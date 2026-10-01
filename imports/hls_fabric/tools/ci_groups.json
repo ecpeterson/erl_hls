@@ -1,0 +1,191 @@
+{
+  "groups": [
+    "software",
+    "hardware",
+    "memory_test",
+    "packed",
+    "bridge",
+    "backend",
+    "bringup"
+  ],
+  "rules": [
+    {
+      "paths": [
+        ".github/**",
+        "rebar.*",
+        "tools/ci_*",
+        "tools/test_ci_*",
+        "tools/xls_ram_codegen/**",
+        "tools/backend_env.sh", "tools/build.py", "tools/prepare_compiler.py", "tools/compiler/**"
+      ],
+      "groups": [
+        "software",
+        "hardware",
+        "memory_test",
+        "packed",
+        "bridge",
+        "backend",
+        "bringup"
+      ]
+    },
+    {
+      "paths": [
+        "experiments/**"
+      ],
+      "groups": [
+        "bringup"
+      ]
+    },
+    {
+      "paths": [
+        "src/hls_node*",
+        "src/hls_local_dist.erl",
+        "src/hls_fabric*",
+        "test/*dist*",
+        "test/*node*",
+        "tools/test_local_dist.sh"
+      ],
+      "groups": [
+        "software",
+        "hardware"
+      ]
+    },
+    {
+      "paths": [
+        "src/hls_shared*",
+        "src/hls_partition_shared_dslx.erl",
+        "src/hls_partition_schedule.erl",
+        "src/hls_partition_ram.erl",
+        "src/backend/**",
+        "priv/xls/templates/**",
+        "priv/xls/lib/**",
+        "tools/test_shared_*",
+        "tools/test_actor_outboxes.sh",
+        "tools/test_mailbox_formal.py"
+      ],
+      "groups": [
+        "software",
+        "hardware",
+        "memory_test",
+        "backend"
+      ]
+    },
+    {
+      "paths": [
+        "src/examples/**",
+        "priv/rtl/phi*",
+        "tools/profile_phi*",
+        "tools/phi_*",
+        "tools/plot_phi*",
+        "tools/test_phi_*",
+        "tools/test_profile*",
+        "tools/test_verify_phi*",
+        "tools/verify_phi*"
+      ],
+      "groups": [
+        "software",
+        "hardware",
+        "memory_test",
+        "bridge",
+        "backend"
+      ]
+    },
+    {
+      "paths": [
+        "priv/xls/hls_packed_link.x",
+        "priv/xls/hls_credit_link.x",
+        "rtl/**",
+        "tools/*packed*",
+        "tools/*credit*",
+        "tools/test_async_fifo.py"
+      ],
+      "groups": [
+        "software",
+        "hardware",
+        "memory_test",
+        "packed",
+        "bridge"
+      ]
+    },
+    {
+      "paths": [
+        "src/**",
+        "priv/**",
+        "test/**",
+        "tools/**"
+      ],
+      "groups": [
+        "software",
+        "hardware",
+        "memory_test",
+        "packed",
+        "bridge",
+        "backend"
+      ]
+    }
+  ],
+  "outputs": {
+    "memory": {
+      "include": [
+        {
+          "placement": "coalesced",
+          "memory_case": "d3",
+          "reductions": "source_fragments",
+          "timeout": 30
+        },
+        {
+          "placement": "coalesced",
+          "memory_case": "board_memory",
+          "reductions": "ordinary",
+          "timeout": 15
+        },
+        {
+          "placement": "coalesced",
+          "memory_case": "board_memory",
+          "reductions": "source_fragments",
+          "timeout": 15
+        }
+      ]
+    },
+    "packed_options": "--regression",
+    "packed_timeout": 15
+  },
+  "extended_outputs": {
+    "memory": {
+      "include": [
+        {
+          "placement": "coalesced",
+          "memory_case": "d3",
+          "reductions": "source_fragments",
+          "timeout": 30
+        },
+        {
+          "placement": "coalesced",
+          "memory_case": "board_memory",
+          "reductions": "ordinary",
+          "timeout": 15
+        },
+        {
+          "placement": "coalesced",
+          "memory_case": "board_memory",
+          "reductions": "source_fragments",
+          "timeout": 15
+        },
+        {
+          "placement": "direct",
+          "memory_case": "d3",
+          "reductions": "ordinary",
+          "timeout": 25
+        },
+        {
+          "placement": "coalesced",
+          "memory_case": "d3",
+          "reductions": "ordinary",
+          "timeout": 30
+        }
+      ]
+    },
+    "packed_options": "",
+    "packed_timeout": 20
+  }
+}

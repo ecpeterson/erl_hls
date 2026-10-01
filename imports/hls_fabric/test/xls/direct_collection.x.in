@@ -1,0 +1,116 @@
+// Build a contribution through the same codec as an ordinary sender.
+fn piece_frame(key: u32, member: u32, value: u8) -> axis::Frame {
+  axis::Frame { header: axis::Header { op: Tag::PIECE as u8, payload_words: u8:3,
+    ..zero!<axis::Header>() }, payload: bits_from_piece(Piece { key, member, value }) as bits[96] }
+}
+
+// Enter collection with a caller-selected epoch and member mask.
+fn collecting_machine(key: u32, mask: u8) -> Machine {
+  Machine { phase: Phase::COLLECTING, entered_from: Phase::IDLE, enter_pending: false,
+    data: Cell { key, mask, value: u8:0 }, ..initial_machine() }
+}
+
+// Every member subset and early/open interleaving has one completed parity.
+#[test]
+fn every_mask_and_opening_position() {
+  for (mask, ()): (u8, ()) in u8:1..u8:64 {
+    for (opening_at, ()): (u32, ()) in u32:0..u32:7 {
+      let (last, count) = for (index, (previous, count)):
+          (u32, (DirectCollectionStep, u32)) in u32:0..u32:16 {
+        let machine = Machine { enter_pending: previous.machine.enter_pending || index == opening_at,
+          ..previous.machine };
+        let selected = index < u32:6 && ((mask >> index) & u8:1) != u8:0;
+        let step = direct_collection_step(machine, previous.collection, previous.control,
+          zero!<axis::Frame>(), false, piece_frame(u32:7, index, u8:1 << index), selected);
+        assert_eq(step.machine.failure, hls_failure::NONE);
+        (step, count + (step.egress_valid as u32))
+      }((DirectCollectionStep { machine: collecting_machine(u32:7, mask),
+          ..zero!<DirectCollectionStep>() }, u32:0));
+      assert_eq(last.machine.phase, Phase::COMPLETE);
+      assert_eq(last.machine.data.value, mask);
+      assert_eq(count, u32:1);
+      assert_eq(last.collection.opened, false);
+      assert_eq(last.machine.reduction.status, ReductionStatus::IDLE);
+    }(())
+  }(())
+}
+
+// Ownership commands cannot affect the bank before crossing their register.
+#[test]
+fn opening_and_release_are_registered() {
+  let first = direct_collection_step(Machine { enter_pending: true,
+      ..collecting_machine(u32:7,u8:1) }, zero!<DirectCollection>(), zero!<CollectionControl>(),
+    zero!<axis::Frame>(), false, piece_frame(u32:7,u32:0,u8:9), true);
+  assert_eq(first.control.open, true);
+  assert_eq(first.collection.opened, false);
+  let opened = direct_collection_step(first.machine, first.collection, first.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(opened.collection.reduction.status, ReductionStatus::COMPLETE);
+  assert_eq(opened.machine.phase, Phase::COLLECTING);
+  let consumed = direct_collection_step(opened.machine, opened.collection, opened.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(consumed.machine.phase, Phase::COMPLETE);
+  assert_eq(consumed.control.release, true);
+  assert_eq(consumed.collection.opened, true);
+  let published = direct_collection_step(consumed.machine, consumed.collection, consumed.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(published.egress_valid, true);
+  assert_eq(published.collection.opened, false);
+}
+
+// A completed bank remains owned until the exact epoch is released. Early next
+// input waits, while duplicates and overlapping incomplete epochs remain faults.
+#[test]
+fn keyed_ownership_and_successor_wait() {
+  let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:1) };
+  let opening = machine_step(machine, zero!<axis::Frame>(), false, true).machine.reduction;
+  let bank = collection_control(zero!<CollectionBank>(), CollectionControl {
+    open: true, opening, ..zero!<CollectionControl>() });
+  let complete = collection_fold(bank, piece_frame(u32:7,u32:0,u8:3), true);
+  assert_eq(complete.reduction.status, ReductionStatus::COMPLETE);
+  assert_eq(collection_accepts(complete, piece_frame(u32:8,u32:0,u8:4)), false);
+  assert_eq(collection_accepts(complete, piece_frame(u32:7,u32:0,u8:4)), true);
+  assert_eq(collection_fold(complete,piece_frame(u32:7,u32:0,u8:4),true).failure,
+    hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_control(complete, CollectionControl {
+    release: true, release_key: u32:8, ..zero!<CollectionControl>() }).failure,
+    hls_failure::REDUCTION_PROTOCOL);
+  let released = collection_control(complete, CollectionControl {
+    release: true, release_key: u32:7, ..zero!<CollectionControl>() });
+  assert_eq(collection_accepts(released,piece_frame(u32:8,u32:0,u8:4)),true);
+  let next = collection_fold(released,piece_frame(u32:8,u32:0,u8:4),true);
+  assert_eq(next.reduction.key,u32:8);
+  assert_eq(next.reduction.seen,ReductionMembers:1);
+  assert_eq(next.failure,hls_failure::NONE);
+}
+
+// Poison is not a protocol release: the rest of the selected members must drain.
+#[test]
+fn reducer_failure_retains_member_obligations() {
+  let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:3) };
+  let opening = machine_step(machine,zero!<axis::Frame>(),false,true).machine.reduction;
+  let bank = collection_control(zero!<CollectionBank>(), CollectionControl {
+    open: true, opening, ..zero!<CollectionControl>() });
+  let first = collection_fold(bank,piece_frame(u32:7,u32:0,u8:9),true);
+  let poisoned = CollectionBank { reduction: ReductionState {
+    failure: hls_failure::REDUCTION_PROTOCOL, ..first.reduction }, ..first };
+  let last = collection_fold(poisoned,piece_frame(u32:7,u32:1,u8:3),true);
+  assert_eq(last.reduction.status,ReductionStatus::COMPLETE);
+  assert_eq(last.reduction.seen,ReductionMembers:3);
+  assert_eq(last.reduction.accumulator.value,u8:9);
+  assert_eq(last.failure,hls_failure::NONE);
+  assert_eq(last.reduction.failure,hls_failure::REDUCTION_PROTOCOL);
+}
+
+// A contribution bypassing the collector is a fault, never an ordinary fold.
+#[test]
+fn reserved_schema_is_rejected_by_direct_mailbox() {
+  let initial = initial_machine();
+  let ready = machine_step(initial, zero!<axis::Frame>(), false, true).machine;
+  let frame = axis::Frame { header: axis::Header { op: Tag::PIECE as u8,
+    payload_words: u8:3, ..zero!<axis::Header>() },
+    payload: bits_from_piece(Piece { key: u32:7, member: u32:0, value: u8:1 }) as bits[96] };
+  let result = machine_step(ready, frame, true, true);
+  assert_eq(hls_failure::failed(result.machine.failure), true);
+  assert_eq(result.machine.reduction, ready.reduction);
+}

@@ -1,0 +1,310 @@
+name: Execution backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XLS_VERSION: v0.0.0-10601-g9f360fc89
+  XLS_SHA256: 163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      backend: ${{ steps.plan.outputs.backend == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      bringup: ${{ steps.plan.outputs.bringup == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      qualify: ${{ steps.plan.outputs.qualify == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      key: ${{ steps.plan.outputs.key }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/test_ci_plan.py
+      - id: plan
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_SUITE: backend
+          CI_GROUPS: backend,bringup
+        run: python3 tools/ci_plan.py
+      - id: passed
+        if: steps.plan.outputs.reusable == 'true' && steps.plan.outputs.qualify == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/backend
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-backend-${{ steps.plan.outputs.key }}
+          lookup-only: true
+      - name: Explain reused qualification
+        if: steps.passed.outputs.cache-hit == 'true'
+        run: echo 'These exact source, dependency, test and workflow inputs already passed; reusing that qualification.' >> "$GITHUB_STEP_SUMMARY"
+
+  bringup:
+    needs: select
+    if: needs.select.outputs.bringup == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Fetch compiler sources for bring-up tools
+        run: python3 tools/build.py get-deps
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Check local timing-model diagnostics
+        run: |
+          python3 experiments/07-openxc7/timing_model/test_model.py
+          python3 experiments/07-openxc7/timing_model/test_selection_shapes.py
+          python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_path_report.py
+          python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_cones.py
+          python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_frontier.py
+
+      - name: Check Zynq package mapping and resource smoke
+        run: python3 experiments/07-openxc7/test_zynq7030.py
+
+      - name: Check PS bring-up probe before and after synthesis
+        run: python3 experiments/07-openxc7/test_zynq_ps_probe.py --yosys "$(command -v yosys)"
+
+      - name: Upload bring-up diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: bringup-diagnostics
+          path: |
+            experiments/07-openxc7/build/ethernet*/**/*.log
+            experiments/07-openxc7/build/ethernet*/**/result.json
+
+  backend:
+    needs: select
+    if: needs.select.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Cache XLS
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+
+      - name: Install pinned XLS with RAM-response reservation
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+          "$XLS_ROOT/codegen_main" --version
+
+      - name: Build compiler and backend fixtures
+        run: python3 tools/build.py as test compile
+
+      - name: Check independent actor outboxes under sustained output pressure
+        run: bash tools/test_actor_outboxes.sh "$RUNNER_TEMP/xls"
+
+      - name: Check physical timing reports and artifact provenance
+        run: python3 experiments/07-openxc7/test_phi_timing.py
+
+      - name: Check effect-window handshakes and combinational loops
+        run: bash tools/test_effect_window.sh "$RUNNER_TEMP/xls"
+
+      - name: Diagnose shared actor failures through scoped debug queries
+        run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls"
+
+      - name: Inspect postponed mailboxes and recovery through scoped debug queries
+        run: |
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-mailbox-debug direct_mailbox
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mixed-mailbox-debug mailbox_mixed
+          python3 _checkouts/erl_hls/tools/check_debug_memories.py _build/mixed-mailbox-debug/p2 --map-xc7
+
+      - name: Diagnose reduction failures through scoped debug queries
+        run: |
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/reduction-debug reduction
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-actor-debug direct_reduction
+          bash "$PWD/_checkouts/erl_hls/tools/test_direct_actor_codegen.sh" "$RUNNER_TEMP/xls"
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/aggregate-debug aggregate
+
+      - name: Check shared callback semantics, layouts and reductions
+        run: |
+          bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
+          bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+          bash tools/test_admission_collection.sh "$RUNNER_TEMP/xls"
+          python3 tools/test_direct_collection_boundary.py
+          python3 tools/test_direct_collection.py "$RUNNER_TEMP/xls" --stage _build/direct-collection-rtl
+          bash tools/test_initialization.sh "$RUNNER_TEMP/xls"
+          bash tools/test_state_projection.sh "$RUNNER_TEMP/xls"
+          bash tools/test_statem_replies.sh "$RUNNER_TEMP/xls"
+          bash tools/test_logical_types.sh "$RUNNER_TEMP/xls"
+          bash tools/test_type_shapes.sh "$RUNNER_TEMP/xls"
+          bash tools/test_names.sh "$RUNNER_TEMP/xls"
+          python3 tools/test_shared_completion.py "$RUNNER_TEMP/xls"
+          python3 tools/test_shared_request_stage.py "$RUNNER_TEMP/xls"
+          python3 tools/test_mailbox_formal.py "$RUNNER_TEMP/xls"
+      - name: Inspect startup backpressure through the debug endpoint
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top init_shared_wrapper --stage _build/initialization/debug \
+            _build/initialization/init_shared_2.v \
+            _build/initialization/init_shared_wrapper.v _checkouts/erl_hls/priv/rtl/hls_1r1w_ram.v
+
+      - name: Check mixed execution placements and scoped observations
+        run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed one two coalesced ingress_one components_weak
+      - name: Retain backend failures
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: backend-diagnostics
+          path: |
+            _build/**/*.log
+            _build/**/*.term
+            _build/**/manifest.json
+  complete-debug:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Cache XLS
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+
+      - name: Install pinned XLS with RAM-response reservation
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+          "$XLS_ROOT/codegen_main" --version
+
+      - name: Build compiler and backend fixtures
+        run: python3 tools/build.py as test compile
+
+      - name: Check smaller and rectangular decoder profiles against BEAM
+        run: python3 tools/test_decoder_profiles.py "$RUNNER_TEMP/xls" --cases board-sized rectangle-z --trace
+
+      - name: Compare the periodic repetition code with BEAM and stalled RTL
+        run: python3 tools/run_repetition_profile.py _build/repetition/n3 --cells 3 --xls "$RUNNER_TEMP/xls"
+
+      - name: Diagnose backpressure in the smaller profile through public debug queries
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \
+            --stage _build/decoder-profiles/board-sized/debug \
+            _build/decoder-profiles/board-sized/compiled/phi_decoder_profile.v \
+            _build/decoder-profiles/board-sized/compiled/phi_decoder_profile_top.v \
+            _build/decoder-profiles/board-sized/compiled/hls_1r1w_ram.v
+
+      - name: Build the complete D3 debug composition and production reference
+        run: python3 tools/build_phi_debug.py "$RUNNER_TEMP/xls"
+
+      - name: Preserve complete D3 application RAM mapping through debug export
+        run: python3 _checkouts/erl_hls/tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
+
+      - name: Diagnose D3 stalls while all debug services share one transport
+        run: python3 tools/test_phi_debug.py _build/phi-debug
+
+      - name: Upload full debug integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: complete-debug-reports
+          path: |
+            _build/repetition/**/*.json
+            _build/repetition/**/*.log
+            _build/repetition/**/events.txt
+            _build/decoder-profiles/**/*.json
+            _build/decoder-profiles/**/*.log
+            _build/decoder-profiles/**/*.events
+            _build/phi-debug/**/*.log
+            _build/phi-debug/**/*.build.json
+            _build/phi-debug/**/*.v
+            _build/phi-debug/**/manifest.json
+            _build/phi-debug/debug/memory-check/report.json
+            _build/phi-debug/debug/memory-check/*.ys
+            _build/phi-debug/live/*.json
+            _build/phi-debug/live/*.term
+
+  qualify:
+    needs: [select, bringup, backend, complete-debug]
+    if: ${{ !cancelled() && needs.select.outputs.qualify == 'true' && (needs.bringup.result == 'success' || needs.bringup.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.complete-debug.result == 'success' || needs.complete-debug.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Record successful input qualification
+        run: |
+          mkdir -p _build/ci-passed
+          printf '%s\n' "$GITHUB_SHA" > _build/ci-passed/backend
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/backend
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-backend-${{ needs.select.outputs.key }}

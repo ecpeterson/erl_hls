@@ -1,0 +1,701 @@
+// Shared-scheduler mailbox storage primitives.
+//
+// The scheduler owns queue metadata; these pure helpers select and update it.
+// Frame payloads live in external RAM at stable, slot-major addresses.
+// DEPTH is the actor mailbox capacity (1..255), matching u8 counts and indices.
+// Actor and producer arrays are nonempty.
+
+import axis;
+import bram;
+import std;
+
+// One frame plus its phase-local postponement flag.
+pub struct Slot {
+  postponed: u1,
+  frame: axis::Frame,
+}
+
+// A pending actor message, or an effect-batch credit when credit is set.
+pub struct ScheduledRequest {
+  slot: u32,
+  frame: axis::Frame,
+  credit: u1,
+}
+
+// A reserved producer/destination/RAM slot; indices are meaningful only if valid.
+pub struct Admission {
+  valid: u1,
+  producer: u32,
+  slot: u32,
+  physical: u8,
+}
+
+// Whole-row mailbox read request.
+pub type RamReadReq = bram::ReadReq;
+// One complete mailbox frame returned from RAM.
+pub type RamReadResp = bram::ReadResp<axis::FRAME_BITS>;
+// Whole-frame mailbox write request.
+pub type RamWriteReq = bram::WriteReq<axis::FRAME_BITS>;
+// Completion token for a mailbox write.
+pub type RamWriteResp = bram::WriteResp;
+
+// Prefer power-of-two rows only when they fit the existing rounded RAM depth.
+// actors and capacity are nonzero; their padded product must fit u32.
+// Capacity remains the logical queue limit; padding supplies no extra credits.
+pub fn physical_stride(actors: u32, capacity: u32) -> u32 {
+  let padded = u32:1 << std::clog2(capacity);
+  if std::clog2(actors * padded) == std::clog2(actors * capacity) {
+    padded
+  } else { capacity }
+}
+
+// Map an actor and physical index to a row-major RAM address.
+// index must be below stride; the result must fit u32 and the allocated RAM.
+pub fn address(slot: u32, index: u8, stride: u32) -> u32 {
+  let row = slot * stride;
+  if (stride & (stride - u32:1)) == u32:0 {
+    row | index as u32
+  } else {
+    row + index as u32
+  }
+}
+
+// Construct a whole-row read under address's bounds; this does not issue I/O.
+pub fn read(slot: u32, index: u8, stride: u32) -> RamReadReq {
+  bram::read(address(slot, index, stride))
+}
+
+// Construct a whole-frame write under address's bounds; this does not issue I/O.
+pub fn write(
+    slot: u32, index: u8, stride: u32, frame: axis::Frame)
+    -> RamWriteReq {
+  bram::write(address(slot, index, stride), axis::bits_from_frame(frame))
+}
+
+// Return the lowest free physical index, or zero when every slot is used.
+// The caller establishes capacity before using the result as a reservation.
+fn free_index<DEPTH: u32>(used: bool[DEPTH]) -> u8 {
+  let requests = rev(!(used as uN[DEPTH]));
+  let grant = one_hot(requests, true) as uN[DEPTH];
+  let indices = unroll_for! (index, values): (u32, u8[DEPTH]) in u32:0..DEPTH {
+    update(values, index, index as u8)
+  }(zero!<u8[DEPTH]>());
+  one_hot_sel(grant, indices)
+}
+
+// Return (valid, logical queue position, physical RAM index), skipping
+// postponed messages without changing their order or releasing their slots.
+// occupied must not exceed DEPTH; every order entry must be below DEPTH.
+// An empty or fully postponed queue returns (false, 0, 0).
+pub fn select<DEPTH: u32>(
+    order: u8[DEPTH], occupied: u8, postponed: u1[DEPTH]) -> (u1, u8, u8) {
+  let eligible = unroll_for! (position, flags):
+      (u32, u1[DEPTH]) in u32:0..DEPTH {
+    let physical = order[position];
+    update(flags, position,
+      position < occupied as u32 && !postponed[physical as u32])
+  }(zero!<u1[DEPTH]>());
+  let requests = rev(eligible as uN[DEPTH]);
+  let grant = one_hot(requests, true) as uN[DEPTH];
+  let positions = unroll_for! (position, values):
+      (u32, u8[DEPTH]) in u32:0..DEPTH {
+    update(values, position, position as u8)
+  }(zero!<u8[DEPTH]>());
+  (or_reduce(requests), one_hot_sel(grant, positions), one_hot_sel(grant, order))
+}
+
+// Select a mailbox row after finding each actor's first unpostponed message.
+// Actor must be in range; each row obeys select's bounds and empty sentinel.
+// Parallel rows replicate selection logic. Prefer select on one indexed row
+// unless measurements justify this area's cost at the intended actor count.
+pub fn select_actor<ACTOR_COUNT: u32, DEPTH: u32>(
+    order: u8[DEPTH][ACTOR_COUNT], occupied: u8[ACTOR_COUNT],
+    postponed: u1[DEPTH][ACTOR_COUNT], actor: u32) -> (u1, u8, u8) {
+  let choices = unroll_for! (slot, choices):
+      (u32, (u1, u8, u8)[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(choices, slot, select(order[slot], occupied[slot], postponed[slot]))
+  }(zero!<(u1, u8, u8)[ACTOR_COUNT]>());
+  choices[actor]
+}
+
+// Remove one consumed logical position; the remaining physical indices keep
+// their order. The caller decrements occupied and owns postponement resets.
+// selected must name an occupied position and occupied must not exceed DEPTH.
+pub fn compact_order<DEPTH: u32>(
+    row: u8[DEPTH],
+    selected: u8,
+    occupied: u8) -> u8[DEPTH] {
+  unroll_for! (position, result):
+      (u32, u8[DEPTH]) in
+      u32:0..DEPTH {
+    let value = if position < selected as u32 {
+      row[position]
+    } else if position + u32:1 < occupied as u32 {
+      row[position + u32:1]
+    } else {
+      u8:0
+    };
+    update(result, position, value)
+  }(zero!<u8[DEPTH]>())
+}
+
+// Clear only the named producer when enabled; out-of-range indices leave all
+// producers untouched. Per-lane masks avoid a read-selector/write-decoder chain.
+pub fn clear_pending<PRODUCER_COUNT: u32>(
+    pending: u1[PRODUCER_COUNT], producer: u32, enabled: bool)
+    -> u1[PRODUCER_COUNT] {
+  unroll_for! (lane, result): (u32, u1[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    update(result, lane, pending[lane] && !(enabled && producer == lane))
+  }(zero!<u1[PRODUCER_COUNT]>())
+}
+
+// Returned batch credits represent completed effect batches, so they
+// update scheduler metadata without carrying another actor context.
+// Select only from the registered inputs. pending_valid also includes newly
+// captured requests; preserve those for the next iteration. Registered-valid
+// slots cannot be overwritten during capture.
+pub fn collect_credit<PRODUCER_COUNT: u32>(
+    registered_pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_valid: u1[PRODUCER_COUNT],
+    pending_valid: u1[PRODUCER_COUNT],
+    egress_busy: u1) -> (u1[PRODUCER_COUNT], u1) {
+  let (credit_found, credit_producer) =
+    unroll_for! (candidate, acc):
+        (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
+      let take = !acc.0 && registered_valid[candidate] &&
+        registered_pending[candidate].credit;
+      (acc.0 || take, if take { candidate } else { acc.1 })
+    }((u1:0, u32:0));
+  let remaining = clear_pending(pending_valid, credit_producer, credit_found);
+  (remaining, egress_busy && !credit_found)
+}
+
+// Each credit returns the named actor's independently reserved outbox after
+// its entire batch drains. Collect all registered credits, so a busy producer
+// cannot starve another actor's return. Fresh captures wait one activation;
+// the caller must issue at most one batch per actor between returns.
+pub fn collect_actor_credits<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    registered_pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_valid: u1[PRODUCER_COUNT],
+    pending_valid: u1[PRODUCER_COUNT],
+    outbox_busy: u1[ACTOR_COUNT]) -> (u1[PRODUCER_COUNT], u1[ACTOR_COUNT]) {
+  let returned = unroll_for! (slot, result):
+      (u32, u1[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    let found = unroll_for! (producer, found):
+        (u32, u1) in u32:0..PRODUCER_COUNT {
+      found || (registered_valid[producer] &&
+        registered_pending[producer].credit &&
+        registered_pending[producer].slot == slot)
+    }(false);
+    update(result, slot, outbox_busy[slot] && !found)
+  }(zero!<u1[ACTOR_COUNT]>());
+  let remaining = unroll_for! (producer, result):
+      (u32, u1[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    let credit = registered_valid[producer] && registered_pending[producer].credit;
+    update(result, producer, pending_valid[producer] && !credit)
+  }(zero!<u1[PRODUCER_COUNT]>());
+  (remaining, returned)
+}
+
+// Credits neither consume messages nor release a different actor's slot.
+#[test]
+fn actor_credits_are_independent_and_registered_test() {
+  let request = zero!<ScheduledRequest>();
+  let pending = [ScheduledRequest {slot: u32:2, credit: true, ..request},
+    request, ScheduledRequest {slot: u32:0, credit: true, ..request}];
+  assert_eq(collect_actor_credits(pending, [false, true, true],
+    [true, true, true], [true, true, true]),
+    ([true, true, false], [false, true, true]));
+  assert_eq(collect_actor_credits(pending, [true, true, true],
+    [true, true, true], [true, true, true]),
+    ([false, true, false], [false, true, false]));
+}
+
+// Updated queue metadata and at most one reserved admission, before its RAM write.
+pub struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32> {
+  pending_valid: u1[PRODUCER_COUNT],
+  occupied: u8[ACTOR_COUNT],
+  order: u8[DEPTH][ACTOR_COUNT],
+  used: bool[DEPTH][ACTOR_COUNT],
+  mail_candidates: u1[ACTOR_COUNT],
+  admission: Admission,
+  cursor: u32,
+}
+
+// Select a producer and a currently free physical slot from one metadata snapshot.
+// Exclusions affect selection only. No metadata is changed and no freshly freed
+// capacity is visible; the caller must preserve the reservation until application.
+// used is exactly the membership bitmap of the occupied order prefix.
+pub fn select_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32>(
+    occupied: u8[ACTOR_COUNT], used: bool[DEPTH][ACTOR_COUNT], cursor: u32,
+    pending: ScheduledRequest[PRODUCER_COUNT], pending_valid: u1[PRODUCER_COUNT],
+    excluded_valid: u1, excluded_slot: u32, failed_valid: u1, failed_slot: u32)
+    -> Admission {
+  let (after_found, after_producer, before_found, before_producer) =
+      unroll_for! (candidate, acc):
+          (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
+    let request = pending[candidate];
+    let slot = request.slot;
+    // Boolean operators are eager in DSLX; guard the array access itself.
+    let has_capacity = if slot < ACTOR_COUNT {
+      occupied[slot] as u32 < DEPTH
+    } else {
+      false
+    };
+    let eligible = pending_valid[candidate] && !request.credit &&
+      has_capacity &&
+      (!excluded_valid || slot != excluded_slot) &&
+      (!failed_valid || slot != failed_slot);
+    let take_after = !acc.0 &&
+      candidate >= cursor && eligible;
+    let take_before = !acc.2 &&
+      candidate < cursor && eligible;
+    (
+      acc.0 || take_after,
+      if take_after { candidate } else { acc.1 },
+      acc.2 || take_before,
+      if take_before { candidate } else { acc.3 }
+    )
+  }((u1:0, u32:0, u1:0, u32:0));
+  let found = after_found || before_found;
+  let producer = if after_found {
+    after_producer
+  } else {
+    before_producer
+  };
+  let request = pending[producer];
+  let slot = if request.slot < ACTOR_COUNT {
+    request.slot
+  } else {
+    u32:0
+  };
+  let physical = free_index(used[slot]);
+  Admission { valid: found, producer, slot, physical }
+}
+
+
+// Append a reserved physical slot to the current row, preserving concurrent
+// retirement changes. The slot must still be free and the row must have capacity.
+// Invalid admissions preserve metadata, producer ownership and cursor.
+pub fn apply_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32>(
+    occupied: u8[ACTOR_COUNT], order: u8[DEPTH][ACTOR_COUNT],
+    used: bool[DEPTH][ACTOR_COUNT], mail_candidates: u1[ACTOR_COUNT], cursor: u32,
+    pending_valid: u1[PRODUCER_COUNT], admission: Admission)
+    -> AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT, DEPTH> {
+  let (found, producer, slot, physical) =
+    (admission.valid, admission.producer, admission.slot, admission.physical);
+  let old_count = occupied[slot];
+  let occupied = if found {
+    update(occupied, slot, old_count + u8:1)
+  } else {
+    occupied
+  };
+  let order = if found {
+    let row = update(order[slot], old_count as u32, physical);
+    update(order, slot, row)
+  } else {
+    order
+  };
+  let used = if found {
+    update(used, slot, update(used[slot], physical as u32, true))
+  } else { used };
+  let mail_candidates = if found {
+    update(mail_candidates, slot, u1:1)
+  } else {
+    mail_candidates
+  };
+  let remaining = clear_pending(pending_valid, producer, found);
+  let cursor = if found {
+    if producer + u32:1 == PRODUCER_COUNT {
+      u32:0
+    } else {
+      producer + u32:1
+    }
+  } else {
+    cursor
+  };
+  AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT, DEPTH> {
+    pending_valid: remaining,
+    occupied,
+    order,
+    used,
+    mail_candidates,
+    admission: Admission {
+      valid: found,
+      producer,
+      slot,
+      physical,
+    },
+    cursor,
+  }
+}
+
+// Select and append in one snapshot when no concurrent retirement is present.
+pub fn reserve_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32>(
+    occupied: u8[ACTOR_COUNT], order: u8[DEPTH][ACTOR_COUNT],
+    used: bool[DEPTH][ACTOR_COUNT], mail_candidates: u1[ACTOR_COUNT], cursor: u32,
+    pending: ScheduledRequest[PRODUCER_COUNT], pending_valid: u1[PRODUCER_COUNT],
+    excluded_valid: u1, excluded_slot: u32, failed_valid: u1, failed_slot: u32)
+    -> AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT, DEPTH> {
+  let admission = select_admission(occupied, used, cursor, pending, pending_valid,
+    excluded_valid, excluded_slot, failed_valid, failed_slot);
+  apply_admission(occupied, order, used, mail_candidates, cursor, pending_valid, admission)
+}
+
+
+
+// A transient projection of scheduler metadata for the retirement transition.
+// used marks exactly the physical indices in each occupied order prefix.
+pub struct Metadata<ACTOR_COUNT: u32, DEPTH: u32> {
+  occupied: u8[ACTOR_COUNT],
+  order: u8[DEPTH][ACTOR_COUNT],
+  used: bool[DEPTH][ACTOR_COUNT],
+  postponed: u1[DEPTH][ACTOR_COUNT],
+  mail_candidates: u1[ACTOR_COUNT],
+  entry_probes: u1[ACTOR_COUNT],
+  egress_waiters: u1[ACTOR_COUNT],
+}
+
+// The actor wrapper resolves its directive to mutually exclusive consume and
+// postpone flags. Queue indices identify that completed activation's message.
+pub struct Retirement {
+  valid: u1,
+  consume: u1,
+  postpone: u1,
+  phase_boundary: u1,
+  failed: u1,
+  enter_pending: u1,
+  egress_blocked: u1,
+}
+
+// Apply a completed activation's consumption, postponement and readiness changes.
+// A phase boundary clears postponement; failure clears the actor's ready flags.
+// Valid outcomes require an in-range actor and valid selected message indices
+// when consuming/postponing. An invalid outcome leaves metadata untouched.
+pub fn retire<ACTOR_COUNT: u32, DEPTH: u32>(
+    metadata: Metadata<ACTOR_COUNT, DEPTH>, slot: u32,
+    order_index: u8, mailbox_index: u8, outcome: Retirement)
+    -> Metadata<ACTOR_COUNT, DEPTH> {
+  if !outcome.valid { metadata } else {
+    let old_count = metadata.occupied[slot];
+    let occupied = if outcome.consume {
+      update(metadata.occupied, slot, old_count - u8:1)
+    } else { metadata.occupied };
+    let order = if outcome.consume {
+      update(metadata.order, slot,
+        compact_order(metadata.order[slot], order_index, old_count))
+    } else { metadata.order };
+    let used = if outcome.consume {
+      update(metadata.used, slot, update(metadata.used[slot], mailbox_index as u32, false))
+    } else { metadata.used };
+    // A phase boundary clears every postponed message, including the selected
+    // one. Otherwise only an explicit postponement changes the bitmap.
+    let postponed_row = if outcome.phase_boundary {
+      zero!<u1[DEPTH]>()
+    } else if outcome.postpone {
+      update(metadata.postponed[slot], mailbox_index as u32, u1:1)
+    } else { metadata.postponed[slot] };
+    let postponed = update(metadata.postponed, slot, postponed_row);
+    // Readiness needs membership, not logical order. The used bitmap names
+    // exactly the occupied prefix; dispatch still selects in that prefix's order.
+    let mail_remaining = or_reduce((used[slot] as uN[DEPTH]) &
+      !(postponed_row as uN[DEPTH]));
+    Metadata<ACTOR_COUNT, DEPTH> {
+      occupied,
+      order,
+      used,
+      postponed,
+      mail_candidates: update(metadata.mail_candidates, slot,
+        mail_remaining && !outcome.failed),
+      entry_probes: update(metadata.entry_probes, slot,
+        outcome.enter_pending && !outcome.egress_blocked && !outcome.failed),
+      egress_waiters: update(metadata.egress_waiters, slot,
+        outcome.enter_pending && outcome.egress_blocked && !outcome.failed),
+    }
+  }
+}
+
+// RAM request rows must preserve actor ownership and the entire frame.
+#[test]
+fn rows_are_slot_major_and_hold_one_frame_test() {
+  let frame = axis::pack(u8:13, u32:0x12345678);
+  assert_eq(address(u32:3, u8:2, u32:5), u32:17);
+  assert_eq(read(u32:3, u8:2, u32:5), bram::read(u32:17));
+  assert_eq(
+    write(u32:3, u8:2, u32:5, frame),
+    bram::write(u32:17, axis::bits_from_frame(frame)));
+}
+
+// Padding must fit the already rounded bank depth and keep actor rows disjoint.
+#[test]
+fn physical_stride_uses_existing_ram_padding_test() {
+  assert_eq(physical_stride(u32:6, u32:24), u32:32);
+  assert_eq(physical_stride(u32:3, u32:24), u32:32);
+  assert_eq(physical_stride(u32:5, u32:24), u32:24);
+  assert_eq(physical_stride(u32:5, u32:5), u32:5);
+  assert_eq(physical_stride(u32:1, u32:1), u32:1);
+  assert_eq(address(u32:5, u8:23, u32:32), u32:183);
+  assert_eq(address(u32:4, u8:23, u32:24), u32:119);
+}
+
+// Postponement skips messages without reordering the remaining candidates.
+#[test]
+fn selection_preserves_queue_order_across_postponement_test() {
+  let order = [u8:2, u8:0, u8:3, u8:1];
+  assert_eq(select(order, u8:3, [false, false, false, false]),
+            (true, u8:0, u8:2));
+  assert_eq(select(order, u8:3, [false, false, true, false]),
+            (true, u8:1, u8:0));
+  assert_eq(select(order, u8:3, [true, false, true, false]),
+            (true, u8:2, u8:3));
+  // Physical slot one is unpostponed but outside the occupied prefix.
+  assert_eq(select(order, u8:3, [true, false, true, true]),
+            (false, u8:0, u8:0));
+  assert_eq(select(order, u8:0, [false, false, false, false]),
+            (false, u8:0, u8:0));
+  // A phase boundary clears postponement and replays the oldest message.
+  assert_eq(select(order, u8:3, zero!<bool[4]>()),
+            (true, u8:0, u8:2));
+}
+
+// Reusing freed physical storage must append at the logical tail.
+#[test]
+fn consumption_reuses_physical_storage_at_queue_tail_test() {
+  let order = [u8:2, u8:0, u8:3, u8:1];
+  assert_eq(compact_order(order, u8:0, u8:4), [u8:0, u8:3, u8:1, u8:0]);
+  assert_eq(compact_order(order, u8:3, u8:4), [u8:2, u8:0, u8:3, u8:0]);
+  let compacted = compact_order(order, u8:1, u8:4);
+  assert_eq(compacted, [u8:2, u8:3, u8:1, u8:0]);
+  let request = ScheduledRequest { slot: u32:0, ..zero!<ScheduledRequest>() };
+  let admitted = reserve_admission(
+    [u8:3], [compacted], [[false, true, true, true]], [true], u32:0, [request], [true],
+    false, u32:0, false, u32:0);
+  assert_eq(admitted.admission,
+            Admission { valid: true, producer: u32:0, slot: u32:0, physical: u8:0 });
+  assert_eq(admitted.occupied, [u8:4]);
+  assert_eq(admitted.used, [[true, true, true, true]]);
+  assert_eq(admitted.order, [[u8:2, u8:3, u8:1, u8:0]]);
+  assert_eq(admitted.pending_valid, [false]);
+  assert_eq(admitted.cursor, u32:0);
+}
+
+// Only eligible messages may reserve capacity; rejection must preserve metadata.
+#[test]
+fn admission_skips_full_excluded_failed_invalid_and_credit_requests_test() {
+  let message = zero!<ScheduledRequest>();
+  let pending = [
+    ScheduledRequest { slot: u32:0, ..message },
+    ScheduledRequest { slot: u32:1, ..message },
+    ScheduledRequest { slot: u32:2, ..message },
+    ScheduledRequest { slot: u32:99, ..message },
+    ScheduledRequest { slot: u32:3, credit: true, ..message },
+    ScheduledRequest { slot: u32:3, ..message },
+  ];
+  let occupied = [u8:2, u8:1, u8:0, u8:0];
+  let order = [[u8:1, u8:0], [u8:0, u8:0], [u8:0, u8:0], [u8:0, u8:0]];
+  let candidates = [true, true, false, false];
+  let used = [[true, true], [true, false], [false, false], [false, false]];
+  let admitted = reserve_admission(
+    occupied, order, used, candidates, u32:1, pending, [true, true, true, true, true, true],
+    true, u32:1, true, u32:2);
+  assert_eq(admitted.admission,
+            Admission { valid: true, producer: u32:5, slot: u32:3, physical: u8:0 });
+  assert_eq(admitted.occupied, [u8:2, u8:1, u8:0, u8:1]);
+  assert_eq(admitted.order, order);
+  assert_eq(admitted.mail_candidates, [true, true, false, true]);
+  assert_eq(admitted.pending_valid, [true, true, true, true, true, false]);
+  assert_eq(admitted.cursor, u32:0);
+  // With the only admissible producer absent, even invalid pending addresses
+  // must leave every piece of queue metadata untouched.
+  let rejected = reserve_admission(
+    occupied, order, used, candidates, u32:1, pending, admitted.pending_valid,
+    true, u32:1, true, u32:2);
+  assert_eq(rejected.admission.valid, false);
+  assert_eq(rejected.occupied, occupied);
+  assert_eq(rejected.order, order);
+  assert_eq(rejected.used, used);
+  assert_eq(rejected.mail_candidates, candidates);
+  assert_eq(rejected.pending_valid, admitted.pending_valid);
+  assert_eq(rejected.cursor, u32:1);
+}
+
+// A single-slot mailbox waits for consumption before admitting the next producer.
+#[test]
+fn admission_round_robins_and_waits_for_single_slot_retirement_test() {
+  let request = zero!<ScheduledRequest>();
+  let pending = [request, request, request];
+  let first = reserve_admission(
+    [u8:0], [[u8:0]], [[false]], [false], u32:2, pending, [true, true, true],
+    false, u32:0, false, u32:0);
+  assert_eq(first.admission.producer, u32:2);
+  assert_eq(first.cursor, u32:0);
+  assert_eq(first.occupied, [u8:1]);
+  assert_eq(first.mail_candidates, [true]);
+  let full = reserve_admission(
+    first.occupied, first.order, first.used, first.mail_candidates, first.cursor,
+    pending, first.pending_valid, false, u32:0, false, u32:0);
+  assert_eq(full.admission.valid, false);
+  assert_eq(full.pending_valid, [true, true, false]);
+  assert_eq(full.occupied, first.occupied);
+  assert_eq(full.order, first.order);
+  assert_eq(full.mail_candidates, first.mail_candidates);
+  assert_eq(full.cursor, first.cursor);
+  let retired = compact_order(first.order[u32:0], u8:0, u8:1);
+  let next = reserve_admission(
+    [u8:0], [retired], [[false]], [false], full.cursor, pending, full.pending_valid,
+    false, u32:0, false, u32:0);
+  assert_eq(next.admission.valid, true);
+  assert_eq(next.admission.producer, u32:0);
+  assert_eq(next.cursor, u32:1);
+  assert_eq(next.pending_valid, [false, true, false]);
+  // Search wraps as well as the cursor: only a producer before cursor is ready.
+  let wrapped = reserve_admission(
+    [u8:0], [[u8:0]], [[false]], [false], u32:1, pending, [true, false, false],
+    false, u32:0, false, u32:0);
+  assert_eq(wrapped.admission.valid, true);
+  assert_eq(wrapped.admission.producer, u32:0);
+  assert_eq(wrapped.cursor, u32:1);
+}
+
+// Reservations use prior-state free bits, then merge with an independent retirement.
+#[test]
+fn simultaneous_retirement_and_admission_preserve_physical_ownership_test() {
+  let original = Metadata<u32:1, u32:4> {
+    occupied: [u8:3], order: [[u8:2, u8:0, u8:3, u8:0]],
+    used: [[true, false, true, true]], mail_candidates: [true],
+    ..zero!<Metadata<u32:1, u32:4>>()
+  };
+  let intent = select_admission(original.occupied, original.used, u32:0,
+    [zero!<ScheduledRequest>()], [true], false, u32:0, false, u32:0);
+  assert_eq(intent.physical, u8:1);
+  let retired = retire(original, u32:0, u8:0, u8:2,
+    Retirement { valid: true, consume: true, ..zero!<Retirement>() });
+  let admitted = apply_admission(retired.occupied, retired.order, retired.used,
+    retired.mail_candidates, u32:0, [true], intent);
+  assert_eq(admitted.order, [[u8:0, u8:3, u8:1, u8:0]]);
+  assert_eq(admitted.used, [[true, true, false, true]]);
+  assert_eq(admitted.occupied, [u8:3]);
+  // Full pre-state cannot borrow the cell which this retirement will release.
+  let full = select_admission([u8:4], [[true, true, true, true]], u32:0,
+    [zero!<ScheduledRequest>()], [true], false, u32:0, false, u32:0);
+  assert_eq(full.valid, false);
+}
+
+// Collect one registered credit while retaining messages and newly captured work.
+#[test]
+fn credit_collection_releases_one_batch_without_consuming_messages_test() {
+  let request = zero!<ScheduledRequest>();
+  let credit = ScheduledRequest { credit: true, ..request };
+  let pending = [credit, request, credit];
+  assert_eq(collect_credit(pending, [false, true, false], [false, true, false], true),
+            ([false, true, false], true));
+  // Newly captured credits remain pending until the next iteration.
+  assert_eq(collect_credit(pending, [false, false, false], [true, true, true], true),
+    ([true, true, true], true));
+  let (remaining, busy) = collect_credit(pending, [true, true, true], [true, true, true], true);
+  assert_eq((remaining, busy), ([false, true, true], false));
+  assert_eq(collect_credit(pending, remaining, remaining, busy),
+            ([false, true, false], false));
+}
+
+// Consumption and a phase transition must preserve all remaining message order.
+#[test]
+fn retirement_preserves_queue_order_across_a_phase_boundary_test() {
+  let metadata = Metadata<u32:2, u32:3> {
+    occupied: [u8:3, u8:1],
+    used: [[true, true, true], [false, true, false]],
+    order: [[u8:2, u8:0, u8:1], [u8:1, u8:0, u8:0]],
+    postponed: [[false, false, true], [false, false, false]],
+    mail_candidates: [true, true],
+    ..zero!<Metadata<u32:2, u32:3>>()
+  };
+  let retired = retire(metadata, u32:0, u8:1, u8:0, Retirement {
+    valid: true, consume: true, phase_boundary: true, ..zero!<Retirement>() });
+  assert_eq(retired.occupied, [u8:2, u8:1]);
+  assert_eq(retired.used, [[false, true, true], [false, true, false]]);
+  assert_eq(retired.order, [[u8:2, u8:1, u8:0], metadata.order[u32:1]]);
+  assert_eq(retired.postponed, zero!<u1[3][2]>());
+  assert_eq(retired.mail_candidates, [true, true]);
+  assert_eq(select(retired.order[u32:0], u8:2, retired.postponed[u32:0]),
+    (true, u8:0, u8:2));
+}
+
+// Entry credit and postponement must update readiness in the same transition.
+#[test]
+fn postponement_and_entry_credit_update_candidates_together_test() {
+  let metadata = Metadata<u32:1, u32:2> {
+    occupied: [u8:1], order: [[u8:1, u8:0]], used: [[false, true]], mail_candidates: [true],
+    ..zero!<Metadata<u32:1, u32:2>>()
+  };
+  let postponed = retire(metadata, u32:0, u8:0, u8:1, Retirement {
+    valid: true, postpone: true, enter_pending: true, egress_blocked: true,
+    ..zero!<Retirement>() });
+  assert_eq(postponed.occupied, metadata.occupied);
+  assert_eq(postponed.order, metadata.order);
+  assert_eq(postponed.used, metadata.used);
+  assert_eq(postponed.postponed, [[false, true]]);
+  assert_eq(postponed.mail_candidates, [false]);
+  assert_eq(postponed.entry_probes, [false]);
+  assert_eq(postponed.egress_waiters, [true]);
+  let resumed = retire(postponed, u32:0, u8:0, u8:1, Retirement {
+    valid: true, phase_boundary: true, enter_pending: true, ..zero!<Retirement>() });
+  assert_eq(resumed.postponed, [[false, false]]);
+  assert_eq(resumed.mail_candidates, [true]);
+  assert_eq(resumed.entry_probes, [true]);
+  assert_eq(resumed.egress_waiters, [false]);
+}
+
+// Failure clears readiness; absent retirement cannot touch any metadata.
+#[test]
+fn failed_or_absent_retirements_cannot_reactivate_actors_test() {
+  let metadata = Metadata<u32:1, u32:1> {
+    occupied: [u8:1], used: [[true]], mail_candidates: [true], entry_probes: [true],
+    egress_waiters: [true], ..zero!<Metadata<u32:1, u32:1>>() };
+  assert_eq(retire(metadata, u32:99, u8:99, u8:99, zero!<Retirement>()), metadata);
+  let failed = retire(metadata, u32:0, u8:0, u8:0, Retirement {
+    valid: true, failed: true, enter_pending: true, egress_blocked: true,
+    ..zero!<Retirement>() });
+  assert_eq(failed.mail_candidates, [false]);
+  assert_eq(failed.entry_probes, [false]);
+  assert_eq(failed.egress_waiters, [false]);
+  assert_eq(failed.occupied, metadata.occupied);
+  assert_eq(failed.order, metadata.order);
+  assert_eq(failed.used, metadata.used);
+}
+
+// Connect one independently owned producer endpoint to the scheduler array.
+// Backpressure affects only this producer; credits must use dedicated relays.
+pub proc RequestRelay {
+  input: chan<ScheduledRequest> in;
+  output: chan<ScheduledRequest> out;
+  // Neither endpoint may have another writer/reader respectively.
+  config(input: chan<ScheduledRequest> in, output: chan<ScheduledRequest> out) {
+    (input, output)
+  }
+  // Hold no application state.
+  init { () }
+  // Preserve each request or credit until the scheduler accepts it.
+  next(state: ()) {
+    let (tok, request) = recv(join(), input);
+    let _sent = send(tok, output, request);
+    state
+  }
+}
+
+// Exhaust the small state space, including disabled and out-of-range clearing.
+#[test]
+fn clear_pending_matches_conditional_update_test() {
+  for (value, _): (u32, ()) in u32:0..u32:8 {
+    let pending = (value as u3) as u1[3];
+    for (producer, _): (u32, ()) in u32:0..u32:5 {
+      assert_eq(clear_pending(pending, producer, false), pending);
+      let expected = if producer < u32:3 { update(pending, producer, u1:0) } else { pending };
+      assert_eq(clear_pending(pending, producer, true), expected);
+    }(());
+  }(());
+  // Match the larger scheduler width and do not truncate oversized indices.
+  let full: u1[22] = [u1:1, ...];
+  assert_eq(clear_pending(full, u32:21, true), update(full, u32:21, u1:0));
+  assert_eq(clear_pending(full, u32:22, true), full);
+  assert_eq(clear_pending(full, u32:0xffff_ffff, true), full);
+}

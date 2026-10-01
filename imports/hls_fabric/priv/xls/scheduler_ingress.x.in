@@ -1,0 +1,19 @@
+// Alternate between two ordered inputs and construct the scheduler request directly.
+proc SchedulerIngress@ACTOR@<SLOT: u32> {
+@FIELDS@
+  request_out: chan<@MODULE@::ScheduledRequest> out;
+  // The merger tree supplies at most two independently buffered streams.
+  config(@PARAMETERS@, request_out: chan<@MODULE@::ScheduledRequest> out) {
+    (@NAMES@, request_out)
+  }
+  // Poll the first input on the first activation after reset.
+  init { u1:0 }
+  // Preserve FrameMux2's polling policy, including its empty-input turns.
+  next(prefer_right: u1) {
+    let selected = (join(), false, zero!<axis::Frame>());
+@RECEIVES@
+    let request = @MODULE@::ScheduledRequest { slot: SLOT, frame: selected.2, credit: u1:0 };
+    let _sent = send_if(selected.0, request_out, selected.1, request);
+    !prefer_right
+  }
+}

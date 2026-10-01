@@ -1,0 +1,14 @@
+-module(hls_shared_debug_catalog).
+-moduledoc "Binds shared placement and dedicated actors to the common debug interface.".
+-export([hardware/3, hardware/4]).
+-doc "Describes logical actors with their shared or dedicated physical placements.".
+-spec hardware(hls_topology:plan(), hls_scheduler_plan:spec(), list()) -> map().
+hardware(Plan, Specs, Boundaries) ->
+    Placements = hls_scheduler_plan:placements(hls_scheduler_plan:normalize(Plan, Specs)),
+    hls_debug_catalog:hardware(Plan, Placements, Boundaries).
+-doc "Validates the scheduler projection before binding manifest resources to logical actors.".
+-spec hardware(hls_topology:plan(), hls_scheduler_plan:spec(), list(), map()) -> map().
+hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
+    Projection = maps:get(<<"actor_projection">>, Manifest, none),
+    ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
+    hls_debug_catalog:bind(hardware(Plan, Specs, Boundaries), Projection, Session).

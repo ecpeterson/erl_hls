@@ -1,0 +1,113 @@
+`timescale 1ns/1ps
+// Ordinary actor frames and live progress exercise both collector and mailbox paths.
+module exclusive_collection_tb;
+  reg clk=0, reset=1, request_valid=0, ready=0;
+  always #5 clk=~clk;
+  reg [193:0] request=0;
+  wire request_ready, valid_a, valid_b, observation_valid;
+  wire [127:0] result_a, result_b;
+  wire [183:0] observation;
+  wire [91:0] a=observation[0+:92], b=observation[92+:92];
+  integer count_a=0, count_b=0, writes_a=0, saved_writes=0;
+  reg [7:0] want_a=10, want_b=2;
+  reg held_a=0, held_b=0, marker_mode=0;
+  reg [1:0] markers=0;
+  reg [127:0] prior_a, prior_b;
+  collection_wrapper dut(.*);
+
+  // Holding external results cannot destabilize a frame or suppress live queries.
+  always @(posedge clk) begin
+    if (reset) begin count_a=0; count_b=0; writes_a=0; held_a=0; held_b=0; markers=0; marker_mode=0; end
+    else begin
+      if(dut.scheduler_0_state_wr_en && dut.scheduler_0_state_wr_addr==0) writes_a=writes_a+1;
+      if(held_a && (!valid_a || result_a !== prior_a)) $fatal(1,"stalled A changed");
+      if(held_b && (!valid_b || result_b !== prior_b)) $fatal(1,"stalled B changed");
+      held_a=valid_a && !ready; held_b=valid_b && !ready;
+      prior_a=result_a; prior_b=result_b;
+      if(valid_a && ready) begin
+        if(marker_mode) begin
+          if(result_a[127:8] !== {8'd1,8'd0,8'd0,8'd5,88'd0}) $fatal(1,"wrong marker frame");
+          case(result_a[7:0])
+            255: begin if(markers[0]) $fatal(1,"repeated first marker"); markers[0]=1; end
+            254: begin if(markers[1]) $fatal(1,"repeated second marker"); markers[1]=1; end
+            default: $fatal(1,"result after opening conflict");
+          endcase
+        end else if(result_a !== {8'd1,8'd0,8'd0,8'd5,88'd0,want_a}) $fatal(1,"wrong A result %h",result_a);
+        count_a=count_a+1;
+      end
+      if(valid_b && ready) begin
+        if(result_b !== {8'd1,8'd0,8'd0,8'd5,88'd0,want_b}) $fatal(1,"wrong B result %h",result_b);
+        count_b=count_b+1;
+      end
+    end
+  end
+
+  // A point rectangle selects one of two ordinary actors sharing one scheduler.
+  task automatic packet(input [15:0] actor, input [7:0] tag, input [7:0] words, input [95:0] payload);
+    begin
+      @(negedge clk); request={actor,16'd0,actor,16'd0,2'd0,words,16'd0,tag,payload}; request_valid=1;
+      do @(posedge clk); while(!request_ready);
+      @(negedge clk); request_valid=0;
+    end
+  endtask
+  task automatic open_set(input [15:0] actor, input [7:0] mask);
+    packet(actor,3,2,{56'd0,mask,32'd7});
+  endtask
+  task automatic piece(input [15:0] actor, input [31:0] member, input [7:0] value);
+    packet(actor,4,3,{24'd0,value,member,32'd7});
+  endtask
+  task automatic wait_a(input [1:0] status, input [5:0] seen);
+    while(!(observation_valid && a[25] && a[26+:2]==status && a[86+:6]==seen)) @(negedge clk);
+  endtask
+  task automatic restart;
+    begin
+      @(negedge clk); reset=1; ready=0; request_valid=0;
+      repeat(5) @(negedge clk);
+      reset=0;
+    end
+  endtask
+
+  initial begin
+    restart();
+    // All inputs arrive before the opening callback. They use no mailbox cells,
+    // remain incomplete, and cannot wake a completion before the actor opens.
+    piece(0,0,9); piece(0,1,3); wait_a(1,3);
+    if(a[80+:6]!=0 || valid_a) $fatal(1,"early collector opened or published prematurely");
+    saved_writes=writes_a; repeat(50) @(negedge clk);
+    if(writes_a!=saved_writes || valid_a) $fatal(1,"early input woke the actor");
+    open_set(0,3);
+    while(!valid_a) @(negedge clk);
+    repeat(100) @(negedge clk); ready=1; repeat(100) @(negedge clk);
+    if(count_a!=1) $fatal(1,"early completion missing or repeated");
+
+    // The completed epoch still owns its bank until consumed. More generally,
+    // even before open a future tag may not overwrite the first arrival.
+    restart(); piece(0,0,9); wait_a(1,1);
+    packet(0,4,3,{24'd0,8'd3,32'd1,32'd8});
+    while(!(observation_valid && a[9+:16]!=0)) @(negedge clk);
+    ready=1; repeat(50) @(negedge clk);
+    if(count_a!=0) $fatal(1,"interleaved epoch published a result");
+
+    // Invalid early membership is discovered when the eventual mask arrives.
+    restart(); piece(0,5,9); wait_a(1,32); open_set(0,3);
+    while(!(observation_valid && a[9+:16]!=0)) @(negedge clk);
+    ready=1; repeat(50) @(negedge clk);
+    if(count_a!=0) $fatal(1,"foreign early member published a result");
+
+    // Opening checks consume a registered command. The callback marker commits
+    // before the conflict is observed; it cannot be retracted, but no result or
+    // further work may be published once the failure reaches the actor.
+    restart(); marker_mode=1; piece(0,0,9); wait_a(1,1); ready=1;
+    packet(0,3,2,{56'd0,8'd3,32'd8});
+    while(!(observation_valid && a[9+:16]!=0)) @(negedge clk);
+    repeat(100) @(negedge clk);
+    if(count_a!=2 || markers!=3 || valid_a) $fatal(1,"delayed opening fault lost or repeated a committed marker");
+
+    // An out-of-range member also fails before a collection exists.
+    restart(); packet(0,4,3,{24'd0,8'd1,32'd7,32'd7});
+    while(!(observation_valid && a[9+:16]!=0)) @(negedge clk);
+    $display("PASS: exclusive all-early collection, interleaved-key fault, opening-mask fault, registered opening and committed marker, out-of-range-member fault");
+    $finish;
+  end
+  initial begin #1000000; $fatal(1,"collector RTL timeout: a=%h b=%h",a,b); end
+endmodule

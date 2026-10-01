@@ -1,0 +1,9 @@
+{
+  "include": [
+    "*.erl",
+    "*.hrl",
+    "priv/xls/*.x"
+  ],
+  "exclude": [],
+  "base_ref": "origin/main"
+}

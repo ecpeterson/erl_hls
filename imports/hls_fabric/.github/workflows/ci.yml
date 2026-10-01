@@ -1,0 +1,371 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      extended:
+        description: Include D3 reference modes and the full packed-link performance grid
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  XLS_VERSION: v0.0.0-10601-g9f360fc89
+  XLS_SHA256: 163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      software: ${{ steps.plan.outputs.software == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      hardware: ${{ steps.plan.outputs.hardware == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      memory_test: ${{ steps.plan.outputs.memory_test == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      packed: ${{ steps.plan.outputs.packed == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      bridge: ${{ steps.plan.outputs.bridge == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      qualify: ${{ steps.plan.outputs.qualify == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      key: ${{ steps.plan.outputs.key }}
+      memory: ${{ steps.plan.outputs.memory }}
+      packed_options: ${{ steps.plan.outputs.packed_options }}
+      packed_timeout: ${{ steps.plan.outputs.packed_timeout }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/test_ci_plan.py
+      - id: plan
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_EXTENDED: ${{ inputs.extended }}
+          CI_SUITE: ci
+          CI_GROUPS: software,hardware,memory_test,packed,bridge
+        run: python3 tools/ci_plan.py
+      - id: passed
+        if: steps.plan.outputs.reusable == 'true' && steps.plan.outputs.qualify == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ steps.plan.outputs.key }}
+          lookup-only: true
+      - name: Explain reused qualification
+        if: steps.passed.outputs.cache-hit == 'true'
+        run: echo 'These exact source, dependency, test and workflow inputs already passed; reusing that qualification.' >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: select
+    if: needs.select.outputs.software == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: '28.0.2'
+          rebar3-version: '3.24.0'
+      - name: Install RTL tools
+        if: needs.select.outputs.hardware == 'true'
+        run: sudo apt-get update && sudo apt-get install --yes iverilog yosys
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: needs.select.outputs.hardware == 'true'
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+      - name: Install pinned XLS with RAM-response reservation
+        if: needs.select.outputs.hardware == 'true'
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+          "$XLS_ROOT/codegen_main" --version
+      - name: Check asynchronous FIFO capacity, wraparound, stalls and reset
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_async_fifo.py --xilinx-cells /usr/share/yosys/xilinx/cells_sim.v
+      - name: Check passive cycle taps against RTL
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_phi_cycle_trace.py
+      - name: Build compiler and backend fixtures
+        run: python3 tools/build.py as test compile
+      - name: Check build packaging and combined profile views
+        run: |
+          python3 tools/test_packaging.py
+          python3 tools/test_profile_views.py
+      - name: Check service-profile accounting
+        run: |
+          python3 tools/test_phi_service_metrics.py
+          python3 tools/test_phi_capture.py
+          python3 tools/test_phi_actor_profile.py
+          python3 tools/test_phi_profile_adapter.py
+          python3 tools/test_phi_reduction_profile.py
+          python3 tools/test_phi_message_trace.py
+          python3 tools/test_phi_message_report.py
+          python3 tools/test_phi_step_report.py
+          python3 tools/test_phi_mailbox_profile.py
+          python3 tools/test_phi_transport_metrics.py
+          python3 tools/test_phi_mesh_metrics.py
+          python3 tools/test_phi_link_packet.py
+          python3 tools/test_packed_credit_cases.py
+          python3 tools/test_phi_packed_metrics.py
+          python3 tools/test_phi_mesh_components.py
+          python3 tools/test_phi_tiles.py
+          python3 tools/test_profile_compilation.py
+          python3 tools/test_transport_codegen.py
+          python3 tools/test_verify_phi_components.py
+      - run: python3 tools/build.py eunit
+      - run: bash tools/test_local_dist.sh
+      - run: bash tools/test_return_routes.sh
+        if: needs.select.outputs.hardware == 'true'
+      - name: Check routed application framing, identity and backpressure
+        if: needs.select.outputs.hardware == 'true'
+        run: |
+          python3 tools/test_partition_io.py "$RUNNER_TEMP/xls"
+          python3 tools/test_partition_io.py "$RUNNER_TEMP/xls" --tile --stage _build/partition-tile-io
+      - name: Exercise actor PIDs and public debug queries against generated RTL
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_actor_rtl.py "$RUNNER_TEMP/xls" --stage _build/actor-pids
+      - name: Check fused scheduler ingress ordering, fairness, stalls and reset
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_scheduler_ingress.py "$RUNNER_TEMP/xls" --stage _build/scheduler-ingress
+      - name: Check link credits, blocked-lane isolation, framing and common reset
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_credit_link.py "$RUNNER_TEMP/xls" --stage _build/credit-link
+      - name: Check four-peer lane identity and blocked-peer isolation
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_partition_peers.py "$RUNNER_TEMP/xls"
+      - name: Check sparse-lane service and saturated arbitration fairness
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_credit_arbitration.py "$RUNNER_TEMP/xls" --stage _build/credit-arbitration
+      - name: Measure saturated links with independent credits and varied latency
+        if: needs.select.outputs.hardware == 'true'
+        run: python3 tools/test_credit_service.py "$RUNNER_TEMP/xls" --stage _build/credit-service
+      - name: Compare independent-clock phi devices with BEAM and diagnose a stopped peer
+        if: needs.select.outputs.bridge == 'true'
+        run: |
+          python3 tools/test_phi_bridge.py "$RUNNER_TEMP/xls" --stage _build/phi-bridge/board-sized --shape 2 2 --planes x z
+          python3 tools/test_phi_bridge.py "$RUNNER_TEMP/xls" --stage _build/phi-bridge/corrections --shape 4 2 --planes x --clock-halves 7 3
+      - name: Retain generated RTL provenance and debug observations
+        if: always() && needs.select.outputs.hardware == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: actor-pid-observations
+          path: |
+            _build/actor-pids/**/*.log
+            _build/actor-pids/**/build.json
+            _build/actor-pids/**/manifest.json
+            _build/actor-pids/**/actors.json
+            _build/actor-pids/**/observations.term
+            _build/async-fifo/*.log
+            _build/async-fifo/report.json
+            _build/partition-io/*.log
+            _build/partition-io/provenance.json
+            _build/partition-peers/*.log
+            _build/partition-peers/provenance.json
+            _build/scheduler-ingress/**/*.log
+            _build/scheduler-ingress/**/build.json
+            _build/credit-link/*.log
+            _build/credit-link/provenance.json
+            _build/credit-service/*.log
+            _build/credit-service/service.json
+            _build/credit-arbitration/*.log
+            _build/credit-arbitration/provenance.json
+            _build/phi-bridge/**/*.log
+            _build/phi-bridge/**/*.json
+            _build/phi-bridge/**/*.term
+
+  phi-memory:
+    needs: select
+    if: needs.select.outputs.memory_test == 'true'
+    name: phi-memory (${{ matrix.memory_case }}, ${{ matrix.placement }}, ${{ matrix.reductions }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.memory) }}
+    # D3 offload covers reset/restart; small noisy witnesses cover both RAM modes.
+    # The two other full D3 implementations are explicit extended coverage.
+    timeout-minutes: ${{ matrix.timeout }}
+    env:
+      IVERILOG_SHA256: c897bbfa9848688982c6d5c30529fc29d68df0b9ff22ffa73bad89db73a7ce49
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: '28.0.2'
+          rebar3-version: '3.24.0'
+      - name: Install RTL tools
+        run: sudo apt-get update && sudo apt-get install --yes yosys build-essential autoconf bison flex gperf libreadline-dev zlib1g-dev
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/iverilog
+          key: iverilog-${{ runner.os }}-${{ runner.arch }}-13.0-${{ env.IVERILOG_SHA256 }}
+      - name: Build the native regression's Icarus 13 simulator
+        env:
+          IVERILOG_ROOT: ${{ runner.temp }}/iverilog
+        run: |
+          if [[ ! -x "$IVERILOG_ROOT/bin/iverilog" ]]; then
+            archive="$RUNNER_TEMP/iverilog.tar.gz"
+            curl --fail --location --show-error https://github.com/steveicarus/iverilog/archive/refs/tags/v13_0.tar.gz --output "$archive"
+            echo "$IVERILOG_SHA256  $archive" | sha256sum --check
+            mkdir -p "$RUNNER_TEMP/iverilog-source"
+            tar -xzf "$archive" --strip-components=1 -C "$RUNNER_TEMP/iverilog-source"
+            cd "$RUNNER_TEMP/iverilog-source"
+            autoconf
+            ./configure --prefix="$IVERILOG_ROOT"
+            make -j2
+            make install
+          fi
+          echo "$IVERILOG_ROOT/bin" >> "$GITHUB_PATH"
+          "$IVERILOG_ROOT/bin/iverilog" -V
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+      - name: Install pinned XLS with RAM-response reservation
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+          "$XLS_ROOT/codegen_main" --version
+      - run: python3 tools/build.py as test compile
+      - name: Compare complete two-device D3 memory with BEAM
+        if: matrix.memory_case == 'd3'
+        # Direct D3 reached the correct witness near its former 12-minute
+        # host deadline; retain reporting/cleanup margin on variable-speed runners.
+        run: python3 tools/test_phi_memory.py "$RUNNER_TEMP/xls" --stage _build/phi-memory --placement "${{ matrix.placement }}" --reductions "${{ matrix.reductions }}" --simulation-timeout "${{ matrix.placement == 'direct' && 900 || 1500 }}"
+      - name: Check complete noisy board-sized memory and occupancy profile
+        if: matrix.memory_case == 'board_memory'
+        run: |
+          python3 tools/test_phi_memory.py "$RUNNER_TEMP/xls" --stage _build/board-memory --placement coalesced --reductions "${{ matrix.reductions }}" --memory-case board_memory --build-only
+          python3 tools/profile_phi_memory.py _build/board-memory --stage _build/board-profile --clock-halves 4 4
+      - name: Check parallel reduction publication and aliased destinations
+        if: matrix.memory_case == 'board_memory' && matrix.reductions == 'source_fragments'
+        run: python3 tools/test_parallel_outbox.py "$RUNNER_TEMP/xls" --stage _build/parallel-outbox
+      - name: Check aggregate mux latency, ordering and stalls
+        if: matrix.memory_case == 'board_memory' && matrix.reductions == 'source_fragments'
+        run: python3 tools/test_aggregate_mux.py "$RUNNER_TEMP/xls" --stage _build/aggregate-mux
+      - name: Check reduction collector duplicate and interleaved fragments
+        if: matrix.memory_case == 'board_memory' && matrix.reductions == 'source_fragments'
+        run: python3 tools/test_partition_reduction.py "$RUNNER_TEMP/xls" _build/board-memory/source --stage _build/reduction-collector
+      - name: Retain memory witnesses and public debug observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: distributed-memory-${{ matrix.memory_case }}-${{ matrix.placement }}-${{ matrix.reductions }}
+          path: |
+            _build/board-memory/**/*.log
+            _build/board-memory/provenance.json
+            _build/board-profile/*.log
+            _build/board-profile/*.json
+            _build/board-profile/*.term
+            _build/reduction-collector/*.log
+            _build/phi-memory/**/*.log
+            _build/phi-memory/provenance.json
+            _build/phi-memory/**/build.json
+            _build/phi-memory/**/manifest.json
+            _build/phi-memory/source/bridge.json
+            _build/phi-memory/source/*.x
+            _build/phi-memory/simulation*/*.json
+            _build/phi-memory/**/*.term
+
+  packed-link:
+    needs: select
+    if: needs.select.outputs.packed == 'true'
+    name: Packed link (${{ matrix.framing }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ fromJSON(needs.select.outputs.packed_timeout) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {framing: full, options: '--configs 1:1 1:4 2:4 4:4'}
+          - {framing: compact, options: '--compact --configs 1:4 4:4'}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: '28.0.2'
+          rebar3-version: '3.24.0'
+      - name: Install RTL tools
+        run: sudo apt-get update && sudo apt-get install --yes iverilog yosys
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+      - name: Install pinned XLS with RAM-response reservation
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+          "$XLS_ROOT/codegen_main" --version
+      - run: python3 tools/build.py as test compile
+      - name: Check real word throughput, independent windows, malformed traffic and reset
+        env:
+          PACKED_OPTIONS: ${{ fromJSON(needs.select.outputs.packed_options) }}
+        run: python3 tools/test_packed_credit.py "$RUNNER_TEMP/xls" --stage _build/packed-credit ${{ matrix.options }} $PACKED_OPTIONS
+      - name: Check directly connected packed endpoints for combinational feedback
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from measure_packed_handoff import loop_check
+          stage, = Path('_build/packed-credit').glob('words-4-credits-4*')
+          loop_check(stage.resolve(), 4, 'yosys')
+          PYCODE
+      - name: Retain bridge inputs and boundary measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: packed-credit-observations-${{ matrix.framing }}
+          path: |
+            _build/packed-credit/**/*.log
+            _build/packed-credit/**/build.json
+            _build/packed-credit/**/service.json
+
+  qualify:
+    needs: [select, test, phi-memory, packed-link]
+    if: ${{ !cancelled() && needs.select.outputs.qualify == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.phi-memory.result == 'success' || needs.phi-memory.result == 'skipped') && (needs.packed-link.result == 'success' || needs.packed-link.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Record successful input qualification
+        run: |
+          mkdir -p _build/ci-passed
+          printf '%s\n' "$GITHUB_SHA" > _build/ci-passed/ci
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ needs.select.outputs.key }}

@@ -1,0 +1,19 @@
+# Toward scoped failure recovery
+
+Design direction, not an implemented protocol. The coordinated reset witness establishes a safe replacement boundary for today's two-device backend. It does not establish a scalable availability policy.
+
+## Erlang model to preserve
+
+Separate observation from policy. A monitor reports failure or loss of reachability; a link expresses a chosen failure dependency; a supervisor decides which children to replace. Geometric neighbors and message routes are not automatically failure links. Borrow the distinction between `noproc`/exit reasons and `noconnection`: loss of a connection does not prove the remote actor died or that its last command did not execute. See [process signals and monitors](https://www.erlang.org/doc/system/ref_man_processes.html) and [supervision strategies](https://www.erlang.org/doc/system/sup_princ.html).
+
+A restarted actor has a new incarnation. Restoring a link need not restart surviving actors, and must not make a previously failed PID live again. Keep logical actor identity, actor incarnation and link/session incarnation distinct. Preserve Erlang's same-sender signal ordering where observable; do not promise a total order across senders or devices.
+
+## Stages and acceptance tests
+
+1. **Expose failures without changing recovery.** Report the affected link/actor, incarnation and reason through public management paths. Distinguish detected actor failure, transport loss and uncertain completion. Test failure reporting under full data queues and stopped peers; reserve control capacity where necessary. A failed link cannot be its own only notification path.
+2. **Fence one replaced component.** Specify reconnect negotiation, stale-packet/credit rejection, actor-handle retirement and safe finite-generation reuse. Test asymmetric reset, old buffered traffic and flapping. Define which accepted work may still finish; never replay uncertain work merely because a connection returned. Keep unaffected actors running in the fixture.
+3. **Add explicit failure dependencies and scoped supervision.** Model monitor notifications and linked exits, including chosen trapping behavior, before restart policies. Exercise `one_for_one` and dependent restart groups with bounded restart intensity. Include at least one independent region whose progress survives another region's failure. Report through the same public inspection interface used for stalls.
+4. **Close in-flight collectives correctly.** A failed reduction member contributes failure, never a successful identity value. Consume outstanding contributions from surviving members; release the failed result only after every member has contributed or been definitively retired behind a fence. Membership and epoch checks must exclude late contributions before reusing storage. Lost reachability alone is insufficient evidence to retire a live contributor.
+5. **Qualify application recovery.** Restarting an actor with initial state is not necessarily valid decoder recovery. Choose a bounded recovery region/window and a checkpoint or retained syndrome-history boundary; preserve correction order and emit explicit gaps/uncertainty when recovery is impossible. Compare recovered results with an uninterrupted reference where equivalence is promised. Delimit any larger restart required by application dependencies.
+
+The decisive experiment has accepted work, a partial packet and an outstanding reduction when one component fails. The unaffected region continues; observers receive one terminal outcome per monitored incarnation; replacement excludes old traffic and cannot duplicate effects. Follow with saturation, repeated failures and exhausted history. This separates transport integrity, process lifecycle and decoder correctness instead of treating a successful reconnect as evidence for all three.

@@ -1,0 +1,54 @@
+// Exhaust all mutable payloads; independently name the signed configuration values.
+#[test]
+fn projected_fields_roundtrip() {
+  let _ = for (i, _): (u32, ()) in u32:0..u32:128 {
+    let raw = i as bits[7];
+    let zero_config = Cell {id: uN[13]:0, value: raw, bias: sN[11]:0};
+    let first = Cell {id: uN[13]:4567, value: raw, bias: sN[11]:-731};
+    let second = Cell {id: uN[13]:1234, value: raw, bias: sN[11]:513};
+    assert_eq(shared_data_from_bits<u32:0>(raw, u32:0, Phase::BOOT), zero_config);
+    assert_eq(shared_data_from_bits<u32:0>(raw, u32:1, Phase::BOOT), zero_config);
+    assert_eq(shared_data_from_bits<u32:0>(raw, u32:0, Phase::READY), first);
+    assert_eq(shared_data_from_bits<u32:0>(raw, u32:1, Phase::READY), second);
+    assert_eq(shared_bits_from_data(first), raw);
+    assert_eq(shared_bits_from_data(second), raw);
+    // Check metadata boundaries too, with nonzero failure and predecessor fields.
+    let m = ActorState {data: first, phase: Phase::READY, entered_from: Phase::BOOT,
+      enter_pending: u1:1, failure: u16:0xa55a};
+    assert_eq(machine_from_bits<u32:0>(bits_from_machine(m), u32:0), m);
+    ()
+  }(());
+  ()
+}
+
+// Startup, entry output blocking and explicit callback failure keep ordinary semantics.
+#[test]
+fn projected_transactions() {
+  let _ = for (slot, _): (u32, ()) in u32:0..u32:2 {
+    let init = initial_actor_state();
+    assert_eq(machine_from_bits<u32:0>(bits_from_machine(init), slot), init);
+    let entered = shared_machine_enter(init, true).machine;
+    let config = if slot == u32:0 { Configure {id: uN[13]:4567, bias: sN[11]:-731} }
+      else { Configure {id: uN[13]:1234, bias: sN[11]:513} };
+    let frame = axis::pack(Tag::CONFIGURE as u8, hls_bits::frame_payload(bits_from_configure(config)));
+    let configured = shared_machine_dispatch(entered, frame, true).machine;
+    assert_eq(machine_from_bits<u32:0>(bits_from_machine(configured), slot), configured);
+    assert_eq(shared_machine_enter(configured, false).machine, configured);
+    let ready = shared_machine_enter(configured, true).machine;
+    let _ = for (v, _): (u32, ()) in u32:0..u32:128 {
+      let put = axis::pack(Tag::PUT as u8, hls_bits::frame_payload(bits_from_put(Put {value: v as uN[7]})));
+      let changed = shared_machine_dispatch(ready, put, true).machine;
+      assert_eq(changed.data.value, v as uN[7]);
+      assert_eq(changed.data.id, config.id);
+      assert_eq(changed.data.bias, config.bias);
+      assert_eq(machine_from_bits<u32:0>(bits_from_machine(changed), slot), changed);
+      let failed = shared_machine_dispatch(changed, frame, true).machine;
+      assert_eq(failed.data, changed.data);
+      assert_eq(failed.failure != u16:0, true);
+      assert_eq(machine_from_bits<u32:0>(bits_from_machine(failed), slot), failed);
+      ()
+    }(());
+    ()
+  }(());
+  ()
+}

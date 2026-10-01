@@ -1,0 +1,50 @@
+// Instantiated with the compiled aggregate-only actor module.
+
+// Announce committed openings before forwarding their output batch. The actor
+// cannot open again until its current aggregate completes, so every token has
+// an independent reserved slot. Ordinary batches produce no opening token.
+proc ReductionOpen<COUNT: u32> {
+  incoming: chan<actor::ScheduledEffects> in;
+  outgoing: chan<actor::ScheduledEffects> out;
+  opened: chan<u1>[COUNT] out;
+  // Each opened endpoint belongs to the matching slot's collector.
+  config(incoming: chan<actor::ScheduledEffects> in,
+      outgoing: chan<actor::ScheduledEffects> out, opened: chan<u1>[COUNT] out) {
+    (incoming, outgoing, opened)
+  }
+  // Tokens and queued batches are reset by their channels.
+  init { () }
+  // Entry has already committed before the scheduler publishes its effects.
+  next(state: ()) {
+    let (tok, batch) = recv(join(), incoming);
+    let prefix = actor::scheduled_reduction_prefix(batch);
+    let announced = unroll_for! (slot, tok): (u32, token) in u32:0..COUNT {
+      send_if(tok, opened[slot], prefix.0 && batch.slot == slot, true)
+    }(tok);
+    let _sent = send(announced, outgoing, batch);
+    state
+  }
+}
+
+// Poll independent per-actor aggregate receptacles. A stalled scheduler retains
+// the selected aggregate; its public capture logic independently drains each slot.
+proc ReductionMux<COUNT: u32> {
+  incoming: chan<actor::ReductionAggregateRequest>[COUNT] in;
+  outgoing: chan<actor::ReductionAggregateRequest> out;
+  // One producer and one bounded input channel per local actor.
+  config(incoming: chan<actor::ReductionAggregateRequest>[COUNT] in,
+      outgoing: chan<actor::ReductionAggregateRequest> out) { (incoming, outgoing) }
+  // Polling starts at the first actor and remains fair across empty slots.
+  init { u32:0 }
+  // Transfer at most one complete aggregate and retain it under output backpressure.
+  next(cursor: u32) {
+    let (tok, valid, value) = unroll_for! (slot, acc):
+        (u32, (token, u1, actor::ReductionAggregateRequest)) in u32:0..COUNT {
+      let (tok, value, valid) = recv_if_non_blocking(acc.0, incoming[slot],
+        cursor == slot, zero!<actor::ReductionAggregateRequest>());
+      (tok, acc.1 || valid, if valid { value } else { acc.2 })
+    }((join(), false, zero!<actor::ReductionAggregateRequest>()));
+    let _sent = send_if(tok, outgoing, valid, value);
+    if cursor + u32:1 == COUNT { u32:0 } else { cursor + u32:1 }
+  }
+}

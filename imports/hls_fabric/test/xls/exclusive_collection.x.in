@@ -1,0 +1,321 @@
+// Install callback metadata without copying application or mailbox storage.
+fn context(machine: ActorState) -> CollectionContext {
+  CollectionContext { reduction: machine.reduction, failure: machine.failure,
+    phase: machine.phase, enter_pending: machine.enter_pending }
+}
+
+// Test a fully accepted registered ownership command; the first transition only
+// enqueues it, and the following transition applies it to the bank.
+fn committed_retirement<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool,
+    slot: u32, machine: ActorState) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let queued = collection_retire(state, valid, slot, machine);
+  collection_retire(queued, false, slot, machine)
+}
+
+// Open the real parity callback, preserving a nonzero caller initial value.
+fn opened(mask: u8) -> ActorState {
+  shared_machine_enter(ActorState {
+    phase: Phase::COLLECTING, entered_from: Phase::IDLE, enter_pending: true,
+    data: Cell { key: u32:7, mask, value: u8:0 }, ..initial_shared_machine()
+  }, true).machine
+}
+
+// Use the generated record codec, with explicit epoch and participant identity.
+fn piece_frame(key: u32, member: u32, value: u8) -> axis::Frame {
+  axis::Frame { header: axis::Header { op: Tag::PIECE as u8, payload_words: u8:3,
+    ..zero!<axis::Header>() }, payload: bits_from_piece(Piece { key, member, value }) as bits[96] }
+}
+
+// Pure transition fixtures install the same decode as real producer capture.
+fn decoded_fixture<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>)
+    -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let empty = SharedState<ACTOR_COUNT, PRODUCER_COUNT> { pending_valid: zero!<bool[PRODUCER_COUNT]>(), ..state };
+  SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+    collection_inputs: collection_capture_inputs(empty, state.pending, state.pending_valid), ..state }
+}
+
+// Select a fixture whose occupied producer slots have completed capture.
+fn select_captured<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>)
+    -> mailbox::Admission { collection_select(decoded_fixture(state)) }
+
+// Fold only the committed fixture snapshot, even if other inputs arrive now.
+fn admit_captured<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(committed: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    intent: mailbox::Admission)
+    -> (bool, ReductionState, hls_failure::Code) {
+  collection_admit(decoded_fixture(committed), intent)
+}
+
+// Every nonempty mask and opening position must match the ordinary reducer
+// primitive; the ordinary dispatcher itself now rejects collector-owned frames.
+#[test]
+fn all_masks_and_opening_positions() {
+  for (mask, ()): (u8, ()) in u8:1..u8:64 {
+    for (opening_at, ()): (u32, ()) in u32:0..u32:7 {
+      let ordinary = opened(mask);
+      let (collected, expected) = for (index, (collected, expected)):
+          (u32, (ReductionState, ActorState)) in u32:0..u32:7 {
+        let collected = if index == opening_at {
+          let joined = collection_open(collected, ordinary.reduction);
+          assert_eq(joined.1, hls_failure::NONE); joined.0
+        } else { collected };
+        if index == u32:6 || ((mask >> index) & u8:1) == u8:0 { (collected, expected) } else {
+          let frame = piece_frame(u32:7, index, u8:1 << index);
+          let pushed = collection_push(collected, index >= opening_at, frame);
+          assert_eq(pushed.1, hls_failure::NONE);
+          (pushed.0, ActorState { reduction: reduction_apply(expected.reduction,
+            reduction_transport_contribution(frame)).state, ..expected })
+        }
+      }((zero!<ReductionState>(), ordinary));
+      assert_eq(collected, expected.reduction);
+      assert_eq(shared_machine_complete(ActorState { reduction: collected, ..ordinary }).machine.data.value, mask);
+    }(())
+  }(())
+}
+
+// A full ordinary mailbox and an in-flight open do not prevent collection.
+#[test]
+fn opening_merges_latest_arrivals_and_consumption_releases() {
+  let empty = zero!<SharedState<u32:2, u32:2>>();
+  let state = SharedState<u32:2, u32:2> {
+    occupied: [MAILBOX_DEPTH as u8, u8:0], in_flight: [true, false],
+    pending: [ScheduledRequest { frame: piece_frame(u32:7,u32:0,u8:11), ..zero!<ScheduledRequest>() }, zero!<ScheduledRequest>()],
+    pending_valid: [true, false], ..empty
+  };
+  let intent = select_captured(state);
+  assert_eq(intent.valid, true);
+  let early = collection_commit(state, intent, admit_captured(state, intent));
+  assert_eq(early.pending_valid, [false, false]);
+  assert_eq(early.occupied, state.occupied);
+  assert_eq(early.internal_candidates, [false, false]);
+  let opening = opened(u8:3);
+  // An additional value arrives after callback dispatch, before retirement.
+  let pushed = collection_push(early.collection_context[u32:0].reduction, false, piece_frame(u32:7,u32:1,u8:7));
+  let newer = collection_commit(early, intent, (true,pushed.0,pushed.1));
+  let joined = committed_retirement(newer, true, u32:0, opening);
+  assert_eq(joined.collection_context[u32:0].reduction.accumulator.value, u8:12);
+  assert_eq(joined.internal_candidates, [true, false]);
+  let stale = ActorState { data: Cell { value: u8:99, ..opening.data }, ..opening };
+  let unchanged = committed_retirement(joined, true, u32:0, stale);
+  assert_eq(unchanged.collection_context[u32:0].reduction, joined.collection_context[u32:0].reduction);
+  let owned = collection_issue(unchanged, unchanged, true, u32:0);
+  let result = shared_machine_complete(ActorState { reduction: owned.collection_context[u32:0].reduction, ..opening });
+  let next_open = ActorState { reduction: ReductionState { key: u32:8, ..opened(u8:5).reduction }, ..opened(u8:5) };
+  let reopened = committed_retirement(owned, true, u32:0, next_open);
+  assert_eq(reopened.collection_owners.opened, [true, false]);
+  assert_eq(reopened.collection_context[u32:0].reduction, next_open.reduction);
+  let consumed = committed_retirement(owned, true, u32:0, result.machine);
+  assert_eq(consumed.collection_owners.opened, [false, false]);
+  assert_eq(consumed.collection_context[u32:0].reduction.status, ReductionStatus::IDLE);
+  assert_eq(collection_push(consumed.collection_context[u32:0].reduction, false,
+    piece_frame(u32:8,u32:0,u8:3)).1, hls_failure::NONE);
+}
+
+// A bad epoch, repeated member, foreign member, malformed frame or mismatched
+// opening is a protocol fault, including after all values arrive but before use.
+#[test]
+fn protocol_violations_are_detected_without_fallback() {
+  let early = collection_push(zero!<ReductionState>(), false, piece_frame(u32:7,u32:0,u8:1)).0;
+  assert_eq(collection_push(early,false,piece_frame(u32:8,u32:1,u8:2)).1, hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_push(early,false,piece_frame(u32:7,u32:0,u8:2)).1, hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_push(early,false,piece_frame(u32:7,u32:6,u8:2)).1, hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_open(early, opened(u8:2).reduction).1, hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_open(early, ReductionState { key: u32:8, ..opened(u8:1).reduction }).1, hls_failure::REDUCTION_PROTOCOL);
+  let complete = collection_open(early, opened(u8:1).reduction).0;
+  assert_eq(collection_push(complete,true,piece_frame(u32:8,u32:1,u8:2)).1, hls_failure::REDUCTION_PROTOCOL);
+  let frame = piece_frame(u32:7,u32:1,u8:2);
+  let malformed = axis::Frame { header: axis::Header { payload_words: u8:1, ..frame.header }, ..frame };
+  assert_eq(collection_reserved(malformed), true);
+  assert_eq(collection_push(early,false,malformed).1, hls_failure::REDUCTION_PROTOCOL);
+}
+
+// Initial values survive early folding; reducer failure drains the selected set.
+#[test]
+fn initial_value_and_absorbing_reducer_failure() {
+  let early = collection_push(zero!<ReductionState>(), false, piece_frame(u32:7,u32:0,u8:1)).0;
+  let opening = ReductionState { accumulator: Parity { value: u8:9 }, ..opened(u8:3).reduction };
+  let partial = collection_open(early, opening).0;
+  assert_eq(partial.accumulator.value, u8:8);
+  let failed = ReductionState { failure: hls_failure::REDUCTION_PROTOCOL, ..partial };
+  let last = collection_push(failed, true, piece_frame(u32:7,u32:1,u8:2));
+  assert_eq(last.1, hls_failure::NONE);
+  assert_eq(last.0.status, ReductionStatus::COMPLETE);
+  assert_eq(last.0.accumulator.value, u8:8);
+  assert_eq(last.0.failure, hls_failure::REDUCTION_PROTOCOL);
+}
+
+// A fault remains observable until an owned callback commits actor failure.
+#[test]
+fn protocol_fault_is_sticky_and_suppresses_publication() {
+  let state = SharedState<u32:1,u32:1> { collection_context: [context(opened(u8:3))], collection_owners: CollectionOwners<u32:1> { opened: [true], ..zero!<CollectionOwners<u32:1>>() },
+    ..zero!<SharedState<u32:1,u32:1>>() };
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  let fault = collection_commit(state,intent,(true,state.collection_context[u32:0].reduction,hls_failure::REDUCTION_PROTOCOL));
+  let repeated = collection_commit(fault,intent,(true,fault.collection_context[u32:0].reduction,hls_failure::REDUCTION_PROTOCOL));
+  assert_eq(repeated.internal_candidates, [true]);
+  let resolved = collection_resolve(repeated, u32:0, SharedStep { machine: opened(u8:3), effects_valid: true, ..zero!<SharedStep>() });
+  assert_eq(resolved.machine.failure, hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(resolved.effects_valid, false);
+  let retired = committed_retirement(repeated,true,u32:0,resolved.machine);
+  assert_eq(retired.internal_candidates, [false]);
+}
+
+// Completion/fault dispatch is classified before concurrent admission. A new
+// protocol fault stays authoritative without changing the kind of issued work.
+#[test]
+fn issued_completion_survives_concurrent_fault_and_other_retirement() {
+  for (mask, ()): (u8, ()) in u8:1..u8:64 {
+    let complete = ActorState { reduction: ReductionState {
+      status: ReductionStatus::COMPLETE, remaining: ReductionRemaining:0,
+      seen: mask as ReductionMembers, ..opened(mask).reduction }, ..opened(mask) };
+    let committed = SharedState<u32:2,u32:1> {
+      collection_context: [context(complete), context(opened(u8:3))],
+      collection_owners: CollectionOwners<u32:2> { opened: [true, true], ..zero!<CollectionOwners<u32:2>>() }, in_flight: [false, true],
+      internal_candidates: [true, false],
+      ..zero!<SharedState<u32:2,u32:1>>() };
+    for (member, ()): (u32, ()) in u32:0..u32:7 {
+      let pending = SharedState<u32:2,u32:1> {
+        pending: [ScheduledRequest { frame: piece_frame(u32:7,member,u8:1),
+          ..zero!<ScheduledRequest>() }], pending_valid: [true], ..committed };
+      let retired = committed_retirement(pending, true, u32:1, opened(u8:3));
+      let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+      let updated = collection_commit(retired, intent, admit_captured(pending,intent));
+      assert_eq(updated.collection_context[u32:0].failure, hls_failure::REDUCTION_PROTOCOL);
+      let issued = collection_issue(pending, updated, true, u32:0);
+      assert_eq(issued.collection_owners.consuming, [true,false]);
+      assert_eq(issued.collection_context, updated.collection_context);
+      let completion = shared_machine_complete(complete);
+      let resolved = collection_resolve(issued,u32:0,SharedStep {
+        machine: completion.machine, effects_valid: true, ..zero!<SharedStep>() });
+      assert_eq(resolved.machine.failure, hls_failure::REDUCTION_PROTOCOL);
+      assert_eq(resolved.effects_valid,false);
+    }(())
+  }(())
+}
+
+// Same-bank opening wins one activation; the held contribution folds on the
+// following activation. Capturing another producer never replaces it.
+#[test]
+fn committed_request_uses_registered_open_with_another_capture() {
+  let (early, failure) = collection_push(zero!<ReductionState>(), false,
+    piece_frame(u32:7,u32:0,u8:9));
+  assert_eq(failure,hls_failure::NONE);
+  let committed = SharedState<u32:1,u32:2> {
+    collection_context: [CollectionContext { reduction: early, ..zero!<CollectionContext>() }],
+    pending: [ScheduledRequest { frame: piece_frame(u32:7,u32:1,u8:3),
+      ..zero!<ScheduledRequest>() }, zero!<ScheduledRequest>()],
+    pending_valid: [true,false], ..zero!<SharedState<u32:1,u32:2>>() };
+  let captured = SharedState<u32:1,u32:2> {
+    pending: update(committed.pending,u32:1,ScheduledRequest {
+      frame: piece_frame(u32:8,u32:0,u8:17), ..zero!<ScheduledRequest>() }),
+    pending_valid: [true,true], ..committed };
+  let queued = collection_retire(captured,true,u32:0,opened(u8:3));
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  let deferred = admit_captured(queued,intent);
+  assert_eq(deferred.0,false);
+  let retired = collection_retire(queued,false,u32:0,zero!<ActorState>());
+  let waiting = collection_commit(retired,intent,deferred);
+  assert_eq(waiting.pending_valid,[true,true]);
+  assert_eq(waiting.collection_context[u32:0].reduction.seen,ReductionMembers:1);
+  let folded = collection_commit(waiting,intent,admit_captured(waiting,intent));
+  assert_eq(folded.collection_context[u32:0].failure,hls_failure::NONE);
+  assert_eq(folded.collection_context[u32:0].reduction.status,ReductionStatus::COMPLETE);
+  assert_eq(folded.collection_context[u32:0].reduction.seen,ReductionMembers:3);
+  assert_eq(folded.pending_valid,[false,true]);
+  assert_eq(folded.pending[u32:1],captured.pending[u32:1]);
+  // The collector owns reduction state; callback data still comes from actor RAM.
+  let restored = machine_from_bits(collection_machine_bits(bits_from_machine(opened(u8:3)),
+    folded.collection_context[u32:0].reduction, folded.collection_context[u32:0].failure));
+  let completed = shared_machine_complete(restored);
+  assert_eq(completed.machine.data.value,u8:10);
+}
+
+// Ordinary admission and contribution admission use separate producer choices,
+// even when the collection actor has a full mailbox.
+#[test]
+fn collector_and_mailbox_admit_independently() {
+  let ordinary = axis::Frame { header: axis::Header { op: Tag::BEGIN_SET as u8,
+    payload_words: u8:2, ..zero!<axis::Header>() }, ..zero!<axis::Frame>() };
+  let state = SharedState<u32:2,u32:2> {
+    occupied: [MAILBOX_DEPTH as u8,u8:0], pending_valid: [true,true],
+    pending: [ScheduledRequest { slot: u32:0, frame: piece_frame(u32:7,u32:0,u8:5), ..zero!<ScheduledRequest>() },
+      ScheduledRequest { slot: u32:1, frame: ordinary, ..zero!<ScheduledRequest>() }],
+    ..zero!<SharedState<u32:2,u32:2>>() };
+  let collect = select_captured(state);
+  let admit = collection_select_ordinary(state);
+  assert_eq((collect.valid,collect.producer,collect.slot),(true,u32:0,u32:0));
+  assert_eq((admit.valid,admit.producer,admit.slot),(true,u32:1,u32:1));
+}
+
+// Retirement cannot alter collector storage until the following activation;
+// clearing the descriptor in actor RAM cannot release its bank early either.
+#[test]
+fn ownership_commands_cross_a_register_boundary() {
+  let state = zero!<SharedState<u32:1,u32:1>>();
+  let queued = collection_retire(state,true,u32:0,opened(u8:1));
+  assert_eq(queued.collection_owners.opened,[false]);
+  assert_eq(queued.collection_context,state.collection_context);
+  let applied = collection_retire(queued,false,u32:0,zero!<ActorState>());
+  assert_eq(applied.collection_owners.opened,[true]);
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  let pushed = collection_push(applied.collection_context[u32:0].reduction,true,piece_frame(u32:7,u32:0,u8:9));
+  let complete = collection_commit(applied,intent,(true,pushed.0,pushed.1));
+  let consuming = collection_issue(complete,complete,true,u32:0);
+  let release = collection_retire(consuming,true,u32:0,zero!<ActorState>());
+  assert_eq(release.collection_owners.opened,[true]);
+  assert_eq(release.collection_context,complete.collection_context);
+  assert_eq(release.internal_candidates,[false]);
+  let released = collection_retire(release,false,u32:0,zero!<ActorState>());
+  assert_eq(released.collection_owners.opened,[false]);
+  assert_eq(released.collection_context[u32:0].reduction.status,ReductionStatus::IDLE);
+}
+
+// Collector-owned schemas cannot silently regain an ordinary-message meaning.
+#[test]
+fn reserved_schema_is_rejected_by_ordinary_dispatch() {
+  let initial = opened(u8:1);
+  let result = shared_machine_dispatch(initial, piece_frame(u32:7,u32:0,u8:1), true);
+  assert_eq(hls_failure::failed(result.machine.failure), true);
+  assert_eq(result.machine.reduction, initial.reduction);
+}
+
+// Capture, hold, release and refill preserve the raw/decoded slot invariant.
+#[test]
+fn decoded_input_changes_only_on_capture() {
+  let empty = zero!<SharedState<u32:1, u32:2>>();
+  let first = ScheduledRequest { frame: piece_frame(u32:7,u32:0,u8:1), ..zero!<ScheduledRequest>() };
+  let second = ScheduledRequest { frame: piece_frame(u32:8,u32:1,u8:2), ..first };
+  let inputs = collection_capture_inputs(empty, [first,second], [true,false]);
+  assert_eq(inputs[u32:0], collection_decode(first.frame));
+  assert_eq(inputs[u32:1], zero!<CollectionInput>());
+  let held = SharedState<u32:1,u32:2> { pending: [first,second], pending_valid: [true,false], collection_inputs: inputs, ..empty };
+  let unchanged = collection_capture_inputs(held, [second,second], [true,true]);
+  assert_eq(unchanged[u32:0], collection_decode(first.frame));
+  assert_eq(unchanged[u32:1], collection_decode(second.frame));
+  let released = SharedState<u32:1,u32:2> { pending_valid: [false,false], ..held };
+  assert_eq(collection_capture_inputs(released,[second,second],[true,false])[u32:0], collection_decode(second.frame));
+}
+
+// Different banks update concurrently; a metadata-only return needs no bubble.
+#[test]
+fn control_and_fold_use_independent_bank_snapshots() {
+  let initial = SharedState<u32:2,u32:1> {
+    pending: [ScheduledRequest { frame: piece_frame(u32:7,u32:0,u8:3),
+      ..zero!<ScheduledRequest>() }], pending_valid: [true],
+    ..zero!<SharedState<u32:2,u32:1>>() };
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  let queued = collection_retire(initial,true,u32:1,opened(u8:1));
+  let folded = admit_captured(queued,intent);
+  assert_eq(folded.0,true);
+  let controlled = collection_retire(queued,false,u32:0,zero!<ActorState>());
+  let both = collection_commit(controlled,intent,folded);
+  assert_eq(both.collection_owners.opened,[false,true]);
+  assert_eq(both.collection_context[u32:0].reduction.accumulator.value,u8:3);
+  assert_eq(both.collection_context[u32:1].reduction,opened(u8:1).reduction);
+  assert_eq(both.pending_valid,[false]);
+  let noop = SharedState<u32:2,u32:1> { collection_command: CollectionCommand { valid: true, slot: u32:0, ..zero!<CollectionCommand>() }, ..initial };
+  assert_eq(admit_captured(noop,intent).0,true);
+  let fault = SharedState<u32:2,u32:1> {
+    collection_command: CollectionCommand { failure: hls_failure::REDUCTION_PROTOCOL, ..noop.collection_command }, ..noop };
+  assert_eq(admit_captured(fault,intent).0,false);
+}

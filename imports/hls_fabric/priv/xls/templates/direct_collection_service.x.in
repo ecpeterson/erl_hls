@@ -1,0 +1,69 @@
+// Receive one checked contribution and one ordinary command per activation.
+// Startup frames precede ordinary input; early contributions may accumulate.
+pub proc CollectionService<PRODUCER_COUNT: u32, STARTUP_COUNT: u32> {
+  req_in: chan<axis::Frame>[PRODUCER_COUNT] in;
+  startup_in: chan<axis::Frame> in;
+  egress_out: chan<Egress> out;
+@@DEBUG_FIELD@@
+  // Each producer owns one bounded, independently stalled input slot.
+  config(req_in: chan<axis::Frame>[PRODUCER_COUNT] in,
+      startup_in: chan<axis::Frame> in, egress_out: chan<Egress> out@@DEBUG_PARAMETER@@) {
+    (req_in, startup_in, egress_out@@DEBUG_VALUE@@)
+  }
+  // Reset discards all input slots and reduction progress together.
+  init { DirectCollectionState<PRODUCER_COUNT> {
+    machine: initial_machine(), ..zero!<DirectCollectionState<PRODUCER_COUNT>>() } }
+  // Selection fills a retained ordinary ticket; mailbox dispatch reads the
+  // previous ticket. Simultaneous drain/refill preserves one message per cycle.
+  // Actor effects depend on committed entry state. Registered collection control
+  // prevents current validation or folding from gating those effects.
+  next(state: DirectCollectionState<PRODUCER_COUNT>) {
+    let machine = Machine { reduction: state.collection.reduction,
+      failure: hls_failure::first(state.machine.failure, state.collection.failure), ..state.machine };
+@@DEBUG_SAMPLE@@
+    let flags = unroll_for! (producer, masks):
+        (u32, (bool[PRODUCER_COUNT], bool[PRODUCER_COUNT])) in u32:0..PRODUCER_COUNT {
+      let reserved = collection_reserved(state.pending[producer]);
+      (update(masks.0, producer, state.valid[producer] && !reserved),
+       update(masks.1, producer, state.valid[producer] && reserved &&
+         collection_accepts(state.collection, state.pending[producer])))
+    }((zero!<bool[PRODUCER_COUNT]>(), zero!<bool[PRODUCER_COUNT]>()));
+    let ordinary = arbitration::select(flags.0, state.ordinary_cursor);
+    let collection = arbitration::select(flags.1, state.collection_cursor);
+    let failed = hls_failure::failed(machine.failure);
+    let completion = state.collection.opened &&
+      state.collection.reduction.status == ReductionStatus::COMPLETE;
+    let can_receive = !failed && !state.machine.enter_pending && !completion &&
+      state.machine.occupied < MAILBOX_CAPACITY;
+    let starting = state.initialized < STARTUP_COUNT;
+    let (startup_tok, startup, startup_valid) = recv_if_non_blocking(
+      join(), startup_in, starting && can_receive, zero!<axis::Frame>());
+    let received = !starting && can_receive && state.ordinary_valid;
+    let selected = !starting && (!state.ordinary_valid || received) && ordinary.0;
+    let collected = !failed && collection.0;
+    let stepped = direct_collection_step(state.machine, state.collection, state.control,
+      if starting { startup } else { state.ordinary_pending },
+      startup_valid || received, state.pending[collection.1], collected);
+    let freed = unroll_for! (producer, valid): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+      update(valid, producer, valid[producer] &&
+        !(selected && ordinary.1 == producer) && !(collected && collection.1 == producer))
+    }(state.valid);
+    let captured = unroll_for! (producer, acc):
+        (u32, (token, axis::Frame[PRODUCER_COUNT], bool[PRODUCER_COUNT])) in u32:0..PRODUCER_COUNT {
+      let (tok, frame, valid) = recv_if_non_blocking(
+        acc.0, req_in[producer], !failed && !freed[producer], zero!<axis::Frame>());
+      (tok, update(acc.1, producer, if valid { frame } else { acc.1[producer] }),
+        update(acc.2, producer, freed[producer] || valid))
+    }((join(), state.pending, freed));
+    let _egress = send_if(join(startup_tok, captured.0), egress_out, stepped.egress_valid, stepped.egress);
+    DirectCollectionState<PRODUCER_COUNT> {
+      machine: stepped.machine, collection: stepped.collection, control: stepped.control,
+      pending: captured.1, valid: captured.2,
+      ordinary_cursor: if selected { arbitration::successor<PRODUCER_COUNT>(ordinary.1) } else { state.ordinary_cursor },
+      collection_cursor: if collected { arbitration::successor<PRODUCER_COUNT>(collection.1) } else { state.collection_cursor },
+      initialized: state.initialized + (startup_valid as u32),
+      ordinary_pending: if selected { state.pending[ordinary.1] } else { state.ordinary_pending },
+      ordinary_valid: (state.ordinary_valid && !received) || selected,
+    }
+  }
+}
