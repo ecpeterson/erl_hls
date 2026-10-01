@@ -3,7 +3,7 @@
 -export([machine_state_field/1, machine_state_copy_field/1, direct_after_failed/2, direct_dispatch_bindings/2, direct_effective_binding/1, direct_failed_binding/1, direct_reduction_field/1, direct_entry_bindings/1, direct_entry_reduction_field/1, direct_receive_gate/1]).
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
 
--export([event_tail/2, entry_bindings/1]).
+-export([event_tail/2, entry_bindings/1, direct_after_failed/3]).
 
 %%%
 %%% Stored-state and scheduler declarations
@@ -25,10 +25,15 @@ machine_state_copy_field(_Reductions) ->
 %%% Direct Service
 %%%
 
+-doc "Emits scalar completion for an actor without finite continuations.".
 -spec direct_after_failed(reductions(), pos_integer()) -> iodata().
-direct_after_failed(none, _Capacity) ->
+direct_after_failed(Reductions, Capacity) -> direct_after_failed(Reductions, Capacity, #{}).
+
+-doc "Emits scalar completion while preserving its optional finite continuation.".
+-spec direct_after_failed(reductions(), pos_integer(), map()) -> iodata().
+direct_after_failed(none, _Capacity, _Spec) ->
     "  } else if machine.enter_pending {\n";
-direct_after_failed(_Reductions, Capacity) ->
+direct_after_failed(_Reductions, Capacity, Spec) ->
     [
         "  } else if machine.reduction.status == ",
         "ReductionStatus::COMPLETE {\n",
@@ -54,6 +59,7 @@ direct_after_failed(_Reductions, Capacity) ->
         "        else { machine.entered_from },\n",
         "      data: if effective { completed.data } else { machine.data },\n",
         "      reduction: completed.reduction,\n",
+        xls_statem_event_codegen:optional(Spec, "      next_event: if effective && !failed { completed.next_event } else { u8:0 },\n"),
         "      slots: if phase_boundary { ",
         direct_unblocked_slots(Capacity, "machine.slots"),
         " } else { machine.slots },\n",
@@ -92,7 +98,7 @@ direct_dispatch_bindings(none, Events) ->
     [
         "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
         "        if dispatchable {\n",
-        "          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
+        xls_statem_gather_codegen:ordinary_dispatch(Events, ["          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")"]), "\n",
         "        } else {\n",
         "          (machine.phase, machine.data, ",
         "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
@@ -118,7 +124,7 @@ direct_dispatch_bindings(_Reductions, Events) ->
         "          (machine.phase, machine.data, ",
         "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "        } else if !reduction_candidate {\n",
-        "          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
+        xls_statem_gather_codegen:ordinary_dispatch(Events, ["          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")"]), "\n",
         "        } else if reduction_mismatch {\n",
         "          (machine.phase, machine.data, ",
         "Directive::POSTPONE, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",

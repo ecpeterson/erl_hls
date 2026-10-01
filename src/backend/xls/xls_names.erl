@@ -247,7 +247,10 @@ runtime(hls_statem) ->
         "ActorDispatch", "MachineStep", "Service", "EgressDemux", "Top", "ReductionStatus",
         "ReductionMode", "ReductionName", "ReductionSite", "ReductionRemaining",
         "ReductionMembers", "ReductionState", "ReductionContribution", "ReductionOutcome",
-        "ReductionApply", "ReductionDispatch", "N", "COUNT",
+        "ReductionApply", "ReductionDispatch", "GatherStatus", "GatherSite", "GatherMembers",
+        "GatherValues", "GatherProgress", "GatherState", "GatherContribution", "GatherOutcome",
+        "GatherApply", "GatherDispatch", "gather_contribution", "gather_apply",
+        "gather_dispatch_completion", "actor_gather_complete", "N", "COUNT",
         "MAILBOX_CAPACITY", "MAILBOX_DEPTH", "EGRESS_DEPTH", "ENTRY_EFFECT_CAPACITY",
         "ENTRY_EFFECT_PAYLOAD_BITS", "INITIAL_ACTOR_STATE", "REPLY_CAPACITY", "ReplyBook",
         "reduction_state_from_bits", "bits_from_reduction_state"].

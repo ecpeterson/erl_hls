@@ -155,6 +155,9 @@ type({type, _, record, [{atom, _, Name}]},
             _ = xls_parse:find_record(Forms, Name),
             {dslx, Struct}
     end;
+type({remote_type, _, [{atom, _, hls_lists}, {atom, _, list}, [Element, {integer, _, Count}]]},
+        Context, Origin) when Count > 0 ->
+    {dslx, [xls_literal_types:format(type(Element, Context, Origin)), "[", integer_to_list(Count), "]"]};
 type({remote_type, _, _} = Type, _Context, Origin) ->
     try
         Descriptor = hls_type:descriptor(Type),

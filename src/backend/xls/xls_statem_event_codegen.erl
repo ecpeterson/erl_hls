@@ -26,7 +26,8 @@ functions(Spec = #{data_name := DataName, internal_steps := Steps, reductions :=
      "    (repeat_phase && (directive != Directive::CONSUME || phase != machine.phase));\n",
      "  let boundary = phase != machine.phase || repeat_phase;\n",
      "  let incomplete = ", case Reduction of none -> "false"; _ ->
-         "boundary && directive != Directive::FAIL && machine.reduction.status == ReductionStatus::OPEN" end, ";\n",
+         "boundary && directive != Directive::FAIL && machine.reduction.status == ReductionStatus::OPEN" end,
+     xls_statem_gather_codegen:optional(Spec, " || (boundary && directive != Directive::FAIL && machine.gather.progress.status == GatherStatus::OPEN)"), ";\n",
      "  let effective = !invalid && !incomplete;\n",
      "  let failure = hls_failure::dispatch(false, invalid, incomplete, effective, callback_failure);\n",
      xls_statem_reply_codegen:optional(Spec, ["  let (reply_book, response, response_valid) = hls_reply::complete(\n",
