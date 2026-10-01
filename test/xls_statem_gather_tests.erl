@@ -68,6 +68,40 @@ differing_site_types_test() ->
     ?assertEqual(48, xls_statem_gather_codegen:payload_width(Gather)),
     ?assertEqual(120, xls_statem_gather_codegen:storage_width(Gather)).
 
+%% The exact typed hardware fixture produces the same ordered values on the ordinary CPU adapter.
+-spec typed_fixture_cpu_control_test() -> ok.
+typed_fixture_cpu_control_test() ->
+    {ok, Module, Beam} = compile:file(?FIXTURE, [binary]),
+    {module, Module} = code:load_binary(Module, ?FIXTURE, Beam),
+    {ok, Pid} = hls_statem:start_link(Module, [], [{mailbox_capacity, 8}, {outputs, #{out => self()}}]),
+    try
+        lists:foreach(fun(Message) -> hls_statem:cast(Pid, Message) end,
+            [{begin_set, 7, 10}, {piece, 7, 3, 4}, {piece, 7, 1, 2}, {scalar, 7, 5}]),
+        ?assertEqual({result, 4020}, output()),
+        ?assertEqual({result, 4025}, output()),
+        ?assertMatch(#{phase := done, gather := idle, reduction := idle, data := {cell, 7, 10, 4025}}, hls_statem:info(Pid))
+    after hls_statem:stop(Pid), code:delete(Module), code:purge(Module) end.
+
+%% Bound a missing output without changing the source actor's event ordering.
+-spec output() -> term().
+output() -> receive {'$gen_cast', Message} -> Message after 1000 -> error(missing_fixture_output) end.
+
+%% A nested message-record value can be gathered directly without reconstructing its fields.
+-spec bound_record_element_test() -> ok.
+bound_record_element_test() ->
+    with_change(<<"value = hls_type:zero() :: hls_nums:u8()}).\n%% A scalar fold">>,
+        <<"value = hls_type:zero() :: #element{}}).\n%% A scalar fold">>, fun(Path) ->
+            {ok, Source} = file:read_file(Path),
+            ok = file:write_file(Path, binary:replace(Source,
+                <<"{gather, items, Key, Member, #element{value = Value}}">>,
+                <<"{gather, items, Key, Member, Value}">>)),
+            Spec = xls_parse:actor_artifact(Path, []),
+            [#{contributions := [#{build := Build, independent_lift := Lift}]}] = maps:get(sites, maps:get(gathers, Spec)),
+            ?assert(is_map(Lift)),
+            ?assertNotEqual(nomatch, binary:match(iolist_to_binary(maps:get(result, Build)), <<".2)">>)),
+            ?assert(is_binary(iolist_to_binary(xls_parse:to_xls(Path))))
+        end).
+
 %% Source variations remain isolated from the reviewed generic fixture.
 -spec with_change(binary(), binary(), fun((file:filename()) -> term())) -> term().
 with_change(From, To, Check) ->

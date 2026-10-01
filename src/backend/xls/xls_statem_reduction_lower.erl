@@ -490,11 +490,13 @@ validate_contribution(
         none -> ok;
         _ -> validate_u32_expression(Member, Bindings, [message])
     end,
-    Accumulator = record_expression_name(Value),
-    ok = case maps:get(kind, Open, reduction) of
-        gather -> ok;
-        reduction -> validate_complete_record_expression(Value,
-            xls_parse:find_record(Forms, Accumulator), reduction_value)
+    Representation = case maps:get(kind, Open, reduction) of
+        gather -> gather_value_representation(Value, Accumulator, Bindings);
+        reduction ->
+            Accumulator = record_expression_name(Value),
+            ok = validate_complete_record_expression(Value,
+                xls_parse:find_record(Forms, Accumulator), reduction_value),
+            tagged
     end,
     ok = require_variable_origins(
         expression_variables(Value),
@@ -503,6 +505,7 @@ validate_contribution(
         {hls_statem_reduction_value, Phase, Tag}
     ),
     Contribution#{
+        value_representation => Representation,
         site => maps:get(id, Open),
         capture_checks => case Guards of
             [] -> xls_pattern_totality:prove(MessagePattern, maps:get(Tag, Shapes));
@@ -893,7 +896,7 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
 
 %% Private value records arrive without the callback record tag wrapper.
 -spec contribution_value_suffix([map(), ...]) -> string().
-contribution_value_suffix([#{value_expression := {record, _, {value, _}, _}} | _]) -> ".2";
+contribution_value_suffix([#{value_representation := value} | _]) -> ".2";
 contribution_value_suffix(_) -> ".2.1".
 
 source_capture_total(#{capture_checks := Checks}) -> Checks =/= none.
@@ -1224,6 +1227,19 @@ require_variable_origins(Variables, Bindings, Origins, Context) ->
                 Context, Name})
         end
     end, Variables).
+
+%% A typed message field may pass its complete record directly into a gather.
+-spec gather_value_representation(term(), atom(), map()) -> value | tagged.
+gather_value_representation({var, _, Variable}, Element, Bindings) ->
+    case maps:get(Variable, Bindings, missing) of
+        #{type := {hls_type, hls_record, Element, _}} -> value;
+        #{type := {record, Element}} -> tagged;
+        Binding -> error({invalid_hls_statem_gather_element, Variable, Element, Binding})
+    end;
+gather_value_representation({record, _, {value, Element}, _}, Element, _Bindings) -> value;
+gather_value_representation({record, _, Element, _}, Element, _Bindings) -> tagged;
+gather_value_representation(Expression, Element, _Bindings) ->
+    error({invalid_hls_statem_gather_element, Element, Expression}).
 
 %% Raw internal collection elements and tagged scalar accumulators share source records.
 -spec record_expression_name(term()) -> atom().
