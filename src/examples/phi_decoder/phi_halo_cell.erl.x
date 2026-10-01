@@ -512,6 +512,7 @@ struct ReductionApply {
 }
 
 struct ReductionDispatch {
+  next_event: u8,
   reduction: ReductionState,
   phase: Phase,
   data: Cell,
@@ -1003,6 +1004,7 @@ fn reduction_dispatch_completion(
         };
         ReductionDispatch {
           reduction: zero!<ReductionState>(),
+          next_event: u8:0,
           phase: conclusion.0,
           data: conclusion.1,
           directive: conclusion.2,
@@ -1043,6 +1045,7 @@ fn reduction_dispatch_completion(
         };
         ReductionDispatch {
           reduction: zero!<ReductionState>(),
+          next_event: u8:0,
           phase: conclusion.0,
           data: conclusion.1,
           directive: conclusion.2,
@@ -1096,6 +1099,7 @@ fn reduction_dispatch_completion(
         };
         ReductionDispatch {
           reduction: zero!<ReductionState>(),
+          next_event: u8:0,
           phase: conclusion.0,
           data: conclusion.1,
           directive: conclusion.2,

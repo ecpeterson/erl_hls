@@ -12,7 +12,7 @@ rebar3 as test compile
 erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
     -eval 'ok = xls_statem_gather_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 cp priv/xls/lib/*.x priv/xls/fabric/*.x "$stage/"
-for unit in "$stage/statem_gather.x" "$stage/statem_gather_sites.x"; do
+for unit in "$stage/statem_gather.x" "$stage/statem_gather_sites.x" "$stage/statem_gather_debug.x"; do
     "${ERL_HLS_INTERPRETER:-"$xls_root/interpreter_main"}" --compare=jit --warnings_as_errors=false \
         --dslx_path="$stage" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$unit"
 done

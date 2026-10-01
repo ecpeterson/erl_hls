@@ -142,10 +142,10 @@ mailbox_observation(_, _) -> {error, invalid_mailbox_observation}.
 -spec reduction_observation(map(), map()) -> {ok, map()} | {error, term()}.
 reduction_observation(Sample = #{initialized := false},
         #{<<"reduction">> := #{<<"early_collection">> := true}}) ->
-    {ok, Sample#{reduction => undefined}};
+    {ok, Sample#{reduction => undefined, gather => undefined}};
 reduction_observation(Sample = #{initialized := false, value := Value}, _Resource)
         when Value bsr 56 =:= 0 ->
-    {ok, Sample#{reduction => undefined}};
+    {ok, Sample#{reduction => undefined, gather => undefined}};
 reduction_observation(Sample = #{initialized := true, value := Value},
         #{<<"reduction">> := #{<<"fields">> := Fields, <<"sites">> := Sites} = Reduction, <<"failures">> := Failures}) ->
     Read = fun(Name) ->
@@ -153,23 +153,29 @@ reduction_observation(Sample = #{initialized := true, value := Value},
         (Value bsr Offset) band ((1 bsl Width)-1)
     end,
     case Read(<<"status">>) of
-        0 -> {ok, Sample#{reduction => idle}};
+        0 -> {ok, Sample#{reduction => idle, gather => idle}};
         Status when Status =:= 1; Status =:= 2 ->
             Id = Read(<<"site">>), Remaining = Read(<<"remaining">>),
             Match = [S || S = #{<<"id">> := I} <- Sites, I =:= Id],
             case {Match, failure_details(Read(<<"failure">>), Failures)} of
-                {[#{<<"phase">> := Phase, <<"name">> := Name, <<"population">> := Population}], {ok, Failure}} ->
-                    Early = maps:get(<<"early_collection">>, Reduction, false) andalso Status =:= 1 andalso Remaining =:= 0,
+                {[#{<<"phase">> := Phase, <<"name">> := Name, <<"population">> := Population} = Site], {ok, Failure}} ->
+                    Kind = maps:get(<<"kind">>, Site, <<"reduction">>),
+                    Early = Kind =:= <<"reduction">> andalso maps:get(<<"early_collection">>, Reduction, false) andalso
+                        Status =:= 1 andalso Remaining =:= 0,
                     ProgressResult = case Early of
                         true -> early_population(Population, Fields, Read);
-                        false -> reduction_population(Population, Fields, Read, Remaining)
+                        false -> collection_population(Kind, Population, Fields, Read, Remaining)
                     end,
                     case ProgressResult of
                         {ok, Progress} when Early orelse (Status =:= 1 andalso Remaining > 0) orelse
                                 (Status =:= 2 andalso Remaining =:= 0) ->
-                            {ok, Sample#{reduction => Progress#{status => case Early of true -> early; false -> element(Status, {open, complete}) end,
+                            Collection = Progress#{status => case Early of true -> early; false -> element(Status, {open, complete}) end,
                                 phase => Phase, name => Name, key => Read(<<"key">>),
-                                remaining => case Early of true -> undefined; false -> Remaining end, failure => Failure}}};
+                                remaining => case Early of true -> undefined; false -> Remaining end, failure => Failure},
+                            case Kind of
+                                <<"gather">> -> {ok, Sample#{reduction => idle, gather => Collection}};
+                                <<"reduction">> -> {ok, Sample#{reduction => Collection, gather => idle}}
+                            end;
                         _ -> {error, invalid_reduction_observation}
                     end;
                 _ -> {error, invalid_reduction_observation}
@@ -177,8 +183,21 @@ reduction_observation(Sample = #{initialized := true, value := Value},
         _ -> {error, invalid_reduction_observation}
     end;
 reduction_observation(Sample = #{initialized := true, value := Value}, _Resource) when Value bsr 56 =:= 0 ->
-    {ok, Sample#{reduction => idle}};
+    {ok, Sample#{reduction => idle, gather => idle}};
 reduction_observation(_, _) -> {error, invalid_reduction_observation}.
+
+%% Gather permits empty captured membership; scalar reduction keeps its nonempty contract.
+-spec collection_population(binary(), map(), map(), fun((binary()) -> non_neg_integer()),
+    non_neg_integer()) -> {ok, map()} | error.
+collection_population(<<"gather">>, #{<<"runtime_mask">> := true} = Population, Fields, Read, Remaining) ->
+    case maps:is_key(<<"expected">>, Fields) andalso Read(<<"expected">>) =:= 0 of
+        true when Remaining =:= 0 -> member_progress([], 0, Fields, Read, Remaining);
+        true -> error;
+        false -> reduction_population(Population, Fields, Read, Remaining)
+    end;
+collection_population(<<"reduction">>, Population, Fields, Read, Remaining) ->
+    reduction_population(Population, Fields, Read, Remaining);
+collection_population(_, _, _, _, _) -> error.
 
 %% Early input has a bound and identities but no selected runtime population yet.
 -spec early_population(map(), map(), fun((binary()) -> non_neg_integer())) -> {ok, map()} | error.
@@ -289,7 +308,7 @@ with_actor_observer(Session, Observer) ->
 -doc "Lists observation items available on a dedicated actor resource.".
 -spec actor_fields(map()) -> [atom()].
 actor_fields(Resource) ->
-    Base = [initialized, phase, enter_pending, failed, failure, reduction],
+    Base = [initialized, phase, enter_pending, failed, failure, reduction, gather],
     case Resource of
         #{<<"mailbox_kind">> := <<"direct">>} ->
             Base ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots];

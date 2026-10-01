@@ -74,9 +74,33 @@ contribution(Tag, Phase, C = {clause, Line, [_Message, _, Data], _,
         [{tuple, _, [{atom, _, Phase}, {var, _, Variable},
           {tuple, _, [{atom, _, gather}, {atom, _, Name}, Key, Member, Value]}]}]}) ->
     case data_variable(Data) of Variable -> ok; _ -> error({mutating_hls_statem_gather, Line}) end,
+    lists:foreach(fun(Expression) -> case total_expression(Expression) of
+        true -> ok;
+        false -> error({fallible_hls_statem_gather_expression, Expression})
+    end end, [Key, Member, Value]),
     #{tag => Tag, phase => Phase, name => Name, mode => members, clause => C,
       key_expression => Key, member_expression => Member, value_expression => Value};
 contribution(Tag, Phase, Clause) -> error({unsupported_hls_statem_gather, Tag, Phase, Clause}).
+
+%% Contribution selection must not turn a selected-body error into ordinary clause fallthrough.
+-spec total_expression(term()) -> boolean().
+total_expression({Tag, _, _}) when Tag =:= var; Tag =:= integer; Tag =:= char; Tag =:= atom; Tag =:= float -> true;
+total_expression({xls_typed_integer, _, _, _}) -> true;
+total_expression({record, _, _, Fields}) ->
+    lists:all(fun({record_field, _, _, Value}) -> total_expression(Value) end, Fields);
+total_expression({record_field, _, Value, _, _}) -> total_expression(Value);
+total_expression({tuple, _, Values}) -> lists:all(fun total_expression/1, Values);
+total_expression({nil, _}) -> true;
+total_expression({cons, _, Head, Tail}) -> total_expression(Head) andalso total_expression(Tail);
+total_expression({op, _, Op, Value}) when Op =:= '+'; Op =:= '-'; Op =:= 'bnot'; Op =:= 'not' -> total_expression(Value);
+total_expression({op, _, Op, Left, Right}) when Op =:= '+'; Op =:= '-'; Op =:= '*';
+        Op =:= 'band'; Op =:= 'bor'; Op =:= 'bxor' -> total_expression(Left) andalso total_expression(Right);
+total_expression({call, _, {remote, _, {atom, _, hls_type}, {atom, _, as}},
+        [{call, _, {remote, _, {atom, _, hls_nums}, {atom, _, Name}}, Arguments}, Value]}) ->
+    lists:member(Name, [u8, u16, u32, u64, uN, s8, s16, s32, s64, sN]) andalso
+        lists:all(fun({integer, _, _}) -> true; (_) -> false end, Arguments) andalso total_expression(Value);
+total_expression({call, _, {remote, _, {atom, _, hls_type}, {atom, _, zero}}, []}) -> true;
+total_expression(_) -> false.
 
 %% Whole-record aliases permit field patterns without permitting contribution mutation.
 -spec data_variable(term()) -> atom().

@@ -102,6 +102,26 @@ bound_record_element_test() ->
             ?assert(is_binary(iolist_to_binary(xls_parse:to_xls(Path))))
         end).
 
+%% The projection reserves one metadata union and identifies each source collection kind.
+-spec direct_debug_layout_test() -> ok.
+direct_debug_layout_test() ->
+    Interface = xls_parse:actor_interface(?FIXTURE),
+    Collection = xls_actor_observation:collection(Interface),
+    ?assertMatch(#{sites := [#{id := 0, name := parity}, #{id := 1, name := items, kind := gather}]}, Collection),
+    ?assertMatch(#{width := 111, reduction := #{width := 62}, mailbox := #{offset := 87}}, xls_actor_observation:layout(Collection)),
+    Bank = xls_actor_debug:direct_bank(0, #{id => {actor, probe}, module => xls_statem_gather_fixture, port => <<"_probe">>}, Interface, []),
+    ?assertMatch([#{id := 0, name := parity}, #{id := 1, name := items, kind := gather}],
+        maps:get(sites, maps:get(reduction, Bank))),
+    ?assertEqual(111, maps:get(width, Bank)).
+
+%% Unsupported partial lift expressions are rejected before their errors could become fallback selection.
+-spec selected_body_failure_is_not_fallthrough_test() -> ok.
+selected_body_failure_is_not_fallthrough_test() ->
+    with_change(<<"{gather, items, Key, Member, #element{value = Value}}">>,
+        <<"{gather, items, Key, Member, #element{value = Value div 0}}">>, fun(Path) ->
+            ?assertException(error, {fallible_hls_statem_gather_expression, _}, xls_parse:actor_artifact(Path, []))
+        end).
+
 %% Source variations remain isolated from the reviewed generic fixture.
 -spec with_change(binary(), binary(), fun((file:filename()) -> term())) -> term().
 with_change(From, To, Check) ->

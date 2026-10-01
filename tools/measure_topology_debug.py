@@ -151,7 +151,10 @@ def main():
             selected = [{k: v for k, v in bank.items() if k != 'mailbox'}
                         for bank in banks]
             for bank in selected:
-                bank['taps'] = bank['taps'][:1 + bank['address_width'] + 25 + bank.get('reduction', {}).get('width', 0)]
+                source = banks[bank['index']]
+                mailbox_start = 1 + bank['address_width'] + 25 + actors.ram_reduction_width(bank)
+                mailbox_width = 1 + 24 * bank['slots'] if 'mailbox' in source else 0
+                bank['taps'] = source['taps'][:mailbox_start] + source['taps'][mailbox_start + mailbox_width:]
         folder = stage / mode
         folder.mkdir(parents=True, exist_ok=True)
         (folder / 'sidecar.v').write_text(sidecar(mode, physical, selected, indices, manifest))
