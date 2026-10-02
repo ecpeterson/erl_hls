@@ -13,6 +13,7 @@ import tempfile
 from backend_paths import PUBLIC
 from compile_xls import build, identity, locked, sha
 from completion_fifo import transform
+from optimizer_pipeline import prepare as prepare_optimizer_pipeline
 
 
 def compile_topology(
@@ -26,19 +27,28 @@ def compile_topology(
     stages: int = 2,
     executor_result_delay: int = 0,
     completion_storage: str = "registers",
+    optimizer_pipeline: Path | None = None,
     timeout: int = 1800,
 ) -> Path:
     """Publish an immutable, provenance-checked release after all requested lowering passes.
 
     Executor delay reserves unit-model budget at result sends, not physical
     picoseconds. It changes XLS scheduling, not pipeline depth. LUTRAM keeps
-    completion queue capacity and latency fixed; unknown FIFO shapes fail.
+    completion queue capacity and latency fixed; unknown FIFO shapes fail. An
+    explicit optimizer pipeline is frozen and hashed alongside the original tool.
     """
     if executor_result_delay < 0 or completion_storage not in ("registers", "lutram"):
         raise ValueError("invalid executor budget or completion storage policy")
     output = output.resolve() if not output.is_symlink() else output.absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
     with locked(output.parent / f".{output.name}.lock"):
+        optimizer_policy = {}
+        if optimizer_pipeline is not None:
+            if any(path.name == "optimizer_pipeline.txtpb" for path in assets):
+                raise ValueError("reserved optimizer pipeline asset name")
+            xls, frozen_pipeline, optimizer_policy = prepare_optimizer_pipeline(
+                xls, optimizer_pipeline, output.parent / ".xls-optimizer-pipelines")
+            assets = [*assets, frozen_pipeline]
         raw = output.parent / ("." + output.name + "-xls")
         release = build(
             source,
@@ -57,6 +67,7 @@ def compile_topology(
         rtl_name = name + ".v"
         text = (release / rtl_name).read_text()
         policy = {
+            **optimizer_policy,
             "executor_result_delay": executor_result_delay,
             "completion_storage": completion_storage,
             "driver_sha256": sha(Path(__file__)),
@@ -112,6 +123,7 @@ def main() -> None:
     parser.add_argument("--pipeline-stages", type=int, default=2)
     parser.add_argument("--executor-result-delay", type=int, default=0)
     parser.add_argument("--completion-storage", choices=("registers", "lutram"), default="registers")
+    parser.add_argument("--optimizer-pipeline", type=Path, help="Explicit XLS pipeline textproto; frozen into the release.")
     parser.add_argument("--timeout", type=int, default=1800)
     args = parser.parse_args()
     print(
@@ -125,6 +137,7 @@ def main() -> None:
             stages=args.pipeline_stages,
             executor_result_delay=args.executor_result_delay,
             completion_storage=args.completion_storage,
+            optimizer_pipeline=args.optimizer_pipeline,
             timeout=args.timeout,
         )
     )
