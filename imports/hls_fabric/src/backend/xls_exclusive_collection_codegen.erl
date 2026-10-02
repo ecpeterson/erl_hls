@@ -48,7 +48,8 @@ helpers(Spec = #{reductions := R}) ->
     [core(Spec),
      "// Dispatch sees only an opened collection; early input remains scheduler-owned.\n",
      "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState, failure: hls_failure::Code) -> MachineBits {\n  ",
-     case maps:get(continuations, Spec, []) of [] -> []; _ -> ["raw[", integer_to_list(End), ":] ++ "] end,
+     case maps:get(continuations, Spec, []) =/= [] orelse maps:get(gathers, Spec, none) =/= none of
+         false -> []; true -> ["raw[", integer_to_list(End), ":] ++ "] end,
      "(if reduction.status == ReductionStatus::IDLE { raw[", integer_to_list(Start), ":", integer_to_list(End), "] } else { bits_from_reduction_state(reduction) }) ++ hls_failure::first(raw[", integer_to_list(Failure), ":", integer_to_list(Start), "] as hls_failure::Code, failure) ++ raw[0:", integer_to_list(Failure), "]\n}\n\n",
      Template].
 

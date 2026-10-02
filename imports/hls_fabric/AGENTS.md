@@ -7,3 +7,5 @@ Run the checks in [docs/source-quality.md](docs/source-quality.md), plus tests a
 Keep long-lived worktrees and compiler caches outside system temporary directories. macOS may delete old `/tmp` files even while a worktree is in use; use it only for disposable scratch.
 
 Use `python3 tools/build.py` to prepare the pinned compiler and run rebar3. Keep retained measurements in the external artifact archive, never in `_build/` or source directories; see [docs/artifacts.md](docs/artifacts.md).
+
+Run memory-intensive local builds, simulations and profile exports one at a time. Use bounded profile windows and prefer the authorized remote machine for large physical runs. Report expected memory before unavoidable large local jobs; do not fill local memory merely to increase parallelism.

@@ -81,22 +81,23 @@ fn collection_select_ordinary<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state.pending, eligible, false, u32:0, false, u32:0)
 }
 
+// Probe reserved producers fairly without reading actor banks during arbitration.
+// A selected input can remain blocked; commit advances the cursor after that probe.
 // Collector admission never selects a mailbox cell or reads its occupancy.
 fn collection_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
   let eligible = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
     let request = state.pending[producer];
-    let bank = CollectionBank { reduction: state.collection_context[request.slot].reduction,
-      opened: state.collection_owners.opened[request.slot], failure: state.collection_context[request.slot].failure };
     update(flags, producer, state.pending_valid[producer] && request.slot < ACTOR_COUNT &&
-      !request.credit && collection_reserved(request.frame) && collection_accepts_input(bank, state.collection_inputs[producer]))
+      !request.credit && collection_reserved(request.frame))
   }(zero!<bool[PRODUCER_COUNT]>());
   let (valid, producer) = arbitration::select(eligible, state.collection_cursor);
-  mailbox::Admission { valid, producer, slot: state.pending[producer].slot, physical: u8:0 }
+  mailbox::Admission { valid, producer, slot: if valid { state.pending[producer].slot } else { u32:0 }, physical: u8:0 }
 }
 
-// Every reserved frame is consumed here, including faults; none can fall back to
-// ordinary delivery after partial folding. Existing failures are absorbing.
+// A selected frame folds only when the committed bank accepts it and control
+// does not own its write. Blocked frames remain pending; accepted malformed frames
+// fault here without ordinary fallback. Reducer poison still drains its members.
 fn collection_admit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     committed: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, intent: mailbox::Admission)
     -> (bool, ReductionState, hls_failure::Code) {
@@ -108,15 +109,19 @@ fn collection_admit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
       hls_failure::failed(committed.collection_command.failure));
   let conflict = control_writes && committed.collection_command.slot == intent.slot;
   let frame = committed.pending[intent.producer].frame;
-  let reserved = intent.valid && collection_reserved(frame) && !conflict;
+  let input = committed.collection_inputs[intent.producer];
   let context = committed.collection_context[intent.slot];
   let bank = CollectionBank { reduction: context.reduction,
     opened: committed.collection_owners.opened[intent.slot], failure: context.failure };
-  let folded = collection_fold_input(bank, committed.collection_inputs[intent.producer], reserved);
-  (reserved, folded.reduction, folded.failure)
+  let accepted = intent.valid && collection_reserved(frame) && !conflict &&
+    collection_accepts_input(bank, input);
+  let folded = collection_fold_input(bank, input, accepted);
+  (accepted, folded.reduction, folded.failure)
 }
 
-// Merge one frame after registered control, retaining producer fairness and wakeup state.
+// Merge an accepted frame after registered control. Every cheap-valid probe moves
+// the cursor, including acceptance/control stalls; only consumption clears pending.
+// A continuously cheap-eligible producer is retried within PRODUCER_COUNT enabled steps.
 fn collection_commit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, intent: mailbox::Admission,
     collected: (bool, ReductionState, hls_failure::Code)) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
@@ -129,12 +134,14 @@ fn collection_commit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
       internal_candidates: update(state.internal_candidates, slot, new_failure ||
         (if hls_failure::failed(collected.2) { state.internal_candidates[slot] } else {
           state.collection_owners.opened[slot] && collected.1.status == ReductionStatus::COMPLETE })),
-      collection_cursor: if intent.producer + u32:1 == PRODUCER_COUNT { u32:0 } else { intent.producer + u32:1 },
       ..state
     }
   };
   SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
     pending_valid: mailbox::clear_pending(state.pending_valid, intent.producer, collected.0),
+    collection_cursor: if intent.valid {
+      if intent.producer + u32:1 == PRODUCER_COUNT { u32:0 } else { intent.producer + u32:1 }
+    } else { state.collection_cursor },
     ..updated
   }
 }

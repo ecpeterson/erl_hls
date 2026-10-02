@@ -1,5 +1,7 @@
 # Buffered completion joins: bounded next probe
 
+Reviewed 2026-10-01. Original physical proposal superseded by merged PR #59. Root and leaf acknowledgments now use shared checked collectors, rather than the exact independent-lane join proposed below. Further parallel fan-in is a profile-gated port/storage option in [the service plan](decoder-service-investigations.md), not unfinished baseline integration. Parser restrictions below also predate public PR #192.
+
 Status: deferred implementation after measuring the locally advanced protocol. Root intake remains a candidate; the short leaf tail does not justify replacing leaf actors yet.
 
 ## Evidence and decision

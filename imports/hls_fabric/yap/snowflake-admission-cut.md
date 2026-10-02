@@ -1,5 +1,7 @@
 # Admission selector and reservation cut
 
+Reviewed 2026-10-01. Historical proposal, partly rejected and partly deferred. The [selector-only variant](snowflake-admission-selector-native.md) lost its matched comparison. The proposed shared reservation pipeline remains unimplemented and differs from PR #59’s direct ordinary-message ticket. Revisit only if the post-snapshot census in [the campaign plan](topology-specialization.md) justifies its latency and storage cost.
+
 Proposal only. Wait for the matched routed control before choosing either experiment. Preserve the complete decoder, mailbox capacities and application arithmetic.
 
 ## Observed chain

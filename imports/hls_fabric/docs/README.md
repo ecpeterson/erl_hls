@@ -3,6 +3,7 @@
 Begin with [building the backend](building.md); keep retained measurements in the [external artifact archive](artifacts.md).
 
 - [Actor execution](execution/README.md): shared placement, compiler boundary and observations.
+- [Indexed collections](indexed-collections.md): typed member snapshots, storage ownership and placement assertions.
 - [Virtual nodes](device-sessions.md): messages, lifetimes, admission and recovery.
 - [Actor PIDs](actor-pids.md): logical addressing and hardware inspection.
 - [Return contexts](return-contexts.md): request/reply ownership at the device boundary.
@@ -13,4 +14,4 @@ Begin with [building the backend](building.md); keep retained measurements in th
 - [Actor timing profiles](profiling.md): reusable event graphs, exact clocks and causal scope.
 - [Source quality](source-quality.md) and [style](../STYLE.md): contributor requirements.
 
-`yap/` holds implementation/qualification working material. `experiments/results/` holds measurements with their scope and reproduction commands.
+`yap/` holds implementation/qualification working material. Retained measurements, scope and reproduction evidence live in the external artifact archive.

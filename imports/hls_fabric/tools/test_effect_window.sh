@@ -9,7 +9,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
 cd "$project_root"
-rebar3 as test compile >/dev/null
+python3 tools/build.py as test compile >/dev/null
 source tools/backend_env.sh
 
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
@@ -41,6 +41,9 @@ for top in ArbiterTop ReturnTop; do
         timeout 60s vvp "$prefix.vvp" | tee "$prefix.sim.log"
     done
 done
+
+# Exercise the generated router, including retained payload/index coupling.
+python3 tools/test_effect_router.py "$xls_root" --stage "$stage/router"
 
 # Bound elaboration separately from functional tests: the prior conditional
 # array update becomes impractical at twelve contenders on the native compiler.

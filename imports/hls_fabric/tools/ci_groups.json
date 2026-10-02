@@ -60,6 +60,12 @@
         "priv/xls/templates/**",
         "priv/xls/lib/**",
         "tools/test_shared_*",
+        "tools/test_indexed_collection.sh",
+        "tools/test_indexed_debug.sh",
+        "test/hls_indexed*",
+        "test/rtl/hls_indexed*",
+        "priv/rtl/hls_indexed*",
+        "priv/xls/lib/indexed_*",
         "tools/test_actor_outboxes.sh",
         "tools/test_mailbox_formal.py"
       ],

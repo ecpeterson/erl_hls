@@ -15,9 +15,15 @@ generated_multi_family_topology_retains_compact_structure_test() ->
         "spawn effect_window::Arbiter<"
     >>)),
     ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    %% Ordinary routers retain two effect lookups each; the two phi reduction
-    %% routers additionally materialize their four-frame captured prefixes.
+    %% Each router decodes incoming index zero and its next retained effect;
+    %% the two phi reduction routers also decode their four-frame prefixes.
     ?assertEqual(20, count(Generated, <<"::scheduled_effect(">>)),
+    ?assertEqual(6, count(Generated, <<"let state_effect_info = state.head;">>)),
+    ?assertEqual(6, count(Generated, <<"let effect_info = if state.control.active { state.head }">>)),
+    ?assertEqual(6, count(Generated, <<"::scheduled_effect(incoming, u8:0);">>)),
+    ?assertEqual(6, count(Generated, <<"scheduled: incoming, head: incoming_effect_info">>)),
+    ?assertEqual(6, count(Generated, <<"::scheduled_effect(scheduled, next_index)">>)),
+    ?assertEqual(0, count(Generated, <<"::scheduled_effect(state.scheduled, state.index)">>)),
     ?assertEqual(1, count(Generated, <<"proc Phi_xReductionPlane {">>)),
     ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
     ?assertEqual(4, count(Generated, <<

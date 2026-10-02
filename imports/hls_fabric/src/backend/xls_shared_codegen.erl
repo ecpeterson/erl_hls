@@ -1,6 +1,6 @@
 -module(xls_shared_codegen).
 -moduledoc false.
--export([emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_layout/2]).
+-export([emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
 %% Checked actor artifact augmented with private physical options.
 -type spec() :: map().
@@ -11,13 +11,16 @@ emit(Spec) ->
     ok = xls_shared_names:validate(Spec),
     Reductions = maps:get(reductions, Spec, none),
     Mode = maps:get(shared_service, Spec, ordinary),
-    xls_actor_codegen:emit(xls_exclusive_collection_codegen:actor_spec(Spec), [bram, mailbox, scheduler, arbitration, direct_mailbox_observation] ++ xls_scheduler_observation:imports(Spec),
+    xls_actor_codegen:emit(xls_exclusive_collection_codegen:actor_spec(Spec), [bram, mailbox, scheduler, arbitration, std, direct_mailbox_observation] ++ xls_scheduler_observation:imports(Spec) ++ xls_indexed_collection_codegen:imports(Spec),
         [xls_shared_reduction_codegen:declarations(Reductions, Mode),
          xls_exclusive_collection_codegen:declarations(Spec),
+         xls_indexed_collection_codegen:declarations(Spec),
          machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
-         xls_shared_collection_codegen:helpers(Spec), xls_collection_observation:declarations(Spec),
+         xls_shared_collection_codegen:helpers(Spec), xls_indexed_collection_codegen:helpers(Spec), xls_collection_observation:declarations(Spec),
          "fn initial_shared_machine() -> ActorState { initial_actor_state() }\n\n",
          xls_shared_reduction_codegen:functions(Reductions, Mode),
+         xls_shared_gather_codegen:helpers(Spec),
+         xls_shared_gather_codegen:selection_helpers(Spec),
          scheduled_effect_function(Spec), shared_machine_step_function(Spec),
          shared_executor(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
 %% Defines accepted-work tickets, RAM row types and scheduler-owned metadata.
@@ -27,7 +30,8 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    MachineBits = shared_machine_width(DataWidth, ReductionWidth) + event_width(Spec) + xls_statem_reply_codegen:width(Spec),
+    GatherWidth = xls_shared_gather_codegen:storage_width(Spec),
+    MachineBits = shared_machine_width(DataWidth, ReductionWidth, GatherWidth) + event_width(Spec) + xls_statem_reply_codegen:width(Spec),
     [
         "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
         "pub type MachineRamReadReq = bram::ReadReq;\n",
@@ -59,8 +63,10 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "  slot: u32,\n  received: u1,\n  mailbox_index: u8,\n  order_index: u8,\n",
         ?REDUCTION_SERVICE:shared_executor_request_field(Reductions, SharedService),
         xls_shared_collection_codegen:ticket_field(Spec),
+        xls_indexed_collection_codegen:ticket_field(Spec),
         "}\n\n",
         "pub struct SharedExecutorRequest {\n",
+        xls_indexed_memory_codegen:request_fields(Spec),
         "  slot: u32,\n",
         "  machine: MachineBits,\n",
         "  frame: axis::Frame,\n",
@@ -100,10 +106,14 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "  in_flight: u1[ACTOR_COUNT],\n",
         ?REDUCTION_SERVICE:shared_state_fields(Reductions, SharedService),
         xls_shared_collection_codegen:state_fields(Spec),
+        xls_shared_gather_codegen:state_fields(Spec),
+        xls_indexed_collection_codegen:state_fields(Spec),
+        xls_indexed_memory_codegen:optional(Spec, "  gather_write_pending: bool,\n"),
         "  completed_valid: u1,\n",
         "  completed: SharedExecutorResult,\n",
         "  admission_cursor: u32,\n",
-        "  cursor: u32,\n",
+        "  // Only BOOT and accepted actor selection advance this bounded cursor.\n",
+        "  cursor: uN[std::max(u32:1, std::clog2(ACTOR_COUNT))],\n",
         "  startup_seen: u32,\n",
         "  pending: ScheduledRequest[PRODUCER_COUNT],\n",
         "  pending_valid: u1[PRODUCER_COUNT],\n",
@@ -133,16 +143,26 @@ shared_machine_width(DataWidth) ->
 -spec shared_machine_width(non_neg_integer(), non_neg_integer()) ->
     pos_integer().
 shared_machine_width(DataWidth, ReductionWidth) ->
-    maps:get(width, shared_machine_layout(DataWidth, ReductionWidth)).
+    shared_machine_width(DataWidth, ReductionWidth, 0).
+
+-doc "Returns the physical row width including independently sized gather storage.".
+-spec shared_machine_width(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> pos_integer().
+shared_machine_width(DataWidth, ReductionWidth, GatherWidth) ->
+    maps:get(width, shared_machine_layout(DataWidth, ReductionWidth, GatherWidth)).
 
 %% Low-to-high packed RAM layout, shared by the codec and passive debug taps.
 -doc "Returns bit offsets used consistently by codecs and observation extraction.".
 -spec shared_machine_layout(non_neg_integer(), non_neg_integer()) -> map().
 shared_machine_layout(DataWidth, ReductionWidth) ->
+    maps:remove(gather, shared_machine_layout(DataWidth, ReductionWidth, 0)).
+
+-doc "Places gather storage after reduction storage, preserving ordinary observation offsets.".
+-spec shared_machine_layout(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> map().
+shared_machine_layout(DataWidth, ReductionWidth, GatherWidth) ->
     {Width, Fields} = lists:foldl(fun({Name, Bits}, {Offset, Acc}) ->
         {Offset + Bits, Acc#{Name => #{offset => Offset, width => Bits}}}
     end, {0, #{}}, [{phase, 8}, {entered_from, 8}, {data, DataWidth},
-        {enter_pending, 1}, {failure, 16}, {reduction, ReductionWidth}]),
+        {enter_pending, 1}, {failure, 16}, {reduction, ReductionWidth}, {gather, GatherWidth}]),
     Fields#{width => Width}.
 
 %% Packs shared RAM rows; optional private fields follow the stable observation offsets.
@@ -153,7 +173,9 @@ machine_codec(Spec) ->
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
     #{data := #{offset := DataStart}, enter_pending := #{offset := EnterStart},
         failure := #{offset := FailureStart}, reduction := #{offset := ReductionStart},
-        width := ReductionEnd} = shared_machine_layout(DataWidth, ReductionWidth),
+        gather := #{offset := GatherStart}, width := PrivateEnd} =
+        shared_machine_layout(DataWidth, ReductionWidth, xls_shared_gather_codegen:storage_width(Spec)),
+    ReductionEnd = ReductionStart + ReductionWidth,
     [
         "fn machine_from_bits", xls_state_projection:parameter(Spec), "(raw: MachineBits",
         case maps:is_key(state_projection, Spec) of true -> ", slot: u32"; false -> "" end,
@@ -164,9 +186,9 @@ machine_codec(Spec) ->
         "    data: ", xls_state_projection:decode(Spec,
             ["raw[", integer_to_list(DataStart), ":", integer_to_list(EnterStart), "]"], "slot"), ",\n",
         xls_statem_reply_codegen:optional(Spec, ["    replies: hls_reply::from_bits<REPLY_CAPACITY>(raw[",
-            integer_to_list(ReductionEnd + event_width(Spec)), ":",
-            integer_to_list(ReductionEnd + event_width(Spec) + xls_statem_reply_codegen:width(Spec)), "]),\n"]),
-        xls_statem_event_codegen:optional(Spec, ["    next_event: raw[", integer_to_list(ReductionEnd), ":", integer_to_list(ReductionEnd + 8), "],\n"]),
+            integer_to_list(PrivateEnd + event_width(Spec)), ":",
+            integer_to_list(PrivateEnd + event_width(Spec) + xls_statem_reply_codegen:width(Spec)), "]),\n"]),
+        xls_statem_event_codegen:optional(Spec, ["    next_event: raw[", integer_to_list(PrivateEnd), ":", integer_to_list(PrivateEnd + 8), "],\n"]),
         "    enter_pending: raw[", integer_to_list(EnterStart), ":",
         integer_to_list(FailureStart), "],\n",
         "    failure: raw[", integer_to_list(FailureStart), ":",
@@ -176,11 +198,13 @@ machine_codec(Spec) ->
             ReductionStart,
             ReductionEnd
         ),
+        xls_shared_gather_codegen:machine_decode_field(Spec, GatherStart, PrivateEnd),
         "  }\n",
         "}\n\n",
         "fn bits_from_machine(machine: ActorState) -> MachineBits {\n",
         xls_statem_reply_codegen:optional(Spec, "  hls_reply::to_bits(machine.replies) ++\n"),
         xls_statem_event_codegen:optional(Spec, "  machine.next_event ++\n"),
+        xls_shared_gather_codegen:machine_encode_prefix(Spec),
         ?REDUCTION_SERVICE:machine_encode_prefix(Reductions),
         "  machine.failure ++\n",
         "    machine.enter_pending ++\n",
@@ -251,7 +275,7 @@ shared_machine_step_function(#{
     SharedService = maps:get(shared_service, Spec, ordinary),
     [
         ?REDUCTION_SERVICE:shared_machine_support(
-            Reductions, SharedService
+            Reductions, SharedService, Spec
         ),
         "fn shared_machine_dispatch(\n",
         "    machine: ActorState, frame: axis::Frame, received: u1)\n",
@@ -271,13 +295,13 @@ shared_machine_step_function(#{
         "      (directive != Directive::CONSUME ||\n",
         "       next_phase != machine.phase);\n",
         ?REDUCTION_SERVICE:shared_dispatch_effective_binding(
-            Reductions, SharedService
+            Reductions, SharedService, Spec
         ),
         "    let phase_changed = effective && next_phase != machine.phase;\n",
         "    let phase_boundary = phase_changed ||\n",
         "      (effective && repeat_phase);\n",
         ?REDUCTION_SERVICE:shared_dispatch_failed_binding(
-            Reductions, SharedService
+            Reductions, SharedService, Spec
         ),
         xls_statem_reply_codegen:finish(Spec, "frame"),
         xls_actor_codegen:reply_failure_binding(Spec),
@@ -301,7 +325,7 @@ shared_machine_step_function(#{
         xls_statem_reply_codegen:optional(Spec, "      reply: response, reply_valid: response_valid,\n"),
         case xls_statem_reply_codegen:enabled(Spec) of
             true -> "      dispatched: failed || effective,\n      directive: if failed { Directive::CONSUME } else { directive },\n";
-            false -> [?REDUCTION_SERVICE:shared_dispatch_dispatched_field(Reductions, SharedService), "      directive,\n"]
+            false -> [?REDUCTION_SERVICE:shared_dispatch_dispatched_field(Reductions, SharedService, Spec), "      directive,\n"]
         end,
         "      phase_boundary,\n",
         "      ..zero!<ActorDispatch>()\n",
@@ -313,7 +337,7 @@ shared_machine_step_function(#{
         "  if hls_failure::failed(machine.failure) || !machine.enter_pending {\n",
         "    SharedStep { machine, ..zero!<SharedStep>() }\n",
         "  } else {\n",
-        ?REDUCTION_SERVICE:shared_entry_step(Reductions),
+        ?REDUCTION_SERVICE:shared_entry_step(Reductions, Spec),
         "  }\n",
         "}\n\n"
     ].
@@ -400,16 +424,17 @@ shared_loader(Spec) ->
         || Field <- Fields]),
     xls_template:render(Template, [
         {<<"@@REDUCTION_FIELDS@@">>, Copy},
-        {<<"@@MACHINE_BITS@@">>, xls_shared_collection_codegen:loader_value(Spec)}]).
+        {<<"@@MACHINE_BITS@@">>, xls_shared_collection_codegen:loader_value(Spec)} |
+        xls_indexed_memory_codegen:loader_bindings(Spec)]).
 
 %% Emits RAM-backed scheduling, retaining one pending request per producer.
 -spec shared_service(spec()) -> iodata().
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
-    RamParameters = xls_scheduler_ram_dslx:parameters(write, [], []),
-    RamConfigParameters = xls_scheduler_ram_dslx:parameters([], []),
-    RamNames = xls_scheduler_ram_dslx:names(write, []),
+    RamParameters = xls_scheduler_ram_dslx:parameters(write, [], [], Spec),
+    RamConfigParameters = xls_scheduler_ram_dslx:parameters(all, [], [], Spec),
+    RamNames = xls_scheduler_ram_dslx:names(write, [], Spec),
     [
     ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
     """
@@ -527,7 +552,9 @@ shared_service(Spec) ->
         spawn SharedRequestStage(loaded_request_c, executor_request_p);
         spawn SharedLoader<INSTANCE_ID, {mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH)}>(
           dispatch_c, loaded_request_p,
-          ram_read_req_out, ram_read_resp_in, mailbox_read_req_out, mailbox_read_resp_in);
+          ram_read_req_out, ram_read_resp_in, mailbox_read_req_out, mailbox_read_resp_in
+    """, xls_indexed_memory_codegen:optional(Spec, ", gather_read_req_out, gather_read_resp_in"), """
+        );
         (
           request_in,
           startup_in,
@@ -592,24 +619,26 @@ shared_service(Spec) ->
         ",\n",
     """
               ram_write_req_out,
-              machine_write(state.cursor, initial_shared_machine()));
+              machine_write(state.cursor as u32, initial_shared_machine()));
             let (_done, _) = recv(write_tok, ram_write_resp_in);
             let entry_probes = update(
-              state.entry_probes, state.cursor, u1:1);
-            let next_state = if state.cursor + u32:1 == ACTOR_COUNT {
+              state.entry_probes, state.cursor as u32, u1:1);
+            let cursor = scheduler::advance_cursor<ACTOR_COUNT>(
+              state.cursor, true, state.cursor as u32);
+            let next_state = if (state.cursor as u32) == ACTOR_COUNT - u32:1 {
               SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
                 phase: if STARTUP_COUNT == u32:0 {
                   SharedPhase::RUN
                 } else {
                   SharedPhase::STARTUP
                 },
-                cursor: u32:0,
+                cursor,
                 entry_probes,
                 ..state
               }
             } else {
               SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-                cursor: state.cursor + u32:1,
+                cursor,
                 entry_probes,
                 ..state
               }
@@ -697,7 +726,7 @@ shared_service(Spec) ->
               phase_boundary: result.phase_boundary,
               egress_blocked: result.egress_blocked,
             };
-    """, xls_shared_collection_codegen:resolve(Spec), """
+    """, xls_shared_collection_codegen:resolve(Spec), xls_indexed_collection_codegen:resolve(Spec), """
             let credited = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
     """, xls_shared_collection_codegen:captured_field(Spec), """
               pending: captured_pending,
@@ -714,6 +743,8 @@ shared_service(Spec) ->
             ?REDUCTION_SERVICE:shared_retire_binding(Reductions,
                 xls_shared_collection_codegen:retire_binding(Spec)),
             xls_shared_collection_codegen:retire(Spec),
+            xls_shared_gather_codegen:retire(Spec),
+            xls_indexed_collection_codegen:retire(Spec),
     """
             let retired_in_flight = if retire_valid {
               update(retired.in_flight, result.slot, u1:0)
@@ -727,9 +758,7 @@ shared_service(Spec) ->
               else { state.completed };
     """,
             "\n",
-            ?REDUCTION_SERVICE:shared_issue_bindings(
-                Reductions, SharedService
-            ),
+            xls_shared_gather_codegen:issue_bindings(Spec),
     """
             let (received, order_index, mailbox_index) =
               mailbox::select(
@@ -742,11 +771,14 @@ shared_service(Spec) ->
               join(), mailbox_write_resp_in,
               state.mailbox_write_pending,
               zero!<MailboxRamWriteResp>());
+    """, xls_indexed_memory_codegen:optional(Spec,
+        "        let (gather_completion_tok, _) = recv_if(join(), gather_write_resp_in,\n"
+        "          state.gather_write_pending, zero!<GatherRamWriteResp>());\n"), """
             // Both arbiters see only committed metadata and registered inputs.
             // Apply this intent after retirement; never replace a whole stale row.
             // An already-free cell cannot alias the live message in a dispatch
             // ticket, so admission does not depend on this cycle's actor choice.
-    """, xls_shared_collection_codegen:selection(Spec), xls_shared_collection_codegen:admit(Spec), """
+    """, xls_shared_collection_codegen:selection(Spec), xls_shared_collection_codegen:admit(Spec), xls_indexed_collection_codegen:admit(Spec), """
             let admission = mailbox::Admission {
     """, "          valid: intent.valid", xls_shared_collection_codegen:admission_guard(Spec), " && !(retire_valid &&\n", """
                 hls_failure::failed(resolved.machine.failure) && intent.slot == result.slot),
@@ -767,7 +799,9 @@ shared_service(Spec) ->
             };
     """,
             xls_shared_collection_codegen:commit(Spec),
+            xls_indexed_collection_codegen:commit(Spec),
             xls_shared_collection_codegen:issue(Spec),
+            xls_indexed_collection_codegen:issue(Spec),
             ?REDUCTION_SERVICE:shared_post_issue_state(
                 Reductions, SharedService
             ),
@@ -777,15 +811,8 @@ shared_service(Spec) ->
             } else {
               retired_in_flight
             };
-            let cursor = if issue_valid {
-              if read_slot + u32:1 == ACTOR_COUNT {
-                u32:0
-              } else {
-                read_slot + u32:1
-              }
-            } else {
-              state.cursor
-            };
+            let cursor = scheduler::advance_cursor<ACTOR_COUNT>(
+              state.cursor, issue_valid, read_slot);
             let selection_state = SharedState<
                 ACTOR_COUNT, PRODUCER_COUNT> {
               in_flight: issued_in_flight,
@@ -805,6 +832,7 @@ shared_service(Spec) ->
                 Reductions, SharedService
             ),
             xls_shared_collection_codegen:ticket_value(Spec),
+            xls_indexed_collection_codegen:ticket_value(Spec),
     """
               received: read_mailbox && received,
               mailbox_index,
@@ -812,7 +840,9 @@ shared_service(Spec) ->
             };
             // Preserve the write-visibility fence before transferring read ownership.
             let dispatch_tok = send_if(
-              join(memory_tok, state_completion_tok, mailbox_completion_tok),
+              join(memory_tok, state_completion_tok, mailbox_completion_tok
+    """, xls_indexed_memory_codegen:optional(Spec, ", gather_completion_tok"), """
+              ),
               dispatch_out, issue_valid, ticket);
             let scheduled = ScheduledEffects {
               slot: result.slot,
@@ -841,12 +871,17 @@ shared_service(Spec) ->
                 reservation.admission.physical,
                 mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH),
                 admission_frame));
+    """, xls_indexed_memory_codegen:optional(Spec,
+        "        let gather_write_tok = send_if(join(memory_tok, gather_completion_tok),\n"
+        "          gather_write_req_out, indexed_admission.write_valid, indexed_admission.write);\n"), """
             let _done = join(
               state_write_tok,
               mailbox_write_tok,
               dispatch_tok,
               state_completion_tok,
-              mailbox_completion_tok);
+              mailbox_completion_tok
+    """, xls_indexed_memory_codegen:optional(Spec, ", gather_completion_tok, gather_write_tok"), """
+              );
             let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
               in_flight: issued_in_flight,
               completed_valid,
@@ -854,9 +889,12 @@ shared_service(Spec) ->
               cursor,
               state_write_pending: retire_valid,
               mailbox_write_pending: reservation.admission.valid,
+    """, xls_indexed_memory_codegen:optional(Spec, "          gather_write_pending: indexed_admission.write_valid,\n"), """
               ..selection_state
             };
-            (join(state_write_tok, mailbox_write_tok), next_state)
+            (join(state_write_tok, mailbox_write_tok
+    """, xls_indexed_memory_codegen:optional(Spec, ", gather_write_tok"), """
+            ), next_state)
           },
         }
       }

@@ -49,9 +49,17 @@ run(Stage) ->
             %% later debug requests behind the application messages.
             ok = peer:call(ProducerPeer, ?MODULE, cast_many, [maps:get(First, Pids), Burst]),
             {ok, FirstActor} = hls_debug_catalog:actor(Catalog, First),
+            %% Backpressure can retain work in the pipeline before retirement
+            %% exposes an egress wait. Diagnose the sink through inspect_waits
+            %% below instead of requiring one implementation's holding point.
             await(fun() ->
-                hls_debug:info(FirstActor, [message_queue_len, free_slots, waiting_for_egress], 10000)
-                    =:= [{message_queue_len, 2}, {free_slots, 0}, {waiting_for_egress, true}]
+                case hls_debug:info(FirstActor,
+                        [message_queue_len, free_slots, waiting_for_egress, in_flight], 10000) of
+                    [{message_queue_len, 2}, {free_slots, 0},
+                            {waiting_for_egress, Waiting}, {in_flight, InFlight}] ->
+                        Waiting orelse InFlight;
+                    _ -> false
+                end
             end),
             Blocked0 = observations(Catalog),
             %% Previously accepted work in the other scheduler remains visible

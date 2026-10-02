@@ -66,7 +66,8 @@ build(Plan, Specs, Options, Codebook) ->
         bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
-    Schema = case lists:any(fun(G) -> maps:get(admission_reductions, G, false) =/= false end, Groups) of true -> 5; false -> 4 end,
+    Schema = case lists:any(fun(G) -> maps:get(admission_reductions, G, false) =/= false orelse
+        maps:get(gathers, G, none) =/= none end, Groups) of true -> 5; false -> 4 end,
     Policies = maps:get(direct_collections, Options, #{}),
     Binding = case map_size(Policies) of 0 -> {Plan, Scheduler}; _ -> {Plan, Scheduler, Policies} end,
     Projection = #{schema => Schema, binding => xls_actor_debug:actor_key(Binding), banks => Banks},
@@ -101,7 +102,8 @@ bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWid
         reduction_storage_width := ReductionWidth, state_storage := block_ram} = Group,
         Interface = #{phases := Phases}, Placements, Sites) ->
     Layout = xls_shared_codegen:shared_machine_layout(
-        maps:get(physical_data_width, Group, DataWidth), ReductionWidth),
+        maps:get(physical_data_width, Group, DataWidth), ReductionWidth,
+        maps:get(gather_storage_width, Group, 0)),
     Fields = maps:with([phase, enter_pending, failure], Layout),
     Entries = lists:keysort(1, [{Slot, #{key => xls_actor_debug:actor_key(Id), slot => Slot,
         name => iolist_to_binary(io_lib:format("~p", [Id]))}} ||
@@ -116,16 +118,25 @@ bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWid
             Local = Projection#{rows := [R || R = #{instance := I} <- Rows, I =:= Index]},
             Bank#{state_projection => xls_state_projection:manifest(Local)}
     end,
-    Reduced = with_reduction(maps:get(reductions, Interface, none), Layout, Observed),
+    Gathered = maps:get(gathers, Interface, none) =/= none,
+    Reduced = case Gathered of
+        true -> Observed#{reduction => xls_collection_observation:layout(Interface)};
+        false -> with_reduction(maps:get(reductions, Interface, none), Layout, Observed)
+    end,
     Policy = maps:get(admission_reductions, Group, false),
     Tagged = case Policy of
         exclusive_epoch -> Reduced#{reduction := (maps:get(reduction, Reduced))#{early_collection => true}};
         _ -> Reduced
     end,
-    case Policy of
-        false -> Tagged;
-        _ -> Tagged#{live_state => #{width => xls_collection_observation:width(maps:get(reductions, Interface)),
-            port => iolist_to_binary(["_scheduler_", integer_to_list(Index), "_collection_debug_out"])}}
+    case {Policy, Gathered} of
+        {false, false} -> Tagged;
+        _ ->
+            Width = case Gathered of
+                true -> xls_collection_observation:width(Interface);
+                false -> xls_collection_observation:width(maps:get(reductions, Interface))
+            end,
+            Tagged#{live_state => #{width => Width,
+                port => iolist_to_binary(["_scheduler_", integer_to_list(Index), "_collection_debug_out"])}}
     end;
 bank(Index, _Group, _Interface, _Placements, _Codebook) ->
     error({debug_requires_state_ram, Index}).

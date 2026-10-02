@@ -1,5 +1,7 @@
 # Registered lower-noise screen
 
+Reviewed 2026-10-01. Historical lower-noise preregistration. Forecasts below concern the original model; 0.5% main, 0.2% sensitivity and 2.5% stress remain comparison inputs, while complete actor service is measured independently under [the service plan](decoder-service-investigations.md).
+
 Preserve the decoder, geometry and service budgets. Replace the main phenomenological probability with p_data=p_meas=0.005, retaining 0.002 and 0.025 controls. Use common random variates at seeds 0x53555246+d+[0,1,2]; the original seed's first 96 sheets must reproduce the previous 2.5% workload exactly. Measure 512 noisy sheets per seed and exclude quiet drain sheets from service statistics. Check reference and BEAM states, phase counts and corrections before interpreting performance.
 
 Expected mechanism: fewer defects should reduce repeated merge passes and transfers. Quiet floors stay 67/77 cycles for d=3/d=5 local owners (kernel latency two, gather one); the fixed global busy stage should remain the largest local component. I expect the d=5 mean at 0.5% to fall below 125 cycles, making its backlog intermittent rather than persistently increasing, but clustered faults may still overflow eight sheets. At 0.2%, expect more time at the quiet floor, not a fivefold improvement. These are finite samples, not stability guarantees.

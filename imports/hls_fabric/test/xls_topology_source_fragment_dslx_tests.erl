@@ -77,8 +77,11 @@ source_fragment_router_captures_only_the_proved_prefix_test() ->
         "frames: [effect_0.frame, effect_1.frame]"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "index: index + if reduction_batch { u8:2 } "
-        "else { u8:1 }"
+        "let next_index = index + if reduction_batch { u8:2 } "
+        "else { u8:1 };"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "head: hls_topology_source_fragment_fixture::scheduled_effect(scheduled, next_index)"
     >>)),
     ?assertEqual(0, count(Generated, <<"OutputPort::NORTH => send(">>)),
     ?assertEqual(0, count(Generated, <<"OutputPort::SOUTH => send(">>)),

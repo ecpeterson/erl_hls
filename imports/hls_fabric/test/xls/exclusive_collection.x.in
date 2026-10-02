@@ -319,3 +319,251 @@ fn control_and_fold_use_independent_bank_snapshots() {
     collection_command: CollectionCommand { failure: hls_failure::REDUCTION_PROTOCOL, ..noop.collection_command }, ..noop };
   assert_eq(admit_captured(fault,intent).0,false);
 }
+
+// Build an actually completed one-member bank through the production fold.
+fn producer_first_complete() -> CollectionContext {
+  let base = opened(u8:1);
+  let folded = collection_push(base.reduction, true, piece_frame(u32:7,u32:0,u8:11));
+  assert_eq(folded.1, hls_failure::NONE);
+  assert_eq(folded.0.status, ReductionStatus::COMPLETE);
+  CollectionContext { reduction:folded.0, ..context(base) }
+}
+
+// A defined ordinary tag is independent of the collector's reserved frame class.
+fn producer_first_ordinary() -> axis::Frame {
+  axis::Frame { header:axis::Header { op:Tag::BEGIN_SET as u8, payload_words:u8:2,
+    ..zero!<axis::Header>() }, ..zero!<axis::Frame>() }
+}
+
+// Filter credit/out-of-range/ordinary/empty producers before selecting a blocked
+// reserved producer. No bank eligibility leaks back into the cheap request mask.
+#[test]
+fn producer_first_cheap_filter_test() {
+  let piece = piece_frame(u32:8,u32:0,u8:3);
+  let state = decoded_fixture(SharedState<u32:2,u32:5> {
+    collection_context:[producer_first_complete(), context(opened(u8:1))],
+    collection_owners:CollectionOwners<u32:2> { opened:[true,true], ..zero!<CollectionOwners<u32:2>>() },
+    pending:[ScheduledRequest { credit:true, frame:piece, ..zero!<ScheduledRequest>() },
+      ScheduledRequest { slot:u32:2, frame:piece, ..zero!<ScheduledRequest>() },
+      ScheduledRequest { slot:u32:1, frame:producer_first_ordinary(), ..zero!<ScheduledRequest>() },
+      ScheduledRequest { frame:piece, ..zero!<ScheduledRequest>() },
+      ScheduledRequest { frame:piece, ..zero!<ScheduledRequest>() }],
+    pending_valid:[true,true,true,false,true],
+    ..zero!<SharedState<u32:2,u32:5>>() });
+  let intent = collection_select(state);
+  assert_eq((intent.valid,intent.producer,intent.slot),(true,u32:4,u32:0));
+  let collected = collection_admit(state,intent);
+  assert_eq(collected.0,false);
+  assert_eq(collection_commit(state,intent,collected),state);
+  // With no cheap-eligible producer, producer zero itself is out of range.
+  // The selector must normalize the invalid intent's slot before eager admission.
+  let idle = SharedState<u32:2,u32:5> { pending_valid:[true,true,true,false,false],
+    pending:update(state.pending,u32:0,ScheduledRequest { slot:u32:2, ..state.pending[u32:0] }),
+    collection_cursor:u32:3, ..state };
+  let intent = collection_select(idle);
+  assert_eq((intent.valid,intent.producer,intent.slot),(false,u32:0,u32:0));
+  // The unselected out-of-range producer remains unindexed by admission.
+  assert_eq(collection_commit(idle,intent,collection_admit(idle,intent)),idle);
+}
+
+// Three cursor starts each visit a failed bank, retained successor and ready bank
+// within three enabled transitions. Blocked probes alter only the scheduling cursor.
+#[test]
+fn producer_first_bounded_retry_test() {
+  let complete = producer_first_complete();
+  for (start, ()): (u32, ()) in u32:0..u32:3 {
+    let state = decoded_fixture(SharedState<u32:3,u32:3> {
+      collection_context:[CollectionContext { failure:hls_failure::INVALID_MESSAGE, ..complete },
+        complete, context(opened(u8:1))],
+      collection_owners:CollectionOwners<u32:3> { opened:[true,true,true], ..zero!<CollectionOwners<u32:3>>() },
+      in_flight:[true,true,true], occupied:[MAILBOX_DEPTH as u8,MAILBOX_DEPTH as u8,MAILBOX_DEPTH as u8],
+      collection_cursor:start, pending_valid:[true,true,true],
+      pending:[ScheduledRequest { slot:u32:0, frame:piece_frame(u32:7,u32:1,u8:3), ..zero!<ScheduledRequest>() },
+        ScheduledRequest { slot:u32:1, frame:piece_frame(u32:8,u32:0,u8:5), ..zero!<ScheduledRequest>() },
+        ScheduledRequest { slot:u32:2, frame:piece_frame(u32:7,u32:0,u8:9), ..zero!<ScheduledRequest>() }],
+      ..zero!<SharedState<u32:3,u32:3>>() });
+    let final = for (step, current): (u32, SharedState<u32:3,u32:3>) in u32:0..u32:3 {
+      let producer = (start + step) % u32:3;
+      let intent = collection_select(current);
+      assert_eq((intent.valid,intent.producer),(true,producer));
+      let collected = collection_admit(current,intent);
+      assert_eq(collected.0,producer == u32:2);
+      let next = collection_commit(current,intent,collected);
+      if producer != u32:2 {
+        assert_eq(next, SharedState<u32:3,u32:3> { collection_cursor:(producer + u32:1) % u32:3, ..current })
+      } else { () };
+      next
+    }(state);
+    assert_eq(final.pending_valid,[true,true,false]);
+    assert_eq(final.collection_context[u32:0],state.collection_context[u32:0]);
+    assert_eq(final.collection_context[u32:1],complete);
+    assert_eq(final.collection_context[u32:2].reduction.status,ReductionStatus::COMPLETE);
+    assert_eq(final.collection_context[u32:2].reduction.accumulator.value,u8:9);
+    assert_eq(final.pending,state.pending);
+    assert_eq(final.collection_inputs,state.collection_inputs);
+  }(())
+}
+
+// A retained successor survives blocked probes and an unrelated capture, then
+// folds after the completed owner's real registered release/open command applies.
+#[test]
+fn producer_first_successor_hold_release_test() {
+  let state = decoded_fixture(SharedState<u32:1,u32:2> {
+    collection_context:[producer_first_complete()],
+    collection_owners:CollectionOwners<u32:1> { opened:[true], actor_opened:[true], consuming:[true],
+      ..zero!<CollectionOwners<u32:1>>() },
+    pending:[ScheduledRequest { frame:piece_frame(u32:8,u32:0,u8:17), ..zero!<ScheduledRequest>() },
+      zero!<ScheduledRequest>()], pending_valid:[true,false],
+    ..zero!<SharedState<u32:1,u32:2>>() });
+  let intent = collection_select(state);
+  let collected = collection_admit(state,intent);
+  assert_eq(collected.0,false);
+  let waiting = collection_commit(state,intent,collected);
+  assert_eq(waiting, SharedState<u32:1,u32:2> { collection_cursor:u32:1, ..state });
+  let replacement = ScheduledRequest { frame:piece_frame(u32:99,u32:1,u8:71), ..zero!<ScheduledRequest>() };
+  let ordinary = ScheduledRequest { frame:producer_first_ordinary(), ..zero!<ScheduledRequest>() };
+  let inputs = collection_capture_inputs(waiting,[replacement,ordinary],[true,true]);
+  assert_eq(inputs[u32:0],waiting.collection_inputs[u32:0]);
+  assert_eq(inputs[u32:1],collection_decode(ordinary.frame));
+  let captured = SharedState<u32:1,u32:2> { pending:update(waiting.pending,u32:1,ordinary),
+    pending_valid:[true,true], collection_inputs:inputs, ..waiting };
+  let base = opened(u8:1);
+  let opening = ActorState { reduction:ReductionState { key:u32:8, ..base.reduction }, ..base };
+  let released = committed_retirement(captured,true,u32:0,opening);
+  let intent = collection_select(released);
+  assert_eq((intent.valid,intent.producer),(true,u32:0));
+  let collected = collection_admit(released,intent);
+  assert_eq(collected.0,true);
+  let final = collection_commit(released,intent,collected);
+  assert_eq(final.pending_valid,[false,true]);
+  assert_eq(final.pending,captured.pending);
+  assert_eq(final.collection_inputs,captured.collection_inputs);
+  assert_eq(final.collection_context[u32:0].failure,hls_failure::NONE);
+  assert_eq(final.collection_context[u32:0].reduction.key,u32:8);
+  assert_eq(final.collection_context[u32:0].reduction.status,ReductionStatus::COMPLETE);
+  assert_eq(final.collection_context[u32:0].reduction.accumulator.value,u8:17);
+}
+
+// Twelve defined input states cover malformed same/other key, member range,
+// duplicate, incomplete-key interleaving and an invalid captured lift. The fixture
+// source has a total lift, so only the last case deliberately injects valid=false.
+// COMPLETE blocks valid other-key input even when its frame length is malformed.
+#[test]
+fn producer_first_reserved_fault_timing_test() {
+  for (i, ()): (u32, ()) in u32:0..u32:12 {
+    let complete = i >= u32:6;
+    let kind = i % u32:6;
+    let first = opened(if complete { u8:1 } else { u8:3 });
+    let early = collection_push(first.reduction,true,piece_frame(u32:7,u32:0,u8:11));
+    assert_eq(early.1,hls_failure::NONE);
+    let key = if kind == u32:1 || kind == u32:4 { u32:8 } else { u32:7 };
+    let member = if kind == u32:2 { u32:6 } else if kind == u32:3 { u32:0 } else { u32:1 };
+    let good = piece_frame(key,member,u8:19);
+    let frame = if kind <= u32:1 {
+      axis::Frame { header:axis::Header { payload_words:u8:1, ..good.header }, ..good }
+    } else { good };
+    let state = decoded_fixture(SharedState<u32:1,u32:1> {
+      collection_context:[CollectionContext { reduction:early.0, ..context(first) }],
+      collection_owners:CollectionOwners<u32:1> { opened:[true], ..zero!<CollectionOwners<u32:1>>() },
+      pending:[ScheduledRequest { frame, ..zero!<ScheduledRequest>() }], pending_valid:[true],
+      ..zero!<SharedState<u32:1,u32:1>>() });
+    let input = state.collection_inputs[u32:0];
+    let state = SharedState<u32:1,u32:1> { collection_inputs:[CollectionInput {
+      contribution:ReductionContribution { valid:kind != u32:5, ..input.contribution }, ..input }], ..state };
+    let intent = collection_select(state);
+    assert_eq(intent.valid,true);
+    let collected = collection_admit(state,intent);
+    let blocked = complete && (kind == u32:1 || kind == u32:4);
+    assert_eq(collected.0,!blocked);
+    let final = collection_commit(state,intent,collected);
+    if blocked {
+      assert_eq(final,state)
+    } else {
+      assert_eq(final.pending_valid,[false]);
+      assert_eq(final.collection_context[u32:0].failure,hls_failure::REDUCTION_PROTOCOL);
+      assert_eq(final.collection_context[u32:0].reduction,early.0)
+    }
+  }(())
+}
+
+// Reducer poison is not a protocol-terminal bank failure: the final member still
+// drains and wakes completion without changing the poisoned accumulator or code.
+#[test]
+fn producer_first_poison_drains_test() {
+  let base = opened(u8:3);
+  let early = collection_push(base.reduction,true,piece_frame(u32:7,u32:0,u8:11));
+  let poisoned = ReductionState { failure:hls_failure::REDUCTION_PROTOCOL, ..early.0 };
+  let state = decoded_fixture(SharedState<u32:1,u32:1> {
+    collection_context:[CollectionContext { reduction:poisoned, ..context(base) }],
+    collection_owners:CollectionOwners<u32:1> { opened:[true], ..zero!<CollectionOwners<u32:1>>() },
+    pending:[ScheduledRequest { frame:piece_frame(u32:7,u32:1,u8:29), ..zero!<ScheduledRequest>() }],
+    pending_valid:[true], ..zero!<SharedState<u32:1,u32:1>>() });
+  let intent = collection_select(state);
+  let collected = collection_admit(state,intent);
+  assert_eq(collected.0,true);
+  let final = collection_commit(state,intent,collected);
+  assert_eq(final.collection_context[u32:0].failure,hls_failure::NONE);
+  assert_eq(final.collection_context[u32:0].reduction,ReductionState {
+    status:ReductionStatus::COMPLETE, remaining:ReductionRemaining:0, seen:ReductionMembers:3, ..poisoned });
+  assert_eq(final.pending_valid,[false]);
+  assert_eq(final.internal_candidates,[true]);
+}
+
+// Eight command cases preserve committed-snapshot conflict rules: same/other
+// actor crossed with metadata-only/open/release/failure commands. Even conflicting
+// probes advance, leaving all command/control effects to the retirement transition.
+#[test]
+fn producer_first_control_conflict_cursor_test() {
+  for (i, ()): (u32, ()) in u32:0..u32:8 {
+    let kind = i % u32:4;
+    let same = i < u32:4;
+    let state = decoded_fixture(SharedState<u32:2,u32:2> {
+      collection_context:[context(opened(u8:1)),context(opened(u8:1))],
+      collection_owners:CollectionOwners<u32:2> { opened:[true,true], ..zero!<CollectionOwners<u32:2>>() },
+      collection_command:CollectionCommand { valid:true, slot:if same { u32:0 } else { u32:1 },
+        failure:if kind == u32:3 { hls_failure::INVALID_MESSAGE } else { hls_failure::NONE },
+        control:CollectionControl { open:kind == u32:1, release:kind == u32:2,
+          ..zero!<CollectionControl>() }, ..zero!<CollectionCommand>() },
+      pending:[ScheduledRequest { frame:piece_frame(u32:7,u32:0,u8:9), ..zero!<ScheduledRequest>() },
+        zero!<ScheduledRequest>()], pending_valid:[true,false], ..zero!<SharedState<u32:2,u32:2>>() });
+    let intent = collection_select(state);
+    let collected = collection_admit(state,intent);
+    let conflict = same && kind != u32:0;
+    assert_eq(collected.0,!conflict);
+    let final = collection_commit(state,intent,collected);
+    assert_eq(final.collection_cursor,u32:1);
+    assert_eq(final.collection_command,state.collection_command);
+    if conflict {
+      assert_eq(final,SharedState<u32:2,u32:2> { collection_cursor:u32:1, ..state })
+    } else {
+      assert_eq(final.pending_valid,[false,false]);
+      assert_eq(final.collection_context[u32:1],state.collection_context[u32:1]);
+      assert_eq(final.collection_context[u32:0].reduction.status,ReductionStatus::COMPLETE)
+    }
+  }(())
+}
+
+// A blocked collector probe neither steals ordinary input nor depends on mailbox
+// capacity. Its commit preserves the ordinary admission's independently updated state.
+#[test]
+fn producer_first_ordinary_admission_independent_test() {
+  let state = decoded_fixture(SharedState<u32:2,u32:2> {
+    collection_context:[producer_first_complete(),context(opened(u8:1))],
+    collection_owners:CollectionOwners<u32:2> { opened:[true,true], ..zero!<CollectionOwners<u32:2>>() },
+    occupied:[MAILBOX_DEPTH as u8,u8:0], pending_valid:[true,true],
+    pending:[ScheduledRequest { frame:piece_frame(u32:8,u32:0,u8:3), ..zero!<ScheduledRequest>() },
+      ScheduledRequest { slot:u32:1, frame:producer_first_ordinary(), ..zero!<ScheduledRequest>() }],
+    ..zero!<SharedState<u32:2,u32:2>>() });
+  let intent = collection_select(state);
+  let ordinary = collection_select_ordinary(state);
+  assert_eq((intent.valid,intent.producer),(true,u32:0));
+  assert_eq((ordinary.valid,ordinary.producer,ordinary.slot),(true,u32:1,u32:1));
+  let collected = collection_admit(state,intent);
+  assert_eq(collected.0,false);
+  // These distinct fields stand for already committed ordinary-admission effects;
+  // actual ordinary selector/cell eligibility is exercised immediately above.
+  let admitted = SharedState<u32:2,u32:2> { occupied:[MAILBOX_DEPTH as u8,u8:1],
+    pending_valid:[true,false], admission_cursor:u32:0, ..state };
+  assert_eq(collection_commit(admitted,intent,collected),
+    SharedState<u32:2,u32:2> { collection_cursor:u32:1, ..admitted });
+}

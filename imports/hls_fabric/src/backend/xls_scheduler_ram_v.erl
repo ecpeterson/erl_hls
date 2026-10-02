@@ -12,7 +12,7 @@ from a normalized scheduler plan, then renders declarations, application port
 bindings, and `hls_1r1w_ram` instances for a surrounding Verilog shell.
 """.
 
--export([bindings/1, wires/1, application_ports/1, instances/2, mailbox_stride/2]).
+-export([bindings/1, wires/1, application_ports/1, instances/2, mailbox_stride/2, assets/1]).
 
 -doc "Derives indexed RAM bindings from a normalized scheduler plan.".
 -spec bindings(hls_scheduler_plan:plan()) -> [map()].
@@ -22,28 +22,41 @@ bindings(#{groups := Groups}) ->
 -doc "Declares every wire needed between an XLS application and its RAMs.".
 -spec wires([map()]) -> iolist().
 wires(Bindings) ->
-    [[binding_wires(Binding) || Binding <- Bindings], xls_collection_observation:wires(Bindings)].
+    [[[binding_wires(Binding), gather_wires(Binding)] || Binding <- Bindings], xls_collection_observation:wires(Bindings)].
 
 -doc "Connects every scheduler RAM port on an XLS application instance.".
 -spec application_ports([map()]) -> iolist().
 application_ports(Bindings) ->
-    [[binding_application_ports(Binding) || Binding <- Bindings], xls_collection_observation:ports(Bindings)].
+    [[[binding_application_ports(Binding), gather_ports(Binding)] || Binding <- Bindings], xls_collection_observation:ports(Bindings)].
 
 -doc "Instantiates one state and one mailbox RAM per scheduler.".
 -spec instances([map()], iodata()) -> iolist().
 instances(Bindings, Clock) ->
-    [binding_instances(Binding, Clock) || Binding <- Bindings].
+    [[binding_instances(Binding, Clock), gather_instance(Binding, Clock)] || Binding <- Bindings].
+
+-doc "Lists generic RTL sources required by these physical storage bindings.".
+-spec assets([map()]) -> [file:filename()].
+assets(Bindings) ->
+    case Bindings of
+        [] -> [];
+        _ -> [filename:join([code:priv_dir(erl_hls), "rtl", "hls_1r1w_ram.v"])] ++
+            case lists:any(fun(B) -> maps:is_key(gather_members, B) end, Bindings) of
+                false -> [];
+                true -> [filename:join([code:priv_dir(hls_fabric), "rtl", "hls_indexed_gather_ram.v"])]
+            end
+    end.
 
 %% Derive physical row widths including optional actor-private state.
 -spec binding(non_neg_integer(), map()) -> map().
 binding(Index, Group) ->
     StateWidth = xls_shared_codegen:shared_machine_width(
         maps:get(physical_data_width, Group, maps:get(width, maps:get(state, Group))),
-        maps:get(reduction_storage_width, Group, 0)
+        maps:get(reduction_storage_width, Group, 0),
+        maps:get(gather_storage_width, Group, 0)
     ) + maps:get(continuation_width, Group, 0) + maps:get(reply_storage_width, Group, 0),
     SlotCount = maps:get(slot_count, Group),
     MailboxCapacity = maps:get(mailbox_capacity, Group),
-    maps:merge(xls_collection_observation:binding(Group), #{
+    maps:merge(maps:merge(xls_collection_observation:binding(Group), gather_binding(Group)), #{
         index => Index,
         state_width => StateWidth,
         state_address_width => address_width(SlotCount),
@@ -155,3 +168,44 @@ address_width(Value, Width) -> address_width(Value bsr 1, Width + 1).
 %% Builds the stable signal prefix for a physical bank.
 -spec stem(integer()) -> [string(),...].
 stem(Index) -> ["scheduler_", integer_to_list(Index)].
+
+%% One masked row contains all member lanes, with two epoch banks per logical actor.
+-spec gather_binding(map()) -> map().
+gather_binding(#{gather_collection := true, slot_count := Slots,
+        gathers := #{sites := [#{element := Element, population := #{size := Members}}]}}) ->
+    #{gather_members => Members, gather_element_bits => xls_statem_reduction_ir:type_width(Element),
+        gather_address_width => address_width(Slots * 2)};
+gather_binding(#{gather_collection := true}) -> error(indexed_gather_requires_one_site);
+gather_binding(_) -> #{}.
+
+%% Keep masks separate from data: only selected member lanes are written.
+-spec gather_wires(map()) -> iodata().
+gather_wires(#{index := Index, gather_members := Members, gather_element_bits := Element}) ->
+    Stem = [stem(Index), "_gather"], Width = integer_to_list(Members * Element - 1),
+    [["    wire [31:0] ", Stem, "_", Port, ";\n"] || Port <- ["rd_addr", "wr_addr"]] ++
+    [["    wire [", Width, ":0] ", Stem, "_", Port, ";\n"] || Port <- ["rd_data", "wr_data"]] ++
+    [["    wire ", Stem, "_", Port, ";\n"] || Port <- ["rd_en", "wr_en"]] ++
+    [["    wire [", integer_to_list(Members - 1), ":0] ", Stem, "_wr_mask;\n"]];
+gather_wires(_) -> [].
+
+%% The XLS RAM adapter exports unhandshaken, fixed-latency physical memory signals.
+-spec gather_ports(map()) -> iodata().
+gather_ports(#{index := Index, gather_members := _}) ->
+    Stem = [stem(Index), "_gather"],
+    [[",\n        .", Stem, "_", Port, "(", Stem, "_", Port, ")"] ||
+        Port <- ["rd_addr", "wr_addr", "rd_data", "wr_data", "rd_en", "wr_en", "wr_mask"]];
+gather_ports(_) -> [].
+
+%% Shallow independent member lanes use distributed RAM without forcing many block RAMs.
+-spec gather_instance(map(), iodata()) -> iodata().
+gather_instance(#{index := Index, gather_members := Members, gather_element_bits := Element,
+        gather_address_width := AddressWidth}, Clock) ->
+    Stem = [stem(Index), "_gather"],
+    ["    hls_indexed_gather_ram #(.ELEMENT_BITS(", integer_to_list(Element),
+     "), .MEMBERS(", integer_to_list(Members), "), .ADDRESS_WIDTH(", integer_to_list(AddressWidth),
+     ")) ", Stem, " (.clk(", Clock, ")",
+     [[", .", Port, "(", Stem, "_", Port, "[", integer_to_list(AddressWidth - 1), ":0])"] ||
+        Port <- ["rd_addr", "wr_addr"]],
+     [[", .", Port, "(", Stem, "_", Port, ")"] ||
+        Port <- ["rd_data", "wr_data", "rd_en", "wr_en", "wr_mask"]], ");\n"];
+gather_instance(_, _) -> [].

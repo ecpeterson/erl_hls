@@ -13,11 +13,21 @@ backend_namespace_test() ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{reductions := #{accumulator => #{name => Name}}}))
     end, ['SharedState', 'SharedExecutor', 'SharedLoader', 'SharedRequestStage', 'SharedDispatchTicket',
-         'ReductionAggregate', 'MachineBits', 'CollectionControl', 'CollectionBank', 'CollectionInput']),
+         'ReductionAggregate', 'MachineBits', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'IndexedContext', 'GatherRamReadReq']),
     lists:foreach(fun(Alias) ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{imports := [Alias]}))
     end, ['backend.SharedService', 'backend.collection_control', 'backend.collection_accepts',
           'backend.collection_fold', 'backend.collection_resolve', 'backend.collection_select',
           'backend.collection_select_ordinary', 'backend.collection_issue', 'backend.collection_decode',
-          'backend.collection_push_input', 'backend.collection_accepts_input', 'backend.collection_capture_inputs']).
+          'backend.collection_push_input', 'backend.collection_accepts_input', 'backend.collection_capture_inputs',
+          'backend.indexed_completion_descriptor', 'backend.indexed_ticket_with_descriptor',
+          'backend.indexed_selected_ticket', 'backend.indexed_admission_ready']).
+
+%% A private element type cannot shadow its physical store or completion envelope.
+-spec gather_element_namespace_test() -> ok.
+gather_element_namespace_test() ->
+    Base = #{data_name => cell, message_names => [], imports => [], reductions => none,
+        gathers => #{sites => [#{element => #{name => 'IndexedLease'}}]}},
+    ?assertException(error, {xls_name_collision, module, "IndexedLease", _, _},
+        xls_shared_names:validate(Base)).

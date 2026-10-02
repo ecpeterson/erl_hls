@@ -1,5 +1,7 @@
 # Autonomous local-owner streaming gate
 
+Reviewed 2026-10-01. Historical custom-controller qualification. Its finite-cohort service/timing results do not qualify the later complete actor implementation. Independently offered-load qualification of that actor design remains in [the service plan](decoder-service-investigations.md).
+
 Registered before controller implementation. Preserve the d=3 surface geometry, 32-bit cluster IDs, Erlang/XLS vertex transitions and frozen local phase engine. Its native XC7Z030 screen completed at a setup-derived 15.764 ns (8 ns requested), with positive hold/pulse margins. The sampled tight paths are CID comparison/selection into proposals, not the busy reduction. That screen motivates a 20 ns integrated-controller closure target; it does not qualify that clock yet.
 
 Build the missing sheet controller around the same engine: DROP, whole growth, whole merges until quiescent, half growth, half merges until quiescent. Reuse simultaneous result consumption and next-phase acceptance. Supply an eight-entry syndrome FIFO, one active sheet and one retained correction-output slot. Reserve correction capacity before drop, suppress warmup outputs, retain ordered empty corrections, and allow the current body's work to continue after its drop result even if the output is blocked. Use a saturating warmup count and wrapping opaque sheet tags. A kernel failure or exhausted 10,000-step merge budget stops new work and exposes a terminal diagnostic; recovery is outside this probe.

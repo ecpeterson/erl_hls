@@ -1,6 +1,7 @@
 // Shared actor scheduling policy, independent of actor records and callbacks.
 
 import arbitration;
+import std;
 
 // Release a transferred value while retaining any replacement captured at the
 // same edge. `pending` already includes that capture. The payload owner decides
@@ -18,6 +19,15 @@ fn release_keeps_simultaneous_replacement_test() {
   assert_eq(release_pending([true, true], true, u32:0, true, u32:1), [false, true]);
   assert_eq(release_pending([true, false], true, u32:0, false, u32:0), [false, false]);
   assert_eq(release_pending([true, false], false, u32:0, false, u32:0), [true, false]);
+}
+
+// Advance only after acceptance; blocked/stalled work retains the old cursor.
+// COUNT is positive, INDEX_BITS represents every actor, and selected < COUNT
+// when accepted. BOOT passes its current cursor; RUN passes the arbiter's index.
+pub fn advance_cursor<COUNT: u32, INDEX_BITS: u32>(
+    cursor: uN[INDEX_BITS], accepted: bool, selected: u32) -> uN[INDEX_BITS] {
+  if accepted { arbitration::successor<COUNT>(selected as uN[INDEX_BITS]) }
+  else { cursor }
 }
 
 // Per-actor ready flags for entry, mailbox, egress and private reduction work.
@@ -114,4 +124,44 @@ fn reserved_outbox_excludes_only_its_owner_test() {
   for (cursor, _): (u32, ()) in u32:0..u32:3 {
     assert_eq(select(work, false, blocked, cursor), (true, u32:1));
   }(());
+}
+
+// Frozen wide update is the prior BOOT/RUN successor, evaluated only on acceptance.
+fn reference_cursor<COUNT: u32>(cursor: u32, accepted: bool, selected: u32) -> u32 {
+  if accepted {
+    if selected + u32:1 == COUNT { u32:0 } else { selected + u32:1 }
+  } else { cursor }
+}
+
+// Compare all reachable cursor/selection pairs and both acceptance outcomes;
+// two full BOOT walks cover singleton, power-of-two and non-power-of-two wrap.
+fn check_bounded_cursor<COUNT: u32,
+    WIDTH: u32 = {std::max(u32:1, std::clog2(COUNT))}>() {
+  for (cursor, _): (u32, ()) in u32:0..COUNT {
+    for (selected, _): (u32, ()) in u32:0..COUNT {
+      for (accepted, _): (u32, ()) in u32:0..u32:2 {
+        let actual = advance_cursor<COUNT>(cursor as uN[WIDTH], accepted != u32:0, selected);
+        assert_eq(actual as u32, reference_cursor<COUNT>(cursor, accepted != u32:0, selected));
+      }(());
+    }(());
+    // An unaccepted selection is irrelevant, even if its address is invalid.
+    assert_eq(advance_cursor<COUNT>(cursor as uN[WIDTH], false, u32:0xffffffff) as u32, cursor);
+  }(());
+  let walked = for (_, state): (u32, (u32, uN[WIDTH])) in u32:0..(COUNT * u32:2) {
+    let (wide, narrow) = state;
+    let expected = reference_cursor<COUNT>(wide, true, wide);
+    let actual = advance_cursor<COUNT>(narrow, true, narrow as u32);
+    assert_eq(actual as u32, expected);
+    (expected, actual)
+  }((u32:0, uN[WIDTH]:0));
+  assert_eq(walked, (u32:0, uN[WIDTH]:0));
+}
+
+// Accepted advancement and blocked holds preserve the old sequence for these populations.
+#[test]
+fn bounded_cursor_wrap_and_hold_test() {
+  check_bounded_cursor<u32:1>();
+  check_bounded_cursor<u32:2>();
+  check_bounded_cursor<u32:4>();
+  check_bounded_cursor<u32:6>();
 }

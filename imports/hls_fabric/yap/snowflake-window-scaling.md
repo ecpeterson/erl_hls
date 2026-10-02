@@ -1,6 +1,6 @@
 # Window scaling and area budget
 
-**Suspended:** these measurements describe custom RTL around helper-lowered functions. They do not satisfy the intended full Erlang actor application. Preserve the evidence, but do not implement the operand-copy or sharing candidates before the [normal actor baseline](decoder-service-investigations.md#2-screen-a-sparse-streaming-decoder-and-its-placement).
+**Historical custom-engine study; not the current application baseline.** The complete actor decoder now exists, but that does not qualify these custom-RTL scaling results for it or reactivate the operand-copy candidates below. Current work and the gate for returning to actor-window scaling are in [the campaign plan](topology-specialization.md). Preserve these forecasts and results as a separate architecture control.
 
 Registered before new hardware measurements. Sustain 1 MHz ordered round resolution with recoverable backlog, then reduce area for the rest of the experiment. Larger spatial windows are an application requirement; storage redesign is conditional on measured need.
 

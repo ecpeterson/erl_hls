@@ -1,5 +1,6 @@
 -module(xls_shared_reduction_service_codegen).
 -moduledoc false.
+-export([shared_dispatch_effective_binding/3, shared_dispatch_failed_binding/3, shared_dispatch_dispatched_field/3, shared_entry_step/2, shared_machine_support/3]).
 -export([machine_decode_field/3, machine_encode_prefix/1, shared_state_fields/2, shared_executor_request_field/2, shared_machine_support/2, shared_dispatch_bindings/3, shared_dispatch_effective_binding/2, shared_dispatch_failed_binding/2, shared_dispatch_reduction_field/2, shared_dispatch_dispatched_field/2, shared_entry_step/1, shared_executor_dispatch/2, shared_service_helpers/2, shared_retire_binding/2, shared_issue_bindings/2, shared_executor_request_value/2, shared_proc_field/2, shared_config_parameter/2, shared_config_endpoint/2, shared_capture/2, shared_capture_token/2, shared_state_source/2, shared_post_issue_state/2, shared_post_issue_state_name/2]).
 %% Checked actor reduction declarations, or absence of reduction support.
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
@@ -70,9 +71,13 @@ shared_executor_request_field(_Reductions, aggregate_only) ->
 
 -doc "Emits completion and aggregate acceptance helpers for shared actors.".
 -spec shared_machine_support(reductions(), service_mode()) -> iodata().
-shared_machine_support(none, _Mode) ->
+shared_machine_support(Reductions, Mode) -> shared_machine_support(Reductions, Mode, #{}).
+
+-doc "Preserves pending continuations, accepts one new completion event and fails conflicting requests atomically.".
+-spec shared_machine_support(reductions(), service_mode(), map()) -> iodata().
+shared_machine_support(none, _Mode, _Spec) ->
     [];
-shared_machine_support(_Reductions, Mode) ->
+shared_machine_support(_Reductions, Mode, Spec) ->
     ["""
     fn shared_machine_complete(machine: ActorState) -> ActorDispatch {
       let valid = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
@@ -90,15 +95,17 @@ shared_machine_support(_Reductions, Mode) ->
       } else {
         let completed = reduction_dispatch_completion(
           machine.reduction, machine.phase, machine.data);
+    """, "\n", xls_statem_event_codegen:completion_bindings(Spec, "completed.next_event"), """
         let invalid_repeat = completed.repeat_phase &&
           (completed.directive != Directive::CONSUME ||
            completed.phase != machine.phase);
-        let effective = completed.dispatched && !invalid_repeat;
+    """, "\n    let effective = completed.dispatched && !invalid_repeat", xls_statem_event_codegen:optional(Spec, " && !hls_failure::failed(completion_event_failure)"), ";\n", """
         let phase_boundary = effective &&
           completed.directive != Directive::FAIL &&
           (completed.phase != machine.phase || completed.repeat_phase);
-        let failure = hls_failure::completion(
-          completed.dispatched, invalid_repeat, completed.failure);
+    """, "\n    let failure = ", xls_statem_event_codegen:optional(Spec, "hls_failure::first("), "hls_failure::completion(\n",
+        "      completed.dispatched, invalid_repeat, completed.failure)",
+        xls_statem_event_codegen:optional(Spec, ", completion_event_failure)"), ";\n", """
         let failed = hls_failure::failed(failure);
         let next_machine = ActorState {
           phase: if effective { completed.phase } else { machine.phase },
@@ -107,6 +114,8 @@ shared_machine_support(_Reductions, Mode) ->
           } else { machine.entered_from },
           data: if effective { completed.data } else { machine.data },
           reduction: completed.reduction,
+    """, "\n", xls_statem_event_codegen:optional(Spec,
+        "      next_event: if effective && !failed { completion_event } else { u8:0 },\n"), """
           enter_pending: phase_boundary && !failed,
           failure,
           ..machine
@@ -221,6 +230,23 @@ shared_dispatch_effective_binding(_Reductions, _Mode) ->
         "      !incomplete_boundary;\n"
     ].
 
+-doc "Rejects phase changes or repeats while either declared collection remains incomplete.".
+-spec shared_dispatch_effective_binding(reductions(), service_mode(), map()) -> iodata().
+shared_dispatch_effective_binding(Reductions, Mode, Spec) ->
+    case maps:get(gathers, Spec, none) of
+        none -> shared_dispatch_effective_binding(Reductions, Mode);
+        _ -> [
+            "    let callback_effective = tag_ok && !invalid_repeat;\n",
+            "    let requested_boundary = callback_effective &&\n",
+            "      (next_phase != machine.phase || repeat_phase);\n",
+            "    let incomplete_boundary = requested_boundary &&\n",
+            "      directive != Directive::FAIL && (machine.gather.progress.status == GatherStatus::OPEN",
+            case Reductions of none -> []; _ -> " || machine.reduction.status == ReductionStatus::OPEN" end,
+            ");\n",
+            "    let effective = callback_effective && !incomplete_boundary;\n"
+        ]
+    end.
+
 -doc "Propagates the selected dispatch failure before committing state.".
 -spec shared_dispatch_failed_binding(reductions(), service_mode()) -> iodata().
 shared_dispatch_failed_binding(Reductions, _Mode) ->
@@ -230,6 +256,16 @@ shared_dispatch_failed_binding(Reductions, _Mode) ->
         ", effective, dispatch_failure);\n",
         "    let failed = hls_failure::failed(failure);\n"
     ].
+
+-doc "Propagates incomplete gather boundaries with the existing scalar protocol-failure priority.".
+-spec shared_dispatch_failed_binding(reductions(), service_mode(), map()) -> iodata().
+shared_dispatch_failed_binding(Reductions, Mode, Spec) ->
+    case maps:get(gathers, Spec, none) of
+        none -> shared_dispatch_failed_binding(Reductions, Mode);
+        _ ->
+            "    let failure = hls_failure::dispatch(!tag_ok, invalid_repeat, incomplete_boundary, effective, dispatch_failure);\n"
+            "    let failed = hls_failure::failed(failure);\n"
+    end.
 
 -doc "Chooses the reduction state produced by the selected dispatch path.".
 -spec shared_dispatch_reduction_field(reductions(), service_mode()) -> iodata().
@@ -251,19 +287,41 @@ shared_dispatch_dispatched_field(_Reductions, _Mode) ->
         "        !incomplete_boundary,\n"
     ].
 
+-doc "Does not consume an input whose requested boundary violates an active collection.".
+-spec shared_dispatch_dispatched_field(reductions(), service_mode(), map()) -> iodata().
+shared_dispatch_dispatched_field(Reductions, Mode, Spec) ->
+    case maps:get(gathers, Spec, none) of
+        none -> shared_dispatch_dispatched_field(Reductions, Mode);
+        _ -> "      dispatched: tag_ok && !invalid_repeat && !incomplete_boundary,\n"
+    end.
+
 -doc "Applies a checked phase entry while respecting batch capacity.".
 -spec shared_entry_step(reductions()) -> iodata().
 shared_entry_step(Reductions) ->
+    shared_entry_step_code(Reductions, xls_statem_reduction_service_codegen:entry_bindings(Reductions), []).
+
+-doc "Commits a gather opening only with its successful complete entry and enforces collection exclusivity.".
+-spec shared_entry_step(reductions(), map()) -> iodata().
+shared_entry_step(Reductions, Spec) ->
+    case maps:get(gathers, Spec, none) of
+        none -> shared_entry_step(Reductions);
+        _ -> shared_entry_step_code(Reductions, xls_statem_gather_codegen:entry_bindings(Spec),
+            "      gather: if entry_failed { machine.gather } else { entered_gather },\n")
+    end.
+
+%% Scalar-only emission remains byte-identical; additional collection fields share its transaction boundary.
+-spec shared_entry_step_code(reductions(), iodata(), iodata()) -> iodata().
+shared_entry_step_code(Reductions, EntryBindings, GatherField) ->
     [
         "    let outcome = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
         "    let effects = outcome.effects;\n",
         "    let effects_valid = entry_effects_valid(effects);\n",
-        xls_statem_reduction_service_codegen:entry_bindings(Reductions),
+        EntryBindings,
         "    let can_advance = !entry_failed && (!effects_valid || egress_ready);\n",
         "    let advanced_machine = ActorState {\n",
         "      data: if entry_failed { machine.data } else { outcome.data },\n",
-        shared_entry_reduction_field(Reductions),
+        shared_entry_reduction_field(Reductions), GatherField,
         "      enter_pending: u1:0,\n",
         "      failure: entry_failure,\n",
         "      ..machine\n",
@@ -398,7 +456,7 @@ shared_retire_binding(_Reductions, Binding) ->
 -spec shared_issue_bindings(reductions(), service_mode()) -> iodata().
 shared_issue_bindings(Reductions, Mode) ->
     Select = case Reductions of none -> "ready_selection"; _ -> "reduction_ready_selection" end,
-    ["        let (ready, read_slot) = ", Select, "(state, state.cursor, state.in_flight);\n",
+    ["        let (ready, read_slot) = ", Select, "(state, state.cursor as u32, state.in_flight);\n",
      "        let issue_valid = ready;\n",
      case Reductions of
          none -> "        let private_active = false;\n";

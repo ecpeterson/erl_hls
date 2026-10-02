@@ -1,5 +1,7 @@
 # Completion FIFO inference across synthesis tools
 
+Reviewed 2026-10-01. Completed and integrated. Subsequent full-core replay and physical measurements qualified the completion-storage transform now packaged in `tools/completion_fifo.py`. Pending-measurement wording below belongs to the original isolated investigation; [the campaign plan](topology-specialization.md) owns current status.
+
 The first six-executor LUTRAM experiment preserved the result FIFO's original `did_push_occur` write predicate and passed bounded and full-width local simulations. Yosys inferred distributed RAM; Vivado did not. The matched full-core Vivado log emits Synth 8-7186 for every `buf__1` row: the `ram_style` attribute is ignored because the object is not inferred as RAM. Its 181,297 LUT / 151,354 FF result therefore does not measure the intended memory implementation.
 
 Hypothesis before repair: the transformed FIFO still contains the unused generated row-update network, which reads every payload row at a constant address. Vivado diagnoses the RAM at elaboration, before its reported RTL optimization stages; Yosys removes the dead network before memory inference. Remove only this unused declaration and generate loop, requiring that no additional consumer exists. Keep the exact original control, payload read, reset gating and write predicate. Expect isolated Vivado to infer distributed RAM with the payload flip-flops removed; do not predict full-core timing or LUT savings until measured.

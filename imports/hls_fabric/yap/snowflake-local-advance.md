@@ -1,5 +1,7 @@
 # Local phase advancement probe
 
+Reviewed 2026-10-01. Implemented and retained in the full actor baseline. Preserve the legal-skew and provisional-key cases below for [snapshot planning](topology-specialization.md); the original mailbox-capacity argument is not a bound on the proposed collection banks. The initial ERTS-only scope below predates the later RTL and physical comparisons.
+
 Base: `ba1027a`. This isolated ERTS-only experiment retains the ordinary actor implementation, numerical kernels, complete snapshot exchanges, correction ownership and eight-credit host interface. No XLS or native build is part of this first test.
 
 Hypothesis, registered before edits: replace the global barriers after drop, whole growth and half growth with local `next_event` transitions. Keep `ready` entry so that drop corrections publish before local advancement. Keep global busy decisions after whole and half merge. For D3/H3, remove three global quorums, 108 vertex completion messages and 18 aggregate messages per sheet. The 108 internal continuations replace 108 phase-message activations; they do not by themselves save vertex activations. With `r` repeated merge phases, command deliveries change from `36*(5+r)` to `42*(2+r)`, saving `96-6r`. No cycle, frequency or area percentage is predicted.

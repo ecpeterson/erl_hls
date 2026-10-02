@@ -5,7 +5,7 @@
 -module(xls_scheduler_ram_dslx).
 -moduledoc false.
 
--export([parameters/2, parameters/3, names/1, names/2]).
+-export([parameters/2, parameters/3, parameters/4, names/1, names/2, names/3]).
 %% Each physical port belongs to exactly one side of the scheduler.
 -type access() :: all | read | write.
 
@@ -18,8 +18,13 @@ parameters(NamePrefix, TypePrefix) -> parameters(all, NamePrefix, TypePrefix).
 -doc "Declares the read or write half of a scheduler RAM interface.".
 -spec parameters(access(), iodata(), iodata()) -> [iolist()].
 parameters(Access, NamePrefix, TypePrefix) ->
+    parameters(Access, NamePrefix, TypePrefix, #{}).
+
+-doc "Includes the member-masked gather store only for an offloaded collection group.".
+-spec parameters(access(), iodata(), iodata(), map()) -> [iolist()].
+parameters(Access, NamePrefix, TypePrefix, Group) ->
     [[NamePrefix, Name, ": chan<", TypePrefix, Type, "> ", Direction]
-        || {Name, Type, Direction} <- channels(Access)].
+        || {Name, Type, Direction} <- channels(Access, Group)].
 
 -doc "Lists generated endpoints in the same order as their parameter declarations.".
 -spec names(iodata()) -> [iolist()].
@@ -28,14 +33,28 @@ names(Prefix) -> names(all, Prefix).
 -doc "Lists endpoints owned by the read or write half of a scheduler.".
 -spec names(access(), iodata()) -> [iolist()].
 names(Access, Prefix) ->
-    [[Prefix, Name] || {Name, _Type, _Direction} <- channels(Access)].
+    names(Access, Prefix, #{}).
 
-%% Filter one ordered interface authority without duplicating its endpoint list.
--spec channels(access()) -> [{string(), string(), string()}].
-channels(all) -> channels();
-channels(Access) ->
-    [Channel || Channel = {Name, _, _} <- channels(),
-        string:find(Name, "_" ++ atom_to_list(Access) ++ "_") =/= nomatch].
+-doc "Lists optional gather endpoints in the same order as their declarations.".
+-spec names(access(), iodata(), map()) -> [iolist()].
+names(Access, Prefix, Group) ->
+    [[Prefix, Name] || {Name, _Type, _Direction} <- channels(Access, Group)].
+
+%% Filter a common ordered interface after adding its selected physical stores.
+-spec channels(access(), map()) -> [{string(), string(), string()}].
+channels(Access, Group) ->
+    All = channels() ++ case maps:get(gather_collection, Group, false) of
+        false -> [];
+        true -> [{"gather_read_req_out", "GatherRamReadReq", "out"},
+            {"gather_read_resp_in", "GatherRamReadResp", "in"},
+            {"gather_write_req_out", "GatherRamWriteReq", "out"},
+            {"gather_write_resp_in", "GatherRamWriteResp", "in"}]
+    end,
+    case Access of
+        all -> All;
+        _ -> [Channel || Channel = {Name, _, _} <- All,
+            string:find(Name, "_" ++ atom_to_list(Access) ++ "_") =/= nomatch]
+    end.
 
 %% Positional config/spawn order: machine read/write, then mailbox read/write;
 %% each request is immediately followed by its response (including writes).

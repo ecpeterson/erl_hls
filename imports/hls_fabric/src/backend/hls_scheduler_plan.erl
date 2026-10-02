@@ -57,7 +57,8 @@ obligations.
     state_storage := storage(),
     mailbox_storage := storage(),
     specialize_state => boolean(),
-    admission_reductions => boolean() | exclusive_epoch
+    admission_reductions => boolean() | exclusive_epoch,
+    gather_collection => boolean()
 }}.
 -doc "Normalized physical execution graph with logical identities retained for routing and debugging.".
 -type plan() :: #{
@@ -110,6 +111,8 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
     ok = validate_storage(Id, mailbox, MailboxStorage),
     Specialize = maps:get(specialize_state, Spec, false),
     Collection = maps:get(admission_reductions, Spec, false),
+    GatherCollection = maps:get(gather_collection, Spec, false),
+    case is_boolean(GatherCollection) of true -> ok; false -> error({gather_collection, Id, GatherCollection}) end,
     case is_boolean(Collection) orelse Collection =:= exclusive_epoch of true -> ok; false -> error({admission_reductions, Id, Collection}) end,
     case is_boolean(Specialize) of true -> ok; false -> error({specialize_state, Id, Specialize}) end,
     Members0 = normalize_members(Id, MemberSpecs, MemberIndex),
@@ -118,8 +121,9 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
         [Only] -> Only;
         _ -> error({heterogeneous_group, Id, Modules})
     end,
-    Group = #{id => Id, module => Module, members => Members0,
+    BaseGroup = #{id => Id, module => Module, members => Members0,
         state_storage => StateStorage, mailbox_storage => MailboxStorage},
+    Group = case GatherCollection of false -> BaseGroup; true -> BaseGroup#{gather_collection => true} end,
     WithCollection = case Collection of false -> Group; _ -> Group#{admission_reductions => Collection} end,
     case Specialize of true -> WithCollection#{specialize_state => true}; false -> WithCollection end;
 normalize_group(Id, _Spec, _MemberIndex) ->
@@ -140,7 +144,13 @@ layout_group(Group = #{members := Members0}, Interface) ->
         hls_actor_interface:reduction_storage_width(Interface),
     {Members, SlotCount} = assign_slots(Members0),
     EventStorage = maps:with([continuation_width, reply_storage_width], Interface),
-    maps:merge(EventStorage, Group#{
+    Gather = maps:get(gathers, Interface, none),
+    GatherWidth = xls_shared_gather_codegen:storage_width(Group#{gathers => Gather}),
+    GatherStorage = case Gather of
+        none -> #{};
+        _ -> #{gathers => Gather, gather_storage_width => GatherWidth}
+    end,
+    maps:merge(maps:merge(EventStorage, GatherStorage), Group#{
         state => State,
         reduction_storage_width => ReductionStorageWidth,
         mailbox_capacity => Capacity,
@@ -157,7 +167,7 @@ layout_group(Group = #{members := Members0}, Interface) ->
 validate_keys(Id, Spec) ->
     Required = [mailbox_storage, members, state_storage],
     Keys = maps:keys(Spec),
-    case {Required -- Keys, Keys -- (Required ++ [specialize_state, admission_reductions])} of
+    case {Required -- Keys, Keys -- (Required ++ [specialize_state, admission_reductions, gather_collection])} of
         {[], []} -> ok;
         {Missing, Unknown} -> error({scheduler_group_keys,
             Id, Missing, Unknown})

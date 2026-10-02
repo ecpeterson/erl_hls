@@ -1,5 +1,7 @@
 # Local-owner physical timing gate
 
+Reviewed 2026-10-01. Historical custom-engine timing study. This architecture predates the required complete actor lowering and is not the current service baseline. Preserve the original hypotheses/results without restarting custom-engine optimization; follow [the service plan](decoder-service-investigations.md).
+
 Preregistered before full-window synthesis. Use the complete d=3 surface window (36 vertices, 51 edges), unchanged 32-bit cluster IDs and Erlang-lowered transitions. Begin with one registered global busy reduction, not the replay’s assumed seven-clock tree. Check raw and mapped RTL against the same complete phase witnesses before timing it.
 
 The area prior is 15k–35k XC7 LUTs, 6k–20k FFs, no DSP or BRAM. The isolated merge kernel has a long comparison/priority chain; expect kernel evaluation, rather than a 36-input Boolean busy reduction, to be a leading timing path. There is no defensible full-window frequency estimate yet. Test the assumed 125 MHz directly with an 8 ns constraint; retain the achieved setup period, hold/pulse checks, logic/routing split and endpoint identities even if it fails.

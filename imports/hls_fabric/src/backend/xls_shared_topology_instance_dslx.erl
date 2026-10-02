@@ -12,7 +12,8 @@ required(Plan, Profile) ->
     #{scheduler_groups := Specs, direct_collections := Collections} =
         xls_shared_topology_profile:normalize(Profile),
     #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs),
-    map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []).
+    map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
+        lists:any(fun(Group) -> maps:get(gathers, Group, none) =/= none end, Groups).
 
 -doc "Returns per-module compiler options required by the selected placement.".
 -spec artifact_requirements(map(),map()) -> map().
@@ -47,6 +48,7 @@ lower(Plan, Profile0) ->
     ActorIndex = maps:from_list([{maps:get(id, Actor), Actor} || Actor <- Actors]),
     Direct = [Actor || Actor = #{placement := direct} <- Actors],
     Schedulers = [scheduler(I, Group, Actors) || {I, Group} <- lists:enumerate(0, Groups0)],
+    lists:foreach(fun validate_indexed_startup/1, Schedulers),
     case {MailboxDebug, Schedulers} of
         {true, []} -> error(mailbox_debug_requires_shared_schedulers);
         _ -> ok
@@ -119,6 +121,20 @@ validate_collection_startup(#{id := Id, module := Module, startup := Frames, int
             end;
         _ -> error(direct_collection_requires_reduced_statem)
     end.
+
+%% Indexed contributions must enter the reserved receiver, not startup mailbox storage.
+-spec validate_indexed_startup(map()) -> ok.
+validate_indexed_startup(#{gather_collection := true, actors := Actors}) ->
+    lists:foreach(fun(#{id := Id, module := Module, startup := Frames,
+            interface := #{gathers := #{sites := Sites}}}) ->
+        Tags = [Module:pack_tag(Tag) || Site <- Sites,
+            Tag <- maps:get(contributions, Site)],
+        case lists:any(fun(#{tag := Tag}) -> lists:member(Tag, Tags) end, Frames) of
+            true -> error({reserved_gather_startup, Id});
+            false -> ok
+        end
+    end, Actors);
+validate_indexed_startup(_) -> ok.
 
 %% Maps a physical execution unit to its effect-window graph vertex.
 -spec window_vertex({direct, term()} | {scheduler, non_neg_integer()}) -> {direct, term()} | non_neg_integer().
@@ -443,9 +459,9 @@ top_proc(Spec = #{direct := Direct, schedulers := Schedulers, units := Units,
 %% Lists the externally visible channels of the generated composition.
 -spec top_ports(map()) -> [any()].
 top_ports(Spec = #{schedulers := Schedulers, externals := Externals, ingresses := Ingresses}) ->
-    Ram = lists:append([lists:zip(xls_scheduler_ram_dslx:names([Stem, "_"]),
-        xls_scheduler_ram_dslx:parameters([Stem, "_"], [Module, "::"])) ||
-        #{stem := Stem, module_name := Module} <- Schedulers]),
+    Ram = lists:append([lists:zip(xls_scheduler_ram_dslx:names(all, [Stem, "_"], Group),
+        xls_scheduler_ram_dslx:parameters(all, [Stem, "_"], [Module, "::"], Group)) ||
+        Group = #{stem := Stem, module_name := Module} <- Schedulers]),
     Mailbox = lists:zip(xls_scheduler_observation:names(Spec),
         xls_scheduler_observation:arguments(Spec)),
     External = [{Name, [Name, ": chan<axis::Frame> out"]} ||
@@ -530,7 +546,7 @@ scheduler_spawn(Spec, Group = #{stem := Stem, index := I, module_name := Module,
         "    spawn ", Module, "::SharedService<u32:", n(Slots), ", u32:",
         n(length(Inbound) + 1), ", u32:", n(length(Startup)), ", u32:", n(I), ">(\n",
         "      ", Stem, "_requests_c, ", Stem, "_startup_c, ", Stem, "_egress_p,\n      ",
-        lists:join(", ", xls_scheduler_ram_dslx:names([Stem, "_"])),
+        lists:join(", ", xls_scheduler_ram_dslx:names(all, [Stem, "_"], Group)),
         xls_scheduler_observation:spawn_argument(Spec, Stem),
         xls_collection_observation:spawn_argument(Group), ");\n"].
 

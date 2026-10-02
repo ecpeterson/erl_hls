@@ -21,7 +21,14 @@ validate(Spec, Options) ->
 -doc "Requires one collector policy per shared module and excludes direct instances of selected modules.".
 -spec requirements([map()], [map()], map()) -> map().
 requirements(Groups, Direct, Requirements) ->
-    lists:foldl(fun(Module, Acc) ->
+    lists:foldl(fun(Module, Initial) ->
+        GatherFlags = lists:usort([maps:get(gather_collection, G, false) ||
+            G = #{module := M} <- Groups, M =:= Module]),
+        Acc = case GatherFlags of
+            [false] -> Initial;
+            [true] -> Initial#{Module := (maps:get(Module, Initial))#{gather_collection => true}};
+            _ -> error({gather_collection_module_policy, Module})
+        end,
         Flags = lists:usort([maps:get(admission_reductions, G, false) ||
             G = #{module := M} <- Groups, M =:= Module]),
         case Flags of
@@ -77,7 +84,7 @@ helpers(Spec = #{message_names := Names, message_words := Words}) ->
             #{reduction := #{offset := Start}, width := End} =
                 xls_shared_codegen:shared_machine_layout(xls_state_projection:width(Spec),
                     xls_statem_reduction_codegen:private_width(R)),
-            HasTail = maps:get(continuations, Spec, []) =/= [],
+            HasTail = maps:get(continuations, Spec, []) =/= [] orelse maps:get(gathers, Spec, none) =/= none,
             ["// RAM retains the last executor result, not current collection progress.\n",
              "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState) -> MachineBits {\n  ",
              case HasTail of true -> ["raw[", integer_to_list(End), ":] ++ "]; false -> [] end,
@@ -149,6 +156,12 @@ resolve(_) -> [].
 
 -doc "Selects ordinary mail and reserved contributions independently, with fairness within each class.".
 -spec selection(map()) -> iodata().
+selection(#{gather_collection := true, admission_reductions := exclusive_epoch}) ->
+    "\n        let intent = collection_select_ordinary(indexed_ordinary_state(state));\n        let collection_intent = collection_select(state);\n";
+selection(Spec = #{gather_collection := true}) ->
+    Text = iolist_to_binary(selection(maps:remove(gather_collection, Spec))),
+    ["\n        let ordinary_state = indexed_ordinary_state(state);\n",
+     binary:replace(Text, <<"state.">>, <<"ordinary_state.">>, [global])];
 selection(#{admission_reductions := exclusive_epoch}) ->
     "\n        let intent = collection_select_ordinary(state);\n        let collection_intent = collection_select(state);\n";
 selection(_) ->

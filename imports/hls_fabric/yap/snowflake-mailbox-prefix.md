@@ -1,5 +1,7 @@
 # Mailbox prefix experiment
 
+Reviewed 2026-10-01. Historical availability study. The K1 gather saved no cycles and was not adopted; K2 batching remains deferred. [Snapshot gathering](topology-specialization.md) takes precedence; reassess batching against the residual mailbox workload rather than reusing these opportunity counts as predictions.
+
 The cached K1 gather keeps one state read/write and one executor transaction per contribution. Its independent cycle payoff is uncertain; it is a semantic control for bounded K2 batching. Before changing the datapath, measure whether a second same-window contribution is already waiting.
 
 ## Passive observation

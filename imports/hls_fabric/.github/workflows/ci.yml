@@ -60,7 +60,7 @@ jobs:
     needs: select
     if: needs.select.outputs.software == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
@@ -91,14 +91,14 @@ jobs:
           fi
           python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
           "$XLS_ROOT/codegen_main" --version
+      - name: Build compiler and backend fixtures
+        run: python3 tools/build.py as test compile
       - name: Check asynchronous FIFO capacity, wraparound, stalls and reset
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_async_fifo.py --xilinx-cells /usr/share/yosys/xilinx/cells_sim.v
       - name: Check passive cycle taps against RTL
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_phi_cycle_trace.py
-      - name: Build compiler and backend fixtures
-        run: python3 tools/build.py as test compile
       - name: Check build packaging and combined profile views
         run: |
           python3 tools/test_packaging.py

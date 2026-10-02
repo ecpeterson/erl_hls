@@ -1,5 +1,7 @@
 # Snowflake barrier and storage comparisons
 
+Reviewed 2026-10-01. Completed historical comparison. Tree barriers, shared execution, profiling and control/effect compaction have landed. Original hypotheses below retain their measured scope. Snapshot gathering continues in [the campaign plan](topology-specialization.md); smaller activation capacities require a measured storage benefit.
+
 Compare complete ordinary-actor D3/H3 decoders with the retained 128-sheet, 0.5% noise cohort. Preserve vertex transitions, correction ownership/order, phase ordering, mailbox capacities, eight outstanding source requests, two-stage XLS schedule and failure handling. The direct/flat baseline is commit `5c4d222`: 887.54 clocks mean round spacing; native XC7/ZU7 area exceeds both devices. No implementation has a qualified clock.
 
 Registered hypotheses before measurement:

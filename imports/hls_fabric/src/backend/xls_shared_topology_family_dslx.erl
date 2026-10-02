@@ -25,7 +25,7 @@ lower(Plan, Profile0) ->
         _ -> ok
     end,
     Schedulers = annotate_schedulers(maps:get(groups, SchedulerPlan)),
-    case lists:any(fun(G) -> maps:get(admission_reductions, G, false) =/= false end, Schedulers) of
+    case lists:any(fun(G) -> maps:get(admission_reductions, G, false) =/= false orelse maps:get(gather_collection, G, false) end, Schedulers) of
         true -> error(admission_reductions_require_materialized_topology); false -> ok end,
     case {MailboxDebug, Schedulers} of
         {true, []} -> error(mailbox_debug_requires_shared_schedulers);

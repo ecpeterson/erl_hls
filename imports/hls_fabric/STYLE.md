@@ -22,6 +22,15 @@ compatibility scaffolding for an obsolete internal format.
   Instead, write separate DSLX modules and import them.  Make liberal use of
   DSLX's parametricity to achieve this.
 
+## Hardware design
+
+- Budget simultaneous readers, writers, field widths and conflicts before adding shared state; stored bits alone do not price access logic.
+- Select before expensive per-input work when accepting one input at a time, unless measured retry costs justify parallel checks.
+- Keep unchanged fields local. Compose updates through the selected row or bank; make write priority and forwarding explicit.
+- Expose established tags, bounds and ownership to the compiler. Retain checks wherever their preconditions are not established.
+- Preregister component area and cycle budgets. Synthesize representative row counts and producer fan-in before full integration.
+- Use IR to check dependencies, mapped area to screen capacity, and measured cycles × routed period to judge throughput. Retain the original baseline and rejected results.
+
 ## Experimental formats and generated files
 
 - Replace obsolete internal formats directly unless compatibility is an

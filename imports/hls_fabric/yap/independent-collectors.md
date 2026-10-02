@@ -1,5 +1,9 @@
 # Independent collectors: receiver/actor split
 
+Historical experiment record, closed by merged [PR #59](https://github.com/ecpeterson/hls_fabric/pull/59) on 2026-10-01. The final retention decision at the end supersedes earlier pending routes, implementation proposals and checkbox states below. Collector code is integrated; the compiler dependency is public [#192](https://github.com/ecpeterson/erl_hls/pull/192), and builds use native XLS scheduling rather than executor transplants. Measurements live in the [external archive](../docs/artifacts.md).
+
+Current status and the next snapshot work are maintained only in [the campaign plan](topology-specialization.md). Earlier forecasts are preserved below as registered hypotheses, not renewed implementation instructions.
+
 Design investigation for PR #59, 2026-09-30. The registered-boundary prototype below is implemented; fully independent activations remain future work. The registered-effect candidate has completed its matched route: 350.772 clocks × 8.563 ns = 3.003658 µs/round, still 4.24% slower than the earlier baseline. The target is a better complete round interval than the earlier 387.094-clock × 7.444 ns collector, not merely recovery from the 9.179 ns regression.
 
 ## Path evidence

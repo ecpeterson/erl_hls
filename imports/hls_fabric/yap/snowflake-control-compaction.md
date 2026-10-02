@@ -1,5 +1,7 @@
 # Snowflake control and representation campaign
 
+Reviewed 2026-10-01. Completed historical campaign. The original checklist below is not current task status: control/effect compaction, local advancement, completion storage, configuration specialization and transfer/acknowledgment offload are integrated. [The campaign plan](topology-specialization.md) owns snapshot gathering and residual read/write work; unadopted variants need fresh evidence.
+
 Continue private PR #53 from `ca7d0d2`, using its six-executor tree: D3/H3, the same 128 original sheets at 0.5% noise, eight source credits, unchanged corrections and failure checks. The reference averages 524.6535 clocks/round. Preserve ordinary Erlang actor lowering. Public compiler changes must contain only generic mechanisms and generic tests.
 
 Register each experiment before observing its result. Save immutable generated releases; compare isolated changes before combining them. A better synthesized path or fewer registers alone does not establish a faster or smaller placed design. Report service minimum/mean/population variance/maximum and physical clock coverage. Do not reinterpret an unsuccessful hypothesis after measurement.

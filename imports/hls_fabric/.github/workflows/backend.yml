@@ -81,6 +81,9 @@ jobs:
           python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_cones.py
           python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_frontier.py
 
+      - name: Check actor profile provenance and causal joins
+        run: python3 -m unittest discover -s experiments/snowflake/actors -p 'test_*.py'
+
       - name: Check Zynq package mapping and resource smoke
         run: python3 experiments/07-openxc7/test_zynq7030.py
 
@@ -168,11 +171,15 @@ jobs:
           bash "$PWD/_checkouts/erl_hls/tools/test_direct_actor_codegen.sh" "$RUNNER_TEMP/xls"
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/aggregate-debug aggregate
 
+      - name: Inspect indexed gathers through scoped debug queries
+        run: bash tools/test_indexed_debug.sh "$RUNNER_TEMP/xls"
+
       - name: Check shared callback semantics, layouts and reductions
         run: |
           bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
           bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
           bash tools/test_admission_collection.sh "$RUNNER_TEMP/xls"
+          bash tools/test_indexed_collection.sh "$RUNNER_TEMP/xls"
           python3 tools/test_direct_collection_boundary.py
           python3 tools/test_direct_collection.py "$RUNNER_TEMP/xls" --stage _build/direct-collection-rtl
           bash tools/test_initialization.sh "$RUNNER_TEMP/xls"

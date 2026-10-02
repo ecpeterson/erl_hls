@@ -1,0 +1,496 @@
+// Convert ownership faults into the actor's existing fail-stop code, retaining
+// source-located callback failures when the original dispatch supplies one.
+fn indexed_failure(context: IndexedContext) -> hls_failure::Code {
+  hls_failure::first(context.failure,
+    if context.banks.failure.code != indexed_collection_core::Fault::NONE {
+      hls_failure::REDUCTION_PROTOCOL
+    } else { hls_failure::NONE })
+}
+
+// Decode the selected committed raw request without mutable actor state.
+fn indexed_decode(frame: axis::Frame) -> IndexedInput {
+  IndexedInput { reserved: indexed_reserved(frame), frame_valid: indexed_frame_valid(frame),
+    contribution: indexed_transport_contribution(frame) }
+}
+
+// Stable actor callbacks decide key eligibility. During entry/private work the
+// asserted two-key bound permits only provisional storage; no completion may run.
+// The explicit inputs exclude bank metadata so retirement may classify before release.
+fn indexed_classify(initialized: bool, machine: ActorState, frame: axis::Frame,
+    input: IndexedInput) -> IndexedEligibility {
+  if !initialized {
+    IndexedEligibility { waiting: true, ..zero!<IndexedEligibility>() }
+  } else if !indexed_stable(machine) {
+    IndexedEligibility { provisional: true, ..zero!<IndexedEligibility>() }
+  } else if !input.frame_valid {
+    IndexedEligibility { failure: hls_failure::INVALID_MESSAGE, ..zero!<IndexedEligibility>() }
+  } else if !input.contribution.valid {
+    let ordinary = indexed_dispatch(frame, machine.phase, machine.data);
+    let postponed = ordinary.0 == Directive::POSTPONE && !hls_failure::failed(ordinary.1);
+    IndexedEligibility { provisional: postponed,
+      failure: if postponed { hls_failure::NONE }
+        else { hls_failure::first(ordinary.1, hls_failure::REDUCTION_PROTOCOL) },
+      ..zero!<IndexedEligibility>() }
+  } else {
+    let current = gather_contribution(frame, machine.phase, machine.data);
+    if current.valid {
+      let agrees = current.site == input.contribution.site && current.key == input.contribution.key &&
+        current.member == input.contribution.member;
+      IndexedEligibility { current: agrees,
+        failure: if agrees { hls_failure::NONE } else { hls_failure::REDUCTION_PROTOCOL },
+        ..zero!<IndexedEligibility>() }
+    } else {
+      let ordinary = indexed_dispatch(frame, machine.phase, machine.data);
+      let postponed = ordinary.0 == Directive::POSTPONE && !hls_failure::failed(ordinary.1);
+      IndexedEligibility { provisional: postponed,
+        failure: if postponed { hls_failure::NONE }
+          else { hls_failure::first(ordinary.1, hls_failure::REDUCTION_PROTOCOL) },
+        ..zero!<IndexedEligibility>() }
+    }
+  }
+}
+
+// Equality alone identifies an already authorized key; numeric order is irrelevant.
+fn indexed_find(banks: IndexedBanks, key: u32) -> (bool, u1) {
+  let first = banks.banks[u32:0];
+  let second = banks.banks[u32:1];
+  let a = first.status != indexed_collection_core::Status::FREE && first.key == key;
+  let b = second.status != indexed_collection_core::Status::FREE && second.key == key;
+  (a || b, if a { u1:0 } else { u1:1 })
+}
+
+// Construct a ticket from the same committed metadata snapshot used for selection.
+fn indexed_lease(banks: IndexedBanks, bank: u1) -> IndexedLease {
+  let selected = banks.banks[bank as u32];
+  IndexedLease { bank, key: selected.key, generation: selected.generation,
+    reset_epoch: banks.reset_epoch }
+}
+
+// A completed or borrowed row can legitimately block its successor until retirement.
+fn indexed_retained(banks: IndexedBanks) -> bool {
+  (banks.banks[u32:0].status == indexed_collection_core::Status::SEALED ||
+   banks.banks[u32:0].status == indexed_collection_core::Status::BORROWED) ||
+  (banks.banks[u32:1].status == indexed_collection_core::Status::SEALED ||
+   banks.banks[u32:1].status == indexed_collection_core::Status::BORROWED)
+}
+
+// A selected input waits while its actor or retained banks cannot accept it.
+fn indexed_can_accept(context: IndexedContext, input: IndexedInput) -> bool {
+  let found = indexed_find(context.banks, input.contribution.key);
+  let bank = context.banks.banks[found.1 as u32];
+  let full = context.banks.banks[u32:0].status != indexed_collection_core::Status::FREE &&
+    context.banks.banks[u32:1].status != indexed_collection_core::Status::FREE;
+  context.initialized && !hls_failure::failed(indexed_failure(context)) &&
+    !hls_failure::failed(context.machine.failure) &&
+    !(!input.contribution.valid && context.deferred_frame_valid) &&
+    !(found.0 && bank.status == indexed_collection_core::Status::PROVISIONAL &&
+      bank.deferred.code != indexed_collection_core::Fault::NONE) &&
+    !(!found.0 && full && indexed_retained(context.banks))
+}
+
+// Report an input fault now only if ordinary mailbox dispatch is eligible.
+fn indexed_input_fault(context: IndexedContext, failure: hls_failure::Code) -> IndexedContext {
+  if indexed_stable(context.machine) {
+    IndexedContext { failure: hls_failure::first(context.failure, failure), ..context }
+  } else {
+    IndexedContext { deferred_failure: if context.deferred_frame_valid { context.deferred_failure }
+      else { hls_failure::first(context.deferred_failure, failure) }, ..context }
+  }
+}
+
+// A rejected partial lift has no safe member/key storage identity. Retain its
+// first raw frame until source dispatch can recover the eligible failure code.
+fn indexed_defer_lift(context: IndexedContext, frame: axis::Frame) -> IndexedContext {
+  if context.deferred_frame_valid || hls_failure::failed(context.deferred_failure) { context } else {
+    IndexedContext { deferred_frame: frame, deferred_frame_valid: true, ..context }
+  }
+}
+
+// Apply a single checked arrival. Every consumed frame belongs to this authority;
+// no partial gather falls back to ordinary actor storage. A third unretained key
+// violates the asserted bound and records a fault instead of silently dropping it.
+fn indexed_push(context: IndexedContext, frame: axis::Frame, input: IndexedInput, slot: u32)
+    -> IndexedAdmission {
+  let eligibility = indexed_classify(context.initialized, context.machine, frame, input);
+  let admission = if eligibility.waiting {
+    IndexedAdmission { context, ..zero!<IndexedAdmission>() }
+  } else if hls_failure::failed(eligibility.failure) {
+    IndexedAdmission { consumed: true, context: indexed_input_fault(context, eligibility.failure),
+      ..zero!<IndexedAdmission>() }
+  } else if !input.frame_valid {
+    IndexedAdmission { consumed: true,
+      context: indexed_input_fault(context, hls_failure::INVALID_MESSAGE),
+      ..zero!<IndexedAdmission>() }
+  } else if !input.contribution.valid {
+    IndexedAdmission { consumed: !context.deferred_frame_valid,
+      context: indexed_defer_lift(context, frame),
+      deferred_write: !context.deferred_frame_valid && !hls_failure::failed(context.deferred_failure),
+      ..zero!<IndexedAdmission>() }
+  } else {
+    let contribution = input.contribution;
+    let found = indexed_find(context.banks, contribution.key);
+    let source_waiting = found.0 && eligibility.provisional &&
+      context.banks.banks[found.1 as u32].status != indexed_collection_core::Status::PROVISIONAL;
+    // Carry one selected bank through reservation and admission before writing
+    // metadata back; the source eligibility gates still own whether it commits.
+    let pushed = indexed_collection_core::reserve_and_offer(context.banks,
+      contribution.key, !GatherMembers:0, contribution.member);
+    let reservation = pushed.1;
+    if source_waiting {
+      IndexedAdmission { context, ..zero!<IndexedAdmission>() }
+    } else if reservation.outcome == indexed_collection_core::Outcome::WAIT {
+      if indexed_retained(context.banks) {
+        IndexedAdmission { context, ..zero!<IndexedAdmission>() }
+      } else {
+        IndexedAdmission { consumed: true,
+          context: indexed_input_fault(context, hls_failure::REDUCTION_PROTOCOL),
+          ..zero!<IndexedAdmission>() }
+      }
+    } else {
+      let consumed = pushed.2.outcome != indexed_collection_core::Outcome::WAIT;
+      let bank = reservation.lease.bank as u32;
+      let first = consumed && !context.representative_valid[bank];
+      let next = IndexedContext { banks: pushed.0,
+        representatives: if first { update(context.representatives, bank, frame) } else { context.representatives },
+        representative_valid: if first { update(context.representative_valid, bank, true) } else { context.representative_valid },
+        ..context };
+      IndexedAdmission { consumed, context: next, write_valid: pushed.2.write.valid,
+        representative_write: first, representative_bank: reservation.lease.bank,
+        write: indexed_gather_ram::write_member<INDEXED_ELEMENT_BITS, INDEXED_CAPACITY>(
+          slot * u32:2 + pushed.2.write.bank as u32, pushed.2.write.member, contribution.value),
+        ..zero!<IndexedAdmission>() }
+    }
+  };
+  // Keep the pure post-state for semantic consumers; physical frame writes use
+  // explicit commands and this single incoming value, never selected old frames.
+  IndexedAdmission { frame, ..admission }
+}
+
+// Transient source decisions depend only on initialization, machine and raw frames;
+// bank transitions consume them under their own validity/status gates.
+struct IndexedChecks {
+  representatives: IndexedEligibility[2],
+  deferred: IndexedEligibility,
+}
+
+// Classify fixed frame positions before bank selection; no decision is published here.
+fn indexed_saved_checks(context: IndexedContext) -> IndexedChecks {
+  let first = context.representatives[u32:0];
+  let second = context.representatives[u32:1];
+  IndexedChecks {
+    representatives: [indexed_classify(context.initialized, context.machine, first, indexed_decode(first)),
+      indexed_classify(context.initialized, context.machine, second, indexed_decode(second))],
+    deferred: indexed_classify(context.initialized, context.machine,
+      context.deferred_frame, indexed_decode(context.deferred_frame)),
+  }
+}
+
+// Open the exact key selected by source entry, rechecking all stored member claims.
+// An unmatchable third opening is an asserted-overlap fault, never bank replacement.
+// Checks must describe this machine and raw frames; validity follows post-release state.
+fn indexed_open(context: IndexedContext, opening: GatherProgress, checks: IndexedChecks)
+    -> IndexedContext {
+  let empty = opening.status == GatherStatus::COMPLETE;
+  let stable = indexed_stable(context.machine);
+  let allow = unroll_for! (bank, allowed): (u32, bool[2]) in u32:0..u32:2 {
+    let eligibility = checks.representatives[bank];
+    update(allowed, bank, empty || (stable && (!context.representative_valid[bank] ||
+      (!hls_failure::failed(eligibility.failure) && eligibility.current))))
+  }([false, false]);
+  let reservation = indexed_collection_core::reserve_and_maybe_open(
+    context.banks, opening.key, !GatherMembers:0, opening.expected, allow);
+  // This result describes reservation/reuse, not whether checked opening succeeded.
+  // Invalid sites discard prepared metadata, including newly diagnosed kernel faults.
+  if reservation.1.outcome != indexed_collection_core::Outcome::ACCEPTED || opening.site != INDEXED_SITE {
+    IndexedContext { failure: hls_failure::first(context.failure, hls_failure::REDUCTION_PROTOCOL), ..context }
+  } else {
+    let bank = reservation.1.lease.bank as u32;
+    let eligibility = checks.representatives[bank];
+    let failure = if !empty && context.representative_valid[bank] && hls_failure::failed(eligibility.failure) {
+      hls_failure::first(context.failure, eligibility.failure)
+    } else { context.failure };
+    IndexedContext { banks: reservation.0, failure, ..context }
+  }
+}
+
+// Recheck provisional keys only at a stable callback boundary. One representative
+// relies on the declared key-uniform eligibility assumption; opening separately
+// validates every stored member against the captured runtime membership mask.
+// Checks describe the same machine/frames; provisional gates use post-open status.
+fn indexed_revalidate(context: IndexedContext, checks: IndexedChecks) -> IndexedContext {
+  if !indexed_stable(context.machine) { context } else {
+    let deferred = if context.deferred_frame_valid {
+      checks.deferred.failure
+    } else { context.deferred_failure };
+    let context = IndexedContext { failure: hls_failure::first(context.failure, deferred), ..context };
+    unroll_for! (bank, current): (u32, IndexedContext) in u32:0..u32:2 {
+      let provisional = current.banks.banks[bank].status == indexed_collection_core::Status::PROVISIONAL &&
+        current.representative_valid[bank];
+      let eligibility = checks.representatives[bank];
+      if provisional && hls_failure::failed(eligibility.failure) {
+        IndexedContext { failure: hls_failure::first(current.failure, eligibility.failure), ..current }
+      } else { current }
+    }(context)
+  }
+}
+
+// Retirement is the last-reader boundary for the transient gather-completion API.
+// Reset of the enclosing scheduler flushes all tickets/RAM handoffs before reuse;
+// ordinary release destroys its ticket before modulo generation can repeat.
+fn indexed_control(context: IndexedContext, machine: ActorState) -> IndexedContext {
+  let checks = indexed_saved_checks(IndexedContext { initialized: true, machine, ..context });
+  let released = if context.consuming {
+    indexed_collection_core::release(context.banks, context.lease).0
+  } else { context.banks };
+  let next = IndexedContext { initialized: true, machine, banks: released, consuming: false,
+    representative_valid: if context.consuming {
+      update(context.representative_valid, context.lease.bank as u32, false)
+    } else { context.representative_valid }, ..context };
+  let active = machine.gather.progress.status != GatherStatus::IDLE;
+  let found = indexed_find(next.banks, machine.gather.progress.key);
+  let deferred_open = found.0 &&
+    next.banks.banks[found.1 as u32].status == indexed_collection_core::Status::PROVISIONAL;
+  let opening = active && (!context.actor_opened || context.consuming || deferred_open);
+  let opened = if opening && !hls_failure::failed(machine.failure) {
+    indexed_open(next, machine.gather.progress, checks)
+  } else { next };
+  indexed_revalidate(IndexedContext { actor_opened: active, ..opened }, checks)
+}
+
+// Classify one fixed committed row, retaining first occupied matching-bank priority.
+// The selected bank remains defined when invalid, including bank 1 when no key matches.
+fn indexed_completion_descriptor(context: IndexedContext) -> (bool, u1) {
+  let found = indexed_find(context.banks, context.machine.gather.progress.key);
+  let bank = context.banks.banks[found.1 as u32];
+  let failure = indexed_failure(context);
+  let valid = context.initialized && context.actor_opened && !context.consuming &&
+    !context.machine.enter_pending &&
+    (context.machine.gather.progress.status == GatherStatus::COMPLETE || indexed_stable(context.machine)) &&
+    !hls_failure::failed(context.machine.failure) &&
+    !hls_failure::failed(failure) && found.0 && bank.status == indexed_collection_core::Status::SEALED;
+  (valid, found.1)
+}
+
+// Reconstruct the complete ticket, including invalid payloads. The descriptor must
+// have been computed from this exact context; admission-updated views are not interchangeable.
+fn indexed_ticket_with_descriptor(context: IndexedContext, descriptor: (bool, u1)) -> IndexedTicket {
+  let bank = context.banks.banks[descriptor.1 as u32];
+  let failure = indexed_failure(context);
+  IndexedTicket { valid: descriptor.0, failure, lease: indexed_lease(context.banks, descriptor.1),
+    progress: GatherProgress { status: GatherStatus::COMPLETE, site: INDEXED_SITE,
+      key: bank.key, remaining: u8:0, expected: bank.members, seen: bank.seen, failure } }
+}
+
+// Completion selection carries checked progress and the physical row lease.
+fn indexed_ticket(context: IndexedContext) -> IndexedTicket {
+  indexed_ticket_with_descriptor(context, indexed_completion_descriptor(context))
+}
+
+// Classify each committed actor before selecting its narrow descriptor. This is
+// combinational: no candidate-cache invariant or cross-activation state is required.
+fn indexed_selected_ticket<ACTOR_COUNT: u32>(
+    contexts: IndexedContext[ACTOR_COUNT], slot: u32) -> IndexedTicket {
+  let descriptors = unroll_for! (actor, rows): (u32, (bool, u1)[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(rows, actor, indexed_completion_descriptor(contexts[actor]))
+  }(zero!<(bool, u1)[ACTOR_COUNT]>());
+  indexed_ticket_with_descriptor(contexts[slot], descriptors[slot])
+}
+
+// Gather wakeups remain independent of scalar-reduction completion candidates.
+fn indexed_ready(context: IndexedContext) -> bool {
+  context.initialized && !hls_failure::failed(context.machine.failure) &&
+    (hls_failure::failed(indexed_failure(context)) || indexed_ticket(context).valid)
+}
+
+// Derive readiness after indexed_push without searching its rebuilt bank array.
+// That transition preserves machine/ownership, never removes a SEALED bank, and
+// can create a new SEALED bank only by offering to a committed OPEN bank. This
+// helper is not valid across retirement, opening, release or acquire transitions.
+fn indexed_admission_ready(before: IndexedContext, after: IndexedContext) -> bool {
+  let key = before.machine.gather.progress.key;
+  let first = before.banks.banks[u32:0];
+  let second = before.banks.banks[u32:1];
+  let first_key_match = first.status != indexed_collection_core::Status::FREE && first.key == key;
+  let second_key_match = !first_key_match && second.status != indexed_collection_core::Status::FREE && second.key == key;
+  let first_complete = first_key_match && (first.status == indexed_collection_core::Status::SEALED ||
+    (first.status == indexed_collection_core::Status::OPEN &&
+      after.banks.banks[u32:0].status == indexed_collection_core::Status::SEALED));
+  let second_complete = second_key_match && (second.status == indexed_collection_core::Status::SEALED ||
+    (second.status == indexed_collection_core::Status::OPEN &&
+      after.banks.banks[u32:1].status == indexed_collection_core::Status::SEALED));
+  let eligible = before.actor_opened && !before.consuming && !before.machine.enter_pending &&
+    (before.machine.gather.progress.status == GatherStatus::COMPLETE || indexed_stable(before.machine));
+  before.initialized && !hls_failure::failed(before.machine.failure) &&
+    (hls_failure::failed(indexed_failure(after)) || (eligible && (first_complete || second_complete)))
+}
+
+// A committed gather fault suppresses effects from an actor callback still in flight.
+fn indexed_resolve<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, slot: u32, step: SharedStep) -> SharedStep {
+  let failure = hls_failure::first(step.machine.failure, indexed_failure(state.indexed_context[slot]));
+  if !hls_failure::failed(failure) { step } else {
+    SharedStep { machine: ActorState { failure, enter_pending: false, ..step.machine },
+      effects_valid: false, dispatched: false, directive: Directive::FAIL,
+      egress_blocked: false, phase_boundary: false, ..step }
+  }
+}
+
+// Update only the retiring actor's context, preserving independent scalar state.
+fn indexed_retire<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool, slot: u32,
+    machine: ActorState) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  if !valid { state } else {
+    let context = indexed_control(state.indexed_context[slot], machine);
+    // Each register row retains fields this transition cannot change; avoid
+    // feeding untouched raw frames back through the selected-row multiplexer.
+    let contexts = unroll_for! (actor, rows): (u32, IndexedContext[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+      let previous = state.indexed_context[actor];
+      let changed = IndexedContext { initialized: context.initialized, machine: context.machine,
+        banks: context.banks, representative_valid: context.representative_valid,
+        actor_opened: context.actor_opened, consuming: context.consuming,
+        failure: context.failure, ..previous };
+      update(rows, actor, if actor == slot { changed } else { previous })
+    }(state.indexed_context);
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      indexed_context: contexts,
+      indexed_candidates: update(state.indexed_candidates, slot, indexed_ready(context)), ..state }
+  }
+}
+
+// Reserved inputs belong exclusively to this collector, including while they
+// wait for initialization or bank space; ordinary admission cannot steal them.
+fn indexed_ordinary_state<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let pending_valid = unroll_for! (producer, valid): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    update(valid, producer, valid[producer] && !indexed_reserved(state.pending[producer].frame))
+  }(state.pending_valid);
+  SharedState<ACTOR_COUNT, PRODUCER_COUNT> { pending_valid, ..state }
+}
+
+// Select a held reserved producer before reading its actor context. A blocked
+// attempt keeps its frame and advances the independent round-robin cursor.
+fn indexed_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
+  let eligible = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    let request = state.pending[producer];
+    update(flags, producer, state.pending_valid[producer] && request.slot < ACTOR_COUNT &&
+      !request.credit && indexed_reserved(request.frame))
+  }(zero!<bool[PRODUCER_COUNT]>());
+  let selected = arbitration::select(eligible, state.indexed_cursor);
+  mailbox::Admission { valid: selected.0, producer: selected.1,
+    slot: state.pending[selected.1].slot, physical: u8:0 }
+}
+
+// A retiring context owns its actor's metadata write; retain a conflicting input.
+// Different actors may retire and accept one member during the same activation.
+// The intent must come from indexed_select on this same committed state.
+fn indexed_admit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, intent: mailbox::Admission,
+    retiring: bool, retiring_slot: u32) -> IndexedAdmission {
+  let context = state.indexed_context[intent.slot];
+  if !intent.valid || (retiring && retiring_slot == intent.slot) {
+    IndexedAdmission { context, ..zero!<IndexedAdmission>() }
+  } else {
+    let frame = indexed_selected_frame(state.pending[intent.producer].frame);
+    let input = indexed_decode(frame);
+    if !indexed_can_accept(context, input) {
+      IndexedAdmission { context, ..zero!<IndexedAdmission>() }
+    } else {
+      indexed_push(context, frame, input, intent.slot)
+    }
+  }
+}
+
+// Merge accepted member metadata and producer release after other disjoint updates.
+// The physical adapter commits admission.write iff write_valid at this same edge.
+// A source-postponed offer retains its producer slot but yields arbitration.
+// Eligibility reads the original snapshot; writeback preserves unrelated updates.
+fn indexed_commit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    committed: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, intent: mailbox::Admission,
+    admission: IndexedAdmission) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let cursor = if !intent.valid { state.indexed_cursor }
+    else if intent.producer + u32:1 == PRODUCER_COUNT { u32:0 } else { intent.producer + u32:1 };
+  if !admission.consumed {
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> { indexed_cursor: cursor, ..state }
+  } else {
+    // Admission owns only member metadata, representative frames and faults.
+    let contexts = unroll_for! (actor, rows): (u32, IndexedContext[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+      let previous = state.indexed_context[actor];
+      let selected = actor == intent.slot;
+      let changed = IndexedContext { banks: admission.context.banks,
+        representative_valid: admission.context.representative_valid,
+        deferred_failure: admission.context.deferred_failure,
+        deferred_frame_valid: admission.context.deferred_frame_valid,
+        failure: admission.context.failure, ..previous };
+      let metadata = if selected { changed } else { previous };
+      // Static row/bank enables retain each register's own old frame directly.
+      let representatives = unroll_for! (bank, frames): (u32, axis::Frame[2]) in u32:0..u32:2 {
+        update(frames, bank, if selected && admission.representative_write &&
+            bank == admission.representative_bank as u32 { admission.frame }
+          else { previous.representatives[bank] })
+      }(previous.representatives);
+      let deferred_frame = if selected && admission.deferred_write { admission.frame }
+        else { previous.deferred_frame };
+      update(rows, actor, IndexedContext { representatives, deferred_frame, ..metadata })
+    }(state.indexed_context);
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      indexed_context: contexts,
+      // The explicit snapshot keeps eligibility outside retirement's row muxes.
+      indexed_candidates: update(state.indexed_candidates, intent.slot,
+        indexed_admission_ready(committed.indexed_context[intent.slot], admission.context)),
+      indexed_cursor: cursor,
+      pending_valid: mailbox::clear_pending(state.pending_valid, intent.producer, true), ..state }
+  }
+}
+
+// Borrow a committed completion when its ticket is issued. The lease stays owned
+// through RAM read, executor stalls and the matching callback's retirement.
+fn indexed_issue<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    committed: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, updated: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    intent: mailbox::Admission, admission: IndexedAdmission,
+    issuing: bool, slot: u32) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let selected = indexed_selected_ticket(committed.indexed_context, slot);
+  if !issuing || !selected.valid { updated } else {
+    // Issue excludes the retiring actor. Only a consumed same-actor admission
+    // can change this row before borrowing; forward that row explicitly.
+    let context = if intent.valid && admission.consumed && intent.slot == slot {
+      admission.context
+    } else { committed.indexed_context[slot] };
+    // Production admission cannot mutate the committed SEALED bank. Check that
+    // bank before admission's other-bank updates; forward the latest kernel failure.
+    let checked_banks = IndexedBanks { failure: context.banks.failure,
+      ..committed.indexed_context[slot].banks };
+    // selected.valid established SEALED for this same committed bank; forwarding
+    // only its latest failure preserves that fact across the actor-slot selection.
+    let acquired = indexed_collection_core::acquire_sealed(checked_banks, selected.lease);
+    // Sealed acquisition accepts or reports failure; it cannot wait for members.
+    let next = IndexedContext { banks: acquired.0,
+      consuming: acquired.1.outcome == indexed_collection_core::Outcome::ACCEPTED,
+      lease: selected.lease, ..context };
+    // Success consumes the sole completion; only a sticky fault can still wake
+    // this actor. Do not search the newly updated bank array again for readiness.
+    let ready = next.initialized && !hls_failure::failed(next.machine.failure) &&
+      hls_failure::failed(indexed_failure(next));
+    // Borrowing cannot change source eligibility or representative/deferred
+    // frames. Preserve their independently committed per-row register values.
+    let contexts = unroll_for! (actor, rows): (u32, IndexedContext[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+      let previous = updated.indexed_context[actor];
+      // Acquire changes bank status or sticky failure, never the row identity,
+      // membership or previously accepted member claims. Other-bank status must
+      // retain any simultaneous reservation or last-member completion.
+      let bank_rows = unroll_for! (bank, rows): (u32, indexed_collection_core::Bank<INDEXED_CAPACITY>[2]) in u32:0..u32:2 {
+        update(rows, bank, indexed_collection_core::Bank<INDEXED_CAPACITY> {
+          status: if bank == selected.lease.bank as u32 { next.banks.banks[bank].status }
+            else { previous.banks.banks[bank].status }, ..previous.banks.banks[bank] })
+      }(previous.banks.banks);
+      let banks = IndexedBanks { banks: bank_rows, failure: next.banks.failure, ..previous.banks };
+      let changed = IndexedContext { banks, consuming: next.consuming,
+        lease: next.lease, failure: next.failure, ..previous };
+      update(rows, actor, if actor == slot { changed } else { previous })
+    }(updated.indexed_context);
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      indexed_context: contexts,
+      indexed_candidates: update(updated.indexed_candidates, slot, ready), ..updated }
+  }
+}

@@ -628,7 +628,7 @@ router_proc(Spec, Scheduler = #{stem := Stem, families := Families,
 %% Both compact and materialized topologies use exactly the same retained
 %% lookahead-credit protocol. Only the typed destination ports and route
 %% selection differ; direct actors do not participate in this protocol.
--doc "Renders ordered effect publication with bounded ownership and backpressure.".
+-doc "Renders ordered publication with retained effect decoding, first-effect bypass and bounded backpressure.".
 -spec effect_router(map(),map(),map()) -> [any(),...].
 effect_router(Spec, Scheduler = #{module_name := Module},
         #{arguments := RouteArguments, names := RouteNames, send := RouteSend}) ->
@@ -654,6 +654,8 @@ effect_router(Spec, Scheduler = #{module_name := Module},
         "  control: effect_window::ClientState,\n",
         "  scheduled: ", Module, "::ScheduledEffects,\n",
         "  index: u8,\n",
+        "  // While active, head equals scheduled_effect(scheduled, index).\n",
+        "  head: (", Module, "::Egress, u1, u1),\n",
         "}\n\n",
         "proc ", router_name(Scheduler), " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
@@ -662,8 +664,7 @@ effect_router(Spec, Scheduler = #{module_name := Module},
         "    (", join_with(", ", Names), ")\n  }\n\n",
         "  init { zero!<", StateName, ">() }\n\n",
         "  next(state: ", StateName, ") {\n",
-        "    let state_effect_info = ", Module,
-        "::scheduled_effect(state.scheduled, state.index);\n",
+        "    let state_effect_info = state.head;\n",
         xls_topology_source_fragment_dslx:router_state_bindings(
             Spec, Scheduler
         ),
@@ -683,8 +684,12 @@ effect_router(Spec, Scheduler = #{module_name := Module},
         "      state.scheduled\n",
         "    } else { incoming };\n",
         "    let index = if state.control.active { state.index } else { u8:0 };\n",
-        "    let effect_info = ", Module,
-        "::scheduled_effect(scheduled, index);\n",
+        "    // New batches retain their first-effect bypass; active batches use\n",
+        "    // the descriptor captured when their current index became owned.\n",
+        "    let incoming_effect_info = ", Module,
+        "::scheduled_effect(incoming, u8:0);\n",
+        "    let effect_info = if state.control.active { state.head }\n",
+        "      else { incoming_effect_info };\n",
         xls_topology_source_fragment_dslx:router_batch_bindings(
             Spec, Scheduler
         ),
@@ -711,15 +716,16 @@ effect_router(Spec, Scheduler = #{module_name := Module},
         "      ..zero!<", StateName, ">()\n",
         "    };\n",
         "    if transition.carry_lookahead {\n",
-        "      ", StateName, " { scheduled: incoming, ..updated }\n",
+        "      ", StateName, " { scheduled: incoming, head: incoming_effect_info, ..updated }\n",
         "    } else if transition.batch_continues {\n",
-        "      ", StateName, " {\n",
-        "        scheduled,\n",
-        "        index: index + ",
+        "      let next_index = index + ",
         xls_topology_source_fragment_dslx:router_index_step(
             Spec, Scheduler
         ),
-        ",\n",
+        ";\n",
+        "      ", StateName, " {\n",
+        "        scheduled, index: next_index,\n",
+        "        head: ", Module, "::scheduled_effect(scheduled, next_index),\n",
         "        ..updated\n",
         "      }\n",
         "    } else { updated }\n",

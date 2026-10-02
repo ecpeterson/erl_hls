@@ -23,7 +23,8 @@ DEBUG_RTL = [PUBLIC / "priv/rtl/debug" / name for name in
              ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
 
 
-def testbench(args, ports, manifest):
+def testbench(args: argparse.Namespace, ports: dict, manifest: dict) -> str:
+    """Drive public boundaries and check unchanged outputs plus fixture-specific conservation."""
     lines = ["`timescale 1ns/1ps", "module topology_live_tb;", "reg clk=0, resetn=0;",
              "always #5 clk=~clk;", "reg released=0, contributions=0; integer fd, cycles=0;",
              "reg [31:0] s_dbg_tdata=0; reg [3:0] s_dbg_tkeep=15;",
@@ -66,8 +67,8 @@ def testbench(args, ports, manifest):
                 signal = "command_valid"
             elif name in sinks:
                 signal = "released" if name == sinks[0] else ("cycles%7 != 0" if components else "1'b1")
-            elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate", "direct_reduction"):
-                signal = "contributions" if args.actor_test == "direct_reduction" else "released"
+            elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate", "direct_reduction", "indexed_gather"):
+                signal = "contributions" if args.actor_test in ("direct_reduction", "indexed_gather") else "released"
             else:
                 raise ValueError(f"test has no driver for input {name}")
             originals.append(f".\\{name} ({signal})")
@@ -102,6 +103,31 @@ def testbench(args, ports, manifest):
             checks.append(f"if(port_{valid_index}_{suffix} && released) report_{suffix}=port_{report_index}_{suffix};")
         final_checks.append('if(report_dut !== report_production) $fatal(1, "production/debug application frame differs");')
         final_checks.append('$display("PASS: production/debug application transcripts match (one healthy report, payload 3)");')
+    if args.actor_test == "indexed_gather":
+        report_index = list(ports).index("_reports_out")
+        valid_index = list(ports).index("_reports_out_vld")
+        lines.append("integer reports=0; reg application_complete=0;")
+        checks += [f'if(port_{valid_index}_dut && !contributions) $fatal(1, "gather completed before missing member");',
+                   f'if(port_{valid_index}_dut && port_{report_index}_dut[95:0] !== 96\'d117) $fatal(1, "gather order/padding/provisional isolation failed");',
+                   f"if(port_{valid_index}_dut && released) reports=reports+1;",
+                   'if(reports>4) $fatal(1, "duplicate gather report");',
+                   'if(reports==4 && !application_complete) begin application_complete=1; fd=$fopen("application_complete","w"); $fclose(fd); end']
+        final_checks += ['if(reports!=4) $fatal(1, "missing gather reports");',
+                         '$display("PASS: four ordered/padded gather reports, no provisional payload or duplicate output");']
+        # Observe only the physical RAM boundary; never read stored payloads or force actor state.
+        lines += ["integer gather_writes=0, gather_reads=0, future_writes=0, partial_writes=0, final_writes=0;",
+                  "reg [31:0] future_row=0, current_row=0;"]
+        checks += ['if(reference.scheduler_0_gather_wr_en) begin',
+                   '  gather_writes=gather_writes+1;',
+                   '  case(reference.scheduler_0_gather_wr_data[7:0])',
+                   '    99: begin future_writes=future_writes+1; future_row=reference.scheduler_0_gather_wr_addr; if(reference.scheduler_0_gather_wr_mask!=1) $fatal(1, "future mask"); fd=$fopen("provisional_written","w"); $fclose(fd); end',
+                   '    7: begin partial_writes=partial_writes+1; current_row=reference.scheduler_0_gather_wr_addr; if(reference.scheduler_0_gather_wr_mask!=2) $fatal(1, "partial mask"); end',
+                   '    11: begin final_writes=final_writes+1; if(reference.scheduler_0_gather_wr_mask!=1 || reference.scheduler_0_gather_wr_addr!=current_row) $fatal(1, "final member ownership"); end',
+                   '    default: $fatal(1, "unexpected payload write");',
+                   '  endcase end',
+                   'if(reference.scheduler_0_gather_rd_en) begin gather_reads=gather_reads+1; if(!contributions || reference.scheduler_0_gather_rd_addr!=current_row) $fatal(1, "premature or wrong-row payload read"); end']
+        final_checks += ['if(gather_writes!=3 || gather_reads!=1 || future_writes!=1 || partial_writes!=1 || final_writes!=1 || future_row==current_row) $fatal(1, "gather physical ownership conservation");',
+                         '$display("PASS: three masked member writes into two distinct banks, one completion read");']
     debug_ports = [f".{side}_dbg_{suffix}({side}_dbg_{suffix})" for side in ("s", "m")
                    for suffix in ("tdata", "tkeep", "tlast", "tvalid", "tready")]
     if args.actor_test and args.actor_test.startswith(("mixed_", "ingress_", "components_")):
@@ -194,7 +220,8 @@ def testbench(args, ports, manifest):
     return "\n".join(lines)+"\n"
 
 
-def run(args):
+def run(args: argparse.Namespace) -> None:
+    """Instrument matching RTL, query it through VPI and retain the finite execution witness."""
     topology.instrument(args)
     stage = args.stage.resolve()
     manifest = json.loads((stage / "manifest.json").read_text())
@@ -221,7 +248,7 @@ def run(args):
             shutil.copy(stage.parent / "expected.hex", stage / "expected.hex")
     else:
         (stage / "actor-test").unlink(missing_ok=True)
-    for name in ("release", "released", "contributions", "contributions_released", "application_complete", "done", "debug_tx", "debug_rx"):
+    for name in ("release", "released", "contributions", "contributions_released", "application_complete", "provisional_written", "done", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(PUBLIC / "test/rtl" / name, stage)
@@ -262,9 +289,10 @@ def run(args):
                     raise RuntimeError("VPI did not create its transport FIFOs")
                 time.sleep(0.01)
             # Paths are passed as arguments, never interpolated into Erlang code.
+            host_module = "hls_indexed_debug_live" if args.actor_test == "indexed_gather" else "hls_topology_debug_live"
             host = ["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/hls_fabric/ebin"),
                     str(ROOT / "_build/test/lib/hls_fabric/test"), "-eval",
-                    'case hls_topology_debug_live:run(hd(init:get_plain_arguments())) of ok -> halt(0); Error -> io:format("~p~n",[Error]), halt(1) end.',
+                    f'case {host_module}:run(hd(init:get_plain_arguments())) of ok -> halt(0); Error -> io:format("~p~n",[Error]), halt(1) end.',
                     "-extra", str(stage)]
             with (stage / "host.log").open("w") as host_log:
                 client = subprocess.Popen(host, cwd=ROOT, stdout=host_log, stderr=subprocess.STDOUT)
@@ -287,7 +315,7 @@ def run(args):
                 sim.terminate()
                 sim.wait(timeout=10)
     assert "PASS: original/instrumented" in (stage / "simulation.log").read_text()
-    for name in (("blocked", "completed", "recovered") if args.actor_test == "direct_reduction" else ("blocked", "recovered")):
+    for name in (("blocked", "completed", "recovered") if args.actor_test in ("direct_reduction", "indexed_gather") else ("blocked", "recovered")):
         report = json.loads((stage / f"{name}.json").read_text())
         (stage / f"{name}.txt").write_text(reporting.text_report(manifest, report))
     print(f"PASS: {manifest['top']} structural and cycle-by-cycle noninterference")
@@ -305,7 +333,7 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "direct_mailbox", "mailbox_mixed", "reduction", "aggregate", "direct_reduction",
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "direct_mailbox", "mailbox_mixed", "reduction", "aggregate", "direct_reduction", "indexed_gather",
                                                 "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced",
                                                 "ingress_direct", "ingress_one", "ingress_two", "ingress_coalesced",
                                                 "components_global", "components_weak"))

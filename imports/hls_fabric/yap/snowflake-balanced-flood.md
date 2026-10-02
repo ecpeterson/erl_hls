@@ -1,5 +1,7 @@
 # Balanced neighbor selection
 
+Reviewed 2026-10-01. Implemented and retained in the full actor baseline. The isolated comparisons below establish their stated local results; later combined routes do not supply an isolated timing attribution. Current work is in [the campaign plan](topology-specialization.md).
+
 Preregistered after the combined control/effect synthesis, before changing the kernel. Its leading six replicated paths end at `SharedExecutor/p0__14__5`, the fourth sequential signed-CID comparison in `merge_surface`. The input comes through the executor request FIFO and callback/entry selection; the whole path is not just the comparisons. It has eight CARRY8 cells, 30 logic levels and a synthesis-estimated 7.266 ns period. Mailbox paths follow at 6.964 ns. These are unplaced estimates.
 
 Replace sequential neighbor visitation by an ordered balanced tree. A subtree retains its lowest valid CID (left wins ties), whether unrooting stops visitation, and whether a visited neighbor contributed growth before that stop. The first component can inspect all neighbors because a stop overrides the final CID/pointer; the growth component must preserve the visited prefix exactly. Keep the original N/W/D/U/E/S surface priority and W/E/D/U repetition priority, signed 32-bit IDs, all failure checks and the ordinary actor path.

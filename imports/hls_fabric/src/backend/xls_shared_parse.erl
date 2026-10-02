@@ -7,7 +7,7 @@ to_xls(Filename) -> to_xls(Filename, #{}).
 -doc "Selects shared reduction placement and optional physical observations.".
 -spec to_xls(file:filename(), map()) -> iolist().
 to_xls(Filename, Options) ->
-    case maps:keys(Options) -- [source_options, shared_service, mailbox_debug, direct_actor_debug, state_projection, admission_reductions, direct_collection] of
+    case maps:keys(Options) -- [source_options, shared_service, mailbox_debug, direct_actor_debug, state_projection, admission_reductions, direct_collection, gather_collection] of
         [] -> ok;
         Unknown -> error({invalid_xls_options, Unknown})
     end,
@@ -19,6 +19,7 @@ to_xls(Filename, Options) ->
             ok = validate_shared_service(Mode, maps:get(reductions, Spec)),
             ok = xls_shared_collection_codegen:validate(Spec, Options),
             ok = xls_direct_collection_codegen:validate(Spec, Options),
+            ok = xls_indexed_collection_codegen:validate(Spec, Options),
             Specialized = case maps:find(state_projection, Options) of
                 error -> Spec;
                 {ok, Projection} ->
@@ -31,6 +32,7 @@ to_xls(Filename, Options) ->
             end,
             xls_shared_codegen:emit(Specialized#{shared_service => Mode,
                 admission_reductions => maps:get(admission_reductions, Options, false),
+                gather_collection => maps:get(gather_collection, Options, false),
                 direct_collection => maps:get(direct_collection, Options, false),
                 mailbox_debug => xls_scheduler_observation:enabled(Options),
                 direct_actor_debug => xls_actor_observation:enabled(Options)})
@@ -39,6 +41,8 @@ to_xls(Filename, Options) ->
             false -> ok; _ -> error(direct_collection_requires_reduced_statem) end,
         case maps:get(admission_reductions, Options, false) of
             false -> ok; _ -> error(admission_reductions_require_ordinary_reduced_actor) end,
+        case maps:get(gather_collection, Options, false) of
+            false -> ok; _ -> error(gather_collection_requires_hls_statem) end,
         case maps:is_key(state_projection, Options) of
             true -> error(state_projection_requires_hls_statem); false -> ok end,
         case {Mode, xls_scheduler_observation:enabled(Options)} of

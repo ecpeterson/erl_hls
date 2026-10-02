@@ -1,0 +1,218 @@
+`timescale 1ns/1ps
+// Generated router with real buffered ownership; this bench supplies only stimuli and oracles.
+module effect_router_tb;
+  localparam PREFIX = @@PREFIX@@;
+  localparam BATCHES = 16;
+  reg clk = 0;
+  always #5 clk = ~clk;
+  reg reset = 1;
+  reg [584:0] scheduled = 0;
+  reg scheduled_vld = 0;
+  wire grant_vld;
+  wire scheduled_rdy, grant_rdy;
+  wire [160:0] credit;
+  wire [127:0] left_data, right_data;
+  wire [287:0] prefix_data;
+  wire credit_vld, left_vld, right_vld, prefix_vld, request_vld, release_vld;
+  wire request_data, release_data;
+  reg credit_rdy = 0, left_rdy = 0, right_rdy = 0, prefix_rdy = 0;
+  wire request_rdy, release_rdy;
+  @@INSTANCE@@
+  wire probe_carry, probe_grant_usable;
+  @@COVERAGE_BINDINGS@@
+
+  integer epoch, cycle, batch_index, offered, credits, returned, requests, grants, releases;
+  integer lane, quiet;
+  integer sent, partial_multicast;
+  integer carried, borrowed;
+  integer head [0:2], tail [0:2], stalls [0:7];
+  reg [287:0] expected [0:2][0:127];
+  reg prelude, input_accepted;
+  reg [127:0] held_left, held_right;
+  reg [287:0] held_prefix;
+  reg [160:0] held_credit;
+  reg held_request, held_release;
+  reg [5:0] stalled_valid;
+
+  // Values encode reset epoch, batch and effect; no sorting or lossy payload projection.
+  function [127:0] frame(input integer b, input integer e);
+    reg [95:0] payload;
+    begin
+      payload = (epoch * 65536) + b * 16 + e + 1;
+      frame = {8'd3, 8'(b), 8'(e), 8'h5a, payload};
+    end
+  endfunction
+  // Mix empty, singleton and continuing batches.
+  function integer count(input integer b);
+    begin
+      case (b % 8)
+        0:count=4; 1:count=0; 2:count=1; 3:count=4;
+        4:count=2; 5:count=3; 6:count=4; default:count=1;
+      endcase
+    end
+  endfunction
+  // Prefix mode alternates ordinary, prefix-only and prefix-plus-tail batches.
+  function integer has_prefix(input integer b);
+    begin has_prefix = PREFIX && !prelude && count(b)>=2 && b%3!=0; end
+  endfunction
+  // REPORT fans out; prefix mode captures NORTH and SOUTH together.
+  function integer port(input integer b, input integer e);
+    begin
+      if (has_prefix(b) && e<2) port=e;
+      else if (PREFIX || prelude || e==0 || e==3) port=2;
+      else port=(b+e)%3;
+    end
+  endfunction
+  // Pack the fixture ABI with element zero in the low array slice.
+  function [584:0] batch(input integer b);
+    reg [543:0] effects;
+    integer e;
+    begin
+      effects=0;
+      for(e=0;e<4;e=e+1) effects[e*136 +: 136]={8'(port(b,e)),frame(b,e)};
+      batch={32'd0,8'(count(b)),1'(has_prefix(b)),effects};
+    end
+  endfunction
+
+  // Queue an offered batch before acceptance: a bypass recipient can accept while
+  // the other recipient holds upstream ready low. The source holds that offer.
+  // Arrays flatten element zero into low RTL bits; tuple fields retain their order.
+  task append_expected(input integer b);
+    integer e, p;
+    begin
+      if (has_prefix(b)) begin
+        expected[2][tail[2]]={32'd0,frame(b,1),frame(b,0)};
+        tail[2]=tail[2]+1;
+      end
+      for(e=0;e<count(b);e=e+1) begin
+        if (!(has_prefix(b) && e<2)) begin
+          p=port(b,e);
+          if(p==0 || p==2) begin expected[0][tail[0]]=frame(b,e);tail[0]=tail[0]+1;end
+          if(p==1 || p==2) begin expected[1][tail[1]]=frame(b,e);tail[1]=tail[1]+1;end
+        end
+      end
+    end
+  endtask
+  // Reject duplicates, omissions, stale reset epochs and per-lane reordering.
+  task consume(input integer which, input [287:0] value);
+    begin
+      if(head[which]>=tail[which] || value!==expected[which][head[which]])
+        $fatal(1,"lane order/content epoch=%0d cycle=%0d lane=%0d index=%0d got=%h expected=%h",
+          epoch,cycle,which,head[which],value,expected[which][head[which]]);
+      head[which]=head[which]+1;
+    end
+  endtask
+
+  // Check accepted content independently of generated state/register names.
+  // Source predicates below count actual lookahead carries and usable grants.
+  task sample;
+    begin
+      input_accepted=0;
+      if ((^{scheduled_rdy,grant_rdy,credit_vld,left_vld,right_vld,prefix_vld,request_vld,release_vld})===1'bx)
+        $fatal(1,"unknown interface validity epoch=%0d cycle=%0d",epoch,cycle);
+      if(!prelude && probe_carry && scheduled_vld && scheduled_rdy) carried=carried+1;
+      if(!prelude && probe_grant_usable && grant_vld && grant_rdy) borrowed=borrowed+1;
+      // Valid and payload remain held on every externally blocked channel.
+      if ((stalled_valid[0] && (!left_vld || left_data!==held_left)) ||
+          (stalled_valid[1] && (!right_vld || right_data!==held_right)) ||
+          (stalled_valid[2] && (!prefix_vld || prefix_data!==held_prefix)) ||
+          (stalled_valid[3] && (!credit_vld || credit!==held_credit)) ||
+          (stalled_valid[4] && (!request_vld || request_data!==held_request)) ||
+          (stalled_valid[5] && (!release_vld || release_data!==held_release)))
+        $fatal(1,"blocked output changed epoch=%0d cycle=%0d",epoch,cycle);
+      held_left=left_data; held_right=right_data;
+      held_prefix=prefix_data; held_credit=credit;
+      held_request=request_data; held_release=release_data;
+      stalled_valid={release_vld&&!release_rdy,request_vld&&!request_rdy,
+        credit_vld&&!credit_rdy,prefix_vld&&!prefix_rdy,
+        right_vld&&!right_rdy,left_vld&&!left_rdy};
+      if(scheduled_vld && !scheduled_rdy) stalls[0]=stalls[0]+1;
+      if(credit_vld && !credit_rdy) stalls[1]=stalls[1]+1;
+      if(left_vld && !left_rdy) stalls[2]=stalls[2]+1;
+      if(right_vld && !right_rdy) stalls[3]=stalls[3]+1;
+      if(prefix_vld && !prefix_rdy) stalls[4]=stalls[4]+1;
+      if(request_vld && !request_rdy) stalls[5]=stalls[5]+1;
+      if(release_vld && !release_rdy) stalls[6]=stalls[6]+1;
+      if(grant_vld && !grant_rdy) stalls[7]=stalls[7]+1;
+      if(left_vld&&left_rdy && right_vld&&!right_rdy && left_data===right_data) partial_multicast=partial_multicast+1;
+      if(scheduled_vld && scheduled_rdy) begin
+        sent=sent+1;input_accepted=1;
+      end
+      if(left_vld&&left_rdy) consume(0,{160'd0,left_data});
+      if(right_vld&&right_rdy) consume(1,{160'd0,right_data});
+      if(prefix_vld&&prefix_rdy) consume(2,prefix_data);
+      if(credit_vld&&credit_rdy) begin
+        if(credit!=={1'b1,160'd0}) $fatal(1,"bad credit payload");
+        credits=credits+1;returned=returned+1;
+      end
+      // Reserve credit at stable offer: terminal credit can precede upstream
+      // acknowledgement while the proc's later window sends finish.
+      if(credits != 1 + returned - offered || credits<0 || credits>1 ||
+          returned>offered || offered<sent || offered-sent>1)
+        $fatal(1,"invalid completion credit balance offered=%0d sent=%0d returned=%0d credits=%0d",
+          offered,sent,returned,credits);
+      if(grant_vld&&grant_rdy) grants=grants+1;
+      if(release_vld&&release_rdy) releases=releases+1;
+      if(request_vld&&request_rdy) requests=requests+1;
+    end
+  endtask
+
+  // Reset deliberately discards one partly published multicast batch, then starts a fresh epoch.
+  task initialize;
+    begin
+      scheduled_vld=0;offered=0;credits=1;returned=0;sent=0;input_accepted=0;
+      requests=0;grants=0;releases=0;batch_index=0;
+      for(lane=0;lane<3;lane=lane+1) begin head[lane]=0;tail[lane]=0;end
+      stalled_valid=0;
+    end
+  endtask
+  initial begin
+    for(lane=0;lane<8;lane=lane+1) stalls[lane]=0;
+    partial_multicast=0;epoch=0;
+    carried=0;borrowed=0;
+    prelude=1;initialize();
+    repeat(4) @(negedge clk);
+    reset=0;
+    for(cycle=0;cycle<40;cycle=cycle+1) begin
+      @(negedge clk);
+      if(input_accepted) scheduled_vld=0;
+      left_rdy=1;right_rdy=0;prefix_rdy=0;credit_rdy=1;
+      if(!scheduled_vld && sent==0) begin scheduled=batch(0);append_expected(0);offered=offered+1;credits=credits-1;scheduled_vld=1;end
+      @(posedge clk);sample();
+    end
+    if(head[0]<1 || head[1]!=0 || partial_multicast==0) $fatal(1,"reset prelude did not reach partial multicast");
+    @(negedge clk);reset=1;initialize();
+    repeat(4) @(negedge clk);
+    epoch=1;prelude=0;reset=0;quiet=0;partial_multicast=0;
+    for(lane=0;lane<8;lane=lane+1) stalls[lane]=0;
+    for(cycle=0;cycle<2000;cycle=cycle+1) begin
+      @(negedge clk);
+      if(input_accepted) scheduled_vld=0;
+      // Independent deterministic stalls, followed by an unconditional drain window.
+      left_rdy=cycle>=200 || (cycle%17>=5);
+      right_rdy=cycle>=200 || (cycle>=14 && cycle%19>=7);
+      prefix_rdy=cycle>=200 || (stalls[4]>=4 && cycle>=18 && cycle%23>=9);
+      credit_rdy=cycle>=200 || (stalls[1]>=4 && cycle%13>=4);
+      if(!scheduled_vld && credits>0 && batch_index<BATCHES) begin
+        scheduled=batch(batch_index);append_expected(batch_index);offered=offered+1;credits=credits-1;scheduled_vld=1;batch_index=batch_index+1;
+      end
+      @(posedge clk);sample();
+      if(offered==BATCHES && sent==BATCHES && returned==BATCHES && credits==1 && requests==grants && grants==releases && !grant_vld &&
+          head[0]==tail[0] && head[1]==tail[1] && head[2]==tail[2] &&
+          !credit_vld && !left_vld && !right_vld && !prefix_vld &&
+          !request_vld && !release_vld) quiet=quiet+1;else quiet=0;
+      if(cycle>=250 && quiet>=32) begin
+        if(requests==0 || grants!=requests || releases!=grants || partial_multicast==0 || carried==0 || borrowed==0)
+          $fatal(1,"missing window/multicast coverage");
+        if(stalls[0]==0 || stalls[1]==0 || stalls[2]==0 || stalls[3]==0 || (PREFIX && stalls[4]==0))
+          $fatal(1,"missing required scheduled/credit/lane/prefix backpressure coverage");
+        $display("PASS mode=%0d cycles=%0d batches=%0d lane_counts=%0d,%0d,%0d requests=%0d grants=%0d releases=%0d partial_multicast=%0d carried=%0d borrowed=%0d",
+          PREFIX,cycle,sent,head[0],head[1],head[2],requests,grants,releases,partial_multicast,carried,borrowed);
+        $display("STALL scheduled=%0d credit=%0d left=%0d right=%0d prefix=%0d request=%0d release=%0d grant=%0d",
+          stalls[0],stalls[1],stalls[2],stalls[3],stalls[4],stalls[5],stalls[6],stalls[7]);
+        $finish;
+      end
+    end
+    $fatal(1,"bounded drain timeout sent=%0d returned=%0d heads=%0d,%0d,%0d tails=%0d,%0d,%0d",sent,returned,head[0],head[1],head[2],tail[0],tail[1],tail[2]);
+  end
+endmodule
