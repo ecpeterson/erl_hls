@@ -104,7 +104,8 @@ artifact(Filename, Source, PhaseNames) ->
         retained_calls => CallSpec,
         internal_steps => xls_statem_continuation:lower(maps:get(internal_steps, Prepared),
             Names, DataName, EnumAtoms, HasCalls, fun(C, P) -> normalize_cast_result(C, P, Names, HasCalls) end),
-        reductions => Reductions
+        reductions => Reductions,
+        gathers => maps:get(gathers, Prepared, none)
     }.
 
 prepare_interface(Forms, PhaseNames) ->
@@ -184,8 +185,9 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
     end,
     {StepGroups, CompletionClauses} = xls_statem_continuation:groups(
         maps:get(internal, Callbacks), maps:get(continuations, Declarations)),
+    {GatherCompletions, ScalarCompletions} = xls_statem_gather_lower:split_internal(CompletionClauses),
     InternalGroups = xls_statem_reduction_lower:internal_groups(
-        CompletionClauses,
+        ScalarCompletions,
         PhaseNames
     ),
     ReductionContext = #{
@@ -193,15 +195,18 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
         entries => Entries,
         cast_groups => CastGroups0,
         internal_groups => InternalGroups,
+        gather_completions => GatherCompletions,
+        continuations => maps:get(continuations, Declarations),
+        retained_calls => maps:get(retained_calls, Declarations),
         message_names => MessageNames,
         data_name => maps:get(data_name, Declarations)
     },
-    ReductionSlots = prepare_reduction_slots(
-        ReductionMode,
-        Forms,
-        ReductionContext,
-        maps:get(records, Declarations)
-    ),
+    #{gathers := Gathers, cast_groups := GatherCasts} =
+        xls_statem_gather_lower:analyze(Forms, ReductionContext, ReductionMode),
+    ExtraRecords = [xls_parse:find_record(Forms, N) || N <- xls_statem_gather_lower:records(Gathers)],
+    ReductionSlots0 = prepare_reduction_slots(ReductionMode, Forms,
+        ReductionContext#{cast_groups := GatherCasts}, lists:uniq(maps:get(records, Declarations) ++ ExtraRecords)),
+    ReductionSlots = ReductionSlots0#{gathers => Gathers},
     maps:merge(Declarations#{
         call_groups => CallGroups,
         internal_steps => StepGroups,
@@ -271,10 +276,11 @@ interface_from_prepared(Prepared) ->
             interface_effects(Entry) || Entry <- Entries
         ])
     },
-    case ReductionInterface of
-        none -> with_continuation_width(Base, Prepared);
-        Interface -> with_continuation_width(Base#{reductions => Interface}, Prepared)
-    end.
+    Gather = maps:get(gathers, Prepared, none),
+    WithReduction = case ReductionInterface of none -> Base; RI -> Base#{reductions => RI} end,
+    with_continuation_width(case Gather of none -> WithReduction; _ ->
+        WithReduction#{gathers => Gather, dispatches := append_new_dispatches(maps:get(dispatches, WithReduction), reduction_dispatches(Gather))}
+    end, Prepared).
 
 %% Finite event state is private scheduler storage, separate from application data.
 -spec with_continuation_width(map(), map()) -> map().
@@ -480,7 +486,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
                 Variant = lists:nth(Id + 1, EntryLayouts),
                 {xls_map, 0, Value, fun(R) ->
                     xls_actor_codegen:entry_value(R, Variant,
-                        PayloadBits, Reductions)
+                        PayloadBits, #{reductions => Reductions, gathers => maps:get(gathers, Prepared, none)})
                 end}
             end),
         Outcome = xls_parse:clause_outcome(Clause, enter_args(DataName),

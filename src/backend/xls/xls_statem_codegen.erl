@@ -29,6 +29,7 @@ machine_declarations(#{capacity := Capacity, data_name := DataName} = Spec) ->
         "  entered_from: Phase,\n",
         "  data: ", DataStruct, ",\n",
         ?REDUCTION_SERVICE:machine_state_field(Reductions),
+        xls_statem_gather_codegen:field(Spec),
         "  slots: MailboxSlot[", integer_to_list(Capacity), "],\n",
         "  occupied: u8,\n",
         xls_statem_reply_codegen:optional(Spec, "  replies: ReplyBook,\n"),
@@ -54,6 +55,7 @@ initial_machine(Spec) ->
     ["fn initial_machine() -> Machine {\n  let machine = initial_actor_state();\n",
      "  Machine { phase: machine.phase, entered_from: machine.entered_from, data: machine.data,\n",
      ?REDUCTION_SERVICE:machine_state_copy_field(Reductions),
+     xls_statem_gather_codegen:copy(Spec),
      xls_statem_reply_codegen:optional(Spec, "    replies: machine.replies,\n"),
      xls_statem_event_codegen:optional(Spec, "    next_event: machine.next_event,\n"),
      "    enter_pending: machine.enter_pending, failure: machine.failure, ..zero!<Machine>() }\n}\n\n",
@@ -63,6 +65,7 @@ initial_machine(Spec) ->
         "    entered_from: machine.entered_from,\n",
         "    data: machine.data,\n",
         ?REDUCTION_SERVICE:machine_state_copy_field(Reductions),
+        xls_statem_gather_codegen:copy(Spec),
         xls_statem_reply_codegen:optional(Spec, "    replies: machine.replies,\n"),
         xls_statem_event_codegen:optional(Spec, "    next_event: machine.next_event,\n"),
         "    enter_pending: machine.enter_pending,\n",
@@ -97,8 +100,9 @@ machine_step_function(#{
         "    egress_ready: u1) -> MachineStep {\n",
         "  if hls_failure::failed(machine.failure) {\n",
         direct_failure_step(Spec),
-        ?REDUCTION_SERVICE:direct_after_failed(Reductions, Capacity),
-        machine_entry_step(Reductions),
+        xls_statem_gather_codegen:direct_complete(Spec),
+        ?REDUCTION_SERVICE:direct_after_failed(Reductions, Capacity, Spec),
+        machine_entry_step(Spec),
         xls_statem_event_codegen:direct_step(Spec),
         "  } else {\n",
         "      let tag_ok = ",
@@ -119,11 +123,12 @@ machine_step_function(#{
         "      let selected_frame = admitted_slots[selected as u32].frame;\n",
         "      let dispatchable = found && !invalid_input;\n",
         xls_statem_reply_codegen:admit(Spec, "selected_frame", "dispatchable"),
+        xls_statem_gather_codegen:dispatch_bindings(Spec),
         ?REDUCTION_SERVICE:direct_dispatch_bindings(Reductions, Spec),
         "      let invalid_repeat = ", xls_statem_reply_codegen:optional(Spec, "(dispatchable && is_call(selected_frame.header.op) && directive == Directive::POSTPONE) || "), "dispatchable && repeat_phase &&\n",
         "        (directive != Directive::CONSUME ||\n",
         "         next_phase != machine.phase);\n",
-        ?REDUCTION_SERVICE:direct_effective_binding(Reductions),
+        xls_statem_gather_codegen:direct_effective(Spec, ?REDUCTION_SERVICE:direct_effective_binding(Reductions)),
         "      let selected_slot = admitted_slots[selected as u32];\n",
         "      let postponed_slot = MailboxSlot {\n",
         "        postponed: u1:1,\n",
@@ -158,7 +163,7 @@ machine_step_function(#{
         "      let final_slots = if phase_boundary {\n",
         "        unblocked_slots\n",
         "      } else { candidate_slots };\n",
-        ?REDUCTION_SERVICE:direct_failed_binding(Reductions),
+        xls_statem_gather_codegen:direct_failure(Spec, ?REDUCTION_SERVICE:direct_failed_binding(Reductions)),
         xls_statem_reply_codegen:finish(Spec, "selected_frame"),
         xls_actor_codegen:reply_failure_binding(Spec),
         "      let admission_pending =\n",
@@ -175,6 +180,7 @@ machine_step_function(#{
         xls_statem_reply_codegen:optional(Spec, "        replies: reply_book,\n"),
         xls_statem_event_codegen:optional(Spec, "        next_event: if effective && !failed { next_event } else { u8:0 },\n"),
         ?REDUCTION_SERVICE:direct_reduction_field(Reductions),
+        xls_statem_gather_codegen:next_field(Spec),
         "        slots: ", xls_statem_reply_codegen:optional(Spec, "if failed && dispatchable { compacted_slots } else { "), "final_slots", xls_statem_reply_codegen:optional(Spec, " }"), ",\n",
         "        occupied: ", xls_statem_reply_codegen:optional(Spec, "if failed && dispatchable { admitted_occupied - u8:1 } else { "), "candidate_occupied", xls_statem_reply_codegen:optional(Spec, " }"), ",\n",
         "        enter_pending: effective && phase_boundary && !failed,\n",
@@ -197,7 +203,10 @@ machine_step_function(#{
         "}\n\n"
     ].
 
-machine_entry_step(Reductions) ->
+%% Entry commits either collection kind only after its complete effect batch.
+-spec machine_entry_step(map()) -> iodata().
+machine_entry_step(Spec) ->
+    Reductions = maps:get(reductions, Spec, none),
     [
         "    let outcome = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
@@ -206,7 +215,7 @@ machine_entry_step(Reductions) ->
         "    let has_effect = machine.entry_effect_index < effect_count;\n",
         "    let effect = entry_effect(\n",
         "      effects, machine.entry_effect_index);\n",
-        ?REDUCTION_SERVICE:direct_entry_bindings(Reductions),
+        xls_statem_gather_codegen:entry_bindings(Spec),
         "    let can_advance = !entry_failed && (!has_effect || egress_ready);\n",
         "    let next_effect_index = machine.entry_effect_index +\n",
         "      ((has_effect && can_advance) as u8);\n",
@@ -218,6 +227,7 @@ machine_entry_step(Reductions) ->
         "    let advanced_machine = Machine {\n",
         "      data: if entry_complete { outcome.data } else { machine.data },\n",
         ?REDUCTION_SERVICE:direct_entry_reduction_field(Reductions),
+        xls_statem_gather_codegen:entry_commit(Spec),
         "      enter_pending: !entry_complete && !entry_failed,\n",
         "      entry_effect_index: if entry_complete {\n",
         "        u8:0\n",
@@ -263,12 +273,12 @@ service(Spec) ->
         "    let _admission_tok = send_if(\n",
         "      join(), admission_out, admission_valid, u1:1);\n",
         case xls_statem_reply_codegen:enabled(Spec) of
-            true -> ["    let receive_enabled = machine.admission_pending && (hls_failure::failed(machine.failure) || (!machine.enter_pending && machine.next_event == u8:0", ?REDUCTION_SERVICE:direct_receive_gate(Reductions), "));\n"];
+            true -> ["    let receive_enabled = machine.admission_pending && (hls_failure::failed(machine.failure) || (!machine.enter_pending && machine.next_event == u8:0", ?REDUCTION_SERVICE:direct_receive_gate(Reductions), xls_statem_gather_codegen:receive_gate(Spec), "));\n"];
             false -> [
         "    let receive_enabled = !hls_failure::failed(machine.failure) &&\n",
         "      !machine.enter_pending && machine.admission_pending",
         xls_statem_event_codegen:optional(Spec, " && machine.next_event == u8:0"),
-        ?REDUCTION_SERVICE:direct_receive_gate(Reductions), ";\n"
+        ?REDUCTION_SERVICE:direct_receive_gate(Reductions), xls_statem_gather_codegen:receive_gate(Spec), ";\n"
             ]
         end,
         "    let (tok, frame, received) = recv_if_non_blocking(\n",

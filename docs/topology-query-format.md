@@ -29,10 +29,12 @@ Channel bits 0/1 mean valid/ready. FIFO values contain stored occupancy. Actor f
 | 40–47 | Postponed count, if enabled |
 | 48–54 | Placement-specific mailbox fields below |
 | 55 | Mailbox initialized |
-| 56 onward | Optional reduction metadata |
+| 56 onward | Optional collection metadata |
 
 For dedicated actors, bit 48 is reserved admission and 49–54 are zero. Other execution backends define their own mailbox metadata interpretation and provide an explicit local decoder. Absent mailbox observations leave 32–55 zero.
 
-Projection schema 4 supplies source and observation offsets for reduction status (2 bits), site (1–8), key (32), remaining (1–8) and pending failure (16), packed consecutively from bit 56. Unused bits are zero. Populations, site names, phase codebooks and failure source maps come from the manifest; unknown codes are rejected.
+The projection supplies source and observation offsets for collection status (2 bits), site (1–8), key (32), remaining (1–8) and pending failure (16), packed consecutively from bit 56. Optional expected and seen masks follow when they fit the 72-bit region. Unused bits are zero. The `reduction` manifest entry describes this shared region; a site with `kind: "gather"` identifies indexed gathering, while an omitted kind identifies scalar reduction. Populations, site names, phase codebooks and failure source maps come from the manifest; unknown codes are rejected.
+
+Projection schema 5 also supports authoritative live samples for RAM-backed actors. A `live_state` port publishes fixed-width rows containing phase, entry, failure and initialized in low bits 0–25. Collection fields may use `live_offset` instead of `offset`; all collection fields must use the same source. These explicit live offsets select metadata only from that row, with no corresponding actor-RAM tap. Their `observation_offset` still selects the unchanged query position. The always-ready publication is sampled independently of queries; mailbox metadata remains separately sampled.
 
 RAM providers occupy `banks`, direct providers `direct`, with contiguous resource indices across both. The projection and source RTL are covered by the manifest fingerprint. Values are snapshots at the query edge; their publication and coherence limits remain those in the [query contract](topology-debug.md).

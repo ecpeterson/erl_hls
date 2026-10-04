@@ -73,10 +73,13 @@ segment(Expression, Bindings, Continue, State) ->
 
 %% Validates an action and retains conservative provenance of its evaluated payload.
 -spec action(term(), map(), map()) -> {term(), term()}.
-action({tuple, Line, [{atom, _, open_reduction} | _]} = Open,
-        _Bindings, _State) ->
-    {Reduction, []} = xls_statem_reduction_lower:split_entry_actions(
-        {cons, Line, Open, {nil, Line}}, Line),
+action({tuple, Line, [{atom, _, Kind} | _]} = Open,
+        _Bindings, _State) when Kind =:= open_reduction; Kind =:= open_gather ->
+    Reduction = case Kind of
+        open_gather -> xls_statem_gather_lower:parse_open(Open, Line);
+        open_reduction -> element(1, xls_statem_reduction_lower:split_entry_actions(
+            {cons, Line, Open, {nil, Line}}, Line))
+    end,
     #{key_expression := Key, identity_expression := Identity} = Reduction,
     TypedKey = {call, Line,
         {remote, Line, {atom, Line, hls_type}, {atom, Line, as}},
@@ -96,9 +99,10 @@ action(Action, _Bindings, _State) ->
 %% The checked mask is part of the transactional entry value, before any cast commits.
 -spec member_mask_value(map(), erl_anno:anno() | erl_anno:location()) -> [erl_parse:abstract_expr()].
 member_mask_value(#{member_mask_expression := none}, _Line) -> [];
-member_mask_value(#{member_mask_expression := Mask, population := #{size := Width}}, Line) ->
+member_mask_value(#{member_mask_expression := Mask, population := #{size := Width}} = Open, Line) ->
     Zero = {integer, Line, 0},
-    Valid = {op, Line, 'andalso', {op, Line, '>', Mask, Zero},
+    Operator = case maps:get(kind, Open, reduction) of gather -> '>='; reduction -> '>' end,
+    Valid = {op, Line, 'andalso', {op, Line, Operator, Mask, Zero},
         {op, Line, '=:=', {op, Line, 'bsr', Mask, {integer, Line, Width}}, Zero}},
     %% This compiler-inserted invariant uses the generic failure code, not a fabricated source site.
     Checked = {match, 0, {atom, 0, true}, Valid},
@@ -232,9 +236,11 @@ binding_names(Pattern, _Bindings) ->
 bound_names(Pattern, Bindings) ->
     maps:merge(maps:map(fun(_Name, _Used) -> {value, xls_entry_storage:identity()} end, variables(Pattern)), Bindings).
 
+%% Entry segments contain effects or a collection opening, including through local aliases.
+-spec contains_segment(term(), map()) -> boolean().
 contains_segment({nil, _}, _Bindings) -> true;
 contains_segment({cons, _, {tuple, _, [{atom, _, Kind} | _]}, _}, _Bindings)
-        when Kind =:= cast; Kind =:= open_reduction -> true;
+        when Kind =:= cast; Kind =:= open_reduction; Kind =:= open_gather -> true;
 contains_segment({op, _, '++', Left, Right}, Bindings) ->
     contains_segment(Left, Bindings) orelse contains_segment(Right, Bindings);
 contains_segment({tuple, _, Fields}, Bindings) ->
@@ -306,9 +312,9 @@ common_reduction(Variants) ->
 %% Every entry alternative for a phase must open the same reduction expression.
 -spec reduction_key(map()) -> tuple().
 reduction_key(#{name := Name, population := Population, accumulator := Accumulator,
-        key_expression := Key, identity_expression := Identity, member_mask_expression := Mask}) ->
+        key_expression := Key, identity_expression := Identity, member_mask_expression := Mask} = Open) ->
     MaskKey = case Mask of none -> none; _ -> erl_parse:map_anno(fun(_) -> 0 end, Mask) end,
-    {Name, Population, Accumulator, erl_parse:map_anno(fun(_) -> 0 end, Key),
+    {maps:get(kind, Open, reduction), Name, Population, Accumulator, erl_parse:map_anno(fun(_) -> 0 end, Key),
         erl_parse:map_anno(fun(_) -> 0 end, Identity), MaskKey}.
 
 %% Interface effects are a conservative union by ordered position. A shared

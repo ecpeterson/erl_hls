@@ -38,8 +38,8 @@ def check_write_contract(module):
         raise ValueError("state RAM accepted-write contract mismatch")
 
 
-def reduction_bits(reduction: dict, phases: list[str], width: int) -> list[int]:
-    """Validate the compiler's packed projection before exposing any RAM bits."""
+def reduction_bits(reduction: dict, phases: list[str], width: int, offset_key: str = "offset") -> list[int]:
+    """Validate packed collection metadata against its declared RAM or live-row source."""
     selected = []
     observation_offset = 56
     sizes = {"status": (2, 2), "site": (1, 8), "key": (32, 32),
@@ -58,8 +58,9 @@ def reduction_bits(reduction: dict, phases: list[str], width: int) -> list[int]:
         raise ValueError("unknown reduction observation fields")
     for name, (minimum, maximum) in sizes.items():
         field = reduction["fields"][name]
-        offset, size = field["offset"], field["width"]
-        if (type(size) is not int or not minimum <= size <= maximum or
+        offset, size = field.get(offset_key), field["width"]
+        if (set(field).intersection(("offset", "live_offset")) != {offset_key} or
+                type(size) is not int or not minimum <= size <= maximum or
                 type(offset) is not int or not 0 <= offset <= width-size or
                 field["observation_offset"] != observation_offset):
             raise ValueError(f"invalid reduction field: {name}")
@@ -75,6 +76,10 @@ def reduction_bits(reduction: dict, phases: list[str], width: int) -> list[int]:
     for site in sites:
         population = site["population"]
         size = population["size"]
+        kind = site.get("kind", "reduction")
+        if kind not in ("reduction", "gather") or (kind == "gather" and
+                (population["mode"] != "members" or not population.get("runtime_mask", False))):
+            raise ValueError("invalid collection kind")
         if (site["phase"] not in phases or not isinstance(site["name"], str) or
                 type(size) is not int or not 1 <= size <= 255 or
                 size >= 1 << reduction["fields"]["remaining"]["width"] or
@@ -94,7 +99,18 @@ def reduction_bits(reduction: dict, phases: list[str], width: int) -> list[int]:
     return selected
 
 
-def selected_fields(bank, keys):
+def live_collection(bank: dict) -> bool:
+    """Identify metadata whose explicit offsets refer only to the live sample."""
+    return any("live_offset" in field for field in bank.get("reduction", {}).get("fields", {}).values())
+
+
+def ram_reduction_width(bank: dict) -> int:
+    """Count collection bits physically selected from the actor state RAM."""
+    return 0 if live_collection(bank) else bank.get("reduction", {}).get("width", 0)
+
+
+def selected_fields(bank: dict, keys: set[str]) -> list[int]:
+    """Validate disjoint state fields and keep live metadata out of the RAM projection."""
     width, slots = bank["width"], bank["slots"]
     fields = bank["fields"]
     selected = []
@@ -105,7 +121,15 @@ def selected_fields(bank, keys):
             raise ValueError(f"invalid actor field: {name}")
         selected.extend(range(offset, offset+size))
     if reduction := bank.get("reduction"):
-        selected.extend(reduction_bits(reduction, bank["phases"], width))
+        if live_collection(bank):
+            live = bank.get("live_state", {})
+            if live.get("width") != 26 + reduction["width"]:
+                raise ValueError("invalid live actor state projection")
+            bits = reduction_bits(reduction, bank["phases"], live["width"], "live_offset")
+            if len(set(bits)) != len(bits) or any(bit < 26 for bit in bits):
+                raise ValueError("overlapping live actor fields")
+        else:
+            selected.extend(reduction_bits(reduction, bank["phases"], width))
     if len(set(selected)) != len(selected):
         raise ValueError("overlapping actor fields")
     phases = bank["phases"]
@@ -255,8 +279,7 @@ def resources(banks, first_id):
 
 
 def wrapper(banks: list[dict], first_id: int, clock: str, reset: str, active_low: bool) -> str:
-    """Render query snapshots while selecting live collector progress over historical RAM state."""
-    """Select physical probes or one row per actor bank at the query address.
+    """Select physical probes or authoritative live metadata at the query address.
 
     Keeping actor rows behind an indexed read port permits memory inference;
     exporting every row as a separate wire would turn the store into registers.
@@ -267,7 +290,7 @@ def wrapper(banks: list[dict], first_id: int, clock: str, reset: str, active_low
     for bank in banks:
         index, slots = bank["index"], bank["slots"]
         address_width = bank["address_width"]
-        reduction_width = bank.get("reduction", {}).get("width", 0)
+        reduction_width = ram_reduction_width(bank)
         write_width = 25 + reduction_width
         mailbox_offset = offset + 1 + address_width + write_width
         mailbox_valid = f"actor_writes[{mailbox_offset}]" if "mailbox" in bank else "1'b0"
@@ -302,10 +325,15 @@ def wrapper(banks: list[dict], first_id: int, clock: str, reset: str, active_low
 
 
 def live_state_wrapper(bank: dict, offset: int, clock: str, reset: str, active_low: bool) -> str:
-    """Select the authoritative live phase/reduction sample; RAM only supplies mailbox metadata."""
+    """Pack the declared live collection fields; RAM supplies only mailbox metadata."""
     index, slots = bank["index"], bank["slots"]
     width = bank["live_state"]["width"]
     reduction = bank["reduction"]["width"]
+    if live_collection(bank):
+        fields = sorted(bank["reduction"]["fields"].values(), key=lambda field: field["observation_offset"], reverse=True)
+        payload = ", ".join(f"actor_live_row_{index}[{field['live_offset']} +: {field['width']}]" for field in fields)
+    else:
+        payload = f"actor_live_row_{index}[26 +: {reduction}]"
     return (f"reg [{slots * width - 1}:0] actor_live_{index};\n"
             f"always @(posedge \\{clock} ) begin\n"
             f"  if ({'!' if active_low else ''}\\{reset} ) actor_live_{index} <= 0;\n"
@@ -313,5 +341,5 @@ def live_state_wrapper(bank: dict, offset: int, clock: str, reset: str, active_l
             f"end\n"
             f"wire [{width-1}:0] actor_live_row_{index} = actor_live_{index}[actor_address_{index}*{width} +: {width}];\n"
             f"assign actor_value_{index} = actor_address_{index} < {slots} && actor_live_row_{index}[25] ?\n"
-            f"  {{{{({72-reduction}){{1'b0}}}}, actor_live_row_{index}[26 +: {reduction}], "
+            f"  {{{{({72-reduction}){{1'b0}}}}, {payload}, "
             f"actor_ram_value_{index}[55:32], 6'b0, actor_live_row_{index}[25:0]}} : 128'b0;\n")
