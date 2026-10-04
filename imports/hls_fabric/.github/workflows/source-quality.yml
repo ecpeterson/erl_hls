@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      diagnostics:
+        description: Retain bounded diagnostics even when tests pass
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -22,6 +27,8 @@ jobs:
         with:
           otp-version: '28.0.2'
           rebar3-version: '3.24.0'
+      - name: Check CI diagnostic bounds and upload policy
+        run: python3 tools/test_ci_diagnostics.py
       - name: Test the source checker
         run: python3 tools/test_source_contracts.py
       - name: Check source contracts against the integration base
@@ -33,14 +40,12 @@ jobs:
           else
             python3 tools/check_source_contracts.py
           fi
-      - name: Retain the full documentation/spec backlog
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Retain bounded source-contract diagnostics
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: source-contracts
-          path: _build/source-contracts.json
-          if-no-files-found: ignore
+          paths: _build/source-contracts.json
       - name: Cache Dialyzer tables
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

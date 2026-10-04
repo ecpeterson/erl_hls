@@ -1,0 +1,28 @@
+name: Bounded CI diagnostics
+description: Retain small reports and log tails for two days.
+inputs:
+  name:
+    description: Unique artifact name within this run.
+    required: true
+  paths:
+    description: Newline-separated file globs relative to the checkout.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Collect diagnostics within the storage budget
+      id: collect
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        DIAGNOSTIC_PATHS: ${{ inputs.paths }}
+        DIAGNOSTIC_OUTPUT: ${{ runner.temp }}/ci-diagnostics/${{ inputs.name }}.zip
+      run: python3 tools/ci_diagnostics.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ runner.temp }}/ci-diagnostics/${{ inputs.name }}.zip
+        retention-days: 2
+        compression-level: 0
+        if-no-files-found: error

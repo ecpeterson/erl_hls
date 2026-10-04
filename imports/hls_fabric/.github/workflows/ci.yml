@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      diagnostics:
+        description: Retain bounded diagnostics even when tests pass
+        type: boolean
+        default: false
       extended:
         description: Include D3 reference modes and the full packed-link performance grid
         type: boolean
@@ -157,12 +161,11 @@ jobs:
           python3 tools/test_phi_bridge.py "$RUNNER_TEMP/xls" --stage _build/phi-bridge/board-sized --shape 2 2 --planes x z
           python3 tools/test_phi_bridge.py "$RUNNER_TEMP/xls" --stage _build/phi-bridge/corrections --shape 4 2 --planes x --clock-halves 7 3
       - name: Retain generated RTL provenance and debug observations
-        if: always() && needs.select.outputs.hardware == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: actor-pid-observations
-          path: |
+          paths: |
             _build/actor-pids/**/*.log
             _build/actor-pids/**/build.json
             _build/actor-pids/**/manifest.json
@@ -269,12 +272,11 @@ jobs:
         if: matrix.memory_case == 'board_memory' && matrix.reductions == 'source_fragments'
         run: python3 tools/test_partition_reduction.py "$RUNNER_TEMP/xls" _build/board-memory/source --stage _build/reduction-collector
       - name: Retain memory witnesses and public debug observations
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: distributed-memory-${{ matrix.memory_case }}-${{ matrix.placement }}-${{ matrix.reductions }}
-          path: |
+          paths: |
             _build/board-memory/**/*.log
             _build/board-memory/provenance.json
             _build/board-profile/*.log
@@ -345,12 +347,11 @@ jobs:
           loop_check(stage.resolve(), 4, 'yosys')
           PYCODE
       - name: Retain bridge inputs and boundary measurements
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: packed-credit-observations-${{ matrix.framing }}
-          path: |
+          paths: |
             _build/packed-credit/**/*.log
             _build/packed-credit/**/build.json
             _build/packed-credit/**/service.json

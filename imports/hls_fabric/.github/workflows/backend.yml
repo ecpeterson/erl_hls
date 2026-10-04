@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      diagnostics:
+        description: Retain bounded diagnostics even when tests pass
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -91,12 +96,11 @@ jobs:
         run: python3 experiments/07-openxc7/test_zynq_ps_probe.py --yosys "$(command -v yosys)"
 
       - name: Upload bring-up diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: bringup-diagnostics
-          path: |
+          paths: |
             experiments/07-openxc7/build/ethernet*/**/*.log
             experiments/07-openxc7/build/ethernet*/**/result.json
 
@@ -201,12 +205,11 @@ jobs:
       - name: Check mixed execution placements and scoped observations
         run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed one two coalesced ingress_one components_weak
       - name: Retain backend failures
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: backend-diagnostics
-          path: |
+          paths: |
             _build/**/*.log
             _build/**/*.term
             _build/**/manifest.json
@@ -280,12 +283,11 @@ jobs:
         run: python3 tools/test_phi_debug.py _build/phi-debug
 
       - name: Upload full debug integration diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: complete-debug-reports
-          path: |
+          paths: |
             _build/repetition/**/*.json
             _build/repetition/**/*.log
             _build/repetition/**/events.txt
