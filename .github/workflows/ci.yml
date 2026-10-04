@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      diagnostics:
+        description: Retain bounded diagnostics even when tests pass
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -229,12 +234,11 @@ jobs:
         run: python3 tools/test_debug_sampling.py _build/xls_sim/regsvc
 
       - name: Upload decoded debug observations
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: debug-observation-reports
-          path: |
+          paths: |
             _build/debug-memories/**/*.json
             _build/debug-memories/**/*.log
             _build/debug-memories/**/*.ys
@@ -266,7 +270,6 @@ jobs:
             _build/reduction-debug/**/scc.log
             _build/aggregate-debug/**/actors-*.term
             _build/aggregate-debug/**/scc.log
-          if-no-files-found: ignore
 
       - name: Query an instrumented generated topology under backpressure
         run: |
@@ -276,12 +279,11 @@ jobs:
             _build/xls_sim/regsvc/ordered_egress_topology.v
 
       - name: Upload simulation diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: xls-simulation-diagnostics
-          path: |
+          paths: |
             _build/topology-debug-queries/**/*.log
             _build/topology-debug-queries/**/manifest.json
             _build/topology-debug-queries/**/blocked.json
@@ -336,7 +338,6 @@ jobs:
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log
             _build/xls_sim/regsvc/phi_sim/vvp.log
-          if-no-files-found: ignore
 
   mixed-topology:
     needs: select
@@ -393,12 +394,11 @@ jobs:
           bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed-topology "$placement"
 
       - name: Upload mixed topology diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
         with:
-          retention-days: 7
           name: mixed-topology-${{ matrix.workload }}-reports
-          path: |
+          paths: |
             _build/mixed-topology/**/*.log
             _build/mixed-topology/**/*.term
             _build/mixed-topology/**/*.hex
@@ -411,7 +411,6 @@ jobs:
             _build/mixed-topology/**/recovered.txt
             _build/mixed-windows/cycles.json
             _build/mixed-windows/**/*.log
-          if-no-files-found: ignore
 
   qualify:
     needs: [select, test, mixed-topology]
