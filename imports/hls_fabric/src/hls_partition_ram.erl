@@ -23,8 +23,10 @@ wrapper(Name, Schedule, Local) ->
     Ports = hls_partition_links:ports(Local) ++ [
         {"_app_in", 33, in}, {"_app_out", 33, out}],
     ["module ", Name, "_ram(input wire clk, reset,\n",
+     "    output wire [4:0] _scheduler_probe,\n",
      lists:join(",\n", [port(P) || P <- Ports]), ");\n",
      xls_scheduler_ram_v:wires(Bindings), xls_scheduler_observation:wires(Schedule),
+     scheduler_probe(Bindings),
      "    ", case Local of #{tile := true} -> "phi_tile"; _ -> Name end, " dut(.clk(clk), .reset(reset)",
      [[",\n        ._", N, "(", integer_to_list(W), "'h", integer_to_list(V, 16), "), ._", N, "_vld(1'b1), ._", N, "_rdy()"]
         || {N, W, V} <- constants(Local)],
@@ -32,6 +34,20 @@ wrapper(Name, Schedule, Local) ->
         || {P, _, _} <- Ports],
      xls_scheduler_ram_v:application_ports(Bindings), xls_scheduler_observation:ports(Schedule),
      "\n    );\n", xls_scheduler_ram_v:instances(Bindings, "clk"), "endmodule\n"].
+
+%% Summarize requests at the physical scheduler-memory boundary without changing readiness.
+-spec scheduler_probe([map()]) -> iolist().
+scheduler_probe(Bindings) ->
+    Indices = [maps:get(index, Binding) || Binding <- Bindings],
+    Signal = fun(Suffix) ->
+        case [["scheduler_", integer_to_list(Index), Suffix] || Index <- Indices] of
+            [] -> "1'b0";
+            Terms -> lists:join(" | ", Terms)
+        end
+    end,
+    ["    assign _scheduler_probe = {", Signal("_mailbox_debug_vld"), ", ",
+     Signal("_mailbox_wr_en"), ", ", Signal("_mailbox_rd_en"), ", ",
+     Signal("_state_wr_en"), ", ", Signal("_state_rd_en"), "};\n"].
 
 %% Public application/link ports retain their widths and ready/valid contract.
 -spec port({string(), pos_integer(), in | out}) -> iolist().
