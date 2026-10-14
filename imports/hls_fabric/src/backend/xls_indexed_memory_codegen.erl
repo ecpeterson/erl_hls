@@ -16,7 +16,10 @@ request_fields(Spec) -> optional(Spec,
 -doc "Supplies optional read ports, one checked row read and the response-ownership join.".
 -spec loader_bindings(map()) -> [{binary(), iodata()}].
 loader_bindings(Spec) ->
-    [{<<"@@GATHER_MEMBERS@@">>, optional(Spec,
+    [{<<"@@OPERAND_GATHER_FIELD@@">>, optional(Spec, "  gathered: GatherRamReadResp,\n")},
+     {<<"@@OPERAND_GATHER_BIND@@">>, optional(Spec, "    let gathered = state.1.gathered;\n")},
+     {<<"@@OPERAND_GATHER_VALUE@@">>, optional(Spec, "gathered,")},
+     {<<"@@GATHER_MEMBERS@@">>, optional(Spec,
         "  gather_read_req_out: chan<GatherRamReadReq> out;\n"
         "  gather_read_resp_in: chan<GatherRamReadResp> in;\n")},
      {<<"@@GATHER_PARAMETERS@@">>, optional(Spec,
@@ -25,10 +28,10 @@ loader_bindings(Spec) ->
      {<<"@@GATHER_NAMES@@">>, optional(Spec,
         ", gather_read_req_out, gather_read_resp_in")},
      {<<"@@GATHER_READ@@">>, optional(Spec,
-        "    let read_gather = send_if(tok, gather_read_req_out, ticket.gather_valid,\n"
+        "    let read_gather = send_if(tok, gather_read_req_out, valid && ticket.gather_valid,\n"
         "      indexed_gather_ram::read(ticket.slot * u32:2 + ticket.gather_lease.bank as u32));\n"
         "    let (gather_done, gathered) = recv_if(read_gather, gather_read_resp_in,\n"
-        "      ticket.gather_valid, zero!<GatherRamReadResp>());\n")},
+        "      valid && ticket.gather_valid, zero!<GatherRamReadResp>());\n")},
      {<<"@@GATHER_FIELDS@@">>, optional(Spec,
         "      gather_valid: ticket.gather_valid,\n"
         "      gather_progress: ticket.gather_progress,\n"

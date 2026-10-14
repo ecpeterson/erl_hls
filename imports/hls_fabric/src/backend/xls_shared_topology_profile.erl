@@ -22,7 +22,8 @@
     direct_actor_debug => boolean(),
     reduction_placements => map(),
     direct_collections => #{module() => exclusive_epoch},
-    effect_window_partition => global | weak_components
+    effect_window_partition => global | weak_components,
+    effect_delivery_width => 1..6
 }.
 
 %% Validate one physical option contract before inserting defaults. Backend
@@ -34,7 +35,7 @@ normalize(Profile) when is_map(Profile) ->
     Required = [actor_egress_depth, channel_depth, name],
     Keys = lists:sort(maps:keys(Profile)),
     Allowed = Required ++ [effect_window_partition, reduction_placements,
-        scheduler_groups, mailbox_debug, direct_actor_debug, direct_collections],
+        scheduler_groups, mailbox_debug, direct_actor_debug, direct_collections, effect_delivery_width],
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
@@ -73,7 +74,13 @@ normalize_options(Profile) ->
         weak_components -> ok;
         _ -> error({effect_window_partition, Partition})
     end,
+    Width = maps:get(effect_delivery_width, Profile, 1),
+    case Width of
+        W when is_integer(W), W >= 1, W =< 6 -> ok;
+        _ -> error({effect_delivery_width, Width})
+    end,
     Profile#{
+        effect_delivery_width => Width,
         mailbox_debug => xls_scheduler_observation:enabled(Profile),
         direct_actor_debug => xls_actor_observation:enabled(Profile),
         scheduler_groups => Groups,

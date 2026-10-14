@@ -32,7 +32,15 @@ validate(#{data_name := Data, message_names := Messages,
 %% declarations belong here; adding a new one must extend the collision witness.
 -spec reserved() -> [string()].
 reserved() ->
-    ["MachineBits", "MachineRamReadReq", "MachineRamReadResp",
+    ["SharedOperands", "IndexedOwnedInput", "indexed_owned_mask", "indexed_capture_retirement", "indexed_capture_result", "indexed_write_data",
+     "indexed_check_owned", "indexed_capture_input", "indexed_retire_owned", "indexed_refresh",
+     "indexed_prepare_mask", "indexed_prepared_finish", "indexed_preparation_source",
+     "indexed_prepared_in_flight", "indexed_prepared_ticket",
+     "indexed_retire_context", "shared_write_mask", "ordinary_selection_source",
+     "direct_collection_finish", "direct_collection_execute",
+     "direct_collection_command", "direct_collection_advance",
+     "DirectCollectionGrant", "direct_collection_next_grant", "STARTUP_BITS",
+     "PUBLICATION_CAPACITY", "PublicationPatch", "publication_patch", "publication_frame", "MachineBits", "MachineRamReadReq", "MachineRamReadResp",
      "MachineRamWriteReq", "MachineRamWriteResp", "MailboxRamReadReq",
      "MailboxRamReadResp", "MailboxRamWriteReq", "MailboxRamWriteResp",
      "ScheduledRequest", "ScheduledEffects", "SharedStep", "SharedExecutorRequest",
@@ -48,7 +56,7 @@ reserved() ->
      "collection_reserved", "collection_frame_valid", "collection_expected", "collection_count",
      "collection_push", "collection_open", "CollectionControl", "CollectionBank",
      "collection_control", "collection_accepts", "collection_fold", "collection_resolve",
-     "collection_select", "collection_select_ordinary", "collection_issue", "CollectionInput",
+     "collection_grant", "collection_selected_input", "collection_select", "collection_select_ordinary", "collection_issue", "CollectionInput",
      "collection_decode", "collection_push_input", "collection_accepts_input",
      "collection_capture_inputs", "GatherRamReadReq", "GatherRamReadResp",
      "GatherRamWriteReq", "GatherRamWriteResp", "IndexedBanks", "IndexedLease",
@@ -62,4 +70,4 @@ reserved() ->
      "indexed_completion_descriptor", "indexed_ticket_with_descriptor", "indexed_selected_ticket",
      "indexed_admission_ready",
      "indexed_resolve", "indexed_retire", "indexed_ordinary_state",
-     "scalar_collection_observation", "indexed_observation_progress", "indexed_select", "indexed_admit", "indexed_commit", "indexed_issue"].
+     "scalar_collection_observation", "indexed_observation_progress", "indexed_grant", "indexed_select", "indexed_admit", "indexed_commit", "indexed_issue"].

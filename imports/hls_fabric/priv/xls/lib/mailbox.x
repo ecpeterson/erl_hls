@@ -30,6 +30,51 @@ pub struct Admission {
   physical: u8,
 }
 
+// Combinational arbitration result; valid reflects the same eligible set as mask.
+// A false valid has a zero mask; otherwise exactly one mask bit is set.
+pub struct ProducerGrant<COUNT: u32> {
+  valid: bool,
+  mask: uN[COUNT],
+}
+
+// Return a round-robin grant and availability from the eligible inputs.
+// Bit zero names array element zero; an out-of-range cursor wraps to zero.
+pub fn producer_grant<COUNT: u32>(pending: bool[COUNT], cursor: u32) -> ProducerGrant<COUNT> {
+  const_assert!(COUNT > u32:0);
+  let requests = rev(pending as uN[COUNT]);
+  let after = requests & (!uN[COUNT]:0 << cursor);
+  ProducerGrant { valid: or_reduce(requests),
+    mask: one_hot(if or_reduce(after) { after } else { requests }, true) as uN[COUNT] }
+}
+
+// Encode the selected producer for cursor/pending bookkeeping; zero yields zero.
+pub fn granted_index<COUNT: u32>(grant: uN[COUNT]) -> u32 {
+  let indices = unroll_for! (i, values): (u32, u32[COUNT]) in u32:0..COUNT {
+    update(values, i, i)
+  }(zero!<u32[COUNT]>());
+  one_hot_sel(grant, indices)
+}
+
+// Preserve indexed-selection's element-zero payload when there is no grant.
+// The availability and mask must describe the same eligible set.
+pub fn grant_or_first<COUNT: u32>(grant: ProducerGrant<COUNT>) -> uN[COUNT] {
+  grant.mask | (!grant.valid as uN[COUNT])
+}
+
+// Select one held request directly from a one-hot grant, without a binary index.
+// No grant returns request zero, matching the old inactive selection payload.
+pub fn granted_request<COUNT: u32>(grant: ProducerGrant<COUNT>, requests: ScheduledRequest[COUNT])
+    -> ScheduledRequest {
+  let packed = unroll_for! (i, words): (u32, bits[axis::FRAME_BITS + u32:33][COUNT]) in u32:0..COUNT {
+    let request = requests[i];
+    update(words, i, request.credit ++ request.slot ++ axis::bits_from_frame(request.frame))
+  }(zero!<bits[axis::FRAME_BITS + u32:33][COUNT]>());
+  let raw = one_hot_sel(grant_or_first(grant), packed);
+  ScheduledRequest { credit: raw[axis::FRAME_BITS + u32:32+:u1],
+    slot: raw[axis::FRAME_BITS+:u32],
+    frame: axis::frame_from_bits(raw[0+:bits[axis::FRAME_BITS]]) }
+}
+
 // Whole-row mailbox read request.
 pub type RamReadReq = bram::ReadReq;
 // One complete mailbox frame returned from RAM.
@@ -170,6 +215,19 @@ pub fn collect_credit<PRODUCER_COUNT: u32>(
   (remaining, egress_busy && !credit_found)
 }
 
+// Return at most one registered publication credit without count underflow.
+// Fresh captures wait. The caller prices its FIFO plus retained command/router
+// slots, reserves one for borrowed lookahead, and increments only below that
+// bound. Its command remains held until the output handshake.
+pub fn collect_publication_credit<PRODUCER_COUNT: u32>(
+    registered_pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_valid: u1[PRODUCER_COUNT], pending_valid: u1[PRODUCER_COUNT],
+    outstanding: u2) -> (u1[PRODUCER_COUNT], u2) {
+  let (remaining, not_found) = collect_credit(
+    registered_pending, registered_valid, pending_valid, true);
+  (remaining, outstanding - (!not_found && outstanding != u2:0) as u2)
+}
+
 // Each credit returns the named actor's independently reserved outbox after
 // its entire batch drains. Collect all registered credits, so a busy producer
 // cannot starve another actor's return. Fresh captures wait one activation;
@@ -231,39 +289,18 @@ pub fn select_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32>(
     pending: ScheduledRequest[PRODUCER_COUNT], pending_valid: u1[PRODUCER_COUNT],
     excluded_valid: u1, excluded_slot: u32, failed_valid: u1, failed_slot: u32)
     -> Admission {
-  let (after_found, after_producer, before_found, before_producer) =
-      unroll_for! (candidate, acc):
-          (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
+  let eligible = unroll_for! (candidate, flags):
+      (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
     let request = pending[candidate];
     let slot = request.slot;
-    // Boolean operators are eager in DSLX; guard the array access itself.
-    let has_capacity = if slot < ACTOR_COUNT {
-      occupied[slot] as u32 < DEPTH
-    } else {
-      false
-    };
-    let eligible = pending_valid[candidate] && !request.credit &&
-      has_capacity &&
-      (!excluded_valid || slot != excluded_slot) &&
-      (!failed_valid || slot != failed_slot);
-    let take_after = !acc.0 &&
-      candidate >= cursor && eligible;
-    let take_before = !acc.2 &&
-      candidate < cursor && eligible;
-    (
-      acc.0 || take_after,
-      if take_after { candidate } else { acc.1 },
-      acc.2 || take_before,
-      if take_before { candidate } else { acc.3 }
-    )
-  }((u1:0, u32:0, u1:0, u32:0));
-  let found = after_found || before_found;
-  let producer = if after_found {
-    after_producer
-  } else {
-    before_producer
-  };
-  let request = pending[producer];
+    let has_capacity = if slot < ACTOR_COUNT { occupied[slot] as u32 < DEPTH } else { false };
+    update(flags, candidate, pending_valid[candidate] && !request.credit && has_capacity &&
+      (!excluded_valid || slot != excluded_slot) && (!failed_valid || slot != failed_slot))
+  }(zero!<bool[PRODUCER_COUNT]>());
+  let grant = producer_grant(eligible, cursor);
+  let found = grant.valid;
+  let producer = granted_index(grant.mask);
+  let request = granted_request(grant, pending);
   let slot = if request.slot < ACTOR_COUNT {
     request.slot
   } else {
@@ -698,4 +735,115 @@ fn clear_pending_matches_conditional_update_test() {
   assert_eq(clear_pending(full, u32:21, true), update(full, u32:21, u1:0));
   assert_eq(clear_pending(full, u32:22, true), full);
   assert_eq(clear_pending(full, u32:0xffff_ffff, true), full);
+}
+
+// Compare grants and complete selected payloads with an independent cyclic scan.
+fn check_producer_selection<COUNT: u32>(pending: bool[COUNT], cursor: u32) {
+  let start = if cursor < COUNT { cursor } else { u32:0 };
+  let expected = for (offset, chosen): (u32, (bool, u32)) in u32:0..COUNT {
+    let index = (start + offset) % COUNT;
+    if !chosen.0 && pending[index] { (true, index) } else { chosen }
+  }((false, u32:0));
+  let requests = for (i, values): (u32, ScheduledRequest[COUNT]) in u32:0..COUNT {
+    update(values, i, ScheduledRequest { slot: u32:91 + i * u32:13,
+      credit: (i % u32:2) as u1,
+      frame: axis::frame_from_bits((i as bits[axis::FRAME_BITS] + bits[axis::FRAME_BITS]:17) * bits[axis::FRAME_BITS]:76543) })
+  }(zero!<ScheduledRequest[COUNT]>());
+  let grant = producer_grant(pending, cursor);
+  assert_eq(grant.valid, expected.0);
+  assert_eq(granted_index(grant.mask), expected.1);
+  assert_eq(grant.mask, if expected.0 { uN[COUNT]:1 << expected.1 } else { uN[COUNT]:0 });
+  assert_eq(granted_request(grant, requests), requests[expected.1]);
+}
+
+// Exhaust all small eligible sets and cursor positions, including idle data.
+#[test]
+fn producer_selection_exhaustive_test() {
+  for (mask, ()): (u32, ()) in u32:0..u32:32 {
+    let pending = for (i, flags): (u32, bool[5]) in u32:0..u32:5 {
+      update(flags, i, ((mask >> i) & u32:1) != u32:0)
+    }(zero!<bool[5]>());
+    for (cursor, ()): (u32, ()) in u32:0..u32:7 {
+      check_producer_selection(pending, cursor)
+    }(())
+  }(())
+}
+
+// Exercise every payload lane at the real fan-ins, competition and cursor wrap.
+// Small masks are exhaustive above; the separate SAT probe covers wide masks.
+fn check_producer_boundaries<COUNT: u32>() {
+  for (a, ()): (u32, ()) in u32:0..COUNT {
+    let single = update(zero!<bool[COUNT]>(), a, true);
+    let pair = update(single, (a + u32:1) % COUNT, true);
+    check_producer_selection(single, u32:0);
+    check_producer_selection(pair, a);
+    check_producer_selection(pair, a + u32:1);
+    check_producer_selection(update(single, COUNT - u32:1 - a, true), u32:0xffffffff)
+  }(());
+  check_producer_selection(zero!<bool[COUNT]>(), u32:0);
+  check_producer_selection(!zero!<uN[COUNT]>() as bool[COUNT], COUNT - u32:1)
+}
+
+// Both generated controller widths retain the same element and fairness order.
+#[test]
+fn producer_selection_representative_widths_test() {
+  check_producer_boundaries<u32:19>();
+  check_producer_boundaries<u32:22>();
+  check_producer_boundaries<u32:1>()
+}
+
+// Idle admissions keep producer zero's normalized destination and free-slot payload.
+// Out-of-range cursors wrap to the same first eligible producer.
+#[test]
+fn admission_idle_payload_and_out_of_range_cursor_test() {
+  let request = zero!<ScheduledRequest>();
+  let pending = [ScheduledRequest { slot: u32:1, ..request }, request];
+  let occupied = [u8:1, u8:1];
+  let used = [[true, false], [true, false]];
+  let idle = select_admission(occupied, used, u32:0xffffffff, pending,
+    [false, false], false, u32:0, false, u32:0);
+  assert_eq(idle, Admission { valid: false, producer: u32:0, slot: u32:1, physical: u8:1 });
+  let active = select_admission(occupied, used, u32:0xffffffff, pending,
+    [true, true], false, u32:0, false, u32:0);
+  assert_eq(active, Admission { valid: true, ..idle });
+  let invalid = [ScheduledRequest { slot: u32:2, ..request }, request];
+  assert_eq(select_admission(occupied, used, u32:0, invalid, [false, false],
+    false, u32:0, false, u32:0), Admission { slot: u32:0, ..idle });
+}
+
+// Fresh credit cannot release capacity before its register; two registered
+// returns are consumed one at a time and cannot underflow an empty reservation.
+#[test]
+fn publication_credit_registration_and_bounds_test() {
+  let c=ScheduledRequest{credit:true,..zero!<ScheduledRequest>()};
+  let pending=[c,c];
+  assert_eq(collect_publication_credit(pending,[false,false],[true,true],u2:2),
+    ([true,true],u2:2));
+  let first=collect_publication_credit(pending,[true,true],[true,true],u2:2);
+  assert_eq(first,([false,true],u2:1));
+  let second=collect_publication_credit(pending,first.0,first.0,first.1);
+  assert_eq(second,([false,false],u2:0));
+  assert_eq(collect_publication_credit(pending,[true,false],[true,false],u2:0),
+    ([false,false],u2:0));
+}
+
+// A finite 256-schedule witness varies producer demand and physical credit
+// returns. Every accepted batch owns capacity; the count stays within three.
+#[test]
+fn publication_capacity_schedule_test() {
+  for (schedule,_): (u32,()) in u32:0..u32:256 {
+    let _final=for (cycle, state): (u32,(u2,u32,u32)) in u32:0..u32:8 {
+      let (count,accepted,returned)=state;
+      let release=count != u2:0 && ((schedule >> cycle) as u1) != u1:0;
+      let pending=[ScheduledRequest{credit:true,..zero!<ScheduledRequest>()}];
+      let left=collect_publication_credit(pending,[release],[release],count).1;
+      let take=left < u2:3;
+      let next=left+(take as u2);
+      let issued=accepted+(take as u32);
+      let completed=returned+(release as u32);
+      assert_eq(next <= u2:3,true);
+      assert_eq(next as u32,issued-completed);
+      (next,issued,completed)
+    }((u2:0,u32:0,u32:0));
+  }(())
 }

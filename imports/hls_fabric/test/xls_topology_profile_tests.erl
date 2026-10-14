@@ -84,3 +84,16 @@ profile() ->
 -spec emit(term(),map()) -> binary().
 emit(Plan, Profile) ->
     iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)).
+
+%% Width bounds are checked before choosing either topology renderer.
+-spec parallel_delivery_bounds_test() -> ok.
+parallel_delivery_bounds_test() ->
+    [begin
+        ?assertError({effect_delivery_width, Width},
+            xls_shared_topology_profile:normalize((profile())#{effect_delivery_width => Width}))
+    end || Width <- [0, 7, 1.5, automatic]],
+    [begin
+        ?assertEqual(Width, maps:get(effect_delivery_width,
+            xls_shared_topology_profile:normalize((profile())#{effect_delivery_width => Width})))
+    end || Width <- [1, 2, 3, 6]],
+    ok.

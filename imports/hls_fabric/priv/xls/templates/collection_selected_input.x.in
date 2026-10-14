@@ -1,0 +1,22 @@
+// Select the captured lift from a same-state grant, preserving the idle sentinel.
+// Packing enables DSLX's bits-only one_hot_sel without adding storage.
+fn collection_selected_input<COUNT: u32>(grant: mailbox::ProducerGrant<COUNT>, inputs: CollectionInput[COUNT]) -> CollectionInput {
+  const VALUE_BITS = u32:@VALUE_BITS@;
+  const SITE_BITS = u32:@SITE_BITS@;
+  const WIDTH = VALUE_BITS + u32:64 + SITE_BITS + u32:2;
+  let words = unroll_for! (i, words): (u32, bits[WIDTH][COUNT]) in u32:0..COUNT {
+    let input = inputs[i];
+    let c = input.contribution;
+    update(words, i, input.frame_valid ++ c.valid ++ (c.site as bits[SITE_BITS]) ++
+      c.key ++ c.member ++ bits_from_@CODEC@(c.value))
+  }(zero!<bits[WIDTH][COUNT]>());
+  let raw = one_hot_sel(mailbox::grant_or_first(grant), words);
+  CollectionInput {
+    frame_valid: raw[WIDTH - u32:1+:bool],
+    contribution: ReductionContribution {
+      valid: raw[WIDTH - u32:2+:bool],
+      site: raw[VALUE_BITS + u32:64+:bits[SITE_BITS]] as ReductionSite,
+      key: raw[VALUE_BITS + u32:32+:u32], member: raw[VALUE_BITS+:u32],
+      value: @CODEC@_from_bits(raw[0+:bits[VALUE_BITS]]) }
+  }
+}

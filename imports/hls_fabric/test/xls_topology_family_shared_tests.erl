@@ -10,6 +10,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"proc SchedulerRouter">>)),
     ?assertEqual(6, count(Generated, <<"spawn SchedulerRouter">>)),
     ?assertEqual(6, count(Generated, <<"::SharedService<">>)),
+    ?assertEqual(6, count(Generated, <<"::ScheduledEffects, u32:2>">>)),
     ?assertEqual(0, count(Generated, <<"::EffectWindowAdapter(">>)),
     ?assertEqual(1, count(Generated, <<
         "spawn effect_window::Arbiter<"
@@ -19,7 +20,9 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     %% the two phi reduction routers also decode their four-frame prefixes.
     ?assertEqual(20, count(Generated, <<"::scheduled_effect(">>)),
     ?assertEqual(6, count(Generated, <<"let state_effect_info = state.head;">>)),
-    ?assertEqual(6, count(Generated, <<"let effect_info = if state.control.active { state.head }">>)),
+    %% Empty routers still capture a head before sending; no incoming bypass.
+    ?assertEqual(6, count(Generated, <<"let effect_info = state.head;">>)),
+    ?assertEqual(0, count(Generated, <<"let effect_info = if state.control.active">>)),
     ?assertEqual(6, count(Generated, <<"::scheduled_effect(incoming, u8:0);">>)),
     ?assertEqual(6, count(Generated, <<"scheduled: incoming, head: incoming_effect_info">>)),
     ?assertEqual(6, count(Generated, <<"::scheduled_effect(scheduled, next_index)">>)),

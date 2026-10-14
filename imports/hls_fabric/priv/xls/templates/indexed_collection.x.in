@@ -335,12 +335,10 @@ fn indexed_resolve<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   }
 }
 
-// Update only the retiring actor's context, preserving independent scalar state.
-fn indexed_retire<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool, slot: u32,
-    machine: ActorState) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-  if !valid { state } else {
-    let context = indexed_control(state.indexed_context[slot], machine);
+// Write only fields owned by a completed retirement, retaining raw frames locally.
+fn indexed_retire_context<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, slot: u32,
+    context: IndexedContext) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
     // Each register row retains fields this transition cannot change; avoid
     // feeding untouched raw frames back through the selected-row multiplexer.
     let contexts = unroll_for! (actor, rows): (u32, IndexedContext[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
@@ -354,6 +352,14 @@ fn indexed_retire<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
       indexed_context: contexts,
       indexed_candidates: update(state.indexed_candidates, slot, indexed_ready(context)), ..state }
+}
+
+// Update only the retiring actor's context, preserving independent scalar state.
+fn indexed_retire<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool, slot: u32,
+    machine: ActorState) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  if !valid { state } else {
+    indexed_retire_context(state, slot, indexed_control(state.indexed_context[slot], machine))
   }
 }
 
@@ -369,16 +375,24 @@ fn indexed_ordinary_state<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
 
 // Select a held reserved producer before reading its actor context. A blocked
 // attempt keeps its frame and advances the independent round-robin cursor.
-fn indexed_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
+fn indexed_grant<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::ProducerGrant<PRODUCER_COUNT> {
   let eligible = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
     let request = state.pending[producer];
     update(flags, producer, state.pending_valid[producer] && request.slot < ACTOR_COUNT &&
       !request.credit && indexed_reserved(request.frame))
   }(zero!<bool[PRODUCER_COUNT]>());
-  let selected = arbitration::select(eligible, state.indexed_cursor);
-  mailbox::Admission { valid: selected.0, producer: selected.1,
-    slot: state.pending[selected.1].slot, physical: u8:0 }
+  mailbox::producer_grant(eligible, state.indexed_cursor)
+}
+
+// Selection and admission share the same committed grant. Bookkeeping retains
+// its binary encoding; request fields use the grant directly.
+fn indexed_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
+  let grant = indexed_grant(state);
+  let request = mailbox::granted_request(grant, state.pending);
+  mailbox::Admission { valid: grant.valid, producer: mailbox::granted_index(grant.mask),
+    slot: request.slot, physical: u8:0 }
 }
 
 // A retiring context owns its actor's metadata write; retain a conflicting input.
@@ -391,7 +405,7 @@ fn indexed_admit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   if !intent.valid || (retiring && retiring_slot == intent.slot) {
     IndexedAdmission { context, ..zero!<IndexedAdmission>() }
   } else {
-    let frame = indexed_selected_frame(state.pending[intent.producer].frame);
+    let frame = indexed_selected_frame(mailbox::granted_request(indexed_grant(state), state.pending).frame);
     let input = indexed_decode(frame);
     if !indexed_can_accept(context, input) {
       IndexedAdmission { context, ..zero!<IndexedAdmission>() }

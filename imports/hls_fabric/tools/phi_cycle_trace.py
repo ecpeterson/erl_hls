@@ -1,4 +1,5 @@
 """Map existing debug projections to passive cycle-level VPI observations."""
+from collections.abc import Iterable
 import gzip
 import hashlib
 import json
@@ -45,6 +46,26 @@ def plan(build: Path, stage: Path, devices: tuple[int, ...] = (0, 1),
                     rows.append((d, "M", ident, mailbox+1+24*slot, 24, mailbox, -1, 0, 0))
             offset = mailbox+1+24*slots
     (stage / "cycle-probes.txt").write_text("".join(" ".join(map(str, row))+"\n" for row in rows))
+
+
+def executor_requests(resources: Iterable[dict], module: str | None = None) -> list[dict]:
+    """Locate executor acceptance ports and any directly attached storage queue.
+
+    Resources describe one device. Depth-zero channels have no FIFO occupancy
+    resource; their acceptance port remains observable. Ambiguous queues fail.
+    """
+    resources = list(resources)
+    consumers = [r for r in resources if r['kind'] == 'channel'
+                 and '__SharedExecutor_' in r['name'] and r['name'].endswith('/_request_in')
+                 and (module is None or module in r['name'])]
+    requests = []
+    for consumer in consumers:
+        connected = [r for r in resources if r['kind'] == 'fifo' and r['pop'] == consumer['id']]
+        if len(connected) > 1:
+            raise ValueError('executor input has ambiguous recorded queues')
+        requests.append({'owner': consumer['name'].rsplit('/', 2)[0], 'accept': consumer['id'],
+                         'queue': connected[0] if connected else None})
+    return sorted(requests, key=lambda r: r['owner'])
 
 
 def capture_path(stage: Path) -> Path:

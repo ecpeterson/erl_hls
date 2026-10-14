@@ -19,7 +19,8 @@ def fixture(stage: Path) -> tuple[dict, dict]:
         resources[0, ident] = {'id': ident, 'kind': 'channel', 'name': name}
         histories[0, ident] = [{'cycle': c, 'time_ns': 8*c, 'value': 3 if c in transfers else 2} for c in range(30)]
     for i in range(4):
-        channel(i, f'executor{i}', list(range(8+i//2, 12+i//2)))
+        channel(i, 'phi_halo_cell/__SharedExecutor_0_next_inst/_request_in' if i == 1 else f'executor{i}',
+                list(range(8+i//2, 12+i//2)))
     for ident, name, push, pop in ((20, 'executor_request', 0, 1), (21, 'executor_result', 2, 3)):
         resources[0, ident] = {'id': ident, 'kind': 'fifo', 'name': f'phi_halo_cell/fifo__{name}_', 'push': push, 'pop': pop}
     for slot in range(4):
@@ -164,12 +165,13 @@ class ActorProfileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)
             resources, histories = fixture(stage)
-            del resources[0, 20], resources[0, 21]
+            del resources[0, 20], resources[0, 21], resources[0, 1]
             for bank in range(2):
                 for port in range(4):
                     ident = 200+bank*10+port
                     cycles = [8+port//2, 9+port//2]
-                    resources[0, ident] = {'id': ident, 'kind': 'channel', 'name': f'executor{bank}/{port}'}
+                    resources[0, ident] = {'id': ident, 'kind': 'channel', 'name': (f'phi_halo_cell__SharedService_{bank}/__SharedExecutor_0/_request_in'
+                                 if port == 1 else f'executor{bank}/{port}')}
                     histories[0, ident] = [{'cycle': c, 'time_ns': 8*c, 'value': 3 if c in cycles else 2} for c in range(30)]
                 for port, suffix in enumerate(('request', 'result')):
                     ident = 204+bank*10+port

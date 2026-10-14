@@ -1,0 +1,167 @@
+// Exclude held preparation, stale eligibility and unsent payload writes from
+// activation. No current checked transition or output-ready enters this mask.
+fn indexed_owned_mask<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> bool[ACTOR_COUNT] {
+  unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(flags, actor, state.in_flight[actor] || state.indexed_dirty[actor] ||
+      (state.indexed_input.intent.valid && state.indexed_input.intent.slot == actor) ||
+      (state.write_machine_valid && state.write_machine_slot == actor) ||
+      (state.write_mailbox_valid && state.write_mailbox_slot == actor) ||
+      (state.write_gather_valid && state.write_gather_slot == actor))
+  }(state.in_flight)
+}
+
+// Result receipt is already a register boundary. Select its metadata there when
+// no admission owns that actor; a conflict uses the later retained-result retry.
+fn indexed_capture_result<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool, slot: u32)
+    -> (bool, IndexedContext) {
+  let conflict = state.indexed_input.intent.valid && state.indexed_input.intent.slot == slot;
+  let capture = valid && !conflict;
+  (capture, if capture {
+    IndexedContext { machine: zero!<ActorState>(), ..state.indexed_context[slot] }
+  } else { state.indexed_retirement })
+}
+
+// Capture one coherent retirement snapshot. The existing completed result is
+// held until this snapshot is valid; admission cannot acquire that actor meanwhile.
+// The returned machine replaces the old machine, so it is not copied here.
+fn indexed_capture_retirement<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> (bool, IndexedContext) {
+  let conflict = state.indexed_input.intent.valid &&
+    state.indexed_input.intent.slot == state.completed.slot;
+  let valid = state.completed_valid && !state.indexed_retirement_valid && !conflict;
+  let context = if valid {
+    IndexedContext { machine: zero!<ActorState>(), ..state.indexed_context[state.completed.slot] }
+  } else { state.indexed_retirement };
+  (valid, context)
+}
+
+// Probe a registered frame against its owned snapshot. WAIT releases ownership
+// after this check; it never holds an actor while awaiting missing members.
+fn indexed_check_owned(owned: IndexedOwnedInput) -> IndexedAdmission {
+  if !owned.intent.valid { zero!<IndexedAdmission>() } else {
+    let input = indexed_decode(owned.frame);
+    if indexed_can_accept(owned.context, input) {
+      indexed_push(owned.context, owned.frame, input, owned.intent.slot)
+    } else { IndexedAdmission { context: owned.context, ..zero!<IndexedAdmission>() } }
+  }
+}
+
+// Grant from registered inputs and identities only. Retirement has priority on
+// its actor. Current issue excludes acquisition of the same bank at this edge.
+fn indexed_capture_input<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, issuing: bool, slot: u32)
+    -> IndexedOwnedInput {
+  let pending_valid = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    let actor = state.pending[producer].slot;
+    let conflict = (state.indexed_input.intent.valid &&
+        (state.indexed_input.intent.slot == actor || state.indexed_input.intent.producer == producer)) ||
+      (state.completed_valid && state.completed.slot == actor) || (issuing && slot == actor) ||
+      (state.indexed_prepared_valid && state.indexed_prepared_slot == actor);
+    update(flags, producer, state.pending_valid[producer] && !conflict)
+  }(state.pending_valid);
+  let source = SharedState<ACTOR_COUNT, PRODUCER_COUNT> { pending_valid, ..state };
+  let intent = indexed_select(source);
+  if !intent.valid { zero!<IndexedOwnedInput>() } else {
+    IndexedOwnedInput { intent,
+      context: IndexedContext { representatives: zero!<axis::Frame[2]>(),
+        deferred_frame: zero!<axis::Frame>(), ..state.indexed_context[intent.slot] },
+      frame: indexed_selected_frame(state.pending[intent.producer].frame) }
+  }
+}
+
+// Commit the unchanged checked retirement from registered operands. This helper
+// does not refresh eligibility; that observes committed rows at a later edge.
+fn indexed_retire_owned<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, valid: bool, slot: u32,
+    machine: ActorState) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  if !valid { state } else {
+    let context = indexed_control(state.indexed_retirement, machine);
+    indexed_retire_context(state, slot, context)
+  }
+}
+
+// Derive eligibility independently per committed row, never from a newly
+// selected transition. Registered ownership invalidates even a failed attempt,
+// so current validation never controls this register or its enable.
+fn indexed_refresh<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    committed: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    updated: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, retiring: bool, retirement_slot: u32,
+    _admission: IndexedAdmission, issuing: bool, issue_slot: u32)
+    -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let dirty = unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(flags, actor, (retiring && retirement_slot == actor) ||
+      (committed.indexed_input.intent.valid && committed.indexed_input.intent.slot == actor) ||
+      (issuing && issue_slot == actor))
+  }(zero!<bool[ACTOR_COUNT]>());
+  let ready = unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(flags, actor, !dirty[actor] && indexed_ready(committed.indexed_context[actor]))
+  }(zero!<bool[ACTOR_COUNT]>());
+  SharedState<ACTOR_COUNT, PRODUCER_COUNT> { indexed_candidates: ready, indexed_dirty: dirty, ..updated }
+}
+
+// The masked RAM writes only selected members. Replicate a retained scalar at
+// the port, avoiding a full mostly-zero payload row in the command registers.
+fn indexed_write_data(value: bits[INDEXED_ELEMENT_BITS])
+    -> bits[INDEXED_ELEMENT_BITS * INDEXED_CAPACITY] {
+  for (member, data): (u32, bits[INDEXED_ELEMENT_BITS * INDEXED_CAPACITY]) in u32:0..INDEXED_CAPACITY {
+    data | ((value as bits[INDEXED_ELEMENT_BITS * INDEXED_CAPACITY]) << (member * INDEXED_ELEMENT_BITS))
+  }(bits[INDEXED_ELEMENT_BITS * INDEXED_CAPACITY]:0)
+}
+
+// Prepare an identity while eligibility refreshes or writes drain. In-flight
+// ownership and held checked input still exclude that actor; no result bypass.
+fn indexed_prepare_mask<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> bool[ACTOR_COUNT] {
+  unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(flags, actor, state.in_flight[actor] ||
+      (state.indexed_input.intent.valid && state.indexed_input.intent.slot == actor))
+  }(state.in_flight)
+}
+
+// Finalization keeps the original visibility/eligibility fence. Its own
+// in-flight reservation is permitted; all prior write acknowledgments still join
+// the dispatch send. A disabled identity never indexes an arbitrary slot.
+fn indexed_prepared_finish<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> bool {
+  if !state.indexed_prepared_valid { false } else {
+    let slot = state.indexed_prepared_slot;
+    !state.indexed_dirty[slot] &&
+      !(state.indexed_input.intent.valid && state.indexed_input.intent.slot == slot) &&
+      !(state.write_machine_valid && state.write_machine_slot == slot) &&
+      !(state.write_mailbox_valid && state.write_mailbox_slot == slot) &&
+      !(state.write_gather_valid && state.write_gather_slot == slot)
+  }
+}
+
+// Stop new ordinary/indexed input captures for the prepared actor. An already
+// retained ordinary intent may finish; the write fence then delays finalization.
+fn indexed_preparation_source<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, preparing: bool, slot: u32)
+    -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let pending_valid = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    let actor = state.pending[producer].slot;
+    let held = state.indexed_prepared_valid && state.indexed_prepared_slot == actor;
+    update(flags, producer, state.pending_valid[producer] && !held && !(preparing && slot == actor))
+  }(state.pending_valid);
+  SharedState<ACTOR_COUNT, PRODUCER_COUNT> { pending_valid, ..state }
+}
+
+// A preparation reserves the existing actor slot, not a second result slot.
+// Cancellation releases it without a callback; successful dispatch retains it.
+fn indexed_prepared_in_flight<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>, retired: bool[ACTOR_COUNT],
+    finish: bool, issued: bool, preparing: bool, slot: u32) -> bool[ACTOR_COUNT] {
+  let released = if finish && !issued {
+    update(retired, state.indexed_prepared_slot, false)
+  } else { retired };
+  if preparing { update(released, slot, true) } else { released }
+}
+
+// Candidate kind and lease have one authority at finalization. An ordinary
+// dispatch never borrows a completion, even if an unrelated stale flag exists.
+fn indexed_prepared_ticket<ACTOR_COUNT: u32>(contexts: IndexedContext[ACTOR_COUNT],
+    gathered: bool, slot: u32) -> IndexedTicket {
+  if gathered { indexed_selected_ticket(contexts, slot) } else { zero!<IndexedTicket>() }
+}

@@ -2,6 +2,10 @@
 
 Capture a complete experiment before interpreting an actor's timing. Public state observations report committed actor state on their documented publication boundary; channel taps report pre-edge ready/valid. A public query cross-checks those projections independently. Sparse queries alone do not establish continuous waits.
 
+Detailed profiles currently supplement public observations with simulator-private VPI taps and, for message ancestry, payload-observer aliases. They do not obtain all recorded events through the debug channel. The [Erlang inspection APIs](execution/debug-targets.md) already query simulated hardware over the real framed debug transport, but their snapshots and boundary counters/traces do not cover every event consumed by these profilers. VPI also carries that transport; transport bridging itself is distinct from directly observing simulator internals.
+
+The [tooling policy](../STYLE.md#tooling-boundaries) favors a shared simulation/on-device observation path. Migration must preserve timestamps, commit coherence, identity, bounded capture and explicit loss reporting; polling snapshots cannot silently substitute for missing transitions. Existing private recordings remain useful diagnostics, not evidence that all their observations are available on-device.
+
 For the cached D6 mesh:
 
 ```sh

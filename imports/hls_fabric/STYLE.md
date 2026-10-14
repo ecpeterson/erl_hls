@@ -22,6 +22,11 @@ compatibility scaffolding for an obsolete internal format.
   Instead, write separate DSLX modules and import them.  Make liberal use of
   DSLX's parametricity to achieve this.
 
+## Tooling boundaries
+
+- Keep compiler analysis, semantic transformations and hardware lowering in Erlang. Python is suitable for file/report processing, build orchestration and invoking the Erlang toolchain. Migrate existing Python compiler transformations into Erlang when extending or promoting them; retain their validation and evidence.
+- Prefer `hls_fabric`'s Erlang inspection APIs over the same manifest-backed debug channel in simulation and on-device. Extend shared snapshots, counters or bounded traces for missing observations before adding simulator-private probes. Existing probes remain diagnostics until coverage is replaced; do not equate sparse snapshots with a complete event history.
+
 ## Hardware design
 
 - Budget simultaneous readers, writers, field widths and conflicts before adding shared state; stored bits alone do not price access logic.
@@ -29,6 +34,7 @@ compatibility scaffolding for an obsolete internal format.
 - Keep unchanged fields local. Compose updates through the selected row or bank; make write priority and forwarding explicit.
 - Expose established tags, bounds and ownership to the compiler. Retain checks wherever their preconditions are not established.
 - Preregister component area and cycle budgets. Synthesize representative row counts and producer fan-in before full integration.
+- Locality may spend LUTs on local storage, decode or replication. Evaluate that cost against routed timing and one cumulative whole-device budget; area neutrality is not a universal exploration gate. Apply the [campaign cost policy](yap/physical-architecture-options.md#routing-and-area-policy) to decoder experiments.
 - Use IR to check dependencies, mapped area to screen capacity, and measured cycles × routed period to judge throughput. Retain the original baseline and rejected results.
 
 ## Experimental formats and generated files

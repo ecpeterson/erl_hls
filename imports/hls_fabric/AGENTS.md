@@ -8,4 +8,6 @@ Keep long-lived worktrees and compiler caches outside system temporary directori
 
 Use `python3 tools/build.py` to prepare the pinned compiler and run rebar3. Keep retained measurements in the external artifact archive, never in `_build/` or source directories; see [docs/artifacts.md](docs/artifacts.md).
 
+Before decoder architecture experiments, read the current [campaign cost policy](yap/physical-architecture-options.md#routing-and-area-policy). Budget LUT growth against cumulative device headroom; do not restore a universal no-growth gate or treat cycle savings as routed-clock evidence.
+
 Run memory-intensive local builds, simulations and profile exports one at a time. Use bounded profile windows and prefer the authorized remote machine for large physical runs. Report expected memory before unavoidable large local jobs; do not fill local memory merely to increase parallelism.

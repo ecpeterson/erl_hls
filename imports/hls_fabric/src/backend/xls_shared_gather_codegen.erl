@@ -195,8 +195,7 @@ issue_bindings(Spec) ->
         false -> xls_shared_reduction_service_codegen:shared_issue_bindings(
             maps:get(reductions, Spec, none), maps:get(shared_service, Spec, ordinary));
         true -> [
-            "        let (ready, read_slot) = gather_ready_selection(state, state.cursor as u32, state.in_flight);\n",
-            "        let issue_valid = ready;\n",
+            issue_selection(Spec),
             "        let internal_active = issue_valid && ", scalar_candidate(Spec, "read_slot"), ";\n",
             "        let gather_active = issue_valid && state.", candidate_field(Spec), "[read_slot];\n",
             "        let private_active = internal_active || gather_active;\n",
@@ -248,3 +247,26 @@ scalar_candidate(Spec, Slot) ->
 has_aggregate(Spec) ->
     maps:get(reductions, Spec, none) =/= none andalso
         maps:get(shared_service, Spec, ordinary) =:= aggregate_only.
+
+%% Indexed preparation overlaps dirty-row refresh; finalized mode and lease see
+%% one committed row. Other gather services keep their existing ticket stage.
+-spec issue_selection(map()) -> iodata().
+issue_selection(Spec) ->
+    case maps:get(gather_collection, Spec, false) of
+        false ->
+            "        let (ready, read_slot) = gather_ready_selection(state, state.cursor as u32, shared_write_mask(state));\n"
+            "        let issue_valid = ready;\n";
+        true ->
+            "        let finish_prepared = indexed_prepared_finish(state);\n"
+            "        let final_mask = unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {\n"
+            "          update(flags, actor, !finish_prepared || actor != state.indexed_prepared_slot)\n"
+            "        }(zero!<bool[ACTOR_COUNT]>());\n"
+            "        let (ready, read_slot) = gather_ready_selection(state, state.indexed_prepared_slot, final_mask);\n"
+            "        let issue_valid = ready;\n"
+            "        let potential = unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {\n"
+            "          update(flags, actor, state.indexed_candidates[actor] || state.indexed_dirty[actor])\n"
+            "        }(state.indexed_candidates);\n"
+            "        let prepare_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> { indexed_candidates: potential, ..state };\n"
+            "        let (prepare_ready, prepare_slot) = gather_ready_selection(prepare_state, state.cursor as u32, indexed_prepare_mask(state));\n"
+            "        let prepare_valid = prepare_ready && (!state.indexed_prepared_valid || finish_prepared);\n"
+    end.

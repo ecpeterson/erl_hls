@@ -358,14 +358,19 @@ actor_cursor_storage_is_bounded_in_each_service_mode_test() ->
     ],
     lists:foreach(fun({Path, Options}) ->
         Generated = iolist_to_binary(xls_shared_parse:to_xls(Path, Options)),
+        Selection = case maps:get(gather_collection, Options, false) of
+            true -> [<<"state.cursor, prepare_valid, prepare_slot">>,
+                <<"indexed_prepare_mask(state)">>, <<"dispatch_c">>];
+            false -> [<<"state.cursor, issue_valid, read_slot">>,
+                <<"(state, state.cursor as u32, shared_write_mask(state))">>,
+                <<"spawn SharedRequestStage(dispatch_c, queued_ticket_p)">>]
+        end,
         lists:foreach(fun(Fragment) ->
             ?assertNotEqual(nomatch, binary:match(Generated, Fragment))
         end, [
             <<"cursor: uN[std::max(u32:1, std::clog2(ACTOR_COUNT))]">>,
             <<"machine_write(state.cursor as u32, initial_shared_machine())">>,
             <<"(state.cursor as u32) == ACTOR_COUNT - u32:1">>,
-            <<"state.cursor, true, state.cursor as u32">>,
-            <<"state.cursor, issue_valid, read_slot">>,
-            <<"(state, state.cursor as u32, state.in_flight)">>
-        ])
+            <<"state.cursor, true, state.cursor as u32">>
+        ] ++ Selection)
     end, Cases).

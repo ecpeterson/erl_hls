@@ -69,7 +69,15 @@ declarations(Spec) -> optional(Spec, fun() ->
      "struct IndexedTicket { valid: bool, progress: GatherProgress, lease: IndexedLease, failure: hls_failure::Code }\n",
      "// Retained-frame commands share the incoming frame; context remains the complete pure result.\n",
      "struct IndexedAdmission { consumed: bool, context: IndexedContext, write_valid: bool, write: GatherRamWriteReq,\n",
-     "  representative_write: bool, representative_bank: u1, deferred_write: bool, frame: axis::Frame }\n\n"]
+     "  representative_write: bool, representative_bank: u1, deferred_write: bool, frame: axis::Frame }\n\n",
+     "// A registered selection owns this actor until its bounded check commits or\n",
+     "// declines. Raw representative frames are retained only by retirement; admission\n",
+     "// keeps them at the authority and carries a masked incoming-frame command.\n",
+     "struct IndexedOwnedInput {\n",
+     "  intent: mailbox::Admission,\n",
+     "  context: IndexedContext,\n",
+     "  frame: axis::Frame,\n",
+     "}\n"]
 end).
 
 -doc "Emits source predicates and pure shared-scheduler ownership/admission helpers.".
@@ -88,7 +96,7 @@ helpers(Spec) -> optional(Spec, fun() ->
      "// Entry and private continuations run before mailbox eligibility is reconsidered.\n",
      "fn indexed_stable(machine: ActorState) -> bool { !machine.enter_pending",
      xls_statem_event_codegen:optional(Spec, " && machine.next_event == u8:0"), " }\n\n",
-     template()]
+     template(), owner_template()]
 end).
 
 %% Constant tag branches retain source failures without instantiating unrelated handlers.
@@ -140,6 +148,11 @@ state_fields(Spec) -> optional(Spec, fun() ->
     "  indexed_context: IndexedContext[ACTOR_COUNT],\n"
     "  indexed_candidates: bool[ACTOR_COUNT],\n"
     "  indexed_cursor: u32,\n"
+    "  indexed_dirty: bool[ACTOR_COUNT],\n"
+    "  indexed_prepared_valid: bool, indexed_prepared_slot: u32,\n"
+    "  indexed_input: IndexedOwnedInput,\n"
+    "  indexed_retirement_valid: bool,\n"
+    "  indexed_retirement: IndexedContext,\n"
 end).
 
 -doc "Carries one borrowed completion identity and progress without its payload row.".
@@ -167,14 +180,18 @@ end).
 -doc "Reconciles the retiring context, opening and borrowed completion with current indexed ownership.".
 -spec retire(map()) -> iodata().
 retire(Spec) -> optional(Spec, fun() ->
-    "        let retired = indexed_retire(retired, retire_valid, result.slot, resolved.machine);\n"
+    "        let retired = indexed_retire_owned(retired, retire_valid, result.slot, resolved.machine);\n"
 end).
 
 -doc "Selects one reserved input and emits at most one checked member write intent.".
 -spec admit(map()) -> iodata().
 admit(Spec) -> optional(Spec, fun() ->
-    "        let indexed_intent = indexed_select(state);\n"
-    "        let indexed_admission = indexed_admit(state, indexed_intent, retire_valid, result.slot);\n"
+    "        let indexed_intent = state.indexed_input.intent;\n"
+    "        let indexed_admission = indexed_check_owned(state.indexed_input);\n"
+    "        let next_indexed_input = indexed_capture_input(state, prepare_valid, prepare_slot);\n"
+    "        let next_indexed_input = if incoming_valid && next_indexed_input.intent.valid &&\n"
+    "            next_indexed_input.intent.slot == incoming_result.slot { zero!<IndexedOwnedInput>() }\n"
+    "          else { next_indexed_input };\n"
 end).
 
 -doc "Merges one accepted input after unrelated retirement without replacing stale actor state.".
@@ -186,8 +203,21 @@ end).
 -doc "Binds the committed dispatch ticket and borrows only its sealed completion; admission faults remain checked.".
 -spec issue(map()) -> iodata().
 issue(Spec) -> optional(Spec, fun() ->
-    "        let selected_indexed_ticket = indexed_selected_ticket(state.indexed_context, read_slot);\n"
-    "        let admitted = indexed_issue(state, admitted, indexed_intent, indexed_admission, issue_valid, read_slot);\n"
+    "        let selected_indexed_ticket = indexed_prepared_ticket(state.indexed_context, gather_active, read_slot);\n"
+    "        let admitted = indexed_issue(state, admitted, indexed_intent, indexed_admission, gather_active, read_slot);\n"
+    "        let admitted = indexed_refresh(state, admitted, retire_valid, result.slot, indexed_admission, issue_valid, read_slot);\n"
+    "        let retirement_capture = if incoming_valid { indexed_capture_result(state, true, incoming_result.slot) }\n"
+    "          else { indexed_capture_retirement(state) };\n"
+    "        let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {\n"
+    "          indexed_input: next_indexed_input,\n"
+    "          indexed_prepared_valid: prepare_valid || (state.indexed_prepared_valid && !finish_prepared),\n"
+    "          indexed_prepared_slot: if prepare_valid { prepare_slot } else { state.indexed_prepared_slot },\n"
+    "          indexed_cursor: if next_indexed_input.intent.valid {\n"
+    "            if next_indexed_input.intent.producer + u32:1 == PRODUCER_COUNT { u32:0 }\n"
+    "            else { next_indexed_input.intent.producer + u32:1 }\n"
+    "          } else { state.indexed_cursor },\n"
+    "          indexed_retirement_valid: retirement_capture.0 || (!incoming_valid && state.indexed_retirement_valid && !retire_valid),\n"
+    "          indexed_retirement: retirement_capture.1, ..admitted };\n"
 end).
 
 %% Disabled artifacts retain their existing actor and scalar-reduction behavior.
@@ -202,4 +232,10 @@ optional(Spec, Render) -> case enabled(Spec) of true -> Render(); false -> [] en
 -spec template() -> binary().
 template() ->
     {ok, Text} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls", "templates", "indexed_collection.x.in"])),
+    Text.
+
+%% The registered owner protocol is separate from the pure checked transitions.
+-spec owner_template() -> binary().
+owner_template() ->
+    {ok, Text} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls", "templates", "indexed_owner.x.in"])),
     Text.

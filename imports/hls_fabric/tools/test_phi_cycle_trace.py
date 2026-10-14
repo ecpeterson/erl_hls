@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from test_phi_bridge import ROOT
-from phi_cycle_trace import plan
+from phi_cycle_trace import executor_requests, plan
 
 
 class CycleTraceTest(unittest.TestCase):
@@ -34,6 +34,20 @@ class CycleTraceTest(unittest.TestCase):
             for d in ('0', '1'):
                 for kind, ident in (('F', '0'), ('C', '1'), ('C', '2'), ('S', '4'), ('M', '4')):
                     self.assertIn([d, kind, ident], rows)
+
+    def test_executor_boundary_uses_consumer(self) -> None:
+        """Input identity survives queue renaming or a depth-zero handoff with no occupancy probe."""
+        resources = [
+            {'kind': 'channel', 'id': 0, 'name': 'phi/__SharedRequestStage_0/_request_in'},
+            {'kind': 'channel', 'id': 1, 'name': 'phi/__SharedExecutor_0/_request_in'},
+            {'kind': 'fifo', 'id': 2, 'name': 'phi/fifo__executor_request_', 'pop': 0, 'capacity': 1},
+            {'kind': 'fifo', 'id': 3, 'name': 'phi/fifo__renamed_', 'pop': 1, 'capacity': 1}]
+        self.assertEqual(executor_requests(resources, 'phi'),
+                         [{'owner': 'phi', 'accept': 1, 'queue': resources[-1]}])
+        self.assertEqual(executor_requests(resources[:-1]), [{'owner': 'phi', 'accept': 1, 'queue': None}])
+        self.assertEqual(executor_requests(resources, 'other'), [])
+        with self.assertRaisesRegex(ValueError, 'ambiguous'):
+            executor_requests(resources + [{**resources[-1], 'id': 4}])
 
     def test_capture(self) -> None:
         """Compare every emitted value with an independent counter-driven RTL fixture."""

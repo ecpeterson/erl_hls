@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 // Generated router with real buffered ownership; this bench supplies only stimuli and oracles.
 module effect_router_tb;
+  integer parallel_pairs = 0;
   localparam PREFIX = @@PREFIX@@;
   localparam BATCHES = 16;
   reg clk = 0;
@@ -58,7 +59,9 @@ module effect_router_tb;
   // REPORT fans out; prefix mode captures NORTH and SOUTH together.
   function integer port(input integer b, input integer e);
     begin
-      if (has_prefix(b) && e<2) port=e;
+      // Keep the first batch serial so every window width can borrow before its last beat.
+      if (!prelude && b==0) port=2;
+      else if (has_prefix(b) && e<2) port=e;
       else if (PREFIX || prelude || e==0 || e==3) port=2;
       else port=(b+e)%3;
     end
@@ -138,6 +141,7 @@ module effect_router_tb;
       if(scheduled_vld && scheduled_rdy) begin
         sent=sent+1;input_accepted=1;
       end
+      if(left_vld&&left_rdy&&right_vld&&right_rdy&&left_data!==right_data) parallel_pairs=parallel_pairs+1;
       if(left_vld&&left_rdy) consume(0,{160'd0,left_data});
       if(right_vld&&right_rdy) consume(1,{160'd0,right_data});
       if(prefix_vld&&prefix_rdy) consume(2,prefix_data);
@@ -191,6 +195,8 @@ module effect_router_tb;
       // Independent deterministic stalls, followed by an unconditional drain window.
       left_rdy=cycle>=200 || (cycle%17>=5);
       right_rdy=cycle>=200 || (cycle>=14 && cycle%19>=7);
+      // Hold the penultimate first-batch beat while its borrowed credit reaches the source.
+      if(right_vld && right_data===frame(0,2) && cycle<80) right_rdy=0;
       prefix_rdy=cycle>=200 || (stalls[4]>=4 && cycle>=18 && cycle%23>=9);
       credit_rdy=cycle>=200 || (stalls[1]>=4 && cycle%13>=4);
       if(!scheduled_vld && credits>0 && batch_index<BATCHES) begin
@@ -203,9 +209,11 @@ module effect_router_tb;
           !request_vld && !release_vld) quiet=quiet+1;else quiet=0;
       if(cycle>=250 && quiet>=32) begin
         if(requests==0 || grants!=requests || releases!=grants || partial_multicast==0 || carried==0 || borrowed==0)
-          $fatal(1,"missing window/multicast coverage");
+          $fatal(1,"missing window/multicast coverage requests=%0d grants=%0d releases=%0d partial=%0d carried=%0d borrowed=%0d",
+            requests,grants,releases,partial_multicast,carried,borrowed);
         if(stalls[0]==0 || stalls[1]==0 || stalls[2]==0 || stalls[3]==0 || (PREFIX && stalls[4]==0))
           $fatal(1,"missing required scheduled/credit/lane/prefix backpressure coverage");
+        if(@@PARALLEL@@ && parallel_pairs==0) $fatal(1,"parallel delivery unexercised");
         $display("PASS mode=%0d cycles=%0d batches=%0d lane_counts=%0d,%0d,%0d requests=%0d grants=%0d releases=%0d partial_multicast=%0d carried=%0d borrowed=%0d",
           PREFIX,cycle,sent,head[0],head[1],head[2],requests,grants,releases,partial_multicast,carried,borrowed);
         $display("STALL scheduled=%0d credit=%0d left=%0d right=%0d prefix=%0d request=%0d release=%0d grant=%0d",

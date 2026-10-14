@@ -3,7 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 import json
 
-from phi_cycle_trace import read
+from phi_cycle_trace import executor_requests, read
 from phi_transport_metrics import dense, distribution
 from phi_reduction_profile import bindings
 
@@ -29,35 +29,35 @@ def handoffs(profile: dict, resources: dict, histories: dict, stage: Path, devic
             raise ValueError('aggregate input queue does not conserve frames')
         groups[actors[name]['bank']] += [(cycle, name, ordinal, emitted[ordinal])
                                         for ordinal, cycle in enumerate(popped)]
-    requests = sorted((r for r in resources.values() if r['kind'] == 'fifo'
-                       and 'phi_halo_cell' in r['name'] and r['name'].endswith('fifo__executor_request_')),
-                      key=lambda r: r['name'])
+    requests = executor_requests(resources.values(), 'phi_halo_cell')
     if len(requests) != len(groups):
         raise ValueError('scheduler/aggregate bank population differs')
     captures, reads = {}, {}
     for (bank, popped), request in zip(sorted(groups.items()), requests):
-        parent = request['name'].rsplit('/', 1)[0]
+        parent = request['owner']
         ports = {r['name'].rsplit('/', 1)[1]: r['id'] for r in resources.values()
                  if r['kind'] == 'channel' and r['name'].rsplit('/', 1)[0] == parent}
         captured = transfers(ports['_aggregate_in'])
         if '_ram_read_req_out' in ports:
             state_reads = transfers(ports['_ram_read_req_out'])
         else:
-            # Follow the checked ticket FIFO endpoint to its RAM owner. Do not
-            # choose a loader by a global instance-name or nearest-time match.
-            ticket, = [r for r in resources.values() if r['kind'] == 'fifo'
-                       and r['name'].rsplit('/', 1)[0] == parent
-                       and r['name'].endswith('fifo__dispatch_ticket_')]
-            owner = resources[device, ticket['pop']]['name'].rsplit('/', 1)[0]
+            # Bind the RAM owner inside this scheduler, then follow its ticket
+            # input. Ticket staging may precede the loader; FIFO names are not roles.
             read_port, = [r for r in resources.values() if r['kind'] == 'channel'
-                         and r['name'] == owner+'/_ram_read_req_out']
+                          and r['name'].startswith(parent+'/')
+                          and r['name'].endswith('/_ram_read_req_out')]
+            owner = read_port['name'].rsplit('/', 1)[0]
+            ticket_input, = [r for r in resources.values() if r['kind'] == 'channel'
+                             and r['name'] == owner+'/_tickets']
+            ticket, = [r for r in resources.values() if r['kind'] == 'fifo'
+                       and r['pop'] == ticket_input['id']]
             state_reads = transfers(read_port['id'])
             issued, loaded = transfers(ticket['push']), transfers(ticket['pop'])
             if not len(state_reads) <= len(loaded) <= len(state_reads)+1 or not len(loaded) <= len(issued) <= len(loaded)+ticket['capacity']:
                 raise ValueError('loader ticket/RAM handoff does not conserve requests')
             if any(push > pop or pop > read for push, pop, read in zip(issued, loaded, state_reads)):
                 raise ValueError('loader ticket/RAM handoff goes backwards')
-        accepted = transfers(request['pop'])
+        accepted = transfers(request['accept'])
         # The mux emits one ordered stream. A bounded capture tail can retain its last word.
         if not len(captured) <= len(popped) <= len(captured)+1:
             raise ValueError('aggregate mux does not conserve frames')

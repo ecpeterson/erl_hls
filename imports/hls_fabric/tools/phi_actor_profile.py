@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import sys
 
-from phi_cycle_trace import capture_path, read, trace_digest
+from phi_cycle_trace import capture_path, executor_requests, read, trace_digest
 from phi_transport_metrics import dense, distribution
 from test_actor_rtl import digest
 
@@ -136,23 +136,24 @@ def reconstruct_group(stage: Path, device: int, trace: Path, resources: dict, hi
     actors = [r for r in actors if r.get('bank', 0) == bank]
     ids = {r['id']: r for r in actors}
     queues = [r for r in resources.values() if r['kind'] == 'fifo' and module in r['name']]
-    requests_by_instance = sorted((r for r in queues if r['name'].endswith('fifo__executor_request_')), key=lambda r: r['name'])
+    requests_by_instance = executor_requests(resources.values(), module)
     request = requests_by_instance[ordinal]
-    instance = request['name'].rsplit('/', 1)[0]
+    instance = request['owner']
     result, = [r for r in queues if r['name'].endswith('fifo__executor_result_') and r['name'].rsplit('/', 1)[0] == instance]
     count = 1+max(int(fields[2]) for line in (stage/'activity.log').read_text().splitlines()
                   if (fields := line.split())[1] == str(device))
     inputs = json.loads((stage/'profile-inputs.json').read_text())
     period = inputs['device_periods_ns'][device]
-    origin = histories[device, request['pop']][0]['time_ns']
+    origin = histories[device, request['accept']][0]['time_ns']
     start, stop = json.loads((stage/'service.json').read_text())['window_ns']
     if origin+count*period < stop:
         raise ValueError('recording ends before the analysis window')
     def transfers(ident: int) -> list[int]:
         """Enumerate accepted pre-edge transactions, including adjacent-cycle transfers."""
         return [i for i, value in enumerate(dense(histories[device, ident], count)) if value == 3]
-    requests, results = transfers(request['pop']), transfers(result['push'])
-    if requests != transfers(request['push']) or results != transfers(result['pop']):
+    requests, results = transfers(request['accept']), transfers(result['push'])
+    if ((request['queue'] is not None and requests != transfers(request['queue']['push']))
+            or results != transfers(result['pop'])):
         raise ValueError('executor FIFO added buffering; adapt the phase model before attributing work')
     writes = sorted((s['cycle'], r['id'], s) for r in actors for s in histories[device, r['id']] if s['state_write'] and s['cycle'] < count)
     initialized = writes[:len(actors)]
@@ -373,6 +374,7 @@ def main() -> None:
     profile['metadata']['analysis_sha256'] = {Path(__file__).name: digest(Path(__file__)),
                                                'phi_reduction_profile.py': digest(Path(__file__).with_name('phi_reduction_profile.py')),
                                                'phi_profile_phases.py': digest(Path(__file__).with_name('phi_profile_phases.py')),
+                                               'phi_cycle_trace.py': digest(Path(__file__).with_name('phi_cycle_trace.py')),
                                                'hls_profile.py': digest(Path(hls_profile.__file__))}
     hls_profile.validate(profile)
     stem = args.output or args.stage/f'actor{args.device}'

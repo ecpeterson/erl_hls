@@ -18,7 +18,7 @@ def fixture(stage: Path) -> tuple[dict, dict, dict]:
     reductions(profile, report, stage, 0, resources, histories)
     for ident, name, cycles in ((31, 'mux_pop', [8]), (32, 'phi_halo_cell/scheduler/_aggregate_in', [9]),
                                 (33, 'phi_halo_cell/scheduler/_ram_read_req_out', [0, 9]),
-                                (34, 'request_pop', [0, 10])):
+                                (34, 'phi_halo_cell/scheduler/__SharedExecutor_0_next_inst/_request_in', [0, 10])):
         resources[0, ident] = {'kind': 'channel', 'id': ident, 'name': name}
         histories[0, ident] = ([{'cycle': 0, 'value': 0}] if cycles[0] else [])+sorted([{'cycle': c, 'value': value}
             for cycle in cycles for c, value in ((cycle, 3), (cycle+1, 0))], key=lambda s: s['cycle'])
@@ -76,6 +76,24 @@ class ProgressTests(unittest.TestCase):
             histories[0, 40][-1]['cycle'] = 11
             with self.assertRaisesRegex(ValueError, 'loader ticket/RAM'):
                 handoffs(p, resources, histories, stage, 0)
+
+    def test_staged_ticket_ram_owner(self) -> None:
+        """A ticket stage before the loader is not mistaken for the RAM owner."""
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            p, resources, histories = fixture(stage)
+            resources[0, 36]['name'] = 'phi_halo_cell/scheduler/fifo__loaded_request_'
+            resources[0, 33]['name'] = 'phi_halo_cell/scheduler/loader/_ram_read_req_out'
+            for ident, owner in ((40, 'stage'), (42, 'loader')):
+                resources[0, ident] = {'kind': 'channel', 'id': ident,
+                                      'name': f'phi_halo_cell/scheduler/{owner}/_tickets'}
+                histories[0, ident] = [dict(s) for s in histories[0, 33]]
+            for ident, port, name in ((41, 40, 'dispatch_ticket'), (43, 42, 'queued_ticket')):
+                resources[0, ident] = {'kind': 'fifo', 'id': ident, 'capacity': 1,
+                                      'name': f'phi_halo_cell/scheduler/fifo__{name}_', 'push': port, 'pop': port}
+            captures, reads = handoffs(p, resources, histories, stage, 0)
+            self.assertEqual(sorted(reads.values()), [0, 9])
+            self.assertEqual(len(captures), 1)
 
     def test_corrupt_streams_fail(self) -> None:
         """Reject phantom mux captures, backwards transfers and unmatched RAM requests."""

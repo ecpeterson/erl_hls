@@ -71,8 +71,8 @@ module direct_collection_tb;
                      marker_mode && outputs==1 ? 254 : expected;
       if(output_data[103:96]!==TAG_RESULT || output_data[7:0]!==expected_value[7:0])
         $fatal(1,"wrong output: %h expected %d",output_data,expected_value);
-      if(marker_mode==1 && outputs==1 && cycles!=last_output_cycle+1)
-        $fatal(1,"retained effects introduced a publication bubble");
+      if(marker_mode==1 && outputs==1 && cycles!=last_output_cycle+2)
+        $fatal(1,"registered actor entry cadence changed");
       last_output_cycle<=cycles;
       outputs<=outputs+1;
     end
@@ -115,7 +115,7 @@ module direct_collection_tb;
     send_piece(0,10,0,1);send_piece(1,10,0,2);
     repeat(30) @(negedge clk);
     if(outputs!=0 || !saw_failure) $fatal(1,"duplicate member did not fail through debug observation");
-    // Retaining publication must still drain and replace one effect per clock.
+    // Actor entry effects retain the two-clock registered grant/execute cadence.
     restart();marker_mode=1;expected=63;
     fork
       begin send_piece(0,8,0,1);send_piece(0,8,2,4);send_piece(0,8,4,16);end
@@ -132,7 +132,7 @@ module direct_collection_tb;
     if(!valid) $fatal(1,"missing committed effect before opening fault");
     ready=1;repeat(30) @(negedge clk);
     if(outputs!=2 || !saw_failure) $fatal(1,"opening fault lost or duplicated committed effects");
-    $display("PASS: early/open input, two producer orders, stable held output, partial/held-effect reset, full-rate entry effects and protocol failures");
+    $display("PASS: early/open input, two producer orders, stable held output, partial/held-effect reset, registered entry cadence and protocol failures");
     $finish;
   end
 endmodule

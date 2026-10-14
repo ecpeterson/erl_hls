@@ -1,11 +1,11 @@
 %% Small RTL fixture for the production router and its buffered ownership protocol.
 -module(xls_effect_router_testgen).
--moduledoc "Generates ordinary and captured-prefix routers for the effect-window RTL regression.".
+-moduledoc "Generates serial, parallel and captured-prefix routers for the effect-window RTL regression.".
 -export([write/2]).
 
--doc "Writes an isolated production router with ordinary multicast or captured-prefix routing.".
+-doc "Writes an isolated production router with multicast, bounded parallel or captured-prefix routing.".
 -spec write(string(), string()) -> ok.
-write(Mode, Output) when Mode =:= "ordinary"; Mode =:= "prefix" ->
+write(Mode, Output) when Mode =:= "ordinary"; Mode =:= "prefix"; Mode =:= "parallel2"; Mode =:= "parallel3"; Mode =:= "parallel6" ->
     Prefix = Mode =:= "prefix",
     PortRoutes = [#{source => {probe, report}, delivery => queued,
         recipients => [{external, left}, {external, right}]}] ++
@@ -42,7 +42,10 @@ write(Mode, Output) when Mode =:= "ordinary"; Mode =:= "prefix" ->
         false -> []
     end,
     %% The runner loads test-local export_all builds; production exports stay unchanged.
-    Router = apply(xls_topology_scheduler_dslx, router_proc, [Spec, Scheduler]),
+    Router = case Mode of
+        "parallel" ++ N -> parallel_router(Scheduler, list_to_integer(N));
+        _ -> apply(xls_topology_scheduler_dslx, router_proc, [Spec, Scheduler])
+    end,
     PrefixArg = case Prefix of true -> "      prefix_out: chan<ProbeReductionBatch> out,\n"; false -> "" end,
     PrefixName = case Prefix of true -> "prefix_out, "; false -> "" end,
     {ok, Template} = file:read_file("test/rtl/effect_router_top.x.in"),
@@ -50,3 +53,18 @@ write(Mode, Output) when Mode =:= "ordinary"; Mode =:= "prefix" ->
         <<"@@PREFIX_ARG@@">>, list_to_binary(PrefixArg)),
         <<"@@PREFIX_NAME@@">>, list_to_binary(PrefixName)),
     ok = file:write_file(Output, [Header, Declaration, Router, Wrapper]).
+
+%% Both report aliases collide; north and south have independent physical lanes.
+-spec parallel_router(map(), pos_integer()) -> binary().
+parallel_router(Scheduler, Width) ->
+    Targets = "// Actual recipient membership in the test topology.\n"
+        "fn router_targets(_slot: u32, effect: ACTOR::Egress) -> bits[LANES] {\n"
+        "  match effect.port { ACTOR::OutputPort::NORTH => u2:1, "
+        "ACTOR::OutputPort::SOUTH => u2:2, _ => u2:3 }\n}\n",
+    Sends = "    let left = router_frame(head, u32:0);\n"
+        "    let right = router_frame(head, u32:1);\n"
+        "    let left_tok = send_if(grant_tok, left_out, batch_valid && left.0, left.1);\n"
+        "    let right_tok = send_if(grant_tok, right_out, batch_valid && right.0, right.1);\n"
+        "    let routed_tok = join(left_tok, right_tok);\n",
+    xls_parallel_effect_router_dslx:emit(Scheduler, Width, 2,
+        ["left_out: chan<axis::Frame> out", "right_out: chan<axis::Frame> out"], Targets, Sends).

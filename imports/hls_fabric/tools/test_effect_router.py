@@ -2,7 +2,7 @@
 """Check generated ordinary/prefix routers with a real depth-one ownership arbiter.
 
 Run after the test compiler build (normally through test_effect_window.sh).
-Two finite RTL witnesses check exact per-lane content/order, held outputs, reset
+Five finite RTL witnesses check exact per-lane content/order, held outputs, reset
 and covered lookahead handoffs. They do not require internal cycle equality.
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ def bindings(rtl: str, expected: dict[str, tuple[str, int]]) -> str:
 
 
 def main() -> None:
-    """Generate current production routers and run two sequential bounded RTL oracles."""
+    """Generate current production routers and run five sequential bounded RTL oracles."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
     parser.add_argument('--stage', type=Path, default=ROOT / '_build/effect_window/router')
@@ -79,7 +79,8 @@ def main() -> None:
         ('xls_topology_scheduler_dslx.erl', 'xls_topology_source_fragment_dslx.erl')]
     sources += [ROOT / 'test/xls_effect_router_testgen.erl', fixture / 'router_probe_actor.x',
         fixture / 'effect_router_top.x.in', fixture / 'effect_router_tb.sv.in',
-        ROOT / 'priv/xls/lib/effect_window.x', Path(__file__)]
+        ROOT / 'priv/xls/lib/effect_window.x', ROOT / 'priv/xls/templates/parallel_effect_router.x.in',
+        ROOT / 'src/backend/xls_parallel_effect_router_dslx.erl', ROOT / 'src/backend/xls_template.erl', Path(__file__)]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
     commands = []
 
@@ -96,11 +97,11 @@ def main() -> None:
 
     # Test-local exports call the exact private production route emitters without
     # widening the production API or retaining a copied implementation.
-    run('fixture-compile', ['erlc', '+export_all', '-o', ebin, *sources[:3]])
+    run('fixture-compile', ['erlc', '+export_all', '-o', ebin, *(p for p in sources if p.suffix == '.erl')])
     stdlib = xls / 'xls/dslx/stdlib'
     options = ['--warnings_as_errors=false', f'--dslx_path={fixture}:{ROOT / "priv/xls/lib"}:{PUBLIC / "priv/xls/lib"}',
         f'--dslx_stdlib_path={stdlib}']
-    for mode in ('ordinary', 'prefix'):
+    for mode in ('ordinary', 'prefix', 'parallel2', 'parallel3', 'parallel6'):
         folder = stage / mode
         folder.mkdir(exist_ok=True)
         source, ir, optimized, rtl = [folder / ('effect_router.' + suffix) for suffix in ('x', 'ir', 'opt.ir', 'v')]
@@ -115,6 +116,7 @@ def main() -> None:
             '--fifo_module=', '--module_name=effect_router', optimized], rtl)
         instance, ports = interface(mode == 'prefix')
         bench = (fixture / 'effect_router_tb.sv.in').read_text().replace('@@PREFIX@@', str(int(mode == 'prefix')))
+        bench = bench.replace('@@PARALLEL@@', str(int(mode.startswith('parallel'))))
         bench = bench.replace('@@INSTANCE@@', instance).replace('@@COVERAGE_BINDINGS@@', bindings(rtl.read_text(), ports))
         if '@@' in bench:
             raise ValueError('unexpanded testbench template')
@@ -129,7 +131,7 @@ def main() -> None:
     if before != {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}:
         raise ValueError('router fixture or production source changed during the test')
     (stage / 'result.json').write_text(json.dumps({'sources_sha256': before, 'commands': commands,
-        'scope': 'Two finite 16-batch witnesses, 40-cycle partial-send reset prelude, at most 2000 post-reset cycles each. One contender, depth-one ownership channels; no fairness or cycle-equivalence claim.'}, indent=2) + '\n')
+        'scope': 'Five finite 16-batch witnesses, 40-cycle partial-send reset prelude, at most 2000 post-reset cycles each. One contender, depth-one ownership channels; no fairness or cycle-equivalence claim.'}, indent=2) + '\n')
 
 
 if __name__ == '__main__':

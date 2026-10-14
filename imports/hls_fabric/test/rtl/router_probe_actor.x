@@ -22,3 +22,15 @@ pub fn scheduled_effect(scheduled: ScheduledEffects, index: u8) -> (Egress, bool
 pub fn scheduled_reduction_prefix(scheduled: ScheduledEffects) -> (bool, u32, bool) {
   (scheduled.prefix && scheduled.count >= u8:2, u32:0, scheduled.count == u8:2)
 }
+
+// The adversarial fixture retains every bit rather than claiming shared fields.
+pub type PublicationPatch = bits[128];
+// Exact full-frame patches exercise unrelated payloads; odd batches stay serial.
+pub fn publication_patch(scheduled: ScheduledEffects, index: u8) -> (PublicationPatch, bool) {
+  (axis::bits_from_frame(scheduled_effect(scheduled, index).0.frame),
+    (scheduled.effects[u32:0].frame.header.flags & u8:1) == u8:0)
+}
+// Reconstruct the selected original payload from its exact difference.
+pub fn publication_frame(base: axis::Frame, difference: PublicationPatch) -> axis::Frame {
+  axis::frame_from_bits(axis::bits_from_frame(base) ^ difference)
+}

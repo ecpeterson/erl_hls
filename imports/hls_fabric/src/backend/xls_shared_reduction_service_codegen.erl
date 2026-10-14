@@ -456,7 +456,7 @@ shared_retire_binding(_Reductions, Binding) ->
 -spec shared_issue_bindings(reductions(), service_mode()) -> iodata().
 shared_issue_bindings(Reductions, Mode) ->
     Select = case Reductions of none -> "ready_selection"; _ -> "reduction_ready_selection" end,
-    ["        let (ready, read_slot) = ", Select, "(state, state.cursor as u32, state.in_flight);\n",
+    ["        let (ready, read_slot) = ", Select, "(state, state.cursor as u32, shared_write_mask(state));\n",
      "        let issue_valid = ready;\n",
      case Reductions of
          none -> "        let private_active = false;\n";

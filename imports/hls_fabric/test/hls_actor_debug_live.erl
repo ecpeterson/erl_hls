@@ -106,7 +106,18 @@ inspect(Session, Stage, Moment) ->
                     true = lists:any(fun(#{message_queue_len := N, postponed := P}) -> N =:= 2 andalso P =:= 2 end, Values),
                     case K of
                         direct_mailbox -> ok;
-                        _ -> true = lists:any(fun
+                        mailbox_mixed ->
+                            %% Publication can stall the proc before its next
+                            %% scheduler sample commits. Retained callbacks then
+                            %% show in_flight, not the later egress-wait flags.
+                            %% The caller also requires an observed external-sink
+                            %% wait chain and recovery after releasing that sink.
+                            true = lists:any(fun
+                                (#{egress_busy := Busy, waiting_for_egress := Waiting,
+                                    in_flight := InFlight}) -> (Busy andalso Waiting) orelse InFlight;
+                                (_) -> false
+                            end, Values);
+                        mailbox -> true = lists:any(fun
                             (#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting;
                             (_) -> false
                         end, Values)

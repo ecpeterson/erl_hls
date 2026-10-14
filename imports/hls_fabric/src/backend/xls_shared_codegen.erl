@@ -1,9 +1,13 @@
 -module(xls_shared_codegen).
 -moduledoc false.
--export([emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
+-export([publication_depth/0, emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
 %% Checked actor artifact augmented with private physical options.
 -type spec() :: map().
+
+-doc "Returns the shared publication FIFO capacity; service and router each retain an additional command slot.".
+-spec publication_depth() -> pos_integer().
+publication_depth() -> 2.
 
 -doc "Renders RAM-backed shared execution of a validated actor artifact.".
 -spec emit(spec()) -> iolist().
@@ -20,8 +24,8 @@ emit(Spec) ->
          "fn initial_shared_machine() -> ActorState { initial_actor_state() }\n\n",
          xls_shared_reduction_codegen:functions(Reductions, Mode),
          xls_shared_gather_codegen:helpers(Spec),
-         xls_shared_gather_codegen:selection_helpers(Spec),
-         scheduled_effect_function(Spec), shared_machine_step_function(Spec),
+         command_helpers(), xls_shared_gather_codegen:selection_helpers(Spec),
+         scheduled_effect_function(Spec), xls_publication_codegen:helpers(Spec), shared_machine_step_function(Spec),
          shared_executor(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
 %% Defines accepted-work tickets, RAM row types and scheduler-owned metadata.
 -spec machine_declarations(spec()) -> iodata().
@@ -33,6 +37,8 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
     GatherWidth = xls_shared_gather_codegen:storage_width(Spec),
     MachineBits = shared_machine_width(DataWidth, ReductionWidth, GatherWidth) + event_width(Spec) + xls_statem_reply_codegen:width(Spec),
     [
+        "// One router slot is reserved for the existing borrowed lookahead credit.\n",
+        "const PUBLICATION_CAPACITY = u2:", integer_to_list(publication_depth() + 1), ";\n",
         "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
         "pub type MachineRamReadReq = bram::ReadReq;\n",
         "pub type MachineRamReadResp = bram::ReadResp<u32:",
@@ -111,7 +117,7 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         xls_indexed_memory_codegen:optional(Spec, "  gather_write_pending: bool,\n"),
         "  completed_valid: u1,\n",
         "  completed: SharedExecutorResult,\n",
-        "  admission_cursor: u32,\n",
+        "  admission_cursor: u32,\n  ordinary_intent: mailbox::Admission,\n",
         "  // Only BOOT and accepted actor selection advance this bounded cursor.\n",
         "  cursor: uN[std::max(u32:1, std::clog2(ACTOR_COUNT))],\n",
         "  startup_seen: u32,\n",
@@ -128,7 +134,13 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "  // Entry work known to need the scheduler's batch sequencer.\n",
         "  egress_waiters: u1[ACTOR_COUNT],\n",
         "  egress_busy: u1,\n",
+        "  publication_outstanding: u2,\n",
         "  outbox_busy: u1[ACTOR_COUNT],\n",
+        "  write_machine_valid: bool,\n  write_machine_slot: u32,\n  write_machine: MachineRamWriteReq,\n",
+        "  write_mailbox_valid: bool,\n  write_mailbox_slot: u32,\n  write_mailbox: MailboxRamWriteReq,\n",
+        "  publish_valid: bool,\n  publish: ScheduledEffects,\n",
+        xls_indexed_memory_codegen:optional(Spec,
+            "  write_gather_valid: bool,\n  write_gather_slot: u32,\n  write_gather_addr: u32,\n  write_gather_mask: bits[INDEXED_CAPACITY],\n  write_gather_value: bits[INDEXED_ELEMENT_BITS],\n"),
         "  state_write_pending: u1,\n",
         "  mailbox_write_pending: u1,\n",
         "}\n\n"
@@ -537,8 +549,10 @@ shared_service(Spec) ->
         xls_scheduler_observation:config_parameter(Spec), xls_collection_observation:config_parameter(Spec),
     """
       ) {
-        let (executor_request_p, executor_request_c) =
-          chan<SharedExecutorRequest, u32:1>("executor_request");
+    """, case maps:get(gather_collection, Spec, false) of
+        true -> [];
+        false -> "    let (queued_ticket_p, queued_ticket_c) = chan<SharedDispatchTicket, u32:1>(\"queued_ticket\");\n"
+    end, """
         let (loaded_request_p, loaded_request_c) =
           chan<SharedExecutorRequest, u32:0>("loaded_request");
         // One reserved result per actor: the FIFO plus the existing skid slot
@@ -548,10 +562,17 @@ shared_service(Spec) ->
             ACTOR_COUNT - u32:1
           } else { u32:1 }}>("executor_result");
         let (dispatch_p, dispatch_c) = chan<SharedDispatchTicket, u32:1>("dispatch_ticket");
-    """, "    spawn SharedExecutor", xls_state_projection:argument(Spec), "(executor_request_c, executor_result_p);\n", """
-        spawn SharedRequestStage(loaded_request_c, executor_request_p);
+    """, "    spawn SharedExecutor", xls_state_projection:argument(Spec), "(loaded_request_c, executor_result_p);\n",
+    case maps:get(gather_collection, Spec, false) of
+        true -> [];
+        false -> "    spawn SharedRequestStage(dispatch_c, queued_ticket_p);\n"
+    end, """
         spawn SharedLoader<INSTANCE_ID, {mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH)}>(
-          dispatch_c, loaded_request_p,
+    """, case maps:get(gather_collection, Spec, false) of
+        true -> "      dispatch_c";
+        false -> "      queued_ticket_c"
+    end, """
+          , loaded_request_p,
           ram_read_req_out, ram_read_resp_in, mailbox_read_req_out, mailbox_read_resp_in
     """, xls_indexed_memory_codegen:optional(Spec, ", gather_read_req_out, gather_read_resp_in"), """
         );
@@ -687,20 +708,21 @@ shared_service(Spec) ->
             // Return credits must already occupy a pending receptacle.
             // Using a newly captured credit here closes a combinational path
             // through result retirement, the router, and its credit output.
-            let (credit_pending_valid, credit_busy, credit_outboxes) =
+            let (credit_pending_valid, credit_count, credit_outboxes) =
               if PER_ACTOR_EGRESS {
                 let (pending, busy) = mailbox::collect_actor_credits(
                   state.pending, state.pending_valid,
                   captured_pending_valid, state.outbox_busy);
-                (pending, u1:0, busy)
+                (pending, u2:0, busy)
               } else {
-                let (pending, busy) = mailbox::collect_credit(
+                let (pending, count) = mailbox::collect_publication_credit(
                   state.pending, state.pending_valid,
-                  captured_pending_valid, state.egress_busy);
-                (pending, busy, state.outbox_busy)
+                  captured_pending_valid, state.publication_outstanding);
+                (pending, count, state.outbox_busy)
               };
             let buffered_can_retire = state.completed_valid &&
-              (!state.completed.effects_valid || !credit_busy);
+    """, xls_indexed_memory_codegen:optional(Spec, "          state.indexed_retirement_valid &&\n"), """
+              (!state.completed.effects_valid || credit_count < PUBLICATION_CAPACITY);
             let accept_executor_result =
               !state.completed_valid || buffered_can_retire;
             let (executor_result_tok, incoming_result, incoming_valid) =
@@ -731,8 +753,10 @@ shared_service(Spec) ->
     """, xls_shared_collection_codegen:captured_field(Spec), """
               pending: captured_pending,
               pending_valid: credit_pending_valid,
+              publication_outstanding: if PER_ACTOR_EGRESS { u2:0 } else {
+                credit_count + (retire_valid && resolved.effects_valid) as u2 },
               egress_busy: !PER_ACTOR_EGRESS &&
-                (credit_busy || (retire_valid && resolved.effects_valid)),
+                credit_count + (retire_valid && resolved.effects_valid) as u2 == PUBLICATION_CAPACITY,
               outbox_busy: if PER_ACTOR_EGRESS && retire_valid && resolved.effects_valid {
                 update(credit_outboxes, result.slot, u1:1)
               } else { credit_outboxes },
@@ -778,7 +802,7 @@ shared_service(Spec) ->
             // Apply this intent after retirement; never replace a whole stale row.
             // An already-free cell cannot alias the live message in a dispatch
             // ticket, so admission does not depend on this cycle's actor choice.
-    """, xls_shared_collection_codegen:selection(Spec), xls_shared_collection_codegen:admit(Spec), xls_indexed_collection_codegen:admit(Spec), """
+    """, ordinary_selection(Spec), xls_shared_collection_codegen:admit(Spec), xls_indexed_collection_codegen:admit(Spec), """
             let admission = mailbox::Admission {
     """, "          valid: intent.valid", xls_shared_collection_codegen:admission_guard(Spec), " && !(retire_valid &&\n", """
                 hls_failure::failed(resolved.machine.failure) && intent.slot == result.slot),
@@ -806,13 +830,7 @@ shared_service(Spec) ->
                 Reductions, SharedService
             ),
     """
-            let issued_in_flight = if issue_valid {
-              update(retired_in_flight, read_slot, u1:1)
-            } else {
-              retired_in_flight
-            };
-            let cursor = scheduler::advance_cursor<ACTOR_COUNT>(
-              state.cursor, issue_valid, read_slot);
+    """, issue_ownership(Spec), """
             let selection_state = SharedState<
                 ACTOR_COUNT, PRODUCER_COUNT> {
               in_flight: issued_in_flight,
@@ -851,13 +869,13 @@ shared_service(Spec) ->
             let egress_tok = send_if(
               executor_result_tok,
               egress_out,
-              retire_valid && resolved.effects_valid,
-              scheduled);
+              state.publish_valid,
+              state.publish);
             let state_write_tok = send_if(
               join(memory_tok, egress_tok),
               ram_write_req_out,
-              retire_valid,
-              machine_write(result.slot, resolved.machine));
+              state.write_machine_valid,
+              state.write_machine);
             // Admission selects only registered-valid producers; capture cannot
             // replace that producer's frame until a later iteration.
             let admission_frame =
@@ -865,15 +883,13 @@ shared_service(Spec) ->
             let mailbox_write_tok = send_if(
               join(memory_tok, egress_tok),
               mailbox_write_req_out,
-              reservation.admission.valid,
-              mailbox::write(
-                reservation.admission.slot,
-                reservation.admission.physical,
-                mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH),
-                admission_frame));
+              state.write_mailbox_valid,
+              state.write_mailbox);
     """, xls_indexed_memory_codegen:optional(Spec,
         "        let gather_write_tok = send_if(join(memory_tok, gather_completion_tok),\n"
-        "          gather_write_req_out, indexed_admission.write_valid, indexed_admission.write);\n"), """
+        "          gather_write_req_out, state.write_gather_valid, GatherRamWriteReq {\n"
+        "            addr: state.write_gather_addr, mask: state.write_gather_mask,\n"
+        "            data: indexed_write_data(state.write_gather_value) });\n"), """
             let _done = join(
               state_write_tok,
               mailbox_write_tok,
@@ -887,9 +903,25 @@ shared_service(Spec) ->
               completed_valid,
               completed,
               cursor,
-              state_write_pending: retire_valid,
-              mailbox_write_pending: reservation.admission.valid,
-    """, xls_indexed_memory_codegen:optional(Spec, "          gather_write_pending: indexed_admission.write_valid,\n"), """
+              ordinary_intent: next_intent,
+              state_write_pending: state.write_machine_valid,
+              mailbox_write_pending: state.write_mailbox_valid,
+              write_machine_valid: retire_valid,
+              write_machine_slot: result.slot,
+              write_machine: machine_write(result.slot, resolved.machine),
+              write_mailbox_valid: reservation.admission.valid,
+              write_mailbox_slot: reservation.admission.slot,
+              write_mailbox: mailbox::write(reservation.admission.slot,
+                reservation.admission.physical, mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH), admission_frame),
+              publish_valid: retire_valid && resolved.effects_valid,
+              publish: scheduled,
+    """, xls_indexed_memory_codegen:optional(Spec,
+        "          gather_write_pending: state.write_gather_valid,\n"
+        "          write_gather_valid: indexed_admission.write_valid,\n"
+        "          write_gather_slot: indexed_intent.slot,\n"
+        "          write_gather_addr: indexed_admission.write.addr,\n"
+        "          write_gather_mask: indexed_admission.write.mask,\n"
+        "          write_gather_value: indexed_transport_contribution(state.indexed_input.frame).value,\n"), """
               ..selection_state
             };
             (join(state_write_tok, mailbox_write_tok
@@ -914,3 +946,64 @@ shared_reply_effect(Spec) -> case xls_statem_reply_codegen:enabled(Spec) of
     true -> ["if dispatched.reply_valid { SharedStep { machine: dispatched.machine, effects: ",
         xls_statem_reply_codegen:effect(Spec), ", effects_valid: true, ..zero!<SharedStep>() } } else { "]
 end.
+
+%% Retained physical writes own visibility until sent; read tickets then join acknowledgments.
+-spec command_helpers() -> iodata().
+command_helpers() ->
+    """
+    // A new activation cannot read a row whose command has not reached RAM.
+    fn shared_write_mask<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> bool[ACTOR_COUNT] {
+      unroll_for! (actor, flags): (u32, bool[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+        update(flags, actor, state.in_flight[actor] ||
+          (state.write_machine_valid && state.write_machine_slot == actor) ||
+          (state.write_mailbox_valid && state.write_mailbox_slot == actor))
+      }(state.in_flight)
+    }
+
+    // Retain a producer and free cell without allowing a second reservation of
+    // that actor before the first intent commits. Retirement only frees cells.
+    fn ordinary_selection_source<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      let pending_valid = unroll_for! (producer, flags):
+          (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+        let held = state.ordinary_intent;
+        update(flags, producer, state.pending_valid[producer] && !(held.valid &&
+          (held.producer == producer || held.slot == state.pending[producer].slot)))
+      }(state.pending_valid);
+      SharedState<ACTOR_COUNT, PRODUCER_COUNT> { pending_valid, ..state }
+    }
+
+    """.
+
+%% Grant an ordinary mailbox cell before applying the retained intent at a later edge.
+-spec ordinary_selection(spec()) -> iodata().
+ordinary_selection(Spec) ->
+    Original = iolist_to_binary(xls_shared_collection_codegen:selection(Spec)),
+    Snapshot = re:replace(Original, "\\bstate\\b", "admission_snapshot", [global, {return, binary}]),
+    Selected = re:replace(Snapshot, "\\bintent\\b", "next_intent", [global, {return, binary}]),
+    Independent = binary:replace(Selected, <<"collection_select(admission_snapshot)">>, <<"collection_select(state)">>),
+    Source = case maps:get(gather_collection, Spec, false) of
+        true -> "indexed_preparation_source(state, prepare_valid, prepare_slot)";
+        false -> "state"
+    end,
+    ["\n        let admission_snapshot = ordinary_selection_source(", Source, ");\n", Independent,
+     "        let intent = state.ordinary_intent;\n"].
+
+%% Indexed actors reserve at preparation and release only on cancellation or
+%% retirement. Their cursor advances across empty probes as well as real work.
+-spec issue_ownership(spec()) -> iodata().
+issue_ownership(Spec) ->
+    case maps:get(gather_collection, Spec, false) of
+        true ->
+            "        let issued_in_flight = indexed_prepared_in_flight(state, retired_in_flight,\n"
+            "          finish_prepared, issue_valid, prepare_valid, prepare_slot);\n"
+            "        let cursor = scheduler::advance_cursor<ACTOR_COUNT>(\n"
+            "          state.cursor, prepare_valid, prepare_slot);\n";
+        false ->
+            "        let issued_in_flight = if issue_valid {\n"
+            "          update(retired_in_flight, read_slot, u1:1)\n"
+            "        } else { retired_in_flight };\n"
+            "        let cursor = scheduler::advance_cursor<ACTOR_COUNT>(\n"
+            "          state.cursor, issue_valid, read_slot);\n"
+    end.

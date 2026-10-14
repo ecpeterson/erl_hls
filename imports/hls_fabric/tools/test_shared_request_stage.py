@@ -24,7 +24,7 @@ def main() -> None:
     args.stage.mkdir(parents=True, exist_ok=True)
     template = (ROOT / 'priv/xls/templates/shared_loader.x.in').read_text()
     stage = template[template.index('proc SharedRequestStage {'):]
-    (args.stage / 'request_stage.x').write_text(stage.replace('SharedExecutorRequest', 'u16'))
+    (args.stage / 'request_stage.x').write_text(stage.replace('SharedDispatchTicket', 'u16'))
     run([args.xls / 'ir_converter_main', '--top=SharedRequestStage',
          '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), 'request_stage.x'],
         args.stage, 'convert.log', 'request.ir')

@@ -84,15 +84,24 @@ fn collection_select_ordinary<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
 // Probe reserved producers fairly without reading actor banks during arbitration.
 // A selected input can remain blocked; commit advances the cursor after that probe.
 // Collector admission never selects a mailbox cell or reads its occupancy.
-fn collection_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
+fn collection_grant<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::ProducerGrant<PRODUCER_COUNT> {
   let eligible = unroll_for! (producer, flags): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
     let request = state.pending[producer];
     update(flags, producer, state.pending_valid[producer] && request.slot < ACTOR_COUNT &&
       !request.credit && collection_reserved(request.frame))
   }(zero!<bool[PRODUCER_COUNT]>());
-  let (valid, producer) = arbitration::select(eligible, state.collection_cursor);
-  mailbox::Admission { valid, producer, slot: if valid { state.pending[producer].slot } else { u32:0 }, physical: u8:0 }
+  mailbox::producer_grant(eligible, state.collection_cursor)
+}
+
+// Carry the same committed grant to request selection and cursor bookkeeping.
+fn collection_select<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) -> mailbox::Admission {
+  let grant = collection_grant(state);
+  let request = mailbox::granted_request(grant, state.pending);
+  let valid = grant.valid;
+  mailbox::Admission { valid, producer: mailbox::granted_index(grant.mask),
+    slot: if valid { request.slot } else { u32:0 }, physical: u8:0 }
 }
 
 // A selected frame folds only when the committed bank accepts it and control
@@ -104,12 +113,14 @@ fn collection_admit<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   // Fold and ownership control read the same committed bank snapshot. Control
   // wins a same-bank write conflict; retain that contribution for the next visit.
   // No-op callback metadata may still update beside a fold on the same actor.
+  // intent must be collection_select(committed), from this same snapshot.
   let control_writes = committed.collection_command.valid &&
     (committed.collection_command.control.open || committed.collection_command.control.release ||
       hls_failure::failed(committed.collection_command.failure));
   let conflict = control_writes && committed.collection_command.slot == intent.slot;
-  let frame = committed.pending[intent.producer].frame;
-  let input = committed.collection_inputs[intent.producer];
+  let grant = collection_grant(committed);
+  let frame = mailbox::granted_request(grant, committed.pending).frame;
+  let input = collection_selected_input(grant, committed.collection_inputs);
   let context = committed.collection_context[intent.slot];
   let bank = CollectionBank { reduction: context.reduction,
     opened: committed.collection_owners.opened[intent.slot], failure: context.failure };

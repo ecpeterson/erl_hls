@@ -14,11 +14,12 @@ fixture(small) ->
     {Plan, #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}}};
 fixture(mailbox) ->
+    %% Five producers exceed three publication reservations plus one borrowed window.
     Outputs = [work_a, work_b, advance] ++ [list_to_atom("blocked_" ++ integer_to_list(I)) || I <- lists:seq(0, 11)],
     Families = [producer, consumer],
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
-        families => maps:from_list([{F, #{module => hls_mailbox_debug_fixture, shape => [3, 1]}} || F <- Families]),
-        ingresses => [{commands, {rectangle, [3, 1]}, [
+        families => maps:from_list([{F, #{module => hls_mailbox_debug_fixture, shape => [5, 1]}} || F <- Families]),
+        ingresses => [{commands, {rectangle, [5, 1]}, [
             {configure, [configure], [{family, producer, {embed, [1, 1], [0, 0]}}]}]}],
         externals => [{reports, out, [report]}], routes => [],
         route_relations => [{{F, Port}, case Port of
@@ -27,7 +28,7 @@ fixture(mailbox) ->
             advance -> [{family, consumer, {translate, [0, 0], wrap}}];
             _ -> [{external, reports}]
         end} || F <- Families, Port <- Outputs],
-        startup => [{{F, I, 0}, [{configure, Role}]} || {F, Role} <- [{producer, 0}, {consumer, 1}], I <- lists:seq(0, 2)]}),
+        startup => [{{F, I, 0}, [{configure, Role}]} || {F, Role} <- [{producer, 0}, {consumer, 1}], I <- lists:seq(0, 4)]}),
     {Plan, maps:from_list([{F, #{members => [{family, F}], state_storage => block_ram,
         mailbox_storage => block_ram}} || F <- Families])};
 fixture(direct_mailbox) ->

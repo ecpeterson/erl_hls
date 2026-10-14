@@ -15,7 +15,7 @@ from test_phi_bridge import ROOT
 from test_phi_mesh import artifacts
 from phi_mesh_metrics import layout, analyze
 from phi_capture import compressed_capture, prune_simulation
-from phi_cycle_trace import plan as cycle_plan, read as read_cycles, verify_queries
+from phi_cycle_trace import executor_requests, plan as cycle_plan, read as read_cycles, verify_queries
 
 
 def connections(devices: list[dict], link_stages: int = 1) -> str:
@@ -121,8 +121,7 @@ def prepare(args: argparse.Namespace) -> list[dict]:
             selected += [r["pop"] for r in resources if r["kind"] == "fifo"
                          and re.search(r"fifo__outgoing_\d+__0_$", r["name"])]
         if args.actors and (args.actor_devices is None or d in args.actor_devices):
-            selected += [r['pop'] for r in json.loads(manifest.read_text())['resources']
-                         if r['kind'] == 'fifo' and r['name'].endswith('fifo__executor_request_')]
+            selected += [r['accept'] for r in executor_requests(json.loads(manifest.read_text())['resources'])]
         probes[str(d)] = selected
     (args.stage / "probes.json").write_text(json.dumps(probes, indent=2)+"\n")
     (args.stage / "phi_mesh_config.vh").write_text(f"`define MESH_DEVICES {len(devices)}\n"

@@ -7,6 +7,8 @@ placements_preserve_identity_and_real_services_test() ->
     lists:foreach(fun({Placement, Shared, Direct}) ->
         Text = generated(Placement),
         ?assertEqual(Shared, count(Text, <<"::SharedService<">>)),
+        %% Every unborrowed publication credit must have matching batch storage.
+        ?assertEqual(Shared, count(Text, <<"::ScheduledEffects, u32:2>">>)),
         ?assertEqual(Direct, count(Text, <<"::Service(">>)),
         ?assertEqual(Shared, count(Text, <<"effect_window::advance_client(">>)),
         ?assertNotEqual(nomatch, binary:match(Text, <<"actor_0_debug_out">>)),

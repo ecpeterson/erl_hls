@@ -45,13 +45,26 @@ helpers(Spec = #{reductions := R}) ->
         xls_shared_codegen:shared_machine_layout(xls_state_projection:width(Spec),
             xls_statem_reduction_codegen:private_width(R)),
     {ok, Template} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls", "templates", "exclusive_collection.x"])),
-    [core(Spec),
+    [core(Spec), selected_input(R),
      "// Dispatch sees only an opened collection; early input remains scheduler-owned.\n",
      "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState, failure: hls_failure::Code) -> MachineBits {\n  ",
      case maps:get(continuations, Spec, []) =/= [] orelse maps:get(gathers, Spec, none) =/= none of
          false -> []; true -> ["raw[", integer_to_list(End), ":] ++ "] end,
      "(if reduction.status == ReductionStatus::IDLE { raw[", integer_to_list(Start), ":", integer_to_list(End), "] } else { bits_from_reduction_state(reduction) }) ++ hls_failure::first(raw[", integer_to_list(Failure), ":", integer_to_list(Start), "] as hls_failure::Code, failure) ++ raw[0:", integer_to_list(Failure), "]\n}\n\n",
      Template].
+
+%% Select the captured lift directly; its codec preserves every inactive bit too.
+-spec selected_input(map()) -> iodata().
+selected_input(R = #{accumulator := #{name := Name}}) ->
+    #{site_bits := SiteBits, accumulator_bits := ValueBits} = xls_statem_reduction_ir:layout(R),
+    Codec = xls_names:record_codec(Name),
+    {ok, Template} = file:read_file(filename:join([code:priv_dir(hls_fabric),
+        "xls", "templates", "collection_selected_input.x.in"])),
+    lists:foldl(fun({Key, Value}, Text) -> binary:replace(Text, Key, Value, [global]) end,
+        Template, [{<<"@SITE_BITS@">>, integer_to_binary(SiteBits)},
+                   {<<"@VALUE_BITS@">>, integer_to_binary(ValueBits)},
+                   {<<"@CODEC@">>, iolist_to_binary(Codec)}]).
+
 
 -doc "Renders message-only lifting, membership checks, early folding and opening reconciliation for either execution backend.".
 -spec core(map()) -> iodata().

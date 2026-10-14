@@ -12,12 +12,20 @@ backend_namespace_test() ->
             xls_shared_names:validate(Base#{data_name := Name})),
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{reductions := #{accumulator => #{name => Name}}}))
-    end, ['SharedState', 'SharedExecutor', 'SharedLoader', 'SharedRequestStage', 'SharedDispatchTicket',
-         'ReductionAggregate', 'MachineBits', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'IndexedContext', 'GatherRamReadReq']),
+    end, ['SharedOperands', 'IndexedOwnedInput', 'PublicationPatch', 'SharedState', 'SharedExecutor', 'SharedLoader', 'SharedRequestStage', 'SharedDispatchTicket',
+         'ReductionAggregate', 'MachineBits', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'DirectCollectionGrant', 'IndexedContext', 'GatherRamReadReq']),
     lists:foreach(fun(Alias) ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{imports := [Alias]}))
-    end, ['backend.SharedService', 'backend.collection_control', 'backend.collection_accepts',
+    end, ['backend.indexed_prepare_mask', 'backend.indexed_prepared_finish',
+          'backend.indexed_preparation_source', 'backend.indexed_prepared_in_flight',
+          'backend.indexed_prepared_ticket', 'backend.indexed_owned_mask', 'backend.indexed_capture_result', 'backend.indexed_write_data', 'backend.indexed_capture_retirement',
+          'backend.indexed_check_owned', 'backend.indexed_capture_input', 'backend.indexed_retire_owned',
+          'backend.indexed_refresh', 'backend.indexed_retire_context', 'backend.shared_write_mask',
+          'backend.ordinary_selection_source', 'backend.direct_collection_finish', 'backend.direct_collection_execute',
+          'backend.direct_collection_command', 'backend.direct_collection_advance',
+          'backend.direct_collection_next_grant',
+          'backend.publication_patch', 'backend.publication_frame', 'backend.SharedService', 'backend.collection_control', 'backend.collection_accepts',
           'backend.collection_fold', 'backend.collection_resolve', 'backend.collection_select',
           'backend.collection_select_ordinary', 'backend.collection_issue', 'backend.collection_decode',
           'backend.collection_push_input', 'backend.collection_accepts_input', 'backend.collection_capture_inputs',

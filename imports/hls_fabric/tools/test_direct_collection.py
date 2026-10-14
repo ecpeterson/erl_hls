@@ -10,24 +10,51 @@ from test_actor_rtl import execute
 
 
 def state_paths(dslx: str) -> dict[int, str]:
-    """Map XLS tuple-flattened state identities back to generated source fields."""
-    structs = {name: re.findall(r'^\s*(\w+)\s*:\s*([^,]+),', body, re.M)
-               for name, body in re.findall(r'(?:pub\s+)?struct\s+(\w+)(?:<[^>]+>)?\s*\{([^}]+)\}', dslx)}
-    aliases = dict(re.findall(r'(?:pub\s+)?type\s+(\w+)\s*=\s*(\w+)\s*;', dslx))
-    result = {}
+    """Map flattened state leaves, resolving imported records and parameterized aliases.
 
-    def visit(kind: str, path: str, seen: tuple[str, ...] = ()) -> None:
-        """Arrays retain one state identity; scalar tuples flatten recursively."""
-        kind = aliases.get(kind, kind)
-        if kind in seen:
-            raise ValueError('recursive collection state type')
-        if kind not in structs:
+    Arrays remain one state identity; scalar records, including axis frames,
+    flatten recursively. Missing imported layouts fail rather than shift indices.
+    """
+    result: dict[int, str] = {}
+    sources: dict[str, str] = {'': dslx}
+
+    def visit(kind: str, path: str, module: str = '', seen: tuple[str, ...] = ()) -> None:
+        """Resolve one type in its declaring module and enumerate scalar leaves."""
+        if '[' in kind:
             result[len(result)] = path
-        else:
-            for field, value in structs[kind]:
-                visit(value.strip(), path+'.'+field, (*seen, kind))
+            return
+        if '::' in kind:
+            module, kind = kind.split('::', 1)
+            if module not in sources:
+                locations = [root/'priv/xls'/folder/(module+'.x')
+                             for root in (ROOT, PUBLIC) for folder in ('lib', 'fabric')]
+                found = next((p for p in locations if p.is_file()), None)
+                if found is None:
+                    raise ValueError(f'missing imported state layout: {module}')
+                sources[module] = found.read_text()
+        source = sources[module]
+        name = kind.split('<', 1)[0]
+        identity = module+'::'+name
+        if identity in seen:
+            raise ValueError('recursive collection state type')
+        active = (*seen, identity)
+        aliases = re.findall(r'(?:pub\s+)?type\s+'+re.escape(name)+r'\s*=\s*([^;]+);', source)
+        if aliases:
+            if len(aliases) != 1:
+                raise ValueError(f'ambiguous state type: {identity}')
+            visit(aliases[0].strip(), path, module, active)
+            return
+        records = re.findall(r'(?:pub\s+)?struct\s+'+re.escape(name)+
+                             r'(?:<[^>]+>)?\s*\{([^}]+)\}', source)
+        if not records:
+            result[len(result)] = path
+            return
+        if len(records) != 1:
+            raise ValueError(f'ambiguous state record: {identity}')
+        for field, value in re.findall(r'^\s*(\w+)\s*:\s*([^,]+),', records[0], re.M):
+            visit(value.strip(), path+'.'+field, module, active)
 
-    if 'DirectCollectionState' not in structs:
+    if not re.search(r'\bstruct DirectCollectionState\b', dslx):
         raise ValueError('missing generated direct collection state')
     visit('DirectCollectionState', 'state')
     return result
@@ -81,11 +108,12 @@ def check_output_boundary(rtl: str, dslx: str) -> list[dict]:
             state = re.fullmatch(r'____state_(\d+)(?:_\w+)?', name)
             if state:
                 path = layout[int(state[1])]
-                if (not path.startswith(('state.machine.', 'state.collection.')) or
+                if path != 'state.publish_valid' and (
+                        not path.startswith(('state.machine.', 'state.collection.')) or
                         path.startswith('state.machine.slots')):
                     raise ValueError(f'{match[1]}: readiness crosses {path}')
                 owners[name] = path
-            elif name == '___egress_out_already_done_reg' or name.endswith('_rdy'):
+            elif name in ('___egress_out_already_done_reg', '___actor_debug_out_already_done_reg') or name.endswith('_rdy'):
                 owners[name] = 'output handshake'
             else:
                 raise ValueError(f'{match[1]}: unclassified readiness leaf {name}')
@@ -95,11 +123,56 @@ def check_output_boundary(rtl: str, dslx: str) -> list[dict]:
     return rows
 
 
+
+def overlap_observer(rtl: str, dslx: str, bench: str) -> str:
+    """Require committed consecutive bank folds across both actor phases in RTL.
+
+    Bind the actual generated consumed predicate to the retained contribution
+    validity field; fail closed if optimization changes that observable boundary.
+    The observer never drives the DUT or changes the exercised histories.
+    """
+    name, body = re.findall(r'^module (\w*CollectionService\w*)\((.*?)^endmodule',
+                            rtl, re.M | re.S)[0]
+    instance, = re.findall(r'^\s*'+re.escape(name)+r'\s+(\w+)\s*\(', rtl, re.M)
+    paths = {v: k for k, v in state_paths(dslx).items()}
+    valid = '____state_'+str(paths['state.contribution_valid'])
+    command = '____state_'+str(paths['state.command_valid'])
+    expression, = re.findall(r'assign consumed = ([^;]+);', body)
+    if not re.search(r'\b'+valid+r'\b', expression):
+        raise ValueError('collector consumed predicate lost retained contribution validity')
+    for signal in (valid, command):
+        if not re.search(r'\breg '+signal+r';', body):
+            raise ValueError(f'collector observation lost scalar register {signal}')
+    stem = 'dut.'+instance
+    observation = f"""
+  integer last_fold_cycle=-2, collector_folds=0;
+  reg fold_on_grant=0, fold_on_execute=0, consecutive_folds=0;
+  always @(posedge clk) begin
+    if(reset) last_fold_cycle=-2;
+    else if({stem}.active_outputs_ready_0 && {stem}.consumed) begin
+      collector_folds=collector_folds+1;
+      if(cycles==last_fold_cycle+1) consecutive_folds=1;
+      last_fold_cycle=cycles;
+      if({stem}.{command}) fold_on_execute=1; else fold_on_grant=1;
+    end
+  end
+"""
+    checked = bench.replace('  initial begin\n', observation+'  initial begin\n', 1)
+    needle = '    $display("PASS:'
+    if checked.count(needle) != 1:
+        raise ValueError('collector test lacks unique final success boundary')
+    return checked.replace(needle, '    if(!fold_on_grant || !fold_on_execute || !consecutive_folds)\n'
+                           '      $fatal(1,"collector did not overlap both actor phases");\n'
+                           '    $display("FOLD_RATE: %0d folds, consecutive=1, both_actor_phases=1",collector_folds);\n'
+                           +needle)
+
+
 def main() -> None:
     """Compile the real actor backend and require a bounded RTL scoreboard to finish."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=lambda p: Path(p).resolve())
     parser.add_argument('--stage', type=lambda p: Path(p).resolve(), required=True)
+    parser.add_argument('--pipeline-stages', type=int, choices=(2, 3), default=2)
     args = parser.parse_args()
     stage, xls = args.stage, args.xls
     stage.mkdir(parents=True, exist_ok=False)
@@ -129,7 +202,7 @@ pub proc CollectionTest {
           f'--dslx_path={ROOT/"priv/xls/lib"}:{PUBLIC/"priv/xls/lib"}:{PUBLIC/"priv/xls/fabric"}',
           f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}', str(stage/'collector.x')], 'convert', 'collector.ir'),
         ([str(xls/'opt_main'), str(stage/'collector.ir')], 'opt', 'collector.opt.ir'),
-        ([str(xls/'codegen_main'), '--pipeline_stages=2', '--delay_model=unit',
+        ([str(xls/'codegen_main'), f'--pipeline_stages={args.pipeline_stages}', '--delay_model=unit',
           '--flop_inputs=false', '--flop_outputs=true', '--use_system_verilog=false',
           '--reset=reset', '--fifo_module=', '--module_name=collector', str(stage/'collector.opt.ir')],
          'codegen', 'collector.v')]
@@ -141,8 +214,11 @@ pub proc CollectionTest {
     parameters = [f'-Pdirect_collection_tb.TAG_{name}={tags[name]}' for name in ('BEGIN_SET', 'PIECE', 'RESULT')]
     width, = re.findall(r'pub type ActorObservation = bits\[(\d+)\]', (stage/'collector.x').read_text())
     parameters.append(f'-Pdirect_collection_tb.OBSERVATION_BITS={width}')
+    bench = overlap_observer((stage/'collector.v').read_text(), (stage/'collector.x').read_text(),
+                             (ROOT/'test/rtl/direct_collection_tb.sv').read_text())
+    (stage/'testbench.sv').write_text(bench)
     execute(['iverilog', '-g2012', '-s', 'direct_collection_tb', *parameters, '-o', str(stage/'test.vvp'),
-             str(ROOT/'test/rtl/direct_collection_tb.sv'), str(stage/'collector.v')], stage, 'test-compile')
+             str(stage/'testbench.sv'), str(stage/'collector.v')], stage, 'test-compile')
     execute(['vvp', str(stage/'test.vvp')], stage, 'simulate')
     report = (stage/'simulate.log').read_text()
     if 'PASS:' not in report:

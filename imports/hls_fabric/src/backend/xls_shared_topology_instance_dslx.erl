@@ -9,10 +9,10 @@
 -doc "Reports whether placement or dedicated collection requires an explicit instance graph.".
 -spec required(map(),map()) -> boolean().
 required(Plan, Profile) ->
-    #{scheduler_groups := Specs, direct_collections := Collections} =
+    #{scheduler_groups := Specs, direct_collections := Collections, effect_delivery_width := Width} =
         xls_shared_topology_profile:normalize(Profile),
     #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs),
-    map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
+    Width > 1 orelse map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
         lists:any(fun(Group) -> maps:get(gathers, Group, none) =/= none end, Groups).
 
 -doc "Returns per-module compiler options required by the selected placement.".
@@ -92,7 +92,8 @@ lower(Plan, Profile0) ->
         units => Units, lanes := Lanes, actor_index => ActorIndex,
         semantic_plan => Plan, mailbox_debug => MailboxDebug, ingresses => Ingresses,
         artifact_requirements => WithMailbox,
-        effect_window_domains => Domains}.
+        effect_window_domains => Domains,
+        effect_delivery_width => maps:get(effect_delivery_width, Profile)}.
 
 %% Selected modules must use one singleton backend throughout this deployment.
 -spec validate_direct_collections(map(), [map()], [map()]) -> ok.
@@ -310,7 +311,10 @@ router(Spec, Unit = #{kind := scheduler, module_name := Module, outbound := Lane
     Routing = #{arguments => [lane_argument(Lane) || Lane <- Lanes],
         names => [lane_name(Lane) || Lane <- Lanes],
         send => route_sends(Spec, Unit, Module, "effect", "scheduled.slot", "grant_tok", "emit")},
-    xls_topology_scheduler_dslx:effect_router(Spec, Unit, Routing);
+    case maps:get(effect_delivery_width, Spec, 1) of
+        W when W =:= 1; Lanes =:= [] -> xls_topology_scheduler_dslx:effect_router(Spec, Unit, Routing);
+        Width -> parallel_router(Spec, Unit, Width)
+    end;
 router(Spec, Unit = #{kind := direct, module_name := Module, outbound := Lanes,
         index := I}) ->
     Arguments = [["egress_in: chan<", Module, "::Egress> in"] |
@@ -321,6 +325,38 @@ router(Spec, Unit = #{kind := direct, module_name := Module, outbound := Lanes,
         "    let (tok, effect) = recv(join(), egress_in);\n",
         route_sends(Spec, Unit, Module, "effect", none, "tok", "true"),
         "    state\n  }\n}\n\n"].
+
+%% Resolve actual recipient sets before choosing a disjoint publication prefix.
+-spec parallel_router(map(), map(), pos_integer()) -> binary().
+parallel_router(Spec, Unit = #{module_name := Module, routes := Routes, outbound := Lanes}, Width) ->
+    Count = length(Lanes),
+    case Count of 0 -> error(parallel_router_requires_destinations); _ -> ok end,
+    Masks = [["    ((", lists:join(" || ", [
+        route_condition(Spec, Route, Module, "effect", "slot") ||
+        Route = #{recipients := Recipients} <- Routes,
+        lists:member(maps:get(recipient, Lane), Recipients)]),
+        ") as bits[LANES]) << u32:", n(I)] || {I, Lane} <- lists:enumerate(0, Lanes)],
+    Targets = ["// Static route membership; aliases occupy the same bit.\n",
+        "fn router_targets(slot: u32, effect: ACTOR::Egress) -> bits[LANES] {\n",
+        lists:join(" |\n", Masks), "\n}\n\n"],
+    Sends = [[begin
+        Id = n(maps:get(index, Lane)),
+        ["    let lane_", Id, " = router_frame(head, u32:", n(I), ");\n",
+         "    let lane_", Id, "_tok = send_if(grant_tok, ", lane_name(Lane),
+         ", batch_valid && lane_", Id, ".0, ",
+         lane_frame_value(Lane, ["lane_", Id, ".1"]), ");\n"]
+    end || {I, Lane} <- lists:enumerate(0, Lanes)],
+        "    let routed_tok = ", join_tokens(["grant_tok" | [
+            ["lane_", n(maps:get(index, Lane)), "_tok"] || Lane <- Lanes]]), ";\n"],
+    xls_parallel_effect_router_dslx:emit(Unit, Width, Count,
+        [lane_argument(Lane) || Lane <- Lanes], Targets, Sends).
+
+%% Wraps a selected frame without retaining a redundant port tag in the head.
+-spec lane_frame_value(map(), iodata()) -> iodata().
+lane_frame_value(#{target := #{placement := #{}, slot := Slot, module_name := Module}}, Frame) ->
+    [Module, "::ScheduledRequest { slot: u32:", n(Slot), ", frame: ", Frame,
+        ", ..zero!<", Module, "::ScheduledRequest>() }"];
+lane_frame_value(_, Frame) -> Frame.
 
 %% Renders all selected recipients while preserving effect acceptance order.
 -spec route_sends(map(),map(),term(),string(),'none' | string(),string(),string()) -> iodata().
@@ -348,10 +384,7 @@ route_condition(#{actor_index := Actors}, #{source := {Id, Port}}, Module, Effec
 
 %% Wraps a frame in the representation expected by its destination lane.
 -spec lane_value(map(),string()) -> iodata().
-lane_value(#{target := #{placement := #{}, slot := Slot, module_name := Module}}, Effect) ->
-    [Module, "::ScheduledRequest { slot: u32:", n(Slot), ", frame: ", Effect,
-        ".frame, ..zero!<", Module, "::ScheduledRequest>() }"];
-lane_value(_, Effect) -> [Effect, ".frame"].
+lane_value(Lane, Effect) -> lane_frame_value(Lane, [Effect, ".frame"]).
 
 %% Declares the destination-specific representation of a routing channel.
 -spec lane_argument(map()) -> iodata().
@@ -505,7 +538,8 @@ unit_channels(#{kind := scheduler, stem := Stem, module_name := Module, inbound 
     [channel([Stem, "_requests"], [Module, "::ScheduledRequest"],
         length(Inbound) + 1, "CHANNEL_DEPTH"),
         channel([Stem, "_startup"], [Module, "::ScheduledRequest"], none, "CHANNEL_DEPTH"),
-        channel([Stem, "_egress"], [Module, "::ScheduledEffects"], none, "CHANNEL_DEPTH")].
+        channel([Stem, "_egress"], [Module, "::ScheduledEffects"], none,
+            ["u32:", n(xls_shared_codegen:publication_depth())])].
 
 %% Declares a channel with its representation and bounded queue depth.
 -spec channel([any(),...],[any(),...],'none' | non_neg_integer(),[string() | 65 | 67 | 68 | 69 | 72 | 76 | 78 | 80 | 84 | 95,...]) -> iodata().

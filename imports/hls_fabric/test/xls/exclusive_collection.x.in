@@ -207,7 +207,9 @@ fn committed_request_uses_registered_open_with_another_capture() {
     pending_valid: [true,false], ..zero!<SharedState<u32:1,u32:2>>() };
   let captured = SharedState<u32:1,u32:2> {
     pending: update(committed.pending,u32:1,ScheduledRequest {
-      frame: piece_frame(u32:8,u32:0,u8:17), ..zero!<ScheduledRequest>() }),
+      frame: axis::Frame { header: axis::Header { op: Tag::BEGIN_SET as u8,
+        payload_words: u8:2, ..zero!<axis::Header>() }, ..zero!<axis::Frame>() },
+      ..zero!<ScheduledRequest>() }),
     pending_valid: [true,true], ..committed };
   let queued = collection_retire(captured,true,u32:0,opened(u8:3));
   let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
@@ -217,7 +219,11 @@ fn committed_request_uses_registered_open_with_another_capture() {
   let waiting = collection_commit(retired,intent,deferred);
   assert_eq(waiting.pending_valid,[true,true]);
   assert_eq(waiting.collection_context[u32:0].reduction.seen,ReductionMembers:1);
-  let folded = collection_commit(waiting,intent,admit_captured(waiting,intent));
+  // Re-select from the current snapshot. The independently captured ordinary
+  // frame does not enter this collector or replace its held contribution.
+  let next_intent = select_captured(waiting);
+  assert_eq(next_intent, intent);
+  let folded = collection_commit(waiting,next_intent,admit_captured(waiting,next_intent));
   assert_eq(folded.collection_context[u32:0].failure,hls_failure::NONE);
   assert_eq(folded.collection_context[u32:0].reduction.status,ReductionStatus::COMPLETE);
   assert_eq(folded.collection_context[u32:0].reduction.seen,ReductionMembers:3);
@@ -566,4 +572,22 @@ fn producer_first_ordinary_admission_independent_test() {
     pending_valid:[true,false], admission_cursor:u32:0, ..state };
   assert_eq(collection_commit(admitted,intent,collected),
     SharedState<u32:2,u32:2> { collection_cursor:u32:1, ..admitted });
+}
+
+// Selecting a captured decode preserves all fields, including inactive data.
+#[test]
+fn one_hot_captured_payload_test() {
+  let inputs = for (i, values): (u32, CollectionInput[22]) in u32:0..u32:22 {
+    let input = CollectionInput {
+      frame_valid: (i % u32:2) == u32:0,
+      contribution: ReductionContribution {
+        valid: (i % u32:3) == u32:0, site: ReductionSite::COLLECTING,
+        key: u32:0xabcdef00 + i, member: u32:0x12345678 + i,
+        value: Parity { value: u8:201 + i as u8 } } };
+    update(values, i, input)
+  }(zero!<CollectionInput[22]>());
+  assert_eq(collection_selected_input(mailbox::ProducerGrant<u32:22> { valid: false, mask: u22:0 }, inputs), inputs[u32:0]);
+  for (i, ()): (u32, ()) in u32:0..u32:22 {
+    assert_eq(collection_selected_input(mailbox::ProducerGrant<u32:22> { valid: true, mask: u22:1 << i }, inputs), inputs[i])
+  }(())
 }

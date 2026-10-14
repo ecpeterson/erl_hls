@@ -1,6 +1,15 @@
 // Load one reserved activation. The scheduler owns actor/mailbox metadata and
 // reserves result capacity before sending a ticket. The generated metadata-stage
-// registers retain its fields; the ticket FIFO breaks backward readiness.
+// registers retain its fields; ticket buffering breaks backward readiness.
+// Raw responses cross a retained boundary before reconstruction and execution.
+// One reserved activation holds raw RAM responses without duplicating actor metadata.
+struct SharedOperands {
+  valid: bool,
+  ticket: SharedDispatchTicket,
+  machine: MachineRamReadResp,
+  message: MailboxRamReadResp,
+@@OPERAND_GATHER_FIELD@@}
+
 proc SharedLoader<INSTANCE_ID: u32, MAILBOX_STRIDE: u32> {
   tickets: chan<SharedDispatchTicket> in;
   requests: chan<SharedExecutorRequest> out;
@@ -22,19 +31,15 @@ proc SharedLoader<INSTANCE_ID: u32, MAILBOX_STRIDE: u32> {
   }
 
   // The identity distinguishes external RAM specializations during legalization.
-  init { INSTANCE_ID }
+  init { (INSTANCE_ID, zero!<SharedOperands>()) }
 
-  // Hold ticket ownership through both responses and executor acceptance.
-  // Neither read waits for current retirement or a new arbitration decision.
-  next(instance_id: u32) {
-    let (tok, ticket) = recv(join(), tickets);
-    let read_state = send(tok, ram_read_req_out, machine_read(ticket.slot));
-    let read_mail = send_if(tok, mailbox_read_req_out, ticket.received,
-      mailbox::read(ticket.slot, ticket.mailbox_index, MAILBOX_STRIDE));
-    let (state_done, machine) = recv(read_state, ram_read_resp_in);
-    let (mail_done, message) = recv_if(read_mail, mailbox_read_resp_in,
-      ticket.received, zero!<MailboxRamReadResp>());
-@@GATHER_READ@@    let request = SharedExecutorRequest {
+  // Send the prior response only. Independent actors can replace this slot
+  // after its request is accepted; reset discards it with the reserved ticket.
+  next(state: (u32, SharedOperands)) {
+    let ticket = state.1.ticket;
+    let machine = state.1.machine;
+    let message = state.1.message;
+@@OPERAND_GATHER_BIND@@    let request = SharedExecutorRequest {
       slot: ticket.slot,
       machine: @@MACHINE_BITS@@,
       frame: axis::frame_from_bits(message.data),
@@ -44,32 +49,40 @@ proc SharedLoader<INSTANCE_ID: u32, MAILBOX_STRIDE: u32> {
       egress_ready: true,
 @@GATHER_FIELDS@@      @@REDUCTION_FIELDS@@
     };
-    let _sent = send(join(state_done, mail_done@@GATHER_JOIN@@), requests, request);
-    instance_id
+    let _sent = send_if(join(), requests, state.1.valid, request);
+    let (tok, ticket, valid) = recv_non_blocking(join(), tickets, zero!<SharedDispatchTicket>());
+    let read_state = send_if(tok, ram_read_req_out, valid, machine_read(ticket.slot));
+    let read_mail = send_if(tok, mailbox_read_req_out, valid && ticket.received,
+      mailbox::read(ticket.slot, ticket.mailbox_index, MAILBOX_STRIDE));
+    let (state_done, machine) = recv_if(read_state, ram_read_resp_in, valid, zero!<MachineRamReadResp>());
+    let (mail_done, message) = recv_if(read_mail, mailbox_read_resp_in,
+      valid && ticket.received, zero!<MailboxRamReadResp>());
+@@GATHER_READ@@    let _responses = join(state_done, mail_done@@GATHER_JOIN@@);
+    (state.0, SharedOperands { valid, ticket, machine, message, @@OPERAND_GATHER_VALUE@@ })
   }
 }
 
-// Retain each loaded request before making it visible to the executor. A full
-// stage may replace its payload only after the prior request is accepted.
+// Retain a reserved ticket before issuing RAM reads. A full stage may replace
+// its ticket only after the loader accepts the prior one. Payload stays in RAM.
 proc SharedRequestStage {
-  input_request: chan<SharedExecutorRequest> in;
-  output_request: chan<SharedExecutorRequest> out;
+  input_request: chan<SharedDispatchTicket> in;
+  output_request: chan<SharedDispatchTicket> out;
 
   // The downstream FIFO supplies occupancy-only readiness.
-  config(input_request: chan<SharedExecutorRequest> in,
-      output_request: chan<SharedExecutorRequest> out) {
+  config(input_request: chan<SharedDispatchTicket> in,
+      output_request: chan<SharedDispatchTicket> out) {
     (input_request, output_request)
   }
 
   // Reset discards any activation retained by this stage.
-  init { (false, zero!<SharedExecutorRequest>()) }
+  init { (false, zero!<SharedDispatchTicket>()) }
 
   // Receive and send belong to one atomic activation. Independent tokens permit
   // simultaneous transfer; state replacement waits for the held send to finish.
-  next(state: (bool, SharedExecutorRequest)) {
+  next(state: (bool, SharedDispatchTicket)) {
     let _sent = send_if(join(), output_request, state.0, state.1);
     let (_, request, valid) = recv_non_blocking(join(), input_request,
-      zero!<SharedExecutorRequest>());
+      zero!<SharedDispatchTicket>());
     (valid, if valid { request } else { state.1 })
   }
 }

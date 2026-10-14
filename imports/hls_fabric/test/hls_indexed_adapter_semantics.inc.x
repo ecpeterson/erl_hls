@@ -1903,3 +1903,233 @@ fn admission_readiness_disjoint_retirement_test() {
   assert_eq(actual.indexed_context,[admission.context,retired.indexed_context[u32:1]]);
   assert_eq(actual.indexed_candidates,[true,false]);
 }
+
+// Execute one owner clock using production helpers. Output stalls hold the whole
+// atomic activation; channel exactly-once behavior is checked by RTL replay.
+fn owned_tick(state: SharedState<u32:2, u32:3>, advance: bool)
+    -> SharedState<u32:2, u32:3> {
+  if !advance { state } else {
+    let retiring = state.completed_valid && state.indexed_retirement_valid;
+    let retired = indexed_retire_owned(state, retiring, state.completed.slot, machine(u32:7,true,true));
+    let admission = indexed_check_owned(state.indexed_input);
+    let next_input = indexed_capture_input(state, false, u32:0);
+    let updated = indexed_commit(state, retired, state.indexed_input.intent, admission);
+    let updated = indexed_refresh(state, updated, retiring, state.completed.slot, admission, false, u32:0);
+    let snapshot = indexed_capture_retirement(state);
+    SharedState<u32:2,u32:3> { indexed_input: next_input,
+      indexed_retirement_valid: snapshot.0 || (state.indexed_retirement_valid && !retiring),
+      indexed_retirement: snapshot.1,
+      completed_valid: state.completed_valid && !retiring,
+      indexed_cursor: if next_input.intent.valid {
+        if next_input.intent.producer + u32:1 == u32:3 { u32:0 } else { next_input.intent.producer + u32:1 }
+      } else { state.indexed_cursor }, ..updated }
+  }
+}
+
+// Same-actor members cannot overwrite a selected snapshot, but a second actor
+// proceeds concurrently. Check every stall placement over a twelve-clock horizon.
+#[test]
+fn owned_member_burst_and_stalls_test() {
+  let context = indexed_control(zero!<IndexedContext>(), machine(u32:7,true,true));
+  let initial = SharedState<u32:2,u32:3> {
+    indexed_context: [context,context], pending_valid:[true,true,true],
+    pending: [ScheduledRequest { slot:u32:0,frame:frame(u32:7,u32:0,u8:31),credit:false },
+      ScheduledRequest { slot:u32:0,frame:frame(u32:7,u32:1,u8:32),credit:false },
+      ScheduledRequest { slot:u32:1,frame:frame(u32:7,u32:0,u8:33),credit:false }],
+    ..zero!<SharedState<u32:2,u32:3>>() };
+  let first = indexed_push(context,initial.pending[u32:0].frame,indexed_decode(initial.pending[u32:0].frame),u32:0);
+  let second = indexed_push(first.context,initial.pending[u32:1].frame,indexed_decode(initial.pending[u32:1].frame),u32:0);
+  let other = indexed_push(context,initial.pending[u32:2].frame,indexed_decode(initial.pending[u32:2].frame),u32:1);
+  for (stall, _): (u32, ()) in u32:0..u32:12 {
+    let final = for (cycle, state): (u32, SharedState<u32:2,u32:3>) in u32:0..u32:12 {
+      let next = owned_tick(state,cycle != stall);
+      assert_eq(if cycle == stall { next == state } else { true },true);
+      next
+    }(initial);
+    assert_eq(final.pending_valid,[false,false,false]);
+    assert_eq(final.indexed_context,[second.context,other.context]);
+    assert_eq(final.indexed_candidates,[true,false]);
+  }(())
+}
+
+// A captured admission finishes before retirement snapshots that actor; a new
+// same-actor grant cannot starve retirement or observe partially committed banks.
+#[test]
+fn owned_retirement_admission_hazard_test() {
+  let context = indexed_control(zero!<IndexedContext>(), machine(u32:7,true,true));
+  let initial = SharedState<u32:2,u32:3> { indexed_context:[context,context],
+    pending_valid:[true,false,false],
+    pending:[ScheduledRequest { slot:u32:0,frame:frame(u32:7,u32:0,u8:31),credit:false },
+      zero!<ScheduledRequest>(),zero!<ScheduledRequest>()],
+    ..zero!<SharedState<u32:2,u32:3>>() };
+  let granted = owned_tick(initial,true);
+  let completed = SharedState<u32:2,u32:3> { completed_valid:true,
+    completed:ScheduledRequest { slot:u32:0,..zero!<ScheduledRequest>() },..granted };
+  assert_eq(indexed_capture_retirement(completed).0,false);
+  assert_eq(indexed_capture_input(completed,false,u32:0).intent.valid,false);
+  let admitted = owned_tick(completed,true);
+  assert_eq(admitted.indexed_retirement_valid,false);
+  let selected = owned_tick(admitted,true);
+  assert_eq(selected.indexed_retirement_valid,true);
+  assert_eq(selected.indexed_retirement.machine,zero!<ActorState>());
+  let committed = owned_tick(selected,true);
+  let expected = indexed_retire(admitted,true,u32:0,machine(u32:7,true,true));
+  assert_eq(committed.indexed_context,expected.indexed_context);
+  assert_eq(committed.completed_valid,false);
+  assert_eq(committed.indexed_candidates[u32:0],false);
+}
+
+// Stale ready bits and unsent writes cannot issue a read; reset drops every
+// owned identity and command. The mask does not depend on output-ready.
+#[test]
+fn owned_visibility_and_reset_test() {
+  let initial=zero!<SharedState<u32:2,u32:3>>();
+  assert_eq(indexed_owned_mask(initial),[false,false]);
+  let held=SharedState<u32:2,u32:3>{write_gather_valid:true,write_gather_slot:u32:1,
+    indexed_dirty:[true,false],..initial};
+  assert_eq(indexed_owned_mask(held),[true,true]);
+  assert_eq(indexed_owned_mask(zero!<SharedState<u32:2,u32:3>>()),[false,false]);
+}
+
+// Malformed input commits the same exact source fault and never a payload write.
+// A disabled owned command never inspects its deliberately invalid slot.
+#[test]
+fn owned_fault_and_disabled_test() {
+  let context=indexed_control(zero!<IndexedContext>(),machine(u32:7,true,true));
+  let good=frame(u32:7,u32:0,u8:31);
+  let bad=axis::Frame { header:axis::Header { payload_words:u8:1,..good.header },..good };
+  let owned=IndexedOwnedInput {intent:mailbox::Admission {valid:true,slot:u32:0,..zero!<mailbox::Admission>()},context,frame:bad};
+  let checked=indexed_check_owned(owned);
+  assert_eq(checked,indexed_push(context,bad,indexed_decode(bad),u32:0));
+  assert_eq(checked.write_valid,false);
+  assert_eq(indexed_failure(checked.context),hls_failure::INVALID_MESSAGE);
+  let disabled=IndexedOwnedInput {intent:mailbox::Admission {slot:u32:999,..zero!<mailbox::Admission>()},..zero!<IndexedOwnedInput>()};
+  assert_eq(indexed_check_owned(disabled),zero!<IndexedAdmission>());
+}
+
+// A result and its independent metadata arrive at one boundary. An existing
+// same-actor admission instead forces a coherent post-commit retry.
+#[test]
+fn owned_result_capture_overlap_test() {
+  let c=indexed_control(zero!<IndexedContext>(),machine(u32:7,true,true));
+  let s=SharedState<u32:2,u32:3>{indexed_context:[c,c],..zero!<SharedState<u32:2,u32:3>>()};
+  let captured=indexed_capture_result(s,true,u32:1);
+  assert_eq(captured.0,true);
+  assert_eq(captured.1,IndexedContext{machine:zero!<ActorState>(),..c});
+  let held=SharedState<u32:2,u32:3>{indexed_input:IndexedOwnedInput{
+    intent:mailbox::Admission{valid:true,slot:u32:1,..zero!<mailbox::Admission>()},..zero!<IndexedOwnedInput>()},..s};
+  assert_eq(indexed_capture_result(held,true,u32:1).0,false);
+  assert_eq(indexed_capture_result(held,true,u32:0).0,true);
+  assert_eq(indexed_capture_result(held,false,u32:999).0,false);
+}
+
+// Expanded unmasked bits do not change the physical RAM's selected write lane.
+#[test]
+fn owned_masked_command_projection_test() {
+  for (member, _): (u32, ()) in u32:0..INDEXED_CAPACITY {
+    let value=bits[INDEXED_ELEMENT_BITS]:43;
+    let reference=indexed_gather_ram::write_member<INDEXED_ELEMENT_BITS,INDEXED_CAPACITY>(u32:2,member,value);
+    let expanded=indexed_write_data(value);
+    let selected=(expanded >> (member * INDEXED_ELEMENT_BITS)) as bits[INDEXED_ELEMENT_BITS];
+    assert_eq(selected,value);
+    assert_eq(reference.mask,bits[INDEXED_CAPACITY]:1 << member);
+  }(())
+}
+
+// Exercise production preparation controls with six actors and both native
+// producer counts. Dirty/write hazards may prepare but never release a consumer.
+fn check_prepared_overlap<PRODUCERS: u32>() {
+  let initial = zero!<SharedState<u32:6, PRODUCERS>>();
+  for (slot, _): (u32, ()) in u32:0..u32:6 {
+    for (hazard, _): (u32, ()) in u32:0..u32:5 {
+      let held = SharedState<u32:6, PRODUCERS> {
+        indexed_prepared_valid: true, indexed_prepared_slot: slot,
+        indexed_dirty: update(initial.indexed_dirty, slot, hazard == u32:0),
+        write_machine_valid: hazard == u32:1, write_machine_slot: slot,
+        write_mailbox_valid: hazard == u32:2, write_mailbox_slot: slot,
+        write_gather_valid: hazard == u32:3, write_gather_slot: slot,
+        indexed_input: IndexedOwnedInput { intent:mailbox::Admission {
+          valid:hazard == u32:4,slot,..zero!<mailbox::Admission>() },..zero!<IndexedOwnedInput>() },
+        ..initial };
+      assert_eq(indexed_prepared_finish(held), false);
+      let mask = indexed_prepare_mask(held);
+      assert_eq(mask[slot], hazard == u32:4);
+      let clean = SharedState<u32:6, PRODUCERS> {
+        indexed_prepared_valid: true,indexed_prepared_slot:slot,
+        in_flight:update(initial.in_flight,slot,true),..initial };
+      assert_eq(indexed_prepared_finish(clean),true);
+      assert_eq(indexed_prepare_mask(clean)[slot],true);
+      let cancelled=indexed_prepared_in_flight(clean,clean.in_flight,true,false,false,u32:999);
+      assert_eq(cancelled,initial.in_flight);
+      assert_eq(indexed_prepared_in_flight(clean,clean.in_flight,true,true,false,u32:999),clean.in_flight);
+      let other=(slot+u32:1)%u32:6;
+      let replaced=indexed_prepared_in_flight(clean,clean.in_flight,true,false,true,other);
+      assert_eq(replaced,update(initial.in_flight,other,true));
+    }(())
+  }(())
+}
+
+// Twelve port/identity populations, including cancellation and disabled indices.
+#[test]
+fn prepared_visibility_and_ownership_test() {
+  check_prepared_overlap<u32:19>();
+  check_prepared_overlap<u32:22>();
+  let disabled=SharedState<u32:6,u32:19>{indexed_prepared_slot:u32:999,
+    ..zero!<SharedState<u32:6,u32:19>>()};
+  assert_eq(indexed_prepared_finish(disabled),false);
+  assert_eq(indexed_prepared_ticket(zero!<IndexedContext[6]>(),false,u32:999),zero!<IndexedTicket>());
+}
+
+// Captures release their producer only on commit, not when a prepared actor
+// temporarily masks them. All unrelated producers and current contexts survive.
+fn check_prepared_capture<PRODUCERS: u32>() {
+  let context=indexed_control(zero!<IndexedContext>(),machine(u32:7,true,true));
+  let pending=unroll_for! (producer, rows): (u32,ScheduledRequest[PRODUCERS]) in u32:0..PRODUCERS {
+    update(rows,producer,ScheduledRequest{slot:producer%u32:6,
+      frame:frame(u32:7,u32:0,u8:31),credit:false})
+  }(zero!<ScheduledRequest[PRODUCERS]>());
+  let valid=unroll_for! (producer, flags): (u32,bool[PRODUCERS]) in u32:0..PRODUCERS {
+    update(flags,producer,true)
+  }(zero!<bool[PRODUCERS]>());
+  let s=SharedState<u32:6,PRODUCERS>{indexed_context:[context,context,context,context,context,context],
+    indexed_prepared_valid:true,indexed_prepared_slot:u32:2,pending,pending_valid:valid,
+    ..zero!<SharedState<u32:6,PRODUCERS>>()};
+  let source=indexed_preparation_source(s,true,u32:4);
+  for (producer, _): (u32, ()) in u32:0..PRODUCERS {
+    let actor=producer%u32:6;
+    assert_eq(source.pending_valid[producer], actor != u32:2 && actor != u32:4);
+  }(());
+  assert_eq(source.pending,s.pending);
+  assert_eq(source.indexed_context,s.indexed_context);
+  for (cursor, _): (u32, ()) in u32:0..PRODUCERS {
+    let selected=indexed_capture_input(SharedState<u32:6,PRODUCERS>{indexed_cursor:cursor,..s},true,u32:4);
+    assert_eq(selected.intent.valid,true);
+    assert_eq(selected.intent.slot == u32:2 || selected.intent.slot == u32:4,false);
+  }(())
+}
+
+// Both native fan-ins keep held and newly prepared actors out of admission.
+#[test]
+fn prepared_input_capture_test() {
+  check_prepared_capture<u32:19>();
+  check_prepared_capture<u32:22>();
+}
+
+// Finalized gather mode alone supplies a live ticket and borrows its bank;
+// ordinary mode leaves a simultaneously available completion untouched.
+#[test]
+fn prepared_mode_lease_coherence_test() {
+  let c=indexed_control(zero!<IndexedContext>(),machine(u32:7,true,true));
+  let first=indexed_push(c,frame(u32:7,u32:0,u8:31),indexed_decode(frame(u32:7,u32:0,u8:31)),u32:0);
+  let second=indexed_push(first.context,frame(u32:7,u32:1,u8:32),indexed_decode(frame(u32:7,u32:1,u8:32)),u32:0);
+  let contexts=[second.context,c];
+  let selected=indexed_prepared_ticket(contexts,true,u32:0);
+  assert_eq(selected.valid,true);
+  assert_eq(selected,indexed_selected_ticket(contexts,u32:0));
+  assert_eq(indexed_prepared_ticket(contexts,false,u32:0),zero!<IndexedTicket>());
+  let s=SharedState<u32:2,u32:3>{indexed_context:contexts,..zero!<SharedState<u32:2,u32:3>>()};
+  assert_eq(indexed_issue(s,s,zero!<mailbox::Admission>(),zero!<IndexedAdmission>(),false,u32:0),s);
+  let issued=indexed_issue(s,s,zero!<mailbox::Admission>(),zero!<IndexedAdmission>(),true,u32:0);
+  assert_eq(issued.indexed_context[u32:0].consuming,true);
+  assert_eq(issued.indexed_context[u32:0].lease,selected.lease);
+}
