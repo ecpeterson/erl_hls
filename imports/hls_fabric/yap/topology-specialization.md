@@ -1,6 +1,6 @@
 # Topology specialization campaign
 
-Updated 2026-10-02. This is the implementation plan; [decoder service investigations](decoder-service-investigations.md) owns workload selection and acceptance. Indexed snapshots preserve the corrected 128-sheet RTL result and reduce mean round clocks by 25.8%. The combined follow-up (`router-head-r1/full-application-r1`) fits at 213,580 LUTs and its 10.585-ns routed period gives an 8.59% lower mean-round proxy than the original control. The routed threshold and final passive-profile checks pass; this is a throughput win with 38.92% more LUTs, not an area win.
+Updated 2026-10-14. This is the implementation plan; [decoder service investigations](decoder-service-investigations.md) owns workload selection and acceptance. Indexed snapshots preserve the corrected 128-sheet RTL result and reduce mean round clocks by 25.8%. The combined follow-up (`router-head-r1/full-application-r1`) fits at 213,580 LUTs and its 10.585-ns routed period gives an 8.59% lower mean-round proxy than the original control. The routed threshold and final passive-profile checks pass; this is a throughput win with 38.92% more LUTs, not an area win.
 
 Preserve ordinary Erlang actor source, logical identity, ordered effects, failures, finite admission and useful debug observations. Target sustained 1 MHz sheet service with bounded backlog, then reduce area at that rate. Changes remain private unless separately approved for publication; independently useful compiler APIs can be proposed publicly with generic fixtures.
 
@@ -114,6 +114,19 @@ The competing router path crosses a request FIFO’s forward-valid bypass, while
 The `scalar-opening-r1/` probe composes reservation and conditional opening on one selected bank before array writeback. Core/adapter references and the exact 128-sheet timestamped replay pass; state remains 84,090 bits. Its optimized IR removes the reconstructed-array detour but still compares bank identity with a reservation-result lease masked on failure. The registered `scalar-opening-r2/` formulation supplies known matching identity only for successful internal reservation/reuse; ordinary caller leases retain their checks. Its structural gate is removal of that redundant comparison, with zero expected cycle/state change. The competing 14.083-ns actor-cursor and 14.031-ns scalar-collection paths preclude a whole-design gain prediction. The cursor remains 32 bits for six actors, with bit nine on a routed path; a bounded representation must preserve boot, wrap and accepted-selection updates. Scalar collection also checks every producer’s bank before choosing one; fair producer-first retry would require selected-bank acceptance and cursor advancement on blocked probes, then measured retry cost.
 
 ## Related follow-ons
+
+### TE0715 deployment
+
+The reusable DMA lifecycle, split repetition-memory coordinator and passive packet/stage/private-link decoders now live outside the board runner. The remaining board work is:
+
+- [ ] Complete `check_repetition_link --memory` on the physical pair, requiring both hosts to apply local and forwarded corrections, agree on a quiet/empty step and report the six-cell logical-X result.
+- [ ] Add a paired activation epoch/reset protocol that retires stale frames and credits, resets both actor graphs and gateways and reattaches BEAM without rebooting either PS. Exercise interrupted work and mismatched peers.
+- [ ] Expose packet, scheduler-stage and private-link counters, faults and traces through a standard `hls_debug` target with selectable source tags, explicit clearing, non-destructive snapshots and drop/overflow/gap accounting.
+  - One failure-capture command should retain both roles' deployment identities, DMA status and boundary evidence while the application lane is blocked.
+- [ ] Raise the 3+3 application clock from the 12.5-MHz diagnostic setting and rerun the demo and logical-memory acceptance at each qualified rate before rebuilding the full-debug 4+4 workload.
+- [ ] Qualify the platform and link beyond bounded witnesses with DDR stress, measured FCLK, CDC/timing signoff, sustained bidirectional traffic and a stated PRBS/BER interval.
+- [ ] Add the missing `GTX_INT_INTERFACE` frame/segbits mapping to the open XC7 database, reassemble the known-good link images and audit every enabled GTX feature against the physical control.
+- [ ] Contribute the SDP72 hardware confirmation and an independent-upper-parity structural regression to Yosys issue 5409; the implementation fix is already present from release 0.65.
 
 - [ ] Package the compiled pure donor evaluator as a reusable profiling backend: derive widths from types, cache by complete source/tool/options identity, compare against the reference interpreter, and reject incomplete or unknown outputs. The bounded external experiment removes repeated interpretation without changing application RTL.
 - [ ] Compile a shared protocol summary for tag ownership, member mapping, phase/key successors and reader lifetimes; use it to verify placement obligations where possible and report remaining assertions explicitly. Retain runtime checks and warnings. Closure alone establishes none of the epoch, uniqueness, monoid or failure-elision properties.
