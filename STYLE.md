@@ -22,6 +22,14 @@ compatibility scaffolding for an obsolete internal format.
   Instead, write separate DSLX modules and import them.  Make liberal use of
   DSLX's parametricity to achieve this.
 
+## Optimization and architecture
+
+- Follow the [optimization review](docs/optimization.md): name the end-to-end objective, relevant bottleneck population, full dependencies and physical mechanism before choosing a transformation.
+- Separate required observable semantics from the current representation and scheduling policy. When the same dependency repeatedly reappears, revisit the ownership/protocol/compiler interface that creates it.
+- Recompute the required performance of competing components when latency, recurrence, buffering or resource sharing changes. A local improvement or a fixed-layout sensitivity calculation is not an end-to-end forecast.
+- Price forward work and reverse control together: validity, selection, failure, ownership, credits, commit, forwarding and observation. Adding a register does not establish independent progress.
+- Verify semantic refinement, generated dependencies and measured physical behavior separately. Fewer operations, bits or logic levels do not establish cheaper communication. Retain negative results and uncertainty; use bounded measurements to resolve credible hypotheses.
+
 ## Experimental formats and generated files
 
 - Replace obsolete internal formats directly unless compatibility is an
