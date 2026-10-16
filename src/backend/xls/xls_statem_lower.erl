@@ -7,7 +7,7 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([interface/2, lower/3, lower/4, artifact/3]).
+-export([interface/2, lower/3, lower/4, artifact/3, planned_artifact/3]).
 
 -type interface() :: map().
 
@@ -34,6 +34,20 @@ lower(Filename, Forms, Phases, Options) ->
 -doc "Lowers actor semantics to a closed artifact without choosing storage or execution placement.".
 -spec artifact(file:filename(), [hls_source:form()], [atom(), ...]) -> xls_actor_codegen:spec().
 artifact(Filename, Source, PhaseNames) ->
+    {Spec, none} = compile_artifact(Filename, Source, PhaseNames, render),
+    Spec.
+
+-doc "Returns the ordinary closed artifact and a source-bound planning sidecar from the same lowering. The sidecar preserves evaluation structure; it does not authorize reordering or projection.".
+-spec planned_artifact(file:filename(), [hls_source:form()], [atom(), ...]) ->
+    {xls_actor_codegen:spec(), xls_statem_plan:plan()}.
+planned_artifact(Filename, Source, PhaseNames) ->
+    compile_artifact(Filename, Source, PhaseNames, plan).
+
+%% Planning observes the same preparation that produces renderer input. Ordinary
+%% compilation neither builds the sidecar nor passes abstract forms to a renderer.
+-spec compile_artifact(file:filename(), [hls_source:form()], [atom(), ...], render | plan) ->
+    {xls_actor_codegen:spec(), none | xls_statem_plan:plan()}.
+compile_artifact(Filename, Source, PhaseNames, Mode) ->
     Forms0 = hls_records:resolve(Source),
     Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
@@ -83,7 +97,7 @@ artifact(Filename, Source, PhaseNames) ->
         ]
         || Record <- EmittedRecords
     ]),
-    #{
+    Spec = #{
         source => Filename,
         failure_sites => Sites,
         imports => xls_dslx_imports:from_forms(Forms),
@@ -106,7 +120,12 @@ artifact(Filename, Source, PhaseNames) ->
             Names, DataName, EnumAtoms, HasCalls, fun(C, P) -> normalize_cast_result(C, P, Names, HasCalls) end),
         reductions => Reductions,
         gathers => maps:get(gathers, Prepared, none)
-    }.
+    },
+    Plan = case Mode of
+        render -> none;
+        plan -> xls_statem_plan:build(Source, Forms, Helpers, Prepared, Spec)
+    end,
+    {Spec, Plan}.
 
 prepare_interface(Forms, PhaseNames) ->
     prepare_callbacks(Forms, declarations(Forms, PhaseNames), interface).
