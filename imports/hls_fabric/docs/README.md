@@ -12,6 +12,7 @@ Begin with [building the backend](building.md); keep retained measurements in th
 - [Distributed memory experiment](distributed-memory.md): correction application, global closeout and final measurements.
 - [Shared RTL tiles](tiles.md): one compilation with board-specific constant wrappers.
 - [Actor timing profiles](profiling.md): reusable event graphs, exact clocks and causal scope.
+- [Retained locality baseline](locality-baseline.md): reproduce the accepted Snowflake comparison design.
 - [Source quality](source-quality.md) and [style](../STYLE.md): contributor requirements.
 
 `yap/` holds implementation/qualification working material. Retained measurements, scope and reproduction evidence live in the external artifact archive.

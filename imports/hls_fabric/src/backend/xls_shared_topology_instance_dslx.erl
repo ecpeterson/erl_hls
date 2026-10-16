@@ -1,7 +1,7 @@
 %%%% A materialized topology graph with independent placement decisions.
 -module(xls_shared_topology_instance_dslx).
 -moduledoc false.
--export([required/2, artifact_requirements/2, emit/2]).
+-export([required/2, artifact_requirements/2, emit/2, message_inputs/2]).
 
 %% The compact renderer preserves generated loops for wholly direct or wholly
 %% shared families. An explicit graph is materialized: route size
@@ -24,6 +24,23 @@ artifact_requirements(Plan, Profile) ->
 -spec emit(map(),map()) -> iodata().
 emit(Plan, Profile) ->
     render(lower(Plan, Profile)).
+
+-doc "Returns physical receive lanes from the same validated lowering used by emit/2. Every lane includes all routed actor/port sources, including aliases merged by a scheduler. External ingress is explicit and supplies no actor value guarantee. Startup and credit are separate from these message lanes.".
+-spec message_inputs(map(), map()) -> [map()].
+message_inputs(Plan, Profile) ->
+    case maps:get(families, Plan) of [] -> ok; _ -> error(message_inputs_requires_exact_graph) end,
+    #{units := Units, actor_index := Actors} = lower(Plan, Profile),
+    [#{unit => Key, module => maps:get(module, Unit),
+        lanes => [begin
+            Sources = [{Id, Port} || #{source := {Id, Port}, recipients := Recipients} <- maps:get(routes, Plan),
+                maps:get(unit, maps:get(Id, Actors)) =:= Source, lists:member(Recipient, Recipients)],
+            #{producer => Producer, lane => I, source_unit => Source, recipient => Recipient,
+                slot => maps:get(slot, maps:get(element(2, Recipient), Actors), none),
+                sources => Sources, external => element(1, Source) =:= ingress}
+        end || {Producer, #{index := I, source := Source, recipient := Recipient}} <-
+            lists:enumerate(0, maps:get(inbound, Unit))]}
+        || Unit = #{unit := Key, kind := Kind} <- Units,
+            Kind =:= scheduler orelse Kind =:= direct].
 
 %% Resolves validated logical actors and routes into a renderable physical graph.
 -spec lower(map(),map()) -> map().

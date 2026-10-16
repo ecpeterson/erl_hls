@@ -89,6 +89,12 @@ jobs:
       - name: Check actor profile provenance and causal joins
         run: python3 -m unittest discover -s experiments/snowflake/actors -p 'test_*.py'
 
+      - name: Check retained locality baseline reproduction
+        run: |
+          python3 -m unittest discover -s experiments/local_admission -p test_baseline.py
+          python3 tools/build.py compile
+          python3 experiments/local_admission/baseline.py emit --stage "$RUNNER_TEMP/locality-baseline"
+
       - name: Check Zynq package mapping and resource smoke
         run: python3 experiments/07-openxc7/test_zynq7030.py
 
