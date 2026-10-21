@@ -145,7 +145,7 @@ jobs:
       - name: Prove round-robin selection and grant fairness
         run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
 
-      - name: Prove opt-in IR control identities
+      - name: Prove automatic clause-IR control identities
         run: python3 tools/test_ir_control.py "$RUNNER_TEMP/xls" --stage _build/ir-rewrites/control
 
       - name: Compare entry outcomes with BEAM and simulate RTL

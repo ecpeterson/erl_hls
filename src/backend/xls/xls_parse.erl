@@ -289,7 +289,7 @@ to_xls_gs_immediate(Filename, Forms0) ->
 to_xls_statem(Filename, Forms, PhaseNames, Options) ->
     xls_statem_lower:lower(Filename, Forms, PhaseNames, Options).
 
-%% We employ a limited IR with three kinds of objects:
+%% The clause IR retains scalar operation nodes alongside:
 %%  + static objects which admit expression in terms of the XLS runtime,
 %%  + phantom objects which do not admit expression in terms of the XLS runtime,
 %%  + snippets of XLS code.
@@ -299,14 +299,21 @@ to_xls_statem(Filename, Forms, PhaseNames, Options) ->
 %% of an Erlang type constructor to XLS's `zero!`.
 -type static() :: {static, integer, integer()} | {static, float, float()}.
 -type phantom() :: {phantom, type, hls_type:descriptor()}.
--type printable() :: [printable()] | string() | static().
--type ir() :: [ir()] | string() | phantom() | static().
+-doc "Renderable clause IR: literals, structured scalar nodes and opaque DSLX leaves.".
+-type printable() :: [printable()] | string() | static() | xls_expr_ir:expr().
+-doc "Clause values additionally admit compile-time-only type descriptors.".
+-type ir() :: [ir()] | string() | phantom() | static() | xls_expr_ir:expr().
 
+-doc "Renders clause IR recursively; structured operations are rendered only here, and phantom types are rejected.".
 -spec print(printable()) -> iolist().
 print(List) when is_list(List) ->
     lists:map(fun print/1, List);
 print(Char) when is_integer(Char) ->
     Char;
+print(Node = {xls_bits_binary, _, _, _}) ->
+    print(xls_expr_ir:render(Node));
+print(Node = {xls_integer_comparison, _, _, _}) ->
+    print(xls_expr_ir:render(Node));
 print({static, integer, Integer}) ->
     integer_to_list(Integer);
 print({static, float, Value}) ->
@@ -466,7 +473,8 @@ statement_from_statement({op, Line, Op, Left, Right}, State)
 %% Integer facts are attached before callback/helper normalization.
 statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
     {References, Evaluated} = lower_arguments([Left, Right], State),
-    instr(Evaluated, xls_comparison:emit(Op, References));
+    [LeftRef, RightRef] = References,
+    instr(Evaluated, {xls_integer_comparison, Op, LeftRef, RightRef});
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
@@ -839,7 +847,8 @@ reference(ClauseState) ->
 reference(ClauseState, Reference) ->
     ClauseState#clause_state{reference = Reference}.
 
--spec instr(clause_state(), ir()) -> clause_state().
+-doc "Allocates and emits one expression binding in the current clause.".
+-spec instr(clause_state(), printable()) -> clause_state().
 instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
     instr(
         ClauseState#clause_state{anonymous_counter = Counter + 1},
@@ -847,28 +856,35 @@ instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
         Expr
     ).
 
--spec instr(clause_state(), ir(), ir()) -> clause_state().
-instr(ClauseState, Place, Expr) ->
+-doc "Emits one binding after structured scalar simplification; preserves evaluation order, failures and the original arithmetic statements.".
+-spec instr(clause_state(), printable(), printable()) -> clause_state().
+instr(ClauseState = #clause_state{expressions = Definitions}, Place, Expr) ->
+    Lowered = case Expr of
+        {xls_bits_binary, _, _, _} -> xls_ir_control:simplify(Expr, Definitions);
+        {xls_integer_comparison, _, _, _} -> xls_ir_control:simplify(Expr, Definitions);
+        _ -> Expr
+    end,
     % TODO: we should admit structured `Place`s in reference and print them in statements
     ClauseState#clause_state{
         reference = Place,
-        statements = [["let ", Place, " = ", Expr, ";\n"] | ClauseState#clause_state.statements]
+        expressions = xls_expr_ir:remember(Place, Lowered, Definitions),
+        statements = [["let ", Place, " = ", Lowered, ";\n"] | ClauseState#clause_state.statements]
     }.
 
 %%%
 %%% Dictionaries for built-in calls
 %%%
 
--spec op(Op :: atom(), Args :: [any()]) -> iolist().
--doc "Translates a built-in Erlang op to an XLS op.".
-op('+', [Left, Right]) -> [Left, " + ", Right];
-op('-', [Left, Right]) -> [Left, " - ", Right];
+-spec op(Op :: atom(), Args :: [printable()]) -> printable().
+-doc "Builds arithmetic nodes for add/sub/xor; other supported built-ins retain their existing DSLX lowering.".
+op('+', [Left, Right]) -> {xls_bits_binary, '+', Left, Right};
+op('-', [Left, Right]) -> {xls_bits_binary, '-', Left, Right};
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
 op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
-op('bxor', [Left, Right]) -> [Left, " ^ ", Right];
+op('bxor', [Left, Right]) -> {xls_bits_binary, 'bxor', Left, Right};
 op('bnot', [Operand]) -> ["!", Operand];
 op('not', [Operand]) -> ["!", Operand];
 op('<', [Left, Right]) -> [Left, " < ", Right];

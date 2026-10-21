@@ -4,6 +4,8 @@
 
 For a communicating graph, normalize the source topology with `hls_topology`, obtain module requirements from `xls_topology_dslx:artifact_requirements/2`, translate those actors, then emit the graph with `xls_topology_dslx:emit/2`. The physical profile controls channel and egress capacities. See [topology semantics](mixed-topologies.md).
 
+Scalar clause lowering retains arithmetic and comparison nodes until DSLX rendering. Exact [control simplifications](ir-control.md) run automatically within that IR; target-dependent circuit topology remains an XLS concern.
+
 ## Alternate execution bodies
 
 Compiler extensions can call `xls_parse:actor_artifact(Path, SourceOptions)` for a validated `hls_statem` artifact. It contains initialization, typed dispatch, ordered effects, internal events, retained replies, reductions and failure origins. Unsupported actor kinds are rejected explicitly.
