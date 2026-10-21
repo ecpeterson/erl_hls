@@ -8,8 +8,8 @@
 -define(CONTROL_ENDPOINT, 7).
 -define(FIRST_EVENT_ENDPOINT, 8).
 
--doc "A typed record addressed to one ingress target within inclusive global bounds.".
--type command() :: {atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()}.
+-doc "A typed rectangle record, or start for every explicitly activated device. Start admission is distinct from the returned started event.".
+-type command() :: start | {atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()}.
 
 -doc "Derives fixed control/event endpoints and a per-device SHA-256 identity covering placement, startup and wire bindings.".
 -spec deployment(map()) -> map().
@@ -44,9 +44,14 @@ external(#{actors := Actors, routes := Routes}, Device, #{id := Id, port := Port
     end || {Module, Output} <- Producers]),
     #{id => Id, port => Port, schemas => maps:from_list(Schemas)}.
 
--doc "Validates a complete rectangle command before returning ordered routed packets for its selected devices.".
+-doc "Validates a rectangle command or explicit start before returning routed packets. Start targets every bound device; the stream client separately enforces single-use admission.".
 -spec command(map(), command()) ->
     [{term(), hls_fabric:route(), hls_fabric:header(), binary()}].
+command(#{devices := Devices}, start) ->
+    [begin
+        #{activation := explicit_start, host := Host, control := Control} = Binding,
+        {Device, {Host, Control}, {3, 0, 0}, <<0:32>>}
+    end || {Device, Binding} <- lists:sort(maps:to_list(Devices))];
 command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds, Message}) ->
     [begin
         #{host := Host, control := Control, ingress := Ingress} = maps:get(Device, Devices),
@@ -56,8 +61,10 @@ command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds,
         {Device, {Host, Control}, {2, 0, 0}, Bytes}
     end || {Device, Packet} <- hls_partition_ingress:commands(Partition, Ingress, Target, Bounds, Message)].
 
--doc "Decodes a bound external record, rejecting wrong routes, headers, lengths and nonzero codec padding.".
+-doc "Decodes a bound external record or canonical application started reply, rejecting wrong routes, headers, lengths and nonzero codec padding. The stream client checks that activation was requested.".
 -spec event(map(), hls_fabric:route(), hls_fabric:header(), binary()) -> {atom(), tuple()}.
+event(#{activation := explicit_start, host := Host, control := Control},
+        {Control, Host}, {16#83, 0, 0}, <<0:32>>) -> {application, {started}};
 event(#{host := Host, events := Events}, {Endpoint, Host}, {Tag, 0, 0}, Payload) ->
     #{id := Id, schemas := Schemas} = maps:get(Endpoint, Events),
     #{module := Module, name := Name, width := Width} = maps:get(Tag, Schemas),

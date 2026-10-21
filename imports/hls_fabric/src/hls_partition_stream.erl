@@ -3,7 +3,10 @@
 One owner's bounded, ordered control/event connection to a partition.
 
 Attachment verifies both gateways before returning. Submission acknowledges
-host queue admission, not device execution. `next/2` releases receive credit
+host queue admission, not device execution. Submitting `start` orders activation
+after earlier setup; `{ok, Device, application, {started}}` confirms the device
+accepted activation. It is not a global barrier or a completion fence for later work.
+`next/2` releases receive credit
 only when returning an event; its timeout cannot abandon a later reply.
 Transport or protocol failure ends the connection without replay. Stopping
 retires its routes but does not reset hardware: replacement requires a reset
@@ -18,7 +21,7 @@ covering both graphs, gateways, links and transport buffers.
 start_link(Deployment, Brokers, Options) ->
     gen_server:start_link(?MODULE, {self(), Deployment, Brokers, Options}, []).
 
--doc "Admits a whole command batch or returns busy before sending any part. Delivery across devices is not atomic.".
+-doc "Admits a whole command batch or returns busy before sending any part. start is single-use per explicit-start connection; its admission does not acknowledge activation. Delivery across devices is not atomic.".
 -spec submit(pid(), hls_partition_wire:command()) -> {ok, non_neg_integer()} | {error, term()}.
 submit(Pid, Command) -> gen_server:call(Pid, {submit, Command}, infinity).
 
@@ -27,7 +30,7 @@ submit(Pid, Command) -> gen_server:call(Pid, {submit, Command}, infinity).
 next(Pid, Timeout) when is_integer(Timeout), Timeout >= 0 ->
     gen_server:call(Pid, {next, Timeout}, infinity).
 
--doc "Reports host queue/receipt occupancy and write/event counts without device traffic.".
+-doc "Reports host queue/receipt occupancy, write/event counts and per-device activation state without device traffic. Only a canonical started reply marks running.".
 -spec info(pid()) -> map().
 info(Pid) -> gen_server:call(Pid, info).
 
@@ -61,6 +64,12 @@ init({Owner, Deployment = #{devices := Devices}, Brokers, Options}) ->
         Monitor = monitor(process, Owner),
         {ok, Settings#{owner => Owner, owner_monitor => Monitor, deployment => Deployment,
             sessions => Sessions, routes => Routes, queues => maps:map(fun(_, _) -> queue:new() end, Devices),
+            activation => maps:map(fun(_, B) ->
+                case maps:get(activation, B, automatic) of
+                    explicit_start -> configured;
+                    automatic -> automatic
+                end
+            end, Devices),
             active => #{}, pending => 0, events => queue:new(), waiter => none,
             written => 0, received => 0, delivered => 0}}
     catch Class:Reason ->
@@ -96,17 +105,23 @@ attach(Session, #{host := Host, control := Control, identity := Identity}, Timeo
 -spec handle_call(term(), gen_server:from(), map()) -> {reply, term(), map()} | {noreply, map()}.
 %% Inspection remains available while writes or the event consumer are stalled.
 handle_call(info, _From, State = #{events := Events}) ->
-    {reply, (maps:with([pending, written, received, delivered], State))#{buffered => queue:len(Events)}, State};
+    {reply, (maps:with([pending, written, received, delivered, activation], State))#{buffered => queue:len(Events)}, State};
 %% Foreign callers cannot consume another owner's data or order its commands.
 handle_call(_Request, {Caller, _}, State = #{owner := Owner}) when Caller =/= Owner ->
     {reply, {error, not_owner}, State};
 %% Validate and reserve the complete batch before any device receives a frame.
 handle_call({submit, Command}, _From, State = #{deployment := Deployment, pending := Pending, queue_limit := Limit}) ->
-    Checked = try {ok, hls_partition_wire:command(Deployment, Command)}
+    Checked = try
+        ok = admit_start(Command, maps:get(activation, State)),
+        {ok, hls_partition_wire:command(Deployment, Command)}
         catch error:Reason -> {error, {invalid_command, Reason}} end,
     case Checked of
         {ok, Packets} when length(Packets) + Pending =< Limit ->
-            Next = lists:foldl(fun enqueue/2, State, Packets),
+            Admitted = case Command of
+                start -> State#{activation := maps:map(fun(_, _) -> start_pending end, maps:get(activation, State))};
+                _ -> State
+            end,
+            Next = lists:foldl(fun enqueue/2, Admitted, Packets),
             {reply, {ok, length(Packets)}, pump(Next)};
         {ok, _} -> {reply, {error, busy}, State};
         Error -> {reply, Error, State}
@@ -126,9 +141,12 @@ handle_call(_, _From, State) -> {reply, {error, bad_request}, State}.
 handle_cast({'$hls_fabric_frame', Receipt, Route, Header, Payload},
         State = #{routes := Routes, deployment := #{devices := Devices}, events := Events, received := Count}) ->
     {Device, Session} = maps:get(Route, Routes),
-    try hls_partition_wire:event(maps:get(Device, Devices), Route, Header, Payload) of
-        {Stream, Event} ->
-            Next = State#{events := queue:in({Device, Stream, Event, Session, Receipt}, Events), received := Count+1},
+    try
+        {Stream0, Event0} = hls_partition_wire:event(maps:get(Device, Devices), Route, Header, Payload),
+        {Stream0, Event0, accept_start(Device, Route, Header, State)}
+    of
+        {Stream, Event, Accepted} ->
+            Next = Accepted#{events := queue:in({Device, Stream, Event, Session, Receipt}, Events), received := Count+1},
             {noreply, deliver(Next)}
     catch error:Reason ->
         ok = hls_fabric:ack(Session, Receipt),
@@ -213,3 +231,25 @@ deliver(State) -> State.
 -spec close_sessions(map()) -> ok.
 close_sessions(Sessions) ->
     maps:foreach(fun(_, Session) -> catch hls_fabric:stop(Session) end, Sessions), ok.
+
+%% Duplicate start is rejected before queue admission; ordinary commands remain ordered.
+-spec admit_start(hls_partition_wire:command(), map()) -> ok.
+admit_start(start, Activation) ->
+    case map_size(Activation) > 0 andalso lists:all(fun(S) -> S =:= configured end, maps:values(Activation)) of
+        true -> ok;
+        false -> error(start_unavailable)
+    end;
+admit_start(_, _) -> ok.
+
+%% A write receipt cannot mark running; only the bound control route can.
+-spec accept_start(term(), hls_fabric:route(), hls_fabric:header(), map()) -> map().
+accept_start(Device, Route, Header, State = #{activation := Activation, deployment := #{devices := Devices}}) ->
+    #{host := Host, control := Control} = maps:get(Device, Devices),
+    case {Route, Header} of
+        {{Control, Host}, {16#83, 0, 0}} ->
+            case maps:get(Device, Activation) of
+                start_pending -> State#{activation := Activation#{Device := running}};
+                _ -> error(unexpected_start_response)
+            end;
+        _ -> State
+    end.

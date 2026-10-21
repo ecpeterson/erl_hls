@@ -16,6 +16,7 @@ pub struct ReceiveState {
   seen: u4,
   bad: bool,
   attached: bool,
+  start_requested: bool,
   poisoned: bool,
 }
 
@@ -36,9 +37,10 @@ fn spatial(payload: bits[256]) -> hls_spatial_router::SpatialFrame {
 
 // Accept only complete frames from this binding. Rejection drains to TLAST,
 // including overlong packets; saturating assembly cannot wrap back to valid.
-pub fn receive_step(
-    state: ReceiveState, beat: axis::Beat, identity: bits[256], host: u16, service: u16
-) -> (ReceiveState, bool, bool, bool, hls_spatial_router::SpatialFrame) {
+pub fn receive_ordered_step(
+    state: ReceiveState, beat: axis::Beat, identity: bits[256], host: u16, service: u16,
+    explicit_start: bool
+) -> (ReceiveState, bool, bool, bool, bool, hls_spatial_router::SpatialFrame) {
   let next = match state.stage {
     u2:0 => ReceiveState { stage: u2:1,
       bad: beat.word != (host ++ service), ..state },
@@ -71,11 +73,22 @@ pub fn receive_step(
     frame.frame.header.flags == u8:0 && frame.frame.header.txid == u8:0 &&
     next.payload[66+:bits[30]] == bits[30]:0 &&
     frame.rectangle.x0 <= frame.rectangle.x1 && frame.rectangle.y0 <= frame.rectangle.y1;
-  let fault = beat.tlast && !state.poisoned && !(attach || control);
+  let start = complete && explicit_start && state.attached && !state.start_requested &&
+    state.header.op == u8:3 && state.header.payload_words == u8:1 && next.payload == bits[256]:0;
+  let fault = beat.tlast && !state.poisoned && !(attach || control || start);
   let next = if beat.tlast {
     ReceiveState { attached: state.attached || attach,
+      start_requested: state.start_requested || start,
       poisoned: state.poisoned || fault, ..zero!<ReceiveState>() }
   } else { next };
+  (next, attach, control, start, fault, frame)
+}
+
+// Automatic-activation gateways reject start; their existing command ABI is unchanged.
+pub fn receive_step(
+    state: ReceiveState, beat: axis::Beat, identity: bits[256], host: u16, service: u16
+) -> (ReceiveState, bool, bool, bool, hls_spatial_router::SpatialFrame) {
+  let (next, attach, control, _, fault, frame) = receive_ordered_step(state, beat, identity, host, service, false);
   (next, attach, control, fault, frame)
 }
 
@@ -130,7 +143,11 @@ pub fn transmit_beat(state: TransmitState, host: u16) -> axis::Beat {
 pub fn transmitted(state: TransmitState, service: u16) -> TransmitState {
   let last = state.index as u8 == state.frame.header.payload_words + u8:1;
   let started = if last && state.source == service {
-    state.frame.header.op == u8:0x81
+    match state.frame.header.op {
+      u8:0x81 => true,
+      u8:0xff => false,
+      _ => state.started,
+    }
   } else { state.started };
   TransmitState { started, sending: !last, index: state.index + u4:1, ..state }
 }
@@ -178,5 +195,64 @@ pub proc Boundary<N: u32, ID0: u64, ID1: u64, ID2: u64, ID3: u64, HOST: u16, SER
     ()
   }
   init { () }
+  next(state: ()) { state }
+}
+
+// One ordered output carries setup and start, so separate channel buffering
+// cannot let activation overtake an earlier rectangle command.
+pub struct OrderedCommand {
+  start: bool,
+  frame: hls_spatial_router::SpatialFrame,
+}
+
+// Start acknowledgment follows the downstream activation handshake, not send
+// admission. Reset cancels partial input, queued start and any pending reply.
+pub proc ReceiveOrdered<ID0: u64, ID1: u64, ID2: u64, ID3: u64, HOST: u16, SERVICE: u16> {
+  input: chan<axis::Beat> in;
+  commands: chan<OrderedCommand> out;
+  started: chan<bool> in;
+  management: chan<axis::FrameN<u32:8>> out;
+  // The started channel must acknowledge actual application activation.
+  config(input: chan<axis::Beat> in, commands: chan<OrderedCommand> out,
+      started: chan<bool> in, management: chan<axis::FrameN<u32:8>> out) {
+    (input, commands, started, management)
+  }
+  // Reset requires fresh attachment and cancels a pending completion wait.
+  init { (zero!<ReceiveState>(), false) }
+  // Completion waits in a separate activation so output acceptance and its
+  // returned acknowledgment do not form a same-activation scheduling cycle.
+  next(state: (ReceiveState, bool)) {
+    let identity = ID3 ++ ID2 ++ ID1 ++ ID0;
+    let waiting = state.1;
+    let (tok, beat) = recv_if(join(), input, !waiting, zero!<axis::Beat>());
+    let (tok, accepted) = recv_if(tok, started, waiting, false);
+    let (parsed, attach, valid, start, fault, frame) = receive_ordered_step(state.0, beat, identity, HOST, SERVICE, true);
+    let tok = send_if(tok, commands, !waiting && (valid || start), OrderedCommand { start, frame });
+    let reply = if waiting && accepted {
+      axis::FrameN<u32:8> { header: axis::Header {
+        op: u8:0x83, payload_words: u8:1, ..zero!<axis::Header>() }, payload: bits[256]:0 }
+    } else { response(!waiting && attach, identity) };
+    let _done = send_if(tok, management, waiting || attach || fault, reply);
+    if waiting {
+      (ReceiveState { poisoned: state.0.poisoned || !accepted, ..state.0 }, false)
+    } else { (parsed, start) }
+  }
+}
+
+// Reuse attachment, framing and fair event serialization for an explicitly
+// activated network. The external command bridge owns the activation barrier.
+pub proc OrderedBoundary<N: u32, ID0: u64, ID1: u64, ID2: u64, ID3: u64, HOST: u16, SERVICE: u16> {
+  // Connect one ordered command stream and a completion channel from the network.
+  config(input: chan<axis::Beat> in, output: chan<axis::Beat> out,
+      commands: chan<OrderedCommand> out, started: chan<bool> in,
+      events: chan<axis::Frame>[N] in) {
+    let (management_p, management_c) = chan<axis::FrameN<u32:8>, u32:1>("management");
+    spawn ReceiveOrdered<ID0, ID1, ID2, ID3, HOST, SERVICE>(input, commands, started, management_p);
+    spawn Transmit<N, HOST, SERVICE>(management_c, events, output);
+    ()
+  }
+  // All protocol state belongs to the shared receiver and transmitter.
+  init { () }
+  // The structural wrapper has no independent activation or packet state.
   next(state: ()) { state }
 }

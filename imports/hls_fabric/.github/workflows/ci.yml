@@ -137,6 +137,7 @@ jobs:
         run: |
           python3 tools/test_partition_io.py "$RUNNER_TEMP/xls"
           python3 tools/test_partition_io.py "$RUNNER_TEMP/xls" --tile --stage _build/partition-tile-io
+          python3 tools/test_partition_io.py "$RUNNER_TEMP/xls" --ordered --stage _build/partition-ordered-io
       - name: Exercise actor PIDs and public debug queries against generated RTL
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_actor_rtl.py "$RUNNER_TEMP/xls" --stage _build/actor-pids
@@ -175,6 +176,8 @@ jobs:
             _build/async-fifo/report.json
             _build/partition-io/*.log
             _build/partition-io/provenance.json
+            _build/partition-ordered-io/*.log
+            _build/partition-ordered-io/provenance.json
             _build/partition-peers/*.log
             _build/partition-peers/provenance.json
             _build/scheduler-ingress/**/*.log

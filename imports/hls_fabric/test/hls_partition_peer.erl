@@ -38,6 +38,10 @@ handle_call({session, Session, {register_route, Route, Owner}}, _From, State = #
 handle_call({session, _, {send, {Host, Control}, {1, 0, 0}, _Identity, _Deadline}}, _From,
         State = #{binding := #{host := Host, control := Control, identity := Identity}}) ->
     {reply, ok, output({{Control, Host}, {16#81, 0, 0}, Identity}, State)};
+%% A start write is observable, but only an explicitly injected hardware reply confirms activation.
+handle_call({session, _, {send, Route, {3, 0, 0}, <<0:32>>, _Deadline}}, _From,
+        State = #{controls := Controls}) ->
+    {reply, ok, State#{controls := [{start, Route} | Controls]}};
 %% Controlled write outcomes exercise admission retries separately from ambiguous delivery.
 handle_call({session, _, {send, Route, {2, 0, 0}, Bytes, Deadline}}, From,
         State = #{mode := Mode, controls := Controls, held := Held}) ->

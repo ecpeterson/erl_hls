@@ -14,18 +14,21 @@ ROOT = Path(__file__).resolve().parents[1]
 def run(args: argparse.Namespace) -> None:
     """Retain source/tool hashes beside generated RTL and the protocol witness."""
     stage, public, xls = args.stage, args.erl_hls, args.xls
+    fixture = "partition_ordered_io.x" if args.ordered else "partition_tile_io.x" if args.tile else "partition_io.x"
+    top = "partition_ordered_io_tb" if args.ordered else "partition_io_tb"
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "priv/xls/hls_partition_io.x", ROOT / ("test/xls/partition_tile_io.x" if args.tile else "test/xls/partition_io.x"),
+    sources = [ROOT / "priv/xls/hls_partition_io.x", ROOT / "test/xls" / fixture,
                ROOT / "priv/xls/hls_partition_tile_io.x",
                public / "priv/xls/lib/axis.x", public / "priv/xls/fabric/hls_spatial_router.x"]
-    bench = ROOT / "test/rtl/partition_io_tb.sv"
-    tracked = sources + [bench, Path(__file__), ROOT / "tools/test_actor_rtl.py"]
+    bench = ROOT / "test/rtl" / (top + ".sv")
+    bridges = [ROOT / "priv/rtl/hls_partition_activation.sv"] if args.ordered else []
+    tracked = sources + bridges + [bench, Path(__file__), ROOT / "tools/test_actor_rtl.py"]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [Path(shutil.which(name)).resolve() for name in ("iverilog", "vvp")]
     inputs = {str(path): digest(path) for path in tracked}
     for path in sources:
-        shutil.copy(path, stage / ("partition_io.x" if path.name == "partition_tile_io.x" else path.name))
+        shutil.copy(path, stage / ("partition_io.x" if path.name == fixture else path.name))
     commands = [
         ("convert", [str(xls / "ir_converter_main"), "--top=Top", "--warnings_as_errors=false",
                      "--dslx_path=.", f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}", "partition_io.x"], stage / "io.ir"),
@@ -35,10 +38,10 @@ def run(args: argparse.Namespace) -> None:
                      "--reset=reset", "--fifo_module=", "--module_name=partition_io", "io.opt.ir"], stage / "io.v")]
     for name, command, output in commands:
         execute(command, stage, name, timeout=300, output=output)
-    execute(["iverilog", *(["-DPARTITION_TILE"] if args.tile else []), "-g2012", "-s", "partition_io_tb", "-o", "io.vvp", str(bench), "io.v"], stage, "iverilog")
+    execute(["iverilog", *(["-DPARTITION_TILE"] if args.tile else []), "-g2012", "-s", top, "-o", "io.vvp", str(bench), *map(str, bridges), "io.v"], stage, "iverilog")
     execute(["vvp", "io.vvp"], stage, "simulation", timeout=30)
     result = (stage / "simulation.log").read_text()
-    if "PASS: routed gateway" not in result:
+    if ("PASS: ordered setup/start" if args.ordered else "PASS: routed gateway") not in result:
         raise RuntimeError("gateway simulation did not reach its assertions")
     if inputs != {str(path): digest(path) for path in tracked}:
         raise RuntimeError("gateway inputs changed during compilation")
@@ -52,7 +55,9 @@ def main() -> None:
     """Resolve tool and output paths before starting a fresh regression."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls", type=Path)
-    parser.add_argument("--tile", action="store_true", help="exercise wrapper-bound configuration using the same protocol checks")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--ordered", action="store_true", help="exercise explicit ordered start and actual activation acknowledgment")
+    modes.add_argument("--tile", action="store_true", help="exercise wrapper-bound configuration using the same protocol checks")
     parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/partition-io")
     args = parser.parse_args()

@@ -52,6 +52,14 @@ Attachment compares each gateway's SHA-256 deployment identity before returning.
 
 The default limit is 128 queued/in-progress frames across the selected devices. `write_timeout` defaults to 10000 ms from admission. Only broker rejections guaranteeing non-transmission are retried, preserving the original deadline. Event consumption and inspection remain available while writes stall.
 
+## Explicit activation
+
+An application with setup-dependent startup can use `hls_partition_io::OrderedBoundary` and declare `activation => explicit_start` in each matching device binding. The application binding must include this protocol choice in its deployment identity. The ordinary generated wrapper still uses automatic activation; changing its host map alone does not add an activation barrier to that hardware.
+
+Submit setup rectangles first, then `hls_partition_stream:submit(Stream, start)`. Start is single-use per connection and targets every bound device; all devices must support explicit activation. A busy rejection leaves start available for retry. The gateway carries setup and start on one ordered command channel. `priv/rtl/hls_partition_activation.sv` splits that channel at the application boundary; the application's `start_ready` must assert only after earlier setup has drained. The bridge acknowledges the actual start handshake, and the gateway returns `{ok, Device, application, {started}}` through the credited event stream. Host admission or write completion is not activation. Each device starts independently; this is not a simultaneous cross-device barrier.
+
+`info/1` reports each binding as `automatic`, `configured`, `start_pending` or `running`; only a canonical started reply marks running. Duplicate requests are rejected before transmission. Unsolicited, duplicate or malformed replies retire the connection. Coordinated reset must cover the gateway, activation bridge, application and transport before reattachment; it cancels partially received commands and pending starts/replies.
+
 ## Module responsibilities
 
 “Wire” and “stream” describe different layers of this same connection:
@@ -99,6 +107,8 @@ All beats are complete little-endian 32-bit words with exact packet termination:
 | Attach | `1` | Eight identity words |
 | Attach acknowledgment | `0x81` | The same identity |
 | Rectangle command | `2` | Two coordinate words, target word, actor header, then actor payload |
+| Start (explicit activation only) | `3` | One zero word |
+| Started acknowledgment | `0x83` | One zero word, after application activation |
 | Protocol fault | `0xff` | Code `1`; control remains disabled until reset |
 
 Coordinates are `x0,y0,x1,y1` as successive little-endian `u16`s. The target occupies the low two bits of its word; other bits are zero. The actor header carries its selector and payload-word count. Transaction IDs and flags are zero. External events retain their generated actor header/payload.
