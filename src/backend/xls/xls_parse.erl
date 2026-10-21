@@ -856,19 +856,14 @@ instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
         Expr
     ).
 
--doc "Emits one binding after structured scalar simplification; preserves evaluation order, failures and the original arithmetic statements.".
+-doc "Emits and records one binding without rewriting its expression; preserves evaluation order and failure tracking.".
 -spec instr(clause_state(), printable(), printable()) -> clause_state().
 instr(ClauseState = #clause_state{expressions = Definitions}, Place, Expr) ->
-    Lowered = case Expr of
-        {xls_bits_binary, _, _, _} -> xls_ir_control:simplify(Expr, Definitions);
-        {xls_integer_comparison, _, _, _} -> xls_ir_control:simplify(Expr, Definitions);
-        _ -> Expr
-    end,
     % TODO: we should admit structured `Place`s in reference and print them in statements
     ClauseState#clause_state{
         reference = Place,
-        expressions = xls_expr_ir:remember(Place, Lowered, Definitions),
-        statements = [["let ", Place, " = ", Lowered, ";\n"] | ClauseState#clause_state.statements]
+        expressions = xls_expr_ir:remember(Place, Expr, Definitions),
+        statements = [["let ", Place, " = ", Expr, ";\n"] | ClauseState#clause_state.statements]
     }.
 
 %%%
