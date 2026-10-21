@@ -175,6 +175,9 @@ jobs:
       - name: Compare mixed-width integers with BEAM, JIT, and RTL
         run: bash tools/test_comparisons.sh "$RUNNER_TEMP/xls"
 
+      - name: Prove opt-in prefix arithmetic rewrites
+        run: python3 tools/test_ir_arithmetic.py "$RUNNER_TEMP/xls" --stage _build/ir-rewrites/arithmetic
+
       - name: Compare wrapping counters with BEAM, JIT, and RTL
         run: bash tools/test_serial.sh "$RUNNER_TEMP/xls"
 
@@ -312,6 +315,7 @@ jobs:
             _build/actor-debug/**
             _build/actor-snapshot-formal/**
             _build/arbitration/**
+            _build/ir-rewrites/**
             _build/actor-outboxes/**
             _build/mailbox-debug/**
             _build/direct-mailbox-debug/**
