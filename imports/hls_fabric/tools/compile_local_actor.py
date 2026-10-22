@@ -1,4 +1,4 @@
-"""Compile an emitted source actor's DSLX owner into a sampled-clock RTL module."""
+"""Compile an emitted ordinary or sender-local inbox actor owner into sampled-clock RTL."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -16,18 +16,19 @@ def digest(path: Path) -> str:
 def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | None = None) -> None:
     """Require the emitted source identity, create fresh products, and retain failed tool diagnostics.
 
+    The selected manifest clock_proc is the ordinary or source-bound inbox owner.
     The resulting local_actor module has packed _commands/_observations ports;
     tie _commands_vld and _observations_rdy high on every clock. This scheduling
     contract makes source-level output_ready independent of XLS channel stalls.
     """
     manifest = json.loads(Path(str(source) + '.json').read_text())
-    if manifest['dslx_sha256'] != digest(source) or manifest['clock_proc'] != 'local_owner_clock':
+    if manifest['dslx_sha256'] != digest(source) or manifest['clock_proc'] not in ['local_owner_clock', 'local_inbox_clock']:
         raise ValueError('changed or unsupported actor source')
     output.mkdir()
     paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
                               PUBLIC/'priv/xls/lib', PUBLIC/'priv/xls/fabric', *(imports or [])]))
     commands = [
-        ('convert', [xls/'ir_converter_main', '--warnings_as_errors=false', '--top=local_owner_clock',
+        ('convert', [xls/'ir_converter_main', '--warnings_as_errors=false', '--top='+manifest['clock_proc'],
                      '--dslx_path='+paths, '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), source], 'raw.ir'),
         ('opt', [xls/'opt_main', output/'raw.ir'], 'optimized.ir'),
         ('codegen', [xls/'codegen_main', '--pipeline_stages=1', '--delay_model=unit',

@@ -6,6 +6,8 @@ import json
 import os
 import subprocess
 
+from test_protocol_inbox import lower_receivers
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -199,6 +201,8 @@ def main() -> None:
     run(['bash','tools/emit_protocol_transport.sh',args.xls,config,fixture],stage,'reject-existing',accepted=False)
     assert retained == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
     applications = []
+    receiver_shapes: set[tuple] = set()
+    receiver_lowerings = lower_receivers(args.xls, fixture, stage, receiver_shapes)
     for name, n, topology, expected in [('repetition',2,'phi_repetition_topology',6),('repetition',3,'phi_repetition_topology',9),('repetition',6,'phi_repetition_topology',18),('noise',3,'phi_noise_topology',54)]:
         key = f'{name}-{n}'
         modules = (['phi_line_cell','phenom_line_data_cell','phenom_line_syndrome_cell'] if name=='repetition'
@@ -212,8 +216,10 @@ def main() -> None:
         report = json.loads((output/'summary.json').read_text())
         assert report['actors']==expected and report['eligible'] is False
         run(['iverilog','-g2012','-s','protocol_fabric','-o',output/'elaborated.vvp','-f',output/'files.f'],stage,'elaborate-'+key)
+        receiver_lowerings += lower_receivers(args.xls, output, stage, receiver_shapes)
         applications.append({'name':key,'actors':expected,'links':report['links']})
     (stage/'result.json').write_text(json.dumps({'passed':True,'applications':applications,
+        'receiver_shapes_lowered':receiver_lowerings,
         'evidence':'finite_transport_witness_and_application_elaboration','negative_builds':len(negatives)+1,'application_admitted':False},indent=2)+'\n')
     print((stage/'simulation.log').read_text().strip())
 

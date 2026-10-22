@@ -79,9 +79,26 @@ def main() -> None:
     assert actor == role['manifest']
     source = summary['source_plans'][role['module']]
     assert source == {key: actor['source_plan'][key] for key in source}
-    assert len(list((transport / 'actors').glob('*.x'))) == 1
+    assert actor['clock_proc'] == 'local_owner_clock'
+    receivers = summary['receivers']
+    assert [receiver['index'] for receiver in receivers] == [0, 1, 2]
+    expected_files = {role['file']}
+    ordinary = (transport / role['file']).read_bytes()
+    for receiver in receivers:
+        assert receiver['module'] == role['module']
+        output = transport / receiver['file']
+        bound = manifest(output)
+        assert bound == receiver['manifest']
+        assert bound['source_plan'] == actor['source_plan']
+        assert bound['clock_proc'] == 'local_inbox_clock'
+        assert output.read_bytes().startswith(ordinary)
+        expected_files.add(receiver['file'])
+    # One shared ordinary definition plus one bound receiver per instance; no extras.
+    actual_files = {str(p.relative_to(transport)) for p in (transport / 'actors').glob('*.x')}
+    assert len(expected_files) == 4 and actual_files == expected_files
     (stage / 'result.json').write_text(json.dumps({'passed': True, 'single_actor': standalone['source_plan'],
         'transport_actor_instances': 3, 'transport_function_definitions': 1,
+        'transport_receiver_definitions': len(receivers),
         'same_source_plan': True, 'actor_runtime': False, 'negative_builds': 4}, indent=2) + '\n')
 
 

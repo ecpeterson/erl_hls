@@ -1,6 +1,6 @@
 -module(hls_protocol_inbox).
 -moduledoc "Groups typed capture channels by logical sender and destination. Per-pair delivery precedence preserves selective receive without inventing cross-sender chronology.".
--export([plan/1]).
+-export([plan/1, attach/3]).
 
 -doc "Plans independent sender/destination histories over exact typed capture channels. Channels from distinct ports of one sender share a history; separate senders do not. Each pending channel currently has one slot, so a repeated send must wait for its lease to be released. This establishes neither sufficient application capacity nor transport deadlock freedom; whole-protocol eligibility remains false.".
 -spec plan(map()) -> map().
@@ -28,3 +28,63 @@ pair({Source,Destination},Channels) ->
       parameters=>#{slots=>length(Channels)},
       arrival_contract=>one_accepted_message_per_clock_in_sender_order,
       reuse_contract=>capture_credit_and_absent_pending_message}.
+
+-doc "Attaches a DSLX inbox owner to a fresh ordinary actor artifact for its exact incoming links. Reconstructs the destination schema from source-bound captures, selects among pair-local eligible heads, retains a reservation through source completion, and delays release one clock after consume. Each transport pair must preserve sender order, stable pending payloads and the supplied eligibility mask; all connected owners must share reset. This trusted build API rejects more than 256 physical slots and establishes no capacity or network progress. The artifact is written/compiled through the ordinary actor commands.".
+-spec attach(hls_local_actor:artifact(), [map()], map()) -> hls_local_actor:artifact().
+attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=Channels}) ->
+    Rows=lists:append([[begin
+        [Op]=[N||{N,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
+        [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
+        #{link=>I,slot=>K,width=>lists:nth(K+1,Widths),
+          payload_offset=>lists:sum(lists:sublist(Widths,K)),
+          codec=>hls_protocol_codec:plan(Channel,Op)}
+    end||#{index:=K,channel:=C}<-Slots]
+    ||#{index:=I,widths:=Widths,pair:=#{slots:=Slots}}<-Links]),
+    Count=length(Rows),
+    case Count=<256 of true->ok;false->error({inbox_slot_limit,Count,256}) end,
+    N=max(1,Count), Cursor=max(1,ceil(math:log2(N))),
+    Indexed=[R#{index=>I}||{I,R}<-lists:enumerate(0,Rows)],
+    Fields=[{"reset",1},{"output_ready",1}]++lists:append([
+        [{link_name(I)++"_selected",S},{link_name(I)++"_available",S},
+         {link_name(I)++"_payloads",W}]||#{index:=I,slots:=S,payload_bits:=W}<-Links]),
+    {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/local_inbox.x.in")),
+    Source=[Body,"\nimport protocol_inbox as inbox_control;\n",
+        "const INBOX_SLOTS = u32:",n(N),";\nconst INBOX_CURSOR_BITS = u32:",n(Cursor),";\n",
+        "// Clock input fields bind the exact incoming transport links.\npub struct LocalInboxInputs {\n",
+        [[Name,": bits[",n(Width),"],\n"]||{Name,Width}<-Fields],"}\n",
+        mask_function("selected",Links,N),mask_function("available",Links,N),
+        "// Reconstruct only the selected source-bound capture as an ordinary destination frame.\n",
+        "fn inbox_frame(io: LocalInboxInputs, index: u32) -> bits[128] { match index {\n",
+        [["u32:",n(I)," => ",frame(R),",\n"]||R=#{index:=I}<-Indexed],
+        "_ => bits[128]:0, } }\n",Template],
+    Artifact#{dslx:=iolist_to_binary(Source),inbox=>#{physical_slots=>Count,mask_bits=>N,
+        cursor_bits=>Cursor,additional_state_bits=>3*N+Cursor+1,
+        inputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Fields],
+        slots=>Indexed,links=>[maps:with([index,slots],L)||L<-Links],
+        selected_head=>pending_until_consumed,release=>one_clock_after_consume,
+        phase_boundary=>wakes_all_postponed,ordering=>per_logical_sender_destination,
+        capacity=>unestablished,network_progress=>unestablished}}.
+
+%% Flatten metadata only; bit zero belongs to the first incoming pair's first slot.
+-spec mask_function(string(),[map()],pos_integer()) -> iodata().
+mask_function(Field,Links,N) ->
+    ["// Flatten the transport's ",Field," mask in manifest slot order.\n",
+     "fn inbox_",Field,"(io: LocalInboxInputs) -> bits[",n(N),"] { ",
+     case Links of []->["bits[",n(N),"]:0"];
+         _->lists:join(" ++ ",[["io.",link_name(I),"_",Field]||#{index:=I}<-lists:reverse(Links)]) end," }\n"].
+
+%% Codec constants and bit positions come from the checked current source channel.
+-spec frame(map()) -> iodata().
+frame(#{link:=Link,payload_offset:=At,codec:=#{value:=Value,frame_positions:=Positions}}) ->
+    Inverse=maps:from_list([{J,I}||{I,J}<-lists:enumerate(0,Positions)]),
+    lists:join(" ++ ",[case maps:find(J,Inverse) of
+        {ok,I}->["io.",link_name(Link),"_payloads[",n(At+I),"+:u1]"];
+        error->["u1:",n((Value bsr J) band 1)] end||J<-lists:seq(127,0,-1)]).
+
+%% Numeric names refer to the unchanged fabric link identities.
+-spec link_name(non_neg_integer()) -> string().
+link_name(I) -> "link_"++n(I).
+
+%% Only elaborated dimensions and identities enter generated declarations.
+-spec n(non_neg_integer()) -> string().
+n(I) -> integer_to_list(I).

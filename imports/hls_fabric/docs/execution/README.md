@@ -40,3 +40,5 @@ Private code owns reservation, actor selection, storage transactions, execution 
 The [scheduler ownership contract](scheduler-pipeline.md) describes reservations, visibility and stalls. The longer [pipeline plan](../../experiments/07-openxc7/yap/scheduler-pipeline-plan.md) records the remaining measurement and design work.
 
 The source-bound actor builder adds a [clocked DSLX owner](../source-protocol.md#compile-a-clocked-source-actor) around these functions, with selected-head retirement and one ordered outbox. Its standalone RTL command enforces the fixed clock schedule; network integration and admission remain separate.
+
+The transport builder also emits [sender-local inbox receivers](../source-protocol.md#connect-sender-local-captures-to-an-actor), connecting that owner to typed capture selection, postponement and delayed release. Their output remains the ordinary source effect stream.
