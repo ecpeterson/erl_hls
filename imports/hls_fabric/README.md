@@ -100,3 +100,5 @@ python3 tools/test_actor_rtl.py /path/to/xls --stage _build/actor-pids
 CI runs this fixture with the same pinned XLS release as the public dependency and retains build provenance and decoded debug observations. The [ingress measurement](docs/artifacts.md#historical-reports) (`experiments/results/actor-pid-measurements.md`) compares the complete small fixture with direct and addressed ingress while preserving its RAM mapping attributes.
 
 The [compiler dependency](docs/building.md) is pinned and prepared automatically. All virtual-node implementation and documentation remain private here.
+
+[Source-protocol inspection](docs/source-protocol.md) compiles the current repetition/noise actors, inventories their exact channels, and reports unresolved ownership obligations before hardware specialization.

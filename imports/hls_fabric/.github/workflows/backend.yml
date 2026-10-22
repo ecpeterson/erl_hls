@@ -161,6 +161,9 @@ jobs:
       - name: Check physical timing reports and artifact provenance
         run: python3 experiments/07-openxc7/test_phi_timing.py
 
+      - name: Inspect source-protocol application topology and rejection paths
+        run: bash tools/test_source_protocol.sh "$RUNNER_TEMP/source-protocol"
+
       - name: Check effect-window handshakes and combinational loops
         run: bash tools/test_effect_window.sh "$RUNNER_TEMP/xls"
 
