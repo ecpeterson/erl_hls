@@ -65,18 +65,13 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install Erlang and rebar3
-        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: "28.0.2"
-          rebar3-version: "3.24.0"
+        uses: ./.github/actions/beam-tools
 
       - name: Fetch compiler sources for bring-up tools
         run: python3 tools/build.py get-deps
 
       - name: Install RTL verification tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes iverilog yosys
+        uses: ./.github/actions/rtl-tools
 
       - name: Check local timing-model diagnostics
         run: |
@@ -120,15 +115,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install Erlang and rebar3
-        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: "28.0.2"
-          rebar3-version: "3.24.0"
+        uses: ./.github/actions/beam-tools
 
       - name: Install RTL verification tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes iverilog yosys
+        uses: ./.github/actions/rtl-tools
 
       - name: Cache XLS
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -208,6 +198,7 @@ jobs:
         run: |
           python3 tools/test_local_actor.py "$RUNNER_TEMP/local-actor-build"
           bash tools/test_local_execution.sh "$RUNNER_TEMP/xls" "$RUNNER_TEMP/local-execution"
+          python3 tools/test_local_protocol.py "$RUNNER_TEMP/xls" _build/local-protocol
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |
@@ -227,6 +218,10 @@ jobs:
             _build/**/*.log
             _build/**/*.term
             _build/**/manifest.json
+            _build/local-protocol/*.json
+            _build/local-protocol/*.x
+            _build/local-protocol/*.ys
+            _build/local-protocol/*.v
   complete-debug:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -237,15 +232,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install Erlang and rebar3
-        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: "28.0.2"
-          rebar3-version: "3.24.0"
+        uses: ./.github/actions/beam-tools
 
       - name: Install RTL verification tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes iverilog yosys
+        uses: ./.github/actions/rtl-tools
 
       - name: Cache XLS
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830

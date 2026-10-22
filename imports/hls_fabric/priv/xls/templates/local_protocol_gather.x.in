@@ -1,0 +1,22 @@
+// Indexed recognition precedes scalar dispatch exactly as in shared_execute.
+fn local_protocol_gather(machine: ActorState, frame: axis::Frame) -> LocalProtocolResult {
+  let applied = gather_apply(machine.gather,
+    gather_contribution(frame, machine.phase, machine.data));
+  if applied.outcome == GatherOutcome::NOT_CANDIDATE {
+    local_protocol_scalar(machine, frame)
+  } else if applied.outcome == GatherOutcome::COMPLETE {
+    let next = ActorState { gather: applied.state, ..machine };
+    (true, true, bits_from_machine(next), false, Directive::CONSUME as u2)
+  } else if applied.outcome == GatherOutcome::PENDING {
+    let next = ActorState { gather: applied.state, ..machine };
+    (true, false, bits_from_machine(next), true, Directive::CONSUME as u2)
+  } else if applied.outcome == GatherOutcome::MISMATCH {
+    (true, false, bits_from_machine(machine), true, Directive::POSTPONE as u2)
+  } else {
+    let next = ActorState {
+      failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+      ..machine
+    };
+    (true, false, bits_from_machine(next), true, Directive::FAIL as u2)
+  }
+}

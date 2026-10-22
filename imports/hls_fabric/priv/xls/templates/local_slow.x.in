@@ -1,0 +1,42 @@
+// Exclude protocol-handled receipts; all other frames retain source validation.
+fn local_plain_dispatch(machine: ActorState, frame: axis::Frame, received: bool)
+    -> ActorDispatch {
+  if hls_failure::failed(machine.failure) || machine.enter_pending || !received {
+    ActorDispatch { machine, ..zero!<ActorDispatch>() }
+  } else {
+    let tag_ok = @@TAG_OK@@;
+@@BINDINGS@@
+    let invalid_repeat = tag_ok && repeat_phase && (directive != Directive::CONSUME || next_phase != machine.phase);
+@@EFFECTIVE@@
+    let phase_changed = effective && next_phase != machine.phase;
+    let phase_boundary = phase_changed || (effective && repeat_phase);
+@@FAILED@@
+    let next_machine = ActorState {
+      phase: if effective { next_phase } else { machine.phase },
+      entered_from: if phase_boundary { machine.phase } else { machine.entered_from },
+      data: if effective { next_data } else { machine.data },
+@@NEXT_EVENT@@
+      enter_pending: effective && phase_boundary && !failed,
+      failure, ..machine
+    };
+    ActorDispatch {
+      machine: next_machine,
+@@DISPATCHED@@
+      directive, phase_boundary, ..zero!<ActorDispatch>()
+    }
+  }
+}
+
+// Same complete result as local_step_at when no receipt is handled and incoming
+// dispatch is suppressed while local_pending_at is true. This is a caller contract,
+// not an input validator. A final gather must first supply its private receipt state.
+pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool,
+    effects_reserved: bool, slot: u32) ->
+    (MachineBits, bits[ENTRY_EFFECT_PAYLOAD_BITS], u8, u8, bool, bool, u2, bool, bool) {
+  let machine = local_machine(raw, slot);
+  let dispatched = { @@SELECTED@@ };
+  let entered = shared_machine_enter(dispatched.machine, effects_reserved);
+  (bits_from_machine(entered.machine), entered.effects.payloads, entered.effects.layout,
+   entry_effect_count(entered.effects), entered.effects_valid, dispatched.dispatched,
+   dispatched.directive as u2, dispatched.phase_boundary, entered.egress_blocked)
+}

@@ -1,0 +1,6 @@
+// A complete gather precedes continuations and scalar completion, as in shared_execute.
+let gathered = if !hls_failure::failed(machine.failure) && !machine.enter_pending && machine.gather.progress.status == GatherStatus::COMPLETE {
+  shared_machine_complete_gather(machine, machine.gather.progress, machine.gather.values)
+} else { ActorDispatch { machine, ..zero!<ActorDispatch>() } };
+let selected_gather = gathered.dispatched || (!hls_failure::failed(machine.failure) && hls_failure::failed(gathered.machine.failure));
+if selected_gather { gathered } else { @@EVENTS@@ }

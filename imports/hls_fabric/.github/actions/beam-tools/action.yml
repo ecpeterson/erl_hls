@@ -1,0 +1,22 @@
+name: Install Erlang and rebar3
+description: Install OTP 28.0.2 and a checksum-pinned rebar3 release without release-list discovery
+runs:
+  using: composite
+  steps:
+    - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+      with:
+        otp-version: '28.0.2'
+    - name: Install pinned rebar3
+      shell: bash
+      run: |
+        set -euo pipefail
+        directory="$RUNNER_TEMP/rebar3-3.24.0"
+        mkdir -p "$directory"
+        curl --fail --location --silent --show-error --retry 2 \
+          --connect-timeout 15 --max-time 60 --retry-max-time 120 \
+          https://github.com/erlang/rebar3/releases/download/3.24.0/rebar3 \
+          --output "$directory/rebar3"
+        echo "d2d31cfb98904b8e4917300a75f870de12cb5167cd6214d1043e973a56668a54  $directory/rebar3" | sha256sum --check
+        chmod +x "$directory/rebar3"
+        "$directory/rebar3" version
+        echo "$directory" >> "$GITHUB_PATH"

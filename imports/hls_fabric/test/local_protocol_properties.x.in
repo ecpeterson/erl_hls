@@ -1,0 +1,61 @@
+// Arbitrary finite-width receipt refinement. Eligibility is computed by the
+// implementation from ordinary source validators; no legal-message assumption.
+// Runtime ownership and temporal progress are separate obligations.
+pub fn protocol_receipt_equal(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = local_protocol_at(raw, frame, received, slot);
+  let reference = local_step_at(raw, frame, received, effects_reserved, slot);
+  let receipt = (fast.2, zero!<bits[ENTRY_EFFECT_PAYLOAD_BITS]>(), u8:0, u8:0,
+                 false, fast.3, fast.4, false, false);
+  !fast.0 || fast.1 || reference == receipt
+}
+
+// A final gathered receipt is private state with the original head still owned.
+// Full completion from that state must match the original atomic activation,
+// including fault, entry, effects, boundary and final mailbox directive.
+pub fn protocol_completion_equal(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = local_protocol_at(raw, frame, received, slot);
+  let reference = local_step_at(raw, frame, received, effects_reserved, slot);
+  let completion = local_slow_step_at(fast.2, bits[128]:0, false, effects_reserved, slot);
+  !fast.0 || !fast.1 || reference == completion
+}
+
+// Deliberately discard a receipt update. SAT must find a handled changing state.
+pub fn protocol_wrong_state(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = local_protocol_at(raw, frame, received, slot);
+  let reference = local_step_at(raw, frame, received, effects_reserved, slot);
+  let broken = (raw, zero!<bits[ENTRY_EFFECT_PAYLOAD_BITS]>(), u8:0, u8:0,
+                false, fast.3, fast.4, false, false);
+  !fast.0 || fast.1 || reference == broken
+}
+
+// Deliberately complete from the stale state, omitting the last indexed value.
+pub fn protocol_stale_completion(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = local_protocol_at(raw, frame, received, slot);
+  let reference = local_step_at(raw, frame, received, effects_reserved, slot);
+  let broken = local_step_at(raw, bits[128]:0, false, effects_reserved, slot);
+  !fast.0 || !fast.1 || reference == broken
+}
+
+// Actual caller domain: internal pending work suppresses incoming dispatch,
+// and the separate collector intercepts every handled receipt.
+pub fn protocol_slow_equal(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !local_pending_at(raw, slot)) &&
+    !local_protocol_at(raw, frame, received, slot).0;
+  !admissible || local_slow_step_at(raw, frame, received, effects_reserved, slot) ==
+    local_step_at(raw, frame, received, effects_reserved, slot)
+}
+
+// Removing internal pending work must be detected by the same caller domain.
+pub fn protocol_drop_internal(raw: MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !local_pending_at(raw, slot)) &&
+    !local_protocol_at(raw, frame, received, slot).0;
+  let broken = (raw, zero!<bits[ENTRY_EFFECT_PAYLOAD_BITS]>(), u8:0, u8:0,
+                 false, false, u2:0, false, false);
+  !admissible || local_step_at(raw, frame, received, effects_reserved, slot) == broken
+}

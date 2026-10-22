@@ -220,6 +220,25 @@ def instrument_device(args: argparse.Namespace, device: dict) -> None:
     print(f"Built and instrumented independent device {ident}", flush=True)
 
 
+def simulation_netlist(args: argparse.Namespace, ident: int) -> Path:
+    """Remove redundant combinational cells for simulation while retaining probe ports and uninitialized registers."""
+    stage = args.stage / f"device{ident}/debug"
+    output = stage / "simulation.v"
+    # Start from the already checked passive netlist. Keep the original export
+    # for diagnosis; these standard Yosys passes change only the simulator input.
+    script = (f"read_json {json.dumps(str(stage / 'instrumented.json'))}\n"
+              "opt_reduce\nopt_clean -purge\n"
+              "opt_expr -keepdc\nopt_merge -keepdc\nopt_clean -purge\n"
+              "splitnets -driver\n"
+              "attrmap -remove src -remove hdlname\n"
+              "attrmap -modattr -remove src -remove hdlname\n"
+              f"stat\nwrite_verilog {json.dumps(str(output))}\n")
+    path = stage / "simulation.ys"
+    path.write_text(script)
+    execute([args.yosys, "-Q", "-T", "-s", str(path)], stage, "simulation-netlist")
+    return output
+
+
 def build(args: argparse.Namespace) -> None:
     """Compile each device, verify instrumentation, and retain reproducible inputs."""
     provenance = inputs(args)
@@ -250,24 +269,30 @@ def build(args: argparse.Namespace) -> None:
     with ThreadPoolExecutor(max_workers=1 if getattr(args, "memory", False) else 2) as workers:
         list(workers.map(lambda device: build_device(args, device), devices))
     (args.stage / "phi_devices.vh").write_text(testbench_connections(devices))
+    compile_simulation(args, devices)
+    if provenance != inputs(args):
+        raise RuntimeError("RTL build inputs changed while generation was running")
+    (args.stage / "provenance.json").write_text(json.dumps({
+        "inputs": provenance, "outputs": outputs(args.stage)}, indent=2, sort_keys=True) + "\n")
+
+
+def compile_simulation(args: argparse.Namespace, devices: list[dict]) -> None:
+    """Compile the verified devices and public-port bridge without changing clocks or witness coverage."""
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(args.erl_hls / "test/rtl" / name, args.stage)
     adapter = "partition_sim_bridge" if getattr(args, "memory", False) else "xls_sim_bridge"
     if getattr(args, "memory", False):
         shutil.copy(ROOT / "test/rtl/partition_sim_bridge.c", args.stage)
     execute(["iverilog-vpi", f"{adapter}.c"], args.stage, "vpi", timeout=60)
-    device_rtl = [args.stage / f"device{device['id']}/debug" / name
-                  for device in devices for name in ("debug_top.v", "instrumented.v")]
+    device_rtl = [path for device in devices for path in (
+        args.stage / f"device{device['id']}/debug/debug_top.v",
+        simulation_netlist(args, device['id']))]
     debug_rtl = [args.erl_hls / "priv/rtl/debug" / name for name in
                  ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
     execute(["iverilog", "-g2012", "-s", "phi_bridge_tb", "-I", str(args.stage),
              *( ["-DPHI_MEMORY"] if getattr(args, "memory", False) else []),
              "-I", str(ROOT / "test/rtl"), "-o", str(args.stage / "phi_bridge.vvp"), str(ROOT / "test/rtl/phi_bridge_tb.sv"), str(ROOT / "rtl/hls_async_fifo.v"),
              *map(str, device_rtl + debug_rtl)], args.stage, "iverilog", timeout=300)
-    if provenance != inputs(args):
-        raise RuntimeError("RTL build inputs changed while generation was running")
-    (args.stage / "provenance.json").write_text(json.dumps({
-        "inputs": provenance, "outputs": outputs(args.stage)}, indent=2, sort_keys=True) + "\n")
 
 
 def simulate(args: argparse.Namespace) -> None:

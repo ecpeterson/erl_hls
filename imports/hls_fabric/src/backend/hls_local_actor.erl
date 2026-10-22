@@ -3,7 +3,7 @@
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation and its complete activation functions. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation and its complete activation and receipt functions. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
     dslx := binary(), source := file:filename()}.
 
@@ -16,7 +16,7 @@ compile(Source, Options) ->
         _ -> error(local_execution_retained_calls_unsupported)
     end,
     #{source => Source, spec => Spec, plan => Plan,
-        dslx => iolist_to_binary(xls_shared_codegen:execution(Spec))}.
+        dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec)])}.
 
 -doc "Writes a fresh source-derived DSLX module and provenance manifest. Refuses existing files; generated code contains no application-specific RTL controller.".
 -spec write(file:filename(), [hls_source:option()] | hls_source:context(), file:filename()) -> map().
@@ -41,7 +41,7 @@ fresh(Path) ->
         {error, Reason} -> error({local_actor_output, Path, Reason})
     end.
 
--doc "Reports activation layouts, function ports and source/DSLX identities. Counts describe source semantics; no runtime owner, hardware admission or timing benefit is established.".
+-doc "Reports activation/receipt layouts, caller obligations and source/DSLX identities. Counts describe source semantics; no runtime owner, hardware admission or timing benefit is established.".
 -spec manifest(artifact()) -> map().
 manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
     #{entries := Entries, reductions := Reductions,
@@ -66,7 +66,10 @@ manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
             [maps:with([id,phase], S) || S <- Sites] end,
         phase_names => maps:get(phases, Spec),
         function_ports => [local_initial, local_pending, local_pending_at, local_step,
-            local_step_at, local_effect, local_observe, local_cycle],
+            local_step_at, local_effect, local_observe, local_cycle, local_protocol_at, local_slow_step_at],
+        receipt_result_fields => [handled, deferred_completion, private_machine, dispatched, directive],
+        receipt_obligations => [intercept_handled_receipts, suppress_receive_while_pending,
+            retain_final_gather_head, reserve_effects_for_completion],
         step_result_fields => [machine, effect_payload, effect_layout, effect_count,
             effects_valid, dispatched, directive, phase_boundary, egress_blocked],
         handwritten_application_controller => false,

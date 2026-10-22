@@ -7,14 +7,14 @@
 run(Stage) ->
     {ok, _} = application:ensure_all_started(crypto),
     Before = with_activation(Stage, #{queue_limit => 16384, write_timeout => 60000}, fun(Resources = #{connections := Connections}) ->
-        Observed = diagnose(Stage, Connections),
+        Observed = timed(diagnose, fun() -> diagnose(Stage, Connections) end),
         ok = touch(Stage, "release_events"),
-        ok = hls_phi_memory_reset:run(Stage, Resources),
+        ok = timed(active_reset, fun() -> hls_phi_memory_reset:run(Stage, Resources) end),
         Observed
     end),
     with_activation(Stage, #{}, fun(Resources = #{application := Application, connections := Connections}) ->
         {ok, [Expected]} = file:consult(filename:join(Stage, "oracle.term")),
-        {Actual, Final} = collect(initial(Stage, Resources)),
+        {Actual, Final} = timed(fresh_experiment, fun() -> collect(initial(Stage, Resources)) end),
         case Actual =:= Expected of
             true -> ok;
             false -> error({witness_mismatch, Expected, Actual})
@@ -32,8 +32,9 @@ run(Stage) ->
         ok = file:write_file(filename:join(Stage, "observed.term"), io_lib:format("~tp.~n", [Actual])),
         [First | _] = Connections,
         ok = hls_bridge_phi_live:save(Stage, "recovered.json",
-            hls_bridge_phi_live:inspect(First, maps:get(seeds, Before))),
-        ok = hls_bridge_phi_live:save(Stage, "actors-complete.json", [actor_samples(C) || C <- Connections]),
+            timed(recovered_queues, fun() -> hls_bridge_phi_live:inspect(First, maps:get(seeds, Before)) end)),
+        ok = hls_bridge_phi_live:save(Stage, "actors-complete.json",
+            timed(actors_complete, fun() -> [actor_samples(C) || C <- Connections] end)),
         ok = hls_phi_memory_metrics:write(Stage),
         ok = stop(Resources),
         ok = touch(Stage, "done"),
@@ -138,7 +139,7 @@ diagnose(Stage, Connections = [First = #{session := Session, manifest := Manifes
     Link = hls_bridge_phi_live:link_output(Manifest),
     await(fun() -> hls_bridge_phi_live:blocked(Session, Link) end),
     %% Diagnose the injected source-side stall; the peer's idle queues add no evidence.
-    Before = hls_bridge_phi_live:inspect(First),
+    Before = timed(blocked_queues, fun() -> hls_bridge_phi_live:inspect(First) end),
     ok = blocked_link(Before),
     ok = hls_bridge_phi_live:save(Stage, "blocked.json", [Before]),
     ok = touch(Stage, "pause_peer"),
@@ -146,10 +147,11 @@ diagnose(Stage, Connections = [First = #{session := Session, manifest := Manifes
     ok = touch(Stage, "release_link"),
     await(fun() -> exists(Stage, "link_released") end),
     await(fun() -> hls_bridge_phi_live:blocked(Session, Link) end),
-    Paused = hls_bridge_phi_live:inspect(First),
+    Paused = timed(paused_queues, fun() -> hls_bridge_phi_live:inspect(First) end),
     ok = blocked_link(Paused),
     ok = hls_bridge_phi_live:save(Stage, "paused-peer.json", Paused),
-    ok = hls_bridge_phi_live:save(Stage, "actors-paused-peer.json", actor_samples(First)),
+    ok = hls_bridge_phi_live:save(Stage, "actors-paused-peer.json",
+        timed(actors_paused, fun() -> actor_samples(First) end)),
     ok = touch(Stage, "resume_peer"),
     await(fun() -> exists(Stage, "peer_resumed") end),
     %% Either board may report first; an idle board can be waiting on its blocked peer.
@@ -165,7 +167,8 @@ diagnose(Stage, Connections = [First = #{session := Session, manifest := Manifes
         {ok, Sample} = hls_topology_debug:query(S, Id), Sample#{device => Device}
     end || {Device, S, Id} <- Outputs],
     ok = hls_bridge_phi_live:save(Stage, "blocked-events.json", Samples),
-    ok = hls_bridge_phi_live:save(Stage, "actors-blocked-events.json", [actor_samples(C) || C <- Connections]),
+    ok = hls_bridge_phi_live:save(Stage, "actors-blocked-events.json",
+        timed(actors_blocked, fun() -> [actor_samples(C) || C <- Connections] end)),
     Before.
 
 %% Require the queue-seeded walk to find the stalled link without seeding that endpoint.
@@ -255,3 +258,14 @@ touch(Stage, Name) -> ok = file:write_file(filename:join(Stage, Name), <<>>).
 %% Observe acknowledgment of a testbench-only clock or link control.
 -spec exists(file:filename(), file:filename()) -> boolean().
 exists(Stage, Name) -> filelib:is_file(filename:join(Stage, Name)).
+
+%% Separate host/debug wall time from simulated device progress, including failed phases.
+-spec timed(atom(), fun(() -> Result)) -> Result.
+timed(Phase, Fun) ->
+    Start = erlang:monotonic_time(millisecond),
+    io:format("START ~p~n", [Phase]),
+    try Fun()
+    after
+        io:format("TIME ~p ~.3f s~n", [Phase,
+            (erlang:monotonic_time(millisecond)-Start)/1000])
+    end.

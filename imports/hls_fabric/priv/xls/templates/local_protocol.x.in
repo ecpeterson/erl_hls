@@ -1,0 +1,27 @@
+// handled, deferred completion, private machine, dispatched, mailbox directive.
+// A deferred receipt retains the selected mailbox head. Only the subsequent
+// completion result may consume/postpone it; its placeholder directive is ignored.
+pub type LocalProtocolResult = (bool, bool, MachineBits, bool, u2);
+
+// Ignore all other fields when handled=false; execute the ordinary callback path.
+fn local_protocol_unhandled(machine: ActorState) -> LocalProtocolResult {
+  (false, false, bits_from_machine(machine), false, Directive::CONSUME as u2)
+}
+
+@@SCALAR@@
+
+@@GATHER@@
+
+// Recognize source-defined receipts only after ordinary tag/failure/pending checks.
+// This path cannot publish effects, so it needs no outbox reservation.
+pub fn local_protocol_at(raw: MachineBits, raw_frame: bits[128],
+                         received: bool, slot: u32) -> LocalProtocolResult {
+  let machine = local_machine(raw, slot);
+  let frame = axis::frame_from_bits(raw_frame);
+  let tag_ok = @@TAG_OK@@;
+  if !received || !tag_ok || hls_failure::failed(machine.failure) || local_pending_at(raw, slot) {
+    local_protocol_unhandled(machine)
+  } else {
+    local_protocol_gather(machine, frame)
+  }
+}

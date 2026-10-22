@@ -67,13 +67,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: '28.0.2'
-          rebar3-version: '3.24.0'
+      - uses: ./.github/actions/beam-tools
       - name: Install RTL tools
         if: needs.select.outputs.hardware == 'true'
-        run: sudo apt-get update && sudo apt-get install --yes iverilog yosys
+        uses: ./.github/actions/rtl-tools
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         if: needs.select.outputs.hardware == 'true'
         with:
@@ -218,12 +215,11 @@ jobs:
       IVERILOG_SHA256: c897bbfa9848688982c6d5c30529fc29d68df0b9ff22ffa73bad89db73a7ce49
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: '28.0.2'
-          rebar3-version: '3.24.0'
+      - uses: ./.github/actions/beam-tools
       - name: Install RTL tools
-        run: sudo apt-get update && sudo apt-get install --yes yosys build-essential autoconf bison flex gperf libreadline-dev zlib1g-dev
+        uses: ./.github/actions/rtl-tools
+        with:
+          packages: yosys build-essential autoconf bison flex gperf libreadline-dev zlib1g-dev
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ${{ runner.temp }}/iverilog
@@ -270,7 +266,9 @@ jobs:
         if: matrix.memory_case == 'd3'
         # Direct D3 reached the correct witness near its former 12-minute
         # host deadline; retain reporting/cleanup margin on variable-speed runners.
-        run: python3 tools/test_phi_memory.py "$RUNNER_TEMP/xls" --stage _build/phi-memory --placement "${{ matrix.placement }}" --reductions "${{ matrix.reductions }}" --simulation-timeout "${{ matrix.placement == 'direct' && 900 || 1500 }}"
+        run: |
+          python3 tools/test_phi_simulation.py --stage _build/phi-simulation
+          python3 tools/test_phi_memory.py "$RUNNER_TEMP/xls" --stage _build/phi-memory --placement "${{ matrix.placement }}" --reductions "${{ matrix.reductions }}" --simulation-timeout "${{ matrix.placement == 'direct' && 900 || 1500 }}"
       - name: Check complete noisy board-sized memory and occupancy profile
         if: matrix.memory_case == 'board_memory'
         run: |
@@ -320,12 +318,9 @@ jobs:
           - {framing: compact, options: '--compact --configs 1:4 4:4'}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
-        with:
-          otp-version: '28.0.2'
-          rebar3-version: '3.24.0'
+      - uses: ./.github/actions/beam-tools
       - name: Install RTL tools
-        run: sudo apt-get update && sudo apt-get install --yes iverilog yosys
+        uses: ./.github/actions/rtl-tools
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ${{ runner.temp }}/xls

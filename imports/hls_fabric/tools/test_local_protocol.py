@@ -1,0 +1,118 @@
+"""Check source-bound receipt/callback composition with finite-width SAT contracts."""
+from pathlib import Path
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import time
+
+from backend_paths import PUBLIC, ROOT
+from test_local_actor import manifest
+
+
+def digest(path: Path) -> str:
+    """Bind a source, emitted circuit or tool to its exact contents."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run(command: list[str | Path], stage: Path, name: str, output: Path | None = None) -> None:
+    """Retain one bounded invocation; unexpected tool failures never count as a verdict."""
+    args = list(map(str, command))
+    (stage / (name + '.command.json')).write_text(json.dumps(args) + '\n')
+    path = stage / (name + '.log')
+    try:
+        with path.open('x') as log:
+            if output is None:
+                subprocess.run(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
+            else:
+                with output.open('x') as out:
+                    subprocess.run(args, cwd=ROOT, stdout=out, stderr=log, check=True, timeout=240)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # Keep the full file and expose a bounded tail in the main CI log.
+        print(path.read_text(errors='replace')[-6000:], flush=True)
+        raise
+
+
+def prove(args: argparse.Namespace, stage: Path, raw: Path, module: str,
+          prop: str, positive: bool) -> dict:
+    """Prove a Boolean circuit or require an explicit counterexample for a broken contract."""
+    stem = module + '__' + prop
+    optimized, circuit = stage / (stem + '.opt.ir'), stage / (stem + '.v')
+    started = time.monotonic()
+    run([args.xls / 'opt_main', '--top=__' + module + '__' + prop, raw], stage, stem + '-opt', optimized)
+    run([args.xls / 'codegen_main', '--generator=combinational', '--use_system_verilog=false',
+         '--module_name=contract', '--output_verilog_path=' + str(circuit), optimized], stage, stem + '-codegen')
+    script = stage / (stem + '.ys')
+    # CI's Yosys 0.33 rejects XLS's unpacked SystemVerilog array assignment patterns.
+    # Generate plain Verilog and parse without -sv to check that boundary locally too.
+    script.write_text(f'read_verilog "{circuit}"\nhierarchy -top contract\nproc\nflatten\nopt\n'
+                      'techmap\nopt\nabc -g AND\nopt_clean\n'
+                      'sat -prove out 1 -set-def-inputs -show-inputs -timeout 180\n')
+    run([args.yosys, '-Q', '-T', '-s', script], stage, stem + '-sat')
+    expected = 'no model found: SUCCESS!' if positive else 'model found: FAIL!'
+    assert 'SAT proof finished - ' + expected in (stage / (stem + '-sat.log')).read_text(), stem
+    print(stem, 'proved' if positive else 'counterexample found', flush=True)
+    return {'module': module, 'property': prop, 'verdict': 'unsat' if positive else 'sat',
+            'seconds': time.monotonic() - started, 'circuit_sha256': digest(circuit)}
+
+
+def main() -> None:
+    """Use the public builder for three source shapes, retaining quantified domains and negative controls."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('xls', type=lambda p: Path(p).resolve())
+    parser.add_argument('stage', type=lambda p: Path(p).resolve())
+    parser.add_argument('--yosys', default='yosys')
+    args = parser.parse_args()
+    args.yosys = Path(shutil.which(args.yosys) or args.yosys).resolve()
+    stage = args.stage
+    stage.mkdir()
+    options = stage / 'options.term'
+    options.write_text('[].\n')
+    properties = ROOT / 'test/local_protocol_properties.x.in'
+    cases = [('plain', ROOT / 'test/hls_local_actor_fixture.erl', ['protocol_drop_internal']),
+             ('scalar', PUBLIC / 'test_data/hls_statem_reduction_lower_fixture.erl',
+              ['protocol_wrong_state', 'protocol_drop_internal']),
+             ('gather', PUBLIC / 'test_data/xls_statem_gather_fixture.erl',
+              ['protocol_wrong_state', 'protocol_stale_completion', 'protocol_drop_internal'])]
+    inputs = [Path(__file__), properties, ROOT / 'tools/emit_local_actor.sh',
+              ROOT / 'tools/emit_local_actor.escript', *[source for _, source, _ in cases],
+              args.yosys, *[args.xls / p for p in ['ir_converter_main', 'opt_main', 'codegen_main']]]
+    for base, pattern in [(ROOT / 'src', '*.erl'), (ROOT / 'priv/xls', '*.x*'),
+                          (PUBLIC / 'src', '*.erl'), (PUBLIC / 'priv/xls', '*.x*'),
+                          (args.xls / 'xls/dslx/stdlib', '*.x')]:
+        inputs.extend(sorted(base.rglob(pattern)))
+    bindings = {str(p): digest(p) for p in inputs}
+    positive = ['protocol_receipt_equal', 'protocol_completion_equal', 'protocol_slow_equal']
+    plan = {'method': 'combinational SAT', 'properties': positive,
+            'domain': 'All machine/frame bits, received/effects_reserved Booleans and 32-bit slots for each emitted fixture; receipt eligibility and slow-path preconditions are expressed in the properties.',
+            'trust': 'Source extraction, DSLX/XLS lowering and optimization, Yosys/ABC/SAT; assumes declared fixed-width interfaces.',
+            'excludes': ['general theorem for arbitrary source programs', 'runtime ownership', 'temporal progress', 'routed timing'],
+            'inputs': bindings}
+    (stage / 'plan.json').write_text(json.dumps(plan, indent=2) + '\n')
+    results, actors = [], []
+    for name, source, negatives in cases:
+        built = stage / (name + '.x')
+        run(['bash', ROOT / 'tools/emit_local_actor.sh', source, options, built], stage, name + '-build')
+        report = manifest(built)
+        assert report['receipt_result_fields'] == ['handled', 'deferred_completion', 'private_machine', 'dispatched', 'directive']
+        assert {'local_protocol_at', 'local_slow_step_at'} <= set(report['function_ports'])
+        actors.append({'name': name, 'manifest': report})
+        module = name + '_properties'
+        proof = stage / (module + '.x')
+        proof.write_bytes(built.read_bytes() + b'\n' + properties.read_bytes())
+        raw = stage / (module + '.ir')
+        paths = ':'.join(map(str, [ROOT / 'priv/xls/lib', ROOT / 'priv/xls/fabric',
+                                  PUBLIC / 'priv/xls/lib', PUBLIC / 'priv/xls/fabric']))
+        run([args.xls / 'ir_converter_main', '--warnings_as_errors=false', '--dslx_path=' + paths,
+             '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), proof], stage, name + '-convert', raw)
+        for prop, expected in [(p, True) for p in positive] + [(p, False) for p in negatives]:
+            results.append(prove(args, stage, raw, module, prop, expected))
+            (stage / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
+    assert bindings == {str(p): digest(p) for p in inputs}, 'formal inputs changed'
+    (stage / 'result.json').write_text(json.dumps({'passed': True, 'actors': actors, 'results': results,
+        'inputs_unchanged': True, 'plan_sha256': digest(stage / 'plan.json')}, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    main()
