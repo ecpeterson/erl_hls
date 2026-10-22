@@ -1,0 +1,54 @@
+// Finite two-message witness for the source-variation fixture, not a network proof.
+fn offered(value: u32) -> bits[128] {
+  axis::bits_from_frame(axis::Frame {
+    header: axis::Header { op: Tag::ADD as u8, payload_words: u8:1, ..zero!<axis::Header>() },
+    payload: bits_from_add(Add { value }) as bits[96],
+  })
+}
+
+// A source arithmetic or guard change must change the actual returned value/fault.
+#[test]
+fn source_behavior() {
+  let boot = local_step(local_initial(), bits[128]:0, false, true);
+  assert_eq(boot.4, false);
+  let first = local_step(boot.0, offered(u32:3), true, true);
+  assert_eq(machine_from_bits(first.0).data.value, u32:3);
+  assert_eq(first.4, true);
+  assert_eq(first.3, u8:1);
+  let emitted = local_effect(first.2, first.1, u8:0);
+  assert_eq(total_from_bits(axis::frame_from_bits(emitted.1).payload).value, u32:3);
+  let second = local_step(first.0, offered(u32:5), true, true);
+  assert_eq(machine_from_bits(second.0).data.value, u32:@@SECOND@@);
+  assert_eq(hls_failure::failed(machine_from_bits(second.0).failure), @@FAIL@@);
+  assert_eq(second.4, !@@FAIL@@);
+}
+
+// A reserved effect is held across capacity stalls and published once on resumption.
+#[test]
+fn reserved_publication() {
+  let boot = local_step(local_initial(), bits[128]:0, false, true);
+  let blocked = local_step(boot.0, offered(u32:3), true, false);
+  assert_eq(blocked.4, false);
+  assert_eq(blocked.8, true);
+  assert_eq(local_pending(blocked.0), true);
+  let held = local_step(blocked.0, bits[128]:0, false, false);
+  assert_eq(held.0, blocked.0);
+  let resumed = local_step(held.0, bits[128]:0, false, true);
+  assert_eq(resumed.4, true);
+  let emitted = local_effect(resumed.2, resumed.1, u8:0);
+  assert_eq(total_from_bits(axis::frame_from_bits(emitted.1).payload).value, u32:3);
+  let idle = local_step(resumed.0, bits[128]:0, false, true);
+  assert_eq(idle.4, false);
+  assert_eq(local_pending(idle.0), false);
+}
+
+// An invalid envelope is rejected before it can be mistaken for valid callback input.
+#[test]
+fn malformed_frame() {
+  let boot = local_step(local_initial(), bits[128]:0, false, true);
+  let frame = axis::frame_from_bits(offered(u32:2));
+  let broken = axis::Frame { header: axis::Header { payload_words: u8:2, ..frame.header }, ..frame };
+  let failed = local_step(boot.0, axis::bits_from_frame(broken), true, true);
+  assert_eq(hls_failure::failed(machine_from_bits(failed.0).failure), true);
+  assert_eq(machine_from_bits(failed.0).data.value, u32:0);
+}

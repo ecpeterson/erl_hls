@@ -1,6 +1,6 @@
 -module(xls_shared_codegen).
 -moduledoc false.
--export([publication_depth/0, emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
+-export([publication_depth/0, emit/1, execution/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
 %% Checked actor artifact augmented with private physical options.
 -type spec() :: map().
@@ -27,6 +27,55 @@ emit(Spec) ->
          command_helpers(), xls_shared_gather_codegen:selection_helpers(Spec),
          scheduled_effect_function(Spec), xls_publication_codegen:helpers(Spec), shared_machine_step_function(Spec),
          shared_executor(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
+-doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies and physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization.".
+-spec execution(xls_actor_codegen:spec()) -> iolist().
+execution(Closed) ->
+    case maps:keys(Closed) -- [source, failure_sites, imports, capacity, phases,
+            message_names, message_words, output_names, max_entry_effects,
+            data_name, data_width, record_declarations, helper_functions, init,
+            entries, casts, continuations, retained_calls, internal_steps,
+            reductions, gathers, state_projection] of
+        [] -> ok;
+        Unknown -> error({local_execution_requires_closed_artifact, Unknown})
+    end,
+    Spec = Closed#{shared_service => ordinary},
+    case maps:get(retained_calls, Spec) of
+        none -> ok;
+        _ -> error(local_execution_retained_calls_unsupported)
+    end,
+    case maps:find(state_projection, Spec) of
+        {ok, #{rows := Rows}} ->
+            case lists:usort([I || #{instance := I} <- Rows]) of
+                [0] -> ok;
+                _ -> error(local_execution_requires_instance_zero)
+            end;
+        error -> ok
+    end,
+    xls_actor_codegen:emit(Spec, [bram, mailbox, scheduler, arbitration, std],
+        [machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
+         xls_shared_gather_codegen:helpers(Spec),
+         shared_machine_step_function(Spec), shared_executor(Spec),
+         execution_ports(Spec)]).
+
+%% Fill the ordinary activation API without selecting application-specific callbacks or storage.
+-spec execution_ports(spec()) -> iodata().
+execution_ports(Spec = #{reductions := Reduction, continuations := Events}) ->
+    ReductionPending = case Reduction of none -> []; _ ->
+        " || machine.reduction.status == ReductionStatus::COMPLETE" end,
+    Pending = ["machine.enter_pending", case Events of [] -> []; _ -> " || machine.next_event != u8:0" end,
+        case maps:get(gathers, Spec, none) of none -> []; _ ->
+            " || machine.gather.progress.status == GatherStatus::COMPLETE" end, ReductionPending],
+    {Decode, Execute} = case maps:is_key(state_projection, Spec) of
+        true -> {"machine_from_bits<u32:0>(raw, slot)", "shared_execute<u32:0>(request)"};
+        false -> {"machine_from_bits(raw)", "shared_execute(request)"}
+    end,
+    Internal = case Reduction of none -> []; _ ->
+        "internal: !machine.enter_pending && machine.reduction.status == ReductionStatus::COMPLETE," end,
+    Path = filename:join(code:priv_dir(hls_fabric), "xls/templates/local_execution.x.in"),
+    {ok, Template} = file:read_file(Path),
+    xls_template:render(Template, [{<<"@@DECODE@@">>, Decode}, {<<"@@EXECUTE@@">>, Execute},
+        {<<"@@PENDING@@">>, Pending}, {<<"@@INTERNAL@@">>, Internal}]).
+
 %% Defines accepted-work tickets, RAM row types and scheduler-owned metadata.
 -spec machine_declarations(spec()) -> iodata().
 machine_declarations(#{capacity := Capacity} = Spec) ->
