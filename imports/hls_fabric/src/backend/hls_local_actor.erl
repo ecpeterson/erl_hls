@@ -3,7 +3,7 @@
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation and its complete activation and receipt functions. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation and its activation, receipt and reserved action functions. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
     dslx := binary(), source := file:filename()}.
 
@@ -41,7 +41,7 @@ fresh(Path) ->
         {error, Reason} -> error({local_actor_output, Path, Reason})
     end.
 
--doc "Reports activation/receipt layouts, caller obligations and source/DSLX identities. Counts describe source semantics; no runtime owner, hardware admission or timing benefit is established.".
+-doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Counts describe source semantics; no runtime owner, hardware admission or timing benefit is established.".
 -spec manifest(artifact()) -> map().
 manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
     #{entries := Entries, reductions := Reductions,
@@ -66,7 +66,12 @@ manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
             [maps:with([id,phase], S) || S <- Sites] end,
         phase_names => maps:get(phases, Spec),
         function_ports => [local_initial, local_pending, local_pending_at, local_step,
-            local_step_at, local_effect, local_observe, local_cycle, local_protocol_at, local_slow_step_at],
+            local_step_at, local_effect, local_observe, local_cycle, local_protocol_at, local_slow_step_at,
+            local_action_at, local_enter_at],
+        action_result_fields => [private_machine, dispatched, directive, phase_boundary],
+        action_obligations => [intercept_handled_receipts, suppress_receive_while_pending,
+            retain_action_and_mailbox_head, retain_actor_slot, reserve_publication,
+            retry_blocked_publication_without_redispatch],
         receipt_result_fields => [handled, deferred_completion, private_machine, dispatched, directive],
         receipt_obligations => [intercept_handled_receipts, suppress_receive_while_pending,
             retain_final_gather_head, reserve_effects_for_completion],

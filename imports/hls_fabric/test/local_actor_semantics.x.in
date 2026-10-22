@@ -10,36 +10,40 @@ fn offered(value: u32) -> bits[128] {
 #[test]
 fn source_behavior() {
   let boot = local_step(local_initial(), bits[128]:0, false, true);
-  assert_eq(boot.4, false);
-  let first = local_step(boot.0, offered(u32:3), true, true);
-  assert_eq(machine_from_bits(first.0).data.value, u32:3);
-  assert_eq(first.4, true);
-  assert_eq(first.3, u8:1);
-  let emitted = local_effect(first.2, first.1, u8:0);
-  assert_eq(total_from_bits(axis::frame_from_bits(emitted.1).payload).value, u32:3);
-  let second = local_step(first.0, offered(u32:5), true, true);
-  assert_eq(machine_from_bits(second.0).data.value, u32:@@SECOND@@);
-  assert_eq(hls_failure::failed(machine_from_bits(second.0).failure), @@FAIL@@);
-  assert_eq(second.4, !@@FAIL@@);
+  assert_eq(boot.effects_valid, false);
+  let first = local_step(boot.machine, offered(u32:3), true, true);
+  assert_eq(machine_from_bits(first.machine).data.value, u32:3);
+  assert_eq(first.effects_valid, true);
+  assert_eq(first.effect_count, u8:1);
+  let cycle = local_cycle(first.machine, offered(u32:5), true, true,
+    first.effect_layout, first.effect_payload, u8:0, u32:0);
+  assert_eq(cycle.observation.pending, false);
+  assert_eq(cycle.observation.failure, u16:0);
+  assert_eq(cycle.effect.port, u8:0);
+  assert_eq(total_from_bits(axis::frame_from_bits(cycle.effect.frame).payload).value, u32:3);
+  let second = cycle.step;
+  assert_eq(machine_from_bits(second.machine).data.value, u32:@@SECOND@@);
+  assert_eq(hls_failure::failed(machine_from_bits(second.machine).failure), @@FAIL@@);
+  assert_eq(second.effects_valid, !@@FAIL@@);
 }
 
 // A reserved effect is held across capacity stalls and published once on resumption.
 #[test]
 fn reserved_publication() {
   let boot = local_step(local_initial(), bits[128]:0, false, true);
-  let blocked = local_step(boot.0, offered(u32:3), true, false);
-  assert_eq(blocked.4, false);
-  assert_eq(blocked.8, true);
-  assert_eq(local_pending(blocked.0), true);
-  let held = local_step(blocked.0, bits[128]:0, false, false);
-  assert_eq(held.0, blocked.0);
-  let resumed = local_step(held.0, bits[128]:0, false, true);
-  assert_eq(resumed.4, true);
-  let emitted = local_effect(resumed.2, resumed.1, u8:0);
-  assert_eq(total_from_bits(axis::frame_from_bits(emitted.1).payload).value, u32:3);
-  let idle = local_step(resumed.0, bits[128]:0, false, true);
-  assert_eq(idle.4, false);
-  assert_eq(local_pending(idle.0), false);
+  let blocked = local_step(boot.machine, offered(u32:3), true, false);
+  assert_eq(blocked.effects_valid, false);
+  assert_eq(blocked.egress_blocked, true);
+  assert_eq(local_pending(blocked.machine), true);
+  let held = local_step(blocked.machine, bits[128]:0, false, false);
+  assert_eq(held.machine, blocked.machine);
+  let resumed = local_step(held.machine, bits[128]:0, false, true);
+  assert_eq(resumed.effects_valid, true);
+  let emitted = local_effect(resumed.effect_layout, resumed.effect_payload, u8:0);
+  assert_eq(total_from_bits(axis::frame_from_bits(emitted.frame).payload).value, u32:3);
+  let idle = local_step(resumed.machine, bits[128]:0, false, true);
+  assert_eq(idle.effects_valid, false);
+  assert_eq(local_pending(idle.machine), false);
 }
 
 // An invalid envelope is rejected before it can be mistaken for valid callback input.
@@ -48,7 +52,9 @@ fn malformed_frame() {
   let boot = local_step(local_initial(), bits[128]:0, false, true);
   let frame = axis::frame_from_bits(offered(u32:2));
   let broken = axis::Frame { header: axis::Header { payload_words: u8:2, ..frame.header }, ..frame };
-  let failed = local_step(boot.0, axis::bits_from_frame(broken), true, true);
-  assert_eq(hls_failure::failed(machine_from_bits(failed.0).failure), true);
-  assert_eq(machine_from_bits(failed.0).data.value, u32:0);
+  let failed = local_step(boot.machine, axis::bits_from_frame(broken), true, true);
+  let observed = local_observe(failed.machine, u32:0);
+  assert_eq(hls_failure::failed(observed.failure), true);
+  assert_eq(observed.pending, false);
+  assert_eq(machine_from_bits(failed.machine).data.value, u32:0);
 }

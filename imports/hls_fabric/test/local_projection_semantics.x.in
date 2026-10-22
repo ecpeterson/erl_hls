@@ -7,29 +7,29 @@ fn projected_local_transactions() {
     let boot = local_step_at(initial,bits[128]:0,false,true,slot);
     let early_frame = axis::bits_from_frame(axis::pack(Tag::PUT as u8,
       hls_bits::frame_payload(bits_from_put(Put {value:uN[7]:19}))));
-    let early = local_step_at(boot.0,early_frame,true,true,slot);
-    assert_eq(early.6,Directive::POSTPONE as u2);
-    assert_eq(early.0,boot.0);
-    assert_eq(early.4,false);
+    let early = local_step_at(boot.machine,early_frame,true,true,slot);
+    assert_eq(early.directive,Directive::POSTPONE as u2);
+    assert_eq(early.machine,boot.machine);
+    assert_eq(early.effects_valid,false);
     let config = if slot==u32:0 {Configure {id:uN[13]:4567,bias:sN[11]:-731}}
       else {Configure {id:uN[13]:1234,bias:sN[11]:513}};
     let frame = axis::bits_from_frame(axis::pack(Tag::CONFIGURE as u8,
       hls_bits::frame_payload(bits_from_configure(config))));
-    let blocked = local_step_at(boot.0,frame,true,false,slot);
-    assert_eq(blocked.4,false);
-    assert_eq(local_pending_at(blocked.0,slot),true);
-    let held = local_step_at(blocked.0,bits[128]:0,false,false,slot);
-    assert_eq(held.0,blocked.0);
-    let ready = local_step_at(held.0,bits[128]:0,false,true,slot);
-    assert_eq(ready.4,true);
+    let blocked = local_step_at(boot.machine,frame,true,false,slot);
+    assert_eq(blocked.effects_valid,false);
+    assert_eq(local_pending_at(blocked.machine,slot),true);
+    let held = local_step_at(blocked.machine,bits[128]:0,false,false,slot);
+    assert_eq(held.machine,blocked.machine);
+    let ready = local_step_at(held.machine,bits[128]:0,false,true,slot);
+    assert_eq(ready.effects_valid,true);
     let _ = for (v, _): (u32, ()) in u32:0..u32:128 {
       let offered = axis::bits_from_frame(axis::pack(Tag::PUT as u8,
         hls_bits::frame_payload(bits_from_put(Put {value:v as uN[7]}))));
-      let changed = local_step_at(ready.0,offered,true,true,slot);
-      let data = machine_from_bits<u32:0>(changed.0,slot).data;
+      let changed = local_step_at(ready.machine,offered,true,true,slot);
+      let data = machine_from_bits<u32:0>(changed.machine,slot).data;
       assert_eq(data,Cell {id:config.id,value:v as uN[7],bias:config.bias});
-      let failed = local_step_at(changed.0,frame,true,true,slot);
-      let machine = machine_from_bits<u32:0>(failed.0,slot);
+      let failed = local_step_at(changed.machine,frame,true,true,slot);
+      let machine = machine_from_bits<u32:0>(failed.machine,slot);
       assert_eq(machine.data,data);
       assert_eq(machine.failure != u16:0,true);
       ()

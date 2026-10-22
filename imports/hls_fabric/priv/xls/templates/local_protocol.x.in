@@ -1,11 +1,20 @@
-// handled, deferred completion, private machine, dispatched, mailbox directive.
+// Receipt disposition and private intermediate state.
 // A deferred receipt retains the selected mailbox head. Only the subsequent
 // completion result may consume/postpone it; its placeholder directive is ignored.
-pub type LocalProtocolResult = (bool, bool, MachineBits, bool, u2);
+pub struct LocalProtocolResult {
+  handled: bool,
+  deferred_completion: bool,
+  private_machine: MachineBits,
+  dispatched: bool,
+  directive: u2,
+}
 
 // Ignore all other fields when handled=false; execute the ordinary callback path.
 fn local_protocol_unhandled(machine: ActorState) -> LocalProtocolResult {
-  (false, false, bits_from_machine(machine), false, Directive::CONSUME as u2)
+  LocalProtocolResult {
+    handled: false, deferred_completion: false, private_machine: bits_from_machine(machine),
+    dispatched: false, directive: Directive::CONSUME as u2,
+  }
 }
 
 @@SCALAR@@

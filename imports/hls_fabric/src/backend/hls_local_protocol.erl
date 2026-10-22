@@ -2,7 +2,7 @@
 -moduledoc "Splits collection receipts from source callbacks at the local actor boundary; allocation and mailbox ownership remain runtime obligations.".
 -export([ports/1]).
 
--doc "Emits receipt and callback DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port requires receipt interception and no received frame during pending internal work. Retained calls are unsupported.".
+-doc "Emits receipt, callback-action and entry/publication DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
 -spec ports(xls_actor_codegen:spec()) -> iodata().
 ports(Spec = #{message_names := Names, message_words := Words,
         reductions := Reductions, gathers := Gathers}) ->

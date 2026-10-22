@@ -27,16 +27,52 @@ fn local_plain_dispatch(machine: ActorState, frame: axis::Frame, received: bool)
   }
 }
 
-// Same complete result as local_step_at when no receipt is handled and incoming
-// dispatch is suppressed while local_pending_at is true. This is a caller contract,
-// not an input validator. A final gather must first supply its private receipt state.
-pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool,
-    effects_reserved: bool, slot: u32) ->
-    (MachineBits, bits[ENTRY_EFFECT_PAYLOAD_BITS], u8, u8, bool, bool, u2, bool, bool) {
+// Private action result: the updated machine and its original mailbox disposition
+// stay together until entry/publication commits. This value is not actor state.
+pub struct LocalAction {
+  private_machine: MachineBits,
+  dispatched: bool,
+  directive: u2,
+  phase_boundary: bool,
+}
+
+// Select source callback work after receipt interception. Suppress received while
+// local_pending_at is true. Retain the returned action and the selected mailbox
+// head together; do not run another action while its entry is outstanding.
+pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool,
+    slot: u32) -> LocalAction {
   let machine = local_machine(raw, slot);
   let dispatched = { @@SELECTED@@ };
-  let entered = shared_machine_enter(dispatched.machine, effects_reserved);
-  (bits_from_machine(entered.machine), entered.effects.payloads, entered.effects.layout,
-   entry_effect_count(entered.effects), entered.effects_valid, dispatched.dispatched,
-   dispatched.directive as u2, dispatched.phase_boundary, entered.egress_blocked)
+  LocalAction {
+    private_machine: bits_from_machine(dispatched.machine),
+    dispatched: dispatched.dispatched,
+    directive: dispatched.directive as u2,
+    phase_boundary: dispatched.phase_boundary,
+  }
+}
+
+// Evaluate entry from an owned action and the same slot. Reserve publication
+// storage before accepting effects. If egress_blocked is true, retain the entire
+// action for retry; ignore inactive payload fields and do not retire the head.
+pub fn local_enter_at(action: LocalAction, effects_reserved: bool, slot: u32) -> LocalStepResult {
+  let entered = shared_machine_enter(local_machine(action.private_machine, slot), effects_reserved);
+  LocalStepResult {
+    machine: bits_from_machine(entered.machine),
+    effect_payload: entered.effects.payloads,
+    effect_layout: entered.effects.layout,
+    effect_count: entry_effect_count(entered.effects),
+    effects_valid: entered.effects_valid,
+    dispatched: action.dispatched,
+    directive: action.directive,
+    phase_boundary: action.phase_boundary,
+    egress_blocked: entered.egress_blocked,
+  }
+}
+
+// Compose the action and its entry immediately for the existing callback path.
+// A final gather first supplies its private receipt state with received=false.
+// The complete result equals local_step_at under the receipt/pending-work domain.
+pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool,
+    effects_reserved: bool, slot: u32) -> LocalStepResult {
+  local_enter_at(local_action_at(raw, frame, received, slot), effects_reserved, slot)
 }

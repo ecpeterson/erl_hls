@@ -7,12 +7,21 @@ fn local_protocol_scalar(machine: ActorState, frame: axis::Frame) -> LocalProtoc
   if applied.outcome == ReductionOutcome::NOT_CANDIDATE {
     local_protocol_unhandled(machine)
   } else if applied.outcome == ReductionOutcome::MISMATCH {
-    (true, false, bits_from_machine(machine), true, Directive::POSTPONE as u2)
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(machine),
+      dispatched: true, directive: Directive::POSTPONE as u2,
+    }
   } else if accepted {
     let next = ActorState { reduction: applied.state, ..machine };
-    (true, false, bits_from_machine(next), true, Directive::CONSUME as u2)
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::CONSUME as u2,
+    }
   } else {
     let next = ActorState { failure: hls_failure::REDUCTION_PROTOCOL, ..machine };
-    (true, false, bits_from_machine(next), true, Directive::FAIL as u2)
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::FAIL as u2,
+    }
   }
 }

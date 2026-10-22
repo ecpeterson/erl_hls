@@ -1,3 +1,38 @@
+// One activation's state, evaluated effect batch and mailbox disposition.
+// Effect payload/layout/count are active only when effects_valid is true.
+pub struct LocalStepResult {
+  machine: MachineBits,
+  effect_payload: bits[ENTRY_EFFECT_PAYLOAD_BITS],
+  effect_layout: u8,
+  effect_count: u8,
+  effects_valid: bool,
+  dispatched: bool,
+  directive: u2,
+  phase_boundary: bool,
+  egress_blocked: bool,
+}
+
+// One decoded publication addressed to a source-declared output port.
+pub struct LocalEffect {
+  port: u8,
+  frame: bits[128],
+}
+
+// Reset value and passive status of the supplied machine before activation.
+pub struct LocalObservation {
+  initial_machine: MachineBits,
+  pending: bool,
+  failure: u16,
+}
+
+// Independent observation, activation and outbox decoding in one evaluation.
+// The effect belongs to the supplied outbox batch, not the newly returned step.
+pub struct LocalCycleResult {
+  observation: LocalObservation,
+  step: LocalStepResult,
+  effect: LocalEffect,
+}
+
 // Decode the source state with the selected actor slot's validated constants.
 fn local_machine(raw: MachineBits, slot: u32) -> ActorState { @@DECODE@@ }
 
@@ -13,42 +48,54 @@ pub fn local_pending_at(raw: MachineBits, slot: u32) -> bool {
 // Execute one reserved activation with ordered effects. State must come from
 // initialization or a committed activation; the caller owns mailbox order and storage.
 pub fn local_step_at(raw: MachineBits, frame: bits[128], received: bool,
-    effects_reserved: bool, slot: u32) ->
-    (MachineBits, bits[ENTRY_EFFECT_PAYLOAD_BITS], u8, u8, bool, bool, u2, bool, bool) {
+    effects_reserved: bool, slot: u32) -> LocalStepResult {
   let machine = local_machine(raw, slot);
   let request = SharedExecutorRequest { machine: raw, frame: axis::frame_from_bits(frame),
     received, slot, egress_ready: effects_reserved, @@INTERNAL@@ ..zero!<SharedExecutorRequest>() };
   let result = @@EXECUTE@@;
-  (result.machine, result.effects.payloads, result.effects.layout,
-   entry_effect_count(result.effects), result.effects_valid, result.dispatched,
-   result.directive as u2, result.phase_boundary, result.egress_blocked)
+  LocalStepResult {
+    machine: result.machine,
+    effect_payload: result.effects.payloads,
+    effect_layout: result.effects.layout,
+    effect_count: entry_effect_count(result.effects),
+    effects_valid: result.effects_valid,
+    dispatched: result.dispatched,
+    directive: result.directive as u2,
+    phase_boundary: result.phase_boundary,
+    egress_blocked: result.egress_blocked,
+  }
 }
 
 // Decode a reserved batch in source order; index must be below its returned count.
-pub fn local_effect(layout: u8, payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], index: u8) -> (u8, bits[128]) {
+pub fn local_effect(layout: u8, payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], index: u8) -> LocalEffect {
   let effect = entry_effect(EntryEffects { layout, payloads: payload }, index);
-  (effect.port as u8, axis::bits_from_frame(effect.frame))
+  LocalEffect { port: effect.port as u8, frame: axis::bits_from_frame(effect.frame) }
 }
 
 // Inspect initialization, pending work and failure without performing an activation.
-pub fn local_observe(raw: MachineBits, slot: u32) -> (MachineBits, bool, u16) {
-  (local_initial(), local_pending_at(raw, slot), local_machine(raw, slot).failure)
+pub fn local_observe(raw: MachineBits, slot: u32) -> LocalObservation {
+  LocalObservation {
+    initial_machine: local_initial(),
+    pending: local_pending_at(raw, slot),
+    failure: local_machine(raw, slot).failure,
+  }
 }
 
 // Single-actor callers use the same source pending predicate at slot zero.
 pub fn local_pending(raw: MachineBits) -> bool { local_pending_at(raw, u32:0) }
 
 // Single-actor callers use the same reserved activation at slot zero.
-pub fn local_step(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool) ->
-    (MachineBits, bits[ENTRY_EFFECT_PAYLOAD_BITS], u8, u8, bool, bool, u2, bool, bool) {
+pub fn local_step(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool) -> LocalStepResult {
   local_step_at(raw, frame, received, effects_reserved, u32:0)
 }
 
 // The caller holds the immutable outbox batch until its last ordered effect is accepted.
 pub fn local_cycle(raw: MachineBits, frame: bits[128], received: bool,
     effects_reserved: bool, out_layout: u8, out_payload: bits[ENTRY_EFFECT_PAYLOAD_BITS],
-    out_index: u8, slot: u32) -> (MachineBits, bool, u16,
-      (MachineBits, bits[ENTRY_EFFECT_PAYLOAD_BITS], u8, u8, bool, bool, u2, bool, bool), (u8, bits[128])) {
-  (local_initial(), local_pending_at(raw, slot), local_machine(raw, slot).failure,
-   local_step_at(raw, frame, received, effects_reserved, slot), local_effect(out_layout, out_payload, out_index))
+    out_index: u8, slot: u32) -> LocalCycleResult {
+  LocalCycleResult {
+    observation: local_observe(raw, slot),
+    step: local_step_at(raw, frame, received, effects_reserved, slot),
+    effect: local_effect(out_layout, out_payload, out_index),
+  }
 }

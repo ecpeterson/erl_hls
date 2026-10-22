@@ -83,9 +83,10 @@ def main() -> None:
                           (args.xls / 'xls/dslx/stdlib', '*.x')]:
         inputs.extend(sorted(base.rglob(pattern)))
     bindings = {str(p): digest(p) for p in inputs}
-    positive = ['protocol_receipt_equal', 'protocol_completion_equal', 'protocol_slow_equal']
+    positive = ['protocol_receipt_equal', 'protocol_completion_equal', 'protocol_slow_equal',
+                'protocol_publication_retry']
     plan = {'method': 'combinational SAT', 'properties': positive,
-            'domain': 'All machine/frame bits, received/effects_reserved Booleans and 32-bit slots for each emitted fixture; receipt eligibility and slow-path preconditions are expressed in the properties.',
+            'domain': 'All machine/frame bits, received/effects_reserved Booleans and 32-bit slots for each emitted fixture; receipt eligibility and slow-path preconditions are expressed in the properties. Publication retry retains the same action and actor slot with no intervening activation.',
             'trust': 'Source extraction, DSLX/XLS lowering and optimization, Yosys/ABC/SAT; assumes declared fixed-width interfaces.',
             'excludes': ['general theorem for arbitrary source programs', 'runtime ownership', 'temporal progress', 'routed timing'],
             'inputs': bindings}
@@ -96,13 +97,16 @@ def main() -> None:
         run(['bash', ROOT / 'tools/emit_local_actor.sh', source, options, built], stage, name + '-build')
         report = manifest(built)
         assert report['receipt_result_fields'] == ['handled', 'deferred_completion', 'private_machine', 'dispatched', 'directive']
-        assert {'local_protocol_at', 'local_slow_step_at'} <= set(report['function_ports'])
+        assert {'local_protocol_at', 'local_slow_step_at', 'local_action_at', 'local_enter_at'} <= set(report['function_ports'])
+        assert report['action_result_fields'] == ['private_machine', 'dispatched', 'directive', 'phase_boundary']
+        negatives += ['protocol_stale_action', 'protocol_drop_action_disposition']
         actors.append({'name': name, 'manifest': report})
         module = name + '_properties'
         proof = stage / (module + '.x')
-        proof.write_bytes(built.read_bytes() + b'\n' + properties.read_bytes())
+        # Import the emitted public types/functions across the real module boundary.
+        proof.write_bytes(f'import {name} as actor;\n\n'.encode() + properties.read_bytes())
         raw = stage / (module + '.ir')
-        paths = ':'.join(map(str, [ROOT / 'priv/xls/lib', ROOT / 'priv/xls/fabric',
+        paths = ':'.join(map(str, [stage, ROOT / 'priv/xls/lib', ROOT / 'priv/xls/fabric',
                                   PUBLIC / 'priv/xls/lib', PUBLIC / 'priv/xls/fabric']))
         run([args.xls / 'ir_converter_main', '--warnings_as_errors=false', '--dslx_path=' + paths,
              '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), proof], stage, name + '-convert', raw)
