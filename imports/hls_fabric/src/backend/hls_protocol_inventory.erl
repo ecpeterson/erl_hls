@@ -3,8 +3,8 @@
 -export([inspect/2]).
 -export_type([report/0]).
 
--doc "Source-bound inspection report. An inventory does not discharge the listed temporal obligations or authorize lowering.".
--opaque report() :: #{version := 1, topology_hash := binary(), modules := map(),
+-doc "Inspectable source-bound report with public structural fields. An inventory does not discharge the listed temporal obligations or authorize lowering.".
+-type report() :: #{version := 1, topology_hash := binary(), modules := map(),
     actors := [map()], channels := [map()], boundaries := map(),
     diagnostics := [map()], obligations := [map()], eligible := false}.
 

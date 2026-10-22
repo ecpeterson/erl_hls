@@ -101,4 +101,4 @@ CI runs this fixture with the same pinned XLS release as the public dependency a
 
 The [compiler dependency](docs/building.md) is pinned and prepared automatically. All virtual-node implementation and documentation remain private here.
 
-[Source-protocol inspection](docs/source-protocol.md) compiles the current repetition/noise actors, inventories their exact channels, and reports unresolved ownership obligations before hardware specialization.
+[Source-protocol inspection and transport](docs/source-protocol.md) compiles current actors, inventories their exact channels and emits connected snapshot publishers and typed capture links. Actor scheduling and whole-application admission remain separate.

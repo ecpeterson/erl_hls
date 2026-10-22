@@ -1,0 +1,20 @@
+// Every clock samples the complete pin bundle. The wrapper ties command-valid
+// and observation-ready high: recipient backpressure is inside Inputs, so it
+// cannot stop unrelated sources, releases or reset retirement.
+pub proc protocol_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // Point-to-point sampled clock interface, never an application queue.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) {
+    (commands, observations)
+  }
+  // Cancel publications, capture ownership, precedence and sticky faults.
+  init { zero!<State>() }
+  // One stage, no input/output flops: state advances once per hardware clock.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let (next_state, output) = tick(state, input);
+    let _sent = send(tok, observations, output);
+    next_state
+  }
+}

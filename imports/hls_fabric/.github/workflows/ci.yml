@@ -141,6 +141,11 @@ jobs:
       - name: Exercise actor PIDs and public debug queries against generated RTL
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_actor_rtl.py "$RUNNER_TEMP/xls" --stage _build/actor-pids
+      - name: Check source-bound codecs and connected publication transport
+        if: needs.select.outputs.hardware == 'true'
+        run: |
+          bash tools/test_protocol_codecs.sh "$RUNNER_TEMP/xls" "_build/protocol-codecs"
+          bash tools/test_protocol_transport.sh "$RUNNER_TEMP/xls" "_build/protocol-transport"
       - name: Check fused scheduler ingress ordering, fairness, stalls and reset
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_scheduler_ingress.py "$RUNNER_TEMP/xls" --stage _build/scheduler-ingress
@@ -167,6 +172,12 @@ jobs:
         with:
           name: actor-pid-observations
           paths: |
+            _build/protocol-codecs/*.json
+            _build/protocol-codecs/*.log
+            _build/protocol-transport/*.log
+            _build/protocol-transport/**/dslx/*.log
+            _build/protocol-transport/**/dslx/commands.json
+            _build/protocol-transport/result.json
             _build/actor-pids/**/*.log
             _build/actor-pids/**/build.json
             _build/actor-pids/**/manifest.json
