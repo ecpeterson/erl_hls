@@ -15,7 +15,7 @@ write(Plan=#{sources:=Sources,links:=Links},Directory) ->
     Source=["import protocol_transport as p;\nimport axis;\nconst_assert!(axis::FRAME_BITS == u32:128);\n",
         structure("Inputs",Inputs),structure("Outputs",Outputs),
         [source(S)||S<-Definitions],[link_shape(L)||L<-shapes(Links)],
-        "struct State {\n",[[sname(I),": S",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Instances],
+        "pub struct State {\n",[[sname(I),": S",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Instances],
         [[lname(I),": L",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Links],"}\n",tick(Plan#{sources=>Instances}),Clock],
     ok=file:write_file(filename:join(Directory,"transport.x"),Source,[exclusive]),
     ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Directory,"protocol_fabric.sv")),
@@ -118,8 +118,11 @@ tick(Plan=#{sources:=Sources,links:=Links,boundaries:=Boundaries}) ->
         ||#{index:=I,source_index:=S,output_index:=D}<-Links])++lists:append([
         [{bname(I,D)++"_valid",bit(sname(I)++".valid",D)}, {bname(I,D)++"_data",slice(sname(I)++".data",At,W)}]
         ||#{source_index:=I,output:=#{index:=D,offset:=At,width:=W}}<-Boundaries])),
-    ["fn tick(s: State, io: Inputs) -> (State, Outputs) {\n",Views,LinkViews,
-        "(State {",SourceNext,LinkNext,"}, Outputs {",[[K,": ",maps:get(K,Values),",\n"]||{K,_}<-Ports],"}) }\n"].
+    ["// Observations use old state; take/release and boundary ready affect next state only.\n",
+        "pub struct Tick { state: State, output: Outputs }\n",
+        "pub fn tick(s: State, io: Inputs) -> Tick {\n",Views,LinkViews,
+        "Tick { state: State {",SourceNext,LinkNext,"}, output: Outputs {",
+        [[K,": ",maps:get(K,Values),",\n"]||{K,_}<-Ports],"} } }\n"].
 
 %% A recipient's credit has no dependency on other recipients or the incoming payload.
 -spec ready(non_neg_integer(),map(),[map()]) -> iolist().
@@ -134,7 +137,7 @@ expression(Bits) -> concat([case B of {payload,J}->["payload[",n(J),"+:u1]"];_->
 
 %% Static packed records keep ABI ordering visible in generated DSLX.
 -spec structure(string(),[{string(),pos_integer()}]) -> iolist().
-structure(Name,Fields) -> ["struct ",Name," {",[[K,": ",bits(W),",\n"]||{K,W}<-Fields],"}\n"].
+structure(Name,Fields) -> ["pub struct ",Name," {",[[K,": ",bits(W),",\n"]||{K,W}<-Fields],"}\n"].
 %% Empty recipients still use the planner's harmless one-bit physical placeholder.
 -spec concat([iodata()],iodata()) -> iolist().
 concat([],Default) -> [Default];

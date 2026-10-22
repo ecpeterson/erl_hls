@@ -13,8 +13,8 @@ pub proc protocol_clock {
   // One stage, no input/output flops: state advances once per hardware clock.
   next(state: State) {
     let (tok, input) = recv(join(), commands);
-    let (next_state, output) = tick(state, input);
-    let _sent = send(tok, observations, output);
-    next_state
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
   }
 }

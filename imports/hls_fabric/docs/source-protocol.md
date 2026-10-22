@@ -80,7 +80,7 @@ The generated top is `protocol_fabric`. `transport.etf` retains exact source, pr
 
 Storage is local: one evaluated snapshot per source, one payload and ownership state per typed channel, and a pairwise precedence matrix per logical sender/destination. Each pair accepts at most one arrival and acquisition per clock; slots have independent last-read releases. An S-slot pair requires S² precedence bits plus S pending bits and two ownership bits per slot, in addition to payloads. The pair limit is 255 classes; a source subsequence has at most 256 entries, matching its ordinary eight-bit effect index. These are structural costs, not mapped area or throughput estimates. There is no global payload allocator or cross-sender arrival order.
 
-Generation leaves `eligible: false`: actor controllers, external ingress, generation guards, sufficient capacity and network progress still need integration and admission. In particular, one slot per class can stall an application that requires more buffered messages. This command does not replace existing backends or run FPGA synthesis.
+Transport generation leaves `eligible: false`: its source and capture ports need owners, and external ingress, generation guards, sufficient capacity and network progress need integration and admission. The network command below connects ordinary owners for source-initialized topologies. In particular, one slot per class can stall an application that requires more buffered messages. This command does not replace existing backends or run FPGA synthesis.
 
 ## Source actor functions
 
@@ -154,7 +154,7 @@ The core samples packed `_commands` (`LocalOwnerInputs`) and emits `_observation
 
 Handled receipts commit without reserving another batch and can overlap draining prior output. A final gather receipt instead supplies private state to completion and holds its original head. All other actions execute once and register the complete `LocalAction`; entry retries that value until publication room exists. No new head or internal action can overwrite it. The committed raw machine changes only at completion. Outbox reservation uses old state, so its last-drain edge does not simultaneously admit a new publication batch.
 
-This baseline retains at most one action and one publication batch: `2*M + P + 63` declared state bits (including the startup flag) for an M-bit machine and P-bit payload, before XLS optimization. One clock can update one actor state/action and advance one output index; there is no shared state allocator or additional mailbox. This is a structural storage bound, not a mapped-area, throughput or native-timing claim. The transport command still compiles its separate transport proc; connecting the complete network, startup/ingress, capacity and progress admission remains later work; the receiver below supplies mailbox selection.
+This baseline retains at most one action and one publication batch: `2*M + P + 63` declared state bits (including the startup flag) for an M-bit machine and P-bit payload, before XLS optimization. One clock can update one actor state/action and advance one output index; there is no shared state allocator or additional mailbox. This is a structural storage bound, not a mapped-area, throughput or native-timing claim. The transport command compiles its separate proc; the receiver below supplies mailbox selection and the network command connects complete batches. Startup/ingress, capacity and progress admission remain separate.
 
 `python3 tools/test_local_owner.py XLS_ROOT FRESH_OUTPUT` compares each completed transaction with the original unsplit executor for plain, two-effect-batch, scalar-reduction and indexed-gather/continuation fixtures, including publication stalls, postponement, failure and reset positions. The whole-test XLS JIT executes the assertions, and all four clocked owners are compiled and simulated against independent frame/retirement scoreboards. These are finite witnesses, not an arbitrary-program refinement or progress theorem.
 
@@ -166,7 +166,7 @@ The same transport build command now emits `actors/receiver_I.x` for each elabor
 python3 tools/compile_local_actor.py XLS_ROOT BUILD/actors/receiver_I.x FRESH_RTL_OUTPUT
 ```
 
-Its manifest selects `local_inbox_clock`. The one-stage schedule, permanently enabled XLS channels and shared active-high reset contract are the same as for the ordinary actor owner. One masked startup clock installs source initialization. These are standalone receiver modules; their ordinary effect outputs still need connection to publishers, and application startup, external ingress, capacity and progress admission remain separate. The transport summary therefore continues to report `actor_runtime: false` and `eligible: false`.
+Its manifest selects `local_inbox_clock`. The one-stage schedule, permanently enabled XLS channels and shared active-high reset contract are the same as for the ordinary actor owner. One masked startup clock installs source initialization. These are standalone receiver modules with ordinary effect outputs. The network command below instead transfers their complete outbox batches to publishers; application startup, external ingress, capacity and progress admission remain separate. The transport summary therefore continues to report `actor_runtime: false` and `eligible: false`.
 
 `LocalInboxInputs` lists `reset`, `output_ready`, then each incoming link's `selected`, `available` and packed `payloads`. Wire these to that exact transport instance. `LocalInboxOutputs` groups four masks and the existing `LocalOwnerOutputs` under `owner`. Masks follow the manifest's `inbox.slots` order; each row identifies its link, capture slot, payload slice and destination-frame codec.
 
@@ -183,3 +183,33 @@ Each pair supplies its oldest eligible pending slot. A circular selector chooses
 The added state is `3*N + max(1, ceil(log2(N))) + 1` bits for postponed, reserved and delayed-release masks, cursor and startup flag, plus the existing `LocalOwnerState`. No frame or payload copy is added. There is one selected dispatch per actor per clock and no shared allocator. `N` is the number of incoming physical capture slots, limited to 256; zero-input actors use one tied-unavailable dummy slot. This is a structural bound, not a native area or timing result.
 
 `python3 tools/test_protocol_inbox.py XLS_ROOT FRESH_OUTPUT` connects real generated transport and receiver RTL to independent sender-age, disposition and source-value scoreboards. Its finite schedule covers early postponement, wakeup, repeated sends, publication stalls, delayed release and reset during ownership, followed by two complete incarnations; early-consume and undelayed-release wiring controls must fail its independent scoreboard. Combinational SAT checks circular priority for all request masks and legal cursors at 1, 3 and 8 slots; an ignored-cursor control must fail. Those checks trust XLS lowering and Yosys/ABC/SAT and establish selection only, not sequential refinement or network progress. Local XC7 selector counts are capacity screens, not Vivado forecasts. The existing transport regression also lowers each distinct source/codec/width receiver shape across its real repetition and D3 populations.
+
+## Build a source-initialized network
+
+For topologies driven by ordinary source initialization and internal messages, the network command connects all owners and transport in one DSLX proc:
+
+```sh
+bash tools/emit_protocol_network.sh XLS_ROOT CONFIG FRESH_OUTPUT
+```
+
+It accepts the same trusted source/topology configuration as the transport command. Declared `startup` messages and `ingresses` reject explicitly; they are not ignored. External destinations remain separate ready/valid streams, ordered per logical source and recipient, without a global output order. All owners and transport share one clock and reset. This command does not implement independent-device reset, a board interface or application admission.
+
+```text
+emit_protocol_network.sh → emit_protocol_network.escript
+  → hls_protocol_network:write/2
+    → hls_protocol_transport:write/2 (fresh sources, exact inboxes and transport)
+    → reject unsupported startup/ingress
+    → xls_protocol_network:write/2
+      → receiver_I::local_inbox_batch / local_inbox_batch_tick
+      → transport::tick → named state/output result
+      → sv_protocol_ports:write/5 (mechanical pin packing)
+  → compile_protocol_network.py → shared sampled-clock XLS compiler
+```
+
+`local_inbox_batch` exposes the old outbox's complete evaluated payload and layout. `local_inbox_batch_tick` reuses ordinary selection, receipt and action completion, but disables single-effect draining: `output_ready` accepts the entire old batch. Use this interface from reset, never interleave it with serial-effect draining. A stalled batch stays unchanged, and its acceptance edge cannot also reuse that outbox for a new entry. The publisher then retires each recipient's ordered subsequence independently.
+
+Composition adds no state: each actor retains its existing `LocalInboxState`, and transport retains its existing publications/captures. There is one complete old-batch reader per publisher and one selected capture reconstruction per receiver. Offers and eligibility use old registered state. The network first obtains transport observations, computes receiver transitions, then supplies their actual take/release inputs to the transport transition. Those observations are independent of take/release and boundary readiness; the first call's unused next state is discarded by XLS. There is no combinational readiness loop or same-edge credit reuse.
+
+`network/manifest.json` describes the pins and binds direct component DSLX hashes. `network/compiled.json` records RTL/tool hashes, import paths and the fixed one-stage schedule; `network/commands.json` retains invocations and failures. `files.f` lists top `protocol_network` and its core. The original transport `summary.json` continues to describe the standalone transport; the network manifest records `actor_runtime: true`, `eligible: false`. Additional provider imports can be supplied to `compile_protocol_network.py` with `--dslx-path DIR`. Inputs and manifests are trusted local build products. Failed builds retain partial output.
+
+Run `python3 tools/test_protocol_network.py XLS_ROOT FRESH_OUTPUT` with Icarus and Yosys available. The three-actor RTL witness uses actual source owners for three batches per producer and ordinary sink results as feedback. Public output scoreboards check ordered changing payloads, independent stalls and reset interruption followed by two complete incarnations. Deliberately dropped stalled batches and disconnected feedback must fail. Combinational SAT quantifies all finite state/input valuations of this fixture's transport to check the observation dependency cut; a deliberately incorrect reset-independence claim yields a counterexample. These checks trust source extraction, XLS and Yosys/ABC/SAT; they establish neither arbitrary-program refinement nor sufficient application capacity/progress. A whole-fixture XC7 resource screen is local synthesis evidence, not routed or native performance.

@@ -76,6 +76,36 @@ pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxT
   }
 }
 
+// Complete evaluated entry snapshot. Use only with local_inbox_batch_tick from
+// reset: mixing serial-effect and batch drains would replay a partial batch.
+pub struct LocalInboxBatch {
+  valid: bool,
+  layout: u8,
+  payload: bits[ENTRY_EFFECT_PAYLOAD_BITS],
+}
+
+// Publisher offers depend exclusively on old registered owner state, never ready.
+pub fn local_inbox_batch(s: LocalInboxState, reset: bool) -> LocalInboxBatch {
+  LocalInboxBatch {
+    valid: !reset && s.started && s.owner.outbox.index == u8:0 && s.owner.outbox.count != u8:0,
+    layout: s.owner.outbox.layout, payload: s.owner.outbox.payload,
+  }
+}
+
+// Reuse the ordinary receiver transition, disabling its serial-effect drain.
+// output_ready instead accepts the entire old batch. Old occupancy still blocks
+// a new entry on this edge; neither action nor selected-head ownership changes.
+pub fn local_inbox_batch_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxTick {
+  let step = local_inbox_tick(s, LocalInboxInputs { output_ready: false, ..io });
+  let accepted = local_inbox_batch(s, io.reset).valid && io.output_ready;
+  let outbox = LocalOutbox { index: s.owner.outbox.count, ..s.owner.outbox };
+  LocalInboxTick {
+    state: if accepted { LocalInboxState {
+      owner: LocalOwnerState { outbox, ..step.state.owner }, ..step.state
+    } } else { step.state }, ..step
+  }
+}
+
 // Sampled clock channels must always be enabled, exactly as for local_owner_clock.
 pub proc local_inbox_clock {
   commands: chan<LocalInboxInputs> in;

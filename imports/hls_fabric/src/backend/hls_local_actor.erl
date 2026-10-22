@@ -94,7 +94,8 @@ manifest(Artifact = #{spec := Spec, plan := Plan, dslx := Bytes, source := Sourc
         error -> Base;
         {ok, Inbox} -> Base#{clock_proc := local_inbox_clock, inbox => Inbox,
             function_ports := maps:get(function_ports, Base) ++
-                [local_inbox_initial, local_inbox_eligible, local_inbox_tick]}
+                [local_inbox_initial, local_inbox_eligible, local_inbox_tick,
+                 local_inbox_batch, local_inbox_batch_tick]}
     end.
 
 %% JSON cannot encode tuple keys or arbitrary tuples; this preserves inventories

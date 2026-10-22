@@ -13,17 +13,17 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def compile_transport(xls: Path, directory: Path) -> None:
-    """Compile one fresh generated proc; reject existing products and retain failed diagnostics."""
-    stage = directory / 'dslx'
+def compile_clock(xls: Path, source: Path, stage: Path, top: str, module: str,
+                  imports: list[Path]) -> None:
+    """Lower a sampled proc once; preserve its exact one-stage schedule and failed diagnostics."""
     commands = [
-        ('convert', [xls/'ir_converter_main', '--warnings_as_errors=false', '--top=protocol_clock',
-                     '--dslx_path='+':'.join(map(str, [ROOT/'priv/xls/lib', PUBLIC/'priv/xls/lib'])),
-                     '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), stage/'transport.x'], stage/'raw.ir'),
+        ('convert', [xls/'ir_converter_main', '--warnings_as_errors=false', '--top='+top,
+                     '--dslx_path='+':'.join(map(str, imports)),
+                     '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), source], stage/'raw.ir'),
         ('opt', [xls/'opt_main', stage/'raw.ir'], stage/'optimized.ir'),
         ('codegen', [xls/'codegen_main', '--pipeline_stages=1', '--delay_model=unit',
                      '--flop_inputs=false', '--flop_outputs=false', '--use_system_verilog=false',
-                     '--reset=reset', '--module_name=protocol_fabric_core', stage/'optimized.ir'], stage/'core.v'),
+                     '--reset=reset', '--module_name='+module, stage/'optimized.ir'], stage/'core.v'),
     ]
     records = []
     for name, command, target in commands:
@@ -33,7 +33,14 @@ def compile_transport(xls: Path, directory: Path) -> None:
                         'sha256':digest(target)})
         (stage/'commands.json').write_text(json.dumps(records, indent=2)+'\n')
         if result.returncode:
-            raise RuntimeError(f'{name} failed; see {stage/(name+".log")}')
+            raise RuntimeError(f'{name} failed: ' + (stage/(name+'.log')).read_text()[-4000:])
+
+
+def compile_transport(xls: Path, directory: Path) -> None:
+    """Compile one fresh generated proc; reject existing products and retain failed diagnostics."""
+    stage = directory / 'dslx'
+    compile_clock(xls, stage/'transport.x', stage, 'protocol_clock', 'protocol_fabric_core',
+                  [ROOT/'priv/xls/lib', PUBLIC/'priv/xls/lib'])
     rtl = [stage/'core.v', stage/'protocol_fabric.sv']
     with (directory/'files.f').open('x') as listing:
         listing.write(''.join(str(p.resolve())+'\n' for p in rtl))
