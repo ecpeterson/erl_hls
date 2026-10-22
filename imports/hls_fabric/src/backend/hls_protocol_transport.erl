@@ -2,7 +2,7 @@
 -moduledoc "Builds source-bound publication and sender-local capture hardware from a fresh application compilation. Actor scheduling and progress admission remain separate.".
 -export([write/2]).
 
--doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits connected publisher and capture DSLX into a fresh directory. Accepts direct and independently buffered routes only. Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; each destination must supply source-correct eligibility, acquisition and last-read release. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
+-doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions plus connected publisher and capture DSLX into a fresh directory. Accepts direct and independently buffered routes only. Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; each destination must supply source-correct eligibility, acquisition and last-read release. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
 -spec write(map(), file:filename()) -> map().
 write(#{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}, Output) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
@@ -37,14 +37,21 @@ write(#{sources := Sources, topology := {Module, Function, Arguments}, actor_lim
     Inbox = hls_protocol_inbox:plan(Capture),
     Fabric = hls_protocol_fabric:plan(Publishers, Inbox),
     ok = file:make_dir(Output),
+    ActorDirectory = filename:join(Output, "actors"),
+    ok = file:make_dir(ActorDirectory),
+    ActorFunctions = [begin
+        Relative = filename:join("actors", "actor_" ++ integer_to_list(I) ++ ".x"),
+        Summary = hls_local_actor:write(maps:get(M, Modules), filename:join(Output, Relative)),
+        #{module => M, file => list_to_binary(Relative), manifest => Summary}
+    end || {I, M} <- lists:enumerate(0, Used)],
     ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
     Plan = #{bundle => Bundle, capture => Capture, transactions => Transactions,
-        sources => Publishers, inbox => Inbox, fabric => Fabric},
+        sources => Publishers, inbox => Inbox, fabric => Fabric, actor_functions => ActorFunctions},
     ok = file:write_file(filename:join(Output, "transport.etf"), term_to_binary(Plan, [deterministic]), [exclusive]),
     Summary = #{actors => length(Actors), links => length(maps:get(links, Fabric)),
         source_modules => Used, top => protocol_fabric, eligible => false,
         source_plans => maps:map(fun(_, #{plan := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5], xls_statem_plan:manifest(P)) end, Modules),
-        hardware => dslx, rtl => []},
+        actor_functions => ActorFunctions, actor_runtime => false, hardware => dslx, rtl => []},
     ok = file:write_file(filename:join(Output, "summary.json"), json:encode(Summary), [exclusive]),
     Plan.
 
@@ -58,8 +65,8 @@ load(File, Options) ->
 -spec compile(module()) -> map().
 compile(Module) ->
     [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
-    {Spec, Plan} = xls_statem_plan:from_file(maps:get(source_name, Context), Context),
-    #{spec => Spec, plan => Plan, context => Context}.
+    Artifact = hls_local_actor:compile(maps:get(source_name, Context), Context),
+    Artifact#{context => Context}.
 
 %% Capture planning independently recompiles the same complete producer source.
 -spec source(map()) -> map().

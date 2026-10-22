@@ -11,7 +11,7 @@ source tools/backend_env.sh
 erl -noshell -eval '[Stage, Compiler] = init:get_plain_arguments(), ok = xls_local_execution_validation:prepare(Stage, Compiler), halt().' -extra "$stage" "$erl_hls_root"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
-for name in base arithmetic guard phase projected; do
+for name in base_test arithmetic_test guard_test phase_test projected; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/$name.x"
 done
 # Type-check the completion/continuation variants through the new exported boundary.

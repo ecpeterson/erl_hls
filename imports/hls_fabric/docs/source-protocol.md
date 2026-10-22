@@ -49,10 +49,11 @@ This compiles connected DSLX transport through XLS, not an executable actor appl
 ```text
 emit_protocol_transport.sh → emit_protocol_transport.escript
   → hls_protocol_transport:write/2
-    → fresh ordinary source compilation + topology normalization/elaboration + inventory
+    → local_actor:compile/2 + topology normalization/elaboration + inventory
     → capture:plan/2 + transactions:plan/2
     → source:plan/3 (projection + codec)
     → inbox:plan/1 → fabric:plan/2
+    → local_actor:write/2 (same compiled actors, source functions + manifests)
     → xls_protocol_transport:write/2
       → parametric protocol_transport.x + generated topology composition
       → sv_protocol_ports:write/3 (pin packing only)
@@ -80,6 +81,30 @@ The generated top is `protocol_fabric`. `transport.etf` retains exact source, pr
 Storage is local: one evaluated snapshot per source, one payload and ownership state per typed channel, and a pairwise precedence matrix per logical sender/destination. Each pair accepts at most one arrival and acquisition per clock; slots have independent last-read releases. An S-slot pair requires S² precedence bits plus S pending bits and two ownership bits per slot, in addition to payloads. The pair limit is 255 classes; a source subsequence has at most 256 entries, matching its ordinary eight-bit effect index. These are structural costs, not mapped area or throughput estimates. There is no global payload allocator or cross-sender arrival order.
 
 Generation leaves `eligible: false`: actor controllers, external ingress, generation guards, sufficient capacity and network progress still need integration and admission. In particular, one slot per class can stall an application that requires more buffered messages. This command does not replace existing backends or run FPGA synthesis.
+
+## Source actor functions
+
+The same transport build now writes `actors/actor_N.x` and its `.json` manifest for each distinct source module. These are the ordinary activation functions from the exact compilation used to plan publication. Actor instances share function definitions, not mutable state. `summary.json` binds module names, relative paths, source-plan identities, DSLX hashes and machine/effect layouts. The generated transport RTL remains separate: it does not instantiate these functions or own actor state.
+
+For a single actor without a topology:
+
+```sh
+# options.term contains one Erlang compiler-options list, for example [].
+bash tools/emit_local_actor.sh source.erl options.term /path/to/fresh/actor.x
+```
+
+Generated modules use the ordinary DSLX runtime libraries plus the provider modules listed in `source_imports`. When invoking XLS, supply the compiler/fabric library directories and the application provider directory; Phi actors also need the compiler’s `src/examples/phi_decoder` directory for `phi_field.x`. These outputs do not bundle or compile those libraries.
+
+The command builds the selected checkout, calls `hls_local_actor:compile/2`, then `write/2`; it accepts source and preprocessing options, not a saved plan or selected callbacks. Source errors and retained synchronous calls reject. Both the DSLX output and JSON sidecar must be absent. Failed writes leave partial output for diagnosis.
+
+`local_initial` supplies reset state; `local_pending_at` and `local_observe` inspect it; `local_step_at` executes one ordinary activation; `local_effect` decodes its evaluated batch in source order. The step result contains the next machine, effect payload/layout/count, effect validity, dispatch/directive, phase-boundary and egress-blocked flags. The caller owns the selected mailbox frame, state and publication reservation, commits once, and keeps a batch until its last effect is accepted. These pure functions allocate no clocked storage and provide no scheduler, lease handling or progress admission. Their use by an integrated owner follows separately.
+
+The source-actor regression invokes the public command, verifies source/DSLX and interface bindings, and rejects existing outputs and missing sources. The activation regression checks source arithmetic, guards, phases and projected state with the XLS interpreter/JIT, and lowers scalar reduction and indexed gather fixtures. These are finite semantic witnesses and compilation checks.
+
+```sh
+python3 tools/test_local_actor.py /path/to/fresh-actor-stage
+bash tools/test_local_execution.sh /path/to/xls /path/to/fresh-activation-stage
+```
 
 ## Transport checks
 

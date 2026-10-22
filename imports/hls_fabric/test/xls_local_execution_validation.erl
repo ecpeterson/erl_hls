@@ -15,8 +15,7 @@ prepare(Stage, CompilerRoot) ->
     ok = projection(Stage),
     Dependency = filename:join(CompilerRoot, "test_data"),
     lists:foreach(fun({Name, File}) ->
-        Spec = xls_parse:actor_artifact(filename:join(Dependency, File), []),
-        ok = file:write_file(filename:join(Stage, Name ++ ".x"), xls_shared_codegen:execution(Spec), [exclusive])
+        _ = hls_local_actor:write(filename:join(Dependency, File), [], filename:join(Stage, Name ++ ".x"))
     end, [{"reduction", "hls_statem_reduction_lower_fixture.erl"}, {"gather", "xls_statem_gather_fixture.erl"}]).
 
 %% Each variant changes source before parsing; no generated program is rewritten.
@@ -24,11 +23,13 @@ prepare(Stage, CompilerRoot) ->
 variant(Stage, Name, Source, Expected, Failure) ->
     File = filename:join(Stage, Name ++ ".erl"),
     ok = file:write_file(File, Source, [exclusive]),
-    Spec = xls_parse:actor_artifact(File, []),
+    Output = filename:join(Stage, Name ++ ".x"),
+    _ = hls_local_actor:write(File, [], Output),
+    {ok, Generated} = file:read_file(Output),
     {ok, Template} = file:read_file("test/local_actor_semantics.x.in"),
     Checks = binary:replace(binary:replace(Template, <<"@@SECOND@@">>, integer_to_binary(Expected), [global]),
         <<"@@FAIL@@">>, atom_to_binary(Failure), [global]),
-    file:write_file(filename:join(Stage, Name ++ ".x"), [xls_shared_codegen:execution(Spec), Checks], [exclusive]).
+    file:write_file(filename:join(Stage, Name ++ "_test.x"), [Generated, Checks], [exclusive]).
 
 %% The projection comes from actual startup/source analysis and is checked against the parsed source.
 -spec projection(file:filename()) -> ok.

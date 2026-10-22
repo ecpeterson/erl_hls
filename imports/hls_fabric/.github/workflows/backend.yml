@@ -204,8 +204,10 @@ jobs:
           python3 tools/test_shared_completion.py "$RUNNER_TEMP/xls"
           python3 tools/test_shared_request_stage.py "$RUNNER_TEMP/xls"
           python3 tools/test_mailbox_formal.py "$RUNNER_TEMP/xls"
-      - name: Check source-derived local activation semantics
-        run: bash tools/test_local_execution.sh "$RUNNER_TEMP/xls" "$RUNNER_TEMP/local-execution"
+      - name: Check source-derived actor build and local activation semantics
+        run: |
+          python3 tools/test_local_actor.py "$RUNNER_TEMP/local-actor-build"
+          bash tools/test_local_execution.sh "$RUNNER_TEMP/xls" "$RUNNER_TEMP/local-execution"
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |
