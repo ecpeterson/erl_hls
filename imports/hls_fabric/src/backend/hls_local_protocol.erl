@@ -1,8 +1,8 @@
 -module(hls_local_protocol).
--moduledoc "Splits collection receipts from source callbacks at the local actor boundary; allocation and mailbox ownership remain runtime obligations.".
+-moduledoc "Splits collection receipts from source callbacks at the local actor boundary; includes the single-actor DSLX clock owner; mailbox selection remains external.".
 -export([ports/1]).
 
--doc "Emits receipt, callback-action and entry/publication DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
+-doc "Emits receipt, callback-action, entry/publication and clock-owner DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
 -spec ports(xls_actor_codegen:spec()) -> iodata().
 ports(Spec = #{message_names := Names, message_words := Words,
         reductions := Reductions, gathers := Gathers}) ->
@@ -17,7 +17,7 @@ ports(Spec = #{message_names := Names, message_words := Words,
         {<<"@@NEXT_EVENT@@">>, xls_statem_event_codegen:optional(Spec,
             "      next_event: if effective && !failed { next_event } else { u8:0 },")},
         {<<"@@DISPATCHED@@">>, xls_shared_reduction_service_codegen:shared_dispatch_dispatched_field(Reductions, ordinary, Spec)},
-        {<<"@@SELECTED@@">>, dispatch(Spec)}])].
+        {<<"@@SELECTED@@">>, dispatch(Spec)}]), template("local_owner", [])].
 
 %% ActorState and source callback types are local to the generated module, so
 %% these fragments fill typed declaration slots rather than rewrite generated code.

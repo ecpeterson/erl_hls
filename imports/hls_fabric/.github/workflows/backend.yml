@@ -199,6 +199,7 @@ jobs:
           python3 tools/test_local_actor.py "$RUNNER_TEMP/local-actor-build"
           bash tools/test_local_execution.sh "$RUNNER_TEMP/xls" "$RUNNER_TEMP/local-execution"
           python3 tools/test_local_protocol.py "$RUNNER_TEMP/xls" _build/local-protocol
+          python3 tools/test_local_owner.py "$RUNNER_TEMP/xls" _build/local-owner
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |
@@ -222,6 +223,9 @@ jobs:
             _build/local-protocol/*.x
             _build/local-protocol/*.ys
             _build/local-protocol/*.v
+            _build/local-owner/**/*.json
+            _build/local-owner/**/*.v
+            _build/local-owner/*.x
   complete-debug:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04

@@ -1,0 +1,92 @@
+// Finite owner/source comparison state, separate from the implementation state.
+struct OwnerWitness {
+  owner: LocalOwnerState,
+  expected: LocalStepResult,
+  request: u32,
+  retired: u32,
+  emitted: u32,
+  stalled: u32,
+  deferred: u32,
+  postponed: u32,
+}
+
+@@FIXTURE@@
+
+// Compare every completed transaction against the unsplit ordinary executor.
+// The input sequence, stalls and reset schedule below are finite witnesses.
+fn witness_tick(w: OwnerWitness, clock: u32) -> OwnerWitness {
+  let offered = owner_message(w.request);
+  let io = LocalOwnerInputs { received: w.request < OWNER_MESSAGES,
+    frame: offered, output_ready: clock > u32:30 && clock % u32:5 != u32:0,
+    ..zero!<LocalOwnerInputs>() };
+  let t = local_owner_tick(w.owner, io);
+  let launch = !w.owner.action_valid && (t.output.input_ready && io.received || local_pending(w.owner.machine));
+  let expected = if launch { local_step(w.owner.machine, offered,
+      t.output.input_ready && io.received, true) } else { w.expected };
+  let commit = t.output.head_done || (w.owner.action_valid && !t.state.action_valid);
+  if commit {
+    assert_eq(t.state.machine, expected.machine);
+    assert_eq(t.output.phase_boundary, expected.phase_boundary);
+    if t.output.head_done {
+      assert_eq(t.output.dispatched, expected.dispatched);
+      assert_eq(t.output.directive, expected.directive);
+    } else { () };
+    if expected.effects_valid {
+      assert_eq(t.state.outbox.payload, expected.effect_payload);
+      assert_eq(t.state.outbox.layout, expected.effect_layout);
+      assert_eq(t.state.outbox.count, expected.effect_count);
+    } else { () };
+  } else { assert_eq(t.state.machine, w.owner.machine); };
+  if w.owner.action_valid {
+    let changed_offer = local_owner_tick(w.owner, LocalOwnerInputs {
+      received: !io.received, frame: !io.frame, ..io });
+    assert_eq(changed_offer, t);
+  } else { () };
+  if w.owner.action_valid && t.state.action_valid {
+    assert_eq(t.state.action, w.owner.action);
+    assert_eq(t.state.action_slot, w.owner.action_slot);
+    assert_eq(t.output.head_done, false);
+    assert_eq(t.output.input_ready, false);
+  } else { () };
+  if t.output.output_valid && !io.output_ready {
+    let held = local_owner_tick(t.state, io);
+    assert_eq(held.output.effect, t.output.effect);
+    assert_eq(held.output.output_valid, true);
+  } else { () };
+  let receipt = local_protocol_at(w.owner.machine, offered, launch && io.received, u32:0);
+  OwnerWitness { owner: t.state, expected,
+    request: w.request + (t.output.head_done as u32),
+    retired: w.retired + (t.output.head_done as u32),
+    emitted: w.emitted + ((t.output.output_valid && io.output_ready) as u32),
+    stalled: w.stalled + ((w.owner.action_valid && t.state.action_valid) as u32),
+    deferred: w.deferred + ((launch && receipt.handled && receipt.deferred_completion) as u32),
+    postponed: w.postponed + ((t.output.head_done && t.output.directive == u2:1) as u32),
+  }
+}
+
+// A bounded run must finish every offered transaction and match source readout.
+#[test]
+fn owner_transactions() {
+  let start = OwnerWitness { owner: local_owner_initial(), ..zero!<OwnerWitness>() };
+  let finished = for (i, w): (u32, OwnerWitness) in u32:0..u32:160 { witness_tick(w, i) }(start);
+  assert_eq(finished.retired, OWNER_MESSAGES);
+  assert_eq(finished.owner.action_valid, false);
+  assert_eq(finished.owner.outbox.index, finished.owner.outbox.count);
+  owner_readout(finished);
+}
+
+// Reset during an action, a full publication or a held final receipt cancels all
+// local ownership. The external mailbox must discard its same-incarnation token.
+#[test]
+fn owner_reset() {
+  let start = OwnerWitness { owner: local_owner_initial(), ..zero!<OwnerWitness>() };
+  let _ = for (i, w): (u32, OwnerWitness) in u32:0..u32:60 {
+    let dirty = witness_tick(w, i);
+    let reset = local_owner_tick(dirty.owner, LocalOwnerInputs {
+      reset: true, received: true, frame: bits[128]:0xffff, output_ready: true,
+      ..zero!<LocalOwnerInputs>() });
+    assert_eq(reset.state, local_owner_initial());
+    assert_eq(reset.output, zero!<LocalOwnerOutputs>());
+    dirty
+  }(start);
+}

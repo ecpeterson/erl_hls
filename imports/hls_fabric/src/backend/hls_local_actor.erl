@@ -1,13 +1,13 @@
 -module(hls_local_actor).
--moduledoc "Source-bound semantic boundary for local execution planning; physical scheduling remains a separate checked transformation.".
+-moduledoc "Compiles ordinary local actor functions and a single-actor DSLX clock owner from source.".
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation and its activation, receipt and reserved action functions. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and its clocked owner. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
     dslx := binary(), source := file:filename()}.
 
--doc "Compiles all source callback families once with ordinary failure and collection semantics. Rejects retained synchronous calls; no application names select behavior.".
+-doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
 compile(Source, Options) ->
     {Spec, Plan} = xls_statem_plan:from_file(Source, Options),
@@ -41,7 +41,7 @@ fresh(Path) ->
         {error, Reason} -> error({local_actor_output, Path, Reason})
     end.
 
--doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Counts describe source semantics; no runtime owner, hardware admission or timing benefit is established.".
+-doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner contract; no network admission or timing benefit is established.".
 -spec manifest(artifact()) -> map().
 manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
     #{entries := Entries, reductions := Reductions,
@@ -53,7 +53,7 @@ manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
     EventWidth = case Events of [] -> 0; _ -> 8 end,
     PayloadWidth = lists:max([1 | [xls_entry_storage:width(Storage)
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
-    #{version => 1, stage => source_semantics_only, source => unicode:characters_to_binary(Source),
+    #{version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
         dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
         machine_layout => Layout, continuation_bits => EventWidth,
@@ -67,7 +67,14 @@ manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
         phase_names => maps:get(phases, Spec),
         function_ports => [local_initial, local_pending, local_pending_at, local_step,
             local_step_at, local_effect, local_observe, local_cycle, local_protocol_at, local_slow_step_at,
-            local_action_at, local_enter_at],
+            local_action_at, local_enter_at, local_owner_initial, local_owner_tick],
+        clock_proc => local_owner_clock,
+        owner_contract => #{selected_head => reserved_until_head_done_or_reset,
+            retirement => dispatched_directive_and_phase_boundary,
+            publication => one_ordered_batch,
+            action => registered_once_then_entry_retry,
+            startup => one_masked_clock_for_source_initialization,
+            schedule => one_stage_no_io_flops_always_enabled_channels},
         action_result_fields => [private_machine, dispatched, directive, phase_boundary],
         action_obligations => [intercept_handled_receipts, suppress_receive_while_pending,
             retain_action_and_mailbox_head, retain_actor_slot, reserve_publication,
@@ -81,7 +88,7 @@ manifest(#{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
         source_semantics_reused => [init, entry, cast, continuation, reduction,
             gather, failure_priority, ordered_effects],
         physical_locality_established => false,
-        excluded => [retained_calls, protocol_fusion, physical_runtime,
+        excluded => [retained_calls, protocol_fusion, network_runtime,
             functional_equivalence_proof, native_measurement]}.
 
 %% JSON cannot encode tuple keys or arbitrary tuples; this preserves inventories

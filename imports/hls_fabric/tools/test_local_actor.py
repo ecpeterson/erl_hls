@@ -32,7 +32,7 @@ def manifest(output: Path) -> dict:
     for module in report['source_imports']:
         assert ('import ' + module + ';').encode() in data, module
     assert report['physical_locality_established'] is False
-    assert 'physical_runtime' in report['excluded']
+    assert 'network_runtime' in report['excluded']
     return report
 
 

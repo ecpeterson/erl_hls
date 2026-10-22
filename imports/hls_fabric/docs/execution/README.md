@@ -38,3 +38,5 @@ The common compiler's `xls_parse:actor_artifact/2` returns checked callback sema
 Private code owns reservation, actor selection, storage transactions, execution handoff, retirement, effect windows and offloaded reductions. Pipeline changes belong here. Dedicated actors continue to use the public execution body, including in mixed graphs; XLS can pipeline their generated procs independently.
 
 The [scheduler ownership contract](scheduler-pipeline.md) describes reservations, visibility and stalls. The longer [pipeline plan](../../experiments/07-openxc7/yap/scheduler-pipeline-plan.md) records the remaining measurement and design work.
+
+The source-bound actor builder adds a [clocked DSLX owner](../source-protocol.md#compile-a-clocked-source-actor) around these functions, with selected-head retirement and one ordered outbox. Its standalone RTL command enforces the fixed clock schedule; network integration and admission remain separate.
