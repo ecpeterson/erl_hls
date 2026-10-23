@@ -69,12 +69,14 @@ struct Stream {
 
 // Independent physical streams share this simulator clock; sessions never survive reset.
 int main(int argc,char**argv){
-    if(argc!=2)return 2;
+    if(argc!=2&&argc!=3)return 2;
+    const bool cancel_chatter=argc==3&&std::string(argv[2])=="--cancel-chatter";
+    if(argc==3&&!cancel_chatter)return 2;
     try{
         std::string dir=argv[1];Verilated::commandArgs(argc,argv);
         Vprotocol_bridge_pair dut;Stream a(dir+"/role0"),b(dir+"/role1");
         auto began=std::chrono::steady_clock::now();
-        for(uint64_t cycle=0;cycle<200000;cycle++){
+        for(uint64_t cycle=0;cycle<(cancel_chatter?2000000u:200000u);cycle++){
             bool reset=cycle<8;
             if(!reset){a.pump();b.pump();}
             dut.clk=0;dut.reset=reset;dut.retire=0;
@@ -91,15 +93,23 @@ int main(int argc,char**argv){
             dut.clk=1;dut.eval();
             if(cycle%64==0){
                 if(access((dir+"/done").c_str(),F_OK)==0){
-                    if(a.valid||!a.rx.empty()||a.phase||b.valid||!b.rx.empty()||b.phase)
+                    if(!cancel_chatter&&(a.valid||!a.rx.empty()||a.phase||b.valid||!b.rx.empty()||b.phase))
                         throw std::runtime_error("pending application input");
+                    if(cancel_chatter){
+                        // Host requested transport closure; retire before closing peer FIFO endpoints.
+                        dut.clk=0;dut.retire=1;dut.eval();
+                        if(dut.s0_ready||dut.s1_ready||dut.m0_valid||dut.m1_valid)
+                            throw std::runtime_error("retired public handshake");
+                        printf("RETIRED pending_input_bytes=%zu,%zu held_beats=%u,%u\n",
+                            a.rx.size(),b.rx.size(),unsigned(a.valid),unsigned(b.valid));
+                    }
                     if(a.stalls<50||b.stalls<50)throw std::runtime_error("missing independent stalls");
                     printf("PASS framed pair cycles=%llu stalls=%llu,%llu words=%llu,%llu\n",
                         (unsigned long long)cycle,(unsigned long long)a.stalls,(unsigned long long)b.stalls,
                         (unsigned long long)a.outputs,(unsigned long long)b.outputs);
                     dut.final();return 0;
                 }
-                if(std::chrono::steady_clock::now()-began>std::chrono::seconds(60))throw std::runtime_error("wall deadline");
+                if(std::chrono::steady_clock::now()-began>std::chrono::seconds(cancel_chatter?120:60))throw std::runtime_error("wall deadline");
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
         }

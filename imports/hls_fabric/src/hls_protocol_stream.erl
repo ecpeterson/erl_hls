@@ -1,17 +1,22 @@
 -module(hls_protocol_stream).
 -moduledoc "One bounded framed owner for a fixed deployment of source-protocol RTL partitions. The sole application client submits ordered controls and consumes canonical external frames. Any participant failure retires all deployment routes; no write is retried. Transport closure and coordinated hardware reset remain caller obligations.".
 -behaviour(gen_server).
--export([start_link/3,submit/2,next/2,info/1,stop/1]).
+-export([start_link/3,start_application/3,submit/2,next/2,info/1,stop/1]).
 -export([init/1,handle_call/3,handle_cast/2,handle_info/2,terminate/2]).
 
 -doc "Attaches one fresh broker per deployment device using the descriptor's identity, host and service. Device keys must match brokers and distinct nonzero sessions. Return route pairs must be unique because broker deliveries contain a route but no broker identity. All participants share one reset/retirement domain; the caller exclusively owns commands/events and must retire old transports before reuse.".
 -spec start_link(map(),map(),map()) -> gen_server:start_ret().
-start_link(Plan,Brokers,Sessions)->gen_server:start_link(?MODULE,{Plan,Brokers,Sessions,self()},[]).
--doc "Admits a caller-encoded control payload or one-shot start within the deployment command limit. A command reaches all participants before the next command is issued; recipients are not atomically updated. Failure after partial delivery is terminal and must never trigger replay.".
--spec submit(pid(),start | {control,binary()}) -> {ok,1}|{error,busy}.
+start_link(Plan,Brokers,Sessions)->gen_server:start_link(?MODULE,{Plan,Brokers,Sessions,self(),raw},[]).
+
+-doc "Attaches a fresh deployment emitted by hls_protocol_deployment with source-checked application codecs. submit accepts typed rectangle commands and next returns {ok,Device,External,Record}; aggregate start uses Device=application. The same bounded owner, crossing queue and collective retirement rules apply; descriptors must be trusted local build outputs.".
+-spec start_application(map(),map(),map()) -> gen_server:start_ret().
+start_application(Plan=#{application:=Application},Brokers,Sessions)->
+    gen_server:start_link(?MODULE,{Plan,Brokers,Sessions,self(),Application},[]).
+-doc "Admits raw control bytes (start_link) or a source-checked typed rectangle (start_application), or one-shot start within the deployment command limit. A command reaches all participants before the next command is issued; recipients are not atomically updated. Failure after partial delivery is terminal and must never trigger replay.".
+-spec submit(pid(),hls_partition_wire:command() | {control,binary()}) -> {ok,1}|{error,busy}.
 submit(Pid,Command)->gen_server:call(Pid,{submit,Command},infinity).
--doc "Returns the next canonical external frame, or timeout after cancelling the sole waiter. The single started event precedes application output and means all participants acknowledged start; this is not a simultaneous clock-edge guarantee.".
--spec next(pid(),pos_integer()) -> {ok,application | {term(),byte()},term()}|timeout.
+-doc "Returns a canonical external frame in raw mode or a decoded {ok,Device,External,Record} in application mode, or timeout after cancelling the sole waiter. The single started event precedes application output and means all participants acknowledged start; this is not a simultaneous clock-edge guarantee.".
+-spec next(pid(),pos_integer()) -> {ok,application | {term(),byte()},term()}|{ok,term(),term(),tuple()}|timeout.
 next(Pid,Timeout)->gen_server:call(Pid,{next,Timeout},infinity).
 -doc "Reports bounded categories and packet counters without private actor state. ERTS client mailboxes and OS transport buffers are outside the record count.".
 -spec info(pid()) -> map().
@@ -22,7 +27,7 @@ stop(Pid)->gen_server:call(Pid,retire,infinity).
 
 -doc "Checks complete actor ownership, reserves distinct return routes, and starts serialized attachment. Each broker may hold one credited frame for this owner.".
 -spec init(tuple()) -> {ok,map()}.
-init({Plan=#{devices:=Devices,limits:=Limits=#{commands:=Commands,events:=Events,crossings:=Crossings}},Brokers,Sessions,Client})
+init({Plan=#{devices:=Devices,limits:=Limits=#{commands:=Commands,events:=Events,crossings:=Crossings}},Brokers,Sessions,Client,Application})
         when is_integer(Commands),Commands>0,is_integer(Events),Events>=2 ->
     Roles=lists:sort(maps:keys(Devices)),Roles=lists:sort(maps:keys(Brokers)),
     true=length(Roles)=:=length(lists:usort(maps:values(Brokers))),
@@ -37,7 +42,7 @@ init({Plan=#{devices:=Devices,limits:=Limits=#{commands:=Commands,events:=Events
     [ok=hls_fabric:register_route(maps:get(R,Brokers),Route,self())||{Route,R}<-Bindings],
     Monitors=maps:from_list([{monitor(process,P),{device,R}}||{R,P}<-maps:to_list(Brokers)]++[{monitor(process,Client),client}]),
     Identities=maps:map(fun(_,#{identity:=I})->I end,Devices),
-    S=#{devices=>Devices,roles=>Roles,returns=>Returns,limits=>Limits,
+    S=#{application=>Application,devices=>Devices,roles=>Roles,returns=>Returns,limits=>Limits,
       record_limit=>Commands+Events+Crossings+length(Roles)+1,
       brokers=>Brokers,sessions=>Sessions,client=>Client,monitors=>Monitors,identities=>Identities,
       queue=>Queue,phases=>maps:from_keys(Roles,pending),phase=>attaching,starts=>false,
@@ -51,12 +56,11 @@ init({Plan=#{devices:=Devices,limits:=Limits=#{commands:=Commands,events:=Events
 handle_call(retire,From={Client,_},S=#{client:=Client,retiring:=none,writer:=Writer})->
     case Writer of none->{stop,normal,ok,S};_->{noreply,S#{retiring:=From}} end;
 %% One command record carries a deployment fanout cursor; no duplicate per-board queues are hidden.
-handle_call({submit,Command},{Client,_},S=#{client:=Client,commands:=Commands,starts:=Started,roles:=Roles,limits:=#{commands:=Limit}})->
+handle_call({submit,Command},{Client,_},S=#{client:=Client,commands:=Commands,starts:=Started,roles:=Roles,application:=Application,limits:=#{commands:=Limit}})->
     case queue:len(Commands)<Limit of
         false->{reply,{error,busy},S};
         true->Bytes=case Command of start->false=Started,start;
-            {control,Payload}->
-                _=hls_protocol_bridge_wire:command(1,Payload),Payload end,
+            _->control(Application,Command) end,
             {reply,{ok,1},work(S#{commands:=queue:in({Roles,Bytes},Commands),starts:=Started orelse Command=:=start})}
     end;
 %% The owner cancels the timer before replying, avoiding an abandoned late event.
@@ -112,9 +116,9 @@ work(S)->send_work(notify(receive_frames(notify(S)))).
 -spec notify(map()) -> map().
 notify(S=#{phase:=Phase}) when Phase=/=running->S;
 notify(S=#{waiter:=none})->S;
-notify(S=#{waiter:={From,_,Timer},events:=Events})->
+notify(S=#{waiter:={From,_,Timer},events:=Events,application:=Application})->
     case queue:out(Events) of {empty,_}->S;
-        {{value,{Id,Record}},Rest}->erlang:cancel_timer(Timer),gen_server:reply(From,{ok,Id,Record}),S#{waiter:=none,events:=Rest} end.
+        {{value,{Id,Record}},Rest}->erlang:cancel_timer(Timer),gen_server:reply(From,reply(Application,Id,Record)),S#{waiter:=none,events:=Rest} end.
 %% Reserving one event slot for aggregate start prevents early output from blocking the last start ACK.
 -spec receive_frames(map()) -> map().
 receive_frames(S=#{roles:=Roles})->lists:foldl(fun receive_role/2,S,Roles).
@@ -181,3 +185,16 @@ write(Role,Kind,{Header,Payload},S=#{brokers:=Brokers,devices:=Devices,writer:=n
 -spec occupied(term()) -> 0|1.
 occupied(none)->0;
 occupied(_)->1.
+
+%% Raw and typed modes have distinct command boundaries; neither silently accepts the other's data.
+-spec control(raw|map(),term()) -> binary().
+control(raw,{control,Payload})->_=hls_protocol_bridge_wire:command(1,Payload),Payload;
+control(Application,Command) when is_map(Application)->hls_protocol_application_binding:control(Application,Command).
+
+%% Decode before returning to the sole caller; no additional event buffering is introduced.
+-spec reply(raw|map(),term(),term()) -> tuple().
+reply(raw,Id,Record)->{ok,Id,Record};
+reply(_,application,{started})->{ok,application,application,{started}};
+reply(Application,{Device,Index},Frame)->
+    {External,Record}=hls_protocol_application_binding:event(Application,Device,Index,Frame),
+    {ok,Device,External,Record}.

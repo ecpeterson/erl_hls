@@ -370,7 +370,39 @@ Attach that deployment with `hls_partition_stream`, then call `phi_protocol_repe
 
 Use a fresh explicit-start stream with the matching width/codecs and enough host queue capacity. The demonstration limits cutoff and observed rounds to 0..511, the request to u32, and requires a positive timeout. It aborts on queue rejection, timeout or unexpected events or duplicate statuses/readouts without retrying; retire the stream and reset the complete application before another run. The quiet fence relies on each source's correction-before-status ordering and the ordered correction/query lane. It does not claim decoder convergence, general deadlock freedom or QEC accuracy.
 
-`python3 tools/test_protocol_repetition.py XLS_ROOT FRESH_OUTPUT` builds N2 and N3 serially, runs an independent ordinary-BEAM actor graph, and runs the production helper through real brokers and public RTL ports. It compares the common fence, correction set, every sender's ordered events through that fence, and final readout; the shared simulator stalls output and observes every actor's public fault pins. It also checks stream/descriptor retirement. These are finite application witnesses. The existing application regression supplies framing/reset/identity-rejection coverage; native timing, multi-board roles and physical capacity remain separate.
+`python3 tools/test_protocol_repetition.py XLS_ROOT FRESH_OUTPUT` builds N2 and N3 serially, runs an independent ordinary-BEAM actor graph, and runs the production helper through real brokers and public RTL ports. It compares the common fence, correction set, every sender's ordered events through that fence, and final readout; the shared simulator stalls output and observes every actor's public fault pins. It also checks stream/descriptor retirement. These are finite application witnesses. The existing application regression supplies framing/reset/identity-rejection coverage; native timing and physical capacity remain separate. The networked deployment below exercises independent RTL roles.
+
+
+## Networked repetition deployment
+
+`python3 tools/emit_protocol_repetition.py XLS_ROOT 6 FRESH_OUTPUT --split 3` places data, syndrome and Phi actors at coordinates 0..2 on device 0 and 3..5 on device 1. Both roles run the source backend; BEAM hosts only the typed application loop and packet relay. Each role has its own framed port, identity and session. The output contains `build/role0/files.f`, `build/role1/files.f` and one trusted `build/deployment.etf`. `--split K` accepts any nonempty two-way placement for N=2..16; the regression below exercises N6/3+3. Process inspection is currently unavailable on this framed path.
+
+For other applications or participant sets, call `hls_protocol_deployment:write/2` (or `tools/emit_protocol_deployment.escript CONFIG FRESH_OUTPUT`) with the ordinary sources/topology, `control => rectangle`, and:
+
+```erlang
+#{devices => #{north => #{native_actors => [left,sink], host => 2, service => 29},
+               south => #{native_actors => [right], host => 3, service => 31}},
+  limits => #{crossings => 8, commands => 128, events => 128}}.
+```
+
+This is the placement portion of a configuration, not a standalone application. Device IDs are arbitrary terms; each configured actor must belong to exactly one device. The builder emits fresh numbered role directories, derives and checks crossing codecs, and records the device-to-directory map. Each role currently requires incoming/outgoing crossings and an external endpoint. Source-record layouts are checked against loaded host codecs through `hls_protocol_application_binding`, also used by the single-device application builder. Event decoding permits only that device's actual producers at the emitted external index. The completed deployment remains `eligible => false`.
+
+Attach the emitted repetition deployment to two already opened brokers:
+
+```erlang
+{ok, Bytes} = file:read_file("BUILD/deployment.etf"),
+Deployment = binary_to_term(Bytes), % trusted local build artifact only
+{ok, Stream} = hls_protocol_stream:start_application(
+    Deployment, #{0 => Broker0, 1 => Broker1}, #{0 => FreshSession0, 1 => FreshSession1}),
+Result = phi_protocol_repetition:run(hls_protocol_stream, Stream, 6, 8, 123, 120000),
+ok = hls_protocol_stream:stop(Stream).
+```
+
+`start_application/3` adds typed commands/events to the existing bounded relay; it adds no process, queue or hardware state. The same `submit/2` now accepts `{Ingress,Target,Bounds,Record}`. Source codecs validate it before admission, then the relay broadcasts the shared global rectangle to every role; native sparse masks ignore unowned targets. `next/2` returns `{ok,Device,External,Record}`, with `{ok,application,application,{started}}` first after every role acknowledges activation. There is no atomic multi-device update. Raw `start_link/3` retains its raw-frame API.
+
+The repetition helper reuses its existing cutoff, correction-feedback, common-fence and readout loop. The caller must subsequently close **every** broker and await all transport leases before coordinated hardware reset and fresh sessions. Reaching the application's quiet fence does not drain ongoing Phi communication: stopping the deployment intentionally cancels remaining chatter. An uncertain or partial write must never be replayed.
+
+`python3 tools/test_protocol_deployment.py XLS_ROOT FRESH_OUTPUT` builds two independent N6 roles and compares two fresh incarnations with an independently executed ordinary-BEAM reference. Real brokers carry every cross-role message and every correction/query; the simulator accesses only public ports and applies independent output stalls. The comparison checks each logical sender through the common fence, all corrections and final readout. Shutdown requests collective retirement, checks that it masks public handshakes, and closes both peer endpoints; both transport leases must then close before a new incarnation. This is a finite integration witness, not a throughput test, general progress proof or live-device result. `--area` additionally maps the complete connected pair under the preregistered 60000-LUT/36000-FF local XC7 screen; passing it does not establish Zynq-7030 fit or routed timing. The new regression has its own bounded CI job.
 
 
 ## Periodic dependency model
