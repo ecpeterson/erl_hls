@@ -40,7 +40,7 @@ def compile_transport(xls: Path, directory: Path) -> None:
     """Compile one fresh generated proc; reject existing products and retain failed diagnostics."""
     stage = directory / 'dslx'
     compile_clock(xls, stage/'transport.x', stage, 'protocol_clock', 'protocol_fabric_core',
-                  [ROOT/'priv/xls/lib', PUBLIC/'priv/xls/lib'])
+                  [stage, ROOT/'priv/xls/lib', PUBLIC/'priv/xls/lib'])
     rtl = [stage/'core.v', stage/'protocol_fabric.sv']
     with (directory/'files.f').open('x') as listing:
         listing.write(''.join(str(p.resolve())+'\n' for p in rtl))
@@ -48,7 +48,9 @@ def compile_transport(xls: Path, directory: Path) -> None:
     summary = json.loads(summary_path.read_text())
     summary['rtl'] = [{'file':str(p.resolve()), 'sha256':digest(p)} for p in rtl]
     summary['dslx_inputs'] = [{'file':str(p.resolve()), 'sha256':digest(p)} for p in
-        [stage/'transport.x', ROOT/'priv/xls/lib/protocol_transport.x', PUBLIC/'priv/xls/lib/axis.x']]
+        [stage/'transport.x', *sorted(stage.glob('remote_*_codec_*.x')),
+         ROOT/'priv/xls/lib/protocol_partition.x', ROOT/'priv/xls/lib/protocol_transport.x',
+         PUBLIC/'priv/xls/lib/axis.x']]
     summary['xls_tools'] = [{'file':str((xls/n).resolve()), 'sha256':digest(xls/n)}
                             for n in ['ir_converter_main','opt_main','codegen_main']]
     summary['schedule'] = {'pipeline_stages':1, 'flop_inputs':False, 'flop_outputs':False,

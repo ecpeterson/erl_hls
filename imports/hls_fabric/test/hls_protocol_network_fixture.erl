@@ -2,7 +2,7 @@
 -moduledoc "Finite feedback producer: three source-ordered batches, triggered by the sink's ordinary result messages.".
 -behaviour(hls_statem).
 -compile({parse_transform,hls_pack}).
--export([init/1, sending/3, topology/0, unsupported/1, isolated/0]).
+-export([init/1, sending/3, topology/0, unsupported/1, isolated/0, partitioned/0]).
 -hls_data(cell).
 -hls_phases([sending]).
 -hls_outputs([early,open,later]).
@@ -49,3 +49,8 @@ unsupported(ingresses) -> (topology())#{ingresses:=[{Name,{rectangle,[1,1]},[{al
 -spec isolated() -> map().
 isolated() -> (topology())#{actors:=#{left=>?MODULE},
     routes:=[{{left,P},[{external,monitor}]}||P<-[early,open,later]]}.
+
+-doc "Adds host totals for both producers, so a sparse native subset must preserve the global host retirement mask.".
+-spec partitioned() -> map().
+partitioned() -> (topology())#{ingresses:=[{host,{rectangle,[2,1]},
+    [{all,[total],[{actor,left,{at,[0,0]}},{actor,right,{at,[1,0]}}]}]}]}.

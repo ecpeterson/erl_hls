@@ -2,10 +2,12 @@
 -moduledoc "Lowers a source-bound transport plan to DSLX clock transitions. XLS owns all transport registers, selection and routing logic; the Verilog adapter only packs named pins.".
 -export([write/2]).
 
--doc "Writes a DSLX proc, pin adapter and port manifest to a fresh directory. Requires the complete checked fabric plan. Compile with one pipeline stage and no input/output flops; both XLS channel handshakes are permanently enabled by the adapter. Recipient readiness remains ordinary input data and cannot stall the whole proc. This is hardware generation, not application capacity or progress admission.".
+-doc "Writes a DSLX proc, pin adapter and port manifest to a fresh directory. Requires the complete checked fabric plan. Partition crossings add canonical frame ports and one sticky fault bit per incoming link; outgoing state remains in its original publication. Compile with one pipeline stage and no input/output flops; both XLS channel handshakes are permanently enabled by the adapter. Recipient readiness remains ordinary input data and cannot stall the whole proc. This is hardware generation, not application capacity or progress admission.".
 -spec write(map(),file:filename()) -> ok.
 write(Plan=#{sources:=Sources,links:=Links},Directory) ->
     ok=file:make_dir(Directory),
+    ok=xls_protocol_partition:write(Plan,Directory),
+    Crossing=xls_protocol_partition:fragments(Plan),
     Keys=lists:usort([source_shape(S)||S<-Sources]),
     Definitions=[K#{index=>I}||{I,K}<-lists:enumerate(0,Keys)],
     Ids=maps:from_list([{K,I}||{I,K}<-lists:enumerate(0,Keys)]),
@@ -13,10 +15,10 @@ write(Plan=#{sources:=Sources,links:=Links},Directory) ->
     {Inputs,Outputs}=ports(Plan),
     {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_clock.x.in")),
     Source=["import protocol_transport as p;\nimport axis;\nconst_assert!(axis::FRAME_BITS == u32:128);\n",
-        structure("Inputs",Inputs),structure("Outputs",Outputs),
+        maps:get(imports,Crossing),structure("Inputs",Inputs),structure("Outputs",Outputs),
         [source(S)||S<-Definitions],[link_shape(L)||L<-shapes(Links)],
         "pub struct State {\n",[[sname(I),": S",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Instances],
-        [[lname(I),": L",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Links],"}\n",tick(Plan#{sources=>Instances}),Clock],
+        [[lname(I),": L",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Links],maps:get(state,Crossing),"}\n",tick(Plan#{sources=>Instances}),Clock],
     ok=file:write_file(filename:join(Directory,"transport.x"),Source,[exclusive]),
     ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Directory,"protocol_fabric.sv")),
     file:write_file(filename:join(Directory,"ports.json"),json:encode(
@@ -38,7 +40,8 @@ source_shape(S=#{outputs:=Outputs}) ->
 
 %% Port order is the DSLX struct bit order and the adapter's concatenation order.
 -spec ports(map()) -> {[{string(),pos_integer()}],[{string(),pos_integer()}]}.
-ports(#{sources:=Sources,links:=Links,boundaries:=Boundaries}) ->
+ports(Plan=#{sources:=Sources,links:=Links,boundaries:=Boundaries}) ->
+    {RemoteInputs,RemoteOutputs}=xls_protocol_partition:ports(Plan),
     Inputs=[{"reset",1}]++lists:append([[{sname(I)++"_valid",1},{sname(I)++"_layout",8},
         {sname(I)++"_payload",W}]||#{index:=I,payload_width:=W}<-Sources])++
         lists:append([[{lname(I)++"_take",1},{lname(I)++"_eligible",N},
@@ -50,7 +53,7 @@ ports(#{sources:=Sources,links:=Links,boundaries:=Boundaries}) ->
             {lname(I)++"_payloads",W}]||#{index:=I,slots:=N,payload_bits:=W}<-Links])++
         lists:append([[{bname(I,D)++"_valid",1},{bname(I,D)++"_data",W}]
             ||#{source_index:=I,output:=#{index:=D,width:=W}}<-Boundaries]),
-    {Inputs,Outputs}.
+    {Inputs++RemoteInputs,Outputs++RemoteOutputs}.
 
 %% Concrete actor payload types instantiate the reusable parametric publication state.
 -spec source(map()) -> iolist().
@@ -101,34 +104,53 @@ link_shape(#{shape:=Shape,widths:=Widths,slots:=N,payload_bits:=Total,input_bits
 -spec tick(map()) -> iolist().
 tick(Plan=#{sources:=Sources,links:=Links,boundaries:=Boundaries}) ->
     {_,Ports}=ports(Plan),
+    Crossing=xls_protocol_partition:fragments(Plan),
     Views=[["let ",sname(I)," = view_",n(Shape),"(s.",sname(I),", io.reset, io.",sname(I),"_layout);\n"]||#{index:=I,shape:=Shape}<-Sources],
-    LinkViews=[["let ",lname(I),"_slot = ",slice(sname(S)++".channel",D*8,8),";\n",
+    LinkViews=[["let ",lname(I),"_slot = ",link_slot(L),";\n",
         "let ",lname(I)," = link_view_",n(Shape),"(s.",lname(I),", io.reset, io.",lname(I),"_eligible, ",lname(I),"_slot);\n"]
-        ||#{index:=I,source_index:=S,output_index:=D,shape:=Shape}<-Links],
+        ||L=#{index:=I,shape:=Shape}<-Links],
     SourceNext=[[sname(I),": next_",n(Shape),"(s.",sname(I),", io.reset, io.",sname(I),"_valid, io.",sname(I),
-        "_layout, io.",sname(I),"_payload, ",concat([ready(I,O,Links)||O<-lists:reverse(Os)],bits(D)++":0"),"),\n"]
+        "_layout, io.",sname(I),"_payload, ",concat([ready(I,O,Links++maps:get(crossings,Plan,[]))||O<-lists:reverse(Os)],bits(D)++":0"),"),\n"]
         ||#{index:=I,shape:=Shape,destinations:=D,outputs:=Os}<-Sources],
-    LinkNext=[[lname(I),": link_next_",n(Shape),"(s.",lname(I),", io.reset, ",bit(sname(S)++".valid",D),
-        ", ",lname(I),"_slot, ",slice(sname(S)++".data",At,Width),", io.",lname(I),"_take, io.",lname(I),
-        "_release_valid, ",lname(I),"),\n"]||#{index:=I,shape:=Shape,source_index:=S,output_index:=D,
-            output:=#{offset:=At,width:=Width}}<-Links],
+    LinkNext=[[lname(I),": link_next_",n(Shape),"(s.",lname(I),", io.reset, ",link_valid(L),
+        ", ",lname(I),"_slot, ",link_payload(L),", io.",lname(I),"_take, io.",lname(I),
+        "_release_valid, ",lname(I),"),\n"]||L=#{index:=I,shape:=Shape}<-Links],
     Values=maps:from_list(lists:append([[{sname(I)++"_ready",sname(I)++".ready"},{sname(I)++"_fault",sname(I)++".fault"}]
-        ||#{index:=I}<-Sources])++lists:append([[{lname(I)++"_capture",[bit(sname(S)++".valid",D)," && ",lname(I),".ready"]},
+        ||#{index:=I}<-Sources])++lists:append([[{lname(I)++"_capture",[link_valid(L)," && ",lname(I),".ready"]},
         {lname(I)++"_capture_slot",lname(I)++"_slot"}]++[{lname(I)++"_"++K,lname(I)++"."++K}||K<-["selected","available","leased","payloads"]]
-        ||#{index:=I,source_index:=S,output_index:=D}<-Links])++lists:append([
+        ||L=#{index:=I}<-Links])++lists:append([
         [{bname(I,D)++"_valid",bit(sname(I)++".valid",D)}, {bname(I,D)++"_data",slice(sname(I)++".data",At,W)}]
-        ||#{source_index:=I,output:=#{index:=D,offset:=At,width:=W}}<-Boundaries])),
+        ||#{source_index:=I,output:=#{index:=D,offset:=At,width:=W}}<-Boundaries])++maps:get(values,Crossing)),
     ["// Observations use old state; take/release and boundary ready affect next state only.\n",
         "pub struct Tick { state: State, output: Outputs }\n",
-        "pub fn tick(s: State, io: Inputs) -> Tick {\n",Views,LinkViews,
-        "Tick { state: State {",SourceNext,LinkNext,"}, output: Outputs {",
+        "pub fn tick(s: State, io: Inputs) -> Tick {\n",Views,LinkViews,maps:get(views,Crossing),
+        "Tick { state: State {",SourceNext,LinkNext,maps:get(next,Crossing),"}, output: Outputs {",
         [[K,": ",maps:get(K,Values),",\n"]||{K,_}<-Ports],"} } }\n"].
 
-%% A recipient's credit has no dependency on other recipients or the incoming payload.
+%% A native recipient uses local ownership; a crossing uses its peer's sampled credit.
 -spec ready(non_neg_integer(),map(),[map()]) -> iolist().
 ready(I,#{index:=D,destination:={external,_}},_) -> ["io.",bname(I,D),"_ready"];
 ready(I,#{index:=D},Links) ->
-    [K]=[K||#{index:=K,source_index:=S,output_index:=O}<-Links,S=:=I,O=:=D], [lname(K),".ready"].
+    [L]=lists:usort([L||L=#{source_index:=S,output_index:=O}<-Links,S=:=I,O=:=D]),
+    case L of
+        #{index:=K,direction:=outgoing}->["io.",xls_protocol_partition:name(K),"_ready"];
+        #{index:=K}->[lname(K),".ready"]
+    end.
+
+%% Incoming boundary offers replace only the missing source's slot/data wires.
+-spec link_slot(map()) -> iodata().
+link_slot(#{index:=I,direction:=incoming}) -> ["io.",xls_protocol_partition:name(I),"_slot"];
+link_slot(#{source_index:=S,output_index:=D}) -> slice(sname(S)++".channel",D*8,8).
+
+%% Canonical admission gates capture; malformed frames never enter native storage.
+-spec link_valid(map()) -> iodata().
+link_valid(#{index:=I,direction:=incoming}) -> [xls_protocol_partition:name(I),".capture"];
+link_valid(#{source_index:=S,output_index:=D}) -> bit(sname(S)++".valid",D).
+
+%% The peer frame is projected by the same source-bound codec used by the receiver.
+-spec link_payload(map()) -> iodata().
+link_payload(#{index:=I,direction:=incoming}) -> [xls_protocol_partition:name(I),"_payload"];
+link_payload(#{source_index:=S,output:=#{offset:=At,width:=W}}) -> slice(sname(S)++".data",At,W).
 
 %% These bits reference the retained ordinary payload, with numeric low-bit-first planning.
 -spec expression([hls_protocol_projection:bit()]) -> iolist().

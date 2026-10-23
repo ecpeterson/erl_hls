@@ -2,9 +2,12 @@
 -moduledoc "Builds a fresh source network with the shared framed application gateway and its exact host deployment binding.".
 -export([write/2]).
 
--doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns a deployment for hls_partition_stream and writes deployment.etf. The gateway orders setup before start; started acknowledges actual network activation. inspection => process adds the common endpoint-2 debug stream and network/inspection.json plus a trusted local inspection.etf catalog. Attachment identity detects mismatched builds, not malicious peers. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
+-doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns a deployment for hls_partition_stream and writes deployment.etf. The gateway orders setup before start; started acknowledges actual network activation. inspection => process adds the common endpoint-2 debug stream and network/inspection.json plus a trusted local inspection.etf catalog. Attachment identity detects mismatched builds, not malicious peers. native_actors is rejected because this gateway does not carry crossing links. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
 -spec write(map(),file:filename()) -> map().
 write(Config=#{device:=Device,host:=Host},Directory) when is_integer(Host),Host>0,Host<65536 ->
+    case maps:is_key(native_actors,Config) of
+        true->error(partition_application_gateway_unavailable);false->ok
+    end,
     case maps:get(activation,Config,explicit_start) of
         explicit_start->ok;
         Mode->error({application_requires_explicit_start,Mode})
