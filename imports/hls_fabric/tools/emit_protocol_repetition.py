@@ -15,13 +15,15 @@ PERIODIC_MODEL = """#{kind=>periodic_neighbor_barrier,contracts=>#{
   phi_line_cell=>#{role=>phi,rounds=>12,phases=>[configuring,measuring,gathering,comparing,flipping]}}}"""
 
 
-def emit_application(width: int, directory: Path, inspect: bool = False, split: int | None = None, mixed: bool = False) -> Path:
+def emit_application(width: int, directory: Path, inspect: bool = False, split: int | None = None, mixed: bool = False, share_arithmetic: bool = False) -> Path:
     """Emit fresh source DSLX and a checked periodic dependency report, without XLS compilation."""
     if not 2 <= width <= 16:raise ValueError('repetition width must be 2..16')
     if split is not None and (not 1 <= split < width or inspect):
         raise ValueError("split requires two nonempty roles and no process inspection")
     if mixed and (split is not None or inspect):
         raise ValueError("mixed requires a single native role and no process inspection")
+    if share_arithmetic and (width not in [2,3] or split is not None or mixed):
+        raise ValueError("arithmetic example requires a whole N2/N3 application")
     directory.mkdir()
     source=PUBLIC/'src/examples/phi_decoder'
     def term(path: Path) -> str:
@@ -44,15 +46,15 @@ def emit_application(width: int, directory: Path, inspect: bool = False, split: 
         actors=','.join('{'+family+','+str(x)+',0}' for family in ['syndrome','phi'] for x in range(width))
         placement='control=>rectangle,native_actors=>['+actors+'],host=>1,service=>7'
         entry='tools/emit_protocol_mixed.escript'
-    config.write_text('#{sources=>['+sources+'],topology=>{phi_repetition_topology,topology,['+str(width)+',16#80000000]},actor_limit=>'+str(3*width)+','+placement+',protocol_model=>'+PERIODIC_MODEL+(',inspection=>process' if inspect else '')+'}.\n')
+    config.write_text('#{sources=>['+sources+'],topology=>{phi_repetition_topology,topology,['+str(width)+',16#80000000]},actor_limit=>'+str(3*width)+','+placement+',protocol_model=>'+PERIODIC_MODEL+(',inspection=>process' if inspect else '')+(',arithmetic_groups=>[['+','.join('{phi,'+str(x)+',0}' for x in range(width))+']]' if share_arithmetic else '')+'}.\n')
     run(['rebar3','compile'],directory,'compile-backend')
     run(['env','ERL_AFLAGS='+ ' '.join('-pa "'+str(p)+'"' for p in erlang_paths()),'escript',entry,config,build],directory,'emit-application')
     return build
 
 
-def build_application(xls: Path, width: int, directory: Path, inspect: bool = False, split: int | None = None, mixed: bool = False) -> Path:
+def build_application(xls: Path, width: int, directory: Path, inspect: bool = False, split: int | None = None, mixed: bool = False, share_arithmetic: bool = False) -> Path:
     """Build one N=2..16 half-rate-noise line; analysis does not change RTL or grant admission."""
-    build=emit_application(width,directory,inspect,split,mixed)
+    build=emit_application(width,directory,inspect,split,mixed,share_arithmetic)
     if mixed:
         compile_bridge(xls,build,[PUBLIC/"src/examples/phi_decoder"])
     elif split is None:
@@ -71,7 +73,8 @@ def main() -> None:
     parser.add_argument('--inspect',action='store_true',help='include passive endpoint-2 process inspection')
     parser.add_argument('--split',type=int,help='place [0,split) and [split,width) on two framed devices')
     parser.add_argument("--mixed",action="store_true",help="run data actors in BEAM and syndrome/Phi in one framed RTL partition")
-    args=parser.parse_args();build_application(args.xls,args.width,args.output,args.inspect,args.split,args.mixed)
+    parser.add_argument("--share-arithmetic",action="store_true",help="share one scalar completion among the two or three Phi actors")
+    args=parser.parse_args();build_application(args.xls,args.width,args.output,args.inspect,args.split,args.mixed,args.share_arithmetic)
 
 
 if __name__=='__main__':main()

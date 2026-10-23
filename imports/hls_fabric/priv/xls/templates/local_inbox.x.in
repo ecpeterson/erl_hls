@@ -63,6 +63,7 @@ pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxT
     let offered = s.held == InboxMask:0 && pick.mask != InboxMask:0;
     let step = local_owner_tick(s.owner, LocalOwnerInputs {
       received: offered, frame: inbox_frame(io, pick.index), output_ready: io.output_ready,
+      @@COMPLETION_INPUTS@@
       ..zero!<LocalOwnerInputs>() });
     let accepted = offered && step.output.input_ready;
     let reservation = if s.held != InboxMask:0 { s.held } else { pick.mask };

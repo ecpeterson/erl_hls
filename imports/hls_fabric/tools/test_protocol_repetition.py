@@ -70,11 +70,12 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls',type=lambda p:Path(p).resolve());parser.add_argument('stage',type=lambda p:Path(p).resolve())
     parser.add_argument('--width',type=int,choices=[2,3],action='append')
+    parser.add_argument("--share-arithmetic",action="store_true")
     args=parser.parse_args();args.stage.mkdir()
     results=[]
     for width in args.width or [2,3]:
         stage=args.stage/('repetition-'+str(width));stage.mkdir()
-        build=build_application(args.xls,width,stage/'application')
+        build=build_application(args.xls,width,stage/'application',share_arithmetic=args.share_arithmetic)
         results.append(qualify(build,stage,width))
         (args.stage/'summary.json').write_text(json.dumps({'results':results},indent=2)+'\n')
 

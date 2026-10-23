@@ -25,7 +25,7 @@ pub struct LocalOwnerInputs {
   frame: bits[128],
   slot: u32,
   output_ready: bool,
-}
+@@SHARED_INPUTS@@}
 
 // These are pre-edge observations/handshakes. head_done ends a reservation;
 // dispatched/directive apply only with it. A phase boundary also wakes postponed
@@ -47,6 +47,7 @@ pub struct LocalOwnerTick {
   output: LocalOwnerOutputs,
 }
 
+@@SHARED_FUNCTIONS@@
 // Source initialization is the reset authority, including pending entry/failure.
 pub fn local_owner_initial() -> LocalOwnerState {
   LocalOwnerState { machine: local_initial(), ..zero!<LocalOwnerState>() }
@@ -92,7 +93,7 @@ pub fn local_owner_tick(s: LocalOwnerState, io: LocalOwnerInputs) -> LocalOwnerT
         },
       }
     }
-  } else if accepted || observation.pending {
+@@SHARED_COMPLETION@@  } else if accepted || observation.pending {
     let receipt = local_protocol_at(s.machine, io.frame, accepted, io.slot);
     if receipt.handled && !receipt.deferred_completion {
       LocalOwnerTick {
@@ -102,7 +103,7 @@ pub fn local_owner_tick(s: LocalOwnerState, io: LocalOwnerInputs) -> LocalOwnerT
       }
     } else {
       let raw = if receipt.handled { receipt.private_machine } else { s.machine };
-      let action = local_action_at(raw, io.frame, accepted && !receipt.handled, io.slot);
+      let action = local_action_selected_at(raw, io.frame, accepted && !receipt.handled, io.slot, @@LOCAL_COMPLETION@@);
       LocalOwnerTick { state: LocalOwnerState { action, action_valid: true,
         selected: accepted, action_slot: io.slot, ..base.state }, ..base }
     }

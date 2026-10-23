@@ -2,10 +2,11 @@
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
 -export([write/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. The manifest also binds every boundary stream to its declared external endpoint, retaining unused declarations and rendering their Erlang IDs as text. Optional process inspection selects metadata from old committed machines and has no input to application state or handshakes. Raw crossing pins pass through to canonical transport admission; crossing_state_bits counts the incoming fault registers already inside transport. This is executable composition, not capacity, progress or physical qualification.".
+-doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Checked arithmetic groups add a bounded round-robin cursor and share one selected scalar source callback into the existing registered action slots. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. The manifest also binds every boundary stream to its declared external endpoint, retaining unused declarations and rendering their Erlang IDs as text. Optional process inspection selects metadata from old committed machines and has no input to application state or handshakes. Raw crossing pins pass through to canonical transport admission; crossing_state_bits counts the incoming fault registers already inside transport. This is executable composition, not capacity, progress or physical qualification.".
 -spec write(map(),file:filename()) -> map().
 write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation,
         bundle:=#{topology:=#{externals:=Externals}}},Directory) ->
+    Arithmetic = maps:get(arithmetic, Plan, []),
     Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
     {RemoteInputs,RemoteOutputs}=xls_protocol_partition:ports(Fabric),
     Crossings=maps:get(crossings,Fabric,[]),
@@ -19,10 +20,10 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
         lists:append([[{boundary(B)++"_valid",1},{boundary(B)++"_data",W}]
             ||B=#{output:=#{width:=W}}<-Boundaries])++RemoteOutputs,
     {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_network_clock.x.in")),
-    Source=["import transport;\n",optional(Inspect,"import process_observation as inspection;\n"),optional(Explicit,"import protocol_activation as activation;\n"),optional(Host,"import ingress;\n"),[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
+    Source=["import transport;\n",optional(Arithmetic=/=[],"import protocol_inbox as arithmetic;\n"),optional(Inspect,"import process_observation as inspection;\n"),optional(Explicit,"import protocol_activation as activation;\n"),optional(Host,"import ingress;\n"),[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
         structure("Inputs",Inputs),structure("Outputs",Outputs),
         "// Component states remain independent; optional ingress owns one shared command.\npub struct State { transport: transport::State,\n",
-        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress::State,\n"),optional(Explicit,"activation: activation::State,\n"),"}\n",
+        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress::State,\n"),optional(Explicit,"activation: activation::State,\n"),xls_protocol_arithmetic:state(Arithmetic),"}\n",
         "// Next component states and pre-edge external observations.\npub struct Tick { state: State, output: Outputs }\n",
         "// Offers/eligibility read old state. Preview outputs ignore take/release;\n",
         "// the second pure transport call supplies their actual next-state inputs.\n",
@@ -37,7 +38,8 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],
         [[boundary(B),"_ready: io.",boundary(B),"_ready,\n"]||B<-Boundaries],[[K,": io.",K,",\n"]||{K,_}<-RemoteInputs],"..zero!<transport::Inputs>() };\n",
         "let preview = transport::tick(s.transport, offer).output;\n",
-        [receiver(R,Links)||R<-Receivers],
+        xls_protocol_arithmetic:steps(Arithmetic),
+        [receiver(R,Links,Arithmetic)||R<-Receivers],
         optional(Host,["let ingress_step = ingress::tick(s.ingress, io.reset, startup_done, io.ingress_valid,\n",
           "ingress::decode(io.ingress_data), ",host_mask(Ingress,Receivers),");\n"]),
         "let transport_step = transport::tick(s.transport, transport::Inputs {\n",
@@ -46,7 +48,7 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],"..offer });\n",
         activation_step(Explicit,Host,Sources,Incoming),
         "Tick { state: State { transport: transport_step.state,\n",
-        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress_step,\n"),optional(Explicit,"activation: activation_step.state,\n"),"}, output: Outputs {\n",
+        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress_step,\n"),optional(Explicit,"activation: activation_step.state,\n"),xls_protocol_arithmetic:updates(Arithmetic),"}, output: Outputs {\n",
         optional(Inspect,["inspect_value: match io.inspect_address {\n",
             [["u32:",n(I)," => inspection::observe_",n(I),"(s.",actor(I),".owner.machine, s.",actor(I),".started, io.reset),\n"]||#{index:=I}<-Sources],
             "_ => bits[128]:0, },\n"]),
@@ -56,7 +58,8 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
     Dslx=filename:join(Path,"network.x"), ok=file:write_file(Dslx,Source,[exclusive]),
     ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Path,"protocol_network.sv"),"protocol_network","protocol_network_core"),
     Manifest=#{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
-        actors=>length(Sources),links=>length(Links),additional_state_bits=>(case Host of true->maps:get(state_bits,Ingress);false->0 end)+(case Explicit of true->1;false->0 end),
+        actors=>length(Sources),links=>length(Links),additional_state_bits=>(case Host of true->maps:get(state_bits,Ingress);false->0 end)+(case Explicit of true->1;false->0 end)+lists:sum([W||#{cursor_bits:=W}<-Arithmetic]),
+        arithmetic=>Arithmetic,
         activation=>Activation,inspection=>Debug,
         native_indices=>[I||#{index:=I}<-Sources],
         crossings=>[#{index=>I,direction=>D,source_index=>S,destination_index=>T,slots=>N,
@@ -101,10 +104,10 @@ activation_step(true,Host,Sources,Incoming) ->
      " }, io.start_valid);\n"].
 
 %% Match the exact field order and per-destination slot flattening used by inbox attachment.
--spec receiver(map(),[map()]) -> iodata().
-receiver(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=Host}}}},Links) ->
+-spec receiver(map(),[map()],[map()]) -> iodata().
+receiver(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=Host}}}},Links,Arithmetic) ->
     ["let step_",n(I)," = ",actor(I),"::local_inbox_batch_tick(s.",actor(I),", ",actor(I),"::LocalInboxInputs {\n",
-     "reset: io.reset, output_ready: preview.",source(I),"_ready,\n",
+     "reset: io.reset, output_ready: preview.",source(I),"_ready,\n",xls_protocol_arithmetic:inputs(I,Arithmetic),
      optional(Host=:=1,["host_valid: ingress_offer.valid[",n(I),"+:u1], host_frame: ingress_offer.frame,\n"]),
      [[link_name(K),"_",Field,": preview.",link_name(K),"_",Field,",\n"]
         ||#{index:=K,destination_index:=D}<-Links,D=:=I,Field<-["selected","available","payloads"]],"});\n"].

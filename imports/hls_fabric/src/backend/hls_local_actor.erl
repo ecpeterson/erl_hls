@@ -3,9 +3,9 @@
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
-    dslx := binary(), source := file:filename(), inbox => map()}.
+    dslx := binary(), source := file:filename(), inbox => map(), completion => map()}.
 
 -doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
@@ -41,7 +41,7 @@ fresh(Path) ->
         {error, Reason} -> error({local_actor_output, Path, Reason})
     end.
 
--doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner and optional source-bound inbox contract; no network admission or timing benefit is established.".
+-doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner, completion mode and optional source-bound inbox contract; no network admission or timing benefit is established.".
 -spec manifest(artifact()) -> map().
 manifest(Artifact = #{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
     #{entries := Entries, reductions := Reductions,
@@ -53,7 +53,7 @@ manifest(Artifact = #{spec := Spec, plan := Plan, dslx := Bytes, source := Sourc
     EventWidth = case Events of [] -> 0; _ -> 8 end,
     PayloadWidth = lists:max([1 | [xls_entry_storage:width(Storage)
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
-    Base = #{version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
+    Base = #{completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
         dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
         machine_layout => Layout, continuation_bits => EventWidth,

@@ -36,11 +36,10 @@ pub struct LocalAction {
   phase_boundary: bool,
 }
 
-// Select source callback work after receipt interception. Suppress received while
-// local_pending_at is true. Retain the returned action and the selected mailbox
-// head together; do not run another action while its entry is outstanding.
-pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool,
-    slot: u32) -> LocalAction {
+// The checked shared owner uses complete_locally=false after intercepting pending
+// scalar work. Constant selection removes the local callback from that datapath.
+fn local_action_selected_at(raw: MachineBits, frame: bits[128], received: bool,
+    slot: u32, complete_locally: bool) -> LocalAction {
   let machine = local_machine(raw, slot);
   let dispatched = { @@SELECTED@@ };
   LocalAction {
@@ -49,6 +48,14 @@ pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool,
     directive: dispatched.directive as u2,
     phase_boundary: dispatched.phase_boundary,
   }
+}
+
+// Select source callback work after receipt interception. Suppress received while
+// local_pending_at is true. Retain the returned action and the selected mailbox
+// head together; do not run another action while its entry is outstanding.
+pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool,
+    slot: u32) -> LocalAction {
+  local_action_selected_at(raw, frame, received, slot, true)
 }
 
 // Evaluate entry from an owned action and the same slot. Reserve publication

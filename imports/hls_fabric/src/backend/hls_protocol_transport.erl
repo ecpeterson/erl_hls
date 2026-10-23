@@ -2,7 +2,7 @@
 -moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
 -export([write/2]).
 
--doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions, per-actor capture/startup/host receivers, and connected publisher/capture DSLX into a fresh directory. Optional native_actors selects a nonempty proper subset of logical IDs, retaining global link/actor identities and exposing canonical sampled-clock crossing ports; all roles require common clock/reset. Accepts direct and independently buffered routes and at most one explicitly declared rectangle host ingress (one to four targets). Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Optional protocol_model => #{kind => periodic_neighbor_barrier, contracts => ModuleRoles} checks an annotated periodic dependency model against this fresh inventory before hardware emission and writes protocol-model.etf/json. It establishes a graph rank only, never source refinement or admission; absent by default. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; generated receivers supply destination eligibility, acquisition and release when wired to their matching links. Their ordinary effect outputs are not yet connected to source snapshots. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
+-doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions, per-actor capture/startup/host receivers, and connected publisher/capture DSLX into a fresh directory. Optional native_actors selects a nonempty proper subset of logical IDs, retaining global link/actor identities and exposing canonical sampled-clock crossing ports; all roles require common clock/reset. Accepts direct and independently buffered routes and at most one explicitly declared rectangle host ingress (one to four targets). Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Optional arithmetic_groups lists disjoint groups of two or three logical native actor IDs; hls_protocol_arithmetic validates source-compatible scalar completion and selects shared receiver ports before emission. Default [] leaves all completions local. Optional protocol_model => #{kind => periodic_neighbor_barrier, contracts => ModuleRoles} checks an annotated periodic dependency model against this fresh inventory before hardware emission and writes protocol-model.etf/json. It establishes a graph rank only, never source refinement or admission; absent by default. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; generated receivers supply destination eligibility, acquisition and release when wired to their matching links. Their ordinary effect outputs are not yet connected to source snapshots. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
 -spec write(map(), file:filename()) -> map().
 write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}, Output) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
@@ -38,6 +38,7 @@ write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, 
     Inbox = hls_protocol_inbox:plan(Capture),
     #{fabric := Fabric, ingress := Ingress, indices := Native} = hls_protocol_partition:plan(
         Config, Bundle, Capture, hls_protocol_fabric:plan(Publishers, Inbox), hls_protocol_ingress:plan(Bundle)),
+    Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Config, []), Bundle, Native),
     ok = file:make_dir(Output),
     ActorDirectory = filename:join(Output, "actors"),
     ok = file:make_dir(ActorDirectory),
@@ -49,13 +50,14 @@ write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, 
     Receivers = [begin
         Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
         Messages = lists:append([Ms || #{target := Target, messages := Ms} <- maps:get(startup,Topology), Target =:= Id]),
-        Artifact = hls_protocol_inbox:attach(maps:get(M, Modules), Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
+        Owner = hls_protocol_arithmetic:receiver(I, Arithmetic, maps:get(M, Modules)),
+        Artifact = hls_protocol_inbox:attach(Owner, Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
         Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
         Manifest = hls_local_actor:write(Artifact, filename:join(Output, Relative)),
         #{index => I, module => M, file => list_to_binary(Relative), manifest => Manifest}
     end || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors), lists:member(I, Native)],
     ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
-    Transport = #{bundle => Bundle, capture => Capture, transactions => Transactions,
+    Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
         sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, actor_functions => ActorFunctions, receivers => Receivers},
     Plan = case Model of none -> Transport; _ -> Transport#{protocol_model => Model} end,
     ok = write_model(Model, Output),

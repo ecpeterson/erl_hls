@@ -1,11 +1,15 @@
 -module(hls_local_protocol).
 -moduledoc "Splits collection receipts from source callbacks at the local actor boundary; includes the single-actor DSLX clock owner; mailbox selection remains external.".
--export([ports/1]).
+-export([ports/1, ports/2]).
 
 -doc "Emits receipt, callback-action, entry/publication and clock-owner DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
 -spec ports(xls_actor_codegen:spec()) -> iodata().
+ports(Spec) -> ports(Spec, local).
+
+-doc "Emits the same source functions with local or externally granted scalar completion. The shared mode is internal to the freshly validated arithmetic-group builder: its owner waits for the group grant and registers that action before entry. Public local_action_at/local_slow_step_at remain the ordinary source references. Only the shared owner disables local scalar dispatch and consumes local_reduce_action_at from its group. No saved artifact or caller-supplied action is accepted by the network builder.".
+-spec ports(xls_actor_codegen:spec(), local | shared) -> iodata().
 ports(Spec = #{message_names := Names, message_words := Words,
-        reductions := Reductions, gathers := Gathers}) ->
+        reductions := Reductions, gathers := Gathers}, Mode) ->
     false = xls_statem_reply_codegen:enabled(Spec),
     Tag = xls_actor_codegen:input_tag_ok(Spec, Names, Words),
     [template("local_protocol", [{<<"@@SCALAR@@">>, scalar(Reductions)},
@@ -17,7 +21,12 @@ ports(Spec = #{message_names := Names, message_words := Words,
         {<<"@@NEXT_EVENT@@">>, xls_statem_event_codegen:optional(Spec,
             "      next_event: if effective && !failed { next_event } else { u8:0 },")},
         {<<"@@DISPATCHED@@">>, xls_shared_reduction_service_codegen:shared_dispatch_dispatched_field(Reductions, ordinary, Spec)},
-        {<<"@@SELECTED@@">>, dispatch(Spec)}]), template("local_owner", [])].
+        {<<"@@SELECTED@@">>, dispatch(Spec)}]),
+     template("local_owner", [{<<"@@SHARED_INPUTS@@">>, shared(Mode, inputs)},
+        {<<"@@LOCAL_COMPLETION@@">>, case Mode of local -> "true"; shared -> "false" end},
+        {<<"@@SHARED_COMPLETION@@">>, shared(Mode, completion)},
+        {<<"@@SHARED_FUNCTIONS@@">>, case Mode of local -> []; shared -> template("local_arithmetic",
+            [{<<"@@NO_EVENT@@">>, xls_statem_event_codegen:optional(Spec, " && machine.next_event == u8:0")}]) end}])].
 
 %% ActorState and source callback types are local to the generated module, so
 %% these fragments fill typed declaration slots rather than rewrite generated code.
@@ -47,7 +56,7 @@ dispatch(Spec = #{reductions := Reductions, gathers := Gathers}) ->
     Plain = "local_plain_dispatch(machine, axis::frame_from_bits(frame), received)",
     Ordinary = case Reductions of
         none -> Plain;
-        _ -> ["if !machine.enter_pending && machine.reduction.status == ReductionStatus::COMPLETE { shared_machine_complete(machine) } else { ", Plain, " }"]
+        _ -> ["if complete_locally && !machine.enter_pending && machine.reduction.status == ReductionStatus::COMPLETE { shared_machine_complete(machine) } else { ", Plain, " }"]
     end,
     Events = [xls_statem_event_codegen:optional(Spec,
         "if !hls_failure::failed(machine.failure) && !machine.enter_pending && machine.next_event != u8:0 { actor_next_event(machine) } else "),
@@ -56,3 +65,10 @@ dispatch(Spec = #{reductions := Reductions, gathers := Gathers}) ->
         none -> Events;
         _ -> template("local_slow_gather", [{<<"@@EVENTS@@">>, Events}])
     end.
+
+%% Only shared owners expose a completion input and wait before ordinary dispatch.
+-spec shared(local | shared, inputs | completion) -> iodata().
+shared(local, _) -> [];
+shared(shared, inputs) ->
+    "  completion_granted: bool,\n  completion_action: LocalAction,\n";
+shared(shared, completion) -> template("local_arithmetic_owner", []).

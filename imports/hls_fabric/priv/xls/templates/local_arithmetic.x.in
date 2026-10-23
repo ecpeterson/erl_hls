@@ -1,0 +1,23 @@
+// Scalar completion is internal work after failure, entry and continuation priority.
+// Receipt application has already stored the complete reduction in this machine.
+pub fn local_reduce_pending(raw: MachineBits, slot: u32) -> bool {
+  let machine = local_machine(raw, slot);
+  !hls_failure::failed(machine.failure) && !machine.enter_pending@@NO_EVENT@@ &&
+    machine.reduction.status == ReductionStatus::COMPLETE
+}
+
+// A group may grant only an idle owner; the committed machine stays local until commit.
+pub fn local_reduce_request(s: LocalOwnerState, slot: u32) -> bool {
+  !s.action_valid && local_reduce_pending(s.machine, slot)
+}
+
+// Exactly the ordinary source completion, applied to one selected actor's machine.
+// The group returns this value only to that same actor's registered action slot.
+pub fn local_reduce_action_at(raw: MachineBits, slot: u32) -> LocalAction {
+  let result = shared_machine_complete(local_machine(raw, slot));
+  LocalAction {
+    private_machine: bits_from_machine(result.machine),
+    dispatched: result.dispatched, directive: result.directive as u2,
+    phase_boundary: result.phase_boundary,
+  }
+}

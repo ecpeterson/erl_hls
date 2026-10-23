@@ -1,0 +1,8 @@
+  } else if local_reduce_pending(s.machine, io.slot) {
+    // Only the granted actor captures the shared result. A waiting owner still
+    // drains its old outbox, but cannot accept a new head or execute other work.
+    if io.completion_granted {
+      LocalOwnerTick { state: LocalOwnerState {
+        action: io.completion_action, action_valid: true, selected: false,
+        action_slot: io.slot, ..base.state }, ..base }
+    } else { base }

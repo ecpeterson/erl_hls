@@ -294,6 +294,9 @@ jobs:
           python3 tools/test_protocol_boundary.py "$RUNNER_TEMP/xls" _build/protocol-boundary
           python3 tools/test_protocol_application.py "$RUNNER_TEMP/xls" _build/protocol-application
 
+      - name: Check source-bound arithmetic sharing and connected resource cost
+        run: python3 tools/test_protocol_arithmetic.py "$RUNNER_TEMP/xls" _build/protocol-arithmetic
+
       - name: Check canonical source partitions and connected feedback
         run: python3 tools/test_protocol_partition.py "$RUNNER_TEMP/xls" _build/protocol-partition
       - name: Check framed source roles and bounded broker relay
@@ -306,6 +309,8 @@ jobs:
           paths: |
             _build/**/*.log
             _build/**/manifest.json
+            _build/protocol-arithmetic/**/*.json
+            _build/protocol-arithmetic/**/*.x
             _build/protocol-partition/**/*.json
             _build/protocol-partition/**/*.x
             _build/protocol-partition/**/*.sv
@@ -449,6 +454,9 @@ jobs:
       - name: Check passive source inspection during correction feedback
         run: python3 tools/test_protocol_inspection.py "$RUNNER_TEMP/xls" _build/protocol-inspection
 
+      - name: Check shared Phi completion against the ordinary BEAM oracle
+        run: python3 tools/test_protocol_repetition.py "$RUNNER_TEMP/xls" _build/protocol-shared-repetition --width 3 --share-arithmetic
+
       - name: Retain repetition integration diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics
@@ -457,6 +465,8 @@ jobs:
           paths: |
             _build/protocol-model/**/*.json
             _build/protocol-model/**/*.log
+            _build/protocol-shared-repetition/**/*.json
+            _build/protocol-shared-repetition/**/*.log
             _build/protocol-repetition/**/*.json
             _build/protocol-repetition/**/*.log
             _build/protocol-inspection/**/*.json

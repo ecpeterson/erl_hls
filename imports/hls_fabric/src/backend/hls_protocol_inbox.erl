@@ -29,7 +29,7 @@ pair({Source,Destination},Channels) ->
       arrival_contract=>one_accepted_message_per_clock_in_sender_order,
       reuse_contract=>capture_credit_and_absent_pending_message}.
 
--doc "Attaches the ordinary inbox plus exact declared startup records to a fresh source artifact. Startup records are constant slots after the capture slots, ordered as one additional logical sender. They remain pending through reservation/postponement, retire only on source consume, and replay after shared reset. An addressed host adds one final slot; host_valid/frame must remain immutable until source consume, including through postponement. Total capture, startup and host slots must not exceed 256. The same source schema supplies startup encoding; no caller-supplied frames or startup progress assumptions are accepted.".
+-doc "Attaches the ordinary inbox plus exact declared startup records to a fresh source artifact. A group-selected shared owner adds internal completion_granted/action fields, connected only by the checked network emitter; these are not independently admissible host inputs. Startup records are constant slots after the capture slots, ordered as one additional logical sender. They remain pending through reservation/postponement, retire only on source consume, and replay after shared reset. An addressed host adds one final slot; host_valid/frame must remain immutable until source consume, including through postponement. Total capture, startup and host slots must not exceed 256. The same source schema supplies startup encoding; no caller-supplied frames or startup progress assumptions are accepted.".
 -spec attach(hls_local_actor:artifact(), [map()], map(), [tuple()], boolean()) -> hls_local_actor:artifact().
 attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=Channels}, Messages, Host) ->
     Starts=hls_protocol_schema:frames(Artifact,Messages),
@@ -45,23 +45,32 @@ attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=
     case Total=<256 of true->ok;false->error({inbox_slot_limit,Total,256}) end,
     N=max(1,Total), Cursor=max(1,ceil(math:log2(N))),
     Indexed=[R#{index=>I}||{I,R}<-lists:enumerate(0,Rows)],
-    Fields=[{"reset",1},{"output_ready",1}]++(case Host of true->[{"host_valid",1},{"host_frame",128}];false->[] end)++lists:append([
+    Shared = maps:get(mode, maps:get(completion, Artifact, #{}), local) =:= shared,
+    CompletionFields = case Shared of
+        false -> [];
+        true -> #{machine_bits := MW} = hls_local_actor:manifest(Artifact),
+            [{"completion_granted",1},{"completion_action",MW+1+2+1}]
+    end,
+    Fields=[{"reset",1},{"output_ready",1}]++CompletionFields++(case Host of true->[{"host_valid",1},{"host_frame",128}];false->[] end)++lists:append([
         [{link_name(I)++"_selected",S},{link_name(I)++"_available",S},
          {link_name(I)++"_payloads",W}]||#{index:=I,slots:=S,payload_bits:=W}<-Links]),
     {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/local_inbox.x.in")),
+    CompletionInputs = case Shared of false -> []; true ->
+        "completion_granted: io.completion_granted, completion_action: io.completion_action," end,
+    Inbox = xls_template:render(Template, [{<<"@@COMPLETION_INPUTS@@">>, CompletionInputs}]),
     Source=[Body,"\nimport protocol_inbox as inbox_control;\nimport protocol_startup as startup_control;\n",
         "const INBOX_SLOTS = u32:",n(N),";\nconst INBOX_CURSOR_BITS = u32:",n(Cursor),";\n",
         "const CAPTURE_SLOTS = u32:",n(Count),";\nconst STARTUP_BITS = u32:",n(max(1,StartupCount)),";\n",
         "const STARTUP_VALID = bits[STARTUP_BITS]:",n((1 bsl StartupCount)-1),";\n",
         "// Clock input fields bind the exact incoming transport links.\npub struct LocalInboxInputs {\n",
-        [[Name,": bits[",n(Width),"],\n"]||{Name,Width}<-Fields],"}\n",
+        [[Name,": ",case Name of "completion_action" -> "LocalAction"; _ -> ["bits[",n(Width),"]"] end,",\n"]||{Name,Width}<-Fields],"}\n",
         mask_function("selected",Links,N,Host,Count+StartupCount),mask_function("available",Links,N,Host,Count+StartupCount),
         "// Reconstruct the selected capture, startup or held host record as an ordinary destination frame.\n",
         "fn inbox_frame(io: LocalInboxInputs, index: u32) -> bits[128] { match index {\n",
         [["u32:",n(I)," => ",frame(R),",\n"]||R=#{index:=I}<-Indexed],
         [["u32:",n(Count+I)," => bits[128]:0x",integer_to_list(F,16),",\n"]||{I,F}<-lists:enumerate(0,Starts)],
         case Host of true-> ["u32:",n(Count+StartupCount)," => io.host_frame,\n"];false->[] end,
-        "_ => bits[128]:0, } }\n",Template],
+        "_ => bits[128]:0, } }\n",Inbox],
     Artifact#{dslx:=iolist_to_binary(Source),inbox=>#{physical_slots=>Count,mask_bits=>N,
         cursor_bits=>Cursor,additional_state_bits=>3*N+Cursor+1+StartupCount,
         host=>#{slots=>HostCount,offset=>Count+StartupCount,retirement=>source_consume},
