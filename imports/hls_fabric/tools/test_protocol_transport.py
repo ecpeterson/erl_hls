@@ -214,6 +214,7 @@ def main() -> None:
         output = stage/key
         run(['bash','tools/emit_protocol_transport.sh',args.xls,config,output],stage,'emit-'+key,timeout=1000)
         run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:startup(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'startup-reference-'+key)
+        run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:ingress(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'ingress-reference-'+key)
         report = json.loads((output/'summary.json').read_text())
         assert report['actors']==expected and report['eligible'] is False
         run(['iverilog','-g2012','-s','protocol_fabric','-o',output/'elaborated.vvp','-f',output/'files.f'],stage,'elaborate-'+key)

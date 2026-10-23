@@ -2,7 +2,7 @@
 -moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
 -export([write/2]).
 
--doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions, per-actor capture/startup receivers, and connected publisher/capture DSLX into a fresh directory. Accepts direct and independently buffered routes only. Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; generated receivers supply destination eligibility, acquisition and release when wired to their matching links. Their ordinary effect outputs are not yet connected to source snapshots. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
+-doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions, per-actor capture/startup/host receivers, and connected publisher/capture DSLX into a fresh directory. Accepts direct and independently buffered routes and at most one explicitly declared rectangle host ingress (one to four targets). Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; generated receivers supply destination eligibility, acquisition and release when wired to their matching links. Their ordinary effect outputs are not yet connected to source snapshots. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
 -spec write(map(), file:filename()) -> map().
 write(#{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}, Output) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
@@ -36,6 +36,7 @@ write(#{sources := Sources, topology := {Module, Function, Arguments}, actor_lim
         [R || #{outputs := Outputs} <- maps:get(sources, Publishers), #{rows := Rows} <- Outputs, R <- Rows]),
     Inbox = hls_protocol_inbox:plan(Capture),
     Fabric = hls_protocol_fabric:plan(Publishers, Inbox),
+    Ingress = hls_protocol_ingress:plan(Bundle),
     ok = file:make_dir(Output),
     ActorDirectory = filename:join(Output, "actors"),
     ok = file:make_dir(ActorDirectory),
@@ -47,14 +48,14 @@ write(#{sources := Sources, topology := {Module, Function, Arguments}, actor_lim
     Receivers = [begin
         Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
         Messages = lists:append([Ms || #{target := Target, messages := Ms} <- maps:get(startup,Topology), Target =:= Id]),
-        Artifact = hls_protocol_inbox:attach(maps:get(M, Modules), Incoming, Capture, Messages),
+        Artifact = hls_protocol_inbox:attach(maps:get(M, Modules), Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
         Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
         Manifest = hls_local_actor:write(Artifact, filename:join(Output, Relative)),
         #{index => I, module => M, file => list_to_binary(Relative), manifest => Manifest}
     end || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors)],
     ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
     Plan = #{bundle => Bundle, capture => Capture, transactions => Transactions,
-        sources => Publishers, inbox => Inbox, fabric => Fabric, actor_functions => ActorFunctions, receivers => Receivers},
+        sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, actor_functions => ActorFunctions, receivers => Receivers},
     ok = file:write_file(filename:join(Output, "transport.etf"), term_to_binary(Plan, [deterministic]), [exclusive]),
     Summary = #{actors => length(Actors), links => length(maps:get(links, Fabric)),
         source_modules => Used, top => protocol_fabric, eligible => false,

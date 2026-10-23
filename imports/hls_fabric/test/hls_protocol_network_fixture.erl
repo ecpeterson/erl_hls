@@ -43,7 +43,7 @@ topology() ->
 -doc "Marks unsupported boundary requirements so the complete-network command must reject them.".
 -spec unsupported(startup | ingresses) -> map().
 unsupported(startup) -> (topology())#{startup:=[{left,[#total{}]}]};
-unsupported(ingresses) -> (topology())#{ingresses:=[{host,{rectangle,[1,1]},[{all,[total],[{actor,left,{at,[0,0]}}]}]}]}.
+unsupported(ingresses) -> (topology())#{ingresses:=[{Name,{rectangle,[1,1]},[{all,[total],[{actor,left,{at,[0,0]}}]}]}||Name<-[host,other]]}.
 
 -doc "A single source with no incoming links still initializes and publishes once.".
 -spec isolated() -> map().

@@ -1,6 +1,6 @@
 -module(hls_protocol_transport_validation).
 -moduledoc "Prepares independent ordinary-decoder references for the production transport output.".
--export([prepare/1, startup/1]).
+-export([prepare/1, startup/1, ingress/1]).
 -doc "Reads a fresh trusted local transport build, writes ordinary DSLX effect decoders and a finite-witness catalogue. The RTL scoreboard uses these ordinary decoders, not the publisher's bit projection, to check frames. This is test preparation, not application admission.".
 -spec prepare(file:filename()) -> ok.
 prepare(Directory) ->
@@ -45,6 +45,41 @@ startup(Directory) ->
         #{actor=>iolist_to_binary(io_lib:format("~p",[Id])),index=>I,frames=>Expected}
     end||{I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
     file:write_file(filename:join(Directory,"startup-reference.json"),json:encode(#{actors=>Rows}),[exclusive]).
+
+-doc "Checks a fresh trusted transport build's host domains against ordinary BEAM zero-valued record packing and independently normalized recipient coordinates. Checks every target/recipient binding, including collocated actors, and retains the finite reference catalogue. Does not establish runtime semantics or application progress.".
+-spec ingress(file:filename()) -> ok.
+ingress(Directory) ->
+    {ok,Bytes}=file:read_file(filename:join(Directory,"transport.etf")),
+    #{bundle:=#{topology:=#{actors:=Actors,ingresses:=Ingresses},modules:=Modules},ingress:=Plan,receivers:=Receivers}=binary_to_term(Bytes),
+    maps:foreach(fun(M,#{context:=Context=#{source_name:=File}}) ->
+        {ok,M,Code}=compile:forms(hls_source:read(File,Context),[binary,debug_info,warnings_as_errors,report]),
+        {module,M}=code:load_binary(M,File,Code)
+    end,Modules),
+    Rows=case Plan of
+      none -> [];
+      #{targets:=Targets} ->
+        [#{targets:=Declared}]=Ingresses,
+        [begin
+          [#{schemas:=Schemas,recipients:=Expected}]=[T||T=#{id:=Name}<-Declared,Name=:=Id],
+          true=lists:sort(Schemas)=:=lists:sort([Tag||#{tag:=Tag}<-Domains]),
+          Actual=[begin
+            #{id:=Actor,module:=M}=lists:nth(I+1,Actors),
+            #{plan:=#{records:=Records}}=maps:get(M,Modules),
+            lists:foreach(fun(#{tag:=Tag,mask:=Mask,value:=Value})->
+              [Fs]=[Fields||{attribute,_,record,{Name,Fields}}<-Records,Name=:=Tag],
+              Message=list_to_tuple([Tag|[hls_type:zero(hls_type:descriptor(Type))||{typed_record_field,_,Type}<-Fs]]),
+              Frame=ordinary_frame(M,Message),Value=Frame band Mask
+            end,Domains),
+            #{actor=>Actor,at=>[X,Y]}
+          end||#{index:=I,x:=X,y:=Y}<-Points],
+          true=lists:sort(Actual)=:=lists:sort(Expected),
+          #{selector=>Selector,recipients=>length(Actual),schemas=>length(Domains)}
+        end||#{id:=Id,selector:=Selector,domains:=Domains,recipients:=Points}<-Targets]
+    end,
+    lists:foreach(fun(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=N}}}})->
+        N=case hls_protocol_ingress:addressed(Plan,I) of true->1;false->0 end
+    end,Receivers),
+    file:write_file(filename:join(Directory,"ingress-reference.json"),json:encode(#{targets=>Rows}),[exclusive]).
 
 %% The ordinary host packer supplies the physical stream and schema tag independently.
 -spec ordinary_frame(module(),tuple()) -> non_neg_integer().

@@ -131,7 +131,7 @@ def main() -> None:
         with (stage/(key+'.log')).open('x') as log:
             result=subprocess.run(['escript','tools/emit_protocol_network.escript',str(config),str(output)],
                 cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=120)
-        assert result.returncode!=0 and 'unsupported_network_boundary,'+key in (stage/(key+'.log')).read_text()
+        assert result.returncode!=0 and 'unsupported_protocol_ingress' in (stage/(key+'.log')).read_text()
         assert not (output/'network').exists()
     config=stage/'isolated.config';configuration(config,'isolated')
     isolated=stage/'isolated'
@@ -139,7 +139,7 @@ def main() -> None:
     compile_network(args.xls,isolated)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'interrupted_incarnations':1,'outputs_per_complete_incarnation':39,'final_sum':60,
-        'negative_wiring':2,'unsupported_boundaries':['ingresses'],
+        'negative_wiring':2,'unsupported_boundaries':['multiple_ingresses'],
         'zero_incoming_links':'lowered',
         'evidence':'Finite source-driven RTL witness and fixture combinational cut; no network admission or native claim.'},indent=2)+'\n')
 

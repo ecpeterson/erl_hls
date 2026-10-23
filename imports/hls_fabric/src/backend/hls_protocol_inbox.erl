@@ -1,6 +1,6 @@
 -module(hls_protocol_inbox).
 -moduledoc "Groups typed capture channels by logical sender and destination. Per-pair delivery precedence preserves selective receive without inventing cross-sender chronology.".
--export([plan/1, attach/4]).
+-export([plan/1, attach/5]).
 
 -doc "Plans independent sender/destination histories over exact typed capture channels. Channels from distinct ports of one sender share a history; separate senders do not. Each pending channel currently has one slot, so a repeated send must wait for its lease to be released. This establishes neither sufficient application capacity nor transport deadlock freedom; whole-protocol eligibility remains false.".
 -spec plan(map()) -> map().
@@ -29,10 +29,10 @@ pair({Source,Destination},Channels) ->
       arrival_contract=>one_accepted_message_per_clock_in_sender_order,
       reuse_contract=>capture_credit_and_absent_pending_message}.
 
--doc "Attaches the ordinary inbox plus exact declared startup records to a fresh source artifact. Startup records are constant slots after the capture slots, ordered as one additional logical sender. They remain pending through reservation/postponement, retire only on source consume, and replay after shared reset. Total capture plus startup slots must not exceed 256. The same source schema supplies startup encoding; no caller-supplied frames or startup progress assumptions are accepted.".
--spec attach(hls_local_actor:artifact(), [map()], map(), [tuple()]) -> hls_local_actor:artifact().
-attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=Channels}, Messages) ->
-    Starts=hls_protocol_startup:frames(Artifact,Messages),
+-doc "Attaches the ordinary inbox plus exact declared startup records to a fresh source artifact. Startup records are constant slots after the capture slots, ordered as one additional logical sender. They remain pending through reservation/postponement, retire only on source consume, and replay after shared reset. An addressed host adds one final slot; host_valid/frame must remain immutable until source consume, including through postponement. Total capture, startup and host slots must not exceed 256. The same source schema supplies startup encoding; no caller-supplied frames or startup progress assumptions are accepted.".
+-spec attach(hls_local_actor:artifact(), [map()], map(), [tuple()], boolean()) -> hls_local_actor:artifact().
+attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=Channels}, Messages, Host) ->
+    Starts=hls_protocol_schema:frames(Artifact,Messages),
     Rows=lists:append([[begin
         [Op]=[N||{N,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
         [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
@@ -41,11 +41,11 @@ attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=
           codec=>hls_protocol_codec:plan(Channel,Op)}
     end||#{index:=K,channel:=C}<-Slots]
     ||#{index:=I,widths:=Widths,pair:=#{slots:=Slots}}<-Links]),
-    Count=length(Rows), StartupCount=length(Starts), Total=Count+StartupCount,
+    Count=length(Rows), StartupCount=length(Starts), HostCount=case Host of true->1;false->0 end, Total=Count+StartupCount+HostCount,
     case Total=<256 of true->ok;false->error({inbox_slot_limit,Total,256}) end,
     N=max(1,Total), Cursor=max(1,ceil(math:log2(N))),
     Indexed=[R#{index=>I}||{I,R}<-lists:enumerate(0,Rows)],
-    Fields=[{"reset",1},{"output_ready",1}]++lists:append([
+    Fields=[{"reset",1},{"output_ready",1}]++(case Host of true->[{"host_valid",1},{"host_frame",128}];false->[] end)++lists:append([
         [{link_name(I)++"_selected",S},{link_name(I)++"_available",S},
          {link_name(I)++"_payloads",W}]||#{index:=I,slots:=S,payload_bits:=W}<-Links]),
     {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/local_inbox.x.in")),
@@ -55,14 +55,16 @@ attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=
         "const STARTUP_VALID = bits[STARTUP_BITS]:",n((1 bsl StartupCount)-1),";\n",
         "// Clock input fields bind the exact incoming transport links.\npub struct LocalInboxInputs {\n",
         [[Name,": bits[",n(Width),"],\n"]||{Name,Width}<-Fields],"}\n",
-        mask_function("selected",Links,N),mask_function("available",Links,N),
-        "// Reconstruct only the selected capture or fixed startup record as an ordinary destination frame.\n",
+        mask_function("selected",Links,N,Host,Count+StartupCount),mask_function("available",Links,N,Host,Count+StartupCount),
+        "// Reconstruct the selected capture, startup or held host record as an ordinary destination frame.\n",
         "fn inbox_frame(io: LocalInboxInputs, index: u32) -> bits[128] { match index {\n",
         [["u32:",n(I)," => ",frame(R),",\n"]||R=#{index:=I}<-Indexed],
         [["u32:",n(Count+I)," => bits[128]:0x",integer_to_list(F,16),",\n"]||{I,F}<-lists:enumerate(0,Starts)],
+        case Host of true-> ["u32:",n(Count+StartupCount)," => io.host_frame,\n"];false->[] end,
         "_ => bits[128]:0, } }\n",Template],
     Artifact#{dslx:=iolist_to_binary(Source),inbox=>#{physical_slots=>Count,mask_bits=>N,
         cursor_bits=>Cursor,additional_state_bits=>3*N+Cursor+1+StartupCount,
+        host=>#{slots=>HostCount,offset=>Count+StartupCount,retirement=>source_consume},
         startup=>#{count=>StartupCount,offset=>Count,frames=>Starts,
             order=>oldest_eligible_declared_record,retirement=>source_consume,reset=>replay},
         inputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Fields],
@@ -72,12 +74,12 @@ attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=
         capacity=>unestablished,network_progress=>unestablished}}.
 
 %% Flatten metadata only; bit zero belongs to the first incoming pair's first slot.
--spec mask_function(string(),[map()],pos_integer()) -> iodata().
-mask_function(Field,Links,N) ->
+-spec mask_function(string(),[map()],pos_integer(),boolean(),non_neg_integer()) -> iodata().
+mask_function(Field,Links,N,Host,At) ->
     ["// Flatten the transport's ",Field," mask in manifest slot order.\n",
      "fn inbox_",Field,"(io: LocalInboxInputs) -> bits[",n(N),"] { ",
      case Links of []->["bits[",n(N),"]:0"];
-         _->["(",lists:join(" ++ ",[["io.",link_name(I),"_",Field]||#{index:=I}<-lists:reverse(Links)]),") as bits[",n(N),"]"] end," }\n"].
+         _->["(",lists:join(" ++ ",[["io.",link_name(I),"_",Field]||#{index:=I}<-lists:reverse(Links)]),") as bits[",n(N),"]"] end,case Host of true->[" | ((io.host_valid as bits[",n(N),"]) << u32:",n(At),")"];false->[] end," }\n"].
 
 %% Codec constants and bit positions come from the checked current source channel.
 -spec frame(map()) -> iodata().

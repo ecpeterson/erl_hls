@@ -160,7 +160,7 @@ This baseline retains at most one action and one publication batch: `2*M + P + 6
 
 ## Connect sender-local captures to an actor
 
-The same transport build command now emits `actors/receiver_I.x` for each elaborated actor, listed in `summary.json` under `receivers`. The direct path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/4` → `hls_local_actor:write/2`. Each receiver includes the ordinary actor owner and source-derived codecs for its exact incoming capture links. Compile a receiver with the existing command:
+The same transport build command now emits `actors/receiver_I.x` for each elaborated actor, listed in `summary.json` under `receivers`. The direct path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/5` → `hls_local_actor:write/2`. Each receiver includes the ordinary actor owner and source-derived codecs for its exact incoming capture links. Compile a receiver with the existing command:
 
 ```sh
 python3 tools/compile_local_actor.py XLS_ROOT BUILD/actors/receiver_I.x FRESH_RTL_OUTPUT
@@ -168,7 +168,7 @@ python3 tools/compile_local_actor.py XLS_ROOT BUILD/actors/receiver_I.x FRESH_RT
 
 Its manifest selects `local_inbox_clock`. The one-stage schedule, permanently enabled XLS channels and shared active-high reset contract are the same as for the ordinary actor owner. One masked startup clock installs source initialization. These are standalone receiver modules with ordinary effect outputs. The network command below instead transfers their complete outbox batches to publishers; external ingress, capacity and progress admission remain separate. The transport summary therefore continues to report `actor_runtime: false` and `eligible: false`.
 
-`LocalInboxInputs` lists `reset`, `output_ready`, then each incoming link's `selected`, `available` and packed `payloads`. Wire these to that exact transport instance. `LocalInboxOutputs` groups four masks and the existing `LocalOwnerOutputs` under `owner`. Masks follow the manifest's `inbox.slots` order; each row identifies its link, capture slot, payload slice and destination-frame codec.
+`LocalInboxInputs` lists `reset`, `output_ready`, optional `host_valid`/`host_frame`, then each incoming link's `selected`, `available` and packed `payloads`. Wire these to that exact transport instance. `LocalInboxOutputs` groups four masks and the existing `LocalOwnerOutputs` under `owner`. Masks follow the manifest's `inbox.slots` order; each row identifies its link, capture slot, payload slice and destination-frame codec.
 
 | Output | Connection and meaning |
 | --- | --- |
@@ -180,7 +180,7 @@ Its manifest selects `local_inbox_clock`. The one-stage schedule, permanently en
 
 Each pair supplies its oldest eligible pending slot. A circular selector chooses among those requests without inventing cross-sender arrival order. It advances only on acceptance. The saved identity remains the pair's only eligible slot through publication stalls, so later arrivals cannot replace it. A postponed head becomes ineligible until a source phase boundary, which wakes all postponed heads. Source failure stops new selection; reset cancels actor, reservation, postponement and delayed release together with the transport. Pending payloads must stay stable, and the transport must implement its declared capture/order contract; these are internal connected interfaces, not arbitrary external inputs.
 
-The added state is `3*N + max(1, ceil(log2(N))) + 1` bits for postponed, reserved and delayed-release masks, cursor and startup flag, plus the existing `LocalOwnerState`. No frame or payload copy is added. There is one selected dispatch per actor per clock and no shared allocator. `N` is the total number of incoming capture and declared startup slots, limited to 256; zero-input actors use one tied-unavailable dummy slot. The startup consumed mask described below adds one bit per declared record. This is a structural bound, not a native area or timing result.
+The added state is `3*N + max(1, ceil(log2(N))) + 1` bits for postponed, reserved and delayed-release masks, cursor and startup flag, plus the existing `LocalOwnerState`. No frame or payload copy is added. There is one selected dispatch per actor per clock and no shared allocator. `N` is the total number of incoming capture, declared startup and optional host slots, limited to 256; zero-input actors use one tied-unavailable dummy slot. The startup consumed mask described below adds one bit per declared record. This is a structural bound, not a native area or timing result.
 
 `python3 tools/test_protocol_inbox.py XLS_ROOT FRESH_OUTPUT` connects real generated transport and receiver RTL to independent sender-age, disposition and source-value scoreboards. Its finite schedule covers early postponement, wakeup, repeated sends, publication stalls, delayed release and reset during ownership, followed by two complete incarnations; early-consume and undelayed-release wiring controls must fail its independent scoreboard. Combinational SAT checks circular priority for all request masks and legal cursors at 1, 3 and 8 slots; an ignored-cursor control must fail. Those checks trust XLS lowering and Yosys/ABC/SAT and establish selection only, not sequential refinement or network progress. Local XC7 selector counts are capacity screens, not Vivado forecasts. The existing transport regression also lowers each distinct source/codec/width receiver shape across its real repetition and D3 populations.
 
@@ -192,13 +192,14 @@ For topologies driven by ordinary source initialization and internal messages, t
 bash tools/emit_protocol_network.sh XLS_ROOT CONFIG FRESH_OUTPUT
 ```
 
-It accepts the same trusted source/topology configuration as the transport command. Declared `startup` records are delivered by the ordinary inbox as described below. Host `ingresses` still reject explicitly. External destinations remain separate ready/valid streams, ordered per logical source and recipient, without a global output order. All owners and transport share one clock and reset. This command does not implement independent-device reset, a board interface or application admission.
+It accepts the same trusted source/topology configuration as the transport command. Declared `startup` records are delivered by the ordinary inbox as described below. One declared rectangle `ingress` is supported as described below; other interface shapes reject explicitly. External destinations remain separate ready/valid streams, ordered per logical source and recipient, without a global output order. All owners and transport share one clock and reset. This command does not implement independent-device reset, a board interface or application admission.
 
 ```text
 emit_protocol_network.sh → emit_protocol_network.escript
   → hls_protocol_network:write/2
     → hls_protocol_transport:write/2 (fresh sources, exact inboxes and transport)
-    → reject unsupported host ingress
+      → hls_protocol_ingress:plan/1 + hls_protocol_schema:domains/2
+      → hls_protocol_inbox:attach/5 (checked host slot)
     → xls_protocol_network:write/2
       → receiver_I::local_inbox_batch / local_inbox_batch_tick
       → transport::tick → named state/output result
@@ -208,7 +209,7 @@ emit_protocol_network.sh → emit_protocol_network.escript
 
 `local_inbox_batch` exposes the old outbox's complete evaluated payload and layout. `local_inbox_batch_tick` reuses ordinary selection, receipt and action completion, but disables single-effect draining: `output_ready` accepts the entire old batch. Use this interface from reset, never interleave it with serial-effect draining. A stalled batch stays unchanged, and its acceptance edge cannot also reuse that outbox for a new entry. The publisher then retires each recipient's ordered subsequence independently.
 
-Composition adds no state: each actor retains its existing `LocalInboxState`, and transport retains its existing publications/captures. There is one complete old-batch reader per publisher and one selected capture reconstruction per receiver. Offers and eligibility use old registered state. The network first obtains transport observations, computes receiver transitions, then supplies their actual take/release inputs to the transport transition. Those observations are independent of take/release and boundary readiness; the first call's unused next state is discarded by XLS. There is no combinational readiness loop or same-edge credit reuse.
+Without host ingress, composition adds no state: each actor retains its existing `LocalInboxState`, and transport retains its existing publications/captures. There is one complete old-batch reader per publisher and one selected capture reconstruction per receiver. Offers and eligibility use old registered state. The network first obtains transport observations, computes receiver transitions, then supplies their actual take/release inputs to the transport transition. Those observations are independent of take/release and boundary readiness; the first call's unused next state is discarded by XLS. There is no combinational readiness loop or same-edge credit reuse.
 
 `network/manifest.json` describes the pins and binds direct component DSLX hashes. `network/compiled.json` records RTL/tool hashes, import paths and the fixed one-stage schedule; `network/commands.json` retains invocations and failures. `files.f` lists top `protocol_network` and its core. The original transport `summary.json` continues to describe the standalone transport; the network manifest records `actor_runtime: true`, `eligible: false`. Additional provider imports can be supplied to `compile_protocol_network.py` with `--dslx-path DIR`. Inputs and manifests are trusted local build products. Failed builds retain partial output.
 
@@ -216,7 +217,7 @@ Run `python3 tools/test_protocol_network.py XLS_ROOT FRESH_OUTPUT` with Icarus a
 
 ## Declared startup messages
 
-The network command accepts the ordinary topology `startup` list, for example `startup => [{receiver, [#value{n=2}, #open{key=7}, #value{n=3}, #value{n=3}]}]`. It does not run a special configuration callback or assume those messages will succeed. The production path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/4` → `hls_protocol_startup:frames/2`, using the receiving actor's fresh source schema, followed by the same `local_inbox_batch_tick` used for internal traffic.
+The network command accepts the ordinary topology `startup` list, for example `startup => [{receiver, [#value{n=2}, #open{key=7}, #value{n=3}, #value{n=3}]}]`. It does not run a special configuration callback or assume those messages will succeed. The production path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/5` → `hls_protocol_schema:frames/2`, using the receiving actor's fresh source schema, followed by the same `local_inbox_batch_tick` used for internal traffic.
 
 The encoder checks the record tag and arity, packs each value exactly with its typed provider and uses the ordinary 128-bit frame codec. Inexact values, oversized payloads and unsupported codecs reject before receiver emission. Built-in numeric/boolean codecs and full-width integer bit-cast providers are supported; custom wire transforms are not. The fixed frame capacity is the existing ABI, not a new configuration width.
 
@@ -224,6 +225,32 @@ Each declared message has a separate immutable slot, including identical records
 
 Reservation does not retire a startup message. Its consumed bit changes only when the ordinary owner completes a dispatched `consume`; postponement, publication stalls and source failure preserve it. Shared reset clears these bits and all matching owner/transport state, replaying the declared list for the new incarnation. Startup frames are constants, with no payload registers or dynamic queue. The additional consumed state is S bits for S startup records, alongside the receiver's `3*N + max(1, ceil(log2(N))) + 1` mask/cursor/initialization bits. There is still one selected dispatch per actor per clock. Zero-startup dummy fields are constant and pruned by XLS.
 
-The network's `startup_done` output is true after every declared record has committed consume in this reset incarnation. It reads old registered state, is suppressed during reset/initialization, and does **not** mean application readiness, internal messages drained, output delivery complete or quiescence. With no startup records it becomes true after source initialization. Host ingress and application-specific capacity/progress admission remain subsequent work; `eligible` remains false.
+The network's `startup_done` output is true after every declared record has committed consume in this reset incarnation. It reads old registered state, is suppressed during reset/initialization, and does **not** mean application readiness, internal messages drained, output delivery complete or quiescence. With no startup records it becomes true after source initialization. Host ingress uses this flag to open admission. Application-specific capacity/progress admission remains separate; `eligible` remains false.
 
 `python3 tools/test_protocol_startup.py XLS_ROOT FRESH_OUTPUT` exercises the public build command and a two-actor source feedback network. Independent public-output scoreboards cover early postponement, repeated identical records, exact sender order, independent output stalls, real peer acknowledgments and three reset interruptions followed by two complete incarnations. Retiring on acceptance or reordering fixed records must fail the same scoreboard. A canonical but source-invalid value separately checks failure without retirement. Combinational SAT checks oldest eligible selection for every consumed/eligible/valid mask at widths 1, 4 and 8; an eligibility-ignoring negative yields a counterexample. These finite witnesses and combinational properties trust source extraction, XLS and the simulator/SAT tools; they are not a general startup termination or network progress proof. Local XC7 counts are a capacity screen, not native implementation measurements.
+
+
+## Host rectangle input
+
+The same `emit_protocol_network.sh` command connects a single ordinary rectangle ingress. Declare one to four topology targets, each with explicit nonempty schemas and recipients. For example:
+
+```erlang
+ingresses => [{host, {rectangle, [3,2]}, [
+    {cells, [work], [{actor,a,{at,[0,0]}}, {actor,b,{at,[2,1]}}]},
+    {first, [work], [{actor,a,{at,[0,0]}}]}
+]}]
+```
+
+`hls_protocol_transport:write/2` calls `hls_protocol_ingress:plan/1` on its freshly compiled bundle. `hls_protocol_schema:domains/2` derives each target's complete header/length/padding masks from the recipients' ordinary source codecs. All recipients of one target must agree on those encodings and the ordered source field names/types; equal masks alone cannot establish schema compatibility. Unsupported codecs, ambiguous recipients, missing schemas and unsupported shapes reject before hardware emission. The shared schema module also encodes startup records; it does not infer a domain from fixture traffic or source-state invariants.
+
+`xls_protocol_network:write/2` calls `xls_protocol_ingress:write/2` to emit source-bound constant tables. The static parametric `protocol_ingress.x` performs decoding and the registered transition. The network wires its held frame into the addressed receivers' ordinary host inbox slot, and each receiver's committed `take` bit back to that recipient's pending bit. `accepted` is only reservation and must never retire a command. All behavior is DSLX; Verilog remains the mechanical pin adapter.
+
+The network exposes `ingress_data[193:0]`, `ingress_valid`, `ingress_ready` and `ingress_fault`. Data uses the existing flattened `hls_spatial_router::SpatialFrame`: inclusive rectangle `(x0,y0,x1,y1)`, two-bit target selector in declaration order, then the ordinary `axis::Frame` struct. It is **not** the actor-facing 128-bit bit codec with a rectangle prepended; `axis::bits_from_frame` supplies that conversion. Dimensions are 1..65536. Bounds, target, schema header, length and zero padding must all be canonical. All represented payload values remain admissible at this boundary; source callbacks still determine semantic failures.
+
+An accepted canonical command registers one immutable 128-bit frame and one pending bit per selected actor. Recipients consume independently, preserving host order at each actor without claiming atomic broadcast. The boundary accepts no later command until all selected recipients commit source `consume`; reservation, publication stalls, postponement and source failure retain the affected bit. A valid empty selection completes without delivery. There is no refill on the last-consume edge. Malformed accepted input delivers nothing and latches `ingress_fault`, blocking admission until shared reset. Reset cancels the pending command and fault together with all owner/transport state.
+
+Admission opens only after `startup_done`; internal traffic remains active during startup. This is one outstanding host command, **not** an unbounded mailbox: a postponed command can block a later host command needed to wake it. Applications must establish their own finite sequencing and capacity/progress obligations. The command makes no independent-device reset or live-board claim and keeps `eligible: false`.
+
+The ingress adds `128 + A + 1` logical state bits for A elaborated actors; unaddressed pending bits can be pruned. Each addressed receiver adds one host slot after its capture and startup slots, recorded in `inbox.host`. That slot extends the existing reservation/postponement/release masks and may widen the cursor; it adds no payload copy. `network/manifest.json` retains the checked ingress tables, state budget and exact generated component hashes. Frame-width parametrization remains a separate compiler/adapter task.
+
+`python3 tools/test_protocol_ingress.py XLS_ROOT FRESH_OUTPUT` builds two actual source recipients plus a feedback relay. Its finite public-pin scoreboards exercise point/broadcast/empty selections, two targets, source postponement and real feedback, per-recipient ordering, independent output stalls, three reset interruptions, two complete incarnations, eight malformed commands and canonical source failure. Early-retirement and live-frame-bypass controls must fail. Combinational SAT quantifies all finite three-recipient state/input patterns for retirement, admission, reset and malformed behavior, and all finite generated fixture state/input patterns for the registered host-input cut, plus every 194-bit command for the fixture’s two-target geometry and ordinary ABI; a false retirement control yields a counterexample. These checks trust source extraction, XLS and Yosys/ABC/SAT. They are finite witnesses and specified combinational properties, not arbitrary-program refinement or application admission. The whole-fixture XC7 screen is local synthesis, not native implementation performance.

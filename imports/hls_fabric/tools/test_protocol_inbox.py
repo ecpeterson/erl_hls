@@ -134,7 +134,9 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
         startup=inbox['startup']
         assert startup['offset']==inbox['physical_slots'] and startup['count']==len(startup['frames'])
         assert all(0<=frame<2**128 for frame in startup['frames'])
-        assert inbox['mask_bits']==max(1,inbox['physical_slots']+startup['count'])
+        host=inbox['host']
+        assert host['slots'] in (0,1) and host['offset']==inbox['physical_slots']+startup['count']
+        assert inbox['mask_bits']==max(1,host['offset']+host['slots'])
         assert inbox['additional_state_bits']==3*inbox['mask_bits']+inbox['cursor_bits']+1+startup['count']
         assert len(inbox['slots'])==inbox['physical_slots']
         # Startup values are individually range-checked fixed-width literals; count changes the circuit shape.

@@ -2,23 +2,27 @@
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
 -export([write/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state without new queues or payload copies. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
+-doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
 -spec write(map(),file:filename()) -> map().
-write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers},Directory) ->
+write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress},Directory) ->
     Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
-    Inputs=[{"reset",1}]++[{boundary(B)++"_ready",1}||B<-Boundaries],
-    Outputs=[{"startup_done",1}]++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
+    Host=Ingress=/=none,
+    case Host of true->ok=xls_protocol_ingress:write(Ingress,filename:join(Directory,"dslx"));false->ok end,
+    Inputs=[{"reset",1}]++optional(Host,[{"ingress_valid",1},{"ingress_data",194}])++[{boundary(B)++"_ready",1}||B<-Boundaries],
+    Outputs=[{"startup_done",1}]++optional(Host,[{"ingress_ready",1},{"ingress_fault",1}])++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
         lists:append([[{boundary(B)++"_valid",1},{boundary(B)++"_data",W}]
             ||B=#{output:=#{width:=W}}<-Boundaries]),
     {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_network_clock.x.in")),
-    Source=["import transport;\n",[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
+    Source=["import transport;\n",optional(Host,"import ingress;\n"),[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
         structure("Inputs",Inputs),structure("Outputs",Outputs),
-        "// Component states remain independent; composition adds no registers.\npub struct State { transport: transport::State,\n",
-        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],"}\n",
+        "// Component states remain independent; optional ingress owns one shared command.\npub struct State { transport: transport::State,\n",
+        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress::State,\n"),"}\n",
         "// Next component states and pre-edge external observations.\npub struct Tick { state: State, output: Outputs }\n",
         "// Offers/eligibility read old state. Preview outputs ignore take/release;\n",
         "// the second pure transport call supplies their actual next-state inputs.\n",
         "pub fn tick(s: State, io: Inputs) -> Tick {\n",
+        "let startup_done = ",lists:join(" && ",[[actor(I),"::local_inbox_startup_done(s.",actor(I),", io.reset)"]||#{index:=I}<-Sources]),";\n",
+        optional(Host,"let ingress_offer = ingress::observe(s.ingress, io.reset, startup_done);\n"),
         [["let batch_",n(I)," = ",actor(I),"::local_inbox_batch(s.",actor(I),", io.reset);\n",
           "let eligible_",n(I)," = ",actor(I),"::local_inbox_eligible(s.",actor(I),", io.reset);\n"]||#{index:=I}<-Sources],
         "let offer = transport::Inputs { reset: io.reset,\n",
@@ -28,19 +32,22 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
         [[boundary(B),"_ready: io.",boundary(B),"_ready,\n"]||B<-Boundaries],"..zero!<transport::Inputs>() };\n",
         "let preview = transport::tick(s.transport, offer).output;\n",
         [receiver(R,Links)||R<-Receivers],
+        optional(Host,["let ingress_step = ingress::tick(s.ingress, io.reset, startup_done, io.ingress_valid,\n",
+          "ingress::decode(io.ingress_data), ",lists:join(" ++ ",[host_take(R)||R<-lists:reverse(Receivers)]),");\n"]),
         "let transport_step = transport::tick(s.transport, transport::Inputs {\n",
         [[link_name(I),"_take: or_reduce(step_",n(D),".output.take[",n(offset(I,Links)),"+:bits[",n(N),"]]),\n",
           link_name(I),"_release_valid: step_",n(D),".output.release[",n(offset(I,Links)),"+:bits[",n(N),"]],\n"]
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],"..offer });\n",
         "Tick { state: State { transport: transport_step.state,\n",
-        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],"}, output: Outputs {\n",
-        "startup_done: ",lists:join(" && ",[[actor(I),"::local_inbox_startup_done(s.",actor(I),", io.reset)"]||#{index:=I}<-Sources]),",\n",
+        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress_step,\n"),"}, output: Outputs {\n",
+        "startup_done,\n",optional(Host,"ingress_ready: ingress_offer.ready, ingress_fault: ingress_offer.fault,\n"),
         [[actor(I),"_failure: step_",n(I),".output.owner.failure, ",actor(I),"_fault: preview.",source(I),"_fault,\n"]||#{index:=I}<-Sources],
         [[boundary(B),"_",K,": preview.",boundary(B),"_",K,",\n"]||B<-Boundaries,K<-["valid","data"]],"} } }\n",Clock],
     Dslx=filename:join(Path,"network.x"), ok=file:write_file(Dslx,Source,[exclusive]),
     ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Path,"protocol_network.sv"),"protocol_network","protocol_network_core"),
     Manifest=#{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
-        actors=>length(Sources),links=>length(Links),additional_state_bits=>0,
+        actors=>length(Sources),links=>length(Links),additional_state_bits=>case Host of true->maps:get(state_bits,Ingress);false->0 end,
+        ingress=>Ingress,
         capacity=>unestablished,network_progress=>unestablished,
         initialization=>source_init_and_declared_startup,publication=>atomic_old_outbox_batch,
         startup_messages=>lists:sum([N||#{manifest:=#{inbox:=#{startup:=#{count:=N}}}}<-Receivers]),
@@ -49,18 +56,30 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
         inputs=>fields(Inputs),outputs=>fields(Outputs),
         dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase),
         components=>[#{file=>list_to_binary(F),sha256=>hash(filename:join(Directory,F))}
-            ||F<-["dslx/transport.x"|[binary_to_list(maps:get(file,R))||R<-Receivers]]],
+            ||F<-["dslx/transport.x"|[binary_to_list(maps:get(file,R))||R<-Receivers]]++optional(Host,["dslx/ingress.x"])],
         boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B))}
             ||B=#{source_index:=I,output:=#{index:=D}}<-maps:get(boundaries,Fabric)]},
     ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]), Manifest.
 
 %% Match the exact field order and per-destination slot flattening used by inbox attachment.
 -spec receiver(map(),[map()]) -> iodata().
-receiver(#{index:=I},Links) ->
+receiver(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=Host}}}},Links) ->
     ["let step_",n(I)," = ",actor(I),"::local_inbox_batch_tick(s.",actor(I),", ",actor(I),"::LocalInboxInputs {\n",
      "reset: io.reset, output_ready: preview.",source(I),"_ready,\n",
+     optional(Host=:=1,["host_valid: ingress_offer.valid[",n(I),"+:u1], host_frame: ingress_offer.frame,\n"]),
      [[link_name(K),"_",Field,": preview.",link_name(K),"_",Field,",\n"]
         ||#{index:=K,destination_index:=D}<-Links,D=:=I,Field<-["selected","available","payloads"]],"});\n"].
+
+%% Host retirement is a source disposition, not initial inbox reservation.
+-spec host_take(map()) -> iodata().
+host_take(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=1,offset:=At}}}}) ->
+    ["step_",n(I),".output.take[",n(At),"+:u1]"];
+host_take(_) -> "u1:0".
+
+%% Omitted interfaces introduce no state or unused pins.
+-spec optional(boolean(),list()) -> list().
+optional(true,Value) -> Value;
+optional(false,_) -> [].
 
 %% Slot zero belongs to the first incoming pair, exactly as in hls_protocol_inbox.
 -spec offset(non_neg_integer(),[map()]) -> non_neg_integer().

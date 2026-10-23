@@ -3,7 +3,7 @@
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally bound to an inbox by hls_protocol_inbox:attach/3. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
     dslx := binary(), source := file:filename(), inbox => map()}.
 

@@ -203,6 +203,7 @@ jobs:
           python3 tools/test_protocol_inbox.py "$RUNNER_TEMP/xls" _build/protocol-inbox
           python3 tools/test_protocol_network.py "$RUNNER_TEMP/xls" _build/protocol-network
           python3 tools/test_protocol_startup.py "$RUNNER_TEMP/xls" _build/protocol-startup
+          python3 tools/test_protocol_ingress.py "$RUNNER_TEMP/xls" _build/protocol-ingress
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |
