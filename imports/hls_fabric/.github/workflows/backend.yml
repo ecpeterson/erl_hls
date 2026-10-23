@@ -507,7 +507,10 @@ jobs:
       - name: Check two independent source repetition roles through real brokers
         run: python3 tools/test_protocol_deployment.py "$RUNNER_TEMP/xls" _build/protocol-deployment
 
-      - name: Retain networked repetition diagnostics
+      - name: Check actual BEAM actors with a native source partition
+        run: python3 tools/test_protocol_mixed.py "$RUNNER_TEMP/xls" _build/protocol-mixed
+
+      - name: Retain networked and mixed repetition diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics
         with:
@@ -515,6 +518,8 @@ jobs:
           paths: |
             _build/protocol-deployment/**/*.json
             _build/protocol-deployment/**/*.log
+            _build/protocol-mixed/**/*.json
+            _build/protocol-mixed/**/*.log
 
   qualify:
     needs: [select, bringup, backend, source-backend, repetition, networked-repetition, complete-debug]

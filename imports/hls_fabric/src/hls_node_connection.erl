@@ -47,6 +47,9 @@ handle_call({local_up, Handle}, _From, State = #{handshake := #{phase := up, pee
 %% Report carrier progress to ERTS liveness checks.
 handle_call(local_stats, _From, State = #{received := Received, sent := Sent}) ->
     {reply, {ok, Received, Sent, 0}, State};
+%% Source mode retains at most one distribution handoff until its central owner accepts it.
+handle_call(info, _From, State = #{source_pending := Pending, clients := Clients}) ->
+    {reply, #{carrier => carrier(State), source_pending => Pending, clients => map_size(Clients)}, State};
 %% Expose per-channel pending and transmitting observations.
 handle_call(info, _From, State = #{clients := Clients, queues := Queues, channels := Channels}) ->
     {reply, #{carrier => carrier(State), queued => queued(Queues), clients => maps:map(fun(_, C) ->
@@ -79,6 +82,9 @@ handle_info(connected, State = #{manager := Manager, socket := Socket}) ->
 %% Stop when the local distribution owner exits.
 handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{owner_monitor := Ref}) ->
     {stop, {connection_owner_down, Reason}, State};
+%% The central source owner cannot be replaced while this incarnation is live.
+handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{source_monitor := Ref}) ->
+    {stop, {source_owner_down, Reason}, State};
 %% Consume one local distribution packet under the same queue bound as TCP.
 handle_info(dist_data, State = #{socket := {local, Handle}, sent := Sent}) ->
     case erlang:dist_ctrl_get_data(Handle) of
@@ -122,7 +128,21 @@ handle_info(Message, State = #{sends := Sends}) ->
 %% Reserve fresh return routes and build this peer's PID/channel indexes.
 -spec attach(node(), map(), map()) -> map().
 attach(Peer, Identity, State = #{manager := Manager}) ->
-    {ok, Brokers, Actors, Source, Config} = gen_server:call(Manager, {attach, Peer, carrier(State)}),
+    Attachment = gen_server:call(Manager, {attach, Peer, carrier(State)}),
+    attach_mode(Attachment, Peer, Identity, State).
+
+%% Source mode uses one bounded owner handoff and no scheduler-slot channel or transaction router.
+-spec attach_mode(tuple(), node(), map(), map()) -> map().
+attach_mode({source, Owner, Actors = [#{senders := Senders} | _], Config}, Peer,
+        #{name := Name, creation := Creation}, State) ->
+    State#{peer => Peer, kernel_pid => hls_node_wire:pid(Name, Creation, 0),
+        clients => maps:from_list([{Pid, A} || A = #{pid := Pid} <- Actors]),
+        names => #{}, channels => #{}, routes => #{}, queues => #{},
+        sends => gen_server:reqids_new(), monitors => #{}, config => Config,
+        source_owner => Owner, source_monitor => monitor(process, Owner),
+        source_senders => maps:from_list([{P, true} || P <- Senders]), source_pending => false,
+        armed => false, retry => false, last_received => now_ms()};
+attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
     Clients = maps:from_list([{Pid, Actor} || #{pid := Pid} = Actor <- Actors]),
     Channels = maps:from_list([{Key, channel(Key, Brokers, Source)} || Key <- lists:usort(
         [Key || #{channel := Key} <- Actors])]),
@@ -154,11 +174,27 @@ signal({20, _From, _To, Ref}, none, State = #{monitors := Monitors}) ->
     State#{monitors := maps:remove(Ref, Monitors)};
 signal({35, ID, From, To}, none, State) ->
     send(State, hls_node_wire:encode({36, ID, To, From}));
+signal({22, From, To}, {message, Message}, State = #{source_owner := _}) ->
+    source_message(From, To, Message, State);
 signal({2, _Cookie, To}, {message, Message}, State) -> deliver(To, Message, State);
 signal({22, _From, To}, {message, Message}, State) -> deliver(To, Message, State);
 signal({6, _From, _Cookie, Name}, {message, Message}, State) -> deliver(Name, Message, State);
 signal({33, _From, _Alias}, {message, _Message}, State) -> State;
 signal(Control, _Message, _State) -> error({unsupported_distribution_signal, element(1, Control)}).
+
+%% Authenticate the actual negotiated sender and current target before one asynchronous handoff.
+%% The central owner must independently check source codecs, target routes and total capacity.
+-spec source_message(pid(), pid(), term(), map()) -> map().
+source_message(From, To, {'$gen_cast', Record}, State = #{source_owner := Owner,
+        source_senders := Senders, source_pending := false, clients := Clients,
+        peer := Peer, sends := Sends}) when is_pid(From), node(From) =:= Peer,
+        is_map_key(From, Senders), is_map_key(To, Clients), is_tuple(Record) ->
+    #{destination := Destination} = maps:get(To, Clients),
+    Req = gen_server:send_request(Owner, {source_send, From, Destination, Record}),
+    State#{source_pending := true, sends := gen_server:reqids_add(Req, source_handoff, Sends)};
+source_message(_From, To, Message, State = #{kernel_pid := Kernel}) when To =:= net_kernel; To =:= Kernel ->
+    deliver(To, Message, State);
+source_message(_, _, _, _) -> error(unauthenticated_source_message).
 
 %% Resolve a current-incarnation PID or advertised name; stale targets are absent.
 -spec target(pid() | atom(), map()) -> pid() | none.
@@ -173,6 +209,7 @@ target(_, _) -> none.
 deliver(To, {'$gen_call', From, {is_auth, _}}, State = #{kernel_pid := Sender})
         when To =:= net_kernel; To =:= Sender ->
     send(State, hls_node_wire:reply(Sender, From, yes));
+deliver(_To, _Message, #{source_owner := _}) -> error(sender_required);
 deliver(To, Message, State) ->
     case target(To, State) of
         none -> State; % Ordinary sends to absent processes are discarded.
@@ -210,6 +247,7 @@ continue(State) ->
     {noreply, arm(Next)}.
 %% Request one more distribution packet only while queued operations remain below the limit.
 -spec arm(map()) -> map().
+arm(State = #{source_pending := true}) -> State;
 arm(State = #{armed := false, socket := {local, Handle}, queues := Queues, config := #{queue_limit := Limit}}) ->
     case queued(Queues) < Limit of
         true -> ok = erlang:dist_ctrl_get_data_notification(Handle), State#{armed := true};
@@ -279,7 +317,8 @@ slot(Tx, Capacity, Pending) ->
     case is_map_key(Tx, Pending) of true -> slot((Tx + 1) rem Capacity, Capacity, Pending); false -> Tx end.
 
 %% Release send admission, or retry only when the broker proves the operation was not sent.
--spec written({channel_key(), byte(), reference(), pid(), operation()}, term(), map()) -> map().
+-spec written(source_handoff | {channel_key(), byte(), reference(), pid(), operation()}, term(), map()) -> map().
+written(source_handoff, ok, State = #{source_pending := true}) -> State#{source_pending := false};
 written({Key, _Tx, _ID, _Pid, _Op}, ok, State = #{channels := Channels}) ->
     Channel = maps:get(Key, Channels), State#{channels := Channels#{Key := Channel#{transmitting := false}}};
 written({Key, Tx, ID, Pid, Op}, {error, {not_sent, Reason}}, State = #{channels := Channels, queues := Queues}) ->

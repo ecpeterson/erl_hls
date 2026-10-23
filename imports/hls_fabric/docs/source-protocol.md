@@ -405,6 +405,34 @@ The repetition helper reuses its existing cutoff, correction-feedback, common-fe
 `python3 tools/test_protocol_deployment.py XLS_ROOT FRESH_OUTPUT` builds two independent N6 roles and compares two fresh incarnations with an independently executed ordinary-BEAM reference. Real brokers carry every cross-role message and every correction/query; the simulator accesses only public ports and applies independent output stalls. The comparison checks each logical sender through the common fence, all corrections and final readout. Shutdown requests collective retirement, checks that it masks public handshakes, and closes both peer endpoints; both transport leases must then close before a new incarnation. This is a finite integration witness, not a throughput test, general progress proof or live-device result. `--area` additionally maps the complete connected pair under the preregistered 60000-LUT/36000-FF local XC7 screen; passing it does not establish Zynq-7030 fit or routed timing. The new regression has its own bounded CI job.
 
 
+## Mixed BEAM/native repetition
+
+`python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT --mixed` places the three ordinary data/noise actors in BEAM and the six syndrome/Phi actors in one native partition. The native side reuses the framed DSLX bridge unchanged. Output includes `build/mixed.etf` and `build/files.f`; `--mixed` excludes `--split` and `--inspect`.
+
+The concrete build path is `emit_protocol_repetition.py` → `emit_protocol_mixed.escript` → `hls_protocol_mixed:write/2` → `hls_protocol_bridge:write/2`. The mixed builder derives the complementary BEAM actors, startup records, routes and crossing codecs from the fresh source bundle. `hls_protocol_application_binding` checks loaded host codecs against those sources. For another application, supply the ordinary bridge configuration with `native_actors`, `control => rectangle`, `host` and `service`. Every BEAM output must have exactly one native or external recipient; BEAM-to-BEAM routes and inspection are unsupported. The build remains `eligible => false`.
+
+Create disconnected ordinary actors from the trusted local plan, open the application broker, then bind the stream owner to a dedicated virtual node:
+
+```erlang
+{ok, Bytes} = file:read_file("BUILD/mixed.etf"),
+Plan = #{actors := Actors} = binary_to_term(Bytes),
+Pids = maps:map(fun(_, #{module := M}) -> {ok, P} = M:start_link(), P end, Actors),
+{ok, Stream} = hls_protocol_mixed_stream:start_link(Plan, AppBroker, Pids, FreshSession, #{}),
+Service = hls_protocol_mixed_host:service(Plan, Stream, Pids),
+{ok, Node} = hls_node:start_link(VirtualNodeName,
+    #{application => AppBroker, debug => DebugBroker}, [Service], #{}),
+pong = net_adm:ping(VirtualNodeName),
+Result = phi_protocol_repetition:run(hls_protocol_mixed_stream, Stream, 3, 8, 123, 60000).
+```
+
+Use a distributed BEAM VM with the compiled application modules loaded, a fresh matching hardware session after coordinated reset, and the existing node adapter's broker prerequisites. `hls_node` still requires a distinct debug broker, although this source service does not use it or expose native inspection. The integration fixture supplies an inert lifetime broker for that requirement. The caller owns actor/node/broker shutdown: stop the stream, stop the virtual node and actors, close the brokers and peer endpoints, and await transport leases before another reset/session. `stop/1` alone does not reset hardware or stop actors.
+
+The stream is the exclusive input writer for those BEAM actors. It admits startup and typed controls through public `hls_statem:info/2` barriers, then connects their outputs to virtual native/external PIDs before explicit native start. ERTS supplies the real sender PID; the node permits one authenticated handoff at a time. The owner checks each sender and route, then queues canonical frames per logical pair. Native class credits govern capture reuse. Reverse messages are acknowledged only after the destination BEAM actor has admitted the cast; admission does not mean consumption. A full actor can postpone one pair while other actors advance.
+
+There are at most 64 outbound records, 16 commands, 32 application events and 12 reverse pairs, with one record per reverse pair. Together with the single distribution handoff, broker receipt and physical writer, owner storage is bounded by 128 records. ERTS outbound queues and actor mailboxes are separate. The exclusive-writer assumption requires trusted processes not to bypass the owner; cookie authentication does not isolate malicious local code. Finite callbacks, fair consumers and sufficient application-level mailbox capacity remain obligations. An actor, owner, connection or transport failure retires the incarnation; ambiguous writes or casts cannot be replayed, and reconnect is unsupported.
+
+`python3 tools/test_protocol_mixed.py XLS_ROOT FRESH_OUTPUT` runs this production path for N3 over two fresh incarnations, using actual BEAM data actors, ERTS distribution, brokers and public RTL ports. It compares per-sender events, correction feedback, the common quiet fence and readout against a fresh ordinary-BEAM reference; it also checks output stalls, public retirement and descriptor closure. Host regressions cover selective postponement, independent actor capacity, timeout ambiguity, sender authentication, order and owner/connection death. These are finite witnesses, not QEC validation, throughput estimates or general progress proofs. `--area` additionally screens the complete native partition against 36000 LUTs, 24000 FFs and zero BRAM/DSP in local XC7 mapping; passing does not establish routed timing or Zynq-7030 fit.
+
 ## Periodic dependency model
 
 The repetition builder also supplies `protocol_model => #{kind => periodic_neighbor_barrier, contracts => ModuleRoles}`. Other fresh source builds may supply the same option; absent annotations leave the build unchanged. Each used module must have exactly one role (`data`, `syndrome` or `phi`) and its complete source phase list. Phi roles also declare a diffusion `rounds` count from 1 to 256; adjacent Phi roles must agree. These are explicit application hypotheses, not inferred source invariants. The repetition example annotates its twelve diffusion rounds.

@@ -7,9 +7,10 @@
 -export_type([brokers/0, service/0, options/0]).
 -doc "Distinct local application and debug transport brokers.".
 -type brokers() :: #{application := pid(), debug := pid()}.
--doc "A named standalone service or a scheduled topology with its debug endpoint.".
+-doc "A named standalone/scheduled service, or one exclusive source partition. Source owner and senders are exact local PIDs; targets map logical identities to owner-validated destination terms. The owner must handle source_bind once and source_attach once, then bounded source_send calls. A source connection loss ends this node incarnation; hardware reset and transport retirement remain external obligations.".
 -type service() :: #{name := atom(), module := module(), endpoint := 0..65535} |
-    #{name := atom(), topology := map(), debug_endpoint := 0..65535}.
+    #{name := atom(), topology := map(), debug_endpoint := 0..65535} |
+    #{name := atom(), source := #{owner := pid(), senders := [pid()], targets := map()}}.
 -doc "Listener address, connection/queue bounds, return-route range and heartbeat interval in milliseconds.".
 -type options() :: #{ip => inet:ip_address(), port => inet:port_number(),
     epmd_port => inet:port_number(), max_connections => pos_integer(),
@@ -78,10 +79,12 @@ init({Name, Brokers, Services, Options, NodeSup}) ->
         {More, Handle, After} = activate(Name, Creation, Service, Next),
         {More ++ Targets, Named#{maps:get(name, Service) => Handle}, After}
     end, {[], #{}, 16#20001}, lists:sort([{maps:get(name, S), S} || S <- Services])),
-    Monitors = [monitor(process, Broker) || Broker <- maps:values(Brokers)],
+    SourceOwners = lists:usort([O || #{source := #{owner := O}} <- Services]),
+    Monitors = [monitor(process, Owner) || Owner <- maps:values(Brokers) ++ SourceOwners],
     {ok, #{name => Name, creation => Creation, listen => Listen, epmd => Epmd,
         port => ActualPort, config => Config, brokers => Brokers, actors => Actors,
-        services => Handles, connections => #{}, node_sup => NodeSup, monitors => Monitors}}.
+        services => Handles, connections => #{}, node_sup => NodeSup, monitors => Monitors,
+        source_used => false, sealed_source => SourceOwners =/= []}}.
 
 %% Assign the application or debug PID for a standalone endpoint.
 -spec actor(node(), non_neg_integer(), map(), application | debug) -> map().
@@ -91,6 +94,13 @@ actor(Node, Creation, #{endpoint := Endpoint} = Service, Kind) ->
 
 %% Create service handles while keeping scheduled actors in a separate dense PID namespace.
 -spec activate(node(), non_neg_integer(), service(), non_neg_integer()) -> {[map()], map(), non_neg_integer()}.
+activate(Node, Creation, #{source := #{owner := Owner, senders := Senders, targets := Destinations}}, Next) ->
+    Targets = [#{kind => source, owner => Owner, senders => Senders, identity => Id,
+        destination => Destination, pid => hls_node_wire:pid(Node, Creation, Next + Offset)}
+        || {Offset, {Id, Destination}} <- lists:enumerate(0, lists:sort(maps:to_list(Destinations)))],
+    Handles = maps:from_list([{Id, Pid} || #{identity := Id, pid := Pid} <- Targets]),
+    ok = gen_server:call(Owner, {source_bind, #{name => Node, creation => Creation}, Handles}),
+    {Targets, #{actors => Handles, source_owner => Owner}, Next + length(Targets)};
 activate(Node, Creation, #{topology := #{actors := Actors}, debug_endpoint := Endpoint}, Next) ->
     %% Standalone endpoint PIDs occupy 1..16#20000. Logical actor identity has
     %% its own dense namespace and never depends on physical scheduler slots.
@@ -119,6 +129,16 @@ handle_call(info, _From, State) ->
 %% Supply the identity needed for an incoming handshake.
 handle_call(handshake, _From, State) ->
     {reply, maps:with([name, creation], State), State};
+%% A source owner already owns its broker route; bind one local-BEAM connection without claiming another.
+handle_call({attach, Peer, Carrier}, {Connection, _}, State = #{sealed_source := true,
+        source_used := false, config := Config, actors := [#{owner := Owner} | _] = Actors}) when Peer =:= node() ->
+    ok = gen_server:call(Owner, {source_attach, Connection}),
+    Ref = monitor(process, Connection),
+    Entry = #{peer => Peer, monitor => Ref, carrier => Carrier},
+    {reply, {source, Owner, Actors, Config}, State#{source_used := true, connections := #{Connection => Entry}}};
+%% Reconnection and foreign peers cannot inherit pending source traffic or hardware credits.
+handle_call({attach, _, _}, _From, State = #{sealed_source := true}) ->
+    {reply, {error, source_incarnation_sealed}, State};
 %% Reserve fresh return routes for an authenticated peer, enforcing connection limits.
 handle_call({attach, Peer, Carrier}, {Owner, _}, State = #{connections := Connections,
         config := #{max_connections := Max} = Config, brokers := Brokers, actors := Actors}) ->
@@ -150,7 +170,12 @@ handle_call({attach, Peer, Carrier}, {Owner, _}, State = #{connections := Connec
 handle_cast(_, State) -> {noreply, State}.
 -doc "Removes dead connections and stops the node if a broker or EPMD connection fails.".
 -spec handle_info(term(), map()) -> {noreply, map()} | {stop, term(), map()}.
-%% A failed broker ends this incarnation; a departed peer only releases its connection entry.
+%% A departed source connection ends the virtual incarnation; it must never reconnect to live hardware state.
+handle_info({'DOWN', Ref, process, Pid, Reason}, State = #{sealed_source := true, connections := Connections})
+        when is_map_key(Pid, Connections) ->
+    #{monitor := Ref} = maps:get(Pid, Connections),
+    {stop, {shutdown, {source_connection_down, Reason}}, State};
+%% A failed broker or source owner ends this incarnation; legacy peers release only their connection entry.
 handle_info({'DOWN', Ref, process, Pid, Reason}, State = #{monitors := Monitors, connections := Connections}) ->
     case lists:member(Ref, Monitors) of
         true -> {stop, {shutdown, {broker_down, Reason}}, State};
@@ -190,6 +215,7 @@ validate(Name, #{application := App, debug := Debug} = Brokers, Services)
     Names = [N || #{name := N} <- Services],
     true = length(Services) =:= length(lists:usort(Names)),
     true = lists:all(fun(N) -> is_atom(N) andalso N =/= net_kernel end, Names),
+    true = (not lists:any(fun(S) -> maps:is_key(source, S) end, Services)) orelse length(Services) =:= 1,
     Channels = lists:append([service_channels(S) || S <- Services]),
     true = length(Channels) =:= length(lists:usort(Channels)),
     true = lists:all(fun({_Kind, E}) -> is_integer(E) andalso E >= 0 andalso E =< 65535 end, Channels),
@@ -197,6 +223,15 @@ validate(Name, #{application := App, debug := Debug} = Brokers, Services)
 
 %% Validate one service and enumerate the physical channels it reserves.
 -spec service_channels(service()) -> [{application | debug, 0..65535}].
+service_channels(#{name := _, source := Source = #{owner := Owner, senders := Senders, targets := Targets}} = S)
+        when map_size(S) =:= 2, map_size(Source) =:= 3 ->
+    true = is_pid(Owner) andalso node(Owner) =:= node(),
+    true = is_list(Senders) andalso Senders =/= [],
+    true = lists:all(fun(P) -> is_pid(P) andalso node(P) =:= node() end, Senders),
+    true = length(Senders) =:= length(lists:usort(Senders)),
+    true = is_map(Targets) andalso map_size(Targets) > 0 andalso map_size(Targets) =< 65535,
+    true = map_size(Targets) =:= length(lists:usort(maps:values(Targets))),
+    [];
 service_channels(#{name := _, topology := Deployment = #{groups := Groups}, debug_endpoint := E} = S)
         when map_size(S) =:= 3 ->
     ok = hls_node_topology:validate(Deployment),

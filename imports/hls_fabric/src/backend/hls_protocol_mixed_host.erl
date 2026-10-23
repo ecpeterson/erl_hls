@@ -1,0 +1,45 @@
+-module(hls_protocol_mixed_host).
+-moduledoc "Source-derived host routes for one explicit-start BEAM/RTL partition. No actor forwarding processes or private runtime introspection.".
+-export([service/3, connect/3, controls/2, startup/1, external/4, native_event/3]).
+
+-doc "Describes a dedicated sealed virtual source service for an existing central owner and exact real BEAM actors. The owner must check source_bind against these targets before any actor is connected.".
+-spec service(map(),pid(),#{non_neg_integer()=>pid()}) -> hls_node:service().
+service(#{actors:=Actors,targets:=Targets},Owner,Pids)->
+    true=lists:sort(maps:keys(Actors))=:=lists:sort(maps:keys(Pids)),
+    #{name=>source,source=>#{owner=>Owner,senders=>maps:values(Pids),targets=>Targets}}.
+
+-doc "Connects previously configured BEAM actors to their bound native/external virtual PIDs. Call once from the exclusive input owner, after distribution attachment and startup/control admission, before requesting hardware start. Any partial failure is ambiguous and requires retiring the entire activation; never reconnect or replay.".
+-spec connect(map(),#{non_neg_integer()=>pid()},map()) -> ok.
+connect(#{actors:=Actors},Pids,Handles)->
+    lists:foreach(fun({I,#{module:=Module,outputs:=Outputs}})->
+        Bound=maps:map(fun(_,Destination)->maps:get(Destination,Handles) end,Outputs),
+        ok=Module:connect(maps:get(I,Pids),Bound)
+    end,lists:sort(maps:to_list(Actors))),ok.
+
+-doc "Validates a source rectangle and returns its shared wire payload plus actual BEAM recipient indices. The central owner must admit the record to every listed actor before transmitting the command, preserving order with later start/control. No per-recipient record copies or implicit broadcast to excluded actors.".
+-spec controls(map(),hls_partition_wire:command()) -> {binary(),[non_neg_integer()],tuple()}.
+controls(#{application:=Application,actors:=Actors,ingress:=#{id:=Ingress,targets:=Targets}},
+        Command={Ingress,Target,{X0,Y0,X1,Y1},Record})->
+    Payload=hls_protocol_application_binding:control(Application,Command),
+    [#{recipients:=Recipients}]=[T||T=#{id:=Id}<-Targets,Id=:=Target],
+    {Payload,[I||#{index:=I,x:=X,y:=Y}<-Recipients,is_map_key(I,Actors),X>=X0,X=<X1,Y>=Y0,Y=<Y1],Record}.
+
+-doc "Enumerates bound BEAM startup records in their original actor-local order. They must pass the same exclusive admission path as controls and native messages before connection/start.".
+-spec startup(map()) -> [{non_neg_integer(),tuple()}].
+startup(#{actors:=Actors})->[{I,Record}||{I,#{startup:=Records}}<-lists:sort(maps:to_list(Actors)),Record<-Records].
+
+-doc "Checks a real BEAM external output against its exact sender actor, declared destination and output schema. Returns a canonical typed application event. This relies on admitted source behavior for source-field meaning; cookie authentication does not isolate a malicious BEAM process.".
+-spec external(map(),non_neg_integer(),atom(),tuple()) -> {atom(),tuple()}.
+external(#{actors:=Actors,application:=#{devices:=#{board:=Binding=#{host:=Host,events:=Events}}}},Index,Id,Record)->
+    #{module:=Module,outputs:=Outputs}=maps:get(Index,Actors),
+    Ports=[P||{P,{external,E}}<-maps:to_list(Outputs),E=:=Id],true=Ports=/=[],
+    Interface=hls_actor_interface:from_module(Module),Name=element(1,Record),
+    true=lists:any(fun(P)->lists:member(Name,hls_actor_interface:output_schemas(Interface,P)) end,Ports),
+    Tag=Module:pack_tag(Name),Payload=hls_codec:align(Module:pack(Record),32),
+    [Endpoint]=[E||{E,#{id:=J}}<-maps:to_list(Events),J=:=Id],
+    {Id,Record}=hls_partition_wire:event(Binding,{Endpoint,Host},{Tag,0,0},Payload).
+
+-doc "Decodes a canonical native external frame using the original shared application schema and physical port order. Rejects nonzero padding/flags or unknown ports. Logical source fields retain their admitted source meaning; no extra global chronology is introduced.".
+-spec native_event(map(),byte(),non_neg_integer()) -> {atom(),tuple()}.
+native_event(#{application:=Application},Index,Frame)->
+    hls_protocol_application_binding:event(Application,board,Index,Frame).

@@ -3,17 +3,17 @@
 -export([run/5,run/6]).
 
 %% One application loop uses either typed transport API without another process or queue.
--type stream() :: {hls_partition_stream|hls_protocol_stream,pid()}.
+-type stream() :: {hls_partition_stream|hls_protocol_stream|hls_protocol_mixed_stream,pid()}.
 
 -doc "Configures a finite noise cutoff, starts the bound line, feeds back corrections, then queries all data cells after a common quiet-empty status fence. Returns per-source events, corrections and readout. The caller supplies a fresh explicit-start deployment of the specified width, sufficient command capacity and the matching source codecs. Timeout, queue rejection or malformed events abort without replay; reset the whole activation before retrying. This finite run does not establish convergence or live-device performance.".
 -spec run(pid(), pos_integer(), non_neg_integer(), non_neg_integer(), pos_integer()) -> map().
 run(Stream, Width, Cutoff, Request, Timeout) ->
     run(hls_partition_stream,Stream,Width,Cutoff,Request,Timeout).
 
--doc "Runs the same finite correction/readout loop through hls_partition_stream or a typed hls_protocol_stream deployment. Transport selection changes attachment and placement, not application semantics. The caller starts and retires the matching stream; run/5 supplies the single-gateway API by default.".
--spec run(hls_partition_stream|hls_protocol_stream,pid(),pos_integer(),non_neg_integer(),non_neg_integer(),pos_integer()) -> map().
+-doc "Runs the same finite correction/readout loop through hls_partition_stream, a typed hls_protocol_stream deployment, or hls_protocol_mixed_stream. Transport selection changes attachment and placement, not application semantics. The caller starts and retires the matching stream; run/5 supplies the single-gateway API by default.".
+-spec run(hls_partition_stream|hls_protocol_stream|hls_protocol_mixed_stream,pid(),pos_integer(),non_neg_integer(),non_neg_integer(),pos_integer()) -> map().
 run(Module, Pid, Width, Cutoff, Request, Timeout)
-        when (Module=:=hls_partition_stream orelse Module=:=hls_protocol_stream),
+        when (Module=:=hls_partition_stream orelse Module=:=hls_protocol_stream orelse Module=:=hls_protocol_mixed_stream),
              Width >= 2, Width =< 65535, Cutoff >= 0, Cutoff < 512,
              Request >= 0, Request < (1 bsl 32), Timeout > 0 ->
     Stream={Module,Pid},
