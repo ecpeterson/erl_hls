@@ -1,0 +1,8 @@
+// Mechanical sampled-clock pins, matching sv_protocol_ports: no proc-level stalls.
+module cost_pins(input wire clk, reset, input wire [@@N@@-1:0] valid,
+ input wire [@@FRAME_BITS@@-1:0] frames, input wire ready,
+ output wire out_valid, output wire [127:0] out_frame, output wire [@@N@@-1:0] accept);
+cost core(.clk(clk),.reset(reset),._commands({reset,valid,frames,ready}),
+ ._commands_vld(1'b1),._commands_rdy(),._observations({out_valid,out_frame,accept}),
+ ._observations_vld(),._observations_rdy(1'b1));
+endmodule

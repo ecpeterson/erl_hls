@@ -1,0 +1,63 @@
+import protocol_egress as egress;
+const N = u32:@@N@@;
+const C = u32:@@C@@;
+type S = egress::State<C>;
+type Frames = bits[128][N];
+
+// All legal cursor/owner states, all request/frame bits, reset and sink readiness.
+pub fn contract(s: S, reset: bool, valid: bits[N], frames: Frames, ready: bool) -> bool {
+  let legal = (s.cursor as u32) < N && (s.owner as u32) < N;
+  let a = egress::tick(s, reset, valid, frames, ready);
+  let b = egress::observe(s, reset, valid, frames, !ready);
+  let o = a.output;
+  let one = o.selected != bits[N]:0 && (o.selected & (o.selected - bits[N]:1)) == bits[N]:0;
+  let selection = if o.valid { one && o.index < N && (o.selected & valid) == o.selected && o.frame == frames[o.index] }
+                  else { o.selected == bits[N]:0 };
+  let acceptance = o.ready == (if ready { o.selected } else { bits[N]:0 });
+  let cut = o.valid == b.valid && o.frame == b.frame && o.selected == b.selected && o.index == b.index;
+  let state = if reset { a.state == zero!<S>() && !o.valid } else if o.valid && ready {
+    !a.state.held && a.state.cursor as u32 == (o.index + u32:1) % N
+  } else if o.valid { a.state.held && a.state.owner as u32 == o.index && a.state.cursor == s.cursor }
+    else { a.state == s };
+  !legal || (selection && acceptance && cut && state && (a.state.cursor as u32) < N && (a.state.owner as u32) < N)
+}
+
+// No offered legal producer may disappear; a lock deliberately excludes other producers.
+pub fn availability(s: S, reset: bool, valid: bits[N]) -> bool {
+  let offered = if s.held { (valid & (bits[N]:1 << s.owner)) != bits[N]:0 } else { valid != bits[N]:0 };
+  let legal = (s.cursor as u32) < N && (s.owner as u32) < N;
+  !legal || egress::observe(s, reset, valid, zero!<Frames>(), false).valid == (!reset && offered)
+}
+
+// Across two transitions, only the held producer must keep valid and its frame.
+// Other producers may appear/disappear/change freely while the sink stays stalled.
+pub fn retained(s: S, valid: bits[N], frames: Frames, others: bits[N], later: Frames) -> bool {
+  let a = egress::tick(s, false, valid, frames, false);
+  let mask = a.output.selected;
+  let retained = (others & mask) == mask && later[a.output.index] == a.output.frame;
+  let b = egress::observe(a.state, false, others, later, false);
+  let legal = (s.cursor as u32) < N && (s.owner as u32) < N;
+  !legal || !a.output.valid || !retained || (b.valid && a.output.frame == b.frame && a.output.selected == b.selected)
+}
+
+// Deliberately false: a ready sink cannot make every producer accepted.
+pub fn wrong_acceptance(valid: bits[N], frames: Frames) -> bool {
+  egress::observe(zero!<S>(), false, valid, frames, true).ready == valid
+}
+
+// Finite fair-service witness: every cursor, persistent requests, N accepted grants,
+// with a stall between grants. A completed round visits every producer exactly once.
+#[test]
+fn persistent_rounds() {
+  for (start, _): (u32, ()) in u32:0..N {
+    let initial = S { cursor: start as bits[C], ..zero!<S>() };
+    let (_, seen) = for (_, (s, seen)): (u32, (S, bits[N])) in u32:0..N {
+      let blocked = egress::tick(s, false, !bits[N]:0, zero!<Frames>(), false);
+      assert_eq(blocked.output.ready, bits[N]:0);
+      let step = egress::tick(blocked.state, false, !bits[N]:0, zero!<Frames>(), true);
+      assert_eq(seen & step.output.ready, bits[N]:0);
+      (step.state, seen | step.output.ready)
+    }((initial, bits[N]:0));
+    assert_eq(seen, !bits[N]:0);
+  }(())
+}

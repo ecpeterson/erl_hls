@@ -1,0 +1,25 @@
+import protocol_egress as egress;
+const N = u32:@@N@@;
+const C = u32:@@C@@;
+// Caller-owned publication frames; no buffering is added by this component.
+struct Inputs { reset: bool, valid: bits[N], frames: bits[128][N], ready: bool }
+// Current merged output and individual producer acceptance.
+struct Outputs { valid: bool, frame: bits[128], ready: bits[N] }
+// Screen the exact ownership registers and selected-payload cone.
+pub proc cost_clock {
+ commands: chan<Inputs> in;
+ observations: chan<Outputs> out;
+ // Proc handshakes carry always-enabled clock samples.
+ config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+ // Reset establishes legal indices.
+ init { zero!<egress::State<C>>() }
+ // Singleton follows the production bypass; its network input already masks reset.
+ next(s: egress::State<C>) {
+  let (t, io) = recv(join(), commands);
+  let step = egress::tick(s, io.reset, io.valid, io.frames, io.ready);
+  let output = if N == u32:1 { Outputs { valid: io.valid != bits[N]:0, frame: io.frames[u32:0], ready: io.ready as bits[N] } }
+    else { Outputs { valid: step.output.valid, frame: step.output.frame, ready: step.output.ready } };
+  let _ = send(t, observations, output);
+  if N == u32:1 { zero!<egress::State<C>>() } else { step.state }
+ }
+}

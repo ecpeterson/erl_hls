@@ -2,9 +2,10 @@
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
 -export([write/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
+-doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. The manifest also binds every boundary stream to its declared external endpoint, retaining unused declarations and rendering their Erlang IDs as text. This is executable composition, not capacity, progress or physical qualification.".
 -spec write(map(),file:filename()) -> map().
-write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation},Directory) ->
+write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation,
+        bundle:=#{topology:=#{externals:=Externals}}},Directory) ->
     Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
     Host=Ingress=/=none, Explicit=Activation=:=explicit_start,
     case Host of true->ok=xls_protocol_ingress:write(Ingress,filename:join(Directory,"dslx"));false->ok end,
@@ -59,8 +60,9 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
         dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase),
         components=>[#{file=>list_to_binary(F),sha256=>hash(filename:join(Directory,F))}
             ||F<-["dslx/transport.x"|[binary_to_list(maps:get(file,R))||R<-Receivers]]++optional(Host,["dslx/ingress.x"])],
-        boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B))}
-            ||B=#{source_index:=I,output:=#{index:=D}}<-maps:get(boundaries,Fabric)]},
+        externals=>[#{index=>I,id=>iolist_to_binary(io_lib:format("~0tp",[Id]))}||{I,#{id:=Id}}<-lists:enumerate(0,Externals)],
+        boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B)),external_index=>external_index(Id,Externals)}
+            ||B=#{source_index:=I,output:=#{index:=D,destination:={external,Id}}}<-maps:get(boundaries,Fabric)]},
     ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]), Manifest.
 
 %% Running is registered: start_valid cannot open captures on its handshake edge.
@@ -138,3 +140,8 @@ boundary(#{source_index:=I,output:=#{index:=D}}) -> "boundary_"++n(I)++"_"++n(D)
 %% Only checked elaboration integers enter generated identifiers and slices.
 -spec n(non_neg_integer()) -> string().
 n(I) -> integer_to_list(I).
+
+%% Canonical normalized topology order is shared by the boundary and host binding.
+-spec external_index(atom() | non_neg_integer() | tuple(),[map()]) -> non_neg_integer().
+external_index(Id,Externals) ->
+    [Index]=[I||{I,#{id:=Name}}<-lists:enumerate(0,Externals),Name=:=Id],Index.

@@ -14,14 +14,9 @@ def compile_network(xls: Path, directory: Path, imports: list[Path] | None = Non
     Extra imports resolve source-provider modules and must match the source build.
     The result is an executable RTL network, not application or device admission.
     """
+    manifest = verify_network(directory)
     stage = directory/'network'
-    manifest = json.loads((stage/'manifest.json').read_text())
     source = stage/'network.x'
-    if manifest['dslx_sha256'] != digest(source):
-        raise ValueError('changed network source')
-    for component in manifest['components']:
-        if digest(directory/component['file']) != component['sha256']:
-            raise ValueError('changed network component: '+component['file'])
     paths = [directory/'actors', directory/'dslx', ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
              PUBLIC/'priv/xls/lib', PUBLIC/'priv/xls/fabric', *(imports or [])]
     compile_clock(xls, source, stage, 'network_clock', 'protocol_network_core', paths)
@@ -35,6 +30,19 @@ def compile_network(xls: Path, directory: Path, imports: list[Path] | None = Non
                             'channel_handshakes':'always_enabled_clock_samples'}
     manifest['native_measured'] = False
     (stage/'compiled.json').write_text(json.dumps(manifest, indent=2)+'\n')
+
+
+def verify_network(directory: Path) -> dict:
+    """Check this trusted generated network and all direct component identities before lowering."""
+    stage = directory/'network'
+    manifest = json.loads((stage/'manifest.json').read_text())
+    source = stage/'network.x'
+    if manifest['dslx_sha256'] != digest(source):
+        raise ValueError('changed network source')
+    for component in manifest['components']:
+        if digest(directory/component['file']) != component['sha256']:
+            raise ValueError('changed network component: '+component['file'])
+    return manifest
 
 
 def main() -> None:

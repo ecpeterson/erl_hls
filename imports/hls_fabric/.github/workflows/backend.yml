@@ -205,6 +205,7 @@ jobs:
           python3 tools/test_protocol_startup.py "$RUNNER_TEMP/xls" _build/protocol-startup
           python3 tools/test_protocol_ingress.py "$RUNNER_TEMP/xls" _build/protocol-ingress
           python3 tools/test_protocol_activation.py "$RUNNER_TEMP/xls" _build/protocol-activation
+          python3 tools/test_protocol_boundary.py "$RUNNER_TEMP/xls" _build/protocol-boundary
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |
@@ -224,6 +225,9 @@ jobs:
             _build/**/*.log
             _build/**/*.term
             _build/**/manifest.json
+            _build/protocol-boundary/**/*.json
+            _build/protocol-boundary/**/*.x
+            _build/protocol-boundary/**/*.ys
             _build/local-protocol/*.json
             _build/local-protocol/*.x
             _build/local-protocol/*.ys
