@@ -125,7 +125,7 @@ def main() -> None:
     base=ROOT/'_build/default'
     os.environ['ERL_AFLAGS']='-pa '+' '.join('"'+str(p)+'"' for p in
         [base/'lib/hls_fabric/ebin',base/'checkouts/erl_hls/ebin'])
-    for key in ['startup','ingresses']:
+    for key in ['ingresses']:
         config=stage/(key+'.config');configuration(config,'unsupported','['+key+']')
         output=stage/key
         with (stage/(key+'.log')).open('x') as log:
@@ -139,7 +139,7 @@ def main() -> None:
     compile_network(args.xls,isolated)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'interrupted_incarnations':1,'outputs_per_complete_incarnation':39,'final_sum':60,
-        'negative_wiring':2,'unsupported_boundaries':['startup','ingresses'],
+        'negative_wiring':2,'unsupported_boundaries':['ingresses'],
         'zero_incoming_links':'lowered',
         'evidence':'Finite source-driven RTL witness and fixture combinational cut; no network admission or native claim.'},indent=2)+'\n')
 

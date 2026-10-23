@@ -2,12 +2,12 @@
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
 -export([write/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state without new queues or payload copies. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
+-doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state without new queues or payload copies. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
 -spec write(map(),file:filename()) -> map().
 write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers},Directory) ->
     Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
     Inputs=[{"reset",1}]++[{boundary(B)++"_ready",1}||B<-Boundaries],
-    Outputs=lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
+    Outputs=[{"startup_done",1}]++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
         lists:append([[{boundary(B)++"_valid",1},{boundary(B)++"_data",W}]
             ||B=#{output:=#{width:=W}}<-Boundaries]),
     {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_network_clock.x.in")),
@@ -34,6 +34,7 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],"..offer });\n",
         "Tick { state: State { transport: transport_step.state,\n",
         [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],"}, output: Outputs {\n",
+        "startup_done: ",lists:join(" && ",[[actor(I),"::local_inbox_startup_done(s.",actor(I),", io.reset)"]||#{index:=I}<-Sources]),",\n",
         [[actor(I),"_failure: step_",n(I),".output.owner.failure, ",actor(I),"_fault: preview.",source(I),"_fault,\n"]||#{index:=I}<-Sources],
         [[boundary(B),"_",K,": preview.",boundary(B),"_",K,",\n"]||B<-Boundaries,K<-["valid","data"]],"} } }\n",Clock],
     Dslx=filename:join(Path,"network.x"), ok=file:write_file(Dslx,Source,[exclusive]),
@@ -41,7 +42,9 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
     Manifest=#{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
         actors=>length(Sources),links=>length(Links),additional_state_bits=>0,
         capacity=>unestablished,network_progress=>unestablished,
-        initialization=>source_init_only,publication=>atomic_old_outbox_batch,
+        initialization=>source_init_and_declared_startup,publication=>atomic_old_outbox_batch,
+        startup_messages=>lists:sum([N||#{manifest:=#{inbox:=#{startup:=#{count:=N}}}}<-Receivers]),
+        startup_done=>all_declared_records_consumed_not_application_readiness,
         reset=>common_clock_cancels_all_ownership,
         inputs=>fields(Inputs),outputs=>fields(Outputs),
         dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase),

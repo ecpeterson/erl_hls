@@ -11,6 +11,7 @@ pub struct LocalInboxState {
   postponed: InboxMask,
   released: InboxMask,
   cursor: InboxCursor,
+  startup_consumed: bits[STARTUP_BITS],
 }
 
 // Transport consumes take now and release on the following edge. accepted reserves
@@ -41,6 +42,12 @@ pub fn local_inbox_eligible(s: LocalInboxState, reset: bool) -> InboxMask {
   else { !s.postponed }
 }
 
+// True only after every declared startup record committed consume in this reset
+// incarnation. It says nothing about internal readiness messages or quiescence.
+pub fn local_inbox_startup_done(s: LocalInboxState, reset: bool) -> bool {
+  !reset && s.started && (s.startup_consumed & STARTUP_VALID) == STARTUP_VALID
+}
+
 // Pair-local age filtering precedes cross-sender choice. Keep the head pending
 // through entry stalls; consume only at commit, then release after last read.
 pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxTick {
@@ -48,7 +55,10 @@ pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxT
     LocalInboxTick { state: local_inbox_initial(), output: zero!<LocalInboxOutputs>() }
   } else {
     let eligible = local_inbox_eligible(s, io.reset);
-    let selected = inbox_selected(io) & inbox_available(io) & eligible;
+    let startup = startup_control::head(s.startup_consumed,
+      (eligible >> CAPTURE_SLOTS) as bits[STARTUP_BITS], STARTUP_VALID);
+    let selected = ((inbox_selected(io) & inbox_available(io)) |
+      ((startup as InboxMask) << CAPTURE_SLOTS)) & eligible;
     let pick = inbox_control::select(selected, s.cursor as u32);
     let offered = s.held == InboxMask:0 && pick.mask != InboxMask:0;
     let step = local_owner_tick(s.owner, LocalOwnerInputs {
@@ -66,6 +76,7 @@ pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxT
         // Source phase boundaries wake all postponed heads, including this one.
         postponed: if step.output.phase_boundary { InboxMask:0 } else { s.postponed | postpone },
         released: take,
+        startup_consumed: s.startup_consumed | ((take >> CAPTURE_SLOTS) as bits[STARTUP_BITS]),
         cursor: if accepted { (if pick.index + u32:1 == INBOX_SLOTS { u32:0 }
                               else { pick.index + u32:1 }) as InboxCursor } else { s.cursor },
         ..s

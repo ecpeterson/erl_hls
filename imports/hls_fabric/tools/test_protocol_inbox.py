@@ -131,11 +131,15 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
         assert json.loads(Path(str(source)+'.json').read_text())==manifest
         assert hashlib.sha256(source.read_bytes()).hexdigest()==manifest['dslx_sha256']
         assert manifest['clock_proc']=='local_inbox_clock'
-        assert inbox['mask_bits']==max(1,inbox['physical_slots'])
-        assert inbox['additional_state_bits']==3*inbox['mask_bits']+inbox['cursor_bits']+1
+        startup=inbox['startup']
+        assert startup['offset']==inbox['physical_slots'] and startup['count']==len(startup['frames'])
+        assert all(0<=frame<2**128 for frame in startup['frames'])
+        assert inbox['mask_bits']==max(1,inbox['physical_slots']+startup['count'])
+        assert inbox['additional_state_bits']==3*inbox['mask_bits']+inbox['cursor_bits']+1+startup['count']
         assert len(inbox['slots'])==inbox['physical_slots']
+        # Startup values are individually range-checked fixed-width literals; count changes the circuit shape.
         shape=(receiver['module'],manifest['source_plan']['artifact_sha256'],
-               tuple(f['width'] for f in inbox['inputs']),
+               tuple(f['width'] for f in inbox['inputs']),startup['count'],
                tuple((s['slot'],s['width'],s['payload_offset'],s['codec']['value'],
                       tuple(s['codec']['frame_positions'])) for s in inbox['slots']))
         if shape in seen:
