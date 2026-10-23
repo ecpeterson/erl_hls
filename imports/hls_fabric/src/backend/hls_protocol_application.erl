@@ -2,7 +2,7 @@
 -moduledoc "Builds a fresh source network with the shared framed application gateway and its exact host deployment binding.".
 -export([write/2]).
 
--doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns a deployment for hls_partition_stream and writes deployment.etf. The gateway orders setup before start; started acknowledges actual network activation. Attachment identity detects mismatched builds, not malicious peers. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
+-doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns a deployment for hls_partition_stream and writes deployment.etf. The gateway orders setup before start; started acknowledges actual network activation. inspection => process adds the common endpoint-2 debug stream and network/inspection.json plus a trusted local inspection.etf catalog. Attachment identity detects mismatched builds, not malicious peers. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
 -spec write(map(),file:filename()) -> map().
 write(Config=#{device:=Device,host:=Host},Directory) when is_integer(Host),Host>0,Host<65536 ->
     case maps:get(activation,Config,explicit_start) of
@@ -19,8 +19,10 @@ write(Config=#{device:=Device,host:=Host},Directory) when is_integer(Host),Host>
     ok=xls_protocol_application:write(Binding,Stage),
     ok=sv_protocol_application:write(Binding,Boundary,Stage),
     ok=file:write_file(filename:join(Directory,"deployment.etf"),term_to_binary(Deployment,[deterministic]),[exclusive]),
-    Files=["deployment.etf","application/gateway.x","application/protocol_application_top.sv"],
+    Files=["deployment.etf","application/gateway.x","application/protocol_application_top.sv"]++
+        case maps:get(inspection,Boundary) of none->[];_->["network/inspection.json","network/inspection.etf"] end,
     Manifest=#{top=>protocol_application_top,activation=>explicit_start,eligible=>false,
+        inspection=>maps:get(inspection,Boundary),
         identity=>binary:encode_hex(maps:get(identity,Binding),lowercase),
         actors=>maps:get(actors,Boundary),externals=>maps:get(externals,Boundary),
         inputs=>[#{file=>list_to_binary(F),sha256=>digest(filename:join(Directory,F))}||F<-Files]},

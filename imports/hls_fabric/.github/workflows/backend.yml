@@ -352,7 +352,7 @@ jobs:
       - name: Install RTL verification tools
         uses: ./.github/actions/rtl-tools
         with:
-          packages: verilator
+          packages: verilator yosys iverilog
 
       - name: Cache XLS
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -382,6 +382,9 @@ jobs:
       - name: Check fresh source repetition applications through real brokers
         run: python3 tools/test_protocol_repetition.py "$RUNNER_TEMP/xls" _build/protocol-repetition
 
+      - name: Check passive source inspection during correction feedback
+        run: python3 tools/test_protocol_inspection.py "$RUNNER_TEMP/xls" _build/protocol-inspection
+
       - name: Retain repetition integration diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics
@@ -390,6 +393,8 @@ jobs:
           paths: |
             _build/protocol-repetition/**/*.json
             _build/protocol-repetition/**/*.log
+            _build/protocol-inspection/**/*.json
+            _build/protocol-inspection/**/*.log
 
   qualify:
     needs: [select, bringup, backend, repetition, complete-debug]

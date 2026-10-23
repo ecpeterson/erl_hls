@@ -53,11 +53,15 @@ def main() -> None:
 
 def simulator_source(build: Path, stage: Path) -> Path:
     """Observe all public source fault pins; the four-source expansion retains the original runner bytes."""
-    actors=json.loads((build/'application/manifest.json').read_text())['actors']
+    manifest=json.loads((build/'application/manifest.json').read_text())
+    actors=manifest['actors']
     indices=range(actors)
     expression='dut.ingress_fault||'+'||'.join(f'dut.actor_{i}_{field}' for field in ['failure','fault'] for i in indices)
     source=stage/'simulation.cpp'
-    source.write_text((ROOT/'test/rtl/protocol_application_sim.cpp.in').read_text().replace('@@SOURCE_FAULTS@@',expression))
+    text=(ROOT/'test/rtl/protocol_application_sim.cpp.in').read_text().replace('@@SOURCE_FAULTS@@',expression)
+    from protocol_inspection_sim import debug_fragments
+    for key,value in debug_fragments(manifest.get('inspection','none') != 'none').items():text=text.replace('@@DEBUG_'+key+'@@',value)
+    source.write_text(text)
     return source
 
 

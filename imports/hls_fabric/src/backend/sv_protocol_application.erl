@@ -4,19 +4,21 @@
 
 -doc "Writes pin wiring for the source-checked application binding and boundary manifest. Reuses hls_partition_activation unchanged; no new behavioral Verilog is emitted. Converts each ordinary actor bit frame to the gateway's Frame struct exactly once. All components must share clock/reset; exposed source faults do not constitute a gateway protocol-fault response.".
 -spec write(map(),map(),file:filename()) -> ok.
-write(#{events:=Events},#{externals:=Externals,outputs:=Outputs},Directory) ->
+write(#{events:=Events},#{externals:=Externals,outputs:=Outputs,inspection:=Inspection},Directory) ->
     true=map_size(Events)=:=length(Externals),
     Diagnostics=[P||P=#{name:=Name}<-Outputs,not lists:prefix("external_",binary_to_list(Name)),
-        Name=/=<<"ingress_ready">>,Name=/=<<"start_ready">>],
+        Name=/=<<"ingress_ready">>,Name=/=<<"start_ready">>,Name=/=<<"inspect_value">>],
     Declarations=[["output wire [",n(W-1),":0] ",Name]||#{name:=Name,width:=W}<-Diagnostics],
     Ports=[".clk(clk)",".reset(reset)",".ingress_data(ingress)",".ingress_valid(ingress_valid)",
         ".ingress_ready(ingress_ready)",".start_valid(start_valid)",".start_ready(start_ready)"]++
+        (case Inspection of none->[];_->[".inspect_address(inspect_address)",".inspect_value(inspect_value)"] end)++
         [[".",Name,"(",Name,")"]||#{name:=Name}<-Diagnostics]++
         [[".external_",n(I),"_",Field,"(event",n(I),"_",Field,")"]||#{index:=I}<-Externals,Field<-["data","valid","ready"]],
     Source=["// Mechanical application pin wiring; shared components own all behavior.\n",
       "module protocol_application_top(input wire clk,reset,input wire [31:0] s_app_tdata,\n",
       "input wire s_app_tlast,s_app_tvalid,output wire s_app_tready,output wire [31:0] m_app_tdata,\n",
-      "output wire m_app_tlast,m_app_tvalid,input wire m_app_tready,\n",lists:join(",\n",Declarations),");\n",
+      "output wire m_app_tlast,m_app_tvalid,input wire m_app_tready,\n",lists:join(",\n",Declarations),sv_protocol_inspection:ports(Inspection),");\n",
+      case Inspection of none->[];_->"wire [31:0] inspect_address;wire [127:0] inspect_value;\n" end,
       "wire [194:0] command;wire command_valid,command_ready,started,started_valid,started_ready;\n",
       "wire [193:0] ingress;wire ingress_valid,ingress_ready,start_valid,start_ready;\n",
       [["wire [127:0] event",n(I),"_data;wire event",n(I),"_valid,event",n(I),"_ready;\n"]||#{index:=I}<-Externals],
@@ -29,7 +31,7 @@ write(#{events:=Events},#{externals:=Externals,outputs:=Outputs},Directory) ->
       "hls_partition_activation activation(.clk(clk),.reset(reset),.command(command),.command_valid(command_valid),.command_ready(command_ready),\n",
       ".ingress_data(ingress),.ingress_valid(ingress_valid),.ingress_ready(ingress_ready),.start_valid(start_valid),.start_ready(start_ready),\n",
       ".started(started),.started_valid(started_valid),.started_ready(started_ready));\n",
-      "protocol_boundary network(",lists:join(",",Ports),");\nendmodule\n"],
+      "protocol_boundary network(",lists:join(",",Ports),");\n",sv_protocol_inspection:body(Inspection),"endmodule\n"],
     file:write_file(filename:join(Directory,"protocol_application_top.sv"),Source,[exclusive]).
 
 %% Actor bit order is payload:op:flags:txid:words; the DSLX struct reverses header fields.

@@ -36,6 +36,8 @@ def compile_application(xls: Path, directory: Path, imports: list[Path] | None =
         (stage/'commands.json').write_text(json.dumps(records,indent=2)+'\n')
         if result.returncode:raise RuntimeError((stage/(label+'.log')).read_text()[-4000:])
     rtl=[stage/'gateway.v',stage/'protocol_application_top.sv',ROOT/'priv/rtl/hls_partition_activation.sv']
+    if manifest['inspection'] != 'none':
+        rtl += [PUBLIC/'priv/rtl/debug'/name for name in ['hls_debug_route.v','hls_debug_frame_rx.v','hls_topology_debug.v']]
     with (directory/'files.f').open('a') as listing:listing.write(''.join(str(p.resolve())+'\n' for p in rtl))
     all_rtl=[Path(p) for p in (directory/'files.f').read_text().splitlines()]
     manifest.update(rtl=[{'file':str(p),'sha256':digest(p)} for p in all_rtl],

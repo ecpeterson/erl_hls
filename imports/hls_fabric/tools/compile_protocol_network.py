@@ -17,7 +17,7 @@ def compile_network(xls: Path, directory: Path, imports: list[Path] | None = Non
     manifest = verify_network(directory)
     stage = directory/'network'
     source = stage/'network.x'
-    paths = [directory/'actors', directory/'dslx', ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
+    paths = [stage, directory/'actors', directory/'dslx', ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
              PUBLIC/'priv/xls/lib', PUBLIC/'priv/xls/fabric', *(imports or [])]
     compile_clock(xls, source, stage, 'network_clock', 'protocol_network_core', paths)
     rtl = [stage/'core.v', stage/'protocol_network.sv']

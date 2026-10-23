@@ -34,7 +34,7 @@ write(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundar
     Bits=lists:sum([N||#{state_bits:=N}<-Groups]),
     Manifest=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
         actor_runtime=>true,eligible=>false,ordering=>per_logical_sender_destination,
-        activation=>maps:get(activation,Network),additional_state_bits=>Bits+maps:get(additional_state_bits,Network),
+        activation=>maps:get(activation,Network),inspection=>maps:get(inspection,Network),additional_state_bits=>Bits+maps:get(additional_state_bits,Network),
         arbitration_state_bits=>Bits,externals=>Groups,inputs=>Inputs,outputs=>Outputs,
         dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase)},
     ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]),Manifest.

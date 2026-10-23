@@ -74,27 +74,27 @@ int main(int argc,char**argv){
         std::string dir=argv[1];
         Verilated::commandArgs(argc,argv);
         Vprotocol_application_top dut;
-        Stream app(dir+"/app");
+        Stream app(dir+"/app");@@DEBUG_INIT@@
         auto began=std::chrono::steady_clock::now();
         uint64_t cycle=0,activation=0;
         for(;cycle<4000000;cycle++){
             bool reset=cycle<8;
             if(!reset){app.pump();}
-            dut.clk=0;dut.reset=reset;
+@@DEBUG_PUMP@@            dut.clk=0;dut.reset=reset;
             dut.s_app_tdata=app.word;dut.s_app_tlast=app.last;dut.s_app_tvalid=!reset&&app.valid;
             dut.m_app_tready=!reset&&app.tx.size()<65532&&cycle%19>=7;
-            dut.eval();
+@@DEBUG_INPUT@@            dut.eval();@@DEBUG_CONTROL@@
             if(!reset){
                 if(@@SOURCE_FAULTS@@)throw std::runtime_error("source fault");
                 app.sample(dut.s_app_tready,dut.m_app_tdata,dut.m_app_tvalid,dut.m_app_tlast,dut.m_app_tready,cycle);
             }
-            dut.clk=1;dut.eval();
+@@DEBUG_SAMPLE@@            dut.clk=1;dut.eval();@@DEBUG_EDGE@@
             if(dut.running&&!activation)activation=cycle;
             if(cycle%64==0){
                 if(access((dir+"/done").c_str(),F_OK)==0){
                     if(app.valid||!app.rx.empty()||app.phase)throw std::runtime_error("pending application input");
                     printf("PASS live application cycles=%llu activation=%llu input_words=%llu output_words=%llu output_stalls=%llu\n",(unsigned long long)cycle,(unsigned long long)activation,(unsigned long long)app.inputs,(unsigned long long)app.outputs,(unsigned long long)app.stalls);
-                    dut.final();return 0;
+@@DEBUG_FINISH@@                    dut.final();return 0;
                 }
                 if(std::chrono::steady_clock::now()-began>std::chrono::seconds(120))throw std::runtime_error("wall deadline");
                 std::this_thread::sleep_for(std::chrono::microseconds(100));

@@ -317,3 +317,28 @@ Attach that deployment with `hls_partition_stream`, then call `phi_protocol_repe
 Use a fresh explicit-start stream with the matching width/codecs and enough host queue capacity. The demonstration limits cutoff and observed rounds to 0..511, the request to u32, and requires a positive timeout. It aborts on queue rejection, timeout or unexpected events or duplicate statuses/readouts without retrying; retire the stream and reset the complete application before another run. The quiet fence relies on each source's correction-before-status ordering and the ordered correction/query lane. It does not claim decoder convergence, general deadlock freedom or QEC accuracy.
 
 `python3 tools/test_protocol_repetition.py XLS_ROOT FRESH_OUTPUT` builds N2 and N3 serially, runs an independent ordinary-BEAM actor graph, and runs the production helper through real brokers and public RTL ports. It compares the common fence, correction set, every sender's ordered events through that fence, and final readout; the shared simulator stalls output and observes every actor's public fault pins. It also checks stream/descriptor retirement. These are finite application witnesses. The existing application regression supplies framing/reset/identity-rejection coverage; native timing, multi-board roles and physical capacity remain separate.
+
+
+## Passive process inspection
+
+Add `inspection => process` to a source-application configuration, or use `python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT --inspect`. The default is `none`. `hls_protocol_network:write/2` validates this choice, `hls_protocol_inspection:write/2` emits source-bound DSLX projections and a catalog, and the application wrapper connects the unchanged debug router/query service on endpoint 2. `files.f` includes those RTL dependencies. This option changes the generated interface, manifest and deployment identity, so attach the matching fresh build.
+
+The top exposes independent 32-bit `s_dbg_*`/`m_dbg_*` ready/valid streams, with keep and last. Clock and reset must cover the application and debug service together. Attach the debug stream to a broker, then bind the trusted local build catalog:
+
+```erlang
+{ok, Bytes} = file:read_file("BUILD/network/inspection.etf"),
+Plan = #{manifest := Manifest} = binary_to_term(Bytes),
+{ok, Client} = hls_debug:start_link(undefined, {fabric, DebugBroker, 2}),
+{ok, Session} = hls_protocol_observation:open(Client, Manifest),
+Catalog = hls_protocol_observation:catalog(Plan, Session),
+{ok, Target} = hls_debug_catalog:actor(Catalog, {actor, {phi, 0, 0}}),
+hls_debug:info(Target, [cycle, initialized, phase, failed, reduction, gather]).
+```
+
+Use a logical actor identity from this build's catalog; the example is a repetition-code identity. The opener checks the actual hardware INFO fingerprint and actor-only resource layout. The catalog also binds exact source actor identities/modules to resource indices. ETF is trusted local build data, never network input. Its finite phase/failure/collection codebook supplies atoms to the shared decoder; application modules need not be loaded in the host.
+
+Each query samples one process's committed phase, initialization, failure and collection metadata at the debug service's acceptance edge, before that edge's application update. The existing service retains that coherent value through reply stalls. Queries neither consume actor messages nor stall the application. Different queries are not atomic together. Payloads, mailbox occupancy and continuous event history are unavailable; tracing reports unsupported. The projection adds no per-actor state, but the selection mux and shared reply service have an area/timing cost.
+
+`hls_process_profile:capture(Catalog, Identities, Options)` performs bounded serial queries. Supply all of `#{session => <<"run-1">>, reset_free => true, rounds => 3, timeout_ms => 10000, interval_ms => 0, budget_ms => 60000}`. At most 10000 queries are accepted. The result retains samples, failed attempts and unattempted count; `write/2` saves it as exclusive JSON. The reset-free label is a caller assumption, not something sparse samples prove. Stop and retire the client/transport after reset, clock wrap, reconnect or timeout; create a fresh session after coordinated reset. Timeouts do not cancel device work.
+
+`python3 tools/test_protocol_inspection.py XLS_ROOT FRESH_OUTPUT` exercises the actual build and shared Erlang APIs. Combinational SAT compares plain/scalar/gather projections against ordinary typed-machine fields for every raw machine bit pattern, initialization bit and reset bit; a second check covers every generated N3 network state/input and query address for application noninterference. A false equal-process-observation claim must produce a counterexample. Two finite broker/RTL incarnations run N3 correction feedback and canonical readout against independent ordinary BEAM actors while sampling all nine processes, stalling debug and application outputs independently, and comparing application pins with an unqueried RTL twin each cycle. A separate public-port witness resets four partial/stalled debug transactions and checks fresh INFO and process replies. These checks trust source extraction, XLS, Yosys/ABC/SAT, Verilator/Icarus and the host runtime; they establish neither arbitrary-source refinement, progress, continuous history nor native performance.
