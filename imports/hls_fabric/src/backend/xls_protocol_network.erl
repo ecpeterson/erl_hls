@@ -2,21 +2,21 @@
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
 -export([write/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
+-doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. This is executable composition, not capacity, progress or physical qualification.".
 -spec write(map(),file:filename()) -> map().
-write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress},Directory) ->
+write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation},Directory) ->
     Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
-    Host=Ingress=/=none,
+    Host=Ingress=/=none, Explicit=Activation=:=explicit_start,
     case Host of true->ok=xls_protocol_ingress:write(Ingress,filename:join(Directory,"dslx"));false->ok end,
-    Inputs=[{"reset",1}]++optional(Host,[{"ingress_valid",1},{"ingress_data",194}])++[{boundary(B)++"_ready",1}||B<-Boundaries],
-    Outputs=[{"startup_done",1}]++optional(Host,[{"ingress_ready",1},{"ingress_fault",1}])++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
+    Inputs=[{"reset",1}]++optional(Explicit,[{"start_valid",1}])++optional(Host,[{"ingress_valid",1},{"ingress_data",194}])++[{boundary(B)++"_ready",1}||B<-Boundaries],
+    Outputs=[{"startup_done",1}]++optional(Explicit,[{"start_ready",1},{"running",1}])++optional(Host,[{"ingress_ready",1},{"ingress_fault",1}])++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
         lists:append([[{boundary(B)++"_valid",1},{boundary(B)++"_data",W}]
             ||B=#{output:=#{width:=W}}<-Boundaries]),
     {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_network_clock.x.in")),
-    Source=["import transport;\n",optional(Host,"import ingress;\n"),[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
+    Source=["import transport;\n",optional(Explicit,"import protocol_activation as activation;\n"),optional(Host,"import ingress;\n"),[["import receiver_",n(I)," as ",actor(I),";\n"]||#{index:=I}<-Sources],
         structure("Inputs",Inputs),structure("Outputs",Outputs),
         "// Component states remain independent; optional ingress owns one shared command.\npub struct State { transport: transport::State,\n",
-        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress::State,\n"),"}\n",
+        [[actor(I),": ",actor(I),"::LocalInboxState,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress::State,\n"),optional(Explicit,"activation: activation::State,\n"),"}\n",
         "// Next component states and pre-edge external observations.\npub struct Tick { state: State, output: Outputs }\n",
         "// Offers/eligibility read old state. Preview outputs ignore take/release;\n",
         "// the second pure transport call supplies their actual next-state inputs.\n",
@@ -27,7 +27,7 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
           "let eligible_",n(I)," = ",actor(I),"::local_inbox_eligible(s.",actor(I),", io.reset);\n"]||#{index:=I}<-Sources],
         "let offer = transport::Inputs { reset: io.reset,\n",
         [[source(I),"_",K,": batch_",n(I),".",K,",\n"]||#{index:=I}<-Sources,K<-["valid","layout","payload"]],
-        [[link_name(I),"_eligible: eligible_",n(D),"[",n(offset(I,Links)),"+:bits[",n(N),"]],\n"]
+        [[link_name(I),"_eligible: ",eligibility(Explicit,D,offset(I,Links),N),",\n"]
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],
         [[boundary(B),"_ready: io.",boundary(B),"_ready,\n"]||B<-Boundaries],"..zero!<transport::Inputs>() };\n",
         "let preview = transport::tick(s.transport, offer).output;\n",
@@ -38,15 +38,17 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
         [[link_name(I),"_take: or_reduce(step_",n(D),".output.take[",n(offset(I,Links)),"+:bits[",n(N),"]]),\n",
           link_name(I),"_release_valid: step_",n(D),".output.release[",n(offset(I,Links)),"+:bits[",n(N),"]],\n"]
             ||#{index:=I,destination_index:=D,slots:=N}<-Links],"..offer });\n",
+        activation_step(Explicit,Host,Sources),
         "Tick { state: State { transport: transport_step.state,\n",
-        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress_step,\n"),"}, output: Outputs {\n",
-        "startup_done,\n",optional(Host,"ingress_ready: ingress_offer.ready, ingress_fault: ingress_offer.fault,\n"),
+        [[actor(I),": step_",n(I),".state,\n"]||#{index:=I}<-Sources],optional(Host,"ingress: ingress_step,\n"),optional(Explicit,"activation: activation_step.state,\n"),"}, output: Outputs {\n",
+        "startup_done,\n",optional(Explicit,"start_ready: activation_step.output.start_ready, running: activation_step.output.running,\n"),optional(Host,"ingress_ready: ingress_offer.ready, ingress_fault: ingress_offer.fault,\n"),
         [[actor(I),"_failure: step_",n(I),".output.owner.failure, ",actor(I),"_fault: preview.",source(I),"_fault,\n"]||#{index:=I}<-Sources],
         [[boundary(B),"_",K,": preview.",boundary(B),"_",K,",\n"]||B<-Boundaries,K<-["valid","data"]],"} } }\n",Clock],
     Dslx=filename:join(Path,"network.x"), ok=file:write_file(Dslx,Source,[exclusive]),
     ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Path,"protocol_network.sv"),"protocol_network","protocol_network_core"),
     Manifest=#{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
-        actors=>length(Sources),links=>length(Links),additional_state_bits=>case Host of true->maps:get(state_bits,Ingress);false->0 end,
+        actors=>length(Sources),links=>length(Links),additional_state_bits=>(case Host of true->maps:get(state_bits,Ingress);false->0 end)+(case Explicit of true->1;false->0 end),
+        activation=>Activation,
         ingress=>Ingress,
         capacity=>unestablished,network_progress=>unestablished,
         initialization=>source_init_and_declared_startup,publication=>atomic_old_outbox_batch,
@@ -60,6 +62,27 @@ write(#{fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},r
         boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B))}
             ||B=#{source_index:=I,output:=#{index:=D}}<-maps:get(boundaries,Fabric)]},
     ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]), Manifest.
+
+%% Running is registered: start_valid cannot open captures on its handshake edge.
+-spec eligibility(boolean(),non_neg_integer(),non_neg_integer(),pos_integer()) -> iodata().
+eligibility(Explicit,Actor,Offset,Width) ->
+    Mask=["eligible_",n(Actor),"[",n(Offset),"+:bits[",n(Width),"]]"],
+    case Explicit of
+        true->["activation::eligible(s.activation, io.reset, ",Mask,")"];
+        false->Mask
+    end.
+
+%% These observations use old ownership/faults, never same-edge consume or ready.
+%% Initialization/entry work and already published captures need not be drained.
+-spec activation_step(boolean(),boolean(),[map()]) -> iodata().
+activation_step(false,_,_) -> [];
+activation_step(true,Host,Sources) ->
+    ["let activation_step = activation::tick(s.activation, activation::Conditions {\n",
+     "reset: io.reset, startup_done, ingress_idle: ",case Host of true->"ingress_offer.ready";false->"true" end,
+     ", ingress_valid: ",case Host of true->"io.ingress_valid";false->"false" end,",\n",
+     "fault: ",optional(Host,"ingress_offer.fault || "),
+     lists:join(" || ",[["step_",n(I),".output.owner.failure != u16:0 || preview.",source(I),"_fault"]||#{index:=I}<-Sources]),
+     " }, io.start_valid);\n"].
 
 %% Match the exact field order and per-destination slot flattening used by inbox attachment.
 -spec receiver(map(),[map()]) -> iodata().

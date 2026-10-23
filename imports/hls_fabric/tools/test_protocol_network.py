@@ -20,9 +20,10 @@ def configuration(path: Path, function: str, arguments: str = '[]') -> None:
 
 
 def simulate(fixture: Path, stage: Path, core: Path | None = None, reject: bool = False) -> None:
-    """Score only public outputs: source order, feedback totals, independent stalls and reset."""
+    """Score public outputs with automatic or held explicit start: order, feedback, stalls and reset."""
     manifest=json.loads((fixture/'network/manifest.json').read_text())
-    assert manifest['actors']==3 and manifest['links']==4 and manifest['additional_state_bits']==0
+    explicit=manifest.get('activation')=='explicit_start'
+    assert manifest['actors']==3 and manifest['links']==4 and manifest['additional_state_bits']==int(explicit)
     assert manifest['actor_runtime'] and not manifest['eligible']
     ports=manifest['inputs']+manifest['outputs']
     wires=[]; connections=['.clk(clk)']
@@ -33,6 +34,7 @@ def simulate(fixture: Path, stage: Path, core: Path | None = None, reject: bool 
         name=boundary['name'];i=boundary['source_index']
         wires.extend([f'assign {name}_ready=ready[{i}];',f'assign valid[{i}]={name}_valid;',
                       f'assign data[{i}]={name}_data;'])
+    if explicit: wires.append("assign start_valid=1'b1;")
     faults=[p['name'] for p in manifest['outputs'] if p['name'].endswith(('_fault','_failure'))]
     wires.append('wire [50:0] faults={'+','.join(faults)+'};')
     wires.append('protocol_network dut('+','.join(connections)+');')
