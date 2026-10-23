@@ -85,7 +85,7 @@ int main(int argc,char**argv){
             dut.m_app_tready=!reset&&app.tx.size()<65532&&cycle%19>=7;
             dut.eval();
             if(!reset){
-                if(dut.ingress_fault||dut.actor_0_failure||dut.actor_1_failure||dut.actor_2_failure||dut.actor_3_failure||dut.actor_0_fault||dut.actor_1_fault||dut.actor_2_fault||dut.actor_3_fault)throw std::runtime_error("source fault");
+                if(@@SOURCE_FAULTS@@)throw std::runtime_error("source fault");
                 app.sample(dut.s_app_tready,dut.m_app_tdata,dut.m_app_tvalid,dut.m_app_tlast,dut.m_app_tready,cycle);
             }
             dut.clk=1;dut.eval();

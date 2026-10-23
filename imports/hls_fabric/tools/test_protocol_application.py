@@ -51,17 +51,28 @@ def main() -> None:
     qualify(build,stage)
 
 
+def simulator_source(build: Path, stage: Path) -> Path:
+    """Observe all public source fault pins; the four-source expansion retains the original runner bytes."""
+    actors=json.loads((build/'application/manifest.json').read_text())['actors']
+    indices=range(actors)
+    expression='dut.ingress_fault||'+'||'.join(f'dut.actor_{i}_{field}' for field in ['failure','fault'] for i in indices)
+    source=stage/'simulation.cpp'
+    source.write_text((ROOT/'test/rtl/protocol_application_sim.cpp.in').read_text().replace('@@SOURCE_FAULTS@@',expression))
+    return source
+
+
 def qualify(build: Path, stage: Path) -> None:
     """Exercise a compiled public application; retain simulation, host and reset evidence."""
     ebin=stage/'ebin';ebin.mkdir()
     run(['erlc',*[v for path in erlang_paths() for v in ('-pa',path)],'+debug_info','-Werror','-o',ebin,
         ROOT/'test/hls_protocol_boundary_fixture.erl',ROOT/'test/hls_protocol_application_live.erl'],stage,'host-compile')
     rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
-    tracked=rtl+[ROOT/'test/rtl/protocol_application_sim.cpp',build/'deployment.etf']
+    source=simulator_source(build,stage)
+    tracked=rtl+[source,build/'deployment.etf']
     hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_application_top',
         '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',
-        *rtl,ROOT/'test/rtl/protocol_application_sim.cpp'],stage,'verilator')
+        *rtl,source],stage,'verilator')
     for i in [1,2]:witness(build,stage/'obj_dir/simulation',ebin,stage/f'live-{i}')
     reset_witness(build,stage,rtl)
     assert hashes=={str(p):digest(p) for p in tracked}
