@@ -1,6 +1,6 @@
 -module(hls_partition_wire).
 -moduledoc "Checked application bindings and codecs for one rectangle ingress per device.".
--export([deployment/1, command/2, event/4, wrapper/3]).
+-export([deployment/1, binding/4, command/2, event/4, wrapper/3]).
 -export_type([command/0]).
 
 %% Fixed application-gateway bindings, unrelated to actor IDs or geometry.
@@ -15,18 +15,23 @@
 -spec deployment(map()) -> map().
 deployment(Partition = #{devices := Devices}) ->
     #{partition => Partition, devices => maps:from_list([begin
-        Local = #{ingresses := [#{id := Ingress}], externals := Externals} =
-            hls_partition:device(Partition, Device),
-        true = length(Externals) > 0,
-        Events = maps:from_list([{?FIRST_EVENT_ENDPOINT + Index, external(Partition, Device, E)}
-            || {Index, E} <- lists:enumerate(0, Externals),
-               Index < (1 bsl 16) - ?FIRST_EVENT_ENDPOINT]),
-        true = map_size(Events) =:= length(Externals),
-        Binding = #{host => Host, control => ?CONTROL_ENDPOINT, ingress => Ingress, events => Events},
-        Identity = crypto:hash(sha256, term_to_binary(
-            {partition_application, 1, Partition, Device, Binding}, [deterministic])),
-        {Device, Binding#{identity => Identity, local => Local}}
+        Local = hls_partition:device(Partition, Device),
+        {Device, (binding(Partition, Device, Host, Local))#{local => Local}}
     end || {Host, Device} <- lists:enumerate(1, Devices)])}.
+
+-doc "Binds one device's declared ingress and external codecs to shared endpoints. The caller must supply checked producer encodings and local port order; this does not validate a runtime implementation. Identity covers the supplied partition and derived wire binding.".
+-spec binding(map(), term(), 1..65535, map()) -> map().
+binding(Partition, Device, Host, #{ingresses := [#{id := Ingress}], externals := Externals})
+        when Host > 0, Host < 65536 ->
+    true = length(Externals) > 0,
+    Events = maps:from_list([{?FIRST_EVENT_ENDPOINT + Index, external(Partition, Device, E)}
+        || {Index, E} <- lists:enumerate(0, Externals),
+           Index < (1 bsl 16) - ?FIRST_EVENT_ENDPOINT]),
+    true = map_size(Events) =:= length(Externals),
+    Binding = #{host => Host, control => ?CONTROL_ENDPOINT, ingress => Ingress, events => Events},
+    Identity = crypto:hash(sha256, term_to_binary(
+        {partition_application, 1, Partition, Device, Binding}, [deterministic])),
+    Binding#{identity => Identity}.
 
 %% All producers of an external already agree on each schema's representation.
 -spec external(map(), term(), map()) -> map().
@@ -62,7 +67,7 @@ command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds,
     end || {Device, Packet} <- hls_partition_ingress:commands(Partition, Ingress, Target, Bounds, Message)].
 
 -doc "Decodes a bound external record or canonical application started reply, rejecting wrong routes, headers, lengths and nonzero codec padding. The stream client checks that activation was requested.".
--spec event(map(), hls_fabric:route(), hls_fabric:header(), binary()) -> {atom(), tuple()}.
+-spec event(map(), hls_fabric:route(), hls_fabric:header(), binary()) -> {term(), tuple()}.
 event(#{activation := explicit_start, host := Host, control := Control},
         {Control, Host}, {16#83, 0, 0}, <<0:32>>) -> {application, {started}};
 event(#{host := Host, events := Events}, {Endpoint, Host}, {Tag, 0, 0}, Payload) ->

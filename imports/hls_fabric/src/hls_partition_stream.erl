@@ -26,7 +26,7 @@ start_link(Deployment, Brokers, Options) ->
 submit(Pid, Command) -> gen_server:call(Pid, {submit, Command}, infinity).
 
 -doc "Returns the next event or timeout after the given milliseconds; only the connection owner may consume.".
--spec next(pid(), non_neg_integer()) -> {ok, term(), atom(), tuple()} | timeout | {error, term()}.
+-spec next(pid(), non_neg_integer()) -> {ok, term(), term(), tuple()} | timeout | {error, term()}.
 next(Pid, Timeout) when is_integer(Timeout), Timeout >= 0 ->
     gen_server:call(Pid, {next, Timeout}, infinity).
 

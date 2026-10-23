@@ -1,0 +1,43 @@
+-module(hls_protocol_application_tests).
+-moduledoc "Fresh application bindings retain exact endpoint identities and the shared host command ABI.".
+-include_lib("eunit/include/eunit.hrl").
+-export([collision/0]).
+
+%% No build should start when the caller requests an incompatible activation mode.
+-spec invalid_mode_test() -> ok.
+invalid_mode_test() ->
+    ?assertError({application_requires_explicit_start,automatic},
+        hls_protocol_application:write(#{device=>board,host=>1,activation=>automatic},"unused")),
+    ?assertError(function_clause,hls_protocol_application:write(#{device=>board,host=>65536},"unused")).
+
+%% The production builder, not a hand-assembled host map, supplies the command and event binding.
+-spec binding_test() -> ok.
+binding_test() ->
+    Path=filename:join("_build","application-binding-"++integer_to_list(erlang:system_time(nanosecond))),
+    D=#{devices:=#{board:=B},eligible:=false}=hls_protocol_application:write(
+        #{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{"test/hls_protocol_boundary_tests.erl",[]}],
+          topology=>{hls_protocol_boundary_tests,topology,[]},actor_limit=>4,device=>board,host=>19},Path),
+    #{activation:=explicit_start,identity:=Identity,events:=Events}=B,
+    ?assertEqual(32,byte_size(Identity)),
+    ?assertEqual([3,'3',{bucket,1}],[Id||{_,#{id:=Id}}<-lists:sort(maps:to_list(Events))]),
+    ?assertMatch([{board,{19,7},{3,0,0},<<0:32>>}],hls_partition_wire:command(D,start)),
+    ?assertMatch([{board,{19,7},{2,0,0},_}],hls_partition_wire:command(D,{host,cells,{0,0,3,0},{work,12}})),
+    ?assertEqual({{bucket,1},{sample,2,12}},hls_partition_wire:event(B,{10,19},{5,0,0},<<2:32/little,12:32/little>>)),
+    ?assertError({badmatch,false},hls_partition_wire:event(B,{10,19},{5,0,0},<<2:32/little>>)),
+    {ok,Bytes}=file:read_file(filename:join(Path,"deployment.etf")),
+    ?assertEqual(D,binary_to_term(Bytes)),ok.
+
+%% Equal payload width and selector cannot conceal a reversed source record layout.
+-spec external_collision_test() -> ok.
+external_collision_test() ->
+    Path=filename:join("_build","application-collision-"++integer_to_list(erlang:system_time(nanosecond))),
+    ?assertError({ambiguous_application_event,shared,5},hls_protocol_application:write(
+        #{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{"test/hls_protocol_application_conflict.erl",[]},{?FILE,[]}],
+          topology=>{?MODULE,collision,[]},actor_limit=>5,device=>board,host=>1},Path)).
+
+-doc "Adds one equal-width but incompatible producer to the shared external endpoint.".
+-spec collision() -> map().
+collision() ->
+    T=#{actors:=Actors,routes:=Routes}=hls_protocol_boundary_fixture:topology(),
+    T#{actors:=Actors#{conflict=>hls_protocol_application_conflict},
+       routes:=Routes++[{{conflict,monitor},[{external,shared}]}]}.

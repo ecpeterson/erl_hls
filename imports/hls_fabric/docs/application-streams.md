@@ -52,6 +52,8 @@ Attachment compares each gateway's SHA-256 deployment identity before returning.
 
 The default limit is 128 queued/in-progress frames across the selected devices. `write_timeout` defaults to 10000 ms from admission. Only broker rejections guaranteeing non-transmission are retried, preserving the original deadline. Event consumption and inspection remain available while writes stall.
 
+For a fresh source-protocol network, [the framed application builder](source-protocol.md#framed-application-build) emits this deployment and the connected gateway together; callers do not hand-assemble the binding.
+
 ## Explicit activation
 
 An application with setup-dependent startup can use `hls_partition_io::OrderedBoundary` and declare `activation => explicit_start` in each matching device binding. The application binding must include this protocol choice in its deployment identity. The ordinary generated wrapper still uses automatic activation; changing its host map alone does not add an activation barrier to that hardware.

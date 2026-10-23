@@ -277,3 +277,33 @@ An empty endpoint is always invalid with zero data. A singleton directly exposes
 For N=2..256 producers, each endpoint adds `2*ceil(log2(N))+1` state bits: cursor, held owner and held flag. It reads N valid bits and selects one existing 128-bit payload, accepting at most one frame per clock. Fan-in above 256 rejects after retaining the freshly built network. Frame capacity remains the existing ABI; global width parametrization is deferred. The wrapper previews the network with producer readiness cleared and uses arbiter acceptance only for the final transition. This composition requires network observations to be independent of live producer readiness.
 
 `python3 tools/test_protocol_boundary.py XLS_ROOT FRESH_OUTPUT` checks actual source-generated frames against ordinary BEAM callbacks/codecs. Its finite public-pin RTL witness covers shared/single/empty endpoints, late arrivals behind a stalled selection, independent stalls, host/start passthrough, four reset interruptions and two complete incarnations. Dropping the lock or acknowledging every producer must fail. Combinational SAT checks all legal component state and input bits at fan-ins 1/3/8/36 for acceptance, transition, readiness independence and retained output under the producer hold assumption; a false multi-accept claim yields a counterexample. Persistent-request service is a finite witness, covering every initial cursor and one full round of accepted grants with interleaved stalls. Separate all-state/input cuts check the generated fixture network and a network with real internal feedback. These checks trust source extraction, DSLX/XLS and the simulator/JIT/Yosys/SAT tools. Local XC7 component and connected capacity screens are not native area or routed timing. The 36-producer LUT screen is diagnostic: its unchanged budget and pass/fail verdict are retained separately from functional qualification. A failed capacity screen does not establish an admissible implementation. Application wire framing, semantic capacity/progress admission and live-board qualification remain separate; `eligible` stays false.
+
+
+## Framed application build
+
+`bash tools/emit_protocol_application.sh XLS_ROOT CONFIG FRESH_OUTPUT` connects a fresh source boundary to the existing application broker protocol. Add `device` and `host` (1..65535) to the boundary configuration. Explicit activation is required and selected by default; this builder rejects `automatic`. For a runnable four-producer example:
+
+```erlang
+#{sources => [{"test/hls_protocol_boundary_fixture.erl", []}],
+  topology => {hls_protocol_boundary_fixture, topology, []},
+  actor_limit => 4, device => board, host => 1}.
+```
+
+The concrete call path is `emit_protocol_application.escript` → `hls_protocol_application:write/2` → fresh `hls_protocol_boundary:write/2`. The builder binds the same elaborated actor identities, rectangle ingress, loaded source codecs and canonical external endpoint order into `deployment.etf`. Shared event selectors must agree on field names/order, types and canonical framing, not merely payload width. The application requires one rectangle ingress and at least one external endpoint. Its SHA-256 identity covers the source bundle and boundary/wire binding; it is a build-mismatch check, not authentication or native equivalence.
+
+`xls_protocol_application` instantiates the existing `hls_partition_io::OrderedBoundary`; `sv_protocol_application` only connects pins and converts actor frame bit ordering to the gateway's DSLX struct ordering. It reuses the existing `hls_partition_activation.sv` bridge unchanged. There is no new framing or activation state machine. The compiler builds the boundary with its single-stage sampled-clock schedule and the shared gateway with its established two-stage channel schedule. `files.f` lists the complete application RTL; `application/compiled.json` records exact inputs, tools through the nested boundary record, and RTL dependencies.
+
+Use the returned deployment directly with the existing host client:
+
+```erlang
+{ok, Bytes} = file:read_file("BUILD/deployment.etf"),
+Deployment = binary_to_term(Bytes), % trusted local build artifact only
+{ok, Stream} = hls_partition_stream:start_link(Deployment, #{board => Broker}, #{}),
+{ok, 1} = hls_partition_stream:submit(Stream, {host, cells, {0,0,0,0}, {cfg,1}}),
+{ok, 1} = hls_partition_stream:submit(Stream, {host, cells, {1,0,1,0}, {cfg,2}}),
+{ok, 1} = hls_partition_stream:submit(Stream, start).
+```
+
+Consume events with `next/2`; `{ok, board, application, {started}}` confirms the actual network start handshake. Startup/setup publications may arrive before that reply. Host queue admission is not execution, and the source's consumed setup is not a general readiness proof. The single ordered command channel prevents start from overtaking earlier setup. Source faults remain exposed on the application top's diagnostic pins; they are distinct from a gateway framing-fault packet. Reset must cover gateway, activation bridge, boundary, actors and physical transport before fresh attachment. See [application streams](application-streams.md) for credit, timeout and descriptor-retirement contracts.
+
+`python3 tools/test_protocol_application.py XLS_ROOT FRESH_OUTPUT` builds this path from source and connects actual `hls_fabric` brokers and `hls_partition_stream` clients to public RTL ports. Two finite incarnations check 24 events each against ordinary BEAM callbacks, independent per-producer host feedback, setup/start ordering and output stalls. Public-wire tests interrupt attachment, setup and a blocked output with coordinated reset; wrong identity poisons the gateway until reset. These are simulation witnesses trusting source extraction, XLS, Verilator/Icarus and the host runtime. They establish neither arbitrary application progress nor native throughput. The build remains opt-in, with `eligible: false`; decoder-specific admission and device capacity remain separate from merging this functional integration.

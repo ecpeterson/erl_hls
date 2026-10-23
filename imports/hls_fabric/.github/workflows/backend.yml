@@ -119,6 +119,8 @@ jobs:
 
       - name: Install RTL verification tools
         uses: ./.github/actions/rtl-tools
+        with:
+          packages: iverilog yosys verilator
 
       - name: Cache XLS
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -206,6 +208,7 @@ jobs:
           python3 tools/test_protocol_ingress.py "$RUNNER_TEMP/xls" _build/protocol-ingress
           python3 tools/test_protocol_activation.py "$RUNNER_TEMP/xls" _build/protocol-activation
           python3 tools/test_protocol_boundary.py "$RUNNER_TEMP/xls" _build/protocol-boundary
+          python3 tools/test_protocol_application.py "$RUNNER_TEMP/xls" _build/protocol-application
 
       - name: Inspect startup backpressure through the debug endpoint
         run: |

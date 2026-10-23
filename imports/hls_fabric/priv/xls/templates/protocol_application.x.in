@@ -1,0 +1,18 @@
+import axis;
+import hls_partition_io;
+
+// Public framed application ports around the shared ordered gateway.
+pub proc Top {
+  // The network's endpoint streams preserve per-sender order, not cross-sender chronology.
+  config(app_in: chan<axis::Beat> in, app_out: chan<axis::Beat> out,
+      commands_out: chan<hls_partition_io::OrderedCommand> out, started_in: chan<bool> in,
+      events_in: chan<axis::Frame>[@@COUNT@@] in) {
+    spawn hls_partition_io::OrderedBoundary<u32:@@COUNT@@, @@IDENTITY@@, u16:@@HOST@@, u16:@@CONTROL@@>
+      (app_in, app_out, commands_out, started_in, events_in);
+    ()
+  }
+  // All state belongs to the shared receiver/transmitter.
+  init { () }
+  // This structural wrapper owns no separate protocol state.
+  next(state: ()) { state }
+}
