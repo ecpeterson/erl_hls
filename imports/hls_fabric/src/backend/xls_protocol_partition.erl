@@ -2,13 +2,13 @@
 -moduledoc "Elaborates canonical crossing codecs and named raw ports for a checked source partition. All behavioral control uses shared DSLX; this module supplies static wiring.".
 -export([ports/1, write/2, fragments/1, name/1, files/1]).
 
--doc "Returns sampled crossing input/output fields grouped by direction, preserving global link order within each group. Incoming links expose ready/fault; outgoing links expose immutable slot/frame while valid. Each peer supplies the complementary handshake. No serial framing or clock crossing is provided.".
+-doc "Returns sampled crossing input/output fields grouped by direction, preserving global link order within each group. Incoming links expose ready/fault and a per-class free mask; outgoing links expose immutable slot/frame while valid. Each peer supplies the complementary handshake. No serial framing or clock crossing is provided.".
 -spec ports(map()) -> {[{string(),pos_integer()}],[{string(),pos_integer()}]}.
 ports(Plan) ->
     Incoming=[L||L=#{direction:=incoming}<-maps:get(crossings,Plan,[])],
     Outgoing=[L||L=#{direction:=outgoing}<-maps:get(crossings,Plan,[])],
     {lists:append([offer(I)||#{index:=I}<-Incoming])++[{name(I)++"_ready",1}||#{index:=I}<-Outgoing],
-        lists:append([[{name(I)++"_ready",1},{name(I)++"_fault",1}]||#{index:=I}<-Incoming])++
+        lists:append([[{name(I)++"_ready",1},{name(I)++"_fault",1},{name(I)++"_free",N}]||#{index:=I,slots:=N}<-Incoming])++
         lists:append([offer(I)||#{index:=I}<-Outgoing])}.
 
 -doc "Writes each source-bound crossing codec to an exclusive DSLX file beside transport.x. Requires the fresh partition planner's classes; generated logic validates header, padding and omitted constants and preserves every dynamic bit.".
@@ -52,7 +52,8 @@ view(#{index:=I,direction:=outgoing,source_index:=S,output_index:=D,output:=#{of
 
 %% Transport observations are forwarded without another register or arbitration stage.
 -spec values(map()) -> [{string(),iodata()}].
-values(#{index:=I,direction:=incoming}) ->
+values(#{index:=I,direction:=incoming,slots:=N}) ->
+    [{name(I)++"_free",["if io.reset { bits[",n(N),"]:0 } else { !(link_",n(I),".available | link_",n(I),".leased) }"]}]++
     [{name(I)++"_"++K,name(I)++"."++K}||K<-["ready","fault"]];
 values(#{index:=I,direction:=outgoing,source_index:=S,output_index:=D}) ->
     [{name(I)++"_valid",["source_",n(S),".valid[",n(D),"+:u1]"]},

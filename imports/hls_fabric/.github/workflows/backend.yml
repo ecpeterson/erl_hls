@@ -296,6 +296,8 @@ jobs:
 
       - name: Check canonical source partitions and connected feedback
         run: python3 tools/test_protocol_partition.py "$RUNNER_TEMP/xls" _build/protocol-partition
+      - name: Check framed source roles and bounded broker relay
+        run: python3 tools/test_protocol_bridge.py "$RUNNER_TEMP/xls" _build/protocol-bridge
       - name: Retain source-backend diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics
@@ -307,6 +309,9 @@ jobs:
             _build/protocol-partition/**/*.json
             _build/protocol-partition/**/*.x
             _build/protocol-partition/**/*.sv
+            _build/protocol-bridge/**/*.json
+            _build/protocol-bridge/**/*.x
+            _build/protocol-bridge/**/*.sv
 
   complete-debug:
     if: github.event_name == 'workflow_dispatch'

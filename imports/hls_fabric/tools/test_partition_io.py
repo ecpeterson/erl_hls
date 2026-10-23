@@ -19,6 +19,7 @@ def run(args: argparse.Namespace) -> None:
     stage.mkdir(parents=True, exist_ok=False)
     sources = [ROOT / "priv/xls/hls_partition_io.x", ROOT / "test/xls" / fixture,
                ROOT / "priv/xls/hls_partition_tile_io.x",
+               ROOT / "priv/xls/lib/protocol_framing.x", ROOT / "priv/xls/lib/protocol_rectangle.x",
                public / "priv/xls/lib/axis.x", public / "priv/xls/fabric/hls_spatial_router.x"]
     bench = ROOT / "test/rtl" / (top + ".sv")
     bridges = [ROOT / "priv/rtl/hls_partition_activation.sv"] if args.ordered else []

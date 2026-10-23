@@ -20,7 +20,7 @@ def compile_application(xls: Path, directory: Path, imports: list[Path] | None =
         if digest(directory/row['file'])!=row['sha256']:
             raise ValueError('changed application input: '+row['file'])
     compile_boundary(xls,directory,imports)
-    paths=[ROOT/'priv/xls',PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric',*(imports or [])]
+    paths=[ROOT/'priv/xls',ROOT/'priv/xls/lib',PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric',*(imports or [])]
     commands=[
         ('convert',[xls/'ir_converter_main','--top=Top','--warnings_as_errors=false',
             '--dslx_path='+':'.join(map(str,paths)), '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),stage/'gateway.x'],stage/'raw.ir'),
@@ -43,7 +43,8 @@ def compile_application(xls: Path, directory: Path, imports: list[Path] | None =
     manifest.update(rtl=[{'file':str(p),'sha256':digest(p)} for p in all_rtl],
         boundary={'file':str(directory/'boundary/compiled.json'),'sha256':digest(directory/'boundary/compiled.json')},
         gateway_dependencies=[{'file':str(p),'sha256':digest(p)} for p in
-            [ROOT/'priv/xls/hls_partition_io.x',PUBLIC/'priv/xls/lib/axis.x',PUBLIC/'priv/xls/fabric/hls_spatial_router.x']],
+            [ROOT/'priv/xls/hls_partition_io.x',ROOT/'priv/xls/lib/protocol_framing.x',
+             ROOT/'priv/xls/lib/protocol_rectangle.x',PUBLIC/'priv/xls/lib/axis.x',PUBLIC/'priv/xls/fabric/hls_spatial_router.x']],
         native_measured=False,eligible=False)
     (stage/'compiled.json').write_text(json.dumps(manifest,indent=2)+'\n')
 

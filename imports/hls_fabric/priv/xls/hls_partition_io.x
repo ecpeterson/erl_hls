@@ -3,6 +3,8 @@
 // Attach is single-use until coordinated reset. Invalid traffic poisons control and reports one fault;
 // neither a write receipt nor attachment acknowledges actor execution.
 import axis;
+import protocol_framing as framing;
+import protocol_rectangle as rectangle;
 import hls_spatial_router;
 
 // Fixed external-event endpoint allocation shared with hls_partition_wire.
@@ -41,38 +43,17 @@ pub fn receive_ordered_step(
     state: ReceiveState, beat: axis::Beat, identity: bits[256], host: u16, service: u16,
     explicit_start: bool
 ) -> (ReceiveState, bool, bool, bool, bool, hls_spatial_router::SpatialFrame) {
-  let next = match state.stage {
-    u2:0 => ReceiveState { stage: u2:1,
-      bad: beat.word != (host ++ service), ..state },
-    u2:1 => {
-      let header = axis::header_from_bits(beat.word);
-      ReceiveState { stage: u2:2, header,
-        bad: state.bad || header.payload_words == u8:0 || header.payload_words > u8:8 ||
-          header.flags != u8:0 || header.txid != u8:0,
-        ..state }
-    },
-    _ => {
-      let accept = !state.bad && state.seen < u4:8;
-      let payload = if accept {
-        bit_slice_update(state.payload, state.seen as u32 * u32:32, beat.word)
-      } else { state.payload };
-      let seen = state.seen + accept as u4;
-      ReceiveState { payload, seen,
-        bad: state.bad || !accept || beat.tlast != (seen as u8 == state.header.payload_words),
-        ..state }
-    },
-  };
+  let assembled = framing::receive(framing::Receive<256> {
+    stage:state.stage,header:axis::bits_from_header(state.header),payload:state.payload,
+    seen:state.seen,bad:state.bad,full:false },beat.word,beat.tlast,host,service);
+  let next = ReceiveState { stage:assembled.stage,header:axis::header_from_bits(assembled.header),
+    payload:assembled.payload,seen:assembled.seen,bad:assembled.bad,..state };
   let frame = spatial(next.payload);
   let complete = beat.tlast && state.stage == u2:2 && !next.bad && !state.poisoned;
   let attach = complete && !state.attached && state.header.op == u8:1 &&
     state.header.payload_words == u8:8 && next.payload == identity;
-  let words = frame.frame.header.payload_words;
   let control = complete && state.attached && state.header.op == u8:2 &&
-    state.header.payload_words >= u8:4 && state.header.payload_words <= u8:7 &&
-    words == state.header.payload_words - u8:4 &&
-    frame.frame.header.flags == u8:0 && frame.frame.header.txid == u8:0 &&
-    next.payload[66+:bits[30]] == bits[30]:0 &&
-    frame.rectangle.x0 <= frame.rectangle.x1 && frame.rectangle.y0 <= frame.rectangle.y1;
+    rectangle::decode(next.payload,state.header.payload_words).valid;
   let start = complete && explicit_start && state.attached && !state.start_requested &&
     state.header.op == u8:3 && state.header.payload_words == u8:1 && next.payload == bits[256]:0;
   let fault = beat.tlast && !state.poisoned && !(attach || control || start);
@@ -131,17 +112,14 @@ pub struct TransmitState {
 
 // Select a word from the retained frame without changing its wire ABI.
 pub fn transmit_beat(state: TransmitState, host: u16) -> axis::Beat {
-  let word = match state.index {
-    u4:0 => state.source ++ host,
-    u4:1 => axis::bits_from_header(state.frame.header),
-    _ => state.frame.payload[(state.index as u32 - u32:2)*u32:32+:u32],
-  };
-  axis::Beat { word, tlast: state.index as u8 == state.frame.header.payload_words + u8:1 }
+  let header = axis::bits_from_header(state.frame.header);
+  axis::Beat { word:framing::word(header,state.frame.payload,state.index,state.source,host),
+    tlast:framing::last(header,state.index) }
 }
 
 // Advance only after the current word is accepted; attach releases ordinary events.
 pub fn transmitted(state: TransmitState, service: u16) -> TransmitState {
-  let last = state.index as u8 == state.frame.header.payload_words + u8:1;
+  let last = framing::last(axis::bits_from_header(state.frame.header),state.index);
   let started = if last && state.source == service {
     match state.frame.header.op {
       u8:0x81 => true,

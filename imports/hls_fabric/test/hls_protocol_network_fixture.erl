@@ -2,7 +2,7 @@
 -moduledoc "Finite feedback producer: three source-ordered batches, triggered by the sink's ordinary result messages.".
 -behaviour(hls_statem).
 -compile({parse_transform,hls_pack}).
--export([init/1, sending/3, topology/0, unsupported/1, isolated/0, partitioned/0]).
+-export([init/1, sending/3, topology/0, unsupported/1, isolated/0, partitioned/0, framed/0]).
 -hls_data(cell).
 -hls_phases([sending]).
 -hls_outputs([early,open,later]).
@@ -54,3 +54,17 @@ isolated() -> (topology())#{actors:=#{left=>?MODULE},
 -spec partitioned() -> map().
 partitioned() -> (topology())#{ingresses:=[{host,{rectangle,[2,1]},
     [{all,[total],[{actor,left,{at,[0,0]}},{actor,right,{at,[1,0]}}]}]}]}.
+
+-doc "Separates each logical sender's external stream for the framed two-role witness.".
+-spec framed() -> map().
+framed() ->
+    T=#{routes:=Routes}=partitioned(),
+    T#{externals:=[{Id,out,[value,go,total]}||Id<-[left,right,sink]],
+      routes:=[frame_route(R)||R<-Routes]}.
+
+%% Preserve route mode and every declared source output.
+-spec frame_route(tuple()) -> tuple().
+frame_route({From={Id,_},Ds}) ->
+    {From,[case D of {external,monitor}->{external,Id};_->D end||D<-Ds]};
+frame_route({From={Id,_},Mode,Ds}) ->
+    {From,Mode,[case D of {external,monitor}->{external,Id};_->D end||D<-Ds]}.
