@@ -6,8 +6,16 @@ from compile_protocol_application import compile_application
 from test_local_protocol import run
 
 
-def build_application(xls: Path, width: int, directory: Path, inspect: bool = False) -> Path:
-    """Bind one N=2..16 line at half-rate noise; emit explicit start and optionally passive process inspection."""
+# These application annotations propose the periodic schedule; the compiler checks
+# complete source phase/route coverage, not the annotated source invariants.
+PERIODIC_MODEL = """#{kind=>periodic_neighbor_barrier,contracts=>#{
+  phenom_line_data_cell=>#{role=>data,phases=>[configuring,collecting,reporting,replying]},
+  phenom_line_syndrome_cell=>#{role=>syndrome,phases=>[configuring,collecting,announcing]},
+  phi_line_cell=>#{role=>phi,rounds=>12,phases=>[configuring,measuring,gathering,comparing,flipping]}}}"""
+
+
+def emit_application(width: int, directory: Path, inspect: bool = False) -> Path:
+    """Emit fresh source DSLX and a checked periodic dependency report, without XLS compilation."""
     if not 2 <= width <= 16:raise ValueError('repetition width must be 2..16')
     directory.mkdir()
     source=PUBLIC/'src/examples/phi_decoder'
@@ -18,10 +26,16 @@ def build_application(xls: Path, width: int, directory: Path, inspect: bool = Fa
     options='[{i,'+term(PUBLIC/'include')+'},{i,'+term(source)+'}]'
     sources=','.join('{'+term(source/(m+'.erl'))+','+options+'}' for m in modules)
     config=directory/'config.erl';build=directory/'build'
-    config.write_text('#{sources=>['+sources+'],topology=>{phi_repetition_topology,topology,['+str(width)+',16#80000000]},actor_limit=>'+str(3*width)+',device=>board,host=>1'+(',inspection=>process' if inspect else '')+'}.\n')
+    config.write_text('#{sources=>['+sources+'],topology=>{phi_repetition_topology,topology,['+str(width)+',16#80000000]},actor_limit=>'+str(3*width)+',device=>board,host=>1,protocol_model=>'+PERIODIC_MODEL+(',inspection=>process' if inspect else '')+'}.\n')
     run(['rebar3','compile'],directory,'compile-backend')
     run(['env','ERL_AFLAGS='+ ' '.join('-pa "'+str(p)+'"' for p in erlang_paths()),'escript','tools/emit_protocol_application.escript',config,build],directory,'emit-application')
-    compile_application(xls,build,[source])
+    return build
+
+
+def build_application(xls: Path, width: int, directory: Path, inspect: bool = False) -> Path:
+    """Build one N=2..16 half-rate-noise line; analysis does not change RTL or grant admission."""
+    build=emit_application(width,directory,inspect)
+    compile_application(xls,build,[PUBLIC/'src/examples/phi_decoder'])
     return build
 
 
