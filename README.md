@@ -8,9 +8,11 @@ Start with the [documentation guide](docs/README.md), [register-service example]
 
 ## Build and check
 
-Use OTP 28 and rebar3:
+Use OTP 28 and rebar3. The [standalone toolchain](docs/toolchain.md) packages `hlsc` for actor-to-DSLX compilation and an optional independent XLS driver:
 
 ```sh
+rebar3 release
+_build/default/rel/erl_hls/bin/hlsc --help
 rebar3 eunit
 python3 tools/check_source_contracts.py
 rebar3 dialyzer

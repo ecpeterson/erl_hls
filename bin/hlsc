@@ -1,0 +1,5 @@
+#!/bin/sh
+# Locate the packaged compiler without relying on the invoking working directory.
+set -eu
+bundle=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec erl +S 2:2 -noshell -pa "$bundle"/lib/*/ebin -s hls_compile_cli main -extra "$@"

@@ -1,5 +1,7 @@
 # Actor compilation
 
+The [standalone `hlsc` command](toolchain.md) packages single-actor lowering without requiring rebar at invocation time.
+
 `xls_parse:to_xls(Path, Options)` emits a complete DSLX actor module. Supported options are `source_options` (preprocessor configuration) and `direct_actor_debug` (committed-state observations). Each generated service owns its state and bounded mailbox. XLS selects the hardware pipeline separately; the Erlang source describes callback behavior.
 
 For a communicating graph, normalize the source topology with `hls_topology`, obtain module requirements from `xls_topology_dslx:artifact_requirements/2`, translate those actors, then emit the graph with `xls_topology_dslx:emit/2`. The physical profile controls channel and egress capacities. See [topology semantics](mixed-topologies.md).
