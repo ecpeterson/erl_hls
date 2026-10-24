@@ -3,11 +3,10 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
-import os
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT
+from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
 from backend_commands import run
 from test_local_protocol import prove
@@ -165,14 +164,11 @@ def main() -> None:
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args(); stage=args.stage; stage.mkdir()
     run(['rebar3','compile'],stage,'build')
-    base=ROOT/'_build/default'
-    os.environ['ERL_AFLAGS']='-pa '+ ' '.join('"'+str(p)+'"' for p in
-        [base/'lib/hls_fabric/ebin',base/'checkouts/erl_hls/ebin'])
     config=stage/'fixture.config'
     config.write_text('#{sources => [{"test/hls_protocol_inbox_fixture.erl",[]}],topology => '
                       '{hls_protocol_inbox_fixture,topology,[]},actor_limit => 3}.\n')
     fixture=stage/'fixture'
-    run(['escript','tools/emit_protocol_transport.escript',config,fixture],stage,'emit')
+    run(['escript','tools/emit_protocol_transport.escript',config,fixture],stage,'emit', env=erlang_environment('default'))
     compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver')
     compile_transport(args.xls,fixture)
     simulate(args.xls,fixture,stage/'receiver',stage)

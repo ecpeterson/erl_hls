@@ -11,3 +11,5 @@ Use [docs/](../docs/README.md) for supported behavior. Keep design exploration h
 Other experiment notes preserve original hypotheses and results. Their unchecked historical lists are not additional active campaigns; use workload acceptance and the architecture review above before selecting new work.
 
 - [Collection communication](collection-communication.md): final placement/receiver probes and the decision to close this performance campaign.
+
+- [Erlang source toolchain](erlang-source-toolchain.md): native source command, standard dependency packaging and independent external compilation.

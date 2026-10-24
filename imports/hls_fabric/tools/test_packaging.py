@@ -1,4 +1,4 @@
-"""Exercise dependency preparation, immutable releases and archive placement without XLS."""
+"""Exercise immutable releases and archive placement without XLS."""
 
 from __future__ import annotations
 import json
@@ -12,73 +12,13 @@ from unittest.mock import patch
 
 from artifacts import artifact_root, archive_path
 from backend_paths import erlang_paths
-from prepare_compiler import prepare, sha
+from backend_commands import digest as sha
 import compile_backend
 from optimizer_pipeline import prepare as prepare_optimizer
 
 
 class PackagingTests(unittest.TestCase):
     """Reject stale sources and failed publication before they affect a selected build."""
-
-    def test_compiler_reconstruction_and_local_edits(self) -> None:
-        """Fetch the pinned commit, ignore checkout edits and rebuild after cache deletion."""
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "backend"
-            source = Path(temporary) / "compiler"
-            root.mkdir()
-            source.mkdir()
-
-            def git(*arguments: str) -> str:
-                """Run fixture-local Git operations without changing user configuration."""
-                return subprocess.check_output(["git", "-C", str(source), *arguments], text=True).strip()
-
-            git("init", "--quiet")
-            (source / "api.txt").write_text("base\n")
-            git("add", "api.txt")
-            git(
-                "-c",
-                "user.name=Fixture",
-                "-c",
-                "user.email=fixture@example.invalid",
-                "commit",
-                "--quiet",
-                "-m",
-                "base",
-            )
-            base = git("rev-parse", "HEAD")
-            (source / "api.txt").write_text("extension\n")
-            git("add", "api.txt")
-            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-                "commit", "--quiet", "-m", "extension")
-            revision = git("rev-parse", "HEAD")
-            (source / "api.txt").write_text("unrelated developer edit\n")
-            directory = root / "tools/compiler"
-            directory.mkdir(parents=True)
-            manifest = {"revision": revision, "url": str(source)}
-            (directory / "manifest.json").write_text(json.dumps(manifest))
-            result = prepare(root, source)
-            self.assertEqual((result / "api.txt").read_text(), "extension\n")
-            self.assertEqual((source / "api.txt").read_text(), "unrelated developer edit\n")
-            self.assertEqual(prepare(root, source), result)
-            (result / "api.txt").write_text("cache edit\n")
-            with self.assertRaisesRegex(ValueError, "cache changed"):
-                prepare(root, source)
-            shutil.rmtree(root / "_build")
-            self.assertEqual((prepare(root, source) / "api.txt").read_text(), "extension\n")
-            checkout = root / "_checkouts/erl_hls"
-            checkout.unlink()
-            checkout.symlink_to(source)
-            with self.assertRaisesRegex(ValueError, "already selected"):
-                prepare(root, source)
-            self.assertEqual(checkout.resolve(), source.resolve())
-            checkout.unlink()
-            # Exercise the fetch path as well as the explicit offline source.
-            shutil.rmtree(root / "_build")
-            self.assertEqual((prepare(root) / "api.txt").read_text(), "extension\n")
-            manifest["revision"] = base
-            (directory / "manifest.json").write_text(json.dumps(manifest))
-            self.assertEqual((prepare(root, source) / "api.txt").read_text(), "base\n")
-            self.assertEqual((source / "api.txt").read_text(), "unrelated developer edit\n")
 
     def test_backend_release_and_failed_transform(self) -> None:
         """Retain a previous release on pass failure and reject edits to a cached release."""

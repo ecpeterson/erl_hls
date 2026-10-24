@@ -5,7 +5,7 @@ Use OTP 28.0.2 and rebar3 3.24.0:
 ```sh
 python3 tools/test_source_contracts.py
 python3 tools/check_source_contracts.py
-python3 tools/build.py dialyzer
+rebar3 dialyzer
 ```
 
 The contract check requires formal docs for exported functions, callbacks and types; specs for functions; explanations for private declarations; and comments for dispatcher clauses. It parses owned `.erl`/`.hrl` files without expanding macros, so both conditional branches are checked. Generated exports and declarations inside macro expansions still require review.

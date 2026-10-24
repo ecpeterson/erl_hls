@@ -2,12 +2,11 @@
 from pathlib import Path
 import argparse
 import json
-import os
 import shutil
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT
+from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
 from compile_protocol_network import compile_network
 from compile_protocol_transport import compile_clock
@@ -121,10 +120,9 @@ def main() -> None:
     negative_wiring(args.xls,fixture,stage)
     selection_checks(args.xls,stage)
     area(fixture,stage)
-    base=ROOT/'_build/default'
-    os.environ['ERL_AFLAGS']='-pa '+' '.join('"'+str(p)+'"' for p in [base/'lib/hls_fabric/ebin',base/'checkouts/erl_hls/ebin'])
     failed=stage/'failed';failed.mkdir();configuration(failed/'config','failing')
-    run(['escript','tools/emit_protocol_network.escript',failed/'config',failed/'fixture'],failed,'emit')
+    run(['escript','tools/emit_protocol_network.escript',failed/'config',failed/'fixture'],failed,'emit',
+        env=erlang_environment('default'))
     compile_network(args.xls,failed/'fixture');simulate(failed/'fixture',failed,failure=True)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'reset_interruptions':3,'outputs_per_complete_incarnation':10,'final_sum':8,'real_acknowledgments':4,

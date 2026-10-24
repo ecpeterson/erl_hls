@@ -1,37 +1,49 @@
 # Building the backend
 
-Use OTP 28, rebar3 and Python 3.12 or newer. From this repository:
+Use OTP 28 and rebar3 3.24.0. Erlang compilation and source emission require neither Python nor XLS:
 
 ```sh
-python3 tools/build.py
-python3 tools/build.py eunit
-python3 tools/build.py dialyzer
+rebar3 compile
+rebar3 eunit
+rebar3 dialyzer
+rebar3 release
+_build/default/rel/hls/bin/hls-fabric --help
 ```
 
-The wrapper prepares the pinned `erl_hls` dependency, then passes its arguments to rebar3. The first invocation fetches the public commit pinned in `tools/compiler/manifest.json`; subsequent invocations verify and reuse its sources. No patch is applied. No developer checkout is edited. For an offline first build, supply a local Git repository containing that commit:
+`rebar.config` and `rebar.lock` select the public `erl_hls` revision. Rebar fetches and compiles it normally. For deliberate compiler development, put its checkout in `_checkouts/erl_hls`; rebar gives that explicit override precedence. Checkouts are not locked, so remove the override when qualifying the pinned dependency. There is no second compiler manifest, Python dependency preparer or managed checkout cache. Existing legacy caches are left untouched and can remain explicit overrides until their owners retire them.
+
+The release directory `_build/default/rel/hls/` contains the CLI, resolved BEAM dependencies, headers, templates and example sources. Copy the **whole directory**, not just `bin/hls-fabric`, to use it elsewhere with a compatible OTP 28 runtime. `include_src` retains the example sources that the HLS compiler consumes. The tiny shell launcher supplies the release's fixed library directory; all argument handling, configuration and source compilation run in Erlang. It does not start a fabric node or invoke rebar at runtime.
+
+The compiler itself owns `hlsc` for ordinary actor lowering, source preprocessing, the shared bundle schema and optional XLS invocation. This project owns `hls-fabric`, deployment roles, adapters and their required schedules. Repetition settings live in the example frontend, not either generic command.
+
+## Source toolchain
 
 ```sh
-python3 tools/prepare_compiler.py --source /path/to/erl_hls
+_build/default/rel/hls/bin/hls-fabric emit --kind application --config application.config --output /path/to/fresh-output
+_build/default/rel/hls/bin/hls-repetition --width 6 --split 3 --output /path/to/fresh-repetition
 ```
 
-Prepared sources live in disposable `_build/compiler/`, selected by `_checkouts/erl_hls`. An existing developer-selected checkout is left alone and reported as a conflict. Modified prepared sources are rejected: preserve intentional edits before deleting that cache. Removing `_build/` is safe; the next invocation reconstructs the dependency.
+`emit` accepts `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. Its trusted Erlang configuration is the corresponding builder's map; paths are relative to the caller's working directory. Add `dslx_path => [Directory, ...]` for application-provided DSLX imports. The output parent must exist and the output itself must be absent. Errors return nonzero and retain partial output; `HLS_DEBUG=1` includes the Erlang stack.
 
-The public compiler supplies runtime reduction membership, contribution lowering, live actor observations and native XLS channel scheduling options. Collector ownership and hardware generation live in this repository's `src/backend/` and `priv/xls/templates/` files.
+`hls-repetition` is a separate example frontend in `phi_protocol_cli`. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then calls the same `hls_source_build:emit/3` API as `emit`. Its placement, inspection and shared-arithmetic bounds are documented in [source protocol](source-protocol.md). It is an application example, not an application-specific branch of the compiler.
 
-## Erlang build profiles
+The direct API is `hls_source_build:emit(Kind, Config, Output)`. It calls the existing source builder, supplies fabric-specific unit schedules and delegates packaging to the compiler-owned `hls_artifact_bundle`: relative paths, emitter `metadata`, generated input hashes, DSLX entry points, RTL module names, required code-generation options and final RTL file lists. Shared DSLX libraries, pin adapters and supplied import trees are copied into `support/`; moving the emitted directory before external compilation is supported. `config.erl` records the original trusted source configuration for inspection; its source paths are not rewritten as a portable source-recompilation recipe. Native source-plan/deployment terms are trusted local artifacts.
 
-Tools select the same rebar profile that they compile. Production emitters use `default`; drivers that call compiled test fixtures use `test`. A missing profile is an error with a build instruction. An old `_build/test/` directory cannot select test beams for a production emitter. Checkout beams take precedence over dependency beams within the selected profile.
+## Optional external compilation
 
-For a shell session, compile first and select explicitly:
+XLS execution is separate from source emission. Use another build system to consume `source-build.json`, or use the standard-library-only convenience driver with Python 3.12 or newer:
 
 ```sh
-python3 tools/build.py as test compile
-source tools/backend_env.sh test
+_build/default/rel/hls/bin/compile-source-build /path/to/xls /path/to/emitted-output
 ```
 
-Use `default` after an ordinary build. Sourcing this helper replaces `ERL_AFLAGS` with the selected code paths; keep unrelated VM options in `ERL_FLAGS`. Python callers use `backend_paths.erlang_paths(profile)` for argument lists or `erlang_environment(profile)` for a child environment. Importing these helpers does not modify the environment or Python module path.
+The release launcher delegates to `erl_hls`'s `priv/tools/compile_source_build.py`, also packaged as a standalone command by the compiler. That driver needs only its script, the emitted bundle and XLS (`ir_converter_main`, `opt_main`, `codegen_main`, `xls/dslx/stdlib`). It verifies input hashes, runs each unit's conversion/optimization/codegen once, and writes command logs, `compiled.json` and a `files.f` per role. Required scheduling options belong to the emitted clock interface; they are not a physical timing estimate. Failed or partial compilations are preserved and cannot be silently retried in place. The manifest is a trusted build record, not an untrusted command-execution format. Emission and XLS compilation establish neither application admission nor hardware timing.
 
-`backend_commands` owns shared hashing and bounded command execution. It does not import fixture drivers or require compiler sources. Compiler-dependent tools explicitly import `compiler_paths`; that separate bootstrap still exposes the selected compiler's unpackaged Python tools on `sys.path`. Python packaging of those compiler tools remains separate work.
+## Legacy test drivers
+
+Existing simulation/report drivers still use Python and shell. Build their declared profile before calling fixtures; `source tools/backend_env.sh test` selects a test build and `default` selects an ordinary build. The helper replaces `ERL_AFLAGS`; unrelated VM flags belong in `ERL_FLAGS`. These helpers are unnecessary for `hls-fabric`.
+
+Compiler-dependent legacy Python drivers still use `compiler_paths` to import the compiler's unpackaged Python helpers. Report-only helpers are independent of it. Porting the remaining older experiment drivers is separate from the source toolchain.
 
 ## Complete decoder example
 

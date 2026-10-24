@@ -10,4 +10,4 @@ cd "$project_root"
 rebar3 compile
 # Do not select a stale test-profile build merely because it exists.
 source "$project_root/tools/backend_env.sh" default
-exec escript tools/inspect_phi_protocol.escript "$project_root/_checkouts/erl_hls" "$1"
+exec escript tools/inspect_phi_protocol.escript "$ERL_HLS_ROOT" "$1"

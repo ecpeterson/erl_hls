@@ -1,0 +1,5 @@
+#!/bin/sh
+# The release fixes one version of each dependency; Erlang owns all build logic.
+set -eu
+bundle=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec erl +S 2:2 -noshell -pa "$bundle"/lib/*/ebin -s phi_protocol_cli main -extra "$@"

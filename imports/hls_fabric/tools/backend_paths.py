@@ -26,6 +26,14 @@ def erlang_paths(profile: str, root: Path = ROOT) -> list[Path]:
     return [*applications.values(), *([tests] if profile == "test" and tests.is_dir() else [])]
 
 
+def application_directory(name: str, profile: str, root: Path = ROOT) -> Path:
+    """Find one resolved application's build directory, including its priv/source links."""
+    for path in erlang_paths(profile, root):
+        if path.name == "ebin" and path.parent.name == name:
+            return path.parent
+    raise FileNotFoundError(f"missing {name} in compiled {profile} profile")
+
+
 def erlang_environment(profile: str, root: Path = ROOT) -> dict[str, str]:
     """Copy the environment with ERL_AFLAGS bound to this profile for one child.
 
@@ -43,6 +51,7 @@ def erl_command(public: Path, expression: str, *arguments: str | Path, profile: 
     """Build a two-scheduler VM command for one profile and optional built compiler override."""
     paths = erlang_paths(profile)
     if (public / "ebin").is_dir():
-        paths = [public / "ebin", *paths]
+        # ERTS prepends each -pa argument, so the last path has priority.
+        paths = [*paths, public / "ebin"]
     return ["erl", "+S", "2:2", "-noshell", "-pa", *map(str, paths),
             "-eval", expression, "-extra", *map(str, arguments)]

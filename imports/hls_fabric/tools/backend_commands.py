@@ -13,11 +13,12 @@ def digest(path: Path) -> str:
 
 
 def run(command: list[str | Path], stage: Path, name: str, output: Path | None = None,
-        *, env: dict[str, str] | None = None) -> None:
+        *, env: dict[str, str] | None = None, timeout: int | None = 240) -> None:
     """Run from the source root with fresh logs and an optional stdout product.
 
-    Retain the argv and failure tail; propagate failed exit status or the 240s
-    timeout. A supplied environment applies only to this child.
+    Retain argv and failure tails; propagate failed exit status or timeout (240s
+    by default). Use None only for drivers that bound their own stages. A supplied
+    environment applies only to this child.
     """
     args = list(map(str, command))
     (stage / (name + '.command.json')).write_text(json.dumps(args) + '\n')
@@ -25,10 +26,10 @@ def run(command: list[str | Path], stage: Path, name: str, output: Path | None =
     try:
         with path.open('x') as log:
             if output is None:
-                subprocess.run(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240, env=env)
+                subprocess.run(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=timeout, env=env)
             else:
                 with output.open('x') as out:
-                    subprocess.run(args, cwd=ROOT, stdout=out, stderr=log, check=True, timeout=240, env=env)
+                    subprocess.run(args, cwd=ROOT, stdout=out, stderr=log, check=True, timeout=timeout, env=env)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         # Keep the full file and expose a bounded tail in the main CI log.
         print(path.read_text(errors='replace')[-6000:], flush=True)

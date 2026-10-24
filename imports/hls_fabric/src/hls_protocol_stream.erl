@@ -122,17 +122,25 @@ notify(S=#{waiter:={From,_,Timer},events:=Events,application:=Application})->
 %% Reserving one event slot for aggregate start prevents early output from blocking the last start ACK.
 -spec receive_frames(map()) -> map().
 receive_frames(S=#{roles:=Roles})->lists:foldl(fun receive_role/2,S,Roles).
-%% An external event waits under broker backpressure; packet control never shares its application queue slot.
+%% Retain the broker receipt while either application capacity or ACK completion blocks admission.
 -spec receive_role(term(),map()) -> map().
-receive_role(Role,S=#{held:=Held,sessions:=Sessions,events:=Events,brokers:=Brokers,received:=Count,limits:=#{events:=Limit}})->
+receive_role(Role,S=#{held:=Held,sessions:=Sessions,brokers:=Brokers,received:=Count})->
     case maps:find(Role,Held) of error->S;
         {ok,{Receipt,Header,Payload}}->
             Event=hls_protocol_bridge_wire:event(maps:get(Role,Sessions),Header,Payload),
-            Full=case Event of {external,_,_}->queue:len(Events)>=Limit-1;_->false end,
-            case Full of true->S;
+            case receive_blocked(Role,Event,S) of true->S;
                 false->Next=event(Role,Event,S),hls_fabric:ack(maps:get(Role,Brokers),Receipt),
                     Next#{held:=maps:remove(Role,Held),received:=Count+1} end
     end.
+
+%% The peer may observe its ACK before our asynchronous write-completion message arrives.
+%% Keep its next same-link data under the existing one-frame broker credit until complete/2
+%% retires the old reservation. Other packets still undergo the ordinary duplicate checks.
+-spec receive_blocked(term(),term(),map()) -> boolean().
+receive_blocked(Role,{packet,#{kind:=1,link:=Link}},#{writer:={Role,{packet,{ack,Link,_}}}})->true;
+receive_blocked(_,{external,_,_},#{events:=Events,limits:=#{events:=Limit}})->queue:len(Events)>=Limit-1;
+receive_blocked(_,_,_)->false.
+
 %% The final participant start acknowledgment opens the single application event stream.
 -spec event(term(),term(),map()) -> map().
 event(Role,attached,S=#{phases:=Phases})->

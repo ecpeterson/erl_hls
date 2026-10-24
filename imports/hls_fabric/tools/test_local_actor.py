@@ -3,18 +3,18 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
-import os
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+from backend_paths import ROOT, erlang_environment
 
 
-def run(command: list[str | Path], stage: Path, name: str, accepted: bool = True) -> str:
+def run(command: list[str | Path], stage: Path, name: str, accepted: bool = True,
+        *, env: dict[str, str] | None = None) -> str:
     """Retain one bounded build's diagnostics, including deliberate rejection."""
     path = stage / (name + '.log')
     with path.open('x') as log:
         result = subprocess.run(list(map(str, command)), cwd=ROOT, stdout=log,
-                                stderr=subprocess.STDOUT, timeout=120)
+                                stderr=subprocess.STDOUT, timeout=120, env=env)
     text = path.read_text()
     if (result.returncode == 0) != accepted:
         raise AssertionError((command, text[-4000:]))
@@ -68,10 +68,8 @@ def main() -> None:
     config.write_text('#{sources => [{"test/hls_protocol_capture_fixture.erl",[]},{"test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
     transport = stage / 'transport'
     # The command-entry escript emits sources only; XLS circuit checks run in the existing transport suite.
-    backend = ROOT / '_build/default'
-    paths = [backend / 'lib/hls_fabric/ebin', backend / 'checkouts/erl_hls/ebin']
-    os.environ['ERL_AFLAGS'] = '-pa ' + ' '.join('"' + str(p) + '"' for p in paths)
-    run(['escript', 'tools/emit_protocol_transport.escript', config, transport], stage, 'transport')
+    run(['escript', 'tools/emit_protocol_transport.escript', config, transport], stage, 'transport',
+        env=erlang_environment('default'))
     summary = json.loads((transport / 'summary.json').read_text())
     assert summary['actors'] == 3 and summary['actor_runtime'] is False and summary['eligible'] is False
     [role] = summary['actor_functions']

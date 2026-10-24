@@ -2,11 +2,10 @@
 from pathlib import Path
 import argparse
 import json
-import os
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT
+from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
 from compile_protocol_transport import compile_clock
 from backend_commands import run
@@ -28,10 +27,7 @@ def imports(fixture: Path) -> list[Path]:
 def expected(stage: Path) -> list[list[str]]:
     """Use the fixture's ordinary BEAM codec, independently of emitted DSLX/RTL."""
     output=stage/'expected.json'
-    base=ROOT/'_build/default'
-    env=os.environ.copy()
-    env['ERL_AFLAGS']='-pa '+' '.join('"'+str(p)+'"' for p in
-        [base/'lib/hls_fabric/ebin',base/'checkouts/erl_hls/ebin'])
+    env=erlang_environment('default')
     expression='{ok,M,B}=compile:file("test/hls_protocol_boundary_fixture.erl",[binary,debug_info,report,warnings_as_errors]),' \
         '{module,M}=code:load_binary(M,"fixture",B),ok=file:write_file('+json.dumps(str(output))+ \
         ',json:encode(M:expected())),halt().'

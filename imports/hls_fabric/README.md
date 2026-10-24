@@ -72,7 +72,7 @@ The TE0715 experiment now carries an [N=6 repetition application](experiments/07
 ## Validation
 
 ```sh
-python3 tools/build.py eunit
+rebar3 eunit
 bash tools/test_local_dist.sh
 bash tools/test_return_routes.sh
 ```

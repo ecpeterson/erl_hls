@@ -7,7 +7,6 @@ if [[ $# != 3 ]]; then
 fi
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_root"
-rebar3 compile
-source "$project_root/tools/backend_env.sh" default
-escript tools/emit_protocol_application.escript "$2" "$3"
-python3 tools/compile_protocol_application.py "$1" "$3"
+rebar3 release
+"$project_root/_build/default/rel/hls/bin/hls-fabric" emit --kind application --config "$2" --output "$3"
+"$project_root/_build/default/rel/hls/bin/compile-source-build" "$1" "$3"

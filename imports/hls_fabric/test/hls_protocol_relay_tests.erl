@@ -22,6 +22,8 @@ rejection_test() ->
     lists:foreach(fun({R,P})->?assertException(error,_,hls_protocol_relay_queue:event(R,P,Q)) end,
         [{0,packet(1,99,0,0)},{0,packet(1,11,1,0)},{1,packet(1,12,0,0)},
          {0,(packet(1,11,0,0))#{frame:=1}},{0,(packet(1,11,0,0))#{slot:=1}}]),
+    Pending=hls_protocol_relay_queue:event(0,packet(1,11,0,0),Q),
+    ?assertException(error,_,hls_protocol_relay_queue:event(0,packet(1,11,1,0),Pending)),
     G=hls_protocol_relay_queue:event(1,packet(2,12,0,0),Q),
     ?assertException(error,_,hls_protocol_relay_queue:event(1,packet(2,12,1,0),G)),
     ?assertException(error,_,hls_protocol_relay_queue:next(hls_protocol_relay_queue:invalidate(Q))),ok.
@@ -99,6 +101,33 @@ deployment_stream_test() ->
         ?assertEqual([#{kind=>1,session=>102,sequence=>0,link=>0,slot=>0,frame=>0}],packets(First)),
         ok=hls_protocol_stream:stop(Stream),
         await(fun()->lists:all(fun(P)->maps:get(owner,hls_protocol_relay_peer:stats(P))=:=retired end,maps:values(Peers)) end)
+    end).
+
+%% A peer can consume an ACK and reply before the broker reports that write's completion.
+-spec acknowledgment_completion_race_test() -> ok.
+acknowledgment_completion_race_test() ->
+    with_deployment(fun(Stream, Peers, _) ->
+        Source = maps:get(north, Peers), Destination = maps:get(42, Peers),
+        ok = hls_protocol_relay_peer:set(Source, hold),
+        try
+            ok = emit_packet(Destination, packet(2, 102, 0, 0)),
+            ok = emit_packet(Source, packet(1, 101, 0, 0)),
+            await(fun() -> maps:get(held, hls_protocol_relay_peer:stats(Source)) =/= none end),
+            %% The ACK is on the wire, but its local completion notification is delayed.
+            ok = emit_packet(Source, packet(1, 101, 1, 0)),
+            await(fun() -> #{counts := #{held := Held}} = hls_protocol_stream:info(Stream), Held =:= 1 end),
+            #{counts := #{writer := 1}, packets := #{records := 1, acknowledged := 0}} = hls_protocol_stream:info(Stream),
+            ?assertNotEqual(none, maps:get(receipt, hls_protocol_relay_peer:stats(Source))),
+            ?assertEqual(1, length(packets(Destination))),
+            ok = emit_packet(Destination, packet(2, 102, 1, 0)),
+            ok = hls_protocol_relay_peer:set(Source, normal),
+            await(fun() -> #{packets := #{acknowledged := N}} = hls_protocol_stream:info(Stream), N =:= 2 end),
+            ?assertEqual([0, 1], [N || #{kind := 1, sequence := N} <- packets(Destination)]),
+            ?assertEqual([0, 1], [N || #{kind := 2, sequence := N} <- packets(Source)]),
+            #{counts := #{held := 0}, packets := #{records := 0}} = hls_protocol_stream:info(Stream)
+        after
+            catch hls_protocol_relay_peer:set(Source, normal)
+        end
     end).
 
 %% Losing any member retires the remaining participants without replay or replacement.

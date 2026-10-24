@@ -9,7 +9,7 @@ The cumulative pipeline retains source-derived receive capture and conditional d
 Run from the repository root, with a new output directory outside the checkout. `emit` generates the fixed 128-round fixture and seven source-bound proof plans, then checks the complete generated inventory against `experiments/local_admission/reference.json`. Eight hardware-generating files must match byte for byte. The inspection-only actor projection must match every layout field; its source-location identities remain freshly generated and validated by ordinary lowering. This establishes reproduction, not qualification.
 
 ```sh
-python3 tools/build.py compile
+rebar3 compile
 python3 experiments/local_admission/baseline.py emit --stage "$HLS_ARTIFACT_ROOT/locality-reproduction"
 ```
 

@@ -51,4 +51,4 @@ jobs:
             ~/.cache/rebar3/*plt
           key: dialyzer-${{ runner.os }}-${{ runner.arch }}-28.0.2-${{ hashFiles('rebar.lock', '**/rebar.config') }}
       - name: Check inferred types
-        run: python3 tools/build.py dialyzer
+        run: rebar3 dialyzer

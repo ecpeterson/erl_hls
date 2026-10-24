@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from backend_commands import run, execute
-from backend_paths import ROOT, erlang_paths, erlang_environment
+from backend_paths import ROOT, erlang_paths, erlang_environment, application_directory, erl_command
 
 
 class BuildContextTests(unittest.TestCase):
@@ -66,6 +66,12 @@ assert 'compiler_paths' not in sys.modules
                     source = root/(module+'.erl')
                     source.write_text(f'-module({module}).\n-export([value/0]).\nvalue() -> {value}.\n')
                     subprocess.run(['erlc', '-o', directory, source], check=True, capture_output=True, timeout=15)
+            self.assertEqual(application_directory('erl_hls', 'default', root),
+                             root/'_build/default/checkouts/erl_hls')
+            self.assertEqual(application_directory('erl_hls', 'test', root),
+                             root/'_build/test/checkouts/erl_hls')
+            with self.assertRaisesRegex(FileNotFoundError, 'missing absent'):
+                application_directory('absent', 'default', root)
             stale = erlang_environment('test', root)['ERL_AFLAGS']
             with patch.dict(os.environ, {'ERL_AFLAGS': stale}):
                 for profile in ('default', 'test'):
@@ -84,19 +90,45 @@ assert 'compiler_paths' not in sys.modules
                     else:
                         self.assertIn('fixture_probe.beam', result)
 
-    def test_production_emitter_uses_its_fresh_default_build(self) -> None:
-        """The repetition emitter passes its selected profile to its actual escript callsite."""
+    def test_normal_dependency_and_explicit_beam_override(self) -> None:
+        """Normal rebar dependencies work without checkouts; test-local beams win when requested."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            compiler = root/'_build/default/lib/erl_hls'
+            (root/'_build/default/lib/hls_fabric/ebin').mkdir(parents=True)
+            override = root/'fixture'
+            for app, value in [(compiler, 'dependency'), (override, 'fixture')]:
+                (app/'ebin').mkdir(parents=True)
+                source = app/'compiler_probe.erl'
+                source.write_text(f'-module(compiler_probe).\n-export([value/0]).\nvalue() -> {value}.\n')
+                subprocess.run(['erlc', '-o', app/'ebin', source], check=True, capture_output=True, timeout=15)
+            self.assertEqual(application_directory('erl_hls', 'default', root), compiler)
+            env = erlang_environment('default', root)
+            expression = 'io:format("~p", [compiler_probe:value()]), halt().'
+            self.assertEqual(subprocess.check_output(['erl', '-noshell', '-eval', expression],
+                                                     env=env, text=True, timeout=15), 'dependency')
+            with patch('backend_paths.erlang_paths', return_value=erlang_paths('default', root)):
+                command = erl_command(override, expression, profile='default')
+            self.assertEqual(subprocess.check_output(command, env=env, text=True, timeout=15), 'fixture')
+
+    def test_production_emitter_uses_native_release(self) -> None:
+        """The optional driver delegates source configuration to the packaged Erlang CLI."""
         import emit_protocol_repetition as emitter
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)/'application'
-            with patch.object(emitter, 'run') as invoke, patch.object(
-                    emitter, 'erlang_environment', return_value={'ERL_AFLAGS': 'chosen-default'}) as select:
-                emitter.emit_application(2, directory)
-            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'compile'])
-            select.assert_called_once_with('default')
-            call = invoke.call_args_list[1]
-            self.assertEqual(call.args[0][0:2], ['escript', 'tools/emit_protocol_application.escript'])
-            self.assertEqual(call.kwargs['env'], {'ERL_AFLAGS': 'chosen-default'})
+            with patch.object(emitter, 'run') as invoke:
+                build = emitter.emit_application(6, directory, split=3)
+            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'release'])
+            self.assertEqual(invoke.call_args_list[1].args[0],
+                             [ROOT/'_build/default/rel/hls/bin/hls-repetition',
+                              '--width', '6', '--output', build, '--split', '3'])
+            self.assertFalse((directory/'config.erl').exists())
+            with patch.object(emitter, 'emit_application', return_value=build), patch.object(emitter, 'run') as invoke:
+                self.assertEqual(emitter.build_application(Path('/xls'), 6, directory, split=3), build)
+            # Whole-bundle time must not undercut the compiler driver's per-stage watchdog.
+            self.assertEqual(invoke.call_args.args[0],
+                             [ROOT/'_build/default/rel/hls/bin/compile-source-build', Path('/xls'), build])
+            self.assertIsNone(invoke.call_args.kwargs['timeout'])
 
     def test_command_logs_outputs_and_failure(self) -> None:
         """Extraction preserves working directories, fresh logs, stdout products and failed commands."""
@@ -114,6 +146,17 @@ assert 'compiler_paths' not in sys.modules
             with self.assertRaises(subprocess.CalledProcessError):
                 run([sys.executable, '-c', 'print("retained failure"); exit(7)'], directory, 'failure')
             self.assertIn('retained failure', (directory/'failure.log').read_text())
+
+    def test_command_timeout_and_delegated_watchdog(self) -> None:
+        """Enforce caller limits for both log modes while permitting stage-bounded child drivers."""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name, output in [('combined', None), ('product', directory/'product')]:
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    run([sys.executable, '-c', 'import time; time.sleep(10)'], directory, name,
+                        output, timeout=0)
+            run([sys.executable, '-c', 'print("driver complete")'], directory, 'delegated', timeout=None)
+            self.assertEqual((directory/'delegated.log').read_text().strip(), 'driver complete')
 
     def test_profiles_are_explicit_at_python_callsites(self) -> None:
         """Keep migrated callers from restoring profile inference or test-owned execution helpers."""

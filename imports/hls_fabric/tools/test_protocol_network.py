@@ -2,11 +2,10 @@
 from pathlib import Path
 import argparse
 import json
-import os
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT
+from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
 from compile_protocol_network import compile_network
 from compile_protocol_transport import compile_clock
@@ -126,20 +125,17 @@ def main() -> None:
     negative_wiring(args.xls,fixture,stage)
     observation_cut(args.xls,fixture,stage)
     area(fixture,stage)
-    base=ROOT/'_build/default'
-    os.environ['ERL_AFLAGS']='-pa '+' '.join('"'+str(p)+'"' for p in
-        [base/'lib/hls_fabric/ebin',base/'checkouts/erl_hls/ebin'])
     for key in ['ingresses']:
         config=stage/(key+'.config');configuration(config,'unsupported','['+key+']')
         output=stage/key
         with (stage/(key+'.log')).open('x') as log:
             result=subprocess.run(['escript','tools/emit_protocol_network.escript',str(config),str(output)],
-                cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=120)
+                cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=120,env=erlang_environment('default'))
         assert result.returncode!=0 and 'unsupported_protocol_ingress' in (stage/(key+'.log')).read_text()
         assert not (output/'network').exists()
     config=stage/'isolated.config';configuration(config,'isolated')
     isolated=stage/'isolated'
-    run(['escript','tools/emit_protocol_network.escript',config,isolated],stage,'isolated-build')
+    run(['escript','tools/emit_protocol_network.escript',config,isolated],stage,'isolated-build', env=erlang_environment('default'))
     compile_network(args.xls,isolated)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'interrupted_incarnations':1,'outputs_per_complete_incarnation':39,'final_sum':60,

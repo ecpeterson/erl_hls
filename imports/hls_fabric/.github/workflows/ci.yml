@@ -93,7 +93,7 @@ jobs:
           python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
           "$XLS_ROOT/codegen_main" --version
       - name: Build compiler and backend fixtures
-        run: python3 tools/build.py as test compile
+        run: rebar3 as test compile
       - name: Check asynchronous FIFO capacity, wraparound, stalls and reset
         if: needs.select.outputs.hardware == 'true'
         run: python3 tools/test_async_fifo.py --xilinx-cells /usr/share/yosys/xilinx/cells_sim.v
@@ -102,6 +102,8 @@ jobs:
         run: python3 tools/test_phi_cycle_trace.py
       - name: Check build packaging and combined profile views
         run: |
+          rebar3 release
+          python3 tools/test_source_toolchain.py
           python3 tools/test_backend_context.py
           python3 tools/test_packaging.py
           python3 tools/test_profile_views.py
@@ -126,7 +128,7 @@ jobs:
           python3 tools/test_profile_compilation.py
           python3 tools/test_transport_codegen.py
           python3 tools/test_verify_phi_components.py
-      - run: python3 tools/build.py eunit
+      - run: rebar3 eunit
       - run: bash tools/test_local_dist.sh
       - run: bash tools/test_return_routes.sh
         if: needs.select.outputs.hardware == 'true'
@@ -262,7 +264,7 @@ jobs:
           fi
           python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
           "$XLS_ROOT/codegen_main" --version
-      - run: python3 tools/build.py as test compile
+      - run: rebar3 as test compile
       - name: Compare complete two-device D3 memory with BEAM
         if: matrix.memory_case == 'd3'
         # Direct D3 reached the correct witness near its former 12-minute
@@ -341,7 +343,7 @@ jobs:
           fi
           python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
           "$XLS_ROOT/codegen_main" --version
-      - run: python3 tools/build.py as test compile
+      - run: rebar3 as test compile
       - name: Check real word throughput, independent windows, malformed traffic and reset
         env:
           PACKED_OPTIONS: ${{ fromJSON(needs.select.outputs.packed_options) }}

@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/beam-tools
 
       - name: Fetch compiler sources for bring-up tools
-        run: python3 tools/build.py get-deps
+        run: rebar3 get-deps
 
       - name: Install RTL verification tools
         uses: ./.github/actions/rtl-tools
@@ -87,7 +87,7 @@ jobs:
       - name: Check retained locality baseline reproduction
         run: |
           python3 -m unittest discover -s experiments/local_admission -p test_baseline.py
-          python3 tools/build.py compile
+          rebar3 compile
           python3 experiments/local_admission/baseline.py emit --stage "$RUNNER_TEMP/locality-baseline"
 
       - name: Check Zynq package mapping and resource smoke
@@ -145,7 +145,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Build compiler and backend fixtures
-        run: python3 tools/build.py as test compile
+        run: rebar3 as test compile
 
       - name: Check independent actor outboxes under sustained output pressure
         run: bash tools/test_actor_outboxes.sh "$RUNNER_TEMP/xls"
@@ -167,13 +167,15 @@ jobs:
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-mailbox-debug direct_mailbox
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mixed-mailbox-debug mailbox_mixed
-          python3 _checkouts/erl_hls/tools/check_debug_memories.py _build/mixed-mailbox-debug/p2 --map-xc7
+          source tools/backend_env.sh test
+          python3 "$ERL_HLS_ROOT/tools/check_debug_memories.py" _build/mixed-mailbox-debug/p2 --map-xc7
 
       - name: Diagnose reduction failures through scoped debug queries
         run: |
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/reduction-debug reduction
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-actor-debug direct_reduction
-          bash "$PWD/_checkouts/erl_hls/tools/test_direct_actor_codegen.sh" "$RUNNER_TEMP/xls"
+          source tools/backend_env.sh test
+          bash "$ERL_HLS_ROOT/tools/test_direct_actor_codegen.sh" "$RUNNER_TEMP/xls"
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/aggregate-debug aggregate
 
       - name: Inspect indexed gathers through scoped debug queries
@@ -198,10 +200,11 @@ jobs:
           python3 tools/test_mailbox_formal.py "$RUNNER_TEMP/xls"
       - name: Inspect startup backpressure through the debug endpoint
         run: |
+          source tools/backend_env.sh test
           python3 tools/test_topology_debug_integration.py \
             --top init_shared_wrapper --stage _build/initialization/debug \
             _build/initialization/init_shared_2.v \
-            _build/initialization/init_shared_wrapper.v _checkouts/erl_hls/priv/rtl/hls_1r1w_ram.v
+            _build/initialization/init_shared_wrapper.v "$ERL_HLS_ROOT/priv/rtl/hls_1r1w_ram.v"
 
       - name: Check mixed execution placements and scoped observations
         run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed one two coalesced ingress_one components_weak
@@ -278,7 +281,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Build compiler and backend fixtures
-        run: python3 tools/build.py as test compile
+        run: rebar3 as test compile
 
       - name: Check source-derived actor build and local activation semantics
         run: |
@@ -356,7 +359,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Build compiler and backend fixtures
-        run: python3 tools/build.py as test compile
+        run: rebar3 as test compile
 
       - name: Check smaller and rectangular decoder profiles against BEAM
         run: python3 tools/test_decoder_profiles.py "$RUNNER_TEMP/xls" --cases board-sized rectangle-z --trace
@@ -377,7 +380,9 @@ jobs:
         run: python3 tools/build_phi_debug.py "$RUNNER_TEMP/xls"
 
       - name: Preserve complete D3 application RAM mapping through debug export
-        run: python3 _checkouts/erl_hls/tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
+        run: |
+          source tools/backend_env.sh test
+          python3 "$ERL_HLS_ROOT/tools/check_debug_memories.py" _build/phi-debug/debug --map-xc7
 
       - name: Diagnose D3 stalls while all debug services share one transport
         run: python3 tools/test_phi_debug.py _build/phi-debug
@@ -443,7 +448,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Build compiler and backend
-        run: python3 tools/build.py compile
+        run: rebar3 compile
 
       - name: Check fresh periodic dependency models
         run: python3 tools/test_protocol_model.py _build/protocol-model
@@ -512,7 +517,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Build compiler and backend
-        run: python3 tools/build.py compile
+        run: rebar3 compile
 
       - name: Check two independent source repetition roles through real brokers
         run: python3 tools/test_protocol_deployment.py "$RUNNER_TEMP/xls" _build/protocol-deployment

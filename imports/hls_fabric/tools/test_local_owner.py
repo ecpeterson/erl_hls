@@ -2,10 +2,9 @@
 from pathlib import Path
 import argparse
 import json
-import os
 
 from compiler_paths import PUBLIC
-from backend_paths import ROOT
+from backend_paths import ROOT, erlang_environment
 from backend_commands import run
 
 
@@ -84,7 +83,7 @@ def check_provider_initializers(xls: Path, stage: Path, paths: str) -> None:
     for role in ['phi_line_cell', 'phi_halo_cell']:
         generated = stage/(role+'.x')
         run(['escript', 'tools/emit_local_actor.escript', providers/(role+'.erl'),
-             provider_options, generated], stage, role+'-emit')
+             provider_options, generated], stage, role+'-emit', env=erlang_environment('default'))
         run([xls/'ir_converter_main', '--top=local_owner_clock',
              '--warnings_as_errors=false', '--dslx_path='+paths+':'+str(providers),
              '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), generated],
@@ -102,9 +101,6 @@ def main() -> None:
     stage = args.stage
     stage.mkdir()
     run(['rebar3', 'compile'], stage, 'build')
-    base = ROOT/'_build/default'
-    os.environ['ERL_AFLAGS'] = '-pa ' + ' '.join('"'+str(p)+'"' for p in
-        [base/'lib/hls_fabric/ebin', base/'checkouts/erl_hls/ebin'])
     options = stage/'options.term'
     options.write_text('[].\n')
     paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
@@ -123,7 +119,8 @@ def main() -> None:
     cases = [case for case in cases if case[0] in args.cases]
     for name, source, fixture in cases:
         generated = stage/(name+'.x')
-        run(['escript', 'tools/emit_local_actor.escript', source, options, generated], stage, name+'-emit')
+        run(['escript', 'tools/emit_local_actor.escript', source, options, generated], stage, name+'-emit',
+            env=erlang_environment('default'))
         test = stage/(name+'_test.x')
         test.write_bytes(generated.read_bytes() + (ROOT/'test/local_owner_semantics.x.in').read_bytes().replace(b'@@FIXTURE@@', fixture.encode()))
         run([args.xls/'interpreter_main', '--evaluator=ir-jit', '--compare=none', *common, test], stage, name+'-witness')

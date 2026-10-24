@@ -24,7 +24,7 @@ compatibility scaffolding for an obsolete internal format.
 
 ## Tooling boundaries
 
-- Keep compiler analysis, semantic transformations and hardware lowering in Erlang. Python is suitable for file/report processing, build orchestration and invoking the Erlang toolchain. Migrate existing Python compiler transformations into Erlang when extending or promoting them; retain their validation and evidence.
+- Keep compiler analysis, semantic transformations and hardware lowering in Erlang. Keep source build configuration and orchestration in Erlang, using rebar3 for dependencies and packaging. External tool execution is a separate boundary; optional drivers consume emitted artifacts. Python is suitable for external tool drivers, report processing and plotting. Migrate existing Python compiler transformations into Erlang when extending or promoting them; retain their validation and evidence.
 - Prefer `hls_fabric`'s Erlang inspection APIs over the same manifest-backed debug channel in simulation and on-device. Extend shared snapshots, counters or bounded traces for missing observations before adding simulator-private probes. Existing probes remain diagnostics until coverage is replaced; do not equate sparse snapshots with a complete event history.
 
 ## Hardware design

@@ -8,7 +8,7 @@ mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
-python3 tools/build.py as test compile
+rebar3 as test compile
 source tools/backend_env.sh test
 erl +S 2:2 -noshell -eval 'ok=hls_indexed_debug_dslx:write(hd(init:get_plain_arguments())),halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"

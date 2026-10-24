@@ -9,7 +9,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
 cd "$project_root"
-python3 tools/build.py as test compile >/dev/null
+rebar3 as test compile >/dev/null
 source tools/backend_env.sh test
 
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \

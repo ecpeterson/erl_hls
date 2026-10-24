@@ -9,10 +9,10 @@ from backend_commands import run
 
 
 def hardware(directory: Path) -> dict[str, str]:
-    """Hash generated DSLX and mechanical pin adapters using relative identities."""
+    """Compare generated hardware, excluding copied support libraries and the comparison gateway."""
     return {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in directory.rglob('*') if p.suffix in ('.x', '.sv')
-            and 'application-comparison' not in p.parts and p.relative_to(directory)!=Path('application/gateway.x')}
+            and p.relative_to(directory).parts[0] != 'support' and 'application-comparison' not in p.parts and p.relative_to(directory)!=Path('application/gateway.x')}
 
 
 def check(directory: Path) -> None:
@@ -20,7 +20,7 @@ def check(directory: Path) -> None:
     directory.mkdir()
     build=emit_application(2,directory/'application')
     env=erlang_environment("default")
-    run(['escript','tools/check_protocol_model.escript',directory/'application/config.erl',build,directory/'binding'],directory,'binding',env=env)
+    run(['escript','tools/check_protocol_model.escript',build/'config.erl',build,directory/'binding'],directory,'binding',env=env)
     assert hardware(build)==hardware(directory/'binding-plain'), 'model annotation changed hardware'
     assert (build/'application/gateway.x').read_bytes()==(directory/'binding-plain/application-comparison/gateway.x').read_bytes(), 'model annotation changed gateway logic'
     run(['escript','tools/inspect_phi_protocol.escript',PUBLIC,directory/'inventory'],directory,'inventory',env=env)

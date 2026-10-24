@@ -2,7 +2,7 @@
 
 Inspect the actual repetition/noise application before proposing specialized transport or storage. This command produces a source and topology inventory, including unresolved ownership obligations. It does not remove fields, emit hardware or select a backend.
 
-Prepare the pinned compiler dependency with `python3 tools/prepare_compiler.py`, then run:
+Build the pinned compiler dependency with `rebar3 compile`, then run:
 
 ```sh
 bash tools/inspect_phi_protocol.sh /path/to/fresh-output
@@ -47,8 +47,8 @@ bash tools/emit_protocol_transport.sh /path/to/xls /path/to/transport.config /pa
 This compiles connected DSLX transport through XLS, not an executable actor application. The source list and topology constructor execute as trusted build code. The command selects this checkout's backend/compiler, reloads the declared sources, checks the topology and rejects incomplete routing or unsupported delivery modes. Direct routes and independently buffered fanout are supported; coupled, queued and best-effort fanout reject. Output directories must be fresh. A failure during writing retains partial output.
 
 ```text
-emit_protocol_transport.sh → emit_protocol_transport.escript
-  → hls_protocol_transport:write/2
+emit_protocol_transport.sh → hls-fabric emit --kind transport
+  → hls_source_build:emit/3 → hls_protocol_transport:write/2
     → local_actor:compile/2 + topology normalization/elaboration + inventory
     → capture:plan/2 + transactions:plan/2
     → source:plan/3 (projection + codec)
@@ -57,7 +57,7 @@ emit_protocol_transport.sh → emit_protocol_transport.escript
     → xls_protocol_transport:write/2
       → parametric protocol_transport.x + generated topology composition
       → sv_protocol_ports:write/3 (pin packing only)
-  → compile_protocol_transport.py → XLS conversion, optimization and code generation
+  → compile_source_build.py → XLS conversion, optimization and code generation
 ```
 
 Each internal source/port/schema/destination gets one fixed capture slot. `hls_protocol_capture:plan/2` independently compiles each producer and joins **every** matching send across all entry phases and conditional alternatives. It removes only whole fields that ordinary lowering makes the same literal constant everywhere; startup values, state invariants and partial constants do not authorize whole-field omission. The build checks both source-plan identities agree and rejects any projection needing an additional invariant. `hls_protocol_source:plan/3` is the codec's hardware consumer: it projects the retained ordinary snapshot directly into compact typed link payloads. External outputs retain full 128-bit ordinary frames.
@@ -68,7 +68,7 @@ Publication, capture ownership, sender order, selectors, projections and topolog
 
 The 128-bit **ordinary frame ABI** is separate from these variable storage widths: `axis::Frame` is currently `FrameN<3>`, comprising a 32-bit header and capacity for three 32-bit payload words. The header records the actual payload length. `axis::FrameN<PAYLOAD_WORDS>` already supports other static boundary capacities, but the ordinary actor compiler and its frame analysis currently select three words. Generated DSLX asserts that this ABI agrees with the projection planner. Widening it requires a coordinated compiler/adapter ABI change, not a transport-only knob. Internal capture payloads omit the proved header, padding and whole-field constants.
 
-The generated top is `protocol_fabric`. `transport.etf` retains exact source, projection, slot and wiring plans; `summary.json` records source-plan identities, direct DSLX inputs, XLS executable identities, the schedule and emitted RTL hashes. `dslx/commands.json` retains each compiler invocation and its result. `files.f` lists the RTL files for synthesis or simulation. ETF files are trusted local build data. Lower-level planning APIs expect internally consistent source-bound plans; the public build command establishes those relationships.
+The generated top is `protocol_fabric`. `transport.etf` retains exact source, projection, slot and wiring plans; `summary.json` records source-plan identities and direct DSLX inputs. `source-build.json` packages the source inputs and required schedule; `compiled.json` records XLS executable identities, commands and emitted RTL hashes. `dslx/commands.json` retains each compiler invocation and its result. `files.f` lists the RTL files for synthesis or simulation. ETF files are trusted local build data. Lower-level planning APIs expect internally consistent source-bound plans; the public build command establishes those relationships.
 
 | Port group | Owner's obligation |
 | --- | --- |
@@ -195,8 +195,8 @@ bash tools/emit_protocol_network.sh XLS_ROOT CONFIG FRESH_OUTPUT
 It accepts the same trusted source/topology configuration as the transport command. Declared `startup` records are delivered by the ordinary inbox as described below. One declared rectangle `ingress` is supported as described below; other interface shapes reject explicitly. External destinations remain separate ready/valid streams, ordered per logical source and recipient, without a global output order. All owners and transport share one clock and reset. This command does not implement independent-device reset, a board interface or application admission.
 
 ```text
-emit_protocol_network.sh → emit_protocol_network.escript
-  → hls_protocol_network:write/2
+emit_protocol_network.sh → hls-fabric emit --kind network
+  → hls_source_build:emit/3 → hls_protocol_network:write/2
     → hls_protocol_transport:write/2 (fresh sources, exact inboxes and transport)
       → hls_protocol_ingress:plan/1 + hls_protocol_schema:domains/2
       → hls_protocol_inbox:attach/5 (checked host slot)
@@ -204,14 +204,14 @@ emit_protocol_network.sh → emit_protocol_network.escript
       → receiver_I::local_inbox_batch / local_inbox_batch_tick
       → transport::tick → named state/output result
       → sv_protocol_ports:write/5 (mechanical pin packing)
-  → compile_protocol_network.py → shared sampled-clock XLS compiler
+  → compile_source_build.py → shared sampled-clock XLS schedule
 ```
 
 `local_inbox_batch` exposes the old outbox's complete evaluated payload and layout. `local_inbox_batch_tick` reuses ordinary selection, receipt and action completion, but disables single-effect draining: `output_ready` accepts the entire old batch. Use this interface from reset, never interleave it with serial-effect draining. A stalled batch stays unchanged, and its acceptance edge cannot also reuse that outbox for a new entry. The publisher then retires each recipient's ordered subsequence independently.
 
 Without host ingress, composition adds no state: each actor retains its existing `LocalInboxState`, and transport retains its existing publications/captures. There is one complete old-batch reader per publisher and one selected capture reconstruction per receiver. Offers and eligibility use old registered state. The network first obtains transport observations, computes receiver transitions, then supplies their actual take/release inputs to the transport transition. Those observations are independent of take/release and boundary readiness; the first call's unused next state is discarded by XLS. There is no combinational readiness loop or same-edge credit reuse.
 
-`network/manifest.json` describes the pins and binds direct component DSLX hashes. `network/compiled.json` records RTL/tool hashes, import paths and the fixed one-stage schedule; `network/commands.json` retains invocations and failures. `files.f` lists top `protocol_network` and its core. The original transport `summary.json` continues to describe the standalone transport; the network manifest records `actor_runtime: true`, `eligible: false`. Additional provider imports can be supplied to `compile_protocol_network.py` with `--dslx-path DIR`. Inputs and manifests are trusted local build products. Failed builds retain partial output.
+`network/manifest.json` describes the pins and binds direct component DSLX hashes. `source-build.json` records copied imports and the fixed one-stage schedule; `compiled.json` records RTL/tool hashes; `network/commands.json` retains invocations and failures. `files.f` lists top `protocol_network` and its core. The original transport `summary.json` continues to describe the standalone transport; the network manifest records `actor_runtime: true`, `eligible: false`. Supply additional provider imports with `dslx_path => [Directory, ...]` in the trusted source configuration. Inputs and manifests are trusted local build products. Failed builds retain partial output.
 
 Run `python3 tools/test_protocol_network.py XLS_ROOT FRESH_OUTPUT` with Icarus and Yosys available. The three-actor RTL witness uses actual source owners for three batches per producer and ordinary sink results as feedback. Public output scoreboards check ordered changing payloads, independent stalls and reset interruption followed by two complete incarnations. Deliberately dropped stalled batches and disconnected feedback must fail. Combinational SAT quantifies all finite state/input valuations of this fixture's transport to check the observation dependency cut; a deliberately incorrect reset-independence claim yields a counterexample. These checks trust source extraction, XLS and Yosys/ABC/SAT; they establish neither arbitrary-program refinement nor sufficient application capacity/progress. A whole-fixture XC7 resource screen is local synthesis evidence, not routed or native performance.
 
@@ -238,7 +238,7 @@ Host commands are delivered separately to each role. Coordinates/selectors retai
 
 Use `bash tools/emit_protocol_bridge.sh XLS_ROOT CONFIG FRESH_OUTPUT` for a framed partition. The config extends the raw network config with `native_actors`, positive 16-bit `host`/`service` addresses, `control => rectangle` and explicit activation. The builder calls `hls_protocol_boundary:write/2`, then `xls_protocol_bridge:write/3`. The generated wrapper binds the application's incoming/outgoing link IDs, capture classes, external streams, identity and control adapter. `protocol_bridge.x` owns sessions, credits and delivery reservations; `protocol_framing.x` owns word assembly/serialization; `protocol_rectangle.x` owns the existing rectangle command grammar. The older application gateway shares the latter two modules. The rectangle adapter is currently the only supported application-control binding; the transport core has no rectangle fields or decoder.
 
-`bridge.etf` contains the trusted local descriptor, `bridge/manifest.json` binds generated inputs, library hashes and state costs, and `files.f` lists the complete RTL. Changes to the control adapter or framing library change the build identity. For source-provider imports, emit with `tools/emit_protocol_bridge.escript` and lower with `tools/compile_protocol_bridge.py --dslx-path PROVIDER_DIR`. Generated Verilog outside XLS is pin packing only.
+`bridge.etf` contains the trusted local descriptor, `bridge/manifest.json` binds generated inputs, library hashes and state costs, and `files.f` lists the complete RTL. Changes to the control adapter or framing library change the build identity. Supply source-provider imports with `dslx_path => [Directory, ...]` in the configuration; `hls-fabric emit --kind bridge` copies them into the source bundle. Generated Verilog outside XLS is pin packing only.
 
 The top has `clk`, `reset`, `retire`, word-aligned 32-bit `s_app_*`/`m_app_*` ready/valid/last streams, `fault` and `running`. A complete routed frame is the common broker route word, header and payload words. Attachment binds one nonzero 64-bit session and the exact build identity. Setup and one-shot start follow in input order; the start receipt acknowledges the actual source start handshake. The existing single-network application gateway retains its separate sessionless protocol.
 
@@ -358,9 +358,9 @@ For N=2..256 producers, each endpoint adds `2*ceil(log2(N))+1` state bits: curso
   actor_limit => 4, device => board, host => 1}.
 ```
 
-The concrete call path is `emit_protocol_application.escript` → `hls_protocol_application:write/2` → fresh `hls_protocol_boundary:write/2`. The builder binds the same elaborated actor identities, rectangle ingress, loaded source codecs and canonical external endpoint order into `deployment.etf`. Shared event selectors must agree on field names/order, types and canonical framing, not merely payload width. The application requires one rectangle ingress and at least one external endpoint. Its SHA-256 identity covers the source bundle and boundary/wire binding; it is a build-mismatch check, not authentication or native equivalence.
+The concrete call path is `hls-fabric emit --kind application` → `hls_source_build:emit/3` → `hls_protocol_application:write/2` → fresh `hls_protocol_boundary:write/2`. The builder binds the same elaborated actor identities, rectangle ingress, loaded source codecs and canonical external endpoint order into `deployment.etf`. Shared event selectors must agree on field names/order, types and canonical framing, not merely payload width. The application requires one rectangle ingress and at least one external endpoint. Its SHA-256 identity covers the source bundle and boundary/wire binding; it is a build-mismatch check, not authentication or native equivalence.
 
-`xls_protocol_application` instantiates the existing `hls_partition_io::OrderedBoundary`; `sv_protocol_application` only connects pins and converts actor frame bit ordering to the gateway's DSLX struct ordering. It reuses the existing `hls_partition_activation.sv` bridge unchanged. There is no new framing or activation state machine. The compiler builds the boundary with its single-stage sampled-clock schedule and the shared gateway with its established two-stage channel schedule. `files.f` lists the complete application RTL; `application/compiled.json` records exact inputs, tools through the nested boundary record, and RTL dependencies.
+`xls_protocol_application` instantiates the existing `hls_partition_io::OrderedBoundary`; `sv_protocol_application` only connects pins and converts actor frame bit ordering to the gateway's DSLX struct ordering. It reuses the existing `hls_partition_activation.sv` bridge unchanged. There is no new framing or activation state machine. The compiler builds the boundary with its single-stage sampled-clock schedule and the shared gateway with its established two-stage channel schedule. `files.f` lists the complete application RTL; `source-build.json` records both compilation units and their copied dependencies; `compiled.json` records the source-bundle hash, tool identities, per-unit commands and complete RTL dependencies.
 
 Use the returned deployment directly with the existing host client:
 
@@ -379,7 +379,9 @@ Consume events with `next/2`; `{ok, board, application, {started}}` confirms the
 
 ## Finite repetition application
 
-After the normal compiler/backend build, `python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT` builds a periodic line using the pinned compiler's ordinary Phi, phenomenological data and syndrome actors. The public source-application builder emits `FRESH_OUTPUT/build/deployment.etf` and the complete RTL list at `FRESH_OUTPUT/build/files.f`. Width counts data sites: each width-N line has 3N actors. The command accepts N=2..16; only the exercised instances have the evidence below, and emission does not establish board fit or semantic admission.
+After `rebar3 release`, `_build/default/rel/hls/bin/hls-repetition --width 3 --output FRESH_OUTPUT` emits the periodic example without Python or XLS. Add `--split 3` with width 6, `--mixed`, `--inspect` or `--share-arithmetic` within the bounds below. The configuration is owned by `phi_protocol_config:repetition/2`. [The source build manifest](building.md#source-toolchain) supplies a separate external compiler with copied imports, entry points and required schedules.
+
+As an optional combined emission/XLS convenience, `python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT` builds a periodic line using the pinned compiler's ordinary Phi, phenomenological data and syndrome actors. The public source-application builder emits `FRESH_OUTPUT/build/deployment.etf` and the complete RTL list at `FRESH_OUTPUT/build/files.f`. Width counts data sites: each width-N line has 3N actors. The command accepts N=2..16; only the exercised instances have the evidence below, and emission does not establish board fit or semantic admission.
 
 Attach that deployment with `hls_partition_stream`, then call `phi_protocol_repetition:run(Stream, 3, 8, 123, 60000)`. The arguments are width, first noise-free round, readout request ID and timeout in milliseconds. The helper sends the cutoff before explicit start, returns every correction through the same ordered command stream, waits for a common round where every Phi actor reports quiet and empty, then queries all data cells. Its result contains the fence round, per-source events, corrections and sorted X-basis replies. Noise is generated by the source actors; the host does not supply precomputed fault samples.
 
@@ -392,7 +394,7 @@ Use a fresh explicit-start stream with the matching width/codecs and enough host
 
 `python3 tools/emit_protocol_repetition.py XLS_ROOT 6 FRESH_OUTPUT --split 3` places data, syndrome and Phi actors at coordinates 0..2 on device 0 and 3..5 on device 1. Both roles run the source backend; BEAM hosts only the typed application loop and packet relay. Each role has its own framed port, identity and session. The output contains `build/role0/files.f`, `build/role1/files.f` and one trusted `build/deployment.etf`. `--split K` accepts any nonempty two-way placement for N=2..16; the regression below exercises N6/3+3. Process inspection is currently unavailable on this framed path.
 
-For other applications or participant sets, call `hls_protocol_deployment:write/2` (or `tools/emit_protocol_deployment.escript CONFIG FRESH_OUTPUT`) with the ordinary sources/topology, `control => rectangle`, and:
+For other applications or participant sets, call `hls_protocol_deployment:write/2` (or `hls-fabric emit --kind deployment --config CONFIG --output FRESH_OUTPUT`) with the ordinary sources/topology, `control => rectangle`, and:
 
 ```erlang
 #{devices => #{north => #{native_actors => [left,sink], host => 2, service => 29},
@@ -424,7 +426,7 @@ The repetition helper reuses its existing cutoff, correction-feedback, common-fe
 
 `python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT --mixed` places the three ordinary data/noise actors in BEAM and the six syndrome/Phi actors in one native partition. The native side reuses the framed DSLX bridge unchanged. Output includes `build/mixed.etf` and `build/files.f`; `--mixed` excludes `--split` and `--inspect`.
 
-The concrete build path is `emit_protocol_repetition.py` → `emit_protocol_mixed.escript` → `hls_protocol_mixed:write/2` → `hls_protocol_bridge:write/2`. The mixed builder derives the complementary BEAM actors, startup records, routes and crossing codecs from the fresh source bundle. `hls_protocol_application_binding` checks loaded host codecs against those sources. For another application, supply the ordinary bridge configuration with `native_actors`, `control => rectangle`, `host` and `service`. Every BEAM output must have exactly one native or external recipient; BEAM-to-BEAM routes and inspection are unsupported. The build remains `eligible => false`.
+The concrete source path is `hls-repetition --mixed` → `phi_protocol_config:repetition/2` → `hls_source_build:emit/3` → `hls_protocol_mixed:write/2` → `hls_protocol_bridge:write/2`. The mixed builder derives the complementary BEAM actors, startup records, routes and crossing codecs from the fresh source bundle. `hls_protocol_application_binding` checks loaded host codecs against those sources. For another application, supply the ordinary bridge configuration with `native_actors`, `control => rectangle`, `host` and `service`. Every BEAM output must have exactly one native or external recipient; BEAM-to-BEAM routes and inspection are unsupported. The build remains `eligible => false`.
 
 Create disconnected ordinary actors from the trusted local plan, open the application broker, then bind the stream owner to a dedicated virtual node:
 
@@ -452,7 +454,7 @@ There are at most 64 outbound records, 16 commands, 32 application events and 12
 
 The repetition builder also supplies `protocol_model => #{kind => periodic_neighbor_barrier, contracts => ModuleRoles}`. Other fresh source builds may supply the same option; absent annotations leave the build unchanged. Each used module must have exactly one role (`data`, `syndrome` or `phi`) and its complete source phase list. Phi roles also declare a diffusion `rounds` count from 1 to 256; adjacent Phi roles must agree. These are explicit application hypotheses, not inferred source invariants. The repetition example annotates its twelve diffusion rounds.
 
-The concrete call path is `emit_protocol_repetition.py` → `hls_protocol_application:write/2` → boundary/network builders → `hls_protocol_transport:write/2` → `hls_protocol_periodic_model:derive/2` → `hls_protocol_wait_graph:check/2`. Transport checks the model against the freshly compiled source inventory before emitting any hardware. Unsupported phases, schemas, roles, duplicate channels or same-generation dependency cycles fail the build. Partial outputs after later I/O failures are retained as usual.
+The concrete call path is `hls-repetition` → `phi_protocol_config:repetition/2` → `hls_source_build:emit/3` → `hls_protocol_application:write/2` → boundary/network builders → `hls_protocol_transport:write/2` → `hls_protocol_periodic_model:derive/2` → `hls_protocol_wait_graph:check/2`. Transport checks the model against the freshly compiled source inventory before emitting any hardware. Unsupported phases, schemas, roles, duplicate channels or same-generation dependency cycles fail the build. Partial outputs after later I/O failures are retained as usual.
 
 The graph includes source stages, each labelled source/destination/port/schema capture, slot reuse after the preceding receive, previous-publication retirement (including empty data/syndrome entries), and same-snapshot ordering between ports addressed to one PID. Query prefetch crosses one logical round. It never imposes an arrival order between independent senders. Zero-lag waits must decrease the computed finite rank; older-generation edges retain their initial-marking/source-transition obligations.
 
