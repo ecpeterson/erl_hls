@@ -11,8 +11,7 @@ optional(Spec, Text) -> case maps:get(gathers, Spec, none) of none -> []; _ -> T
 
 -doc "Reports the packed progress width independently of element payloads.".
 -spec progress_width(none | map()) -> non_neg_integer().
-progress_width(none) -> 0;
-progress_width(G) -> 66 + 2 * capacity(G).
+progress_width(G) -> maps:get(width, xls_statem_gather_layout:progress(G)).
 
 -doc "Reports the largest per-site ordered payload width.".
 -spec payload_width(none | map()) -> non_neg_integer().
@@ -26,7 +25,7 @@ storage_width(G) -> progress_width(G) + payload_width(G).
 
 %% The shared progress mask covers each site's fixed numeric capacity.
 -spec capacity(map()) -> pos_integer().
-capacity(#{sites := Sites}) -> lists:max([maps:get(size, maps:get(population, S)) || S <- Sites]).
+capacity(G) -> maps:get(capacity, xls_statem_gather_layout:progress(G)).
 %% Record codecs define the physical element width and bit interpretation.
 -spec element_width(map()) -> non_neg_integer().
 element_width(#{element := E}) -> xls_statem_reduction_ir:type_width(E).
@@ -63,14 +62,34 @@ functions(Spec) -> case maps:get(gathers,Spec,none) of
     G = #{sites := Sites} -> [codecs(G), [site_functions(S,G)||S<-Sites], contribution(G), apply_function(Sites), completion(G), actor_completion(Spec)]
 end.
 
-%% Member zero occupies the least-significant element slice in every payload representation.
+%% Pack and unpack use the same semantic slices; element payload remains above all progress bits.
 -spec codecs(map()) -> iodata().
 codecs(G) ->
-    C=capacity(G), W=progress_width(G),
-    ["fn bits_from_gather_progress(p: GatherProgress) -> bits[",n(W),"] { p.failure ++ p.seen ++ p.expected ++ p.remaining ++ p.key ++ (p.site as u8) ++ (p.status as u2) }\n",
-     "fn gather_progress_from_bits(raw: bits[",n(W),"]) -> GatherProgress { GatherProgress { status: raw[0:2] as GatherStatus, site: raw[2:10] as GatherSite, key: raw[10:42], remaining: raw[42:50], expected: raw[50+:","bits[",n(C),"]], seen: raw[",n(50+C),"+:bits[",n(C),"]], failure: raw[",n(50+2*C),"+:bits[16]] } }\n",
-     "fn bits_from_gather_state(s: GatherState) -> bits[",n(storage_width(G)),"] { s.values ++ bits_from_gather_progress(s.progress) }\n",
-     "fn gather_state_from_bits(raw: bits[",n(storage_width(G)),"]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:",n(W),"]), values: raw[",n(W),":] } }\n\n"].
+    #{width := Width, fields := Fields} = xls_statem_gather_layout:progress(G),
+    Ordered = lists:sort([{Offset, Name, Bits}
+        || {Name, #{offset := Offset, width := Bits}} <- maps:to_list(Fields)]),
+    Packed = lists:join(" ++ ", [pack_progress_field(Field) || Field <- lists:reverse(Ordered)]),
+    Unpacked = lists:join(", ", [unpack_progress_field(Field) || Field <- Ordered]),
+    ["fn bits_from_gather_progress(p: GatherProgress) -> bits[", n(Width), "] { ", Packed, " }\n",
+     "fn gather_progress_from_bits(raw: bits[", n(Width), "]) -> GatherProgress { GatherProgress { ", Unpacked, " } }\n",
+     "fn bits_from_gather_state(s: GatherState) -> bits[", n(storage_width(G)), "] { s.values ++ bits_from_gather_progress(s.progress) }\n",
+     "fn gather_state_from_bits(raw: bits[", n(storage_width(G)), "]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:", n(Width), "]), values: raw[", n(Width), ":] } }\n\n"].
+
+%% Typed enum and integer fields become exactly the width declared by the numeric schema.
+-spec pack_progress_field({non_neg_integer(), xls_statem_gather_layout:field_name(), pos_integer()}) -> iodata().
+pack_progress_field({_, Name, Bits}) ->
+    ["(p.", atom_to_list(Name), " as bits[", n(Bits), "])"].
+
+%% Only rendering knows the DSLX enum names; the schema contains no target-language expressions.
+-spec unpack_progress_field({non_neg_integer(), xls_statem_gather_layout:field_name(), pos_integer()}) -> iodata().
+unpack_progress_field({Offset, Name, Bits}) ->
+    Slice = ["raw[", n(Offset), "+:bits[", n(Bits), "]]"],
+    Value = case Name of
+        status -> [Slice, " as GatherStatus"];
+        site -> [Slice, " as GatherSite"];
+        _ -> Slice
+    end,
+    [atom_to_list(Name), ": ", Value].
 
 %% Per-site typed helpers keep padding and element codecs out of physical storage policy.
 -spec site_functions(map(),map()) -> iodata().

@@ -18,3 +18,19 @@ fn different_site_types_test() {
   assert_eq(result.failure, hls_failure::NONE);
   assert_eq(result.progress.status, GatherStatus::IDLE);
 }
+
+// Both source site IDs use the shared capacity-three masks, with payload bits above progress.
+#[test]
+fn distinct_site_progress_codec_test() {
+  for (site, _): (GatherSite, ()) in [GatherSite::NARROW, GatherSite::WIDE] {
+    let progress = GatherProgress { status: GatherStatus::OPEN, site,
+      key: u32:0x76543210, remaining: u8:2, expected: GatherMembers:0x5,
+      seen: GatherMembers:0x1, failure: hls_failure::Code:0x13d7 };
+    let expected = u16:0x13d7 ++ u3:0x1 ++ u3:0x5 ++ u8:2 ++ u32:0x76543210 ++ (site as u8) ++ u2:1;
+    assert_eq(bits_from_gather_progress(progress), expected);
+    assert_eq(gather_progress_from_bits(expected), progress);
+    let state = GatherState { progress, values: GatherValues:0x0123456789ab };
+    assert_eq(bits_from_gather_state(state), u48:0x0123456789ab ++ expected);
+    assert_eq(gather_state_from_bits(bits_from_gather_state(state)), state);
+  }(())
+}
