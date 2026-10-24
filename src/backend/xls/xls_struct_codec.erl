@@ -27,7 +27,7 @@ layout(Fields, Encoding) when Encoding =:= stream; Encoding =:= lsb ->
 -spec declaration(string(), layout()) -> iodata().
 declaration(TypeName, #{fields := Fields}) ->
     ["pub struct ", TypeName, " {\n",
-        [["  ", atom_to_list(Name), ": ", hls_type:print_type(Type), ",\n"]
+        [["  ", atom_to_list(Name), " : ", hls_type:print_type(Type), ",\n"]
             || #{name := Name, type := Type} <- Fields],
         "}\n"].
 
