@@ -1,15 +1,23 @@
 -module(xls_statem_plan).
 -moduledoc "Retains checked callback structure for a bounded ownership-planning consumer. This sidecar establishes provenance and dependency closure, not field independence, protocol refinement or physical benefit.".
--export([from_file/2, build/5, validate/3, select/2, manifest/1]).
--export_type([plan/0, selection/0]).
+-export([from_file/2, build/5, validate/3, select/2, manifest/1, identity/1]).
+-export_type([plan/0, selection/0, identity/0]).
 
 %% Planner-owned data is opaque so consumers select complete callback families
 %% instead of constructing partial dispatch chains by dropping inconvenient arms.
 -doc "Versioned planning sidecar bound to preprocessed source and ordinary lowering; validate against current source before using a saved value.".
 -opaque plan() :: #{version := 1, source := file:filename(), source_sha256 := binary(),
-    artifact_sha256 := binary(), planner_md5 := binary(), phases := [atom(), ...],
+    artifact_sha256 := binary(), planner_md5 := binary(), identity_inputs := identity_inputs(),
+    phases := [atom(), ...],
     data := map(), records := [hls_source:form()], callbacks := [map()],
     entries := [map()], roots := [map()], helpers := [map()], protocol := map()}.
+
+%% These digests require the original source/artifact, which the sidecar does not retain.
+-type identity_inputs() :: #{source_sha256 := binary(), artifact_sha256 := binary()}.
+
+-doc "Path-independent compiler identity with lowercase hexadecimal digests. Source/preprocessing and closed-artifact digests bind construction inputs; the complete-plan digest is recomputed with payload-origin sharing preserved. This does not replace strict validation.".
+-type identity() :: #{version := 1, source_sha256 := binary(), artifact_sha256 := binary(),
+    plan_sha256 := binary(), planner_md5 := binary()}.
 
 -doc "A whole phase/event family. Selection retains every ordered clause, including failure and postponement alternatives; it cannot select a single successful clause.".
 -type selection() :: {atom(), enter | cast | call | internal}.
@@ -40,6 +48,7 @@ build(Source, Forms, Helpers, Prepared, Spec = #{source := Filename, phases := P
         helper_calls(Roots), Helpers),
     #{version => 1, source => Filename, source_sha256 => digest(Source),
         artifact_sha256 => digest(Spec), planner_md5 => ?MODULE:module_info(md5),
+        identity_inputs => identity_inputs(Source, Spec),
         phases => Phases, data => #{name => DataName, width => DataWidth},
         records => [F || F = {attribute, _, record, _} <- Forms],
         callbacks => Callbacks, entries => maps:get(entries, Prepared), roots => Roots,
@@ -96,6 +105,60 @@ manifest(#{version := Version, source := Source, source_sha256 := SourceHash,
         helpers => [#{name => maps:get(name, H),
             helpers => helper_calls(maps:get(clauses, H)),
             providers => provider_calls(maps:get(clauses, H))} || H <- Helpers]}.
+
+-doc "Returns canonical source/preprocessing, closed-artifact, current complete-plan and planner identities. Source locations are relative to the actor directory, ordered include roots to the captured build directory; semantic literals and failure locations remain exact. Renaming fresh origins preserves alias sharing. Call validate/3 separately to reject stale or modified plans.".
+-spec identity(plan()) -> identity().
+identity(Plan = #{identity_inputs := #{source_sha256 := SourceHash,
+        artifact_sha256 := ArtifactHash}, planner_md5 := PlannerHash}) ->
+    Structure = maps:without([source, source_sha256, artifact_sha256, planner_md5], Plan),
+    #{version => 1, source_sha256 => binary:encode_hex(SourceHash, lowercase),
+        artifact_sha256 => binary:encode_hex(ArtifactHash, lowercase),
+        plan_sha256 => binary:encode_hex(digest(canonical(Structure)), lowercase),
+        planner_md5 => binary:encode_hex(PlannerHash, lowercase)}.
+
+%% Canonicalize only compiler-owned provenance fields. In particular, a source
+%% ?FILE expansion is an ordinary literal and must retain its semantic value.
+-spec identity_inputs([hls_source:form()], xls_actor_codegen:spec()) -> identity_inputs().
+identity_inputs(Source, Spec = #{source := Filename}) ->
+    Context = #{directory := Directory, source_name := SourceName,
+        includes := Includes} = hls_source:from_forms(Source, []),
+    ActorRoot = filename:dirname(filename:absname(SourceName, Directory)),
+    Forms = [identity_form(Form, Directory, ActorRoot) || Form <- Source,
+        not source_context(Form)],
+    Preprocessing = (maps:remove(directory, Context))#{
+        source_name := relative_path(SourceName, Directory, ActorRoot),
+        includes := [relative_path(Path, Directory, Directory) || Path <- Includes],
+        origins := lists:usort([relative_path(Path, Directory, ActorRoot)
+            || Path <- maps:get(origins, Context)])},
+    #{source_sha256 => digest(#{forms => Forms, preprocessing => Preprocessing}),
+        artifact_sha256 => digest(Spec#{source := relative_path(Filename, Directory, ActorRoot)})}.
+
+%% The context is represented once, independently of its synthetic form location.
+-spec source_context(hls_source:form()) -> boolean().
+source_context({attribute, _, hls_source_context, _}) -> true;
+source_context(_) -> false.
+
+%% epp file attributes are diagnostic metadata; all other forms remain literal.
+-spec identity_form(hls_source:form(), file:filename(), file:filename()) -> hls_source:form().
+identity_form({attribute, Anno, file, {File, Line}}, Directory, ActorRoot) ->
+    {attribute, Anno, file, {relative_path(File, Directory, ActorRoot), Line}};
+identity_form(Form, _Directory, _ActorRoot) -> Form.
+
+%% Keep relative topology, including parent-directory traversal, without exposing
+%% the build host's absolute root. Source spelling alone is not semantic content.
+-spec relative_path(file:filename(), file:filename(), file:filename()) -> string().
+relative_path(Path, Directory, Root) ->
+    Absolute = filename:split(filename:absname(Path, Directory)),
+    Base = filename:split(filename:absname(Root)),
+    case relative_parts(Base, Absolute) of
+        [] -> ".";
+        Parts -> filename:join(Parts)
+    end.
+
+%% Strip a common prefix before retaining each unmatched directory component.
+-spec relative_parts([string()], [string()]) -> [string()].
+relative_parts([Part | Base], [Part | Path]) -> relative_parts(Base, Path);
+relative_parts(Base, Path) -> lists:duplicate(length(Base), "..") ++ Path.
 
 %% Callback preparation preserves order within a family. Ordinals are per
 %% phase/event, not source line numbers (which can collide after includes/macros).
