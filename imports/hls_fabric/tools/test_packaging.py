@@ -125,7 +125,7 @@ class PackagingTests(unittest.TestCase):
                 "checkouts/erl_hls/ebin",
             ):
                 (root / "_build/test" / name).mkdir(parents=True)
-            selected = erlang_paths(root)
+            selected = erlang_paths("test", root)
             self.assertIn(root / "_build/test/checkouts/erl_hls/ebin", selected)
             self.assertNotIn(root / "_build/test/lib/erl_hls/ebin", selected)
             self.assertIn(root / "_build/test/lib/hls_fabric/test", selected)

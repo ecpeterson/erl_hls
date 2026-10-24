@@ -4,9 +4,11 @@ from types import SimpleNamespace
 import argparse
 import json
 import os
-from backend_paths import ROOT, PUBLIC, erlang_paths
+from backend_paths import ROOT, erlang_paths
+from compiler_paths import PUBLIC
 from compile_protocol_network import compile_network
-from test_local_protocol import run, prove
+from backend_commands import run
+from test_local_protocol import prove
 
 
 # Public ordinary functions remain reference APIs even on a shared receiver.
@@ -110,7 +112,7 @@ def main() -> None:
     parser.add_argument("--cases", nargs="+", choices=["local3", "shared2", "shared3"], default=["local3", "shared2", "shared3"])
     args = parser.parse_args(); args.stage.mkdir()
     run(["rebar3", "as", "test", "compile"], args.stage, "build-backend")
-    os.environ["ERL_AFLAGS"] = "-pa " + " ".join('"' + str(p) + '"' for p in erlang_paths())
+    os.environ["ERL_AFLAGS"] = "-pa " + " ".join('"' + str(p) + '"' for p in erlang_paths("test"))
     results = {}
     for case in args.cases:
         members = int(case[-1]); part = args.stage / case

@@ -1,10 +1,11 @@
 """Build a fresh periodic repetition application from the pinned compiler's ordinary examples."""
 from pathlib import Path
 import argparse
-from backend_paths import ROOT, PUBLIC, erlang_paths
+from backend_paths import ROOT, erlang_environment
+from compiler_paths import PUBLIC
 from compile_protocol_application import compile_application
 from compile_protocol_bridge import compile_bridge
-from test_local_protocol import run
+from backend_commands import run
 
 
 # These application annotations propose the periodic schedule; the compiler checks
@@ -48,7 +49,7 @@ def emit_application(width: int, directory: Path, inspect: bool = False, split: 
         entry='tools/emit_protocol_mixed.escript'
     config.write_text('#{sources=>['+sources+'],topology=>{phi_repetition_topology,topology,['+str(width)+',16#80000000]},actor_limit=>'+str(3*width)+','+placement+',protocol_model=>'+PERIODIC_MODEL+(',inspection=>process' if inspect else '')+(',arithmetic_groups=>[['+','.join('{phi,'+str(x)+',0}' for x in range(width))+']]' if share_arithmetic else '')+'}.\n')
     run(['rebar3','compile'],directory,'compile-backend')
-    run(['env','ERL_AFLAGS='+ ' '.join('-pa "'+str(p)+'"' for p in erlang_paths()),'escript',entry,config,build],directory,'emit-application')
+    run(['escript',entry,config,build],directory,'emit-application', env=erlang_environment("default"))
     return build
 
 

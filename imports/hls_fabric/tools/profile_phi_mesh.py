@@ -4,13 +4,14 @@ import argparse
 import json
 import os
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import re
 import shutil
 import subprocess
 import time
 
-from test_actor_rtl import digest, erl_command, execute
+from backend_commands import digest, execute
+from backend_paths import erl_command
 from test_phi_bridge import ROOT
 from test_phi_mesh import artifacts
 from phi_mesh_metrics import layout, analyze
@@ -92,7 +93,7 @@ def prepare(args: argparse.Namespace) -> list[dict]:
     execute(erl_command(args.erl_hls,
         "[Stage] = init:get_plain_arguments(), ok = hls_phi_memory_fixture:oracle(Stage), "
         "ok = hls_phi_memory_profile:describe(Stage), "
-        "ok = hls_phi_board_geometry:write(filename:join(Stage, \"geometry.json\")), halt().", args.stage),
+        "ok = hls_phi_board_geometry:write(filename:join(Stage, \"geometry.json\")), halt().", args.stage, profile="test"),
         args.stage, "oracle", timeout=120)
     catalog = json.loads((args.stage / "lane-catalog.json").read_text())
     probes = {}
@@ -185,7 +186,7 @@ def simulate(args: argparse.Namespace) -> None:
     with compressed_capture(args.stage / "cycle-trace.csv", getattr(args, "compress_capture", False)), \
             (args.stage / "host.log").open("w") as host_log, (args.stage / "simulation.log").open("w") as sim_log:
         host = subprocess.Popen(erl_command(args.erl_hls,
-            "ok = hls_phi_memory_profile:run(hd(init:get_plain_arguments())), halt().", args.stage),
+            "ok = hls_phi_memory_profile:run(hd(init:get_plain_arguments())), halt().", args.stage, profile="test"),
             cwd=ROOT, stdout=host_log, stderr=subprocess.STDOUT)
         sim = subprocess.Popen(["vvp", "-M", str(args.stage), "-m", "phi_service_trace", str(args.stage / "profile.vvp"),
             f"+HALF={args.clock_half}", f"+STALLS={int(args.stalls)}"], cwd=args.stage, stdout=sim_log, stderr=subprocess.STDOUT)

@@ -7,7 +7,7 @@ import statistics
 
 from phi_cycle_trace import read, capture_path
 from phi_mesh_metrics import layout
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def transport_plan(resources: list[dict], links: list[dict]) -> list[dict]:

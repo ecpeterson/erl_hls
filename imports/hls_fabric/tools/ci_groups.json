@@ -16,7 +16,7 @@
         "tools/ci_*",
         "tools/test_ci_*",
         "tools/xls_ram_codegen/**",
-        "tools/backend_env.sh", "tools/build.py", "tools/prepare_compiler.py", "tools/compiler/**"
+        "tools/backend_env.sh", "tools/backend_paths.py", "tools/backend_commands.py", "tools/compiler_paths.py", "tools/build.py", "tools/prepare_compiler.py", "tools/compiler/**"
       ],
       "groups": [
         "software",

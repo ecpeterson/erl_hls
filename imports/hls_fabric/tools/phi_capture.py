@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 @contextmanager

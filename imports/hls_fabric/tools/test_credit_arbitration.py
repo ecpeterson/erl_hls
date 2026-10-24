@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 
 from test_credit_link import ROOT, digest, run

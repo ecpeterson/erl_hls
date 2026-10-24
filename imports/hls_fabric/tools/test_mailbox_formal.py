@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SAT-check mailbox selection and inductive metadata contracts at explicit sizes."""
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import argparse
 import copy
 import hashlib

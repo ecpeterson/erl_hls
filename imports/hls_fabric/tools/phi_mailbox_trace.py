@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sys
 
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def payload_net(channel: str) -> str:

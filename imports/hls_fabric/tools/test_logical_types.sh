@@ -8,7 +8,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell -eval 'ok = hls_dense_topology_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 cp "$erl_hls_root"/priv/xls/lib/*.x priv/xls/lib/*.x "$stage/"
 cp "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"

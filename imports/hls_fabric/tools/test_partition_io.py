@@ -3,10 +3,10 @@
 import argparse
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 
 ROOT = Path(__file__).resolve().parents[1]
 

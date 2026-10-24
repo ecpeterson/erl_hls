@@ -6,7 +6,7 @@ mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 # Source listings and common host transports retain one compiler-owned implementation.
 bash "$erl_hls_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '

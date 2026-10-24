@@ -4,8 +4,9 @@ import argparse
 import json
 import os
 
-from backend_paths import PUBLIC, ROOT
-from test_local_protocol import run
+from compiler_paths import PUBLIC
+from backend_paths import ROOT
+from backend_commands import run
 
 
 # Frames are constructed by the generated source codecs, including their tags.

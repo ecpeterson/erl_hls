@@ -15,7 +15,8 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(output, repeats):
+def run(output: Path, repeats: int) -> None:
+    """Measure all carriers in fresh VMs and retain per-run samples and aggregate statistics."""
     output.mkdir(parents=True, exist_ok=False)
     samples = []
     modes = ['proxy', 'tcp', 'local']
@@ -23,7 +24,7 @@ def run(output, repeats):
         for mode in modes[repeat % 3:] + modes[:repeat % 3]:
             carrier = 'hls_local' if mode == 'local' else 'inet_tcp'
             command = ['erl', '+S', '4:4', '-noshell', '-proto_dist', carrier, '-pa',
-                       *map(str, erlang_paths()), '-eval',
+                       *map(str, erlang_paths("test")), '-eval',
                        f'ok = hls_carrier_bench:run({mode}), halt().']
             result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, timeout=60)

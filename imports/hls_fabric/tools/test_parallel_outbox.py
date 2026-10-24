@@ -2,10 +2,11 @@
 """Exercise production-generated parallel outboxes with aliased and independent lanes."""
 import argparse
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 
-from test_actor_rtl import erl_command, execute
+from backend_paths import erl_command
+from backend_commands import execute
 from test_credit_link import run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
     """Compile the real private drainer, then check all accepted effects and credits in RTL."""
     stage.mkdir(parents=True, exist_ok=False)
-    execute(erl_command(public, f'[Path] = init:get_plain_arguments(), ok = hls_partition_outbox_tests:write(Path, {lanes}), halt().', stage/'top.x'), stage, 'generate')
+    execute(erl_command(public, f'[Path] = init:get_plain_arguments(), ok = hls_partition_outbox_tests:write(Path, {lanes}), halt().', stage/'top.x', profile="test"), stage, 'generate')
     shutil.copy(public/'priv/xls/lib/axis.x', stage/'axis.x')
     shutil.copy(ROOT/'test/rtl/parallel_outbox_actor.x', stage/'parallel_outbox_actor.x')
     for command, name, output in [

@@ -10,7 +10,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell \
     -eval '[Stage, KindText] = init:get_plain_arguments(),
         Kind = maps:get(KindText, #{"small" => small, "mailbox" => mailbox, "direct_mailbox" => direct_mailbox, "mailbox_mixed" => mailbox_mixed, "phi" => phi, "reduction" => reduction, "aggregate" => aggregate, "direct_reduction" => direct_reduction}),

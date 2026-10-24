@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 
 from phi_mesh_components import modules, ports
-from test_actor_rtl import digest
+from backend_commands import digest
 
 INSTANCE = re.compile(r'^  (\w+) (\w+) \(\n(.*?)^  \);', re.M | re.S)
 NET = re.compile(r'^  (?:wire|reg) (?:\[[^\]]+\] )?(\w+)', re.M)

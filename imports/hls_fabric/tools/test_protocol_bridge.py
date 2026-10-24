@@ -5,10 +5,10 @@ import json
 import re
 import subprocess
 import time
-from backend_paths import ROOT, erlang_paths
+from backend_paths import ROOT, erlang_paths, erlang_environment
 from compile_protocol_bridge import compile_bridge
 from compile_protocol_transport import digest
-from test_local_protocol import run
+from backend_commands import run
 
 
 def build(xls: Path, stage: Path) -> list[Path]:
@@ -20,7 +20,7 @@ def build(xls: Path, stage: Path) -> list[Path]:
             '{"test/hls_protocol_inbox_fixture.erl",[]}],topology=>{hls_protocol_network_fixture,framed,[]},'
             'actor_limit=>3,control=>rectangle,activation=>explicit_start,native_actors=>'+actors+',host=>1,service=>'+str(7+10*i)+'}.\n')
         role=stage/f'role{i}'
-        run(['escript','tools/emit_protocol_bridge.escript',config,role],stage,f'emit-{i}')
+        run(['escript','tools/emit_protocol_bridge.escript',config,role],stage,f'emit-{i}', env=erlang_environment("test"))
         compile_bridge(xls,role);roles.append(role)
     return roles
 
@@ -60,7 +60,7 @@ def witness(build_root: Path, binary: Path, ebin: Path, stage: Path, incarnation
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('pair simulator startup')
                 time.sleep(.02)
             expression='[B,S,I]=init:get_plain_arguments(),ok=hls_protocol_bridge_live:run(B,S,list_to_integer(I)),halt().'
-            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,'-eval',expression,
+            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),ebin,'-eval',expression,
                 '-extra',build_root,stage,str(incarnation)],stage,'host')
             assert sim.wait(timeout=10)==0,(stage/'simulation.log').read_text()
         finally:
@@ -72,7 +72,7 @@ def witness(build_root: Path, binary: Path, ebin: Path, stage: Path, incarnation
 def qualify(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
     """Compile once and exercise two fresh reset-owned incarnations through real host routes."""
     ebin=stage/'ebin';ebin.mkdir()
-    run(['erlc',*[v for p in erlang_paths() for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
+    run(['erlc',*[v for p in erlang_paths("test") for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
          ROOT/'test/hls_protocol_network_fixture.erl',ROOT/'test/hls_protocol_bridge_live.erl'],stage,'host-compile')
     wrapper,rtl=pair(roles,stage)
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_pair',

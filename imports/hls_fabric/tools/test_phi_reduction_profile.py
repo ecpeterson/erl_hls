@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from phi_reduction_profile import extend, aggregate_handoffs
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def fixture(stage: Path) -> tuple[dict, dict, dict, dict]:

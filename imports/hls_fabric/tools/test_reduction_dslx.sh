@@ -9,7 +9,7 @@ test_stage=$(cd "$test_stage" && pwd)
 
 cd "$project_root"
 rebar3 as test compile >/dev/null
-source tools/backend_env.sh
+source tools/backend_env.sh test
 
 generated="$test_stage/hls_statem_reduction_lower_fixture.x"
 aggregate_generated="$test_stage/hls_statem_reduction_aggregate_fixture.x"

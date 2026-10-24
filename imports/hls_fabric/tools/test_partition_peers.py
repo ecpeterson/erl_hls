@@ -3,10 +3,11 @@
 import argparse
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 
-from test_actor_rtl import digest, erl_command, execute
+from backend_commands import digest, execute
+from backend_paths import erl_command
 from test_phi_bridge import ROOT
 
 
@@ -43,7 +44,7 @@ def main() -> None:
     stage, xls, public = args.stage.resolve(), args.xls.resolve(), args.erl_hls.resolve()
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",
-                        stage / "partition_peers.x"), stage, "generation", timeout=60)
+                        stage / "partition_peers.x", profile="test"), stage, "generation", timeout=60)
     sources = [ROOT / "priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x"]
     for path in sources:
         shutil.copy(path, stage)

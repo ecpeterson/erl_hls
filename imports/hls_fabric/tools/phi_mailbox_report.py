@@ -8,7 +8,7 @@ import sys
 from types import ModuleType
 
 from phi_transport_metrics import distribution
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def remote_intervals(message: dict, read: dict, events: dict, incoming: dict) -> dict[str, int] | None:

@@ -8,7 +8,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_type_shape_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"

@@ -11,7 +11,7 @@ import sys
 
 from phi_cycle_trace import capture_path, executor_requests, read, trace_digest
 from phi_transport_metrics import dense, distribution
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def reduction(resource: dict, value: int) -> dict:

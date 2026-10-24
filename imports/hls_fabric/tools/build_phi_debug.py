@@ -4,7 +4,8 @@
 Uses native XLS plus Yosys. Each directory retains DSLX, IR, RTL, source hashes,
 commands and logs; debug/ contains the deployable shared-transport wrapper.
 """
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 import argparse
 import hashlib
 import json
@@ -62,14 +63,14 @@ def validate(build):
         raise ValueError("manifest fingerprint mismatch")
 
 
-def build(args):
+def build(args: argparse.Namespace) -> None:
+    """Compile the test profile and emit matched production and observed Phi devices."""
     stage, xls = args.stage.resolve(), args.xls.resolve()
     subprocess.run(["rebar3", "as", "test", "compile"], cwd=ROOT, check=True)
     for mode in ("production", "observed"):
         out = stage / mode
         out.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/hls_fabric/ebin"),
-                        str(ROOT / "_build/test/lib/hls_fabric/test"), "-eval",
+        subprocess.run(["erl", "-noshell", "-pa", *map(str, erlang_paths("test")), "-eval",
                         '[Dir, Flag, Shards] = init:get_plain_arguments(), ok = hls_phi_debug_dslx:write(Dir, Flag =:= "true", list_to_integer(Shards)), halt().',
                         "-extra", str(out), str(mode == "observed").lower(), str(args.shards)], cwd=ROOT, check=True)
         for source in [*PUBLIC.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x"), *PUBLIC.glob("priv/xls/fabric/*.x"),

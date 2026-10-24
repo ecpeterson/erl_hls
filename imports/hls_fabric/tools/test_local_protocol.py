@@ -1,37 +1,14 @@
 """Check source-bound receipt/callback composition with finite-width SAT contracts."""
 from pathlib import Path
 import argparse
-import hashlib
 import json
 import shutil
-import subprocess
 import time
 
-from backend_paths import PUBLIC, ROOT
+from compiler_paths import PUBLIC
+from backend_paths import ROOT
 from test_local_actor import manifest
-
-
-def digest(path: Path) -> str:
-    """Bind a source, emitted circuit or tool to its exact contents."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def run(command: list[str | Path], stage: Path, name: str, output: Path | None = None) -> None:
-    """Retain one bounded invocation; unexpected tool failures never count as a verdict."""
-    args = list(map(str, command))
-    (stage / (name + '.command.json')).write_text(json.dumps(args) + '\n')
-    path = stage / (name + '.log')
-    try:
-        with path.open('x') as log:
-            if output is None:
-                subprocess.run(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
-            else:
-                with output.open('x') as out:
-                    subprocess.run(args, cwd=ROOT, stdout=out, stderr=log, check=True, timeout=240)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        # Keep the full file and expose a bounded tail in the main CI log.
-        print(path.read_text(errors='replace')[-6000:], flush=True)
-        raise
+from backend_commands import digest, run
 
 
 def prove(args: argparse.Namespace, stage: Path, raw: Path, module: str,

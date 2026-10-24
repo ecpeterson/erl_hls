@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import re
 
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 
 
 def adapter_procs(ir: str) -> list[tuple[str, str, str]]:

@@ -10,7 +10,7 @@ import subprocess
 try:
     import compile_xls
 except ModuleNotFoundError:
-    from backend_paths import PUBLIC
+    from compiler_paths import PUBLIC
 
 from compile_xls import build, duration, interrupted, sha
 

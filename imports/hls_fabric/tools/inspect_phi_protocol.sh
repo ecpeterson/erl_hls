@@ -9,5 +9,5 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_root"
 rebar3 compile
 # Do not select a stale test-profile build merely because it exists.
-export ERL_AFLAGS="-pa \"$project_root/_build/default/lib/hls_fabric/ebin\" -pa \"$project_root/_build/default/checkouts/erl_hls/ebin\""
+source "$project_root/tools/backend_env.sh" default
 exec escript tools/inspect_phi_protocol.escript "$project_root/_checkouts/erl_hls" "$1"

@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import re
 import shutil
 import statistics

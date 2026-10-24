@@ -2,9 +2,10 @@
 from pathlib import Path
 import argparse
 import hashlib
-from backend_paths import PUBLIC, erlang_paths
+from compiler_paths import PUBLIC
+from backend_paths import erlang_environment
 from emit_protocol_repetition import emit_application
-from test_local_protocol import run
+from backend_commands import run
 
 
 def hardware(directory: Path) -> dict[str, str]:
@@ -18,12 +19,12 @@ def check(directory: Path) -> None:
     """Check fresh line/halo models, one direct application caller and unchanged emitted hardware."""
     directory.mkdir()
     build=emit_application(2,directory/'application')
-    env=['env','ERL_AFLAGS='+ ' '.join('-pa "'+str(p)+'"' for p in erlang_paths()),'escript']
-    run([*env,'tools/check_protocol_model.escript',directory/'application/config.erl',build,directory/'binding'],directory,'binding')
+    env=erlang_environment("default")
+    run(['escript','tools/check_protocol_model.escript',directory/'application/config.erl',build,directory/'binding'],directory,'binding',env=env)
     assert hardware(build)==hardware(directory/'binding-plain'), 'model annotation changed hardware'
     assert (build/'application/gateway.x').read_bytes()==(directory/'binding-plain/application-comparison/gateway.x').read_bytes(), 'model annotation changed gateway logic'
-    run([*env,'tools/inspect_phi_protocol.escript',PUBLIC,directory/'inventory'],directory,'inventory')
-    run([*env,'tools/check_protocol_model.escript','inventory',directory/'inventory'],directory,'models')
+    run(['escript','tools/inspect_phi_protocol.escript',PUBLIC,directory/'inventory'],directory,'inventory',env=env)
+    run(['escript','tools/check_protocol_model.escript','inventory',directory/'inventory'],directory,'models',env=env)
 
 
 def main() -> None:

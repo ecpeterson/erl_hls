@@ -14,7 +14,8 @@ from pathlib import Path
 import re
 import subprocess
 
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -105,7 +106,7 @@ def main() -> None:
         folder = stage / mode
         folder.mkdir(exist_ok=True)
         source, ir, optimized, rtl = [folder / ('effect_router.' + suffix) for suffix in ('x', 'ir', 'opt.ir', 'v')]
-        run(mode + '-emit', ['erl', '+S', '2:2', '-noshell', '-pa', ebin, '-eval',
+        run(mode + '-emit', ['erl', '+S', '2:2', '-noshell', '-pa', ebin, *erlang_paths("test"), '-eval',
             '[Mode, Output] = init:get_plain_arguments(), ok = xls_effect_router_testgen:write(Mode, Output), halt().',
             '-extra', mode, source])
         run(mode + '-convert', [xls / 'ir_converter_main', '--top=Top', *options, source], ir)

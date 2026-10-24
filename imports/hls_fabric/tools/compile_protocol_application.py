@@ -3,7 +3,8 @@ from pathlib import Path
 import argparse
 import json
 import subprocess
-from backend_paths import ROOT, PUBLIC
+from backend_paths import ROOT
+from compiler_paths import PUBLIC
 from compile_protocol_boundary import compile_boundary
 from compile_protocol_transport import digest
 

@@ -5,7 +5,8 @@ import hashlib
 import json
 import subprocess
 
-from backend_paths import PUBLIC, ROOT
+from compiler_paths import PUBLIC
+from backend_paths import ROOT
 
 
 def digest(path: Path) -> str:

@@ -8,7 +8,7 @@ import re
 import subprocess
 
 from phi_transport_metrics import dense, distribution
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def bindings(stage: Path, device: int) -> dict:

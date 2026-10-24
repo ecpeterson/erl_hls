@@ -13,7 +13,8 @@ from phi_actor_profile import reconstruct
 from phi_cycle_trace import capture_path, trace_digest
 from phi_reduction_profile import bindings as reduction_bindings
 from phi_link_packet import packets
-from test_actor_rtl import digest, erl_command
+from backend_commands import digest
+from backend_paths import erl_command
 
 
 def routes(stage: Path, public: Path) -> dict:
@@ -38,7 +39,7 @@ def routes(stage: Path, public: Path) -> dict:
        || I <- maps:get(ingresses,P)],
     io:put_chars(json:encode(#{actors=>LA,lanes=>LL,ingresses=>LI})), halt().'''
     before = digest(stage/'deployment.term')
-    result = json.loads(subprocess.check_output(erl_command(public, expression, stage), text=True))
+    result = json.loads(subprocess.check_output(erl_command(public, expression, stage, profile="test"), text=True))
     if before != digest(stage/'deployment.term'):
         raise ValueError('deployment changed during route binding')
     result['deployment_sha256'] = before

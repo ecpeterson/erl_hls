@@ -9,7 +9,7 @@ stage=${2:-_build/indexed-collection}
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 python3 tools/build.py as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl +S 2:2 -noshell -eval 'ok = hls_indexed_adapter_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 for source in "$project_root/priv/xls/lib/mailbox.x" \
               "$project_root/priv/xls/templates/indexed_collection_core_tests.x" \

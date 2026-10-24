@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare configurable decoder profiles with BEAM and stalled RTL execution."""
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 import argparse
 from collections import defaultdict
 import json
@@ -64,7 +65,7 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     (stage / "validation.json").unlink(missing_ok=True)
     (stage / "config.term").write_text(
         f"#{{shape => [{width},{height}], planes => [{','.join(planes)}], shards => {shards}}}.\n")
-    erl = ["erl", "-noshell", "-pa", ROOT / "_build/test/lib/hls_fabric/ebin", ROOT / "_build/test/lib/hls_fabric/test"]
+    erl = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test"))]
     command([*erl, "-eval", "[Stage] = init:get_plain_arguments(), phi_decoder_profile_fixture:write(Stage), "
              "phi_decoder_profile_fixture:oracle(Stage), halt().", "-extra", stage], ROOT, stage / "prepare.log", 120)
     for directory in (ROOT / "priv/xls/lib", PUBLIC / "priv/xls/lib", PUBLIC / "priv/xls/fabric"):

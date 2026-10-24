@@ -5,12 +5,13 @@ Run rebar3 as test compile first. XLS_ROOT contains ir_converter_main, opt_main,
 codegen_main and xls/dslx/stdlib. The same generated RTL exercises both carriers.
 """
 import argparse
-import hashlib
 import importlib
 import json
 import os
 from pathlib import Path
-from backend_paths import PUBLIC, erlang_paths
+from compiler_paths import PUBLIC
+from backend_paths import erl_command
+from backend_commands import digest, execute
 import shutil
 import subprocess
 import sys
@@ -19,14 +20,12 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def inputs(args):
+def inputs(args: argparse.Namespace) -> dict:
+    """Hash compiler, fixture and tool inputs used to validate reuse of the actor RTL build."""
     private = [ROOT / path for path in (
         "test/hls_actor_pid_fixture.erl", "test/hls_actor_pid_dslx.erl",
-        "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/phi_scheduler_rams.sh", "rebar.config", "rebar.lock")]
+        "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/backend_commands.py",
+        "tools/backend_paths.py", "tools/compiler_paths.py", "tools/phi_scheduler_rams.sh", "rebar.config", "rebar.lock")]
     private += list((ROOT / "src").rglob("*.erl"))
     private += list((ROOT / "priv/xls").rglob("*.x"))
     private += list((ROOT / "test/xls").rglob("*.x"))
@@ -62,37 +61,15 @@ def validate_build(args):
         raise ValueError("generated RTL or instrumentation changed; rebuild before simulation")
 
 
-def beam_paths(public: Path) -> list[Path]:
-    """Use built backend applications and the selected compiler, honoring an explicit built override."""
-    # Explicit independently built compiler overrides retain their own beam directory.
-    paths = erlang_paths()
-    return [public / "ebin", *paths] if (public / "ebin").is_dir() else paths
-
-
-def erl_command(public, expression, *arguments):
-    return ["erl", "+S", "2:2", "-noshell", "-pa", *map(str, beam_paths(public)),
-            "-eval", expression, "-extra", *map(str, arguments)]
-
-
-def execute(command, directory, name, timeout=180, output=None):
-    with (directory / f"{name}.log").open("w") as log:
-        if output is None:
-            subprocess.run(command, cwd=directory, stdout=log, stderr=subprocess.STDOUT,
-                           check=True, timeout=timeout)
-        else:
-            with output.open("w") as result:
-                subprocess.run(command, cwd=directory, stdout=result, stderr=log,
-                               check=True, timeout=timeout)
-
-
-def build(args):
+def build(args: argparse.Namespace) -> None:
+    """Generate and instrument one fresh actor RTL build, rejecting changed inputs or interfaces."""
     stage, public, xls = args.stage, args.erl_hls, args.xls
     provenance = inputs(args)
     stage.mkdir(parents=True, exist_ok=False)
     source = stage / "source"
     source.mkdir()
     command = erl_command(public,
-        "ok = hls_actor_pid_dslx:write(hd(init:get_plain_arguments())), halt().", source)
+        "ok = hls_actor_pid_dslx:write(hd(init:get_plain_arguments())), halt().", source, profile="test")
     with (stage / "generation.log").open("w") as log:
         subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
     for library in ("lib", "fabric"):
@@ -157,7 +134,8 @@ def build(args):
         "inputs": provenance, "outputs": outputs(stage)}, indent=2, sort_keys=True) + "\n")
 
 
-def simulate(args, carrier):
+def simulate(args: argparse.Namespace, carrier: str) -> None:
+    """Run the host fixture through one carrier and retain public observations; terminate on failure."""
     board = args.stage / carrier
     board.mkdir()
     shutil.copy(args.stage / "debug/manifest.json", board)
@@ -175,7 +153,7 @@ def simulate(args, carrier):
                     raise RuntimeError(f"simulator startup failed; see {board / 'simulation.log'}")
                 time.sleep(0.02)
             command = erl_command(args.erl_hls,
-                "ok = hls_actor_pid_live:run(hd(init:get_plain_arguments())), halt().", board)
+                "ok = hls_actor_pid_live:run(hd(init:get_plain_arguments())), halt().", board, profile="test")
             command[1:1] = ["-proto_dist", carrier]
             execute(command, board, "host", timeout=180)
             if sim.wait(timeout=10):

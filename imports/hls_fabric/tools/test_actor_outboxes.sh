@@ -8,7 +8,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_actor_outbox_testgen:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$stage:$root/priv/xls/lib:$root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"

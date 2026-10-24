@@ -5,8 +5,9 @@ import json
 import re
 from pathlib import Path
 
-from backend_paths import PUBLIC, ROOT
-from test_actor_rtl import execute
+from compiler_paths import PUBLIC
+from backend_paths import ROOT, erlang_paths
+from backend_commands import execute
 
 
 def state_paths(dslx: str) -> dict[int, str]:
@@ -179,7 +180,7 @@ def main() -> None:
     expression = '''[Source, Target] = init:get_plain_arguments(),
       Body = xls_shared_parse:to_xls(Source, #{direct_collection => exclusive_epoch, direct_actor_debug => true}),
       ok = file:write_file(Target, Body), halt().'''
-    execute(['erl', '-noshell', '-eval', expression, '-extra',
+    execute(['erl', '-noshell', '-pa', *erlang_paths("test"), '-eval', expression, '-extra',
              str(ROOT/'test/hls_projection_reduction_fixture.erl'), str(stage/'collector.x')], stage, 'generate')
     with (stage/'collector.x').open('a') as output:
         output.write('''

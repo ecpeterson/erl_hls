@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 import re
 
-from test_actor_rtl import ROOT, digest, execute
+from backend_paths import ROOT
+from backend_commands import digest, execute
 from transport_codegen import specialize
 
 

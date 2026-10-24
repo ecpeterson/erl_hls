@@ -7,8 +7,10 @@ import os
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT, PUBLIC
-from test_local_protocol import run, prove
+from backend_paths import ROOT
+from compiler_paths import PUBLIC
+from backend_commands import run
+from test_local_protocol import prove
 from compile_local_actor import compile_owner
 from compile_protocol_transport import compile_transport
 

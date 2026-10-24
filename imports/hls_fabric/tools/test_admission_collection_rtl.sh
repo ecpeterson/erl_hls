@@ -9,7 +9,7 @@ case "$policy" in true|exclusive_epoch) ;; *) echo "invalid collector policy" >&
 stage="$project_root/_build/admission-collection/rtl-$policy"
 mkdir -p "$stage"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell -eval '
 [Stage,Policy]=init:get_plain_arguments(),
 ok=hls_admission_collection_dslx:write(Stage,case Policy of "true" -> true; "exclusive_epoch" -> exclusive_epoch end),halt().' -extra "$stage" "$policy"

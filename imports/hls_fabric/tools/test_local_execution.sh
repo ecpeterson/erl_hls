@@ -7,7 +7,7 @@ stage=${2:-"$project_root/_build/local-execution"}
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 erl -noshell -eval '[Stage, Compiler] = init:get_plain_arguments(), ok = xls_local_execution_validation:prepare(Stage, Compiler), halt().' -extra "$stage" "$erl_hls_root"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")

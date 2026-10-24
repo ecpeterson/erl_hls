@@ -1,5 +1,5 @@
 """Check causal identities when adapting scheduler traces to common profiles."""
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import unittest
 
 class AdapterTests(unittest.TestCase):

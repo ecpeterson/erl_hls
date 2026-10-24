@@ -5,10 +5,12 @@ import json
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT, PUBLIC
+from backend_paths import ROOT
+from compiler_paths import PUBLIC
 from compile_protocol_transport import compile_clock
 from test_protocol_network import area, configuration as network_config, simulate as network_simulate
-from test_local_protocol import run, prove
+from backend_commands import run
+from test_local_protocol import prove
 
 
 def configuration(path: Path) -> None:

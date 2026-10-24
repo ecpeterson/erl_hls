@@ -10,7 +10,7 @@ xls_root=$(cd "$xls_root" && pwd)
 
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 ERL_HLS_ENTRY_STAGE="$stage" erl -noshell \
     -eval 'Stage = os:getenv("ERL_HLS_ENTRY_STAGE"), ok = xls_entry_outcome_dslx:write(Stage), ok = xls_entry_branch_dslx:write(Stage), halt().'
 

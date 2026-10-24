@@ -5,7 +5,8 @@ First run build_phi_debug.py. The VPI plugin transports external stream words;
 it never reads application internals. The RTL also compares the application
 against its independently compiled production variant on every clock.
 """
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 import argparse
 import json
 import os
@@ -19,7 +20,8 @@ from topology_debug_services import rtl_files
 from build_phi_debug import validate
 
 
-def run(build, stage):
+def run(build: Path, stage: Path) -> None:
+    """Validate a matched build and replay it through public debug APIs in the test profile."""
     validate(build)
     stage.mkdir(parents=True, exist_ok=True)
     for name in ("block", "blocked", "hold_debug", "debug_held", "reply_held", "debug_released", "done",
@@ -60,8 +62,7 @@ def run(build, stage):
                     raise RuntimeError((stage / "simulation.log").read_text())
                 time.sleep(0.05)
             with (stage / "host.log").open("w") as host_log:
-                client = subprocess.run(["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/hls_fabric/ebin"),
-                    str(ROOT / "_build/test/lib/hls_fabric/test"), "-eval",
+                client = subprocess.run(["erl", "-noshell", "-pa", *map(str, erlang_paths("test")), "-eval",
                     'ok = hls_phi_debug_live:run(hd(init:get_plain_arguments())), halt().', "-extra", str(stage)],
                     cwd=ROOT, stdout=host_log, stderr=subprocess.STDOUT, timeout=600)
             if client.returncode:

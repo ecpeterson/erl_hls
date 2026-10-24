@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import re
 
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def declarations(path: Path) -> dict[str, int]:

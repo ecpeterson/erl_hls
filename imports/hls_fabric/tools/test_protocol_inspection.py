@@ -5,10 +5,12 @@ import argparse
 import json
 import subprocess
 import time
-from backend_paths import ROOT, PUBLIC, erlang_paths
+from backend_paths import ROOT, erlang_paths
+from compiler_paths import PUBLIC
 from compile_protocol_transport import digest
 from emit_protocol_repetition import build_application
-from test_local_protocol import run, prove
+from backend_commands import run
+from test_local_protocol import prove
 from test_protocol_application import simulator_source
 from test_protocol_repetition import compare
 
@@ -42,7 +44,7 @@ def properties(xls: Path, build: Path, stage: Path) -> None:
 def shapes(xls: Path, stage: Path) -> None:
     """Compare packed projections to ordinary typed machine fields, including active gather/scalar priority."""
     expression='[C,S]=init:get_plain_arguments(),ok=hls_protocol_inspection_shapes:write(C,S),halt().'
-    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),'-eval',expression,'-extra',PUBLIC,stage],stage.parent,'shapes-emit')
+    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',PUBLIC,stage],stage.parent,'shapes-emit')
     for name in ['plain','scalar','gather']:
         shape_case(xls,stage/name,name)
 
@@ -89,7 +91,7 @@ def live(build: Path, stage: Path, binary: Path) -> None:
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('simulation startup failed')
                 time.sleep(.02)
             expression='[B,S]=init:get_plain_arguments(),ok=hls_protocol_inspection_live:run(B,S,3),halt().'
-            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),'-eval',expression,'-extra',build,stage],stage,'host')
+            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',build,stage],stage,'host')
             assert sim.wait(timeout=10)==0
         finally:
             if sim.poll() is None:sim.terminate();sim.wait(timeout=5)
@@ -113,7 +115,7 @@ def reset_witness(build: Path, stage: Path) -> None:
 def qualify(build: Path, stage: Path) -> None:
     """Compile one public-port twin harness and compare finite runs to independent ordinary BEAM actors."""
     expression='[S]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,3),halt().'
-    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),'-eval',expression,'-extra',stage],stage,'oracle')
+    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',stage],stage,'oracle')
     rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()];source=simulator_source(build,stage)
     inputs=rtl+[source,build/'deployment.etf',build/'network/inspection.etf',build/'network/inspection.json']
     hashes={str(p):digest(p) for p in inputs}

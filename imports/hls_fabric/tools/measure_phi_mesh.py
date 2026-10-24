@@ -4,12 +4,12 @@ import argparse
 import importlib
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import statistics
 import subprocess
 import sys
 
-from test_actor_rtl import digest
+from backend_commands import digest
 from test_phi_mesh import artifacts
 
 

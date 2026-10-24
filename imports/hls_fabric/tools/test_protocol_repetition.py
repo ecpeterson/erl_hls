@@ -7,7 +7,7 @@ import time
 from backend_paths import ROOT, erlang_paths
 from compile_protocol_transport import digest
 from emit_protocol_repetition import build_application
-from test_local_protocol import run
+from backend_commands import run
 from test_protocol_application import simulator_source
 
 
@@ -33,7 +33,7 @@ def live(build: Path, stage: Path, width: int, ebin: Path, binary: Path) -> None
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('simulation startup failed')
                 time.sleep(.02)
             expression='[B,S,N]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:live(B,S,list_to_integer(N)),halt().'
-            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,'-eval',expression,
+            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,
                  '-extra',build,stage,str(width)],stage,'host')
             assert sim.wait(timeout=10)==0
         finally:
@@ -44,10 +44,10 @@ def live(build: Path, stage: Path, width: int, ebin: Path, binary: Path) -> None
 def qualify(build: Path, stage: Path, width: int) -> dict:
     """Compile the independent reference fixture and public-port simulation once for this fresh build."""
     ebin=stage/'ebin';ebin.mkdir()
-    run(['erlc',*[v for p in erlang_paths() for v in ('-pa',p)],'+debug_info','-Werror',
+    run(['erlc',*[v for p in erlang_paths("default") for v in ('-pa',p)],'+debug_info','-Werror',
          '-o',ebin,ROOT/'test/phi_protocol_repetition_fixture.erl'],stage,'compile-host')
     expression='[S,N]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,list_to_integer(N)),halt().'
-    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,'-eval',expression,'-extra',stage,str(width)],stage,'oracle')
+    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage,str(width)],stage,'oracle')
     rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
     tracked=rtl+[source,build/'deployment.etf',stage/'oracle.json']

@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 from compile_xls import identity, locked, sha
 
 

@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 
 from transport_codegen import specialize
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 from test_phi_mesh import artifacts
 
 

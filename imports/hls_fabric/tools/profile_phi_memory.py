@@ -5,12 +5,13 @@ import json
 import os
 import re
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 import subprocess
 import time
 
-from test_actor_rtl import digest, erl_command, execute
+from backend_commands import digest, execute
+from backend_paths import erl_command
 from test_phi_bridge import ROOT, outputs
 from phi_service_metrics import summarize
 from phi_service_analysis import analyze
@@ -28,7 +29,7 @@ def profile(args: argparse.Namespace) -> None:
         shutil.copy(args.build / "source" / name, args.stage)
     execute(erl_command(args.erl_hls,
         "[Stage] = init:get_plain_arguments(), ok = hls_phi_memory_fixture:oracle(Stage), "
-        "ok = hls_phi_memory_profile:describe(Stage), halt().", args.stage),
+        "ok = hls_phi_memory_profile:describe(Stage), halt().", args.stage, profile="test"),
         args.stage, "oracle", timeout=60)
     catalog = json.loads((args.stage / "lane-catalog.json").read_text())
     plan = {}
@@ -107,7 +108,7 @@ def profile(args: argparse.Namespace) -> None:
     started = time.monotonic()
     with (args.stage / "host.log").open("w") as host_log, (args.stage / "simulation.log").open("w") as sim_log:
         host = subprocess.Popen(erl_command(args.erl_hls,
-            "ok = hls_phi_memory_profile:run(hd(init:get_plain_arguments())), halt().", args.stage),
+            "ok = hls_phi_memory_profile:run(hd(init:get_plain_arguments())), halt().", args.stage, profile="test"),
             cwd=ROOT, stdout=host_log, stderr=subprocess.STDOUT)
         sim = subprocess.Popen(["vvp", "-M", str(args.stage), "-m", "phi_service_trace", str(args.stage / "profile.vvp"),
             f"+HALF0={args.clock_halves[0]}", f"+HALF1={args.clock_halves[1]}", f"+STALLS={int(args.stalls)}"],

@@ -5,7 +5,7 @@ import json
 import subprocess
 import time
 from backend_paths import ROOT, erlang_paths
-from test_local_protocol import run
+from backend_commands import run
 from compile_protocol_transport import digest
 
 
@@ -20,7 +20,7 @@ def witness(build: Path, binary: Path, ebin: Path, stage: Path) -> None:
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('simulation startup failed')
                 time.sleep(.02)
             expression='[B,S]=init:get_plain_arguments(),ok=hls_protocol_application_live:run(B,S),halt().'
-            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,
+            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,
                  '-eval',expression,'-extra',build,stage],stage,'host')
             assert sim.wait(timeout=10)==0
         finally:
@@ -68,7 +68,7 @@ def simulator_source(build: Path, stage: Path) -> Path:
 def qualify(build: Path, stage: Path) -> None:
     """Exercise a compiled public application; retain simulation, host and reset evidence."""
     ebin=stage/'ebin';ebin.mkdir()
-    run(['erlc',*[v for path in erlang_paths() for v in ('-pa',path)],'+debug_info','-Werror','-o',ebin,
+    run(['erlc',*[v for path in erlang_paths("default") for v in ('-pa',path)],'+debug_info','-Werror','-o',ebin,
         ROOT/'test/hls_protocol_boundary_fixture.erl',ROOT/'test/hls_protocol_application_live.erl'],stage,'host-compile')
     rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)

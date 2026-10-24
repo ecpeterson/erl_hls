@@ -11,7 +11,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh
+source tools/backend_env.sh test
 source tools/phi_scheduler_rams.sh
 for placement in "${placements[@]}"; do
     case "$placement" in direct|one|two|coalesced|ingress_direct|ingress_one|ingress_two|ingress_coalesced|components_global|components_weak) ;; *) echo "unknown placement: $placement" >&2; exit 1;; esac

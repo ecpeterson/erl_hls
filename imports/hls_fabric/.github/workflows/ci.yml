@@ -102,6 +102,7 @@ jobs:
         run: python3 tools/test_phi_cycle_trace.py
       - name: Check build packaging and combined profile views
         run: |
+          python3 tools/test_backend_context.py
           python3 tools/test_packaging.py
           python3 tools/test_profile_views.py
       - name: Check service-profile accounting

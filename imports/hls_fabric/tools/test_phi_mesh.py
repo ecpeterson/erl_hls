@@ -5,12 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 import gzip
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 import sys
 from collections.abc import Callable
 
-from test_actor_rtl import digest, erl_command, execute
+from backend_commands import digest, execute
+from backend_paths import erl_command
 from test_phi_bridge import ROOT, inputs, build_device, instrument_device
 
 
@@ -83,7 +84,7 @@ def build(args: argparse.Namespace, *, transform: Callable[[Path], None] | None 
             "ok = hls_phi_memory_fixture:write(hd(init:get_plain_arguments()), coalesced, mesh_memory, "
             f"#{{phi_halo_cell => {args.phi_actors_per_scheduler}}}, {args.reductions}, {transport}, "
             f"{str(getattr(args, 'tiles', False)).lower()}), halt().",
-            source), args.stage, "generation", timeout=600)
+            source, profile="test"), args.stage, "generation", timeout=600)
         for library in ("lib", "fabric"):
             for path in (args.erl_hls / "priv/xls" / library).glob("*.x"):
                 shutil.copy(path, source)

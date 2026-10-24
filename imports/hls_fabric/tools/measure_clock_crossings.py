@@ -4,11 +4,11 @@ import argparse
 import importlib
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import statistics
 import subprocess
 import sys
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 
 ROOT = Path(__file__).resolve().parents[1]
 

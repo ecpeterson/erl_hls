@@ -38,6 +38,8 @@ class SelectionTests(unittest.TestCase):
             self.assertFalse(selection[group])
         self.assertTrue(plan(['rtl/hls_async_fifo.v'], CONFIG)['packed'])
         self.assertTrue(plan(['rebar.config'], CONFIG)['bringup'])
+        for helper in ('backend_paths.py', 'backend_commands.py', 'compiler_paths.py'):
+            self.assertTrue(all(plan(['tools/'+helper], CONFIG)[group] for group in CONFIG['groups']))
         self.assertFalse(plan(['experiments/07-openxc7/test_probe.py'], CONFIG)['memory_test'])
         cases=selection['memory']['include']
         self.assertEqual({(c['memory_case'],c['reductions']) for c in cases}, {

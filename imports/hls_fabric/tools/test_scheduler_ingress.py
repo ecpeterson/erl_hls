@@ -3,9 +3,10 @@
 import argparse
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 
-from test_actor_rtl import ROOT, digest, erl_command, execute
+from backend_paths import ROOT, erl_command
+from backend_commands import digest, execute
 
 
 def compile_ingress(stage: Path, xls: Path, public: Path, count: int, reference: bool = False) -> None:
@@ -17,7 +18,7 @@ def compile_ingress(stage: Path, xls: Path, public: Path, count: int, reference:
         actors => [#{{identity => probe, slot => 3}}]}}]}},
       Source = hls_partition_shared_dslx:ingress_support(A, Local, lists:seq(1, {count})),
       ok = file:write_file(filename:join(Stage, "selector.x"), Source), halt().'''
-    execute(erl_command(public, expression, stage), stage, 'generate')
+    execute(erl_command(public, expression, stage, profile="test"), stage, 'generate')
     (stage/'ingress_types.x').write_text('''import axis;
 pub struct ScheduledRequest { slot: u32, frame: axis::Frame, credit: u1 }
 ''')

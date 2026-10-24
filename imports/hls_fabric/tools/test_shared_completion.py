@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prove generated shared completion equivalent for every input bit pattern."""
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import argparse
 import json
 from pathlib import Path
@@ -28,7 +28,7 @@ def main() -> None:
     xls, stage = args.xls.resolve(), args.stage.resolve()
     stage.mkdir(parents=True, exist_ok=True)
     run(['rebar3', 'as', 'test', 'compile'], stage, 'compile.log')
-    run(['erl', '-noshell', '-pa', *map(str, erlang_paths()),
+    run(['erl', '-noshell', '-pa', *map(str, erlang_paths("test")),
          '-eval', 'io:put_chars(xls_shared_parse:to_xls('
          '"test_data/hls_statem_reduction_lower_fixture.erl", '
          '#{shared_service => aggregate_only})), halt().'], stage, 'generated.x')

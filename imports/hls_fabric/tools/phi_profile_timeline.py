@@ -2,7 +2,7 @@
 """Render a standalone cross-shard phi profile SVG from a VPI trace."""
 
 from __future__ import annotations
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 
 import argparse
 from collections import defaultdict, deque

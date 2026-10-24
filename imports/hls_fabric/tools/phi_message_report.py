@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 from phi_transport_metrics import distribution
-from test_actor_rtl import digest
+from backend_commands import digest
 
 
 def input_chain(target: dict, events: dict, incoming: dict) -> list[dict]:

@@ -5,7 +5,8 @@ Takes the same RTL/top/clock/reset arguments as topology_debug.py. The test
 compares original and instrumented application outputs every cycle, blocks the
 first external sink, then releases it after the host has inspected its wait chain.
 """
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 
 import argparse
 import json
@@ -290,8 +291,7 @@ def run(args: argparse.Namespace) -> None:
                 time.sleep(0.01)
             # Paths are passed as arguments, never interpolated into Erlang code.
             host_module = "hls_indexed_debug_live" if args.actor_test == "indexed_gather" else "hls_topology_debug_live"
-            host = ["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/hls_fabric/ebin"),
-                    str(ROOT / "_build/test/lib/hls_fabric/test"), "-eval",
+            host = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test")), "-eval",
                     f'case {host_module}:run(hd(init:get_plain_arguments())) of ok -> halt(0); Error -> io:format("~p~n",[Error]), halt(1) end.',
                     "-extra", str(stage)]
             with (stage / "host.log").open("w") as host_log:

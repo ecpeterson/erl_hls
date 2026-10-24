@@ -1,5 +1,6 @@
 """Check profile-specific RAM settings and publication metadata using compiler stubs."""
-from backend_paths import PUBLIC, ROOT
+from compiler_paths import PUBLIC
+from backend_paths import ROOT
 import json
 import shutil
 import subprocess

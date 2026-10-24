@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import re
 
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 from test_packed_credit import simulate
 from transport_codegen import replace_module
 

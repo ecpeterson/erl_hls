@@ -11,7 +11,7 @@ import importlib
 import json
 import os
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import re
 import shutil
 import subprocess
@@ -19,7 +19,8 @@ import sys
 import time
 
 from transport_codegen import specialize
-from test_actor_rtl import digest, erl_command, execute
+from backend_commands import digest, execute
+from backend_paths import erl_command
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,7 +34,8 @@ def inputs(args: argparse.Namespace) -> dict:
                            "test/rtl/partition_sim_bridge.c",
                            "test/hls_phi_memory_fixture.erl", "test/hls_phi_board_geometry.erl", "tools/test_phi_memory.py",
                            "rtl/hls_async_fifo.v", "priv/xls/**/*.x", "tools/phi_scheduler_rams.sh",
-                           "tools/test_phi_bridge.py", "tools/test_actor_rtl.py", "tools/transport_codegen.py",
+                           "tools/test_phi_bridge.py", "tools/test_actor_rtl.py", "tools/backend_commands.py",
+                           "tools/backend_paths.py", "tools/compiler_paths.py", "tools/transport_codegen.py",
                            "rebar.config", "rebar.lock")),
         ("public", args.erl_hls, ("src/**/*.erl", "src/examples/phi_decoder/phi_field.x",
                                   "include/**/*.hrl", "priv/xls/**/*.x",
@@ -252,7 +254,7 @@ def build(args: argparse.Namespace) -> None:
     command = erl_command(args.erl_hls,
         f"ok = {fixture}:write(hd(init:get_plain_arguments())" +
         (f", {args.placement}, {args.memory_case}, #{{}}, {getattr(args, 'reductions', 'ordinary')}"
-         if getattr(args, "memory", False) else "") + "), halt().", source)
+         if getattr(args, "memory", False) else "") + "), halt().", source, profile="test")
     with (args.stage / "generation.log").open("w") as log:
         subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=300)
@@ -321,7 +323,7 @@ def simulate(args: argparse.Namespace) -> None:
     env.update(ERL_HLS_SIM_DIR=str(stage), ERL_HLS_SIM_TOP="phi_bridge_tb")
     fixture = "hls_phi_memory_fixture" if getattr(args, "memory", False) else "hls_bridge_phi_fixture"
     command = erl_command(args.erl_hls,
-        f"ok = {fixture}:oracle(hd(init:get_plain_arguments())), halt().", stage)
+        f"ok = {fixture}:oracle(hd(init:get_plain_arguments())), halt().", stage, profile="test")
     with (stage / "oracle.log").open("w") as log:
         subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=300)
@@ -344,7 +346,7 @@ def simulate(args: argparse.Namespace) -> None:
                 time.sleep(0.02)
             runner = "hls_phi_memory_live" if getattr(args, "memory", False) else "hls_bridge_phi_live"
             execute(erl_command(args.erl_hls,
-                f"ok = {runner}:run(hd(init:get_plain_arguments())), halt().", stage),
+                f"ok = {runner}:run(hd(init:get_plain_arguments())), halt().", stage, profile="test"),
                 stage, "host", timeout=getattr(args, "simulation_timeout", 720))
             if sim.wait(timeout=15):
                 raise RuntimeError(f"simulator failed; see {stage / 'simulation.log'}")

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build and verify a periodic repetition-code workload; optionally map XC7 resources."""
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
+from backend_paths import erlang_paths
 import argparse
 import json
 import os
@@ -61,8 +62,7 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
                   'phi_repetition_fixture:oracle(S,N), halt().')
     with (stage / "prepare.log").open("w") as out:
         subprocess.run(["erl", "+S", "2", "-noshell", "-pa",
-                        str(ROOT / "_build/test/lib/hls_fabric/ebin"),
-                        str(ROOT / "_build/test/lib/hls_fabric/test"), "-eval", expression],
+                        *map(str, erlang_paths("test")), "-eval", expression],
                        cwd=ROOT, env=dict(os.environ, REPETITION_STAGE=str(stage),
                                         REPETITION_COUNT=str(count)),
                        stdout=out, stderr=subprocess.STDOUT, check=True, timeout=120)

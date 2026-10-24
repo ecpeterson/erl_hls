@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from phi_capture import compressed_capture, prune_simulation
-from test_actor_rtl import digest
+from backend_commands import digest
 from phi_cycle_trace import capture_path
 
 

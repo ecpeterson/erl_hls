@@ -4,7 +4,7 @@ import argparse
 import importlib
 import json
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import shutil
 import statistics
 import subprocess

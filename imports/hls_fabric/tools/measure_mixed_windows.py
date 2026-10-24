@@ -7,7 +7,7 @@ its cycles are independent of the separate live debug regression's host timing.
 Optional area mapping includes the complete application and topology/actor
 query service, but no boundary counter/trace monitor or board transport.
 """
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import argparse
 import hashlib
 import json

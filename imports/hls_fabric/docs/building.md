@@ -18,6 +18,21 @@ Prepared sources live in disposable `_build/compiler/`, selected by `_checkouts/
 
 The public compiler supplies runtime reduction membership, contribution lowering, live actor observations and native XLS channel scheduling options. Collector ownership and hardware generation live in this repository's `src/backend/` and `priv/xls/templates/` files.
 
+## Erlang build profiles
+
+Tools select the same rebar profile that they compile. Production emitters use `default`; drivers that call compiled test fixtures use `test`. A missing profile is an error with a build instruction. An old `_build/test/` directory cannot select test beams for a production emitter. Checkout beams take precedence over dependency beams within the selected profile.
+
+For a shell session, compile first and select explicitly:
+
+```sh
+python3 tools/build.py as test compile
+source tools/backend_env.sh test
+```
+
+Use `default` after an ordinary build. Sourcing this helper replaces `ERL_AFLAGS` with the selected code paths; keep unrelated VM options in `ERL_FLAGS`. Python callers use `backend_paths.erlang_paths(profile)` for argument lists or `erlang_environment(profile)` for a child environment. Importing these helpers does not modify the environment or Python module path.
+
+`backend_commands` owns shared hashing and bounded command execution. It does not import fixture drivers or require compiler sources. Compiler-dependent tools explicitly import `compiler_paths`; that separate bootstrap still exposes the selected compiler's unpackaged Python tools on `sys.path`. Python packaging of those compiler tools remains separate work.
+
 ## Complete decoder example
 
 Install Icarus Verilog (`iverilog` and `vvp`) on `PATH`. Provide an XLS bundle containing `ir_converter_main`, `opt_main`, `codegen_main`, `interpreter_main` and `xls/dslx/stdlib`:

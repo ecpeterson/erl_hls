@@ -10,7 +10,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 from compile_xls import build, identity, locked, sha
 from completion_fifo import transform
 from optimizer_pipeline import prepare as prepare_optimizer_pipeline

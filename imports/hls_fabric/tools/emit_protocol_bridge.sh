@@ -8,6 +8,6 @@ fi
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_root"
 rebar3 compile
-export ERL_AFLAGS="-pa \"$project_root/_build/default/lib/hls_fabric/ebin\" -pa \"$project_root/_build/default/checkouts/erl_hls/ebin\""
+source "$project_root/tools/backend_env.sh" default
 escript tools/emit_protocol_bridge.escript "$2" "$3"
 python3 tools/compile_protocol_bridge.py "$1" "$3"

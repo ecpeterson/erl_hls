@@ -2,7 +2,7 @@
 """Run the complete D3 memory experiment across two independently clocked RTL devices."""
 import argparse
 from pathlib import Path
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import test_phi_bridge as bridge
 
 

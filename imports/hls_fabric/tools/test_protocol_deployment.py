@@ -9,7 +9,7 @@ from emit_protocol_repetition import build_application
 from test_protocol_bridge import pair
 from test_protocol_repetition import compare
 from compile_protocol_transport import digest
-from test_local_protocol import run
+from backend_commands import run
 
 
 def live(build: Path, binary: Path, ebin: Path, stage: Path, incarnation: int) -> dict:
@@ -23,7 +23,7 @@ def live(build: Path, binary: Path, ebin: Path, stage: Path, incarnation: int) -
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('simulation startup')
                 time.sleep(.02)
             expression='[B,S,I]=init:get_plain_arguments(),ok=phi_protocol_deployment_live:run(B,S,6,list_to_integer(I)),halt().'
-            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,'-eval',expression,
+            run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,
                  '-extra',build,stage,str(incarnation)],stage,'host')
             assert sim.wait(timeout=10)==0,(stage/'simulation.log').read_text()
         finally:
@@ -36,10 +36,10 @@ def live(build: Path, binary: Path, ebin: Path, stage: Path, incarnation: int) -
 def qualify(build: Path, stage: Path) -> tuple[Path,list[Path]]:
     """Compare every logical sender and final readout with independently executed ordinary BEAM actors."""
     ebin=stage/'ebin';ebin.mkdir()
-    run(['erlc',*[v for p in erlang_paths() for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
+    run(['erlc',*[v for p in erlang_paths("default") for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
          ROOT/'test/phi_protocol_repetition_fixture.erl',ROOT/'test/phi_protocol_deployment_live.erl'],stage,'host-compile')
     expression='[S]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,6),halt().'
-    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths(),ebin,'-eval',expression,'-extra',stage],stage,'oracle')
+    run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage],stage,'oracle')
     roles=[build/'role0',build/'role1']
     wrapper,rtl=pair(roles,stage)
     tracked=[*rtl,wrapper,build/'deployment.etf',stage/'oracle.json']

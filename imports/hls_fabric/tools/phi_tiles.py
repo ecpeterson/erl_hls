@@ -8,7 +8,7 @@ import subprocess
 import time
 
 from transport_codegen import specialize
-from test_actor_rtl import digest, execute
+from backend_commands import digest, execute
 
 
 def identity(source: Path, xls: Path, ram_helper: Path, schedulers: int,

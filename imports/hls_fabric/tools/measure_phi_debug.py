@@ -5,7 +5,7 @@ Run build_phi_debug.py first. This maps the entire design, including the shared
 debug transport, compiler-generated samples and one boundary monitor. LUT RAM
 is included in LUT totals. No placement/routing or power estimate is implied.
 """
-from backend_paths import PUBLIC
+from compiler_paths import PUBLIC
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
