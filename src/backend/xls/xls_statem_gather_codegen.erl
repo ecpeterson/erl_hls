@@ -11,8 +11,7 @@ optional(Spec, Text) -> case maps:get(gathers, Spec, none) of none -> []; _ -> T
 
 -doc "Reports the packed progress width independently of element payloads.".
 -spec progress_width(none | map()) -> non_neg_integer().
-progress_width(none) -> 0;
-progress_width(G) -> 66 + 2 * capacity(G).
+progress_width(G) -> maps:get(width, xls_statem_gather_layout:progress(G)).
 
 -doc "Reports the largest per-site ordered payload width.".
 -spec payload_width(none | map()) -> non_neg_integer().
@@ -26,7 +25,7 @@ storage_width(G) -> progress_width(G) + payload_width(G).
 
 %% The shared progress mask covers each site's fixed numeric capacity.
 -spec capacity(map()) -> pos_integer().
-capacity(#{sites := Sites}) -> lists:max([maps:get(size, maps:get(population, S)) || S <- Sites]).
+capacity(G) -> maps:get(capacity, xls_statem_gather_layout:progress(G)).
 %% Record codecs define the physical element width and bit interpretation.
 -spec element_width(map()) -> non_neg_integer().
 element_width(#{element := E}) -> xls_statem_reduction_ir:type_width(E).
@@ -48,7 +47,7 @@ declarations(G = #{data := #{dslx_type := Data}, sites := Sites}) ->
      "enum GatherSite : u8 {\n", [["  ",label(S)," = u8:",n(maps:get(id,S)),",\n"] || S <- Sites], "}\n",
      "type GatherMembers = bits[",n(capacity(G)),"];\n",
      "type GatherValues = bits[",n(payload_width(G)),"];\n",
-     "struct GatherProgress { status: GatherStatus, site: GatherSite, key: u32, remaining: u8, expected: GatherMembers, seen: GatherMembers, failure: hls_failure::Code }\n",
+     xls_struct_codec:declaration("GatherProgress", xls_statem_gather_layout:codec(G)),
      "struct GatherState { progress: GatherProgress, values: GatherValues }\n",
      "struct GatherContribution { valid: bool, site: GatherSite, key: u32, member: u32, value: bits[",
          n(lists:max([element_width(S)||S<-Sites])),"] }\n",
@@ -63,14 +62,15 @@ functions(Spec) -> case maps:get(gathers,Spec,none) of
     G = #{sites := Sites} -> [codecs(G), [site_functions(S,G)||S<-Sites], contribution(G), apply_function(Sites), completion(G), actor_completion(Spec)]
 end.
 
-%% Member zero occupies the least-significant element slice in every payload representation.
+%% Pack and unpack use the same semantic slices; element payload remains above all progress bits.
 -spec codecs(map()) -> iodata().
 codecs(G) ->
-    C=capacity(G), W=progress_width(G),
-    ["fn bits_from_gather_progress(p: GatherProgress) -> bits[",n(W),"] { p.failure ++ p.seen ++ p.expected ++ p.remaining ++ p.key ++ (p.site as u8) ++ (p.status as u2) }\n",
-     "fn gather_progress_from_bits(raw: bits[",n(W),"]) -> GatherProgress { GatherProgress { status: raw[0:2] as GatherStatus, site: raw[2:10] as GatherSite, key: raw[10:42], remaining: raw[42:50], expected: raw[50+:","bits[",n(C),"]], seen: raw[",n(50+C),"+:bits[",n(C),"]], failure: raw[",n(50+2*C),"+:bits[16]] } }\n",
-     "fn bits_from_gather_state(s: GatherState) -> bits[",n(storage_width(G)),"] { s.values ++ bits_from_gather_progress(s.progress) }\n",
-     "fn gather_state_from_bits(raw: bits[",n(storage_width(G)),"]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:",n(W),"]), values: raw[",n(W),":] } }\n\n"].
+    Layout = xls_statem_gather_layout:codec(G),
+    Width = maps:get(width, Layout),
+    [xls_struct_codec:encoder("GatherProgress", "bits_from_gather_progress", Layout),
+     xls_struct_codec:decoder("GatherProgress", "gather_progress_from_bits", Layout),
+     "fn bits_from_gather_state(s: GatherState) -> bits[", n(storage_width(G)), "] { s.values ++ bits_from_gather_progress(s.progress) }\n",
+     "fn gather_state_from_bits(raw: bits[", n(storage_width(G)), "]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:", n(Width), "]), values: raw[", n(Width), ":] } }\n\n"].
 
 %% Per-site typed helpers keep padding and element codecs out of physical storage policy.
 -spec site_functions(map(),map()) -> iodata().

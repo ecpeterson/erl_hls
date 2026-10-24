@@ -699,57 +699,26 @@ record_raw(_Name, Value) -> [Value, ".1"].
 
 -spec struct_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Translates an Erlang record definition to an XLS struct definition.".
-struct_from_record(RecordForm) ->
-    {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
-    StructName = xls_names:record_type(NameAtom),
-    ["pub struct ", StructName, " {\n",
-        [io_lib:format("  ~s : ~s,~n", [
-                atom_to_list(record_field_name(Field)),
-                hls_type:print_type(hls_type:descriptor(Type))
-            ])
-            ||  {typed_record_field, Field, Type} <- Fields
-        ],
-    "}\n"].
+struct_from_record(RecordForm = {attribute, _, record, {Name, _}}) ->
+    xls_struct_codec:declaration(xls_names:record_type(Name), record_layout(RecordForm)).
 
 -spec structfrombits_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Builds an XLS-side unpacker for the Erlang record definition.".
-structfrombits_from_record(RecordForm) ->
-    {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
-    StructName = xls_names:record_type(NameAtom),
-    ["pub fn ", xls_names:record_codec(NameAtom), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
-    "  let stream = hls_bits::to_stream(raw);\n",
-    "  ", StructName, " {\n",
-    lists:reverse(element(1, lists:foldl(
-        fun(
-            {typed_record_field, Field, Type},
-            {Body, Offset}
-        ) ->
-            Slot = record_field_name(Field),
-            Descriptor = hls_type:descriptor(Type),
-            NextOffset = Offset + hls_type:width(Descriptor),
-            Bits = io_lib:format("hls_bits::from_stream(stream[N - u32:~w+:bits[~w]])",
-                [NextOffset, NextOffset - Offset]),
-            Line = ["    ", atom_to_list(Slot), ": ",
-                hls_type:dslx_from_bits(Descriptor, Bits), ",\n"],
-            {[Line | Body], NextOffset}
-        end,
-        {[], 0}, Fields
-    ))),
-    "  }\n",
-    "}\n"].
+structfrombits_from_record(RecordForm = {attribute, _, record, {Name, _}}) ->
+    xls_struct_codec:decoder(xls_names:record_type(Name),
+        xls_names:record_codec(Name) ++ "_from_bits", record_layout(RecordForm)).
 
 -spec bitsfromstruct_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Builds an XLS-side packer for the Erlang record definition.".
-bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
-    StructName = xls_names:record_type(NameAtom),
-    ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName,
-        ") -> bits[", integer_to_list(record_width(RecordForm)), "] {\n",
-        "  hls_bits::from_stream(",
-        [["hls_bits::to_stream(", hls_type:dslx_to_bits(hls_type:descriptor(Type),
-            ["s.", atom_to_list(record_field_name(Field))]), ") ++ "]
-            || {typed_record_field, Field, Type} <- Fields],
-        "zero!<bits[0]>())\n",
-    "}\n"].
+bitsfromstruct_from_record(RecordForm = {attribute, _, record, {Name, _}}) ->
+    xls_struct_codec:encoder(xls_names:record_type(Name),
+        "bits_from_" ++ xls_names:record_codec(Name), record_layout(RecordForm)).
+
+-doc "Derives a typed layout for a checked source record, retaining Erlang field order and provider padding.".
+-spec record_layout(hls_source:record_declaration()) -> xls_struct_codec:layout().
+record_layout({attribute, _, record, {_, Fields}}) ->
+    xls_struct_codec:layout([{record_field_name(Field), hls_type:descriptor(Type)}
+        || {typed_record_field, Field, Type} <- Fields], stream).
 
 -doc "Returns the number of 32-bit words needed for a record's packed fields.".
 -spec message_words([hls_source:form()], atom()) -> 0..3.
@@ -762,11 +731,8 @@ message_words(Forms, Name) ->
 
 -spec record_width(hls_source:record_declaration()) -> non_neg_integer().
 -doc "Calculates the packed width of an Erlang record's XLS struct.".
-record_width({attribute, _L, record, {_NameAtom, Fields}}) ->
-    lists:sum([
-        hls_type:width(hls_type:descriptor(Type))
-        || {typed_record_field, _Field, Type} <- Fields
-    ]).
+record_width(RecordForm) ->
+    maps:get(width, record_layout(RecordForm)).
 
 -spec record_field_name(hls_source:record_field()) -> atom().
 -doc "Extracts a field name from record declarations with or without a default.".

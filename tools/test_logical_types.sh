@@ -10,10 +10,12 @@ cd "$project_root"
 rebar3 as test compile
 erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
     -eval 'Stage = hd(init:get_plain_arguments()), ok = hls_logical_dslx:write(Stage),
-        ok = hls_dense_topology_dslx:write(Stage), halt().' -extra "$stage"
+        ok = hls_dense_topology_dslx:write(Stage),
+        ok = xls_struct_codec_dslx:write(Stage), halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/codecs.x"
+"$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/struct_codecs.x"
 "$xls_root/ir_converter_main" --top=probe "${options[@]}" "$stage/codecs.x" > "$stage/codecs.ir"
 "$xls_root/opt_main" "$stage/codecs.ir" > "$stage/codecs.opt.ir"
 "$xls_root/codegen_main" --generator=combinational --module_name=probe \

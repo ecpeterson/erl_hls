@@ -18,12 +18,38 @@ distinct_collection_types_test() ->
     ?assertEqual(72, maps:get(data_width, Spec)),
     ?assertMatch([#{independent_lift := #{}, source_transportable := false}], maps:get(contributions, Site)).
 
+%% Every named slice is contiguous, and its capacity follows all sites rather than list order.
+-spec progress_layout_test() -> ok.
+progress_layout_test() ->
+    ?assertEqual(#{capacity => 0, width => 0, fields => #{}}, xls_statem_gather_layout:progress(none)),
+    ?assertEqual(0, xls_statem_gather_codegen:progress_width(none)),
+    lists:foreach(fun(Capacity) ->
+        Gather = #{sites => [#{population => #{size => Capacity}}]},
+        #{width := Width, fields := Fields} = Layout = xls_statem_gather_layout:progress(Gather),
+        ?assertEqual(Capacity, maps:get(capacity, Layout)),
+        ?assertEqual(66 + 2 * Capacity, Width),
+        ?assertEqual(Width, xls_statem_gather_codegen:progress_width(Gather)),
+        ?assertEqual([{0, status, 2}, {2, site, 8}, {10, key, 32}, {42, remaining, 8},
+            {50, expected, Capacity}, {50 + Capacity, seen, Capacity}, {50 + 2 * Capacity, failure, 16}],
+            lists:sort([{Offset, Name, Bits} || {Name, #{offset := Offset, width := Bits}} <- maps:to_list(Fields)])),
+        Covered = lists:append([lists:seq(Offset, Offset + Bits - 1)
+            || #{offset := Offset, width := Bits} <- maps:values(Fields)]),
+        ?assertEqual(lists:seq(0, Width - 1), lists:sort(Covered))
+    end, [1, 3, 4, 255]),
+    Sites = [#{population => #{size => Size}} || Size <- [2, 3]],
+    Layout = xls_statem_gather_layout:progress(#{sites => Sites}),
+    ?assertMatch(#{capacity := 3, width := 72}, Layout),
+    ?assertEqual(Layout, xls_statem_gather_layout:progress(#{sites => lists:reverse(Sites)})),
+    ok.
+
 %% Structural compilation and closed lowering describe the same storage contract.
 -spec structural_interface_test() -> ok.
 structural_interface_test() ->
     Spec = xls_parse:actor_artifact(?FIXTURE, []),
     Interface = xls_parse:actor_interface(?FIXTURE),
     ?assertEqual(xls_statem_gather_lower:interface(maps:get(gathers, Spec)), maps:get(gathers, Interface)),
+    ?assertEqual(xls_statem_gather_layout:progress(maps:get(gathers, Spec)),
+        xls_statem_gather_layout:progress(maps:get(gathers, Interface))),
     ?assertEqual(106, hls_actor_interface:gather_storage_width(Interface)),
     ?assert(lists:member(piece, hls_actor_interface:dispatched_schemas(Interface))),
     ?assertEqual(0, hls_actor_interface:gather_storage_width(#{})).

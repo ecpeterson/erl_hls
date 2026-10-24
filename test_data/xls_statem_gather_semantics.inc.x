@@ -118,3 +118,19 @@ fn scalar_pending_continuation_test() {
   assert_eq(failed.failure, hls_failure::INVALID_EFFECT);
   assert_eq(failed.next_event, u8:0);
 }
+
+// Capacity-four codec witnesses distinguish every metadata field and preserve the existing low-bit ABI.
+#[test]
+fn progress_codec_field_boundaries_test() {
+  for (status, _): (GatherStatus, ()) in [GatherStatus::IDLE, GatherStatus::OPEN, GatherStatus::COMPLETE] {
+    let progress = GatherProgress { status, site: GatherSite::COLLECTING,
+      key: u32:0x89abcdef, remaining: u8:3, expected: GatherMembers:0xa,
+      seen: GatherMembers:0x5, failure: hls_failure::Code:0x9c37 };
+    let expected = u16:0x9c37 ++ u4:0x5 ++ u4:0xa ++ u8:3 ++ u32:0x89abcdef ++ u8:0 ++ (status as u2);
+    assert_eq(bits_from_gather_progress(progress), expected);
+    assert_eq(gather_progress_from_bits(expected), progress);
+    let state = GatherState { progress, values: GatherValues:0x2468ace1 };
+    assert_eq(bits_from_gather_state(state), u32:0x2468ace1 ++ expected);
+    assert_eq(gather_state_from_bits(bits_from_gather_state(state)), state);
+  }(())
+}
