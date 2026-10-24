@@ -2,7 +2,7 @@
 
 - [x] Extract the hardware half of post-campaign R10 into typed receive/transmit decisions, explicit state commit and pre-edge pin observations.
 - [x] Qualify the unchanged clock contract with focused schedules, old/new component equivalence and the existing small framed-role/reset witness.
-- [ ] Leave host stream transition/effect factoring as the remaining R10 task; do not combine distinct peer-forwarding and BEAM-admission acknowledgments.
+- [x] Complete the host half in [host-stream-transitions.md](host-stream-transitions.md), retaining distinct peer-forwarding and BEAM-admission acknowledgments.
 
 Evidence belongs in `hls_artifacts/runs/erlang-local-cells-2026-10-16/post-campaign-cleanup-7/`. This is a control-flow refactor, with no new scheduling support, state, frame ABI, performance claim or live-device run. The earlier review's canonical identity (R3) and compiler-owned layouts (R4) remain separate tasks.
 

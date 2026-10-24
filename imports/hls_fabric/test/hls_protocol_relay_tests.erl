@@ -197,7 +197,107 @@ endpoint_binding_rejection_test() ->
     try
         South=maps:get({tile,south},D),North=maps:get(north,D),
         Ambiguous=P#{devices:=D#{{tile,south}:=South#{host:=maps:get(host,North),service:=maps:get(service,North)}}},
-        ?assertException(error,_,hls_protocol_stream:init({Ambiguous,Peers,Sessions,self()})),
-        ?assertException(error,_,hls_protocol_stream:init({P#{limits:=#{crossings=>2,commands=>1,events=>1}},Peers,Sessions,self()})),
+        ?assertError({badmatch,false},hls_protocol_stream:init({Ambiguous,Peers,Sessions,self(),raw})),
+        ?assertError(function_clause,hls_protocol_stream:init({P#{limits:=#{crossings=>2,commands=>1,events=>1}},Peers,Sessions,self(),raw})),
         [?assertEqual(none,maps:get(owner,hls_protocol_relay_peer:stats(Peer)))||Peer<-maps:values(Peers)]
     after [gen_server:stop(Peer)||Peer<-maps:values(Peers)] end,ok.
+
+
+%% A queued fanout precedes eligible ACKs; an ACK precedes another credited pair.
+%% Held broker completions expose each boundary without timing assumptions.
+-spec write_priority_test() -> ok.
+write_priority_test() ->
+    with_deployment(fun(Stream, Peers, _) ->
+        Source = maps:get(north, Peers),
+        First = maps:get(42, Peers),
+        Second = maps:get({tile,south}, Peers),
+        [ok = hls_protocol_relay_peer:set(Peer, hold) || Peer <- maps:values(Peers)],
+        try
+            ok = emit_packet(First, packet(2, 102, 0, 0)),
+            ok = emit_packet(Source, packet(1, 101, 0, 0)),
+            await_held(First),
+            {ok, 1} = hls_protocol_stream:submit(Stream, {control, <<0:128>>}),
+            ok = emit_packet(Second, packet(2, 103, 0, 1)),
+            ok = emit_packet(Source, packet(1, 101, 1, 1)),
+            await(fun() -> #{received := Count} = hls_protocol_stream:info(Stream), Count =:= 7 end),
+            ok = hls_protocol_relay_peer:set(First, normal),
+            await_held(Source),
+            ?assertEqual([2], operations(Source)),
+            ?assertEqual([], operations(Second)),
+            ok = hls_protocol_relay_peer:set(Source, normal),
+            await_held(Second),
+            ?assertEqual([2], operations(Source)),
+            ?assertEqual([2], operations(Second)),
+            ok = hls_protocol_relay_peer:set(Source, hold),
+            ok = hls_protocol_relay_peer:set(Second, normal),
+            await_held(Source),
+            ?assertMatch([#{kind := 2, link := 0}], packets(Source)),
+            ?assertEqual([2], operations(Second)),
+            ok = hls_protocol_relay_peer:set(Source, normal),
+            await(fun() -> #{packets := #{acknowledged := Count}} = hls_protocol_stream:info(Stream), Count =:= 2 end),
+            ?assertEqual([4, 2], operations(First)),
+            ?assertEqual([2, 4], operations(Second)),
+            ?assertEqual([0, 1], [Link || #{kind := 2, link := Link} <- packets(Source)])
+        after
+            [catch hls_protocol_relay_peer:set(Peer, normal) || Peer <- maps:values(Peers)]
+        end
+    end).
+
+%% Graceful retirement waits for its physical writer and abandons queued fanout.
+-spec retire_held_writer_test() -> ok.
+retire_held_writer_test() ->
+    with_deployment(fun(Stream, Peers, _) ->
+        First = maps:get(42, Peers),
+        ok = hls_protocol_relay_peer:set(First, hold),
+        try
+            {ok, 1} = hls_protocol_stream:submit(Stream, {control, <<0:128>>}),
+            await_held(First),
+            Monitor = monitor(process, Stream),
+            Request = gen_server:send_request(Stream, retire),
+            #{counts := #{writer := 1}} = hls_protocol_stream:info(Stream),
+            ?assertEqual(timeout, gen_server:wait_response(Request, 0)),
+            ok = hls_protocol_relay_peer:set(First, normal),
+            ?assertEqual({reply, ok}, gen_server:wait_response(Request, 1000)),
+            receive {'DOWN', Monitor, process, Stream, normal} -> ok
+            after 1000 -> error(retirement_timeout) end,
+            ?assertEqual([], operations(maps:get(north, Peers))),
+            ?assertEqual([], operations(maps:get({tile,south}, Peers)))
+        after
+            catch hls_protocol_relay_peer:set(First, normal)
+        end
+    end).
+
+%% Even a definitely-unsent error retires every route without advancing or replaying fanout.
+-spec write_failure_test() -> ok.
+write_failure_test() ->
+    with_deployment(fun(Stream, Peers, _) ->
+        First = maps:get(42, Peers),
+        ok = hls_protocol_relay_peer:set(First, hold),
+        try
+            {ok, 1} = hls_protocol_stream:submit(Stream, {control, <<0:128>>}),
+            await_held(First),
+            Monitor = monitor(process, Stream),
+            ok = hls_protocol_relay_peer:fail(First, {error, unsent}),
+            receive {'DOWN', Monitor, process, Stream, {shutdown, {write_failed, {error, unsent}}}} -> ok
+            after 1000 -> error(failed_owner_survived) end,
+            await(fun() -> lists:all(fun(Peer) ->
+                maps:get(owner, hls_protocol_relay_peer:stats(Peer)) =:= retired
+            end, maps:values(Peers)) end),
+            ?assertEqual([2], operations(First)),
+            ?assertEqual([], operations(maps:get(north, Peers))),
+            ?assertEqual([], operations(maps:get({tile,south}, Peers)))
+        after
+            catch hls_protocol_relay_peer:set(First, normal)
+        end
+    end).
+
+%% Observe request issue order through the broker model's public wire log.
+-spec operations(pid()) -> [byte()].
+operations(Peer) ->
+    #{writes := Writes} = hls_protocol_relay_peer:stats(Peer),
+    [Operation || {_, {Operation, _, _}, _} <- lists:reverse(Writes)].
+
+%% Each pause ends only when the selected broker has retained a real request.
+-spec await_held(pid()) -> ok.
+await_held(Peer) ->
+    await(fun() -> maps:get(held, hls_protocol_relay_peer:stats(Peer)) =/= none end).

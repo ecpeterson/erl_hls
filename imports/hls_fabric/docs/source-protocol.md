@@ -283,6 +283,25 @@ These synchronous cores require a lossless ordered carrier. After any participan
 
 `python3 tools/test_protocol_bridge.py XLS_ROOT FRESH_OUTPUT` retains the two-device real-broker/RTL integration case. Two finite fresh incarnations each check 39 per-sender records, 27 cross-device messages, ordinary-source feedback, final sum 60, sparse rectangle delivery, independent output stalls and descriptor closure. Public-port checks interrupt attachment, setup and stalled output, exercise retirement, and reject stale sessions/wrong identities. Component SAT quantifies every state/input bit at one incoming link, two classes, one outgoing link and one external stream for reset, retained-output, credit, early-ACK and terminal cancellation properties; an intentionally false admission assertion must produce a counterexample. The complete pair also receives a local XC7 area screen. Separate host-model tests use three arbitrary device keys, irregular endpoints, one source with two destinations, bounded command admission, delayed forwarding completion, aggregate start and collective retirement. Those model tests establish no three-device RTL claim. The witnesses and component proofs trust source extraction, DSLX/XLS, simulators and Yosys/ABC/SAT; they do not establish arbitrary application progress, source refinement, native timing, board fit or N6 repetition qualification. Eligibility stays false.
 
+### Host owner decisions
+
+The deployment relay (`hls_protocol_stream`) and mixed BEAM/RTL owner (`hls_protocol_mixed_stream`, described below) retain different delivery obligations. Both reserve one typed write decision before `issue_write/1` sends it through the broker. A pending physical writer prevents further issue; receipt admission and application delivery can still advance within their bounds.
+
+| Boundary | Deployment relay | Mixed BEAM/RTL owner |
+| --- | --- | --- |
+| One work pass | Notify → admit each role's held frame once → notify → choose one write | Notify → admit held frame → try reverse admissions → try one source handoff → notify → choose one write → schedule capacity recheck |
+| Write priority after attachment | Head command's remaining device fanout → eligible relay ACK → credited pair data | Admitted reverse ACK → head command's BEAM recipients and native write → credited source data |
+| Blocked head command | Remaining device fanout retains command order | Busy BEAM recipient retains the unadmitted suffix; later commands and source data wait |
+| Start event | Wait for every role, then deliver aggregate start before early output | Append native started response in ordinary event order |
+| Graceful retirement | Stop new work; finish only the outstanding write | Same, then retire BEAM admission monitors as well |
+| Participant or write failure | Retire the whole incarnation without replay | Same, including source actor and virtual-node connection failures |
+
+A relay transfer follows **source packet → destination credit → reserved destination write → physical success → eligible source ACK → physical ACK success → released pair**. The source may see that ACK and send its next packet before our completion callback arrives; the owner retains that next packet under broker receipt credit until the old pair reservation retires.
+
+A mixed reverse transfer follows **native packet → retained decoded record → destination BEAM admission → eligible ACK → reserved ACK write → physical success**. Admission is a public mailbox barrier, not actor consumption. A full actor retains its reverse record while other actors can admit theirs. Command admission also performs BEAM effects: successful recipients leave the retained command cursor before a busy recipient is retried. Only the capacity check repeats; successful deliveries and failed writes do not replay.
+
+These orders are intentional and implemented by separate schedulers. `hls_protocol_relay_tests` and `hls_protocol_mixed_stream_tests` exercise the actual owners with controlled broker completions; these are finite host witnesses, not hardware or general progress proofs.
+
 ## Declared startup messages
 
 The network command accepts the ordinary topology `startup` list, for example `startup => [{receiver, [#value{n=2}, #open{key=7}, #value{n=3}, #value{n=3}]}]`. It does not run a special configuration callback or assume those messages will succeed. The production path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/5` → `hls_protocol_schema:frames/2`, using the receiving actor's fresh source schema, followed by the same `local_inbox_batch_tick` used for internal traffic.

@@ -4,6 +4,43 @@
 -export([start_link/3,start_application/3,submit/2,next/2,info/1,stop/1]).
 -export([init/1,handle_call/3,handle_cast/2,handle_info/2,terminate/2]).
 
+%% Deployment keys are caller-defined Erlang terms, independent of wire addresses.
+-type role() :: term().
+%% A participant progresses independently; aggregate start waits for all roles.
+-type phase() :: pending | attaching | attached | starting | running.
+%% One command retains the unissued suffix of its ordered device fanout.
+-type command() :: {nonempty_list(role()), start | binary()}.
+%% Events retain raw frames until the sole consumer's application codec runs.
+-type event() :: {application, {started}} | {{role(), byte()}, non_neg_integer()}.
+%% A waiter owns both the response alias and its cancellable timer.
+-type waiter() :: none | {gen_server:from(), reference(), reference()}.
+%% Broker receipt credit is independent of logical pair credit and source ACKs.
+-type receipt() :: {reference(), hls_fabric:header(), binary()}.
+%% The relay queue binds physical completion to a particular pair and sequence.
+-type packet_token() :: {data | ack, non_neg_integer(), non_neg_integer()}.
+%% Exactly one broker request may be outstanding across the deployment.
+-type writer_tag() :: {role(), attach | control | {packet, packet_token()}}.
+%% Scheduling reserves ownership before issue_write performs the broker effect.
+-type write_request() :: #{tag := writer_tag(), frame := {hls_fabric:header(), binary()}}.
+%% A blocked decision can retain changes already made by the current work pass.
+-type write_decision() :: {wait, state()} | {send, write_request(), state()}.
+%% This owner types its own lifecycle and retention; plans and relay queue stay
+%% under their respective modules' contracts rather than duplicating their schema.
+-type state() :: #{
+    application := raw | map(), devices := #{role() => map()}, roles := [role()],
+    returns := #{{pos_integer(), pos_integer()} => role()},
+    limits := #{commands := pos_integer(), events := pos_integer(), crossings := pos_integer()},
+    record_limit := pos_integer(), brokers := #{role() => pid()},
+    sessions := #{role() => pos_integer()}, client := pid(),
+    monitors := #{reference() => client | {device, role()}},
+    identities := #{role() => binary()}, queue := map(),
+    phases := #{role() => phase()}, phase := phase(), starts := boolean(),
+    commands := queue:queue(command()), events := queue:queue(event()),
+    held := #{role() => receipt()}, writer := none | writer_tag(),
+    sends := gen_server:request_id_collection(), waiter := waiter(),
+    retiring := none | gen_server:from(), received := non_neg_integer(), written := non_neg_integer()
+}.
+
 -doc "Attaches one fresh broker per deployment device using the descriptor's identity, host and service. Device keys must match brokers and distinct nonzero sessions. Return route pairs must be unique because broker deliveries contain a route but no broker identity. All participants share one reset/retirement domain; the caller exclusively owns commands/events and must retire old transports before reuse.".
 -spec start_link(map(),map(),map()) -> gen_server:start_ret().
 start_link(Plan,Brokers,Sessions)->gen_server:start_link(?MODULE,{Plan,Brokers,Sessions,self(),raw},[]).
@@ -26,169 +63,258 @@ info(Pid)->gen_server:call(Pid,info).
 stop(Pid)->gen_server:call(Pid,retire,infinity).
 
 -doc "Checks complete actor ownership, reserves distinct return routes, and starts serialized attachment. Each broker may hold one credited frame for this owner.".
--spec init(tuple()) -> {ok,map()}.
-init({Plan=#{devices:=Devices,limits:=Limits=#{commands:=Commands,events:=Events,crossings:=Crossings}},Brokers,Sessions,Client,Application})
-        when is_integer(Commands),Commands>0,is_integer(Events),Events>=2 ->
-    Roles=lists:sort(maps:keys(Devices)),Roles=lists:sort(maps:keys(Brokers)),
-    true=length(Roles)=:=length(lists:usort(maps:values(Brokers))),
-    Queue=hls_protocol_relay_queue:new(Plan,Sessions),
-    Bindings=[begin
-        true=is_integer(H) andalso H>0 andalso H<65536,
-        true=is_integer(V) andalso V>0 andalso V<65536 andalso V=/=H,
-        true=is_binary(I) andalso byte_size(I)=:=32,
-        {{V,H},R}
-    end||{R,#{host:=H,service:=V,identity:=I}}<-maps:to_list(Devices)],
-    Returns=maps:from_list(Bindings),true=map_size(Returns)=:=length(Roles),
-    [ok=hls_fabric:register_route(maps:get(R,Brokers),Route,self())||{Route,R}<-Bindings],
-    Monitors=maps:from_list([{monitor(process,P),{device,R}}||{R,P}<-maps:to_list(Brokers)]++[{monitor(process,Client),client}]),
-    Identities=maps:map(fun(_,#{identity:=I})->I end,Devices),
-    S=#{application=>Application,devices=>Devices,roles=>Roles,returns=>Returns,limits=>Limits,
-      record_limit=>Commands+Events+Crossings+length(Roles)+1,
-      brokers=>Brokers,sessions=>Sessions,client=>Client,monitors=>Monitors,identities=>Identities,
-      queue=>Queue,phases=>maps:from_keys(Roles,pending),phase=>attaching,starts=>false,
-      commands=>queue:new(),events=>queue:new(),held=>#{},writer=>none,sends=>gen_server:reqids_new(),
-      waiter=>none,retiring=>none,received=>0,written=>0},
-    {ok,work(S)}.
+-spec init({map(), map(), map(), pid(), raw | map()}) -> {ok, state()}.
+init({Plan = #{devices := Devices,
+        limits := Limits = #{commands := Commands, events := Events, crossings := Crossings}},
+        Brokers, Sessions, Client, Application})
+        when is_integer(Commands), Commands > 0, is_integer(Events), Events >= 2 ->
+    Roles = lists:sort(maps:keys(Devices)),
+    Roles = lists:sort(maps:keys(Brokers)),
+    true = length(Roles) =:= length(lists:usort(maps:values(Brokers))),
+    Queue = hls_protocol_relay_queue:new(Plan, Sessions),
+    Bindings = [begin
+        true = is_integer(Host) andalso Host > 0 andalso Host < 65536,
+        true = is_integer(Service) andalso Service > 0 andalso Service < 65536 andalso Service =/= Host,
+        true = is_binary(Identity) andalso byte_size(Identity) =:= 32,
+        {{Service, Host}, Role}
+    end || {Role, #{host := Host, service := Service, identity := Identity}} <- maps:to_list(Devices)],
+    Returns = maps:from_list(Bindings),
+    true = map_size(Returns) =:= length(Roles),
+    [ok = hls_fabric:register_route(maps:get(Role, Brokers), Route, self()) || {Route, Role} <- Bindings],
+    Monitors = maps:from_list([{monitor(process, Pid), {device, Role}} || {Role, Pid} <- maps:to_list(Brokers)]),
+    State = #{application => Application, devices => Devices, roles => Roles, returns => Returns, limits => Limits,
+        record_limit => Commands + Events + Crossings + length(Roles) + 1,
+        brokers => Brokers, sessions => Sessions, client => Client,
+        monitors => Monitors#{monitor(process, Client) => client},
+        identities => maps:map(fun(_, #{identity := Identity}) -> Identity end, Devices),
+        queue => Queue, phases => maps:from_keys(Roles, pending), phase => attaching, starts => false,
+        commands => queue:new(), events => queue:new(), held => #{}, writer => none,
+        sends => gen_server:reqids_new(), waiter => none, retiring => none, received => 0, written => 0},
+    {ok, work(State)}.
 
 -doc "Serializes control admission, one bounded read and graceful retirement for the sole client.".
--spec handle_call(term(),gen_server:from(),map()) -> {reply,term(),map()}|{noreply,map()}|{stop,normal,ok,map()}.
-%% Retire only after the outstanding write is definite; no further packets will be issued.
-handle_call(retire,From={Client,_},S=#{client:=Client,retiring:=none,writer:=Writer})->
-    case Writer of none->{stop,normal,ok,S};_->{noreply,S#{retiring:=From}} end;
-%% One command record carries a deployment fanout cursor; no duplicate per-board queues are hidden.
-handle_call({submit,Command},{Client,_},S=#{client:=Client,commands:=Commands,starts:=Started,roles:=Roles,application:=Application,limits:=#{commands:=Limit}})->
-    case queue:len(Commands)<Limit of
-        false->{reply,{error,busy},S};
-        true->Bytes=case Command of start->false=Started,start;
-            _->control(Application,Command) end,
-            {reply,{ok,1},work(S#{commands:=queue:in({Roles,Bytes},Commands),starts:=Started orelse Command=:=start})}
+-spec handle_call(term(), gen_server:from(), state()) ->
+    {reply, term(), state()} | {noreply, state()} | {stop, normal, ok, state()}.
+%% Retire only after the outstanding write is definite; issue no further packets.
+handle_call(retire, From = {Client, _}, S = #{client := Client, retiring := none, writer := Writer}) ->
+    case Writer of
+        none -> {stop, normal, ok, S};
+        _ -> {noreply, S#{retiring := From}}
     end;
-%% The owner cancels the timer before replying, avoiding an abandoned late event.
-handle_call({next,Timeout},From={Client,_},S=#{client:=Client,waiter:=none}) when Timeout>0->
-    Token=make_ref(),Timer=erlang:send_after(Timeout,self(),{next_timeout,Token}),
-    {noreply,work(S#{waiter:={From,Token,Timer}})};
+%% One command carries a fanout cursor, without duplicate per-device queues.
+handle_call({submit, Command}, {Client, _}, S = #{client := Client, commands := Commands,
+        starts := Started, roles := Roles, application := Application, limits := #{commands := Limit}}) ->
+    case queue:len(Commands) < Limit of
+        false -> {reply, {error, busy}, S};
+        true ->
+            Bytes = case Command of
+                start -> false = Started, start;
+                _ -> control(Application, Command)
+            end,
+            Next = S#{commands := queue:in({Roles, Bytes}, Commands),
+                starts := Started orelse Command =:= start},
+            {reply, {ok, 1}, work(Next)}
+    end;
+%% Cancel the timer before replying, avoiding an abandoned late event.
+handle_call({next, Timeout}, From = {Client, _}, S = #{client := Client, waiter := none}) when Timeout > 0 ->
+    Token = make_ref(),
+    Timer = erlang:send_after(Timeout, self(), {next_timeout, Token}),
+    {noreply, work(S#{waiter := {From, Token, Timer}})};
 %% Count retained records conservatively, including the writer's descriptor.
-handle_call(info,_,S=#{queue:=Q,commands:=C,events:=E,held:=H,writer:=W,record_limit:=Limit})->
-    QI=hls_protocol_relay_queue:info(Q),
-    Counts=#{crossings=>maps:get(records,QI),commands=>queue:len(C),events=>queue:len(E),held=>map_size(H),writer=>occupied(W)},
-    true=lists:sum(maps:values(Counts))=<Limit,
-    {reply,(maps:with([phase,phases,received,written],S))#{counts=>Counts,record_limit=>Limit,packets=>QI},S}.
+handle_call(info, _, S = #{queue := Queue, commands := Commands, events := Events,
+        held := Held, writer := Writer, record_limit := Limit}) ->
+    QueueInfo = hls_protocol_relay_queue:info(Queue),
+    Counts = #{crossings => maps:get(records, QueueInfo), commands => queue:len(Commands),
+        events => queue:len(Events), held => map_size(Held), writer => occupied(Writer)},
+    true = lists:sum(maps:values(Counts)) =< Limit,
+    Info = (maps:with([phase, phases, received, written], S))#{counts => Counts,
+        record_limit => Limit, packets => QueueInfo},
+    {reply, Info, S}.
 
--doc "Accepts one credited broker frame per role. Distinct return routes bind the sender to its role before packet validation.".
--spec handle_cast(term(),map()) -> {noreply,map()}.
-%% Broker receipt credit is released separately from destination capacity and source delivery ACK.
-handle_cast({'$hls_fabric_frame',Receipt,Route,Header,Payload},S=#{held:=Held,returns:=Returns})->
-    Role=maps:get(Route,Returns),false=maps:is_key(Role,Held),
-    {noreply,work(S#{held:=Held#{Role=>{Receipt,Header,Payload}}})}.
+-doc "Accepts one credited broker frame per role. Distinct return routes bind the sender before packet validation.".
+-spec handle_cast(term(), state()) -> {noreply, state()}.
+%% Broker receipt credit is separate from destination capacity and source delivery ACK.
+handle_cast({'$hls_fabric_frame', Receipt, Route, Header, Payload}, S = #{held := Held, returns := Returns}) ->
+    Role = maps:get(Route, Returns),
+    false = maps:is_key(Role, Held),
+    {noreply, work(S#{held := Held#{Role => {Receipt, Header, Payload}}})}.
 
--doc "Commits definite physical completion, cancels timed-out reads and stops globally on a participant failure. Write errors, including definitely-unsent ones, are terminal in this implementation.".
--spec handle_info(term(),map()) -> {noreply,map()}|{stop,term(),map()}.
-%% Any transport or client death invalidates all credits and all participant attachments.
-handle_info({'DOWN',Ref,process,_,Reason},S=#{monitors:=Monitors})->
-    {stop,{shutdown,{maps:get(Ref,Monitors),Reason}},S};
+-doc "Commits definite physical completion, cancels timed-out reads and stops globally on participant failure. Every write error is terminal, including definitely-unsent writes.".
+-spec handle_info(term(), state()) -> {noreply, state()} | {stop, term(), state()}.
+%% Any transport or client death invalidates all credits and attachments.
+handle_info({'DOWN', Ref, process, _, Reason}, S = #{monitors := Monitors}) ->
+    {stop, {shutdown, {maps:get(Ref, Monitors), Reason}}, S};
 %% Remove the sole waiter before returning timeout.
-handle_info({next_timeout,Token},S=#{waiter:={From,Token,_}})->
-    gen_server:reply(From,timeout),{noreply,S#{waiter:=none}};
+handle_info({next_timeout, Token}, S = #{waiter := {From, Token, _}}) ->
+    gen_server:reply(From, timeout),
+    {noreply, S#{waiter := none}};
 %% A cancelled timer may already have delivered its message.
-handle_info({next_timeout,_},S)->{noreply,S};
-%% Only a successful write response makes a peer-delivery ACK eligible.
-handle_info(Message,S=#{sends:=Sends,writer:=Writer,written:=Count})->
-    case gen_server:check_response(Message,Sends,true) of
-        {{reply,ok},Writer,Rest}->
-            Next=completed(Writer,S#{writer:=none,sends:=Rest,written:=Count+1}),
-            case maps:get(retiring,S) of none->{noreply,work(Next)};
-                From->gen_server:reply(From,ok),{stop,normal,Next} end;
-        {{reply,Error},_,_}->{stop,{shutdown,{write_failed,Error}},S};
-        {{error,Error},_,_}->{stop,{shutdown,{writer_failed,Error}},S};
-        _->{noreply,S}
+handle_info({next_timeout, _}, S) -> {noreply, S};
+%% Only physical completion makes a peer-delivery ACK eligible; retirement issues nothing further.
+handle_info(Message, S = #{sends := Sends, writer := Writer, written := Count, retiring := Retiring}) ->
+    case gen_server:check_response(Message, Sends, true) of
+        {{reply, ok}, Writer, Rest} ->
+            Next = completed(Writer, S#{writer := none, sends := Rest, written := Count + 1}),
+            case Retiring of
+                none -> {noreply, work(Next)};
+                From -> gen_server:reply(From, ok), {stop, normal, Next}
+            end;
+        {{reply, Error}, _, _} -> {stop, {shutdown, {write_failed, Error}}, S};
+        {{error, Error}, _, _} -> {stop, {shutdown, {writer_failed, Error}}, S};
+        _ -> {noreply, S}
     end.
 
--doc "Cancels a pending read timer. All brokers monitor this same route owner, so its death retires all deployment routes. This callback does not establish physical descriptor closure or reset; the caller must await all transport leases before replacement.".
--spec terminate(term(),map()) -> ok.
-terminate(_,#{waiter:=Waiter})->
-    case Waiter of none->ok;{_,_,Timer}->erlang:cancel_timer(Timer),ok end.
-
-%% Receive capacity and serialized sends are reconsidered only on real events; no packet retry timer exists.
--spec work(map()) -> map().
-work(S=#{retiring:=From}) when From=/=none->S;
-work(S)->send_work(notify(receive_frames(notify(S)))).
-%% Hold application events until the aggregate started event has been queued in front of them.
--spec notify(map()) -> map().
-notify(S=#{phase:=Phase}) when Phase=/=running->S;
-notify(S=#{waiter:=none})->S;
-notify(S=#{waiter:={From,_,Timer},events:=Events,application:=Application})->
-    case queue:out(Events) of {empty,_}->S;
-        {{value,{Id,Record}},Rest}->erlang:cancel_timer(Timer),gen_server:reply(From,reply(Application,Id,Record)),S#{waiter:=none,events:=Rest} end.
-%% Reserving one event slot for aggregate start prevents early output from blocking the last start ACK.
--spec receive_frames(map()) -> map().
-receive_frames(S=#{roles:=Roles})->lists:foldl(fun receive_role/2,S,Roles).
-%% Retain the broker receipt while either application capacity or ACK completion blocks admission.
--spec receive_role(term(),map()) -> map().
-receive_role(Role,S=#{held:=Held,sessions:=Sessions,brokers:=Brokers,received:=Count})->
-    case maps:find(Role,Held) of error->S;
-        {ok,{Receipt,Header,Payload}}->
-            Event=hls_protocol_bridge_wire:event(maps:get(Role,Sessions),Header,Payload),
-            case receive_blocked(Role,Event,S) of true->S;
-                false->Next=event(Role,Event,S),hls_fabric:ack(maps:get(Role,Brokers),Receipt),
-                    Next#{held:=maps:remove(Role,Held),received:=Count+1} end
+-doc "Cancels a pending read timer. Owner death retires all monitored broker routes; callers must still await transport closure and reset before replacement.".
+-spec terminate(term(), state()) -> ok.
+terminate(_, #{waiter := Waiter}) ->
+    case Waiter of
+        none -> ok;
+        {_, _, Timer} -> erlang:cancel_timer(Timer), ok
     end.
 
-%% The peer may observe its ACK before our asynchronous write-completion message arrives.
-%% Keep its next same-link data under the existing one-frame broker credit until complete/2
-%% retires the old reservation. Other packets still undergo the ordinary duplicate checks.
--spec receive_blocked(term(),term(),map()) -> boolean().
-receive_blocked(Role,{packet,#{kind:=1,link:=Link}},#{writer:={Role,{packet,{ack,Link,_}}}})->true;
-receive_blocked(_,{external,_,_},#{events:=Events,limits:=#{events:=Limit}})->queue:len(Events)>=Limit-1;
-receive_blocked(_,_,_)->false.
+%% One pass preserves broker backpressure: notify, admit each role once, notify,
+%% reserve one write. Retirement leaves receipts and commands untouched.
+-spec work(state()) -> state().
+work(S = #{retiring := From}) when From =/= none -> S;
+work(S) ->
+    Notified = notify(S),
+    Received = receive_frames(Notified),
+    Delivered = notify(Received),
+    issue_write(prepare_write(Delivered)).
 
-%% The final participant start acknowledgment opens the single application event stream.
--spec event(term(),term(),map()) -> map().
-event(Role,attached,S=#{phases:=Phases})->
-    attaching=maps:get(Role,Phases),P=Phases#{Role:=attached},
-    S#{phases:=P,phase:=case lists:usort(maps:values(P)) of [attached]->attached;_->attaching end};
-event(Role,started,S=#{phases:=Phases,events:=Events})->
-    starting=maps:get(Role,Phases),P=Phases#{Role:=running},
-    case lists:usort(maps:values(P)) of [running]->S#{phases:=P,phase:=running,events:=queue:in_r({application,{started}},Events)};
-        _->S#{phases:=P} end;
-event(Role,{packet,Packet},S=#{queue:=Q})->S#{queue:=hls_protocol_relay_queue:event(Role,Packet,Q)};
-event(Role,{external,Index,Frame},S=#{devices:=Devices,events:=Events})->
-    #{externals:=Externals}=maps:get(Role,Devices),
-    true=Index<length(Externals),Words=Frame band 255,true=Words=<3,
-    0=(Frame bsr 8) band 65535,true=(Frame bsr 32)<(1 bsl (Words*32)),
-    S#{events:=queue:in({{Role,Index},Frame},Events)}.
-
-%% Complete a peer transfer only after the shared physical writer succeeds.
--spec completed(tuple(),map()) -> map().
-completed({_,{packet,Token}},S=#{queue:=Q})->S#{queue:=hls_protocol_relay_queue:complete(Token,Q)};
-completed(_,S)->S.
-%% Attachment and command fanout preserve per-board order; data uses the independently checked link scheduler.
--spec send_work(map()) -> map().
-send_work(S=#{writer:=W}) when W=/=none->S;
-send_work(S=#{phases:=Phases,identities:=Identities,sessions:=Sessions})->
-    case [R||{R,pending}<-lists:sort(maps:to_list(Phases))] of
-        [R|_]->write(R,attach,hls_protocol_bridge_wire:attach(maps:get(R,Identities),maps:get(R,Sessions)),S#{phases:=Phases#{R:=attaching}});
-        []->case lists:member(attaching,maps:values(Phases)) of true->S;false->command(S) end
+%% Hold application events until aggregate start has been queued in front of them.
+-spec notify(state()) -> state().
+notify(S = #{phase := Phase}) when Phase =/= running -> S;
+notify(S = #{waiter := none}) -> S;
+notify(S = #{waiter := {From, _, Timer}, events := Events, application := Application}) ->
+    case queue:out(Events) of
+        {empty, _} -> S;
+        {{value, {Id, Record}}, Rest} ->
+            erlang:cancel_timer(Timer),
+            gen_server:reply(From, reply(Application, Id, Record)),
+            S#{waiter := none, events := Rest}
     end.
-%% Keep all participant destinations in one command record until each is reserved exactly once.
--spec command(map()) -> map().
-command(S=#{commands:=Commands,sessions:=Sessions,phases:=Phases})->
+
+%% One reserved start slot prevents early output from blocking the final start ACK.
+-spec receive_frames(state()) -> state().
+receive_frames(S = #{roles := Roles}) -> lists:foldl(fun receive_role/2, S, Roles).
+
+%% Release broker credit only after application capacity and ACK completion permit admission.
+-spec receive_role(role(), state()) -> state().
+receive_role(Role, S = #{held := Held, sessions := Sessions, brokers := Brokers, received := Count}) ->
+    case maps:find(Role, Held) of
+        error -> S;
+        {ok, {Receipt, Header, Payload}} ->
+            Event = hls_protocol_bridge_wire:event(maps:get(Role, Sessions), Header, Payload),
+            case receive_blocked(Role, Event, S) of
+                true -> S;
+                false ->
+                    Next = event(Role, Event, S),
+                    hls_fabric:ack(maps:get(Role, Brokers), Receipt),
+                    Next#{held := maps:remove(Role, Held), received := Count + 1}
+            end
+    end.
+
+%% A peer may consume its ACK before our write-completion message arrives. Keep
+%% its next same-link data under broker credit until the old reservation retires.
+-spec receive_blocked(role(), term(), state()) -> boolean().
+receive_blocked(Role, {packet, #{kind := 1, link := Link}},
+        #{writer := {Role, {packet, {ack, Link, _}}}}) -> true;
+receive_blocked(_, {external, _, _}, #{events := Events, limits := #{events := Limit}}) ->
+    queue:len(Events) >= Limit - 1;
+receive_blocked(_, _, _) -> false.
+
+%% Participant responses advance local phases; only the final start opens output.
+-spec event(role(), term(), state()) -> state().
+event(Role, attached, S = #{phases := Phases}) ->
+    attaching = maps:get(Role, Phases),
+    NextPhases = Phases#{Role := attached},
+    Phase = case lists:usort(maps:values(NextPhases)) of
+        [attached] -> attached;
+        _ -> attaching
+    end,
+    S#{phases := NextPhases, phase := Phase};
+event(Role, started, S = #{phases := Phases, events := Events}) ->
+    starting = maps:get(Role, Phases),
+    NextPhases = Phases#{Role := running},
+    case lists:usort(maps:values(NextPhases)) of
+        [running] -> S#{phases := NextPhases, phase := running,
+            events := queue:in_r({application, {started}}, Events)};
+        _ -> S#{phases := NextPhases}
+    end;
+event(Role, {packet, Packet}, S = #{queue := Queue}) ->
+    S#{queue := hls_protocol_relay_queue:event(Role, Packet, Queue)};
+event(Role, {external, Index, Frame}, S = #{devices := Devices, events := Events}) ->
+    #{externals := Externals} = maps:get(Role, Devices),
+    true = Index < length(Externals),
+    Words = Frame band 255,
+    true = Words =< 3,
+    0 = (Frame bsr 8) band 65535,
+    true = (Frame bsr 32) < (1 bsl (Words * 32)),
+    S#{events := queue:in({{Role, Index}, Frame}, Events)}.
+
+%% Successful forwarding permits a source ACK; successful ACK releases that pair.
+-spec completed(writer_tag(), state()) -> state().
+completed({_, {packet, Token}}, S = #{queue := Queue}) ->
+    S#{queue := hls_protocol_relay_queue:complete(Token, Queue)};
+completed(_, S) -> S.
+
+%% Write priority: existing writer, pending attaches, attachment barrier,
+%% command fanout, then the relay queue's ACK/data scheduler. Selection is pure.
+-spec prepare_write(state()) -> write_decision().
+prepare_write(S = #{writer := Writer}) when Writer =/= none -> {wait, S};
+prepare_write(S = #{phases := Phases, identities := Identities, sessions := Sessions}) ->
+    Pending = [Role || {Role, pending} <- lists:sort(maps:to_list(Phases))],
+    case Pending of
+        [Role | _] ->
+            Frame = hls_protocol_bridge_wire:attach(maps:get(Role, Identities), maps:get(Role, Sessions)),
+            {send, #{tag => {Role, attach}, frame => Frame}, S#{phases := Phases#{Role := attaching}}};
+        [] ->
+            case lists:member(attaching, maps:values(Phases)) of
+                true -> {wait, S};
+                false -> prepare_command(S)
+            end
+    end.
+
+%% Reserve exactly one destination from the head command before any pair traffic.
+-spec prepare_command(state()) -> write_decision().
+prepare_command(S = #{commands := Commands, sessions := Sessions, phases := Phases}) ->
     case queue:out(Commands) of
-        {empty,_}->data(S);
-        {{value,{[Role|Roles],Bytes}},Rest}->
-            NextCommands=case Roles of []->Rest;_->queue:in_r({Roles,Bytes},Rest) end,
-            Next=case Bytes of start->attached=maps:get(Role,Phases),S#{phases:=Phases#{Role:=starting},phase:=starting};_->S end,
-            write(Role,control,hls_protocol_bridge_wire:command(maps:get(Role,Sessions),Bytes),Next#{commands:=NextCommands})
+        {empty, _} -> prepare_packet(S);
+        {{value, {[Role | Roles], Bytes}}, Rest} ->
+            Remaining = case Roles of
+                [] -> Rest;
+                _ -> queue:in_r({Roles, Bytes}, Rest)
+            end,
+            Next = case Bytes of
+                start ->
+                    attached = maps:get(Role, Phases),
+                    S#{phases := Phases#{Role := starting}, phase := starting};
+                _ -> S
+            end,
+            Frame = hls_protocol_bridge_wire:command(maps:get(Role, Sessions), Bytes),
+            {send, #{tag => {Role, control}, frame => Frame}, Next#{commands := Remaining}}
     end.
-%% The queue reserves destination capacity and retains source identity until physical ACK completion.
--spec data(map()) -> map().
-data(S=#{queue:=Q})->case hls_protocol_relay_queue:next(Q) of none->S;
-    {Role,Packet,Token,Next}->write(Role,{packet,Token},hls_protocol_bridge_wire:packet(Packet),S#{queue:=Next}) end.
-%% There is one physical writer across all brokers; its role and purpose remain bound to the response alias.
--spec write(term(),term(),{hls_fabric:header(),binary()},map()) -> map().
-write(Role,Kind,{Header,Payload},S=#{brokers:=Brokers,devices:=Devices,writer:=none,sends:=Sends})->
-    #{host:=Host,service:=Service}=maps:get(Role,Devices),
-    Tag={Role,Kind},Ref=hls_fabric:send_request(maps:get(Role,Brokers),{Host,Service},Header,Payload,infinity),
-    S#{writer:=Tag,sends:=gen_server:reqids_add(Ref,Tag,Sends)}.
+
+%% The queue reserves capacity and retains source identity through ACK completion.
+-spec prepare_packet(state()) -> write_decision().
+prepare_packet(S = #{queue := Queue}) ->
+    case hls_protocol_relay_queue:next(Queue) of
+        none -> {wait, S};
+        {Role, Packet, Token, Next} ->
+            Request = #{tag => {Role, {packet, Token}}, frame => hls_protocol_bridge_wire:packet(Packet)},
+            {send, Request, S#{queue := Next}}
+    end.
+
+%% Issue one reserved request; the response alias carries its role and completion token.
+-spec issue_write(write_decision()) -> state().
+issue_write({wait, S}) -> S;
+issue_write({send, #{tag := Tag = {Role, _}, frame := {Header, Payload}},
+        S = #{brokers := Brokers, devices := Devices, writer := none, sends := Sends}}) ->
+    #{host := Host, service := Service} = maps:get(Role, Devices),
+    Ref = hls_fabric:send_request(maps:get(Role, Brokers), {Host, Service}, Header, Payload, infinity),
+    S#{writer := Tag, sends := gen_server:reqids_add(Ref, Tag, Sends)}.
+
 %% Count an occupied descriptor without exposing application data.
 -spec occupied(term()) -> 0|1.
 occupied(none)->0;

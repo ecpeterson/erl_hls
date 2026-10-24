@@ -1,7 +1,7 @@
 -module(hls_protocol_relay_peer).
 -moduledoc "Single-credit broker model for deployment relay tests. Attachment is modeled; start and data replies are explicitly injected. This is not hardware evidence.".
 -behaviour(gen_server).
--export([start/1,set/2,emit/3,stats/1]).
+-export([start/1,set/2,fail/2,emit/3,stats/1]).
 -export([init/1,handle_call/3,handle_cast/2,handle_info/2]).
 
 -doc "Starts an unlinked broker model with one endpoint binding.".
@@ -10,6 +10,9 @@ start(Binding)->gen_server:start(?MODULE,Binding,[]).
 -doc "Holds or releases definite physical write completion.".
 -spec set(pid(),hold|normal) -> ok.
 set(Pid,Mode)->gen_server:call(Pid,{mode,Mode}).
+-doc "Completes a held write with an injected error; no simulated device response is generated.".
+-spec fail(pid(), term()) -> ok.
+fail(Pid, Error) -> gen_server:call(Pid, {fail, Error}).
 -doc "Queues a simulated device reply behind the broker's single receipt credit.".
 -spec emit(pid(),tuple(),binary()) -> ok.
 emit(Pid,Header,Payload)->gen_server:call(Pid,{emit,Header,Payload}).
@@ -41,6 +44,10 @@ handle_call({mode,Mode},_,S=#{held:=Held})->
     case {Mode,Held} of {normal,From} when From=/=none->gen_server:reply(From,ok);
         _->ok end,
     {reply,ok,S#{mode:=Mode,held:=case Mode of normal->none;hold->Held end}};
+%% A failed physical write is definite only as an error; the owner must not replay it.
+handle_call({fail, Error}, _, S = #{held := From}) when From =/= none ->
+    gen_server:reply(From, Error),
+    {reply, ok, S#{held := none}};
 %% Start, credits and external records are independent device observations.
 handle_call({emit,H,B},_,S)->{reply,ok,output({H,B},S)};
 %% Tests observe public packet writes and ownership only.
