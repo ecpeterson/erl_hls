@@ -35,11 +35,13 @@ def prove(args: argparse.Namespace, stage: Path, raw: Path, module: str,
 
 
 def main() -> None:
-    """Use the public builder for three source shapes, retaining quantified domains and negative controls."""
+    """Use the public builder for selected source shapes, retaining quantified domains and negative controls."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=lambda p: Path(p).resolve())
     parser.add_argument('stage', type=lambda p: Path(p).resolve())
     parser.add_argument('--yosys', default='yosys')
+    parser.add_argument('--case', choices=['all', 'plain', 'scalar', 'gather'], default='all',
+                        help='Select one source shape for a focused contract check')
     args = parser.parse_args()
     args.yosys = Path(shutil.which(args.yosys) or args.yosys).resolve()
     stage = args.stage
@@ -52,6 +54,7 @@ def main() -> None:
               ['protocol_wrong_state', 'protocol_drop_internal']),
              ('gather', PUBLIC / 'test_data/xls_statem_gather_fixture.erl',
               ['protocol_wrong_state', 'protocol_stale_completion', 'protocol_drop_internal'])]
+    cases = [case for case in cases if args.case == 'all' or case[0] == args.case]
     inputs = [Path(__file__), properties, ROOT / 'tools/emit_local_actor.sh',
               ROOT / 'tools/emit_local_actor.escript', *[source for _, source, _ in cases],
               args.yosys, *[args.xls / p for p in ['ir_converter_main', 'opt_main', 'codegen_main']]]

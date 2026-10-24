@@ -1,0 +1,110 @@
+// Receiver-specific inboxes import one source owner instead of recompiling its callbacks.
+import @@MODULE@@ as source_owner;
+// Payload layout remains defined by the same source entry planner.
+pub const ENTRY_EFFECT_PAYLOAD_BITS = source_owner::ENTRY_EFFECT_PAYLOAD_BITS;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type MachineBits = source_owner::MachineBits;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalStepResult = source_owner::LocalStepResult;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalEffect = source_owner::LocalEffect;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalObservation = source_owner::LocalObservation;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalCycleResult = source_owner::LocalCycleResult;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalProtocolResult = source_owner::LocalProtocolResult;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalAction = source_owner::LocalAction;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalOutbox = source_owner::LocalOutbox;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalOwnerState = source_owner::LocalOwnerState;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalOwnerInputs = source_owner::LocalOwnerInputs;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalOwnerOutputs = source_owner::LocalOwnerOutputs;
+// Retain the ordinary owner API and its source-defined type identity.
+pub type LocalOwnerTick = source_owner::LocalOwnerTick;
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_initial() -> MachineBits {
+  source_owner::local_initial()
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_pending(raw: MachineBits) -> bool {
+  source_owner::local_pending(raw)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_pending_at(raw: MachineBits, slot: u32) -> bool {
+  source_owner::local_pending_at(raw, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_step(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool) -> LocalStepResult {
+  source_owner::local_step(raw, frame, received, effects_reserved)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_step_at(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
+  source_owner::local_step_at(raw, frame, received, effects_reserved, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_effect(layout: u8, payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], index: u8) -> LocalEffect {
+  source_owner::local_effect(layout, payload, index)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_observe(raw: MachineBits, slot: u32) -> LocalObservation {
+  source_owner::local_observe(raw, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_cycle(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, out_layout: u8, out_payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], out_index: u8, slot: u32) -> LocalCycleResult {
+  source_owner::local_cycle(raw, frame, received, effects_reserved, out_layout, out_payload, out_index, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_protocol_at(raw: MachineBits, frame: bits[128], received: bool, slot: u32) -> LocalProtocolResult {
+  source_owner::local_protocol_at(raw, frame, received, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool, slot: u32) -> LocalAction {
+  source_owner::local_action_at(raw, frame, received, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_enter_at(action: LocalAction, effects_reserved: bool, slot: u32) -> LocalStepResult {
+  source_owner::local_enter_at(action, effects_reserved, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
+  source_owner::local_slow_step_at(raw, frame, received, effects_reserved, slot)
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_owner_initial() -> LocalOwnerState {
+  source_owner::local_owner_initial()
+}
+
+// Delegate unchanged to the shared source definition; each caller still owns separate state.
+pub fn local_owner_tick(s: LocalOwnerState, io: LocalOwnerInputs) -> LocalOwnerTick {
+  source_owner::local_owner_tick(s, io)
+}
+
+// Preserve the standalone clock boundary for consumers of receiver artifacts.
+pub proc local_owner_clock {
+  // Channels sample one complete input/output on each clock.
+  config(commands: chan<LocalOwnerInputs> in, observations: chan<LocalOwnerOutputs> out) {
+    spawn source_owner::local_owner_clock(commands, observations); ()
+  }
+  // The imported proc owns the state.
+  init { () }
+  // This wrapper introduces no state or additional work.
+  next(state: ()) { state }
+}

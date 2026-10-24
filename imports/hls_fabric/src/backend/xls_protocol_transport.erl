@@ -69,8 +69,7 @@ source(#{index:=I,payload_width:=W,destinations:=D,sequence_slots:=N,
      "let (valid, indices) = p::publication_view(s.0, reset);\n",
      "let payload = s.0.payload as ",bits(W),"; let layout = (s.0.payload >> u32:",n(W),") as u8;\n",
      [["let (data_",n(K),", class_",n(K),") = match (layout, indices[u32:",n(K),"]) {\n",
-        [["(u8:",n(L),", u8:",n(Seq),") => (",expression(Bs++lists:duplicate(Width-length(Bs),0)),
-          ", u8:",n(C),"),\n"]||#{layout:=L,sequence:=Seq,bits:=Bs,capture_slot:=C}<-Rows],
+        projection_rows(Rows, Width),
         "_ => (",bits(Width),":0, u8:0), };\n"]||#{index:=K,width:=Width,rows:=Rows}<-Outputs],
      "V",Id," { ready: !reset && !s.0.busy && mask_",Id,"(offered_layout).0, fault: s.1, valid, data: ",
      concat(["data_"++n(K)||#{index:=K}<-lists:reverse(Outputs)],bits(Total)++":0"),", channel: ",
@@ -154,8 +153,7 @@ link_payload(#{source_index:=S,output:=#{offset:=At,width:=W}}) -> slice(sname(S
 
 %% These bits reference the retained ordinary payload, with numeric low-bit-first planning.
 -spec expression([hls_protocol_projection:bit()]) -> iolist().
-expression(Bits) -> concat([case B of {payload,J}->["payload[",n(J),"+:u1]"];_->["u1:",n(B)] end
-    ||B<-lists:reverse(Bits)],"u1:0").
+expression(Bits) -> xls_protocol_bits:expression("payload", Bits).
 
 %% Static packed records keep ABI ordering visible in generated DSLX.
 -spec structure(string(),[{string(),pos_integer()}]) -> iolist().
@@ -185,3 +183,16 @@ bname(I,D) -> "boundary_"++n(I)++"_"++n(D).
 %% Only elaborated integers enter DSLX identifiers or literals.
 -spec n(integer()) -> string().
 n(N) -> integer_to_list(N).
+
+%% Many source layouts differ only in which other ports publish. Group equal
+%% projections so DSLX typechecks their wiring once, preserving every selector.
+-spec projection_rows([map()], pos_integer()) -> iodata().
+projection_rows(Rows, Width) ->
+    Selectors = [{L, S} || #{layout := L, sequence := S} <- Rows],
+    true = length(Selectors) =:= length(lists:usort(Selectors)),
+    Groups = lists:foldl(fun(#{layout := L, sequence := S, bits := Bits, capture_slot := C}, Acc) ->
+        maps:update_with({Bits, C}, fun(Keys) -> [{L, S} | Keys] end, [{L, S}], Acc)
+    end, #{}, Rows),
+    [[lists:join(" | ", [["(u8:", n(L), ", u8:", n(S), ")"] || {L, S} <- lists:sort(Keys)]),
+        " => (", expression(Bits ++ lists:duplicate(Width-length(Bits), 0)),
+        ", u8:", n(C), "),\n"] || {{Bits, C}, Keys} <- lists:sort(maps:to_list(Groups))].

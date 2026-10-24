@@ -12,7 +12,7 @@ import time
 
 from backend_commands import digest, execute
 from backend_paths import erl_command
-from test_phi_bridge import ROOT, outputs
+from test_phi_bridge import ROOT, read_build
 from phi_service_metrics import summarize
 from phi_service_analysis import analyze
 from phi_cycle_trace import plan as cycle_plan, read as read_cycles, verify_queries
@@ -21,9 +21,7 @@ from phi_cycle_trace import plan as cycle_plan, read as read_cycles, verify_quer
 def profile(args: argparse.Namespace) -> None:
     """Validate immutable device artifacts, compile only the testbench, and check the selected oracle."""
     provenance_path = args.build / "provenance.json"
-    provenance = json.loads(provenance_path.read_text())
-    if provenance["outputs"] != outputs(args.build):
-        raise ValueError("cached device outputs changed since their build")
+    provenance = read_build(args.build)
     args.stage.mkdir(parents=True, exist_ok=False)
     for name in ("config.term", "deployment.term", "bridge.json"):
         shutil.copy(args.build / "source" / name, args.stage)

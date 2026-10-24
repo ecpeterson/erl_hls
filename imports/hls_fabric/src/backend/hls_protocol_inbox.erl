@@ -94,9 +94,11 @@ mask_function(Field,Links,N,Host,At) ->
 -spec frame(map()) -> iodata().
 frame(#{link:=Link,payload_offset:=At,codec:=#{value:=Value,frame_positions:=Positions}}) ->
     Inverse=maps:from_list([{J,I}||{I,J}<-lists:enumerate(0,Positions)]),
-    lists:join(" ++ ",[case maps:find(J,Inverse) of
-        {ok,I}->["io.",link_name(Link),"_payloads[",n(At+I),"+:u1]"];
-        error->["u1:",n((Value bsr J) band 1)] end||J<-lists:seq(127,0,-1)]).
+    Bits = [case maps:find(J, Inverse) of
+        {ok, I} -> {payload, At + I};
+        error -> (Value bsr J) band 1
+    end || J <- lists:seq(0, 127)],
+    xls_protocol_bits:expression("io." ++ link_name(Link) ++ "_payloads", Bits).
 
 %% Numeric names refer to the unchanged fabric link identities.
 -spec link_name(non_neg_integer()) -> string().

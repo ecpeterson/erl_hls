@@ -9,7 +9,7 @@ import statistics
 import subprocess
 import sys
 
-from test_phi_bridge import ROOT, outputs
+from test_phi_bridge import ROOT, read_build
 from backend_commands import digest
 
 
@@ -51,9 +51,7 @@ def wrapper(device: int) -> str:
 
 def measure(args: argparse.Namespace) -> None:
     """Retain cell distributions and hashes; reject edits to the simulated application artifacts."""
-    provenance = json.loads((args.build / "provenance.json").read_text())
-    if provenance["outputs"] != outputs(args.build):
-        raise ValueError("generated artifacts differ from their validated build")
+    provenance = read_build(args.build)
     args.stage.mkdir(parents=True, exist_ok=False)
     sys.path.insert(0, str(args.erl_hls / "tools"))
     accounting = importlib.import_module("measure_topology_debug")

@@ -3,9 +3,9 @@
 -export([compile/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
 -type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
-    dslx := binary(), source := file:filename(), inbox => map(), completion => map()}.
+    dslx := binary(), source := file:filename(), inbox => map(), completion => map(), owner_import => map()}.
 
 -doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
@@ -93,6 +93,7 @@ manifest(Artifact = #{spec := Spec, plan := Plan, dslx := Bytes, source := Sourc
     case maps:find(inbox, Artifact) of
         error -> Base;
         {ok, Inbox} -> Base#{clock_proc := local_inbox_clock, inbox => Inbox,
+            owner_import => maps:get(owner_import, Artifact, none),
             function_ports := maps:get(function_ports, Base) ++
                 [local_inbox_initial, local_inbox_eligible, local_inbox_tick,
                  local_inbox_batch, local_inbox_batch_tick]}

@@ -23,7 +23,11 @@ def main() -> None:
                         help="total host-run deadline; defaults to 720s direct or 1500s RAM-backed")
     parser.add_argument("--memory-case", choices=("d3", "board_memory", "board_quiet"), default="d3")
     parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--devices-only", action="store_true",
+                        help="emit and instrument devices without the unused bridge simulation harness")
     args = parser.parse_args()
+    if args.devices_only:
+        args.build_only = True
     if min(args.clock_halves) < 1:
         parser.error("clock half periods must be positive")
     if args.placement == "direct" and args.reductions != "ordinary":

@@ -56,24 +56,34 @@ def inputs(args: argparse.Namespace) -> dict:
         tools[name] = {"path": str(path), "sha256": digest(path)}
     return {"files": files, "tools": tools, "config": {"shape": args.shape, "planes": args.planes,
         "memory": getattr(args, "memory", False), "memory_case": getattr(args, "memory_case", "d3"),
-        "placement": getattr(args, "placement", "direct"), "reductions": getattr(args, "reductions", "ordinary")}}
+        "placement": getattr(args, "placement", "direct"), "reductions": getattr(args, "reductions", "ordinary"),
+        "devices_only": getattr(args, "devices_only", False)}}
 
 
-def outputs(stage: Path) -> dict:
-    """Hash generated devices and the selected public-port simulation adapter."""
+def outputs(stage: Path, *, devices_only: bool = False) -> dict:
+    """Hash generated devices; require the bridge adapter unless the build explicitly omits it."""
     paths = [path for directory in ("source", "device0", "device1")
              for path in (stage / directory).rglob("*")
              if path.is_file() and path.suffix in (".x", ".v", ".vh", ".json", ".ir", ".term")]
-    paths += [stage / "phi_bridge.vvp", stage / "phi_devices.vh", *stage.glob("*.vpi")]
+    paths += [stage / "phi_devices.vh", *stage.glob("*.vpi")]
+    if not devices_only:
+        paths.append(stage / "phi_bridge.vvp")
     return {str(path.relative_to(stage)): digest(path) for path in sorted(paths)}
 
 
-def validate_build(args):
-    saved = json.loads((args.stage / "provenance.json").read_text())
-    if saved["inputs"] != inputs(args):
-        raise ValueError("RTL build inputs changed; use a fresh --stage without --reuse-build")
-    if saved["outputs"] != outputs(args.stage):
+def read_build(stage: Path) -> dict:
+    """Return the build record only when all selected device/harness artifact hashes still match."""
+    saved = json.loads((stage / "provenance.json").read_text())
+    devices_only = saved["inputs"]["config"].get("devices_only", False)
+    if saved["outputs"] != outputs(stage, devices_only=devices_only):
         raise ValueError("generated RTL or instrumentation changed; rebuild before simulation")
+    return saved
+
+
+def validate_build(args: argparse.Namespace) -> None:
+    """Reject reuse when selected inputs, device files or required simulation artifacts differ."""
+    if read_build(args.stage)["inputs"] != inputs(args):
+        raise ValueError("RTL build inputs changed; use a fresh --stage without --reuse-build")
 
 
 def external_ports(device):
@@ -242,7 +252,7 @@ def simulation_netlist(args: argparse.Namespace, ident: int) -> Path:
 
 
 def build(args: argparse.Namespace) -> None:
-    """Compile each device, verify instrumentation, and retain reproducible inputs."""
+    """Compile and verify each device; optionally omit the bridge harness when another driver supplies it."""
     provenance = inputs(args)
     args.stage.mkdir(parents=True, exist_ok=False)
     source = args.stage / "source"
@@ -271,11 +281,12 @@ def build(args: argparse.Namespace) -> None:
     with ThreadPoolExecutor(max_workers=1 if getattr(args, "memory", False) else 2) as workers:
         list(workers.map(lambda device: build_device(args, device), devices))
     (args.stage / "phi_devices.vh").write_text(testbench_connections(devices))
-    compile_simulation(args, devices)
+    if not getattr(args, "devices_only", False):
+        compile_simulation(args, devices)
     if provenance != inputs(args):
         raise RuntimeError("RTL build inputs changed while generation was running")
     (args.stage / "provenance.json").write_text(json.dumps({
-        "inputs": provenance, "outputs": outputs(args.stage)}, indent=2, sort_keys=True) + "\n")
+        "inputs": provenance, "outputs": outputs(args.stage, devices_only=getattr(args, "devices_only", False))}, indent=2, sort_keys=True) + "\n")
 
 
 def compile_simulation(args: argparse.Namespace, devices: list[dict]) -> None:

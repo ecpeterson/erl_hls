@@ -70,7 +70,7 @@ bundle(#program{bundle = Bundle}) -> Bundle.
 plan(Config) ->
     plan(prepare(Config), maps:with([native_actors, arithmetic_groups], Config)).
 
--doc "Derives a placement from one unchanged source program without source reads or file writes. Options accepts only native_actors and arithmetic_groups. Omitted native_actors selects all actors; otherwise require a nonempty proper subset of unique logical IDs. Groups select disjoint source-compatible scalar completions, local by default. Builds source-bound receiver artifacts before emission, retaining global indices and canonical crossing ports. These ports still require ordered delivery, common clock/reset and stable offers; no framing or independent reset protocol is added here.".
+-doc "Derives a placement from one unchanged source program without source reads or file writes. Options accepts only native_actors and arithmetic_groups. Omitted native_actors selects all actors; otherwise require a nonempty proper subset of unique logical IDs. Groups select disjoint source-compatible scalar completions, local by default. Builds source-bound receiver artifacts before emission, retaining global indices and canonical crossing ports. Ordinary receivers import their one source owner definition; this removes duplicated DSLX compilation, not independent actor state or hardware. These ports still require ordered delivery, common clock/reset and stable offers; no framing or independent reset protocol is added here.".
 -spec plan(program(), map()) -> build().
 plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, modules := Modules},
         capture = Capture, transactions = Transactions, sources = Publishers, inbox = Inbox,
@@ -91,7 +91,7 @@ plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, mo
     Receivers = [begin
         Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
         Messages = lists:append([Ms || #{target := Target, messages := Ms} <- maps:get(startup,Topology), Target =:= Id]),
-        Owner = hls_protocol_arithmetic:receiver(I, Arithmetic, maps:get(M, Modules)),
+        Owner = receiver_owner(I, M, Arithmetic, Modules, ActorFunctions),
         Artifact = hls_protocol_inbox:attach(Owner, Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
         Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
         #{index => I, module => M, file => list_to_binary(Relative), manifest => hls_local_actor:manifest(Artifact), artifact => Artifact}
@@ -156,3 +156,21 @@ alternatives(#{entries := Entries}) ->
 -spec delivery(map()) -> ok.
 delivery(#{delivery := Mode}) when Mode =:= direct; Mode =:= buffered -> ok;
 delivery(#{source := Source, delivery := Mode}) -> error({unsupported_transport_delivery, Source, Mode}).
+
+%% Separate source semantics from per-instance inbox wiring. Shared arithmetic currently
+%% has a distinct owner ABI, so it retains its separately generated definition.
+-spec receiver_owner(non_neg_integer(), module(), [map()], map(), [map()]) -> hls_local_actor:artifact().
+receiver_owner(Index, Module, Groups, Modules, Functions) ->
+    Owner = hls_protocol_arithmetic:receiver(Index, Groups, maps:get(Module, Modules)),
+    case maps:get(mode, maps:get(completion, Owner, #{}), local) of
+        shared -> Owner;
+        local ->
+            [#{file := File, artifact := #{dslx := Source}}] =
+                [F || F = #{module := M} <- Functions, M =:= Module],
+            Name = filename:basename(binary_to_list(File), ".x"),
+            {ok, Template} = file:read_file(filename:join(code:priv_dir(hls_fabric),
+                "xls/templates/local_owner_import.x.in")),
+            Owner#{dslx := xls_template:render(Template, [{<<"@@MODULE@@">>, Name}]),
+                owner_import => #{file => File,
+                    dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Source), lowercase)}}
+    end.

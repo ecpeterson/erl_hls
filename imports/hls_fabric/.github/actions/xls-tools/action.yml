@@ -1,0 +1,25 @@
+name: Install pinned XLS
+description: Reuse the checksum-bound compiler and scheduler RAM reservation extension
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ${{ runner.temp }}/xls
+        key: xls-${{ runner.os }}-${{ runner.arch }}-v0.0.0-10601-g9f360fc89-163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+    - name: Install compiler and RAM reservation extension
+      shell: bash
+      env:
+        XLS_ROOT: ${{ runner.temp }}/xls
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+          archive="$RUNNER_TEMP/xls.tar.gz"
+          curl --fail --location --show-error --connect-timeout 15 --max-time 120 \
+            https://github.com/google/xls/releases/download/v0.0.0-10601-g9f360fc89/xls-v0.0.0-10601-g9f360fc89-linux-x64.tar.gz --output "$archive"
+          echo "163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e  $archive" | sha256sum --check
+          mkdir -p "$XLS_ROOT"
+          tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+        fi
+        python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
