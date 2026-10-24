@@ -5,9 +5,10 @@
 -doc "Builds one framed native partition using hls_protocol_bridge's configuration; complementary actors run in BEAM. Requires one recipient per BEAM output, no BEAM-to-BEAM links, rectangle control and explicit activation. Writes mixed.etf for hls_protocol_mixed_stream and the usual bridge artifacts. Loaded codecs are checked against fresh source declarations. Partial output is retained on failure; no mailbox replacement, progress, timing or device admission is granted.".
 -spec write(map(),file:filename()) -> map().
 write(Config,Directory) ->
-    _=hls_protocol_bridge:write(Config,Directory),
-    Bridge=#{native_indices:=Native,links:=Links,identity:=Identity,host:=Host,service:=Service}=read(filename:join(Directory,"bridge.etf")),
-    #{bundle:=Bundle=#{topology:=#{actors:=Actors,routes:=Routes,startup:=Startup},modules:=Modules}}=read(filename:join(Directory,"transport.etf")),
+    Build = hls_protocol_transport:plan(Config),
+    #{bridge := Bridge = #{native_indices := Native, links := Links, identity := Identity, host := Host, service := Service},
+        transport := #{bundle := Bundle = #{topology := #{actors := Actors, routes := Routes, startup := Startup}, modules := Modules}}} =
+        hls_protocol_bridge:emit(Build,maps:with([host, service, control, activation, inspection],Config),Directory),
     HostIds=[Id||{I,#{id:=Id}}<-lists:enumerate(0,Actors),not lists:member(I,Native)],
     Application=hls_protocol_application_binding:bind(Bundle,maps:from_list([{Id,board}||#{id:=Id}<-Actors]),#{board=>Host}),
     HostActors=maps:from_list([begin
@@ -55,7 +56,3 @@ decode(#{destination_module:=Module,classes:=Classes},Slot,Frame) ->
     {ok,_}=hls_protocol_codec:encode(Codec,Frame),
     <<Packed:Width/bitstring,_/bitstring>> = <<(Frame bsr 32):96/little>>,
     {Message,<<>>}=Module:unpack(Tag,Packed),Packed=Module:pack(Message),Message.
-
-%% Only artifacts created in this fresh build are decoded; never network-supplied terms.
--spec read(file:filename()) -> map().
-read(Path)->{ok,Bytes}=file:read_file(Path),binary_to_term(Bytes).

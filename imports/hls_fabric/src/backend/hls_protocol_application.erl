@@ -12,10 +12,9 @@ write(Config=#{device:=Device,host:=Host},Directory) when is_integer(Host),Host>
         explicit_start->ok;
         Mode->error({application_requires_explicit_start,Mode})
     end,
-    Boundary=hls_protocol_boundary:write(Config#{activation=>explicit_start},Directory),
-    {ok,Bytes}=file:read_file(filename:join(Directory,"transport.etf")),
-    %% Only the just-emitted local build is read, never a caller-supplied saved plan.
-    #{bundle:=Bundle}=binary_to_term(Bytes),
+    Build = hls_protocol_transport:plan(Config),
+    #{boundary := Boundary, transport := #{bundle := Bundle}} =
+        hls_protocol_boundary:emit(Build,(maps:with([inspection],Config))#{activation=>explicit_start},Directory),
     Deployment=deployment(Bundle,Boundary,Device,Host),
     Stage=filename:join(Directory,"application"),ok=file:make_dir(Stage),
     Binding=maps:get(Device,maps:get(devices,Deployment)),

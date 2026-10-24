@@ -1,10 +1,31 @@
 -module(hls_protocol_transport).
 -moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
--export([write/2]).
+-export([prepare/1, bundle/1, descriptor/1, plan/1, plan/2, emit/2, write/2]).
+-export_type([program/0, build/0]).
 
--doc "Compiles the explicit trusted source list, invokes its topology constructor, checks and elaborates the topology, then emits complete ordinary actor functions, per-actor capture/startup/host receivers, and connected publisher/capture DSLX into a fresh directory. Optional native_actors selects a nonempty proper subset of logical IDs, retaining global link/actor identities and exposing canonical sampled-clock crossing ports; all roles require common clock/reset. Accepts direct and independently buffered routes and at most one explicitly declared rectangle host ingress (one to four targets). Config contains sources as {file, compiler options} pairs, topology as {module, function, arguments}, and actor_limit. Only complete ordinary source alternatives establish omitted constants; no supplied state facts or saved plans are accepted. Optional arithmetic_groups lists disjoint groups of two or three logical native actor IDs; hls_protocol_arithmetic validates source-compatible scalar completion and selects shared receiver ports before emission. Default [] leaves all completions local. Optional protocol_model => #{kind => periodic_neighbor_barrier, contracts => ModuleRoles} checks an annotated periodic dependency model against this fresh inventory before hardware emission and writes protocol-model.etf/json. It establishes a graph rank only, never source refinement or admission; absent by default. Returns the complete transport plan. Each source port requires an evaluated ordinary entry snapshot; generated receivers supply destination eligibility, acquisition and release when wired to their matching links. Their ordinary effect outputs are not yet connected to source snapshots. Successful emission is not sufficient application capacity, progress, mailbox replacement or hardware admission. Source lists and constructors are trusted build code; partial outputs after I/O failure are retained.".
+%% Source-wide facts are shared by every placement; role selection never recompiles them.
+-record(program, {bundle :: map(), capture :: map(), transactions :: map(),
+    sources :: map(), inbox :: map(), fabric :: map(), ingress :: none | map(),
+    model :: none | map()}).
+%% Emission retains the exact actor artifacts whose manifests enter the transport plan.
+-record(build, {transport :: map(), files :: [actor_file()]}).
+%% One relative actor path and its complete source-derived artifact.
+-type actor_file() :: #{file := binary(), artifact := hls_local_actor:artifact()}.
+
+-doc "One checked source program from prepare/1, shared across placements within a build. Contains source artifacts and topology, not an output directory or hardware admission. Keep it in process and do not edit it or reload its source modules while deriving roles; it is not a saved-plan input format.".
+-opaque program() :: #program{}.
+
+-doc "A checked transport placement from plan/1 or plan/2, with receiver artifacts ready for emission. Retain it unchanged in process; it grants no capacity, progress or device admission.".
+-opaque build() :: #build{}.
+
+-doc "Prepares, plans and emits a fresh source transport. See prepare/1 for source/configuration requirements and plan/2 for placement options. Returns the emitted transport descriptor; partial I/O failures are retained.".
 -spec write(map(), file:filename()) -> map().
-write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}, Output) ->
+write(Config, Output) ->
+    emit(plan(Config), Output).
+
+-doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model derives an annotated periodic dependency model, not source refinement or progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Capture analysis independently reads producer source and must agree with the ordinary actor compilation.".
+-spec prepare(map()) -> program().
+prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
     case length(Loaded) =:= length(lists:usort(Loaded)) of
         true -> ok; false -> error(duplicate_transport_source)
@@ -36,16 +57,36 @@ write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, 
     true = lists:all(fun(#{constant_requirements := Requirements}) -> Requirements =:= [] end,
         [R || #{outputs := Outputs} <- maps:get(sources, Publishers), #{rows := Rows} <- Outputs, R <- Rows]),
     Inbox = hls_protocol_inbox:plan(Capture),
+    #program{bundle = Bundle, capture = Capture, transactions = Transactions,
+        sources = Publishers, inbox = Inbox, fabric = hls_protocol_fabric:plan(Publishers, Inbox),
+        ingress = hls_protocol_ingress:plan(Bundle), model = Model}.
+
+-doc "Returns the source bundle for downstream placement and host-codec binding. Treat it as read-only and retain the program's source modules; this accessor does not validate supplied bundles.".
+-spec bundle(program()) -> map().
+bundle(#program{bundle = Bundle}) -> Bundle.
+
+-doc "Prepares one source program and plans its transport without creating output files. Accepts prepare/1 configuration plus plan/2's native_actors and arithmetic_groups options.".
+-spec plan(map()) -> build().
+plan(Config) ->
+    plan(prepare(Config), maps:with([native_actors, arithmetic_groups], Config)).
+
+-doc "Derives a placement from one unchanged source program without source reads or file writes. Options accepts only native_actors and arithmetic_groups. Omitted native_actors selects all actors; otherwise require a nonempty proper subset of unique logical IDs. Groups select disjoint source-compatible scalar completions, local by default. Builds source-bound receiver artifacts before emission, retaining global indices and canonical crossing ports. These ports still require ordered delivery, common clock/reset and stable offers; no framing or independent reset protocol is added here.".
+-spec plan(program(), map()) -> build().
+plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, modules := Modules},
+        capture = Capture, transactions = Transactions, sources = Publishers, inbox = Inbox,
+        fabric = WholeFabric, ingress = WholeIngress, model = Model}, Options) ->
+    case maps:keys(maps:without([native_actors, arithmetic_groups], Options)) of
+        [] -> ok;
+        Unknown -> error({unsupported_transport_options, lists:sort(Unknown)})
+    end,
     #{fabric := Fabric, ingress := Ingress, indices := Native} = hls_protocol_partition:plan(
-        Config, Bundle, Capture, hls_protocol_fabric:plan(Publishers, Inbox), hls_protocol_ingress:plan(Bundle)),
-    Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Config, []), Bundle, Native),
-    ok = file:make_dir(Output),
-    ActorDirectory = filename:join(Output, "actors"),
-    ok = file:make_dir(ActorDirectory),
+        Options, Bundle, Capture, WholeFabric, WholeIngress),
+    Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Options, []), Bundle, Native),
+    Used = lists:sort(maps:keys(Modules)),
     ActorFunctions = [begin
         Relative = filename:join("actors", "actor_" ++ integer_to_list(I) ++ ".x"),
-        Summary = hls_local_actor:write(maps:get(M, Modules), filename:join(Output, Relative)),
-        #{module => M, file => list_to_binary(Relative), manifest => Summary}
+        Artifact = maps:get(M, Modules),
+        #{module => M, file => list_to_binary(Relative), manifest => hls_local_actor:manifest(Artifact), artifact => Artifact}
     end || {I, M} <- lists:enumerate(0, Used)],
     Receivers = [begin
         Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
@@ -53,17 +94,34 @@ write(Config = #{sources := Sources, topology := {Module, Function, Arguments}, 
         Owner = hls_protocol_arithmetic:receiver(I, Arithmetic, maps:get(M, Modules)),
         Artifact = hls_protocol_inbox:attach(Owner, Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
         Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
-        Manifest = hls_local_actor:write(Artifact, filename:join(Output, Relative)),
-        #{index => I, module => M, file => list_to_binary(Relative), manifest => Manifest}
+        #{index => I, module => M, file => list_to_binary(Relative), manifest => hls_local_actor:manifest(Artifact), artifact => Artifact}
     end || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors), lists:member(I, Native)],
-    ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
+    Files = [maps:with([file, artifact], A) || A <- ActorFunctions ++ Receivers],
     Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
-        sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, actor_functions => ActorFunctions, receivers => Receivers},
+        sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress,
+        actor_functions => [maps:remove(artifact, A) || A <- ActorFunctions],
+        receivers => [maps:remove(artifact, R) || R <- Receivers]},
     Plan = case Model of none -> Transport; _ -> Transport#{protocol_model => Model} end,
-    ok = write_model(Model, Output),
+    #build{transport = Plan, files = Files}.
+
+-doc "Returns the checked transport descriptor before or after emission. Treat it as read-only; it describes the exact artifacts in Build and is also saved as transport.etf.".
+-spec descriptor(build()) -> map().
+descriptor(#build{transport = Transport}) -> Transport.
+
+-doc "Emits a planned transport and its actor artifacts to a fresh directory without rereading source. Returns the transport descriptor also saved as transport.etf. The in-memory build is authoritative; saved output is for inspection and downstream consumers, not feedback into compilation. I/O failures retain partial output.".
+-spec emit(build(), file:filename()) -> map().
+emit(#build{transport = Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
+        actor_functions := ActorFunctions, receivers := Receivers}, files = Files}, Output) ->
+    ok = file:make_dir(Output),
+    ok = file:make_dir(filename:join(Output, "actors")),
+    lists:foreach(fun(#{file := Relative, artifact := Artifact}) ->
+        _ = hls_local_actor:write(Artifact, filename:join(Output, binary_to_list(Relative)))
+    end, Files),
+    ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
+    ok = write_model(maps:get(protocol_model, Plan, none), Output),
     ok = file:write_file(filename:join(Output, "transport.etf"), term_to_binary(Plan, [deterministic]), [exclusive]),
-    Summary = #{actors => length(Native), links => length(maps:get(links, Fabric)),
-        source_modules => Used, top => protocol_fabric, eligible => false,
+    Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
+        source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
         source_plans => maps:map(fun(_, #{plan := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5], xls_statem_plan:manifest(P)) end, Modules),
         actor_functions => ActorFunctions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
     ok = file:write_file(filename:join(Output, "summary.json"), json:encode(Summary), [exclusive]),

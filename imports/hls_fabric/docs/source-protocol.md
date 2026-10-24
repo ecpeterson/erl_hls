@@ -49,14 +49,14 @@ This compiles connected DSLX transport through XLS, not an executable actor appl
 ```text
 emit_protocol_transport.sh → hls-fabric emit --kind transport
   → hls_source_build:emit/3 → hls_protocol_transport:write/2
-    → local_actor:compile/2 + topology normalization/elaboration + inventory
-    → capture:plan/2 + transactions:plan/2
-    → source:plan/3 (projection + codec)
-    → inbox:plan/1 → fabric:plan/2
-    → local_actor:write/2 (same compiled actors, source functions + manifests)
-    → xls_protocol_transport:write/2
-      → parametric protocol_transport.x + generated topology composition
-      → sv_protocol_ports:write/3 (pin packing only)
+    → transport:prepare/1
+      → local_actor:compile/2 + topology normalization/elaboration + inventory
+      → capture:plan/2 + transactions:plan/2 → source:plan/3
+      → inbox:plan/1 → fabric:plan/2
+    → transport:plan/2 (placement, arithmetic and receiver artifacts)
+    → transport:emit/2
+      → local_actor:write/2 (same compiled actors and receivers)
+      → xls_protocol_transport:write/2 (DSLX composition + mechanical pin adapter)
   → compile_source_build.py → XLS conversion, optimization and code generation
 ```
 

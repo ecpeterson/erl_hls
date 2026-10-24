@@ -8,6 +8,14 @@ binding_test() ->
     Dir=filename:join("_build","deployment-binding-"++integer_to_list(erlang:system_time(nanosecond))),
     D=#{application:=A,devices:=Devices}=hls_protocol_deployment:write(config(),Dir),
     ?assertEqual([north,south],lists:sort(maps:keys(Devices))),
+    #{directories := Directories} = D,
+    [FirstBundle, SecondBundle] = [begin
+        {ok, TransportBytes} = file:read_file(filename:join([Dir, Name, "transport.etf"])),
+        #{bundle := Bundle} = binary_to_term(TransportBytes),
+        Bundle
+    end || {_Device, Name} <- lists:sort(maps:to_list(Directories))],
+    %% Even fresh compiler-origin references agree: there was one preparation, not two recompilations.
+    ?assertEqual(FirstBundle, SecondBundle),
     Payload=hls_protocol_application_binding:control(A,{host,all,{0,0,1,0},{total,12}}),
     ?assertEqual(20,byte_size(Payload)),
     ?assertEqual(20,byte_size(hls_protocol_application_binding:control(A,{host,all,{0,0,0,0},{total,12}}))),
@@ -32,8 +40,22 @@ ownership_test() ->
     lists:foreach(fun(Is)->
         Dir=filename:join("_build","deployment-invalid-"++integer_to_list(erlang:system_time(nanosecond))),
         C=#{devices:=Ds}=config(),S=maps:get(south,Ds),
-        ?assertException(error,_,hls_protocol_deployment:write(C#{devices:=Ds#{south:=S#{native_actors:=Is}}},Dir))
-    end,[[left],[right,sink]]),ok.
+        ?assertException(error,_,hls_protocol_deployment:write(C#{devices:=Ds#{south:=S#{native_actors:=Is}}},Dir)),
+        ?assertEqual(false, filelib:is_dir(Dir))
+    end,[[left],[right,sink],[],[unknown],[right,right]]),ok.
+
+%% Conflicting return addresses and malformed role maps also reject before output exists.
+-spec endpoints_test() -> ok.
+endpoints_test() ->
+    C = #{devices := Ds = #{north := North, south := South}} = config(),
+    lists:foreach(fun(Placement) ->
+        Dir = filename:join("_build", "deployment-endpoint-" ++ integer_to_list(erlang:system_time(nanosecond))),
+        ?assertException(error, _, hls_protocol_deployment:write(C#{devices := Ds#{south := Placement}}, Dir)),
+        ?assertEqual(false, filelib:is_dir(Dir))
+    end, [South#{host := maps:get(host, North), service := maps:get(service, North)},
+          South#{host := 0}, South#{service := 65536}, South#{host := maps:get(service, South)},
+          South#{sources => []}]),
+    ok.
 
 %% Arbitrary role names/addresses ensure the builder does not assume integer roles or service 7.
 -spec config() -> map().

@@ -29,6 +29,24 @@ _build/default/rel/hls/bin/hls-repetition --width 6 --split 3 --output /path/to/
 
 The direct API is `hls_source_build:emit(Kind, Config, Output)`. It calls the existing source builder, supplies fabric-specific unit schedules and delegates packaging to the compiler-owned `hls_artifact_bundle`: relative paths, emitter `metadata`, generated input hashes, DSLX entry points, RTL module names, required code-generation options and final RTL file lists. Shared DSLX libraries, pin adapters and supplied import trees are copied into `support/`; moving the emitted directory before external compilation is supported. `config.erl` records the original trusted source configuration for inspection; its source paths are not rewritten as a portable source-recompilation recipe. Native source-plan/deployment terms are trusted local artifacts.
 
+## In-process build stages
+
+The source transport builder has explicit preparation, placement and emission stages:
+
+```erlang
+Program = hls_protocol_transport:prepare(SourceConfig),
+North = hls_protocol_transport:plan(Program, #{native_actors => NorthActorIds}),
+South = hls_protocol_transport:plan(Program, #{native_actors => SouthActorIds}),
+Descriptor = hls_protocol_transport:descriptor(North),
+hls_protocol_transport:emit(North, "/path/to/fresh-north").
+```
+
+`prepare/1` loads the declared Erlang modules, executes the trusted topology constructor and checks one source program. `plan/2` derives a transport placement and its receiver artifacts from that program; its only options are `native_actors` and `arithmetic_groups`. Neither stage creates output files. Planning reads backend templates but does not reread application source. `plan/1` combines preparation and placement for a single build; `write/2` remains the convenience API that also emits. These opaque values are trusted in-process stages, not a serialized cache: retain them unchanged and keep their loaded source modules until the build finishes.
+
+`hls_protocol_network:emit/3`, `hls_protocol_boundary:emit/3` and `hls_protocol_bridge:emit/3` consume the planned transport, renderer options and a fresh output directory. Their named results carry the transport descriptor alongside the emitted manifest, so application, mixed and deployment builders do not read their own ETF outputs back. Source/placement options cannot be changed through these emission APIs. ETF outputs remain available for inspection and host consumers.
+
+A deployment prepares the source program once, validates complete disjoint ownership and return endpoints, and plans all roles before creating its output directory. This removes repeated source analysis per role; capture's independent source check still runs during preparation. Boundary/bridge checks, cross-role codec/relay checks and file writes still occur during emission, so later failures can leave partial output. This is not yet a dry-run API for an entire deployment. No XLS schedule, generated hardware behavior or admission policy changes at this boundary.
+
 ## Optional external compilation
 
 XLS execution is separate from source emission. Use another build system to consume `source-build.json`, or use the standard-library-only convenience driver with Python 3.12 or newer:
