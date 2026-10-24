@@ -1,20 +1,27 @@
 -module(xls_protocol_network).
 -moduledoc "Composes source-bound receiver and transport clock functions in DSLX. Wiring uses old-state offers and eligibility, followed by one registered transition per component.".
--export([write/2]).
+-export([emit/2]).
 
--doc "Writes network DSLX, a mechanical pin adapter and a manifest beside a fresh transport build. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Checked arithmetic groups add a bounded round-robin cursor and share one selected scalar source callback into the existing registered action slots. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. The manifest also binds every boundary stream to its declared external endpoint, retaining unused declarations and rendering their Erlang IDs as text. Optional process inspection selects metadata from old committed machines and has no input to application state or handshakes. Raw crossing pins pass through to canonical transport admission; crossing_state_bits counts the incoming fault registers already inside transport. This is executable composition, not capacity, progress or physical qualification.".
--spec write(map(),file:filename()) -> map().
-write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation,
-        bundle:=#{topology:=#{externals:=Externals}}},Directory) ->
+-doc "Returns only new network files and optional ingress DSLX without writing output. UpstreamFiles contains root-relative transport and receiver bytes used for exact component hashes. Requires hls_protocol_network's source-bound plan and boundary checks. Reuses each receiver and transport state. Checked arithmetic groups add a bounded round-robin cursor and share one selected scalar source callback into the existing registered action slots. Optional host ingress adds one shared frame, per-actor pending bits and a sticky fault; payload is not copied per recipient. Explicit activation adds one monotone bit and gates internal eligibility only; local entry work, startup, host commands and publications continue while stopped. startup_done reports only consumption of declared records, not application readiness. Every clock samples external ready pins; all components share reset. Outputs include each actor's source failure and publisher fault. The manifest also binds every boundary stream to its declared external endpoint, retaining unused declarations and rendering their Erlang IDs as text. Optional process inspection selects metadata from old committed machines and has no input to application state or handshakes. Raw crossing pins pass through to canonical transport admission; crossing_state_bits counts the incoming fault registers already inside transport. This is executable composition, not capacity, progress or physical qualification.".
+-spec emit(map(),hls_generated_files:files()) -> hls_generated_files:output().
+emit(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},receivers:=Receivers,ingress:=Ingress,activation:=Activation,
+        bundle:=#{topology:=#{externals:=Externals}}},UpstreamFiles) ->
     Arithmetic = maps:get(arithmetic, Plan, []),
-    Path=filename:join(Directory,"network"), ok=file:make_dir(Path),
     {RemoteInputs,RemoteOutputs}=xls_protocol_partition:ports(Fabric),
     Crossings=maps:get(crossings,Fabric,[]),
     Incoming=[I||#{index:=I,direction:=incoming}<-Crossings],
     Inspect=Inspection=:=process,
-    Debug=case Inspect of true->hls_protocol_inspection:write(Plan,Path);false->none end,
+    {Debug,InspectionFiles}=case Inspect of
+        true->
+            #{result:=InspectionManifest,files:=GeneratedInspection}=hls_protocol_inspection:emit(Plan),
+            {InspectionManifest,hls_generated_files:prefix("network",GeneratedInspection)};
+        false->{none,#{}}
+    end,
     Host=Ingress=/=none, Explicit=Activation=:=explicit_start,
-    case Host of true->ok=xls_protocol_ingress:write(Ingress,filename:join(Directory,"dslx"));false->ok end,
+    IngressFiles=case Host of
+        true->#{"dslx/ingress.x"=>xls_protocol_ingress:emit(Ingress)};
+        false->#{}
+    end,
     Inputs=[{"reset",1}]++optional(Inspect,[{"inspect_address",32}])++optional(Explicit,[{"start_valid",1}])++optional(Host,[{"ingress_valid",1},{"ingress_data",194}])++[{boundary(B)++"_ready",1}||B<-Boundaries]++RemoteInputs,
     Outputs=[{"startup_done",1}]++optional(Inspect,[{"inspect_value",128}])++optional(Explicit,[{"start_ready",1},{"running",1}])++optional(Host,[{"ingress_ready",1},{"ingress_fault",1}])++lists:append([[{actor(I)++"_failure",16},{actor(I)++"_fault",1}]||#{index:=I}<-Sources])++
         lists:append([[{boundary(B)++"_valid",1},{boundary(B)++"_data",W}]
@@ -55,8 +62,10 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
         "startup_done,\n",optional(Explicit,"start_ready: activation_step.output.start_ready, running: activation_step.output.running,\n"),optional(Host,"ingress_ready: ingress_offer.ready, ingress_fault: ingress_offer.fault,\n"),
         [[actor(I),"_failure: step_",n(I),".output.owner.failure, ",actor(I),"_fault: preview.",source(I),"_fault,\n"]||#{index:=I}<-Sources],
         [[boundary(B),"_",K,": preview.",boundary(B),"_",K,",\n"]||B<-Boundaries,K<-["valid","data"]],[[K,": preview.",K,",\n"]||{K,_}<-RemoteOutputs],"} } }\n",Clock],
-    Dslx=filename:join(Path,"network.x"), ok=file:write_file(Dslx,Source,[exclusive]),
-    ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Path,"protocol_network.sv"),"protocol_network","protocol_network_core"),
+    GeneratedFiles=hls_generated_files:merge([InspectionFiles,IngressFiles,
+        #{"network/network.x"=>Source,
+          "network/protocol_network.sv"=>sv_protocol_ports:emit(Inputs,Outputs,"protocol_network","protocol_network_core")}]),
+    ComponentFiles=hls_generated_files:merge([UpstreamFiles,GeneratedFiles]),
     Manifest=#{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
         actors=>length(Sources),links=>length(Links),additional_state_bits=>(case Host of true->maps:get(state_bits,Ingress);false->0 end)+(case Explicit of true->1;false->0 end)+lists:sum([W||#{cursor_bits:=W}<-Arithmetic]),
         arithmetic=>Arithmetic,
@@ -73,13 +82,14 @@ write(Plan=#{inspection:=Inspection,fabric:=Fabric=#{sources:=Sources,links:=Lin
         startup_done=>all_declared_records_consumed_not_application_readiness,
         reset=>common_clock_cancels_all_ownership,
         inputs=>fields(Inputs),outputs=>fields(Outputs),
-        dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase),
-        components=>[#{file=>list_to_binary(F),sha256=>hash(filename:join(Directory,F))}
+        dslx_sha256=>hls_generated_files:hash(Source),
+        components=>[#{file=>list_to_binary(F),sha256=>hls_generated_files:hash(maps:get(F,ComponentFiles))}
             ||F<-["dslx/transport.x"|[binary_to_list(maps:get(file,R))||R<-Receivers]]++xls_protocol_partition:files(Fabric)++optional(Host,["dslx/ingress.x"])++optional(Inspect,["network/process_observation.x"])],
         externals=>[#{index=>I,id=>iolist_to_binary(io_lib:format("~0tp",[Id]))}||{I,#{id:=Id}}<-lists:enumerate(0,Externals)],
         boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B)),external_index=>external_index(Id,Externals)}
             ||B=#{source_index:=I,output:=#{index:=D,destination:={external,Id}}}<-maps:get(boundaries,Fabric)]},
-    ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]), Manifest.
+    Files=hls_generated_files:merge([GeneratedFiles,#{"network/manifest.json"=>json:encode(Manifest)}]),
+    #{files=>Files,result=>Manifest}.
 
 %% Running is registered: start_valid cannot open captures on its handshake edge.
 -spec eligibility(boolean(),non_neg_integer(),non_neg_integer(),pos_integer()) -> iodata().
@@ -144,10 +154,6 @@ structure(Name,Fields) -> ["// Sampled network clock interface.\npub struct ",Na
 %% JSON retains the same exact widths rather than inferring them from generated text.
 -spec fields([{string(),pos_integer()}]) -> [map()].
 fields(Fields) -> [#{name=>list_to_binary(K),width=>W}||{K,W}<-Fields].
-
-%% Bind generated imports to their fresh source build; partial reads fail the build.
--spec hash(file:filename()) -> binary().
-hash(Path) -> {ok,Bytes}=file:read_file(Path), binary:encode_hex(crypto:hash(sha256,Bytes),lowercase).
 
 %% Names follow deterministic elaborated instance and recipient identities.
 -spec actor(non_neg_integer()) -> string().

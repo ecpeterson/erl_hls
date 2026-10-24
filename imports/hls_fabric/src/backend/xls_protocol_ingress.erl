@@ -1,17 +1,22 @@
 -module(xls_protocol_ingress).
 -moduledoc "Emits source-bound constant tables for the shared DSLX rectangle ingress implementation. All clock behavior resides in protocol_ingress.x.".
--export([write/2]).
+-export([emit/1, write/2]).
 
 -doc "Writes a fresh ingress.x beside transport.x from the checked hls_protocol_ingress plan. Tables retain dense actor identities, coordinates and exact schema masks. Emits no behavioral Verilog and adds no state beyond the shared frame, pending bits and fault.".
 -spec write(map(),file:filename()) -> ok.
-write(#{actors:=N,width:=W,height:=H,targets:=Targets},Directory) ->
+write(Plan, Directory) ->
+    file:write_file(filename:join(Directory, "ingress.x"), emit(Plan), [exclusive]).
+
+-doc "Returns ingress DSLX bytes from a checked plan and the installed template. Dense identities, coordinates and schema masks are unchanged; no output files are created.".
+-spec emit(map()) -> iodata().
+emit(#{actors:=N,width:=W,height:=H,targets:=Targets}) ->
     D=lists:max([length(Domains)||#{domains:=Domains}<-Targets]),
     {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_ingress.x.in")),
     Source=["import protocol_ingress as control;\nconst ACTORS = u32:",n(N),";\n",
         "const WIDTH = u32:",n(W),";\nconst HEIGHT = u32:",n(H),";\n",
         "const TARGETS = control::Target<ACTORS,u32:",n(D),">[",n(length(Targets)),"]:[\n",
         [target(T,N,D)||T<-Targets],"];\n",Template],
-    file:write_file(filename:join(Directory,"ingress.x"),Source,[exclusive]).
+    Source.
 
 %% Unused point/domain entries are explicitly invalid, never wildcard encodings.
 -spec target(map(),pos_integer(),pos_integer()) -> iodata().

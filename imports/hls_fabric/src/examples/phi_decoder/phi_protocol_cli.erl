@@ -21,7 +21,7 @@ run(Args) ->
         {Value, Rest} -> Rest#{split => hls_cli:integer(split, Value)}
     end,
     {Kind, Config} = phi_protocol_config:repetition(Width, Placement),
-    _ = hls_source_build:emit(Kind, Config, Output),
+    _ = hls_source_build:write(Kind, Config, Output),
     ok.
 
 %% Keep example-specific placement choices discoverable without extending compiler options.

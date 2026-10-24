@@ -1,6 +1,6 @@
 -module(xls_protocol_partition).
 -moduledoc "Elaborates canonical crossing codecs and named raw ports for a checked source partition. All behavioral control uses shared DSLX; this module supplies static wiring.".
--export([ports/1, write/2, fragments/1, name/1, files/1]).
+-export([ports/1, emit/1, write/2, fragments/1, name/1, files/1]).
 
 -doc "Returns sampled crossing input/output fields grouped by direction, preserving global link order within each group. Incoming links expose ready/fault and a per-class free mask; outgoing links expose immutable slot/frame while valid. Each peer supplies the complementary handshake. No serial framing or clock crossing is provided.".
 -spec ports(map()) -> {[{string(),pos_integer()}],[{string(),pos_integer()}]}.
@@ -13,10 +13,15 @@ ports(Plan) ->
 
 -doc "Writes each source-bound crossing codec to an exclusive DSLX file beside transport.x. Requires the fresh partition planner's classes; generated logic validates header, padding and omitted constants and preserves every dynamic bit.".
 -spec write(map(),file:filename()) -> ok.
-write(Plan,Directory) ->
-    lists:foreach(fun(#{index:=I,classes:=Classes})->lists:foreach(fun(#{slot:=K,codec:=Codec})->
-        ok=hls_protocol_codec:write(Codec,"convert",filename:join(Directory,codec_name(I,K)++".x"))
-    end,Classes) end,maps:get(crossings,Plan,[])),ok.
+write(Plan, Directory) ->
+    hls_generated_files:write_into(#{files => emit(Plan), result => ok}, Directory).
+
+-doc "Returns named crossing codec files from the checked partition plan, with no output I/O. Names retain global link and class indices; duplicate filenames are rejected.".
+-spec emit(map()) -> hls_generated_files:files().
+emit(Plan) ->
+    hls_generated_files:merge([#{codec_name(I, K) ++ ".x" => hls_protocol_codec:emit(Codec, "convert")}
+        || #{index := I, classes := Classes} <- maps:get(crossings, Plan, []),
+           #{slot := K, codec := Codec} <- Classes]).
 
 -doc "Returns DSLX imports, state fields, old-state views, next-state fields and output expressions for transport composition. Incoming canonical checks precede capture; outgoing frames restore destination schemas from held source projections. No additional payload state is introduced.".
 -spec fragments(map()) -> map().

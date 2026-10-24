@@ -1,14 +1,14 @@
 -module(hls_source_build).
 -moduledoc "Source-only HLS build boundary. Packages generated DSLX and its libraries for independently invoked external tools.".
--export([emit/3]).
+-export([write/3]).
 -export_type([kind/0]).
 
 -doc "The supported source-derived hardware boundaries; selection is explicit and does not change application semantics.".
 -type kind() :: transport | network | boundary | application | bridge | deployment | mixed.
 
--doc "Calls the selected source builder with a trusted configuration and a fresh output directory. Optional dslx_path lists provider import directories; all .x files in those directories and the resolved applications' DSLX/RTL support trees are copied into the output. Writes source-build.json with relative input hashes, entry points, required schedules and RTL lists. Config paths are relative to the caller's working directory. The manifest is a trusted build record, not executable commands or admission; XLS, simulation, synthesis and timing remain separate. Partial output is retained on failure; existing output is never replaced.".
--spec emit(kind(), map(), file:filename()) -> map().
-emit(Kind, Config, Output) ->
+-doc "Calls the selected source builder with a trusted configuration map or filename and a fresh output directory. A filename is consulted as one map and follows the same build path. Optional dslx_path lists provider import directories; all .x files in those directories and the resolved applications' DSLX/RTL support trees are copied into the output. Writes source-build.json with relative input hashes, entry points, required schedules and RTL lists. Config paths are relative to the caller's working directory. The manifest is a trusted build record, not executable commands or admission; XLS, simulation, synthesis and timing remain separate. Partial output is retained on failure; existing output is never replaced.".
+-spec write(kind(), map() | file:filename(), file:filename()) -> map().
+write(Kind, Config, Output) when is_map(Config) ->
     Builder = builder(Kind),
     Imports = maps:get(dslx_path, Config, []),
     lists:foreach(fun import_directory/1, Imports),
@@ -26,7 +26,8 @@ emit(Kind, Config, Output) ->
         _ -> [{Kind, "."}]
     end,
     Units = lists:append([units(K, Role, Config, Support) || {K, Role} <- Roles]),
-    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind}).
+    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind});
+write(Kind, Filename, Output) -> write(Kind, hls_source_config:read(Filename), Output).
 
 %% Choose only known emitters, before creating any output.
 -spec builder(kind()) -> module().

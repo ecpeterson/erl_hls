@@ -1,6 +1,6 @@
 -module(hls_ci_snowflake).
 -moduledoc "Small surface-window witness for the source protocol backend; no physical or QEC admission.".
--export([config/0, topology/0, emit/1, oracle/1]).
+-export([config/0, topology/0, write/1, oracle/1]).
 
 -doc "Selects the ordinary D2/H2 sources with a twelve-member flat barrier and bounded coordinator mailbox.".
 -spec config() -> map().
@@ -21,10 +21,10 @@ topology() ->
         snowflake_actor_topology:topology(2, 2),
     Topology#{routes := [{{coordinator, command}, buffered, Recipients} | Rest]}.
 
--doc "Emits one fresh complete source-protocol boundary using production compilation and topology checks.".
--spec emit(file:filename()) -> ok.
-emit(Output) ->
-    _ = hls_source_build:emit(boundary, config(), Output), ok.
+-doc "Writes one fresh complete source-protocol boundary using production compilation and topology checks.".
+-spec write(file:filename()) -> ok.
+write(Output) ->
+    _ = hls_source_build:write(boundary, config(), Output), ok.
 
 -doc "Runs ordinary BEAM actors on eight finite syndrome sheets and writes independently calculated public frames. The reference checks each round's complete state and retirement; this is a finite witness, not decoder validation.".
 -spec oracle(file:filename()) -> ok.

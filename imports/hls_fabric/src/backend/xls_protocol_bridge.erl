@@ -1,12 +1,11 @@
 -module(xls_protocol_bridge).
 -moduledoc "Elaborates static partition pins around the shared typed DSLX bridge and unchanged source boundary.".
--export([write/3]).
+-export([emit/3]).
 
--doc "Writes one fresh sampled-clock bridge around a freshly built boundary. Static link/class identities come from hls_protocol_bridge; old boundary observations supply credit and retained offers, and only the final call applies accepted transfers. Adds bounded framing and reservation state, no replicated native payloads. Output fault includes any native actor/transport failure; retirement masks both directions until coordinated reset. Returns exact emitted-input hashes and state accounting with eligibility false.".
--spec write(map(),map(),file:filename()) -> map().
-write(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming,outgoing:=Outgoing,credits:=Credits},
-        Boundary=#{outputs:=NativeOutputs,externals:=Externals},Directory) ->
-    Path=filename:join(Directory,"bridge"),ok=file:make_dir(Path),
+-doc "Returns in-memory sampled-clock bridge files without writing output. UpstreamFiles supplies root-relative boundary bytes for exact component hashes. Static link/class identities come from hls_protocol_bridge; old boundary observations supply credit and retained offers, and only the final call applies accepted transfers. Adds bounded framing and reservation state, no replicated native payloads. Output fault includes any native actor/transport failure; retirement masks both directions until coordinated reset. Returns exact emitted-input hashes and state accounting with eligibility false.".
+-spec emit(map(),map(),hls_generated_files:files()) -> hls_generated_files:output().
+emit(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming,outgoing:=Outgoing,credits:=Credits},
+        Boundary=#{outputs:=NativeOutputs,externals:=Externals},UpstreamFiles) ->
     I=length(Incoming),C=length(Credits),O=length(Outgoing),E=length(Externals),
     Dimensions=lists:join(",",[n(N)||N<-[I,C,O,E]]),StateDimensions=lists:join(",",[n(N)||N<-[I,C,O]]),
     Inputs=[{"reset",1},{"retire",1},{"s_app_tdata",32},{"s_app_tlast",1},{"s_app_tvalid",1},{"m_app_tready",1}],
@@ -42,8 +41,9 @@ write(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming
       "s_app_tready:step.output.ready,m_app_tdata:step.output.word,m_app_tlast:step.output.last,\n",
       "m_app_tvalid:step.output.valid,fault:step.output.fault,running:old.running && step.output.active } } }\n",
       binary:replace(Clock,<<"boundary_clock">>,<<"bridge_clock">>,[global])],
-    ok=file:write_file(filename:join(Path,"bridge.x"),Source,[exclusive]),
-    ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Path,"protocol_bridge_top.sv"),"protocol_bridge_top","protocol_bridge_core"),
+    GeneratedFiles=#{"bridge/bridge.x"=>Source,
+        "bridge/protocol_bridge_top.sv"=>sv_protocol_ports:emit(Inputs,Outputs,"protocol_bridge_top","protocol_bridge_core")},
+    ComponentFiles=hls_generated_files:merge([UpstreamFiles,GeneratedFiles]),
     %% RX=360, TX=310; attachment/fault=67, event sequence/cursor=48.
     StateBits=785+32*I+C+42*O,
     Manifest=(maps:without([identity,incoming,outgoing,credits,links],Bridge))#{top=>protocol_bridge_top,
@@ -54,10 +54,11 @@ write(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming
       reset=>retire_deployment_transports_then_coordinated_reset,ordering=>per_logical_sender_destination,
       inputs=>[#{name=>list_to_binary(N),width=>W}||{N,W}<-Inputs],
       outputs=>[#{name=>list_to_binary(N),width=>W}||{N,W}<-Outputs],
-      dslx_sha256=>hash(filename:join(Path,"bridge.x")),
-      components=>[#{file=>list_to_binary(F),sha256=>hash(filename:join(Directory,F))}
+      dslx_sha256=>hls_generated_files:hash(Source),
+      components=>[#{file=>list_to_binary(F),sha256=>hls_generated_files:hash(maps:get(F,ComponentFiles))}
         ||F<-["boundary/boundary.x","bridge/protocol_bridge_top.sv"]]},
-    ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]),Manifest.
+    Files=hls_generated_files:merge([GeneratedFiles,#{"bridge/manifest.json"=>json:encode(Manifest)}]),
+    #{files=>Files,result=>Manifest}.
 
 %% Static retained offers preserve the ordinary low-header frame ABI.
 -spec offer(string(),string(),string()) -> iodata().
@@ -70,9 +71,6 @@ remote(#{index:=I}) -> xls_protocol_partition:name(I).
 %% Named pins follow DSLX struct order in the mechanical adapter.
 -spec structure(string(),[{string(),pos_integer()}]) -> iodata().
 structure(Name,Fields) -> ["// Sampled bridge pins.\npub struct ",Name," {\n",[[N,":bits[",n(W),"],\n"]||{N,W}<-Fields],"}\n"].
-%% Exact emitted bytes bind the separate XLS invocation.
--spec hash(file:filename()) -> binary().
-hash(File) -> {ok,B}=file:read_file(File),binary:encode_hex(crypto:hash(sha256,B),lowercase).
 %% Only checked dimensions and indices enter generated text.
 -spec n(non_neg_integer()) -> string().
 n(N) -> integer_to_list(N).

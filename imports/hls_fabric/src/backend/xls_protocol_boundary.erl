@@ -1,11 +1,10 @@
 -module(xls_protocol_boundary).
 -moduledoc "Wires declared external endpoints to static DSLX arbiters around the source-network transition.".
--export([write/2]).
+-export([emit/1]).
 
--doc "Emits a fresh boundary clock, mechanical pin adapter and manifest for hls_protocol_boundary's checked plan. Reuses the network state and one small arbitration state per endpoint with multiple producers. Network preview observations must be independent of boundary ready; only the final transition consumes arbiter acceptance. No payload buffering or application eligibility is added.".
--spec write(map(),file:filename()) -> map().
-write(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups},Directory) ->
-    Path=filename:join(Directory,"boundary"),ok=file:make_dir(Path),
+-doc "Returns in-memory boundary clock, pin adapter and manifest files for hls_protocol_boundary's checked plan without writing output. Reuses the network state and one small arbitration state per endpoint with multiple producers. Network preview observations must be independent of boundary ready; only the final transition consumes arbiter acceptance. No payload buffering or application eligibility is added.".
+-spec emit(map()) -> hls_generated_files:output().
+emit(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups}) ->
     BoundaryNames=lists:append([[<<Name/binary,"_ready">>,<<Name/binary,"_valid">>,<<Name/binary,"_data">>]||#{name:=Name}<-Boundaries]),
     PassInputs=[P||P=#{name:=Name}<-NetworkInputs,not lists:member(Name,BoundaryNames)],
     PassOutputs=[P||P=#{name:=Name}<-NetworkOutputs,not lists:member(Name,BoundaryNames)],
@@ -29,15 +28,15 @@ write(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundar
         [[external(I),": merge_",n(I),".state,\n"]||#{index:=I}<-Multiple],"}, output: Outputs {\n",
         [[Name,": preview.",Name,",\n"]||#{name:=Name}<-PassOutputs],
         [observation(G)||G<-Groups],"} } }\n",Clock],
-    ok=file:write_file(filename:join(Path,"boundary.x"),Source,[exclusive]),
-    ok=sv_protocol_ports:write(pins(Inputs),pins(Outputs),filename:join(Path,"protocol_boundary.sv"),"protocol_boundary","protocol_boundary_core"),
     Bits=lists:sum([N||#{state_bits:=N}<-Groups]),
     Manifest=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
         actor_runtime=>true,eligible=>false,ordering=>per_logical_sender_destination,
         activation=>maps:get(activation,Network),inspection=>maps:get(inspection,Network),additional_state_bits=>Bits+maps:get(additional_state_bits,Network),
         arbitration_state_bits=>Bits,externals=>Groups,inputs=>Inputs,outputs=>Outputs,
-        dslx_sha256=>binary:encode_hex(crypto:hash(sha256,Source),lowercase)},
-    ok=file:write_file(filename:join(Path,"manifest.json"),json:encode(Manifest),[exclusive]),Manifest.
+        dslx_sha256=>hls_generated_files:hash(Source)},
+    #{files=>#{"boundary/boundary.x"=>Source,
+        "boundary/protocol_boundary.sv"=>sv_protocol_ports:emit(pins(Inputs),pins(Outputs),"protocol_boundary","protocol_boundary_core"),
+        "boundary/manifest.json"=>json:encode(Manifest)},result=>Manifest}.
 
 %% Producer bit zero is array element zero; sources retain frames until selected acceptance.
 -spec arbiter(map()) -> iodata().

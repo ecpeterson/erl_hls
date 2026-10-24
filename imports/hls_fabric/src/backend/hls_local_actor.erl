@@ -1,6 +1,6 @@
 -module(hls_local_actor).
 -moduledoc "Compiles ordinary local actor functions and a single-actor DSLX clock owner from source.".
--export([compile/2, write/2, write/3, manifest/1]).
+-export([compile/2, emit/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
 -doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
@@ -18,6 +18,11 @@ compile(Source, Options) ->
     #{source => Source, spec => Spec, plan => Plan,
         dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec)])}.
 
+-doc "Returns an existing artifact's DSLX and JSON provenance sidecar under a relative filename, without recompilation or output I/O. The enclosing generated-files writer validates the relative path; retain the checked artifact unchanged.".
+-spec emit(artifact(), string()) -> hls_generated_files:files().
+emit(Artifact = #{dslx := Bytes}, RelativeFilename) ->
+    #{RelativeFilename => Bytes, RelativeFilename ++ ".json" => json:encode(manifest(Artifact))}.
+
 -doc "Writes a fresh source-derived DSLX module and provenance manifest. Refuses existing files; generated code contains no application-specific RTL controller.".
 -spec write(file:filename(), [hls_source:option()] | hls_source:context(), file:filename()) -> map().
 write(Source, Options, Output) ->
@@ -25,11 +30,13 @@ write(Source, Options, Output) ->
 
 -doc "Writes an artifact returned by compile/2 without recompiling or selecting callbacks. Output and its .json sidecar must both be absent; partial I/O failures are retained. This is a trusted in-process build API, not validation of a saved or supplied artifact.".
 -spec write(artifact(), file:filename()) -> map().
-write(Artifact = #{dslx := Bytes}, Output) ->
+write(Artifact, Output) ->
     lists:foreach(fun fresh/1, [Output, Output ++ ".json"]),
     Manifest = manifest(Artifact),
+    Filename = filename:basename(Output), Sidecar = Filename ++ ".json",
+    #{Filename := Bytes, Sidecar := Json} = emit(Artifact, Filename),
     ok = file:write_file(Output, Bytes, [exclusive]),
-    ok = file:write_file(Output ++ ".json", json:encode(Manifest), [exclusive]),
+    ok = file:write_file(Output ++ ".json", Json, [exclusive]),
     Manifest.
 
 %% Refuse either existing output before writing its companion; exclusive writes also guard races.

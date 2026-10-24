@@ -33,7 +33,8 @@ external_collision_test() ->
     Path=filename:join("_build","application-collision-"++integer_to_list(erlang:system_time(nanosecond))),
     ?assertError({ambiguous_application_event,shared,5},hls_protocol_application:write(
         #{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{"test/hls_protocol_application_conflict.erl",[]},{?FILE,[]}],
-          topology=>{?MODULE,collision,[]},actor_limit=>5,device=>board,host=>1},Path)).
+          topology=>{?MODULE,collision,[]},actor_limit=>5,device=>board,host=>1},Path)),
+    ?assertNot(filelib:is_dir(Path)).
 
 -doc "Adds one equal-width but incompatible producer to the shared external endpoint.".
 -spec collision() -> map().

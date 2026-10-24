@@ -16,8 +16,7 @@ run(["emit" | Args]) ->
     Kind = kind(maps:get(kind, Options, "application")),
     ConfigPath = hls_cli:required(config, Options),
     Output = hls_cli:required(output, Options),
-    {ok, [Config]} = file:consult(ConfigPath),
-    _ = hls_source_build:emit(Kind, Config, Output),
+    _ = hls_source_build:write(Kind, ConfigPath, Output),
     ok;
 run(Args) -> error({unknown_command, Args}).
 

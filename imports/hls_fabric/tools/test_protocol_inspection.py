@@ -45,40 +45,21 @@ def shapes(xls: Path, stage: Path) -> None:
     """Compare packed projections to ordinary typed machine fields, including active gather/scalar priority."""
     expression='[C,S]=init:get_plain_arguments(),ok=hls_protocol_inspection_shapes:write(C,S),halt().'
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',PUBLIC,stage],stage.parent,'shapes-emit')
-    for name in ['plain','scalar','gather']:
-        shape_case(xls,stage/name,name)
+    for name in ['plain','scalar','gather','gather_sites']:
+        shape_case(xls,stage/name)
 
 
-def shape_case(xls: Path, part: Path, name: str) -> None:
+def shape_case(xls: Path, part: Path) -> None:
     """Check one freshly emitted shape against the ordinary typed machine unpacker."""
-    manifest=json.loads((part/'inspection.json').read_text());resource=manifest['resources'][0]
-    # The reference unpacks through the ordinary compiler's typed ActorState, not raw offsets.
-    pieces=['(bits[128]:1 << u32:25)','(m.phase as bits[128])','((m.enter_pending as bits[128]) << u32:8)',
-            '((m.failure as bits[128]) << u32:9)']
-    fields=resource.get('reduction',{}).get('fields',{})
-    for field,layout in fields.items():
-        width=layout['width']
-        if not width:continue
-        scalar=f'(m.reduction.{field} as bits[{width}])'
-        if name=='gather':
-            scalar=f'bits[{width}]:0' if field == 'expected' else scalar
-            gathered=f'(m.gather.progress.{field} as bits[{width}])'
-            if field=='site':gathered=f'({gathered} + bits[{width}]:1)'
-            value=f'(if m.gather.progress.status != GatherStatus::IDLE {{ {gathered} }} else {{ {scalar} }})'
-        else:value=scalar
-        pieces.append(f'(({value} as bits[128]) << u32:{layout["observation_offset"]})')
     source=part/'shape.x';raw=part/'shape.ir'
-    source.write_text((part/'actor.x').read_text()+'\nimport process_observation as view;\n'
-        '// All raw machine bits: independent ordinary typed unpacking supplies metadata.\n'
-        'pub fn metadata(raw: MachineBits, initialized: bool, reset: bool) -> bool {\n'
-        'let m = local_machine(raw, u32:0);\n'
-        'let expected = if reset || !initialized { bits[128]:0 } else { '+' | '.join(pieces)+' };\n'
-        'view::observe_0(raw, initialized, reset) == expected }\n')
     imports=[part,ROOT/'priv/xls/lib',PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric']
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],part,'shape-convert',raw)
     result=prove(SimpleNamespace(xls=xls,yosys='yosys'),part,raw,'shape','metadata',True)
-    (part/'result.json').write_text(json.dumps(result,indent=2)+'\n')
+    (part/'result.json').write_text(json.dumps({'result':result,
+        'domain':'All raw machine bits and initialization/reset Booleans for this source fixture.',
+        'trust':['source extraction','typed machine unpacker','DSLX/XLS','Yosys/ABC/SAT'],
+        'limits':'Combinational projection equivalence; no temporal progress or arbitrary-source claim.'},indent=2)+'\n')
 
 def live(build: Path, stage: Path, binary: Path) -> None:
     """Run actual broker/client queries and correction feedback; preserve both independent accepted-word logs."""

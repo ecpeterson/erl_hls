@@ -1,6 +1,6 @@
 -module(hls_protocol_transport).
 -moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
--export([prepare/1, bundle/1, descriptor/1, plan/1, plan/2, emit/2, write/2]).
+-export([prepare/1, bundle/1, descriptor/1, plan/1, plan/2, emit/1, write/2]).
 -export_type([program/0, build/0]).
 
 %% Source-wide facts are shared by every placement; role selection never recompiles them.
@@ -18,10 +18,10 @@
 -doc "A checked transport placement from plan/1 or plan/2, with receiver artifacts ready for emission. Retain it unchanged in process; it grants no capacity, progress or device admission.".
 -opaque build() :: #build{}.
 
--doc "Prepares, plans and emits a fresh source transport. See prepare/1 for source/configuration requirements and plan/2 for placement options. Returns the emitted transport descriptor; partial I/O failures are retained.".
--spec write(map(), file:filename()) -> map().
-write(Config, Output) ->
-    emit(plan(Config), Output).
+-doc "Writes emit/1's generated files to a fresh directory and returns the transport descriptor. Accepts a trusted source config map or filename, or an unchanged in-process build. Generation finishes before output is created; I/O failures retain partial output.".
+-spec write(map() | file:filename() | build(), file:filename()) -> map().
+write(Input, Output) ->
+    hls_generated_files:write(emit(Input), Output).
 
 -doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model => {Module, Options} invokes an application-owned hls_protocol_model provider on the fresh inventory. Its checked graph establishes neither source refinement nor progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Capture analysis independently reads producer source and must agree with the ordinary actor compilation.".
 -spec prepare(map()) -> program().
@@ -108,24 +108,24 @@ plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, mo
 -spec descriptor(build()) -> map().
 descriptor(#build{transport = Transport}) -> Transport.
 
--doc "Emits a planned transport and its actor artifacts to a fresh directory without rereading source. Returns the transport descriptor also saved as transport.etf. The in-memory build is authoritative; saved output is for inspection and downstream consumers, not feedback into compilation. I/O failures retain partial output.".
--spec emit(build(), file:filename()) -> map().
+-doc "Returns relative filenames with IO data and the transport descriptor, without writing output. A trusted config map is prepared and planned; a filename is consulted as one config map and follows that same path, with source paths relative to the caller. An unchanged in-process build needs no source rereads. Source constructors may have effects; template reads remain. Saved ETF plans are not accepted as configuration.".
+-spec emit(map() | file:filename() | build()) -> hls_generated_files:output().
 emit(#build{transport = Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
-        actor_functions := ActorFunctions, receivers := Receivers}, files = Files}, Output) ->
-    ok = file:make_dir(Output),
-    ok = file:make_dir(filename:join(Output, "actors")),
-    lists:foreach(fun(#{file := Relative, artifact := Artifact}) ->
-        _ = hls_local_actor:write(Artifact, filename:join(Output, binary_to_list(Relative)))
-    end, Files),
-    ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
-    ok = hls_protocol_model:write(maps:get(protocol_model, Plan, none), Output),
-    ok = file:write_file(filename:join(Output, "transport.etf"), term_to_binary(Plan, [deterministic]), [exclusive]),
+        actor_functions := ActorFunctions, receivers := Receivers}, files = Files}) ->
+    Actors = [hls_local_actor:emit(Artifact, binary_to_list(Relative))
+        || #{file := Relative, artifact := Artifact} <- Files],
+    #{files := TransportFiles} = xls_protocol_transport:emit(Fabric),
+    ModelFiles = hls_protocol_model:emit(maps:get(protocol_model, Plan, none)),
     Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
         source_plans => maps:map(fun(_, #{plan := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5], xls_statem_plan:manifest(P)) end, Modules),
         actor_functions => ActorFunctions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
-    ok = file:write_file(filename:join(Output, "summary.json"), json:encode(Summary), [exclusive]),
-    Plan.
+    Generated = hls_generated_files:merge(Actors ++ [
+        hls_generated_files:prefix("dslx", TransportFiles), ModelFiles,
+        #{"transport.etf" => term_to_binary(Plan, [deterministic]), "summary.json" => json:encode(Summary)}]),
+    #{files => Generated, result => Plan};
+emit(Config) when is_map(Config) -> emit(plan(Config));
+emit(Filename) -> emit(hls_source_config:read(Filename)).
 
 %% Load only declared current source; no historical backend overlay enters the code path.
 -spec load(file:filename(), list()) -> module().

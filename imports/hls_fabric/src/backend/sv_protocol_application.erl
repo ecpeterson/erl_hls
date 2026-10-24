@@ -1,10 +1,16 @@
 -module(sv_protocol_application).
 -moduledoc "Mechanically connects the shared gateway, activation bridge and freshly emitted source boundary.".
--export([write/3]).
+-export([emit/2, write/3]).
 
 -doc "Writes pin wiring for the source-checked application binding and boundary manifest. Reuses hls_partition_activation unchanged; no new behavioral Verilog is emitted. Converts each ordinary actor bit frame to the gateway's Frame struct exactly once. All components must share clock/reset; exposed source faults do not constitute a gateway protocol-fault response.".
 -spec write(map(),map(),file:filename()) -> ok.
-write(#{events:=Events},#{externals:=Externals,outputs:=Outputs,inspection:=Inspection},Directory) ->
+write(Binding, Boundary, Directory) ->
+    file:write_file(filename:join(Directory, "protocol_application_top.sv"),
+        emit(Binding, Boundary), [exclusive]).
+
+-doc "Returns mechanical application pin wiring from the checked binding and boundary. Retains frame/header bit order and optional inspection connections; no output files are created.".
+-spec emit(map(), map()) -> iodata().
+emit(#{events:=Events},#{externals:=Externals,outputs:=Outputs,inspection:=Inspection}) ->
     true=map_size(Events)=:=length(Externals),
     Diagnostics=[P||P=#{name:=Name}<-Outputs,not lists:prefix("external_",binary_to_list(Name)),
         Name=/=<<"ingress_ready">>,Name=/=<<"start_ready">>,Name=/=<<"inspect_value">>],
@@ -32,7 +38,7 @@ write(#{events:=Events},#{externals:=Externals,outputs:=Outputs,inspection:=Insp
       ".ingress_data(ingress),.ingress_valid(ingress_valid),.ingress_ready(ingress_ready),.start_valid(start_valid),.start_ready(start_ready),\n",
       ".started(started),.started_valid(started_valid),.started_ready(started_ready));\n",
       "protocol_boundary network(",lists:join(",",Ports),");\n",sv_protocol_inspection:body(Inspection),"endmodule\n"],
-    file:write_file(filename:join(Directory,"protocol_application_top.sv"),Source,[exclusive]).
+    Source.
 
 %% Actor bit order is payload:op:flags:txid:words; the DSLX struct reverses header fields.
 -spec event(non_neg_integer()) -> iodata().

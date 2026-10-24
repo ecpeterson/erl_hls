@@ -1,6 +1,6 @@
 -module(hls_protocol_inspection).
 -moduledoc "Source-bound passive process metadata for the existing endpoint-2 inspection service.".
--export([mode/1, write/2]).
+-export([mode/1, emit/1, write/2]).
 
 -doc "Accepts none or process; rejects unsupported inspection before source compilation.".
 -spec mode(term()) -> none | process.
@@ -10,11 +10,15 @@ mode(Other) -> error({unsupported_protocol_inspection,Other}).
 
 -doc "Writes passive DSLX observation functions, a fingerprinted JSON manifest and a trusted local catalog beside a fresh network. Reads committed machine metadata only, with no new actor state or application backpressure. Collection fields use the common 128-bit reply policy; payloads, mailbox occupancy and history are excluded. The caller must connect inspect_address/value to the unchanged topology debug service under the same reset.".
 -spec write(map(),file:filename()) -> map().
-write(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receivers},Directory) ->
+write(Plan, Directory) ->
+    hls_generated_files:write_into(emit(Plan), Directory).
+
+-doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. The result is the same bound manifest; no output files are created or read back.".
+-spec emit(map()) -> hls_generated_files:output().
+emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receivers}) ->
     Rows=[#{index=>I,id=>Id,module=>M}||{I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
     Resources=[resource(A,maps:get(M,Modules))||A=#{module:=M}<-Rows],
     Source=[observation(R,maps:get(M,Modules))||R=#{module:=M}<-Receivers],
-    ok=file:write_file(filename:join(Directory,"process_observation.x"),Source,[exclusive]),
     Manifest0=json(#{schema=>5,resources=>Resources,probes=>[],catalogue_sha256=>digest(term_to_binary(Rows,[deterministic])),
         inspection=>#{scope=>process,coherence=>one_process_pre_edge,history=>unavailable,
             sampling=>query_service_acceptance_edge,transport_stalls=>excluded},
@@ -22,9 +26,9 @@ write(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Recei
         dslx_sha256=>digest(iolist_to_binary(Source)),
         limits=>[<<"Separate queries are not atomic together.">>,<<"No mailbox counts, payloads or continuous event history.">>]}),
     Manifest=Manifest0#{<<"fingerprint">>=>hls_topology_debug:manifest_fingerprint(Manifest0)},
-    ok=file:write_file(filename:join(Directory,"inspection.json"),json:encode(Manifest),[exclusive]),
-    ok=file:write_file(filename:join(Directory,"inspection.etf"),term_to_binary(#{actors=>Rows,manifest=>Manifest},[deterministic]),[exclusive]),
-    Manifest.
+    #{result => Manifest, files => #{"process_observation.x" => Source,
+        "inspection.json" => json:encode(Manifest),
+        "inspection.etf" => term_to_binary(#{actors=>Rows,manifest=>Manifest},[deterministic])}}.
 
 %% Resource order is the exact normalized actor order, including composite logical identities.
 -spec resource(map(),map()) -> map().
@@ -51,14 +55,24 @@ observation(#{index:=I,manifest:=#{machine_layout:=ML,machine_bits:=Width}},#{sp
 
 %% Gather metadata supersedes scalar metadata only while its source status is active.
 -spec progress(atom(),pos_integer(),map(),map()) -> iodata().
-progress(Name,Width,#{reductions:=R,gathers:=G},ML) ->
-    Scalar=case R of none->["bits[",n(Width),"]:0"];_->field(Name,Width,reduction,xls_statem_reduction_ir:packed_layout(R),ML) end,
-    case G of none->Scalar;#{sites:=[#{population:=#{size:=C}}]}->
-        Layout=maps:from_list([{K,#{offset=>O,width=>W}}||{K,O,W}<-[{status,0,2},{site,2,8},{key,10,32},{remaining,42,8},{expected,50,C},{seen,50+C,C},{failure,50+2*C,16}]]),
-        Gather=field(Name,Width,gather,Layout,ML),
-        Count=case R of none->0;#{sites:=Sites}->length(Sites) end,
-        Value=case Name of site->["(",Gather," + bits[",n(Width),"]:",n(Count),")"];_->Gather end,
-        ["(if ",field(status,2,gather,Layout,ML)," != u2:0 { ",Value," } else { ",Scalar," })"]
+progress(Name, Width, #{reductions := Reduction, gathers := Gather}, Machine) ->
+    Scalar = case Reduction of
+        none -> ["bits[", n(Width), "]:0"];
+        _ -> field(Name, Width, reduction,
+            xls_statem_reduction_ir:packed_layout(Reduction), Machine)
+    end,
+    case Gather of
+        none -> Scalar;
+        _ ->
+            #{fields := Fields} = xls_statem_gather_layout:progress(Gather),
+            Value = field(Name, Width, gather, Fields, Machine),
+            SiteCount = case Reduction of none -> 0; #{sites := Sites} -> length(Sites) end,
+            Indexed = case Name of
+                site -> ["(", Value, " + bits[", n(Width), "]:", n(SiteCount), ")"];
+                _ -> Value
+            end,
+            ["(if ", field(status, 2, gather, Fields, Machine), " != u2:0 { ",
+                Indexed, " } else { ", Scalar, " })"]
     end.
 
 %% Absent membership fields are zero; widths follow the common bounded observation ABI.

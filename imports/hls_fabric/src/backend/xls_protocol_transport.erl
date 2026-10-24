@@ -1,12 +1,10 @@
 -module(xls_protocol_transport).
 -moduledoc "Lowers a source-bound transport plan to DSLX clock transitions. XLS owns all transport registers, selection and routing logic; the Verilog adapter only packs named pins.".
--export([write/2]).
+-export([emit/1]).
 
--doc "Writes a DSLX proc, pin adapter and port manifest to a fresh directory. Requires the complete checked fabric plan. Partition crossings add canonical frame ports and one sticky fault bit per incoming link; outgoing state remains in its original publication. Compile with one pipeline stage and no input/output flops; both XLS channel handshakes are permanently enabled by the adapter. Recipient readiness remains ordinary input data and cannot stall the whole proc. This is hardware generation, not application capacity or progress admission.".
--spec write(map(),file:filename()) -> ok.
-write(Plan=#{sources:=Sources,links:=Links},Directory) ->
-    ok=file:make_dir(Directory),
-    ok=xls_protocol_partition:write(Plan,Directory),
+-doc "Returns in-memory DSLX, pin adapter, port manifest and crossing codec files without writing output. Requires the complete checked fabric plan. Partition crossings add canonical frame ports and one sticky fault bit per incoming link; outgoing state remains in its original publication. Compile with one pipeline stage and no input/output flops; both XLS channel handshakes are permanently enabled by the adapter. Recipient readiness remains ordinary input data and cannot stall the whole proc. This is hardware generation, not application capacity or progress admission.".
+-spec emit(map()) -> hls_generated_files:output().
+emit(Plan=#{sources:=Sources,links:=Links}) ->
     Crossing=xls_protocol_partition:fragments(Plan),
     Keys=lists:usort([source_shape(S)||S<-Sources]),
     Definitions=[K#{index=>I}||{I,K}<-lists:enumerate(0,Keys)],
@@ -19,11 +17,13 @@ write(Plan=#{sources:=Sources,links:=Links},Directory) ->
         [source(S)||S<-Definitions],[link_shape(L)||L<-shapes(Links)],
         "pub struct State {\n",[[sname(I),": S",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Instances],
         [[lname(I),": L",n(Shape),",\n"]||#{index:=I,shape:=Shape}<-Links],maps:get(state,Crossing),"}\n",tick(Plan#{sources=>Instances}),Clock],
-    ok=file:write_file(filename:join(Directory,"transport.x"),Source,[exclusive]),
-    ok=sv_protocol_ports:write(Inputs,Outputs,filename:join(Directory,"protocol_fabric.sv")),
-    file:write_file(filename:join(Directory,"ports.json"),json:encode(
-        #{inputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Inputs],
-          outputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Outputs]}),[exclusive]).
+    Files=hls_generated_files:merge([xls_protocol_partition:emit(Plan),
+        #{"transport.x"=>Source,
+          "protocol_fabric.sv"=>sv_protocol_ports:emit(Inputs,Outputs,"protocol_fabric","protocol_fabric_core"),
+          "ports.json"=>json:encode(
+              #{inputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Inputs],
+                outputs=>[#{name=>list_to_binary(K),width=>W}||{K,W}<-Outputs]})}]),
+    #{files=>Files,result=>ok}.
 
 %% Only identical ordered payload shapes share functions; instances keep separate state.
 -spec shapes([map()]) -> [map()].

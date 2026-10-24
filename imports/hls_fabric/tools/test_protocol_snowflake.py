@@ -82,7 +82,7 @@ def main() -> None:
     args.stage.mkdir(parents=True)
     build = args.stage / 'build'
     env = erlang_environment('test')
-    expression = '[Build, Vectors]=init:get_plain_arguments(),ok=hls_ci_snowflake:emit(Build),ok=hls_ci_snowflake:oracle(Vectors),halt().'
+    expression = '[Build, Vectors]=init:get_plain_arguments(),ok=hls_ci_snowflake:write(Build),ok=hls_ci_snowflake:oracle(Vectors),halt().'
     run(['erl', '-noshell', '-eval', expression, '-extra', build, args.stage / 'vectors.json'],
         args.stage, 'emit-reference', env=env)
     compiler = application_directory('erl_hls', 'test')

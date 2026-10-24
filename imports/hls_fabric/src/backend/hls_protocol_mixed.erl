@@ -1,14 +1,19 @@
 -module(hls_protocol_mixed).
 -moduledoc "Fresh source-bound BEAM/native placement using the shared DSLX bridge. Host admission, transport retirement and application progress are separate obligations.".
--export([write/2,encode/3,decode/3]).
+-export([emit/1,write/2,encode/3,decode/3]).
 
--doc "Builds one framed native partition using hls_protocol_bridge's configuration; complementary actors run in BEAM. Requires one recipient per BEAM output, no BEAM-to-BEAM links, rectangle control and explicit activation. Writes mixed.etf for hls_protocol_mixed_stream and the usual bridge artifacts. Loaded codecs are checked against fresh source declarations. Partial output is retained on failure; no mailbox replacement, progress, timing or device admission is granted.".
--spec write(map(),file:filename()) -> map().
-write(Config,Directory) ->
+-doc "Builds one framed native partition using hls_protocol_bridge's configuration; complementary actors run in BEAM. Requires one recipient per BEAM output, no BEAM-to-BEAM links, rectangle control and explicit activation. Writes mixed.etf for hls_protocol_mixed_stream and the usual bridge artifacts. Loaded codecs are checked against fresh source declarations. Generation failures create no output; I/O failures retain partial output; no mailbox replacement, progress, timing or device admission is granted.".
+-spec write(map() | file:filename(), file:filename()) -> map().
+write(Config, Directory) ->
+    hls_generated_files:write(emit(Config), Directory).
+
+-doc "Generates a mixed BEAM/native bundle without writing output, returning relative filenames with IO data and its deployment plan. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors. Template and support reads remain; loaded host codecs must stay available.".
+-spec emit(map() | file:filename()) -> hls_generated_files:output().
+emit(Config) when is_map(Config) ->
     Build = hls_protocol_transport:plan(Config),
-    #{bridge := Bridge = #{native_indices := Native, links := Links, identity := Identity, host := Host, service := Service},
-        transport := #{bundle := Bundle = #{topology := #{actors := Actors, routes := Routes, startup := Startup}, modules := Modules}}} =
-        hls_protocol_bridge:emit(Build,maps:with([host, service, control, activation, inspection],Config),Directory),
+    #{files := BridgeFiles, result := #{bridge := Bridge = #{native_indices := Native, links := Links, identity := Identity, host := Host, service := Service},
+        transport := #{bundle := Bundle = #{topology := #{actors := Actors, routes := Routes, startup := Startup}, modules := Modules}}}} =
+        hls_protocol_bridge:emit(Build,maps:with([host, service, control, activation, inspection],Config)),
     HostIds=[Id||{I,#{id:=Id}}<-lists:enumerate(0,Actors),not lists:member(I,Native)],
     Application=hls_protocol_application_binding:bind(Bundle,maps:from_list([{Id,board}||#{id:=Id}<-Actors]),#{board=>Host}),
     HostActors=maps:from_list([begin
@@ -27,7 +32,9 @@ write(Config,Directory) ->
     Mixed=#{host_actors=>lists:sort(maps:keys(HostActors)),identity=>Identity,links=>[link_descriptor(L,Actors)||L<-Links]},
     Plan=#{actors=>HostActors,targets=>Targets,mixed=>Mixed,application=>Application,device=>board,
         binding=>#{host=>Host,control=>Service},ingress=>hls_protocol_ingress:plan(Bundle),bridge=>Bridge,eligible=>false},
-    ok=file:write_file(filename:join(Directory,"mixed.etf"),term_to_binary(Plan,[deterministic]),[exclusive]),Plan.
+    #{files => hls_generated_files:merge([BridgeFiles, #{"mixed.etf" => term_to_binary(Plan, [deterministic])}]),
+      result => Plan};
+emit(Filename) -> emit(hls_source_config:read(Filename)).
 
 %% The bridge's destination codecs, not the sender's operation numbering, define crossing frames.
 -spec link_descriptor(map(),[map()]) -> map().

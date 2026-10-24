@@ -1,6 +1,6 @@
 -module(hls_protocol_model).
 -moduledoc "Optional application-owned wait models, checked against one fresh inventory before hardware emission. Model generation and source refinement are separate trust boundaries.".
--export([check/2, write/2]).
+-export([check/2, emit/1, write/2]).
 -export_type([request/0, graph/0, report/0]).
 
 -doc "No analysis, or a trusted application provider and its options. The provider must already be available on the build VM's code path; no implicit application selection or source loading occurs.".
@@ -38,9 +38,14 @@ check(Other, _) -> error({unsupported_protocol_model, Other}).
 
 -doc "Writes the complete trusted-local report as ETF and a compact JSON summary in an existing directory. Uses only the prepared report; it never calls the provider again. none writes nothing. Partial I/O failures are retained.".
 -spec write(none | report(), file:filename()) -> ok.
-write(none, _) -> ok;
-write(Report = #{provider := Provider, inventory_sha256 := Identity, application := Application,
-        model := #{nodes := Nodes, edges := Edges}, analysis := Analysis}, Output) ->
+write(Report, Output) ->
+    hls_generated_files:write_into(#{files => emit(Report), result => ok}, Output).
+
+-doc "Returns complete ETF and compact JSON report files from the already checked report. Does not call the provider or write files; none returns an empty file set.".
+-spec emit(none | report()) -> hls_generated_files:files().
+emit(none) -> #{};
+emit(Report = #{provider := Provider, inventory_sha256 := Identity, application := Application,
+        model := #{nodes := Nodes, edges := Edges}, analysis := Analysis}) ->
     Summary = #{provider => Provider, inventory_sha256 => Identity, application => Application,
         analysis => (maps:remove(ranks, Analysis))#{evidence => finite_graph_check,
             nodes => length(Nodes), edges => length(Edges),
@@ -48,6 +53,5 @@ write(Report = #{provider := Provider, inventory_sha256 := Identity, application
             older_generation_edges => length([E || E = #{lag := 1} <- Edges]),
             whole_protocol_eligible => false,
             trust_boundary => [source_extraction, application_model_provider, graph_checker]}},
-    ok = file:write_file(filename:join(Output, "protocol-model.etf"),
-        term_to_binary(Report, [deterministic]), [exclusive]),
-    file:write_file(filename:join(Output, "protocol-model.json"), json:encode(Summary), [exclusive]).
+    #{"protocol-model.etf" => term_to_binary(Report, [deterministic]),
+      "protocol-model.json" => json:encode(Summary)}.

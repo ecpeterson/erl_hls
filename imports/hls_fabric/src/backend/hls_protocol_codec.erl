@@ -1,6 +1,6 @@
 -module(hls_protocol_codec).
 -moduledoc "Lossless projection between a source-bound ordinary frame and a typed capture payload. This is a wire codec, not receipt eligibility or a network lifetime proof.".
--export([plan/2, encode/2, decode/2, write/3]).
+-export([plan/2, encode/2, decode/2, emit/2, write/3]).
 
 -doc "Builds a bit permutation for one capture channel and its ordinary operation byte. Header, padding and source-constant fields use the shared entry ABI; dynamic fields remain exact, including partial bytes. Compact bit zero is the first dynamic physical stream bit. Rejects inconsistent capture offsets, overlapping fields or payloads wider than the ordinary 96-bit frame. The caller must establish source/schema/route provenance before omitting fields.".
 -spec plan(map(), 0..255) -> map().
@@ -41,7 +41,12 @@ decode(_,_) -> error(invalid_capture_payload).
 
 -doc "Writes a combinational DSLX function for ready/valid encode and decode to a new file. Invalid input asserts fault and cannot handshake; the owner must handle that fault. Decode rejects a nonzero constant-only dummy bit. The tuple result is encoded, decoded, canonical, frame_ready, encoded_valid, encode_fault, payload_ready, decoded_valid, decode_fault. This function owns no storage or arbitration; producers hold valid input stable while stalled. Name must be a simple DSLX identifier.".
 -spec write(map(),string(),file:filename()) -> ok.
-write(#{mask:=Mask,value:=Value,frame_positions:=Positions,physical_width:=Width,payload_bits:=Bits},Name,Path) ->
+write(Plan, Name, Path) ->
+    file:write_file(Path, emit(Plan, Name), [exclusive]).
+
+-doc "Returns the combinational ready/valid codec as DSLX bytes without writing files. Preserves canonical-frame checks, constant-only dummy validation and the write/3 tuple interface; Name must be a simple DSLX identifier.".
+-spec emit(map(), string()) -> iodata().
+emit(#{mask:=Mask,value:=Value,frame_positions:=Positions,physical_width:=Width,payload_bits:=Bits},Name) ->
     match=re:run(Name,"^[a-zA-Z_][a-zA-Z0-9_]*$",[{capture,none}]),
     Inverse=maps:from_list([{J,I}||{I,J}<-lists:enumerate(0,Positions)]),
     Source=["import axis;\nconst_assert!(axis::FRAME_BITS == u32:128);\n",
@@ -56,7 +61,7 @@ write(#{mask:=Mask,value:=Value,frame_positions:=Positions,physical_width:=Width
         end||J<-lists:seq(127,0,-1)]),";\n",
         "(encoded, decoded, canonical, encoded_ready && canonical, frame_valid && canonical, frame_valid && !canonical,\n",
         " decoded_ready && payload_canonical, payload_valid && payload_canonical, payload_valid && !payload_canonical) }\n"],
-    file:write_file(Path,Source,[exclusive]).
+    Source.
 
 %% Source stream offsets are checked rather than trusting duplicated derived metadata.
 -spec check_field(map(),{non_neg_integer(),non_neg_integer()}) -> {non_neg_integer(),non_neg_integer()}.

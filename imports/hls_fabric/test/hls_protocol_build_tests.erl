@@ -27,26 +27,68 @@ reusable_program_test() ->
     %% A placement API must not silently accept a request to change its source configuration.
     ?assertError({unsupported_transport_options, [sources]},
         hls_protocol_transport:plan(Program, #{sources => Sources})),
+    Before = relative_files(Root),
+    Output = #{files := Generated, result := Descriptor} = hls_protocol_transport:emit(North),
+    ?assertEqual(hls_protocol_transport:descriptor(North), Descriptor),
+    ?assertEqual(Output, hls_protocol_transport:emit(North)),
+    ?assertEqual(Before, relative_files(Root)),
     First = filename:join(Root, "first"), Second = filename:join(Root, "second"),
-    ?assertEqual(false, filelib:is_dir(First)),
-    ?assertEqual(hls_protocol_transport:descriptor(North), hls_protocol_transport:emit(North, First)),
-    ?assertEqual(hls_protocol_transport:descriptor(North), hls_protocol_transport:emit(North, Second)),
+    ?assertEqual(Descriptor, hls_generated_files:write(Output, First)),
+    ?assertEqual(Descriptor, hls_protocol_transport:write(North, Second)),
     FilesWritten = relative_files(First),
+    ?assertEqual(lists:sort(maps:keys(Generated)), FilesWritten),
     ?assertEqual(FilesWritten, relative_files(Second)),
     lists:foreach(fun(File) ->
-        ?assertEqual(file:read_file(filename:join(First, File)), file:read_file(filename:join(Second, File)))
+        Bytes = iolist_to_binary(maps:get(File, Generated)),
+        ?assertEqual({ok, Bytes}, file:read_file(filename:join(First, File))),
+        ?assertEqual({ok, Bytes}, file:read_file(filename:join(Second, File)))
     end, FilesWritten),
     %% Inspection restriction follows the actual planned cut, not a second native_actors flag.
     ?assertError(partition_inspection_unavailable,
-        hls_protocol_network:emit(South, #{inspection => process}, filename:join(Root, "inspection"))),
+        hls_protocol_network:write(South, #{inspection => process}, filename:join(Root, "inspection"))),
     ?assertEqual(false, filelib:is_dir(filename:join(Root, "inspection"))),
     Override = filename:join(Root, "override"),
     ?assertError({unsupported_network_options, [native_actors]},
-        hls_protocol_network:emit(South, #{native_actors => [left]}, Override)),
+        hls_protocol_network:write(South, #{native_actors => [left]}, Override)),
     ?assertError({unsupported_bridge_options, [sources]},
-        hls_protocol_bridge:emit(South, #{host => 1, service => 7, control => rectangle, sources => Sources}, Override)),
+        hls_protocol_bridge:write(South, #{host => 1, service => 7, control => rectangle, sources => Sources}, Override)),
     ?assertEqual(false, filelib:is_dir(Override)),
     ok.
+
+%% Filename input is a trusted source map; emission has no output side effects and hashes its returned bytes.
+-spec emission_inputs_test() -> ok.
+emission_inputs_test() ->
+    Root = fresh("emission-inputs"),
+    ok = file:make_dir(Root),
+    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []}],
+        topology => {hls_protocol_network_fixture, isolated, []}, actor_limit => 1},
+    Filename = filename:join(Root, "source.config"),
+    ok = file:write_file(Filename, io_lib:format("~tp.~n", [Config]), [exclusive]),
+    Before = relative_files(Root),
+    #{files := FromMap, result := #{network := Network}} = hls_protocol_network:emit(Config),
+    #{files := FromFile, result := #{network := Network}} = hls_protocol_network:emit(Filename),
+    ?assertEqual(Before, relative_files(Root)),
+    %% Compiler-origin references in trusted ETF plans need not survive another preparation.
+    ?assertEqual(hardware_files(FromMap), hardware_files(FromFile)),
+    #{dslx_sha256 := Hash, components := Components} = Network,
+    ?assertEqual(Hash, digest(maps:get("network/network.x", FromMap))),
+    lists:foreach(fun(#{file := File, sha256 := Expected}) ->
+        ?assertEqual(Expected, digest(maps:get(binary_to_list(File), FromMap)))
+    end, Components),
+    Saved = filename:join(Root, "saved.etf"),
+    ok = file:write_file(Saved, term_to_binary(Config, [deterministic]), [exclusive]),
+    ?assertException(error, _, hls_protocol_network:emit(Saved)),
+    ok.
+
+%% Compare generated hardware independently of process-local compiler provenance in plans.
+-spec hardware_files(hls_generated_files:files()) -> #{string() => binary()}.
+hardware_files(Files) ->
+    maps:from_list([{File, iolist_to_binary(Bytes)} || {File, Bytes} <- maps:to_list(Files),
+        lists:member(filename:extension(File), [".x", ".sv"])]).
+
+%% Use the standard hash operation independently of the file-bundle helper.
+-spec digest(iodata()) -> binary().
+digest(Bytes) -> binary:encode_hex(crypto:hash(sha256, Bytes), lowercase).
 
 %% All generated actor files and sidecars are bound, not just one representative DSLX module.
 -spec relative_files(file:filename()) -> [file:filename()].
