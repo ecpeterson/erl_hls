@@ -450,9 +450,6 @@ jobs:
       - name: Build compiler and backend
         run: rebar3 compile
 
-      - name: Check fresh periodic dependency models
-        run: python3 tools/test_protocol_model.py _build/protocol-model
-
       - name: Check fresh source repetition applications through real brokers
         run: python3 tools/test_protocol_repetition.py "$RUNNER_TEMP/xls" _build/protocol-repetition
 
@@ -468,8 +465,6 @@ jobs:
         with:
           name: protocol-repetition-diagnostics
           paths: |
-            _build/protocol-model/**/*.json
-            _build/protocol-model/**/*.log
             _build/protocol-shared-repetition/**/*.json
             _build/protocol-shared-repetition/**/*.log
             _build/protocol-repetition/**/*.json

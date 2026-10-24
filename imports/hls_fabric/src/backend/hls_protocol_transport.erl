@@ -6,7 +6,7 @@
 %% Source-wide facts are shared by every placement; role selection never recompiles them.
 -record(program, {bundle :: map(), capture :: map(), transactions :: map(),
     sources :: map(), inbox :: map(), fabric :: map(), ingress :: none | map(),
-    model :: none | map()}).
+    model :: none | hls_protocol_model:report()}).
 %% Emission retains the exact actor artifacts whose manifests enter the transport plan.
 -record(build, {transport :: map(), files :: [actor_file()]}).
 %% One relative actor path and its complete source-derived artifact.
@@ -23,7 +23,7 @@
 write(Config, Output) ->
     emit(plan(Config), Output).
 
--doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model derives an annotated periodic dependency model, not source refinement or progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Capture analysis independently reads producer source and must agree with the ordinary actor compilation.".
+-doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model => {Module, Options} invokes an application-owned hls_protocol_model provider on the fresh inventory. Its checked graph establishes neither source refinement nor progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Capture analysis independently reads producer source and must agree with the ordinary actor compilation.".
 -spec prepare(map()) -> program().
 prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
@@ -39,7 +39,7 @@ prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}
     Modules = maps:from_list([{M, compile(M)} || M <- Used]),
     Inventory = hls_protocol_inventory:inspect(Topology, Modules),
     [] = maps:get(diagnostics, Inventory),
-    Model = protocol_model(maps:get(protocol_model, Config, none), Inventory),
+    Model = hls_protocol_model:check(maps:get(protocol_model, Config, none), Inventory),
     Bundle = #{topology => Topology, modules => Modules, inventory => Inventory},
     Files = maps:from_list([{Id, source(maps:get(M, Modules))} || #{id := Id, module := M} <- Actors]),
     Capture = hls_protocol_capture:plan(Inventory, Files),
@@ -118,7 +118,7 @@ emit(#build{transport = Plan = #{bundle := #{modules := Modules}, fabric := Fabr
         _ = hls_local_actor:write(Artifact, filename:join(Output, binary_to_list(Relative)))
     end, Files),
     ok = xls_protocol_transport:write(Fabric, filename:join(Output, "dslx")),
-    ok = write_model(maps:get(protocol_model, Plan, none), Output),
+    ok = hls_protocol_model:write(maps:get(protocol_model, Plan, none), Output),
     ok = file:write_file(filename:join(Output, "transport.etf"), term_to_binary(Plan, [deterministic]), [exclusive]),
     Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
@@ -156,27 +156,3 @@ alternatives(#{entries := Entries}) ->
 -spec delivery(map()) -> ok.
 delivery(#{delivery := Mode}) when Mode =:= direct; Mode =:= buffered -> ok;
 delivery(#{source := Source, delivery := Mode}) -> error({unsupported_transport_delivery, Source, Mode}).
-
-%% Application annotations propose a model; they never supply storage facts to lowering.
--spec protocol_model(none | map(), hls_protocol_inventory:report()) -> none | map().
-protocol_model(none, _) -> none;
-protocol_model(#{kind := periodic_neighbor_barrier, contracts := Contracts}, Inventory) ->
-    #{kind => periodic_neighbor_barrier,
-      inventory_sha256 => binary:encode_hex(crypto:hash(sha256, term_to_binary(Inventory, [deterministic])), lowercase),
-      model => hls_protocol_periodic_model:derive(Inventory, Contracts)};
-protocol_model(Other, _) -> error({unsupported_protocol_model, Other}).
-
-%% Full trusted-local terms retain labelled dependencies; JSON exposes limits and unresolved obligations.
--spec write_model(none | map(), file:filename()) -> ok.
-write_model(none, _) -> ok;
-write_model(Report = #{kind := Kind, inventory_sha256 := Identity, model := Model}, Output) ->
-    #{nodes := Nodes, edges := Edges, messages := Messages} = Model,
-    Summary = (maps:with([actor_count, internal_channels, source_contracts, source_refinement,
-        startup_marking, whole_protocol_eligible, obligations, exclusions], Model))#{
-        kind => Kind, inventory_sha256 => Identity, property => lexicographically_decreasing_wait,
-        evidence => finite_graph_check, nodes => length(Nodes), edges => length(Edges), messages => length(Messages),
-        same_generation_edges => length([E || E = #{lag := 0} <- Edges]),
-        older_generation_edges => length([E || E = #{lag := 1} <- Edges]),
-        trust_boundary => [source_extraction, explicit_role_annotations, model_generator, graph_checker]},
-    ok = file:write_file(filename:join(Output, "protocol-model.etf"), term_to_binary(Report, [deterministic]), [exclusive]),
-    file:write_file(filename:join(Output, "protocol-model.json"), json:encode(Summary), [exclusive]).

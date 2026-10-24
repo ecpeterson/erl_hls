@@ -64,9 +64,9 @@ placement(Width, Split, false) ->
 actors(Families, First, Last) -> [{Family, X, 0} || Family <- Families, X <- lists:seq(First, Last)].
 
 %% These annotations propose dependencies; the source model checker validates coverage.
--spec model() -> map().
+-spec model() -> hls_protocol_model:request().
 model() ->
-    #{kind => periodic_neighbor_barrier, contracts => #{
+    {phi_protocol_model, #{
         phenom_line_data_cell => #{role => data, phases => [configuring, collecting, reporting, replying]},
         phenom_line_syndrome_cell => #{role => syndrome, phases => [configuring, collecting, announcing]},
         phi_line_cell => #{role => phi, rounds => 12, phases => [configuring, measuring, gathering, comparing, flipping]}}}.

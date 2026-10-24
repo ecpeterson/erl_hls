@@ -1,9 +1,10 @@
--module(hls_protocol_periodic_model).
--moduledoc "Builds a periodic wait model for explicitly annotated neighbor-barrier source contracts. The model handles one-round noise prefetch and fixed typed-slot reuse; it does not certify source refinement or program admission.".
--export([derive/2]).
+-module(phi_protocol_model).
+-behaviour(hls_protocol_model).
+-moduledoc "Builds a periodic wait model for explicitly annotated neighbor-barrier source contracts. The Phi model handles one-round noise prefetch and fixed typed-slot reuse; it does not certify source refinement or program admission.".
+-export([derive/2, summary/1]).
 
--doc "Derives a finite graph from exact source routes and an explicit module-to-role annotation. Roles are data, syndrome or phi; each supplies its complete expected phase list and Phi supplies a positive rounds bound. Rejects unrecognized internal schemas or route endpoints. Every internal channel gets capture, receive and reuse dependencies, preserving duplicate labelled ports to one PID. A successful rank concerns this proposed model only: initialization, source guards/keys/batches, local arbitration, host sequencing and runtime refinement remain qualification obligations.".
--spec derive(map(), map()) -> map().
+-doc "Derives a finite graph from exact source routes and an explicit module-to-role annotation. Roles are data, syndrome or phi; each supplies its complete expected phase list and Phi supplies a positive rounds bound. Rejects unrecognized internal schemas or route endpoints. Every internal channel gets capture, receive and reuse dependencies, preserving duplicate labelled ports to one PID. The shared checker ranks this proposed model only: initialization, source guards/keys/batches, local arbitration, host sequencing and runtime refinement remain qualification obligations.".
+-spec derive(hls_protocol_inventory:report(), map()) -> hls_protocol_model:graph().
 derive(#{actors := Actors, channels := Channels, modules := Modules, diagnostics := Diagnostics}, Contracts) ->
     need(Diagnostics =:= [], {source_diagnostics, Diagnostics}),
     need(lists:sort(maps:keys(Contracts)) =:= lists:sort(maps:keys(Modules)), incomplete_role_annotations),
@@ -22,11 +23,7 @@ derive(#{actors := Actors, channels := Channels, modules := Modules, diagnostics
     Order = sender_order(Messages),
     Entry = lists:append([empty_entry(Id, C, Messages) || {Id, C} <- maps:to_list(Owners)]),
     Edges = lists:usort(Local ++ Delivery ++ Publishers ++ Order ++ Entry),
-    Ranked = case hls_protocol_wait_graph:check(SourceNodes ++ Keys, Edges) of
-        {ok, Ranking} -> Ranking;
-        {error, Why} -> error({periodic_model, Why})
-    end,
-    #{nodes => SourceNodes ++ Keys, edges => Edges, ranks => maps:get(ranks, Ranked),
+    #{nodes => SourceNodes ++ Keys, edges => Edges,
       messages => Messages, actor_count => length(Actors), internal_channels => length(Internal),
       source_contracts => Contracts, source_refinement => unestablished,
       startup_marking => unestablished, whole_protocol_eligible => false,
@@ -34,6 +31,13 @@ derive(#{actors := Actors, channels := Channels, modules := Modules, diagnostics
           initial_configuration_and_prefetch, source_to_runtime_refinement,
           fair_selection_and_sinks, bounded_host_control_and_no_wrap],
       exclusions => [source_error_freedom, application_convergence, native_timing]}.
+
+-doc "Summarizes application annotations and unresolved obligations without duplicating the full channel model.".
+-spec summary(hls_protocol_model:graph()) -> map().
+summary(Model = #{messages := Messages}) ->
+    (maps:with([actor_count, internal_channels, source_contracts, source_refinement,
+        startup_marking, whole_protocol_eligible, obligations, exclusions], Model))#{
+        kind => periodic_neighbor_barrier, messages => length(Messages)}.
 
 %% Role annotations must match the complete source phase set; names alone never qualify a role.
 -spec contract(module(), map(), map()) -> map().
