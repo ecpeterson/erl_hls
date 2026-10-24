@@ -47,7 +47,7 @@ declarations(G = #{data := #{dslx_type := Data}, sites := Sites}) ->
      "enum GatherSite : u8 {\n", [["  ",label(S)," = u8:",n(maps:get(id,S)),",\n"] || S <- Sites], "}\n",
      "type GatherMembers = bits[",n(capacity(G)),"];\n",
      "type GatherValues = bits[",n(payload_width(G)),"];\n",
-     "struct GatherProgress { status: GatherStatus, site: GatherSite, key: u32, remaining: u8, expected: GatherMembers, seen: GatherMembers, failure: hls_failure::Code }\n",
+     xls_struct_codec:declaration("GatherProgress", xls_statem_gather_layout:codec(G)),
      "struct GatherState { progress: GatherProgress, values: GatherValues }\n",
      "struct GatherContribution { valid: bool, site: GatherSite, key: u32, member: u32, value: bits[",
          n(lists:max([element_width(S)||S<-Sites])),"] }\n",
@@ -65,31 +65,12 @@ end.
 %% Pack and unpack use the same semantic slices; element payload remains above all progress bits.
 -spec codecs(map()) -> iodata().
 codecs(G) ->
-    #{width := Width, fields := Fields} = xls_statem_gather_layout:progress(G),
-    Ordered = lists:sort([{Offset, Name, Bits}
-        || {Name, #{offset := Offset, width := Bits}} <- maps:to_list(Fields)]),
-    Packed = lists:join(" ++ ", [pack_progress_field(Field) || Field <- lists:reverse(Ordered)]),
-    Unpacked = lists:join(", ", [unpack_progress_field(Field) || Field <- Ordered]),
-    ["fn bits_from_gather_progress(p: GatherProgress) -> bits[", n(Width), "] { ", Packed, " }\n",
-     "fn gather_progress_from_bits(raw: bits[", n(Width), "]) -> GatherProgress { GatherProgress { ", Unpacked, " } }\n",
+    Layout = xls_statem_gather_layout:codec(G),
+    Width = maps:get(width, Layout),
+    [xls_struct_codec:encoder("GatherProgress", "bits_from_gather_progress", Layout),
+     xls_struct_codec:decoder("GatherProgress", "gather_progress_from_bits", Layout),
      "fn bits_from_gather_state(s: GatherState) -> bits[", n(storage_width(G)), "] { s.values ++ bits_from_gather_progress(s.progress) }\n",
      "fn gather_state_from_bits(raw: bits[", n(storage_width(G)), "]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:", n(Width), "]), values: raw[", n(Width), ":] } }\n\n"].
-
-%% Typed enum and integer fields become exactly the width declared by the numeric schema.
--spec pack_progress_field({non_neg_integer(), xls_statem_gather_layout:field_name(), pos_integer()}) -> iodata().
-pack_progress_field({_, Name, Bits}) ->
-    ["(p.", atom_to_list(Name), " as bits[", n(Bits), "])"].
-
-%% Only rendering knows the DSLX enum names; the schema contains no target-language expressions.
--spec unpack_progress_field({non_neg_integer(), xls_statem_gather_layout:field_name(), pos_integer()}) -> iodata().
-unpack_progress_field({Offset, Name, Bits}) ->
-    Slice = ["raw[", n(Offset), "+:bits[", n(Bits), "]]"],
-    Value = case Name of
-        status -> [Slice, " as GatherStatus"];
-        site -> [Slice, " as GatherSite"];
-        _ -> Slice
-    end,
-    [atom_to_list(Name), ": ", Value].
 
 %% Per-site typed helpers keep padding and element codecs out of physical storage policy.
 -spec site_functions(map(),map()) -> iodata().
