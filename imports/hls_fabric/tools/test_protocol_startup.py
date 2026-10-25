@@ -114,6 +114,7 @@ def main() -> None:
     args=parser.parse_args();stage=args.stage;stage.mkdir()
     config=stage/'startup.config';configuration(config,'topology');fixture=stage/'fixture'
     run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=(fixture/'compiled').resolve()
     assert json.loads((fixture/'network/manifest.json').read_text())['startup_messages']==4
     simulate(fixture,stage)
     negative_wiring(args.xls,fixture,stage)
@@ -122,7 +123,7 @@ def main() -> None:
     failed=stage/'failed';failed.mkdir();configuration(failed/'config','failing')
     run(emit_command('network', failed/'config', failed/'fixture'),failed,'emit',
         env=erlang_environment('default'))
-    compile_build(args.xls,failed/'fixture');simulate(failed/'fixture',failed,failure=True)
+    failed_build=compile_build(args.xls,failed/'fixture');simulate(failed_build,failed,failure=True)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'reset_interruptions':3,'outputs_per_complete_incarnation':10,'final_sum':8,'real_acknowledgments':4,
         'negative_wiring':2,'source_failure_incarnations':2,

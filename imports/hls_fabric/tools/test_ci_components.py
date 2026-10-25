@@ -59,7 +59,7 @@ def main() -> None:
     config = boundary / 'fixture.config'
     configuration(config)
     command('boundary-build', ['bash', 'tools/emit_protocol_boundary.sh', args.xls, config, boundary / 'build'])
-    simulate(boundary / 'build', boundary, expected(boundary))
+    simulate((boundary / 'build/compiled').resolve(), boundary, expected(boundary))
     # Three actors cover crossing routes, real relay leases and reset-incarnation retirement.
     framed = args.stage / 'framed'
     framed.mkdir()

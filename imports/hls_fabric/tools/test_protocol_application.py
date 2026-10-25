@@ -47,7 +47,7 @@ def main() -> None:
     config.write_text('#{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]}],topology=>'
         '{hls_protocol_boundary_fixture,topology,[]},actor_limit=>4,device=>board,host=>1}.\n')
     run(['bash','tools/emit_protocol_application.sh',args.xls,config,build],stage,'public-build')
-    qualify(build,stage)
+    qualify((build/'compiled').resolve(),stage)
 
 
 def simulator_source(build: Path, stage: Path) -> Path:
@@ -69,7 +69,7 @@ def qualify(build: Path, stage: Path) -> None:
     ebin=stage/'ebin';ebin.mkdir()
     run(['erlc',*[v for path in erlang_paths("default") for v in ('-pa',path)],'+debug_info','-Werror','-o',ebin,
         ROOT/'test/hls_protocol_boundary_fixture.erl',ROOT/'test/hls_protocol_application_live.erl'],stage,'host-compile')
-    rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
+    rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
     tracked=rtl+[source,build/'deployment.etf']
     hashes={str(p):digest(p) for p in tracked}

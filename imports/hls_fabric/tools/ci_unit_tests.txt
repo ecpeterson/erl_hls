@@ -3,6 +3,7 @@ test_backend_context
 test_ci_diagnostics
 test_direct_collection_boundary
 test_packaging
+test_compile_local_actor
 test_packed_credit_cases
 test_phi_actor_profile
 test_phi_capture

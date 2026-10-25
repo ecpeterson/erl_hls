@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -20,45 +19,90 @@ from optimizer_pipeline import prepare
 
 public = compiler_root("test")
 compiler_helpers = compiler_tool(public, "compile_xls")
+BuildFixture = compiler_tool(public, "testing").BuildFixture
 prepare_optimizer = partial(prepare, public=public, profile="test")
 
 
-class PackagingTests(unittest.TestCase):
+# Minimal accepted XLS completion-ring shape; this exercises legalization, not hardware behavior.
+COMPLETION_FIFO_RTL = """module fifo_for_depth_3_width_8(
+    input wire clk, input wire reset, input wire push_valid,
+    input wire [7:0] push_data, input wire [1:0] head, input wire is_full_bool);
+  reg [7:0] buf__1[0:2];
+  wire [7:0] buf__1_init[0:2];
+  wire [7:0] array_update_42[0:2];
+  wire pushed;
+  assign pushed = ~is_full_bool & push_valid;
+  for (genvar __i0 = 0; __i0 < 3; __i0 = __i0 + 1) begin : update_payload
+    assign array_update_42[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  end
+  always @(posedge clk) begin
+    if (reset) begin
+      buf__1[0] <= buf__1_init[0];
+      buf__1[1] <= buf__1_init[1];
+      buf__1[2] <= buf__1_init[2];
+    end else begin
+      buf__1[0] <= pushed ? array_update_42[0] : buf__1[0];
+      buf__1[1] <= pushed ? array_update_42[1] : buf__1[1];
+      buf__1[2] <= pushed ? array_update_42[2] : buf__1[2];
+    end
+  end
+endmodule
+module example();
+  fifo_for_depth_3_width_8 materialized_fifo_fifo__executor_result_();
+endmodule
+"""
+
+
+class PackagingTests(BuildFixture):
     """Reject stale sources and failed publication before they affect a selected build."""
 
     def test_backend_release_and_failed_transform(self) -> None:
-        """Retain a previous release on pass failure and reject edits to a cached release."""
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            raw = root / "raw"
-            raw.mkdir()
-            output = root / "compiled"
-            (raw / "example.v").write_text("module example(); endmodule\n")
-            (raw / "placement.json").write_text("{}\n")
-            manifest = {
-                "rtl": {"example.v": sha(raw / "example.v")},
-                "artifacts": {"example.v": sha(raw / "example.v")},
-                "assets": {"placement.json": sha(raw / "placement.json")},
-            }
-            (raw / "example.build.json").write_text(json.dumps(manifest))
-            with patch.object(compiler_helpers, "build", return_value=raw) as build:
-                args = dict(name="example", assets=[], executor_result_delay=6, public=public, profile="test")
-                with compiler_helpers.locked(root / ".compiled.lock"):
-                    with self.assertRaisesRegex(ValueError, "build already active"):
-                        compile_backend.compile_topology(root / "source.x", root / "xls", output, **args)
-                build.assert_not_called()
-                release = compile_backend.compile_topology(root / "source.x", root / "xls", output, **args)
-                self.assertEqual(build.call_args.kwargs["channel_delays"], {"_result_out:send": 6})
-                self.assertEqual(output.resolve(), release)
-                with patch.object(compile_backend, "transform", side_effect=ValueError("unknown FIFO")):
-                    with self.assertRaisesRegex(ValueError, "unknown FIFO"):
-                        compile_backend.compile_topology(
-                            root / "source.x", root / "xls", output, completion_storage="lutram", **args
-                        )
-                self.assertEqual(output.resolve(), release)
-                (release / "example.v").write_text("tampered\n")
-                with self.assertRaisesRegex(ValueError, "release changed"):
-                    compile_backend.compile_topology(root / "source.x", root / "xls", output, **args)
+        """Retain a prior release on transform failure and repair tampering from verified stage caches."""
+        args = dict(name="example", assets=[], executor_result_delay=6, public=public, profile="test")
+        with compiler_helpers.locked(self.root / ".published.lock"):
+            with self.assertRaisesRegex(ValueError, "build already active"):
+                compile_backend.compile_topology(self.source, self.xls, self.output, **args)
+        self.assertFalse(self.calls.exists())
+        release = compile_backend.compile_topology(self.source, self.xls, self.output, **args)
+        manifest = json.loads((release / "example.build.json").read_text())
+        self.assertIn("--additional_channel_delay_ps=_result_out:send=6", manifest["options"]["codegen"])
+        self.assertEqual(manifest["backend"]["completion_storage"], "registers")
+        self.assertEqual(self.output.resolve(), release)
+        calls = self.calls.read_text()
+        with patch.object(compile_backend, "transform", side_effect=ValueError("unknown FIFO")):
+            with self.assertRaisesRegex(ValueError, "unknown FIFO"):
+                compile_backend.compile_topology(
+                    self.source, self.xls, self.output, completion_storage="lutram", **args)
+        self.assertEqual(self.output.resolve(), release)
+        self.assertEqual(self.calls.read_text(), calls)
+        report = json.loads(self.output.with_suffix('.run.json').read_text())
+        self.assertEqual(report["status"], "failed")
+        self.assertTrue(Path(report["attempt"]).is_dir())
+        (release / "example.v").write_text("tampered\n")
+        repaired = compile_backend.compile_topology(self.source, self.xls, self.output, **args)
+        self.assertEqual(repaired, release)
+        self.assertEqual(sha(repaired / "example.v"), manifest["rtl"]["example.v"])
+        self.assertEqual(self.calls.read_text(), calls)
+        self.assertTrue(list(release.parent.glob(release.name + ".damaged-*")))
+
+    def test_completion_transform_precedes_final_hashes(self) -> None:
+        """The real completion pass changes published RTL without changing the cached codegen product."""
+        codegen = self.xls / "codegen_main"
+        codegen.write_text("#!/usr/bin/env python3\nprint(" + repr(COMPLETION_FIFO_RTL) + ")\n")
+        args = dict(name="example", assets=[], public=public, profile="test")
+        original = compile_backend.compile_topology(self.source, self.xls, self.output, **args)
+        original_rtl = (original / "example.v").read_text()
+        transformed = compile_backend.compile_topology(
+            self.source, self.xls, self.output, completion_storage="lutram", **args)
+        manifest = json.loads((transformed / "example.build.json").read_text())
+        self.assertIn('ram_style = "distributed"', (transformed / "example.v").read_text())
+        self.assertEqual(manifest["rtl"]["example.v"], sha(transformed / "example.v"))
+        self.assertEqual(manifest["artifacts"]["example.v"], sha(transformed / "example.v"))
+        self.assertEqual(set(manifest["backend"]["completion_fifo"]["modules"]),
+                         {"fifo_for_depth_3_width_8"})
+        self.assertEqual((original / "example.v").read_text(), original_rtl)
+        self.assertTrue(all(self.statuses().values()))
+        self.assertEqual(compile_backend.compile_topology(self.source, self.xls, self.output, **args), original)
 
     def test_checkout_beams_override_stale_dependency(self) -> None:
         """A previous rebar dependency cannot shadow the selected compiler checkout."""
@@ -103,7 +147,7 @@ def optimizer_bundle(root: Path) -> Path:
     return xls
 
 
-class OptimizerPipelineTests(unittest.TestCase):
+class OptimizerPipelineTests(BuildFixture):
     """Configuration identity and frozen bytes must survive cache reuse and later edits."""
 
     def test_arguments_and_configuration_identity(self) -> None:
@@ -130,38 +174,27 @@ class OptimizerPipelineTests(unittest.TestCase):
 
     def test_backend_retains_configuration_and_original_tool(self) -> None:
         """Publish the pipeline as a checked asset without mutating the caller's tool bundle."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            xls = optimizer_bundle(root)
-            selected = root / "selection.txtpb"
-            selected.write_text('default_pipeline: ["dce"]\n')
-            raw = root / "raw"
-            raw.mkdir()
-            (raw / "example.v").write_text("module example(); endmodule\n")
-            manifest = {"rtl": {"example.v": sha(raw / "example.v")},
-                        "artifacts": {"example.v": sha(raw / "example.v")},
-                        "assets": {"optimizer_pipeline.txtpb": sha(selected)}}
-            (raw / "optimizer_pipeline.txtpb").write_bytes(selected.read_bytes())
-            (raw / "example.build.json").write_text(json.dumps(manifest))
-            with patch.object(compiler_helpers, "build", return_value=raw) as compiler:
-                release = compile_backend.compile_topology(
-                    root / "source.x", xls, root / "compiled", name="example", assets=[],
-                    optimizer_pipeline=selected, public=public, profile="test")
-                passed = compiler.call_args
-                self.assertNotEqual(passed.args[1], xls)
-                frozen = passed.kwargs["assets"][0]
-                self.assertEqual(frozen.name, "optimizer_pipeline.txtpb")
-                self.assertEqual(frozen.read_bytes(), selected.read_bytes())
-                recorded = json.loads((release / "example.build.json").read_text())
-                self.assertEqual(recorded["backend"]["optimizer_pipeline_sha256"], sha(selected))
-                self.assertEqual(recorded["backend"]["optimizer_executable_sha256"], sha(xls / "opt_main"))
-                selected.write_text('default_pipeline: ["cse"]\n')
-                self.assertEqual(sha(release / frozen.name), manifest["assets"][frozen.name])
-                self.assertEqual((release / frozen.name).read_bytes(), frozen.read_bytes())
-                with self.assertRaisesRegex(ValueError, "reserved optimizer pipeline"):
-                    compile_backend.compile_topology(
-                        root / "source.x", xls, root / "other", name="example", assets=[frozen],
-                        optimizer_pipeline=selected, public=public, profile="test")
+        selected = self.root / "selection.txtpb"
+        selected.write_text('default_pipeline: ["dce"]\n')
+        expected = selected.read_bytes()
+        release = compile_backend.compile_topology(
+            self.source, self.xls, self.output, name="example", assets=[],
+            optimizer_pipeline=selected, public=public, profile="test")
+        recorded = json.loads((release / "example.build.json").read_text())
+        self.assertEqual(recorded["backend"]["optimizer_pipeline_sha256"], sha(selected))
+        self.assertEqual(recorded["backend"]["optimizer_executable_sha256"], sha(self.xls / "opt_main"))
+        command = json.loads((release / "opt.command.json").read_text())
+        self.assertNotEqual(Path(command[0]), self.xls / "opt_main")
+        result = json.loads((release / "example.opt.ir").read_text())
+        self.assertTrue(result["args"][0].startswith("--pipeline_textproto="))
+        selected.write_text('default_pipeline: ["cse"]\n')
+        frozen = release / "optimizer_pipeline.txtpb"
+        self.assertEqual(sha(frozen), recorded["assets"][frozen.name])
+        self.assertEqual(frozen.read_bytes(), expected)
+        with self.assertRaisesRegex(ValueError, "reserved optimizer pipeline"):
+            compile_backend.compile_topology(
+                self.source, self.xls, self.root / "other", name="example", assets=[frozen],
+                optimizer_pipeline=selected, public=public, profile="test")
 
     def test_changed_optimizer_is_rejected_by_old_overlay(self) -> None:
         """An old wrapper cannot silently execute a newly replaced optimizer."""

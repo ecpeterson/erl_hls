@@ -115,7 +115,7 @@ def main() -> None:
     for case in args.cases:
         members = int(case[-1]); part = args.stage / case
         build = emit(part, members, case.startswith("shared"))
-        compile_build(args.xls, build, profile="test")
+        build = compile_build(args.xls, build, profile="test")
         simulate(build, part, members)
         results[case] = mapped_cost(build, part)
         if case == "shared3": action_contract(args.xls, build, part)

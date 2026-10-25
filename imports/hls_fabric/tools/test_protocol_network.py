@@ -120,6 +120,7 @@ def main() -> None:
     config=stage/'fixture.config';configuration(config,'topology')
     fixture=stage/'fixture'
     run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage)
     negative_wiring(args.xls,fixture,stage)
     observation_cut(args.xls,fixture,stage)

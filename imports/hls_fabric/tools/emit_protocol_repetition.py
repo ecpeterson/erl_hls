@@ -24,12 +24,12 @@ def emit_application(width: int, directory: Path, inspect: bool = False, split: 
 
 def build_application(xls: Path, width: int, directory: Path, inspect: bool = False, split: int | None = None,
                       mixed: bool = False, share_arithmetic: bool = False) -> Path:
-    """Optionally compile the emitted bundle with XLS; source emission itself needs no external compiler."""
+    """Compile the emitted bundle with XLS and return its resolved immutable release."""
     build = emit_application(width, directory, inspect, split, mixed, share_arithmetic)
     # The compiler driver bounds each XLS stage at 300s across all emitted roles.
     run([ROOT / "_build/default/rel/hls/bin/compile-source-build", xls, build],
         directory, "compile-application", timeout=None)
-    return build
+    return (build / "compiled").resolve()
 
 
 def main() -> None:

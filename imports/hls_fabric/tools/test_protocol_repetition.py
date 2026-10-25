@@ -47,7 +47,7 @@ def qualify(build: Path, stage: Path, width: int) -> dict:
          '-o',ebin,ROOT/'test/phi_protocol_repetition_fixture.erl'],stage,'compile-host')
     expression='[S,N]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,list_to_integer(N)),halt().'
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage,str(width)],stage,'oracle')
-    rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
+    rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
     tracked=rtl+[source,build/'deployment.etf',stage/'oracle.json']
     hashes={str(p):digest(p) for p in tracked}

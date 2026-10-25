@@ -83,9 +83,12 @@ class SourceToolchainTests(unittest.TestCase):
                 path.write_text('#!/bin/sh\nprintf "mock product\\n"\n')
                 path.chmod(0o755)
             detached_driver = stage/'compile_source_build.py'
-            shutil.copyfile(next(release.glob('lib/erl_hls-*/priv/tools/compile_source_build.py')), detached_driver)
+            compiler_tools = next(release.glob('lib/erl_hls-*/priv/tools'))
+            for name in ('compile_source_build.py', 'compile_xls.py'):
+                shutil.copyfile(compiler_tools/name, stage/name)
             subprocess.run([sys.executable, detached_driver, xls, moved], cwd=stage, env=env, check=True, timeout=30)
-            compiled = json.loads((moved/'compiled.json').read_text())
+            published = (moved/'compiled').resolve()
+            compiled = json.loads((published/'compiled.json').read_text())
             self.assertFalse(compiled['native_measured'])
             boundary, gateway = compiled['units']
             self.assertIn('--pipeline_stages=1', boundary['commands'][2]['command'])
@@ -96,7 +99,16 @@ class SourceToolchainTests(unittest.TestCase):
                 imports = next(a for a in unit['commands'][0]['command'] if a.startswith('--dslx_path='))
                 self.assertNotIn(str(ROOT), imports)
                 self.assertNotIn(str(emitted), imports)
-            self.assertTrue(all(Path(p).is_file() for p in (moved/'files.f').read_text().splitlines()))
+            files = (published/'files.f').read_text().splitlines()
+            self.assertTrue(all(not Path(p).is_absolute() and (published/p).is_file() for p in files))
+            self.assertEqual(json.loads((published/'source-build.json').read_text()), manifest)
+            self.assertFalse((moved/'compiled.json').exists())
+            relocated = stage/'moved compiled release'
+            shutil.copytree(published, relocated)
+            self.assertTrue(all((relocated/p).is_file() for p in files))
+            for row in manifest['inputs']:
+                self.assertEqual(hashlib.sha256((moved/row['file']).read_bytes()).hexdigest(), row['sha256'])
+                self.assertEqual((relocated/row['file']).read_bytes(), (moved/row['file']).read_bytes())
 
 if __name__ == '__main__':
     unittest.main()

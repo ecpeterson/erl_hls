@@ -171,7 +171,7 @@ def main() -> None:
     run(emit_command('transport', config, fixture),stage,'emit', env=erlang_environment('default'))
     compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver', [fixture/'actors'],
                   public=compiler_root('default'), profile='default')
-    compile_build(args.xls,fixture)
+    fixture=compile_build(args.xls,fixture)
     simulate(args.xls,fixture,stage/'receiver',stage)
     selection_checks(args.xls,stage)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,

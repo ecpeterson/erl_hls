@@ -122,7 +122,7 @@ def without_host(xls: Path, stage: Path) -> None:
     config=stage/'no-host.config';network_config(config,'topology')
     config.write_text(config.read_text().replace('actor_limit => 3','actor_limit => 3,activation => explicit_start'))
     fixture=stage/'no-host';run(['bash','tools/emit_protocol_network.sh',xls,config,fixture],stage,'no-host-build')
-    result=stage/'no-host-witness';result.mkdir();network_simulate(fixture,result)
+    result=stage/'no-host-witness';result.mkdir();network_simulate((fixture/'compiled').resolve(),result)
 
 
 def main() -> None:
@@ -132,6 +132,7 @@ def main() -> None:
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
     fixture=stage/'fixture';run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage);negative_wiring(args.xls,fixture,stage);properties(args.xls,fixture,stage)
     area(fixture,stage);component_area(args.xls,stage);without_host(args.xls,stage)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,'reset_interruptions':4,

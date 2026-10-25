@@ -3,12 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-import os
 from pathlib import Path
-import shutil
-import tempfile
 
 from compiler_paths import compiler_root, compiler_source, compiler_tool
 from completion_fifo import transform
@@ -43,76 +38,41 @@ def compile_topology(
     compiler = compiler_tool(public, "compile_xls")
     if executor_result_delay < 0 or completion_storage not in ("registers", "lutram"):
         raise ValueError("invalid executor budget or completion storage policy")
-    output = output.resolve() if not output.is_symlink() else output.absolute()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with compiler.locked(output.parent / f".{output.name}.lock"):
-        optimizer_policy = {}
-        if optimizer_pipeline is not None:
-            if any(path.name == "optimizer_pipeline.txtpb" for path in assets):
-                raise ValueError("reserved optimizer pipeline asset name")
-            xls, frozen_pipeline, optimizer_policy = prepare_optimizer_pipeline(
-                xls, optimizer_pipeline, output.parent / ".xls-optimizer-pipelines", public=public)
-            assets = [*assets, frozen_pipeline]
-        raw = output.parent / ("." + output.name + "-xls")
-        release = compiler.build(
-            source,
-            xls,
-            raw,
-            name=name,
-            top="Top",
-            pipeline_stages=stages,
-            ram_configurations=ram_configurations,
-            assets=assets,
-            timeout=timeout,
-            channel_delays={"_result_out:send": executor_result_delay} if executor_result_delay else {},
-        )
-        release = release.resolve()
-        manifest = json.loads((release / (name + ".build.json")).read_text())
-        rtl_name = name + ".v"
-        text = (release / rtl_name).read_text()
-        policy = {
-            **optimizer_policy,
-            "executor_result_delay": executor_result_delay,
-            "completion_storage": completion_storage,
-            "driver_sha256": compiler.sha(Path(__file__)),
-            "compiler_extension_sha256": compiler.sha(compiler_source(public, "compile_xls")),
-        }
+    output = output.absolute()
+    optimizer_policy = {}
+    if optimizer_pipeline is not None:
+        if any(path.name == "optimizer_pipeline.txtpb" for path in assets):
+            raise ValueError("reserved optimizer pipeline asset name")
+        xls, frozen_pipeline, optimizer_policy = prepare_optimizer_pipeline(
+            xls, optimizer_pipeline, output.parent / ".xls-optimizer-pipelines", public=public)
+        assets = [*assets, frozen_pipeline]
+    policy = {
+        **optimizer_policy,
+        "executor_result_delay": executor_result_delay,
+        "completion_storage": completion_storage,
+        "driver_sha256": compiler.sha(Path(__file__)),
+        "compiler_extension_sha256": compiler.sha(compiler_source(public, "compile_xls")),
+    }
+
+    def finalize(snapshot: Path, manifest: dict) -> dict:
+        """Apply only the requested RTL legalization before the executor hashes and publishes it."""
+        backend = dict(policy)
         if completion_storage == "lutram":
-            text, audit = transform(text)
-            policy.update(
-                {
-                    "completion_fifo": audit,
-                    "legalization_sha256": compiler.sha(Path(__file__).with_name("completion_fifo.py")),
-                }
-            )
-        digest = hashlib.sha256(text.encode()).hexdigest()
-        manifest = {
-            **manifest,
-            "backend": policy,
-            "rtl": {**manifest["rtl"], rtl_name: digest},
-            "artifacts": {**manifest["artifacts"], rtl_name: digest},
-        }
-        destination = output.parent / ("." + output.name + "-backend") / compiler.identity(manifest)
-        destination.parent.mkdir(exist_ok=True)
-        if not destination.exists():
-            with tempfile.TemporaryDirectory(prefix="release-", dir=destination.parent) as tmp:
-                staged = Path(tmp) / "content"
-                staged.mkdir()
-                for filename in manifest["artifacts"].keys() | manifest["assets"].keys():
-                    shutil.copyfile(release / filename, staged / filename)
-                (staged / rtl_name).write_text(text)
-                (staged / (name + ".build.json")).write_text(json.dumps(manifest, indent=2) + "\n")
-                staged.rename(destination)
-        actual = json.loads((destination / (name + ".build.json")).read_text())
-        if actual != manifest or any(
-            compiler.sha(destination / n) != h for table in ("artifacts", "assets") for n, h in manifest[table].items()
-        ):
-            raise ValueError("backend release changed; preserve it and rebuild in a fresh output directory")
-        pending = output.with_name(output.name + ".pending")
-        pending.unlink(missing_ok=True)
-        pending.symlink_to(destination)
-        os.replace(pending, output)
-        return destination
+            rtl = snapshot / (name + ".v")
+            text, audit = transform(rtl.read_text())
+            rtl.write_text(text)
+            backend.update({
+                "completion_fifo": audit,
+                "legalization_sha256": compiler.sha(Path(__file__).with_name("completion_fifo.py")),
+            })
+        return {**manifest, "backend": backend}
+
+    return compiler.build(
+        source, xls, output, name=name, top="Top", pipeline_stages=stages,
+        ram_configurations=ram_configurations, assets=assets, timeout=timeout,
+        channel_delays={"_result_out:send": executor_result_delay} if executor_result_delay else {},
+        finalize=finalize,
+    )
 
 
 def main() -> None:

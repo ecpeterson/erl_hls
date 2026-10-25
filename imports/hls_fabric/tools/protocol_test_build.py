@@ -14,8 +14,8 @@ def emit_command(kind: str, config: Path, output: Path) -> list[str | Path]:
             'emit', '--kind', kind, '--config', config, '--output', output]
 
 
-def compile_build(xls: Path, directory: Path, *, profile: str = 'default') -> None:
-    """Compile an emitted bundle with its profile's compiler driver, retaining logs on failure.
+def compile_build(xls: Path, directory: Path, *, profile: str = 'default') -> Path:
+    """Compile an emitted bundle and return its resolved immutable release; retain logs on failure.
 
     Schedules, imports, input verification and provenance come from the production
     source-build boundary. No fixture-specific compiler implementation is selected.
@@ -23,6 +23,7 @@ def compile_build(xls: Path, directory: Path, *, profile: str = 'default') -> No
     compiler = application_directory('erl_hls', profile)
     run([sys.executable, compiler/'priv/tools/compile_source_build.py', xls, directory],
         directory, 'compile-source-build', timeout=None)
+    return (directory/'compiled').resolve()
 
 
 def compile_clock(xls: Path, source: Path, stage: Path, top: str, module: str,

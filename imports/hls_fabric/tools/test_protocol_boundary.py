@@ -160,6 +160,7 @@ def main() -> None:
     parser.add_argument('xls',type=lambda p:Path(p).resolve());parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
     fixture=stage/'fixture';run(['bash','tools/emit_protocol_boundary.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=(fixture/'compiled').resolve()
     frames=expected(stage);simulate(fixture,stage,frames);negative_wiring(args.xls,fixture,stage,frames)
     properties(args.xls,stage);observation_cut(args.xls,fixture,stage)
     map_area([fixture/'boundary/core.v',fixture/'boundary/protocol_boundary.sv'],'protocol_boundary',stage,16000,8000)
@@ -169,7 +170,7 @@ def main() -> None:
     feedback_config=stage/'feedback.config';feedback_configuration(feedback_config)
     feedback=stage/'feedback'
     run(['bash','tools/emit_protocol_boundary.sh',args.xls,feedback_config,feedback],stage,'feedback-build')
-    observation_cut(args.xls,feedback,feedback)
+    observation_cut(args.xls,(feedback/'compiled').resolve(),feedback)
     (stage/'result.json').write_text(json.dumps({'functional_passed':True,
         'all_capacity_screens_passed':all(json.loads((stage/f'cost-{n}/area.json').read_text())['within_budget'] for n in [1,3,8,36]),
         'complete_incarnations':2,'reset_interruptions':4,

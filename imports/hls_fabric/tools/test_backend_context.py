@@ -111,11 +111,34 @@ class BuildContextTests(unittest.TestCase):
                              [ROOT/'_build/default/rel/hls/bin/hls-repetition',
                               '--width', '6', '--output', build, '--split', '3'])
             self.assertFalse((directory/'config.erl').exists())
+            build.mkdir()
+            published = directory/'immutable-release'
+            published.mkdir()
+            (build/'compiled').symlink_to(published, target_is_directory=True)
             with patch.object(emitter, 'emit_application', return_value=build), patch.object(emitter, 'run') as invoke:
-                self.assertEqual(emitter.build_application(Path('/xls'), 6, directory, split=3), build)
+                self.assertEqual(emitter.build_application(Path('/xls'), 6, directory, split=3), published.resolve())
             # Whole-bundle time must not undercut the compiler driver's per-stage watchdog.
             self.assertEqual(invoke.call_args.args[0],
                              [ROOT/'_build/default/rel/hls/bin/compile-source-build', Path('/xls'), build])
+            self.assertIsNone(invoke.call_args.kwargs['timeout'])
+
+    def test_source_helper_returns_resolved_release(self) -> None:
+        """Positive fixtures read the published snapshot while compile diagnostics stay beside the input."""
+        import protocol_test_build as builder
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)/'source'
+            directory.mkdir()
+            published = Path(temporary)/'release'
+            published.mkdir()
+            (directory/'compiled').symlink_to(published, target_is_directory=True)
+            compiler = Path(temporary)/'compiler'
+            with patch.object(builder, 'application_directory', return_value=compiler) as select, \
+                    patch.object(builder, 'run') as invoke:
+                self.assertEqual(builder.compile_build(Path('/xls'), directory, profile='test'), published.resolve())
+            select.assert_called_once_with('erl_hls', 'test')
+            self.assertEqual(invoke.call_args.args[0],
+                             [sys.executable, compiler/'priv/tools/compile_source_build.py', Path('/xls'), directory])
+            self.assertEqual(invoke.call_args.args[1], directory)
             self.assertIsNone(invoke.call_args.kwargs['timeout'])
 
     def test_command_logs_outputs_and_failure(self) -> None:

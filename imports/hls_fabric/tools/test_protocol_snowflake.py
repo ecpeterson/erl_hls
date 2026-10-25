@@ -55,7 +55,7 @@ def bench(build: Path, stage: Path, vectors: dict) -> Path:
 def qualify(build: Path, stage: Path, vectors: dict) -> None:
     """Compile the exact circuit once, then run its finite witness and a rejecting scoreboard control."""
     source = bench(build, stage, vectors)
-    rtl = [Path(p) for p in (build / 'files.f').read_text().splitlines()]
+    rtl = [build / p for p in (build / 'files.f').read_text().splitlines()]
     tracked = [source, *rtl, stage / 'vectors.json']
     hashes = {str(p): digest(p) for p in tracked}
     run(['verilator', '--binary', '--timing', '--top-module', 'tb', '--Mdir', stage / 'obj_dir',
@@ -88,7 +88,7 @@ def main() -> None:
     compiler = application_directory('erl_hls', 'test')
     run([sys.executable, compiler / 'priv/tools/compile_source_build.py', args.xls, build],
         args.stage, 'xls', timeout=600)
-    qualify(build, args.stage, json.loads((args.stage / 'vectors.json').read_text()))
+    qualify((build / 'compiled').resolve(), args.stage, json.loads((args.stage / 'vectors.json').read_text()))
 
 
 if __name__ == '__main__':

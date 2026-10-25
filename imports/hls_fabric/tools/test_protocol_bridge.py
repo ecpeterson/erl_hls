@@ -20,7 +20,7 @@ def build(xls: Path, stage: Path) -> list[Path]:
             'actor_limit=>3,control=>rectangle,activation=>explicit_start,native_actors=>'+actors+',host=>1,service=>'+str(7+10*i)+'}.\n')
         role=stage/f'role{i}'
         run(emit_command('bridge', config, role),stage,f'emit-{i}', env=erlang_environment("test"))
-        compile_build(xls,role,profile='test');roles.append(role)
+        roles.append(compile_build(xls,role,profile='test'))
     return roles
 
 
@@ -48,7 +48,7 @@ def pair(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
     return wrapper,rtl
 
 
-def witness(build_root: Path, binary: Path, ebin: Path, stage: Path, incarnation: int) -> None:
+def witness(roles: list[Path], binary: Path, ebin: Path, stage: Path, incarnation: int) -> None:
     """Run actual brokers/relay, then require both FIFO leases closed and exact finite readout."""
     stage.mkdir()
     with (stage/'simulation.log').open('x') as log:
@@ -58,9 +58,9 @@ def witness(build_root: Path, binary: Path, ebin: Path, stage: Path, incarnation
             while not (stage/'role1_rx').exists():
                 if sim.poll() is not None or time.monotonic()>deadline:raise RuntimeError('pair simulator startup')
                 time.sleep(.02)
-            expression='[B,S,I]=init:get_plain_arguments(),ok=hls_protocol_bridge_live:run(B,S,list_to_integer(I)),halt().'
+            expression='[A,B,S,I]=init:get_plain_arguments(),ok=hls_protocol_bridge_live:run(A,B,S,list_to_integer(I)),halt().'
             run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),ebin,'-eval',expression,
-                '-extra',build_root,stage,str(incarnation)],stage,'host')
+                '-extra',*roles,stage,str(incarnation)],stage,'host')
             assert sim.wait(timeout=10)==0,(stage/'simulation.log').read_text()
         finally:
             if sim.poll() is None:sim.terminate();sim.wait(timeout=5)
@@ -77,7 +77,7 @@ def qualify(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_pair',
         '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',
         wrapper,*rtl,ROOT/'test/rtl/protocol_bridge_sim.cpp'],stage,'verilator')
-    for i in [1,2]:witness(roles[0].parent,stage/'obj_dir/simulation',ebin,stage/f'live-{i}',100+i)
+    for i in [1,2]:witness(roles,stage/'obj_dir/simulation',ebin,stage/f'live-{i}',100+i)
     return wrapper,rtl
 
 

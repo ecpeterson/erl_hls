@@ -22,8 +22,7 @@ def build(xls: Path, stage: Path, index: int, actors: str) -> Path:
         'activation => explicit_start,native_actors => '+actors+'}.\n')
     role=stage/f'role{index}'
     run(emit_command('network', config, role),stage,f'emit-{index}', env=erlang_environment("test"))
-    compile_build(xls,role,profile='test')
-    return role
+    return compile_build(xls,role,profile='test')
 
 
 def pair(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:

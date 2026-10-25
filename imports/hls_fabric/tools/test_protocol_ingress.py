@@ -113,6 +113,7 @@ def main() -> None:
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
     fixture=stage/'fixture';run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage);negative_wiring(args.xls,fixture,stage);properties(args.xls,fixture,stage);area(fixture,stage)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,'reset_interruptions':3,
         'commands_per_complete_incarnation':6,'outputs_per_complete_incarnation':13,'malformed_incarnations':8,

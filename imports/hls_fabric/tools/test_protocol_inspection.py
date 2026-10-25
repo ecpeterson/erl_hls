@@ -86,7 +86,7 @@ def reset_witness(build: Path, stage: Path) -> None:
     assignments='\n'.join(f"fingerprint[{i}]=32'h{int.from_bytes(fingerprint[4*i:4*i+4],'little'):08x};" for i in range(8))
     bench=stage/'reset.sv'
     bench.write_text((ROOT/'test/rtl/protocol_inspection_reset_tb.sv').read_text().replace('@@FINGERPRINT@@',assignments))
-    rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()]
+    rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     run(['iverilog','-g2012','-s','tb','-o',stage/'simulation',bench,*rtl],stage,'compile')
     run(['vvp',stage/'simulation'],stage,'simulate')
     assert 'PROTOCOL_INSPECTION_RESET_PASS' in (stage/'simulate.log').read_text()
@@ -96,7 +96,7 @@ def qualify(build: Path, stage: Path) -> None:
     """Compile one public-port twin harness and compare finite runs to independent ordinary BEAM actors."""
     expression='[S]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,3),halt().'
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',stage],stage,'oracle')
-    rtl=[Path(p) for p in (build/'files.f').read_text().splitlines()];source=simulator_source(build,stage)
+    rtl=[build/p for p in (build/'files.f').read_text().splitlines()];source=simulator_source(build,stage)
     inputs=rtl+[source,build/'deployment.etf',build/'network/inspection.etf',build/'network/inspection.json']
     hashes={str(p):digest(p) for p in inputs}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_application_top',

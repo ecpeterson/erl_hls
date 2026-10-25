@@ -1,11 +1,12 @@
 -module(hls_protocol_bridge_live).
 -moduledoc "Finite two-role public-port witness with the production brokers and bounded relay. No private RTL probes or cross-sender chronology.".
--export([run/3]).
+-export([run/4]).
 
--doc "Attaches two fresh fixture builds, forwards actual source packets with credits, checks 39 per-sender records and final arithmetic, then retires both brokers and awaits descriptor closure. Distinct sessions must follow fresh reset. Ordinary source callbacks supply producer records. This is a finite simulation witness, not general progress or device qualification.".
--spec run(file:filename(),file:filename(),pos_integer()) -> ok.
-run(Build,Stage,Incarnation) ->
-    Devices=maps:from_list([{R,read(filename:join([Build,"role"++integer_to_list(R),"bridge.etf"]))}||R<-[0,1]]),
+-doc "Attaches two explicit immutable fixture releases, forwards actual source packets with credits, checks 39 per-sender records and final arithmetic, then retires both brokers and awaits descriptor closure. Distinct sessions must follow fresh reset. Ordinary source callbacks supply producer records. This is a finite simulation witness, not general progress or device qualification.".
+-spec run(file:filename(),file:filename(),file:filename(),pos_integer()) -> ok.
+run(Role0,Role1,Stage,Incarnation) ->
+    Devices=maps:from_list([{R,read(filename:join(Build,"bridge.etf"))}
+        ||{R,Build}<-lists:zip([0,1],[Role0,Role1])]),
     Plan=#{devices=>Devices,actors=>3,limits=>#{crossings=>8,commands=>16,events=>32}},
     Brokers=maps:from_list([begin P=filename:join(Stage,"role"++integer_to_list(R)),
         {ok,B}=hls_fabric:start_link(P++"_tx",P++"_rx",#{rx_route_limit=>1}),{R,B} end||R<-[0,1]]),
