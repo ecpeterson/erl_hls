@@ -1,23 +1,40 @@
 -module(xls_protocol_boundary).
 -moduledoc "Wires declared external endpoints to static DSLX arbiters around the source-network transition.".
--export([emit/1]).
+-export([plan/1, descriptor/1, emit/2]).
+-export_type([plan/0]).
 
--doc "Returns in-memory boundary clock, pin adapter and manifest files for hls_protocol_boundary's checked plan without writing output. Reuses the network state and one small arbitration state per endpoint with multiple producers. Network preview observations must be independent of boundary ready; only the final transition consumes arbiter acceptance. No payload buffering or application eligibility is added.".
--spec emit(map()) -> hls_generated_files:output().
-emit(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups}) ->
+%% Pass-through ports and external groups fix the boundary before any hardware is rendered.
+-record(plan, {descriptor :: map(), pass_inputs :: [map()], pass_outputs :: [map()]}).
+
+-doc "An unchanged in-process boundary composition from plan/1. Retains the packed interface, external groups and pass-through ports independently of rendered bytes. It is not a serialized input format or hardware admission.".
+-opaque plan() :: #plan{}.
+
+-doc "Plans endpoint arbitration from a static network descriptor and checked external groups. Replaces individual producer ports with endpoint streams while retaining their declared order and arbitration-state accounting. Requires hls_protocol_boundary's checked groups; reads no templates and emits no hardware.".
+-spec plan(map()) -> plan().
+plan(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups}) ->
     BoundaryNames=lists:append([[<<Name/binary,"_ready">>,<<Name/binary,"_valid">>,<<Name/binary,"_data">>]||#{name:=Name}<-Boundaries]),
     PassInputs=[P||P=#{name:=Name}<-NetworkInputs,not lists:member(Name,BoundaryNames)],
     PassOutputs=[P||P=#{name:=Name}<-NetworkOutputs,not lists:member(Name,BoundaryNames)],
     Inputs=PassInputs++[#{name=>list_to_binary(external(I)++"_ready"),width=>1}||#{index:=I}<-Groups],
     Outputs=PassOutputs++lists:append([[#{name=>list_to_binary(external(I)++"_valid"),width=>1},
         #{name=>list_to_binary(external(I)++"_data"),width=>128}]||#{index:=I}<-Groups]),
-    Source = source(Inputs, Outputs, PassInputs, PassOutputs, Groups),
     Bits=lists:sum([N||#{state_bits:=N}<-Groups]),
-    Manifest=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
+    Descriptor=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
         actor_runtime=>true,eligible=>false,ordering=>per_logical_sender_destination,
         activation=>maps:get(activation,Network),inspection=>maps:get(inspection,Network),additional_state_bits=>Bits+maps:get(additional_state_bits,Network),
-        arbitration_state_bits=>Bits,externals=>Groups,inputs=>Inputs,outputs=>Outputs,
-        dslx_sha256=>hls_generated_files:hash(Source)},
+        arbitration_state_bits=>Bits,externals=>Groups,inputs=>Inputs,outputs=>Outputs},
+    #plan{descriptor = Descriptor, pass_inputs = PassInputs, pass_outputs = PassOutputs}.
+
+-doc "Returns the planned boundary interface and static arbitration facts. inspection remains the network's none/process mode; observation evidence and the source hash are added only by emission. Treat this descriptor as read-only.".
+-spec descriptor(plan()) -> map().
+descriptor(#plan{descriptor = Descriptor}) -> Descriptor.
+
+-doc "Returns boundary clock, pin adapter and manifest files from an unchanged plan and the corresponding emitted network's inspection evidence. Reads templates without writing output, adding actual inspection evidence and the source hash to the descriptor. Network preview observations must remain independent of boundary ready; only the final transition consumes arbiter acceptance. No payload buffering or application eligibility is added.".
+-spec emit(plan(), none | map()) -> hls_generated_files:output().
+emit(#plan{descriptor = Descriptor = #{inputs := Inputs, outputs := Outputs, externals := Groups},
+        pass_inputs = PassInputs, pass_outputs = PassOutputs}, Inspection) ->
+    Source = source(Inputs, Outputs, PassInputs, PassOutputs, Groups),
+    Manifest = Descriptor#{inspection := Inspection, dslx_sha256 => hls_generated_files:hash(Source)},
     #{files=>#{"boundary/boundary.x"=>Source,
         "boundary/protocol_boundary.sv"=>sv_protocol_ports:emit(pins(Inputs),pins(Outputs),"protocol_boundary","protocol_boundary_core"),
         "boundary/manifest.json"=>json:encode(Manifest)},result=>Manifest}.

@@ -75,7 +75,7 @@ framed(#{kind:=rectangle,input_bits:=Bits},Options) ->
     end;
 framed(Control,_) -> error({unsupported_framed_control,Control}).
 
--doc "Checks that an emitted explicit-start boundary provides the adapter's exact native control handshake. Call before gateway or bridge rendering; mismatches fail rather than producing incompatible pin wiring.".
+-doc "Checks that a planned or emitted explicit-start boundary provides the adapter's exact native control handshake. Call before rendering the boundary or its framed parent; mismatches fail rather than producing incompatible pin wiring.".
 -spec check_boundary(map(),map()) -> ok.
 check_boundary(#{input_bits:=Bits},#{activation:=explicit_start,inputs:=Inputs,outputs:=Outputs}) ->
     ExpectedInputs=[#{name=><<"ingress_valid">>,width=>1},#{name=><<"ingress_data">>,width=>Bits},

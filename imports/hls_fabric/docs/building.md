@@ -47,9 +47,20 @@ hls_generated_files:write(Generated, "/path/to/fresh-north").
 
 Every protocol builder's `emit/1` and `write/2` accepts either a source configuration map or a filename containing exactly one trusted Erlang map. A filename is loaded and passed through the same map-based path. Source and include paths remain relative to the caller's working directory, not the configuration file's directory. Saved ETF plans are not configuration inputs.
 
-`hls_protocol_network:emit/2`, `hls_protocol_boundary:emit/2` and `hls_protocol_bridge:emit/2` instead accept a planned transport and renderer options. Their bundle results carry the transport descriptor alongside the generated manifest, so application, mixed and deployment builders do not read their own ETF outputs back. Source/placement options cannot be changed through these emission APIs. The corresponding `write/3` functions also take a fresh output directory. ETF files remain available for inspection and host consumers.
+Network, boundary and bridge composition each has a checked `plan/2` stage after transport placement. It consumes the unchanged transport build and that layer's options, fixes wiring and packed ports, and rejects unsupported composition before rendering transport or wrapper hardware:
 
-A deployment prepares the source program once, validates complete disjoint ownership and return endpoints, and plans all roles. The shared static `hls_protocol_routing:plan/1` checks cross-role ownership, matching codecs, packet index bounds and relay limits before any bridge is rendered. Compilation needs no sessions or live relay state; the host constructs the same routing plan from `deployment.etf` before opening an incarnation. A validation or rendering failure leaves the requested output absent; an I/O failure can leave a partial directory. This boundary does not change XLS schedules, generated hardware behavior or admission policy.
+```erlang
+Boundary = hls_protocol_boundary:plan(North, #{activation => explicit_start}),
+Interface = hls_protocol_boundary:descriptor(Boundary),
+#{inputs := Inputs, outputs := Outputs, externals := Endpoints} = Interface,
+Generated = hls_protocol_boundary:emit(Boundary).
+```
+
+The corresponding `hls_protocol_network` and `hls_protocol_bridge` APIs have the same shape. These composition plans read no templates and render no hardware; the transport build already contains lowered source/receiver artifacts. Descriptors expose static interfaces, state costs and endpoint ownership. Network/boundary `inspection` is the mode (`none` or `process`) at this stage. Emission adds the actual inspection catalog, generated-byte hashes and attachment identities to final manifests. Static descriptors are for build-time checks, not host attachment. Keep opaque plans unchanged in process with their source modules loaded.
+
+`emit(Build, Options)` combines composition planning and emission; `write(Build, Options, Directory)` also writes the files. Their bundle results retain the transport descriptor alongside the final manifest. Source/placement options cannot change through these APIs. Application and mixed builders check host codecs, external schemas and supported host routes against the planned interfaces before emission. ETF files remain available for inspection and host consumers.
+
+A deployment prepares sources once, validates complete disjoint ownership and return endpoints, and checks every role's bridge layout. The shared `hls_protocol_routing:plan/1` checks cross-role ownership, matching codecs, packet index bounds and relay limits; application binding checks host codecs. All these checks precede rendering any role. Compilation needs no sessions or live relay state; the host constructs the same routing plan from `deployment.etf` before opening an incarnation. A validation or rendering failure leaves the requested output absent; an I/O failure can leave a partial directory. This boundary does not change XLS schedules, generated hardware behavior or admission policy.
 
 ## Optional external compilation
 

@@ -84,7 +84,7 @@ trace_bridges(Build) ->
     Session = trace:session_create(deployment_bridge_emission, Collector, []),
     try
         1 = trace:process(Session, self(), true, [call]),
-        1 = trace:function(Session, {hls_protocol_bridge, emit, 2}, [], []),
+        1 = trace:function(Session, {hls_protocol_bridge, emit, 1}, [], []),
         Result = Build(),
         1 = trace:process(Session, self(), false, [call]),
         Ref = trace:delivered(Session, self()),
@@ -105,7 +105,7 @@ trace_bridges(Build) ->
 collect_bridges(Count) ->
     receive
         %% A traced role has reached hardware generation.
-        {trace, _, call, {hls_protocol_bridge, emit, [_, _]}} -> collect_bridges(Count + 1);
+        {trace, _, call, {hls_protocol_bridge, emit, [_]}} -> collect_bridges(Count + 1);
         %% Trace delivery was confirmed before this request was sent.
         {collect, Owner, Ref} -> Owner ! {Ref, Count}, ok
     end.

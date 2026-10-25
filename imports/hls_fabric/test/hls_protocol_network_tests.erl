@@ -51,7 +51,7 @@ receiver_owned_slices_test() ->
     Components = #{"dslx/transport.x" => "// Rendering fixture transport.\n",
         "receivers/receiver_2.x" => "// Rendering fixture receiver.\n"},
     #{files := #{"network/network.x" := Source}, result := Manifest} =
-        xls_protocol_network:emit(Plan, Components),
+        xls_protocol_network:emit(xls_protocol_network:plan(Plan), Components),
     {match, Slices} = re:run(Source,
         <<"link_[0-9]+_(?:eligible|take|release_valid): [^,\\n]+">>,
         [global, {capture, first, binary}]),

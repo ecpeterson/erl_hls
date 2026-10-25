@@ -1,6 +1,7 @@
 -module(xls_protocol_network).
 -moduledoc "Connects source-bound receivers and transport using the explicit clock transition in protocol_network.x.in. Erlang elaborates heterogeneous connections; DSLX retains the observe, select and commit order.".
--export([emit/2]).
+-export([plan/1, descriptor/1, emit/2]).
+-export_type([plan/0]).
 
 %% Packed interface order is shared by DSLX, the pin adapter and the manifest.
 -type clock_port() :: {string(), pos_integer()}.
@@ -8,21 +9,43 @@
 -type receiver_wiring() :: #{index := non_neg_integer(),
     links := [hls_protocol_inbox:link_binding()], host_slot := none | non_neg_integer()}.
 
--doc "Returns network files and a manifest without writing output. Requires hls_protocol_network's checked source plan and exact upstream bytes for component hashes. Uses receiver-owned inbox spans for eligibility, take and release; inconsistent source/receiver/link bindings fail generation. The DSLX template samples old state, selects shared arithmetic, advances receivers and commits transport once. Optional ingress, activation and passive inspection retain their existing ownership. This is composition, not capacity, progress or physical qualification.".
--spec emit(map(), hls_generated_files:files()) -> hls_generated_files:output().
-emit(Input, UpstreamFiles) ->
-    Plan = Input#{arithmetic => maps:get(arithmetic, Input, [])},
-    #{fabric := Fabric, receivers := Receivers} = Plan,
+%% Checked wiring and interface order are retained independently of emitted files.
+-record(plan, {input :: map(), wiring :: [receiver_wiring()],
+    inputs :: [clock_port()], outputs :: [clock_port()],
+    descriptor :: map(), components :: [string()]}).
+
+-doc "An unchanged in-process network composition from plan/1. Retains checked receiver wiring, packed ports and source descriptors without rendering network hardware or assigning its byte hashes. It is not a serialized input format or hardware admission.".
+-opaque plan() :: #plan{}.
+
+-doc "Plans network composition from hls_protocol_transport's descriptor with checked activation/inspection modes. Validates receiver-owned inbox spans against source/link identities, fixes interface order and derives static metadata without reading templates or emitting files. Sources, placement and capability checks belong to the enclosing builder.".
+-spec plan(map()) -> plan().
+plan(Input) ->
+    Transport = Input#{arithmetic => maps:get(arithmetic, Input, [])},
+    #{fabric := Fabric, receivers := Receivers} = Transport,
     Wiring = wiring(Fabric, Receivers),
-    {Inputs, Outputs} = ports(Plan),
-    {Debug, OptionalFiles} = optional_files(Plan),
-    Source = render(Plan, Wiring, Inputs, Outputs),
+    {Inputs, Outputs} = ports(Transport),
+    #plan{input = Transport, wiring = Wiring, inputs = Inputs, outputs = Outputs,
+        descriptor = static_descriptor(Transport, Inputs, Outputs),
+        components = component_files(Transport)}.
+
+-doc "Returns the planned interface and static network facts without emission. inspection is none or process; emitted observation evidence and component/source hashes are intentionally absent. Treat this descriptor as read-only.".
+-spec descriptor(plan()) -> map().
+descriptor(#plan{descriptor = Descriptor}) -> Descriptor.
+
+-doc "Returns network files and a manifest from an unchanged composition plan and exact upstream bytes, without writing output. Adds actual inspection evidence and emitted-byte hashes to the static descriptor. The DSLX template samples old state, selects shared arithmetic, advances receivers and commits transport once. Template reads remain; no capacity, progress or physical qualification is granted.".
+-spec emit(plan(), hls_generated_files:files()) -> hls_generated_files:output().
+emit(#plan{input = Input, wiring = Wiring, inputs = Inputs, outputs = Outputs,
+        descriptor = Descriptor, components = Components}, UpstreamFiles) ->
+    {Debug, OptionalFiles} = optional_files(Input),
+    Source = render(Input, Wiring, Inputs, Outputs),
     GeneratedFiles = hls_generated_files:merge([OptionalFiles,
         #{"network/network.x" => Source,
           "network/protocol_network.sv" => sv_protocol_ports:emit(
               Inputs, Outputs, "protocol_network", "protocol_network_core")}]),
-    Manifest = manifest(Plan, Inputs, Outputs, Debug,
-        hls_generated_files:merge([UpstreamFiles, GeneratedFiles]), Source),
+    ComponentFiles = hls_generated_files:merge([UpstreamFiles, GeneratedFiles]),
+    Manifest = Descriptor#{inspection := Debug, dslx_sha256 => hls_generated_files:hash(Source),
+        components => [#{file => list_to_binary(File),
+            sha256 => hls_generated_files:hash(maps:get(File, ComponentFiles))} || File <- Components]},
     #{files => hls_generated_files:merge([GeneratedFiles,
           #{"network/manifest.json" => json:encode(Manifest)}]), result => Manifest}.
 
@@ -174,20 +197,19 @@ observations(Sources, Boundaries, RemoteOutputs, Inspect, Explicit, Host) ->
      [[boundary(B), "_", K, ": preview.", boundary(B), "_", K, ",\n"] || B <- Boundaries, K <- ["valid", "data"]],
      [[K, ": preview.", K, ",\n"] || {K, _} <- RemoteOutputs]].
 
-%% Reports consume the same interface and exact emitted bytes as the pin adapter.
--spec manifest(map(), [clock_port()], [clock_port()], none | map(), hls_generated_files:files(), iodata()) -> map().
-manifest(#{fabric := Fabric = #{sources := Sources, links := Links}, receivers := Receivers,
-        ingress := Ingress, activation := Activation, arithmetic := Arithmetic,
-        bundle := #{topology := #{externals := Externals}}}, Inputs, Outputs, Debug, ComponentFiles, Source) ->
+%% Static facts expose the same interface before template or observation emission.
+-spec static_descriptor(map(), [clock_port()], [clock_port()]) -> map().
+static_descriptor(#{fabric := Fabric = #{sources := Sources, links := Links}, receivers := Receivers,
+        ingress := Ingress, activation := Activation, arithmetic := Arithmetic, inspection := Inspection,
+        bundle := #{topology := #{externals := Externals}}}, Inputs, Outputs) ->
     Crossings = maps:get(crossings, Fabric, []),
     Incoming = [I || #{index := I, direction := incoming} <- Crossings],
     Host = Ingress =/= none,
     Explicit = Activation =:= explicit_start,
-    Inspect = Debug =/= none,
     #{top=>protocol_network,clock_proc=>network_clock,actor_runtime=>true,eligible=>false,
         actors=>length(Sources),links=>length(Links),additional_state_bits=>(case Host of true->maps:get(state_bits,Ingress);false->0 end)+(case Explicit of true->1;false->0 end)+lists:sum([W||#{cursor_bits:=W}<-Arithmetic]),
         arithmetic=>Arithmetic,
-        activation=>Activation,inspection=>Debug,
+        activation=>Activation,inspection=>Inspection,
         native_indices=>[I||#{index:=I}<-Sources],
         crossings=>[#{index=>I,direction=>D,source_index=>S,destination_index=>T,slots=>N,
             classes=>[maps:with([slot,codec],C)||C<-Cs]}
@@ -200,12 +222,16 @@ manifest(#{fabric := Fabric = #{sources := Sources, links := Links}, receivers :
         startup_done=>all_declared_records_consumed_not_application_readiness,
         reset=>common_clock_cancels_all_ownership,
         inputs=>fields(Inputs),outputs=>fields(Outputs),
-        dslx_sha256=>hls_generated_files:hash(Source),
-        components=>[#{file=>list_to_binary(F),sha256=>hls_generated_files:hash(maps:get(F,ComponentFiles))}
-            ||F<-["dslx/transport.x"|[binary_to_list(maps:get(file,R))||R<-Receivers]]++xls_protocol_partition:files(Fabric)++optional(Host,["dslx/ingress.x"])++optional(Inspect,["network/process_observation.x"])],
         externals=>[#{index=>I,id=>iolist_to_binary(io_lib:format("~0tp",[Id]))}||{I,#{id:=Id}}<-lists:enumerate(0,Externals)],
         boundaries=>[#{source_index=>I,output_index=>D,name=>list_to_binary(boundary(B)),external_index=>external_index(Id,Externals)}
             ||B=#{source_index:=I,output:=#{index:=D,destination:={external,Id}}}<-maps:get(boundaries,Fabric)]}.
+
+%% Component identities name exactly the receiver and optional inputs used by this plan.
+-spec component_files(map()) -> [string()].
+component_files(#{fabric := Fabric, receivers := Receivers, ingress := Ingress, inspection := Inspection}) ->
+    ["dslx/transport.x" | [binary_to_list(File) || #{file := File} <- Receivers]] ++
+        xls_protocol_partition:files(Fabric) ++ optional(Ingress =/= none, ["dslx/ingress.x"]) ++
+        optional(Inspection =:= process, ["network/process_observation.x"]).
 
 %% Running is registered: start_valid cannot open captures on its handshake edge.
 -spec eligibility(boolean(),non_neg_integer(),non_neg_integer(),pos_integer()) -> iodata().

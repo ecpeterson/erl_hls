@@ -7,13 +7,17 @@
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
 
--doc "Generates a mixed BEAM/native bundle without writing output, returning relative filenames with IO data and its deployment plan. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors. Template and support reads remain; loaded host codecs must stay available.".
+-doc "Generates a mixed BEAM/native bundle without writing output, returning relative filenames with IO data and its deployment plan. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors. Checks host placement, target bindings and loaded codecs before rendering the bridge. Template and support reads remain; loaded host codecs must stay available.".
 -spec emit(map() | file:filename()) -> hls_generated_files:output().
 emit(Config) when is_map(Config) ->
     Build = hls_protocol_transport:plan(Config),
-    #{files := BridgeFiles, result := #{bridge := Bridge = #{native_indices := Native, links := Links, identity := Identity, host := Host, service := Service},
-        transport := #{whole_control := Control, bundle := Bundle = #{topology := #{actors := Actors, routes := Routes, startup := Startup}, modules := Modules}}}} =
-        hls_protocol_bridge:emit(Build,maps:with([host, service, control, activation, inspection],Config)),
+    #{whole_control := Control,
+      bundle := Bundle = #{topology := #{actors := Actors, routes := Routes, startup := Startup}, modules := Modules}} =
+        hls_protocol_transport:descriptor(Build),
+    BridgePlan = hls_protocol_bridge:plan(Build,
+        maps:with([host, service, control, activation, inspection], Config)),
+    #{native_indices := Native, links := Links, host := Host, service := Service} =
+        hls_protocol_bridge:descriptor(BridgePlan),
     HostIds=[Id||{I,#{id:=Id}}<-lists:enumerate(0,Actors),not lists:member(I,Native)],
     Application=hls_protocol_application_binding:bind(Bundle,Control,maps:from_list([{Id,board}||#{id:=Id}<-Actors]),#{board=>Host}),
     HostActors=maps:from_list([begin
@@ -30,7 +34,10 @@ emit(Config) when is_map(Config) ->
     ExternalKeys=lists:usort([D||#{outputs:=O}<-maps:values(HostActors),D={external,_}<-maps:values(O)]),
     Targets=maps:merge(maps:from_list([{{actor,Id},{actor,I}}||{I,#{id:=Id}}<-lists:enumerate(0,Actors),lists:member(I,Native)]),
         maps:from_list([{K,K}||K<-ExternalKeys])),
-    Mixed=#{host_actors=>lists:sort(maps:keys(HostActors)),identity=>Identity,links=>[link_descriptor(L,Actors)||L<-Links]},
+    MixedLinks = [link_descriptor(Link, Actors) || Link <- Links],
+    #{files := BridgeFiles, result := #{bridge := Bridge = #{identity := Identity}}} =
+        hls_protocol_bridge:emit(BridgePlan),
+    Mixed=#{host_actors=>lists:sort(maps:keys(HostActors)),identity=>Identity,links=>MixedLinks},
     Plan=#{actors=>HostActors,targets=>Targets,mixed=>Mixed,application=>Application,device=>board,
         binding=>#{host=>Host,control=>Service},bridge=>Bridge,eligible=>false},
     #{files => hls_generated_files:merge([BridgeFiles, #{"mixed.etf" => term_to_binary(Plan, [deterministic])}]),

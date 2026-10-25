@@ -7,7 +7,7 @@
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
 
--doc "Generates the application bundle without writing output, returning relative filenames with IO data and the deployment binding. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors. Templates and support inputs are read; generation errors create no output.".
+-doc "Generates the application bundle without writing output, returning relative filenames with IO data and the deployment binding. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors. Checks the static boundary and host codecs before rendering composition files. Templates and support inputs are read; generation errors create no output.".
 -spec emit(map() | file:filename()) -> hls_generated_files:output().
 emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<65536 ->
     case maps:is_key(native_actors,Config) of
@@ -18,11 +18,15 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
         Mode->error({application_requires_explicit_start,Mode})
     end,
     Build = hls_protocol_transport:plan(Config),
-    #{ingress := Control} = hls_protocol_transport:descriptor(Build),
+    Transport = #{ingress := Control} = hls_protocol_transport:descriptor(Build),
     Hardware = hls_protocol_control:framed(Control, Config),
-    #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Plan}} =
-        hls_protocol_boundary:emit(Build,(maps:with([inspection],Config))#{activation=>explicit_start}),
-    Deployment=deployment(Plan,Boundary,BoundaryFiles,Device,Host,Hardware),
+    BoundaryPlan = hls_protocol_boundary:plan(Build,
+        (maps:with([inspection], Config))#{activation => explicit_start}),
+    StaticBoundary = hls_protocol_boundary:descriptor(BoundaryPlan),
+    Application = bind(Transport, StaticBoundary, Device, Host, Hardware),
+    #{files := BoundaryFiles, result := #{boundary := Boundary}} =
+        hls_protocol_boundary:emit(BoundaryPlan),
+    Deployment = deployment(Application, Transport, Boundary, BoundaryFiles, Device),
     Binding=maps:get(Device,maps:get(devices,Deployment)),
     GatewayFiles = hls_generated_files:prefix("application", xls_protocol_application:emit(Binding)),
     Generated = hls_generated_files:merge([BoundaryFiles, GatewayFiles, #{
@@ -39,16 +43,24 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
       result => Deployment};
 emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_config:read(Filename)).
 
-%% Bind the same source-checked codecs used by framed deployments to one gateway identity.
--spec deployment(map(),map(),hls_generated_files:files(),term(),1..65535,map()) -> map().
-deployment(Plan=#{whole_control:=Control,bundle:=Bundle=#{topology:=#{actors:=Actors,externals:=Externals}}},
-        Boundary=#{activation:=explicit_start,externals:=Outputs},Files,Device,Host,Hardware) ->
+%% Validate host codecs and external numbering against the checked interface before rendering.
+-spec bind(map(), map(), term(), 1..65535, map()) -> map().
+bind(#{whole_control := Control, bundle := Bundle = #{topology := #{actors := Actors, externals := Externals}}},
+        Boundary = #{activation := explicit_start, externals := Outputs}, Device, Host, Hardware) ->
     ok = hls_protocol_control:check_boundary(Hardware, Boundary),
-    Ids=[iolist_to_binary(io_lib:format("~0tp",[Id]))||#{id:=Id}<-Externals],
-    Ids=[Id||#{id:=Id}<-Outputs],
-    Owners=maps:from_list([{Id,Device}||#{id:=Id}<-Actors]),
-    Application=#{devices:=#{Device:=Raw}}=hls_protocol_application_binding:bind(Bundle,Control,Owners,#{Device=>Host}),
-    Binding = Raw#{control_adapter => Hardware},
-    Content=hls_protocol_identity:boundary(Plan,Files),
-    Identity=crypto:hash(sha256,term_to_binary({source_protocol_application,4,Content,Boundary,Device,Binding},[deterministic])),
-    Application#{devices:=#{Device=>Binding#{identity=>Identity}},source_boundary=>Boundary,eligible=>false}.
+    Ids = [iolist_to_binary(io_lib:format("~0tp", [Id])) || #{id := Id} <- Externals],
+    Ids = [Id || #{id := Id} <- Outputs],
+    Owners = maps:from_list([{Id, Device} || #{id := Id} <- Actors]),
+    Application = #{devices := #{Device := Binding}} =
+        hls_protocol_application_binding:bind(Bundle, Control, Owners, #{Device => Host}),
+    Application#{devices := #{Device => Binding#{control_adapter => Hardware}}}.
+
+%% Identity covers the emitted boundary and exact source files after all bindings are checked.
+-spec deployment(map(), map(), map(), hls_generated_files:files(), term()) -> map().
+deployment(Application = #{devices := Devices}, Transport, Boundary, Files, Device) ->
+    Binding = maps:get(Device, Devices),
+    Content = hls_protocol_identity:boundary(Transport, Files),
+    Identity = crypto:hash(sha256, term_to_binary(
+        {source_protocol_application, 4, Content, Boundary, Device, Binding}, [deterministic])),
+    Application#{devices := #{Device => Binding#{identity => Identity}},
+        source_boundary => Boundary, eligible => false}.
