@@ -79,22 +79,11 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
                       ProfileDimension("ERL_HLS_PHI_PROFILE_HEIGHT")],
             planes => ProfilePlanes, shards => ProfileShardCount
         }),
-        ok = file:write_file(filename:join(Stage,"phi_decoder_profile.json"),
-            json:encode(phi_decoder_profile:manifest(ProfileConfig))),
-        ProfilePlan = hls_topology:normalize(
-            phi_decoder_profile_topology:topology(ProfileConfig)
-        ),
-        ProfilePhysical =
-            (phi_decoder_profile_topology_dslx:profile(
-                ProfileConfig
-            ))#{
-                effect_window_partition => ProfileEffectWindowPartition
-            },
+        #{files := ProfileFiles, result := #{requirements := ProfileRequirements}} =
+            phi_decoder_profile_build:emit(ProfileConfig,
+                #{effect_window_partition => ProfileEffectWindowPartition}),
         ArtifactRequirementMaps = [
-            xls_shared_topology_dslx:artifact_requirements(
-                ProfilePlan,
-                ProfilePhysical
-            ),
+            ProfileRequirements,
             xls_shared_topology_dslx:artifact_requirements(
                 PhiNoisePlan,
                 PhiNoisePhysical
@@ -118,10 +107,8 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
                 _ -> error({mixed_staged_actor_artifacts, Module, Modes})
             end
         end,
-        PhiHalo = xls_shared_parse:to_xls(
-            "src/examples/phi_decoder/phi_halo_cell.erl",
-            #{shared_service => SharedServiceFor(phi_halo_cell)}
-        ),
+        %% Shared staging must agree with the already prepared profile actors.
+        [_ = SharedServiceFor(Module) || Module <- maps:keys(ProfileRequirements)],
         PhenomData = xls_shared_parse:to_xls(
             "src/examples/phi_decoder/phenom_data_cell.erl",
             #{shared_service => SharedServiceFor(phenom_data_cell)}
@@ -130,10 +117,6 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
             "src/examples/phi_decoder/phenom_syndrome_cell.erl",
             #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
         ),
-        PhiSyndromeReplay = xls_shared_parse:to_xls(
-            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl",
-            #{shared_service => SharedServiceFor(phi_syndrome_replay_cell)}
-        ),
         PhiNoiseTopology = xls_shared_topology_dslx:emit(
             PhiNoisePlan,
             PhiNoisePhysical
@@ -141,13 +124,6 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         PhiNoiseTopologySmoke = xls_shared_topology_dslx:emit(
             PhiNoiseSmokePlan,
             PhiNoiseSmokePhysical
-        ),
-        PhiDecoderProfile = xls_shared_topology_dslx:emit(
-            ProfilePlan,
-            ProfilePhysical
-        ),
-        PhiDecoderProfileTop = phi_decoder_profile_top_v:to_verilog(
-            ProfileConfig
         ),
         PhiBridgeDistance = case os:getenv(
             "ERL_HLS_PHI_BRIDGE_DISTANCE"
@@ -167,14 +143,13 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         PhiMemoryDebugTop = phi_memory_debug_top_v:to_verilog(
             GatewayProfile
         ),
-        ok = file:write_file(filename:join(Stage, "phi_halo_cell.x"), PhiHalo),
+        maps:foreach(fun(Name, Data) ->
+            ok = file:write_file(filename:join(Stage, Name), Data)
+        end, ProfileFiles),
         ok = file:write_file(filename:join(Stage, "phenom_data_cell.x"), PhenomData),
         ok = file:write_file(filename:join(Stage, "phenom_syndrome_cell.x"), PhenomSyndrome),
-        ok = file:write_file(filename:join(Stage, "phi_syndrome_replay_cell.x"), PhiSyndromeReplay),
         ok = file:write_file(filename:join(Stage, "phi_noise_topology.x"), PhiNoiseTopology),
         ok = file:write_file(filename:join(Stage, "phi_noise_topology_smoke.x"), PhiNoiseTopologySmoke),
-        ok = file:write_file(filename:join(Stage, "phi_decoder_profile_topology.x"), PhiDecoderProfile),
-        ok = file:write_file(filename:join(Stage, "phi_decoder_profile_top.v"), PhiDecoderProfileTop),
         ok = file:write_file(filename:join(Stage, "phi_memory_gateway.x"), PhiMemoryGateway),
         ok = file:write_file(filename:join(Stage, "phi_memory_debug_top.v"), PhiMemoryDebugTop),
         halt().'

@@ -11,7 +11,7 @@ plumbing is derived from the same normalized physical profile that emits the
 DSLX topology, keeping profiling fixtures independent of scheduler widths.
 """.
 
--export([to_verilog/0, to_verilog/1, to_verilog/2]).
+-export([to_verilog/0, to_verilog/1, to_verilog/2, emit/3]).
 
 -doc "Renders the checked three-shard decoder-only wrapper.".
 -spec to_verilog() -> binary().
@@ -27,7 +27,12 @@ to_verilog(ProfileOptions) ->
 -spec to_verilog(pos_integer() | map(),map()) -> binary().
 to_verilog(ProfileOptions, Options) ->
     Config = #{planes := Planes} = phi_decoder_profile:normalize(ProfileOptions),
-    Plan = #{groups := Groups} = phi_decoder_profile_topology_dslx:scheduler_plan(Config),
+    Plan = phi_decoder_profile_topology_dslx:scheduler_plan(Config),
+    emit(Planes, Plan, Options).
+
+-doc "Renders a wrapper from the selected planes and their matching normalized scheduler plan, without rebuilding topology or placement. Options selects observation aliases. This is a trusted in-process build boundary; retain the profile's plane order and scheduler unchanged.".
+-spec emit([x | z], hls_scheduler_plan:plan(), map()) -> binary().
+emit(Planes, Plan = #{groups := Groups}, Options) ->
     Bindings = xls_scheduler_ram_v:bindings(Plan),
     {DebugWires, DebugPorts} = case xls_scheduler_observation:enabled(Options) of
         false -> {[], []};

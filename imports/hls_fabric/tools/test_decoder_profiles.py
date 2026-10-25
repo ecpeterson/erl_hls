@@ -71,8 +71,7 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     for directory in (ROOT / "priv/xls/lib", PUBLIC / "priv/xls/lib", PUBLIC / "priv/xls/fabric"):
         for path in directory.glob("*.x"):
             shutil.copyfile(path, stage / path.name)
-    for path in (PUBLIC / "src/examples/phi_decoder/phi_field.x", PUBLIC / "priv/rtl/hls_1r1w_ram.v",
-                 ROOT / "tools/phi_scheduler_rams.sh"):
+    for path in (PUBLIC / "src/examples/phi_decoder/phi_field.x", PUBLIC / "priv/rtl/hls_1r1w_ram.v"):
         shutil.copyfile(path, stage / path.name)
     command(["iverilog", "-g2012", "-tnull", "-i", stage / "phi_decoder_profile_top.v",
              stage / "hls_1r1w_ram.v"], stage, stage / "shell-check.log")

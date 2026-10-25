@@ -1,4 +1,5 @@
 -module(hls_actor_debug_dslx).
+-moduledoc "Small scheduler-observation fixtures and adapters to the production decoder-profile source builder.".
 -export([write/1, write/2, write/3, fixture/1, artifacts/1, artifacts/2, projection/1]).
 
 -doc "Builds the selected test topology and its matching execution profile.".
@@ -94,17 +95,11 @@ write(Stage) -> write(Stage, #{}).
 -spec write(atom() | binary() | [atom() | [any()] | char()],map()) -> 'ok' | {'error',atom()}.
 write(Stage, Options) -> write(small, Stage, Options).
 
--doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
+-doc "Writes the selected fixture's matching actors, topology, RAM wrapper and observation projection into an existing stage. Phi uses the production profile builder; existing generated files are replaced.".
 -spec write('aggregate' | 'direct_mailbox' | 'direct_reduction' | 'mailbox' | 'mailbox_mixed' | 'phi' | 'reduction' | 'small',atom() | binary() | [atom() | [any()] | char()],map()) -> 'ok' | {'error',atom()}.
 write(phi, Stage, Options) ->
-    {Plan, Specs} = fixture(phi),
-    ok = write_file(Stage, "phi_decoder_profile.json", json:encode(phi_decoder_profile:manifest(#{}))),
-    Artifacts = artifacts(phi, Options),
-    maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", Actor) end, Artifacts),
-    ok = write_file(Stage, "phi_decoder_profile_topology.x", xls_shared_topology_dslx:emit(Plan,
-        maps:merge(phi_decoder_profile_topology_dslx:profile(), Options))),
-    ok = write_file(Stage, "phi_decoder_profile_top.v", phi_decoder_profile_top_v:to_verilog(3, Options)),
-    write_file(Stage, "phi-actors.json", json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts, Options)));
+    #{files := Files} = phi_decoder_profile_build:emit(#{}, Options),
+    maps:foreach(fun(Name, Bytes) -> ok = write_file(Stage, Name, Bytes) end, Files);
 write(Kind, Stage, Options0) ->
     Options = case Kind of
         aggregate -> Options0#{reduction_placements => #{cell => source_fragments}};

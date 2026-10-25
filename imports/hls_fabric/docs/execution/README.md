@@ -29,6 +29,10 @@ Open hardware sessions with `hls_shared_observation:open/2`, then bind actors us
 
 `tools/prepare_xls_sim.sh STAGE` combines common compiler assets with shared actor artifacts, RAM bindings and private profiler hooks. The common VPI transport supplies accepted-edge samples; `test/rtl/xls_scheduler_profile.h` adds passive scheduler telemetry. Profile event meaning, SVG/Perfetto rendering and measurement commands remain in [profiling](../profiling.md).
 
+For the decoder-only profile, `phi_decoder_profile_build:emit(Config, Options)` returns `#{files => Files, result => Result}` without writing files. `Config` selects geometry, planes and shards; `Options` selects observations and effect-window partitioning. The simulation preparation script and debug/test fixtures use this same builder for actor DSLX, topology, RAM wrapper and observation metadata.
+
+Its `phi_decoder_profile.inputs.json` binds the generated sources, wrapper and profile metadata by SHA-256 and carries the XLS RAM configurations from the scheduler bindings. A separate RAM recipe fingerprint identifies the compiled renderer and channel-name authority, independently of the chosen geometry and actor sources, for experiment comparisons. `compile_phi_decoder_profile.py` verifies those inputs before passing the configurations to the common XLS executor; it does not interpret DSLX to recover placement. Regenerate an old prepared stage before compiling it. The manifest checks consistency of trusted local build output, not authenticity or hardware equivalence.
+
 All board experiments now live under `experiments/`. Existing report paths are preserved there. [CI coverage](../ci.md) separates routine backend witnesses from expensive complete-application measurements.
 
 ## Maintenance boundary

@@ -12,12 +12,32 @@ from a normalized scheduler plan, then renders declarations, application port
 bindings, and `hls_1r1w_ram` instances for a surrounding Verilog shell.
 """.
 
--export([bindings/1, wires/1, application_ports/1, instances/2, mailbox_stride/2, assets/1]).
+-export([bindings/1, configurations/1, wires/1, application_ports/1, instances/2, mailbox_stride/2, assets/1]).
 
 -doc "Derives indexed RAM bindings from a normalized scheduler plan.".
 -spec bindings(hls_scheduler_plan:plan()) -> [map()].
 bindings(#{groups := Groups}) ->
     [binding(Index, Group) || {Index, Group} <- lists:enumerate(0, Groups)].
+
+-doc "Returns the XLS --ram_configurations value for these ordered physical bindings. Uses the scheduler DSLX channel interface for state, mailbox and optional masked-gather stores; indices need not be contiguous. An empty binding list returns empty IO data.".
+-spec configurations([map()]) -> iodata().
+configurations(Bindings) ->
+    lists:join(",", lists:append([binding_configurations(Binding) || Binding <- Bindings])).
+
+%% The wrapper bank names and DSLX endpoint order describe the same physical stores.
+-spec binding_configurations(map()) -> [iodata()].
+binding_configurations(Binding = #{index := Index}) ->
+    Gather = maps:is_key(gather_members, Binding),
+    Stores = ["state", "mailbox"] ++ case Gather of true -> ["gather"]; false -> [] end,
+    Names = xls_scheduler_ram_dslx:names(all, ["_", stem(Index), "_"], #{gather_collection => Gather}),
+    configurations(stem(Index), Stores, Names).
+
+%% XLS names each bank followed by its read request/response and write request/response.
+-spec configurations(iodata(), [string()], [iodata()]) -> [iodata()].
+configurations(_, [], []) -> [];
+configurations(Stem, [Store | Stores], [ReadRequest, ReadResponse, WriteRequest, WriteResponse | Names]) ->
+    [[Stem, "_", Store, ":1R1W:", lists:join(":", [ReadRequest, ReadResponse, WriteRequest, WriteResponse])]
+        | configurations(Stem, Stores, Names)].
 
 -doc "Declares every wire needed between an XLS application and its RAMs.".
 -spec wires([map()]) -> iolist().

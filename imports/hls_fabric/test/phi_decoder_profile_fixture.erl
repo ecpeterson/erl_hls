@@ -1,23 +1,13 @@
 -module(phi_decoder_profile_fixture).
+-moduledoc "Decoder-profile source preparation and a finite independent BEAM oracle for RTL comparison.".
 -export([write/1, oracle/1]).
 
-%% The small integration runner stages only this profile's dependencies.
--doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
--spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
+-doc "Writes the production profile source bundle into an existing test stage using config.term. Existing generated files are replaced for this reusable fixture; the BEAM oracle remains separate.".
+-spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, [Config]} = file:consult(filename:join(Stage, "config.term")),
-    Plan = hls_topology:normalize(phi_decoder_profile_topology:topology(Config)),
-    Profile = #{scheduler_groups := Specs} = phi_decoder_profile_topology_dslx:profile(Config),
-    Artifacts = maps:map(fun(Module, Options) ->
-        xls_shared_parse:to_xls("src/examples/phi_decoder/" ++ atom_to_list(Module) ++ ".erl", Options)
-    end, xls_shared_topology_dslx:artifact_requirements(Plan, Profile)),
-    maps:foreach(fun(Module, Source) ->
-        write(Stage, atom_to_list(Module) ++ ".x", Source)
-    end, Artifacts),
-    write(Stage, "phi_decoder_profile_topology.x", xls_shared_topology_dslx:emit(Plan, Profile)),
-    write(Stage, "phi_decoder_profile_top.v", phi_decoder_profile_top_v:to_verilog(Config)),
-    write(Stage, "phi_decoder_profile.json", json:encode(phi_decoder_profile:manifest(Config))),
-    write(Stage, "phi-actors.json", json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts))).
+    #{files := Files} = phi_decoder_profile_build:emit(Config, #{}),
+    maps:foreach(fun(Name, Bytes) -> ok = write(Stage, Name, Bytes) end, Files).
 
 %% Independent BEAM actor execution: compare per-actor event order/content,
 %% without imposing a global order on the concurrently merged event stream.
