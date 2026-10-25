@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-import topology_debug as topology
+from erl_hls_tools import topology_debug as topology
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 import subprocess
 
-from topology_debug import quote
-from measure_topology_debug import cell_counts
+from erl_hls_tools.topology_debug import quote
+from erl_hls_tools.measure_topology_debug import cell_counts
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import defaultdict
 import subprocess
 
-from hls_profile import counter_name, display_duration
+from erl_hls_tools.hls_profile import counter_name, display_duration
 
 
 def verify(processor: Path, profile: dict, trace: Path) -> dict:

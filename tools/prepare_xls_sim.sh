@@ -193,5 +193,5 @@ cp "$stage/test_src/regsvc_cpu_tests.P" \
 
 
 for helper in compile_xls.py; do
-    cp "$project_root/tools/$helper" "$stage/$helper"
+    cp "$project_root/tools/erl_hls_tools/$helper" "$stage/$helper"
 done

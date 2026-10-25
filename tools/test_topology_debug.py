@@ -6,9 +6,9 @@ import subprocess
 import tempfile
 import unittest
 
-import topology_debug as topology
-from measure_topology_debug import cell_counts
-import topology_debug_services as services
+from erl_hls_tools import topology_debug as topology
+from erl_hls_tools.measure_topology_debug import cell_counts
+from erl_hls_tools import topology_debug_services as services
 
 ROOT = Path(__file__).resolve().parents[1]
 
