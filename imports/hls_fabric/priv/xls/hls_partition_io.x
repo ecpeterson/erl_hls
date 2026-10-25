@@ -22,21 +22,6 @@ pub struct ReceiveState {
   poisoned: bool,
 }
 
-// Read the explicit word ABI, independent of DSLX's aggregate bit ordering.
-fn spatial(payload: bits[256]) -> hls_spatial_router::SpatialFrame {
-  hls_spatial_router::SpatialFrame {
-    rectangle: hls_spatial_router::Rectangle {
-      x0: payload[0+:u16], y0: payload[16+:u16],
-      x1: payload[32+:u16], y1: payload[48+:u16],
-    },
-    target: payload[64+:u2],
-    frame: axis::Frame {
-      header: axis::header_from_bits(payload[96+:u32]),
-      payload: payload[128+:bits[96]],
-    },
-  }
-}
-
 // Accept only complete frames from this binding. Rejection drains to TLAST,
 // including overlong packets; saturating assembly cannot wrap back to valid.
 pub fn receive_ordered_step(
@@ -48,12 +33,12 @@ pub fn receive_ordered_step(
     seen:state.seen,bad:state.bad,full:false },beat.word,beat.tlast,host,service);
   let next = ReceiveState { stage:assembled.stage,header:axis::header_from_bits(assembled.header),
     payload:assembled.payload,seen:assembled.seen,bad:assembled.bad,..state };
-  let frame = spatial(next.payload);
+  let decoded = rectangle::decode(next.payload, state.header.payload_words);
   let complete = beat.tlast && state.stage == u2:2 && !next.bad && !state.poisoned;
   let attach = complete && !state.attached && state.header.op == u8:1 &&
     state.header.payload_words == u8:8 && next.payload == identity;
   let control = complete && state.attached && state.header.op == u8:2 &&
-    rectangle::decode(next.payload,state.header.payload_words).valid;
+    decoded.valid;
   let start = complete && explicit_start && state.attached && !state.start_requested &&
     state.header.op == u8:3 && state.header.payload_words == u8:1 && next.payload == bits[256]:0;
   let fault = beat.tlast && !state.poisoned && !(attach || control || start);
@@ -62,7 +47,7 @@ pub fn receive_ordered_step(
       start_requested: state.start_requested || start,
       poisoned: state.poisoned || fault, ..zero!<ReceiveState>() }
   } else { next };
-  (next, attach, control, start, fault, frame)
+  (next, attach, control, start, fault, decoded.frame)
 }
 
 // Automatic-activation gateways reject start; their existing command ABI is unchanged.

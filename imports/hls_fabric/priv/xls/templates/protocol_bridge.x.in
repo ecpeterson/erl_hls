@@ -73,7 +73,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   // Apply accepted transfers to the child network exactly once.
   let network = boundary::tick(s.network, boundary::Inputs {
     ingress_valid: step.output.control_valid,
-    ingress_data: command.ingress,
+    ingress_data: control::ingress(command.frame),
     start_valid: step.output.start_valid,
     @@NETWORK_INPUTS@@
     ..sample

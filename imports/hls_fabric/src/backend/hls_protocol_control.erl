@@ -99,5 +99,6 @@ rectangle_hardware() ->
       activation_module=><<"hls_partition_activation">>,
       rtl=>[#{owner=>fabric,file=><<"priv/rtl/hls_partition_activation.sv">>}],
       dependencies=>[#{owner=>fabric,file=>F}||F<-[<<"priv/xls/hls_partition_io.x">>,
-          <<"priv/xls/lib/protocol_framing.x">>,<<"priv/xls/lib/protocol_rectangle.x">>]] ++
+          <<"priv/xls/lib/protocol_framing.x">>,<<"priv/xls/lib/protocol_rectangle.x">>,
+          <<"priv/xls/lib/protocol_envelope.x">>]] ++
           [#{owner=>compiler,file=>F}||F<-[<<"priv/xls/lib/axis.x">>,<<"priv/xls/fabric/hls_spatial_router.x">>]]}.

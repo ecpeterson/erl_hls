@@ -16,20 +16,20 @@ command(Session,Control) when Session>0,Session<(1 bsl 64),byte_size(Control)>=4
 
 -doc "Encodes one reserved actor data packet or exact host-admission ACK. Sequence exhaustion, link/slot bounds and zero ACK payload are checked before writing. This does not reserve credits or authorize replay.".
 -spec packet(map()) -> {hls_fabric:header(),binary()}.
-packet(#{kind:=Kind,session:=Session,sequence:=Seq,link:=Link,slot:=Slot,frame:=Frame})
+packet(Packet = #{kind:=Kind,session:=Session,sequence:=Seq,link:=Link,slot:=Slot,frame:=Frame})
         when (Kind=:=1 orelse Kind=:=2),Session>0,Session<(1 bsl 64),Seq>=0,Seq<16#ffffffff,
              Link>=0,Link<65536,Slot>=0,Slot<256,Frame>=0,Frame<(1 bsl 128),
              (Kind=:=1 orelse Frame=:=0) ->
-    Value=(Kind bsl 248) bor (Session bsl 184) bor (Seq bsl 152) bor (Link bsl 136) bor (Slot bsl 128) bor Frame,
-    {{4,0,0},<<Value:256/little>>}.
+    {{4,0,0},hls_protocol_envelope:pack_packet(Packet)}.
 
 -doc "Decodes a complete broker frame after the owner checks its reserved route. Exact session rejects stale management and external events. Actor sequence, kind, route, credit and canonical payload checks belong to the source-bound queue/session owner; the transport envelope alone is not authentication.".
 -spec event(pos_integer(),hls_fabric:header(),binary()) -> attached|started|{packet,map()}|{external,byte(),non_neg_integer()}.
 event(Session,{16#81,0,0},<<Session:64/little>>) -> attached;
 event(Session,{16#83,0,0},<<Session:64/little,0:32>>) -> started;
-event(Session,{16#84,0,0},<<Value:256/little>>) ->
-    <<Kind:8,Session:64,Seq:32,Link:16,Slot:8,Frame:128>> = <<Value:256>>,
+event(Session,{16#84,0,0},Bytes) ->
+    Packet = #{kind := Kind, session := Session, sequence := Seq, frame := Frame} =
+        hls_protocol_envelope:unpack_packet(Bytes),
     true=(Kind=:=1 orelse Kind=:=2) andalso Seq<16#ffffffff,
     true=Kind=:=1 orelse Frame=:=0,
-    {packet,#{kind=>Kind,session=>Session,sequence=>Seq,link=>Link,slot=>Slot,frame=>Frame}};
+    {packet,Packet};
 event(Session,{16#85,Index,0},<<Session:64/little,Frame:128/little>>) -> {external,Index,Frame}.

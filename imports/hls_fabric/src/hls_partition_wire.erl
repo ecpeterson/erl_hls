@@ -70,8 +70,9 @@ command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds,
 -spec control_payload(bitstring()) -> binary().
 control_payload(<<X0:16, Y0:16, X1:16, Y1:16, Kind:2, Words:8, 0:16, Tag:8, Payload:96>>)
         when Words =< 3 ->
-    <<X0:16/little, Y0:16/little, X1:16/little, Y1:16/little,
-        Kind:32/little, Words:8, 0:16, Tag:8, Payload:(Words*32)/little>>.
+    Header = binary:decode_unsigned(<<Words:8, 0:16, Tag:8>>, little),
+    hls_protocol_envelope:pack_rectangle(#{x0 => X0, y0 => Y0, x1 => X1, y1 => Y1,
+        target => Kind, header => Header, payload => Payload}, Words).
 
 -doc "Decodes a bound external record or canonical application started reply, rejecting wrong routes, headers, lengths and nonzero codec padding. The stream client checks that activation was requested.".
 -spec event(map(), hls_fabric:route(), hls_fabric:header(), binary()) -> {term(), tuple()}.

@@ -3,16 +3,14 @@
 // One RX frame and one immutable TX frame. No replay after ambiguous delivery.
 
 import protocol_framing as framing;
+import protocol_envelope as envelope;
 
 // Canonical remote data or a final-delivery acknowledgment/credit.
-pub struct Packet { kind: u8, session: u64, sequence: u32, link: u16, slot: u8, frame: bits[128] }
+pub type Packet = envelope::Packet;
 // Exact ABI: low bits hold the ordinary destination frame.
-pub fn unpack(value: bits[256]) -> Packet {
-  Packet { kind: value[248+:u8], session: value[184+:u64], sequence: value[152+:u32],
-    link: value[136+:u16], slot: value[128+:u8], frame: value[0+:bits[128]] }
-}
-// The Erlang wire owner uses the same little-endian word layout.
-pub fn pack(p: Packet) -> bits[256] { p.kind ++ p.session ++ p.sequence ++ p.link ++ p.slot ++ p.frame }
+pub fn unpack(value: bits[256]) -> Packet { envelope::unpack_packet(value) }
+// The shared schema supplies the wire layout used by the Erlang peer.
+pub fn pack(p: Packet) -> bits[256] { envelope::pack_packet(p) }
 // One selected native source, observed before any retirement on this edge.
 pub struct Offer { valid: bool, slot: u8, frame: bits[128] }
 // Credit identity and native free observation; never a duplicated payload.

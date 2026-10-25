@@ -32,7 +32,7 @@ emit(#plan{boundary = BoundaryPlan,
     Libraries = [begin
         {ok, Bytes} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls/lib", File])),
         #{file => File, sha256 => hls_generated_files:hash(Bytes)}
-    end || File <- [<<"protocol_bridge.x">>, <<"protocol_framing.x">>] ++ maps:get(bridge_libraries, Hardware)],
+    end || File <- [<<"protocol_bridge.x">>, <<"protocol_framing.x">>, <<"protocol_envelope.x">>] ++ maps:get(bridge_libraries, Hardware)],
     Content = hls_protocol_identity:boundary(Transport, BoundaryFiles),
     Identity = crypto:hash(sha256, term_to_binary({source_partition_bridge, 4, Host, Service,
         Hardware, Boundary, Content, Libraries}, [deterministic])),

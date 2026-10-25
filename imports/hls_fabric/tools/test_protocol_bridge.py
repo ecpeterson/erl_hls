@@ -5,7 +5,7 @@ import json
 import re
 import subprocess
 import time
-from backend_paths import ROOT, erlang_paths, erlang_environment
+from backend_paths import ROOT, erlang_paths, erlang_environment, application_directory
 from protocol_test_build import compile_build, compile_clock, emit_command
 from backend_commands import digest, run
 
@@ -128,7 +128,9 @@ def area(wrapper: Path, rtl: list[Path], stage: Path) -> None:
 def component(xls: Path, stage: Path) -> None:
     """Measure the preregistered controller population including its selection/access logic."""
     source=ROOT/'test/rtl/protocol_bridge_component.x'
-    compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',[ROOT/'priv/xls/lib'])
+    compiler=application_directory('erl_hls','test')
+    imports=[ROOT/'priv/xls/lib',compiler/'priv/xls/lib',compiler/'priv/xls/fabric']
+    compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',imports)
     script=stage/'map.ys';netlist=stage/'mapped.json'
     script.write_text('read_verilog "'+str(stage/'core.v')+'"\n'
         'synth_xilinx -family xc7 -top bridge_component -flatten -nowidelut\nwrite_json "'+str(netlist)+'"\n')
