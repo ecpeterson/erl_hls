@@ -3,10 +3,9 @@ from pathlib import Path
 from types import SimpleNamespace
 import argparse
 import json
-import os
-from backend_paths import ROOT, erlang_paths
+from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
-from compile_protocol_network import compile_network
+from protocol_test_build import compile_build, emit_command
 from backend_commands import run
 from test_local_protocol import prove
 
@@ -31,7 +30,7 @@ def emit(stage: Path, members: int, shared: bool) -> Path:
     config.write_text('#{sources=>[{"test/hls_protocol_arithmetic_fixture.erl",[]}],'
         'topology=>{hls_protocol_arithmetic_fixture,topology,[' + str(members) + ']},actor_limit=>3' + group + '}.\n')
     build = stage / "build"
-    run(["escript", "tools/emit_protocol_network.escript", config, build], stage, "emit")
+    run(emit_command("network", config, build), stage, "emit", env=erlang_environment("test"))
     return build
 
 
@@ -112,12 +111,11 @@ def main() -> None:
     parser.add_argument("--cases", nargs="+", choices=["local3", "shared2", "shared3"], default=["local3", "shared2", "shared3"])
     args = parser.parse_args(); args.stage.mkdir()
     run(["rebar3", "as", "test", "compile"], args.stage, "build-backend")
-    os.environ["ERL_AFLAGS"] = "-pa " + " ".join('"' + str(p) + '"' for p in erlang_paths("test"))
     results = {}
     for case in args.cases:
         members = int(case[-1]); part = args.stage / case
         build = emit(part, members, case.startswith("shared"))
-        compile_network(args.xls, build)
+        compile_build(args.xls, build, profile="test")
         simulate(build, part, members)
         results[case] = mapped_cost(build, part)
         if case == "shared3": action_contract(args.xls, build, part)

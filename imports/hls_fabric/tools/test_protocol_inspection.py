@@ -7,9 +7,8 @@ import subprocess
 import time
 from backend_paths import ROOT, erlang_paths
 from compiler_paths import PUBLIC
-from compile_protocol_transport import digest
 from emit_protocol_repetition import build_application
-from backend_commands import run
+from backend_commands import digest, run
 from test_local_protocol import prove
 from test_protocol_application import simulator_source
 from test_protocol_repetition import compare

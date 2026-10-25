@@ -7,8 +7,7 @@ from types import SimpleNamespace
 
 from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
-from compile_protocol_network import compile_network
-from compile_protocol_transport import compile_clock
+from protocol_test_build import compile_build, compile_clock, emit_command
 from backend_commands import run
 from test_local_protocol import prove
 
@@ -129,14 +128,14 @@ def main() -> None:
         config=stage/(key+'.config');configuration(config,'unsupported','['+key+']')
         output=stage/key
         with (stage/(key+'.log')).open('x') as log:
-            result=subprocess.run(['escript','tools/emit_protocol_network.escript',str(config),str(output)],
+            result=subprocess.run(emit_command('network', config, output),
                 cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,timeout=120,env=erlang_environment('default'))
         assert result.returncode!=0 and 'unsupported_protocol_ingress' in (stage/(key+'.log')).read_text()
         assert not (output/'network').exists()
     config=stage/'isolated.config';configuration(config,'isolated')
     isolated=stage/'isolated'
-    run(['escript','tools/emit_protocol_network.escript',config,isolated],stage,'isolated-build', env=erlang_environment('default'))
-    compile_network(args.xls,isolated)
+    run(emit_command('network', config, isolated),stage,'isolated-build', env=erlang_environment('default'))
+    compile_build(args.xls,isolated)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'interrupted_incarnations':1,'outputs_per_complete_incarnation':39,'final_sum':60,
         'negative_wiring':2,'unsupported_boundaries':['multiple_ingresses'],

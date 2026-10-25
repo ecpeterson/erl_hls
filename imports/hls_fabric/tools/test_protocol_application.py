@@ -5,8 +5,7 @@ import json
 import subprocess
 import time
 from backend_paths import ROOT, erlang_paths
-from backend_commands import run
-from compile_protocol_transport import digest
+from backend_commands import digest, run
 
 
 def witness(build: Path, binary: Path, ebin: Path, stage: Path) -> None:

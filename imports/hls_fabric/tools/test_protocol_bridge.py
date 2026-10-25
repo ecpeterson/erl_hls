@@ -6,9 +6,8 @@ import re
 import subprocess
 import time
 from backend_paths import ROOT, erlang_paths, erlang_environment
-from compile_protocol_bridge import compile_bridge
-from compile_protocol_transport import digest
-from backend_commands import run
+from protocol_test_build import compile_build, compile_clock, emit_command
+from backend_commands import digest, run
 
 
 def build(xls: Path, stage: Path) -> list[Path]:
@@ -20,8 +19,8 @@ def build(xls: Path, stage: Path) -> list[Path]:
             '{"test/hls_protocol_inbox_fixture.erl",[]}],topology=>{hls_protocol_network_fixture,framed,[]},'
             'actor_limit=>3,control=>rectangle,activation=>explicit_start,native_actors=>'+actors+',host=>1,service=>'+str(7+10*i)+'}.\n')
         role=stage/f'role{i}'
-        run(['escript','tools/emit_protocol_bridge.escript',config,role],stage,f'emit-{i}', env=erlang_environment("test"))
-        compile_bridge(xls,role);roles.append(role)
+        run(emit_command('bridge', config, role),stage,f'emit-{i}', env=erlang_environment("test"))
+        compile_build(xls,role,profile='test');roles.append(role)
     return roles
 
 
@@ -128,7 +127,6 @@ def area(wrapper: Path, rtl: list[Path], stage: Path) -> None:
 
 def component(xls: Path, stage: Path) -> None:
     """Measure the preregistered controller population including its selection/access logic."""
-    from compile_protocol_transport import compile_clock
     source=ROOT/'test/rtl/protocol_bridge_component.x'
     compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',[ROOT/'priv/xls/lib'])
     script=stage/'map.ys';netlist=stage/'mapped.json'

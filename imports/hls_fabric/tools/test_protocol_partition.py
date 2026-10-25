@@ -8,7 +8,7 @@ import subprocess
 
 from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
-from compile_protocol_network import compile_network
+from protocol_test_build import compile_build, emit_command
 from backend_commands import run
 from test_local_protocol import prove
 
@@ -21,8 +21,8 @@ def build(xls: Path, stage: Path, index: int, actors: str) -> Path:
         '{hls_protocol_network_fixture,partitioned,[]},actor_limit => 3,'
         'activation => explicit_start,native_actors => '+actors+'}.\n')
     role=stage/f'role{index}'
-    run(['escript','tools/emit_protocol_network.escript',config,role],stage,f'emit-{index}', env=erlang_environment("test"))
-    compile_network(xls,role)
+    run(emit_command('network', config, role),stage,f'emit-{index}', env=erlang_environment("test"))
+    compile_build(xls,role,profile='test')
     return role
 
 

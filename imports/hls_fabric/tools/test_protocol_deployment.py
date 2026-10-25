@@ -8,8 +8,7 @@ from backend_paths import ROOT, erlang_paths
 from emit_protocol_repetition import build_application
 from test_protocol_bridge import pair
 from test_protocol_repetition import compare
-from compile_protocol_transport import digest
-from backend_commands import run
+from backend_commands import digest, run
 
 
 def live(build: Path, binary: Path, ebin: Path, stage: Path, incarnation: int) -> dict:

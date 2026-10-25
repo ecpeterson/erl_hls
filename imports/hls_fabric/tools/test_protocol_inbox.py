@@ -11,7 +11,7 @@ from compiler_paths import PUBLIC
 from backend_commands import run
 from test_local_protocol import prove
 from compile_local_actor import compile_owner
-from compile_protocol_transport import compile_transport
+from protocol_test_build import compile_build, emit_command
 
 
 def simulate(xls: Path, fixture: Path, receiver: Path, stage: Path) -> None:
@@ -149,7 +149,7 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
             continue
         seen.add(shape); converted+=1
         stem=directory.name+'-receiver-'+str(receiver['index'])
-        paths=':'.join(map(str,[ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',
+        paths=':'.join(map(str,[directory/'actors',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',
             PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric',PUBLIC/'src/examples/phi_decoder']))
         run([xls/'ir_converter_main','--top=local_inbox_clock','--warnings_as_errors=false',
              '--dslx_path='+paths,'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],
@@ -168,9 +168,9 @@ def main() -> None:
     config.write_text('#{sources => [{"test/hls_protocol_inbox_fixture.erl",[]}],topology => '
                       '{hls_protocol_inbox_fixture,topology,[]},actor_limit => 3}.\n')
     fixture=stage/'fixture'
-    run(['escript','tools/emit_protocol_transport.escript',config,fixture],stage,'emit', env=erlang_environment('default'))
-    compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver')
-    compile_transport(args.xls,fixture)
+    run(emit_command('transport', config, fixture),stage,'emit', env=erlang_environment('default'))
+    compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver', [fixture/'actors'])
+    compile_build(args.xls,fixture)
     simulate(args.xls,fixture,stage/'receiver',stage)
     selection_checks(args.xls,stage)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,

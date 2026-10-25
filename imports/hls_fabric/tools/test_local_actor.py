@@ -6,6 +6,7 @@ import json
 import subprocess
 
 from backend_paths import ROOT, erlang_environment
+from protocol_test_build import emit_command
 
 
 def run(command: list[str | Path], stage: Path, name: str, accepted: bool = True,
@@ -26,11 +27,19 @@ def manifest(output: Path) -> dict:
     report = json.loads(Path(str(output) + '.json').read_text())
     data = output.read_bytes()
     assert report['dslx_sha256'] == hashlib.sha256(data).hexdigest()
-    assert f"pub type MachineBits = bits[{report['machine_bits']}]".encode() in data
+    declarations = data
+    owner = report.get('owner_import', 'none')
+    if owner != 'none':
+        definition = output.parent / Path(owner['file']).name
+        assert hashlib.sha256(definition.read_bytes()).hexdigest() == owner['dslx_sha256']
+        assert f"import {definition.stem} as source_owner;".encode() in data
+        assert b'pub type MachineBits = source_owner::MachineBits;' in data
+        declarations += definition.read_bytes()
+    assert f"pub type MachineBits = bits[{report['machine_bits']}]".encode() in declarations
     for name in report['function_ports']:
         assert ('pub fn ' + name + '(').encode() in data, name
     for module in report['source_imports']:
-        assert ('import ' + module + ';').encode() in data, module
+        assert ('import ' + module + ';').encode() in declarations, module
     assert report['physical_locality_established'] is False
     assert 'network_runtime' in report['excluded']
     return report
@@ -67,8 +76,8 @@ def main() -> None:
     config = stage / 'transport.config'
     config.write_text('#{sources => [{"test/hls_protocol_capture_fixture.erl",[]},{"test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
     transport = stage / 'transport'
-    # The command-entry escript emits sources only; XLS circuit checks run in the existing transport suite.
-    run(['escript', 'tools/emit_protocol_transport.escript', config, transport], stage, 'transport',
+    # The public CLI emits a source bundle only; RTL checks run in the transport suite.
+    run(emit_command('transport', config, transport), stage, 'transport',
         env=erlang_environment('default'))
     summary = json.loads((transport / 'summary.json').read_text())
     assert summary['actors'] == 3 and summary['actor_runtime'] is False and summary['eligible'] is False
@@ -89,7 +98,8 @@ def main() -> None:
         assert bound == receiver['manifest']
         assert bound['source_plan'] == actor['source_plan']
         assert bound['clock_proc'] == 'local_inbox_clock'
-        assert output.read_bytes().startswith(ordinary)
+        assert bound['owner_import'] == {'file': role['file'],
+            'dslx_sha256': hashlib.sha256(ordinary).hexdigest()}
         expected_files.add(receiver['file'])
     # One shared ordinary definition plus one bound receiver per instance; no extras.
     actual_files = {str(p.relative_to(transport)) for p in (transport / 'actors').glob('*.x')}

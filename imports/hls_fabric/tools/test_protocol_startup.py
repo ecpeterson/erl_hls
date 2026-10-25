@@ -8,8 +8,7 @@ from types import SimpleNamespace
 
 from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
-from compile_protocol_network import compile_network
-from compile_protocol_transport import compile_clock
+from protocol_test_build import compile_build, compile_clock, emit_command
 from test_protocol_network import area
 from backend_commands import run
 from test_local_protocol import prove
@@ -121,9 +120,9 @@ def main() -> None:
     selection_checks(args.xls,stage)
     area(fixture,stage)
     failed=stage/'failed';failed.mkdir();configuration(failed/'config','failing')
-    run(['escript','tools/emit_protocol_network.escript',failed/'config',failed/'fixture'],failed,'emit',
+    run(emit_command('network', failed/'config', failed/'fixture'),failed,'emit',
         env=erlang_environment('default'))
-    compile_network(args.xls,failed/'fixture');simulate(failed/'fixture',failed,failure=True)
+    compile_build(args.xls,failed/'fixture');simulate(failed/'fixture',failed,failure=True)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,
         'reset_interruptions':3,'outputs_per_complete_incarnation':10,'final_sum':8,'real_acknowledgments':4,
         'negative_wiring':2,'source_failure_incarnations':2,

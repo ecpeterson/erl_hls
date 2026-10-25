@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from backend_paths import ROOT, erlang_environment
 from compiler_paths import PUBLIC
-from compile_protocol_transport import compile_clock
+from protocol_test_build import compile_clock
 from backend_commands import run
 from test_local_protocol import prove
 
