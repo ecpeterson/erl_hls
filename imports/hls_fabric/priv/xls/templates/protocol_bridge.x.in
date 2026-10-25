@@ -1,0 +1,97 @@
+import boundary;
+import protocol_bridge as b;
+import protocol_rectangle as control;
+
+// Sampled bridge pins.
+pub struct Inputs {
+  @@INPUT_FIELDS@@
+}
+
+// Sampled bridge pins.
+pub struct Outputs {
+  @@OUTPUT_FIELDS@@
+}
+
+// Shared source state plus the sole framed transport owner.
+pub struct State {
+  network: boundary::State,
+  bridge: b::State<@@STATE_DIMENSIONS@@>
+}
+
+// Next state and pre-edge public pins.
+pub struct Tick {
+  state: State,
+  output: Outputs
+}
+
+// Read retained observations, then apply accepted transfers once.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  // Decode the held packet and observe destination credit before admission.
+  let packet = b::unpack(s.bridge.rx.payload as bits[256]);
+  let command = control::decode(
+    s.bridge.rx.payload[64+:bits[256]],
+    s.bridge.rx.header[0+:u8] - u8:2);
+  let sample = boundary::Inputs {
+    reset: io.reset,
+    @@SAMPLE_FIELDS@@
+    ..zero!<boundary::Inputs>()
+  };
+  let old = boundary::tick(s.network, sample).output;
+
+  // Framing selects transfers using old credit and retained child offers.
+  let step = b::tick(s.bridge, b::Inputs<@@INPUT_DIMENSIONS@@> {
+    reset: io.reset,
+    retire: io.retire,
+    child_fault: @@CHILD_FAULT@@,
+    word: io.s_app_tdata,
+    last: io.s_app_tlast,
+    valid: io.s_app_tvalid,
+    ready: io.m_app_tready,
+    incoming_links: [
+      @@INCOMING_LINKS@@
+    ],
+    incoming_ready: [
+      @@INCOMING_READY@@
+    ],
+    credits: [
+      @@CREDITS@@
+    ],
+    outgoing_links: [
+      @@OUTGOING_LINKS@@
+    ],
+    outgoing: [
+      @@OUTGOING_OFFERS@@
+    ],
+    externals: [
+      @@EXTERNAL_OFFERS@@
+    ],
+    control_legal: command.valid,
+    control_ready: old.ingress_ready,
+    start_ready: old.start_ready
+  }, bits[256]:@@IDENTITY@@, u16:@@HOST@@, u16:@@SERVICE@@);
+
+  // Apply accepted transfers to the child network exactly once.
+  let network = boundary::tick(s.network, boundary::Inputs {
+    ingress_valid: step.output.control_valid,
+    ingress_data: command.ingress,
+    start_valid: step.output.start_valid,
+    @@NETWORK_INPUTS@@
+    ..sample
+  });
+
+  // Commit both states and expose the selected framed word and old run state.
+  Tick {
+    state: State {
+      network: network.state,
+      bridge: step.state
+    },
+    output: Outputs {
+      s_app_tready: step.output.ready,
+      m_app_tdata: step.output.word,
+      m_app_tlast: step.output.last,
+      m_app_tvalid: step.output.valid,
+      fault: step.output.fault,
+      running: old.running && step.output.active
+    }
+  }
+}

@@ -1,0 +1,57 @@
+import transport;
+@@IMPORTS@@
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Component states remain independent; ingress owns one shared command.
+pub struct State {
+  transport: transport::State,
+  @@STATE_FIELDS@@
+}
+
+// Next component states and pre-edge external observations.
+pub struct Tick {
+  state: State,
+  output: Outputs
+}
+
+// Preview observes old state; the final transport call applies retirement.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  // Observe startup, held host commands and actor offers before any transition.
+  let startup_done = @@STARTUP_DONE@@;
+  @@INGRESS_OBSERVE@@
+  @@ACTOR_OBSERVE@@
+
+  let offer = transport::Inputs {
+    reset: io.reset,
+    @@OFFER_FIELDS@@
+    ..zero!<transport::Inputs>()
+  };
+  let preview = transport::tick(s.transport, offer).output;
+
+  // Select shared work and advance receivers using the old transport view.
+  @@ARITHMETIC_SELECT@@
+  @@RECEIVER_STEPS@@
+  @@INGRESS_STEP@@
+
+  // Apply actual take/release signals, then advance registered activation.
+  let transport_step = transport::tick(s.transport, transport::Inputs {
+    @@RETIRE_FIELDS@@
+    ..offer
+  });
+  @@ACTIVATION_STEP@@
+
+  // Commit component states alongside this clock's external observations.
+  Tick {
+    state: State {
+      transport: transport_step.state,
+      @@STATE_UPDATES@@
+    },
+    output: Outputs {
+      @@OBSERVATIONS@@
+    }
+  }
+}
+
+@@CLOCK@@

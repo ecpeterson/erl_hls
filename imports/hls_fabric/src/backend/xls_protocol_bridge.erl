@@ -4,43 +4,12 @@
 
 -doc "Returns in-memory sampled-clock bridge files without writing output. UpstreamFiles supplies root-relative boundary bytes for exact component hashes. Static link/class identities come from hls_protocol_bridge; old boundary observations supply credit and retained offers, and only the final call applies accepted transfers. Adds bounded framing and reservation state, no replicated native payloads. Output fault includes any native actor/transport failure; retirement masks both directions until coordinated reset. Returns exact emitted-input hashes and state accounting with eligibility false.".
 -spec emit(map(),map(),hls_generated_files:files()) -> hls_generated_files:output().
-emit(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming,outgoing:=Outgoing,credits:=Credits},
-        Boundary=#{outputs:=NativeOutputs,externals:=Externals},UpstreamFiles) ->
-    I=length(Incoming),C=length(Credits),O=length(Outgoing),E=length(Externals),
-    Dimensions=lists:join(",",[n(N)||N<-[I,C,O,E]]),StateDimensions=lists:join(",",[n(N)||N<-[I,C,O]]),
+emit(Bridge=#{identity:=Identity,incoming:=Incoming,outgoing:=Outgoing,credits:=Credits},
+        Boundary,UpstreamFiles) ->
+    I=length(Incoming),C=length(Credits),O=length(Outgoing),
     Inputs=[{"reset",1},{"retire",1},{"s_app_tdata",32},{"s_app_tlast",1},{"s_app_tvalid",1},{"m_app_tready",1}],
     Outputs=[{"s_app_tready",1},{"m_app_tdata",32},{"m_app_tlast",1},{"m_app_tvalid",1},{"fault",1},{"running",1}],
-    Faults=[Name||#{name:=Name}<-NativeOutputs,lists:suffix("_fault",binary_to_list(Name)) orelse lists:suffix("_failure",binary_to_list(Name))],
-    {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_boundary_clock.x.in")),
-    Source=["import boundary;\nimport protocol_bridge as b;\nimport protocol_rectangle as control;\n",structure("Inputs",Inputs),structure("Outputs",Outputs),
-      "// Shared source state plus the sole framed transport owner.\npub struct State { network: boundary::State, bridge: b::State<",StateDimensions,"> }\n",
-      "// Next state and pre-edge public pins.\npub struct Tick { state: State, output: Outputs }\n",
-      "// Read retained observations, then apply accepted transfers once.\npub fn tick(s: State, io: Inputs) -> Tick {\n",
-      "let packet = b::unpack(s.bridge.rx.payload as bits[256]);\n",
-      "let command = control::decode(s.bridge.rx.payload[64+:bits[256]],s.bridge.rx.header[0+:u8]-u8:2);\n",
-      "let sample = boundary::Inputs { reset: io.reset,\n",
-      [[remote(L),"_slot: packet.slot, ",remote(L),"_frame: packet.frame,\n"]||L<-Incoming],
-      "..zero!<boundary::Inputs>() };\nlet old = boundary::tick(s.network, sample).output;\n",
-      "let step = b::tick(s.bridge, b::Inputs<",Dimensions,"> { reset:io.reset,retire:io.retire,\n",
-      "child_fault: ",lists:join(" || ",[["old.",Name," != bits[",n(W),"]:0"]||#{name:=Name,width:=W}<-NativeOutputs,lists:member(Name,Faults)]),",\n",
-      "word:io.s_app_tdata,last:io.s_app_tlast,valid:io.s_app_tvalid,ready:io.m_app_tready,\n",
-      "incoming_links: [",lists:join(",",[["u16:",n(N)]||#{index:=N}<-Incoming]),"],\n",
-      "incoming_ready: [",lists:join(",",[["old.",remote(L),"_ready"]||L<-Incoming]),"],\n",
-      "credits: [",lists:join(",",[["b::Credit { link:u16:",n(N),",slot:u8:",n(K),",free:old.remote_",n(N),"_free[",n(K),"+:u1] }"]||#{link:=N,slot:=K}<-Credits]),"],\n",
-      "outgoing_links: [",lists:join(",",[["u16:",n(N)]||#{index:=N}<-Outgoing]),"],\n",
-      "outgoing: [",lists:join(",",[offer(remote(L),"slot","frame")||L<-Outgoing]),"],\n",
-      "externals: [",lists:join(",",[offer("external_"++n(N),"zero","data")||#{index:=N}<-Externals]),"],\n",
-      "control_legal:command.valid,control_ready:old.ingress_ready,start_ready:old.start_ready }, bits[256]:",integer_to_list(binary:decode_unsigned(Identity,little)),
-      ", u16:",n(Host),", u16:",n(Service),");\n",
-      "let network = boundary::tick(s.network, boundary::Inputs {\n",
-      "ingress_valid:step.output.control_valid,ingress_data:command.ingress,start_valid:step.output.start_valid,\n",
-      [[remote(L),"_valid:step.output.incoming_valid[",n(K),"],\n"]||{K,L}<-lists:enumerate(0,Incoming)],
-      [[remote(L),"_ready:step.output.outgoing_ready[",n(K),"],\n"]||{K,L}<-lists:enumerate(0,Outgoing)],
-      [["external_",n(N),"_ready:step.output.external_ready[",n(N),"],\n"]||#{index:=N}<-Externals],
-      "..sample });\nTick { state:State {network:network.state,bridge:step.state},output:Outputs {\n",
-      "s_app_tready:step.output.ready,m_app_tdata:step.output.word,m_app_tlast:step.output.last,\n",
-      "m_app_tvalid:step.output.valid,fault:step.output.fault,running:old.running && step.output.active } } }\n",
-      binary:replace(Clock,<<"boundary_clock">>,<<"bridge_clock">>,[global])],
+    Source = source(Bridge, Boundary, Inputs, Outputs),
     GeneratedFiles=#{"bridge/bridge.x"=>Source,
         "bridge/protocol_bridge_top.sv"=>sv_protocol_ports:emit(Inputs,Outputs,"protocol_bridge_top","protocol_bridge_core")},
     ComponentFiles=hls_generated_files:merge([UpstreamFiles,GeneratedFiles]),
@@ -60,6 +29,73 @@ emit(Bridge=#{identity:=Identity,host:=Host,service:=Service,incoming:=Incoming,
     Files=hls_generated_files:merge([GeneratedFiles,#{"bridge/manifest.json"=>json:encode(Manifest)}]),
     #{files=>Files,result=>Manifest}.
 
+%% The template makes the old-observation/framing/final-acceptance order explicit.
+-spec source(map(), map(), [{string(), pos_integer()}], [{string(), pos_integer()}]) -> iodata().
+source(#{identity := Identity, host := Host, service := Service,
+        incoming := Incoming, outgoing := Outgoing, credits := Credits},
+        #{outputs := NativeOutputs, externals := Externals}, Inputs, Outputs) ->
+    I = length(Incoming), C = length(Credits), O = length(Outgoing), E = length(Externals),
+    Directory = filename:join(code:priv_dir(hls_fabric), "xls/templates"),
+    {ok, Template} = file:read_file(filename:join(Directory, "protocol_bridge.x.in")),
+    {ok, Clock} = file:read_file(filename:join(Directory, "protocol_boundary_clock.x.in")),
+    Bindings = [
+        {<<"@@INPUT_FIELDS@@">>, fields(Inputs)},
+        {<<"@@OUTPUT_FIELDS@@">>, fields(Outputs)},
+        {<<"@@STATE_DIMENSIONS@@">>, dimensions([I, C, O])},
+        {<<"@@INPUT_DIMENSIONS@@">>, dimensions([I, C, O, E])},
+        {<<"@@SAMPLE_FIELDS@@">>, [[remote(Link), "_slot: packet.slot, ",
+            remote(Link), "_frame: packet.frame,\n"] || Link <- Incoming]},
+        {<<"@@CHILD_FAULT@@">>, child_fault(NativeOutputs)},
+        {<<"@@INCOMING_LINKS@@">>, link_indices(Incoming)},
+        {<<"@@INCOMING_READY@@">>, lists:join(",", [["old.", remote(Link), "_ready"]
+            || Link <- Incoming])},
+        {<<"@@CREDITS@@">>, credits(Credits)},
+        {<<"@@OUTGOING_LINKS@@">>, link_indices(Outgoing)},
+        {<<"@@OUTGOING_OFFERS@@">>, lists:join(",", [offer(remote(Link), "slot", "frame")
+            || Link <- Outgoing])},
+        {<<"@@EXTERNAL_OFFERS@@">>, lists:join(",", [offer("external_" ++ n(N), "zero", "data")
+            || #{index := N} <- Externals])},
+        {<<"@@IDENTITY@@">>, n(binary:decode_unsigned(Identity, little))},
+        {<<"@@HOST@@">>, n(Host)},
+        {<<"@@SERVICE@@">>, n(Service)},
+        {<<"@@NETWORK_INPUTS@@">>, network_inputs(Incoming, Outgoing, Externals)}
+    ],
+    [xls_template:render(Template, Bindings),
+        binary:replace(Clock, <<"boundary_clock">>, <<"bridge_clock">>, [global])].
+
+%% Fault widths remain those of the child network's exact output interface.
+-spec child_fault([map()]) -> iodata().
+child_fault(Outputs) ->
+    lists:join(" || ", [["old.", Name, " != bits[", n(Width), "]:0"]
+        || #{name := Name, width := Width} <- Outputs,
+           lists:suffix("_fault", binary_to_list(Name)) orelse
+               lists:suffix("_failure", binary_to_list(Name))]).
+
+%% Framing tables use original global link identities in the planner's order.
+-spec link_indices([map()]) -> iodata().
+link_indices(Links) -> lists:join(",", [["u16:", n(Index)] || #{index := Index} <- Links]).
+
+%% A class credit samples its exact old capture-slot ownership bit.
+-spec credits([map()]) -> iodata().
+credits(Credits) ->
+    lists:join(",", [["b::Credit { link:u16:", n(Link), ",slot:u8:", n(Slot),
+        ",free:old.remote_", n(Link), "_free[", n(Slot), "+:u1] }"]
+        || #{link := Link, slot := Slot} <- Credits]).
+
+%% Bridge-local array ordinals differ from original global link identifiers.
+-spec network_inputs([map()], [map()], [map()]) -> iodata().
+network_inputs(Incoming, Outgoing, Externals) ->
+    [[[remote(Link), "_valid:step.output.incoming_valid[", n(Ordinal), "],\n"]
+        || {Ordinal, Link} <- lists:enumerate(0, Incoming)],
+     [[remote(Link), "_ready:step.output.outgoing_ready[", n(Ordinal), "],\n"]
+        || {Ordinal, Link} <- lists:enumerate(0, Outgoing)],
+     [["external_", n(Index), "_ready:step.output.external_ready[", n(Index), "],\n"]
+        || #{index := Index} <- Externals]].
+
+%% DSLX parameter order follows the typed bridge state and input declarations.
+-spec dimensions([non_neg_integer()]) -> iodata().
+dimensions(Values) -> lists:join(",", [n(Value) || Value <- Values]).
+
 %% Static retained offers preserve the ordinary low-header frame ABI.
 -spec offer(string(),string(),string()) -> iodata().
 offer(P,Slot,Frame) ->
@@ -68,9 +104,9 @@ offer(P,Slot,Frame) ->
 %% Only original global link indices determine raw crossing names.
 -spec remote(map()) -> string().
 remote(#{index:=I}) -> xls_protocol_partition:name(I).
-%% Named pins follow DSLX struct order in the mechanical adapter.
--spec structure(string(),[{string(),pos_integer()}]) -> iodata().
-structure(Name,Fields) -> ["// Sampled bridge pins.\npub struct ",Name," {\n",[[N,":bits[",n(W),"],\n"]||{N,W}<-Fields],"}\n"].
+%% Named pins retain their exact ordered widths in the mechanical adapter.
+-spec fields([{string(), pos_integer()}]) -> iodata().
+fields(Fields) -> [[Name, ":bits[", n(Width), "],\n"] || {Name, Width} <- Fields].
 %% Only checked dimensions and indices enter generated text.
 -spec n(non_neg_integer()) -> string().
 n(N) -> integer_to_list(N).

@@ -42,3 +42,65 @@ excessive_link_classes_test() ->
     ?assertException(error, _, hls_protocol_link:components(#{pairs => [#{slots => Slots}]})),
     [#{widths := Widths}] = hls_protocol_link:components(#{pairs => [#{slots => tl(Slots)}]}),
     ?assertEqual(255, length(Widths)).
+
+%% Eligibility spans follow receiver slot order, independent of numeric link identities or payload widths.
+-spec link_bindings_follow_receiver_order_test() -> ok.
+link_bindings_follow_receiver_order_test() ->
+    ?assertEqual([
+        #{index => 19, slots => 2, offset => 0},
+        #{index => 3, slots => 1, offset => 2},
+        #{index => 11, slots => 3, offset => 3}
+    ], hls_protocol_inbox:link_bindings(binding_inbox())).
+
+%% Startup and host slots do not allocate any transport eligibility span.
+-spec link_bindings_without_links_test() -> ok.
+link_bindings_without_links_test() ->
+    Inbox = #{links => [], slots => [], physical_slots => 0, mask_bits => 3,
+        startup => #{count => 2, offset => 0}, host => #{slots => 1, offset => 2}},
+    ?assertEqual([], hls_protocol_inbox:link_bindings(Inbox)).
+
+%% Global slot positions, local positions and link membership must agree with the receiver declaration.
+-spec inconsistent_indexed_link_slots_test() -> ok.
+inconsistent_indexed_link_slots_test() ->
+    Inbox = #{slots := [First, Second | Rest]} = binding_inbox(),
+    Invalid = [
+        [First#{index := 1}, Second | Rest],
+        [Second, First | Rest],
+        [First#{slot := 1}, Second | Rest],
+        [First#{link := 3}, Second | Rest],
+        [First | Rest]
+    ],
+    lists:foreach(fun(Slots) ->
+        ?assertError(invalid_inbox_link_layout,
+            hls_protocol_inbox:link_bindings(Inbox#{slots := Slots}))
+    end, Invalid).
+
+%% Physical count and link multiplicity cannot diverge from the indexed capture rows.
+-spec inconsistent_link_counts_test() -> ok.
+inconsistent_link_counts_test() ->
+    Inbox = #{links := [First | Rest]} = binding_inbox(),
+    Invalid = [
+        Inbox#{physical_slots := 5},
+        Inbox#{links := [First#{slots := 1} | Rest]},
+        #{links => [#{index => 7, slots => 1}, #{index => 7, slots => 1}],
+          slots => [#{index => 0, link => 7, slot => 0},
+              #{index => 1, link => 7, slot => 0}], physical_slots => 2},
+        #{links => [#{index => 7, slots => 0}], slots => [], physical_slots => 0}
+    ],
+    lists:foreach(fun(Layout) ->
+        ?assertError(invalid_inbox_link_layout, hls_protocol_inbox:link_bindings(Layout))
+    end, Invalid).
+
+%% Sparse, reordered link identities expose numeric-order assumptions in consumers of inbox masks.
+-spec binding_inbox() -> map().
+binding_inbox() ->
+    #{links => [#{index => 19, slots => 2}, #{index => 3, slots => 1},
+            #{index => 11, slots => 3}],
+      slots => [#{index => 0, link => 19, slot => 0, width => 3},
+            #{index => 1, link => 19, slot => 1, width => 17},
+            #{index => 2, link => 3, slot => 0, width => 1},
+            #{index => 3, link => 11, slot => 0, width => 8},
+            #{index => 4, link => 11, slot => 1, width => 5},
+            #{index => 5, link => 11, slot => 2, width => 12}],
+      physical_slots => 6, mask_bits => 9,
+      startup => #{count => 2, offset => 6}, host => #{slots => 1, offset => 8}}.

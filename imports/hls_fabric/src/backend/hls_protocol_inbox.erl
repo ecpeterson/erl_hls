@@ -1,6 +1,10 @@
 -module(hls_protocol_inbox).
 -moduledoc "Groups typed capture channels by logical sender and destination. Per-pair delivery precedence preserves selective receive without inventing cross-sender chronology.".
--export([plan/1, attach/5]).
+-export([plan/1, attach/5, link_bindings/1]).
+-export_type([link_binding/0]).
+
+-doc "One incoming link and its contiguous span in the receiver eligibility, take and release masks.".
+-type link_binding() :: #{index := non_neg_integer(), slots := pos_integer(), offset := non_neg_integer()}.
 
 -doc "Plans independent sender/destination histories over exact typed capture channels. Channels from distinct ports of one sender share a history; separate senders do not. Each pending channel currently has one slot, so a repeated send must wait for its lease to be released. This establishes neither sufficient application capacity nor transport deadlock freedom; whole-protocol eligibility remains false.".
 -spec plan(map()) -> map().
@@ -81,6 +85,23 @@ attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=
         selected_head=>pending_until_consumed,release=>one_clock_after_consume,
         phase_boundary=>wakes_all_postponed,ordering=>per_logical_sender_destination,
         capacity=>unestablished,network_progress=>unestablished}}.
+
+-doc "Returns incoming link mask spans from an attached inbox manifest. Checks that link order/counts describe exactly the indexed physical slots; rejects inconsistent layout with invalid_inbox_link_layout. Link identifiers need not be consecutive or numerically ordered. Startup and host slots are outside these spans.".
+-spec link_bindings(map()) -> [link_binding()].
+link_bindings(#{links := Links, slots := Slots, physical_slots := Count}) ->
+    {Bindings, Total} = lists:mapfoldl(fun(#{index := I, slots := N}, At) ->
+        {#{index => I, slots => N, offset => At}, At + N}
+    end, 0, Links),
+    Expected = lists:append([[{At + K, I, K} || K <- lists:seq(0, N - 1)]
+        || #{index := I, slots := N, offset := At} <- Bindings]),
+    Actual = [{J, I, K} || #{index := J, link := I, slot := K} <- Slots],
+    Ids = [I || #{index := I} <- Links],
+    case Total =:= Count andalso Expected =:= Actual andalso
+            length(Ids) =:= length(lists:usort(Ids)) andalso
+            lists:all(fun(#{slots := N}) -> N > 0 end, Links) of
+        true -> Bindings;
+        false -> error(invalid_inbox_link_layout)
+    end.
 
 %% Flatten metadata only; bit zero belongs to the first incoming pair's first slot.
 -spec mask_function(string(),[map()],pos_integer(),boolean(),non_neg_integer()) -> iodata().

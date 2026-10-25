@@ -11,23 +11,7 @@ emit(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundari
     Inputs=PassInputs++[#{name=>list_to_binary(external(I)++"_ready"),width=>1}||#{index:=I}<-Groups],
     Outputs=PassOutputs++lists:append([[#{name=>list_to_binary(external(I)++"_valid"),width=>1},
         #{name=>list_to_binary(external(I)++"_data"),width=>128}]||#{index:=I}<-Groups]),
-    Multiple=[G||G=#{members:=Ms}<-Groups,length(Ms)>1],
-    {ok,Clock}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_boundary_clock.x.in")),
-    Source=["import network;\nimport protocol_egress as egress;\n",structure("Inputs",Inputs),structure("Outputs",Outputs),
-        "// Network state and independent endpoint ownership; no copied frame payloads.\npub struct State { network: network::State,\n",
-        [[external(I),": egress::State<",n(C),">,\n"]||#{index:=I,index_bits:=C}<-Multiple],"}\n",
-        "// Next state and current boundary observations.\npub struct Tick { state: State, output: Outputs }\n",
-        "// Preview ignores sink readiness; only the final transition retires publications.\n",
-        "pub fn tick(s: State, io: Inputs) -> Tick {\nlet offer = network::Inputs {\n",
-        [[Name,": io.",Name,",\n"]||#{name:=Name}<-PassInputs],"..zero!<network::Inputs>() };\n",
-        "let preview = network::tick(s.network, offer).output;\n",
-        [arbiter(G)||G<-Multiple],
-        "let step = network::tick(s.network, network::Inputs {\n",
-        [acceptance(G)||G<-Groups],"..offer });\n",
-        "Tick { state: State { network: step.state,\n",
-        [[external(I),": merge_",n(I),".state,\n"]||#{index:=I}<-Multiple],"}, output: Outputs {\n",
-        [[Name,": preview.",Name,",\n"]||#{name:=Name}<-PassOutputs],
-        [observation(G)||G<-Groups],"} } }\n",Clock],
+    Source = source(Inputs, Outputs, PassInputs, PassOutputs, Groups),
     Bits=lists:sum([N||#{state_bits:=N}<-Groups]),
     Manifest=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
         actor_runtime=>true,eligible=>false,ordering=>per_logical_sender_destination,
@@ -37,6 +21,30 @@ emit(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundari
     #{files=>#{"boundary/boundary.x"=>Source,
         "boundary/protocol_boundary.sv"=>sv_protocol_ports:emit(pins(Inputs),pins(Outputs),"protocol_boundary","protocol_boundary_core"),
         "boundary/manifest.json"=>json:encode(Manifest)},result=>Manifest}.
+
+%% Keep the preview/arbiter/commit schedule in DSLX; only static wiring varies.
+-spec source([map()], [map()], [map()], [map()], [map()]) -> iodata().
+source(Inputs, Outputs, PassInputs, PassOutputs, Groups) ->
+    Multiple = [G || G = #{members := Members} <- Groups, length(Members) > 1],
+    Directory = filename:join(code:priv_dir(hls_fabric), "xls/templates"),
+    {ok, Template} = file:read_file(filename:join(Directory, "protocol_boundary.x.in")),
+    {ok, Clock} = file:read_file(filename:join(Directory, "protocol_boundary_clock.x.in")),
+    Bindings = [
+        {<<"@@INPUT_FIELDS@@">>, fields(Inputs)},
+        {<<"@@OUTPUT_FIELDS@@">>, fields(Outputs)},
+        {<<"@@ARBITER_STATE@@">>, [[external(I), ": egress::State<", n(C), ">,\n"]
+            || #{index := I, index_bits := C} <- Multiple]},
+        {<<"@@PASS_INPUTS@@">>, [[Name, ": io.", Name, ",\n"]
+            || #{name := Name} <- PassInputs]},
+        {<<"@@ARBITER_STEPS@@">>, [arbiter(Group) || Group <- Multiple]},
+        {<<"@@ACCEPTANCE@@">>, [acceptance(Group) || Group <- Groups]},
+        {<<"@@ARBITER_UPDATES@@">>, [[external(I), ": merge_", n(I), ".state,\n"]
+            || #{index := I} <- Multiple]},
+        {<<"@@PASS_OUTPUTS@@">>, [[Name, ": preview.", Name, ",\n"]
+            || #{name := Name} <- PassOutputs]},
+        {<<"@@OBSERVATIONS@@">>, [observation(Group) || Group <- Groups]}
+    ],
+    [xls_template:render(Template, Bindings), Clock].
 
 %% Producer bit zero is array element zero; sources retain frames until selected acceptance.
 -spec arbiter(map()) -> iodata().
@@ -63,10 +71,10 @@ observation(#{index:=I}) ->
 %% Preserve exact DSLX field order in the mechanical Verilog adapter.
 -spec pins([map()]) -> [{string(),pos_integer()}].
 pins(Fields) -> [{binary_to_list(Name),Width}||#{name:=Name,width:=Width}<-Fields].
-%% Concrete widths come from the already checked network and declared endpoints.
--spec structure(string(),[map()]) -> iodata().
-structure(Name,Fields) -> ["// Sampled application boundary pins.\npub struct ",Name," {\n",
-    [[Key,": bits[",n(W),"],\n"]||#{name:=Key,width:=W}<-Fields],"}\n"].
+%% Concrete widths and field order come from the checked boundary interface.
+-spec fields([map()]) -> iodata().
+fields(Fields) -> [[Key, ": bits[", n(Width), "],\n"]
+    || #{name := Key, width := Width} <- Fields].
 %% Endpoint indices follow canonical normalized topology order, never actor indices.
 -spec external(non_neg_integer()) -> string().
 external(I) -> "external_"++n(I).
