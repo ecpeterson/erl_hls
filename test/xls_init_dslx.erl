@@ -80,7 +80,7 @@ topology() ->
     }).
 
 %% Renders initialization and mutation checks for the selected fixture.
--spec semantics('gs' | 'statem') -> [1..255,...].
+-spec semantics('gs' | 'statem') -> [1 .. ((1 bsl 8) - 1),...].
 semantics(gs) ->
     "\n#[test]\nfn initialized_state() {\n"
     "  assert_eq(initial_state(), Ledger {value: u32:42, default: u32:0});\n"

@@ -7,7 +7,7 @@
 -type domain() :: unknown | {values, [bitstring(), ...]} | {bits, bitstring(), bitstring()}.
 
 -doc "Source-bound analysis of all ordinary entry alternatives. Saved values must be validated against current source before use.".
--opaque facts() :: #{version := 3, tags := #{atom() => 0..255}, identity := map(), outputs := [atom()],
+-opaque facts() :: #{version := 3, tags := #{atom() => 0 .. ((1 bsl 8) - 1)}, identity := map(), outputs := [atom()],
     reply_port := none | {port, atom()}, alternatives := [map()]}.
 
 -doc "Returns unchanged ordinary lowering and message facts from its exact entry-storage layouts. Options retain ordinary preprocessing semantics; invalid actors fail ordinary lowering.".
@@ -124,7 +124,7 @@ frame_bits(Facts, Ports) ->
     end.
 
 -doc "Returns per-operation ordinary-frame bit bounds for selected emitted ports, or unknown when retained replies are possible. Requires fresh facts and complete physical producer bindings. Schema alternatives with the same operation are joined; no phase, reachability, acceptance or lifetime guarantee follows. A closed empty set is silent, not permission to change incoming frames.".
--spec frame_cases(facts(), [atom(), ...]) -> unknown | [#{op := 0..255, mask := non_neg_integer(), value := non_neg_integer()}].
+-spec frame_cases(facts(), [atom(), ...]) -> unknown | [#{op := 0 .. ((1 bsl 8) - 1), mask := non_neg_integer(), value := non_neg_integer()}].
 frame_cases(Facts = #{tags := Tags}, Ports) ->
     case on_ports(Facts, Ports) of
         #{closed := true, schemas := Schemas} ->

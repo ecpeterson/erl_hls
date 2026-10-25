@@ -19,11 +19,11 @@ with no associativity or commutativity requirement on values or their consumer.
 -record(gather, {
     name :: atom(),
     key :: term(),
-    capacity :: 1..255,
+    capacity :: 1 .. ((1 bsl 8) - 1),
     expected :: non_neg_integer(),
     seen = 0 :: non_neg_integer(),
     values :: list(),
-    remaining :: 1..255
+    remaining :: 1 .. ((1 bsl 8) - 1)
 }).
 
 -doc "An incomplete collection whose accepted values cannot be observed yet.".
@@ -36,7 +36,7 @@ with no associativity or commutativity requirement on values or their consumer.
 -type offer_error() :: {duplicate_member, term()} | {unexpected_member, term()}.
 
 -doc "Opens a bounded gather; an empty mask immediately returns its padded completed view.".
--spec open(atom(), term(), 1..255, non_neg_integer(), Value) ->
+-spec open(atom(), term(), 1 .. ((1 bsl 8) - 1), non_neg_integer(), Value) ->
     {pending, gather(Value)} | {complete, completion(Value)} | {error, open_error()}.
 open(Name, _Key, _Capacity, _Mask, _Padding) when not is_atom(Name) ->
     {error, invalid_name};
@@ -74,8 +74,8 @@ offer(_Name, _Key, Member, Value,
     end.
 
 -doc "Reports membership and progress without exposing unfinished values.".
--spec info(gather(term())) -> #{name := atom(), key := term(), capacity := 1..255,
-    expected := non_neg_integer(), seen := non_neg_integer(), remaining := 1..255}.
+-spec info(gather(term())) -> #{name := atom(), key := term(), capacity := 1 .. ((1 bsl 8) - 1),
+    expected := non_neg_integer(), seen := non_neg_integer(), remaining := 1 .. ((1 bsl 8) - 1)}.
 info(#gather{name = Name, key = Key, capacity = Capacity, expected = Expected,
         seen = Seen, remaining = Remaining}) ->
     #{name => Name, key => Key, capacity => Capacity, expected => Expected,

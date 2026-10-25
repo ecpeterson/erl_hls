@@ -52,8 +52,8 @@
 }.
 -doc "A fixed population bound; runtime_mask restricts numeric member slots at each open.".
 -type population() ::
-    #{mode := count, size := 1..255} |
-    #{mode := members, size := 1..255, members := [0..16#ffffffff], runtime_mask => boolean()}.
+    #{mode := count, size := 1 .. ((1 bsl 8) - 1)} |
+    #{mode := members, size := 1 .. ((1 bsl 8) - 1), members := [0 .. ((1 bsl 32) - 1)], runtime_mask => boolean()}.
 -doc "A checked contribution; independent_lift omits the data pattern and requires a separately established or asserted exclusive protocol.".
 -type contribution() :: #{
     tag := atom(),
@@ -102,14 +102,16 @@ new(Data, Accumulator, Sites, Reducers) ->
 site_count(#{sites := Sites}) ->
     length(Sites).
 
--spec max_population(reduction()) -> 1..255.
+-doc "Returns the largest declared count or member-set capacity across reduction sites.".
+-spec max_population(reduction()) -> 1 .. ((1 bsl 8) - 1).
 max_population(#{sites := Sites}) ->
     lists:max([
         maps:get(size, maps:get(population, Site))
         || Site <- Sites
     ]).
 
--spec max_member_count(reduction()) -> 0..255.
+-doc "Returns the largest member-set capacity, or zero when every site counts arrivals.".
+-spec max_member_count(reduction()) -> 0 .. ((1 bsl 8) - 1).
 max_member_count(#{sites := Sites}) ->
     lists:max([0 | [
         maps:get(size, Population)

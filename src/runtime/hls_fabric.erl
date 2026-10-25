@@ -29,7 +29,8 @@ broker death; unconfirmed raw I/O release prevents a competing open in this VM.
 -export([register_route/3, send/4, send/5, send_request/5, ack/2, info/1, client_info/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
--type endpoint() :: 0..65535.
+%% Unsigned address carried in the frame source and destination headers.
+-type endpoint() :: 0 .. ((1 bsl 16) - 1).
 -type route() :: {endpoint(), endpoint()}.
 -type header() :: {byte(), byte(), byte()}.
 -type deadline() :: timeout() | {abs, integer()}.

@@ -292,7 +292,7 @@ service(Spec) ->
     ].
 
 %% Each selection step is named so large mailboxes do not exhaust XLS parser nesting.
--spec queue_expansion(1..255) -> map().
+-spec queue_expansion(1 .. ((1 bsl 8) - 1)) -> map().
 queue_expansion(Capacity) ->
     Indexes = lists:seq(0, Capacity - 1),
     EligibleBindings = [eligible_binding(Index) || Index <- Indexes],

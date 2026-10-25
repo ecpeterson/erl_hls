@@ -42,7 +42,7 @@ expected(A, B, C, D) ->
     (1 bsl 64) bor (Word bsl 32) bor Word.
 
 %% Renders DSLX assertions from independently computed expected values.
--spec tests([{[any(),...],non_neg_integer()}]) -> [[[any()] | 1..255],...].
+-spec tests([{[any(),...],non_neg_integer()}]) -> [[[any()] | 1 .. ((1 bsl 8) - 1)],...].
 tests(Cases) ->
     ["#[test]\nfn beam_contributions_agree() {\n",
         [io_lib:format("assert_eq(probe(u32:~B, u32:~B, u32:~B, u32:~B), bits[72]:~B);\n",

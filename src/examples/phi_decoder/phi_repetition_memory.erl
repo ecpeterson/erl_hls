@@ -55,7 +55,7 @@ simulation witness for the observed activation, not decoder threshold proof.
 -doc "Configures role ownership, line geometry, cutoff and measurement identity.".
 -type options() :: #{
     role := role(),
-    size := 2..16#ffff,
+    size := 2 .. ((1 bsl 16) - 1),
     coordinates := [hls_nums:u16()],
     rectangle := rectangle(),
     first_quiet_step := hls_nums:u32(),

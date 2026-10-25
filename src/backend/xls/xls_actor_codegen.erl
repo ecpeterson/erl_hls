@@ -22,7 +22,7 @@
     failure_sites := [map()],
     source := file:filename(),
     imports := [atom()],
-    capacity := 1..255,
+    capacity := 1 .. ((1 bsl 8) - 1),
     phases := [atom(), ...],
     message_names := [atom(), ...],
     message_words := #{atom() => 0..3},
