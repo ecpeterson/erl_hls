@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fault-inject incremental XLS builds; optionally compare real regsvc RTL."""
 import argparse
+from collections.abc import Callable, Mapping
 import json
 import os
 from pathlib import Path
@@ -264,6 +265,198 @@ class Builds(BuildFixture):
         for invalid in ('0', '-1', 'nan', 'inf', '1d', '1;echo nope'):
             with self.assertRaises(argparse.ArgumentTypeError):
                 compiler.duration(invalid)
+
+
+class Recipes(BuildFixture):
+    """Exercise multiple exact schedules and finalization through the common transaction."""
+
+    def recipe(self, snapshot: Path) -> list[compiler.StageSpec]:
+        """Two units share frozen inputs while keeping distinct tops and sampled/pipelined schedules."""
+        result = []
+        for index in range(2):
+            unit = f"unit{index}"
+            raw, optimized, rtl = (f"{unit}/{name}" for name in ('raw.ir', 'optimized.ir', 'actor.v'))
+            flags = [f"--pipeline_stages={1 if index == 0 else 3}",
+                     f"--flop_outputs={'false' if index == 0 else 'true'}", f"--module_name={unit}"]
+            result.extend([
+                {'id': f'{unit}/convert', 'cache': 'ir', 'tool': 'ir_converter_main',
+                 'arguments': ['--dslx_path=.', '--dslx_stdlib_path=_stdlib', f'--top={unit}', 'counter.x'],
+                 'output': raw, 'inputs': {'sources': {'counter.x': 'counter.x', 'helper.x': 'helper.x'},
+                                           'stdlib': {'std.x': '_stdlib/std.x'}}},
+                {'id': f'{unit}/opt', 'cache': 'opt', 'tool': 'opt_main', 'arguments': [raw],
+                 'output': optimized, 'inputs': {raw: raw}},
+                {'id': f'{unit}/codegen', 'cache': 'codegen', 'tool': 'codegen_main',
+                 'arguments': [*flags, optimized], 'output': rtl, 'inputs': {optimized: optimized}}])
+        return result
+
+    def publication(self, snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+        """Select both units together and retain stable recipe/cache provenance."""
+        return {'manifest_name': 'build.json',
+                'manifest': {'stages': {key: row['key'] for key, row in runs.items()}},
+                'files': {row['output']: row['output'] for row in runs.values()}}
+
+    def execute(self, *, source_root: Path | None = None, output: Path | None = None,
+                finalize: Callable[[Path, Mapping[str, compiler.StageRun]], compiler.Publication] | None = None,
+                prepare: Callable[[Path], list[compiler.StageSpec]] | None = None) -> Path:
+        """Construct the same explicit snapshot mapping after source or output relocation."""
+        source_root = source_root or self.inputs
+        files = {**compiler.tree_files(source_root),
+                 **compiler.tree_files(self.xls/'xls/dslx/stdlib', '_stdlib')}
+        return compiler.execute(files, {name: self.xls/name for name in compiler.TOOLS}, output or self.output,
+                                prepare=prepare or self.recipe, finalize=finalize or self.publication,
+                                directories=['empty-import'], name='two_units', cache=self.cache)
+
+    def test_multiunit_cold_warm_and_relocated(self) -> None:
+        """Every stage reuses after relocation and one-stage/no-output-flop flags are unchanged."""
+        release = self.execute()
+        self.assertEqual(len(self.calls.read_text().splitlines()), 6)
+        for index in range(2):
+            command = json.loads((release/f'unit{index}/codegen.command.json').read_text())
+            self.assertIn(f"--flop_outputs={'false' if index == 0 else 'true'}", command)
+            self.assertIn(f"--pipeline_stages={1 if index == 0 else 3}", command)
+        self.assertEqual(self.execute(), release)
+        self.assertTrue(all(self.statuses().values()))
+        moved = self.root/'moved sources'
+        shutil.copytree(self.inputs, moved)
+        second = self.root/'other output'
+        other_release = self.execute(source_root=moved, output=second)
+        self.assertTrue(all(self.statuses(second).values()))
+        self.assertEqual(compiler.sha(other_release/'unit1/actor.v'), compiler.sha(release/'unit1/actor.v'))
+        self.assertEqual(len(self.calls.read_text().splitlines()), 6)
+
+    def test_second_unit_failure_retains_release_and_retry_reuses_completed_work(self) -> None:
+        """A failed last unit cannot expose a mixture of old and new successful products."""
+        old = self.execute()
+        (self.inputs/'helper.x').write_text('// new dependency\n')
+        with patch.dict(os.environ, {'XLS_TEST_FAIL': 'codegen', 'XLS_TEST_FAIL_MATCH': '--module_name=unit1'}):
+            with self.assertRaisesRegex(RuntimeError, 'exited 7'):
+                self.execute()
+        self.assertEqual(self.output.resolve(), old)
+        report = json.loads(self.output.with_suffix('.run.json').read_text())
+        self.assertEqual(report['active_stage'], 'unit1/codegen')
+        attempt = Path(report['attempt'])
+        self.assertTrue((attempt/'unit0/actor.v').is_file())
+        self.assertIn('partial output', (attempt/'unit1/actor.v').read_text())
+        self.execute()
+        self.assertEqual(self.statuses(), {'unit0/convert': True, 'unit0/opt': True, 'unit0/codegen': True,
+                                          'unit1/convert': True, 'unit1/opt': True, 'unit1/codegen': False})
+
+    def test_finalization_failure_and_transformation_remain_atomic(self) -> None:
+        """Final reports and transformed RTL participate in publication identity without new XLS work."""
+        old = self.execute()
+
+        def fail(snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+            """Fail after producing a partial final report to test the transaction boundary."""
+            (snapshot/'partial-report.json').write_text('{}')
+            raise ValueError('rejected final policy')
+
+        with self.assertRaisesRegex(ValueError, 'rejected final policy'):
+            self.execute(finalize=fail)
+        self.assertEqual(self.output.resolve(), old)
+        self.assertTrue(all(self.statuses().values()))
+        report = json.loads(self.output.with_suffix('.run.json').read_text())
+        self.assertEqual(report['active_stage'], 'finalize')
+        self.assertTrue((Path(report['attempt'])/'partial-report.json').is_file())
+
+        def transform(snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+            """Change a product without changing the client manifest to test executor file identity."""
+            path = snapshot/'unit1/actor.v'
+            path.write_text(path.read_text()+'// legalized\n')
+            return self.publication(snapshot, runs)
+
+        new = self.execute(finalize=transform)
+        self.assertNotEqual(new, old)
+        self.assertTrue(all(self.statuses().values()))
+        self.assertTrue((new/'unit1/actor.v').read_text().endswith('// legalized\n'))
+        self.assertEqual(self.execute(), old)
+
+    def test_frozen_input_mutation_rejected_before_publication(self) -> None:
+        """A postprocessor may change products, never the source snapshot behind their provenance."""
+        old = self.execute()
+
+        def mutate(snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+            """Inject a source mutation as a rejecting control for the finalization contract."""
+            (snapshot/'counter.x').write_text('mutated')
+            return self.publication(snapshot, runs)
+
+        with self.assertRaisesRegex(ValueError, 'frozen build input'):
+            self.execute(finalize=mutate)
+        self.assertEqual(self.output.resolve(), old)
+
+    def test_invalid_recipe_runs_no_tools(self) -> None:
+        """Duplicate products and paths escaping the snapshot fail before tool execution."""
+        def duplicate(snapshot: Path) -> list[compiler.StageSpec]:
+            """Return two owners of the same product to exercise preparation validation."""
+            specs = self.recipe(snapshot)
+            specs[-1]['output'] = specs[0]['output']
+            return specs
+
+        with self.assertRaisesRegex(ValueError, 'duplicate or reserved'):
+            self.execute(prepare=duplicate)
+        self.assertFalse(self.calls.exists())
+        with self.assertRaisesRegex(ValueError, 'normalized relative path'):
+            compiler.execute({'../escaped.x': self.source}, {'ir_converter_main': self.xls/'ir_converter_main'},
+                             self.output, prepare=self.recipe, finalize=self.publication)
+        self.assertFalse(self.calls.exists())
+
+    def test_finalizer_cannot_replace_logs_or_change_tool_identity(self) -> None:
+        """A late client mistake or compiler replacement cannot publish false provenance."""
+        old = self.execute()
+
+        def replace_log(snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+            """Select an owned diagnostic filename as the manifest as a rejecting control."""
+            result = self.publication(snapshot, runs)
+            return {**result, 'manifest_name': 'unit0/convert.command.json'}
+
+        with self.assertRaisesRegex(ValueError, 'shadows'):
+            self.execute(finalize=replace_log)
+        self.assertEqual(self.output.resolve(), old)
+
+        def change_tool(snapshot: Path, runs: Mapping[str, compiler.StageRun]) -> compiler.Publication:
+            """Replace a tool after all stages finish to exercise the last identity check."""
+            tool = self.xls/'codegen_main'
+            tool.write_text(tool.read_text()+'\n# replacement during finalization\n')
+            return self.publication(snapshot, runs)
+
+        with self.assertRaisesRegex(ValueError, 'changed during finalization'):
+            self.execute(finalize=change_tool)
+        self.assertEqual(self.output.resolve(), old)
+
+    def test_input_tree_keeps_nested_and_linked_imports(self) -> None:
+        """Dependency inventory preserves import hierarchy and detects link cycles explicitly."""
+        nested = self.inputs/'subdir'
+        nested.mkdir()
+        (nested/'module.x').write_text('pub const A = u1:1;')
+        (self.inputs/'alias').symlink_to(nested, target_is_directory=True)
+        files = compiler.tree_files(self.inputs, '_imports/0')
+        self.assertIn('_imports/0/subdir/module.x', files)
+        self.assertIn('_imports/0/alias/module.x', files)
+        self.assertEqual(compiler.sha(files['_imports/0/subdir/module.x']),
+                         compiler.sha(files['_imports/0/alias/module.x']))
+        (nested/'loop').symlink_to(self.inputs, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'cyclic input directory'):
+            compiler.tree_files(self.inputs)
+
+    def test_flat_finalizer_and_signal_policy(self) -> None:
+        """The flat adapter refreshes transformed product hashes and restores embedding signal policy."""
+        prior = signal.getsignal(signal.SIGTERM)
+        old = self.build()
+
+        def transform(snapshot: Path, manifest: dict) -> dict:
+            """Model a fabric-owned postprocessor without owning its release directory."""
+            path = snapshot/'counter.v'
+            path.write_text(path.read_text()+'// backend result\n')
+            return {**manifest, 'backend': {'policy': 'test'}}
+
+        new = self.build(finalize=transform)
+        self.assertEqual(signal.getsignal(signal.SIGTERM), prior)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+        manifest = json.loads((new/'counter.build.json').read_text())
+        self.assertEqual(manifest['rtl']['counter.v'], compiler.sha(new/'counter.v'))
+        self.assertEqual(manifest['artifacts']['counter.v'], compiler.sha(new/'counter.v'))
+        self.assertEqual(manifest['backend'], {'policy': 'test'})
+        self.assertNotEqual(old, new)
+
 
 
 class NativeBuild(unittest.TestCase):

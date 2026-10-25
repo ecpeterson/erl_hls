@@ -92,6 +92,7 @@ class SourceToolchainTests(unittest.TestCase):
                 path.chmod(0o755)
             detached = stage/'driver.py'
             shutil.copyfile(release/'bin/compile-source-build', detached)
+            shutil.copyfile(release/'bin/compile_xls.py', stage/'compile_xls.py')
             preview_command = [sys.executable, detached, '--dry-run', xls, moved]
             before = snapshot(moved)
             preview = subprocess.run(preview_command, cwd=stage, env=env, check=True,
@@ -99,8 +100,14 @@ class SourceToolchainTests(unittest.TestCase):
             plan = json.loads(preview.stdout)
             self.assertEqual(snapshot(moved), before)
             self.assertEqual(plan['units'][0]['codegen_flags'], manifest['units'][0]['codegen_flags'])
-            subprocess.run([sys.executable, detached, xls, moved], cwd=stage, env=env, check=True, timeout=30)
-            compiled = json.loads((moved/'compiled.json').read_text())
+            cache = stage/'compiler cache'
+            subprocess.run([sys.executable, detached, '--cache', cache, xls, moved],
+                           cwd=stage, env=env, check=True, timeout=30)
+            compiled_release = (moved/'compiled').resolve()
+            self.assertTrue((moved/'compiled').is_symlink())
+            compiled = json.loads((compiled_release/'compiled.json').read_text())
+            self.assertEqual({name: ((moved/name).read_bytes(), (moved/name).stat().st_mtime_ns)
+                              for name in before}, before)
             self.assertFalse(compiled['native_measured'])
             self.assertEqual([row['command'] for row in plan['units'][0]['commands']],
                              [row['command'] for row in compiled['units'][0]['commands']])
@@ -109,13 +116,12 @@ class SourceToolchainTests(unittest.TestCase):
                                               capture_output=True, text=True, timeout=30)
             self.assertEqual(json.loads(repeated_preview.stdout), plan)
             self.assertEqual(snapshot(moved), after)
-            self.assertEqual((moved/'files.f').read_text(), str(moved/'actor.v')+'\n')
-            with self.assertRaises(FileExistsError):
-                compile_build(xls, moved)
+            self.assertEqual((compiled_release/'files.f').read_text(), 'actor.v\n')
+            self.assertEqual(compile_build(xls, moved, cache=cache), compiled_release)
             original = moved/manifest['inputs'][0]['file']
             original.write_bytes(original.read_bytes()+b'changed')
             with self.assertRaisesRegex(ValueError, 'changed source build input'):
-                compile_build(xls, moved)
+                compile_build(xls, moved, cache=cache)
 
     def test_cli_diagnostic_formats(self) -> None:
         """The installed CLI gives owned errors structured output and exposes unowned exception stacks."""
@@ -201,7 +207,7 @@ class SourceToolchainTests(unittest.TestCase):
                         'rtl': {row['role']: row['rtl'] for row in units}}
             (root/'source-build.json').write_text(json.dumps(manifest))
             before = snapshot(root)
-            with patch.object(driver.subprocess, 'run', side_effect=AssertionError('preview executed a tool')):
+            with patch('subprocess.Popen', side_effect=AssertionError('preview executed a tool')):
                 plan = driver.plan_build(xls, root)
             self.assertEqual(snapshot(root), before)
             self.assertEqual([unit['codegen_flags'] for unit in plan['units']], [unit['codegen_flags'] for unit in units])
@@ -234,9 +240,18 @@ class SourceToolchainTests(unittest.TestCase):
                 path = xls/name
                 path.write_text('#!/bin/sh\necho failed-fixture >&2\nexit 7\n')
                 path.chmod(0o755)
-            with self.assertRaisesRegex(RuntimeError, 'failed-fixture'):
-                compile_build(xls, root)
-            self.assertEqual(json.loads((root/'commands.json').read_text())[0]['exit'], 7)
+            output = root/'published'
+            before = snapshot(root)
+            with self.assertRaisesRegex(RuntimeError, 'compiler exited 7'):
+                compile_build(xls, root, output=output, cache=root/'cache')
+            report = json.loads((root/'published.run.json').read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['active_stage'], 'unit0.convert')
+            attempt = Path(report['attempt'])
+            self.assertTrue(any('failed-fixture' in log.read_text() for log in attempt.rglob('*.log')))
+            self.assertEqual({name: ((root/name).read_bytes(), (root/name).stat().st_mtime_ns)
+                              for name in before}, before)
+            self.assertFalse(output.exists())
             self.assertFalse((root/'optimized.ir').exists())
             self.assertFalse((root/'compiled.json').exists())
 
