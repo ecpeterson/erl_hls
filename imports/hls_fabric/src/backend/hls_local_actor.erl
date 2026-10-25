@@ -3,19 +3,20 @@
 -export([compile/2, emit/2, write/2, write/3, manifest/1]).
 -export_type([artifact/0]).
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. Consumers must retain the spec, plan and DSLX together; supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
--type artifact() :: #{spec := xls_actor_codegen:spec(), plan := xls_statem_plan:plan(),
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
+-type artifact() :: #{program := xls_actor_program:program(),
     dslx := binary(), source := file:filename(), inbox => map(), completion => map(), owner_import => map()}.
 
 -doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
 compile(Source, Options) ->
-    {Spec, Plan} = xls_statem_plan:from_file(Source, Options),
+    Program = xls_actor_program:from_file(Source, Options),
+    Spec = xls_actor_program:spec(Program),
     case maps:get(retained_calls, Spec) of
         none -> ok;
         _ -> error(local_execution_retained_calls_unsupported)
     end,
-    #{source => Source, spec => Spec, plan => Plan,
+    #{source => Source, program => Program,
         dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec)])}.
 
 -doc "Returns an existing artifact's DSLX and JSON provenance sidecar under a relative filename, without recompilation or output I/O. The enclosing generated-files writer validates the relative path; retain the checked artifact unchanged.".
@@ -50,7 +51,9 @@ fresh(Path) ->
 
 -doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner, completion mode and optional source-bound inbox contract; no network admission or timing benefit is established.".
 -spec manifest(artifact()) -> map().
-manifest(Artifact = #{spec := Spec, plan := Plan, dslx := Bytes, source := Source}) ->
+manifest(Artifact = #{program := Program, dslx := Bytes, source := Source}) ->
+    Spec = xls_actor_program:spec(Program),
+    Plan = xls_actor_program:plan(Program),
     #{entries := Entries, reductions := Reductions,
         gathers := Gathers, continuations := Events} = Spec,
     DataWidth = xls_state_projection:width(Spec),

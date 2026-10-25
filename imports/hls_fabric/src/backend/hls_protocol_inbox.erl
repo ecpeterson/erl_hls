@@ -35,7 +35,8 @@ pair({Source,Destination},Channels) ->
 
 -doc "Attaches the ordinary inbox plus exact declared startup records to a fresh source artifact. A group-selected shared owner adds internal completion_granted/action fields, connected only by the checked network emitter; these are not independently admissible host inputs. Startup records are constant slots after the capture slots, ordered as one additional logical sender. They remain pending through reservation/postponement, retire only on source consume, and replay after shared reset. An addressed host adds one final slot; host_valid/frame must remain immutable until source consume, including through postponement. Total capture, startup and host slots must not exceed 256. The same source schema supplies startup encoding; no caller-supplied frames or startup progress assumptions are accepted.".
 -spec attach(hls_local_actor:artifact(), [map()], map(), [tuple()], boolean()) -> hls_local_actor:artifact().
-attach(Artifact=#{spec:=#{message_names:=Names},dslx:=Body}, Links, #{channels:=Channels}, Messages, Host) ->
+attach(Artifact=#{program:=Program,dslx:=Body}, Links, #{channels:=Channels}, Messages, Host) ->
+    #{message_names:=Names}=xls_actor_program:spec(Program),
     Starts=hls_protocol_schema:frames(Artifact,Messages),
     Rows=lists:append([[begin
         [Op]=[N||{N,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],

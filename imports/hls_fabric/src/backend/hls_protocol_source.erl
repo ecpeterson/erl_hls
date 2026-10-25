@@ -8,7 +8,8 @@ plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Cap
     #{pairs:=Pairs}=hls_protocol_inbox:plan(Capture),
     Components=[begin
         [Transaction]=[T||T=#{actor:=A}<-Transactions,A=:=Id],
-        #{spec:=Spec}=maps:get(M,Modules),
+        #{program:=Program}=maps:get(M,Modules),
+        Spec=xls_actor_program:spec(Program),
         actor(I,Id,Spec,Transaction,Capture,Pairs)
     end || {I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
     #{sources=>Components,snapshot=>ordinary_evaluated_payload_and_layout,

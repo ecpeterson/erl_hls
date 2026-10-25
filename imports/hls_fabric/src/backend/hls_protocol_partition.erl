@@ -30,7 +30,8 @@ plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sour
 -spec classes(map(),map(),map()) -> [map()].
 classes(#{destination_index:=D,pair:=#{slots:=Slots}},#{topology:=#{actors:=Actors},modules:=Modules},#{channels:=Channels}) ->
     #{module:=M}=lists:nth(D+1,Actors),
-    #{spec:=#{message_names:=Names}}=maps:get(M,Modules),
+    #{program:=Program}=maps:get(M,Modules),
+    #{message_names:=Names}=xls_actor_program:spec(Program),
     [begin
         [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
         [Op]=[O||{O,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],

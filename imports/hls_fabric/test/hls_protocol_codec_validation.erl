@@ -2,14 +2,14 @@
 -moduledoc "Finite RTL witnesses for source-bound frame permutations and canonical-frame rejection.".
 -export([prepare/1]).
 
--doc "Compiles the two-phase fixture through the public capture API and writes four codec modules and self-checking benches to a fresh directory. Checks payload bit bases, extremes, all five-bit payloads, every forbidden fixed-bit flip and every valid/ready combination. This is a finite source-to-RTL witness, not a connected-protocol proof.".
+-doc "Compiles the complete two-phase fixture, derives captures from that program and writes four codec modules and self-checking benches to a fresh directory. Checks payload bit bases, extremes, all five-bit payloads, every forbidden fixed-bit flip and every valid/ready combination. This is a finite source-to-RTL witness, not a connected-protocol proof.".
 -spec prepare(file:filename()) -> ok.
 prepare(Stage) ->
     ok = file:make_dir(Stage),
     Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
         || Tag <- [unaligned, full, constant, small]],
-    #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels},
-        #{a => #{file => "test/hls_protocol_capture_fixture.erl", options => []}}),
+    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", []),
+    #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
     lists:foreach(fun(Channel = #{port := Tag}) -> write_case(Stage, atom_to_list(Tag), Channel) end, Captures).
 
 %% The same source-derived layout supplies host and RTL codecs; no alternative facts enter this harness.

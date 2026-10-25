@@ -80,6 +80,83 @@ emission_inputs_test() ->
     ?assertException(error, _, hls_protocol_network:emit(Saved)),
     ok.
 
+%% Trace a real small build; three producer instances must share one ordinary source compilation.
+-spec shared_source_program_test_() -> term().
+shared_source_program_test_() -> {timeout, 30, fun shared_source_program/0}.
+
+%% Every source phase, conditional send and instance transaction survives compilation reuse.
+-spec shared_source_program() -> ok.
+shared_source_program() ->
+    Config = #{sources => [{"test/hls_protocol_capture_fixture.erl", []},
+            {"test/hls_protocol_transport_topology.erl", []}],
+        topology => {hls_protocol_transport_topology, topology, []}, actor_limit => 3},
+    {Build, Compiled} = trace_build(fun() -> hls_protocol_transport:plan(Config) end),
+    ?assertEqual(["hls_protocol_capture_fixture.erl"], [filename:basename(File) || File <- Compiled]),
+    #{bundle := #{topology := #{actors := Actors}, modules := Modules,
+            inventory := #{modules := #{hls_protocol_capture_fixture := #{alternatives := Alternatives}}}},
+        capture := #{channels := Channels}, transactions := #{actors := Transactions}} =
+        hls_protocol_transport:descriptor(Build),
+    ?assertEqual([a, b, c], [Id || #{id := Id} <- Actors]),
+    ?assertEqual([hls_protocol_capture_fixture], maps:keys(Modules)),
+    ?assertEqual([{first, <<1:3>>}, {second, <<2:3>>}], lists:usort([
+        {Phase, Value} || #{phase := Phase, port := varying, fields := [#{constant := Value}]} <- Alternatives])),
+    ?assertEqual([<<1:3>>, <<2:3>>], lists:usort([
+        Value || #{port := conditional, fields := [#{constant := Value}]} <- Alternatives])),
+    ?assertEqual([{Id, Port, 3} || Id <- [a, b, c], Port <- [conditional, varying]],
+        lists:sort([{Id, Port, Bits} || #{source := Id, port := Port, payload_bits := Bits} <- Channels,
+            Port =:= conditional orelse Port =:= varying])),
+    lists:foreach(fun(#{batches := Batches}) ->
+        ?assertEqual([lists:seq(0, 7), lists:seq(0, 7)],
+            [Order || #{phase := first, logical_send_order := Order} <- Batches]),
+        ?assertEqual([[0]], [Order || #{phase := second, logical_send_order := Order} <- Batches]),
+        %% Partial constants retain the ordinary storage slices, not the inventory's display projection.
+        PartialWidths = [lists:sum([Width || {_, Width} <- Slices])
+            || #{effects := Effects} <- Batches,
+               #{port := partial, fields := [#{slices := Slices}]} <- Effects],
+        ?assertEqual([2, 2], PartialWidths)
+    end, Transactions).
+
+%% A private trace session observes only this test process, so concurrent builds cannot inflate the count.
+-spec trace_build(fun(() -> hls_protocol_transport:build())) -> {hls_protocol_transport:build(), [file:filename()]}.
+trace_build(Build) ->
+    {module, xls_statem_plan} = code:ensure_loaded(xls_statem_plan),
+    {Collector, Monitor} = spawn_monitor(fun() -> collect_compilations([]) end),
+    Session = trace:session_create(protocol_build_compilations, Collector, []),
+    try
+        1 = trace:process(Session, self(), true, [call]),
+        1 = trace:function(Session, {xls_statem_plan, from_file, 2}, [], []),
+        Result = Build(),
+        1 = trace:process(Session, self(), false, [call]),
+        Ref = trace:delivered(Session, self()),
+        receive
+            {trace_delivered, _, Ref} -> ok
+        after 5000 -> error(compile_trace_delivery_timeout)
+        end,
+        Collector ! {collect, self(), Ref},
+        receive
+            {Ref, Files} -> {Result, Files}
+        after 5000 -> error(compile_trace_collection_timeout)
+        end
+    after
+        trace:session_destroy(Session),
+        exit(Collector, kill),
+        receive
+            {'DOWN', Monitor, process, Collector, _} -> ok
+        after 5000 -> error(compile_trace_cleanup_timeout)
+        end
+    end.
+
+%% Retain source filenames, not full compiler contexts, until the caller has observed trace delivery.
+-spec collect_compilations([file:filename()]) -> ok.
+collect_compilations(Files) ->
+    receive
+        %% Each ordinary planner entry is one actual source compilation by the traced build process.
+        {trace, _, call, {xls_statem_plan, from_file, [File, _Options]}} ->
+            collect_compilations([File | Files]);
+        %% The delivery barrier guarantees every preceding call is already in this mailbox.
+        {collect, Owner, Ref} -> Owner ! {Ref, lists:reverse(Files)}, ok
+    end.
+
 %% Compare generated hardware independently of process-local compiler provenance in plans.
 -spec hardware_files(hls_generated_files:files()) -> #{string() => binary()}.
 hardware_files(Files) ->

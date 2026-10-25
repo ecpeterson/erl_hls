@@ -15,8 +15,8 @@ main([CompilerRoot,Output]) ->
         [{i,filename:join(CompilerRoot,"include")},{i,SourceDir}]) end,All),
     Plans=maps:from_list([begin
         [Context]=proplists:get_value(hls_source_context,M:module_info(attributes)),
-        {Spec,Plan}=xls_statem_plan:from_file(maps:get(source_name,Context),Context),
-        {M,#{spec=>Spec,plan=>Plan,context=>Context}}
+        Program=xls_actor_program:from_file(maps:get(source_name,Context),Context),
+        {M,#{program=>Program,context=>Context}}
     end||M<-Modules]),
     ok=file:write_file(filename:join(Output,"source-plans.etf"),term_to_binary(Plans,[deterministic]),[exclusive]),
     Summaries=[inventory(Name,Topology,Plans,Output)||{Name,Topology}<-[
@@ -27,7 +27,7 @@ main([CompilerRoot,Output]) ->
     Inputs=lists:usort([filename:join(SourceDir,atom_to_list(M)++".erl")||M<-All]++
         lists:append([maps:get(origins,maps:get(context,P),[])||P<-maps:values(Plans)])++
         [escript:script_name()]),
-    Beams=[code:which(M)||M<-[xls_statem_plan,xls_statem_lower,xls_parse,hls_source,hls_pack,hls_topology,hls_topology_family,hls_actor_interface,hls_protocol_topology,hls_protocol_inventory]],
+    Beams=[code:which(M)||M<-[xls_actor_program,xls_statem_plan,xls_statem_lower,xls_parse,hls_source,hls_pack,hls_topology,hls_topology_family,hls_actor_interface,hls_protocol_topology,hls_protocol_inventory]],
     Report=#{eligible=>false,rtl_generated=>false,source_plans=>maps:map(fun(_,P)->source_summary(P) end,Plans),
         topologies=>Summaries,inputs=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Inputs],
         compiler_beams=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Beams]},
@@ -68,10 +68,12 @@ inventory(Name,Topology,Plans,Output)->
 
 %% Report complete ordinary source shapes, including branchy entries and asynchronous control.
 -spec source_summary(map()) -> map().
-source_summary(#{spec:=S,plan:=P})->
-    #{source=>list_to_binary(maps:get(source,P)),source_plan_sha256=>binary:encode_hex(maps:get(source_sha256,P),lowercase),
+source_summary(#{program:=Program})->
+    S=xls_actor_program:spec(Program),P=xls_actor_program:plan(Program),
+    #{source:=File,source_sha256:=Hash}=xls_statem_plan:provenance(P),
+    #{source=>list_to_binary(File),source_plan_sha256=>binary:encode_hex(Hash,lowercase),
       phases=>maps:get(phases,S),message_words=>maps:get(message_words,S),messages=>maps:get(message_names,S),
-      outputs=>maps:get(output_names,S),callbacks=>length(maps:get(callbacks,P)),
+      outputs=>maps:get(output_names,S),callbacks=>length(xls_statem_plan:callbacks(P)),
       entries=>length(maps:get(entries,S)),retained_calls=>text(maps:get(retained_calls,S)),
       continuations=>text(maps:get(continuations,S)),
       gathers=>text(maps:get(gathers,S)),reductions=>text(maps:get(reductions,S))}.

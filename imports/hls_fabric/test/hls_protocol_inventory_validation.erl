@@ -37,7 +37,8 @@ check(Name, Stage) ->
     [] = lists:append([maps:get(K, T) || K <- [families, route_relations, lane_relations]]),
     true = length(Obligations) =:= 5 * length(Actors),
     ExpectedChannels = lists:usort(lists:append([begin
-        #{spec := #{entries := Entries}} = maps:get(Module, Modules),
+        #{program := Program} = maps:get(Module, Modules),
+        #{entries := Entries} = xls_actor_program:spec(Program),
         Tags = lists:usort([Tag || #{layouts := Layouts} <- Entries,
             #{storage := #{effects := Effects}} <- Layouts,
             #{port := P, tag := Tag} <- Effects, P =:= Port]),
@@ -46,9 +47,11 @@ check(Name, Stage) ->
         #{source := {Source, Port}, recipients := Recipients} <- Routes, Source =:= Id])),
     ExpectedChannels = lists:sort([{S, P, Tag, D} ||
         #{source := S, port := P, tag := Tag, destination := D} <- Channels]),
-    maps:foreach(fun(Module, #{spec := Spec, plan := Plan}) ->
+    maps:foreach(fun(Module, #{program := Program}) ->
+        Spec = xls_actor_program:spec(Program),
+        Plan = xls_actor_program:plan(Program),
         #{families := Families, alternatives := Alternatives} = maps:get(Module, maps:get(modules, R)),
-        true = lists:sum([length(Cs) || #{clauses := Cs} <- Families]) =:= length(maps:get(callbacks, Plan)),
+        true = lists:sum([length(Cs) || #{clauses := Cs} <- Families]) =:= length(xls_statem_plan:callbacks(Plan)),
         true = length(Alternatives) =:= lists:sum([length(Effects) ||
             #{layouts := Layouts} <- maps:get(entries, Spec), #{storage := #{effects := Effects}} <- Layouts])
     end, Modules),

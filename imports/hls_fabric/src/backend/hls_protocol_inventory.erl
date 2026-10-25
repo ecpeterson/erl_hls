@@ -8,7 +8,7 @@
     actors := [map()], channels := [map()], boundaries := map(),
     diagnostics := [map()], obligations := [map()], eligible := false}.
 
--doc "Inspects a normalized exact topology and freshly compiled module artifacts containing spec and plan. Retains every entry alternative and complete ordered callback family. Reports unknown producers, interfaces and temporal obligations without executing callbacks or trusting fixture traces. The caller must bind these trusted compiler artifacts to current source; this function is not a stale-artifact validator.".
+-doc "Inspects a normalized exact topology and module artifacts containing a complete opaque compiler program. Retains every entry alternative and complete ordered callback family. Reports unknown producers, interfaces and temporal obligations without executing callbacks or trusting fixture traces. The caller must bind these trusted compiler artifacts to current source; this function is not a stale-artifact validator.".
 -spec inspect(hls_topology:plan(), #{module() => map()}) -> report().
 inspect(Topology = #{actors := Actors, routes := Routes}, Artifacts) ->
     Modules = maps:map(fun module/2, Artifacts),
@@ -25,15 +25,18 @@ inspect(Topology = #{actors := Actors, routes := Routes}, Artifacts) ->
 
 %% Keep source identities and complete families, not just a successful receive arm.
 -spec module(module(), map()) -> map().
-module(Name, #{spec := Spec, plan := Plan = #{callbacks := Callbacks}}) ->
-    Entries = alternatives(maps:get(entries, Spec)),
+module(Name, #{program := Program}) ->
+    Spec = xls_actor_program:spec(Program),
+    Plan = xls_actor_program:plan(Program),
+    Callbacks = xls_statem_plan:callbacks(Plan),
+    Entries = [alternative(E) || E <- xls_actor_program:entry_effects(Program)],
     Families = [#{phase => Phase, kind => Kind,
         clauses => [callback(C) || C <- Callbacks,
             maps:get(phase, C) =:= Phase, maps:get(kind, C) =:= Kind],
         source_family_hash => hash([C || C <- Callbacks,
             maps:get(phase, C) =:= Phase, maps:get(kind, C) =:= Kind])}
         || {Phase, Kind} <- lists:usort([{maps:get(phase, C), maps:get(kind, C)} || C <- Callbacks])],
-    #{identity => maps:with([source, source_sha256, artifact_sha256, planner_md5], Plan),
+    #{identity => xls_statem_plan:provenance(Plan),
       phases => maps:get(phases, Spec), outputs => maps:get(output_names, Spec),
       messages => maps:get(message_names, Spec), alternatives => Entries,
       entry_layouts => entry_layouts(maps:get(entries, Spec)),
@@ -45,14 +48,11 @@ module(Name, #{spec := Spec, plan := Plan = #{callbacks := Callbacks}}) ->
               <<"Declare and check a bounded request/reply adapter; retained callers are not closed entry producers.">>)]
       end}.
 
-%% Reuse ordinary encoded storage facts; do not erase their phase/layout/order correlation.
--spec alternatives([map()]) -> [map()].
-alternatives(Entries) ->
-    [#{phase => Phase, layout => Layout, order => Order, port => Port, tag => Tag,
-       fields => [maps:with([name, type, constant, known, offset], F) || F <- Fields]}
-     || #{layouts := Layouts} <- Entries,
-        #{phase := Phase, layout := Layout, storage := #{effects := Effects}} <- Layouts,
-        {Order, #{port := Port, tag := Tag, fields := Fields}} <- lists:enumerate(0, Effects)].
+%% The inventory is a display projection; storage consumers use the full compiler effects.
+-spec alternative(map()) -> map().
+alternative(Effect = #{fields := Fields}) ->
+    (maps:with([phase, layout, order, port, tag], Effect))#{
+        fields => [maps:with([name, type, constant, known, offset], F) || F <- Fields]}.
 
 %% Empty source layouts still commit state and must release a zero-delivery transaction.
 -spec entry_layouts([map()]) -> [map()].

@@ -32,7 +32,8 @@ emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receiv
 
 %% Resource order is the exact normalized actor order, including composite logical identities.
 -spec resource(map(),map()) -> map().
-resource(#{index:=I,id:=Id,module:=M},#{spec:=Spec}) ->
+resource(#{index:=I,id:=Id,module:=M},#{program:=Program}) ->
+    Spec=xls_actor_program:spec(Program),
     Collection=xls_actor_observation:collection(Spec),Layout=xls_actor_observation:layout(Collection),
     Base=#{id=>I,kind=>actor,name=>iolist_to_binary(["owner/",integer_to_list(I)]),owner_index=>I,
         logical_key=>xls_actor_debug:actor_key(Id),logical_name=>iolist_to_binary(io_lib:format("~0tp",[Id])),
@@ -43,7 +44,8 @@ resource(#{index:=I,id:=Id,module:=M},#{spec:=Spec}) ->
 
 %% Projection reads declared raw-machine offsets, never private action or collection payload data.
 -spec observation(map(),map()) -> iodata().
-observation(#{index:=I,manifest:=#{machine_layout:=ML,machine_bits:=Width}},#{spec:=Spec}) ->
+observation(#{index:=I,manifest:=#{machine_layout:=ML,machine_bits:=Width}},#{program:=Program}) ->
+    Spec=xls_actor_program:spec(Program),
     Layout=xls_actor_observation:layout(xls_actor_observation:collection(Spec)),
     Fields=maps:get(fields,maps:get(reduction,Layout,#{fields=>#{}})),
     Pieces=["(bits[128]:1 << u32:25)",shift(slice(maps:get(phase,ML)),0),

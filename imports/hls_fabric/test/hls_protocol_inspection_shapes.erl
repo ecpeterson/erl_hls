@@ -15,7 +15,8 @@ write(Compiler, Stage) ->
 %% Use the public actor and inspection emitters, then append a typed reference to the actor module.
 -spec write_case(atom(), file:filename(), file:filename()) -> ok.
 write_case(Name, File, Stage) ->
-    Actor = #{spec := Spec} = hls_local_actor:compile(File, []),
+    Actor = #{program := Program} = hls_local_actor:compile(File, []),
+    Spec = xls_actor_program:spec(Program),
     Directory = filename:join(Stage, atom_to_list(Name)),
     ok = file:make_dir(Directory),
     ActorFile = filename:join(Directory, "actor.x"),

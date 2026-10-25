@@ -19,7 +19,8 @@ group(I, Ids, Actors, Modules, Native) when is_list(Ids), length(Ids) >= 2, leng
     Bindings = [member(Id, Actors, Native) || Id <- Ids],
     case lists:usort([M || {_, M} <- Bindings]) of
         [Module] ->
-            #{spec := Spec} = maps:get(Module, Modules),
+            #{program := Program} = maps:get(Module, Modules),
+            Spec = xls_actor_program:spec(Program),
             case Spec of
                 #{reductions := R, gathers := none, retained_calls := none} when R =/= none -> ok;
                 _ -> error({unsupported_shared_completion, Module})
@@ -40,7 +41,8 @@ member(Id, Actors, Native) ->
 
 -doc "Selects the shared-owner template only for a checked group's receiver. Reuses the fresh source spec and ordinary compiler execution; ungrouped artifacts are unchanged. Call only after plan/3 on this same bundle, before attaching an inbox.".
 -spec receiver(non_neg_integer(), [map()], hls_local_actor:artifact()) -> hls_local_actor:artifact().
-receiver(Index, Groups, Artifact = #{spec := Spec}) ->
+receiver(Index, Groups, Artifact = #{program := Program}) ->
+    Spec = xls_actor_program:spec(Program),
     case [G || #{index := G, members := Members} <- Groups, lists:member(Index, Members)] of
         [] -> Artifact;
         [Group] -> Artifact#{completion => #{mode => shared, group => Group},

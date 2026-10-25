@@ -73,8 +73,8 @@ source_models() ->
     end, Modules ++ [phi_noise_topology, phi_repetition_topology]),
     Artifacts = maps:from_list([begin
         [Context] = proplists:get_value(hls_source_context, M:module_info(attributes)),
-        {Spec, Plan} = xls_statem_plan:from_file(maps:get(source_name, Context), Context),
-        {M, #{spec => Spec, plan => Plan}}
+        Program = xls_actor_program:from_file(maps:get(source_name, Context), Context),
+        {M, #{program => Program}}
     end || M <- Modules]),
     Cases = [{phi_repetition_topology:topology(N, 16#80000000), line, 3 * N, 34 * N} || N <- [2, 3, 6]] ++
         [{phi_noise_topology:topology(3, 16#80000000), halo, 54, 1188}],

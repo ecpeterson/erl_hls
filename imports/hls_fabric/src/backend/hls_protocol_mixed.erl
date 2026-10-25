@@ -22,7 +22,8 @@ emit(Config) when is_map(Config) ->
             case Destination of {actor,To}->false=lists:member(To,HostIds);{external,_}->ok end,
             {Port,Destination}
         end||#{source:={From,Port},recipients:=Recipients}<-Routes,From=:=Id]),
-        #{spec:=#{capacity:=Capacity}}=maps:get(Module,Modules),
+        #{program:=Program}=maps:get(Module,Modules),
+        #{capacity:=Capacity}=xls_actor_program:spec(Program),
         Messages=lists:append([Ms||#{target:=Target,messages:=Ms}<-Startup,Target=:=Id]),
         {I,#{id=>Id,module=>Module,capacity=>Capacity,outputs=>Outputs,startup=>Messages}}
     end||{I,#{id:=Id,module:=Module}}<-lists:enumerate(0,Actors),not lists:member(I,Native)]),

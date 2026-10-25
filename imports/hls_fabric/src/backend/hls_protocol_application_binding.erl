@@ -39,7 +39,9 @@ event(#{devices:=Devices},Device,Index,Frame) when Frame>=0,Frame<(1 bsl 128) ->
 
 %% Field names/order, types, selectors and packed width must match fresh compiler records.
 -spec check_codec(module(),map(),map()) -> ok.
-check_codec(Module,#{spec:=#{message_names:=Names},plan:=#{records:=Records}},Interface) ->
+check_codec(Module,#{program:=Program},Interface) ->
+    #{message_names:=Names}=xls_actor_program:spec(Program),
+    Records=xls_statem_plan:records(xls_actor_program:plan(Program)),
     lists:foreach(fun({Op,Name})->
         #{selector:=Op,fields:=Fields}=hls_actor_interface:schema(Interface,Name),
         Op=Module:pack_tag(Name),

@@ -23,7 +23,7 @@
 write(Input, Output) ->
     hls_generated_files:write(emit(Input), Output).
 
--doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model => {Module, Options} invokes an application-owned hls_protocol_model provider on the fresh inventory. Its checked graph establishes neither source refinement nor progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Capture analysis independently reads producer source and must agree with the ordinary actor compilation.".
+-doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model => {Module, Options} invokes an application-owned hls_protocol_model provider on the fresh inventory. Its checked graph establishes neither source refinement nor progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Each distinct actor module is lowered once; capture analysis and all placements share that complete compiler program.".
 -spec prepare(map()) -> program().
 prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
@@ -41,16 +41,11 @@ prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}
     [] = maps:get(diagnostics, Inventory),
     Model = hls_protocol_model:check(maps:get(protocol_model, Config, none), Inventory),
     Bundle = #{topology => Topology, modules => Modules, inventory => Inventory},
-    Files = maps:from_list([{Id, source(maps:get(M, Modules))} || #{id := Id, module := M} <- Actors]),
-    Capture = hls_protocol_capture:plan(Inventory, Files),
-    %% The second source read must agree with the ordinary snapshot decoder's compilation.
-    maps:foreach(fun(Id, Provenance) ->
-        [#{module := M}] = [A || A = #{id := I} <- Actors, I =:= Id],
-        #{plan := Plan} = maps:get(M, Modules),
-        Provenance = xls_statem_plan:manifest(Plan)
-    end, maps:get(sources, Capture)),
-    Entries = maps:from_list([{Id, alternatives(maps:get(spec, maps:get(M, Modules)))}
-        || #{id := Id, module := M} <- Actors]),
+    Programs = maps:map(fun(_, #{program := P}) -> P end, Modules),
+    Producers = maps:from_list([{Id, maps:get(M, Programs)} || #{id := Id, module := M} <- Actors]),
+    Capture = hls_protocol_capture:plan(Inventory, Producers),
+    Effects = maps:map(fun(_, P) -> xls_actor_program:entry_effects(P) end, Programs),
+    Entries = maps:from_list([{Id, maps:get(M, Effects)} || #{id := Id, module := M} <- Actors]),
     Transactions = hls_protocol_transactions:plan(Inventory, Entries),
     Publishers = hls_protocol_source:plan(Bundle, Transactions, Capture),
     %% State invariants are outside this build boundary; literal source projections need none.
@@ -118,7 +113,8 @@ emit(#build{transport = Plan = #{bundle := #{modules := Modules}, fabric := Fabr
     ModelFiles = hls_protocol_model:emit(maps:get(protocol_model, Plan, none)),
     Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
-        source_plans => maps:map(fun(_, #{plan := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5], xls_statem_plan:manifest(P)) end, Modules),
+        source_plans => maps:map(fun(_, #{program := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5],
+            xls_statem_plan:manifest(xls_actor_program:plan(P))) end, Modules),
         actor_functions => ActorFunctions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
     Generated = hls_generated_files:merge(Actors ++ [
         hls_generated_files:prefix("dslx", TransportFiles), ModelFiles,
@@ -139,18 +135,6 @@ compile(Module) ->
     [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
     Artifact = hls_local_actor:compile(maps:get(source_name, Context), Context),
     Artifact#{context => Context}.
-
-%% Capture planning independently recompiles the same complete producer source.
--spec source(map()) -> map().
-source(#{context := Context}) -> #{file => maps:get(source_name, Context), options => Context}.
-
-%% Original storage fields retain slices and offsets for every send alternative.
--spec alternatives(map()) -> [map()].
-alternatives(#{entries := Entries}) ->
-    [Effect#{phase => Phase, layout => Layout, order => Order}
-        || #{layouts := Layouts} <- Entries,
-           #{phase := Phase, layout := Layout, storage := #{effects := Effects}} <- Layouts,
-           {Order, Effect} <- lists:enumerate(0, Effects)].
 
 %% Independent destination acceptance implements direct and buffered delivery only.
 -spec delivery(map()) -> ok.

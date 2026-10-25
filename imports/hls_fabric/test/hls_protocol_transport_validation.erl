@@ -7,7 +7,8 @@ prepare(Directory) ->
     {ok, Bytes} = file:read_file(filename:join(Directory, "transport.etf")),
     #{bundle := #{modules := Modules}, sources := #{sources := Sources},
       capture := #{channels := Channels}, fabric := #{links := Links, boundaries := Boundaries}} = binary_to_term(Bytes),
-    [{Module, #{spec := Spec}}] = maps:to_list(Modules),
+    [{Module, #{program := Program}}] = maps:to_list(Modules),
+    Spec = xls_actor_program:spec(Program),
     ok = file:write_file(filename:join(Directory, "reference.x"), xls_shared_codegen:execution(Spec), [exclusive]),
     Pairs = [begin
         SlotRows = [begin
@@ -64,7 +65,8 @@ ingress(Directory) ->
           true=lists:sort(Schemas)=:=lists:sort([Tag||#{tag:=Tag}<-Domains]),
           Actual=[begin
             #{id:=Actor,module:=M}=lists:nth(I+1,Actors),
-            #{plan:=#{records:=Records}}=maps:get(M,Modules),
+            #{program:=Program}=maps:get(M,Modules),
+            Records=xls_statem_plan:records(xls_actor_program:plan(Program)),
             lists:foreach(fun(#{tag:=Tag,mask:=Mask,value:=Value})->
               [Fs]=[Fields||{attribute,_,record,{Name,Fields}}<-Records,Name=:=Tag],
               Message=list_to_tuple([Tag|[hls_type:zero(hls_type:descriptor(Type))||{typed_record_field,_,Type}<-Fs]]),
