@@ -45,15 +45,22 @@ class SourceToolchainTests(unittest.TestCase):
                 '-module(xls_names_gs_fixture).', '-module(xls_names_gs_fixture).\n-include("options.hrl").'))
             includes = stage/'includes'
             includes.mkdir()
-            (includes/'options.hrl').write_text('-ifndef(CLI_DEFINE).\n-error(missing_cli_define).\n-endif.\n')
+            (includes/'options.hrl').write_text('-ifndef(CLI_DEFINE).\n-error(missing_cli_define).\n-endif.\n'
+                '-if(?CLI_DEFINE =/= 7 orelse ?BARE =/= true orelse ?FROM_FILE =/= 9).\n'
+                '-error(wrong_macro_precedence).\n-endif.\n')
+            defaults = stage/'options.erl'
+            defaults.write_text("[{d, 'CLI_DEFINE', 1}, {d, 'BARE', 0}, {d, 'FROM_FILE', 9}].\n")
             env = {**os.environ, 'PATH': str(forbidden)+os.pathsep+os.environ['PATH'], 'ERL_AFLAGS': ''}
             emitted = stage/'emitted'
-            command = [release/'bin/hlsc', 'emit', fixture, '-I', includes, '-D', 'CLI_DEFINE=7',
-                       '--output', emitted, '--pipeline-stages', '3']
+            command = [release/'bin/hlsc', 'emit', fixture, '--output', stage/'superseded',
+                       '--pipeline-stages', 'invalid', '--source-options', stage/'absent.erl',
+                       '-I', includes, '-D', 'CLI_DEFINE', '-D', 'CLI_DEFINE=7', '-D', 'BARE=2', '-D', 'BARE',
+                       '--source-options', defaults, '--output', emitted, '--pipeline-stages', '3']
             result = subprocess.run(command, cwd=stage, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             manifest = json.loads((emitted/'source-build.json').read_text())
             self.assertEqual(manifest['metadata'], {'kind': 'actor'})
+            self.assertFalse((stage/'superseded').exists())
             self.assertIn('--pipeline_stages=3', manifest['units'][0]['codegen_flags'])
             self.assertIn('proc Top {', (emitted/'actor.x').read_text())
             for row in manifest['inputs']:
@@ -122,11 +129,13 @@ class SourceToolchainTests(unittest.TestCase):
                               '-record(message, {value = hls_type:zero() :: hls_bits:bits(128)}).\n'
                               'init([]) -> #cell{}.\nhandle_call(#message{}, State) -> {reply, #message{}, State}.\n')
             command = [release/'bin/hlsc', 'emit', source, '--output', stage/'unused']
-            human = subprocess.run(command, env=env, capture_output=True, text=True, timeout=30)
+            human = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics', 'text'],
+                                   env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(human.returncode, 1)
             self.assertIn('actor_source/message_too_wide', human.stderr)
             self.assertIn(str(source), human.stderr)
-            machine = subprocess.run([*command, '--diagnostics', 'json'], env=env,
+            machine = subprocess.run([*command, '--diagnostics', 'invalid', '--diagnostics', 'text',
+                                      '--diagnostics', 'json'], env=env,
                                      capture_output=True, text=True, timeout=30)
             report = json.loads(machine.stderr)
             self.assertEqual(report['code'], 'message_too_wide')
@@ -134,6 +143,14 @@ class SourceToolchainTests(unittest.TestCase):
             self.assertEqual(report['context']['location'], 6)
             self.assertEqual(report['context']['width'], 128)
             self.assertFalse((stage/'unused').exists())
+            invalid = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics', 'invalid'],
+                                     env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(invalid.returncode, 1)
+            self.assertIn('arguments/invalid_diagnostics', invalid.stderr)
+            missing_mode = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics'],
+                                          env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(missing_mode.returncode, 1)
+            self.assertIn('arguments/missing_option_value', missing_mode.stderr)
             debug = subprocess.run([*command, '--diagnostics', 'json'], env={**env, 'HLS_DEBUG': '1'},
                                    capture_output=True, text=True, timeout=30)
             self.assertTrue(json.loads(debug.stderr)['stack'])

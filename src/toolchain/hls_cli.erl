@@ -3,13 +3,13 @@
 -export([main/2, options/2, required/2, integer/2]).
 -export_type([option/0]).
 
--doc "An accepted spelling, fixed result key and value mode. Repeated values retain command-line order; other duplicates fail.".
+-doc "An accepted spelling, fixed result key and value mode. Repeat options accumulate in command-line order; values use the last occurrence and flags are idempotent.".
 -type option() :: {string(), atom(), flag | value | repeat}.
 
 -doc "Runs a frontend with plain VM arguments, reserving --diagnostics text|json for failure rendering. Tagged failures use their owned diagnostic; unexpected exceptions always retain class, reason and stack. Exits zero on success or one on failure.".
 -spec main(string(), fun(([string()]) -> ok)) -> no_return().
 main(Name, Run) ->
-    try diagnostic_options(init:get_plain_arguments(), text, false, []) of
+    try diagnostic_options(init:get_plain_arguments(), "text", []) of
         {Mode, Args} -> execute(Name, Run, Mode, Args)
     catch
         error:{hls_diagnostic, Diagnostic}:Stack ->
@@ -21,22 +21,21 @@ main(Name, Run) ->
     end.
 
 %% Keep global rendering options separate from frontend command vocabularies.
--spec diagnostic_options([string()], text | json, boolean(), [string()]) ->
-    {text | json, [string()]}.
-diagnostic_options([], Mode, _Seen, Acc) -> {Mode, lists:reverse(Acc)};
-diagnostic_options(["--diagnostics" | _], _Mode, true, _Acc) ->
-    hls_diagnostic:raise(arguments, duplicate_option, <<"Option may appear only once">>, #{option => <<"--diagnostics">>});
-diagnostic_options(["--diagnostics", Value | Rest], _Mode, false, Acc) ->
+-spec diagnostic_options([string()], string(), [string()]) -> {text | json, [string()]}.
+diagnostic_options([], Value, Acc) ->
     Mode = case Value of
         "text" -> text;
         "json" -> json;
-        _ -> hls_diagnostic:raise(arguments, invalid_diagnostics, <<"Diagnostic format must be text or json">>, #{option => <<"--diagnostics">>, value => unicode:characters_to_binary(Value)})
+        _ -> hls_diagnostic:raise(arguments, invalid_diagnostics, <<"Diagnostic format must be text or json">>,
+            #{option => <<"--diagnostics">>, value => unicode:characters_to_binary(Value)})
     end,
-    diagnostic_options(Rest, Mode, true, Acc);
-diagnostic_options(["--diagnostics"], _Mode, false, _Acc) ->
+    {Mode, lists:reverse(Acc)};
+diagnostic_options(["--diagnostics", Value | Rest], _Mode, Acc) ->
+    diagnostic_options(Rest, Value, Acc);
+diagnostic_options(["--diagnostics"], _Mode, _Acc) ->
     hls_diagnostic:raise(arguments, missing_option_value, <<"Option requires a value">>, #{option => <<"--diagnostics">>});
-diagnostic_options([Arg | Rest], Mode, Seen, Acc) ->
-    diagnostic_options(Rest, Mode, Seen, [Arg | Acc]).
+diagnostic_options([Arg | Rest], Mode, Acc) ->
+    diagnostic_options(Rest, Mode, [Arg | Acc]).
 
 %% Only an owned diagnostic is rendered as an expected failure.
 -spec execute(string(), fun(([string()]) -> ok), text | json, [string()]) -> no_return().
@@ -75,21 +74,17 @@ report_exception(_Name, json, Class, Reason, Stack) ->
     io:put_chars(standard_error, [json:encode(hls_diagnostic:json_value(
         #{exception => Class, reason => Reason, stack => Stack})), "\n"]).
 
--doc "Parses only declared options, without creating atoms. Value options require separate arguments; missing, unknown and duplicate options fail. Positional arguments are handled by the calling frontend.".
+-doc "Parses only declared options, without creating atoms. Value options require separate arguments; missing and unknown options fail. Later values override earlier values for the same key, including aliases; repeat options accumulate and flags may repeat. Positional arguments are handled by the calling frontend.".
 -spec options([string()], [option()]) -> map().
 options(Args, Spec) -> options(Args, Spec, #{}).
 
-%% One parser owns spelling and duplicate handling without knowing any application.
+%% Resolve spelling and precedence before frontends validate effective values.
 -spec options([string()], [option()], map()) -> map().
 options([], _, Acc) -> Acc;
 options([Name | Rest], Spec, Acc) ->
     {Key, Mode} = case lists:keyfind(Name, 1, Spec) of
         {Name, K, M} -> {K, M};
         false -> hls_diagnostic:raise(arguments, unknown_option, <<"Unknown option">>, #{option => unicode:characters_to_binary(Name)})
-    end,
-    case Mode =/= repeat andalso maps:is_key(Key, Acc) of
-        true -> hls_diagnostic:raise(arguments, duplicate_option, <<"Option may appear only once">>, #{option => unicode:characters_to_binary(Name)});
-        false -> ok
     end,
     case {Mode, Rest} of
         {flag, _} -> options(Rest, Spec, Acc#{Key => true});

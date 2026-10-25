@@ -2,13 +2,18 @@
 -moduledoc "Compiler frontend option handling and artifact-boundary rejection tests.".
 -include_lib("eunit/include/eunit.hrl").
 
-%% Preprocessing flags repeat in source order; unknown and duplicate scalar flags fail.
+%% Values and aliases override in command order; additive options retain every entry and flags are idempotent.
 -spec cli_options_test() -> ok.
 cli_options_test() ->
-    Spec = [{"-I", includes, repeat}, {"--output", output, value}, {"--debug", debug, flag}],
+    Spec = [{"-I", includes, repeat}, {"--output", output, value}, {"-o", output, value}, {"--debug", debug, flag}],
     ?assertEqual(#{includes => ["a", "b"], output => "out", debug => true},
         hls_cli:options(["-I", "a", "--output", "out", "-I", "b", "--debug"], Spec)),
-    ?assertError({hls_diagnostic, #{stage := arguments, code := duplicate_option, context := #{option := <<"--output">>}}}, hls_cli:options(["--output", "a", "--output", "b"], Spec)),
+    ?assertEqual(#{includes => ["a", "b", "a"], output => "last", debug => true},
+        hls_cli:options(["--output", "first", "-I", "a", "--debug", "-o", "second",
+            "-I", "b", "--output", "last", "--debug", "-I", "a"], Spec)),
+    ?assertEqual(#{output => "last"}, hls_cli:options(["--output", "first", "-o", "last"], Spec)),
+    ?assertError({hls_diagnostic, #{code := missing_option_value}},
+        hls_cli:options(["--output", "first", "--output"], Spec)),
     ?assertError({hls_diagnostic, #{code := missing_option_value, context := #{option := <<"-I">>}}}, hls_cli:options(["-I", "--output"], Spec)),
     ?assertError({hls_diagnostic, #{code := unknown_option, context := #{option := <<"--fabric">>}}}, hls_cli:options(["--fabric"], Spec)),
     ?assertError({hls_diagnostic, #{code := missing_option, context := #{option := output}}}, hls_compile_cli:run(["emit", "missing.erl"])),
