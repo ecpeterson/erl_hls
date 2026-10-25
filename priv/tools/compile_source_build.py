@@ -54,6 +54,7 @@ class BuildPlan(TypedDict):
     version: int
     directory: str
     source_build_sha256: str
+    metadata: dict[str, object]
     inputs: list[FileIdentity]
     xls_tools: dict[str, ToolIdentity]
     stdlib: str
@@ -114,12 +115,16 @@ def plan_build(xls: Path, directory: Path) -> BuildPlan:
 
     All relative paths in commands are interpreted inside a private snapshot.
     Schedules are the emitter's literal flags; this driver offers no override.
+    Optional metadata must be an object and is retained without interpreting it.
     """
     xls, directory = xls.resolve(), directory.resolve()
     manifest_path = directory / 'source-build.json'
     manifest = json.loads(manifest_path.read_text())
     if manifest['version'] != 1:
         raise ValueError('unsupported source build version')
+    metadata = manifest.get('metadata', {})
+    if not isinstance(metadata, dict):
+        raise ValueError('source build metadata must be an object')
     bound = {}
     for row in manifest['inputs']:
         name = relative(row['file'])
@@ -176,7 +181,7 @@ def plan_build(xls: Path, directory: Path) -> BuildPlan:
     if 'compiled.json' in bound or 'source-build.json' in bound:
         raise ValueError('reserved source build input')
     return {'version': 1, 'directory': str(directory), 'source_build_sha256': digest(manifest_path),
-            'inputs': manifest['inputs'], 'xls_tools': tools, 'stdlib': str(stdlib),
+            'metadata': metadata, 'inputs': manifest['inputs'], 'xls_tools': tools, 'stdlib': str(stdlib),
             'stdlib_inputs': [{'file': name, 'sha256': digest(path)}
                               for name, path in executor().tree_files(stdlib).items()],
             'units': units, 'rtl': rtl}
@@ -250,7 +255,7 @@ def compile_build(xls: Path, directory: Path, *, output: Path | None = None,
             (snapshot / listing).write_text(''.join(os.path.relpath(path, role) + '\n' for path in paths))
             retained[listing] = listing
             rtl[role] = [{'file': path, 'sha256': digest(snapshot / path)} for path in paths]
-        manifest = {'source_build_sha256': plan['source_build_sha256'],
+        manifest = {'source_build_sha256': plan['source_build_sha256'], 'metadata': plan['metadata'],
                     'xls_tools': {name: tool['sha256'] for name, tool in plan['xls_tools'].items()},
                     'units': records, 'rtl': rtl, 'eligible': False, 'native_measured': False}
         return {'manifest_name': 'compiled.json', 'manifest': manifest, 'files': retained}
