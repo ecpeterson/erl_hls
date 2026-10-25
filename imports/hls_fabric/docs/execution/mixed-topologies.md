@@ -109,6 +109,8 @@ These choices preserve each sender's ordering while letting unrelated senders co
 
 Shared routers also use an **effect-window arbiter**. Its grant permits one early return of a batch-completion credit, so a router can retain a lookahead batch while its current batch drains. It does not grant every message send or serialize all actor execution. Credit returns have dedicated inputs so they do not queue behind application requests awaiting mailbox space.
 
+The [shared router template](../../priv/xls/templates/scheduler_effect_router.x.in) exposes that sequence: observe the retained batch, route its active effect, send registered ownership actions, then commit the next batch. Compact and instance-based renderers supply concrete channels and route selection to the same template. Newly received batches cannot bypass the retained head.
+
 The physical profile chooses the scope of this extra capacity with `effect_window_partition`:
 
 - `global` (the default) shares one retained lookahead grant across all shared groups.

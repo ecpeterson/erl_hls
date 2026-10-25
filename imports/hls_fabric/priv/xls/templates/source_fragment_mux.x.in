@@ -1,0 +1,53 @@
+// One retained aggregate per plane; cursor names the first lane considered next.
+struct @@STATE_DECLARATION@@ {
+  cursor: @@CURSOR_TYPE@@,
+  valid: u1[u32:@@VALID_COUNT@@],
+  values: @@STATE_REQUEST@@[u32:@@STATE_VALUE_COUNT@@],
+}
+
+// Merge planes feeding one shared scheduler without dropping stalled aggregates.
+proc @@MUX_NAME@@ {
+  aggregate_in: chan<@@INPUT_REQUEST@@>[u32:@@INPUT_COUNT@@] in;
+  aggregate_out: chan<@@OUTPUT_REQUEST@@> out;
+
+  // Keep each incoming lane bound to its checked plane position.
+  config(
+      aggregate_in: chan<@@CONFIG_INPUT_REQUEST@@>[u32:@@CONFIG_INPUT_COUNT@@] in,
+      aggregate_out: chan<@@CONFIG_OUTPUT_REQUEST@@> out
+  ) { (aggregate_in, aggregate_out) }
+
+  // No lane owns an aggregate after reset.
+  init { zero!<@@INITIAL_STATE@@>() }
+
+  // Capture empty lanes, deliver one round-robin choice, then retire that lane.
+  next(state: @@PRIOR_STATE@@) {
+    let (recv_tok, available, values) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1[u32:@@ACCUMULATOR_VALID_COUNT@@], @@ACCUMULATOR_REQUEST@@[u32:@@ACCUMULATOR_VALUE_COUNT@@])) in u32:0..u32:@@CAPTURE_COUNT@@ {
+        let (next_tok, incoming, received) =
+          recv_if_non_blocking(
+            acc.0, aggregate_in[candidate],
+            !acc.1[candidate], zero!<@@EMPTY_REQUEST@@>());
+        (
+          next_tok,
+          update(acc.1, candidate, acc.1[candidate] || received),
+          update(acc.2, candidate,
+            if received { incoming } else { acc.2[candidate] })
+        )
+      }((join(), state.valid, state.values));
+    let (selected, selected_index) = arbitration::select(
+      available, state.cursor);
+    let _done = send_if(
+      recv_tok, aggregate_out, selected, values[selected_index]);
+    let valid = if selected {
+      update(available, selected_index, u1:0)
+    } else { available };
+    @@NEXT_STATE@@ {
+      cursor: if !selected { state.cursor
+        } else { arbitration::successor<u32:@@CURSOR_COUNT@@>(selected_index) },
+      valid,
+      values,
+    }
+  }
+}
+

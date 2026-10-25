@@ -628,7 +628,7 @@ router_proc(Spec, Scheduler = #{stem := Stem, families := Families,
 %% Both compact and materialized topologies use exactly the same retained
 %% lookahead-credit protocol. Only the typed destination ports and route
 %% selection differ; direct actors do not participate in this protocol.
--doc "Renders ordered publication with registered batch decoding, credit actions and bounded backpressure.".
+-doc "Renders the shared ordered-publication DSLX template with concrete actor channels and routing. Compact and materialized topologies retain the same registered head, ownership actions and lookahead protocol; template reads are the only I/O.".
 -spec effect_router(map(),map(),map()) -> [any(),...].
 effect_router(Spec, Scheduler = #{module_name := Module},
         #{arguments := RouteArguments, names := RouteNames, send := RouteSend}) ->
@@ -645,91 +645,41 @@ effect_router(Spec, Scheduler = #{module_name := Module},
     Names = ["scheduled_in", "credit_out"] ++ RouteNames ++
         xls_topology_source_fragment_dslx:router_argument_names(Spec, Scheduler) ++
         ["window_request_out", "window_grant_in", "window_release_out"],
-    [
-        "// Routes one committed actor-entry batch in source order. A ",
-        effect_window_scope(Spec), "\n",
-        "// reservation may admit one lookahead batch while the active batch\n",
-        "// drains; only the active batch can emit downstream effects.\n",
-        "struct ", StateName, " {\n",
-        "  control: effect_window::ClientState,\n",
-        "  credit: bool,\n  release: bool,\n  request: bool,\n",
-        "  scheduled: ", Module, "::ScheduledEffects,\n",
-        "  index: u8,\n",
-        "  // While active, head equals scheduled_effect(scheduled, index).\n",
-        "  head: (", Module, "::Egress, u1, u1),\n",
-        "}\n\n",
-        "proc ", router_name(Scheduler), " {\n",
-        [["  ", Member, ";\n"] || Member <- Members],
-        "\n",
-        config_signature(Members, 2),
-        "    (", join_with(", ", Names), ")\n  }\n\n",
-        "  init { zero!<", StateName, ">() }\n\n",
-        "  next(state: ", StateName, ") {\n",
-        "    let state_effect_info = state.head;\n",
-        xls_topology_source_fragment_dslx:router_state_bindings(
+    Path = filename:join(code:priv_dir(hls_fabric),
+        "xls/templates/scheduler_effect_router.x.in"),
+    {ok, Template} = file:read_file(Path),
+    [xls_template:render(Template, [
+        {<<"@@WINDOW_SCOPE@@">>, effect_window_scope(Spec)},
+        {<<"@@STATE_DECLARATION@@">>, StateName},
+        {<<"@@SCHEDULED_MODULE@@">>, Module},
+        {<<"@@HEAD_MODULE@@">>, Module},
+        {<<"@@ROUTER_NAME@@">>, router_name(Scheduler)},
+        {<<"@@CHANNEL_FIELDS@@">>, [["  ", Member, ";\n"] || Member <- Members]},
+        {<<"@@CONFIG_SIGNATURE@@">>, config_signature(Members, 2)},
+        {<<"@@CHANNEL_NAMES@@">>, join_with(", ", Names)},
+        {<<"@@STATE_INITIALIZER@@">>, StateName},
+        {<<"@@STATE_INPUT@@">>, StateName},
+        {<<"@@OBSERVE_BATCH_COMPLETION@@">>, xls_topology_source_fragment_dslx:router_state_bindings(
             Spec, Scheduler
-        ),
-        "    let can_receive = effect_window::can_receive(\n",
-        "      state.control, state_last);\n",
-        "    let (receive_tok, incoming, incoming_valid) =\n",
-        "      recv_if_non_blocking(\n",
-        "        join(), scheduled_in, can_receive,\n",
-        "        zero!<", Module, "::ScheduledEffects>());\n",
-        "    let (grant_tok, _grant, grant_valid) =\n",
-        "      recv_if_non_blocking(\n",
-        "        receive_tok, window_grant_in,\n",
-        "        state.control.window_requested &&\n",
-        "          !state.control.window_granted, u1:0);\n",
-        "    let batch_valid = state.control.active;\n",
-        "    let scheduled = state.scheduled;\n",
-        "    let index = state.index;\n",
-        "    // Every batch crosses the retained head before publication.\n",
-        "    let incoming_effect_info = ", Module,
-        "::scheduled_effect(incoming, u8:0);\n",
-        "    let effect_info = state.head;\n",
-        xls_topology_source_fragment_dslx:router_batch_bindings(
+        )},
+        {<<"@@EMPTY_INCOMING_MODULE@@">>, Module},
+        {<<"@@INCOMING_MODULE@@">>, Module},
+        {<<"@@OBSERVE_REDUCTION_PREFIX@@">>, xls_topology_source_fragment_dslx:router_batch_bindings(
             Spec, Scheduler
-        ),
-        "    let effect = effect_info.0;\n",
-        "    let emit = batch_valid && effect_info.1;\n",
-        RouteSend,
-        router_last_binding(Spec, Scheduler),
-        "    let transition = effect_window::advance_client(\n",
-        "      state.control, incoming_valid, grant_valid, last);\n",
-        "    let forward_credit = state.credit;\n",
-        "    let credit_tok = send_if(\n",
-        "      routed_tok, credit_out, forward_credit, ", Module,
-        "::ScheduledRequest {\n",
-        "        credit: u1:1,\n",
-        "        ..zero!<", Module, "::ScheduledRequest>()\n",
-        "      });\n",
-        "    let release = state.release;\n",
-        "    let release_tok = send_if(\n",
-        "      credit_tok, window_release_out, release, u1:1);\n",
-        "    let _request_tok = send_if(\n",
-        "      release_tok, window_request_out, state.request, u1:1);\n",
-        "    let updated = ", StateName, " {\n",
-        "      control: transition.state,\n",
-        "      credit: transition.forward_credit, release: transition.release, request: transition.request,\n",
-        "      ..zero!<", StateName, ">()\n",
-        "    };\n",
-        "    if transition.carry_lookahead || (!state.control.active && incoming_valid) {\n",
-        "      ", StateName, " { scheduled: incoming, head: incoming_effect_info, ..updated }\n",
-        "    } else if transition.batch_continues {\n",
-        "      let next_index = index + ",
-        xls_topology_source_fragment_dslx:router_index_step(
+        )},
+        {<<"@@ROUTE_EFFECT@@">>, RouteSend},
+        {<<"@@BATCH_COMPLETION@@">>, router_last_binding(Spec, Scheduler)},
+        {<<"@@CREDIT_MODULE@@">>, Module},
+        {<<"@@EMPTY_CREDIT_MODULE@@">>, Module},
+        {<<"@@STATE_UPDATE@@">>, StateName},
+        {<<"@@STATE_ZERO@@">>, StateName},
+        {<<"@@STATE_INCOMING@@">>, StateName},
+        {<<"@@CURSOR_ADVANCE@@">>, xls_topology_source_fragment_dslx:router_index_step(
             Spec, Scheduler
-        ),
-        ";\n",
-        "      ", StateName, " {\n",
-        "        scheduled, index: next_index,\n",
-        "        head: ", Module, "::scheduled_effect(scheduled, next_index),\n",
-        "        ..updated\n",
-        "      }\n",
-        "    } else { updated }\n",
-        "  }\n",
-        "}\n\n"
-    ].
+        )},
+        {<<"@@STATE_CONTINUED@@">>, StateName},
+        {<<"@@CONTINUED_MODULE@@">>, Module}
+    ])].
 
 %% Declares the routed request channel for one destination group.
 -spec router_destination_argument(map()) -> [any(),...].

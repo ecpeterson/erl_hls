@@ -290,136 +290,82 @@ fragment_comment(#{ordinal := Ordinal, port := Port,
         integer_to_list(DX), ", ", integer_to_list(DY), "].\n"
     ].
 
-%% Combines reciprocal source contributions into destination aggregates.
--spec fragment_plane_proc(map()) -> iodata().
-fragment_plane_proc(Plane = #{
-    module_name := Module,
-    source_schedulers := Sources,
-    destinations := Destinations,
-    fragments := Fragments
-}) ->
+%% Concrete dimensions and reciprocal rows are prepared before any DSLX is rendered.
+-type plane_layout() :: #{source_count := pos_integer(), actor_count := pos_integer(),
+    population := pos_integer(), inverse_rows := [[map()]],
+    members := [iodata()], names := [iodata()]}.
+
+%% Combines reciprocal contributions using the fixed plane transition template.
+-spec fragment_plane_proc(map()) -> binary().
+fragment_plane_proc(Plane) ->
+    render_plane(Plane, plane_layout(Plane)).
+
+%% Separates topology geometry and channel order from the plane's state machine.
+-spec plane_layout(map()) -> plane_layout().
+plane_layout(Plane = #{module_name := Module, source_schedulers := Sources,
+        destinations := Destinations, population := Population}) ->
     SourceCount = length(Sources),
-    ActorCount = length(Destinations),
-    InputIndex = xls_nums:index_type(SourceCount),
-    OutputIndex = xls_nums:index_type(ActorCount),
-    Population = maps:get(population, Plane),
+    OutputNames = [["aggregate_out_", integer_to_list(Index)]
+        || Index <- lists:seq(0, SourceCount - 1)],
+    Members = [["batch_in: chan<", batch_name(Plane), ">[u32:",
+        integer_to_list(SourceCount), "] in"] | [
+        [Name, ": chan<", Module, "::ReductionAggregateRequest> out"]
+        || Name <- OutputNames]],
+    #{source_count => SourceCount, actor_count => length(Destinations),
+        population => Population, inverse_rows => inverse_rows(Plane),
+        members => Members, names => ["batch_in" | OutputNames]}.
+
+%% Bind only dimensions, names and constant topology wiring; sequencing stays in DSLX.
+-spec render_plane(map(), plane_layout()) -> binary().
+render_plane(Plane = #{module_name := Module, destinations := Destinations,
+        fragments := Fragments}, #{source_count := SourceCount,
+        actor_count := ActorCount, population := Population,
+        inverse_rows := InverseRows, members := Members, names := Names}) ->
     State = state_name(Plane),
-    Queue = "frame_queue::Queue",
     Batch = batch_name(Plane),
-    InverseRows = inverse_rows(Plane),
-    Members = [
-        ["batch_in: chan<", Batch, ">[u32:",
-            integer_to_list(SourceCount), "] in"]
-        | [["aggregate_out_", integer_to_list(Index), ": chan<", Module,
-            "::ReductionAggregateRequest> out"]
-            || Index <- lists:seq(0, SourceCount - 1)]
-    ],
-    Names = ["batch_in" | [["aggregate_out_", integer_to_list(Index)]
-        || Index <- lists:seq(0, SourceCount - 1)]],
-    [
-        "struct ", State, " {\n",
-        "  input_cursor: ", InputIndex, ",\n",
-        "  output_cursor: ", OutputIndex, ",\n",
-        "  open_tokens: u1[u32:", integer_to_list(ActorCount), "],\n",
-        [["  bank_", integer_to_list(maps:get(ordinal, Fragment)), ": ",
-            Queue, "[u32:", integer_to_list(ActorCount), "],\n"]
-            || Fragment <- Fragments],
-        "  pending_valid: u1,\n",
-        "  pending_batch: ", Batch, ",\n",
-        "}\n\n",
-        "proc ", plane_name(Plane), " {\n",
-        [["  ", Member, ";\n"] || Member <- Members],
-        "\n",
-        config_signature(Members, 2),
-        "    (", join_with(", ", Names), ")\n",
-        "  }\n\n",
-        "  init { zero!<", State, ">() }\n\n",
-        "  next(state: ", State, ") {\n",
-        "    let ready_slots = [\n",
-        [ready_row(Row, Index, ActorCount)
-            || {Index, Row} <- lists:enumerate(0, InverseRows)],
-        "    ];\n",
-        "    let (output_ready, output_index) = arbitration::select(\n",
-        "      ready_slots, state.output_cursor);\n",
-        "    let output_slot = output_index as u32;\n",
-        "    let pop_sources = match output_slot {\n",
-        [inverse_arm(Row, Index)
-            || {Index, Row} <- lists:enumerate(0, InverseRows)],
-        "      _ => zero!<u32[u32:", integer_to_list(Population), "]>(),\n",
-        "    };\n",
-        "    let frames = match output_slot {\n",
-        [frames_arm(Row, Index)
-            || {Index, Row} <- lists:enumerate(0, InverseRows)],
-        "      _ => zero!<axis::Frame[u32:",
-        integer_to_list(Population), "]>(),\n",
-        "    };\n",
-        "    let aggregate = ", Module,
-        "::reduction_aggregate_batch<u32:", integer_to_list(Population),
-        ">(frames);\n",
-        "    let output_tok = if output_ready {\n",
-        "      match output_slot {\n",
-        [output_arm(Plane, Destination) || Destination <- Destinations],
-        "        _ => join(),\n",
-        "      }\n",
-        "    } else { join() };\n",
-        "    // Input and output handshakes are independent. The scalar\n",
-        "    // pending batch makes all fragment-bank insertion atomic.\n",
-        "    let (input_tok, received, incoming) =\n",
-        "      unroll_for! (candidate, acc):\n",
-        "          (u32, (token, u1, ", Batch,
-        ")) in u32:0..u32:", integer_to_list(SourceCount), " {\n",
-        "        let (next_tok, next_batch, valid) =\n",
-        "          recv_if_non_blocking(\n",
-        "            acc.0, batch_in[candidate],\n",
-        "            !state.pending_valid &&\n",
-        "              state.input_cursor as u32 == candidate,\n",
-        "            zero!<", Batch, ">());\n",
-        "        (next_tok, acc.1 || valid,\n",
-        "          if valid { next_batch } else { acc.2 })\n",
-        "      }((join(), u1:0, zero!<", Batch, ">()));\n",
-        "    let work_valid = state.pending_valid || received;\n",
-        "    let work = if state.pending_valid {\n",
-        "      state.pending_batch\n",
-        "    } else { incoming };\n",
-        "    let source_valid = work.source < u32:",
-        integer_to_list(ActorCount), ";\n",
-        "    let push_source = if source_valid { work.source\n",
-        "      } else { u32:0 };\n",
-        "    // An actor cannot reopen before its current aggregate retires,\n",
-        "    // so one token bit is sufficient. Clear before set keeps the\n",
-        "    // conservative same-cycle update well-defined.\n",
-        "    let open_tokens_after_output = if output_ready {\n",
-        "      update(state.open_tokens, output_slot, u1:0)\n",
-        "    } else { state.open_tokens };\n",
-        "    let incoming_source_valid = received &&\n",
-        "      incoming.source < u32:", integer_to_list(ActorCount), ";\n",
-        "    let open_tokens = if incoming_source_valid {\n",
-        "      update(open_tokens_after_output, incoming.source, u1:1)\n",
-        "    } else { open_tokens_after_output };\n",
-        [capacity_binding(Fragment) || Fragment <- Fragments],
-        "    let can_insert = work_valid && source_valid",
-        [[" && capacity_", integer_to_list(maps:get(ordinal, Fragment))]
-            || Fragment <- Fragments],
-        ";\n",
-        [bank_binding(Fragment) || Fragment <- Fragments],
-        "    let _done = join(output_tok, input_tok);\n",
-        "    ", State, " {\n",
-        "      input_cursor: if state.pending_valid { state.input_cursor\n",
-        "      } else { arbitration::successor<u32:", integer_to_list(SourceCount),
-        ">(state.input_cursor) },\n",
-        "      output_cursor: if !output_ready { state.output_cursor\n",
-        "      } else { arbitration::successor<u32:", integer_to_list(ActorCount),
-        ">(output_index) },\n",
-        "      open_tokens,\n",
-        [["      bank_", integer_to_list(maps:get(ordinal, Fragment)),
-            ",\n"] || Fragment <- Fragments],
-        "      pending_valid: work_valid && !can_insert,\n",
-        "      pending_batch: if work_valid && !can_insert { work\n",
-        "        } else { state.pending_batch },\n",
-        "    }\n",
-        "  }\n",
-        "}\n\n"
-    ].
+    Sources = integer_to_list(SourceCount),
+    Actors = integer_to_list(ActorCount),
+    PopulationText = integer_to_list(Population),
+    Rows = lists:enumerate(0, InverseRows),
+    render_template("source_fragment_plane.x.in", [
+        {<<"@@STATE_DECLARATION@@">>, State},
+        {<<"@@INPUT_INDEX@@">>, xls_nums:index_type(SourceCount)},
+        {<<"@@OUTPUT_INDEX@@">>, xls_nums:index_type(ActorCount)},
+        {<<"@@OPEN_TOKEN_COUNT@@">>, Actors},
+        {<<"@@BANK_FIELDS@@">>, [["  bank_", integer_to_list(Ordinal),
+            ": frame_queue::Queue[u32:", Actors, "],\n"]
+            || #{ordinal := Ordinal} <- Fragments]},
+        {<<"@@BATCH_FIELD@@">>, Batch},
+        {<<"@@PLANE_NAME@@">>, plane_name(Plane)},
+        {<<"@@MEMBERS@@">>, [["  ", Member, ";\n"] || Member <- Members]},
+        {<<"@@CONFIG_SIGNATURE@@">>, config_signature(Members, 2)},
+        {<<"@@CONFIG_NAMES@@">>, join_with(", ", Names)},
+        {<<"@@INITIAL_STATE@@">>, State},
+        {<<"@@PRIOR_STATE@@">>, State},
+        {<<"@@READY_ROWS@@">>, [ready_row(Row, Index, ActorCount) || {Index, Row} <- Rows]},
+        {<<"@@POP_SOURCE_ROWS@@">>, [inverse_arm(Row, Index) || {Index, Row} <- Rows]},
+        {<<"@@POP_SOURCE_COUNT@@">>, PopulationText},
+        {<<"@@FRAME_ROWS@@">>, [frames_arm(Row, Index) || {Index, Row} <- Rows]},
+        {<<"@@FRAME_COUNT@@">>, PopulationText},
+        {<<"@@AGGREGATE_MODULE@@">>, Module},
+        {<<"@@AGGREGATE_COUNT@@">>, PopulationText},
+        {<<"@@OUTPUT_ROUTES@@">>, [output_arm(Plane, D) || D <- Destinations]},
+        {<<"@@BATCH_ACCUMULATOR@@">>, Batch},
+        {<<"@@INPUT_COUNT@@">>, Sources},
+        {<<"@@EMPTY_INPUT_BATCH@@">>, Batch},
+        {<<"@@INITIAL_INPUT_BATCH@@">>, Batch},
+        {<<"@@WORK_SOURCE_BOUND@@">>, Actors},
+        {<<"@@INCOMING_SOURCE_BOUND@@">>, Actors},
+        {<<"@@CAPACITY_BINDINGS@@">>, [capacity_binding(F) || F <- Fragments]},
+        {<<"@@CAPACITY_GUARDS@@">>, [[" && capacity_", integer_to_list(Ordinal)]
+            || #{ordinal := Ordinal} <- Fragments]},
+        {<<"@@BANK_UPDATES@@">>, [bank_binding(F) || F <- Fragments]},
+        {<<"@@NEXT_STATE@@">>, State},
+        {<<"@@INPUT_CURSOR_COUNT@@">>, Sources},
+        {<<"@@OUTPUT_CURSOR_COUNT@@">>, Actors},
+        {<<"@@BANK_VALUES@@">>, [["      bank_", integer_to_list(Ordinal), ",\n"]
+            || #{ordinal := Ordinal} <- Fragments]}
+    ]).
 
 %% Builds the destination-indexed inverse of source delivery geometry.
 -spec inverse_rows(map()) -> [[map()]].
@@ -522,68 +468,36 @@ bank_binding(#{ordinal := Ordinal}) ->
 %%% Aggregate arbitration and graph wiring
 %%%
 
--spec aggregate_mux_proc(term(),map()) -> iodata().
+%% A scheduler with several planes retains one aggregate per incoming lane.
+-spec aggregate_mux_proc(map(), map()) -> binary().
 aggregate_mux_proc(Spec, Scheduler = #{module_name := Module}) ->
-    Planes = scheduler_planes(Spec, Scheduler),
-    Count = length(Planes),
+    Count = length(scheduler_planes(Spec, Scheduler)),
     CountText = integer_to_list(Count),
-    Index = xls_nums:index_type(Count),
     State = mux_state_name(Scheduler),
-    Name = mux_name(Scheduler),
-    [
-        "struct ", State, " {\n",
-        "  cursor: ", Index, ",\n",
-        "  valid: u1[u32:", CountText, "],\n",
-        "  values: ", Module,
-        "::ReductionAggregateRequest[u32:", CountText, "],\n",
-        "}\n\n",
-        "proc ", Name, " {\n",
-        "  aggregate_in: chan<", Module,
-        "::ReductionAggregateRequest>[u32:", CountText, "] in;\n",
-        "  aggregate_out: chan<", Module,
-        "::ReductionAggregateRequest> out;\n\n",
-        "  config(\n",
-        "      aggregate_in: chan<", Module,
-        "::ReductionAggregateRequest>[u32:", CountText, "] in,\n",
-        "      aggregate_out: chan<", Module,
-        "::ReductionAggregateRequest> out\n",
-        "  ) { (aggregate_in, aggregate_out) }\n\n",
-        "  init { zero!<", State, ">() }\n\n",
-        "  next(state: ", State, ") {\n",
-        "    let (recv_tok, available, values) =\n",
-        "      unroll_for! (candidate, acc):\n",
-        "          (u32, (token, u1[u32:", CountText, "], ", Module,
-        "::ReductionAggregateRequest[u32:", CountText,
-        "])) in u32:0..u32:", CountText, " {\n",
-        "        let (next_tok, incoming, received) =\n",
-        "          recv_if_non_blocking(\n",
-        "            acc.0, aggregate_in[candidate],\n",
-        "            !acc.1[candidate], zero!<", Module,
-        "::ReductionAggregateRequest>());\n",
-        "        (\n",
-        "          next_tok,\n",
-        "          update(acc.1, candidate, acc.1[candidate] || received),\n",
-        "          update(acc.2, candidate,\n",
-        "            if received { incoming } else { acc.2[candidate] })\n",
-        "        )\n",
-        "      }((join(), state.valid, state.values));\n",
-        "    let (selected, selected_index) = arbitration::select(\n",
-        "      available, state.cursor);\n",
-        "    let _done = send_if(\n",
-        "      recv_tok, aggregate_out, selected, values[selected_index]);\n",
-        "    let valid = if selected {\n",
-        "      update(available, selected_index, u1:0)\n",
-        "    } else { available };\n",
-        "    ", State, " {\n",
-        "      cursor: if !selected { state.cursor\n",
-        "        } else { arbitration::successor<u32:", CountText,
-        ">(selected_index) },\n",
-        "      valid,\n",
-        "      values,\n",
-        "    }\n",
-        "  }\n",
-        "}\n\n"
-    ].
+    Request = [Module, "::ReductionAggregateRequest"],
+    render_template("source_fragment_mux.x.in", [
+        {<<"@@STATE_DECLARATION@@">>, State},
+        {<<"@@CURSOR_TYPE@@">>, xls_nums:index_type(Count)},
+        {<<"@@VALID_COUNT@@">>, CountText},
+        {<<"@@STATE_REQUEST@@">>, Request},
+        {<<"@@STATE_VALUE_COUNT@@">>, CountText},
+        {<<"@@MUX_NAME@@">>, mux_name(Scheduler)},
+        {<<"@@INPUT_REQUEST@@">>, Request},
+        {<<"@@INPUT_COUNT@@">>, CountText},
+        {<<"@@OUTPUT_REQUEST@@">>, Request},
+        {<<"@@CONFIG_INPUT_REQUEST@@">>, Request},
+        {<<"@@CONFIG_INPUT_COUNT@@">>, CountText},
+        {<<"@@CONFIG_OUTPUT_REQUEST@@">>, Request},
+        {<<"@@INITIAL_STATE@@">>, State},
+        {<<"@@PRIOR_STATE@@">>, State},
+        {<<"@@ACCUMULATOR_VALID_COUNT@@">>, CountText},
+        {<<"@@ACCUMULATOR_REQUEST@@">>, Request},
+        {<<"@@ACCUMULATOR_VALUE_COUNT@@">>, CountText},
+        {<<"@@CAPTURE_COUNT@@">>, CountText},
+        {<<"@@EMPTY_REQUEST@@">>, Request},
+        {<<"@@NEXT_STATE@@">>, State},
+        {<<"@@CURSOR_COUNT@@">>, CountText}
+    ]).
 
 -doc "Emit bounded aggregate handoffs for a scheduler and its selected reduction planes.".
 -spec scheduler_channels(map(), map()) -> iodata().
@@ -740,6 +654,13 @@ mux_name(#{index := Index}) ->
 -spec mux_state_name(map()) -> [string(),...].
 mux_state_name(#{index := Index}) ->
     ["SchedulerAggregateArrayMuxState", integer_to_list(Index)].
+
+%% Templates expose each substitution once and reject missing or unresolved bindings.
+-spec render_template(string(), [{binary(), iodata()}]) -> binary().
+render_template(Name, Bindings) ->
+    Path = filename:join([code:priv_dir(hls_fabric), "xls", "templates", Name]),
+    {ok, Template} = file:read_file(Path),
+    xls_template:render(Template, Bindings).
 
 %% Declares configuration parameters in channel-binding order.
 -spec config_signature([iodata()], non_neg_integer()) -> iodata().
