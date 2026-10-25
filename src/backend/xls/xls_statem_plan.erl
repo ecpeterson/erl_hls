@@ -1,7 +1,8 @@
 -module(xls_statem_plan).
 -moduledoc "Retains checked callback structure for a bounded ownership-planning consumer. This sidecar establishes provenance and dependency closure, not field independence, protocol refinement or physical benefit.".
--export([from_file/2, build/5, validate/3, select/2, manifest/1, identity/1]).
--export_type([plan/0, selection/0, identity/0]).
+-export([from_file/2, build/5, validate/3, records/1, callbacks/1, provenance/1,
+    select/2, manifest/1, identity/1]).
+-export_type([plan/0, selection/0, provenance/0, identity/0]).
 
 %% Planner-owned data is opaque so consumers select complete callback families
 %% instead of constructing partial dispatch chains by dropping inconvenient arms.
@@ -9,7 +10,7 @@
 -opaque plan() :: #{version := 1, source := file:filename(), source_sha256 := binary(),
     artifact_sha256 := binary(), planner_md5 := binary(), identity_inputs := identity_inputs(),
     phases := [atom(), ...],
-    data := map(), records := [hls_source:form()], callbacks := [map()],
+    data := map(), records := [hls_source:record_declaration()], callbacks := [map()],
     entries := [map()], roots := [map()], helpers := [map()], protocol := map()}.
 
 %% These digests require the original source/artifact, which the sidecar does not retain.
@@ -18,6 +19,10 @@
 -doc "Path-independent compiler identity with lowercase hexadecimal digests. Source/preprocessing and closed-artifact digests bind construction inputs; the complete-plan digest is recomputed with payload-origin sharing preserved. This does not replace strict validation.".
 -type identity() :: #{version := 1, source_sha256 := binary(), artifact_sha256 := binary(),
     plan_sha256 := binary(), planner_md5 := binary()}.
+
+-doc "Original source path and raw binary source, rendering-artifact and planner digests from construction. Unlike identity/1, these values are not path-normalized or hexadecimal encoded.".
+-type provenance() :: #{source := file:filename(), source_sha256 := binary(),
+    artifact_sha256 := binary(), planner_md5 := binary()}.
 
 -doc "A whole phase/event family. Selection retains every ordered clause, including failure and postponement alternatives; it cannot select a single successful clause.".
 -type selection() :: {atom(), enter | cast | call | internal}.
@@ -64,6 +69,21 @@ validate(Filename, Options, Plan) ->
         true -> ok;
         false -> error(stale_statem_plan)
     end.
+
+-doc "Returns every complete resolved record declaration retained by the plan, preserving field order, types, defaults and source annotations. This read-only snapshot view does not revalidate current files.".
+-spec records(plan()) -> [hls_source:record_declaration()].
+records(#{records := Records}) -> Records.
+
+-doc "Returns all complete prepared callback clauses across every phase, grouped as enter, cast, call and internal with source order preserved within each family. Includes guards, failure/postponement arms and helper/provider dependencies without selection or reachability filtering. This view does not revalidate current files.".
+-spec callbacks(plan()) -> [map()].
+callbacks(#{callbacks := Callbacks}) -> Callbacks.
+
+-doc "Returns exactly the original source path and raw source/artifact/planner digests captured at construction. This provenance view is distinct from canonical build identity and does not establish current-file freshness; use validate/3 for saved plans.".
+-spec provenance(plan()) -> provenance().
+provenance(#{source := Source, source_sha256 := SourceHash,
+        artifact_sha256 := ArtifactHash, planner_md5 := PlannerHash}) ->
+    #{source => Source, source_sha256 => SourceHash,
+        artifact_sha256 => ArtifactHash, planner_md5 => PlannerHash}.
 
 -doc "Selects nonempty complete phase/event families and their transitive helpers in dependency order. Keeps exact clauses, entry programs, all record declarations and actor-wide protocol obligations. Provider calls are inventoried, not certified for projection; the result remains planning-only.".
 -spec select(plan(), [selection(), ...]) -> map().
