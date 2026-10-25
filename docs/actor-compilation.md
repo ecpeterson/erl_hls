@@ -14,6 +14,12 @@ Compiler extensions can call `xls_parse:actor_artifact(Path, SourceOptions)` for
 
 `xls_actor_codegen:emit(Artifact, RuntimeImports, Body)` renders common semantics with an execution body. The body must preserve callback ordering, failure behavior and effect ownership. `xls_statem_codegen:body/1` supplies dedicated execution. These are source-level compiler interfaces: pin the compiler revision when consuming them. They are not a serialized deployment protocol.
 
+## Shared source snapshot
+
+`xls_actor_program:from_file(Path, SourceOptions)` compiles a complete actor once into an opaque in-process program. `spec/1` returns the ordinary rendering artifact and `plan/1` its complete planning sidecar from that same lowering. No constructor accepts supplied artifacts or selected alternatives. Consumers retain the program unchanged; editing a returned map does not modify it. These views describe the captured source, so later file edits require a new `from_file/2`. The program is not a saved build-input format or a replacement for saved-plan validation below.
+
+`xls_actor_program:entry_effects(Program)` returns every effect in every entry layout across all phases, with `phase`, `layout` and zero-based `order`. It preserves the full typed field metadata, including constants, known bits, slices and layout-local storage offsets that express sharing. It neither filters alternatives nor joins them into a constant summary. Empty layouts contribute no effects; evaluation and failure obligations remain in the rendering artifact and planning sidecar. Consumers deriving channel constants must join every matching alternative rather than selecting a convenient phase or branch.
+
 ## Ownership-planning sidecar
 
 `xls_statem_plan:from_file(Path, SourceOptions)` returns `{Artifact, Plan}` from one ordinary lowering. `Artifact` is unchanged. `Plan` retains prepared callback clauses, typed helper signatures, entry branch programs and actor-wide protocol obligations before rendering discards their structure. It is an internal planning format, not a replacement renderer or a hardware optimization.
