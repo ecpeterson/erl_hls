@@ -5,7 +5,7 @@ import json
 import unittest
 import xml.etree.ElementTree as ET
 
-from hls_profile import longest_path, perfetto, svg, validate, window, counter_name, observed_predecessors, observed_overlay
+from erl_hls_tools.hls_profile import longest_path, perfetto, svg, validate, window, counter_name, observed_predecessors, observed_overlay
 
 
 def fixture() -> dict:

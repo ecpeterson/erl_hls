@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 import check_debug_memories as memories
-from topology_debug import instrument, quote, yosys_run
+from erl_hls_tools.topology_debug import instrument, quote, yosys_run
 
 ROOT = Path(__file__).resolve().parents[1]
 

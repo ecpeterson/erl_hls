@@ -13,67 +13,30 @@ import time
 import unittest
 from unittest.mock import patch
 
-import compile_xls as compiler
+from erl_hls_tools import compile_xls as compiler
+from erl_hls_tools.testing import BuildFixture
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class ToolPackageTests(unittest.TestCase):
+    """Package imports are inert and retain compiler-relative observation assets."""
+
+    def test_imports_do_not_select_environment(self) -> None:
+        """Transitive helper imports leave environment/search paths unchanged without executing tools."""
+        probe = """import importlib, os, sys
+before_env, before_path = dict(os.environ), list(sys.path)
+for name in ['compile_xls', 'hls_profile', 'topology_debug', 'topology_debug_report', 'measure_topology_debug']:
+    importlib.import_module('erl_hls_tools.' + name)
+assert dict(os.environ) == before_env
+assert sys.path == before_path
+assert not any(name.startswith('test_') for name in sys.modules)
+from erl_hls_tools.topology_debug_services import rtl_files
+assert all(path.is_file() for path in rtl_files(monitor=True))
+"""
+        subprocess.run([sys.executable, '-c', probe], cwd=ROOT/'tools', check=True,
+                       env={**os.environ, 'ERL_HLS_ROOT': '/missing/compiler', 'ERL_AFLAGS': 'sentinel'}, timeout=10)
 NATIVE_XLS = None
-STUB = r'''#!/usr/bin/env python3
-import json, os, pathlib, sys, time
-p = pathlib.Path
-stage = {'ir_converter_main': 'ir', 'opt_main': 'opt', 'codegen_main': 'codegen'}[p(sys.argv[0]).name]
-with open(os.environ['XLS_TEST_CALLS'], 'a') as log:
-    log.write(stage + '\n')
-if os.environ.get('XLS_TEST_PAUSE') == stage:
-    p(os.environ['XLS_TEST_READY']).write_text(str(os.getpid()))
-    time.sleep(float(os.environ.get("XLS_TEST_SLEEP", "1")))
-if os.environ.get('XLS_TEST_FAIL') == stage:
-    print('partial output')
-    print('injected failure', file=sys.stderr)
-    sys.exit(7)
-if stage == 'ir':
-    inputs = {str(f): f.read_text() for pattern in ['*.x', '_stdlib/**/*.x'] for f in sorted(p('.').glob(pattern))}
-else:
-    inputs = p(sys.argv[-1]).read_text()
-result = {'stage': stage, 'args': sys.argv[1:], 'inputs': inputs}
-if os.environ.get('XLS_TEST_NONDETERMINISTIC') == stage:
-    result['node_id'] = os.getpid()
-print(json.dumps(result, sort_keys=True))
-'''
-
-
-class BuildFixture(unittest.TestCase):
-    """Isolated tool stubs and publication directories for compiler-runner tests."""
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.inputs = self.root / 'input with spaces'
-        self.inputs.mkdir()
-        self.source = self.inputs / 'counter.x'
-        self.source.write_text('import helper;\n')
-        (self.inputs / 'helper.x').write_text('pub const VALUE = u32:1;\n')
-        self.xls = self.root / 'xls'
-        self.xls.mkdir()
-        for tool in compiler.TOOLS:
-            path = self.xls / tool
-            path.write_text(STUB)
-            path.chmod(0o755)
-        stdlib = self.xls / 'xls/dslx/stdlib'
-        stdlib.mkdir(parents=True)
-        (stdlib / 'std.x').write_text('// test standard library\n')
-        self.calls = self.root / 'calls'
-        environment = patch.dict(os.environ, {'XLS_TEST_CALLS': str(self.calls)})
-        environment.start()
-        self.addCleanup(environment.stop)
-        self.output = self.root / 'published'
-        self.cache = self.root / 'cache'
-
-    def build(self, **options):
-        return compiler.build(self.source, self.xls, self.output, cache=self.cache, **options)
-
-    def statuses(self, output=None):
-        report = json.loads((output or self.output).with_suffix('.run.json').read_text())
-        return {name: row['reused'] for name, row in report['stages'].items()}
 
 
 class Builds(BuildFixture):

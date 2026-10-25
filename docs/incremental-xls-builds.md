@@ -2,6 +2,8 @@
 
 `tools/compile_xls.py` compiles a prepared flat directory of DSLX modules through IR conversion, optimization, and RTL generation. It runs on Linux and macOS with Python 3.9+ and an installed XLS toolchain. The runner checks the three executables and standard library before compiling; it does not install or rebuild XLS.
 
+Reusable Python helpers live in `tools/erl_hls_tools`: compilation, profile rendering and topology observation use package-relative imports. Importing them does not select a compiler checkout, change Python search paths or alter the environment. The `tools/*.py` command entrypoints remain directly executable. Consumers embedding the helpers must select that package explicitly; they should not add an arbitrary compiler checkout to global module search paths. Detached simulation stages copy the standalone compilation implementation from `tools/erl_hls_tools/compile_xls.py`, including its command entrypoint.
+
 For the generated `regsvc` example:
 
 ```sh

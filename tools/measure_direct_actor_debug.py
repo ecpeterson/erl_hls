@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 import subprocess
 
-from measure_topology_debug import cell_counts, distribution
-import topology_debug
+from erl_hls_tools.measure_topology_debug import cell_counts, distribution
+from erl_hls_tools import topology_debug
 
 ROOT = Path(__file__).resolve().parents[1]
 

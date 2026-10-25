@@ -14,8 +14,8 @@ import shutil
 import subprocess
 import time
 
-import topology_debug as topology
-import topology_debug_report as reporting
+from erl_hls_tools import topology_debug as topology
+from erl_hls_tools import topology_debug_report as reporting
 
 ROOT = Path(__file__).resolve().parents[1]
 DEBUG_RTL = [

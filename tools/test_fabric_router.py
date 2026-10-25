@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess
 
-from topology_debug import quote
+from erl_hls_tools.topology_debug import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 RTL = ROOT / 'priv/rtl/fabric'
