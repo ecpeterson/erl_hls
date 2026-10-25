@@ -1,7 +1,7 @@
 -module(xls_name_hardening_tests).
 -moduledoc "Regressions for provider aliases, deployment keywords and local/type shadowing.".
 -include_lib("eunit/include/eunit.hrl").
--include("../src/backend/xls/xls_parse.hrl").
+-include("../src/backend/xls/xls_clause_lower.hrl").
 -export([dslx_imports/0]).
 
 -doc "Supplies provider import declarations chosen by each test.".
@@ -12,10 +12,17 @@ dslx_imports() -> get(name_test_imports).
 -spec record_shadow_test() -> ok.
 record_shadow_test() ->
     ?assertEqual("Value_1", xls_names:record_type('_Value_1')),
-    {Name, State} = xls_parse:uniquify(#clause_state{}, 'Value'),
-    ?assertEqual("v_Value_1", Name),
-    ?assertEqual("v_Value_2", element(1, xls_parse:uniquify(State, 'Value'))),
-    ?assertEqual("_v__Value_1", element(1, xls_parse:uniquify(State, '_Value'))).
+    First = xls_clause_lower:bind('Value', 1, "u32:1", #clause_state{}),
+    Second = xls_clause_lower:bind('Value', 2, "u32:2", First),
+    Final = xls_clause_lower:bind('_Value', 3, "u32:3", Second),
+    ?assertEqual(#{'Value' => "v_Value_1", '_Value' => "_v__Value_1"},
+        Final#clause_state.bindings),
+    Generated = iolist_to_binary(xls_clause_lower:print(
+        lists:reverse(Final#clause_state.statements))),
+    lists:foreach(fun(Binding) ->
+        ?assertNotEqual(nomatch, binary:match(Generated, Binding))
+    end, [<<"let v_Value_1 = u32:1;">>, <<"let v_Value_2 = u32:2;">>,
+        <<"let _v__Value_1 = u32:3;">>]).
 
 %% Leading underscores in record names must not enter the unused-binding namespace.
 -spec unused_binding_collision_test() -> ok.

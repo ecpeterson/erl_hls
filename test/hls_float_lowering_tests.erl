@@ -13,9 +13,11 @@ typed_literal_test() ->
         rendered("hls_float:literal(hls_nums:float32(), X)")),
     ?assertError(badarg, rendered("hls_float:literal(hls_nums:float16(), 65520.0)")).
 
+%% Every retained floating arithmetic failure keeps its source line and badarith code kind.
+-spec float_failure_codebook_test() -> ok.
 float_failure_codebook_test() ->
     Source = "test/hls_float_fixture.erl",
-    {ok, Forms} = xls_parse:parse_file(Source),
+    {ok, Forms} = hls_source:parse_file(Source),
     {_, Origins} = xls_failure_sites:prepare(Forms),
     Dslx = xls_parse:to_xls(Source),
     Sites = xls_failure_sites:from_artifact(Origins, Dslx),
@@ -27,8 +29,10 @@ float_failure_codebook_test() ->
         ?assert(L > 0)
     end, Arithmetic).
 
+%% Lowers an expression with one runtime argument for focused generated-code assertions.
+-spec rendered(string()) -> binary().
 rendered(Expression) ->
     {ok, Tokens, _} = erl_scan:string("probe(X) -> " ++ Expression ++ "."),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    #{body := Body, result := Result} = xls_parse:clause_outcome(Clause, ["x"], state, #{}),
-    iolist_to_binary(xls_parse:print([Body, Result])).
+    #{body := Body, result := Result} = xls_clause_lower:clause_outcome(Clause, ["x"], state, #{}),
+    iolist_to_binary(xls_clause_lower:print([Body, Result])).

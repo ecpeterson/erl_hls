@@ -64,15 +64,19 @@ zero(list, [Subtype, Count]) ->
 
 %% TODO: bake new into record construction?
 
+-doc "Lowers fixed-size collection operations. Descriptors and result sizes are static; dynamic bounds failures propagate as badarg.".
+-spec transpile(list | nth | set | new | zero | sublist | array_slice,
+    [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state() | {fallible, badarg, xls_clause_lower:ir()}.
 transpile(list, [{phantom, type, Subtype}, {static, integer, Count}], State) ->
-    xls_parse:reference(State, {phantom, type, list(Subtype, Count)});
+    xls_clause_lower:reference(State, {phantom, type, list(Subtype, Count)});
 transpile(nth, [Index, List], _State) ->
     checked_element(Index, List, "collection_values[collection_index]");
 transpile(set, [Index, List, Value], _State) ->
     checked_element(Index, List, ["update(collection_values, collection_index, ", Value, ")"]);
 transpile(new, [Subtype, Count], State) ->
     NewState = transpile(list, [Subtype, Count], State),
-    transpile(zero, [xls_parse:reference(NewState)], NewState);
+    transpile(zero, [xls_clause_lower:reference(NewState)], NewState);
 transpile(zero, [{phantom, type, {hls_type, hls_lists, list, [Subtype, Count]}}], _State) ->
     %% NOTE: Here we enforce that the arguments to `new/2` are static.
     ["zero!<", print_type(list, [Subtype, Count]), ">()"];

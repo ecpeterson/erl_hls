@@ -14,7 +14,7 @@
 %% Hardware has one compile-time initializer. Per-instance configuration is
 %% supplied separately by topology startup messages, before normal input traffic.
 clause(Forms, Behaviour) ->
-    case xls_parse:find_function(Forms, init, 1) of
+    case hls_source:find_function(Forms, init, 1) of
         [Clause = {clause, _Line, [{nil, _}], [], _Body}] -> Clause;
         [{clause, Line, Patterns, Guards, _Body}] ->
             error({unsupported_hls_init_head, Behaviour, Line, Patterns, Guards});
@@ -24,15 +24,15 @@ clause(Forms, Behaviour) ->
 
 -doc "Lowers initialization to its source line, statements, postprocessed value and failure expression.".
 -spec lower(erl_parse:abstract_clause(), atom(),
-    fun((xls_parse:printable()) -> xls_parse:printable()), map()) -> lowered().
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), map()) -> lowered().
 lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
     #{body := Body, result := Result, failed := Failed} =
-        xls_parse:clause_outcome(Clause, [], DataName, EnumAtoms),
+        xls_clause_lower:clause_outcome(Clause, [], DataName, EnumAtoms),
     #{
         line => erl_anno:line(Line),
-        body => xls_parse:print(Body),
-        result => xls_parse:print(Postprocess(Result)),
-        failed => xls_parse:print(Failed)
+        body => xls_clause_lower:print(Body),
+        result => xls_clause_lower:print(Postprocess(Result)),
+        failed => xls_clause_lower:print(Failed)
     }.
 
 -doc "Emits an initializer that rejects failed matches during DSLX conversion.".

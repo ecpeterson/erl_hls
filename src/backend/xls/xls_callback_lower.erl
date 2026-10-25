@@ -8,7 +8,7 @@
 -module(xls_callback_lower).
 -moduledoc false.
 
--include("xls_parse.hrl").
+-include("xls_clause_lower.hrl").
 
 -export([
     group_by/2,
@@ -31,11 +31,11 @@ group_by(Items, KeyFun) ->
     [erl_parse:abstract_clause(), ...],
     [xls_pattern_lower:argument()],
     atom(),
-    fun((xls_parse:printable()) -> xls_parse:printable()),
-    xls_parse:printable(),
-    fun((xls_parse:printable()) -> xls_parse:printable()),
-    #{atom() => xls_parse:printable()}
-) -> {xls_parse:printable(), xls_parse:printable()}.
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
+    xls_clause_lower:printable(),
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
+    #{atom() => xls_clause_lower:printable()}
+) -> {xls_clause_lower:printable(), xls_clause_lower:printable()}.
 lower(Clauses0, Arguments, StateName, Postprocessor,
         NoClauseFailure, BodyFailure, EnumAtoms) ->
     Clauses = [
@@ -56,6 +56,11 @@ lower(Clauses0, Arguments, StateName, Postprocessor,
 %%% Ordered selection
 %%%
 
+%% Evaluate heads in source order and keep fallthrough distinct from selected-body failure.
+-spec lower_chain([erl_parse:abstract_clause()], [xls_pattern_lower:argument()], atom(),
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), xls_clause_lower:printable(),
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), #{atom() => xls_clause_lower:printable()}) ->
+    {xls_clause_lower:printable(), xls_clause_lower:printable()}.
 lower_chain([], _Arguments, _StateName, _Postprocessor,
         NoClauseFailure, _BodyFailure, _EnumAtoms) ->
     {[], NoClauseFailure};
@@ -78,7 +83,7 @@ lower_chain(
         Initial
     ),
     Guard = xls_guard_lower:condition(Guards, Conditions, Line),
-    GuardState = xls_parse:statement_from_statement(
+    GuardState = xls_clause_lower:statement_from_statement(
         Guard,
         PatternState#clause_state{reference = none}
     ),
@@ -87,13 +92,13 @@ lower_chain(
 
     BodyBase = GuardState#clause_state{statements = [], reference = none, failures = []},
     BodyState = lower_expressions(xls_var_scope:annotate(Body), BodyBase),
-    BodyMismatch = xls_parse:failure_expression(BodyState),
+    BodyMismatch = xls_clause_lower:failure_expression(BodyState),
     Selected = [
         lists:reverse(BodyState#clause_state.statements),
         "if (", BodyMismatch, ") {\n",
-        xls_parse_io:indent(xls_parse:print(BodyFailure(xls_parse:failure_code(BodyState))), 2),
+        xls_parse_io:indent(xls_clause_lower:print(BodyFailure(xls_clause_lower:failure_code(BodyState))), 2),
         "} else {\n",
-        xls_parse_io:indent(xls_parse:print(
+        xls_parse_io:indent(xls_clause_lower:print(
             Postprocessor(BodyState#clause_state.reference)
         ), 2),
         "}"
@@ -111,9 +116,9 @@ lower_chain(
         "bool:true" -> Selected;
         _ -> [
             "if ", GuardReference, " {\n",
-            xls_parse_io:indent(xls_parse:print(Selected), 2),
+            xls_parse_io:indent(xls_clause_lower:print(Selected), 2),
             "} else {\n",
-            xls_parse_io:indent(xls_parse:print([NextBody, NextResult]), 2),
+            xls_parse_io:indent(xls_clause_lower:print([NextBody, NextResult]), 2),
             "}"
         ]
     end,
@@ -147,10 +152,12 @@ add_to_group(Key, Item, [{Key, Items} | Rest]) ->
 add_to_group(Key, Item, [Group | Rest]) ->
     [Group | add_to_group(Key, Item, Rest)].
 
+%% Lower prepared expressions in order, replacing only the current value reference.
+-spec lower_expressions([term()], xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 lower_expressions(Expressions, State0) ->
     lists:foldl(
         fun(Expression, State) ->
-            xls_parse:statement_from_statement(
+            xls_clause_lower:statement_from_statement(
                 Expression,
                 State#clause_state{reference = none}
             )

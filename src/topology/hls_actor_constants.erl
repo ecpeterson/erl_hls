@@ -274,7 +274,7 @@ expression(_, Env, _) -> {unknown, Env}.
 %% Only recognized typed zeros or supported literal/default expressions establish values.
 -spec default(tuple(), context()) -> value().
 default({typed_record_field, {record_field, _, _, Expr}, Type}, C) ->
-    case xls_parse:is_zero_default(Expr) of
+    case hls_records:is_zero_default(Expr) of
         true -> abstract(hls_type:zero(hls_type:descriptor(Type)));
         false -> element(1, expression(Expr, #{}, C))
     end;

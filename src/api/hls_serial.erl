@@ -81,7 +81,7 @@ unpack(Packed, counter, Args) ->
     {Value, Rest}.
 
 -doc "Renders the unsigned fixed-width XLS representation.".
--spec print_type(counter, [pos_integer()]) -> xls_parse:printable().
+-spec print_type(counter, [pos_integer()]) -> xls_clause_lower:printable().
 print_type(counter, Args) -> xls_nums:unsigned_type(width(counter, Args)).
 
 -doc "Declares the static XLS serial-arithmetic companion.".
@@ -89,10 +89,10 @@ print_type(counter, Args) -> xls_nums:unsigned_type(width(counter, Args)).
 dslx_imports() -> [hls_serial].
 
 -doc "Lowers counter construction and arithmetic, preserving half-range failures.".
--spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) ->
-    xls_parse:ir() | xls_parse:clause_state() | {fallible, badarg, xls_parse:ir()}.
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state() | {fallible, badarg, xls_clause_lower:ir()}.
 transpile(counter, [{static, integer, Width}], State) ->
-    xls_parse:reference(State, {phantom, type, counter(Width)});
+    xls_clause_lower:reference(State, {phantom, type, counter(Width)});
 transpile(wrap, [{phantom, type, Type}, Value], _State) ->
     operand(Type, Value);
 transpile(Operation, [{phantom, type, Type}, Left, Right], _State)
@@ -106,7 +106,7 @@ transpile(Operation, [{phantom, type, Type}, Left, Right], _State)
 
 %% Reduce literal values before emitting them; dynamic casts preserve their low
 %% bits independently of signedness or source width. No expression is duplicated.
--spec operand(hls_type:descriptor(), xls_parse:ir()) -> xls_parse:ir().
+-spec operand(hls_type:descriptor(), xls_clause_lower:ir()) -> xls_clause_lower:ir().
 operand(Type = {hls_type, ?MODULE, counter, _}, {static, integer, Value}) ->
     [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
 operand(Type = {hls_type, ?MODULE, counter, _}, Value) ->

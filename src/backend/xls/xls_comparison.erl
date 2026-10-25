@@ -16,7 +16,7 @@
 -spec prepare([hls_source:form()]) -> [hls_source:form()].
 prepare(Forms) ->
     Context = #{records => maps:from_list([{Name, maps:from_list([
-        {xls_parse:record_field_name(Field), shape(Type)}
+        {hls_records:field_name(Field), shape(Type)}
         || {typed_record_field, Field, Type} <- Fields])}
         || {attribute, _, record, {Name, Fields}} <- Forms]),
         signatures => maps:from_list([{Key, {[shape(A) || A <- Args], shape(Result)}}
@@ -214,7 +214,7 @@ field(Name, Slot, #{records := Records}) ->
     maps:get(Slot, maps:get(Name, Records, #{}), unknown).
 
 -doc "Emits a mathematical integer comparison; literals retain sufficient independent width.".
--spec emit(atom(), [xls_parse:printable()]) -> xls_parse:printable().
+-spec emit(atom(), [xls_clause_lower:printable()]) -> xls_clause_lower:printable().
 emit(Op, [Left, Right]) ->
     Function = case Op of '<' -> "less"; '=<' -> "less_equal";
         '>' -> "less"; '>=' -> "less_equal";
@@ -225,6 +225,6 @@ emit(Op, [Left, Right]) ->
         lists:join(", ", [literal(A) || A <- Args]), ")"].
 
 %% A literal's mathematical value must not inherit its neighbor's narrow type.
--spec literal(xls_parse:printable()) -> xls_parse:printable().
+-spec literal(xls_clause_lower:printable()) -> xls_clause_lower:printable().
 literal({static, integer, N}) -> xls_binary_lower:integer_literal(N);
 literal(Value) -> Value.

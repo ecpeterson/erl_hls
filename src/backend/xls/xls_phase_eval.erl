@@ -21,7 +21,7 @@ context(Forms) ->
 %% Retain initializers without evaluating arbitrary providers as compiler code.
 -spec field(term()) -> {atom(), term()}.
 field({typed_record_field, F = {record_field, _, {atom, _, N}, Default}, Type}) ->
-    case {xls_parse:is_zero_default(Default), Type} of
+    case {hls_records:is_zero_default(Default), Type} of
         {true, {remote_type, _, [{atom, _, hls_nums}, {atom, _, Kind}, _]}} ->
             case lists:member(Kind, [u8, u16, u32, u64, uN, s8, s16, s32, s64, sN]) of
                 true -> {N, {integer, 0, 0}};

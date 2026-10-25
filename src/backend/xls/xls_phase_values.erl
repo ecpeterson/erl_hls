@@ -13,8 +13,8 @@
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), facts()}.
 from_file(File, Options) ->
-    {ok, Source} = xls_parse:parse_file(File, Options),
-    Phases = xls_parse:find_attribute(Source, hls_phases),
+    {ok, Source} = hls_source:parse_file(File, Options),
+    Phases = hls_source:find_attribute(Source, hls_phases),
     Spec = xls_statem_lower:artifact(File, Source, Phases),
     {Spec, analyze(Source, Spec)}.
 
@@ -23,8 +23,8 @@ from_file(File, Options) ->
 analyze(Source, #{data_name := Data, phases := Phases}) ->
     Forms = hls_records:resolve(Source),
     C = xls_phase_eval:context(Forms),
-    {attribute, _, record, {Data, Fields}} = xls_parse:find_record(Forms, Data),
-    Results = [{xls_parse:record_field_name(F), infer(xls_parse:record_field_name(F),
+    {attribute, _, record, {Data, Fields}} = hls_records:find(Forms, Data),
+    Results = [{hls_records:field_name(F), infer(hls_records:field_name(F),
         Data, Phases, Forms, C)} || {typed_record_field, F, _} <- Fields],
     #{version => 1, source_sha256 => crypto:hash(sha256, term_to_binary(Source, [deterministic])),
         analyzer_md5 => ?MODULE:module_info(md5), evaluator_md5 => xls_phase_eval:module_info(md5),

@@ -52,9 +52,11 @@ deterministic_build_still_analyzes_with_its_macros_test() ->
         ?assertNot(total(hls_actor_interface:from_module(hls_shape_reduction_fixture)))
     end).
 
+%% Forms produced with explicit macros remain compilable and retain those macros for interface analysis.
+-spec preprocessed_forms_remain_compilable_with_their_context_test() -> ok.
 preprocessed_forms_remain_compilable_with_their_context_test() ->
     with_source(fun(Actor, _Provider, _Header) ->
-        {ok, Forms} = xls_parse:parse_file(Actor, [{d, 'SHAPE_COUNT', 3}]),
+        {ok, Forms} = hls_source:parse_file(Actor, [{d, 'SHAPE_COUNT', 3}]),
         {ok, hls_shape_reduction_fixture, Beam} = compile:forms(Forms, [binary, debug_info]),
         {module, hls_shape_reduction_fixture} = code:load_binary(
             hls_shape_reduction_fixture, Actor, Beam),
@@ -90,13 +92,15 @@ shared_type_sources_use_explicit_search_paths_test() ->
         ?assert(total(hls_actor_interface:from_module(hls_shape_reduction_fixture)))
     end).
 
+%% Nested alias shapes are resolved correctly with only one provider-source read per analysis.
+-spec nested_parameterized_aliases_resolve_once_per_source_test() -> ok.
 nested_parameterized_aliases_resolve_once_per_source_test() ->
     with_source(fun(Actor, Provider, _Header) ->
         ok = file:write_file(Provider,
             "-module(hls_shape_type_fixture).\n"
             "-type vector() :: row(row(hls_nums:u32(), 2), 3).\n"
             "-type row(E, N) :: hls_lists:list(E, N).\n"),
-        {ok, Forms} = xls_parse:parse_file(Actor),
+        {ok, Forms} = hls_source:parse_file(Actor),
         Session = trace:session_create(type_shape_reads, self(), []),
         try
             1 = trace:function(Session, {hls_source, read, 2}, true, [call_count]),

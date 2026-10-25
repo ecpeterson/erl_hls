@@ -144,9 +144,9 @@ analyze_source(Forms, #{
                 MessageNames
             ),
             ok = xls_names:reduction(Forms, AccumulatorName, Opens),
-            AccumulatorRecord = xls_parse:find_record(
+            AccumulatorRecord = hls_records:find(
                 Forms, AccumulatorName),
-            ok = xls_parse:validate_record_defaults(AccumulatorRecord),
+            ok = hls_records:validate_defaults(AccumulatorRecord),
             OpenIndex = index_opens(Opens),
             ValidOpens = [validate_open(Open, Forms, DataName)
                 || Open <- Opens],
@@ -312,7 +312,7 @@ validate_open(Open = #{
     ok = case maps:get(kind, Open, reduction) of
         gather -> ok;
         reduction -> validate_complete_record_expression(Identity,
-            xls_parse:find_record(Forms, Accumulator), reduction_identity)
+            hls_records:find(Forms, Accumulator), reduction_identity)
     end,
     Open.
 
@@ -495,7 +495,7 @@ validate_contribution(
         reduction ->
             Accumulator = record_expression_name(Value),
             ok = validate_complete_record_expression(Value,
-                xls_parse:find_record(Forms, Accumulator), reduction_value),
+                hls_records:find(Forms, Accumulator), reduction_value),
             tagged
     end,
     ok = require_variable_origins(
@@ -1043,6 +1043,10 @@ strip_dispatched_internal_phase({clause, Line,
         [Key, Accumulator, dispatched_phase_variable(Phase), Data],
         Guards, Body}.
 
+%% Close a checked two-operand reducer with explicit callback-failure propagation.
+-spec close_reducer(#{name := atom(), clause := erl_parse:abstract_clause(),
+    atom() => term()}, atom(), atom(), xls_statem_reduction_ir:type_ref(),
+    #{atom() => xls_clause_lower:printable()}) -> xls_statem_reduction_ir:reducer().
 close_reducer(#{name := Name, clause := {clause, Line, [
         {atom, _NameLine, Name}, Left, Right
     ], Guards, Body}}, DataName, AccumulatorName, AccumulatorType,
@@ -1074,8 +1078,8 @@ close_reducer(#{name := Name, clause := {clause, Line, [
     ),
     #{
         name => Name,
-        body => xls_parse:print(LoweredBody),
-        result => xls_parse:print(Result)
+        body => xls_clause_lower:print(LoweredBody),
+        result => xls_clause_lower:print(Result)
     }.
 
 accumulator_argument(Name, Variable) ->
@@ -1084,14 +1088,18 @@ accumulator_argument(Name, Variable) ->
         xls_names:record_codec(Name), "(", Variable, "))"
     ].
 
+%% Resolve a source record before constructing the reducer's closed type reference.
+-spec type_ref([hls_source:form()], atom()) -> xls_statem_reduction_ir:type_ref().
 type_ref(Forms, Name) ->
-    type_ref(xls_parse:find_record(Forms, Name)).
+    type_ref(hls_records:find(Forms, Name)).
 
+%% Retain the nominal record type and ordered provider descriptors for code generation.
+-spec type_ref(hls_source:record_declaration()) -> xls_statem_reduction_ir:type_ref().
 type_ref({attribute, _Line, record, {Name, Fields0}}) ->
     Fields = [
         begin
             Type = hls_type:descriptor(TypeExpression),
-            #{name => xls_parse:record_field_name(Field), type => Type}
+            #{name => hls_records:field_name(Field), type => Type}
         end
         || {typed_record_field, Field, TypeExpression} <- Fields0
     ],
@@ -1106,10 +1114,14 @@ type_ref({attribute, _Line, record, {Name, Fields0}}) ->
 %%% Typed source validation
 %%%
 
+%% Track whether each bound record or field originated in actor data or the incoming message.
+-spec pattern_bindings(erl_parse:abstract_expr(), atom(), data | message,
+    [hls_source:form()]) -> #{atom() => #{type := hls_type:descriptor() | {record, atom()},
+        fields => #{atom() => hls_type:descriptor()}, origin := data | message}}.
 pattern_bindings(Pattern, RecordName, Origin, Forms) ->
-    Record = xls_parse:find_record(Forms, RecordName),
+    Record = hls_records:find(Forms, RecordName),
     FieldTypes = maps:from_list([
-        {xls_parse:record_field_name(Field), hls_type:descriptor(Type)}
+        {hls_records:field_name(Field), hls_type:descriptor(Type)}
         || {typed_record_field, Field, Type} <- record_decl_fields(Record)
     ]),
     pattern_bindings(Pattern, RecordName, FieldTypes, Origin, #{}).
@@ -1248,13 +1260,16 @@ record_expression_name({record, _Line, Name, _Fields}) -> Name;
 record_expression_name(Expression) ->
     error({unsupported_hls_statem_reduction_record_expression, Expression}).
 
+%% Reduction values must construct every declared field exactly once, without update shorthand.
+-spec validate_complete_record_expression(term(), hls_source:record_declaration(),
+    reduction_identity | reduction_value | reduction_result) -> ok.
 validate_complete_record_expression(
     {record, Line, Name, Fields},
     {attribute, _RecordLine, record, {Name, DeclaredFields}},
     Context
 ) ->
     Declared = lists:sort([
-        xls_parse:record_field_name(Field)
+        hls_records:field_name(Field)
         || {typed_record_field, Field, _Type} <- DeclaredFields
     ]),
     Present = [Field
@@ -1336,8 +1351,10 @@ replace_body({clause, Line, Patterns, Guards, _Body}, Body) ->
 
 split_last(List) -> {lists:droplast(List), lists:last(List)}.
 
+%% Render both pieces only after reduction lowering has produced a closed expression.
+-spec lowered(xls_clause_lower:printable(), xls_clause_lower:printable()) -> xls_statem_reduction_ir:expression().
 lowered(Body, Result) ->
-    #{body => xls_parse:print(Body), result => xls_parse:print(Result)}.
+    #{body => xls_clause_lower:print(Body), result => xls_clause_lower:print(Result)}.
 
 enum_atoms(Phases) ->
     maps:from_list(

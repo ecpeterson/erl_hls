@@ -45,9 +45,11 @@ expression_continuations_export_bindings_test_() ->
             "f(X) -> Value = case X of true -> Value = X; false -> Value = X end."
         ]].
 
+%% Renders a scope fixture as its result and failure flag for focused variable-binding assertions.
+-spec lower(string()) -> binary().
 lower(Source) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     #{body := Body, result := Value, failed := Failed} =
-        xls_parse:clause_outcome(Clause, ["x"], cell, #{}),
-    iolist_to_binary(xls_parse:print([Body, "(", Value, ", ", Failed, ")"])).
+        xls_clause_lower:clause_outcome(Clause, ["x"], cell, #{}),
+    iolist_to_binary(xls_clause_lower:print([Body, "(", Value, ", ", Failed, ")"])).

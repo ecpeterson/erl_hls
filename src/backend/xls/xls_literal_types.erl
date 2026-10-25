@@ -25,7 +25,7 @@ format({tuple, Fields}) -> ["(", [[format(T), ", "] || T <- Fields], ")"].
     [erl_parse:abstract_clause()].
 clauses(Clauses, Result, Forms) ->
     Records = maps:from_list([{Name, maps:from_list([
-        {xls_parse:record_field_name(Field), Type}
+        {hls_records:field_name(Field), Type}
         || {typed_record_field, Field, Type} <- Fields])}
         || {attribute, _, record, {Name, Fields}} <- Forms]),
     [Clause || Source <- Clauses, {Clause, _} <- [clause(Source, Result, #{}, Records)]].

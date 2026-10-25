@@ -35,20 +35,20 @@ expected(Mode, X) ->
 -spec program([hls_source:form()], string(), [string()], string()) -> iodata().
 program(Forms0, Name, Args, Signature) ->
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{list_to_atom(Name), length(Args)}]),
-    Data = xls_parse:state(Forms),
-    Tags = [Data | xls_parse:find_tags(Forms)],
-    [Clause] = xls_parse:find_function(Forms, list_to_atom(Name), length(Args)),
+    Data = hls_actor_source:state(Forms),
+    Tags = [Data | hls_actor_source:tags(Forms)],
+    [Clause] = hls_source:find_function(Forms, list_to_atom(Name), length(Args)),
     #{body := Body, result := Value, failed := Failed} =
-        xls_parse:clause_outcome(Clause, Args, Data, #{}),
+        xls_clause_lower:clause_outcome(Clause, Args, Data, #{}),
     [xls_dslx_imports:emit([hls_failure, hls_integer, hls_bits],
             xls_dslx_imports:from_forms(Forms)),
         "enum Tag : u8 { ", lists:join(", ", [[xls_names:enum_member(Tag), " = ",
             integer_to_list(I)] || {I, Tag} <- lists:enumerate(Tags)]), " }\n",
-        [[xls_parse:struct_from_record(Record), xls_parse:bitsfromstruct_from_record(Record)]
+        [[xls_record_codegen:declaration(Record), xls_record_codegen:encoder(Record)]
             || Record = {attribute, _, record, _} <- Forms],
         xls_helpers:emit(Helpers, Data, #{}),
         "pub fn ", Name, "(", Signature, ") -> u33 {\n",
-        xls_parse:print([Body, "if ", Failed, " { u33:0x100000000 } else { (",
+        xls_clause_lower:print([Body, "if ", Failed, " { u33:0x100000000 } else { (",
             Value, " as u32) as u33 }\n"]), "}\n"].
 
 %% Constraints cannot silently narrow existing values, including bound literals.

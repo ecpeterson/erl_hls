@@ -22,15 +22,17 @@ write(Stage) ->
     ok = file:write_file(filename:join(Stage, "binary_tb.sv"), testbench(Expected)),
     codecs(Stage).
 
+%% Renders a binary probe with its selected failure kind and a zero value on failure.
+-spec function(atom(), bits | integer, [hls_source:form()]) -> iodata().
 function(Name, Kind, Forms) ->
-    [Clause] = xls_parse:find_function(Forms, Name, 2),
+    [Clause] = hls_source:find_function(Forms, Name, 2),
     #{body := Body, result := Value, failure := Failure} =
-        xls_parse:clause_outcome(Clause, ["x", "value"], unused, #{}),
+        xls_clause_lower:clause_outcome(Clause, ["x", "value"], unused, #{}),
     Result = case Kind of bits -> ["(", Value, ").0"]; integer -> Value end,
     ["fn probe_", atom_to_list(Name), "(x: s32, value: (u24,)) -> bits[36] {\n",
-        xls_parse:print(Body), "let code = ", xls_parse:print(Failure), ";\n",
+        xls_clause_lower:print(Body), "let code = ", xls_clause_lower:print(Failure), ";\n",
         "let value = if code != hls_failure::NONE { u32:0 } else { (",
-        xls_parse:print(Result), ") as u32 };\n",
+        xls_clause_lower:print(Result), ") as u32 };\n",
         "(hls_failure::kind(code) as u4) ++ value\n}\n"].
 
 expected(Name, {X, Value}) ->

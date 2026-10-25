@@ -22,5 +22,8 @@ pack(true, bool, []) -> <<1:1>>;
 pack(_, bool, []) -> error(badarg).
 unpack(<<Bit:1, Rest/bitstring>>, bool, []) -> {Bit =:= 1, Rest}.
 print_type(bool, []) -> "bool".
+-doc "Creates the compile-time Boolean type descriptor.".
+-spec transpile(bool, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:clause_state().
 transpile(bool, [], State) ->
-    xls_parse:reference(State, {phantom, type, bool()}).
+    xls_clause_lower:reference(State, {phantom, type, bool()}).

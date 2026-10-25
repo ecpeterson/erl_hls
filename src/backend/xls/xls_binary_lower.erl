@@ -84,15 +84,20 @@ calculate(Op, Args) ->
     end.
 
 -doc "Lowers fixed-width binary construction, preserving evaluation order and recording payload failures.".
--spec construct(erl_parse:abstract_expr(), xls_parse:clause_state()) -> xls_parse:clause_state().
+-spec construct(erl_parse:abstract_expr(), xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 construct({bin, _, Elements}, State) ->
     {Parts, Evaluated} = lists:mapfoldl(fun construct_segment/2, State, segments(Elements)),
-    xls_parse:instr(Evaluated, ["(", lists:join(" ++ ", Parts ++ ["bits[0]:0"]), ",)"]).
+    xls_clause_lower:instr(Evaluated, ["(", lists:join(" ++ ", Parts ++ ["bits[0]:0"]), ",)"]).
 
+%% Evaluate one normalized segment before encoding it and recording length failures.
+-spec construct_segment(#{value := erl_parse:abstract_expr(), kind := integer | binary,
+    width := non_neg_integer() | all, unit := pos_integer(), line := erl_anno:anno(),
+    sign := signed | unsigned, endian := big | little}, xls_clause_lower:clause_state()) ->
+    {xls_clause_lower:printable(), xls_clause_lower:clause_state()}.
 construct_segment(#{value := Expr, kind := Kind} = Segment, State) ->
     ValueExpr = constant_expression(Expr),
-    Evaluated = xls_parse:statement_from_statement(ValueExpr, State),
-    Value = xls_parse:reference(Evaluated),
+    Evaluated = xls_clause_lower:statement_from_statement(ValueExpr, State),
+    Value = xls_clause_lower:reference(Evaluated),
     case Kind of
         integer -> {encode_integer(Value, Segment), Evaluated};
         binary ->
@@ -107,7 +112,7 @@ construct_segment(#{value := Expr, kind := Kind} = Segment, State) ->
             end,
             Checked = case Predicate of
                 none -> Evaluated;
-                _ -> xls_parse:add_failure(["hls_failure::check(", Predicate, ", ",
+                _ -> xls_clause_lower:add_failure(["hls_failure::check(", Predicate, ", ",
                     xls_failure_sites:at(badarg, Line), ")"], Evaluated)
             end,
             {Part, Checked}
@@ -125,7 +130,7 @@ encode_integer(Value, #{width := Width, endian := Endian}) ->
 %% The length predicate rejects those placeholder values before selecting a
 %% clause; an assignment instead reports the ordinary badmatch failure.
 -doc "Returns a binary pattern's length predicate and field projections for subsequent matching.".
--spec pattern(erl_parse:abstract_expr(), xls_parse:printable()) ->
+-spec pattern(erl_parse:abstract_expr(), xls_clause_lower:printable()) ->
     {{erl_anno:anno(), iolist()}, [{erl_parse:abstract_expr(), iolist(), integer | bits}]}.
 pattern({bin, Line, Elements}, Value) ->
     {Parts, Offset, Tail} = pattern_segments(segments(Elements), Value, 0),

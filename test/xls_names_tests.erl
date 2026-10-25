@@ -133,6 +133,8 @@ include_origins_test() ->
         #{name := foobar, file := "second.hrl", line := 17}},
         reason(fun() -> xls_names:actor(Located, hls_statem) end)).
 
+%% Generated-name collisions fail in interface and both service entrypoints before callback lowering.
+-spec translation_and_interface_validate_before_callbacks_test() -> ok.
 translation_and_interface_validate_before_callbacks_test() ->
     %% Invalid declarations alone suffice: no callback/helper lowering runs.
     Forms = forms([foo_bar, foobar]),
@@ -143,7 +145,7 @@ translation_and_interface_validate_before_callbacks_test() ->
         xls_statem_lower:interface(Forms, [waiting])
     end)),
     ?assertMatch({xls_name_collision, module, "Foobar", _, _}, reason(fun() ->
-        xls_parse:to_xls_gs("names.erl", Forms)
+        xls_gs_immediate:emit("names.erl", Forms)
     end)).
 
 %% Checks runtime declarations remain reserved.
@@ -153,7 +155,7 @@ runtime_declarations_remain_reserved_test() ->
     %% cannot silently reopen a record-name collision. This is a test of the
     %% namespace contract; production validation never scans generated text.
     [begin
-        {ok, Forms} = xls_parse:parse_file(Path),
+        {ok, Forms} = hls_source:parse_file(Path),
         RecordTypes = [xls_names:record_type(N) || {attribute, _, record, {N, _}} <- Forms],
         Text = iolist_to_binary(xls_parse:to_xls(Path, Options)),
         {match, Declarations} = re:run(Text,

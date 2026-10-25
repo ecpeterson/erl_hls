@@ -31,10 +31,14 @@ source_rejections_test_() ->
         "<<X:32/float>>.", "<<X/utf8>>.", "<<X:16/native>>.",
         "case B of <<A/binary, _:8>> -> A end."]].
 
+%% Lowers an expression sequence with the integer and binary runtime arguments used by these tests.
+-spec lower(string()) -> #{body := xls_clause_lower:printable(),
+    result := xls_clause_lower:printable(), failed := xls_clause_lower:printable(),
+    failure := xls_clause_lower:printable()}.
 lower(Source) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, Body} = erl_parse:parse_exprs(Tokens),
-    xls_parse:clause_outcome({clause, 1, [{var, 1, 'X'}, {var, 1, 'B'}], [], Body},
+    xls_clause_lower:clause_outcome({clause, 1, [{var, 1, 'X'}, {var, 1, 'B'}], [], Body},
         ["x", "b"], unused, #{}).
 
 size_bif_resolution_test() ->
@@ -54,14 +58,16 @@ size_bif_resolution_test() ->
     ?assertError({undefined_xls_helper, 1, {bit_size, 1}},
         xls_helpers:prepare(LocalForms, [{probe, 1}])).
 
+%% Binary operations and assignments retain distinct source failures in the emitted codebook.
+-spec source_failure_sites_test() -> ok.
 source_failure_sites_test() ->
     {ok, Forms0} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
     {Forms, Origins} = xls_failure_sites:prepare(Forms0),
     Bodies = [begin
-        [Clause] = xls_parse:find_function(Forms, Name, 2),
+        [Clause] = hls_source:find_function(Forms, Name, 2),
         #{body := Body, failure := Failure} =
-            xls_parse:clause_outcome(Clause, ["x", "b"], unused, #{}),
-        xls_parse:print([Body, Failure])
+            xls_clause_lower:clause_outcome(Clause, ["x", "b"], unused, #{}),
+        xls_clause_lower:print([Body, Failure])
     end || Name <- [bad_prefix, assignment, same_bits]],
     Sites = xls_failure_sites:allocate(Origins, Bodies),
     ?assert(lists:any(fun(#{kind := K}) -> K =:= badarg end, Sites)),

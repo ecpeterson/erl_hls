@@ -35,8 +35,10 @@ expected(A, B) ->
     Value = binary:decode_unsigned(xls_names_fixture:pack(Output), little),
     (1 bsl 96) bor (Value bsl 64) bor (Value bsl 32) bor Value.
 
+%% Emits a mixed-case server and reply checks using the same names as its host wire codec.
+-spec gs() -> iodata().
 gs() ->
-    {ok, Forms} = xls_parse:parse_file("test/xls_names_gs_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/xls_names_gs_fixture.erl"),
     [xls_parse:to_xls("test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
         "  let state_record = (Tag::SERVER_DATA, ServerData { Value: value });\n",

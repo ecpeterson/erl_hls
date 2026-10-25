@@ -14,7 +14,11 @@ unsupported_shapes_fail_before_xls_test() ->
     ?assertEqual(<<>>, hls_type:pack([], Empty)),
     ?assertError(empty_xls_collection, hls_type:print_type(Empty)).
 
+%% Lowers a collection expression with runtime values and count for focused failure assertions.
+-spec lower(string()) -> #{body := xls_clause_lower:printable(),
+    result := xls_clause_lower:printable(), failed := xls_clause_lower:printable(),
+    failure := xls_clause_lower:printable()}.
 lower(Expression) ->
     {ok, Tokens, _} = erl_scan:string("probe(V, Count) -> " ++ Expression ++ "."),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    xls_parse:clause_outcome(Clause, ["values", "count"], state, #{}).
+    xls_clause_lower:clause_outcome(Clause, ["values", "count"], state, #{}).

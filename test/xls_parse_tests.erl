@@ -73,29 +73,35 @@ repeated_hls_tags_reach_state_machine_lowering_test() ->
     ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::SHARED">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::LAST">>)).
 
+%% Repeated tags are rejected both within a declaration and across separate declaration blocks.
+-spec duplicate_hls_tags_are_rejected_across_blocks_test() -> ok.
 duplicate_hls_tags_are_rejected_across_blocks_test() ->
     Forms = [
         {attribute, 1, hls_tags, [first, shared]},
         {attribute, 2, hls_tags, [shared, last]}
     ],
-    ?assertError({duplicate_hls_tags, [shared]}, xls_parse:find_tags(Forms)),
+    ?assertError({duplicate_hls_tags, [shared]}, hls_actor_source:tags(Forms)),
     ?assertError(
         {duplicate_hls_tags, [first]},
-        xls_parse:find_tags([
+        hls_actor_source:tags([
             {attribute, 3, hls_tags, [first, first]}
         ])
     ).
 
+%% Tag declarations must be lists of atoms and report the offending source line.
+-spec malformed_hls_tag_fragments_are_rejected_test() -> ok.
 malformed_hls_tag_fragments_are_rejected_test() ->
     ?assertError(
         {invalid_hls_tags, 7, [first, 2]},
-        xls_parse:find_tags([{attribute, 7, hls_tags, [first, 2]}])
+        hls_actor_source:tags([{attribute, 7, hls_tags, [first, 2]}])
     ),
     ?assertError(
         {invalid_hls_tags, 9, first},
-        xls_parse:find_tags([{attribute, 9, hls_tags, first}])
+        hls_actor_source:tags([{attribute, 9, hls_tags, first}])
     ).
 
+%% Public tags may fill all 253 available operation codes but cannot consume reserved codes.
+-spec hls_tags_fill_but_do_not_overflow_the_u8_namespace_test() -> ok.
 hls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
     Tags = [
         list_to_atom("hls_capacity_tag_" ++ integer_to_list(Index))
@@ -103,13 +109,13 @@ hls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
     ],
     ?assertEqual(
         lists:sublist(Tags, 253),
-        xls_parse:find_tags([
+        hls_actor_source:tags([
             {attribute, 1, hls_tags, lists:sublist(Tags, 253)}
         ])
     ),
     ?assertError(
         {too_many_hls_tags, 254, 253},
-        xls_parse:find_tags([{attribute, 2, hls_tags, Tags}])
+        hls_actor_source:tags([{attribute, 2, hls_tags, Tags}])
     ).
 
 guard_alternatives_are_lowered_test() ->
@@ -283,7 +289,7 @@ boolean_case_preserves_branch_badmatches_test() ->
         "probe(Condition, Value) -> "
         "case Condition of true -> true = Value, 1; false -> 2 end."
     ),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         ["condition", "value"],
         state,
@@ -291,7 +297,7 @@ boolean_case_preserves_branch_badmatches_test() ->
         "failure",
         #{}
     ),
-    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    XLS = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertNotEqual(
         nomatch,
         binary:match(
@@ -327,12 +333,14 @@ short_circuit_rhs_bindings_stay_in_their_branch_test_() ->
         {"orelse", <<"} else {">>}
     ]].
 
+%% The host annotation preserves its value while lowering emits the requested target type cast.
+-spec hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() -> ok.
 hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
     ?assertEqual(0, hls_type:as(hls_nums:u32(), 0)),
     Clause = parse_clause(
         "probe() -> hls_type:as(hls_nums:u32(), 0)."
     ),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         [],
         state,
@@ -340,7 +348,7 @@ hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
         "failure",
         #{}
     ),
-    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    XLS = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"(0 as u32)">>)).
 
 %% Sibling Boolean arms can bind a name independently.
@@ -350,7 +358,7 @@ boolean_case_bindings_are_local_to_each_arm_test() ->
         "probe(Condition) -> "
         "case Condition of true -> X = 1, X; false -> X = 2, X end."
     ),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         ["condition"],
         state,
@@ -358,7 +366,7 @@ boolean_case_bindings_are_local_to_each_arm_test() ->
         "failure",
         #{}
     ),
-    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    XLS = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertEqual(nomatch, binary:match(XLS, <<"v_X_2">>)).
 
 %% Integer case arms preserve source-order guard selection.
@@ -493,6 +501,8 @@ guarded_general_case_fallback_carries_failure_test() ->
         "probe(Value) -> case Value of 0 -> 1; Fallback when Fallback >= 0 -> 2 end.", ["value"]),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::CASE_CLAUSE">>)).
 
+%% A wildcard cannot precede later alternatives in a general case expression.
+-spec nonfinal_general_case_fallback_is_rejected_test() -> ok.
 nonfinal_general_case_fallback_is_rejected_test() ->
     Clause = parse_clause(
         "probe(Value) -> case Value of _ -> 0; 1 -> 1; _ -> 2 end."
@@ -500,7 +510,7 @@ nonfinal_general_case_fallback_is_rejected_test() ->
     ?assertException(
         error,
         {nonfinal_xls_case_fallback, _},
-        xls_parse:branch_from_clause(
+        xls_clause_lower:branch_from_clause(
             Clause,
             ["value"],
             state,
@@ -510,6 +520,8 @@ nonfinal_general_case_fallback_is_rejected_test() ->
         )
     ).
 
+%% Binding an alias around a wildcard does not permit a nonfinal case fallback.
+-spec nonfinal_alias_case_fallback_is_rejected_test() -> ok.
 nonfinal_alias_case_fallback_is_rejected_test() ->
     Clause = parse_clause(
         "probe(Value) -> case Value of Whole = _ -> Whole; _ -> 2 end."
@@ -517,7 +529,7 @@ nonfinal_alias_case_fallback_is_rejected_test() ->
     ?assertException(
         error,
         {nonfinal_xls_case_fallback, _},
-        xls_parse:branch_from_clause(
+        xls_clause_lower:branch_from_clause(
             Clause,
             ["value"],
             state,
@@ -527,6 +539,8 @@ nonfinal_alias_case_fallback_is_rejected_test() ->
         )
     ).
 
+%% One case scrutinee cannot be interpreted as both a tuple and a scalar.
+-spec general_case_rejects_incompatible_pattern_shapes_test() -> ok.
 general_case_rejects_incompatible_pattern_shapes_test() ->
     Clause = parse_clause(
         "probe(Value) -> case Value of {0, _} -> 1; 0 -> 2; _ -> 3 end."
@@ -534,7 +548,7 @@ general_case_rejects_incompatible_pattern_shapes_test() ->
     ?assertException(
         error,
         {incompatible_xls_case_pattern_shapes, _, _},
-        xls_parse:branch_from_clause(
+        xls_clause_lower:branch_from_clause(
             Clause,
             ["value"],
             state,
@@ -544,6 +558,8 @@ general_case_rejects_incompatible_pattern_shapes_test() ->
         )
     ).
 
+%% Different record layouts cannot share one untyped case scrutinee.
+-spec general_case_rejects_heterogeneous_record_patterns_test() -> ok.
 general_case_rejects_heterogeneous_record_patterns_test() ->
     Clause = parse_clause(
         "probe(Value) -> case Value of #left{} -> 1; #right{} -> 2; _ -> 3 end."
@@ -551,7 +567,7 @@ general_case_rejects_heterogeneous_record_patterns_test() ->
     ?assertException(
         error,
         {incompatible_xls_case_pattern_shapes, _, _},
-        xls_parse:branch_from_clause(
+        xls_clause_lower:branch_from_clause(
             Clause,
             ["value"],
             state,
@@ -561,6 +577,8 @@ general_case_rejects_heterogeneous_record_patterns_test() ->
         )
     ).
 
+%% Repeated Boolean alternatives reject before generating ambiguous branch selection.
+-spec duplicate_boolean_case_arm_is_rejected_test() -> ok.
 duplicate_boolean_case_arm_is_rejected_test() ->
     Clause = parse_clause(
         "probe(Condition) -> "
@@ -569,7 +587,7 @@ duplicate_boolean_case_arm_is_rejected_test() ->
     ?assertException(
         error,
         {duplicate_xls_boolean_case_branch, _, true},
-        xls_parse:branch_from_clause(
+        xls_clause_lower:branch_from_clause(
             Clause,
             ["condition"],
             state,
@@ -586,7 +604,7 @@ case_failure_uses_no_synthetic_erlang_bindings_test() ->
         "probe(Condition, Case_match_1) -> "
         "case Condition of true -> 1; false -> 2 end."
     ),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         ["condition", "case_match_1"],
         state,
@@ -594,7 +612,7 @@ case_failure_uses_no_synthetic_erlang_bindings_test() ->
         "failure",
         #{}
     ),
-    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    XLS = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Case_match_1_1">>)),
     ?assertEqual(nomatch, binary:match(XLS, <<"let case_match_">>)).
 
@@ -1162,6 +1180,8 @@ invalid_gs_wire_width_test_() ->
         {"hls_vec:vector(hls_nums:u32(), 4)", {xls_message_too_wide, message, 128, 96}}
     ]].
 
+%% An eight-bit message occupies one wire word while its logical record width remains eight bits.
+-spec non_word_aligned_state_machine_message_is_accepted_test() -> ok.
 non_word_aligned_state_machine_message_is_accepted_test() ->
     Path = filename:join("_build", "non_word_statem_fixture.erl"),
     ok = filelib:ensure_dir(Path),
@@ -1181,9 +1201,9 @@ non_word_aligned_state_machine_message_is_accepted_test() ->
     >>,
     ok = file:write_file(Path, Source),
     try
-        {ok, Forms} = xls_parse:parse_file(Path),
-        ?assertEqual(1, xls_parse:message_words(Forms, message)),
-        ?assertEqual(8, xls_parse:record_width(xls_parse:find_record(Forms, message)))
+        {ok, Forms} = hls_source:parse_file(Path),
+        ?assertEqual(1, hls_actor_source:message_words(Forms, message)),
+        ?assertEqual(8, hls_records:width(hls_records:find(Forms, message)))
     after
         ok = file:delete(Path)
     end.
@@ -1298,6 +1318,8 @@ callback_arguments() ->
         )
     ].
 
+%% Lowers parsed callback clauses with distinct no-match and body-failure sentinels.
+-spec lower_callback_clauses(string()) -> binary().
 lower_callback_clauses(Source) ->
     {Body, Result} = xls_callback_lower:lower(
         parse_clauses(Source),
@@ -1308,10 +1330,12 @@ lower_callback_clauses(Source) ->
         fun(_Kind) -> "body_failure" end,
         #{}
     ),
-    iolist_to_binary(xls_parse:print([Body, Result])).
+    iolist_to_binary(xls_clause_lower:print([Body, Result])).
 
+%% Lowers one parsed expression clause against explicit runtime arguments and a failure sentinel.
+-spec lower_expression_clause(string(), [xls_clause_lower:printable()]) -> binary().
 lower_expression_clause(Source, Arguments) ->
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         parse_clause(Source),
         Arguments,
         state,
@@ -1319,4 +1343,4 @@ lower_expression_clause(Source, Arguments) ->
         "failure",
         #{}
     ),
-    iolist_to_binary(xls_parse:print([Body, Result])).
+    iolist_to_binary(xls_clause_lower:print([Body, Result])).

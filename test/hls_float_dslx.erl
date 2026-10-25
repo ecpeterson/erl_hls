@@ -1,6 +1,8 @@
 -module(hls_float_dslx).
 -export([write/1, cases/1, oracle/4]).
 
+-doc "Writes floating-point DSLX probes, BEAM-derived RTL vectors and rejection fixtures into an existing staging directory. File or lowering failures raise; this does not execute the generated tests.".
+-spec write(file:filename()) -> ok.
 write(Stage) ->
     lists:foreach(fun(Name) ->
         Type = hls_nums:Name(),
@@ -24,17 +26,19 @@ write(Stage) ->
         {ok, Tokens, _} = erl_scan:string("probe(X, Y) -> " ++ Expression ++ "."),
         {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
         #{body := Body, result := Result} =
-            xls_parse:clause_outcome(Clause, ["x", "y"], state, #{}),
+            xls_clause_lower:clause_outcome(Clause, ["x", "y"], state, #{}),
         ok = file:write_file(filename:join(Stage, Name ++ ".x"),
             ["import hls_bits;\nimport apfloat;\nimport hls_float;\nimport hls_failure;\n",
                 "pub fn probe(x: ", hls_type:print_type(ArgumentType), ", y: ",
                 hls_type:print_type(ArgumentType), ") -> ",
                 hls_type:print_type(hls_nums:float16()), " {\n",
-                xls_parse:print([Body, Result]), "\n}\n"])
+                xls_clause_lower:print([Body, Result]), "\n}\n"])
     end, [{"integer_operator", hls_nums:float16(), "X + Y"},
         {"wrong_precision", hls_nums:float32(), "hls_float:add(hls_nums:float16(), X, Y)"},
         {"integer_operand", hls_nums:u16(), "hls_float:add(hls_nums:float16(), X, Y)"}]).
 
+%% Lowers one named float operation into a raw-bit probe returning the value and failure flag.
+-spec probe(hls_type:descriptor(), add | sub | mul | eq | lt) -> iodata().
 probe(Type = {hls_type, _, Name, []}, Op) ->
     Source = lists:flatten(io_lib:format(
         "probe(X, Y) -> hls_float:~s(hls_nums:~s(), X, Y).", [Op, Name])),
@@ -42,7 +46,7 @@ probe(Type = {hls_type, _, Name, []}, Op) ->
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     W = hls_type:width(Type),
     #{body := Body, result := Result, failure := Failure} =
-        xls_parse:clause_outcome(Clause,
+        xls_clause_lower:clause_outcome(Clause,
             [hls_type:dslx_from_bits(Type, "x"), hls_type:dslx_from_bits(Type, "y")], state, #{}),
     Encoded = case Op of
         eq -> ["(", Result, ") as uN[", integer_to_list(W), "]"];
@@ -51,9 +55,9 @@ probe(Type = {hls_type, _, Name, []}, Op) ->
     end,
     ["pub fn ", atom_to_list(Op), "(x: uN[", integer_to_list(W), "], y: uN[",
         integer_to_list(W), "]) -> (uN[", integer_to_list(W), "], bool) {\n",
-        xls_parse:print(Body), "let failed = ", xls_parse:print(Failure),
+        xls_clause_lower:print(Body), "let failed = ", xls_clause_lower:print(Failure),
         " != hls_failure::NONE;\n(if failed { uN[", integer_to_list(W),
-        "]:0 } else { ", xls_parse:print(Encoded), " }, failed)\n}\n"].
+        "]:0 } else { ", xls_clause_lower:print(Encoded), " }, failed)\n}\n"].
 
 checks(Type, Op) ->
     W = hls_type:width(Type),
@@ -110,6 +114,8 @@ ties(Type) ->
         A <- [One, One + 1, One + (1 bsl F) - 1],
         B <- [HalfUlp - 1, HalfUlp, HalfUlp + 1]].
 
+%% Emits float-list slice checks with subnormal and signed-zero values packed by the host codec.
+-spec collections(hls_type:descriptor()) -> iodata().
 collections(Type = {hls_type, _, Name, []}) ->
     ListType = hls_lists:list(Type, 3),
     W = hls_type:width(Type),
@@ -117,13 +123,13 @@ collections(Type = {hls_type, _, Name, []}) ->
         "hls_lists:sublist(hls_lists:list(hls_nums:~s(), 3), Values, Start, Count).", [Name])),
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    #{body := Body, result := Result} = xls_parse:clause_outcome(Clause,
+    #{body := Body, result := Result} = xls_clause_lower:clause_outcome(Clause,
         [hls_type:dslx_from_bits(ListType, "raw"), "start", "count"], state, #{}),
     {Tiny, <<>>} = hls_type:unpack(<<1:W/little>>, Type),
     Values = [1.5, -Tiny, -0.0],
     Raw = binary:decode_unsigned(hls_type:pack(Values, ListType), little),
     [io_lib:format("fn slice(raw: uN[~p], start: u32, count: u32) -> uN[~p] {\n", [3*W, 3*W]),
-        xls_parse:print([Body, hls_type:dslx_to_bits(ListType, Result)]), "\n}\n",
+        xls_clause_lower:print([Body, hls_type:dslx_to_bits(ListType, Result)]), "\n}\n",
         "#[test]\nfn float_collections() {\n",
         [begin
             Expected = binary:decode_unsigned(hls_type:pack(

@@ -36,20 +36,22 @@ write(Stage) ->
         ok = file:write_file(Prefix ++ ".count", integer_to_list(length(Cases)))
     end, [{S, W} || W <- [8, 32, 64], S <- [u, s]]).
 
+%% Lowers a collection access with the selected index width and signedness, retaining failure bits.
+-spec function(u | s, pos_integer(), nth | set | sublist | array_slice) -> iodata().
 function(Sign, Width, Op) ->
     {Expression, OutType} = operation(Op),
     {ok, Tokens, _} = erl_scan:string("probe(I, C, V, New) -> " ++ Expression ++ "."),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     Integer = [atom_to_list(Sign), "N[", integer_to_list(Width), "]"],
-    #{body := Body, result := Result, failure := Failure} = xls_parse:clause_outcome(Clause,
+    #{body := Body, result := Result, failure := Failure} = xls_clause_lower:clause_outcome(Clause,
         [["(index as ", Integer, ")"], ["(count as ", Integer, ")"],
          "(values as u8[3])", "value"], state, #{}),
     Bits = hls_type:width(OutType),
     [io_lib:format("fn probe_~s(index: uN[~p], count: uN[~p], values: u24, value: u8) -> bits[~p] {\n",
-        [Op, Width, Width, Bits+4]), xls_parse:print(Body),
-        "let code = ", xls_parse:print(Failure), ";\n",
+        [Op, Width, Width, Bits+4]), xls_clause_lower:print(Body),
+        "let code = ", xls_clause_lower:print(Failure), ";\n",
         "let result = if code != hls_failure::NONE { zero!<", hls_type:print_type(OutType),
-        ">() } else { ", xls_parse:print(Result), " };\n",
+        ">() } else { ", xls_clause_lower:print(Result), " };\n",
         "(result as bits[", integer_to_list(Bits), "]) ++ (code as u4)\n}\n"].
 
 operation(nth) -> {"hls_vec:nth(I, V)", hls_nums:u8()};
@@ -86,6 +88,8 @@ boundaries(Width) ->
         [V || V <- [1 bsl 32, (1 bsl 32)+1, (1 bsl 32)+3], V =< Mask]),
     [{I, C} || I <- Values, C <- Values].
 
+%% Emits fixed-index collection operations and exact expected values, including sublist padding.
+-spec constant() -> iodata().
 constant() ->
     Source = "probe(V, New) -> {hls_lists:nth(2, V), hls_lists:set(2, V, New), "
         "hls_lists:sublist(hls_lists:list(hls_nums:u32(), 3), V, 2, 1), "
@@ -93,11 +97,11 @@ constant() ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     #{body := Body, result := Result, failure := Failure} =
-        xls_parse:clause_outcome(Clause, ["values", "replacement"], state, #{}),
+        xls_clause_lower:clause_outcome(Clause, ["values", "replacement"], state, #{}),
     ["import hls_lists;\nimport hls_failure;\n",
         "pub fn constant_probe(values: u32[3], replacement: u32) -> ",
-        "((u32, u32[3], u32[3], u32[2]), u16) {\n", xls_parse:print(Body),
-        "(", xls_parse:print(Result), ", ", xls_parse:print(Failure), ")\n}\n",
+        "((u32, u32[3], u32[3], u32[2]), u16) {\n", xls_clause_lower:print(Body),
+        "(", xls_clause_lower:print(Result), ", ", xls_clause_lower:print(Failure), ")\n}\n",
         "#[test]\nfn constant_accesses() {\n",
         "assert_eq(constant_probe(u32[3]:[10, 20, 30], u32:99), ",
         "((u32:20, u32[3]:[10, 99, 30], u32[3]:[20, 0, 0], u32[2]:[20, 30]), u16:0));\n}\n"].

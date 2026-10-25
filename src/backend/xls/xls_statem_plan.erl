@@ -31,8 +31,8 @@
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), plan()}.
 from_file(Filename, Options) ->
-    {ok, Source} = xls_parse:parse_file(Filename, Options),
-    Phases = xls_parse:find_attribute(Source, hls_phases),
+    {ok, Source} = hls_source:parse_file(Filename, Options),
+    Phases = hls_source:find_attribute(Source, hls_phases),
     xls_statem_lower:planned_artifact(Filename, Source, Phases).
 
 -doc "Builds a sidecar from one successful ordinary lowering's source, prepared helpers/callbacks and closed artifact. Internal lowerer entry point: callers must not combine inputs from different compilations.".

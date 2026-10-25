@@ -50,10 +50,10 @@ operation(Op, W) ->
         "hls_serial:~s(hls_serial:counter(~B), ~s).", [Op, W, Args])),
     #{body := Body, result := Result, failed := Failed} = outcome(Source, ["x", "y"]),
     [io_lib:format("fn op_~s(x: sN[~B], y: uN[~B]) -> (uN[~B], bool) {\n",
-        [Op, W + 2, W + 1, W]), xls_parse:print(Body),
-        "let failed = ", xls_parse:print(Failed), ";\n",
+        [Op, W + 2, W + 1, W]), xls_clause_lower:print(Body),
+        "let failed = ", xls_clause_lower:print(Failed), ";\n",
         "(if failed { uN[", integer_to_list(W), "]:0 } else { (",
-        xls_parse:print(Result), ") as uN[", integer_to_list(W), "] }, failed)\n}\n"].
+        xls_clause_lower:print(Result), ") as uN[", integer_to_list(W), "] }, failed)\n}\n"].
 
 %% Huge signed constants must normalize before reaching DSLX's literal typer.
 -spec literal(pos_integer()) -> iolist().
@@ -62,16 +62,16 @@ literal(W) ->
     Source = lists:flatten(io_lib:format("probe() -> "
         "hls_serial:add(hls_serial:counter(~B), ~B, -2).", [W, Value])),
     #{body := Body, result := Result} = outcome(Source, []),
-    ["#[test]\nfn large_literal() {\n", xls_parse:print(Body),
+    ["#[test]\nfn large_literal() {\n", xls_clause_lower:print(Body),
         io_lib:format("assert_eq(~s, uN[~B]:~B);\n}\n",
-            [xls_parse:print(Result), W, hls_serial:add(hls_serial:counter(W), Value, -2)])].
+            [xls_clause_lower:print(Result), W, hls_serial:add(hls_serial:counter(W), Value, -2)])].
 
 %% Parse one ordinary Erlang clause with supplied hardware argument expressions.
--spec outcome(string(), [xls_parse:printable()]) -> map().
+-spec outcome(string(), [xls_clause_lower:printable()]) -> map().
 outcome(Source, Arguments) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    xls_parse:clause_outcome(Clause, Arguments, state, #{}).
+    xls_clause_lower:clause_outcome(Clause, Arguments, state, #{}).
 
 %% Preserve each operation's failure independently; values after failure are ignored.
 -spec oracle(pos_integer(), integer(), non_neg_integer()) -> non_neg_integer().

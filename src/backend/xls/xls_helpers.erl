@@ -20,11 +20,11 @@
 -spec prepare([hls_source:form()], [{atom(), arity()}]) ->
     {[hls_source:form()], [helper()]}.
 prepare(Forms0, Roots) ->
-    Module = xls_parse:find_attribute(Forms0, module),
+    Module = hls_source:find_attribute(Forms0, module),
     WireForms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Forms0)), Module)),
     Definitions = definitions(WireForms, undefined, #{}),
     Context = #{definitions => Definitions, roots => Roots, forms => WireForms,
-        data => xls_parse:state(WireForms), tags => hls_records:wire_names(WireForms) -- [xls_parse:state(WireForms)]},
+        data => hls_actor_source:state(WireForms), tags => hls_records:wire_names(WireForms) -- [hls_actor_source:state(WireForms)]},
     Calls = lists:append([local_calls(maps:get(clauses, maps:get(Root, Definitions)))
         || Root <- Roots, maps:is_key(Root, Definitions)]),
     Helpers = reachable(Calls, Context, #{}),
@@ -149,10 +149,10 @@ type({type, _, record, [{atom, _, Name}]},
     case {Name =:= Data, lists:member(Name, Tags)} of
         {true, _} -> {dslx, ["(Tag, ", Struct, ")"]};
         {false, true} -> {dslx, ["(Tag, ", Struct, ", bits[",
-            integer_to_list(xls_parse:record_width(xls_parse:find_record(Forms, Name))),
+            integer_to_list(hls_records:width(hls_records:find(Forms, Name))),
             "])"]};
         _ ->
-            _ = xls_parse:find_record(Forms, Name),
+            _ = hls_records:find(Forms, Name),
             {dslx, Struct}
     end;
 type({remote_type, _, [{atom, _, hls_lists}, {atom, _, list}, [Element, {integer, _, Count}]]},
@@ -195,7 +195,7 @@ emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
         true ->
             [Clause] = Clauses,
             #{body := Computation, result := Result, failure := Failure} =
-                xls_parse:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
+                xls_clause_lower:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
             [Computation, "(", Result, ", ", Failure, ")"];
         false ->
             Inputs = [case Record of
@@ -213,7 +213,7 @@ emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
     ["fn ", Name, "(", lists:join(", ", [[A, ": ", xls_literal_types:format(T)]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
         ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
-        xls_parse_io:indent(xls_parse:print(Body), 2), "}\n\n"].
+        xls_parse_io:indent(xls_clause_lower:print(Body), 2), "}\n\n"].
 
 plain_head([{clause, _, Parameters, [], _}]) ->
     Names = [N || {var, _, N} <- Parameters, N =/= '_'],

@@ -53,7 +53,7 @@ complete_plan_views_test() ->
         [Name || {attribute, _, record, {Name, _}} <- Records]),
     [Piece] = [Fields || {attribute, _, record, {piece, Fields}} <- Records],
     ?assertEqual([{key, hls_nums:u32()}, {member, hls_nums:u32()}, {value, hls_nums:u8()}],
-        [{xls_parse:record_field_name(Field), hls_type:descriptor(Type)}
+        [{hls_records:field_name(Field), hls_type:descriptor(Type)}
             || {typed_record_field, Field, Type} <- Piece]),
     Callbacks = xls_statem_plan:callbacks(Plan),
     ?assertEqual(

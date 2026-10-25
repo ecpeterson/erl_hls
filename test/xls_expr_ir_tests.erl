@@ -7,7 +7,7 @@
 arithmetic_rendering_test() ->
     [begin
         Node = {xls_bits_binary, Op, "a", "b"},
-        ?assertEqual(Text, iolist_to_binary(xls_parse:print(Node)))
+        ?assertEqual(Text, iolist_to_binary(xls_clause_lower:print(Node)))
     end || {Op, Text} <- [{'+', <<"a + b">>}, {'-', <<"a - b">>}, {'bxor', <<"a ^ b">>}]],
     ok.
 
@@ -34,7 +34,7 @@ ordinary_lowering_test() ->
     ?assertEqual(1, count_nodes(xls_bits_binary, Body)),
     ?assertEqual(1, count_nodes(xls_integer_comparison, Body)),
     ?assertEqual(0, zero_comparisons(Body)),
-    Rendered = iolist_to_binary(xls_parse:print(Body)),
+    Rendered = iolist_to_binary(xls_clause_lower:print(Body)),
     ?assertNotEqual(nomatch, binary:match(Rendered, <<" + ">>)),
     ?assertNotEqual(nomatch, binary:match(Rendered, <<"hls_integer::equal(">>)),
     ok.
@@ -44,7 +44,7 @@ ordinary_lowering_test() ->
 branch_boundary_test() ->
     #{body := Body} = lower("T = case A =:= B of true -> A + B; false -> A - B end, T =:= A"),
     ?assertEqual(0, count_nodes(xls_bits_binary, Body)),
-    Text = iolist_to_binary(xls_parse:print(Body)),
+    Text = iolist_to_binary(xls_clause_lower:print(Body)),
     ?assertNotEqual(nomatch, binary:match(Text, <<" + ">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<" - ">>)),
     ?assertEqual(0, zero_comparisons(Body)),
@@ -56,7 +56,7 @@ eager_evaluation_test() ->
     #{body := Body, failed := Failed} = lower("T = (A div B) + A, T =:= A"),
     ?assertEqual(1, count_nodes(xls_bits_binary, Body)),
     ?assertEqual(0, zero_comparisons(Body)),
-    Text = iolist_to_binary(xls_parse:print([Body, Failed])),
+    Text = iolist_to_binary(xls_clause_lower:print([Body, Failed])),
     ?assertNotEqual(nomatch, binary:match(Text, <<" / ">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"hls_failure::">>)),
     ok.
@@ -67,7 +67,7 @@ lower(Body) ->
     Forms = [parse("-spec f(hls_nums:u32(), hls_nums:u32()) -> term()."),
         parse("f(A, B) -> " ++ Body ++ ".")],
     [_, {function, _, _, _, [Clause]}] = xls_comparison:prepare(Forms),
-    xls_parse:clause_outcome(Clause, ["a", "b"], state, #{}).
+    xls_clause_lower:clause_outcome(Clause, ["a", "b"], state, #{}).
 
 %% Parse complete forms so source binding behavior matches ordinary frontend input.
 -spec parse(string()) -> hls_source:form().

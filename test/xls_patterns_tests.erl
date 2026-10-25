@@ -1,13 +1,15 @@
 -module(xls_patterns_tests).
 -include_lib("eunit/include/eunit.hrl").
--include("../src/backend/xls/xls_parse.hrl").
+-include("../src/backend/xls/xls_clause_lower.hrl").
 
+%% Assignment matches an existing binding without replacing it and still binds fresh list elements.
+-spec assignment_preserves_existing_binding_test() -> ok.
 assignment_preserves_existing_binding_test() ->
     State = #clause_state{bindings = #{'Existing' => "original"}},
     Next = xls_pattern_lower:match(pattern("[Existing, New]"), "values", State),
     ?assertEqual("original", maps:get('Existing', Next#clause_state.bindings)),
     ?assert(is_map_key('New', Next#clause_state.bindings)),
-    ?assertEqual("values", xls_parse:reference(Next)),
+    ?assertEqual("values", xls_clause_lower:reference(Next)),
     ?assertNotEqual([], Next#clause_state.failures).
 
 clause_mismatch_does_not_raise_body_failure_test() ->
@@ -32,14 +34,16 @@ improper_list_patterns_have_a_diagnostic_test_() ->
             [xls_pattern_lower:value_argument("values")], #clause_state{}))
         || Source <- ["[X | 7]", "[X | bad_tail]", "[X | {A, B}]"]].
 
+%% List shape and element failures retain the source lines of their respective assignments.
+-spec list_pattern_origins_cover_length_and_element_failures_test() -> ok.
 list_pattern_origins_cover_length_and_element_failures_test() ->
     Forms = [form("-file(\"pattern_fixture.erl\", 1)."),
         form("-module(pattern_fixture)."),
         form("f(V) ->\n [0, _] = V,\n [] = V,\n V.")],
     {Annotated, Sites} = xls_failure_sites:prepare(Forms),
-    [Clause] = xls_parse:find_function(Annotated, f, 1),
-    Outcome = xls_parse:clause_outcome(Clause, ["values"], cell, #{}),
-    Body = xls_parse:print([maps:get(body, Outcome), maps:get(failure, Outcome)]),
+    [Clause] = hls_source:find_function(Annotated, f, 1),
+    Outcome = xls_clause_lower:clause_outcome(Clause, ["values"], cell, #{}),
+    Body = xls_clause_lower:print([maps:get(body, Outcome), maps:get(failure, Outcome)]),
     Retained = xls_failure_sites:allocate(Sites, Body),
     ?assertEqual([{2, match_failure}, {3, match_failure}],
         [{Line, Kind} || #{line := Line, kind := Kind} <- Retained]).

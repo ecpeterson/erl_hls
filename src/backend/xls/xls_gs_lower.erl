@@ -1,7 +1,7 @@
 %%%% xls_gs_lower
 %%%%
 %%%% Lowers hls_gs initialization and groups callback clauses by wire tag.
-%%%% Erlang forms stay outside the service template in xls_parse.
+%%%% Callback lowering is shared by the immediate and retained-call server emitters.
 
 -module(xls_gs_lower).
 -moduledoc false.
@@ -28,6 +28,9 @@ callback_arms(Forms, StateName) ->
         "}\n"
     ].
 
+%% Validate frame length before decoding and selecting this request tag's callback clauses.
+-spec callback_arm(cast | {call, [atom(), ...]},
+    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()]) -> iolist().
 callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
     Arguments = [
         xls_pattern_lower:record_argument(
@@ -54,13 +57,13 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
     [
         "\nTag::", xls_names:enum_member(Tag), " => {\n",
         "  if frame.header.payload_words != u8:",
-        integer_to_list(xls_parse:message_words(Forms, Tag)), " {\n",
+        integer_to_list(hls_actor_source:message_words(Forms, Tag)), " {\n",
         "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
         "  } else {\n",
         "    let request = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
-        xls_parse_io:indent(xls_parse:print(Body), 4),
-        xls_parse_io:indent(xls_parse:print(Result), 4),
+        xls_parse_io:indent(xls_clause_lower:print(Body), 4),
+        xls_parse_io:indent(xls_clause_lower:print(Result), 4),
         "  }\n",
         "},\n"
     ].

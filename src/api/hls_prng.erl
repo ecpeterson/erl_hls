@@ -33,18 +33,21 @@ xorshift32(State0)
 xorshift32(_State) ->
     error(badarg).
 
+-doc "Emits the three masked xorshift32 steps, retaining each intermediate binding in clause order.".
+-spec transpile(xorshift32, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:clause_state().
 transpile(xorshift32, [State0], ClauseState0) ->
-    ClauseState1 = xls_parse:instr(ClauseState0, [
+    ClauseState1 = xls_clause_lower:instr(ClauseState0, [
         "(", State0, " ^ (", State0,
         " << u32:13)) & u32:0xffffffff"
     ]),
-    State1 = xls_parse:reference(ClauseState1),
-    ClauseState2 = xls_parse:instr(ClauseState1, [
+    State1 = xls_clause_lower:reference(ClauseState1),
+    ClauseState2 = xls_clause_lower:instr(ClauseState1, [
         "(", State1, " ^ (", State1,
         " >> u32:17)) & u32:0xffffffff"
     ]),
-    State2 = xls_parse:reference(ClauseState2),
-    xls_parse:instr(ClauseState2, [
+    State2 = xls_clause_lower:reference(ClauseState2),
+    xls_clause_lower:instr(ClauseState2, [
         "(", State2, " ^ (", State2,
         " << u32:5)) & u32:0xffffffff"
     ]).

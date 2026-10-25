@@ -72,13 +72,17 @@ unpack(Packed, signed, [Width, _FractionBits]) ->
 print_type(signed, [Width, _FractionBits]) -> xls_nums:signed_type(Width).
 dslx_imports() -> [hls_fixed].
 
+-doc "Lowers fixed-point descriptors, wrapping, saturation and ratio rounding. Type parameters and ratio denominators must be static.".
+-spec transpile(signed | wrap | saturate | round_ratio,
+    [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state().
 transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}},
         {static, integer, Value}], _State) ->
     [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
 transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}}, Value], State) ->
     hls_type:transpile(as, [{phantom, type, Type}, Value], State);
 transpile(signed, [{static, integer, Width}, {static, integer, FractionBits}], State) ->
-    xls_parse:reference(State, {phantom, type, signed(Width, FractionBits)});
+    xls_clause_lower:reference(State, {phantom, type, signed(Width, FractionBits)});
 transpile(saturate, [{phantom, type, Type}, Value], _State) ->
     ["hls_fixed::saturate<u32:", integer_to_list(hls_type:width(Type)),
         ">(", Value, ")"];

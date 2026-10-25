@@ -1,13 +1,15 @@
 -module(xls_helpers_dslx).
 -export([write/1]).
 
+-doc "Writes helper-lowering DSLX tests, BEAM-derived RTL vectors and type-rejection fixtures into an existing staging directory. Raises on source or file errors; does not execute generated tests.".
+-spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, Forms0} = epp:parse_file("test/xls_helpers_fixture.erl", [], []),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{factored, 3}, {inline, 3}]),
     Declarations = ["enum Tag : u8 { CELL = 0, REPORT = 1 }\n",
         xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
-        [[xls_parse:struct_from_record(Record),
-            xls_parse:bitsfromstruct_from_record(Record)]
+        [[xls_record_codegen:declaration(Record),
+            xls_record_codegen:encoder(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
     Cases = [{M, X, Y} || M <- lists:seq(0, 29),
         X <- [0, 1, 2, 3, 7, 8, 15, 1000], Y <- [0, 1, 2, 3, 7, 8, 15, 1000]],
@@ -31,12 +33,14 @@ beam_test(Mode, Cases) ->
         [io_lib:format("    assert_eq(~s(u8:~p, x, y), expected);\n", [Name, Mode])
             || Name <- ["factored", "inline"]], "  } (())\n}\n"].
 
+%% Renders a helper fixture root with one high failure bit and its successful result.
+-spec function(atom(), [hls_source:form()]) -> iodata().
 function(Name, Forms) ->
-    [Clause] = xls_parse:find_function(Forms, Name, 3),
+    [Clause] = hls_source:find_function(Forms, Name, 3),
     #{body := Body, result := Value, failed := Failed} =
-        xls_parse:clause_outcome(Clause, ["mode", "x", "y"], cell, #{}),
+        xls_clause_lower:clause_outcome(Clause, ["mode", "x", "y"], cell, #{}),
     ["pub fn ", atom_to_list(Name), "(mode: u8, x: u32, y: u32) -> bits[33] {\n",
-        xls_parse:print([Body, "if ", Failed, " { bits[33]:0x100000000 } else {\n",
+        xls_clause_lower:print([Body, "if ", Failed, " { bits[33]:0x100000000 } else {\n",
             "  ", Value, " as bits[33]\n}\n"]), "}\n"].
 
 expected(Arguments = {M, X, Y}) ->
@@ -65,19 +69,21 @@ testbench(Cases) ->
         io_lib:format("    $display(\"PASS: ~p factored/inline RTL vectors\");\n",
             [length(Cases)]), "    $finish;\n  end\nendmodule\n"].
 
+%% Writes mismatched helper argument, branch-join and result types for XLS rejection checks.
+-spec write_rejections(file:filename(), [hls_source:form()]) -> ok.
 write_rejections(Stage, Base) ->
     Header = [F || F = {attribute, _, Kind, _} <- Base,
         lists:member(Kind, [module, hls_data, hls_tags])],
     lists:foreach(fun({Kind, Sources}) ->
         Forms0 = Header ++ [form(Source) || Source <- Sources],
         {Forms, Helpers} = xls_helpers:prepare(Forms0, [{root, 1}]),
-        [Clause] = xls_parse:find_function(Forms, root, 1),
+        [Clause] = hls_source:find_function(Forms, root, 1),
         #{body := Body, result := Value, failed := Failed} =
-            xls_parse:clause_outcome(Clause, ["x"], cell, #{}),
+            xls_clause_lower:clause_outcome(Clause, ["x"], cell, #{}),
         ok = file:write_file(filename:join(Stage, Kind ++ ".x"), [
             "import hls_failure;\n", xls_helpers:emit(Helpers, cell, #{}),
             "pub fn root(x: u32) -> (u32, bool) {\n",
-            xls_parse:print([Body, "(", Value, ", ", Failed, ")\n"]), "}\n"])
+            xls_clause_lower:print([Body, "(", Value, ", ", Failed, ")\n"]), "}\n"])
     end, [
         {"wrong_argument", ["root(X) -> narrow(X).",
             "-spec narrow(hls_nums:u8()) -> hls_nums:u32().",

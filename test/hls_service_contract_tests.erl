@@ -65,8 +65,10 @@ missing_proxy_contract_test() ->
     ?assertEqual({stop, {missing_hls_service_contract, ?MODULE}},
         hls_gs:init({?MODULE, [], [{fabric, self(), 1}]})).
 
+%% Reads the reply-contract fixture through the same source preparation as normal compilation.
+-spec forms() -> [hls_source:form()].
 forms() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_reply_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_reply_fixture.erl"),
     Forms.
 
 replies(Declaration) ->

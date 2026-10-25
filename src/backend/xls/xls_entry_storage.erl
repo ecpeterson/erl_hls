@@ -73,7 +73,7 @@ plan(Actions, Records) ->
         fun({N, Action = #{tag := Tag}}, State) ->
             Root = maps:get(origin, Action, identity()),
             {Fields, Next} = lists:mapfoldl(fun({typed_record_field, F, T}, Acc) ->
-                Name = xls_parse:record_field_name(F),
+                Name = hls_records:field_name(F),
                 Type = hls_type:descriptor(T),
                 pack_field(N, Name, Type, field(Root, Tag, Name), Acc)
             end, State, maps:get(Tag, Index)),

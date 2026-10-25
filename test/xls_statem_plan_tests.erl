@@ -60,7 +60,7 @@ guard_and_fallback_order_is_retained_test() ->
 %% Closure must include an indirect helper and its provider calls in callee order.
 -spec transitive_helpers_are_closed_test() -> ok.
 transitive_helpers_are_closed_test() ->
-    {ok, Forms} = xls_parse:parse_file(?GATHER, []),
+    {ok, Forms} = hls_source:parse_file(?GATHER, []),
     Wrapped = [wrap_completion(F) || F <- Forms] ++ [
         form("-spec outer(hls_lists:list(#element{}, 4)) -> hls_nums:u32()."),
         form("outer(Values) -> ordered(Values).")],
@@ -113,7 +113,7 @@ incomplete_dependency_graph_is_rejected_test() ->
 %% Bind source bodies beyond the actor-interface summary, including unused source.
 -spec complete_source_fingerprint_test() -> ok.
 complete_source_fingerprint_test() ->
-    {ok, Forms} = xls_parse:parse_file(?GATHER, []),
+    {ok, Forms} = hls_source:parse_file(?GATHER, []),
     {_, Before} = planned(Forms),
     {_, After} = planned(Forms ++ [form("host_only() -> 42.")]),
     A = xls_statem_plan:manifest(Before), B = xls_statem_plan:manifest(After),
@@ -179,7 +179,7 @@ split_origins(Value) -> Value.
 %% Compile mutated forms through the same checked lowering as file compilation.
 -spec planned([hls_source:form()]) -> {xls_actor_codegen:spec(), xls_statem_plan:plan()}.
 planned(Forms) ->
-    xls_statem_lower:planned_artifact(?GATHER, Forms, xls_parse:find_attribute(Forms, hls_phases)).
+    xls_statem_lower:planned_artifact(?GATHER, Forms, hls_source:find_attribute(Forms, hls_phases)).
 
 %% Parse a single fixture declaration without bypassing Erlang syntax validation.
 -spec form(string()) -> hls_source:form().
