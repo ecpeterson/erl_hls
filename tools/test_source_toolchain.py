@@ -147,10 +147,13 @@ class SourceToolchainTests(unittest.TestCase):
                                      env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(invalid.returncode, 1)
             self.assertIn('arguments/invalid_diagnostics', invalid.stderr)
-            missing_mode = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics'],
-                                          env=env, capture_output=True, text=True, timeout=30)
-            self.assertEqual(missing_mode.returncode, 1)
-            self.assertIn('arguments/missing_option_value', missing_mode.stderr)
+            for flags in (['--diagnostics', 'json', '--diagnostics'],
+                          ['--diagnostics', '--help', '--diagnostics', 'text']):
+                with self.subTest(flags=flags):
+                    missing_mode = subprocess.run([*command, *flags], env=env,
+                                                  capture_output=True, text=True, timeout=30)
+                    self.assertEqual(missing_mode.returncode, 1)
+                    self.assertIn('arguments/missing_option_value', missing_mode.stderr)
             debug = subprocess.run([*command, '--diagnostics', 'json'], env={**env, 'HLS_DEBUG': '1'},
                                    capture_output=True, text=True, timeout=30)
             self.assertTrue(json.loads(debug.stderr)['stack'])

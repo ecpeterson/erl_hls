@@ -30,6 +30,8 @@ diagnostic_options([], Value, Acc) ->
             #{option => <<"--diagnostics">>, value => unicode:characters_to_binary(Value)})
     end,
     {Mode, lists:reverse(Acc)};
+diagnostic_options(["--diagnostics", [$- | _] | _], _Mode, _Acc) ->
+    hls_diagnostic:raise(arguments, missing_option_value, <<"Option requires a value">>, #{option => <<"--diagnostics">>});
 diagnostic_options(["--diagnostics", Value | Rest], _Mode, Acc) ->
     diagnostic_options(Rest, Value, Acc);
 diagnostic_options(["--diagnostics"], _Mode, _Acc) ->
