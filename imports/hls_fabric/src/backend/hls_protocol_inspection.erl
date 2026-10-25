@@ -1,6 +1,13 @@
 -module(hls_protocol_inspection).
 -moduledoc "Source-bound passive process metadata for the existing endpoint-2 inspection service.".
 -export([mode/1, emit/1, write/2]).
+-export_type([manifest/0]).
+
+%% JSON normalization uses binary keys; the debug provider owns nested catalogue schemas.
+-type json_value() :: null | boolean() | number() | binary() | [json_value()] | #{binary() => json_value()}.
+
+-doc "The normalized JSON inspection catalogue passed unchanged to the debug service. Nested resources belong to the compiler's observation schema; composition consumers retain this object without interpreting it.".
+-type manifest() :: #{binary() => json_value()}.
 
 -doc "Accepts none or process; rejects unsupported inspection before source compilation.".
 -spec mode(term()) -> none | process.
@@ -9,12 +16,12 @@ mode(process) -> process;
 mode(Other) -> error({unsupported_protocol_inspection,Other}).
 
 -doc "Writes passive DSLX observation functions, a fingerprinted JSON manifest and a trusted local catalog beside a fresh network. Reads committed machine metadata only, with no new actor state or application backpressure. Collection fields use the common 128-bit reply policy; payloads, mailbox occupancy and history are excluded. The caller must connect inspect_address/value to the unchanged topology debug service under the same reset.".
--spec write(map(),file:filename()) -> map().
+-spec write(hls_protocol_transport:descriptor() | xls_protocol_network:input(), file:filename()) -> manifest().
 write(Plan, Directory) ->
     hls_generated_files:write_into(emit(Plan), Directory).
 
 -doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. The result is the same bound manifest; no output files are created or read back.".
--spec emit(map()) -> hls_generated_files:output().
+-spec emit(hls_protocol_transport:descriptor() | xls_protocol_network:input()) -> hls_generated_files:output(manifest()).
 emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receivers}) ->
     Rows=[#{index=>I,id=>Id,module=>M}||{I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
     Resources=[resource(A,maps:get(M,Modules))||A=#{module:=M}<-Rows],
@@ -95,7 +102,7 @@ slice(#{offset:=At,width:=Bits}) -> ["raw[",n(At),"+:bits[",n(Bits),"]]"].
 -spec shift(iodata(),non_neg_integer()) -> iodata().
 shift(Value,At) -> ["((",Value," as bits[128]) << u32:",n(At),")"].
 %% Normalize JSON before computing the shared canonical fingerprint.
--spec json(map()) -> map().
+-spec json(map()) -> manifest().
 json(Value) -> json:decode(iolist_to_binary(json:encode(Value))).
 %% Stable byte identities bind metadata and its trusted local catalog.
 -spec digest(binary()) -> binary().

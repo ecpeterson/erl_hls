@@ -1,30 +1,56 @@
 -module(hls_protocol_bridge).
 -moduledoc "Builds a source partition with reset-owned framing, class credits and exact delivery acknowledgments. Hardware remains DSLX; the peer owns transport retirement and bounded routing.".
 -export([plan/2, descriptor/1, write/2, write/3, emit/1, emit/2]).
--export_type([plan/0, result/0]).
+-export_type([plan/0, options/0, descriptor/0, bridge/0, manifest/0, credit/0, result/0, output/0]).
+
+-doc "Framing endpoints and adapter selection for an already checked native placement. Activation remains explicit; inspection is unsupported.".
+-type options() :: hls_source_config:bridge_options().
+
+-doc "One incoming crossing class whose previous capture ownership determines its credit.".
+-type credit() :: #{link := 0..65535, slot := byte()}.
+
+%% Framing ownership is unchanged when emission adds attachment identity and support hashes.
+-define(INTERFACE_FIELDS,
+    host := 1..65535, service := 1..65535, links := [hls_protocol_partition:crossing()],
+    control := rectangle, control_adapter := hls_protocol_control:hardware(),
+    native_indices := [non_neg_integer()], actors := non_neg_integer(),
+    externals := [xls_protocol_boundary:group()], incoming := [hls_protocol_partition:crossing()],
+    outgoing := [hls_protocol_partition:crossing()], credits := [credit()], eligible := false).
+
+-doc "Checked framing endpoints, ownership, crossing classes and external groups before attachment identity exists.".
+-type descriptor() :: #{?INTERFACE_FIELDS}.
+
+-doc "The finalized host bridge descriptor, requiring its raw SHA-256 attachment identity and hashed support-library inventory.".
+-type bridge() :: #{?INTERFACE_FIELDS, identity := binary(), libraries := [xls_protocol_network:component()]}.
+
+-doc "The serialized hardware-facing bridge manifest, including compact crossing codecs and generated-input hashes.".
+-type manifest() :: xls_protocol_bridge:manifest().
+
+-doc "Bridge files paired with concrete final manifest, host bridge and transport descriptors.".
+-type output() :: hls_generated_files:output(result()).
 
 %% Static bridge ownership is checked before the boundary or its parents are emitted.
--record(plan, {boundary :: hls_protocol_boundary:plan(), interface :: map()}).
+-record(plan, {boundary :: hls_protocol_boundary:plan(), interface :: descriptor()}).
 
 -doc "A checked framed partition from plan/2. Retain unchanged in process with its source codecs loaded. Build identity and library hashes are added only during emission; no device or progress admission is granted.".
 -opaque plan() :: #plan{}.
 
 -doc "The emitted bridge manifest, host bridge descriptor and source transport descriptor, all from the same role build.".
--type result() :: #{manifest := map(), bridge := map(), transport := map()}.
+-type result() :: #{manifest := manifest(), bridge := bridge(), transport := hls_protocol_transport:descriptor()}.
 
 -doc "Freshly builds a native_actors source partition with an explicit control => rectangle adapter and explicit activation, plus host/service endpoints in 1..65535. Writes bridge.etf, a bound manifest, DSLX and a mechanical pin adapter. Supports nonempty incoming/outgoing cuts and external endpoints, at most 256 combined credit/data/external contenders. Each incoming class has one credit; each outgoing pair retains one unacknowledged delivery. Sequence 0xffffffff is reserved. Callers must serialize frames, acknowledge only after reserving destination capacity and completing its forwarding write and retire every old transport before coordinated reset and new nonzero sessions. Identity detects mismatched builds, not malicious peers. Inspection, CDC, automatic recovery, capacity/progress admission and native device qualification are absent. An unchanged composition plan may also be written directly. Generation failures create no output; I/O failures retain partial output.".
--spec write(map() | file:filename() | plan(), file:filename()) -> map().
+-spec write(hls_source_config:bridge() | file:filename() | plan(), file:filename()) -> manifest().
 write(Config, Directory) ->
     #{manifest := Manifest} = hls_generated_files:write(emit(Config), Directory),
     Manifest.
 
 -doc "Writes emit/2's planned bridge bundle to a fresh directory and returns its manifest/bridge/transport result. Generation precedes output creation; I/O failures retain partial output.".
--spec write(hls_protocol_transport:build(), map(), file:filename()) -> result().
+-spec write(hls_protocol_transport:build(), options(), file:filename()) -> result().
 write(Build, Options, Directory) ->
     hls_generated_files:write(emit(Build, Options), Directory).
 
 -doc "Generates a bridge bundle from a trusted native_actors source config map or a filename containing one map. Source paths remain relative to the caller. Preparation loads sources and invokes trusted constructors; an unchanged plan/2 value skips preparation and layout checks. No output is written. Returns relative filenames with IO data and named manifest/bridge/transport descriptors.".
--spec emit(map() | file:filename() | plan()) -> hls_generated_files:output().
+-spec emit(hls_source_config:bridge() | file:filename() | plan()) -> output().
 emit(#plan{boundary = BoundaryPlan,
         interface = Interface = #{host := Host, service := Service, control_adapter := Hardware}}) ->
     #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Transport}} =
@@ -45,8 +71,8 @@ emit(Config = #{native_actors := _}) ->
     emit(hls_protocol_transport:plan(Config), maps:with([host, service, control, activation, inspection], Config));
 emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_config:read(Filename)).
 
--doc "Checks a framed partition before rendering its network, boundary or bridge. Requires host/service endpoints in 1..65535, rectangle control and explicit activation. Checks boundary control ports, nonempty incoming/outgoing cuts and external endpoints, crossing indices/slots and the combined 256-contender budget. Options cannot change the source or placement. No templates or support libraries are read here; the transport already owns lowered receivers.".
--spec plan(hls_protocol_transport:build(), map()) -> plan().
+-doc "Checks a framed partition before rendering its network, boundary or bridge. Requires host/service endpoints in 1..65535, rectangle control and explicit activation. Checks boundary control ports, nonempty incoming/outgoing cuts and external endpoints, crossing indices/slots and the combined 256-contender budget. Options cannot change the source or placement. No templates or support libraries are read here; the transport owns checked source snapshots and receiver layouts.".
+-spec plan(hls_protocol_transport:build(), options()) -> plan().
 plan(Build, Config = #{host := Host, service := Service, control := _})
         when is_integer(Host), is_integer(Service), Host > 0, Host < 65536,
              Service > 0, Service < 65536, Host =/= Service ->
@@ -73,9 +99,9 @@ plan(Build, Config = #{host := Host, service := Service, control := _})
             incoming => Incoming, outgoing => Outgoing, credits => Credits, eligible => false}}.
 
 -doc "Returns checked bridge endpoints, actor ownership, crossing classes and external groups. There is no identity or library inventory until emit/1 reads support and hashes emitted bytes. Treat the descriptor as read-only; it is suitable for routing and host-layout checks, not attachment.".
--spec descriptor(plan()) -> map().
+-spec descriptor(plan()) -> descriptor().
 descriptor(#plan{interface = Interface}) -> Interface.
 
 -doc "Plans and emits a framed partition without writing output. Equivalent to emit(plan(Build, Options)); source and placement remain fixed. Returns the final bridge/transport descriptors and manifest; support reads and identity hashing follow layout checks.".
--spec emit(hls_protocol_transport:build(), map()) -> hls_generated_files:output().
+-spec emit(hls_protocol_transport:build(), options()) -> output().
 emit(Build, Options) -> emit(plan(Build, Options)).

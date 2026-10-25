@@ -2,15 +2,15 @@
 -moduledoc "Binds startup values and host frame domains to the receiving actor's fresh ordinary schema. Source callbacks retain semantic validation.".
 -export([frames/2, domains/2]).
 
--doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor artifact from the same fresh source build. Checks record identity/arity and exact host packing, then uses the ordinary 128-bit frame ABI (at most 96 payload bits). Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs reject. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
--spec frames(hls_local_actor:artifact(), [tuple()]) -> [non_neg_integer()].
+-doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the ordinary 128-bit frame ABI (at most 96 payload bits). Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs reject. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
+-spec frames(hls_local_actor:source() | hls_local_actor:artifact(), [tuple()]) -> [non_neg_integer()].
 frames(#{program := Program}, Messages) ->
     #{message_names := Names} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     [frame(Message, Names, Records) || Message <- Messages].
 
--doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same fresh source artifact as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond 96 bits reject; semantic invalid values must still reach the source callback.".
--spec domains(hls_local_actor:artifact(), [atom()]) -> [map()].
+-doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond 96 bits reject; semantic invalid values must still reach the source callback.".
+-spec domains(hls_local_actor:source() | hls_local_actor:artifact(), [atom()]) -> [map()].
 domains(#{program := Program}, Tags) ->
     #{message_names := Names} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),

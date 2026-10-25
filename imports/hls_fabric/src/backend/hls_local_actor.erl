@@ -1,23 +1,74 @@
 -module(hls_local_actor).
 -moduledoc "Compiles ordinary local actor functions and a single-actor DSLX clock owner from source.".
--export([compile/2, emit/2, write/2, write/3, manifest/1]).
--export_type([artifact/0]).
+-export([prepare/2, render/1, descriptor/1, compile/2, emit/2, write/2, write/3, manifest/1]).
+-export_type([source/0, artifact/0, completion/0, descriptor/0, manifest/0]).
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, optionally selected for shared completion by hls_protocol_arithmetic:receiver/3 and bound to an inbox by hls_protocol_inbox:attach/5. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
+-doc "Checked ordinary source semantics before hardware rendering. The compiler program retains the source snapshot. Optional completion selects an owner ABI; inbox and import fields describe checked receiver wiring. Retain unchanged within the build, never accept a supplied map as compiled source.".
+-type source() :: #{program := xls_actor_program:program(), source := file:filename(),
+    context => hls_source:context(), completion => completion(), inbox => hls_protocol_inbox:metadata(), owner_import => owner_import()}.
+
+%% Compiler-owned provenance is serialized for reporting, never read as a backend plan.
+-type inventory_value() :: atom() | binary() | number() | [inventory_value()] |
+    #{atom() | binary() => inventory_value()}.
+
+%% Fixed scheduling promises describe this owner implementation, not application admission.
+-type owner_contract() :: #{selected_head := reserved_until_head_done_or_reset,
+    retirement := dispatched_directive_and_phase_boundary, publication := one_ordered_batch,
+    action := registered_once_then_entry_retry, startup := one_masked_clock_for_source_initialization,
+    schedule := one_stage_no_io_flops_always_enabled_channels}.
+
+%% Static and emitted interfaces share fields; the latter requires a generated-byte identity.
+-define(INTERFACE_FIELDS, completion := completion(), version := 1, stage := source_actor_and_owner,
+    source := binary(), source_plan := #{atom() | binary() => inventory_value()},
+    machine_layout := xls_shared_codegen:machine_layout(), continuation_bits := 0 | 8,
+    machine_bits := pos_integer(), effect_payload_bits := pos_integer(), source_imports := [atom()],
+    output_ports := [atom()], message_schemas := [atom()],
+    completion_sites := [#{id := non_neg_integer(), phase := atom()}], phase_names := [atom()],
+    function_ports := [atom()], clock_proc := local_owner_clock | local_inbox_clock,
+    owner_contract := owner_contract(), action_result_fields := [atom()], action_obligations := [atom()],
+    receipt_result_fields := [atom()], receipt_obligations := [atom()], step_result_fields := [atom()],
+    handwritten_application_controller := false, source_semantics_reused := [atom()],
+    physical_locality_established := false, excluded := [atom()],
+    inbox => hls_protocol_inbox:metadata(), owner_import => none | owner_import()).
+
+-doc "Source/owner interface metadata before the module's generated-byte identity. Imported receivers may retain their owner's hash; source_plan is compiler-owned JSON provenance, not a backend planning input.".
+-type descriptor() :: #{?INTERFACE_FIELDS}.
+
+-doc "The source/owner interface with the required hash of its rendered DSLX bytes.".
+-type manifest() :: #{?INTERFACE_FIELDS, dslx_sha256 := binary()}.
+
+%% Planning binds the import path; emission additionally binds the rendered owner bytes.
+-type owner_import() :: #{file := binary(), dslx_sha256 => binary()}.
+
+-doc "Local scalar completion or a source-compatible shared group selected by the arithmetic planner.".
+-type completion() :: #{mode := local} | #{mode := shared, group := non_neg_integer()}.
+
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by hls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
 -type artifact() :: #{program := xls_actor_program:program(),
-    dslx := binary(), source := file:filename(), inbox => map(), completion => map(), owner_import => map()}.
+    dslx := binary(), source := file:filename(), context => hls_source:context(),
+    inbox => hls_protocol_inbox:metadata(), completion => completion(), owner_import => owner_import()}.
 
 -doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
-compile(Source, Options) ->
+compile(Source, Options) -> render(prepare(Source, Options)).
+
+-doc "Lowers one source snapshot and rejects retained synchronous calls before any owner or port DSLX is rendered. The returned source is reusable across placements; source constructors and compiler codecs remain trusted build code.".
+-spec prepare(file:filename(), [hls_source:option()] | hls_source:context()) -> source().
+prepare(Source, Options) ->
     Program = xls_actor_program:from_file(Source, Options),
     Spec = xls_actor_program:spec(Program),
     case maps:get(retained_calls, Spec) of
         none -> ok;
         _ -> error(local_execution_retained_calls_unsupported)
     end,
-    #{source => Source, program => Program,
-        dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec)])}.
+    #{source => Source, program => Program}.
+
+-doc "Renders the checked source's ordinary functions and selected clock-owner ABI without rereading source. Templates are read here. Inbox attachment and imported-owner wiring belong to the enclosing transport emission.".
+-spec render(source()) -> artifact().
+render(Source = #{program := Program}) ->
+    Spec = xls_actor_program:spec(Program),
+    Mode = maps:get(mode, maps:get(completion, Source, #{mode => local})),
+    Source#{dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec, Mode)])}.
 
 -doc "Returns an existing artifact's DSLX and JSON provenance sidecar under a relative filename, without recompilation or output I/O. The enclosing generated-files writer validates the relative path; retain the checked artifact unchanged.".
 -spec emit(artifact(), string()) -> hls_generated_files:files().
@@ -25,12 +76,12 @@ emit(Artifact = #{dslx := Bytes}, RelativeFilename) ->
     #{RelativeFilename => Bytes, RelativeFilename ++ ".json" => json:encode(manifest(Artifact))}.
 
 -doc "Writes a fresh source-derived DSLX module and provenance manifest. Refuses existing files; generated code contains no application-specific RTL controller.".
--spec write(file:filename(), [hls_source:option()] | hls_source:context(), file:filename()) -> map().
+-spec write(file:filename(), [hls_source:option()] | hls_source:context(), file:filename()) -> manifest().
 write(Source, Options, Output) ->
     write(compile(Source, Options), Output).
 
 -doc "Writes an artifact returned by compile/2 without recompiling or selecting callbacks. Output and its .json sidecar must both be absent; partial I/O failures are retained. This is a trusted in-process build API, not validation of a saved or supplied artifact.".
--spec write(artifact(), file:filename()) -> map().
+-spec write(artifact(), file:filename()) -> manifest().
 write(Artifact, Output) ->
     lists:foreach(fun fresh/1, [Output, Output ++ ".json"]),
     Manifest = manifest(Artifact),
@@ -50,8 +101,13 @@ fresh(Path) ->
     end.
 
 -doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner, completion mode and optional source-bound inbox contract; no network admission or timing benefit is established.".
--spec manifest(artifact()) -> map().
-manifest(Artifact = #{program := Program, dslx := Bytes, source := Source}) ->
+-spec manifest(artifact()) -> manifest().
+manifest(Artifact = #{dslx := Bytes}) ->
+    (descriptor(Artifact))#{dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)}.
+
+-doc "Returns source layouts, port obligations and optional checked inbox metadata before rendering. Prepared sources contain no generated-byte hashes; an already rendered input retains its import identity. manifest/1 adds the owner module’s DSLX identity. A source snapshot alone does not establish network admission or physical locality.".
+-spec descriptor(source() | artifact()) -> descriptor().
+descriptor(Artifact = #{program := Program, source := Source}) ->
     Spec = xls_actor_program:spec(Program),
     Plan = xls_actor_program:plan(Program),
     #{entries := Entries, reductions := Reductions,
@@ -65,7 +121,6 @@ manifest(Artifact = #{program := Program, dslx := Bytes, source := Source}) ->
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
     Base = #{completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
-        dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
         machine_layout => Layout, continuation_bits => EventWidth,
         machine_bits => maps:get(width, Layout) + EventWidth,
         effect_payload_bits => PayloadWidth,

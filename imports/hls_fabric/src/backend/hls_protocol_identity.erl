@@ -3,7 +3,7 @@
 -export([source_modules/1, boundary/2]).
 
 -doc "Returns versioned compiler content identities for freshly compiled actor modules. Keeps complete source and lowering distinctions, including origin sharing, without build-local references or checkout paths. This does not validate saved or edited artifacts; use only the unchanged source bundle from transport preparation.".
--spec source_modules(#{module() => hls_local_actor:artifact()}) -> map().
+-spec source_modules(#{module() => hls_local_actor:source() | hls_local_actor:artifact()}) -> map().
 source_modules(Modules) ->
     maps:map(fun(_, #{program := Program}) ->
         xls_statem_plan:identity(xls_actor_program:plan(Program)) end, Modules).

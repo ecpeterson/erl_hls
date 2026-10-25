@@ -29,7 +29,7 @@ reusable_program_test() ->
         hls_protocol_transport:plan(Program, #{sources => Sources})),
     Before = relative_files(Root),
     Output = #{files := Generated, result := Descriptor} = hls_protocol_transport:emit(North),
-    ?assertEqual(hls_protocol_transport:descriptor(North), Descriptor),
+    finalized_transport(hls_protocol_transport:descriptor(North), Descriptor, Generated),
     ?assertEqual(Output, hls_protocol_transport:emit(North)),
     ?assertEqual(Before, relative_files(Root)),
     First = filename:join(Root, "first"), Second = filename:join(Root, "second"),
@@ -54,6 +54,33 @@ reusable_program_test() ->
         hls_protocol_bridge:write(South, #{host => 1, service => 7, control => rectangle, sources => Sources}, Override)),
     ?assertEqual(false, filelib:is_dir(Override)),
     ok.
+
+%% Finalization adds only generated module bytes and their exact owner/receiver hashes.
+-spec finalized_transport(map(), map(), hls_generated_files:files()) -> ok.
+finalized_transport(Static = #{bundle := #{modules := Sources}},
+        Final = #{bundle := Bundle = #{modules := Modules}, actor_functions := Functions, receivers := Receivers}, Files) ->
+    maps:foreach(fun(Module, Source) ->
+        ?assertNot(maps:is_key(dslx, Source)),
+        Artifact = #{dslx := Bytes} = maps:get(Module, Modules),
+        ?assert(is_binary(Bytes)),
+        ?assertEqual(Source, maps:remove(dslx, Artifact))
+    end, Sources),
+    ?assertEqual(lists:sort(maps:keys(Sources)), lists:sort(maps:keys(Modules))),
+    ?assertEqual(Static, Final#{bundle := Bundle#{modules := Sources},
+        actor_functions := [static_actor(A, Files) || A <- Functions],
+        receivers := [static_actor(A, Files) || A <- Receivers]}).
+
+%% Verify byte identities before removing exactly the two fields unavailable during planning.
+-spec static_actor(map(), hls_generated_files:files()) -> map().
+static_actor(Actor = #{file := File, manifest := Manifest = #{dslx_sha256 := Hash}}, Files) ->
+    ?assertEqual(Hash, digest(maps:get(binary_to_list(File), Files))),
+    Static = maps:remove(dslx_sha256, Manifest),
+    case maps:get(owner_import, Static, none) of
+        none -> Actor#{manifest := Static};
+        Import = #{file := OwnerFile, dslx_sha256 := OwnerHash} ->
+            ?assertEqual(OwnerHash, digest(maps:get(binary_to_list(OwnerFile), Files))),
+            Actor#{manifest := Static#{owner_import := maps:remove(dslx_sha256, Import)}}
+    end.
 
 %% Filename input is a trusted source map; emission has no output side effects and hashes its returned bytes.
 -spec emission_inputs_test() -> ok.

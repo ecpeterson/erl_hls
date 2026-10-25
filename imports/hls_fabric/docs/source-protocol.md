@@ -161,7 +161,7 @@ This baseline retains at most one action and one publication batch: `2*M + P + 6
 
 ## Connect sender-local captures to an actor
 
-The same transport build command now emits `actors/receiver_I.x` for each elaborated actor, listed in `summary.json` under `receivers`. The direct path is `hls_protocol_transport:write/2` → `hls_protocol_transport:emit/1` → `hls_protocol_inbox:attach/5` → `hls_local_actor:emit/2`. Each receiver includes the ordinary actor owner and source-derived codecs for its exact incoming capture links. Compile a receiver with the existing command:
+The same transport build command now emits `actors/receiver_I.x` for each elaborated actor, listed in `summary.json` under `receivers`. The direct path is `hls_protocol_transport:plan/2` → `hls_protocol_inbox:plan/5` for checked receiver layouts, then `hls_protocol_transport:emit/1` → `hls_protocol_inbox:attach/2` → `hls_local_actor:emit/2` for generated files. Each receiver includes the ordinary actor owner and source-derived codecs for its exact incoming capture links. Compile a receiver with the existing command:
 
 ```sh
 python3 tools/compile_local_actor.py XLS_ROOT BUILD/actors/receiver_I.x FRESH_RTL_OUTPUT
@@ -201,7 +201,7 @@ emit_protocol_network.sh → hls-fabric emit --kind network
     → hls_protocol_network:emit/1
       → hls_protocol_transport:plan/1 (fresh sources, exact inboxes and transport)
         → hls_protocol_control:plan/1 + hls_protocol_schema:domains/2
-        → hls_protocol_inbox:attach/5 (checked host slot)
+        → hls_protocol_inbox:plan/5 (checked host slot)
       → hls_protocol_network:plan/2 (checked wiring and packed interface)
       → hls_protocol_network:emit/1 (unchanged composition plan)
         → hls_protocol_transport:emit/1 (prepared actor and transport files)
@@ -312,7 +312,7 @@ These orders are intentional and implemented by separate schedulers. `hls_protoc
 
 ## Declared startup messages
 
-The network command accepts the ordinary topology `startup` list, for example `startup => [{receiver, [#value{n=2}, #open{key=7}, #value{n=3}, #value{n=3}]}]`. It does not run a special configuration callback or assume those messages will succeed. The production path is `hls_protocol_transport:write/2` → `hls_protocol_inbox:attach/5` → `hls_protocol_schema:frames/2`, using the receiving actor's fresh source schema, followed by the same `local_inbox_batch_tick` used for internal traffic.
+The network command accepts the ordinary topology `startup` list, for example `startup => [{receiver, [#value{n=2}, #open{key=7}, #value{n=3}, #value{n=3}]}]`. It does not run a special configuration callback or assume those messages will succeed. The production path is `hls_protocol_transport:plan/2` → `hls_protocol_inbox:plan/5` → `hls_protocol_schema:frames/2`, using the receiving actor's fresh source schema, followed by the same `local_inbox_batch_tick` used for internal traffic.
 
 The encoder checks the record tag and arity, packs each value exactly with its typed provider and uses the ordinary 128-bit frame codec. Inexact values, oversized payloads and unsupported codecs reject before receiver emission. Built-in numeric/boolean codecs and full-width integer bit-cast providers are supported; custom wire transforms are not. The fixed frame capacity is the existing ABI, not a new configuration width.
 

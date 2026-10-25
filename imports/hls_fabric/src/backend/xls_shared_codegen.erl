@@ -1,7 +1,15 @@
 -module(xls_shared_codegen).
 -moduledoc false.
 -export([publication_depth/0, emit/1, execution/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
+-export_type([machine_layout/0]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
+%% A packed field may be empty when its source feature is absent.
+-type field() :: #{offset := non_neg_integer(), width := non_neg_integer()}.
+
+-doc "Packed ordinary machine fields, in low-to-high order. The two-argument layout omits gather; the three-argument layout includes it even at zero width.".
+-type machine_layout() :: #{width := pos_integer(), phase := field(), entered_from := field(),
+    data := field(), enter_pending := field(), failure := field(), reduction := field(), gather => field()}.
+
 %% Checked actor artifact augmented with private physical options.
 -type spec() :: map().
 
@@ -213,12 +221,12 @@ shared_machine_width(DataWidth, ReductionWidth, GatherWidth) ->
 
 %% Low-to-high packed RAM layout, shared by the codec and passive debug taps.
 -doc "Returns bit offsets used consistently by codecs and observation extraction.".
--spec shared_machine_layout(non_neg_integer(), non_neg_integer()) -> map().
+-spec shared_machine_layout(non_neg_integer(), non_neg_integer()) -> machine_layout().
 shared_machine_layout(DataWidth, ReductionWidth) ->
     maps:remove(gather, shared_machine_layout(DataWidth, ReductionWidth, 0)).
 
 -doc "Places gather storage after reduction storage, preserving ordinary observation offsets.".
--spec shared_machine_layout(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> map().
+-spec shared_machine_layout(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> machine_layout().
 shared_machine_layout(DataWidth, ReductionWidth, GatherWidth) ->
     {Width, Fields} = lists:foldl(fun({Name, Bits}, {Offset, Acc}) ->
         {Offset + Bits, Acc#{Name => #{offset => Offset, width => Bits}}}

@@ -1,9 +1,42 @@
 -module(hls_protocol_source).
 -moduledoc "Plans complete source entry batches and independent typed recipient outputs. The plan still requires connected receive, capacity and progress qualification.".
 -export([plan/3]).
+-export_type([row/0, output/0, source/0, plan/0]).
+
+-doc "One selected source effect projected to a recipient, with its layout, sequence position and checked constant omissions.".
+-type row() :: #{layout := non_neg_integer(), sequence := non_neg_integer(),
+    source_order := non_neg_integer(), port := atom(), tag := atom(),
+    bits := [hls_protocol_projection:bit()], capture_slot := non_neg_integer(),
+    constant_requirements := [{{payload, non_neg_integer()}, 0 | 1}]}.
+
+-doc "One independently stalled recipient output, packed at offset within the publisher's combined output.".
+-type output() :: #{index := non_neg_integer(), destination := hls_protocol_topology:destination(),
+    offset := non_neg_integer(), width := pos_integer(), rows := [row()]}.
+
+-doc "One actor's immutable entry snapshot, per-recipient output wiring and pending-delivery masks.".
+-type source() :: #{index := non_neg_integer(), actor := hls_protocol_topology:id(),
+    payload_width := pos_integer(), snapshot_width := pos_integer(), destinations := pos_integer(),
+    logical_destinations := non_neg_integer(), sequence_slots := pos_integer(), outputs := [output()],
+    output_width := pos_integer(), masks := [#{layout := non_neg_integer(), mask := non_neg_integer()}],
+    same_sender_order := one_snapshot_and_per_recipient_subsequence,
+    invariant_scope := source_bound_constant_omissions_not_runtime_input_validation}.
+
+-doc "The source-wide publisher catalogue; source snapshots do not establish cross-sender chronology or protocol admission.".
+-type plan() :: #{sources := [source()], snapshot := ordinary_evaluated_payload_and_layout,
+    no_cross_sender_chronology := true, whole_protocol_eligible := false}.
+
+%% Only wiring and constant requirements differ between internal and boundary recipients.
+-type projection() :: #{bits := [hls_protocol_projection:bit()], capture_slot := non_neg_integer(),
+    constant_requirements := [{{payload, non_neg_integer()}, 0 | 1}]}.
+%% Ordinary effect projection remains compiler-ordered before compact capture selection.
+-type effect_projection() :: #{layout := non_neg_integer(), index := non_neg_integer(),
+    port := atom(), tag := atom(), frame := [hls_protocol_projection:bit()], port_number := non_neg_integer()}.
 
 -doc "Binds every source batch to exact ordinary frame projections and declared typed capture channels. Outputs to one recipient keep their source order across ports; separate recipients have independent backpressure. Internal constant omissions retain explicit source-invariant requirements. This plan does not authorize eliminating receipt guards or establish a safe whole-network capacity.".
--spec plan(map(),map(),map()) -> map().
+-spec plan(#{topology := #{actors := [#{id := hls_protocol_topology:id(), module := module(),
+        atom() => term()}], atom() => term()},
+    modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()}, atom() => term()},
+    hls_protocol_transactions:plan(), hls_protocol_capture:plan()) -> plan().
 plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Capture) ->
     #{pairs:=Pairs}=hls_protocol_inbox:plan(Capture),
     Components=[begin
@@ -16,7 +49,8 @@ plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Cap
       no_cross_sender_chronology=>true,whole_protocol_eligible=>false}.
 
 %% Original layout payloads are retained once; their width includes shared dynamic fields.
--spec actor(non_neg_integer(),term(),map(),map(),map(),[map()]) -> map().
+-spec actor(non_neg_integer(), hls_protocol_topology:id(), xls_actor_codegen:spec(),
+    hls_protocol_transactions:actor(), hls_protocol_capture:plan(), [hls_protocol_inbox:pair()]) -> source().
 actor(I,Id,Spec,#{batches:=Batches},Capture,Pairs) ->
     Projection=hls_protocol_projection:plan(Spec),#{payload_width:=Width,rows:=Effects}=Projection,
     Destinations=lists:usort([D || #{per_recipient:=Rs}<-Batches,#{destination:=D}<-Rs]),
@@ -40,7 +74,9 @@ actor(I,Id,Spec,#{batches:=Batches},Capture,Pairs) ->
       invariant_scope=>source_bound_constant_omissions_not_runtime_input_validation}.
 
 %% One physical output covers one logical destination, including all of its source ports.
--spec recipient_rows(term(),term(),map(),[map()],map(),[map()]) -> [map()].
+-spec recipient_rows(hls_protocol_topology:id(), hls_protocol_topology:destination(),
+    hls_protocol_transactions:batch(), [effect_projection()], hls_protocol_capture:plan(),
+    [hls_protocol_inbox:pair()]) -> [row()].
 recipient_rows(Source,Destination,#{layout:=Layout,deliveries:=Deliveries},Effects,Capture,Pairs) ->
     Selected=[D||D=#{destination:=Target}<-Deliveries,Target=:=Destination],
     [begin
@@ -51,7 +87,8 @@ recipient_rows(Source,Destination,#{layout:=Layout,deliveries:=Deliveries},Effec
     end || {K,#{order:=Order,port:=Port,tag:=Tag}}<-lists:enumerate(0,Selected)].
 
 %% Boundary recipients retain ordinary frames; internal links omit only certified source constants.
--spec projection(term(),term(),atom(),atom(),[hls_protocol_projection:bit()],map(),[map()]) -> map().
+-spec projection(hls_protocol_topology:id(), hls_protocol_topology:destination(), atom(), atom(),
+    [hls_protocol_projection:bit()], hls_protocol_capture:plan(), [hls_protocol_inbox:pair()]) -> projection().
 projection(_, {external,_},_,_,Frame,_,_) ->
     #{bits=>Frame,capture_slot=>0,constant_requirements=>[]};
 projection(Source,Destination,Port,Tag,Frame,#{channels:=Channels},Pairs) ->

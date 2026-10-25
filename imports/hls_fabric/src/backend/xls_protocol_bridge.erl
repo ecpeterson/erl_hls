@@ -1,9 +1,25 @@
 -module(xls_protocol_bridge).
 -moduledoc "Elaborates static partition pins around the shared typed DSLX bridge and unchanged source boundary.".
 -export([emit/3]).
+-export_type([manifest/0]).
+
+-doc "The emitted bridge's packed ports, compact crossing codecs, raw-boundary manifest and required hardware/support hashes. The attachment identity is lowercase hex here; the host bridge descriptor retains its raw bytes.".
+-type manifest() :: #{host := 1..65535, service := 1..65535, control := rectangle,
+    control_adapter := hls_protocol_control:hardware(), native_indices := [non_neg_integer()],
+    actors := non_neg_integer(), externals := [xls_protocol_boundary:group()], eligible := false,
+    libraries := [xls_protocol_network:component()], top := protocol_bridge_top,
+    links := [xls_protocol_network:crossing()], identity := binary(), bridge_state_bits := non_neg_integer(),
+    boundary := hls_protocol_boundary:manifest(), reset := retire_deployment_transports_then_coordinated_reset,
+    ordering := per_logical_sender_destination, inputs := [xls_protocol_network:packed_port()],
+    outputs := [xls_protocol_network:packed_port()], dslx_sha256 := binary(),
+    components := [xls_protocol_network:component()]}.
+
+%% Mechanical adapter fields retain the same order and widths as their DSLX declarations.
+-type clock_port() :: {string(), pos_integer()}.
 
 -doc "Returns in-memory sampled-clock bridge files without writing output. UpstreamFiles supplies root-relative boundary bytes for exact component hashes. Static link/class identities come from hls_protocol_bridge; old boundary observations supply credit and retained offers, and only the final call applies accepted transfers. Adds bounded framing and reservation state, no replicated native payloads. Output fault includes any native actor/transport failure; retirement masks both directions until coordinated reset. Returns exact emitted-input hashes and state accounting with eligibility false.".
--spec emit(map(),map(),hls_generated_files:files()) -> hls_generated_files:output().
+-spec emit(hls_protocol_bridge:bridge(), hls_protocol_boundary:manifest(),
+    hls_generated_files:files()) -> hls_generated_files:output(manifest()).
 emit(Bridge=#{identity:=Identity,incoming:=Incoming,outgoing:=Outgoing,credits:=Credits},
         Boundary,UpstreamFiles) ->
     I=length(Incoming),C=length(Credits),O=length(Outgoing),
@@ -30,7 +46,7 @@ emit(Bridge=#{identity:=Identity,incoming:=Incoming,outgoing:=Outgoing,credits:=
     #{files=>Files,result=>Manifest}.
 
 %% The template makes the old-observation/framing/final-acceptance order explicit.
--spec source(map(), map(), [{string(), pos_integer()}], [{string(), pos_integer()}]) -> iodata().
+-spec source(hls_protocol_bridge:bridge(), hls_protocol_boundary:manifest(), [clock_port()], [clock_port()]) -> iodata().
 source(#{identity := Identity, host := Host, service := Service,
         incoming := Incoming, outgoing := Outgoing, credits := Credits,
         control_adapter := #{bridge_decoder := Decoder}},
@@ -66,7 +82,7 @@ source(#{identity := Identity, host := Host, service := Service,
         binary:replace(Clock, <<"boundary_clock">>, <<"bridge_clock">>, [global])].
 
 %% Fault widths remain those of the child network's exact output interface.
--spec child_fault([map()]) -> iodata().
+-spec child_fault([xls_protocol_network:packed_port()]) -> iodata().
 child_fault(Outputs) ->
     lists:join(" || ", [["old.", Name, " != bits[", n(Width), "]:0"]
         || #{name := Name, width := Width} <- Outputs,
@@ -74,18 +90,19 @@ child_fault(Outputs) ->
                lists:suffix("_failure", binary_to_list(Name))]).
 
 %% Framing tables use original global link identities in the planner's order.
--spec link_indices([map()]) -> iodata().
+-spec link_indices([hls_protocol_partition:crossing()]) -> iodata().
 link_indices(Links) -> lists:join(",", [["u16:", n(Index)] || #{index := Index} <- Links]).
 
 %% A class credit samples its exact old capture-slot ownership bit.
--spec credits([map()]) -> iodata().
+-spec credits([hls_protocol_bridge:credit()]) -> iodata().
 credits(Credits) ->
     lists:join(",", [["b::Credit { link:u16:", n(Link), ",slot:u8:", n(Slot),
         ",free:old.remote_", n(Link), "_free[", n(Slot), "+:u1] }"]
         || #{link := Link, slot := Slot} <- Credits]).
 
 %% Bridge-local array ordinals differ from original global link identifiers.
--spec network_inputs([map()], [map()], [map()]) -> iodata().
+-spec network_inputs([hls_protocol_partition:crossing()], [hls_protocol_partition:crossing()],
+    [xls_protocol_boundary:group()]) -> iodata().
 network_inputs(Incoming, Outgoing, Externals) ->
     [[[remote(Link), "_valid:step.output.incoming_valid[", n(Ordinal), "],\n"]
         || {Ordinal, Link} <- lists:enumerate(0, Incoming)],
@@ -104,10 +121,10 @@ offer(P,Slot,Frame) ->
     ["b::Offer {valid:old.",P,"_valid,slot:",case Slot of "zero"->"u8:0";_->["old.",P,"_",Slot] end,
       ",frame:old.",P,"_",Frame,"}"].
 %% Only original global link indices determine raw crossing names.
--spec remote(map()) -> string().
+-spec remote(hls_protocol_partition:crossing()) -> string().
 remote(#{index:=I}) -> xls_protocol_partition:name(I).
 %% Named pins retain their exact ordered widths in the mechanical adapter.
--spec fields([{string(), pos_integer()}]) -> iodata().
+-spec fields([clock_port()]) -> iodata().
 fields(Fields) -> [[Name, ":bits[", n(Width), "],\n"] || {Name, Width} <- Fields].
 %% Only checked dimensions and indices enter generated text.
 -spec n(non_neg_integer()) -> string().

@@ -1,24 +1,78 @@
 -module(hls_source_build).
 -moduledoc "Source-only HLS build boundary. Packages generated DSLX and its libraries for independently invoked external tools.".
--export([write/3]).
--export_type([kind/0]).
+-export([plan/2, descriptor/1, write/2, write/3]).
+-export_type([kind/0, plan/0, descriptor/0, manifest/0]).
 
 -doc "The supported source-derived hardware boundaries; selection is explicit and does not change application semantics.".
 -type kind() :: transport | network | boundary | application | bridge | deployment | mixed.
 
--doc "Calls the selected source builder with a trusted configuration map or filename and a fresh output directory. A filename is consulted as one map and follows the same build path. Optional dslx_path lists provider import directories; all .x files in those directories and the resolved applications' DSLX/RTL support trees are copied into the output. Writes source-build.json with relative input hashes, entry points, required schedules and RTL lists. Config paths are relative to the caller's working directory. The manifest is a trusted build record, not executable commands or admission; XLS, simulation, synthesis and timing remain separate. Partial output is retained on failure; existing output is never replaced.".
--spec write(kind(), map() | file:filename(), file:filename()) -> map().
-write(Kind, Config, Output) when is_map(Config) ->
+%% Each selected stage retains its own checked constructor result, never a universal input map.
+-type stage_plan() :: hls_protocol_transport:build() | hls_protocol_network:plan() |
+    hls_protocol_boundary:plan() | hls_protocol_application:plan() | hls_protocol_bridge:plan() |
+    hls_protocol_deployment:plan() | hls_protocol_mixed:plan().
+%% Packaging retains the original config for inspection, but does not rerun it during write.
+-record(plan, {kind :: kind(), config :: hls_source_config:config(), stage :: stage_plan()}).
+
+-doc "One complete checked source composition selected by plan/2. Keep it unchanged in process with its source codecs loaded. Provider/support files are read during packaging, so this is not a saved or hermetic external-tool input.".
+-opaque plan() :: #plan{}.
+
+-doc "The selected kind, its read-only static builder descriptor and provider import paths. Generated-byte identities, support snapshots and external-tool schedules belong to the written bundle.".
+-type descriptor() ::
+    #{kind := transport, build := hls_protocol_transport:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := network, build := hls_protocol_network:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := boundary, build := hls_protocol_boundary:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := application, build := hls_protocol_application:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := bridge, build := hls_protocol_bridge:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := deployment, build := hls_protocol_deployment:descriptor(), dslx_path := [file:filename()]} |
+    #{kind := mixed, build := hls_protocol_mixed:descriptor(), dslx_path := [file:filename()]}.
+
+-doc "The compiler-owned source bundle format with this builder's kind metadata. Unit schedules use hls_artifact_bundle's shared contract; inputs bind every packaged file and RTL lists are grouped by role.".
+-type manifest() :: #{version := 1, metadata := #{kind := kind()},
+    units := [hls_artifact_bundle:unit()], rtl := #{binary() => [binary()]},
+    inputs := [#{file := binary(), sha256 := binary()}], eligible := false, native_measured := false}.
+
+-doc "Checks a source composition without rendering or creating an output directory. Accepts a trusted config map or filename and validates optional dslx_path directories before source preparation. The selected builder owns placement, layout and host-binding checks; trusted source constructors may have effects. Paths are relative to the caller.".
+-spec plan(transport, hls_source_config:transport() | file:filename()) -> plan();
+    (network, hls_source_config:network() | file:filename()) -> plan();
+    (boundary, hls_source_config:boundary() | file:filename()) -> plan();
+    (application, hls_source_config:application() | file:filename()) -> plan();
+    (bridge, hls_source_config:bridge() | file:filename()) -> plan();
+    (deployment, hls_source_config:deployment() | file:filename()) -> plan();
+    (mixed, hls_source_config:mixed() | file:filename()) -> plan().
+plan(Kind, Config) when is_map(Config) ->
+    _ = builder(Kind),
+    lists:foreach(fun import_directory/1, maps:get(dslx_path, Config, [])),
+    #plan{kind = Kind, config = Config, stage = stage_plan(Kind, maps:remove(dslx_path, Config))};
+plan(Kind, Filename) -> plan(Kind, hls_source_config:read(Filename)).
+
+-doc "Returns the complete static composition and provider import locations. Inspect this value without an output directory; the descriptor grants neither artifact freshness after mutation nor device admission.".
+-spec descriptor(plan()) -> descriptor().
+descriptor(#plan{kind = Kind, config = Config, stage = Stage}) ->
+    Builder = builder(Kind),
+    #{kind => Kind, build => Builder:descriptor(Stage), dslx_path => maps:get(dslx_path, Config, [])}.
+
+-doc "Plans the selected source boundary, then writes and packages it with write/2. A config filename is consulted as one trusted map; existing output is never replaced. XLS, simulation, synthesis and timing remain separate.".
+-spec write(transport, hls_source_config:transport() | file:filename(), file:filename()) -> manifest();
+    (network, hls_source_config:network() | file:filename(), file:filename()) -> manifest();
+    (boundary, hls_source_config:boundary() | file:filename(), file:filename()) -> manifest();
+    (application, hls_source_config:application() | file:filename(), file:filename()) -> manifest();
+    (bridge, hls_source_config:bridge() | file:filename(), file:filename()) -> manifest();
+    (deployment, hls_source_config:deployment() | file:filename(), file:filename()) -> manifest();
+    (mixed, hls_source_config:mixed() | file:filename(), file:filename()) -> manifest().
+write(Kind, Config, Output) -> write(plan(Kind, Config), Output).
+
+-doc "Renders a retained checked composition into a fresh directory without recompiling source or repeating layout/host checks. Copies provider and resolved compiler/fabric support trees, records config.erl and writes source-build.json with relative input hashes, entry points, schedules and RTL lists. Packaging reads support files at write time; I/O failures retain partial output. The resulting manifest is a trusted build record, not executable commands or admission.".
+-spec write(plan(), file:filename()) -> manifest().
+write(#plan{kind = Kind, config = Config, stage = Stage}, Output) ->
     Builder = builder(Kind),
     Imports = maps:get(dslx_path, Config, []),
-    lists:foreach(fun import_directory/1, Imports),
     Directory = filename:absname(Output),
     case file:read_link_info(Directory) of
         {error, enoent} -> ok;
         {ok, _} -> error({source_output_exists, Directory});
         {error, Reason} -> error({source_output, Directory, Reason})
     end,
-    Result = Builder:write(maps:remove(dslx_path, Config), Directory),
+    Result = hls_generated_files:write(Builder:emit(Stage), Directory),
     ok = file:write_file(filename:join(Directory, "config.erl"), io_lib:format("~tp.~n", [Config]), [exclusive]),
     Support = support(Directory, Imports),
     Roles = case Kind of
@@ -26,8 +80,19 @@ write(Kind, Config, Output) when is_map(Config) ->
         _ -> [{Kind, "."}]
     end,
     Units = lists:append([units(K, Role, Config, Support) || {K, Role} <- Roles]),
-    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind});
-write(Kind, Filename, Output) -> write(Kind, hls_source_config:read(Filename), Output).
+    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind}).
+
+%% Low-level compositions share the ordinary source planner; complete application builders own theirs.
+-spec stage_plan(kind(), hls_source_config:config()) -> stage_plan().
+stage_plan(network, Config) ->
+    hls_protocol_network:plan(hls_protocol_transport:plan(Config), maps:with([activation, inspection], Config));
+stage_plan(boundary, Config) ->
+    hls_protocol_boundary:plan(hls_protocol_transport:plan(Config), maps:with([activation, inspection], Config));
+stage_plan(bridge, Config = #{native_actors := _}) ->
+    hls_protocol_bridge:plan(hls_protocol_transport:plan(Config),
+        maps:with([host, service, control, activation, inspection], Config));
+stage_plan(Kind, Config) when Kind =:= transport; Kind =:= application; Kind =:= deployment; Kind =:= mixed ->
+    Builder = builder(Kind), Builder:plan(Config).
 
 %% Choose only known emitters, before creating any output.
 -spec builder(kind()) -> module().
@@ -58,7 +123,7 @@ support(Output, Imports) ->
         [unicode:characters_to_list(P) || P <- CompilerPaths].
 
 %% Schedules describe existing clock owners, not target-frequency optimization requests.
--spec units(kind(), string(), map(), [string()]) -> [hls_artifact_bundle:unit()].
+-spec units(kind(), string(), hls_source_config:config(), [string()]) -> [hls_artifact_bundle:unit()].
 units(application, Role, Config, Support) ->
     Boundary = units(boundary, Role, Config, Support),
     Debug = case maps:get(inspection, Config, none) of

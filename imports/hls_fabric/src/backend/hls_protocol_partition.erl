@@ -1,9 +1,25 @@
 -module(hls_protocol_partition).
 -moduledoc "Cuts a freshly compiled source network at logical actor boundaries. Crossing frames use destination schemas; physical framing, clock crossing and independent reset retirement remain adapter obligations.".
 -export([plan/5]).
+-export_type([class/0, crossing/0, plan/0]).
+
+-doc "One crossing slot and its codec derived from the destination's fresh message schema.".
+-type class() :: #{slot := non_neg_integer(), channel := hls_protocol_capture:binding(),
+    codec := hls_protocol_codec:plan()}.
+
+-doc "A global capture link crossing the selected native actor set. plan/5 adds direction and classes to the fabric link; its global indices remain unchanged.".
+-type crossing() :: hls_protocol_fabric:link().
+
+-doc "A checked native placement: selected actor indices, destination-owned links and the projected host ingress.".
+-type plan() :: #{fabric := hls_protocol_fabric:plan(), ingress := none | hls_protocol_control:plan(),
+    indices := [non_neg_integer()]}.
+
+%% Other transport options belong to their owning planners and are ignored by this cut.
+-type options() :: #{native_actors => [hls_protocol_topology:id()], atom() => term()}.
 
 -doc "Selects all actors by default, or a nonempty proper subset of unique logical IDs in native_actors. Keeps global actor/link indices, local publications and destination-owned captures; crossing links carry a slot and canonical 128-bit destination frame. Derives every codec from fresh capture/source schemas, never supplied constants. Filters rectangle recipients without renumbering the host mask. Returns fabric, ingress and native indices; malformed selections fail before hardware emission. All roles must share clock/reset and stable ready/valid handshakes. No capacity, progress or multi-board admission is established.".
--spec plan(map(),map(),map(),map(),none | map()) -> map().
+-spec plan(options(), hls_protocol_transport:bundle(), hls_protocol_capture:plan(),
+    hls_protocol_fabric:plan(), none | hls_protocol_control:plan()) -> plan().
 plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},Ingress) ->
     Indexed=lists:enumerate(0,Actors),
     case maps:find(native_actors,Config) of
@@ -27,7 +43,8 @@ plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sour
     end.
 
 %% Destination operation numbering may differ from the sender's numbering.
--spec classes(map(),map(),map()) -> [map()].
+-spec classes(hls_protocol_fabric:link(), hls_protocol_transport:bundle(),
+    hls_protocol_capture:plan()) -> [class()].
 classes(#{destination_index:=D,pair:=#{slots:=Slots}},#{topology:=#{actors:=Actors},modules:=Modules},#{channels:=Channels}) ->
     #{module:=M}=lists:nth(D+1,Actors),
     #{program:=Program}=maps:get(M,Modules),

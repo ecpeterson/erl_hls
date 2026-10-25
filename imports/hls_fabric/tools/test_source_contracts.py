@@ -93,6 +93,65 @@ class SourceContractsTests(unittest.TestCase):
         self.assertNotEqual(gaps[0]['fingerprint'], changed[0]['fingerprint'])
         self.assertEqual(gaps[0]['fingerprint'], self.audit('\n' + source)[0]['fingerprint'])
 
+    def test_map_field_macros_preserve_type_contracts(self) -> None:
+        """Field splices retain type arity, formal docs and private explanations."""
+        source = ('-define(FIELDS(T), field := T, optional => #{?INNER}).\n'
+                  '-define(KEYS(K), key := K).\n'
+                  '-export_type([visible/1, opaque_value/2]).\n'
+                  '-type visible(T) :: #{?FIELDS(T), extra => T}.\n'
+                  '-doc "Owns the checked value.".\n'
+                  '-opaque opaque_value(K, V) :: #{?KEYS(K), ?VALUES(V)}.\n'
+                  '%% Describes a private field set.\n'
+                  '-type private() :: #{?FIELDS}.\n'
+                  '-type unexplained() :: #{?FIELDS}.')
+        self.assertEqual([(g['id'], g['rule']) for g in self.audit(source)],
+                         [('type:visible/1', 'public_doc'),
+                          ('type:unexplained/0', 'private_comment')])
+        documented = source.replace('-type visible', '-doc "Describes the value.".\n-type visible')
+        self.assertEqual([g['id'] for g in self.audit(documented)], ['type:unexplained/0'])
+
+    def test_map_field_macros_preserve_conditional_visibility(self) -> None:
+        """Neither macro expansion nor a conditional branch hides a declaration."""
+        source = ('-export_type([value/0]).\n-ifdef(ONE).\n'
+                  '-type value() :: #{?FIELDS(one)}.\n-else.\n'
+                  '-type value() :: #{?FIELDS(two)}.\n-endif.')
+        gaps = self.audit(source)
+        self.assertEqual([(g['id'], g['rule']) for g in gaps],
+                         [('type:value/0', 'public_doc'), ('type:value/0', 'public_doc')])
+        self.assertNotEqual(gaps[0]['fingerprint'], gaps[1]['fingerprint'])
+
+    def test_map_field_macro_fingerprints_keep_raw_tokens(self) -> None:
+        """Arguments and explicit fields affect identity; token location does not."""
+        source = ('-type value(T) :: #{?FIELDS(none | #{state := [T]}), '
+                  'child := #{?CHILD}, flag := boolean()}.')
+        original = self.audit(source)
+        self.assertEqual([(g['id'], g['rule']) for g in original],
+                         [('type:value/1', 'private_comment')])
+        fingerprint = original[0]['fingerprint']
+        moved = source.replace(', ', ',\n    ')
+        self.assertEqual(fingerprint, self.audit('\n\n' + moved)[0]['fingerprint'])
+        for changed in [source.replace('none', 'process'),
+                        source.replace('?CHILD', '?OTHER'),
+                        source.replace('boolean()', 'atom()')]:
+            self.assertNotEqual(fingerprint, self.audit(changed)[0]['fingerprint'])
+
+    def test_map_field_macro_recovery_keeps_parse_errors(self) -> None:
+        """Only complete map-field macros are opaque; surrounding syntax is checked."""
+        for definition in ['#{?FIELDS, bad := }',
+                           '#{good := atom() ?FIELDS}',
+                           '#{bad =>, ?FIELDS}',
+                           '#{?FIELDS, bad := atom() ++ boolean()}',
+                           '#{?FIELDS([atom())), good := atom()}']:
+            with self.subTest(definition=definition):
+                gaps = self.audit('-type value() :: ' + definition + '.')
+                self.assertIn('parse', [g['rule'] for g in gaps])
+        for definition in ['-define(FIELDS(T), field := ).',
+                           '-define(FIELDS(T,), field := T).',
+                           '-define(FIELDS()(T), field := T).',
+                           '-define(FIELDS(T), field := atom() ++ boolean()).']:
+            with self.subTest(definition=definition):
+                self.assertIn('parse', [g['rule'] for g in self.audit(definition)])
+
     def test_parse_errors_are_not_hidden(self) -> None:
         """A malformed function cannot disappear behind the record macro exception."""
         gaps = self.audit('-record(r, {x}).\nf() -> .')
