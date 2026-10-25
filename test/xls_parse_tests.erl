@@ -1161,24 +1161,25 @@ terminate_is_not_a_declarable_phase_test() ->
         )
     ).
 
-invalid_gs_wire_width_test_() ->
-    [?_test(begin
-        Path = filename:join("_build", "invalid_gs_wire_fixture.erl"),
-        ok = filelib:ensure_dir(Path),
-        Source = [
-            "-module(invalid_gs_wire_fixture).\n",
-            "-behavior(hls_gs).\n-hls_data(cell).\n-hls_tags([message]).\n",
-            "-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n",
-            "-record(message, {value = hls_type:zero() :: ", Type, "}).\n",
-            "init([]) -> #cell{}.\n",
-            "handle_call(#message{}, State) -> {reply, #message{}, State}.\n"
-        ],
-        ok = file:write_file(Path, Source),
-        try ?assertError(Error, xls_parse:to_xls(Path))
-        after ok = file:delete(Path) end
-    end) || {Type, Error} <- [
-        {"hls_vec:vector(hls_nums:u32(), 4)", {xls_message_too_wide, message, 128, 96}}
-    ]].
+%% Oversized source messages retain their record and preprocessing location at the public lowering boundary.
+-spec invalid_gs_wire_width_test() -> ok.
+invalid_gs_wire_width_test() ->
+    Path = filename:join("_build", "invalid_gs_wire_fixture.erl"),
+    BinaryPath = unicode:characters_to_binary(Path),
+    ok = filelib:ensure_dir(Path),
+    Source = [
+        "-module(invalid_gs_wire_fixture).\n",
+        "-behavior(hls_gs).\n-hls_data(cell).\n-hls_tags([message]).\n",
+        "-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n",
+        "-record(message, {value = hls_type:zero() :: hls_vec:vector(hls_nums:u32(), 4)}).\n",
+        "init([]) -> #cell{}.\n",
+        "handle_call(#message{}, State) -> {reply, #message{}, State}.\n"
+    ],
+    ok = file:write_file(Path, Source),
+    try ?assertError({hls_diagnostic, #{stage := actor_source, code := message_too_wide,
+        context := #{source := BinaryPath, location := 6, record := message, width := 128, max_width := 96}}},
+        xls_parse:to_xls(Path))
+    after ok = file:delete(Path) end.
 
 %% An eight-bit message occupies one wire word while its logical record width remains eight bits.
 -spec non_word_aligned_state_machine_message_is_accepted_test() -> ok.

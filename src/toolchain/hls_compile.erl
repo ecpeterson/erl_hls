@@ -1,7 +1,7 @@
 -module(hls_compile).
 -moduledoc "Standalone actor compilation and compiler support libraries. Placement and deployment belong to clients.".
--export([actor/3, support/2]).
--export_type([options/0]).
+-export([actor/3, support/2, support_layout/1]).
+-export_type([options/0, support_layout/0]).
 
 -doc "Actor preprocessing, direct observation, extra DSLX import trees and the optional external pipeline length (default two). No external tools run during emission.".
 -type options() :: #{source_options => [hls_source:option()], direct_actor_debug => boolean(),
@@ -12,12 +12,14 @@
 actor(Source, Options, Output) ->
     case maps:keys(Options) -- [source_options, direct_actor_debug, dslx_path, pipeline_stages] of
         [] -> ok;
-        Keys -> error({unknown_compile_options, Keys})
+        Keys -> hls_diagnostic:raise(arguments, unknown_compile_options,
+            <<"Unknown actor compilation options">>, #{options => Keys})
     end,
     Stages = maps:get(pipeline_stages, Options, 2),
     case is_integer(Stages) andalso Stages > 0 of
         true -> ok;
-        false -> error({pipeline_stages, Stages})
+        false -> hls_diagnostic:raise(arguments, pipeline_stages,
+            <<"Pipeline stage count must be a positive integer">>, #{option => pipeline_stages, value => Stages})
     end,
     SourceOptions = maps:get(source_options, Options, []) ++
         [{i, filename:join(code:lib_dir(erl_hls), "include")}],
@@ -39,12 +41,24 @@ actor(Source, Options, Output) ->
 -doc "Snapshots this compiler's DSLX/RTL support and extra DSLX trees into an open bundle; returns existing relative import directories. Additional imports must exist. Fabric clients may add their own libraries and schedules separately.".
 -spec support(file:filename(), [file:filename()]) -> [binary()].
 support(Output, Imports) ->
+    #{libraries := Libraries, imports := Paths} = support_layout(Imports),
+    hls_artifact_bundle:snapshot(Output, Libraries),
+    Paths.
+
+-doc "Compiler and caller-owned support trees with their emitted import directories, without writing files. Library sources are absolute; imports are bundle-relative.".
+-type support_layout() :: #{libraries := [hls_artifact_bundle:library()], imports := [binary()]}.
+
+-doc "Plans the same support snapshot used by support/2 without opening an output directory. Missing extra import trees fail; optional compiler import subdirectories are included only when present in the source tree.".
+-spec support_layout([file:filename()]) -> support_layout().
+support_layout(Imports) ->
     Priv = code:priv_dir(erl_hls),
-    Extra = [{Source, "support/import" ++ integer_to_list(I), [".x"]}
+    Extra = [{filename:absname(Source), "support/import" ++ integer_to_list(I), [".x"]}
         || {I, Source} <- lists:enumerate(0, Imports)],
-    hls_artifact_bundle:snapshot(Output,
-        [{filename:join(Priv, "xls"), "support/compiler/xls", [".x"]},
-         {filename:join(Priv, "rtl"), "support/compiler/rtl", [".v", ".sv"]} | Extra]),
-    Paths = ["support/compiler/xls/lib", "support/compiler/xls/fabric"] ++
-        [Target || {_, Target, _} <- Extra],
-    [unicode:characters_to_binary(P) || P <- Paths, filelib:is_dir(filename:join(Output, P))].
+    Libraries = [{filename:join(Priv, "xls"), "support/compiler/xls", [".x"]},
+        {filename:join(Priv, "rtl"), "support/compiler/rtl", [".v", ".sv"]} | Extra],
+    lists:foreach(fun({Source, _, _}) -> {ok, _} = file:list_dir(Source) end, Libraries),
+    Candidates = [{filename:join([Priv, "xls", "lib"]), "support/compiler/xls/lib"},
+        {filename:join([Priv, "xls", "fabric"]), "support/compiler/xls/fabric"}] ++
+        [{Source, Target} || {Source, Target, _} <- Extra],
+    #{libraries => Libraries, imports => [unicode:characters_to_binary(Target)
+        || {Source, Target} <- Candidates, filelib:is_dir(Source)]}.

@@ -21,23 +21,32 @@ open(Output) ->
         {error, Reason} -> error({source_output, Directory, Reason})
     end.
 
--doc "Copies selected library files without overwriting. Destinations must stay within the bundle; missing source directories fail. Trusted source-tree symlinks are followed.".
+-doc "Copies selected library files without overwriting, preserving source directories even when empty or containing only excluded file types. Destinations must stay within the bundle; missing source directories fail. Trusted source-tree symlinks are followed.".
 -spec snapshot(file:filename(), [library()]) -> ok.
 snapshot(Output, Libraries) ->
     lists:foreach(fun({Source, Relative, Extensions}) ->
-        Target = filename:join(Output, relative(Relative)),
-        ok = filelib:ensure_dir(filename:join(Target, "placeholder")),
-        lists:foreach(fun(Path) ->
-            case lists:member(filename:extension(Path), Extensions) of
-                false -> ok;
-                true ->
-                    Destination = filename:join(Target, Path),
-                    ok = filelib:ensure_dir(Destination),
-                    {ok, Bytes} = file:read_file(filename:join(Source, Path)),
-                    ok = file:write_file(Destination, Bytes, [exclusive])
-            end
-        end, files(Source))
+        snapshot_tree(Source, filename:join(Output, relative(Relative)), Extensions)
     end, Libraries).
+
+%% Import directories are part of the source tree even when no selected file lies below them.
+-spec snapshot_tree(file:filename(), file:filename(), [string()]) -> ok.
+snapshot_tree(Source, Target, Extensions) ->
+    {ok, Names} = file:list_dir(Source),
+    ok = filelib:ensure_dir(filename:join(Target, "placeholder")),
+    lists:foreach(fun(Name) ->
+        Input = filename:join(Source, Name),
+        Output = filename:join(Target, Name),
+        case filelib:is_dir(Input) of
+            true -> snapshot_tree(Input, Output, Extensions);
+            false ->
+                case lists:member(filename:extension(Name), Extensions) of
+                    false -> ok;
+                    true ->
+                        {ok, Bytes} = file:read_file(Input),
+                        ok = file:write_file(Output, Bytes, [exclusive])
+                end
+        end
+    end, lists:sort(Names)).
 
 -doc "Writes source-build.json once, binding every generated/copied input by SHA-256. Units supply entry points, imports, schedules and RTL lists; metadata is descriptive JSON data and cannot override schema fields. Paths and unique unit directories are checked, but this trusted local build record is not a security boundary or hardware qualification.".
 -spec finish(file:filename(), [unit()], map()) -> map().

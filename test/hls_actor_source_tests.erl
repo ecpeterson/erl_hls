@@ -50,8 +50,14 @@ message_width_limit_test() ->
     Wide = form("-record(wide, {bits = hls_type:zero() :: hls_bits:bits(97)})."),
     ?assertEqual(0, hls_actor_source:message_words([Empty], empty)),
     ?assertEqual(3, hls_actor_source:message_words([Full], full)),
-    ?assertError({xls_message_too_wide, wide, 97, 96},
-        hls_actor_source:message_words([Wide], wide)).
+    ?assertError({hls_diagnostic, #{stage := actor_source, code := message_too_wide,
+        context := #{record := wide, width := 97, max_width := 96, location := 1}}},
+        hls_actor_source:message_words([Wide], wide)),
+    Included = setelement(2, Wide, erl_anno:new({17, 3})),
+    ?assertError({hls_diagnostic, #{context := #{source := <<"messages.hrl">>, location := {17, 3}}}},
+        hls_actor_source:message_words([{attribute, 1, file, {"actor.erl", 1}},
+            {attribute, 1, file, {"messages.hrl", 1}}, Included,
+            {attribute, 20, file, {"actor.erl", 2}}], wide)).
 
 %% Querying typed fields is distinct from admitting an actor's complete record declaration.
 -spec untyped_record_field_test() -> ok.
