@@ -21,7 +21,7 @@ functions(Spec, aggregate_only) ->
     aggregate_functions(aggregate_only, Spec).
 
 %% Defines bounded aggregate values and their destination-slot envelope.
--spec aggregate_declarations('aggregate_only',pos_integer(),pos_integer(),1..255,term()) -> iodata().
+-spec aggregate_declarations('aggregate_only',pos_integer(),pos_integer(),1 .. ((1 bsl 8) - 1),term()) -> iodata().
 aggregate_declarations(aggregate_only, SiteBits, RemainingBits, MemberBits,
         AccumulatorType) ->
     [
@@ -127,7 +127,7 @@ aggregate_expected_members_function(Spec = #{sites := Sites}) ->
     ].
 
 %% Encodes one site's fixed-member population mask.
--spec aggregate_expected_members_arm(map(),1..255) -> [string(),...].
+-spec aggregate_expected_members_arm(map(),1 .. ((1 bsl 8) - 1)) -> [string(),...].
 aggregate_expected_members_arm(Site = #{
     population := #{mode := members, size := Size}
 }, MemberBits) ->

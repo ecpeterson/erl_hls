@@ -83,6 +83,41 @@ These plans fix wiring, packed ports, endpoint ownership and state costs before 
 
 A deployment prepares sources once, validates complete disjoint ownership and return endpoints, then checks every role's bridge layout and cross-role routing before rendering any role. `hls_protocol_deployment:routing(Plan)` returns the retained `hls_protocol_routing:plan()`; `roles/1` and `routes/1` inspect its checked ownership and paired crossing codecs without sessions or credits. Runtime attachment independently validates the serialized deployment when opening an incarnation. A validation or rendering failure leaves output absent; an I/O failure can retain partial output. These boundaries do not change XLS schedules, generated hardware behavior or admission policy.
 
+### Following the implementation
+
+Start at `hls_source_build:plan/2`, not a renderer. Its build kind selects a checked composition; `write/2` later renders that same plan and packages its files. For a deployment, the complete path is:
+
+```text
+hls_source_build:plan(deployment, Config)
+  → hls_protocol_deployment:plan(Config)
+    → hls_protocol_transport:prepare(CommonConfig)          one source snapshot
+    → placement(Devices, Actors)                           checked actor → role ownership
+    → hls_protocol_transport:plan(Program, RoleOptions)     once per role
+    → hls_protocol_bridge:plan(Transport, BridgeOptions)    each role's composition
+    → hls_protocol_routing:plan(Interfaces)                 checked cross-role routes
+    → hls_protocol_application_binding:bind(...)            source record/host bindings
+hls_source_build:write(Plan, Directory)
+  → hls_protocol_deployment:emit(DeploymentPlan)
+    → hls_protocol_bridge:emit(RolePlan)                    all role files in memory
+  → hls_generated_files:write(...)
+  → hls_artifact_bundle:snapshot/2, finish/3                support files and tool manifest
+```
+
+The internal authorities are deliberately small:
+
+| Fact | Owner | Consumer |
+| --- | --- | --- |
+| Compiled source, whole topology and publication analysis | Transport `program()` | Every placement shares this snapshot. |
+| Native receiver identity, source and inbox layout | One private transport receiver record | Static descriptors and emitted files derive from that same record; list position does not bind them. |
+| Actor-to-role ownership | Deployment placement check | The application binding uses the checked map. |
+| Eligibility, acquisition and release slices | Receiver inbox layout, joined to links during network planning | `xls_protocol_network` retains the checked connections for both offer and retirement rendering. |
+| Host record fields and widths | Compiler `hls_records` queries | Application binding checks codecs against source records without inspecting Erlang AST tuple positions. |
+| Serialized descriptors and generated identities | The composition's emitted result | Runtime attachment checks these separately; it never consumes private build records. |
+
+For mixed placement, `hls_protocol_mixed:plan/1` derives native/host indices, binds host actor outputs and startup, then checks crossing codecs and command targets. It retains the same transport and bridge plans used by emission. A builder named `hls_protocol_*` owns source/placement checks; `xls_protocol_*` elaborates checked connections into DSLX. The clock transition itself lives in `protocol_network.x.in`: observe old state, select, advance receivers, then commit transport. Mechanical `sv_protocol_*` adapters only connect packed pins.
+
+The runtime route continues at [host owner decisions](source-protocol.md#host-owner-decisions); build ownership and live queue ownership are separate types and lifetimes.
+
 ## Optional external compilation
 
 XLS execution is separate from source emission. Use another build system to consume `source-build.json`, or use the standard-library-only convenience driver with Python 3.12 or newer:

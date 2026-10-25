@@ -38,7 +38,7 @@ plan(Config = #{devices := Devices, limits := Limits = #{commands := Commands, e
     Common = maps:without([devices, limits, native_actors, host, service], Config),
     Program = hls_protocol_transport:prepare(Common),
     Bundle = #{topology := #{actors := Actors}} = hls_protocol_transport:bundle(Program),
-    ok = placement(Devices, Actors),
+    Owners = placement(Devices, Actors),
     Roles = [role(Device, Index, Placement, Common, Program)
         || {Index, {Device, Placement}} <- lists:enumerate(0, lists:sort(maps:to_list(Devices)))],
     Interfaces = maps:from_list([{Device, hls_protocol_bridge:descriptor(Bridge)}
@@ -52,7 +52,6 @@ plan(Config = #{devices := Devices, limits := Limits = #{commands := Commands, e
             #{path => [limits, crossings], actual => Crossings, maximum => Maximum})
     end,
     Routing = hls_protocol_routing:plan(#{devices => Interfaces, actors => length(Actors), limits => Limits}),
-    Owners = maps:from_list([{Id, D} || {D, #{native_actors := Ids}} <- maps:to_list(Devices), Id <- Ids]),
     Hosts = maps:map(fun(_, #{host := H}) -> H end, Interfaces),
     Application = hls_protocol_application_binding:bind(Bundle, hls_protocol_transport:control(Program), Owners, Hosts),
     Descriptor = #{devices => Interfaces, actors => length(Actors), limits => Limits,
@@ -89,8 +88,9 @@ emit(#plan{roles = Roles, descriptor = Descriptor}) ->
     #{files => Files, result => Deployment};
 emit(Config) -> emit(plan(Config)).
 
-%% Keep roles attached to actor IDs until every ownership conflict is diagnosed.
--spec placement(#{hls_source_config:device() => hls_source_config:role()}, [hls_protocol_topology:actor()]) -> ok.
+%% Keep conflicting assignments for diagnostics, then return the checked single owner per actor.
+-spec placement(#{hls_source_config:device() => hls_source_config:role()}, [hls_protocol_topology:actor()]) ->
+    #{hls_protocol_topology:id() => hls_source_config:device()}.
 placement(Devices, Actors) ->
     Roles = lists:sort(maps:to_list(Devices)),
     lists:foreach(fun({Role, Placement}) ->
@@ -129,7 +129,8 @@ placement(Devices, Actors) ->
         [{{ReturnHost, ReturnService}, ReturnRoles} | _] -> hls_diagnostic:raise(deployment, duplicate_deployment_endpoints,
             <<"Each deployment role needs a distinct host/service endpoint pair.">>,
             #{host => ReturnHost, service => ReturnService, roles => ReturnRoles, path => [devices]})
-    end.
+    end,
+    maps:map(fun(_, [Role]) -> Role end, Owners).
 
 %% Direct planner callers receive the same deliberate rejection as configuration loading.
 -spec endpoint(hls_source_config:role()) -> ok.

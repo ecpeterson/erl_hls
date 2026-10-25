@@ -9,7 +9,7 @@
 %% Erlang map types have no extension syntax; these fragments give shared input
 %% fields one owner while keeping every exported per-kind map closed.
 -define(SOURCE_FIELDS,
-    sources := [source_file(), ...], topology := topology(), actor_limit := 1..65536,
+    sources := [source_file(), ...], topology := topology(), actor_limit := 1 .. (1 bsl 16),
     protocol_model => hls_protocol_model:request(), dslx_path => [file:filename()]).
 -define(PLACEMENT_FIELDS,
     native_actors => [hls_protocol_topology:id(), ...],
@@ -33,7 +33,7 @@
 -type inspection() :: none | process.
 
 -doc "A nonzero 16-bit host or service endpoint; each bridge requires different host and service values.".
--type endpoint() :: 1..65535.
+-type endpoint() :: 1 .. ((1 bsl 16) - 1).
 
 -doc "An application-chosen device identity used as a map key and retained in deployment bindings; it is not a host endpoint or process identifier.".
 -type device() :: term().

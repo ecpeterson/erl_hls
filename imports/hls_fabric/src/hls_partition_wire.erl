@@ -23,7 +23,7 @@ deployment(Partition = #{devices := Devices}) ->
     end || {Host, Device} <- lists:enumerate(1, Devices)])}.
 
 -doc "Binds one device's declared ingress and external codecs to shared endpoints. The caller must supply checked producer encodings and local port order; this does not validate a runtime implementation. Identity covers the supplied partition and derived wire binding.".
--spec binding(map(), term(), 1..65535, map()) -> map().
+-spec binding(map(), term(), 1 .. ((1 bsl 16) - 1), map()) -> map().
 binding(Partition, Device, Host, #{ingresses := [#{id := Ingress}], externals := Externals})
         when Host > 0, Host < 65536 ->
     true = length(Externals) > 0,

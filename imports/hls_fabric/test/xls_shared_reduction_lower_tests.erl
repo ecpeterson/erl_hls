@@ -480,7 +480,7 @@ cast_key({clause, _Line,
     {xls_pattern_lower:record_pattern_name(Message), Phase}.
 
 %% Parses one test expression without executing it.
--spec expression([1..255,...]) -> {'nil',erl_anno:anno()} | {atom(),erl_anno:anno(),term()} | {atom(),erl_anno:anno(),term(),term()} | {'op',erl_anno:anno(),atom(),term(),term()} | {'receive',erl_anno:anno(),[{term(),term(),term(),term(),term()},...],term(),[any(),...]} | {'record',erl_anno:anno(),term(),atom(),[{term(),term(),term(),term()}]} | {'record_field',erl_anno:anno(),term(),atom(),{'atom',erl_anno:anno(),atom()}} | {'try',erl_anno:anno(),[any(),...],[{term(),term(),term(),term(),term()}],[{term(),term(),term(),term(),term()}],[any()]}.
+-spec expression([1 .. ((1 bsl 8) - 1),...]) -> {'nil',erl_anno:anno()} | {atom(),erl_anno:anno(),term()} | {atom(),erl_anno:anno(),term(),term()} | {'op',erl_anno:anno(),atom(),term(),term()} | {'receive',erl_anno:anno(),[{term(),term(),term(),term(),term()},...],term(),[any(),...]} | {'record',erl_anno:anno(),term(),atom(),[{term(),term(),term(),term()}]} | {'record_field',erl_anno:anno(),term(),atom(),{'atom',erl_anno:anno(),atom()}} | {'try',erl_anno:anno(),[any(),...],[{term(),term(),term(),term(),term()}],[{term(),term(),term(),term(),term()}],[any()]}.
 expression(Source) ->
     {ok, Tokens, _} = erl_scan:string(Source ++ "."),
     {ok, [Expression]} = erl_parse:parse_exprs(Tokens),

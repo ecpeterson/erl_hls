@@ -86,7 +86,7 @@ binding(Index, Group) ->
     }).
 
 -doc "Returns a power-of-two mailbox row stride when it fits the already allocated RAM; otherwise returns capacity.".
--spec mailbox_stride(pos_integer(), 1..255) -> pos_integer().
+-spec mailbox_stride(pos_integer(), 1 .. ((1 bsl 8) - 1)) -> pos_integer().
 mailbox_stride(Slots, Capacity) ->
     Padded = case Capacity of 1 -> 1; _ -> 1 bsl address_width(Capacity) end,
     case address_width(Slots * Padded) =:= address_width(Slots * Capacity) of

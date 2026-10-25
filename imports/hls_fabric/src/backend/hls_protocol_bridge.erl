@@ -7,11 +7,11 @@
 -type options() :: hls_source_config:bridge_options().
 
 -doc "One incoming crossing class whose previous capture ownership determines its credit.".
--type credit() :: #{link := 0..65535, slot := byte()}.
+-type credit() :: #{link := 0 .. ((1 bsl 16) - 1), slot := byte()}.
 
 %% Framing ownership is unchanged when emission adds attachment identity and support hashes.
 -define(INTERFACE_FIELDS,
-    host := 1..65535, service := 1..65535, links := [hls_protocol_partition:crossing()],
+    host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), links := [hls_protocol_partition:crossing()],
     control := rectangle, control_adapter := hls_protocol_control:hardware(),
     native_indices := [non_neg_integer()], actors := non_neg_integer(),
     externals := [xls_protocol_boundary:group()], incoming := [hls_protocol_partition:crossing()],

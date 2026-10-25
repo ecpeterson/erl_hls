@@ -27,7 +27,7 @@ boot(cast, #configure{value = 4}, Cell) ->
 boot(cast, #configure{value = Value}, Cell) when Value =/= 5 ->
     {active, Cell#cell{value = Value}, consume}.
 -doc "Processes the fixture's application messages in its active phase.".
--spec active('cast' | 'enter',term(),term()) -> {#cell{value::1..255},[{'cast','out',{term(),term()}},...]} | {'active',term(),'consume'}.
+-spec active('cast' | 'enter',term(),term()) -> {#cell{value::1 .. ((1 bsl 8) - 1)},[{'cast','out',{term(),term()}},...]} | {'active',term(),'consume'}.
 active(enter, _, Cell) ->
     %% Independent failure origins coexist with healthy, backpressured actors.
     Value = case Cell#cell.value of

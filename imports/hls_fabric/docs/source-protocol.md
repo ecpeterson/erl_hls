@@ -52,16 +52,17 @@ The [common executor](building.md#optional-external-compilation) preserves the l
 
 ```text
 emit_protocol_transport.sh → hls-fabric emit --kind transport
-  → hls_source_build:write/3 → hls_protocol_transport:write/2
+  → hls_source_build:plan/2
+    → transport:prepare/1
+      → local_actor:prepare/2 + topology normalization/elaboration + inventory
+      → capture:plan/2 + transactions:plan/2 → source:plan/3
+      → inbox:plan/1 → fabric:plan/2
+    → transport:plan/2 (placement and checked receiver layouts)
+  → hls_source_build:write/2
     → transport:emit/1
-      → transport:prepare/1
-        → local_actor:compile/2 + topology normalization/elaboration + inventory
-        → capture:plan/2 + transactions:plan/2 → source:plan/3
-        → inbox:plan/1 → fabric:plan/2
-      → transport:plan/2 (placement, arithmetic and receiver artifacts)
-      → local_actor:emit/2 (same compiled actors and receivers)
+      → local_actor:emit/2 + inbox:attach/2 (same source and receiver layouts)
       → xls_protocol_transport:emit/1 (DSLX composition + mechanical pin adapter)
-    → hls_generated_files:write/2 (persist the complete generated bundle)
+    → hls_generated_files:write/2 + hls_artifact_bundle packaging
   → compile_source_build.py → XLS conversion, optimization and code generation
 ```
 
@@ -311,6 +312,18 @@ The deployment relay (`hls_protocol_stream`) and mixed BEAM/RTL owner (`hls_prot
 A relay transfer follows **source packet → destination credit → reserved destination write → physical success → eligible source ACK → physical ACK success → released pair**. The source may see that ACK and send its next packet before our completion callback arrives; the owner retains that next packet under broker receipt credit until the old pair reservation retires.
 
 A mixed reverse transfer follows **native packet → retained decoded record → destination BEAM admission → eligible ACK → reserved ACK write → physical success**. Admission is a public mailbox barrier, not actor consumption. A full actor retains its reverse record while other actors can admit theirs. Command admission also performs BEAM effects: successful recipients leave the retained command cursor before a busy recipient is retried. Only the capacity check repeats; successful deliveries and failed writes do not replay.
+
+To follow a particular message in the source, start with the stream owner and its queue API:
+
+| Path | Admission | Reservation | Completion |
+| --- | --- | --- | --- |
+| Device → device | `hls_protocol_stream` passes an ordered packet to `hls_protocol_relay_queue:event/3`. | `next/1` selects an ACK or a credited pair head and returns a token. | `complete/2` advances that exact token after physical success: data enables an ACK; the ACK frees the pair. |
+| BEAM → device | `hls_protocol_mixed_queue:offer/4` authenticates the sender and selects one canonical source-bound class. | `next/1` removes only a credited pair head and consumes its credit/sequence. | The stream serializes the physical write. Failure retires the incarnation; later hardware credit permits reuse. |
+| Device → BEAM | `hls_protocol_mixed_queue:delivery/6` validates event order and decodes the destination record. | `hls_protocol_mixed_admission:deliver/3` checks mailbox capacity and performs the same-owner cast/barrier. | Only successful admission enables the stream's ACK. Busy retains the record; ambiguous admission retires it. |
+
+Each queue/admission module owns an opaque `state()`. Streams keep that value and use its operations and typed `info/1` report; they do not inspect or modify credits, cursors, monitors or pending-record phases. Within the relay, `pending → writing → ack → acking` distinguishes destination transmission from source acknowledgment. Round-robin selection can bypass an uncredited different pair but never a pair's head.
+
+Mixed source-class selection packs a record once and tests the declared same-tag codecs, including omitted constants. Zero or multiple matching classes reject. A source packer exception remains an error; it is not treated as evidence that a different port should be tried.
 
 These orders are intentional and implemented by separate schedulers. `hls_protocol_relay_tests` and `hls_protocol_mixed_stream_tests` exercise the actual owners with controlled broker completions; these are finite host witnesses, not hardware or general progress proofs.
 

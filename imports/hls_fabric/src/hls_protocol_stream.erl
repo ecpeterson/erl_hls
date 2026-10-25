@@ -17,7 +17,7 @@
 %% Broker receipt credit is independent of logical pair credit and source ACKs.
 -type receipt() :: {reference(), hls_fabric:header(), binary()}.
 %% The relay queue binds physical completion to a particular pair and sequence.
--type packet_token() :: {data | ack, non_neg_integer(), non_neg_integer()}.
+-type packet_token() :: hls_protocol_relay_queue:token().
 %% Exactly one broker request may be outstanding across the deployment.
 -type writer_tag() :: {role(), attach | control | {packet, packet_token()}}.
 %% Scheduling reserves ownership before issue_write performs the broker effect.
@@ -33,7 +33,7 @@
     record_limit := pos_integer(), brokers := #{role() => pid()},
     sessions := #{role() => pos_integer()}, client := pid(),
     monitors := #{reference() => client | {device, role()}},
-    identities := #{role() => binary()}, queue := map(),
+    identities := #{role() => binary()}, queue := hls_protocol_relay_queue:state(),
     phases := #{role() => phase()}, phase := phase(), starts := boolean(),
     commands := queue:queue(command()), events := queue:queue(event()),
     held := #{role() => receipt()}, writer := none | writer_tag(),

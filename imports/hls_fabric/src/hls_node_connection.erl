@@ -7,7 +7,7 @@
 -doc "An accepted TCP socket or a local distribution owner with node identity.".
 -type carrier() :: gen_tcp:socket() | {local, pid(), #{name := node(), creation := non_neg_integer()}}.
 %% Physical service channel shared by its logical actor PIDs.
--type channel_key() :: {application | debug, 0..65535}.
+-type channel_key() :: {application | debug, 0 .. ((1 bsl 16) - 1)}.
 %% Calls carry their reply destination; casts need no reply slot.
 -type operation() :: {call, gen_server:from(), term()} | {cast, none, term()}.
 

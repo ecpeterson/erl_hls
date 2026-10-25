@@ -1,7 +1,8 @@
 -module(hls_protocol_mixed).
 -moduledoc "Fresh source-bound BEAM/native placement using the shared DSLX bridge. Host admission, transport retirement and application progress are separate obligations.".
--export([plan/1, descriptor/1, transport/1, emit/1, write/2, encode/3, decode/3]).
--export_type([plan/0, descriptor/0, result/0, output/0, host_actor/0, link/0, class/0]).
+-export([plan/1, descriptor/1, transport/1, emit/1, write/2, encode/2, encode/3, decode/3]).
+-export_type([plan/0, descriptor/0, result/0, output/0, host_actor/0, link/0, class/0,
+    codec_class/0, encoder_link/0, decoder_link/0]).
 
 %% Host bindings and target selection are complete before the native bridge can render.
 -record(plan, {bridge :: hls_protocol_bridge:plan(), descriptor :: descriptor()}).
@@ -22,18 +23,23 @@
     direction := to_rtl | to_beam, classes := [class()],
     source_module := module(), destination_module := module()}.
 
-%% Standalone host codec calls need no physical channel; retained crossing classes supply it.
+-doc "One host codec class, optionally retaining its physical channel binding. Constants and selectors are checked by its codec plan.".
 -type codec_class() :: #{slot := byte(), codec := hls_protocol_codec:plan(),
     port := atom(), tag := atom(), message_bits := non_neg_integer(),
     channel => hls_protocol_capture:binding()}.
-%% Standalone encoding can retain routing addresses without a physical fabric/capture layout.
+-doc "The source module and crossing classes required to encode a host record; optional routing fields retain its placement.".
 -type encoder_link() :: #{source_module := module(), destination_module => module(),
     classes := [codec_class()], index => non_neg_integer(), source_index => non_neg_integer(),
     destination_index => non_neg_integer(), direction => to_rtl | to_beam}.
-%% Standalone decoding needs the destination codec and may retain the matching source/routing data.
+-doc "The destination module and crossing classes required to decode a host frame; optional routing fields retain its placement.".
 -type decoder_link() :: #{destination_module := module(), source_module => module(),
     classes := [codec_class()], index => non_neg_integer(), source_index => non_neg_integer(),
     destination_index => non_neg_integer(), direction => to_rtl | to_beam}.
+
+%% Source actor indices stay global when host and native subsets are separated.
+-type indexed_actor() :: {non_neg_integer(), hls_protocol_topology:actor()}.
+%% Startup order is source-declared and independent of host placement.
+-type startup() :: #{target := hls_protocol_topology:id(), delivery := cast, messages := [tuple()]}.
 
 %% Logical targets map to global native indices or unchanged external stream identities.
 -type targets() :: #{hls_protocol_topology:destination() =>
@@ -77,25 +83,18 @@ plan(Config) when is_map(Config) ->
         maps:with([host, service, control, activation, inspection], Config)),
     Bridge = #{native_indices := Native, links := Links, host := Host, service := Service} =
         hls_protocol_bridge:descriptor(BridgePlan),
-    HostIds=[Id||{I,#{id:=Id}}<-lists:enumerate(0,Actors),not lists:member(I,Native)],
-    Application=hls_protocol_application_binding:bind(Bundle,Control,maps:from_list([{Id,board}||#{id:=Id}<-Actors]),#{board=>Host}),
-    HostActors=maps:from_list([begin
-        Outputs=maps:from_list([begin
-            Destination = host_destination(Id, Module, Port, Recipients, HostIds),
-            {Port, Destination}
-        end||#{source:={From,Port},recipients:=Recipients}<-Routes,From=:=Id]),
-        #{program:=Program}=maps:get(Module,Modules),
-        #{capacity:=Capacity}=xls_actor_program:spec(Program),
-        Messages=lists:append([Ms||#{target:=Target,messages:=Ms}<-Startup,Target=:=Id]),
-        {I,#{id=>Id,module=>Module,capacity=>Capacity,outputs=>Outputs,startup=>Messages}}
-    end||{I,#{id:=Id,module:=Module}}<-lists:enumerate(0,Actors),not lists:member(I,Native)]),
-    ExternalKeys=lists:usort([D||#{outputs:=O}<-maps:values(HostActors),D={external,_}<-maps:values(O)]),
-    Targets=maps:merge(maps:from_list([{{actor,Id},{actor,I}}||{I,#{id:=Id}}<-lists:enumerate(0,Actors),lists:member(I,Native)]),
-        maps:from_list([{K,K}||K<-ExternalKeys])),
+    {NativeActors, HostPlacements} = lists:partition(fun({Index, _}) -> lists:member(Index, Native) end,
+        lists:enumerate(0, Actors)),
+    HostIds = [Id || {_, #{id := Id}} <- HostPlacements],
+    Owners = maps:from_list([{Id, board} || #{id := Id} <- Actors]),
+    Application = hls_protocol_application_binding:bind(Bundle, Control, Owners, #{board => Host}),
+    HostActors = maps:from_list([{Index, host_actor(Actor, Routes, Startup, Modules, HostIds)}
+        || {Index, Actor} <- HostPlacements]),
+    Targets = targets(NativeActors, HostActors),
     MixedLinks = [link_descriptor(Link, Actors) || Link <- Links],
-    Mixed=#{host_actors=>lists:sort(maps:keys(HostActors)),links=>MixedLinks},
-    Descriptor=#{actors=>HostActors,targets=>Targets,mixed=>Mixed,application=>Application,device=>board,
-        binding=>#{host=>Host,control=>Service},bridge=>Bridge,eligible=>false},
+    Mixed = #{host_actors => lists:sort(maps:keys(HostActors)), links => MixedLinks},
+    Descriptor = #{actors => HostActors, targets => Targets, mixed => Mixed, application => Application,
+        device => board, binding => #{host => Host, control => Service}, bridge => Bridge, eligible => false},
     #plan{bridge = BridgePlan, descriptor = Descriptor};
 plan(Filename) -> plan(hls_source_config:read(Filename)).
 
@@ -116,6 +115,32 @@ emit(#plan{bridge = BridgePlan, descriptor = Descriptor = #{mixed := Mixed}}) ->
     #{files => hls_generated_files:merge([BridgeFiles,
         #{"mixed.etf" => term_to_binary(Deployment, [deterministic])}]), result => Deployment};
 emit(Config) -> emit(plan(Config)).
+
+%% Bind one host actor to its exact mailbox, ordered startup messages and checked output routes.
+-spec host_actor(hls_protocol_topology:actor(), [hls_protocol_topology:route()], [startup()],
+    #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
+    [hls_protocol_topology:id()]) -> host_actor().
+host_actor(#{id := Id, module := Module}, Routes, Startup, Modules, HostIds) ->
+    #{program := Program} = maps:get(Module, Modules),
+    #{capacity := Capacity} = xls_actor_program:spec(Program),
+    Outputs = host_outputs(Id, Module, Routes, HostIds),
+    Messages = lists:append([Batch || #{target := Target, messages := Batch} <- Startup, Target =:= Id]),
+    #{id => Id, module => Module, capacity => Capacity, outputs => Outputs, startup => Messages}.
+
+%% Retain source port names while checking the supported single-recipient host routing model.
+-spec host_outputs(hls_protocol_topology:id(), module(), [hls_protocol_topology:route()],
+    [hls_protocol_topology:id()]) -> #{atom() => hls_protocol_topology:destination()}.
+host_outputs(Id, Module, Routes, HostIds) ->
+    maps:from_list([{Port, host_destination(Id, Module, Port, Recipients, HostIds)}
+        || #{source := {From, Port}, recipients := Recipients} <- Routes, From =:= Id]).
+
+%% Host routing addresses native actors by global index and preserves external stream identities.
+-spec targets([indexed_actor()], #{non_neg_integer() => host_actor()}) -> targets().
+targets(Native, HostActors) ->
+    NativeTargets = maps:from_list([{{actor, Id}, {actor, Index}} || {Index, #{id := Id}} <- Native]),
+    Destinations = lists:append([maps:values(Outputs) || #{outputs := Outputs} <- maps:values(HostActors)]),
+    ExternalTargets = maps:from_list([{Destination, Destination} || Destination = {external, _} <- Destinations]),
+    maps:merge(NativeTargets, ExternalTargets).
 
 %% A BEAM output has one crossing or external recipient; host-to-host routing is unsupported.
 -spec host_destination(hls_protocol_topology:id(), module(), atom(),
@@ -139,29 +164,65 @@ host_destination(Id, Module, Port, Recipients, _) ->
 
 %% The bridge's destination codecs, not the sender's operation numbering, define crossing frames.
 -spec link_descriptor(hls_protocol_partition:crossing(), [hls_protocol_topology:actor()]) -> link().
-link_descriptor(Link=#{source_index:=S,destination_index:=D,direction:=Direction,classes:=Classes},Actors) ->
-    #{module:=SM}=lists:nth(S+1,Actors),#{module:=DM}=lists:nth(D+1,Actors),
-    Link#{direction:=case Direction of incoming->to_rtl;outgoing->to_beam end,
-        source_module=>SM,destination_module=>DM,
-        classes:=[C#{port=>Port,tag=>Tag,message_bits=>DM:pack_width(Tag)}
-            ||C=#{channel:=#{port:=Port,tag:=Tag}}<-Classes]}.
+link_descriptor(Link = #{source_index := Source, destination_index := Destination,
+        direction := Direction, classes := Classes}, Actors) ->
+    #{module := SourceModule} = lists:nth(Source + 1, Actors),
+    #{module := DestinationModule} = lists:nth(Destination + 1, Actors),
+    Link#{direction := case Direction of incoming -> to_rtl; outgoing -> to_beam end,
+        source_module => SourceModule, destination_module => DestinationModule,
+        classes := [Class#{port => Port, tag => Tag, message_bits => DestinationModule:pack_width(Tag)}
+            || Class = #{channel := #{port := Port, tag := Tag}} <- Classes]}.
+
+-doc "Selects exactly one canonical source-bound crossing for an ordinary record without a port hint. Packs the record once, then checks same-tag classes including omitted constants. Rejects malformed records, missing or ambiguous classes; source packer errors propagate unchanged. Sender authentication and queue admission belong to the owner.".
+-spec encode(link() | encoder_link(), tuple()) -> {byte(), non_neg_integer()}.
+encode(#{source_module := Module, classes := Classes}, Message) when is_tuple(Message), tuple_size(Message) > 0 ->
+    Tag = element(1, Message),
+    Matching = [Class || Class = #{tag := Name} <- Classes, Name =:= Tag],
+    case Matching of
+        [] -> error({no_protocol_class, Tag});
+        _ ->
+            Packed = Module:pack(Message),
+            Candidates = lists:usort(lists:append([canonical_candidate(Class, Packed) || Class <- Matching])),
+            case Candidates of
+                [Candidate] -> Candidate;
+                [] -> error({no_protocol_class, Tag});
+                _ -> error({ambiguous_protocol_classes, Tag, [Slot || {Slot, _} <- Candidates]})
+            end
+    end;
+encode(_, Message) -> error({invalid_protocol_message, Message}).
+
+%% Only the codec's deliberate canonical-frame rejection excludes a class; internal errors propagate.
+-spec canonical_candidate(class() | codec_class(), bitstring()) -> [{byte(), non_neg_integer()}].
+canonical_candidate(Class = #{slot := Slot, codec := Codec}, Packed) ->
+    Frame = ordinary_frame(Class, Packed),
+    case hls_protocol_codec:encode(Codec, Frame) of
+        {ok, _} -> [{Slot, Frame}];
+        {error, invalid_frame} -> []
+    end.
 
 -doc "Encodes an ordinary source output for exactly one crossing class. Uses the destination operation selector and checks omitted constants, reserved bits and padding. Sender PID authentication, queue capacity and sequence reservation belong to the owner.".
--spec encode(link() | encoder_link(), atom(), tuple()) ->
-    {byte(), non_neg_integer()}.
-encode(#{source_module:=Module,classes:=Classes},Port,Message) ->
-    Tag=element(1,Message),
-    [#{slot:=Slot,codec:=Codec=#{value:=Value},message_bits:=Width}]=
-        [C||C=#{port:=P,tag:=T}<-Classes,P=:=Port,T=:=Tag],
-    Packed=Module:pack(Message),Width=bit_size(Packed),
-    Payload=binary:decode_unsigned(hls_codec:pad_to(Packed,96),little),
-    Frame=(Value band 16#ffffffff) bor (Payload bsl 32),
-    {ok,_}=hls_protocol_codec:encode(Codec,Frame),{Slot,Frame}.
+-spec encode(link() | encoder_link(), atom(), tuple()) -> {byte(), non_neg_integer()}.
+encode(#{source_module := Module, classes := Classes}, Port, Message) ->
+    Tag = element(1, Message),
+    [Class = #{slot := Slot, codec := Codec}] =
+        [C || C = #{port := P, tag := T} <- Classes, P =:= Port, T =:= Tag],
+    Frame = ordinary_frame(Class, Module:pack(Message)),
+    {ok, _} = hls_protocol_codec:encode(Codec, Frame),
+    {Slot, Frame}.
+
+%% The destination fixes the ordinary header while the source contributes the exact record bitstream.
+-spec ordinary_frame(class() | codec_class(), bitstring()) -> non_neg_integer().
+ordinary_frame(#{codec := #{value := Value}, message_bits := Width}, Packed) ->
+    Width = bit_size(Packed),
+    Payload = binary:decode_unsigned(hls_codec:pad_to(Packed, 96), little),
+    (Value band 16#ffffffff) bor (Payload bsl 32).
 
 -doc "Checks a canonical crossing frame and decodes its bound destination record, including a packed round trip. Caller authenticates the link/session and must acknowledge only after actual destination admission; failure is never permission to replay.".
 -spec decode(link() | decoder_link(), byte(), non_neg_integer()) -> tuple().
-decode(#{destination_module:=Module,classes:=Classes},Slot,Frame) ->
-    [#{tag:=Tag,codec:=Codec,message_bits:=Width}]=[C||C=#{slot:=I}<-Classes,I=:=Slot],
-    {ok,_}=hls_protocol_codec:encode(Codec,Frame),
-    <<Packed:Width/bitstring,_/bitstring>> = <<(Frame bsr 32):96/little>>,
-    {Message,<<>>}=Module:unpack(Tag,Packed),Packed=Module:pack(Message),Message.
+decode(#{destination_module := Module, classes := Classes}, Slot, Frame) ->
+    [#{tag := Tag, codec := Codec, message_bits := Width}] = [C || C = #{slot := I} <- Classes, I =:= Slot],
+    {ok, _} = hls_protocol_codec:encode(Codec, Frame),
+    <<Packed:Width/bitstring, _/bitstring>> = <<(Frame bsr 32):96/little>>,
+    {Message, <<>>} = Module:unpack(Tag, Packed),
+    Packed = Module:pack(Message),
+    Message.

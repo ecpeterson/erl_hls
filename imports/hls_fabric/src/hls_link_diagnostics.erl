@@ -49,7 +49,7 @@ packet_delta(Before, Final) ->
                            frames => counter32_delta(Before, Final, app_tx_frames)}}.
 
 -doc "Combines retained adapter and MAC event masks by diagnostic opcode.".
--spec packet_trace_flags([map()]) -> {0..255, 0..63}.
+-spec packet_trace_flags([map()]) -> {0 .. ((1 bsl 8) - 1), 0 .. ((1 bsl 6) - 1)}.
 packet_trace_flags(Events) ->
     lists:foldl(fun
         (#{kind := application_tx, op := 16#d1, tx_id := Flags}, {Adapter, Mac}) ->
@@ -67,7 +67,7 @@ packet_trace_event(#{cycle := Cycle, op := 16#d2, tx_id := Flags}) ->
     #{cycle => Cycle, mac => packet_mac_flags(Flags band 63)}.
 
 -doc "Names packet-adapter transitions retained under opcode 0xd1.".
--spec packet_adapter_flags(0..255) -> map().
+-spec packet_adapter_flags(0 .. ((1 bsl 8) - 1)) -> map().
 packet_adapter_flags(Flags) ->
     #{raw => Flags,
       tx_frame_accepted => Flags band 1 =/= 0,
@@ -80,7 +80,7 @@ packet_adapter_flags(Flags) ->
       rx_link => Flags band 128 =/= 0}.
 
 -doc "Names monotone MAC-counter transitions retained under opcode 0xd2.".
--spec packet_mac_flags(0..63) -> map().
+-spec packet_mac_flags(0 .. ((1 bsl 6) - 1)) -> map().
 packet_mac_flags(Flags) ->
     #{raw => Flags,
       tx_accepted => Flags band 1 =/= 0,
@@ -139,7 +139,7 @@ stage_delta(Before, Final) ->
                             event_frames => counter32_delta(Before, Final, app_tx_frames)}}.
 
 -doc "Combines raw scheduler flags retained in application-TX trace headers.".
--spec stage_trace_flags([map()]) -> 0..31.
+-spec stage_trace_flags([map()]) -> 0 .. ((1 bsl 5) - 1).
 stage_trace_flags(Events) ->
     lists:foldl(fun
         (#{kind := application_tx, tx_id := Flags}, Acc) -> Acc bor (Flags band 31);
@@ -147,7 +147,7 @@ stage_trace_flags(Events) ->
     end, 0, Events).
 
 -doc "Names each physical wrapper flag while retaining its raw value.".
--spec stage_flags(0..31) -> map().
+-spec stage_flags(0 .. ((1 bsl 5) - 1)) -> map().
 stage_flags(Flags) ->
     #{raw => Flags,
       state_read => Flags band 1 =/= 0,

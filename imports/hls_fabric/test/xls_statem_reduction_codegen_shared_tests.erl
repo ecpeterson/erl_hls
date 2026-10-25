@@ -135,11 +135,11 @@ site(ID, Phase, Population, Tag) ->
     }.
 
 %% Parses one test expression without executing it.
--spec expression([1..255,...]) -> map().
+-spec expression([1 .. ((1 bsl 8) - 1),...]) -> map().
 expression(Result) ->
     #{body => [], result => Result}.
 
 %% Requires the generated artifact to contain the selected structural marker.
--spec assert_contains(binary(),[1..255,...]) -> 'ok'.
+-spec assert_contains(binary(),[1 .. ((1 bsl 8) - 1),...]) -> 'ok'.
 assert_contains(Text, Fragment) ->
     ?assertNotEqual(nomatch, binary:match(Text, iolist_to_binary(Fragment))).

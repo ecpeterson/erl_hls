@@ -85,10 +85,10 @@ plan() ->
         ||{R,D}<-[{0,outgoing},{1,incoming}]])}.
 
 %% Every test starts with no granted credits and distinct fresh sessions.
--spec new() -> map().
+-spec new() -> hls_protocol_relay_queue:state().
 new() -> hls_protocol_relay_queue:new(hls_protocol_routing:plan(plan()), #{0 => 11, 1 => 12}).
 %% One packet identity is retained across destination forwarding and source acknowledgment.
--spec packet(1|2,pos_integer(),non_neg_integer(),non_neg_integer()) -> map().
+-spec packet(1|2,pos_integer(),non_neg_integer(),non_neg_integer()) -> hls_protocol_relay_queue:packet().
 packet(Kind,Session,Seq,Link) -> #{kind=>Kind,session=>Session,sequence=>Seq,link=>Link,slot=>0,frame=>0}.
 
 %% Three arbitrary device keys and irregular endpoints expose accidental two-board assumptions.
@@ -315,3 +315,19 @@ operations(Peer) ->
 -spec await_held(pid()) -> ok.
 await_held(Peer) ->
     await(fun() -> maps:get(held, hls_protocol_relay_peer:stats(Peer)) =/= none end).
+
+
+%% Only the exact reserved write may complete; completion cannot be replayed across phases.
+-spec completion_token_test() -> ok.
+completion_token_test() ->
+    Pending = hls_protocol_relay_queue:event(0, packet(1, 11, 0, 0), new()),
+    Ready = hls_protocol_relay_queue:event(1, packet(2, 12, 0, 0), Pending),
+    {1, _, Data, Writing} = hls_protocol_relay_queue:next(Ready),
+    ?assertException(error, _, hls_protocol_relay_queue:complete({ack, 0, 0}, Writing)),
+    ?assertEqual(none, hls_protocol_relay_queue:next(Writing)),
+    AckReady = hls_protocol_relay_queue:complete(Data, Writing),
+    ?assertException(error, _, hls_protocol_relay_queue:complete(Data, AckReady)),
+    {0, _, Ack, Acking} = hls_protocol_relay_queue:next(AckReady),
+    ?assertException(error, _, hls_protocol_relay_queue:complete({ack, 0, 1}, Acking)),
+    Done = hls_protocol_relay_queue:complete(Ack, Acking),
+    ?assertMatch(#{records := 0, forwarded := 1, acknowledged := 1}, hls_protocol_relay_queue:info(Done)).

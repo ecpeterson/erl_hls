@@ -16,7 +16,7 @@
 -doc "A source-bound internal capture channel, with joined constant fields and exact ordinary/compact widths.".
 -type channel() :: #{source := hls_protocol_topology:id(), port := atom(), tag := atom(),
     destination := {actor, hls_protocol_topology:id()}, fields := [field()],
-    source_operation := 3..255, message_bits := non_neg_integer(), payload_bits := non_neg_integer(),
+    source_operation := 3 .. ((1 bsl 8) - 1), message_bits := non_neg_integer(), payload_bits := non_neg_integer(),
     parameters := #{width := pos_integer()}, writer_count := 1, reader_count := 1,
     snapshot_slots := 1, capacity_bound := unestablished, source_alternatives_hash := binary()}.
 

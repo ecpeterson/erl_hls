@@ -1,6 +1,6 @@
 -module(hls_protocol_mixed_tests).
 -include_lib("eunit/include/eunit.hrl").
--export([topology/0]).
+-export([topology/0, host_binding/0]).
 
 %% The production mixed builder must retain host recipients removed from its native projection.
 -spec whole_control_test() -> ok.
@@ -24,6 +24,34 @@ topology() ->
         {From = {right, _}, buffered, [First | _]} -> {From, [First]};
         _ -> R
     end || R <- Routes]}.
+
+%% Host placement preserves startup order and duplicates while separating native and external targets.
+-spec host_binding_test() -> ok.
+host_binding_test() ->
+    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []},
+        {"test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
+        topology => {?MODULE, host_binding, []}, actor_limit => 3,
+        native_actors => [left, sink], host => 2, service => 29, control => rectangle},
+    #{actors := #{1 := HostActor}, targets := Targets, application := Application} =
+        hls_protocol_mixed:descriptor(hls_protocol_mixed:plan(Config)),
+    ?assertEqual(#{id => right, module => hls_protocol_network_fixture, capacity => 8,
+        outputs => #{early => {actor, sink}, open => {actor, sink}, later => {external, right}},
+        startup => [{total, 3}, {total, 1}, {total, 3}]}, HostActor),
+    ?assertEqual(#{{actor, left} => {actor, 0}, {actor, sink} => {actor, 2},
+        {external, right} => {external, right}}, Targets),
+    #{partition := #{actors := BoundActors}} = Application,
+    ?assertEqual([{left, 0, board}, {right, 1, board}, {sink, 2, board}],
+        [{Id, Index, Device} || #{id := Id, index := Index, device := Device} <- BoundActors]).
+
+-doc "Adds ordered host startup records and one external-only output to the mixed fixture's otherwise native feedback routes.".
+-spec host_binding() -> map().
+host_binding() ->
+    Topology = #{routes := Routes} = topology(),
+    Topology#{startup := [{right, [{total, 3}, {total, 1}, {total, 3}]}],
+        routes := [case Route of
+            {{right, later}, _} -> {{right, later}, [{external, right}]};
+            _ -> Route
+        end || Route <- Routes]}.
 
 %% Crossing operation numbering belongs to the destination; use a deliberately different selector.
 -spec destination_selector_test() -> ok.

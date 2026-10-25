@@ -1,7 +1,7 @@
 -module(hls_protocol_topology).
 -moduledoc "Materializes a bounded normalized topology while preserving its complete spatial ingress contract. Expansion is source bookkeeping, not protocol eligibility or hardware admission.".
 -export([elaborate/2]).
--export_type([id/0, destination/0, actor/0, route/0, ingress/0, plan/0]).
+-export_type([id/0, destination/0, actor/0, route/0, ingress/0, external/0, plan/0]).
 
 -doc "A normalized static logical identity: atom, nonnegative integer or a nonempty tuple recursively containing those values.".
 -type id() :: atom() | non_neg_integer() | tuple().
@@ -21,10 +21,13 @@
     targets := [#{id := id(), schemas := [atom()],
         recipients := [#{actor := id(), at := [non_neg_integer()]}]}]}.
 
+-doc "One declared output endpoint with its logical identity and allowed message schemas.".
+-type external() :: #{id := id(), direction := out, schemas := [atom()]}.
+
 -doc "A fully expanded source topology. Family/relation lists are empty, while startup order, external schemas, routes and ingress coordinates remain intact.".
 -type plan() :: #{version := 1, actors := [actor()], families := [], routes := [route()],
     route_relations := [], lane_relations := [], ingresses := [ingress()],
-    externals := [#{id := id(), direction := out, schemas := [atom()]}],
+    externals := [external()],
     startup := [#{target := id(), delivery := cast, messages := [tuple()]}],
     lanes := [#{source := id(), destination := destination(), source_ports := [atom()]}]}.
 

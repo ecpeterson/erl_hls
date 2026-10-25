@@ -1,56 +1,89 @@
 -module(hls_protocol_mixed_admission).
--moduledoc "Single-owner admission into actual hls_statem actors without changing their runtime. The owner must be the exclusive input writer, including setup, control and host-host routes. Other Erlang processes are trusted not to bypass it; this module does not isolate PIDs.".
+-moduledoc "Single-owner admission into actual hls_statem actors without changing their runtime. The owner is the exclusive input writer, including setup, control and host-host routes. Other processes are trusted not to bypass it; this module does not isolate PIDs.".
 -export([new/2, deliver/3, down/3, retire/1, info/1]).
+-export_type([state/0, bindings/0, report/0]).
 
--doc "Binds exact local actor PIDs and source mailbox capacities, installing lifetime monitors. Caller becomes the sole owner and must serialize all input through deliver/3, process monitor notifications and retain only the newest state. Actors may initially be disconnected for ordered setup. Timeout bounds each public runtime barrier; finite callback work and same-sender ordering are required. No hardware session is activated here.".
--spec new(#{non_neg_integer()=>#{pid:=pid(),capacity:=1..255}},pos_integer()) -> map().
-new(Bindings,Timeout) when map_size(Bindings)>0,Timeout>0 ->
-    Pids=[P||#{pid:=P}<-maps:values(Bindings)],
-    true=length(Pids)=:=map_size(Bindings),
-    true=length(Pids)=:=length(lists:usort(Pids)),
-    true=lists:all(fun(P)->is_pid(P) andalso node(P)=:=node() end,Pids),
-    true=lists:all(fun(#{capacity:=C})->is_integer(C) andalso C>0 andalso C=<255 end,maps:values(Bindings)),
-    Monitors=maps:from_list([{monitor(process,P),I}||{I,#{pid:=P}}<-maps:to_list(Bindings)]),
-    State=#{owner=>self(),live=>true,actors=>Bindings,monitors=>Monitors,timeout=>Timeout,admitted=>0},
-    try maps:foreach(fun(_,A)->snapshot(A,Timeout) end,Bindings),State
-    catch Class:Reason:Stack->retire(State),erlang:raise(Class,Reason,Stack) end.
+%% Logical actor indices select exact local PID/capacity bindings.
+-type actor() :: non_neg_integer().
+%% Runtime capacity is checked at both sides of each admitted cast.
+-type binding() :: #{pid := pid(), capacity := 1 .. ((1 bsl 8) - 1)}.
+-doc "Exact local actors and source mailbox capacities; new/2 rejects duplicate PIDs and installs owner-held lifetime monitors.".
+-type bindings() :: #{actor() => binding()}.
 
--doc "Admits one record or returns busy without sending when the actor mailbox is full. Checks capacity, sends the cast, then awaits a public runtime state barrier from the same owner. Only ok authorizes a delivery ACK; it means admission completed, not consumption. Timeout/death after sending is ambiguous and returns a permanently retired state; never replay. Exclusive writer and finite runtime work are explicit composition assumptions, not conclusions from observing occupancy.".
--spec deliver(non_neg_integer(),tuple(),map()) -> {ok,map()} | {busy,map()} | {error,term(),map()}.
-deliver(Id,Message,State=#{owner:=Owner,live:=true,actors:=Actors,timeout:=Timeout,admitted:=Count}) when Owner=:=self() ->
+%% Monitor ownership and admission accounting stay local to the creating process.
+-record(state, {
+    owner :: pid(), live = true :: boolean(), actors = #{} :: bindings(),
+    monitors = #{} :: #{reference() => actor()}, timeout :: pos_integer(), admitted = 0 :: non_neg_integer()
+}).
+-doc "Private single-writer admission state. Only the creating process may deliver, process monitor notifications or retire; retain the newest returned value.".
+-opaque state() :: #state{}.
+-doc "Payload-free lifecycle, bound actor count and confirmed admission count.".
+-type report() :: #{live := boolean(), actors := non_neg_integer(), admitted := non_neg_integer()}.
+
+-doc "Binds exact local PIDs and source capacities, installing lifetime monitors. Caller serializes all actor input through deliver/3 and processes monitor notifications. Actors may initially be disconnected for setup. Timeout bounds each public runtime barrier; finite callback work and same-sender order are required. No hardware session is activated.".
+-spec new(bindings(), pos_integer()) -> state().
+new(Bindings, Timeout) when map_size(Bindings) > 0, Timeout > 0 ->
+    Pids = [Pid || #{pid := Pid} <- maps:values(Bindings)],
+    true = length(Pids) =:= map_size(Bindings),
+    true = length(Pids) =:= length(lists:usort(Pids)),
+    true = lists:all(fun(Pid) -> is_pid(Pid) andalso node(Pid) =:= node() end, Pids),
+    true = lists:all(fun(#{capacity := Capacity}) ->
+        is_integer(Capacity) andalso Capacity > 0 andalso Capacity =< 255
+    end, maps:values(Bindings)),
+    Monitors = maps:from_list([{monitor(process, Pid), I} || {I, #{pid := Pid}} <- maps:to_list(Bindings)]),
+    State = #state{owner = self(), actors = Bindings, monitors = Monitors, timeout = Timeout},
     try
-        Actor=#{pid:=Pid}=maps:get(Id,Actors),
-        case snapshot(Actor,Timeout) of
-            #{available:=0}->{busy,State};
-            #{available:=Free} when Free>0->
-                ok=hls_statem:cast(Pid,Message),
-                _=snapshot(Actor,Timeout),
-                {ok,State#{admitted:=Count+1}}
-        end
-    catch Class:Reason->{error,{admission_failed,Class,Reason},retire(State)} end.
-
-%% Both barriers use the public runtime API; no private record layout or state mutation is used.
--spec snapshot(#{pid:=pid(),capacity:=pos_integer()},pos_integer()) -> map().
-snapshot(#{pid:=Pid,capacity:=Capacity},Timeout) ->
-    #{mailbox:=M=#{capacity:=Capacity,occupied:=Occupied,available:=Available,
-        committed:=Occupied,reserved:=0}}=hls_statem:info(Pid,Timeout),
-    true=Occupied>=0 andalso Available>=0 andalso Occupied+Available=:=Capacity,M.
-
--doc "Retires all bindings on a known actor monitor notification; ignores unrelated monitors. The transport owner must also retire on broker/connection death and stop acknowledging hardware packets.".
--spec down(reference(),term(),map()) -> {unrelated,map()} | {error,term(),map()}.
-down(Ref,Reason,State=#{owner:=Owner,live:=true,monitors:=Monitors}) when Owner=:=self() ->
-    case maps:find(Ref,Monitors) of
-        error->{unrelated,State};
-        {ok,Id}->{error,{actor_down,Id,Reason},retire(State)}
+        maps:foreach(fun(_, Actor) -> available(Actor, Timeout) end, Bindings),
+        State
+    catch Class:Reason:Stack ->
+        retire(State),
+        erlang:raise(Class, Reason, Stack)
     end.
 
--doc "Permanently releases monitors and removes actor bindings without stopping the actors. Does not undo any admitted or ambiguous cast. Caller must cancel transport/session ownership separately; a retired state cannot admit another record.".
--spec retire(map()) -> map().
-retire(State=#{owner:=Owner,monitors:=Monitors}) when Owner=:=self() ->
-    maps:foreach(fun(Ref,_)->demonitor(Ref,[flush]) end,Monitors),
-    State#{live:=false,actors:=#{},monitors:=#{}}.
+-doc "Admits a record or returns busy without sending when the actor mailbox is full. A same-owner runtime barrier follows the cast; only ok permits a delivery ACK and means admission, not consumption. Timeout/death after sending is ambiguous and retires the state permanently; never replay. Exclusive writer and finite runtime work are composition assumptions.".
+-spec deliver(actor(), tuple(), state()) -> {ok, state()} | {busy, state()} | {error, term(), state()}.
+deliver(Id, Message, State = #state{owner = Owner, live = true, actors = Actors, timeout = Timeout})
+        when Owner =:= self() ->
+    try
+        Actor = maps:get(Id, Actors),
+        case available(Actor, Timeout) of
+            0 -> {busy, State};
+            Free when Free > 0 -> admit(Actor, Message, State)
+        end
+    catch Class:Reason ->
+        {error, {admission_failed, Class, Reason}, retire(State)}
+    end.
 
--doc "Reports only lifecycle, actor count and completed admissions; excludes actor payloads and PID bindings.".
--spec info(map()) -> map().
-info(#{live:=Live,actors:=Actors,admitted:=Count})->
-    #{live=>Live,actors=>map_size(Actors),admitted=>Count}.
+%% Read capacity through the public runtime barrier; no private record layout is inspected.
+-spec available(binding(), pos_integer()) -> non_neg_integer().
+available(#{pid := Pid, capacity := Capacity}, Timeout) ->
+    #{mailbox := #{capacity := Capacity, occupied := Occupied, available := Available,
+        committed := Occupied, reserved := 0}} = hls_statem:info(Pid, Timeout),
+    true = Occupied >= 0 andalso Available >= 0 andalso Occupied + Available =:= Capacity,
+    Available.
+
+%% The post-cast barrier makes admission definite before accounting or a delivery ACK can advance.
+-spec admit(binding(), tuple(), state()) -> {ok, state()}.
+admit(Actor = #{pid := Pid}, Message, State = #state{timeout = Timeout, admitted = Count}) ->
+    ok = hls_statem:cast(Pid, Message),
+    _ = available(Actor, Timeout),
+    {ok, State#state{admitted = Count + 1}}.
+
+-doc "Retires every binding on a known actor monitor notification and ignores unrelated monitors. The transport owner also retires on broker/connection death and stops acknowledging hardware packets.".
+-spec down(reference(), term(), state()) -> {unrelated, state()} | {error, term(), state()}.
+down(Ref, Reason, State = #state{owner = Owner, live = true, monitors = Monitors}) when Owner =:= self() ->
+    case maps:find(Ref, Monitors) of
+        error -> {unrelated, State};
+        {ok, Id} -> {error, {actor_down, Id, Reason}, retire(State)}
+    end.
+
+-doc "Permanently releases monitors and actor bindings without stopping actors or undoing admitted/ambiguous casts. Caller cancels transport ownership separately; a retired state cannot admit another record.".
+-spec retire(state()) -> state().
+retire(State = #state{owner = Owner, monitors = Monitors}) when Owner =:= self() ->
+    maps:foreach(fun(Ref, _) -> demonitor(Ref, [flush]) end, Monitors),
+    State#state{live = false, actors = #{}, monitors = #{}}.
+
+-doc "Reports lifecycle, actor count and completed admissions, excluding payloads, PID bindings and monitor references.".
+-spec info(state()) -> report().
+info(#state{live = Live, actors = Actors, admitted = Count}) ->
+    #{live => Live, actors => map_size(Actors), admitted => Count}.

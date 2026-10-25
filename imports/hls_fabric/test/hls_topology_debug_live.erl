@@ -102,7 +102,7 @@ run(Stage) ->
     file:write_file(filename:join(Stage, "done"), <<>>).
 
 %% Waits for the named RTL acknowledgment file with a bounded retry count.
--spec await_file(atom() | binary() | [atom() | [any()] | char()],[1..255,...],1..1114111) -> 'ok'.
+-spec await_file(atom() | binary() | [atom() | [any()] | char()],[1 .. ((1 bsl 8) - 1),...],1..1114111) -> 'ok'.
 await_file(_Stage, Name, 0) -> error({release_timeout, Name});
 await_file(Stage, Name, Attempts) ->
     case file:read_file(filename:join(Stage, Name)) of

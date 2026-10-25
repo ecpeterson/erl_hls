@@ -482,7 +482,7 @@ frame(#{tag := Tag, payload := Payload}) ->
     ["axis::pack(u8:", n(Tag), ", ", Payload, ")"].
 
 %% Declares proc channels and retains them in configuration order.
--spec proc_header([string(),...],[[any(),...],...],[[[any()] | 1..255,...],...]) -> iodata().
+-spec proc_header([string(),...],[[any(),...],...],[[[any()] | 1 .. ((1 bsl 8) - 1),...],...]) -> iodata().
 proc_header(Name, Arguments, Names) ->
     ["proc ", Name, " {\n", [["  ", Argument, ";\n"] || Argument <- Arguments],
         "  config(\n    ", lists:join(",\n    ", Arguments), "\n  ) {\n    ",

@@ -89,7 +89,7 @@ relation(Source, Port, Destination, Offset) ->
     ]}.
 
 %% Assigns deterministic source coordinates and noise seeds.
--spec source_startup('syndrome_x' | 'syndrome_z',0 | 1,[1..255,...]) -> [{{term(),term(),term()},[any(),...]}].
+-spec source_startup('syndrome_x' | 'syndrome_z',0 | 1,[1 .. ((1 bsl 8) - 1),...]) -> [{{term(),term(),term()},[any(),...]}].
 source_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     [
         {{Family, X, Y}, [#phenom_config{
@@ -103,7 +103,7 @@ source_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     ].
 
 %% Assigns coordinates and decoder parameters to phi actors.
--spec phi_startup('phi_x' | 'phi_z',2 | 3,[1..255,...]) -> [{{term(),term(),term()},[any(),...]}].
+-spec phi_startup('phi_x' | 'phi_z',2 | 3,[1 .. ((1 bsl 8) - 1),...]) -> [{{term(),term(),term()},[any(),...]}].
 phi_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     [
         {{Family, X, Y}, [#phi_config{
@@ -114,7 +114,7 @@ phi_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     ].
 
 %% Derives reproducible per-coordinate seeds for the selected source family.
--spec seed(0 | 1 | 2 | 3,[1..255,...],integer(),integer()) -> non_neg_integer().
+-spec seed(0 | 1 | 2 | 3,[1 .. ((1 bsl 8) - 1),...],integer(),integer()) -> non_neg_integer().
 seed(FamilyIndex, [Width, Height], X, Y) ->
     Linear = FamilyIndex * Width * Height + X * Height + Y + 1,
     (Linear * ?SEED_STRIDE) band ?U32_MASK.

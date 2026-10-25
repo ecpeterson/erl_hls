@@ -8,6 +8,9 @@ binding_test() ->
     Dir=filename:join("_build","deployment-binding-"++integer_to_list(erlang:system_time(nanosecond))),
     D=#{application:=A,devices:=Devices}=hls_protocol_deployment:write(config(),Dir),
     ?assertEqual([north,south],lists:sort(maps:keys(Devices))),
+    #{partition := #{actors := BoundActors}} = A,
+    ?assertEqual([{left, 0, north}, {right, 1, south}, {sink, 2, north}],
+        [{Id, Index, Device} || #{id := Id, index := Index, device := Device} <- BoundActors]),
     #{directories := Directories} = D,
     [FirstBundle, SecondBundle] = [begin
         {ok, TransportBytes} = file:read_file(filename:join([Dir, Name, "transport.etf"])),

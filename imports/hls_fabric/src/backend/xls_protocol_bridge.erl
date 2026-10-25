@@ -4,7 +4,7 @@
 -export_type([manifest/0]).
 
 -doc "The emitted bridge's packed ports, compact crossing codecs, raw-boundary manifest and required hardware/support hashes. The attachment identity is lowercase hex here; the host bridge descriptor retains its raw bytes.".
--type manifest() :: #{host := 1..65535, service := 1..65535, control := rectangle,
+-type manifest() :: #{host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), control := rectangle,
     control_adapter := hls_protocol_control:hardware(), native_indices := [non_neg_integer()],
     actors := non_neg_integer(), externals := [xls_protocol_boundary:group()], eligible := false,
     libraries := [xls_protocol_network:component()], top := protocol_bridge_top,

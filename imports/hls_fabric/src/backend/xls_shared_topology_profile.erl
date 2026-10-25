@@ -8,7 +8,7 @@
 -export([normalize/1, identifier/2, egress_depth/2]).
 -export_type([profile/0]).
 
--define(U32_MAX, 16#ffffffff).
+-define(U32_MAX, ((1 bsl 32) - 1)).
 
 %% Explicit queue depth or a depth derived from the actor's largest effect batch.
 -type egress_policy() :: burst | 0..?U32_MAX.

@@ -31,7 +31,7 @@ application(Profile, Options) ->
     render("phi_memory_top.template.v", Profile, Options).
 
 %% Assembles declarations, routing procs and the top-level composition.
--spec render([1..255,...],1 | 2 | {'phi_shards',pos_integer()},map()) -> binary().
+-spec render([1 .. ((1 bsl 8) - 1),...],1 | 2 | {'phi_shards',pos_integer()},map()) -> binary().
 render(Shell, Profile, Options) ->
     Plan = phi_shared_noise_topology_dslx:scheduler_plan(Profile),
     Bindings = xls_scheduler_ram_v:bindings(Plan),
@@ -61,7 +61,7 @@ render(Shell, Profile, Options) ->
     binary:replace(template(Shell), <<"@APPLICATION@">>, Application).
 
 %% Loads the owned RTL wrapper template, rejecting a missing installation asset.
--spec template([1..255,...]) -> binary().
+-spec template([1 .. ((1 bsl 8) - 1),...]) -> binary().
 template(Name) ->
     Priv = code:priv_dir(hls_fabric),
     Path = filename:join([Priv, "rtl", Name]),

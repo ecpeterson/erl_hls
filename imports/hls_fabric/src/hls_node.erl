@@ -8,8 +8,8 @@
 -doc "Distinct local application and debug transport brokers.".
 -type brokers() :: #{application := pid(), debug := pid()}.
 -doc "A named standalone/scheduled service, or one exclusive source partition. Source owner and senders are exact local PIDs; targets map logical identities to owner-validated destination terms. The owner must handle source_bind once and source_attach once, then bounded source_send calls. A source connection loss ends this node incarnation; hardware reset and transport retirement remain external obligations.".
--type service() :: #{name := atom(), module := module(), endpoint := 0..65535} |
-    #{name := atom(), topology := map(), debug_endpoint := 0..65535} |
+-type service() :: #{name := atom(), module := module(), endpoint := 0 .. ((1 bsl 16) - 1)} |
+    #{name := atom(), topology := map(), debug_endpoint := 0 .. ((1 bsl 16) - 1)} |
     #{name := atom(), source := #{owner := pid(), senders := [pid()], targets := map()}}.
 -doc "Listener address, connection/queue bounds, return-route range and heartbeat interval in milliseconds.".
 -type options() :: #{ip => inet:ip_address(), port => inet:port_number(),
@@ -222,7 +222,7 @@ validate(Name, #{application := App, debug := Debug} = Brokers, Services)
     ok.
 
 %% Validate one service and enumerate the physical channels it reserves.
--spec service_channels(service()) -> [{application | debug, 0..65535}].
+-spec service_channels(service()) -> [{application | debug, 0 .. ((1 bsl 16) - 1)}].
 service_channels(#{name := _, source := Source = #{owner := Owner, senders := Senders, targets := Targets}} = S)
         when map_size(S) =:= 2, map_size(Source) =:= 3 ->
     true = is_pid(Owner) andalso node(Owner) =:= node(),

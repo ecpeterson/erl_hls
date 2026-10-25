@@ -161,10 +161,10 @@ collect(Workers) ->
     after ?TIMEOUT -> error(debug_workers_timeout) end || {Pid, Ref} <- Workers].
 
 %% Signals a test-only RTL control file without bypassing the debug data path.
--spec command(atom() | binary() | [atom() | [any()] | char()],[1..255,...]) -> 'ok' | {'error',atom()}.
+-spec command(atom() | binary() | [atom() | [any()] | char()],[1 .. ((1 bsl 8) - 1),...]) -> 'ok' | {'error',atom()}.
 command(Stage, Name) -> file:write_file(filename:join(Stage, Name), <<>>).
 %% Waits for the named RTL acknowledgment file with a bounded retry count.
--spec await_file(atom() | binary() | [atom() | [any()] | char()],[1..255,...]) -> 'ok'.
+-spec await_file(atom() | binary() | [atom() | [any()] | char()],[1 .. ((1 bsl 8) - 1),...]) -> 'ok'.
 await_file(Stage, Name) -> await_path(filename:join(Stage, Name), 18000).
 %% Polls an RTL acknowledgment path until completion or timeout.
 -spec await_path(binary() | string(),1..1114111) -> 'ok'.
@@ -178,5 +178,5 @@ await_path(Path, N) ->
 -spec write_json(atom() | binary() | [atom() | [any()] | char()],[46 | 98 | 99 | 100 | 101 | 106 | 107 | 108 | 110 | 111 | 114 | 115 | 118,...],map()) -> 'ok' | {'error',atom()}.
 write_json(Stage, Name, Value) -> file:write_file(filename:join(Stage, Name), json:encode(Value)).
 %% Saves Erlang observations for diagnosing a failed fixture expectation.
--spec write_term(atom() | binary() | [atom() | [any()] | char()],[1..255,...],term()) -> 'ok' | {'error',atom()}.
+-spec write_term(atom() | binary() | [atom() | [any()] | char()],[1 .. ((1 bsl 8) - 1),...],term()) -> 'ok' | {'error',atom()}.
 write_term(Stage, Name, Value) -> file:write_file(filename:join(Stage, Name), io_lib:format("~p.~n", [Value])).

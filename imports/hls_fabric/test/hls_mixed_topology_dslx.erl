@@ -281,7 +281,7 @@ receive_reports(N, Acc) ->
 
 
 %% Declares the fixture's external command and acknowledgment ports.
--spec input_ports('coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {term(),term()}}}) -> [1..255].
+-spec input_ports('coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {term(),term()}}}) -> [1 .. ((1 bsl 8) - 1)].
 input_ports({components, _}) ->
     "  output wire [127:0] _reports_peer_out, output wire _reports_peer_out_vld, input wire _reports_peer_out_rdy,\n";
 input_ports({ingress, _}) ->
@@ -290,7 +290,7 @@ input_ports({ingress, _}) ->
 input_ports(_) -> [].
 
 %% Connects external command streams to the generated wrapper.
--spec input_connections('coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {term(),term()}}}) -> [1..255].
+-spec input_connections('coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {term(),term()}}}) -> [1 .. ((1 bsl 8) - 1)].
 input_connections({components, _}) ->
     ", ._reports_peer_out(_reports_peer_out), ._reports_peer_out_vld(_reports_peer_out_vld), ._reports_peer_out_rdy(_reports_peer_out_rdy)";
 input_connections({ingress, _}) ->

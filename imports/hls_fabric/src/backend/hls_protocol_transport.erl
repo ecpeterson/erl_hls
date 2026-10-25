@@ -24,10 +24,15 @@
     transactions :: hls_protocol_transactions:plan(), sources :: hls_protocol_source:plan(),
     inbox :: hls_protocol_inbox:plan(), fabric :: hls_protocol_fabric:plan(),
     ingress :: none | hls_protocol_control:plan(), model :: none | hls_protocol_model:report()}).
-%% Each receiver retains checked source ownership and inbox layout, never rendered text.
--record(receiver, {source :: hls_local_actor:source(), layout :: hls_protocol_inbox:layout()}).
-%% Static descriptor and ordered receiver layouts are one trusted emission input.
--record(build, {transport :: descriptor(), receivers :: [#receiver{}]}).
+%% A receiver's interface, checked source ownership and inbox layout travel together.
+-record(receiver, {descriptor :: actor_descriptor(), source :: hls_local_actor:source(),
+    layout :: hls_protocol_inbox:layout()}).
+%% Placement retains source-wide facts by reference; public descriptors are derived views.
+-record(build, {program :: program(), fabric :: hls_protocol_fabric:plan(),
+    ingress :: none | hls_protocol_control:plan(), arithmetic :: [hls_protocol_arithmetic:group()],
+    functions :: [actor_descriptor()], receivers = [] :: [#receiver{}]}).
+%% Each rendered actor couples its finalized interface to its exact generated files.
+-record(emitted_actor, {descriptor :: actor_descriptor(), files :: hls_generated_files:files()}).
 
 -doc "One checked source program from prepare/1, shared across placements within a build. Contains source artifacts and topology, not an output directory or hardware admission. Keep it in process and do not edit it or reload its source modules while deriving roles; it is not a saved-plan input format.".
 -opaque program() :: #program{}.
@@ -40,62 +45,16 @@
 write(Input, Output) ->
     hls_generated_files:write(emit(Input), Output).
 
--doc "Compiles the trusted sources list of {file, compiler options} pairs, invokes topology {module, function, arguments}, and elaborates within actor_limit. Checks direct/buffered routes, source-derived captures, publishers, startup and optional rectangle ingress. Optional protocol_model => {Module, Options} invokes an application-owned hls_protocol_model provider on the fresh inventory. Its checked graph establishes neither source refinement nor progress admission. Does not create output files. Loads declared source modules into the VM; constructors are trusted build code and may themselves have effects. Each distinct actor module is lowered once; capture analysis and all placements share that complete compiler program. Owner, port and inbox hardware is rendered only by emit/1.".
+-doc "Loads the declared sources, invokes the trusted topology constructor and lowers each distinct actor module once. Checks source inventories, captures, publishers, startup and optional rectangle control before placement. All roles share the retained compiler programs; owner and inbox hardware is rendered only by emit/1. Creates no output files. Constructors may have effects; retain the loaded source modules while deriving placements. Optional protocol-model checks establish neither source refinement nor progress admission.".
 -spec prepare(hls_source_config:config()) -> program().
-prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}) ->
-    Loaded = [load(File, Options) || {File, Options} <- Sources],
-    case length(Loaded) =:= length(lists:usort(Loaded)) of
-        true -> ok;
-        false -> hls_diagnostic:raise(source, duplicate_transport_source,
-            <<"Declare each source module once.">>, #{modules => Loaded, path => [sources]})
-    end,
-    case lists:member(Module, Loaded) of
-        true -> ok;
-        false -> hls_diagnostic:raise(source, missing_topology_module,
-            <<"The topology constructor's module must appear in sources.">>,
-            #{module => Module, path => [topology], source_modules => Loaded})
-    end,
-    case erlang:function_exported(Module, Function, length(Arguments)) of
-        true -> ok;
-        false -> hls_diagnostic:raise(topology, missing_topology_constructor,
-            <<"Export the configured topology constructor with the supplied arity.">>,
-            #{module => Module, function => Function, arity => length(Arguments), path => [topology]})
-    end,
-    Normal = hls_topology:normalize(apply(Module, Function, Arguments)),
-    Topology = #{actors := Actors, routes := Routes} = hls_protocol_topology:elaborate(Normal, Limit),
-    lists:foreach(fun delivery/1, Routes),
-    Used = lists:usort([M || #{module := M} <- Actors]),
-    case [#{actor => Id, module => M} || #{id := Id, module := M} <- Actors, not lists:member(M, Loaded)] of
-        [] -> ok;
-        Missing -> hls_diagnostic:raise(source, missing_actor_modules,
-            <<"Every actor module used by the topology must appear in sources.">>,
-            #{actors => Missing, path => [sources]})
-    end,
-    Modules = maps:from_list([{M, hls_diagnostic:with_context(
-        #{module => M, actors => [Id || #{id := Id, module := AM} <- Actors, AM =:= M]},
-        fun() -> compile(M) end)} || M <- Used]),
-    Inventory = hls_protocol_inventory:inspect(Topology, Modules),
-    case maps:get(diagnostics, Inventory) of
-        [] -> ok;
-        [#{code := Code, context := Context, message := Message} | _] = Diagnostics ->
-            hls_diagnostic:raise(inventory, Code, Message, Context#{diagnostics => Diagnostics})
-    end,
+prepare(Config = #{sources := Sources, topology := Constructor, actor_limit := Limit}) ->
+    Loaded = load_sources(Sources),
+    Topology = prepare_topology(Constructor, Limit, Loaded),
+    Modules = prepare_actors(Topology, Loaded),
+    Inventory = inspect_sources(Topology, Modules),
     Model = hls_protocol_model:check(maps:get(protocol_model, Config, none), Inventory),
     Bundle = #{topology => Topology, modules => Modules, inventory => Inventory},
-    Programs = maps:map(fun(_, #{program := P}) -> P end, Modules),
-    Producers = maps:from_list([{Id, maps:get(M, Programs)} || #{id := Id, module := M} <- Actors]),
-    Capture = hls_protocol_capture:plan(Inventory, Producers),
-    Effects = maps:map(fun(_, P) -> xls_actor_program:entry_effects(P) end, Programs),
-    Entries = maps:from_list([{Id, maps:get(M, Effects)} || #{id := Id, module := M} <- Actors]),
-    Transactions = hls_protocol_transactions:plan(Inventory, Entries),
-    Publishers = hls_protocol_source:plan(Bundle, Transactions, Capture),
-    %% State invariants are outside this build boundary; literal source projections need none.
-    true = lists:all(fun(#{constant_requirements := Requirements}) -> Requirements =:= [] end,
-        [R || #{outputs := Outputs} <- maps:get(sources, Publishers), #{rows := Rows} <- Outputs, R <- Rows]),
-    Inbox = hls_protocol_inbox:plan(Capture),
-    #program{bundle = Bundle, capture = Capture, transactions = Transactions,
-        sources = Publishers, inbox = Inbox, fabric = hls_protocol_fabric:plan(Publishers, Inbox),
-        ingress = hls_protocol_control:plan(Bundle), model = Model}.
+    prepare_transport(Bundle, Model).
 
 -doc "Returns the source bundle for downstream placement and host-codec binding. Treat it as read-only and retain the program's source modules; this accessor does not validate supplied bundles.".
 -spec bundle(program()) -> bundle().
@@ -110,77 +69,200 @@ control(#program{ingress = Control}) -> Control.
 plan(Config) ->
     plan(prepare(Config), maps:with([native_actors, arithmetic_groups], Config)).
 
--doc "Derives a placement from one unchanged source program without source reads or file writes. Options accepts only native_actors and arithmetic_groups. Omitted native_actors selects all actors; otherwise require a nonempty proper subset of unique logical IDs. Groups select disjoint source-compatible scalar completions, local by default. Checks source-bound receiver layouts without rendering hardware, retaining global indices and canonical crossing ports. Ordinary receivers import their one source owner definition; this removes duplicated DSLX compilation, not independent actor state or hardware. These ports still require ordered delivery, common clock/reset and stable offers; no framing or independent reset protocol is added here.".
+-doc "Plans native placement and optional shared arithmetic from one unchanged source program. Options accepts only native_actors and arithmetic_groups; omitted placement selects all actors. Checks receiver layouts without source reads or hardware rendering. Global actor indices and crossing ports remain stable. Ordinary receivers share their source module's generated functions, while retaining independent state. Ordered delivery, common clock/reset and stable offers remain caller obligations.".
 -spec plan(program(), hls_source_config:placement_options()) -> build().
-plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, modules := Modules},
-        capture = Capture, transactions = Transactions, sources = Publishers, inbox = Inbox,
-        fabric = WholeFabric, ingress = WholeIngress, model = Model}, Options) ->
+plan(Program = #program{bundle = Bundle = #{topology := #{actors := Actors}, modules := Modules},
+        capture = Capture, fabric = WholeFabric, ingress = WholeIngress}, Options) ->
+    check_placement_options(Options),
+    #{fabric := Fabric, ingress := Ingress, indices := Native} = hls_protocol_partition:plan(
+        Options, Bundle, Capture, WholeFabric, WholeIngress),
+    Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Options, []), Bundle, Native),
+    Build = #build{program = Program, fabric = Fabric, ingress = Ingress,
+        arithmetic = Arithmetic, functions = function_descriptors(Modules)},
+    Receivers = [plan_receiver(Index, Actor, Build)
+        || {Index, Actor} <- lists:enumerate(0, Actors), lists:member(Index, Native)],
+    Build#build{receivers = Receivers}.
+
+-doc "Returns a static view of the retained source snapshots, receiver interfaces and import filenames. Generated DSLX and byte hashes are absent; emit/1 returns and saves the finalized descriptor as transport.etf. Treat both views as read-only.".
+-spec descriptor(build()) -> descriptor().
+descriptor(Build = #build{program = #program{bundle = Bundle}, functions = Functions, receivers = Receivers}) ->
+    transport_descriptor(Build, Bundle, Functions, [D || #receiver{descriptor = D} <- Receivers]).
+
+-doc "Returns relative filenames with IO data and the finalized transport descriptor, without writing output. Config maps are prepared and planned; filenames are consulted as config maps with source paths relative to the caller. A retained build needs no source rereads, but emission reads templates. Saved ETF descriptors are not configuration.".
+-spec emit(hls_source_config:transport() | file:filename() | build()) -> hls_generated_files:output(descriptor()).
+emit(Build = #build{program = #program{bundle = Bundle = #{modules := Sources}},
+        functions = FunctionDescriptors, receivers = ReceiverPlans}) ->
+    Modules = maps:map(fun(_, Source) -> hls_local_actor:render(Source) end, Sources),
+    Functions = [emit_actor(D, maps:get(Module, Modules)) || D = #{module := Module} <- FunctionDescriptors],
+    Receivers = [emit_receiver(Receiver, Modules) || Receiver <- ReceiverPlans],
+    Plan = transport_descriptor(Build, Bundle#{modules := Modules},
+        [D || #emitted_actor{descriptor = D} <- Functions],
+        [D || #emitted_actor{descriptor = D} <- Receivers]),
+    ActorFiles = [Files || #emitted_actor{files = Files} <- Functions ++ Receivers],
+    #{files => transport_files(Plan, ActorFiles), result => Plan};
+emit(Config) when is_map(Config) -> emit(plan(Config));
+emit(Filename) -> emit(hls_source_config:read(Filename)).
+
+%% Declared modules are loaded in source order, with duplicate ownership rejected before elaboration.
+-spec load_sources([hls_source_config:source_file()]) -> [module()].
+load_sources(Sources) ->
+    Loaded = [load(File, Options) || {File, Options} <- Sources],
+    case length(Loaded) =:= length(lists:usort(Loaded)) of
+        true -> Loaded;
+        false -> hls_diagnostic:raise(source, duplicate_transport_source,
+            <<"Declare each source module once.">>, #{modules => Loaded, path => [sources]})
+    end.
+
+%% Only the declared, exported constructor may elaborate the source graph.
+-spec prepare_topology(hls_source_config:topology(), pos_integer(), [module()]) -> hls_protocol_topology:plan().
+prepare_topology({Module, Function, Arguments}, Limit, Loaded) ->
+    case lists:member(Module, Loaded) of
+        true -> ok;
+        false -> hls_diagnostic:raise(source, missing_topology_module,
+            <<"The topology constructor's module must appear in sources.">>,
+            #{module => Module, path => [topology], source_modules => Loaded})
+    end,
+    case erlang:function_exported(Module, Function, length(Arguments)) of
+        true -> ok;
+        false -> hls_diagnostic:raise(topology, missing_topology_constructor,
+            <<"Export the configured topology constructor with the supplied arity.">>,
+            #{module => Module, function => Function, arity => length(Arguments), path => [topology]})
+    end,
+    Normal = hls_topology:normalize(apply(Module, Function, Arguments)),
+    Topology = #{routes := Routes} = hls_protocol_topology:elaborate(Normal, Limit),
+    lists:foreach(fun delivery/1, Routes),
+    Topology.
+
+%% Compile each distinct actor module once, retaining every affected logical actor in diagnostics.
+-spec prepare_actors(hls_protocol_topology:plan(), [module()]) -> #{module() => hls_local_actor:source()}.
+prepare_actors(#{actors := Actors}, Loaded) ->
+    Missing = [#{actor => Id, module => Module} || #{id := Id, module := Module} <- Actors,
+        not lists:member(Module, Loaded)],
+    case Missing of
+        [] -> ok;
+        _ -> hls_diagnostic:raise(source, missing_actor_modules,
+            <<"Every actor module used by the topology must appear in sources.">>,
+            #{actors => Missing, path => [sources]})
+    end,
+    Used = lists:usort([Module || #{module := Module} <- Actors]),
+    maps:from_list([{Module, hls_diagnostic:with_context(
+        #{module => Module, actors => [Id || #{id := Id, module := Owner} <- Actors, Owner =:= Module]},
+        fun() -> compile(Module) end)} || Module <- Used]).
+
+%% Inventory diagnostics retain their original ordering and detailed source contexts.
+-spec inspect_sources(hls_protocol_topology:plan(), #{module() => hls_local_actor:source()}) -> hls_protocol_inventory:report().
+inspect_sources(Topology, Modules) ->
+    Inventory = hls_protocol_inventory:inspect(Topology, Modules),
+    case maps:get(diagnostics, Inventory) of
+        [] -> Inventory;
+        [#{code := Code, context := Context, message := Message} | _] = Diagnostics ->
+            hls_diagnostic:raise(inventory, Code, Message, Context#{diagnostics => Diagnostics})
+    end.
+
+%% Publication, capture and inbox plans all derive from the same compiler programs and inventory.
+-spec prepare_transport(bundle(), none | hls_protocol_model:report()) -> program().
+prepare_transport(Bundle = #{topology := #{actors := Actors}, modules := Modules, inventory := Inventory}, Model) ->
+    Programs = maps:map(fun(_, #{program := Program}) -> Program end, Modules),
+    Producers = maps:from_list([{Id, maps:get(Module, Programs)} || #{id := Id, module := Module} <- Actors]),
+    Capture = hls_protocol_capture:plan(Inventory, Producers),
+    Effects = maps:map(fun(_, Program) -> xls_actor_program:entry_effects(Program) end, Programs),
+    Entries = maps:from_list([{Id, maps:get(Module, Effects)} || #{id := Id, module := Module} <- Actors]),
+    Transactions = hls_protocol_transactions:plan(Inventory, Entries),
+    Publishers = hls_protocol_source:plan(Bundle, Transactions, Capture),
+    %% State invariants are outside this build boundary; literal source projections need none.
+    true = lists:all(fun(#{constant_requirements := Requirements}) -> Requirements =:= [] end,
+        [Row || #{outputs := Outputs} <- maps:get(sources, Publishers), #{rows := Rows} <- Outputs, Row <- Rows]),
+    Inbox = hls_protocol_inbox:plan(Capture),
+    #program{bundle = Bundle, capture = Capture, transactions = Transactions,
+        sources = Publishers, inbox = Inbox, fabric = hls_protocol_fabric:plan(Publishers, Inbox),
+        ingress = hls_protocol_control:plan(Bundle), model = Model}.
+
+%% Placement cannot silently ignore options belonging to a different build stage.
+-spec check_placement_options(hls_source_config:placement_options()) -> ok.
+check_placement_options(Options) ->
     case maps:keys(maps:without([native_actors, arithmetic_groups], Options)) of
         [] -> ok;
         Unknown -> hls_diagnostic:raise(transport, unsupported_transport_options,
             <<"Transport placement accepts native_actors and arithmetic_groups only.">>,
             #{options => lists:sort(Unknown)})
-    end,
-    #{fabric := Fabric, ingress := Ingress, indices := Native} = hls_protocol_partition:plan(
-        Options, Bundle, Capture, WholeFabric, WholeIngress),
-    Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Options, []), Bundle, Native),
-    Used = lists:sort(maps:keys(Modules)),
-    ActorFunctions = [begin
-        Relative = filename:join("actors", "actor_" ++ integer_to_list(I) ++ ".x"),
-        Artifact = maps:get(M, Modules),
-        #{module => M, file => list_to_binary(Relative), manifest => hls_local_actor:descriptor(Artifact)}
-    end || {I, M} <- lists:enumerate(0, Used)],
-    {Receivers, Layouts} = lists:unzip([begin
-        Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
-        Messages = lists:append([Ms || #{target := Target, messages := Ms} <- maps:get(startup,Topology), Target =:= Id]),
-        Owner = hls_protocol_arithmetic:select(I, Arithmetic, maps:get(M, Modules)),
-        Layout = hls_protocol_inbox:plan(Owner, Incoming, Capture, Messages, hls_protocol_control:addressed(Ingress,I)),
-        Source = case maps:get(mode, maps:get(completion, Owner, #{mode => local})) of
-            shared -> Owner;
-            local -> [File] = [F || #{module := Mod, file := F} <- ActorFunctions, Mod =:= M],
-                Owner#{owner_import => #{file => File}}
-        end,
-        Interface = hls_local_actor:descriptor(Source#{inbox => hls_protocol_inbox:descriptor(Layout)}),
-        Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
-        {#{index => I, module => M, file => list_to_binary(Relative), manifest => Interface},
-            #receiver{source = Source, layout = Layout}}
-    end || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors), lists:member(I, Native)]),
+    end.
+
+%% Stable module order gives ordinary owners one filename independently of native placement.
+-spec function_descriptors(#{module() => hls_local_actor:source() | hls_local_actor:artifact()}) -> [actor_descriptor()].
+function_descriptors(Modules) ->
+    [#{module => Module, file => actor_filename("actor", Index),
+        manifest => hls_local_actor:descriptor(maps:get(Module, Modules))}
+        || {Index, Module} <- lists:enumerate(0, lists:sort(maps:keys(Modules)))].
+
+%% Each receiver owns its source, interface and checked inbox together; global indices remain stable.
+-spec plan_receiver(non_neg_integer(), hls_protocol_topology:actor(), build()) -> #receiver{}.
+plan_receiver(Index, #{id := Id, module := Module},
+        #build{program = #program{bundle = #{topology := #{startup := Startup}, modules := Modules}, capture = Capture},
+            fabric = #{links := Links}, ingress = Ingress, arithmetic = Arithmetic, functions = Functions}) ->
+    Incoming = [Link || Link = #{destination_index := Destination} <- Links, Destination =:= Index],
+    Messages = lists:append([Batch || #{target := Target, messages := Batch} <- Startup, Target =:= Id]),
+    Owner = hls_protocol_arithmetic:select(Index, Arithmetic, maps:get(Module, Modules)),
+    Layout = hls_protocol_inbox:plan(Owner, Incoming, Capture, Messages,
+        hls_protocol_control:addressed(Ingress, Index)),
+    Source = receiver_source(Owner, Module, Functions),
+    Interface = hls_local_actor:descriptor(Source#{inbox => hls_protocol_inbox:descriptor(Layout)}),
+    Descriptor = #{index => Index, module => Module, file => actor_filename("receiver", Index), manifest => Interface},
+    #receiver{descriptor = Descriptor, source = Source, layout = Layout}.
+
+%% Shared completion keeps its specialized owner; ordinary receivers import their source module.
+-spec receiver_source(hls_local_actor:source(), module(), [actor_descriptor()]) -> hls_local_actor:source().
+receiver_source(Owner, Module, Functions) ->
+    case maps:get(mode, maps:get(completion, Owner, #{mode => local})) of
+        shared -> Owner;
+        local ->
+            [File] = [Path || #{module := SourceModule, file := Path} <- Functions, SourceModule =:= Module],
+            Owner#{owner_import => #{file => File}}
+    end.
+
+%% Function and receiver paths retain their existing serialized identities.
+-spec actor_filename(string(), non_neg_integer()) -> binary().
+actor_filename(Kind, Index) ->
+    list_to_binary(filename:join("actors", Kind ++ "_" ++ integer_to_list(Index) ++ ".x")).
+
+%% Static and emitted views share structure; only the supplied module artifacts and actor manifests differ.
+-spec transport_descriptor(build(), bundle(), [actor_descriptor()], [actor_descriptor()]) -> descriptor().
+transport_descriptor(#build{program = #program{capture = Capture, transactions = Transactions,
+        sources = Publishers, inbox = Inbox, ingress = WholeIngress, model = Model},
+        fabric = Fabric, ingress = Ingress, arithmetic = Arithmetic}, Bundle, Functions, Receivers) ->
     Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
         sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, whole_control => WholeIngress,
-        actor_functions => ActorFunctions, receivers => Receivers},
-    Plan = case Model of none -> Transport; _ -> Transport#{protocol_model => Model} end,
-    #build{transport = Plan, receivers = Layouts}.
+        actor_functions => Functions, receivers => Receivers},
+    case Model of
+        none -> Transport;
+        _ -> Transport#{protocol_model => Model}
+    end.
 
--doc "Returns the static transport descriptor without rendering owners or inboxes. Source snapshots, receiver layouts and imported filenames are present; generated DSLX and byte hashes are absent. emit/1 returns and saves the finalized descriptor as transport.etf. Treat both as read-only.".
--spec descriptor(build()) -> descriptor().
-descriptor(#build{transport = Transport}) -> Transport.
+%% Render only the receiver's retained ownership/layout and its already rendered ordinary source module.
+-spec emit_receiver(#receiver{}, #{module() => hls_local_actor:artifact()}) -> #emitted_actor{}.
+emit_receiver(#receiver{descriptor = Descriptor = #{module := Module}, source = Source, layout = Layout}, Modules) ->
+    Owner = receiver_owner(Source, maps:get(Module, Modules)),
+    emit_actor(Descriptor, hls_protocol_inbox:attach(Owner, Layout)).
 
--doc "Returns relative filenames with IO data and the transport descriptor, without writing output. A trusted config map is prepared and planned; a filename is consulted as one config map and follows that same path, with source paths relative to the caller. An unchanged in-process build needs no source rereads. Source constructors may have effects; template reads remain. Saved ETF plans are not accepted as configuration.".
--spec emit(hls_source_config:transport() | file:filename() | build()) -> hls_generated_files:output(descriptor()).
-emit(#build{transport = Static = #{bundle := Bundle = #{modules := Sources}, fabric := Fabric,
-        actor_functions := Functions, receivers := Interfaces}, receivers = Layouts}) ->
-    Modules = maps:map(fun(_, Source) -> hls_local_actor:render(Source) end, Sources),
-    FunctionArtifacts = [maps:get(M, Modules) || #{module := M} <- Functions],
-    ReceiverArtifacts = [hls_protocol_inbox:attach(receiver_owner(Source, maps:get(M, Modules)), Layout)
-        || {#{module := M}, #receiver{source = Source, layout = Layout}} <- lists:zip(Interfaces, Layouts)],
-    ActorFunctions = [D#{manifest := hls_local_actor:manifest(A)} || {D, A} <- lists:zip(Functions, FunctionArtifacts)],
-    Receivers = [D#{manifest := hls_local_actor:manifest(A)} || {D, A} <- lists:zip(Interfaces, ReceiverArtifacts)],
-    Plan = Static#{bundle := Bundle#{modules := Modules}, actor_functions := ActorFunctions, receivers := Receivers},
-    Actors = [hls_local_actor:emit(Artifact, binary_to_list(Relative))
-        || {#{file := Relative}, Artifact} <- lists:zip(Functions ++ Interfaces, FunctionArtifacts ++ ReceiverArtifacts)],
+%% Finalized metadata and sidecar files are bound to one exact artifact, without positional list joins.
+-spec emit_actor(actor_descriptor(), hls_local_actor:artifact()) -> #emitted_actor{}.
+emit_actor(Descriptor = #{file := Relative}, Artifact) ->
+    #emitted_actor{descriptor = Descriptor#{manifest := hls_local_actor:manifest(Artifact)},
+        files = hls_local_actor:emit(Artifact, binary_to_list(Relative))}.
+
+%% Package finalized actors, fabric and reports without changing public file names or manifest schemas.
+-spec transport_files(descriptor(), [hls_generated_files:files()]) -> hls_generated_files:files().
+transport_files(Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
+        actor_functions := Functions, receivers := Receivers}, ActorFiles) ->
     #{files := TransportFiles} = xls_protocol_transport:emit(Fabric),
     ModelFiles = hls_protocol_model:emit(maps:get(protocol_model, Plan, none)),
     Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
-        source_plans => maps:map(fun(_, #{program := P}) -> maps:with([source_sha256, artifact_sha256, planner_md5],
-            xls_statem_plan:manifest(xls_actor_program:plan(P))) end, Modules),
-        actor_functions => ActorFunctions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
-    Generated = hls_generated_files:merge(Actors ++ [
+        source_plans => maps:map(fun(_, #{program := Program}) -> maps:with([source_sha256, artifact_sha256, planner_md5],
+            xls_statem_plan:manifest(xls_actor_program:plan(Program))) end, Modules),
+        actor_functions => Functions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
+    hls_generated_files:merge(ActorFiles ++ [
         hls_generated_files:prefix("dslx", TransportFiles), ModelFiles,
-        #{"transport.etf" => term_to_binary(Plan, [deterministic]), "summary.json" => json:encode(Summary)}]),
-    #{files => Generated, result => Plan};
-emit(Config) when is_map(Config) -> emit(plan(Config));
-emit(Filename) -> emit(hls_source_config:read(Filename)).
+        #{"transport.etf" => term_to_binary(Plan, [deterministic]), "summary.json" => json:encode(Summary)}]).
 
 %% Collect compiler messages instead of printing them into the CLI's structured output.
 -spec load(file:filename(), [hls_source:compiler_option()]) -> module().

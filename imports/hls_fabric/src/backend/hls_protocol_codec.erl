@@ -5,8 +5,8 @@
 
 -doc "Checked compact-to-ordinary frame wiring. Mask/value fix all omitted bits; frame_positions lists each retained stream bit in compact order.".
 -type plan() :: #{mask := non_neg_integer(), value := non_neg_integer(),
-    frame_positions := [0..127], payload_bits := 0..96, physical_width := 1..96,
-    operation := 0..255}.
+    frame_positions := [0 .. ((1 bsl 7) - 1)], payload_bits := 0..96, physical_width := 1..96,
+    operation := 0 .. ((1 bsl 8) - 1)}.
 
 %% Codec callers may omit field names; physical offsets and typed widths determine the wiring.
 -type field() :: #{type := hls_type:descriptor(), message_bit_offset := non_neg_integer(),
@@ -19,7 +19,7 @@
     message_bits := non_neg_integer(), payload_bits := non_neg_integer(), atom() => term()}.
 
 -doc "Builds a bit permutation for one capture channel and its ordinary operation byte. Header, padding and source-constant fields use the shared entry ABI; dynamic fields remain exact, including partial bytes. Compact bit zero is the first dynamic physical stream bit. Rejects inconsistent capture offsets, overlapping fields or payloads wider than the ordinary 96-bit frame. The caller must establish source/schema/route provenance before omitting fields.".
--spec plan(channel_layout(), 0..255) -> plan().
+-spec plan(channel_layout(), 0 .. ((1 bsl 8) - 1)) -> plan().
 plan(#{fields:=Fields, message_bits:=MessageBits, payload_bits:=PayloadBits}, Op)
         when Op >= 0, Op < 256 ->
     {MessageBits,PayloadBits}=lists:foldl(fun check_field/2,{0,0},Fields),
