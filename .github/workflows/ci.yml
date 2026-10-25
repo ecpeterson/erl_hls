@@ -110,6 +110,7 @@ jobs:
         run: |
           rebar3 release
           python3 tools/test_source_toolchain.py
+          python3 -m unittest tools.test_source_build_executor
 
       - name: Prepare simulation inputs
         run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"

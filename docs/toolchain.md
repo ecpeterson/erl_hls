@@ -44,6 +44,7 @@ Consume the manifest from another build system, or invoke the packaged standard-
 
 ```sh
 _build/default/rel/erl_hls/bin/compile-source-build /path/to/xls /path/to/emitted-bundle
+compiled=$(cd /path/to/emitted-bundle/compiled && pwd -P)
 ```
 
 Add `--dry-run` to print a JSON preview without writing files or starting any XLS process:
@@ -52,8 +53,12 @@ Add `--dry-run` to print a JSON preview without writing files or starting any XL
 _build/default/rel/erl_hls/bin/compile-source-build --dry-run /path/to/xls /path/to/emitted-bundle
 ```
 
-The preview verifies frozen input hashes, resolved executable paths and their hashes, standard-library contents, source paths and import directories. It includes every unit's entry point, exact schedule flags and the same argument vectors consumed by execution. It also works on completed or partially compiled bundles; real execution still rejects existing products. A preview establishes the command plan, not XLS acceptance, successful scheduling or hardware behavior.
+The preview verifies frozen input hashes, resolved executable paths and their hashes, standard-library contents, source paths and import directories. It includes every unit's entry point, literal schedule flags and the same argument vectors consumed by execution. Relative arguments, outputs and logs refer to a future private source snapshot, not the caller's working directory. Preview also works after successful or failed compilation. It establishes the command plan, not XLS acceptance, successful scheduling or hardware behavior.
 
-The script can be copied and used independently of Erlang/rebar. It requires Python 3.12+ and XLS's `ir_converter_main`, `opt_main`, `codegen_main` and DSLX standard library. Each stage has a 300-second deadline. It verifies input hashes, compiles every unit once, records tool hashes, commands, logs and products in `compiled.json`, and writes `files.f` per role. Failed/partial output is preserved and cannot be retried in place. This convenience driver supplies imports and required schedules; XLS remains an external tool. The older [incremental stage cache](incremental-xls-builds.md) remains a separate consumer for existing experiment drivers.
+For detached use, copy both packaged `bin/compile-source-build` and `bin/compile_xls.py` into the same directory. The driver may be renamed; its companion must remain `compile_xls.py`. They require Python 3.12+ and XLS's `ir_converter_main`, `opt_main`, `codegen_main` and DSLX standard library, with no Erlang/rebar dependency. Each stage has a 300-second default deadline; `--timeout` changes it, and `--cache` selects a shared stage cache.
+
+The driver leaves `source-build.json` and every frozen source input unchanged. It snapshots their relative hierarchy, runs or reuses conversion/optimization/codegen for every unit, then publishes one complete immutable release through the default `SOURCE/compiled` symlink. `--output` selects another managed symlink; the Python `compile_build(...)` API returns the resolved release path. Resolve the symlink once, as above, before consuming several files. The release retains frozen source metadata, inputs, per-unit IR/RTL and `commands.json`, logs, `compiled.json` and a `files.f` per role. Each `files.f` entry is relative to that listing's parent directory; `compiled.json` RTL paths are relative to the release root.
+
+A later-unit failure leaves the previous release selected and retains the failed attempt's inputs, commands, logs and partial products. Retrying the same frozen bundle reuses completed stages after checking their hashes; an unchanged successful invocation keeps the same release. `<output>.run.json` beside the symlink records current cache hits and execution costs, separately from the immutable producing evidence. Source-bundle and prepared-flat-directory drivers share the [same stage executor and publication rules](incremental-xls-builds.md). They preserve their emitters' schedules and backend policies; a unified build-profile interface remains separate work.
 
 The relocation tests use real Erlang lowering and mock external executables. They establish packaging/invocation behavior, not hardware semantics; RTL simulation and physical measurement remain separate evidence.

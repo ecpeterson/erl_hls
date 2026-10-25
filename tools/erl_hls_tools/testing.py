@@ -18,7 +18,7 @@ with open(os.environ['XLS_TEST_CALLS'], 'a') as log:
 if os.environ.get('XLS_TEST_PAUSE') == stage:
     p(os.environ['XLS_TEST_READY']).write_text(str(os.getpid()))
     time.sleep(float(os.environ.get("XLS_TEST_SLEEP", "1")))
-if os.environ.get('XLS_TEST_FAIL') == stage:
+if os.environ.get('XLS_TEST_FAIL') == stage and os.environ.get('XLS_TEST_FAIL_MATCH', '') in ' '.join(sys.argv[1:]):
     print('partial output')
     print('injected failure', file=sys.stderr)
     sys.exit(7)
