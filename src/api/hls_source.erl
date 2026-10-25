@@ -184,17 +184,24 @@ read_here(File, SourceName, Includes, Macros, FeatureOptions) ->
         {ok, Forms} ->
             case source_errors(Forms, SourceName, []) of
                 [] -> Forms;
-                Errors -> error({source_errors, lists:reverse(Errors)})
+                Errors -> hls_diagnostic:raise(source, source_errors, <<"Source preprocessing or parsing failed">>,
+                    #{source => unicode:characters_to_binary(File), errors => lists:reverse(Errors)})
             end;
-        {error, Reason} -> error({source_open, File, Reason})
+        {error, Reason} -> hls_diagnostic:raise(source, source_open, <<"Cannot open source file">>,
+            #{source => unicode:characters_to_binary(File), reason => Reason, detail => unicode:characters_to_binary(file:format_error(Reason))})
     end.
 
-%% Attach the current include filename to each preprocessing error.
--spec source_errors([form() | {error, erl_parse:error_info()}], file:filename(), [tuple()]) -> [tuple()].
+%% Each epp/parser error retains the active include, location, formatter and original reason.
+-type source_error() :: #{source := binary(), location := erl_anno:location(),
+    module := module(), reason := term(), message := binary()}.
+
+%% Parsing does not run transforms; formatter failures remain unexpected exceptions.
+-spec source_errors([form() | {error, erl_parse:error_info()}], file:filename(), [source_error()]) -> [source_error()].
 source_errors([{attribute, _, file, {File, _}} | Forms], _File, Errors) ->
     source_errors(Forms, File, Errors);
 source_errors([{error, {Location, Module, Reason}} | Forms], File, Errors) ->
-    source_errors(Forms, File, [{File, Location, Module, Reason} | Errors]);
+    source_errors(Forms, File, [#{source => unicode:characters_to_binary(File), location => Location, module => Module,
+        reason => Reason, message => unicode:characters_to_binary(Module:format_error(Reason))} | Errors]);
 source_errors([_ | Forms], File, Errors) -> source_errors(Forms, File, Errors);
 source_errors([], _File, Errors) -> Errors.
 

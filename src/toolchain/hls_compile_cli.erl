@@ -2,7 +2,7 @@
 -moduledoc "Standalone compiler frontend; independent of rebar and any fabric deployment.".
 -export([main/0, run/1]).
 
--doc "Runs hlsc using the packaged compiler; HLS_DEBUG=1 includes diagnostic stacks.".
+-doc "Runs hlsc using the packaged compiler; --diagnostics selects text or JSON failures.".
 -spec main() -> no_return().
 main() -> hls_cli:main("hlsc", fun run/1).
 
@@ -27,7 +27,8 @@ run(["emit", Source | Args]) ->
         dslx_path => maps:get(imports, Options, []),
         pipeline_stages => hls_cli:integer(stages, maps:get(stages, Options, "2"))}, Output),
     ok;
-run(Args) -> error({unknown_command, Args}).
+run(Args) -> hls_diagnostic:raise(arguments, unknown_command,
+    <<"Unknown compiler command">>, #{arguments => [unicode:characters_to_binary(Arg) || Arg <- Args]}).
 
 %% Macro names and literal Erlang values are trusted compiler input, like source itself.
 -spec define(string()) -> hls_source:option().
@@ -39,11 +40,11 @@ define(Value) ->
                 {ok, Tokens, _} ->
                     case erl_parse:parse_term(Tokens) of
                         {ok, Term} -> {d, list_to_atom(Name), Term};
-                        _ -> error({invalid_define, Value})
+                        _ -> hls_diagnostic:raise(arguments, invalid_define, <<"Macro definition must be NAME or NAME=TERM">>, #{option => <<"-D">>, value => unicode:characters_to_binary(Value)})
                     end;
-                _ -> error({invalid_define, Value})
+                _ -> hls_diagnostic:raise(arguments, invalid_define, <<"Macro definition must be NAME or NAME=TERM">>, #{option => <<"-D">>, value => unicode:characters_to_binary(Value)})
             end;
-        _ -> error({invalid_define, Value})
+        _ -> hls_diagnostic:raise(arguments, invalid_define, <<"Macro definition must be NAME or NAME=TERM">>, #{option => <<"-D">>, value => unicode:characters_to_binary(Value)})
     end.
 
 %% Help describes the source/external-tool boundary rather than application presets.
@@ -51,5 +52,5 @@ define(Value) ->
 usage() ->
     io:put_chars("Usage: hlsc emit SOURCE --output FRESH_DIRECTORY [-I DIRECTORY] [-D NAME[=TERM]]\n"
         "                 [--source-options FILE] [--dslx-path DIRECTORY]\n"
-        "                 [--direct-actor-debug] [--pipeline-stages N]\n"
+        "                 [--direct-actor-debug] [--pipeline-stages N] [--diagnostics text|json]\n"
         "Emits DSLX and source-build.json. XLS invocation and hardware qualification are separate.\n").

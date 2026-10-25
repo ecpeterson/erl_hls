@@ -26,6 +26,8 @@ build_context_agrees_with_source_and_dslx_test() ->
         ])
     end).
 
+%% The saved context preserves include selection and error locations after the working directory changes.
+-spec captured_context_survives_working_directory_change_test() -> ok.
 captured_context_survives_working_directory_change_test() ->
     with_source(fun(Path, Directory) ->
         {ok, OriginalDirectory} = file:get_cwd(),
@@ -51,7 +53,7 @@ captured_context_survives_working_directory_change_test() ->
                 #{source_options => Context}))),
             ok = file:write_file(filename:join([Directory, "headers", "config.hrl"]),
                 "this is invalid.\n"),
-            ?assertMatch([{"headers/config.hrl", 1, erl_parse, _} | _],
+            ?assertMatch([#{source := <<"headers/config.hrl">>, location := 1, module := erl_parse} | _],
                 errors(fun() -> hls_actor_interface:from_module(?MODULE_UNDER_TEST) end)),
             ?assertEqual({ok, OriginalDirectory}, file:get_cwd())
         after
@@ -98,7 +100,7 @@ relocated_build_context_test() ->
             ok = file:set_cwd(OriginalDirectory),
             ok = file:write_file(filename:join([Relocated, "headers", "config.hrl"]),
                 "this is invalid.\n"),
-            ?assertMatch([{"headers/config.hrl", 1, erl_parse, _} | _],
+            ?assertMatch([#{source := <<"headers/config.hrl">>, location := 1, module := erl_parse} | _],
                 errors(fun() -> hls_source:read(Path, Context) end)),
             ?assertEqual({ok, OriginalDirectory}, file:get_cwd())
         after
@@ -180,6 +182,8 @@ changed_transitive_header_rejects_stale_beam_test() ->
         ?assertEqual(64, maps:get(width, hls_actor_interface:state(Interface)))
     end).
 
+%% Owned preprocessing diagnostics retain original include locations, reasons and rendered messages.
+-spec missing_header_and_syntax_errors_have_source_locations_test() -> ok.
 missing_header_and_syntax_errors_have_source_locations_test() ->
     with_source(fun(Path, Directory) ->
         Options = options(Directory) ++ [{d, 'CAPACITY', 1}],
@@ -187,10 +191,14 @@ missing_header_and_syntax_errors_have_source_locations_test() ->
         Config = filename:join([Directory, "headers", "config.hrl"]),
         ok = file:write_file(Config, "-include(\"missing.hrl\").\n"),
         Missing = errors(fun() -> hls_actor_interface:from_module(?MODULE_UNDER_TEST) end),
-        ?assert(lists:member({Config, 1, epp, {include, file, "missing.hrl"}}, Missing)),
+        ?assert(lists:any(fun(#{source := File, location := Line, module := Module, reason := Reason, message := Message}) ->
+            File =:= unicode:characters_to_binary(Config) andalso Line =:= 1 andalso Module =:= epp andalso
+                Reason =:= {include, file, "missing.hrl"} andalso byte_size(Message) > 0
+        end, Missing)),
         ok = file:write_file(Config, "-define(WORD_TYPE, u32).\nthis is invalid.\n"),
         Syntax = errors(fun() -> xls_parse:to_xls(Path, #{source_options => Options}) end),
-        ?assertMatch([{Config, 2, erl_parse, _}], Syntax)
+        ConfigBinary = unicode:characters_to_binary(Config),
+        ?assertMatch([#{source := ConfigBinary, location := 2, module := erl_parse}], Syntax)
     end).
 
 source_less_and_deterministic_beams_use_embedded_interface_test() ->
@@ -206,18 +214,22 @@ source_less_and_deterministic_beams_use_embedded_interface_test() ->
         ?assertEqual(Expected, hls_actor_interface:from_module(?MODULE_UNDER_TEST))
     end).
 
+%% Invalid preprocessing options remain rejected and missing macros produce owned source diagnostics.
+-spec source_options_are_checked_test() -> ok.
 source_options_are_checked_test() ->
     ?assertError({invalid_source_options, wrong}, hls_source:options("unused.erl", wrong)),
     lists:foreach(fun(Option) ->
         ?assertError({invalid_source_option, Option},
             xls_parse:to_xls("unused.erl", #{source_options => [Option]}))
     end, [{i, 7}, {d, "NAME"}, {feature, maybe_expr, wrong}, debug_info]),
-    ?assertMatch([{_, _, epp, _} | _],
+    ?assertMatch([#{module := epp} | _],
         errors(fun() -> xls_parse:actor_interface("test_data/hls_source_context_fixture.erl") end)).
 
+%% Extract structured source errors while allowing unrelated exceptions to fail the test.
+-spec errors(fun(() -> term())) -> [#{source := binary(), location := erl_anno:location(), module := module(), reason := term(), message := binary()}].
 errors(Fun) ->
     try Fun() of
         Value -> error({expected_source_error, Value})
     catch
-        error:{source_errors, Errors} -> Errors
+        error:{hls_diagnostic, #{stage := source, code := source_errors, context := #{errors := Errors}}} -> Errors
     end.

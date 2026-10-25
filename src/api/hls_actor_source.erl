@@ -60,8 +60,19 @@ duplicate_tags([Tag | Rest], Counts, Duplicates) ->
 -doc "Returns a record's 32-bit transport word count, including provider padding. Rejects payloads exceeding the current 96-bit actor message limit.".
 -spec message_words([hls_source:form()], atom()) -> 0..3.
 message_words(Forms, Name) ->
-    Width = hls_records:width(hls_records:find(Forms, Name)),
+    Record = hls_records:find(Forms, Name),
+    Width = hls_records:width(Record),
     case Width =< 96 of
         true -> (Width + 31) div 32;
-        false -> error({xls_message_too_wide, Name, Width, 96})
+        false -> hls_diagnostic:raise(actor_source, message_too_wide,
+            <<"Actor message exceeds the 96-bit transport payload limit">>,
+            (record_context(Forms, Name, #{}))#{record => Name, width => Width, max_width => 96})
     end.
+
+%% File attributes track include entry/return, so the record points to its actual declaration.
+-spec record_context([hls_source:form()], atom(), hls_diagnostic:context()) -> hls_diagnostic:context().
+record_context([{attribute, _, file, {File, _}} | Rest], Name, Context) ->
+    record_context(Rest, Name, Context#{source => unicode:characters_to_binary(File)});
+record_context([{attribute, Anno, record, {Name, _}} | _], Name, Context) ->
+    Context#{location => erl_anno:location(Anno)};
+record_context([_ | Rest], Name, Context) -> record_context(Rest, Name, Context).

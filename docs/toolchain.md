@@ -18,11 +18,13 @@ Options take separate arguments:
 - `--direct-actor-debug` requests the existing dedicated state-machine observation interface.
 - `--pipeline-stages N` selects the optional XLS recipe's positive stage count (default two, unit delay model). This is a scheduling choice, not a target frequency or physical result.
 
-Unknown or duplicate scalar options fail. Source failures retain their compiler reason; `HLS_DEBUG=1` adds a stack trace. Existing output is rejected; later failures preserve partial output.
+Unknown or duplicate scalar options fail. `--diagnostics text|json` selects error output on standard error; the default is text. Owned diagnostics identify their `stage`, stable `code`, human `message` and structured `context`. Source preprocessing errors include each originating file, location, formatter module, raw reason and rendered message. For example, an oversized actor message reports its record, source/include location, actual width and the 96-bit limit. `HLS_DEBUG=1` adds the original stack, including as a `stack` field in JSON mode. Unexpected exceptions always expose their original class, reason and stack rather than being relabeled as invalid configuration. Existing output is rejected; later failures preserve partial output.
+
+Compiler and downstream owners raise `hls_diagnostic:raise/4`; a caller can add defaults with `with_context/2`. Specific inner context wins, and the original stack is retained. The helper catches only tagged diagnostics: unrelated errors, throws and exits remain unchanged. JSON preserves numbers and UTF-8 binary text; every proper Erlang list remains an array, so numeric index lists never change schema based on their values. Owners use binaries for textual context; compound Erlang evidence uses explicit representations (`$tuple`, `$map` key/value pairs, `$binary_hex` for non-UTF-8 bytes, and `$term` for runtime-only values). This keeps actor identifiers and non-string map keys distinct from display text.
 
 ## Bundle contract
 
-`hls_artifact_bundle` is the shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
+`hls_artifact_bundle` is the shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees; `support_layout/1` describes the same sources and bundle-relative import directories without copying them. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
 
 Version 1 of `source-build.json` contains:
 
@@ -43,6 +45,14 @@ Consume the manifest from another build system, or invoke the packaged standard-
 ```sh
 _build/default/rel/erl_hls/bin/compile-source-build /path/to/xls /path/to/emitted-bundle
 ```
+
+Add `--dry-run` to print a JSON preview without writing files or starting any XLS process:
+
+```sh
+_build/default/rel/erl_hls/bin/compile-source-build --dry-run /path/to/xls /path/to/emitted-bundle
+```
+
+The preview verifies frozen input hashes, resolved executable paths and their hashes, standard-library contents, source paths and import directories. It includes every unit's entry point, exact schedule flags and the same argument vectors consumed by execution. It also works on completed or partially compiled bundles; real execution still rejects existing products. A preview establishes the command plan, not XLS acceptance, successful scheduling or hardware behavior.
 
 The script can be copied and used independently of Erlang/rebar. It requires Python 3.12+ and XLS's `ir_converter_main`, `opt_main`, `codegen_main` and DSLX standard library. Each stage has a 300-second deadline. It verifies input hashes, compiles every unit once, records tool hashes, commands, logs and products in `compiled.json`, and writes `files.f` per role. Failed/partial output is preserved and cannot be retried in place. This convenience driver supplies imports and required schedules; XLS remains an external tool. The older [incremental stage cache](incremental-xls-builds.md) remains a separate consumer for existing experiment drivers.
 
