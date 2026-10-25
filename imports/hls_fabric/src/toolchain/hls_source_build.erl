@@ -67,7 +67,7 @@ units(application, Role, Config, Support) ->
             || Name <- ["hls_debug_route.v", "hls_debug_frame_rx.v", "hls_topology_debug.v"]]
     end,
     Gateway = unit(Role, "application", "gateway.x", "Top", "application_gateway", "gateway.v",
-        ["support/fabric/xls" | Support],
+        [join(Role, "application"), "support/fabric/xls" | Support],
         ["--pipeline_stages=2", "--delay_model=unit", "--flop_inputs=false", "--flop_outputs=true",
          "--use_system_verilog=false", "--reset=reset", "--fifo_module="],
         [join(Role, "application/protocol_application_top.sv"), "support/fabric/rtl/hls_partition_activation.sv"] ++ Debug),

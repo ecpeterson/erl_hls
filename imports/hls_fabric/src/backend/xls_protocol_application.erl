@@ -1,18 +1,26 @@
 -module(xls_protocol_application).
--moduledoc "Binds an application identity and endpoint count to the existing ordered DSLX gateway.".
+-moduledoc "Installs the concrete DSLX gateway and emits only its application configuration constants.".
 -export([emit/1, write/2]).
 
--doc "Writes a structural gateway proc for a freshly source-checked host binding. All framing, attachment, ordering and event serialization state remains in hls_partition_io::OrderedBoundary; the separately connected activation bridge supplies actual start completion.".
+-doc "Writes gateway.x and application_config.x exclusively into a caller-owned directory. Framing and ordering stay in the shared gateway; the separately connected activation bridge supplies actual start completion.".
 -spec write(map(),file:filename()) -> ok.
 write(Binding, Directory) ->
-    file:write_file(filename:join(Directory, "gateway.x"), emit(Binding), [exclusive]).
+    hls_generated_files:write_into(#{files => emit(Binding), result => ok}, Directory).
 
--doc "Returns the gateway DSLX bytes from a checked binding and the installed template. Framing and ordering remain in the shared gateway; no output files are created.".
--spec emit(map()) -> iodata().
-emit(#{identity:=Identity,host:=Host,control:=Control,events:=Events}) ->
-    Args=lists:join(", ",["u64:"++integer_to_list(Word)||<<Word:64/little>><=Identity]),
-    {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_application.x.in")),
-    Source=lists:foldl(fun({Key,Value},Text)->binary:replace(Text,Key,Value,[global]) end,Template,
-        [{<<"@@COUNT@@">>,integer_to_binary(map_size(Events))},{<<"@@IDENTITY@@">>,iolist_to_binary(Args)},
-         {<<"@@HOST@@">>,integer_to_binary(Host)},{<<"@@CONTROL@@">>,integer_to_binary(Control)}]),
-    Source.
+-doc "Returns gateway.x unchanged from the checked adapter and application_config.x containing typed endpoint-count, identity and address constants. Creates no files and substitutes no DSLX program text.".
+-spec emit(map()) -> hls_generated_files:files().
+emit(#{identity := Identity, host := Host, control := Control, events := Events,
+        control_adapter := #{gateway_source := Source}}) ->
+    {ok, Gateway} = file:read_file(filename:join(code:priv_dir(hls_fabric), Source)),
+    Words = [{"ID" ++ integer_to_list(I), "u64", Word}
+        || {I, Word} <- lists:enumerate(0, [W || <<W:64/little>> <= Identity])],
+    Config = [constant(Name, Type, Value) || {Name, Type, Value} <-
+        [{"EVENTS", "u32", map_size(Events)} | Words] ++
+        [{"HOST", "u16", Host}, {"CONTROL", "u16", Control}]],
+    #{"gateway.x" => Gateway, "application_config.x" => ["// Bound application identity, endpoint count and addresses.\n", Config]}.
+
+%% Only checked scalar values cross the generated boundary; all behavior is handwritten DSLX.
+-spec constant(string(), string(), non_neg_integer()) -> iodata().
+constant(Name, Type, Value) ->
+    ["pub const ", Name, " = ", Type, ":",
+     integer_to_list(Value), ";\n"].

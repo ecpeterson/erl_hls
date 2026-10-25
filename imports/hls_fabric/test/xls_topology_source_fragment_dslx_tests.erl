@@ -255,16 +255,12 @@ multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() ->
     %% Only the shared final handoff adds capacity; mux input storage is unchanged.
     ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:1>">>)),
     ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:0>[u32:2]">>)),
+    ?assertEqual(1, count(Generated, <<"import retained_mux;">>)),
     ?assertEqual(1, count(Generated, <<
-        "proc SchedulerAggregateArrayMux0 {"
+        "spawn retained_mux::Mux<hls_topology_source_fragment_fixture::"
+        "ReductionAggregateRequest, u32:2>"
     >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<"  cursor: u1,">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "valid: u1[u32:2]"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let (selected, selected_index) = arbitration::select("
-    >>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"SchedulerAggregateArrayMux">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "scheduler_0_aggregate_sources_c, scheduler_0_aggregate_p"
     >>)),

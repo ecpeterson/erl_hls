@@ -157,3 +157,10 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_population" \
     >/dev/null
+
+# The shared typed mux is independent of application-generated callbacks.
+"$xls_root/interpreter_main" \
+    --warnings_as_errors=false \
+    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib" \
+    --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
+    "$project_root/test/xls/retained_mux_test.x"

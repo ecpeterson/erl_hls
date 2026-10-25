@@ -1,5 +1,29 @@
 -module(hls_protocol_mixed_tests).
 -include_lib("eunit/include/eunit.hrl").
+-export([topology/0]).
+
+%% The production mixed builder must retain host recipients removed from its native projection.
+-spec whole_control_test() -> ok.
+whole_control_test() ->
+    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []},
+        {"test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
+        topology => {?MODULE, topology, []}, actor_limit => 3,
+        native_actors => [left, sink], host => 2, service => 29, control => rectangle},
+    #{result := Plan = #{actors := Actors}} = hls_protocol_mixed:emit(Config),
+    ?assertEqual([1], maps:keys(Actors)),
+    ?assertMatch({_, [1], {total, 12}}, hls_protocol_mixed_host:controls(
+        Plan, {host, all, {1, 0, 1, 0}, {total, 12}})),
+    ?assertMatch({_, [], {total, 12}}, hls_protocol_mixed_host:controls(
+        Plan, {host, all, {0, 0, 0, 0}, {total, 12}})).
+
+-doc "Keeps the feedback fixture's native multicast but gives each BEAM output one destination, as required by mixed placement.".
+-spec topology() -> map().
+topology() ->
+    T = #{routes := Routes} = hls_protocol_network_fixture:framed(),
+    T#{routes := [case R of
+        {From = {right, _}, buffered, [First | _]} -> {From, [First]};
+        _ -> R
+    end || R <- Routes]}.
 
 %% Crossing operation numbering belongs to the destination; use a deliberately different selector.
 -spec destination_selector_test() -> ok.

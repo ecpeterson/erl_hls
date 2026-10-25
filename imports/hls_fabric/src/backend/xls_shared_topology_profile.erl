@@ -140,4 +140,4 @@ reserved(Name, _) -> xls_names:keyword(Name) orelse lists:member(Name, ["spawn",
 -spec reserved_module(string()) -> boolean().
 reserved_module(Name) ->
     reserved(Name, topology_name) orelse lists:member(Name,
-        ["axis", "frame_transport", "frame_queue", "effect_window", "arbitration", "hls_spatial_router"]).
+        ["axis", "frame_transport", "frame_queue", "effect_window", "arbitration", "retained_mux", "hls_spatial_router"]).

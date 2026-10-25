@@ -11,7 +11,7 @@ support(Partition, #{actors := Actors, schedulers := Groups}) ->
      [collector_proc(A, Inputs) || A <- Actors,
         Inputs <- [hls_partition_reduction:inputs(A, Partition)], Inputs =/= []]].
 
-%% DSLX type parameters cannot abstract the actor's nominal aggregate and batch types.
+%% The opening proc calls concrete actor callbacks; its polling mux is still emitted beside it.
 -spec template(module()) -> binary().
 template(Module) ->
     Path = filename:join([code:priv_dir(hls_fabric), "xls", "partition_reduction.x.in"]),

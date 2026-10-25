@@ -200,7 +200,7 @@ emit_protocol_network.sh → hls-fabric emit --kind network
   → hls_source_build:write/3 → hls_protocol_network:write/2
     → hls_protocol_network:emit/1
       → hls_protocol_transport:plan/1 (fresh sources, exact inboxes and transport)
-        → hls_protocol_ingress:plan/1 + hls_protocol_schema:domains/2
+        → hls_protocol_control:plan/1 + hls_protocol_schema:domains/2
         → hls_protocol_inbox:attach/5 (checked host slot)
       → hls_protocol_network:emit/2
         → hls_protocol_transport:emit/1 (prepared actor and transport files)
@@ -350,7 +350,11 @@ ingresses => [{host, {rectangle, [3,2]}, [
 ]}]
 ```
 
-`hls_protocol_transport:write/2` calls `hls_protocol_ingress:plan/1` on its freshly compiled bundle. `hls_protocol_schema:domains/2` derives each target's complete header/length/padding masks from the recipients' ordinary source codecs. All recipients of one target must agree on those encodings and the ordered source field names/types; equal masks alone cannot establish schema compatibility. Unsupported codecs, ambiguous recipients, missing schemas and unsupported shapes reject before hardware emission. The shared schema module also encodes startup records; it does not infer a domain from fixture traffic or source-state invariants.
+`hls_protocol_transport:prepare/1` calls `hls_protocol_control:plan/1` once on its freshly compiled bundle. `hls_protocol_schema:domains/2` derives each target's complete header/length/padding masks from the recipients' ordinary source codecs. All recipients of one target must agree on those encodings and the ordered source field names/types; equal masks alone cannot establish schema compatibility. Unsupported codecs, ambiguous recipients, missing schemas and unsupported shapes reject before hardware emission. The shared schema module also encodes startup records; it does not infer a domain from fixture traffic or source-state invariants.
+
+That checked control plan owns both native and host bindings. `hls_protocol_control:project/2` restricts native recipients without renumbering global actor indices; `hls_protocol_transport:control/1` retains the whole plan for application, multi-device and mixed BEAM/native host binding. Host selection and packing share `hls_partition_ingress:select/5`, also used by the scheduler's partition client. The mixed runner only filters selected indices by BEAM ownership. Coordinates belong to each target, so the same actor can occupy different points in different targets without host/hardware disagreement.
+
+For framed builds, `hls_protocol_control:framed/2` checks the selected adapter and explicit activation, then supplies the decoder, ordered gateway, activation wiring, port widths and support-file dependencies. The builders validate the emitted boundary against that contract. The optional XLS driver resolves the emitted support paths; it does not choose control semantics. Rectangle is still the only supported adapter, with its existing fixed wire format. Adding a different interface requires its checked plan, host codec and hardware implementation, not just a new width setting.
 
 `xls_protocol_network:emit/2` calls `xls_protocol_ingress:emit/1` to emit source-bound constant tables. The static parametric `protocol_ingress.x` performs decoding and the registered transition. The network wires its held frame into the addressed receivers' ordinary host inbox slot, and each receiver's committed `take` bit back to that recipient's pending bit. `accepted` is only reservation and must never retire a command. All behavior is DSLX; Verilog remains the mechanical pin adapter.
 

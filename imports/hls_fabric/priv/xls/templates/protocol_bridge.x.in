@@ -1,6 +1,6 @@
 import boundary;
 import protocol_bridge as b;
-import protocol_rectangle as control;
+import @@CONTROL_DECODER@@ as control;
 
 // Sampled bridge pins.
 pub struct Inputs {

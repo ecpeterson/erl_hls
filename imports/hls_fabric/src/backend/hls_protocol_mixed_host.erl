@@ -17,12 +17,10 @@ connect(#{actors:=Actors},Pids,Handles)->
     end,lists:sort(maps:to_list(Actors))),ok.
 
 -doc "Validates a source rectangle and returns its shared wire payload plus actual BEAM recipient indices. The central owner must admit the record to every listed actor before transmitting the command, preserving order with later start/control. No per-recipient record copies or implicit broadcast to excluded actors.".
--spec controls(map(),hls_partition_wire:command()) -> {binary(),[non_neg_integer()],tuple()}.
-controls(#{application:=Application,actors:=Actors,ingress:=#{id:=Ingress,targets:=Targets}},
-        Command={Ingress,Target,{X0,Y0,X1,Y1},Record})->
-    Payload=hls_protocol_application_binding:control(Application,Command),
-    [#{recipients:=Recipients}]=[T||T=#{id:=Id}<-Targets,Id=:=Target],
-    {Payload,[I||#{index:=I,x:=X,y:=Y}<-Recipients,is_map_key(I,Actors),X>=X0,X=<X1,Y>=Y0,Y=<Y1],Record}.
+-spec controls(map(),hls_partition_wire:rectangle()) -> {binary(),[non_neg_integer()],tuple()}.
+controls(#{application:=Application,actors:=Actors},Command)->
+    {Payload,Recipients,Record}=hls_protocol_application_binding:delivery(Application,Command),
+    {Payload,[I||I<-Recipients,is_map_key(I,Actors)],Record}.
 
 -doc "Enumerates bound BEAM startup records in their original actor-local order. They must pass the same exclusive admission path as controls and native messages before connection/start.".
 -spec startup(map()) -> [{non_neg_integer(),tuple()}].

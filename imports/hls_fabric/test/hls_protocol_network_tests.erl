@@ -44,7 +44,7 @@ receiver_owned_slices_test() ->
         receivers => [#{index => 2, file => <<"receivers/receiver_2.x">>,
             manifest => #{inbox => Inbox}}],
         bundle => #{topology => #{externals => []}}, inspection => none,
-        activation => automatic, ingress => #{actors => 3, width => 3, height => 1,
+        activation => automatic, ingress => #{kind => rectangle, input_bits => 194, actors => 3, width => 3, height => 1,
             state_bits => 132, targets => [#{recipients => [#{index => 2, x => 2, y => 0}],
                 domains => [#{mask => 0, value => 0}]}]}},
     %% Stub components supply content hashes only; this test does not claim an XLS-compiled network.

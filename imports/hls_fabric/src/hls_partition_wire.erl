@@ -1,7 +1,7 @@
 -module(hls_partition_wire).
 -moduledoc "Checked application bindings and codecs for one rectangle ingress per device.".
--export([deployment/1, binding/4, command/2, event/4, wrapper/3]).
--export_type([command/0]).
+-export([deployment/1, binding/4, command/2, control_payload/1, event/4, wrapper/3]).
+-export_type([command/0, rectangle/0]).
 
 %% Fixed application-gateway bindings, unrelated to actor IDs or geometry.
 %% The values are arbitrary; the XLS gateway shares FIRST_EVENT_ENDPOINT.
@@ -9,7 +9,10 @@
 -define(FIRST_EVENT_ENDPOINT, 8).
 
 -doc "A typed rectangle record, or start for every explicitly activated device. Start admission is distinct from the returned started event.".
--type command() :: start | {atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()}.
+-type command() :: start | rectangle().
+
+-doc "A typed record addressed to one ingress target within inclusive rectangle bounds. Encoding validates bounds and the target's accepted schemas.".
+-type rectangle() :: {atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()}.
 
 -doc "Derives fixed control/event endpoints and a per-device SHA-256 identity covering placement, startup and wire bindings.".
 -spec deployment(map()) -> map().
@@ -60,11 +63,15 @@ command(#{devices := Devices}, start) ->
 command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds, Message}) ->
     [begin
         #{host := Host, control := Control, ingress := Ingress} = maps:get(Device, Devices),
-        <<X0:16, Y0:16, X1:16, Y1:16, Kind:2, Words:8, 0:16, Tag:8, Payload:96>> = Packet,
-        Bytes = <<X0:16/little, Y0:16/little, X1:16/little, Y1:16/little,
-            Kind:32/little, Words:8, 0:16, Tag:8, Payload:(Words*32)/little>>,
-        {Device, {Host, Control}, {2, 0, 0}, Bytes}
+        {Device, {Host, Control}, {2, 0, 0}, control_payload(Packet)}
     end || {Device, Packet} <- hls_partition_ingress:commands(Partition, Ingress, Target, Bounds, Message)].
+
+-doc "Converts a checked 194-bit spatial command to its routed little-endian rectangle payload. Keeps global bounds and sends exactly the declared ordinary payload words. This is wire packing, not source schema validation; use select/5 or commands/5 in hls_partition_ingress first.".
+-spec control_payload(bitstring()) -> binary().
+control_payload(<<X0:16, Y0:16, X1:16, Y1:16, Kind:2, Words:8, 0:16, Tag:8, Payload:96>>)
+        when Words =< 3 ->
+    <<X0:16/little, Y0:16/little, X1:16/little, Y1:16/little,
+        Kind:32/little, Words:8, 0:16, Tag:8, Payload:(Words*32)/little>>.
 
 -doc "Decodes a bound external record or canonical application started reply, rejecting wrong routes, headers, lengths and nonzero codec padding. The stream client checks that activation was requested.".
 -spec event(map(), hls_fabric:route(), hls_fabric:header(), binary()) -> {term(), tuple()}.

@@ -53,12 +53,12 @@ ports(#{inspection := Inspection, activation := Activation, ingress := Ingress,
     {RemoteInputs, RemoteOutputs} = xls_protocol_partition:ports(Fabric),
     Inspect = Inspection =:= process,
     Explicit = Activation =:= explicit_start,
-    Host = Ingress =/= none,
+    {ControlInputs, ControlOutputs} = hls_protocol_control:ports(Ingress),
     Inputs = [{"reset", 1}] ++ optional(Inspect, [{"inspect_address", 32}]) ++
-        optional(Explicit, [{"start_valid", 1}]) ++ optional(Host, [{"ingress_valid", 1}, {"ingress_data", 194}]) ++
+        optional(Explicit, [{"start_valid", 1}]) ++ ControlInputs ++
         [{boundary(B) ++ "_ready", 1} || B <- Boundaries] ++ RemoteInputs,
     Outputs = [{"startup_done", 1}] ++ optional(Inspect, [{"inspect_value", 128}]) ++
-        optional(Explicit, [{"start_ready", 1}, {"running", 1}]) ++ optional(Host, [{"ingress_ready", 1}, {"ingress_fault", 1}]) ++
+        optional(Explicit, [{"start_ready", 1}, {"running", 1}]) ++ ControlOutputs ++
         lists:append([[{actor(I) ++ "_failure", 16}, {actor(I) ++ "_fault", 1}] || #{index := I} <- Sources]) ++
         lists:append([[{boundary(B) ++ "_valid", 1}, {boundary(B) ++ "_data", W}]
             || B = #{output := #{width := W}} <- Boundaries]) ++ RemoteOutputs,

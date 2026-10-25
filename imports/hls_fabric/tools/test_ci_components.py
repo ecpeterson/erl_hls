@@ -35,6 +35,8 @@ def main() -> None:
     for name in ['effect_window', 'frame_queue', 'indexed_gather_ram', 'mailbox', 'scheduler', 'scheduler_observation']:
         command(name, [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none', '--max_ticks=1000', *options,
                        ROOT / 'priv/xls/lib' / (name + '.x')])
+    command('retained-mux', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
+        '--compare=none', '--max_ticks=1000', *options, ROOT / 'test/xls/retained_mux_test.x'])
     command('bridge-transitions', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
         '--compare=none', *options, ROOT / 'test/rtl/protocol_bridge_transitions.x'])
     command('execution', ['bash', 'tools/test_local_execution.sh', args.xls, args.stage / 'execution'])

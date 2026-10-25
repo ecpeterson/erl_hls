@@ -29,7 +29,7 @@ emit(Config = #{devices := Devices, limits := Limits = #{commands := Commands, e
     _ = hls_protocol_relay_queue:new(Plan, Sessions),
     Owners = maps:from_list([{Id, D} || {D, #{native_actors := Ids}} <- maps:to_list(Devices), Id <- Ids]),
     Hosts = maps:map(fun(_, #{host := H}) -> H end, Bridges),
-    Application = hls_protocol_application_binding:bind(Bundle, Owners, Hosts),
+    Application = hls_protocol_application_binding:bind(Bundle, hls_protocol_transport:control(Program), Owners, Hosts),
     Deployment = Plan#{application => Application, eligible => false,
         directories => maps:from_list([{D, Name} || #{device := D, directory := Name} <- Roles])},
     Files = hls_generated_files:merge([hls_generated_files:prefix(Name, RoleFiles)

@@ -42,3 +42,22 @@ collision() ->
     T=#{actors:=Actors,routes:=Routes}=hls_protocol_boundary_fixture:topology(),
     T#{actors:=Actors#{conflict=>hls_protocol_application_conflict},
        routes:=Routes++[{{conflict,monitor},[{external,shared}]}]}.
+
+%% Program text stays fixed across applications; only typed configuration values change.
+-spec gateway_configuration_test() -> ok.
+gateway_configuration_test() ->
+    Hardware = hls_protocol_control:framed(#{kind => rectangle, input_bits => 194}, #{}),
+    Binding = #{identity => <<1:64/little, 2:64/little, 3:64/little, 4:64/little>>,
+        host => 19, control => 7, events => #{0 => event}, control_adapter => Hardware},
+    First = xls_protocol_application:emit(Binding),
+    Second = xls_protocol_application:emit(Binding#{host := 65535, events := #{0 => a, 1 => b}}),
+    {ok, Source} = file:read_file(filename:join(code:priv_dir(hls_fabric),
+        "xls/templates/protocol_application.x")),
+    ?assertEqual(Source, maps:get("gateway.x", First)),
+    ?assertEqual(Source, maps:get("gateway.x", Second)),
+    Config = iolist_to_binary(maps:get("application_config.x", First)),
+    lists:foreach(fun(Declaration) -> ?assertNotEqual(nomatch, binary:match(Config, Declaration)) end,
+        [<<"pub const EVENTS = u32:1;">>, <<"pub const ID0 = u64:1;">>,
+         <<"pub const ID3 = u64:4;">>, <<"pub const HOST = u16:19;">>,
+         <<"pub const CONTROL = u16:7;">>]),
+    ?assertNotEqual(Config, iolist_to_binary(maps:get("application_config.x", Second))).

@@ -1,17 +1,18 @@
 -module(hls_protocol_application_binding).
 -moduledoc "Source-checked host codecs shared by single-device gateways and framed deployments. Descriptors are trusted local compiler outputs, never network terms.".
--export([bind/3, control/2, event/4]).
+-export([bind/4, control/2, delivery/2, event/4]).
 
--doc "Checks loaded codecs against fresh source records and binds every actor to exactly one supplied device. Hosts supply positive 16-bit addresses. External schemas include only that device's actual producers. Returns typed rectangle and event bindings; transport identities and admission remain the caller's responsibility.".
--spec bind(map(),map(),map()) -> map().
-bind(#{topology:=Topology=#{actors:=Actors,routes:=Routes,externals:=Externals},modules:=Modules},Owners,Hosts) ->
+-doc "Checks loaded codecs against fresh source records and binds every actor to exactly one supplied device. Control is the unchanged whole plan from that same source build, never a native projection. Hosts supply positive 16-bit addresses. External schemas include only that device's actual producers. Returns typed control and event bindings; transport identities and admission remain the caller's responsibility.".
+-spec bind(map(),none | map(),map(),map()) -> map().
+bind(#{topology:=Topology=#{actors:=Actors,routes:=Routes,externals:=Externals},modules:=Modules},Control,Owners,Hosts) ->
     true=lists:sort(maps:keys(Owners))=:=lists:sort([Id||#{id:=Id}<-Actors]),
     true=lists:sort(maps:keys(Hosts))=:=lists:usort(maps:values(Owners)),
     Interfaces=hls_actor_interface:from_modules(maps:keys(Modules)),
     maps:foreach(fun(M,A)->check_codec(M,A,maps:get(M,Interfaces)) end,Modules),
     ok=check_externals(Topology,Modules,Interfaces),
-    Bound=[A#{identity=>{actor,Id},device=>maps:get(Id,Owners)}||A=#{id:=Id}<-Actors],
-    Ingresses=hls_partition_ingress:lower(Topology,Bound,Interfaces),
+    Bound=[A#{identity=>{actor,Id},index=>I,device=>maps:get(Id,Owners)}
+        ||{I,A=#{id:=Id}}<-lists:enumerate(0,Actors)],
+    Ingresses=hls_protocol_control:host_ingresses(Control,Bound),
     PortRoutes=[R#{source:={{actor,Id},Port}}||R=#{source:={Id,Port}}<-Routes],
     Ports=[E#{port=>"external_"++integer_to_list(I)}||{I,E}<-lists:enumerate(0,Externals)],
     Partition=#{actors=>Bound,routes=>PortRoutes,ingresses=>Ingresses},
@@ -22,10 +23,17 @@ bind(#{topology:=Topology=#{actors:=Actors,routes:=Routes,externals:=Externals},
     #{partition=>Partition,devices=>Devices}.
 
 -doc "Encodes a typed rectangle using the checked source schemas. All selected devices must share the same command bytes. The relay broadcasts those global bounds; each native sparse mask discards unowned targets. An empty selection or malformed command is rejected before queue admission.".
--spec control(map(),hls_partition_wire:command()) -> binary().
+-spec control(map(),hls_partition_wire:rectangle()) -> binary().
 control(Application,Command) ->
-    [Payload]=lists:usort([Bytes||{_,_,{2,0,0},Bytes}<-hls_partition_wire:command(Application,Command)]),
+    {Payload,_,_}=delivery(Application,Command),
     Payload.
+
+-doc "Returns one checked command payload, its exact global actor indices and the original record. Uses the shared partition selector for schema packing and geometry; host owners filter these indices by actual local ownership. Rejects empty selection before queue admission. No transport or actor delivery occurs here.".
+-spec delivery(map(),hls_partition_wire:rectangle()) -> {binary(),[non_neg_integer()],tuple()}.
+delivery(#{partition:=Partition},{Ingress,Target,Bounds,Record}) ->
+    #{packet:=Packet,recipients:=Recipients=[_|_]}=
+        hls_partition_ingress:select(Partition,Ingress,Target,Bounds,Record),
+    {hls_partition_wire:control_payload(Packet),[maps:get(index,A)||A<-Recipients],Record}.
 
 -doc "Decodes a canonical external frame at the emitted global endpoint index, using only the emitting device's producer schemas. Rejects unknown selectors, wrong word counts and noncanonical padding. This is codec validation, not application-semantic validation.".
 -spec event(map(),term(),byte(),non_neg_integer()) -> {term(),tuple()}.

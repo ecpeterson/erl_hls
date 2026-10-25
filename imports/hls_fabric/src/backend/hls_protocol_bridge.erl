@@ -25,33 +25,33 @@ emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_co
 
 -doc "Generates a planned partition through its boundary and framed bridge without writing output. Options supplies host/service, rectangle control and network modes; the unchanged in-process Build fixes source and native placement. Returns relative filenames with IO data and named bridge/transport descriptors with the manifest. Template and support-library reads remain; retain the loaded source codecs.".
 -spec emit(hls_protocol_transport:build(), map()) -> hls_generated_files:output().
-emit(Build, Config = #{host := Host, service := Service})
+emit(Build, Config = #{host := Host, service := Service, control := _})
         when is_integer(Host),is_integer(Service),Host>0,Host<65536,Service>0,Service<65536,Host=/=Service ->
     case maps:keys(maps:without([host, service, control, activation, inspection], Config)) of
         [] -> ok;
         Unknown -> error({unsupported_bridge_options, lists:sort(Unknown)})
     end,
-    explicit_start=maps:get(activation,Config,explicit_start),
-    rectangle=maps:get(control,Config),
+    #{ingress := Control} = hls_protocol_transport:descriptor(Build),
+    Hardware = hls_protocol_control:framed(Control, Config),
     %% A whole-network plan cannot be silently treated as a framed partition.
     #{fabric := #{crossings := _}} = hls_protocol_transport:descriptor(Build),
     #{files := BoundaryFiles,
-      result := #{boundary := Boundary = #{inputs := Inputs, externals := Externals}, transport := Plan}} =
+      result := #{boundary := Boundary = #{externals := Externals}, transport := Plan}} =
         hls_protocol_boundary:emit(Build,(maps:with([inspection],Config))#{activation=>explicit_start}),
-    true=lists:member(#{name=><<"ingress_data">>,width=>194},Inputs),
+    ok = hls_protocol_control:check_boundary(Hardware, Boundary),
     #{fabric:=#{sources:=Sources,crossings:=Cross},bundle:=#{topology:=#{actors:=Actors}}}=Plan,
     Incoming=[L||L=#{direction:=incoming}<-Cross],Outgoing=[L||L=#{direction:=outgoing}<-Cross],
     true=Incoming=/=[] andalso Outgoing=/=[] andalso Externals=/=[],
     true=lists:all(fun(#{index:=I,slots:=N})->I<65536 andalso N>0 andalso N<256 end,Cross),
     Credits=[#{link=>I,slot=>K}||#{index:=I,classes:=Cs}<-Incoming,#{slot:=K}<-Cs],
     true=length(Credits)+length(Outgoing)+length(Externals)=<256,
-    Libraries=[begin {ok,Bytes0}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/lib/"++File)),
-        #{file=>list_to_binary(File),sha256=>binary:encode_hex(crypto:hash(sha256,Bytes0),lowercase)}
-        end||File<-["protocol_bridge.x","protocol_framing.x","protocol_rectangle.x"]],
+    Libraries=[begin {ok,Bytes0}=file:read_file(filename:join([code:priv_dir(hls_fabric),"xls/lib",File])),
+        #{file=>File,sha256=>binary:encode_hex(crypto:hash(sha256,Bytes0),lowercase)}
+        end||File<-[<<"protocol_bridge.x">>,<<"protocol_framing.x">>] ++ maps:get(bridge_libraries, Hardware)],
     Content=hls_protocol_identity:boundary(Plan,BoundaryFiles),
-    Identity=crypto:hash(sha256,term_to_binary({source_partition_bridge,3,Host,Service,rectangle,Boundary,Content,
+    Identity=crypto:hash(sha256,term_to_binary({source_partition_bridge,4,Host,Service,Hardware,Boundary,Content,
         Libraries},[deterministic])),
-    Bridge=#{identity=>Identity,host=>Host,service=>Service,links=>Cross,control=>rectangle,libraries=>Libraries,
+    Bridge=#{identity=>Identity,host=>Host,service=>Service,links=>Cross,control=>maps:get(kind,Hardware),control_adapter=>Hardware,libraries=>Libraries,
         native_indices=>[I||#{index:=I}<-Sources],actors=>length(Actors),externals=>Externals,
         incoming=>Incoming,outgoing=>Outgoing,credits=>Credits,eligible=>false},
     #{files := BridgeFiles, result := Manifest} = xls_protocol_bridge:emit(Bridge, Boundary, BoundaryFiles),

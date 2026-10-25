@@ -79,7 +79,7 @@ ingress(Directory) ->
         end||#{id:=Id,selector:=Selector,domains:=Domains,recipients:=Points}<-Targets]
     end,
     lists:foreach(fun(#{index:=I,manifest:=#{inbox:=#{host:=#{slots:=N}}}})->
-        N=case hls_protocol_ingress:addressed(Plan,I) of true->1;false->0 end
+        N=case hls_protocol_control:addressed(Plan,I) of true->1;false->0 end
     end,Receivers),
     file:write_file(filename:join(Directory,"ingress-reference.json"),json:encode(#{targets=>Rows}),[exclusive]).
 

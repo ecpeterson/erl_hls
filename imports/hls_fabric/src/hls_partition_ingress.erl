@@ -1,6 +1,6 @@
 -module(hls_partition_ingress).
 -moduledoc "Rectangle control over checked device ownership; delivery is ordered per actor, not atomic across devices.".
--export([lower/3, commands/5]).
+-export([lower/3, commands/5, select/5]).
 
 -doc "Checks shared ingress encodings and expands logical selections to placed actor points.".
 -spec lower(hls_topology:plan(), [map()], map()) -> [map()].
@@ -24,7 +24,15 @@ bindings(#{actor := Actor, at := Point, targets := Targets}, Actors) ->
 -doc "Packs one spatial command per selected device, retaining global bounds. Raises on invalid bounds, targets or schemas; the caller must preserve order and abort partial failure without replay.".
 -spec commands(map(), atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()) ->
     [{term(), bitstring()}].
-commands(#{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
+commands(Partition, Id, TargetId, Rectangle, Message) ->
+    #{packet := Packet, recipients := Recipients} =
+        select(Partition, Id, TargetId, Rectangle, Message),
+    [{Device, Packet} || Device <- lists:usort([D || #{device := D} <- Recipients])].
+
+-doc "Validates and packs one rectangle, returning its exact selected actor bindings with the common spatial frame. Selection may be empty; each consumer decides whether that is admissible. Preserves checked binding order and metadata so host and native recipients share one geometry decision. Raises on invalid bounds, target or record encoding before any delivery.".
+-spec select(map(), atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()) ->
+    #{packet := bitstring(), recipients := [map()]}.
+select(#{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
     [#{shape := Shape, targets := Targets, bindings := Bindings}] =
         [I || I = #{id := Name} <- Ingresses, Name =:= Id],
     ok = bounds(Rectangle, Shape),
@@ -42,9 +50,9 @@ commands(#{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
     {X0, Y0, X1, Y1} = Rectangle,
     Packet = <<X0:16, Y0:16, X1:16, Y1:16, Target:2,
         (Width div 32):8, 0:16, Selector:8, Value:96>>,
-    Devices = lists:usort([D || #{device := D, point := [X, Y]} <- Candidates,
-        X0 =< X, X =< X1, Y0 =< Y, Y =< Y1]),
-    [{Device, Packet} || Device <- Devices].
+    Recipients = [A || A = #{point := [X, Y]} <- Candidates,
+        X0 =< X, X =< X1, Y0 =< Y, Y =< Y1],
+    #{packet => Packet, recipients => Recipients}.
 
 %% Reject wrapping or out-of-domain rectangles before any device is contacted.
 -spec bounds({integer(), integer(), integer(), integer()}, [pos_integer()]) -> ok.

@@ -32,13 +32,15 @@ emit(Bridge=#{identity:=Identity,incoming:=Incoming,outgoing:=Outgoing,credits:=
 %% The template makes the old-observation/framing/final-acceptance order explicit.
 -spec source(map(), map(), [{string(), pos_integer()}], [{string(), pos_integer()}]) -> iodata().
 source(#{identity := Identity, host := Host, service := Service,
-        incoming := Incoming, outgoing := Outgoing, credits := Credits},
+        incoming := Incoming, outgoing := Outgoing, credits := Credits,
+        control_adapter := #{bridge_decoder := Decoder}},
         #{outputs := NativeOutputs, externals := Externals}, Inputs, Outputs) ->
     I = length(Incoming), C = length(Credits), O = length(Outgoing), E = length(Externals),
     Directory = filename:join(code:priv_dir(hls_fabric), "xls/templates"),
     {ok, Template} = file:read_file(filename:join(Directory, "protocol_bridge.x.in")),
     {ok, Clock} = file:read_file(filename:join(Directory, "protocol_boundary_clock.x.in")),
     Bindings = [
+        {<<"@@CONTROL_DECODER@@">>, Decoder},
         {<<"@@INPUT_FIELDS@@">>, fields(Inputs)},
         {<<"@@OUTPUT_FIELDS@@">>, fields(Outputs)},
         {<<"@@STATE_DIMENSIONS@@">>, dimensions([I, C, O])},

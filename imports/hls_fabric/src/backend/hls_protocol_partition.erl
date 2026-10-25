@@ -23,7 +23,7 @@ plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sour
                 ||L=#{index:=I,destination_index:=D}<-Links,lists:member(D,Native)],
             Cut=Fabric#{sources:=[S||S=#{index:=I}<-Sources,lists:member(I,Native)],links:=LocalLinks,
                 boundaries:=[B||B=#{source_index:=I}<-Boundaries,lists:member(I,Native)],crossings=>Cross},
-            #{fabric=>Cut,ingress=>ingress(Ingress,Native),indices=>Native}
+            #{fabric=>Cut,ingress=>hls_protocol_control:project(Ingress,Native),indices=>Native}
     end.
 
 %% Destination operation numbering may differ from the sender's numbering.
@@ -37,10 +37,3 @@ classes(#{destination_index:=D,pair:=#{slots:=Slots}},#{topology:=#{actors:=Acto
         [Op]=[O||{O,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
         #{slot=>I,channel=>C,codec=>hls_protocol_codec:plan(Channel,Op)}
     end||#{index:=I,channel:=C}<-Slots].
-
-%% Global mask indices survive holes; a target may address no actor on this role.
--spec ingress(none | map(),[non_neg_integer()]) -> none | map().
-ingress(none,_) -> none;
-ingress(Ingress=#{targets:=Targets},Native) ->
-    Ingress#{targets:=[T#{recipients:=[R||R=#{index:=I}<-Rs,lists:member(I,Native)]}
-        ||T=#{recipients:=Rs}<-Targets]}.

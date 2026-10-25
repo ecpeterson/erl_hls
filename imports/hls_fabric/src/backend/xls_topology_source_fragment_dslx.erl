@@ -259,10 +259,11 @@ router_spawn_arguments(Spec, Scheduler = #{index := Source}) ->
 -doc "Renders source-fragment declarations, planes and aggregate-output arbitration.".
 -spec support(map()) -> iodata().
 support(Spec) ->
+    Muxed = lists:any(fun(Scheduler) ->
+        length(scheduler_planes(Spec, Scheduler)) > 1
+    end, maps:get(schedulers, Spec)),
     [
-        [aggregate_mux_proc(Spec, Scheduler)
-            || Scheduler <- maps:get(schedulers, Spec),
-               length(scheduler_planes(Spec, Scheduler)) > 1],
+        case Muxed of true -> "import retained_mux;\n"; false -> [] end,
         [[fragment_declarations(Plane), fragment_plane_proc(Plane)]
             || Plane <- maps:get(source_fragment_planes, Spec, [])]
     ].
@@ -468,37 +469,6 @@ bank_binding(#{ordinal := Ordinal}) ->
 %%% Aggregate arbitration and graph wiring
 %%%
 
-%% A scheduler with several planes retains one aggregate per incoming lane.
--spec aggregate_mux_proc(map(), map()) -> binary().
-aggregate_mux_proc(Spec, Scheduler = #{module_name := Module}) ->
-    Count = length(scheduler_planes(Spec, Scheduler)),
-    CountText = integer_to_list(Count),
-    State = mux_state_name(Scheduler),
-    Request = [Module, "::ReductionAggregateRequest"],
-    render_template("source_fragment_mux.x.in", [
-        {<<"@@STATE_DECLARATION@@">>, State},
-        {<<"@@CURSOR_TYPE@@">>, xls_nums:index_type(Count)},
-        {<<"@@VALID_COUNT@@">>, CountText},
-        {<<"@@STATE_REQUEST@@">>, Request},
-        {<<"@@STATE_VALUE_COUNT@@">>, CountText},
-        {<<"@@MUX_NAME@@">>, mux_name(Scheduler)},
-        {<<"@@INPUT_REQUEST@@">>, Request},
-        {<<"@@INPUT_COUNT@@">>, CountText},
-        {<<"@@OUTPUT_REQUEST@@">>, Request},
-        {<<"@@CONFIG_INPUT_REQUEST@@">>, Request},
-        {<<"@@CONFIG_INPUT_COUNT@@">>, CountText},
-        {<<"@@CONFIG_OUTPUT_REQUEST@@">>, Request},
-        {<<"@@INITIAL_STATE@@">>, State},
-        {<<"@@PRIOR_STATE@@">>, State},
-        {<<"@@ACCUMULATOR_VALID_COUNT@@">>, CountText},
-        {<<"@@ACCUMULATOR_REQUEST@@">>, Request},
-        {<<"@@ACCUMULATOR_VALUE_COUNT@@">>, CountText},
-        {<<"@@CAPTURE_COUNT@@">>, CountText},
-        {<<"@@EMPTY_REQUEST@@">>, Request},
-        {<<"@@NEXT_STATE@@">>, State},
-        {<<"@@CURSOR_COUNT@@">>, CountText}
-    ]).
-
 -doc "Emit bounded aggregate handoffs for a scheduler and its selected reduction planes.".
 -spec scheduler_channels(map(), map()) -> iodata().
 scheduler_channels(Spec, Scheduler = #{stem := Stem, module_name := Module}) ->
@@ -547,11 +517,12 @@ plane_channels(Spec) ->
 aggregate_mux_spawns(Spec) ->
     [
         [
-            "    spawn ", mux_name(Scheduler), "(\n",
+            "    spawn retained_mux::Mux<", Module, "::ReductionAggregateRequest, u32:",
+            integer_to_list(length(scheduler_planes(Spec, Scheduler))), ">(\n",
             "      ", Stem, "_aggregate_sources_c, ", Stem,
             "_aggregate_p);\n"
         ]
-        || Scheduler = #{stem := Stem} <- maps:get(schedulers, Spec),
+        || Scheduler = #{stem := Stem, module_name := Module} <- maps:get(schedulers, Spec),
            length(scheduler_planes(Spec, Scheduler)) > 1
     ].
 
@@ -644,16 +615,6 @@ batch_output_name(#{id := Id}) ->
     [atom_to_list(Id), "_reduction_out"].
 
 
-
-%% Names the aggregate arbiter feeding a physical group.
--spec mux_name(map()) -> [string(),...].
-mux_name(#{index := Index}) ->
-    ["SchedulerAggregateArrayMux", integer_to_list(Index)].
-
-%% Names the retained arbitration state for aggregate delivery.
--spec mux_state_name(map()) -> [string(),...].
-mux_state_name(#{index := Index}) ->
-    ["SchedulerAggregateArrayMuxState", integer_to_list(Index)].
 
 %% Templates expose each substitution once and reject missing or unresolved bindings.
 -spec render_template(string(), [{binary(), iodata()}]) -> binary().

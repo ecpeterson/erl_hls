@@ -1,6 +1,6 @@
 -module(hls_protocol_transport).
 -moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
--export([prepare/1, bundle/1, descriptor/1, plan/1, plan/2, emit/1, write/2]).
+-export([prepare/1, bundle/1, control/1, descriptor/1, plan/1, plan/2, emit/1, write/2]).
 -export_type([program/0, build/0]).
 
 %% Source-wide facts are shared by every placement; role selection never recompiles them.
@@ -54,11 +54,15 @@ prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}
     Inbox = hls_protocol_inbox:plan(Capture),
     #program{bundle = Bundle, capture = Capture, transactions = Transactions,
         sources = Publishers, inbox = Inbox, fabric = hls_protocol_fabric:plan(Publishers, Inbox),
-        ingress = hls_protocol_ingress:plan(Bundle), model = Model}.
+        ingress = hls_protocol_control:plan(Bundle), model = Model}.
 
 -doc "Returns the source bundle for downstream placement and host-codec binding. Treat it as read-only and retain the program's source modules; this accessor does not validate supplied bundles.".
 -spec bundle(program()) -> map().
 bundle(#program{bundle = Bundle}) -> Bundle.
+
+-doc "Returns the whole source control plan before native placement. Host bindings retain recipients assigned to BEAM or another device; the transport descriptor's ingress is only the native projection.".
+-spec control(program()) -> none | map().
+control(#program{ingress = Control}) -> Control.
 
 -doc "Prepares one source program and plans its transport without creating output files. Accepts prepare/1 configuration plus plan/2's native_actors and arithmetic_groups options.".
 -spec plan(map()) -> build().
@@ -87,13 +91,13 @@ plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, mo
         Incoming = [L || L = #{destination_index := D} <- maps:get(links, Fabric), D =:= I],
         Messages = lists:append([Ms || #{target := Target, messages := Ms} <- maps:get(startup,Topology), Target =:= Id]),
         Owner = receiver_owner(I, M, Arithmetic, Modules, ActorFunctions),
-        Artifact = hls_protocol_inbox:attach(Owner, Incoming, Capture, Messages, hls_protocol_ingress:addressed(Ingress,I)),
+        Artifact = hls_protocol_inbox:attach(Owner, Incoming, Capture, Messages, hls_protocol_control:addressed(Ingress,I)),
         Relative = filename:join("actors", "receiver_" ++ integer_to_list(I) ++ ".x"),
         #{index => I, module => M, file => list_to_binary(Relative), manifest => hls_local_actor:manifest(Artifact), artifact => Artifact}
     end || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors), lists:member(I, Native)],
     Files = [maps:with([file, artifact], A) || A <- ActorFunctions ++ Receivers],
     Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
-        sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress,
+        sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, whole_control => WholeIngress,
         actor_functions => [maps:remove(artifact, A) || A <- ActorFunctions],
         receivers => [maps:remove(artifact, R) || R <- Receivers]},
     Plan = case Model of none -> Transport; _ -> Transport#{protocol_model => Model} end,

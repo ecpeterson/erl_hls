@@ -144,14 +144,14 @@ application_build() ->
     %% Unique compiler references still vary the identity constant; bind both gateways to the same exact identity.
     Compare = filename:join(Plain, "application-comparison"), ok = file:make_dir(Compare),
     ok = xls_protocol_application:write(Binding, Compare),
-    ?assertEqual(file:read_file(filename:join(Build, "application/gateway.x")),
-        file:read_file(filename:join(Compare, "gateway.x"))),
+    ?assertEqual(file:read_file(filename:join(Build, "application/application_config.x")),
+        file:read_file(filename:join(Compare, "application_config.x"))),
     Files = filelib:fold_files(Build, "\\.(x|sv)$", true, fun(F, Acc) -> [F | Acc] end, []),
     ?assert(Files =/= []),
     lists:foreach(fun(File) ->
         Relative = lists:nthtail(length(Build) + 1, File),
         case Relative of
-            "application/gateway.x" -> ok;
+            "application/application_config.x" -> ok;
             _ -> ?assertEqual(file:read_file(File), file:read_file(filename:join(Plain, Relative)))
         end
     end, Files),

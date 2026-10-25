@@ -1,13 +1,14 @@
 import axis;
-import hls_partition_io;
+import hls_partition_io as gateway;
+import application_config as config;
 
 // Public framed application ports around the shared ordered gateway.
 pub proc Top {
   // The network's endpoint streams preserve per-sender order, not cross-sender chronology.
   config(app_in: chan<axis::Beat> in, app_out: chan<axis::Beat> out,
-      commands_out: chan<hls_partition_io::OrderedCommand> out, started_in: chan<bool> in,
-      events_in: chan<axis::Frame>[@@COUNT@@] in) {
-    spawn hls_partition_io::OrderedBoundary<u32:@@COUNT@@, @@IDENTITY@@, u16:@@HOST@@, u16:@@CONTROL@@>
+      commands_out: chan<gateway::OrderedCommand> out, started_in: chan<bool> in,
+      events_in: chan<axis::Frame>[config::EVENTS] in) {
+    spawn gateway::OrderedBoundary<config::EVENTS, config::ID0, config::ID1, config::ID2, config::ID3, config::HOST, config::CONTROL>
       (app_in, app_out, commands_out, started_in, events_in);
     ()
   }

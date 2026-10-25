@@ -132,13 +132,11 @@ plan() ->
     Actors = maps:from_list([{I, #{module => Module, capacity => 2, startup => [],
         outputs => #{out => {actor, native}}}} || I <- [0, 1]]),
     Ingress = #{id => host, shape => [2, 1], targets => [#{id => all, selector => 0, schemas => [total]}],
-        bindings => [#{module => Module, device => board, point => [I, 0], targets => [all]} || I <- [0, 1]]},
+        bindings => [#{module => Module, index => I, device => board, point => [I, 0], targets => [all]} || I <- [0, 1]]},
     #{actors => Actors, targets => #{{actor, native} => {actor, 2}}, binding => #{host => 55, control => 7},
         mixed => #{identity => <<1:256>>, host_actors => [0, 1], links => Links},
         application => #{partition => #{ingresses => [Ingress]},
-            devices => #{board => #{host => 55, control => 7, ingress => host}}},
-        ingress => #{id => host, targets => [#{id => all,
-            recipients => [#{index => I, x => I, y => 0} || I <- [0, 1]]}]}}.
+            devices => #{board => #{host => 55, control => 7, ingress => host}}}}.
 
 %% Rectangle zero selects the consuming actor; one also selects the postponed actor.
 -spec control(0 | 1, non_neg_integer()) -> hls_partition_wire:command().

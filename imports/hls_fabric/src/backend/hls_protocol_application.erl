@@ -18,17 +18,19 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
         Mode->error({application_requires_explicit_start,Mode})
     end,
     Build = hls_protocol_transport:plan(Config),
+    #{ingress := Control} = hls_protocol_transport:descriptor(Build),
+    Hardware = hls_protocol_control:framed(Control, Config),
     #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Plan}} =
         hls_protocol_boundary:emit(Build,(maps:with([inspection],Config))#{activation=>explicit_start}),
-    Deployment=deployment(Plan,Boundary,BoundaryFiles,Device,Host),
+    Deployment=deployment(Plan,Boundary,BoundaryFiles,Device,Host,Hardware),
     Binding=maps:get(Device,maps:get(devices,Deployment)),
-    Generated = hls_generated_files:merge([BoundaryFiles, #{
-        "application/gateway.x" => xls_protocol_application:emit(Binding),
+    GatewayFiles = hls_generated_files:prefix("application", xls_protocol_application:emit(Binding)),
+    Generated = hls_generated_files:merge([BoundaryFiles, GatewayFiles, #{
         "application/protocol_application_top.sv" => sv_protocol_application:emit(Binding, Boundary),
         "deployment.etf" => term_to_binary(Deployment, [deterministic])}]),
-    Files=["deployment.etf","application/gateway.x","application/protocol_application_top.sv"]++
+    Files=maps:keys(GatewayFiles)++["deployment.etf","application/protocol_application_top.sv"]++
         case maps:get(inspection,Boundary) of none->[];_->["network/inspection.json","network/inspection.etf"] end,
-    Manifest=#{top=>protocol_application_top,activation=>explicit_start,eligible=>false,
+    Manifest=#{top=>protocol_application_top,activation=>explicit_start,eligible=>false,control_adapter=>Hardware,
         inspection=>maps:get(inspection,Boundary),
         identity=>binary:encode_hex(maps:get(identity,Binding),lowercase),
         actors=>maps:get(actors,Boundary),externals=>maps:get(externals,Boundary),
@@ -38,14 +40,15 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
 emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_config:read(Filename)).
 
 %% Bind the same source-checked codecs used by framed deployments to one gateway identity.
--spec deployment(map(),map(),hls_generated_files:files(),term(),1..65535) -> map().
-deployment(Plan=#{bundle:=Bundle=#{topology:=#{actors:=Actors,externals:=Externals}}},
-        Boundary=#{activation:=explicit_start,externals:=Outputs,inputs:=Inputs},Files,Device,Host) ->
-    true=lists:member(#{name=><<"ingress_data">>,width=>194},Inputs),
+-spec deployment(map(),map(),hls_generated_files:files(),term(),1..65535,map()) -> map().
+deployment(Plan=#{whole_control:=Control,bundle:=Bundle=#{topology:=#{actors:=Actors,externals:=Externals}}},
+        Boundary=#{activation:=explicit_start,externals:=Outputs},Files,Device,Host,Hardware) ->
+    ok = hls_protocol_control:check_boundary(Hardware, Boundary),
     Ids=[iolist_to_binary(io_lib:format("~0tp",[Id]))||#{id:=Id}<-Externals],
     Ids=[Id||#{id:=Id}<-Outputs],
     Owners=maps:from_list([{Id,Device}||#{id:=Id}<-Actors]),
-    Application=#{devices:=#{Device:=Binding}}=hls_protocol_application_binding:bind(Bundle,Owners,#{Device=>Host}),
+    Application=#{devices:=#{Device:=Raw}}=hls_protocol_application_binding:bind(Bundle,Control,Owners,#{Device=>Host}),
+    Binding = Raw#{control_adapter => Hardware},
     Content=hls_protocol_identity:boundary(Plan,Files),
-    Identity=crypto:hash(sha256,term_to_binary({source_protocol_application,3,Content,Boundary,Device,Binding},[deterministic])),
+    Identity=crypto:hash(sha256,term_to_binary({source_protocol_application,4,Content,Boundary,Device,Binding},[deterministic])),
     Application#{devices:=#{Device=>Binding#{identity=>Identity}},source_boundary=>Boundary,eligible=>false}.
