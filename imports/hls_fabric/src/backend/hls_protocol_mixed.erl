@@ -1,6 +1,6 @@
 -module(hls_protocol_mixed).
 -moduledoc "Fresh source-bound BEAM/native placement using the shared DSLX bridge. Host admission, transport retirement and application progress are separate obligations.".
--export([plan/1, descriptor/1, emit/1, write/2, encode/3, decode/3]).
+-export([plan/1, descriptor/1, transport/1, emit/1, write/2, encode/3, decode/3]).
 -export_type([plan/0, descriptor/0, result/0, output/0, host_actor/0, link/0, class/0]).
 
 %% Host bindings and target selection are complete before the native bridge can render.
@@ -81,9 +81,8 @@ plan(Config) when is_map(Config) ->
     Application=hls_protocol_application_binding:bind(Bundle,Control,maps:from_list([{Id,board}||#{id:=Id}<-Actors]),#{board=>Host}),
     HostActors=maps:from_list([begin
         Outputs=maps:from_list([begin
-            [Destination]=Recipients,
-            case Destination of {actor,To}->false=lists:member(To,HostIds);{external,_}->ok end,
-            {Port,Destination}
+            Destination = host_destination(Id, Module, Port, Recipients, HostIds),
+            {Port, Destination}
         end||#{source:={From,Port},recipients:=Recipients}<-Routes,From=:=Id]),
         #{program:=Program}=maps:get(Module,Modules),
         #{capacity:=Capacity}=xls_actor_program:spec(Program),
@@ -104,6 +103,10 @@ plan(Filename) -> plan(hls_source_config:read(Filename)).
 -spec descriptor(plan()) -> descriptor().
 descriptor(#plan{descriptor = Descriptor}) -> Descriptor.
 
+-doc "Returns the retained transport placement for source, topology and receiver-layout inspection. Reuses the checked snapshot without recompiling or rendering; retain it unchanged.".
+-spec transport(plan()) -> hls_protocol_transport:build().
+transport(#plan{bridge = Build}) -> hls_protocol_bridge:transport(Build).
+
 -doc "Renders a checked mixed plan, or plans a trusted config map/filename before rendering. Returns relative files and the final runtime deployment without writing output. Retained plans need no source rereads or host-binding checks; templates and support libraries are read at emission.".
 -spec emit(hls_source_config:mixed() | file:filename() | plan()) -> output().
 emit(#plan{bridge = BridgePlan, descriptor = Descriptor = #{mixed := Mixed}}) ->
@@ -113,6 +116,26 @@ emit(#plan{bridge = BridgePlan, descriptor = Descriptor = #{mixed := Mixed}}) ->
     #{files => hls_generated_files:merge([BridgeFiles,
         #{"mixed.etf" => term_to_binary(Deployment, [deterministic])}]), result => Deployment};
 emit(Config) -> emit(plan(Config)).
+
+%% A BEAM output has one crossing or external recipient; host-to-host routing is unsupported.
+-spec host_destination(hls_protocol_topology:id(), module(), atom(),
+    [hls_protocol_topology:destination()], [hls_protocol_topology:id()]) -> hls_protocol_topology:destination().
+host_destination(Id, Module, Port, [Destination], HostIds) ->
+    case Destination of
+        {actor, To} ->
+            case lists:member(To, HostIds) of
+                false -> Destination;
+                true -> hls_diagnostic:raise(mixed, unsupported_host_route,
+                    <<"Mixed builds do not route messages between BEAM actors; place one endpoint in hardware.">>,
+                    #{actor => Id, module => Module, port => Port, destination => Destination,
+                      capability => beam_to_beam})
+            end;
+        {external, _} -> Destination
+    end;
+host_destination(Id, Module, Port, Recipients, _) ->
+    hls_diagnostic:raise(mixed, unsupported_host_fanout,
+        <<"Each BEAM output in a mixed build must have exactly one recipient.">>,
+        #{actor => Id, module => Module, port => Port, recipients => Recipients}).
 
 %% The bridge's destination codecs, not the sender's operation numbering, define crossing frames.
 -spec link_descriptor(hls_protocol_partition:crossing(), [hls_protocol_topology:actor()]) -> link().

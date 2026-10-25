@@ -35,13 +35,16 @@
 plan(#{topology:=#{ingresses:=[]}}) -> none;
 plan(#{topology:=#{actors:=Actors,ingresses:=[#{id:=Id,kind:=rectangle,shape:=[W,H],targets:=Targets}]},modules:=Modules})
         when W>0,W=<65536,H>0,H=<65536,length(Targets)>0,length(Targets)=<4 ->
-    Bound=[target(T,K,Actors,Modules,W,H)||{K,T}<-lists:enumerate(0,Targets)],
+    Bound=[hls_diagnostic:with_context(#{ingress => Id, target => maps:get(id,T,unknown)},
+        fun() -> target(T,K,Actors,Modules,W,H) end) || {K,T} <- lists:enumerate(0,Targets)],
     #{input_bits:=Bits}=rectangle_hardware(),
     #{kind=>rectangle,id=>Id,width=>W,height=>H,actors=>length(Actors),targets=>Bound,input_bits=>Bits,
       state_bits=>129+length(Actors),host_order=>one_command_until_all_selected_actors_consume,
       admission=>after_declared_startup_consumption,malformed=>sticky_fault_without_delivery,
       retirement=>source_consume,reset=>cancels_command_and_fault,capacity=>unestablished,network_progress=>unestablished};
-plan(#{topology:=#{ingresses:=Ingresses}}) -> error({unsupported_protocol_ingress,Ingresses}).
+plan(#{topology:=#{ingresses:=Ingresses}}) -> hls_diagnostic:raise(control, unsupported_protocol_ingress,
+    <<"Use at most one rectangle ingress, with dimensions 1..65536 and one to four targets.">>,
+    #{ingresses => Ingresses}).
 
 -doc "Reports whether the checked plan addresses an actor index. Addressed receivers need exactly one host slot, shared by all targets because at most one host command is outstanding.".
 -spec addressed(none | recipient_view(), non_neg_integer()) -> boolean().
@@ -73,23 +76,38 @@ host_ingresses(#{kind:=rectangle,id:=Id,width:=W,height:=H,targets:=Targets},Act
     #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
     pos_integer(), pos_integer()) -> target().
 target(#{id:=Id,schemas:=Schemas,recipients:=Recipients},Selector,Actors,Modules,W,H) ->
-    case Recipients of []->error({empty_ingress_target,Id}); _->ok end,
+    case Recipients of
+        [] -> hls_diagnostic:raise(control, empty_ingress_target,
+            <<"An ingress target must address at least one actor.">>, #{target => Id});
+        _ -> ok
+    end,
     Points=[begin
         case X>=0 andalso X<W andalso Y>=0 andalso Y<H of
-            true->ok;false->error({ingress_coordinate,Id,[X,Y]})
+            true -> ok;
+            false -> hls_diagnostic:raise(control, ingress_coordinate,
+                <<"Ingress coordinates must lie within the declared rectangle.">>,
+                #{target => Id, actor => Actor, coordinate => [X,Y], shape => [W,H]})
         end,
         [{I,#{module:=M}}]=[{J,A}||{J,A=#{id:=Identity}}<-lists:enumerate(0,Actors),Identity=:=Actor],
-        #{index=>I,x=>X,y=>Y,schemas=>lists:sort(hls_protocol_schema:domains(maps:get(M,Modules),Schemas))}
+        Domains=hls_diagnostic:with_context(#{actor=>Actor,module=>M},
+            fun() -> hls_protocol_schema:domains(maps:get(M,Modules),Schemas) end),
+        #{index=>I,x=>X,y=>Y,schemas=>lists:sort(Domains)}
     end||#{actor:=Actor,at:=[X,Y]}<-Recipients],
     case length(Points)=:=length(Recipients) andalso length(Points)=:=length(lists:usort([I||#{index:=I}<-Points])) of
-        true->ok;false->error({ambiguous_ingress_recipients,Id})
+        true -> ok;
+        false -> hls_diagnostic:raise(control, ambiguous_ingress_recipients,
+            <<"Each ingress target must name every recipient once with an explicit coordinate.">>,
+            #{target => Id, recipients => Recipients})
     end,
     case lists:usort([Fs||#{schemas:=Fs}<-Points]) of
         [Domains]->#{id=>Id,selector=>Selector,schemas=>Schemas,domains=>Domains,
             recipients=>[maps:remove(schemas,P)||P<-Points]};
-        _->error({incompatible_ingress_schemas,Id})
+        _ -> hls_diagnostic:raise(control, incompatible_ingress_schemas,
+            <<"Recipients of an ingress target must share the same canonical schema encodings.">>,
+            #{target => Id, schemas => Schemas, recipients => Recipients})
     end;
-target(Target,_,_,_,_,_) -> error({invalid_ingress_target,Target}).
+target(Target,_,_,_,_,_) -> hls_diagnostic:raise(control, invalid_ingress_target,
+    <<"An ingress target needs an ID, explicit schemas and recipients with coordinates.">>, #{value => Target}).
 
 -doc "Returns the sampled native control input/output ports for a checked plan, in packed interface order. No control contributes no ports. The input width belongs to the adapter, independently of crossing and external frame widths.".
 -spec ports(none | #{kind := rectangle, input_bits := 194, atom() => term()}) ->
@@ -105,9 +123,12 @@ framed(#{kind:=rectangle,input_bits:=Bits},Options) ->
     Hardware=#{input_bits:=Bits}=rectangle_hardware(),
     case {maps:get(control,Options,rectangle),maps:get(activation,Options,explicit_start)} of
         {rectangle,explicit_start} -> Hardware;
-        {Kind,Mode} -> error({unsupported_framed_control,Kind,Mode})
+        {Kind,Mode} -> hls_diagnostic:raise(control, unsupported_framed_control,
+            <<"Framed control requires the rectangle adapter and explicit_start activation.">>,
+            #{control => Kind, activation => Mode})
     end;
-framed(Control,_) -> error({unsupported_framed_control,Control}).
+framed(Control,_) -> hls_diagnostic:raise(control, unsupported_framed_control,
+    <<"Framed builds require a source-declared rectangle ingress.">>, #{control => Control}).
 
 -doc "Checks that a planned or emitted explicit-start boundary provides the adapter's exact native control handshake. Call before rendering the boundary or its framed parent; mismatches fail rather than producing incompatible pin wiring.".
 -spec check_boundary(hardware(), #{activation := explicit_start,

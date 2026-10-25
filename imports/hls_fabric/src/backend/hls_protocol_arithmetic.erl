@@ -10,13 +10,19 @@
 -doc "Resolves groups of two or three logical actor IDs against a fresh bundle and its native placement. Every member must use the same source module with scalar reductions, no indexed gathers or retained calls. Groups must be disjoint and wholly native. Returns source-bound indices and cursor costs; this is sharing configuration, not progress, resource-fit or timing admission.".
 -spec plan([[term()]], map(), [non_neg_integer()]) -> [group()].
 plan(Groups, #{topology := #{actors := Actors}, modules := Modules}, Native) when is_list(Groups) ->
-    Plans = [group(I, Ids, Actors, Modules, Native) || {I, Ids} <- lists:enumerate(0, Groups)],
-    Members = lists:append([Is || #{members := Is} <- Plans]),
-    case length(Members) =:= length(lists:usort(Members)) of
-        true -> Plans;
-        false -> error(overlapping_arithmetic_groups)
+    Plans = [hls_diagnostic:with_context(#{group => I, actors => Ids, path => [arithmetic_groups, I]},
+        fun() -> group(I, Ids, Actors, Modules, Native) end) || {I, Ids} <- lists:enumerate(0, Groups)],
+    Owners = lists:foldl(fun({Id, I}, Acc) ->
+        maps:update_with(Id, fun(Is) -> Is ++ [I] end, [I], Acc)
+    end, #{}, [{Id, I} || {I, Ids} <- lists:enumerate(0, Groups), Id <- Ids]),
+    case [#{actor => Id, groups => Is} || {Id, Is} <- lists:sort(maps:to_list(Owners)), length(Is) > 1] of
+        [] -> Plans;
+        Conflicts -> hls_diagnostic:raise(arithmetic, overlapping_arithmetic_groups,
+            <<"Assign each actor to at most one shared arithmetic group.">>,
+            #{conflicts => Conflicts, path => [arithmetic_groups]})
     end;
-plan(Other, _, _) -> error({invalid_arithmetic_groups, Other}).
+plan(Other, _, _) -> hls_diagnostic:raise(arithmetic, invalid_arithmetic_groups,
+    <<"Arithmetic groups must be a list of actor-ID lists.">>, #{value => Other, path => [arithmetic_groups]}).
 
 %% Bind identity and source compatibility before emitting any hardware.
 -spec group(non_neg_integer(), term(), [map()], map(), [non_neg_integer()]) -> group().
@@ -28,20 +34,27 @@ group(I, Ids, Actors, Modules, Native) when is_list(Ids), length(Ids) >= 2, leng
             Spec = xls_actor_program:spec(Program),
             case Spec of
                 #{reductions := R, gathers := none, retained_calls := none} when R =/= none -> ok;
-                _ -> error({unsupported_shared_completion, Module})
+                _ -> hls_diagnostic:raise(arithmetic, unsupported_shared_completion,
+                    <<"Shared completion requires scalar reductions without gathers or retained calls.">>,
+                    #{module => Module})
             end,
             #{index => I, members => [N || {N, _} <- Bindings], module => Module,
               cursor_bits => case length(Ids) of 2 -> 1; 3 -> 2 end};
-        _ -> error({incompatible_arithmetic_group, Ids})
+        Distinct -> hls_diagnostic:raise(arithmetic, incompatible_arithmetic_group,
+            <<"Every actor in an arithmetic group must use the same source module.">>, #{modules => Distinct})
     end;
-group(_, Ids, _, _, _) -> error({arithmetic_group_size, Ids}).
+group(_, Ids, _, _, _) -> hls_diagnostic:raise(arithmetic, arithmetic_group_size,
+    <<"An arithmetic group must contain two or three actor IDs.">>, #{value => Ids}).
 
 %% Global indices remain stable across partitioned roles; a group cannot cross a role boundary.
 -spec member(term(), [map()], [non_neg_integer()]) -> {non_neg_integer(), module()}.
 member(Id, Actors, Native) ->
     case [{I, M} || {I, #{id := Name, module := M}} <- lists:enumerate(0, Actors), Name =:= Id, lists:member(I, Native)] of
         [Binding] -> Binding;
-        _ -> error({arithmetic_member_not_native, Id})
+        _ -> hls_diagnostic:raise(arithmetic, arithmetic_member_not_native,
+            <<"Every arithmetic group member must name an actor placed on this native role.">>,
+            #{actor => Id, native_actors => [Name || {I, #{id := Name}} <- lists:enumerate(0, Actors),
+                lists:member(I, Native)]})
     end.
 
 -doc "Selects completion ownership from groups checked against this same source bundle. It changes only the static completion descriptor; no hardware is rendered and ungrouped sources are unchanged.".

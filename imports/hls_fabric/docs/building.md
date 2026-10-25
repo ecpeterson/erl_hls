@@ -23,13 +23,29 @@ _build/default/rel/hls/bin/hls-fabric emit --kind application --config applicati
 _build/default/rel/hls/bin/hls-repetition --width 6 --split 3 --output /path/to/fresh-repetition
 ```
 
-`emit` accepts `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. Its trusted Erlang configuration is the corresponding builder's map; paths are relative to the caller's working directory. Add `dslx_path => [Directory, ...]` for application-provided DSLX imports. The output itself must be absent; missing parent directories are created. Source analysis and hardware rendering finish before output is created; filesystem or support-packaging failures can retain partial output. Errors return nonzero; `HLS_DEBUG=1` includes the Erlang stack.
+`emit` accepts `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. Its trusted Erlang configuration is the corresponding builder's map; paths are relative to the caller's working directory. Add `dslx_path => [Directory, ...]` for application-provided DSLX imports. The output itself must be absent; missing parent directories are created. Source analysis and hardware rendering finish before output is created; filesystem or support-packaging failures can retain partial output. Later scalar options override earlier values, including output/configuration paths, builder kind, plan stage/format and diagnostic format; flags may repeat. Errors return nonzero. Expected input failures name their stage, diagnostic code and relevant field/source/actor/role. `--diagnostics json` emits the same diagnostic as JSON on stderr; `HLS_DEBUG=1` adds the original stack. Unexpected exceptions always retain their class, reason and stack so compiler bugs remain visible.
 
 `hls-repetition` is a separate example frontend in `phi_protocol_cli`. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then calls the same `hls_source_build:write/3` API as `emit`. Its placement, inspection and shared-arithmetic bounds are documented in [source protocol](source-protocol.md). It is an application example, not an application-specific branch of the compiler.
 
 The direct API is `hls_source_build:write(Kind, ConfigOrFilename, Output)`. To inspect a complete composition first, use `Plan = hls_source_build:plan(Kind, ConfigOrFilename)`, `hls_source_build:descriptor(Plan)`, then `hls_source_build:write(Plan, Output)`. Planning checks source, placement, layout and host bindings without rendering hardware or needing an output directory. The retained plan shares its source snapshot across roles; writing does not recompile it. Keep plans unchanged in process with their source codecs loaded. They are not saved-artifact input formats.
 
 Writing renders the checked composition, supplies fabric-specific unit schedules and delegates packaging to the compiler-owned `hls_artifact_bundle`: relative paths, emitter `metadata`, generated input hashes, DSLX entry points, RTL module names, required code-generation options and final RTL file lists. Shared DSLX libraries, pin adapters and supplied import trees are read at packaging time and copied into `support/`; moving the emitted directory before external compilation is supported. `config.erl` records the original trusted source configuration for inspection; its source paths are not rewritten as a portable source-recompilation recipe. Native source-plan/deployment terms are trusted local artifacts.
+
+## Inspecting a build
+
+Use the same configuration and build kind for planning and emission:
+
+```sh
+_build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment.config
+_build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment.config --stage placement --format json
+_build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment.config --stage schedule
+```
+
+`plan` checks the entire selected composition and prints a report without rendering hardware or creating a bundle. It still compiles trusted sources and executes their topology/provider constructors. The default `summary` shows roles and compilation units. `configuration` shows inputs and resolved compiler/fabric/support locations; `source` shows compiler provenance, actor interfaces and inventory obligations; `topology` shows the expanded graph; `placement` shows receiver, publication and capture layouts per role; `composition` shows the final static interfaces; `schedule` shows the exact retained compilation-unit recipes used by emission. These are views of one complete successful plan, not switches that bypass later validation. In-process callers use `hls_source_build:inspect(Plan, Stage)` to inspect repeatedly without preparing sources again.
+
+Reports are diagnostic data, not serialized executable plans. JSON preserves tuples as `{"$tuple": [...]}`, maps with non-string or colliding keys as `{"$map": [[key, value], ...]}`, and non-text binaries as `{"$binary_hex": "..."}`. Atom keys and text binaries become ordinary JSON strings; atoms used in tagged map keys retain an explicit `$atom` tag. Every proper list remains an array, including Erlang character lists in the original configuration, so integer indices never change representation based on their values. Configuration field paths are explicit lists; source line/column locations are retained when the source pass supplies them. Configuration terms do not carry per-key locations, so those errors use the config filename and field path rather than inventing a line number.
+
+The public source-build boundary rejects missing, unknown and malformed configuration fields before compiling sources. Semantic checks remain in their owning planners: overlapping ownership names the actor and roles, unsupported mixed routes name their actor/port/destination, and unsupported frame sizes name the source record and capacity. `hls_diagnostic:with_context/2` adds outer build context only to deliberately tagged diagnostics; it never converts a `badmatch`, `badkey` or unexpected provider exception into an input error.
 
 ## In-process build stages
 
@@ -75,7 +91,9 @@ XLS execution is separate from source emission. Use another build system to cons
 _build/default/rel/hls/bin/compile-source-build /path/to/xls /path/to/emitted-output
 ```
 
-The release launcher delegates to `erl_hls`'s `priv/tools/compile_source_build.py`, also packaged as a standalone command by the compiler. That driver needs only its script, the emitted bundle and XLS (`ir_converter_main`, `opt_main`, `codegen_main`, `xls/dslx/stdlib`). It verifies input hashes, runs each unit's conversion/optimization/codegen once, and writes command logs, `compiled.json` and a `files.f` per role. Required scheduling options belong to the emitted clock interface; they are not a physical timing estimate. Failed or partial compilations are preserved and cannot be silently retried in place. The manifest is a trusted build record, not an untrusted command-execution format. Emission and XLS compilation establish neither application admission nor hardware timing.
+The release launcher delegates to `erl_hls`'s `priv/tools/compile_source_build.py`, also packaged as a standalone command by the compiler. Add `--dry-run` to print a JSON command plan without invoking XLS or creating output files. Preview checks the frozen input hashes and resolves the tools, standard library, import paths and exact scheduling arguments; the same command construction is used for execution. It can inspect an already compiled bundle.
+
+That driver needs only its script, the emitted bundle and XLS (`ir_converter_main`, `opt_main`, `codegen_main`, `xls/dslx/stdlib`). It verifies input hashes, runs each unit's conversion/optimization/codegen once, and writes command logs, `compiled.json` and a `files.f` per role. Required scheduling options belong to the emitted clock interface; they are not a physical timing estimate. Failed or partial compilations are preserved and cannot be silently retried in place. The manifest is a trusted build record, not an untrusted command-execution format. Emission and XLS compilation establish neither application admission nor hardware timing.
 
 ## Legacy test drivers
 

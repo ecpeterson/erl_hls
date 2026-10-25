@@ -45,17 +45,41 @@ write(Input, Output) ->
 prepare(Config = #{sources := Sources, topology := {Module, Function, Arguments}, actor_limit := Limit}) ->
     Loaded = [load(File, Options) || {File, Options} <- Sources],
     case length(Loaded) =:= length(lists:usort(Loaded)) of
-        true -> ok; false -> error(duplicate_transport_source)
+        true -> ok;
+        false -> hls_diagnostic:raise(source, duplicate_transport_source,
+            <<"Declare each source module once.">>, #{modules => Loaded, path => [sources]})
     end,
-    true = lists:member(Module, Loaded),
+    case lists:member(Module, Loaded) of
+        true -> ok;
+        false -> hls_diagnostic:raise(source, missing_topology_module,
+            <<"The topology constructor's module must appear in sources.">>,
+            #{module => Module, path => [topology], source_modules => Loaded})
+    end,
+    case erlang:function_exported(Module, Function, length(Arguments)) of
+        true -> ok;
+        false -> hls_diagnostic:raise(topology, missing_topology_constructor,
+            <<"Export the configured topology constructor with the supplied arity.">>,
+            #{module => Module, function => Function, arity => length(Arguments), path => [topology]})
+    end,
     Normal = hls_topology:normalize(apply(Module, Function, Arguments)),
     Topology = #{actors := Actors, routes := Routes} = hls_protocol_topology:elaborate(Normal, Limit),
     lists:foreach(fun delivery/1, Routes),
     Used = lists:usort([M || #{module := M} <- Actors]),
-    true = lists:all(fun(M) -> lists:member(M, Loaded) end, Used),
-    Modules = maps:from_list([{M, compile(M)} || M <- Used]),
+    case [#{actor => Id, module => M} || #{id := Id, module := M} <- Actors, not lists:member(M, Loaded)] of
+        [] -> ok;
+        Missing -> hls_diagnostic:raise(source, missing_actor_modules,
+            <<"Every actor module used by the topology must appear in sources.">>,
+            #{actors => Missing, path => [sources]})
+    end,
+    Modules = maps:from_list([{M, hls_diagnostic:with_context(
+        #{module => M, actors => [Id || #{id := Id, module := AM} <- Actors, AM =:= M]},
+        fun() -> compile(M) end)} || M <- Used]),
     Inventory = hls_protocol_inventory:inspect(Topology, Modules),
-    [] = maps:get(diagnostics, Inventory),
+    case maps:get(diagnostics, Inventory) of
+        [] -> ok;
+        [#{code := Code, context := Context, message := Message} | _] = Diagnostics ->
+            hls_diagnostic:raise(inventory, Code, Message, Context#{diagnostics => Diagnostics})
+    end,
     Model = hls_protocol_model:check(maps:get(protocol_model, Config, none), Inventory),
     Bundle = #{topology => Topology, modules => Modules, inventory => Inventory},
     Programs = maps:map(fun(_, #{program := P}) -> P end, Modules),
@@ -93,7 +117,9 @@ plan(#program{bundle = Bundle = #{topology := Topology = #{actors := Actors}, mo
         fabric = WholeFabric, ingress = WholeIngress, model = Model}, Options) ->
     case maps:keys(maps:without([native_actors, arithmetic_groups], Options)) of
         [] -> ok;
-        Unknown -> error({unsupported_transport_options, lists:sort(Unknown)})
+        Unknown -> hls_diagnostic:raise(transport, unsupported_transport_options,
+            <<"Transport placement accepts native_actors and arithmetic_groups only.">>,
+            #{options => lists:sort(Unknown)})
     end,
     #{fabric := Fabric, ingress := Ingress, indices := Native} = hls_protocol_partition:plan(
         Options, Bundle, Capture, WholeFabric, WholeIngress),
@@ -156,23 +182,62 @@ emit(#build{transport = Static = #{bundle := Bundle = #{modules := Sources}, fab
 emit(Config) when is_map(Config) -> emit(plan(Config));
 emit(Filename) -> emit(hls_source_config:read(Filename)).
 
-%% Load only declared current source; no historical backend overlay enters the code path.
+%% Collect compiler messages instead of printing them into the CLI's structured output.
 -spec load(file:filename(), [hls_source:compiler_option()]) -> module().
 load(File, Options) ->
-    {ok, M, Bytes} = compile:file(File, [binary, debug_info, warnings_as_errors, report | Options]),
-    {module, M} = code:load_binary(M, File, Bytes), M.
+    Quiet = [Option || Option <- Options, not lists:member(Option, [report, report_errors, report_warnings, verbose])],
+    hls_diagnostic:with_context(#{source => unicode:characters_to_binary(File)}, fun() ->
+        case compile:file(File, [binary, debug_info, warnings_as_errors, return_errors, return_warnings | Quiet]) of
+            {ok, Module, Bytes, []} ->
+                {module, Module} = code:load_binary(Module, File, Bytes), Module;
+            {error, Errors, Warnings} -> compile_failure(Errors, Warnings)
+        end
+    end).
+
+%% Compiler returns source/formatter triples; parse-transform exceptions retain their real stack.
+-type compiler_messages() :: [{file:filename(), [{erl_anno:location() | none, module(), term()}]}].
+
+%% Ordinary syntax and warning failures are expected input errors, unlike transform crashes.
+-spec compile_failure(compiler_messages(), compiler_messages()) -> no_return().
+compile_failure(Errors, Warnings) ->
+    lists:foreach(fun({_File, Messages}) -> lists:foreach(fun
+        ({_Location, compile, {parse_transform, _Transform, {Class, Reason, Stack}}})
+                when Class =:= error; Class =:= exit; Class =:= throw ->
+            erlang:raise(Class, Reason, Stack);
+        (_) -> ok
+    end, Messages) end, Errors),
+    hls_diagnostic:raise(source, source_compile_failed,
+        <<"Source compilation failed; fix the reported errors or warnings.">>,
+        #{errors => compiler_messages(Errors), warnings => compiler_messages(Warnings)}).
+
+%% Preserve formatter ownership and raw reasons alongside their ordinary human explanation.
+-spec compiler_messages(compiler_messages()) -> [map()].
+compiler_messages(Groups) ->
+    [#{source => unicode:characters_to_binary(File), location => Location, module => Formatter, reason => Reason,
+        message => unicode:characters_to_binary(Formatter:format_error(Reason))}
+        || {File, Messages} <- Groups, {Location, Formatter, Reason} <- Messages].
 
 %% The parse transform's context retains includes and preprocessing options.
 -spec compile(module()) -> hls_local_actor:source().
 compile(Module) ->
-    [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
-    Artifact = hls_local_actor:prepare(maps:get(source_name, Context), Context),
+    Context = case proplists:get_value(hls_source_context, Module:module_info(attributes)) of
+        [Captured] -> Captured;
+        undefined -> hls_diagnostic:raise(source, missing_actor_source_context,
+            <<"Compile the actor with its HLS parse transform and without deterministic metadata removal.">>,
+            #{module => Module})
+    end,
+    Source = maps:get(source_name, Context),
+    Artifact = hls_diagnostic:with_context(#{module => Module, source => unicode:characters_to_binary(Source)},
+        fun() -> hls_local_actor:prepare(Source, Context) end),
     Artifact#{context => Context}.
 
 %% Independent destination acceptance implements direct and buffered delivery only.
 -spec delivery(hls_protocol_topology:route()) -> ok.
 delivery(#{delivery := Mode}) when Mode =:= direct; Mode =:= buffered -> ok;
-delivery(#{source := Source, delivery := Mode}) -> error({unsupported_transport_delivery, Source, Mode}).
+delivery(#{source := {Actor, Port}, delivery := Mode}) ->
+    hls_diagnostic:raise(transport, unsupported_transport_delivery,
+        <<"Source transport supports direct and buffered delivery only.">>,
+        #{actor => Actor, port => Port, value => Mode, supported => [direct, buffered]}).
 
 %% Render a shared ABI or import the already rendered ordinary owner. Layout planning
 %% binds the file; only emission can bind its generated-byte identity.

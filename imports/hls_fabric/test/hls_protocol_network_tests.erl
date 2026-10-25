@@ -5,9 +5,9 @@
 %% An invalid mode cannot be silently interpreted as automatic activation.
 -spec unsupported_activation_test() -> ok.
 unsupported_activation_test() ->
-    ?assertError({unsupported_protocol_activation,pause},
+    ?assertError({hls_diagnostic, #{stage := network, code := unsupported_protocol_activation, context := #{value := pause}}},
         hls_protocol_network:write(#{activation=>pause},"unused")),
-    ?assertError({unsupported_protocol_activation,<<"explicit_start">>},
+    ?assertError({hls_diagnostic, #{stage := network, code := unsupported_protocol_activation, context := #{value := <<"explicit_start">>}}},
         hls_protocol_network:write(#{activation=><<"explicit_start">>},"unused")).
 
 %% One source definition backs several independent inbox owners, bound by hash.

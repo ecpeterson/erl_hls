@@ -71,11 +71,11 @@ bridge_plan() ->
 partition_inspection_test() ->
     Build = hls_protocol_transport:plan(partition()),
     {ok, Calls} = trace_renderers(fun() ->
-        ?assertError(partition_inspection_unavailable,
+        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
             hls_protocol_network:plan(Build, #{inspection => process})),
-        ?assertError(partition_inspection_unavailable,
+        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
             hls_protocol_boundary:plan(Build, #{inspection => process})),
-        ?assertError(partition_inspection_unavailable,
+        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
             hls_protocol_bridge:plan(Build, #{host => 2, service => 29,
                 control => rectangle, inspection => process})),
         ok
@@ -92,8 +92,11 @@ mixed_rejections() ->
     Multicast = partition(),
     HostLink = (fixture(beam_to_beam))#{native_actors => [left], host => 2, service => 29},
     {ok, Calls} = trace_renderers(fun() ->
-        ?assertException(error, _, hls_protocol_mixed:emit(Multicast)),
-        ?assertError({badmatch, true}, hls_protocol_mixed:emit(HostLink)),
+        ?assertError({hls_diagnostic, #{stage := mixed, code := unsupported_host_fanout,
+            context := #{actor := right, port := early, recipients := [_, _]}}},
+            hls_protocol_mixed:emit(Multicast)),
+        ?assertError({hls_diagnostic, #{stage := mixed, code := unsupported_host_route,
+            context := #{capability := beam_to_beam}}}, hls_protocol_mixed:emit(HostLink)),
         ok
     end),
     ?assertEqual(#{}, Calls).
@@ -135,7 +138,9 @@ deployment_rejection() ->
             zzz => #{native_actors => [orphan], host => 4, service => 37}},
         limits => #{crossings => 8, commands => 8, events => 8}},
     {ok, Calls} = trace_renderers(fun() ->
-        ?assertError({badmatch, false}, hls_protocol_deployment:emit(Config)),
+        ?assertError({hls_diagnostic, #{stage := bridge, code := missing_bridge_paths,
+            context := #{role := zzz, missing := [incoming, outgoing]}}},
+            hls_protocol_deployment:emit(Config)),
         ok
     end),
     ?assertEqual(#{}, Calls).
@@ -172,7 +177,8 @@ shared_arithmetic_plan() ->
 -spec local_reply_rejection_test() -> ok.
 local_reply_rejection_test() ->
     {ok, Calls} = trace_renderers(fun() ->
-        ?assertError(local_execution_retained_calls_unsupported,
+        ?assertError({hls_diagnostic, #{stage := source, code := local_execution_retained_calls_unsupported,
+            context := #{source := <<"test/hls_protocol_call_fixture.erl">>, capability := retained_calls}}},
             hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", [])),
         ok
     end),

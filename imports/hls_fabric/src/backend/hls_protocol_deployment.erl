@@ -1,6 +1,6 @@
 -module(hls_protocol_deployment).
 -moduledoc "Fresh source-bound framed deployments with typed application control and events. Placement belongs to the build configuration; routing follows derived actor ownership.".
--export([plan/1, descriptor/1, routing/1, emit/1, write/2]).
+-export([plan/1, descriptor/1, routing/1, transports/1, emit/1, write/2]).
 -export_type([plan/0, descriptor/0, result/0, output/0]).
 
 %% Every role is fully checked before any role renders composition hardware.
@@ -43,6 +43,14 @@ plan(Config = #{devices := Devices, limits := Limits = #{commands := Commands, e
         || {Index, {Device, Placement}} <- lists:enumerate(0, lists:sort(maps:to_list(Devices)))],
     Interfaces = maps:from_list([{Device, hls_protocol_bridge:descriptor(Bridge)}
         || #{device := Device, bridge := Bridge} <- Roles]),
+    Crossings = length([L || #{links := Links} <- maps:values(Interfaces),
+        L = #{direction := outgoing} <- Links]),
+    case maps:get(crossings, Limits) of
+        Maximum when Crossings =< Maximum -> ok;
+        Maximum -> hls_diagnostic:raise(deployment, crossing_limit,
+            <<"The deployment crossing limit is smaller than its source-derived routes.">>,
+            #{path => [limits, crossings], actual => Crossings, maximum => Maximum})
+    end,
     Routing = hls_protocol_routing:plan(#{devices => Interfaces, actors => length(Actors), limits => Limits}),
     Owners = maps:from_list([{Id, D} || {D, #{native_actors := Ids}} <- maps:to_list(Devices), Id <- Ids]),
     Hosts = maps:map(fun(_, #{host := H}) -> H end, Interfaces),
@@ -61,6 +69,12 @@ descriptor(#plan{descriptor = Descriptor}) -> Descriptor.
 -spec routing(plan()) -> hls_protocol_routing:plan().
 routing(#plan{routing = Routing}) -> Routing.
 
+-doc "Returns every role's retained transport placement for source, topology and receiver-layout inspection. All roles share one checked source snapshot; no compilation or rendering occurs.".
+-spec transports(plan()) -> #{hls_source_config:device() => hls_protocol_transport:build()}.
+transports(#plan{roles = Roles}) ->
+    maps:from_list([{Device, hls_protocol_bridge:transport(Bridge)}
+        || #{device := Device, bridge := Bridge} <- Roles]).
+
 -doc "Renders every checked role and the final deployment without writing output. A trusted config map/filename is planned first; a retained plan neither recompiles sources nor repeats host/routing checks. Templates and support libraries are read only during emission.".
 -spec emit(hls_source_config:deployment() | file:filename() | plan()) -> output().
 emit(#plan{roles = Roles, descriptor = Descriptor}) ->
@@ -75,36 +89,66 @@ emit(#plan{roles = Roles, descriptor = Descriptor}) ->
     #{files => Files, result => Deployment};
 emit(Config) -> emit(plan(Config)).
 
-%% Reject missing, duplicate and unknown ownership together, before planning or writing a role.
+%% Keep roles attached to actor IDs until every ownership conflict is diagnosed.
 -spec placement(#{hls_source_config:device() => hls_source_config:role()}, [hls_protocol_topology:actor()]) -> ok.
 placement(Devices, Actors) ->
-    lists:foreach(fun endpoint/1, maps:values(Devices)),
+    Roles = lists:sort(maps:to_list(Devices)),
+    lists:foreach(fun({Role, Placement}) ->
+        hls_diagnostic:with_context(#{role => Role, path => [devices, Role]},
+            fun() -> endpoint(Placement) end)
+    end, Roles),
     Known = lists:sort([Id || #{id := Id} <- Actors]),
-    Owned = lists:sort(lists:append([Ids || #{native_actors := Ids} <- maps:values(Devices)])),
-    case Owned =:= Known of
-        true -> ok;
-        false -> error({invalid_deployment_ownership, Known, Owned})
+    Owners = lists:foldl(fun({Role, #{native_actors := Ids}}, Acc) ->
+        lists:foldl(fun(Id, ByActor) ->
+            maps:update_with(Id, fun(Previous) -> Previous ++ [Role] end, [Role], ByActor)
+        end, Acc, Ids)
+    end, #{}, Roles),
+    case [{Id, Assigned} || {Id, Assigned} <- lists:sort(maps:to_list(Owners)), length(Assigned) > 1] of
+        [] -> ok;
+        [{DuplicateActor, DuplicateRoles} | _] -> hls_diagnostic:raise(deployment, duplicate_actor_owner,
+            <<"Assign each actor to exactly one role; this actor is assigned more than once.">>,
+            #{actor => DuplicateActor, roles => DuplicateRoles, path => [devices]})
     end,
-    Returns = [{Host, Service} || #{host := Host, service := Service} <- maps:values(Devices)],
-    case length(Returns) =:= length(lists:usort(Returns)) of
-        true -> ok;
-        false -> error({duplicate_deployment_endpoints, Returns})
+    case lists:sort(maps:keys(Owners)) -- Known of
+        [] -> ok;
+        Unknown -> hls_diagnostic:raise(deployment, unknown_actor_owners,
+            <<"Deployment roles name actors absent from the source topology.">>,
+            #{actors => Unknown, ownership => maps:with(Unknown, Owners), path => [devices]})
+    end,
+    case Known -- maps:keys(Owners) of
+        [] -> ok;
+        Missing -> hls_diagnostic:raise(deployment, missing_actor_owners,
+            <<"Assign every source actor to a deployment role.">>,
+            #{actors => Missing, path => [devices]})
+    end,
+    Returns = lists:foldl(fun({Role, #{host := Host, service := Service}}, Acc) ->
+        maps:update_with({Host, Service}, fun(Previous) -> Previous ++ [Role] end, [Role], Acc)
+    end, #{}, Roles),
+    case [{Address, Assigned} || {Address, Assigned} <- lists:sort(maps:to_list(Returns)), length(Assigned) > 1] of
+        [] -> ok;
+        [{{ReturnHost, ReturnService}, ReturnRoles} | _] -> hls_diagnostic:raise(deployment, duplicate_deployment_endpoints,
+            <<"Each deployment role needs a distinct host/service endpoint pair.">>,
+            #{host => ReturnHost, service => ReturnService, roles => ReturnRoles, path => [devices]})
     end.
 
-%% Device terms are user configuration; reject extra keys and malformed endpoint addresses.
+%% Direct planner callers receive the same deliberate rejection as configuration loading.
 -spec endpoint(hls_source_config:role()) -> ok.
 endpoint(Placement = #{native_actors := Ids, host := Host, service := Service})
         when map_size(Placement) =:= 3, is_list(Ids), Ids =/= [],
              is_integer(Host), Host > 0, Host < 65536,
              is_integer(Service), Service > 0, Service < 65536, Host =/= Service -> ok;
-endpoint(Other) -> error({invalid_deployment_device, Other}).
+endpoint(Other) -> hls_diagnostic:raise(deployment, invalid_deployment_device,
+    <<"A role requires nonempty native_actors and different host/service addresses in 1..65535.">>,
+    #{value => Other}).
 
-%% Only placement changes between roles; all source facts come from the same program value.
+%% Only placement changes between roles; diagnostic context follows that role's checks.
 -spec role(hls_source_config:device(), non_neg_integer(), hls_source_config:role(),
     hls_source_config:network(), hls_protocol_transport:program()) -> role().
 role(Device, Index, Placement = #{native_actors := Ids}, Common, Program) ->
-    Options = (maps:with([arithmetic_groups], Common))#{native_actors => Ids},
-    Build = hls_protocol_transport:plan(Program, Options),
-    BridgeOptions = maps:with([host, service, control, activation, inspection], maps:merge(Common, Placement)),
-    #{device => Device, directory => "role" ++ integer_to_list(Index),
-      bridge => hls_protocol_bridge:plan(Build, BridgeOptions)}.
+    hls_diagnostic:with_context(#{role => Device, path => [devices, Device]}, fun() ->
+        Options = (maps:with([arithmetic_groups], Common))#{native_actors => Ids},
+        Build = hls_protocol_transport:plan(Program, Options),
+        BridgeOptions = maps:with([host, service, control, activation, inspection], maps:merge(Common, Placement)),
+        #{device => Device, directory => "role" ++ integer_to_list(Index),
+          bridge => hls_protocol_bridge:plan(Build, BridgeOptions)}
+    end).

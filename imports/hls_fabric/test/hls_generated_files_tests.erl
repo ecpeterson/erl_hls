@@ -96,11 +96,11 @@ invalid_config_test() ->
     lists:foreach(fun({Name, Bytes}) ->
         Path = filename:join(Root, Name),
         ok = file:write_file(Path, Bytes, [exclusive]),
-        ?assertError({invalid_source_config, Path}, hls_source_config:read(Path))
+        ?assertException(error, {hls_diagnostic, #{code := invalid_config_file}}, hls_source_config:read(Path))
     end, [{"empty.config", <<>>}, {"atom.config", <<"config.\n">>},
         {"multiple.config", <<"#{}.\n#{}.\n">>}]),
     Missing = filename:join(Root, "missing.config"),
-    ?assertError({source_config, Missing, enoent}, hls_source_config:read(Missing)),
+    ?assertException(error, {hls_diagnostic, #{code := config_read}}, hls_source_config:read(Missing)),
     ok.
 
 %% Each test keeps its tiny outputs beneath a unique disposable build directory.

@@ -37,12 +37,12 @@ repetition_rejection_test() ->
 %% CLI errors are deterministic and do not silently ignore unsupported options.
 -spec cli_rejection_test() -> ok.
 cli_rejection_test() ->
-    ?assertError({unknown_command, ["build"]}, hls_fabric_cli:run(["build"])),
-    ?assertError({missing_option, config}, hls_fabric_cli:run(["emit"])),
-    ?assertError({unknown_emitter, "foreign"}, hls_fabric_cli:run(["emit", "--kind", "foreign"])),
-    ?assertError({duplicate_option, "--width"},
-        phi_protocol_cli:run(["--output", "unused", "--width", "2", "--width", "3"])),
-    ?assertError({invalid_integer, width, "bad"}, phi_protocol_cli:run(["--output", "unused", "--width", "bad"])),
-    ?assertError({unknown_option, "--xls"}, hls_fabric_cli:run(["emit", "--xls", "path"])),
-    ?assertError({missing_option_value, "--config"}, hls_fabric_cli:run(["emit", "--config", "--output", "fresh"])),
+    ?assertException(error, {hls_diagnostic, #{code := unknown_command}}, hls_fabric_cli:run(["build"])),
+    ?assertException(error, {hls_diagnostic, #{code := missing_option}}, hls_fabric_cli:run(["emit"])),
+    ?assertException(error, {hls_diagnostic, #{code := unknown_emitter}}, hls_fabric_cli:run(["emit", "--kind", "foreign"])),
+    ?assertError({repetition_width, 17},
+        phi_protocol_cli:run(["--output", "unused", "--width", "bad", "--width", "17"])),
+    ?assertException(error, {hls_diagnostic, #{code := invalid_integer}}, phi_protocol_cli:run(["--output", "unused", "--width", "bad"])),
+    ?assertException(error, {hls_diagnostic, #{code := unknown_option}}, hls_fabric_cli:run(["emit", "--xls", "path"])),
+    ?assertException(error, {hls_diagnostic, #{code := missing_option_value}}, hls_fabric_cli:run(["emit", "--config", "--output", "fresh"])),
     ok.

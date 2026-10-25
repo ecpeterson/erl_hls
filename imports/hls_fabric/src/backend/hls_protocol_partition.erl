@@ -28,7 +28,10 @@ plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sour
             Known=[Id||#{id:=Id}<-Actors],
             case is_list(Ids) andalso Ids=/=[] andalso length(Ids)<length(Known)
                 andalso length(Ids)=:=length(lists:usort(Ids)) andalso Ids--Known=:=[] of
-                true->ok;false->error({invalid_native_actors,Ids})
+                true -> ok;
+                false -> hls_diagnostic:raise(placement, invalid_native_actors,
+                    <<"native_actors must name a nonempty, unique proper subset of source actors.">>,
+                    #{path => [native_actors], value => Ids, known_actors => Known})
             end,
             Native=[I||{I,#{id:=Id}}<-Indexed,lists:member(Id,Ids)],
             Cross=[L#{direction=>case lists:member(S,Native) of true->outgoing;false->incoming end,

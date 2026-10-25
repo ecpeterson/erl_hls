@@ -19,14 +19,16 @@
 -doc "Returns a JSON-encodable application summary of the proposed model. The framework keeps it separate from the checker result; it is not a certificate. Called once during preparation, never during emission.".
 -callback summary(graph()) -> map().
 
--doc "Invokes the selected provider once, checks its finite graph and binds the result to Inventory. Rejects malformed selections or invalid graphs before emission; provider errors propagate. none leaves the source build unannotated. The graph check establishes no source refinement, startup marking, fairness or program admission.".
+-doc "Invokes the selected provider once, checks its finite graph and binds the result to Inventory. Reports malformed selections or rejected graphs as diagnostics before emission; provider exceptions and malformed callback results propagate unchanged. none leaves the source build unannotated. The graph check establishes no source refinement, startup marking, fairness or program admission.".
 -spec check(request(), hls_protocol_inventory:report()) -> none | report().
 check(none, _) -> none;
 check({Provider, Options}, Inventory) when is_atom(Provider) ->
     Model = #{nodes := Nodes, edges := Edges} = Provider:derive(Inventory, Options),
     Analysis = case hls_protocol_wait_graph:check(Nodes, Edges) of
         {ok, Checked} -> maps:remove(edges, Checked);
-        {error, Why} -> error({protocol_model, Provider, Why})
+        {error, Why} -> hls_diagnostic:raise(model, invalid_wait_graph,
+            <<"The provider's finite wait graph violates the protocol dependency contract.">>,
+            #{provider => Provider, reason => Why})
     end,
     Summary = Provider:summary(Model),
     %% Force report encoding here so callback/summary failures cannot leave emitted hardware.
@@ -34,7 +36,8 @@ check({Provider, Options}, Inventory) when is_atom(Provider) ->
     #{provider => Provider, model => Model, application => Summary, analysis => Analysis,
       inventory_sha256 => binary:encode_hex(crypto:hash(sha256,
           term_to_binary(Inventory, [deterministic])), lowercase)};
-check(Other, _) -> error({unsupported_protocol_model, Other}).
+check(Other, _) -> hls_diagnostic:raise(model, unsupported_protocol_model,
+    <<"Select none or a {provider_module, options} pair for protocol-model analysis.">>, #{value => Other}).
 
 -doc "Writes the complete trusted-local report as ETF and a compact JSON summary in an existing directory. Uses only the prepared report; it never calls the provider again. none writes nothing. Partial I/O failures are retained.".
 -spec write(none | report(), file:filename()) -> ok.

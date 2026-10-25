@@ -6,7 +6,7 @@
 %% No build should start when the caller requests an incompatible activation mode.
 -spec invalid_mode_test() -> ok.
 invalid_mode_test() ->
-    ?assertError({application_requires_explicit_start,automatic},
+    ?assertException(error, {hls_diagnostic, #{code := application_requires_explicit_start}},
         hls_protocol_application:write(#{device=>board,host=>1,activation=>automatic},"unused")),
     ?assertError(function_clause,hls_protocol_application:write(#{device=>board,host=>65536},"unused")).
 

@@ -1,6 +1,6 @@
 -module(hls_protocol_network).
 -moduledoc "Connects ordinary DSLX owners and source-bound transport with declared startup messages. Host commands enter ordinary inbox slots; application admission remains separate.".
--export([plan/2, descriptor/1, write/2, write/3, emit/1, emit/2]).
+-export([plan/2, descriptor/1, transport/1, write/2, write/3, emit/1, emit/2]).
 -export_type([plan/0, options/0, activation/0, descriptor/0, manifest/0, result/0, output/0]).
 
 -doc "Whether source captures run automatically after reset or wait for the ordered start handshake.".
@@ -63,13 +63,19 @@ plan(Build, Options) ->
 -spec descriptor(plan()) -> descriptor().
 descriptor(#plan{layout = Layout}) -> xls_protocol_network:descriptor(Layout).
 
+-doc "Returns the retained transport placement for source, topology and receiver-layout inspection. Reuses the checked snapshot without recompiling or rendering; retain it unchanged.".
+-spec transport(plan()) -> hls_protocol_transport:build().
+transport(#plan{transport = Build}) -> Build.
+
 -doc "Plans and emits a connected network from an unchanged transport build. Options accepts activation/inspection only. Equivalent to emit(plan(Build, Options)); returns relative files and final network/transport descriptors. Template reads occur only after composition checks.".
 -spec emit(hls_protocol_transport:build(), options()) -> output().
 emit(Build, Options) -> emit(plan(Build, Options)).
 
 %% Check configuration before source work, then check the actual cut at the emission boundary.
 -spec inspection(boolean(), none | process) -> ok.
-inspection(true, process) -> error(partition_inspection_unavailable);
+inspection(true, process) -> hls_diagnostic:raise(network, partition_inspection_unavailable,
+    <<"Process inspection is unavailable for a native partition; select inspection => none.">>,
+    #{path => [inspection], value => process, capability => partition_inspection});
 inspection(_, _) -> ok.
 
 %% Reject renderer options that could imply changing the already planned source or placement.
@@ -77,13 +83,23 @@ inspection(_, _) -> ok.
 modes(Options) ->
     case maps:keys(maps:without([activation, inspection], Options)) of
         [] -> ok;
-        Unknown -> error({unsupported_network_options, lists:sort(Unknown)})
+        Unknown -> hls_diagnostic:raise(network, unsupported_network_options,
+            <<"Network composition accepts activation and inspection options only.">>,
+            #{options => lists:sort(Unknown)})
     end,
     #{activation => activation(maps:get(activation, Options, automatic)),
-      inspection => hls_protocol_inspection:mode(maps:get(inspection, Options, none))}.
+      inspection => inspection_mode(maps:get(inspection, Options, none))}.
 
 %% Reject unknown modes before reading sources or creating a partial output tree.
 -spec activation(term()) -> activation().
 activation(automatic) -> automatic;
 activation(explicit_start) -> explicit_start;
-activation(Other) -> error({unsupported_protocol_activation,Other}).
+activation(Other) -> hls_diagnostic:raise(network, unsupported_protocol_activation,
+    <<"Activation must be automatic or explicit_start.">>, #{path => [activation], value => Other}).
+
+%% Validate the public mode before rendering any observation hardware.
+-spec inspection_mode(term()) -> none | process.
+inspection_mode(none) -> none;
+inspection_mode(process) -> process;
+inspection_mode(Other) -> hls_diagnostic:raise(network, unsupported_protocol_inspection,
+    <<"Inspection must be none or process.">>, #{path => [inspection], value => Other}).

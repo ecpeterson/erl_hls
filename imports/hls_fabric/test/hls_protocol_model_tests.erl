@@ -42,7 +42,8 @@ provider_build() ->
         ?assertEqual(file:read_file(File), file:read_file(filename:join(Plain, Relative)))
     end, filelib:fold_files(Annotated, "\\.(x|sv)$", true, fun(F, Acc) -> [F | Acc] end, [])),
     Rejected = filename:join(Root, "rejected"),
-    ?assertError({protocol_model, ?MODULE, {same_generation_wait_cycle, [[left]]}},
+    ?assertError({hls_diagnostic, #{stage := model, code := invalid_wait_graph,
+        context := #{provider := ?MODULE, reason := {same_generation_wait_cycle, [[left]]}}}},
         hls_protocol_transport:write(Config#{protocol_model => {?MODULE, cycle}}, Rejected)),
     ?assertNot(filelib:is_dir(Rejected)),
     ?assertEqual([derive], erase(model_calls)),
@@ -56,12 +57,16 @@ provider_build() ->
 -spec invalid_graph_test() -> ok.
 invalid_graph_test() ->
     Inventory = #{actors => [#{id => left}]},
-    ?assertError({protocol_model, ?MODULE, {unknown_prerequisite, absent}},
+    ?assertError({hls_diagnostic, #{stage := model, code := invalid_wait_graph,
+        context := #{provider := ?MODULE, reason := {unknown_prerequisite, absent}}}},
         hls_protocol_model:check({?MODULE, missing}, Inventory)),
     ?assertEqual([derive], erase(model_calls)),
-    ?assertError({unsupported_protocol_model, #{kind := periodic_neighbor_barrier}},
+    ?assertError({hls_diagnostic, #{stage := model, code := unsupported_protocol_model,
+        context := #{value := #{kind := periodic_neighbor_barrier}}}},
         hls_protocol_model:check(#{kind => periodic_neighbor_barrier}, Inventory)),
     ?assertEqual(none, hls_protocol_model:check(none, Inventory)),
+    ?assertError({badmatch, []}, hls_protocol_model:check({?MODULE, independent}, #{actors => []})),
+    ?assertEqual([derive], erase(model_calls)),
     ok.
 
 -doc "Proposes actor-local nodes for a non-Phi fixture; negative modes introduce a self wait or missing endpoint. No source-behavior claim is made.".

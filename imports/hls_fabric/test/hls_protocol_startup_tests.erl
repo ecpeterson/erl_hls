@@ -27,7 +27,7 @@ empty_test() ->
 rejects_bad_records_test() ->
     Artifact = artifact([{n, "hls_nums:u8()"}]),
     lists:foreach(fun(Message) ->
-        ?assertError({invalid_startup_record, Message},
+        ?assertError({hls_diagnostic, #{stage := schema, code := invalid_startup_record, context := #{message := Message}}},
             hls_protocol_schema:frames(Artifact, [Message]))
     end, [bad, {other, 1}, {message}, {message, 1, 2}]),
     ?assertException(error, _, hls_protocol_schema:frames(Artifact, [{message, 256}])),
@@ -36,7 +36,7 @@ rejects_bad_records_test() ->
 %% The ordinary compiler rejects over-capacity schemas before a startup artifact exists.
 -spec rejects_wide_payload_test() -> ok.
 rejects_wide_payload_test() ->
-    ?assertError({xls_message_too_wide, message, 97, 96},
+    ?assertError({hls_diagnostic, #{code := message_too_wide, context := #{record := message, width := 97, max_width := 96}}},
         artifact([{n, "hls_nums:uN(97)"}])).
 
 %% Obtain the receiving schema through fresh complete source lowering, not an artifact map.

@@ -25,7 +25,7 @@ reusable_program_test() ->
     ?assertEqual([0, 2], [I || #{index := I} <- NorthActors]),
     ?assertEqual([1], [I || #{index := I} <- SouthActors]),
     %% A placement API must not silently accept a request to change its source configuration.
-    ?assertError({unsupported_transport_options, [sources]},
+    ?assertError({hls_diagnostic, #{stage := transport, code := unsupported_transport_options, context := #{options := [sources]}}},
         hls_protocol_transport:plan(Program, #{sources => Sources})),
     Before = relative_files(Root),
     Output = #{files := Generated, result := Descriptor} = hls_protocol_transport:emit(North),
@@ -44,13 +44,13 @@ reusable_program_test() ->
         ?assertEqual({ok, Bytes}, file:read_file(filename:join(Second, File)))
     end, FilesWritten),
     %% Inspection restriction follows the actual planned cut, not a second native_actors flag.
-    ?assertError(partition_inspection_unavailable,
+    ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
         hls_protocol_network:write(South, #{inspection => process}, filename:join(Root, "inspection"))),
     ?assertEqual(false, filelib:is_dir(filename:join(Root, "inspection"))),
     Override = filename:join(Root, "override"),
-    ?assertError({unsupported_network_options, [native_actors]},
+    ?assertError({hls_diagnostic, #{stage := network, code := unsupported_network_options, context := #{options := [native_actors]}}},
         hls_protocol_network:write(South, #{native_actors => [left]}, Override)),
-    ?assertError({unsupported_bridge_options, [sources]},
+    ?assertError({hls_diagnostic, #{stage := bridge, code := unsupported_bridge_options, context := #{options := [sources]}}},
         hls_protocol_bridge:write(South, #{host => 1, service => 7, control => rectangle, sources => Sources}, Override)),
     ?assertEqual(false, filelib:is_dir(Override)),
     ok.

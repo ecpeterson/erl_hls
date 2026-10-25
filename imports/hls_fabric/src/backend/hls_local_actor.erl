@@ -59,7 +59,9 @@ prepare(Source, Options) ->
     Spec = xls_actor_program:spec(Program),
     case maps:get(retained_calls, Spec) of
         none -> ok;
-        _ -> error(local_execution_retained_calls_unsupported)
+        _ -> hls_diagnostic:raise(source, local_execution_retained_calls_unsupported,
+            <<"The local protocol owner does not support retained call replies.">>,
+            #{source => unicode:characters_to_binary(Source), capability => retained_calls})
     end,
     #{source => Source, program => Program}.
 

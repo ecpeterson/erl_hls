@@ -1,6 +1,6 @@
 -module(hls_protocol_boundary).
 -moduledoc "Builds one application-facing frame stream per declared external endpoint around a fresh source network.".
--export([plan/2, descriptor/1, write/2, write/3, emit/1, emit/2]).
+-export([transport/1, plan/2, descriptor/1, write/2, write/3, emit/1, emit/2]).
 -export_type([plan/0, options/0, descriptor/0, manifest/0, result/0, output/0]).
 
 -doc "Boundary composition accepts the network's activation and inspection options without changing source or placement.".
@@ -72,3 +72,7 @@ group(E=#{index:=I},Boundaries) ->
             state_bits=>case N>1 of true->2*max(1,ceil(math:log2(N)))+1;false->0 end};
         false->error({unsupported_external_fanin,I,N})
     end.
+
+-doc "Returns the retained transport placement for source, topology and layout inspection. Treat it as read-only; this accessor does not prepare sources or render hardware.".
+-spec transport(plan()) -> hls_protocol_transport:build().
+transport(#plan{network = Child}) -> hls_protocol_network:transport(Child).

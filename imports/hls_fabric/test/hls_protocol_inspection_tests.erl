@@ -5,7 +5,7 @@
 %% Unsupported modes fail before file reads or output creation.
 -spec invalid_mode_test() -> ok.
 invalid_mode_test() ->
-    ?assertError({unsupported_protocol_inspection,trace},hls_protocol_network:write(#{inspection=>trace},"unused")),
+    ?assertError({hls_diagnostic, #{code := unsupported_protocol_inspection, context := #{value := trace}}},hls_protocol_network:write(#{inspection=>trace},"unused")),
     ?assertEqual(none,hls_protocol_inspection:mode(none)).
 
 %% The actual application command produces one resource for every compiled source actor.

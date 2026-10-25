@@ -7,7 +7,7 @@
 selection_test() ->
     Bundle=#{topology=>#{actors=>[#{id=>a},#{id=>b},#{id=>c}]}},
     Fabric=#{sources=>[#{index=>0},#{index=>1},#{index=>2}],links=>[],boundaries=>[]},
-    lists:foreach(fun(Ids)->?assertError({invalid_native_actors,Ids},
+    lists:foreach(fun(Ids)->?assertError({hls_diagnostic, #{stage := placement, code := invalid_native_actors, context := #{value := Ids}}},
         hls_protocol_partition:plan(#{native_actors=>Ids},Bundle,#{},Fabric,none)) end,
         [[],[a,a],[unknown],[a,b,c],all]),
     #{fabric:=Fabric,indices:=[0,1,2]}=hls_protocol_partition:plan(#{},Bundle,#{},Fabric,none),
@@ -19,5 +19,5 @@ selection_test() ->
 %% Unsupported framed application and inspection paths cannot drop crossing pins.
 -spec unsupported_outer_boundary_test() -> ok.
 unsupported_outer_boundary_test() ->
-    ?assertError(partition_inspection_unavailable,hls_protocol_network:write(#{native_actors=>[a],inspection=>process},"unused")),
-    ?assertError(partition_application_gateway_unavailable,hls_protocol_application:write(#{native_actors=>[a],device=>board,host=>1},"unused")).
+    ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},hls_protocol_network:write(#{native_actors=>[a],inspection=>process},"unused")),
+    ?assertException(error, {hls_diagnostic, #{code := partition_application_gateway_unavailable}},hls_protocol_application:write(#{native_actors=>[a],device=>board,host=>1},"unused")).

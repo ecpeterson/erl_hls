@@ -1,6 +1,6 @@
 -module(hls_protocol_bridge).
 -moduledoc "Builds a source partition with reset-owned framing, class credits and exact delivery acknowledgments. Hardware remains DSLX; the peer owns transport retirement and bounded routing.".
--export([plan/2, descriptor/1, write/2, write/3, emit/1, emit/2]).
+-export([plan/2, descriptor/1, transport/1, write/2, write/3, emit/1, emit/2]).
 -export_type([plan/0, options/0, descriptor/0, bridge/0, manifest/0, credit/0, result/0, output/0]).
 
 -doc "Framing endpoints and adapter selection for an already checked native placement. Activation remains explicit; inspection is unsupported.".
@@ -73,25 +73,39 @@ emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_co
 
 -doc "Checks a framed partition before rendering its network, boundary or bridge. Requires host/service endpoints in 1..65535, rectangle control and explicit activation. Checks boundary control ports, nonempty incoming/outgoing cuts and external endpoints, crossing indices/slots and the combined 256-contender budget. Options cannot change the source or placement. No templates or support libraries are read here; the transport owns checked source snapshots and receiver layouts.".
 -spec plan(hls_protocol_transport:build(), options()) -> plan().
-plan(Build, Config = #{host := Host, service := Service, control := _})
-        when is_integer(Host), is_integer(Service), Host > 0, Host < 65536,
-             Service > 0, Service < 65536, Host =/= Service ->
+plan(Build, Config = #{host := Host, service := Service, control := _}) ->
+    ok = endpoints(Host, Service),
     case maps:keys(maps:without([host, service, control, activation, inspection], Config)) of
         [] -> ok;
-        Unknown -> error({unsupported_bridge_options, lists:sort(Unknown)})
+        Unknown -> hls_diagnostic:raise(bridge, unsupported_bridge_options,
+            <<"Bridge options are host, service, control, activation and inspection.">>,
+            #{options => lists:sort(Unknown)})
     end,
-    #{ingress := Control, fabric := #{sources := Sources, crossings := Cross},
+    #{ingress := Control, fabric := Fabric = #{sources := Sources},
         bundle := #{topology := #{actors := Actors}}} = hls_protocol_transport:descriptor(Build),
+    Cross = maps:get(crossings, Fabric, []),
     Hardware = hls_protocol_control:framed(Control, Config),
     BoundaryPlan = hls_protocol_boundary:plan(Build, (maps:with([inspection], Config))#{activation => explicit_start}),
     Boundary = #{externals := Externals} = hls_protocol_boundary:descriptor(BoundaryPlan),
     ok = hls_protocol_control:check_boundary(Hardware, Boundary),
     Incoming = [L || L = #{direction := incoming} <- Cross],
     Outgoing = [L || L = #{direction := outgoing} <- Cross],
-    true = Incoming =/= [] andalso Outgoing =/= [] andalso Externals =/= [],
-    true = lists:all(fun(#{index := I, slots := N}) -> I < 65536 andalso N > 0 andalso N < 256 end, Cross),
+    case [Kind || {Kind, Entries} <- [{incoming, Incoming}, {outgoing, Outgoing}, {external, Externals}], Entries =:= []] of
+        [] -> ok;
+        Missing -> hls_diagnostic:raise(bridge, missing_bridge_paths,
+            <<"A framed partition requires incoming and outgoing crossings and an external endpoint.">>,
+            #{missing => Missing, native_actors => [I || #{index := I} <- Sources]})
+    end,
+    lists:foreach(fun wire_limits/1, Cross),
     Credits = [#{link => I, slot => K} || #{index := I, classes := Cs} <- Incoming, #{slot := K} <- Cs],
-    true = length(Credits) + length(Outgoing) + length(Externals) =< 256,
+    Contenders = length(Credits) + length(Outgoing) + length(Externals),
+    case Contenders =< 256 of
+        true -> ok;
+        false -> hls_diagnostic:raise(bridge, bridge_contender_limit,
+            <<"Bridge credits, outgoing links and external streams exceed the framing arbiter limit.">>,
+            #{actual => Contenders, maximum => 256, credits => length(Credits),
+              outgoing => length(Outgoing), externals => length(Externals)})
+    end,
     #plan{boundary = BoundaryPlan,
         interface = #{host => Host, service => Service, links => Cross, control => maps:get(kind, Hardware),
             control_adapter => Hardware, native_indices => [I || #{index := I} <- Sources],
@@ -102,6 +116,25 @@ plan(Build, Config = #{host := Host, service := Service, control := _})
 -spec descriptor(plan()) -> descriptor().
 descriptor(#plan{interface = Interface}) -> Interface.
 
+-doc "Returns the retained transport placement for source, topology and receiver-layout inspection. Reuses the checked snapshot without recompiling or rendering; retain it unchanged.".
+-spec transport(plan()) -> hls_protocol_transport:build().
+transport(#plan{boundary = Build}) -> hls_protocol_boundary:transport(Build).
+
 -doc "Plans and emits a framed partition without writing output. Equivalent to emit(plan(Build, Options)); source and placement remain fixed. Returns the final bridge/transport descriptors and manifest; support reads and identity hashing follow layout checks.".
 -spec emit(hls_protocol_transport:build(), options()) -> output().
 emit(Build, Options) -> emit(plan(Build, Options)).
+
+%% Framed addresses are nonzero words, and a bridge cannot address itself.
+-spec endpoints(hls_source_config:endpoint(), hls_source_config:endpoint()) -> ok.
+endpoints(Host, Service) when is_integer(Host), is_integer(Service),
+        Host > 0, Host < 65536, Service > 0, Service < 65536, Host =/= Service -> ok;
+endpoints(Host, Service) -> hls_diagnostic:raise(bridge, invalid_bridge_endpoints,
+    <<"Bridge host and service must be different addresses in 1..65535.">>,
+    #{host => Host, service => Service}).
+
+%% Source-derived crossings must fit the fixed packet's link and class fields.
+-spec wire_limits(hls_protocol_partition:crossing()) -> ok.
+wire_limits(#{index := Index, slots := Slots}) when Index < 65536, Slots > 0, Slots < 256 -> ok;
+wire_limits(#{index := Index, slots := Slots}) -> hls_diagnostic:raise(bridge, bridge_wire_limit,
+    <<"A bridge crossing needs a 16-bit link index and between 1 and 255 class slots.">>,
+    #{link => Index, slots => Slots, maximum_link => 65535, maximum_slots => 255}).

@@ -11,10 +11,10 @@ schema_domain_test() ->
     ?assertEqual(Value, Frame band Mask),
     ?assertNotEqual(Value, (Frame bor (1 bsl 64)) band Mask),
     ?assertNotEqual(Value, (Frame bxor (1 bsl 8)) band Mask),
-    ?assertError({invalid_ingress_schemas, []}, hls_protocol_schema:domains(Artifact, [])),
-    ?assertError({invalid_ingress_schemas, [work, work]},
+    ?assertError({hls_diagnostic, #{stage := schema, code := invalid_ingress_schemas, context := #{schemas := []}}}, hls_protocol_schema:domains(Artifact, [])),
+    ?assertError({hls_diagnostic, #{code := invalid_ingress_schemas, context := #{schemas := [work, work]}}},
         hls_protocol_schema:domains(Artifact, [work, work])),
-    ?assertError({undeclared_protocol_schema, other},
+    ?assertError({hls_diagnostic, #{code := undeclared_protocol_schema, context := #{schema := other}}},
         hls_protocol_schema:domains(Artifact, [other])).
 
 %% One shared command covers all selected actor identities without duplicating frames.
@@ -33,9 +33,11 @@ binding_test() ->
 -spec mismatched_codec_test() -> ok.
 mismatched_codec_test() ->
     Bundle = #{modules := #{a := Unsigned}} = bundle(),
-    ?assertError({incompatible_ingress_schemas, all}, hls_protocol_control:plan(
+    ?assertError({hls_diagnostic, #{stage := control, code := incompatible_ingress_schemas,
+        context := #{ingress := host, target := all}}}, hls_protocol_control:plan(
         Bundle#{modules := #{a => Unsigned, b => artifact([other, work], u32)}})),
-    ?assertError({incompatible_ingress_schemas, all}, hls_protocol_control:plan(
+    ?assertError({hls_diagnostic, #{stage := control, code := incompatible_ingress_schemas,
+        context := #{ingress := host, target := all}}}, hls_protocol_control:plan(
         Bundle#{modules := #{a => Unsigned, b => artifact([work], s32)}})).
 
 %% Missing schemas, duplicate recipients and unsupported boundaries fail before generation.
@@ -46,13 +48,15 @@ rejects_ambiguous_test() ->
     Check = fun(New) ->
         hls_protocol_control:plan(Bundle#{topology := Topology#{ingresses := [New]}})
     end,
-    ?assertError({ambiguous_ingress_recipients, all},
+    ?assertError({hls_diagnostic, #{code := ambiguous_ingress_recipients, context := #{target := all}}},
         Check(Ingress#{targets := [Target#{recipients := [First, First]}]})),
     Missing = maps:remove(schemas, Target),
-    ?assertError({invalid_ingress_target, Missing}, Check(Ingress#{targets := [Missing]})),
-    ?assertException(error, _, Check(Ingress#{shape := [65537, 1]})),
-    ?assertException(error, _, hls_protocol_control:plan(
-        Bundle#{topology := Topology#{ingresses := [Ingress, Ingress]}})).
+    ?assertError({hls_diagnostic, #{code := invalid_ingress_target, context := #{value := Missing}}},
+        Check(Ingress#{targets := [Missing]})),
+    ?assertError({hls_diagnostic, #{stage := control, code := unsupported_protocol_ingress}},
+        Check(Ingress#{shape := [65537, 1]})),
+    ?assertError({hls_diagnostic, #{stage := control, code := unsupported_protocol_ingress}},
+        hls_protocol_control:plan(Bundle#{topology := Topology#{ingresses := [Ingress, Ingress]}})).
 
 %% A shared actor keeps each target's coordinates; native projection cannot replace the host plan.
 -spec target_coordinates_and_projection_test() -> ok.
@@ -99,10 +103,11 @@ framed_capabilities_test() ->
     Control = #{kind => rectangle, input_bits => 194},
     Hardware = hls_protocol_control:framed(Control, #{}),
     ?assertMatch(#{input_bits := 194, command_bits := 195}, Hardware),
-    ?assertError({unsupported_framed_control, none}, hls_protocol_control:framed(none, #{})),
-    ?assertError({unsupported_framed_control, other, explicit_start},
+    ?assertError({hls_diagnostic, #{stage := control, code := unsupported_framed_control, context := #{control := none}}},
+        hls_protocol_control:framed(none, #{})),
+    ?assertError({hls_diagnostic, #{code := unsupported_framed_control, context := #{control := other, activation := explicit_start}}},
         hls_protocol_control:framed(Control, #{control => other})),
-    ?assertError({unsupported_framed_control, rectangle, automatic},
+    ?assertError({hls_diagnostic, #{code := unsupported_framed_control, context := #{control := rectangle, activation := automatic}}},
         hls_protocol_control:framed(Control, #{activation => automatic})),
     ?assertEqual({[], []}, hls_protocol_control:ports(none)),
     {Inputs, Outputs} = hls_protocol_control:ports(Control),

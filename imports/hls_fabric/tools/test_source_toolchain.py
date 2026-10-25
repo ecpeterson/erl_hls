@@ -37,10 +37,32 @@ class SourceToolchainTests(unittest.TestCase):
             env = {**os.environ, 'PATH': str(forbidden)+os.pathsep+os.environ['PATH'],
                    'ERL_HLS_ROOT': '/not-a-compiler', 'PYTHONPATH': '/not-python-tools', 'ERL_AFLAGS': ''}
             emitted = stage/'emitted'
-            command = [release/'bin/hls-fabric', 'emit', '--config', config, '--output', emitted]
+            planned = subprocess.run([release/'bin/hls-fabric', 'plan', '--config', stage/'absent.erl',
+                                      '--kind', 'unknown', '--stage', 'invalid', '--format', 'invalid',
+                                      '--config', config, '--kind', 'application',
+                                      '--stage', 'schedule', '--format', 'json'],
+                                     cwd=stage, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(planned.returncode, 0, planned.stdout+planned.stderr)
+            schedule = json.loads(planned.stdout)['data']
+            self.assertFalse(emitted.exists())
+            invalid = stage/'invalid.erl'
+            invalid.write_text('#{}.\n')
+            rejected = subprocess.run([release/'bin/hls-fabric', 'plan', '--config', invalid,
+                                       '--diagnostics', 'json'], cwd=stage, env=env,
+                                      capture_output=True, text=True, timeout=30)
+            self.assertEqual(rejected.returncode, 1)
+            error = json.loads(rejected.stderr)
+            self.assertEqual(error['code'], 'missing_config_field')
+            self.assertEqual(error['context']['field'], ['sources'])
+            self.assertEqual(error['context']['config_file'], str(invalid))
+            self.assertEqual(rejected.stdout, '')
+            command = [release/'bin/hls-fabric', 'emit', '--output', stage/'superseded',
+                       '--config', stage/'absent.erl', '--config', config, '--output', emitted]
             result = subprocess.run(command, cwd=stage, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             manifest = json.loads((emitted/'source-build.json').read_text())
+            self.assertEqual(schedule, manifest['units'])
+            self.assertFalse((stage/'superseded').exists())
             self.assertEqual([u['module'] for u in manifest['units']], ['protocol_boundary_core', 'application_gateway'])
             for row in manifest['inputs']:
                 self.assertFalse(Path(row['file']).is_absolute())
@@ -55,7 +77,7 @@ class SourceToolchainTests(unittest.TestCase):
             emitted.rename(moved)
             # Mock tools validate invocation/provenance mechanics, not XLS semantics or RTL.
             xls = stage/'mock xls'
-            xls.mkdir()
+            (xls/'xls/dslx/stdlib').mkdir(parents=True)
             for name in ('ir_converter_main', 'opt_main', 'codegen_main'):
                 path = xls/name
                 path.write_text('#!/bin/sh\nprintf "mock product\\n"\n')

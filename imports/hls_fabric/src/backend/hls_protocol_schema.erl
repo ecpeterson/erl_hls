@@ -2,27 +2,31 @@
 -moduledoc "Binds startup values and host frame domains to the receiving actor's fresh ordinary schema. Source callbacks retain semantic validation.".
 -export([frames/2, domains/2]).
 
--doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the ordinary 128-bit frame ABI (at most 96 payload bits). Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs reject. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
+-doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the ordinary 128-bit frame ABI (at most 96 payload bits). Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs raise schema diagnostics. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
 -spec frames(hls_local_actor:source() | hls_local_actor:artifact(), [tuple()]) -> [non_neg_integer()].
 frames(#{program := Program}, Messages) ->
     #{message_names := Names} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     [frame(Message, Names, Records) || Message <- Messages].
 
--doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond 96 bits reject; semantic invalid values must still reach the source callback.".
+-doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond 96 bits reject; invalid tags and unsupported codecs raise schema diagnostics; semantic invalid values must still reach the source callback.".
 -spec domains(hls_local_actor:source() | hls_local_actor:artifact(), [atom()]) -> [map()].
 domains(#{program := Program}, Tags) ->
     #{message_names := Names} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     case Tags =/= [] andalso length(Tags) =:= length(lists:usort(Tags)) of
-        true -> ok; false -> error({invalid_ingress_schemas,Tags})
+        true -> ok;
+        false -> hls_diagnostic:raise(schema, invalid_ingress_schemas,
+            <<"An ingress target needs a nonempty list of distinct message tags.">>, #{schemas => Tags})
     end,
     [case {[I || {I,T} <- lists:enumerate(3,Names), T =:= Tag],
            [Fs || {attribute,_,record,{T,Fs}} <- Records, T =:= Tag]} of
         {[Op],[Fields]} ->
             (maps:with([mask,value],xls_message_bits:frame(Op,
                 [#{type=>field_type(F),domain=>unknown} || F<-Fields])))#{tag=>Tag,schema_sha256=>schema_hash(Fields)};
-        _ -> error({undeclared_protocol_schema,Tag})
+        _ -> hls_diagnostic:raise(schema, undeclared_protocol_schema,
+            <<"An ingress message tag must be declared by its receiving actor.">>,
+            #{schema => Tag, declared_schemas => Names})
     end || Tag<-Tags].
 
 %% Ignore source locations/default expressions, but bind ordered names and exact codec types.
@@ -44,9 +48,15 @@ frame(Message, Names, Records) when is_tuple(Message), tuple_size(Message) > 0 -
                 || {V,Type} <- lists:zip(Values,[field_type(F) || F <- Fields])],
             #{mask := Mask, value := Value} = xls_message_bits:frame(Op,Bound),
             true = Mask =:= (1 bsl 128)-1, Value;
-        _ -> error({invalid_startup_record, Message})
+        _ -> invalid_startup(Message, Names)
     end;
-frame(Message, _, _) -> error({invalid_startup_record, Message}).
+frame(Message, Names, _) -> invalid_startup(Message, Names).
+
+%% Startup is source input; wrong record identity or arity is not a compiler invariant failure.
+-spec invalid_startup(term(), [atom()]) -> no_return().
+invalid_startup(Message, Names) -> hls_diagnostic:raise(schema, invalid_startup_record,
+    <<"A startup value must be a declared message record with the exact field count.">>,
+    #{message => Message, declared_schemas => Names}).
 
 %% Admit only codecs with the established ordinary scalar wire representation.
 -spec field_type(term()) -> hls_type:descriptor().
@@ -66,7 +76,13 @@ wire_scalar(Descriptor) ->
         {bit_cast,{match,[Bits]}} when Width > 0, Width =< 96 ->
             case binary_to_integer(Bits) =:= Width andalso hls_type:value_width(Descriptor) =:= Width of
                 true -> Descriptor;
-                false -> error({unsupported_protocol_schema_codec, Descriptor})
+                false -> unsupported_codec(Descriptor)
             end;
-        _ -> error({unsupported_protocol_schema_codec, Descriptor})
+        _ -> unsupported_codec(Descriptor)
     end.
+
+%% Custom providers must expose the scalar bit-cast ABI required by ordinary protocol frames.
+-spec unsupported_codec(hls_type:descriptor()) -> no_return().
+unsupported_codec(Descriptor) -> hls_diagnostic:raise(schema, unsupported_protocol_schema_codec,
+    <<"Protocol fields require a supported numeric/boolean codec or a full-width scalar bit-cast provider.">>,
+    #{type => Descriptor}).

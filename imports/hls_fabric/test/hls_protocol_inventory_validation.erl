@@ -109,4 +109,4 @@ reject_inventory(T = #{routes := [Route = #{source := {Id, _}, recipients := Rec
 -spec reject(fun(() -> term())) -> ok.
 reject(Fun) ->
     try Fun() of Value -> error({not_rejected, Value})
-    catch error:{protocol_topology, _} -> ok end.
+    catch error:{hls_diagnostic, #{stage := topology}} -> ok end.

@@ -1,6 +1,6 @@
 -module(hls_protocol_application).
 -moduledoc "Builds a fresh source network with the shared framed application gateway and its exact host deployment binding.".
--export([plan/1, descriptor/1, emit/1, write/2]).
+-export([transport/1, plan/1, descriptor/1, emit/1, write/2]).
 -export_type([plan/0, descriptor/0, result/0, output/0]).
 
 %% The boundary owns source/layout checks; host bindings are validated against that same build.
@@ -33,11 +33,15 @@ write(Config, Directory) ->
 -spec plan(hls_source_config:application() | file:filename()) -> plan().
 plan(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<65536 ->
     case maps:is_key(native_actors,Config) of
-        true->error(partition_application_gateway_unavailable);false->ok
+        true -> hls_diagnostic:raise(application, partition_application_gateway_unavailable,
+            <<"The whole-application gateway cannot carry crossing links; select bridge, mixed or deployment for a partition.">>,
+            #{field => [native_actors]});
+        false -> ok
     end,
     case maps:get(activation,Config,explicit_start) of
         explicit_start->ok;
-        Mode->error({application_requires_explicit_start,Mode})
+        Mode -> hls_diagnostic:raise(application, application_requires_explicit_start,
+            <<"Framed applications require explicit_start activation.">>, #{field => [activation], value => Mode})
     end,
     Build = hls_protocol_transport:plan(Config),
     Transport = #{ingress := Control} = hls_protocol_transport:descriptor(Build),
@@ -101,3 +105,7 @@ deployment(Application = #{devices := Devices}, Transport, Boundary, Files, Devi
         {source_protocol_application, 4, Content, Boundary, Device, Binding}, [deterministic])),
     Application#{devices := #{Device => Binding#{identity => Identity}},
         source_boundary => Boundary, eligible => false}.
+
+-doc "Returns the retained transport placement for source, topology and layout inspection. Treat it as read-only; this accessor does not prepare sources or render hardware.".
+-spec transport(plan()) -> hls_protocol_transport:build().
+transport(#plan{boundary = Child}) -> hls_protocol_boundary:transport(Child).
