@@ -25,6 +25,7 @@
     output_ports := [atom()], message_schemas := [atom()],
     completion_sites := [#{id := non_neg_integer(), phase := atom()}], phase_names := [atom()],
     function_ports := [atom()], clock_proc := local_owner_clock | local_inbox_clock,
+    build_profile := hls_build_profile:profile(), codegen_flags := [binary()],
     owner_contract := owner_contract(), action_result_fields := [atom()], action_obligations := [atom()],
     receipt_result_fields := [atom()], receipt_obligations := [atom()], step_result_fields := [atom()],
     handwritten_application_controller := false, source_semantics_reused := [atom()],
@@ -121,7 +122,9 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
     EventWidth = case Events of [] -> 0; _ -> 8 end,
     PayloadWidth = lists:max([1 | [xls_entry_storage:width(Storage)
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
-    Base = #{completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
+    Profile = hls_build_profile:owner(),
+    Base = #{build_profile => Profile, codegen_flags => hls_build_profile:flags(Profile, sampled_clock),
+        completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
         machine_layout => Layout, continuation_bits => EventWidth,
         machine_bits => maps:get(width, Layout) + EventWidth,

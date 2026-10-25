@@ -1,7 +1,7 @@
 -module(hls_source_config).
 -moduledoc "Source-build configuration contracts and trusted terms-file loading. The public build boundary validates input shape here; source-owning passes check semantic constraints. File loading alone does not produce a checked config.".
--export([read/1, validate/2]).
--export_type([config/0, source/0, transport/0, network/0, boundary/0, application/0,
+-export([read/1, validate/2, validate_source/1]).
+-export_type([build_source/0, config/0, source/0, transport/0, network/0, boundary/0, application/0,
     bridge/0, deployment/0, mixed/0, placement_options/0, network_options/0,
     bridge_options/0, source_file/0, topology/0, activation/0, inspection/0,
     role/0, limits/0, endpoint/0, device/0]).
@@ -37,6 +37,17 @@
 
 -doc "An application-chosen device identity used as a map key and retained in deployment bindings; it is not a host endpoint or process identifier.".
 -type device() :: term().
+
+-doc "Common frontend inputs for either backend, before topology execution or backend placement checks.".
+-type build_source() :: #{sources := [source_file(), ...], topology := topology(),
+    dslx_path => [file:filename()]}.
+
+-doc "Validates common source/topology/import shapes without choosing an actor limit or a backend. Semantic and placement checks belong to the selected builder.".
+-spec validate_source(term()) -> build_source().
+validate_source(Config) ->
+    object(Config, [sources, topology], [dslx_path], []),
+    lists:foreach(fun({Key, Value}) -> field(Key, Value, [Key]) end, lists:sort(maps:to_list(Config))),
+    Config.
 
 -doc "Fresh source inputs shared by every build kind. Optional provider options belong to hls_protocol_model; dslx_path is consumed only by source-bundle packaging.".
 -type source() :: #{?SOURCE_FIELDS}.

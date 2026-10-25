@@ -38,6 +38,7 @@ class SourceToolchainTests(unittest.TestCase):
                    'ERL_HLS_ROOT': '/not-a-compiler', 'PYTHONPATH': '/not-python-tools', 'ERL_AFLAGS': ''}
             emitted = stage/'emitted'
             planned = subprocess.run([release/'bin/hls-fabric', 'plan', '--config', stage/'absent.erl',
+                                      '--backend', 'channel_scheduler', '--backend', 'source_protocol',
                                       '--kind', 'unknown', '--stage', 'invalid', '--format', 'invalid',
                                       '--config', config, '--kind', 'application',
                                       '--stage', 'schedule', '--format', 'json'],
@@ -90,6 +91,7 @@ class SourceToolchainTests(unittest.TestCase):
             published = (moved/'compiled').resolve()
             compiled = json.loads((published/'compiled.json').read_text())
             self.assertFalse(compiled['native_measured'])
+            self.assertEqual(compiled['metadata'], manifest['metadata'])
             boundary, gateway = compiled['units']
             self.assertIn('--pipeline_stages=1', boundary['commands'][2]['command'])
             self.assertIn('--flop_outputs=false', boundary['commands'][2]['command'])
@@ -109,6 +111,102 @@ class SourceToolchainTests(unittest.TestCase):
             for row in manifest['inputs']:
                 self.assertEqual(hashlib.sha256((moved/row['file']).read_bytes()).hexdigest(), row['sha256'])
                 self.assertEqual((relocated/row['file']).read_bytes(), (moved/row['file']).read_bytes())
+
+
+    def test_scheduler_profile_and_backend_constraints(self) -> None:
+        """The public backend selector retains one RAM-placement profile across planning, moves and compilation."""
+        with tempfile.TemporaryDirectory(prefix='scheduler toolchain ') as temporary:
+            stage = Path(temporary).resolve()
+            release = stage/'relocated toolchain'
+            shutil.copytree(ROOT/'_build/default/rel/hls', release)
+            source = stage/'hls_counter_example.erl'
+            shutil.copyfile(ROOT/'src/examples/counter/hls_counter_example.erl', source)
+            config = stage/'scheduler.config'
+            config.write_text((ROOT/'src/examples/counter/scheduler-ram.config').read_text().replace(
+                '"src/examples/counter/hls_counter_example.erl"', json.dumps(str(source))))
+            environment = {**os.environ, 'ERL_AFLAGS': '', 'ERL_HLS_ROOT': '/not-a-compiler'}
+            cli = release/'bin/hls-fabric'
+
+            def invoke(*arguments: object) -> subprocess.CompletedProcess[str]:
+                """Run the moved packaged frontend, never a checkout-local executable."""
+                return subprocess.run([str(cli), *map(str, arguments)], cwd=stage, env=environment,
+                                      capture_output=True, text=True, timeout=60)
+
+            def plan(view: str) -> dict:
+                """Earlier backend directives may be superseded before validation or source loading."""
+                result = invoke('plan', '--backend', 'unknown', '--backend', 'source_protocol',
+                                '--backend', 'channel_scheduler', '--config', config,
+                                '--stage', view, '--format', 'json')
+                self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+                return json.loads(result.stdout)['data']
+
+            profile, schedule = plan('profile'), plan('schedule')
+            self.assertEqual(profile['backend'], 'channel_scheduler')
+            self.assertEqual(profile['schedules']['channel']['pipeline_stages'], 2)
+            self.assertEqual(profile['placement']['scheduler_groups']['counters']['state_storage'], 'block_ram')
+            unit, = schedule
+            self.assertTrue(any(flag.startswith('--ram_configurations=') for flag in unit['codegen_flags']))
+            self.assertIn('support/compiler/rtl/hls_1r1w_ram.v', unit['rtl'])
+            rejected = invoke('emit', '--backend', 'channel_scheduler', '--kind', 'application',
+                              '--config', stage/'absent.erl', '--output', stage/'rejected-kind',
+                              '--diagnostics', 'json')
+            self.assertEqual(rejected.returncode, 1)
+            self.assertEqual(json.loads(rejected.stderr)['code'], 'incompatible_build_kind')
+            self.assertEqual(rejected.stdout, '')
+            self.assertFalse((stage/'rejected-kind').exists())
+            override = stage/'source-override.config'
+            source_config = (ROOT/'src/examples/counter/source.config').read_text().replace(
+                '"src/examples/counter/hls_counter_example.erl"', '"missing-source.erl"')
+            prefix, separator, suffix = source_config.rpartition('}.')
+            self.assertEqual(separator, '}.')
+            override.write_text(prefix + ', schedule => #{pipeline_stages => 2}}.' + suffix)
+            rejected = invoke('emit', '--backend', 'source_protocol', '--kind', 'application',
+                              '--config', override, '--output', stage/'rejected-schedule',
+                              '--diagnostics', 'json')
+            self.assertEqual(rejected.returncode, 1)
+            diagnostic = json.loads(rejected.stderr)
+            self.assertEqual(diagnostic['code'], 'unknown_config_fields')
+            self.assertEqual(diagnostic['context']['value'], ['schedule'])
+            self.assertFalse((stage/'rejected-schedule').exists())
+            emitted = stage/'emitted scheduler'
+            result = invoke('emit', '--backend', 'source_protocol', '--backend', 'channel_scheduler',
+                            '--config', config, '--output', emitted)
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            manifest = json.loads((emitted/'source-build.json').read_text())
+            self.assertEqual(manifest['metadata'], {'backend': 'channel_scheduler', 'profile': profile})
+            self.assertEqual(manifest['units'], schedule)
+            self.assertEqual(json.loads((emitted/'profile.json').read_text()), profile)
+            self.assertEqual(len(json.loads((emitted/'ram/bindings.json').read_text())), 1)
+            source.rename(source.with_suffix('.retained'))
+            moved = stage/'relocated scheduler bundle'
+            emitted.rename(moved)
+            # Stubs test the packaged contract and provenance, never hardware functionality.
+            xls = stage/'stub xls'
+            (xls/'xls/dslx/stdlib').mkdir(parents=True)
+            for name in ('ir_converter_main', 'opt_main', 'codegen_main'):
+                executable = xls/name
+                executable.write_text('#!/bin/sh\nprintf "stub product\\n"\n')
+                executable.chmod(0o755)
+            compiler_tools = next(release.glob('lib/erl_hls-*/priv/tools'))
+            for name in ('compile_source_build.py', 'compile_xls.py'):
+                shutil.copyfile(compiler_tools/name, stage/name)
+            subprocess.run([sys.executable, stage/'compile_source_build.py', xls, moved],
+                           cwd=stage, env=environment, check=True, timeout=30)
+            published = (moved/'compiled').resolve()
+            compiled = json.loads((published/'compiled.json').read_text())
+            self.assertEqual(compiled['metadata'], manifest['metadata'])
+            self.assertEqual(json.loads((published/'source-build.json').read_text()), manifest)
+            self.assertFalse(compiled['native_measured'])
+            compiled_unit, = compiled['units']
+            command = compiled_unit['commands'][2]['command']
+            self.assertTrue(all(flag in command for flag in unit['codegen_flags']))
+            self.assertIn('--module_name=counter_topology', command)
+            self.assertEqual(set(compiled['xls_tools']), {'ir_converter_main', 'opt_main', 'codegen_main'})
+            for row in manifest['inputs']:
+                self.assertEqual(hashlib.sha256((published/row['file']).read_bytes()).hexdigest(), row['sha256'])
+                self.assertEqual((published/row['file']).read_bytes(), (moved/row['file']).read_bytes())
+            rtl = (published/'files.f').read_text().splitlines()
+            self.assertTrue(all(not Path(path).is_absolute() and (published/path).is_file() for path in rtl))
 
 if __name__ == '__main__':
     unittest.main()

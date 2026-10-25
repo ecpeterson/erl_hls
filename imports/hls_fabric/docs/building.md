@@ -16,24 +16,77 @@ The release directory `_build/default/rel/hls/` contains the CLI, resolved BEAM 
 
 The compiler itself owns `hlsc` for ordinary actor lowering, source preprocessing, the shared bundle schema and optional XLS invocation. This project owns `hls-fabric`, deployment roles, adapters and their required schedules. Repetition settings live in the example frontend, not either generic command.
 
-## Source toolchain
+## One build boundary, two execution models
+
+Select the backend in the build request. The application declares actor semantics and logical routes; its backend configuration declares physical ownership and the supported schedule.
+
+| Backend | Configuration | Generated boundary |
+| --- | --- | --- |
+| `source_protocol` (default) | Source composition plus `--kind` | Source-bound owners, compact captures and connected application/deployment adapters. |
+| `channel_scheduler` | Source modules, topology and `placement`; optional `schedule` | Dedicated actors and shared executors connected by ordinary ready/valid channels. |
+
+These are different checked execution models. A scheduler placement is not a source-protocol configuration, and choosing a backend does not translate unsupported constructs. `source_protocol` accepts kinds `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. `channel_scheduler` has one topology boundary and rejects `--kind`.
+
+The two-counter example uses the same actor and topology with both backends. Run from the repository root after `rebar3 release`; choose fresh output directories:
 
 ```sh
-_build/default/rel/hls/bin/hls-fabric emit --kind application --config application.config --output /path/to/fresh-output
+_build/default/rel/hls/bin/hls-fabric plan --backend source_protocol --kind application \
+    --config src/examples/counter/source.config --stage profile
+_build/default/rel/hls/bin/hls-fabric emit --backend source_protocol --kind application \
+    --config src/examples/counter/source.config --output _build/counter-source
+_build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
+    --config src/examples/counter/scheduler.config --stage profile
+_build/default/rel/hls/bin/hls-fabric emit --backend channel_scheduler \
+    --config src/examples/counter/scheduler.config --output _build/counter-scheduler
+```
+
+`hls_counter_example` owns two independent totals, addressed through one rectangular ingress and reported on separate outputs. `source.config` asks for a framed native application; `scheduler.config` leaves both counters as dedicated channel actors, with no shared-executor group or external state/mailbox RAM. Neither command runs a simulation. Both produce the compiler-owned `source-build.json` bundle consumed by the same [external compilation command](#optional-external-compilation). Component and application tests use this public emission/compilation boundary too; they add their own bounded execution assertions.
+
+To share one executor, use the same actor/topology with the alternative RAM-backed placement:
+
+```sh
+_build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
+    --config src/examples/counter/scheduler-ram.config --stage placement
+_build/default/rel/hls/bin/hls-fabric emit --backend channel_scheduler \
+    --config src/examples/counter/scheduler-ram.config --output _build/counter-scheduler-ram
+```
+
+This variant selects `block_ram` for both state and mailbox storage. Its core exposes RAM ports and emits the connection fragments described below; an enclosing shell must connect the physical RAMs.
+
+Both configurations are trusted Erlang maps, or filenames containing exactly one map. Paths are relative to the caller's working directory, including source paths inside a configuration file. Add `dslx_path => [Directory, ...]` for application-provided DSLX imports. The output itself must be absent; missing parent directories are created. Backend planning and rendering finish before output is created; filesystem or support-packaging failures can retain partial output. Later scalar options override earlier values, including backend, output/configuration paths, builder kind, plan stage/format and diagnostic format; flags may repeat. Errors return nonzero. Expected input failures name their stage, diagnostic code and relevant field/source/actor/role. `--diagnostics json` emits the same diagnostic as JSON on stderr; `HLS_DEBUG=1` adds the original stack. Unexpected exceptions always retain their class, reason and stack so compiler bugs remain visible.
+
+The common Erlang API follows the same path:
+
+```erlang
+Request = #{backend => channel_scheduler,
+    configuration => "src/examples/counter/scheduler.config"},
+Plan = hls_build:plan(Request),
+Profile = hls_build:inspect(Plan, profile),
+Descriptor = hls_build:descriptor(Plan),
+hls_build:write(Plan, "/path/to/fresh-output").
+```
+
+For source protocol, use `#{backend => source_protocol, kind => application, configuration => Config}`. `hls_build:plan/1` also accepts a trusted filename containing that whole request. Retain plans unchanged in process with source modules loaded; they are not saved-artifact input formats. Planning loads trusted source and invokes its topology constructor. Source-protocol planning retains checked structure for later rendering; scheduler planning also retains generated DSLX. Neither creates output or invokes XLS, and writing either plan does not recompile source.
+
+`hls_source_build` and `hls_scheduler_build` own their backend-specific checks. The scheduler configuration requires `sources`, `topology` and `placement`; `schedule` and `dslx_path` are optional. Declare every actor and topology-constructor module in `sources`. Placement uses `xls_shared_topology_profile`, including dedicated actors or shared scheduler groups, queue bounds and reduction placement. The shared counter example selects external block RAM for both state and mailbox storage. Schedule options are `pipeline_stages` (default 2), `initiation_interval` (default 1), `delay_model` (default `unit`) and `executor_result_delay` (default 0). Result delay affects XLS scheduling, not pipeline depth or measured physical time. Unsupported fields fail instead of being ignored.
+
+Source feedback clocks retain one stage with input/output flops disabled. The application gateway has its separate two-stage channel schedule with output flops enabled. Source configurations cannot override these contracts: adding registers to the feedback boundary changes the hardware transition. `hls_build_profile` owns the policies consumed by this public build frontend and standalone source owners. Its profile names the current fixed ordinary actor ABI: a 32-bit header plus 96-bit payload, 128 bits total. This records today's contract; it does not parameterize frame width or equate compact captures and bridge envelopes with that frame. Actual XLS executable and library hashes are recorded by external compilation, not guessed during planning. Rebar's `default`/`test` profiles select BEAM dependencies; they are distinct from this hardware policy.
+
+Packaging delegates relative paths, metadata, generated input hashes, DSLX entry points, RTL module names, required codegen options and RTL file lists to the compiler-owned `hls_artifact_bundle`. Support libraries and supplied import trees are copied into `support/`, so a completed bundle can move before external compilation. The recorded source configuration remains inspection data, not a rewritten portable source-recompilation recipe.
+
+A scheduler bundle contains `scheduler/topology.x`, generated actor modules, `profile.json`, and RAM binding/fragments under `ram/`. The dedicated-actor counter example needs no external state/mailbox RAM. With `block_ram` placement, the compiled core exposes its RAM channels; `wires.vh`, `application_ports.vh` and `instances.vh` describe their connection to the support RAMs. These fragments are for an application shell, not independently compiled RTL. The generic scheduler build does not invent a framed host gateway, board pinout or complete application wrapper.
+
+`hls-repetition` remains an application-owned convenience frontend. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then uses the source-protocol builder. For example:
+
+```sh
 _build/default/rel/hls/bin/hls-repetition --width 6 --split 3 --output /path/to/fresh-repetition
 ```
 
-`emit` accepts `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. Its trusted Erlang configuration is the corresponding builder's map; paths are relative to the caller's working directory. Add `dslx_path => [Directory, ...]` for application-provided DSLX imports. The output itself must be absent; missing parent directories are created. Source analysis and hardware rendering finish before output is created; filesystem or support-packaging failures can retain partial output. Later scalar options override earlier values, including output/configuration paths, builder kind, plan stage/format and diagnostic format; flags may repeat. Errors return nonzero. Expected input failures name their stage, diagnostic code and relevant field/source/actor/role. `--diagnostics json` emits the same diagnostic as JSON on stderr; `HLS_DEBUG=1` adds the original stack. Unexpected exceptions always retain their class, reason and stack so compiler bugs remain visible.
-
-`hls-repetition` is a separate example frontend in `phi_protocol_cli`. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then calls the same `hls_source_build:write/3` API as `emit`. Its placement, inspection and shared-arithmetic bounds are documented in [source protocol](source-protocol.md). It is an application example, not an application-specific branch of the compiler.
-
-The direct API is `hls_source_build:write(Kind, ConfigOrFilename, Output)`. To inspect a complete composition first, use `Plan = hls_source_build:plan(Kind, ConfigOrFilename)`, `hls_source_build:descriptor(Plan)`, then `hls_source_build:write(Plan, Output)`. Planning checks source, placement, layout and host bindings without rendering hardware or needing an output directory. The retained plan shares its source snapshot across roles; writing does not recompile it. Keep plans unchanged in process with their source codecs loaded. They are not saved-artifact input formats.
-
-Writing renders the checked composition, supplies fabric-specific unit schedules and delegates packaging to the compiler-owned `hls_artifact_bundle`: relative paths, emitter `metadata`, generated input hashes, DSLX entry points, RTL module names, required code-generation options and final RTL file lists. Shared DSLX libraries, pin adapters and supplied import trees are read at packaging time and copied into `support/`; moving the emitted directory before external compilation is supported. `config.erl` records the original trusted source configuration for inspection; its source paths are not rewritten as a portable source-recompilation recipe. Native source-plan/deployment terms are trusted local artifacts.
+Its placement, inspection and shared-arithmetic bounds are documented in [source protocol](source-protocol.md).
 
 ## Inspecting a build
 
-Use the same configuration and build kind for planning and emission:
+Use the same backend, configuration and source composition kind for planning and emission:
 
 ```sh
 _build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment.config
@@ -41,7 +94,7 @@ _build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment
 _build/default/rel/hls/bin/hls-fabric plan --kind deployment --config deployment.config --stage schedule
 ```
 
-`plan` checks the entire selected composition and prints a report without rendering hardware or creating a bundle. It still compiles trusted sources and executes their topology/provider constructors. The default `summary` shows roles and compilation units. `configuration` shows inputs and resolved compiler/fabric/support locations; `source` shows compiler provenance, actor interfaces and inventory obligations; `topology` shows the expanded graph; `placement` shows receiver, publication and capture layouts per role; `composition` shows the final static interfaces; `schedule` shows the exact retained compilation-unit recipes used by emission. These are views of one complete successful plan, not switches that bypass later validation. In-process callers use `hls_source_build:inspect(Plan, Stage)` to inspect repeatedly without preparing sources again.
+`plan` checks the entire selected build and prints a report without creating a bundle or invoking XLS. The default `summary` shows the units and roles or scheduler populations. `configuration` shows inputs and build context; `source` shows source identities and backend requirements; `topology` shows the logical graph; `placement` shows checked physical ownership; `composition` shows static interfaces; `profile` shows backend, frame ABI and structured scheduling policy; `schedule` shows the exact retained compilation-unit recipes. These are views of one successful plan, not switches that bypass later validation. In-process callers use `hls_build:inspect(Plan, Stage)` to inspect repeatedly without preparing sources again.
 
 Reports are diagnostic data, not serialized executable plans. JSON preserves tuples as `{"$tuple": [...]}`, maps with non-string or colliding keys as `{"$map": [[key, value], ...]}`, and non-text binaries as `{"$binary_hex": "..."}`. Atom keys and text binaries become ordinary JSON strings; atoms used in tagged map keys retain an explicit `$atom` tag. Every proper list remains an array, including Erlang character lists in the original configuration, so integer indices never change representation based on their values. Configuration field paths are explicit lists; source line/column locations are retained when the source pass supplies them. Configuration terms do not carry per-key locations, so those errors use the config filename and field path rather than inventing a line number.
 
@@ -85,7 +138,7 @@ A deployment prepares sources once, validates complete disjoint ownership and re
 
 ### Following the implementation
 
-Start at `hls_source_build:plan/2`, not a renderer. Its build kind selects a checked composition; `write/2` later renders that same plan and packages its files. For a deployment, the complete path is:
+Start at `hls_build:plan/1`. It selects `hls_source_build` or `hls_scheduler_build`; each owns preparation and lowering while `hls_build_profile` owns scheduling policy. For a source deployment, the complete path inside the selected backend is:
 
 ```text
 hls_source_build:plan(deployment, Config)
@@ -133,11 +186,11 @@ Compilation leaves the source bundle and `source-build.json` frozen. The default
 
 All units must finish before publication. A failure preserves the previous release and retains the private attempt's inputs, commands, logs and partial products. Repeating the command reuses completed stages after hash checks, including earlier units, and an unchanged success keeps the same release. `<output>.run.json` records the latest attempt and cache/execution costs. `--cache` selects a shared cache; `--timeout` bounds each XLS stage (default 300 seconds).
 
-The executor preserves literal emitted schedules: sampled-clock source units use one stage with input/output flops disabled, while the shared gateway retains its two-stage channel schedule. These are interface contracts, not physical timing estimates. The manifest is a trusted build record. Emission and XLS compilation establish neither application admission nor hardware timing. The shared executor does not yet unify source-builder and backend build-profile policy.
+The executor preserves literal emitted schedules: sampled-clock source units use one stage with input/output flops disabled, while the shared gateway retains its two-stage channel schedule. These are interface contracts, not physical timing estimates. The manifest is a trusted build record. Emission and XLS compilation establish neither application admission nor hardware timing. The common build frontend resolves both backend profiles before emitting this manifest. This policy boundary covers public source bundles and standalone source owners. Existing flat-topology and phi experiment drivers, including `compile_backend.py` and `compile_phi_decoder_profile.py`, still select and record their schedules separately; their migration remains outstanding. They share the external executor without changing a public source bundle.
 
-## Legacy test drivers
+## Experiment and diagnostic drivers
 
-Existing simulation/report drivers still use Python and shell. Build their declared profile before calling fixtures; `source tools/backend_env.sh test` selects a test build and `default` selects an ordinary build. The helper replaces `ERL_AFLAGS`; unrelated VM flags belong in `ERL_FLAGS`. These helpers are unnecessary for `hls-fabric`.
+Experiment-specific simulation/report drivers still use Python and shell, with their own input and measurement policies. They are separate from the public build boundary above. Build their declared rebar profile before calling fixtures; `source tools/backend_env.sh test` selects a test build and `default` selects an ordinary build. The helper replaces `ERL_AFLAGS`; unrelated VM flags belong in `ERL_FLAGS`. These helpers are unnecessary for `hls-fabric`.
 
 External Python drivers select a compiler when invoked, using their declared rebar profile or an explicit `--erl-hls` checkout. Compiler sources, Python helpers and BEAM files must come from that selection; a missing build is an error, with no fallback to a different profile. The shell helper also accepts an explicit checkout: `source tools/backend_env.sh test /path/to/erl_hls`. `ERL_HLS_ROOT` is an output of that selection, not an implicit Python override.
 

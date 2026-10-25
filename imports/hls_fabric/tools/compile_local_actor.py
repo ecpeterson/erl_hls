@@ -29,6 +29,9 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
     manifest = json.loads(manifest_file.read_text())
     if manifest['dslx_sha256'] != digest(source) or manifest['clock_proc'] not in ['local_owner_clock', 'local_inbox_clock']:
         raise ValueError('changed or unsupported actor source')
+    flags = manifest['codegen_flags']
+    hardware_profile = manifest['build_profile']
+    schedule = hardware_profile['schedules']['sampled_clock']
     roots = [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', public/'priv/xls/lib',
              public/'priv/xls/fabric', *(imports or [])]
     directories = ['_stdlib', *[f'_imports/{index}' for index in range(len(roots))]]
@@ -58,9 +61,7 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
             {'id': 'opt', 'cache': 'owner_opt', 'tool': 'opt_main',
              'arguments': ['raw.ir'], 'output': 'optimized.ir', 'inputs': {'ir': 'raw.ir'}},
             {'id': 'codegen', 'cache': 'owner_codegen', 'tool': 'codegen_main',
-             'arguments': ['--pipeline_stages=1', '--delay_model=unit', '--flop_inputs=false',
-                           '--flop_outputs=false', '--use_system_verilog=false', '--reset=reset',
-                           '--module_name=local_actor', 'optimized.ir'],
+             'arguments': [*flags, '--module_name=local_actor', 'optimized.ir'],
              'output': 'actor.v', 'inputs': {'ir': 'optimized.ir'}},
         ]
 
@@ -69,12 +70,12 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
         records = [{key: runs[name][key] for key in ['command', 'exit', 'output', 'sha256']}
                    for name, _ in products]
         (snapshot/'commands.json').write_text(json.dumps(records, indent=2)+'\n')
-        report = {'actor': manifest, 'module': 'local_actor', 'source': str(source),
+        report = {'actor': manifest, 'build_profile': hardware_profile, 'module': 'local_actor', 'source': str(source),
                   'rtl_sha256': digest(snapshot/'actor.v'),
                   'dslx_path': ':'.join(map(str, roots)),
                   'inputs': {name: digest(snapshot/name) for name in files},
                   'xls_tools': {name: digest(path) for name, path in tools.items()},
-                  'schedule': {'pipeline_stages': 1, 'flop_inputs': False, 'flop_outputs': False,
+                  'schedule': {**{key: schedule[key] for key in ('pipeline_stages', 'flop_inputs', 'flop_outputs')},
                                'commands_valid': True, 'observations_ready': True},
                   'network_admitted': False, 'native_measured': False}
         retained = {filename: filename for _, filename in products}

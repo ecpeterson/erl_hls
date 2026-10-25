@@ -30,6 +30,12 @@ class LocalActorCompilationTests(BuildFixture):
     def bind_source(self, clock: str = 'local_owner_clock') -> None:
         """Write the source identity and clock proc selected by the owning Erlang emitter."""
         self.manifest.write_text(json.dumps({'clock_proc': clock,
+                                            'build_profile': {'backend': 'source_protocol', 'placement': {'kind': 'local_owner'},
+                                                'schedules': {'sampled_clock': {'pipeline_stages': 1,
+                                                    'flop_inputs': False, 'flop_outputs': False}}},
+                                            'codegen_flags': ['--pipeline_stages=1', '--delay_model=unit',
+                                                '--flop_inputs=false', '--flop_outputs=false',
+                                                '--use_system_verilog=false', '--reset=reset'],
                                             'dslx_sha256': compile_local_actor.digest(self.source)}))
 
     def compile(self) -> Path:

@@ -11,28 +11,45 @@ main() -> hls_cli:main("hls-fabric", fun run/1).
 run([]) -> usage();
 run(["--help"]) -> usage();
 run(["emit" | Args]) ->
-    Options = hls_cli:options(Args, [{"--kind", kind, value},
+    Options = hls_cli:options(Args, [{"--backend", backend, value}, {"--kind", kind, value},
         {"--config", config, value}, {"--output", output, value}]),
-    Kind = kind(maps:get(kind, Options, "application")),
+    Request = request(Options, ""),
     ConfigPath = hls_cli:required(config, Options),
     Output = hls_cli:required(output, Options),
-    _ = hls_source_build:write(Kind, ConfigPath, Output),
+    _ = hls_build:write(hls_build:plan(Request#{configuration := ConfigPath}), Output),
     ok;
 run(["plan" | Args]) ->
-    Options = hls_cli:options(Args, [{"--kind", kind, value}, {"--config", config, value},
+    Options = hls_cli:options(Args, [{"--backend", backend, value}, {"--kind", kind, value}, {"--config", config, value},
         {"--stage", stage, value}, {"--format", format, value}]),
-    Kind = kind(maps:get(kind, Options, "application")),
     Stage = stage(maps:get(stage, Options, "summary")),
     Format = format(maps:get(format, Options, "erlang")),
+    Request = request(Options, ""),
     ConfigPath = hls_cli:required(config, Options),
-    Plan = hls_source_build:plan(Kind, ConfigPath),
-    Report = hls_source_build:inspect(Plan, Stage),
+    Plan = hls_build:plan(Request#{configuration := ConfigPath}),
+    Report = hls_build:inspect(Plan, Stage),
     case Format of
         erlang -> io:format("~tp.~n", [Report]);
         json -> io:put_chars([json:encode(hls_diagnostic:json_value(Report)), "\n"])
     end;
 run(Args) -> hls_diagnostic:raise(command_line, unknown_command,
     <<"Expected plan or emit; use --help for syntax.">>, #{arguments => [unicode:characters_to_binary(Arg) || Arg <- Args]}).
+
+%% A missing backend preserves the explicit source-kind frontend; scheduler placement has its own config.
+-spec request(map(), file:filename()) -> hls_build:request().
+request(Options, Config) ->
+    case maps:get(backend, Options, "source_protocol") of
+        "source_protocol" -> #{backend => source_protocol,
+            kind => kind(maps:get(kind, Options, "application")), configuration => Config};
+        "channel_scheduler" ->
+            case maps:is_key(kind, Options) of
+                false -> #{backend => channel_scheduler, configuration => Config};
+                true -> hls_diagnostic:raise(command_line, incompatible_build_kind,
+                    <<"--kind selects a source-protocol boundary; omit it for channel_scheduler.">>, #{})
+            end;
+        Other -> hls_diagnostic:raise(command_line, unknown_backend,
+            <<"Backend must be source_protocol or channel_scheduler.">>,
+            #{value => unicode:characters_to_binary(Other)})
+    end.
 
 %% Unknown kinds fail before any source compilation; command input never creates atoms.
 -spec kind(string()) -> hls_source_build:kind().
@@ -55,6 +72,7 @@ stage("topology") -> topology;
 stage("placement") -> placement;
 stage("composition") -> composition;
 stage("schedule") -> schedule;
+stage("profile") -> profile;
 stage(Other) -> hls_diagnostic:raise(command_line, unknown_inspection_stage,
     <<"Unknown plan view; use --help for supported stages.">>, #{value => unicode:characters_to_binary(Other)}).
 
@@ -68,10 +86,11 @@ format(Other) -> hls_diagnostic:raise(command_line, unknown_output_format,
 %% Keep application presets outside the generic fabric command.
 -spec usage() -> ok.
 usage() ->
-    io:put_chars("Usage: hls-fabric plan --config FILE [--kind KIND] [--stage STAGE] [--format erlang|json]\n"
-        "       hls-fabric emit --config FILE --output FRESH_DIRECTORY [--kind KIND]\n"
+    io:put_chars("Usage: hls-fabric plan --config FILE [--backend BACKEND] [--kind KIND] [--stage STAGE] [--format erlang|json]\n"
+        "       hls-fabric emit --config FILE --output FRESH_DIRECTORY [--backend BACKEND] [--kind KIND]\n"
         "       Add --diagnostics text|json to either command (default text).\n"
-        "Kinds: transport, network, boundary, application, bridge, deployment, mixed.\n"
-        "Stages: summary, configuration, source, topology, placement, composition, schedule.\n"
+        "Backends: source_protocol (default), channel_scheduler.\n"
+        "Source kinds: transport, network, boundary, application, bridge, deployment, mixed.\n"
+        "Stages: summary, configuration, source, topology, placement, composition, schedule, profile.\n"
         "Plans inspect checked source and wiring; emit writes source-build.json, DSLX and pin adapters.\n"
         "XLS is separate; compile-source-build --dry-run previews its commands.\n").

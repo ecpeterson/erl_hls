@@ -4,14 +4,47 @@
 
 Build with `rebar3 as test compile`. The dependency is pinned in `rebar.config`; for coordinated development, put the matching public checkout at `_checkouts/erl_hls`. External drivers accept an explicit `--erl-hls` checkout where needed; the selected compiler must have matching beams for the declared profile. See [build context](../building.md).
 
-## Compile and place
+## Select and inspect a backend
 
-1. Normalize the logical graph with `hls_topology` from `erl_hls`.
-2. Describe physical placement using `xls_shared_topology_profile`: choose scheduler groups, state/mailbox storage, queue depths and optional reduction placements.
-3. Ask `xls_shared_topology_dslx:artifact_requirements/2` for each actor module's required options. Pass those options to `xls_shared_parse:to_xls/2`.
-4. Emit the graph with `xls_shared_topology_dslx:emit/2`. Generate RAM bindings with `xls_scheduler_ram_v` and compile through the common `compile_xls.py` tool.
+`hls_build:plan/1` and the `hls-fabric` command select between two supported execution models:
 
-An ungrouped actor remains dedicated. Mixed graphs can contain both placements. The private backend validates its own generated namespace and physical options; the public compiler does not import this application. [Mixed topologies](mixed-topologies.md) describes routing and placement. [Reduction placement](actor-reductions.md) describes source fragments and aggregate delivery; [outboxes](actor-outboxes.md) describes independent publication. [State specialization](../state-specialization.md) removes topology-established configuration from shared mutable storage.
+| Backend | Execution/storage ownership | Public build result |
+| --- | --- | --- |
+| `source_protocol` | Source-bound actor owners, sender-local captures, checked native/host/device placement | Connected transport, network, boundary, application, bridge, deployment or mixed composition. |
+| `channel_scheduler` | Dedicated actors or groups sharing an executor, state/mailbox storage and independent publication queues | Channel topology core, actor DSLX and any external RAM bindings/fragments. |
+
+Use the [counter walkthrough](../building.md#one-build-boundary-two-execution-models) to build both models from one ordinary actor and topology. The source backend's `--kind` selects its composition boundary. Scheduler builds reject `--kind`; their configuration contains `sources`, `topology`, `placement` and optional `schedule`/`dslx_path`. Both write `source-build.json` for the same external executor. A backend change still needs a valid configuration and the selected backend's capability checks; these are not interchangeable implementations of every accepted program.
+
+Inspect the checked hardware contract before invoking external compilation:
+
+```sh
+_build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
+    --config src/examples/counter/scheduler.config --stage profile
+_build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
+    --config src/examples/counter/scheduler.config --stage placement
+```
+
+The primary `scheduler.config` keeps both counters dedicated. To share an executor, substitute `scheduler-ram.config`; it assigns the same actors to one group with block-RAM state and mailbox storage. That core requires the generated RAM connection fragments to be included in an enclosing shell.
+
+`profile` names the backend, retained placement policy, fixed ordinary frame ABI and structured clock schedules. `schedule` shows exact external compilation units. Source sampled clocks require one stage with input/output flops disabled; the framed application gateway has a separate two-stage output-registered schedule. Scheduler channel depths, placement and allowed pipeline/throughput options belong to its configuration. Those scheduling values are not physical timing measurements, and tool hashes exist only after the external executor inspects actual tools.
+
+## Scheduler lowering
+
+For ordinary development, `hls_scheduler_build` performs the following sequence behind `hls_build`; the individual APIs are useful when changing a lowering pass:
+
+1. Compile every declared source and normalize the logical graph with `hls_topology` from `erl_hls`.
+2. Normalize `placement` with `xls_shared_topology_profile`, selecting scheduler groups, state/mailbox storage, queue depths and optional reduction placements.
+3. Obtain each actor's requirements from `xls_shared_topology_dslx:artifact_requirements/2` and pass them to `xls_shared_parse:to_xls/2` using its captured source context.
+4. Emit the graph with `xls_shared_topology_dslx:emit/2`, derive RAM bindings with `xls_scheduler_ram_v`, and package the retained hardware profile and unit schedule.
+5. Invoke the independent `compile-source-build` driver, or another build system, against the emitted bundle.
+
+An ungrouped actor remains dedicated. Mixed graphs can contain both placements. The fabric backend validates generated namespaces and physical options; the public compiler does not import this application. Dedicated actors need no external scheduler state/mailbox RAM. Shared RAM-backed cores expose their memory channels and supply connection fragments; an application shell still owns physical RAM instantiation, host gateways and board pins. [Mixed topologies](mixed-topologies.md) describes routing and placement. [Reduction placement](actor-reductions.md) describes source fragments and aggregate delivery; [outboxes](actor-outboxes.md) describes independent publication. [State specialization](../state-specialization.md) removes topology-established configuration from shared mutable storage.
+
+## Source-protocol lowering
+
+`hls_source_build` prepares one source snapshot and derives native ownership, publication/capture layouts and the selected network/application layers from it. Whole applications, multiple device roles and mixed BEAM/native actors have separate checked composition contracts. `hls_build` retains that same plan for inspection and writing; no test fixture or decoder preset is required. Follow the [build control path](../building.md#following-the-implementation) and [source-protocol guide](../source-protocol.md) for the owners of each boundary.
+
+The ordinary actor frame is currently the fixed `axis::FrameN<3>` ABI: 32 header bits plus 96 payload bits. Compact captures and framed bridge envelopes have their own layouts. The profile records this fact without implying frame capacity is now configurable.
 
 ## Local activation semantics
 
@@ -29,6 +62,8 @@ Open hardware sessions with `hls_shared_observation:open/2`, then bind actors us
 
 `tools/prepare_xls_sim.sh STAGE` combines common compiler assets with shared actor artifacts, RAM bindings and private profiler hooks. The common VPI transport supplies accepted-edge samples; `test/rtl/xls_scheduler_profile.h` adds passive scheduler telemetry. Profile event meaning, SVG/Perfetto rendering and measurement commands remain in [profiling](../profiling.md).
 
+The flat-topology and decoder experiment drivers retain separate scheduling policy even though they share the external XLS executor. The public `hls_build` profile does not yet replace their experiment-specific options or replay checks.
+
 For the decoder-only profile, `phi_decoder_profile_build:emit(Config, Options)` returns `#{files => Files, result => Result}` without writing files. `Config` selects geometry, planes and shards; `Options` selects observations and effect-window partitioning. The simulation preparation script and debug/test fixtures use this same builder for actor DSLX, topology, RAM wrapper and observation metadata.
 
 Its `phi_decoder_profile.inputs.json` binds the generated sources, wrapper and profile metadata by SHA-256 and carries the XLS RAM configurations from the scheduler bindings. A separate RAM recipe fingerprint identifies the compiled renderer and channel-name authority, independently of the chosen geometry and actor sources, for experiment comparisons. `compile_phi_decoder_profile.py` verifies those inputs before passing the configurations to the common XLS executor; it does not interpret DSLX to recover placement. Regenerate an old prepared stage before compiling it. The manifest checks consistency of trusted local build output, not authenticity or hardware equivalence.
@@ -43,6 +78,6 @@ Private code owns reservation, actor selection, storage transactions, execution 
 
 The [scheduler ownership contract](scheduler-pipeline.md) describes reservations, visibility and stalls. The longer [pipeline plan](../../experiments/07-openxc7/yap/scheduler-pipeline-plan.md) records the remaining measurement and design work.
 
-The source-bound actor builder adds a [clocked DSLX owner](../source-protocol.md#compile-a-clocked-source-actor) around these functions, with selected-head retirement and one ordered outbox. Its standalone RTL command enforces the fixed clock schedule; network integration and admission remain separate.
+The source-bound actor builder adds a [clocked DSLX owner](../source-protocol.md#compile-a-clocked-source-actor) around these functions, with selected-head retirement and one ordered outbox. Its standalone RTL command consumes the same fixed sampled-clock profile as connected source builds. Standalone owner compilation establishes neither connected-protocol admission nor application progress.
 
 The transport builder also emits [sender-local inbox receivers](../source-protocol.md#connect-sender-local-captures-to-an-actor), connecting that owner to typed capture selection, postponement and delayed release. Their output remains the ordinary source effect stream.

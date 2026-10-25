@@ -13,10 +13,10 @@
 %% Packaging retains the original config for inspection, but does not rerun it during write.
 -record(plan, {kind :: kind(), config :: hls_source_config:config(), stage :: stage_plan(),
     cwd :: file:filename(), libraries :: [hls_artifact_bundle:library()],
-    units :: [hls_artifact_bundle:unit()]}).
+    units :: [hls_artifact_bundle:unit()], profile :: hls_build_profile:profile()}).
 
 -doc "Read-only views of a checked build. Views inspect retained source and layout data; none resumes a build from serialized data.".
--type inspection_stage() :: summary | configuration | source | topology | placement | composition | schedule.
+-type inspection_stage() :: summary | configuration | source | topology | placement | composition | schedule | profile.
 
 -doc "A versioned inspection report. Data is an Erlang term; hls_diagnostic:json_value/1 preserves non-JSON shapes using explicit tags for display, never as executable plan input.".
 -type inspection() :: #{version := 1, kind := kind(), stage := inspection_stage(), data := term()}.
@@ -36,7 +36,7 @@
     #{kind := mixed, build := hls_protocol_mixed:descriptor(), dslx_path := [file:filename()]}.
 
 -doc "The compiler-owned source bundle format with this builder's kind metadata. Unit schedules use hls_artifact_bundle's shared contract; inputs bind every packaged file and RTL lists are grouped by role.".
--type manifest() :: #{version := 1, metadata := #{kind := kind()},
+-type manifest() :: #{version := 1, metadata := #{kind := kind(), backend := source_protocol, profile := hls_diagnostic:json_value()},
     units := [hls_artifact_bundle:unit()], rtl := #{binary() => [binary()]},
     inputs := [#{file := binary(), sha256 := binary()}], eligible := false, native_measured := false}.
 
@@ -52,10 +52,11 @@ plan(Kind, Config) when is_map(Config) ->
     hls_diagnostic:with_context(#{kind => Kind}, fun() ->
         _ = builder(Kind),
         Checked = hls_source_config:validate(Kind, Config),
+        Profile = hls_build_profile:protocol(Kind, Checked),
         Imports = maps:get(dslx_path, Checked, []),
         lists:foreach(fun import_directory/1, Imports),
         Stage = stage_plan(Kind, maps:remove(dslx_path, Checked)),
-        #{libraries := Libraries, imports := Support} = support_layout(Imports),
+        #{libraries := Libraries, imports := Support} = hls_build_support:layout(Imports),
         Builder = builder(Kind),
         Roles = case Kind of
             deployment ->
@@ -65,7 +66,8 @@ plan(Kind, Config) when is_map(Config) ->
         end,
         {ok, Cwd} = file:get_cwd(),
         #plan{kind = Kind, config = Checked, stage = Stage, cwd = Cwd, libraries = Libraries,
-            units = lists:append([units(K, Role, Checked, Support) || {K, Role} <- Roles])}
+            units = lists:append([units(K, Role, Checked, Support, Profile) || {K, Role} <- Roles]),
+            profile = Profile}
     end);
 plan(Kind, Filename) ->
     hls_diagnostic:with_context(#{kind => Kind, config_file => text(filename:absname(Filename))},
@@ -94,6 +96,7 @@ inspection_data(#plan{config = Config, cwd = Cwd, libraries = Libraries}, config
       libraries => [#{source => text(Source), destination => text(Target), extensions => [text(E) || E <- Extensions]}
           || {Source, Target, Extensions} <- Libraries]};
 inspection_data(#plan{units = Units}, schedule) -> Units;
+inspection_data(#plan{profile = Profile}, profile) -> Profile;
 inspection_data(Plan, composition) ->
     case descriptor(Plan) of
         D = #{kind := transport, build := Transport} -> D#{build := transport_report(Transport)};
@@ -140,7 +143,7 @@ write(Kind, Config, Output) -> write(plan(Kind, Config), Output).
 
 -doc "Renders a retained checked composition into a fresh directory without recompiling source or repeating layout/host checks. Copies provider and resolved compiler/fabric support trees, records config.erl and writes source-build.json with relative input hashes, entry points, schedules and RTL lists. Packaging reads support files at write time; I/O failures retain partial output. The resulting manifest is a trusted build record, not executable commands or admission.".
 -spec write(plan(), file:filename()) -> manifest().
-write(#plan{kind = Kind, config = Config, stage = Stage, libraries = Libraries, units = Units}, Output) ->
+write(#plan{kind = Kind, config = Config, stage = Stage, libraries = Libraries, units = Units, profile = Profile}, Output) ->
     Builder = builder(Kind),
     Directory = filename:absname(Output),
     case file:read_link_info(Directory) of
@@ -153,7 +156,7 @@ write(#plan{kind = Kind, config = Config, stage = Stage, libraries = Libraries, 
     _ = hls_generated_files:write(Builder:emit(Stage), Directory),
     ok = file:write_file(filename:join(Directory, "config.erl"), io_lib:format("~tp.~n", [Config]), [exclusive]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
-    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind}).
+    hls_artifact_bundle:finish(Directory, Units, #{kind => Kind, backend => source_protocol, profile => hls_diagnostic:json_value(Profile)}).
 
 %% Low-level compositions share the ordinary source planner; complete application builders own theirs.
 -spec stage_plan(kind(), hls_source_config:config()) -> stage_plan().
@@ -187,24 +190,10 @@ import_directory(Path) ->
             <<"DSLX import directory does not exist.">>, #{field => [dslx_path], path => text(Path)})
     end.
 
-%% Resolve one support layout for both inspection and packaging; files are copied only by write/2.
--spec support_layout([file:filename()]) ->
-    #{libraries := [hls_artifact_bundle:library()], imports := [string()]}.
-support_layout(Imports) ->
-    #{libraries := CompilerLibraries, imports := CompilerImports} = hls_compile:support_layout(Imports),
-    Fabric = code:priv_dir(hls_fabric),
-    Libraries = [{filename:join(Fabric, "xls"), "support/fabric/xls", [".x"]},
-        {filename:join(Fabric, "rtl"), "support/fabric/rtl", [".v", ".sv"]}],
-    Paths = ["lib", "fabric"],
-    #{libraries => Libraries ++ CompilerLibraries,
-      imports => ["support/fabric/xls/" ++ P || P <- Paths,
-          filelib:is_dir(filename:join([Fabric, "xls", P]))] ++
-          [unicode:characters_to_list(P) || P <- CompilerImports]}.
-
 %% Schedules describe existing clock owners, not target-frequency optimization requests.
--spec units(kind(), string(), hls_source_config:config(), [string()]) -> [hls_artifact_bundle:unit()].
-units(application, Role, Config, Support) ->
-    Boundary = units(boundary, Role, Config, Support),
+-spec units(kind(), string(), hls_source_config:config(), [string()], hls_build_profile:profile()) -> [hls_artifact_bundle:unit()].
+units(application, Role, Config, Support, Profile) ->
+    Boundary = units(boundary, Role, Config, Support, Profile),
     Debug = case maps:get(inspection, Config, none) of
         none -> [];
         process -> ["support/compiler/rtl/debug/" ++ Name
@@ -212,12 +201,11 @@ units(application, Role, Config, Support) ->
     end,
     Gateway = unit(Role, "application", "gateway.x", "Top", "application_gateway", "gateway.v",
         [join(Role, "application"), "support/fabric/xls" | Support],
-        ["--pipeline_stages=2", "--delay_model=unit", "--flop_inputs=false", "--flop_outputs=true",
-         "--use_system_verilog=false", "--reset=reset", "--fifo_module="],
+        hls_build_profile:flags(Profile, gateway),
         [join(Role, "application/protocol_application_top.sv"), "support/fabric/rtl/hls_partition_activation.sv"] ++ Debug),
     Boundary ++ [Gateway];
-units(mixed, Role, Config, Support) -> units(bridge, Role, Config, Support);
-units(Kind, Role, _, Support) ->
+units(mixed, Role, Config, Support, Profile) -> units(bridge, Role, Config, Support, Profile);
+units(Kind, Role, _, Support, Profile) ->
     {Stage, File, Top, Module, Adapter, ImportDirs} = case Kind of
         transport -> {"dslx", "transport.x", "protocol_clock", "protocol_fabric_core", "protocol_fabric.sv", ["dslx"]};
         network -> {"network", "network.x", "network_clock", "protocol_network_core", "protocol_network.sv", ["network", "actors", "dslx"]};
@@ -225,11 +213,10 @@ units(Kind, Role, _, Support) ->
         bridge -> {"bridge", "bridge.x", "bridge_clock", "protocol_bridge_core", "protocol_bridge_top.sv", ["boundary", "network", "actors", "dslx"]}
     end,
     [unit(Role, Stage, File, Top, Module, "core.v", [join(Role, P) || P <- ImportDirs] ++ Support,
-        ["--pipeline_stages=1", "--delay_model=unit", "--flop_inputs=false", "--flop_outputs=false",
-         "--use_system_verilog=false", "--reset=reset"], [join(Role, filename:join(Stage, Adapter))])].
+        hls_build_profile:flags(Profile, sampled_clock), [join(Role, filename:join(Stage, Adapter))])].
 
 %% Relative paths make emitted bundles movable before invoking any external tool.
--spec unit(string(), string(), string(), string(), string(), string(), [string()], [string()], [string()]) -> hls_artifact_bundle:unit().
+-spec unit(string(), string(), string(), string(), string(), string(), [string()], [binary()], [string()]) -> hls_artifact_bundle:unit().
 unit(Role, Stage, Source, Top, Module, Product, Imports, Flags, Rtl) ->
     Directory = join(Role, Stage), Output = filename:join(Directory, Product),
     #{role => text(Role), directory => text(Directory), source => text(filename:join(Directory, Source)),

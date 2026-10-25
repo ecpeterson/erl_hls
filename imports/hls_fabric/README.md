@@ -1,6 +1,18 @@
 # hls_fabric
 
-Private shared actor execution, device fabrics and timing experiments built on `erl_hls`. Start with [building](docs/building.md), then [execution backends](docs/execution/README.md) for placement.
+Private actor execution, device fabrics and timing experiments built on `erl_hls`. The common build frontend supports source-protocol actors and channel-scheduled shared executors. Start with the [two-counter build walkthrough](docs/building.md#one-build-boundary-two-execution-models), then [execution backends](docs/execution/README.md) for their placement and interface contracts.
+
+`hls-fabric plan` inspects a checked backend request; `hls-fabric emit` produces its portable source bundle. XLS compilation, simulation and physical qualification remain separate steps. For a small source-protocol application:
+
+```sh
+rebar3 release
+_build/default/rel/hls/bin/hls-fabric plan --config src/examples/counter/source.config --stage profile
+_build/default/rel/hls/bin/hls-fabric emit --config src/examples/counter/source.config --output _build/counter-source
+```
+
+Use `--backend channel_scheduler --config src/examples/counter/scheduler.config` to build the same topology as dedicated channel actors. The alternative `scheduler-ram.config` places both counters on one shared executor with external state/mailbox RAM interfaces. Backend selection belongs to the build request; the actor source and logical routes do not select it. Each backend checks its own configuration and execution restrictions. The ordinary actor frame remains 128 bits; frame-width generalization is separate work.
+
+Source-protocol applications include framed host attachment, connected typed capture links and whole or multi-role placement; see [source protocol](docs/source-protocol.md). The node interface below covers standalone services and scheduled-actor gateways, which have their own documented support limits.
 
 Each configured device has a virtual node name and genuine external Erlang PIDs for standalone services and scheduled actors. One ordinary BEAM hosts the node adapters and physical fabric brokers; no second VM or per-actor proxy process is required.
 
@@ -97,8 +109,8 @@ The scheduled-actor regression generates fresh XLS RTL, binds real state/mailbox
 python3 tools/test_actor_rtl.py /path/to/xls --stage _build/actor-pids
 ```
 
-CI runs this fixture with the same pinned XLS release as the public dependency and retains build provenance and decoded debug observations. The [ingress measurement](docs/artifacts.md#historical-reports) (`experiments/results/actor-pid-measurements.md`) compares the complete small fixture with direct and addressed ingress while preserving its RAM mapping attributes.
+This optional regression uses the selected XLS tools and retains build provenance and decoded debug observations. The [bounded CI tiers](docs/ci.md) select focused components plus one phi scheduler integration and one Snowflake source-protocol integration; they do not run every historical experiment. The [ingress measurement](docs/artifacts.md#historical-reports) (`experiments/results/actor-pid-measurements.md`) compares the complete small fixture with direct and addressed ingress while preserving its RAM mapping attributes.
 
 The [compiler dependency](docs/building.md) is pinned and prepared automatically. All virtual-node implementation and documentation remain private here.
 
-[Source-protocol inspection and transport](docs/source-protocol.md) compiles current actors, inventories their exact channels and emits connected snapshot publishers and typed capture links. Actor scheduling and whole-application admission remain separate.
+Source-protocol build output records eligibility and native measurement separately. Emitting or compiling a source bundle does not by itself establish application progress, resource fit or physical timing.
