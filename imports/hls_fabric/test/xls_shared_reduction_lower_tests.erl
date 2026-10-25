@@ -425,11 +425,11 @@ lower(Path, Options) ->
 %% Constructs the source context needed by a lowering witness.
 -spec context(file:filename()) -> {[hls_source:form()], map()}.
 context(Path) ->
-    {ok, Forms} = xls_parse:parse_file(Path),
-    Phases = xls_parse:find_attribute(Forms, hls_phases),
+    {ok, Forms} = hls_source:parse_file(Path),
+    Phases = hls_source:find_attribute(Forms, hls_phases),
     Prepared = lists:append([
         [prepare_clause(Clause, Phase)
-            || Clause <- xls_parse:find_function(Forms, Phase, 3)]
+            || Clause <- hls_source:find_function(Forms, Phase, 3)]
         || Phase <- Phases
     ]),
     EntryClauses = [Clause || {enter, Clause} <- Prepared],
@@ -447,8 +447,8 @@ context(Path) ->
         entries => Entries,
         cast_groups => CastGroups,
         internal_groups => InternalGroups,
-        message_names => xls_parse:find_tags(Forms),
-        data_name => xls_parse:find_attribute(Forms, hls_data)
+        message_names => hls_actor_source:tags(Forms),
+        data_name => hls_source:find_attribute(Forms, hls_data)
     }}.
 
 %% Normalizes a parsed callback clause for the lowerer under test.
@@ -470,8 +470,8 @@ prepare_clause({clause, Line,
 -spec entry({'clause',term(),[any(),...],term(),term()},term()) -> map().
 entry(Clause = {clause, _Line,
         [_OldPhase, {atom, _PhaseLine, Phase}, _Data], _Guards, _Body}, Forms) ->
-    (xls_statem_entry:analyze(Clause, xls_parse:find_tags(Forms),
-        xls_parse:find_attribute(Forms, hls_outputs)))#{phase => Phase}.
+    (xls_statem_entry:analyze(Clause, hls_actor_source:tags(Forms),
+        hls_source:find_attribute(Forms, hls_outputs)))#{phase => Phase}.
 
 %% Builds the contribution-key expression used by the lowerer witness.
 -spec cast_key({'clause',term(),[any(),...],term(),term()}) -> {term(),term()}.

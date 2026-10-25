@@ -33,5 +33,5 @@ unpack(Bits, vector, []) -> hls_type:unpack(Bits, wire()).
 -spec print_type(vector, []) -> iodata().
 print_type(vector, []) -> hls_type:print_type(wire()).
 -doc "Lowers the fixture provider's typed operation into the checked expression IR.".
--spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) -> xls_parse:ir().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_clause_lower:ir().
 transpile(F, Args, Types) -> hls_vec:transpile(F, Args, Types).

@@ -40,7 +40,7 @@ expected(A, B) ->
 %% Translates the mixed-case register-service fixture.
 -spec gs() -> [any(),...].
 gs() ->
-    {ok, Forms} = xls_parse:parse_file("test/xls_names_gs_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/xls_names_gs_fixture.erl"),
     [xls_shared_parse:to_xls("test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
         "  let state_record = (Tag::SERVER_DATA, ServerData { Value: value });\n",

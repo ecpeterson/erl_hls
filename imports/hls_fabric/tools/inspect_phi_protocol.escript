@@ -27,7 +27,10 @@ main([CompilerRoot,Output]) ->
     Inputs=lists:usort([filename:join(SourceDir,atom_to_list(M)++".erl")||M<-All]++
         lists:append([maps:get(origins,maps:get(context,P),[])||P<-maps:values(Plans)])++
         [escript:script_name()]),
-    Beams=[code:which(M)||M<-[xls_actor_program,xls_statem_plan,xls_statem_lower,xls_parse,hls_source,hls_pack,hls_topology,hls_topology_family,hls_actor_interface,hls_protocol_topology,hls_protocol_inventory]],
+    Beams=[code:which(M)||M<-[xls_actor_program,xls_statem_plan,xls_statem_lower,
+        xls_parse,xls_clause_lower,xls_record_codegen,xls_gs_immediate,
+        hls_source,hls_actor_source,hls_records,hls_pack,hls_topology,
+        hls_topology_family,hls_actor_interface,hls_protocol_topology,hls_protocol_inventory]],
     Report=#{eligible=>false,rtl_generated=>false,source_plans=>maps:map(fun(_,P)->source_summary(P) end,Plans),
         topologies=>Summaries,inputs=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Inputs],
         compiler_beams=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Beams]},
