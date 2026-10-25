@@ -22,7 +22,7 @@ emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receiv
     Manifest0=json(#{schema=>5,resources=>Resources,probes=>[],catalogue_sha256=>digest(term_to_binary(Rows,[deterministic])),
         inspection=>#{scope=>process,coherence=>one_process_pre_edge,history=>unavailable,
             sampling=>query_service_acceptance_edge,transport_stalls=>excluded},
-        source_plans=>maps:map(fun(_,#{plan:=P})->maps:with([source,source_sha256,artifact_sha256,planner_md5],xls_statem_plan:manifest(P)) end,Modules),
+        source_identities=>hls_protocol_identity:source_modules(Modules),
         dslx_sha256=>digest(iolist_to_binary(Source)),
         limits=>[<<"Separate queries are not atomic together.">>,<<"No mailbox counts, payloads or continuous event history.">>]}),
     Manifest=Manifest0#{<<"fingerprint">>=>hls_topology_debug:manifest_fingerprint(Manifest0)},

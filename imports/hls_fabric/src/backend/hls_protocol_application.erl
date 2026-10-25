@@ -18,9 +18,9 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
         Mode->error({application_requires_explicit_start,Mode})
     end,
     Build = hls_protocol_transport:plan(Config),
-    #{files := BoundaryFiles, result := #{boundary := Boundary, transport := #{bundle := Bundle}}} =
+    #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Plan}} =
         hls_protocol_boundary:emit(Build,(maps:with([inspection],Config))#{activation=>explicit_start}),
-    Deployment=deployment(Bundle,Boundary,Device,Host),
+    Deployment=deployment(Plan,Boundary,BoundaryFiles,Device,Host),
     Binding=maps:get(Device,maps:get(devices,Deployment)),
     Generated = hls_generated_files:merge([BoundaryFiles, #{
         "application/gateway.x" => xls_protocol_application:emit(Binding),
@@ -38,13 +38,14 @@ emit(Config=#{device:=Device,host:=Host}) when is_integer(Host),Host>0,Host<6553
 emit(Filename) when is_list(Filename); is_binary(Filename) -> emit(hls_source_config:read(Filename)).
 
 %% Bind the same source-checked codecs used by framed deployments to one gateway identity.
--spec deployment(map(),map(),term(),1..65535) -> map().
-deployment(Bundle=#{topology:=#{actors:=Actors,externals:=Externals}},
-        Boundary=#{activation:=explicit_start,externals:=Outputs,inputs:=Inputs},Device,Host) ->
+-spec deployment(map(),map(),hls_generated_files:files(),term(),1..65535) -> map().
+deployment(Plan=#{bundle:=Bundle=#{topology:=#{actors:=Actors,externals:=Externals}}},
+        Boundary=#{activation:=explicit_start,externals:=Outputs,inputs:=Inputs},Files,Device,Host) ->
     true=lists:member(#{name=><<"ingress_data">>,width=>194},Inputs),
     Ids=[iolist_to_binary(io_lib:format("~0tp",[Id]))||#{id:=Id}<-Externals],
     Ids=[Id||#{id:=Id}<-Outputs],
     Owners=maps:from_list([{Id,Device}||#{id:=Id}<-Actors]),
     Application=#{devices:=#{Device:=Binding}}=hls_protocol_application_binding:bind(Bundle,Owners,#{Device=>Host}),
-    Identity=crypto:hash(sha256,term_to_binary({source_protocol_application,2,Bundle,Boundary,Device,Binding},[deterministic])),
+    Content=hls_protocol_identity:boundary(Plan,Files),
+    Identity=crypto:hash(sha256,term_to_binary({source_protocol_application,3,Content,Boundary,Device,Binding},[deterministic])),
     Application#{devices:=#{Device=>Binding#{identity=>Identity}},source_boundary=>Boundary,eligible=>false}.

@@ -48,7 +48,8 @@ emit(Build, Config = #{host := Host, service := Service})
     Libraries=[begin {ok,Bytes0}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/lib/"++File)),
         #{file=>list_to_binary(File),sha256=>binary:encode_hex(crypto:hash(sha256,Bytes0),lowercase)}
         end||File<-["protocol_bridge.x","protocol_framing.x","protocol_rectangle.x"]],
-    Identity=crypto:hash(sha256,term_to_binary({source_partition_bridge,2,Host,Service,rectangle,Boundary,Plan,
+    Content=hls_protocol_identity:boundary(Plan,BoundaryFiles),
+    Identity=crypto:hash(sha256,term_to_binary({source_partition_bridge,3,Host,Service,rectangle,Boundary,Content,
         Libraries},[deterministic])),
     Bridge=#{identity=>Identity,host=>Host,service=>Service,links=>Cross,control=>rectangle,libraries=>Libraries,
         native_indices=>[I||#{index:=I}<-Sources],actors=>length(Actors),externals=>Externals,
