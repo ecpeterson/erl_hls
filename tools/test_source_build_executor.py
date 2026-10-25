@@ -94,7 +94,9 @@ class SourceBuildExecutorTests(unittest.TestCase):
         (self.bundle/'shared/libs').mkdir(parents=True)
         (self.bundle/'shared/libs/helper.x').write_text('pub const VALUE = u32:999;\n')
         (self.bundle/'shared/libs/leaf.x').write_text('pub const LEAF = u32:23;\n')
-        self.manifest: dict[str, Any] = {'version': 1, 'metadata': {'kind': 'mock deployment'},
+        self.manifest: dict[str, Any] = {'version': 1,
+            'metadata': {'kind': 'mock deployment', 'hardware_profile': {
+                'backend': 'fixture', 'options': {'storage': 'local', 'pipeline_stages': 99}}},
             'units': units, 'inputs': [], 'rtl': {unit['role']: unit['rtl'] for unit in units}}
         self.freeze()
 
@@ -129,6 +131,7 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertFalse(self.cache.exists())
         self.assertFalse(self.output.exists())
         self.assertEqual(self.invocations(), [])
+        self.assertEqual(plan['metadata'], self.manifest['metadata'])
         for index, unit in enumerate(plan['units']):
             self.assertEqual(unit['codegen_flags'], self.manifest['units'][index]['codegen_flags'])
             self.assertEqual(unit['commands'][-1]['command'][1:1 + len(unit['codegen_flags'])],
@@ -144,6 +147,9 @@ class SourceBuildExecutorTests(unittest.TestCase):
         compiled = json.loads((release/'compiled.json').read_text())
         self.assertFalse(compiled['native_measured'])
         self.assertFalse(compiled['eligible'])
+        self.assertEqual(compiled['metadata'], self.manifest['metadata'])
+        self.assertEqual(compiled['xls_tools'],
+                         {name: tool['sha256'] for name, tool in plan['xls_tools'].items()})
         for name, (contents, _) in before.items():
             self.assertEqual((release/name).read_bytes(), contents)
         self.assertEqual([call['command'] for call in self.invocations()],
@@ -169,6 +175,51 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertEqual(self.compile(), release)
         self.assertEqual(len(self.invocations()), 6)
         self.assertEqual(self.bound_snapshot(), before)
+
+    def test_metadata_only_change_preserves_cached_stages_and_new_provenance(self) -> None:
+        """Descriptive policy cannot change schedules, but every publication retains its own metadata."""
+        first_plan = driver.plan_build(self.xls, self.bundle)
+        first = self.compile()
+        first_manifest = json.loads((first/'compiled.json').read_text())
+        first_inputs = self.manifest['inputs']
+        self.manifest['metadata']['hardware_profile']['options']['storage'] = 'shared'
+        self.freeze()
+        plan = driver.plan_build(self.xls, self.bundle)
+        self.assertEqual(self.manifest['inputs'], first_inputs)
+        self.assertEqual(plan['units'], first_plan['units'])
+        self.assertEqual(plan['xls_tools'], first_plan['xls_tools'])
+        count = len(self.invocations())
+        second = self.compile()
+        compiled = json.loads((second/'compiled.json').read_text())
+        report = json.loads((self.root/'published.run.json').read_text())
+        self.assertNotEqual(first, second)
+        self.assertEqual(len(self.invocations()), count)
+        self.assertTrue(all(command['reused'] for command in report['stages'].values()))
+        self.assertEqual(compiled['metadata'], self.manifest['metadata'])
+        self.assertEqual(compiled['units'], first_manifest['units'])
+        self.assertEqual(compiled['xls_tools'], first_manifest['xls_tools'])
+        self.assertEqual(json.loads((first/'compiled.json').read_text()), first_manifest)
+        self.assertNotEqual(compiled['source_build_sha256'], first_manifest['source_build_sha256'])
+
+    def test_metadata_must_be_an_object_before_execution(self) -> None:
+        """Reject malformed metadata before launching tools or creating any output/cache state."""
+        for value in (None, 'profile', [], 7):
+            with self.subTest(metadata=value):
+                self.manifest['metadata'] = value
+                self.freeze()
+                before = self.bound_snapshot()
+                with patch('subprocess.Popen', side_effect=AssertionError('invalid metadata executed a tool')):
+                    with self.assertRaisesRegex(ValueError, 'metadata must be an object'):
+                        driver.plan_build(self.xls, self.bundle)
+                    with self.assertRaisesRegex(ValueError, 'metadata must be an object'):
+                        self.compile()
+                self.assertEqual(self.bound_snapshot(), before)
+                self.assertFalse(self.cache.exists())
+                self.assertFalse(self.output.exists())
+                self.assertEqual(self.invocations(), [])
+        del self.manifest['metadata']
+        self.freeze()
+        self.assertEqual(driver.plan_build(self.xls, self.bundle)['metadata'], {})
 
     def test_later_unit_failure_keeps_previous_release_and_retry_uses_cache(self) -> None:
         """Publication is all-or-nothing and a retry reuses both complete units and completed earlier stages."""
