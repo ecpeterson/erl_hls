@@ -2,32 +2,20 @@
 -moduledoc "Bounded packet ownership among a fixed deployment of source-protocol RTL partitions. Each directed logical pair has one retained record; physical completion precedes source acknowledgment. This state machine does not establish transport retirement, reset or application progress.".
 -export([new/2,event/3,next/1,complete/2,invalidate/1,info/1]).
 
--doc "Binds the deployment's disjoint, complete actor ownership to directed crossing routes and distinct nonzero sessions. Each outgoing descriptor must have exactly one matching incoming descriptor at the destination actor's device. The declared crossings limit bounds retained payload records. Old transports must be retired and all participating devices reset before constructing a replacement.".
--spec new(map(),map()) -> map().
-new(#{devices:=Devices,actors:=Count,limits:=#{crossings:=Limit}},Sessions)
-        when map_size(Devices)>0,is_integer(Limit),Limit>0 ->
-    Roles=lists:sort(maps:keys(Devices)),Roles=lists:sort(maps:keys(Sessions)),
-    Values=maps:values(Sessions),true=length(Values)=:=length(lists:usort(Values)),
-    true=lists:all(fun(S)->is_integer(S) andalso S>0 andalso S<(1 bsl 64) end,Values),
-    Owned=[{I,R}||{R,#{native_indices:=Is}}<-maps:to_list(Devices),I<-Is],
-    true=lists:sort([I||{I,_}<-Owned])=:=lists:seq(0,Count-1),
-    Owners=maps:from_list(Owned),
-    Directed=[begin
-        From=maps:get(S,Owners),To=maps:get(D,Owners),true=From=/=To,
-        #{links:=PeerLinks}=maps:get(To,Devices),
-        [Peer]=[L||L=#{index:=J,direction:=incoming}<-PeerLinks,J=:=I],
-        true=maps:with([index,source_index,destination_index,classes],Link)=:=maps:with([index,source_index,destination_index,classes],Peer),
-        {I,#{from=>From,to=>To,link=>Link}}
-    end||{From,#{links:=Links}}<-maps:to_list(Devices),
-         Link=#{index:=I,direction:=outgoing,source_index:=S,destination_index:=D}<-Links],
-    Routes=maps:from_list(Directed),true=map_size(Routes)=:=length(Directed),
-    Incoming=lists:sort([{R,I}||{R,#{links:=Ls}}<-maps:to_list(Devices),#{index:=I,direction:=incoming}<-Ls]),
-    Incoming=lists:sort([{R,I}||{I,#{to:=R}}<-Directed]),
-    true=map_size(Routes)>0 andalso map_size(Routes)=<Limit,
-    #{live=>true,sessions=>Sessions,routes=>Routes,events=>maps:from_keys(Roles,0),pending=>#{},
-      order=>lists:sort(maps:keys(Routes)),cursor=>0,writer=>none,
-      credits=>maps:from_list([{{I,S},false}||{I,#{link:=#{classes:=Cs}}}<-Directed,#{slot:=S}<-Cs]),
-      sequences=>maps:from_list([{I,0}||I<-maps:keys(Routes)]),forwarded=>0,acknowledged=>0,bypassed=>0}.
+-doc "Creates a fresh queue from checked static routing and distinct nonzero 64-bit sessions, one per role. Initializes empty records, credits and sequences; the routing plan is reusable across incarnations. Old transports must be retired and all participating devices reset before constructing a replacement.".
+-spec new(hls_protocol_routing:plan(), #{hls_protocol_routing:role() => pos_integer()}) -> map().
+new(Plan, Sessions) ->
+    Roles = hls_protocol_routing:roles(Plan),
+    Routes = hls_protocol_routing:routes(Plan),
+    Roles = lists:sort(maps:keys(Sessions)),
+    Values = maps:values(Sessions),
+    true = length(Values) =:= length(lists:usort(Values)),
+    true = lists:all(fun(S) -> is_integer(S) andalso S > 0 andalso S < (1 bsl 64) end, Values),
+    #{live => true, sessions => Sessions, routes => Routes, events => maps:from_keys(Roles, 0), pending => #{},
+      order => lists:sort(maps:keys(Routes)), cursor => 0, writer => none,
+      credits => maps:from_list([{{I, S}, false}
+          || {I, #{link := #{classes := Cs}}} <- maps:to_list(Routes), #{slot := S} <- Cs]),
+      sequences => maps:from_keys(maps:keys(Routes), 0), forwarded => 0, acknowledged => 0, bypassed => 0}.
 
 -doc "Accepts one route-bound participant's credit or data packet in exact output-event order. Rejects stale sessions, duplicate/skipped events, unknown routes/classes, noncanonical frames, duplicate grants and a second unacknowledged record for a pair. Output event sequences are independent of destination input sequences.".
 -spec event(term(),map(),map()) -> map().

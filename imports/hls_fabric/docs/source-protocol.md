@@ -450,6 +450,8 @@ For other applications or participant sets, call `hls_protocol_deployment:write/
 
 This is the placement portion of a configuration, not a standalone application. Device IDs are arbitrary terms; each configured actor must belong to exactly one device. The builder emits fresh numbered role directories, derives and checks crossing codecs, and records the device-to-directory map. Each role currently requires incoming/outgoing crossings and an external endpoint. Source-record layouts are checked against loaded host codecs through `hls_protocol_application_binding`, also used by the single-device application builder. Event decoding permits only that device's actual producers at the emitted external index. The completed deployment remains `eligible => false`.
 
+`hls_protocol_routing:plan/1` checks complete actor ownership, one outgoing/incoming descriptor per crossing, matching codecs, nonempty unique class slots, wire index bounds and the declared crossing limit. Deployment generation runs this static check before bridge rendering; `hls_protocol_stream` runs it again on the loaded descriptor before registering broker routes. Only then does `hls_protocol_relay_queue:new/2` bind fresh sessions and initialize credits, sequences and retained records. Static routing is independent of an incarnation; session uniqueness, transport retirement and reset remain runtime obligations.
+
 Attach the emitted repetition deployment to two already opened brokers:
 
 ```erlang

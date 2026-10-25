@@ -49,7 +49,7 @@ Every protocol builder's `emit/1` and `write/2` accepts either a source configur
 
 `hls_protocol_network:emit/2`, `hls_protocol_boundary:emit/2` and `hls_protocol_bridge:emit/2` instead accept a planned transport and renderer options. Their bundle results carry the transport descriptor alongside the generated manifest, so application, mixed and deployment builders do not read their own ETF outputs back. Source/placement options cannot be changed through these emission APIs. The corresponding `write/3` functions also take a fresh output directory. ETF files remain available for inspection and host consumers.
 
-A deployment prepares the source program once, validates complete disjoint ownership and return endpoints, and plans all roles. It then renders every boundary/bridge and checks cross-role codecs and relay limits before writing any output. A validation or rendering failure leaves the requested output absent; an I/O failure can leave a partial directory. This boundary does not change XLS schedules, generated hardware behavior or admission policy.
+A deployment prepares the source program once, validates complete disjoint ownership and return endpoints, and plans all roles. The shared static `hls_protocol_routing:plan/1` checks cross-role ownership, matching codecs, packet index bounds and relay limits before any bridge is rendered. Compilation needs no sessions or live relay state; the host constructs the same routing plan from `deployment.etf` before opening an incarnation. A validation or rendering failure leaves the requested output absent; an I/O failure can leave a partial directory. This boundary does not change XLS schedules, generated hardware behavior or admission policy.
 
 ## Optional external compilation
 

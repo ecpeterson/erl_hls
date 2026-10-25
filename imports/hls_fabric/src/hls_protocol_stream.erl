@@ -62,16 +62,17 @@ info(Pid)->gen_server:call(Pid,info).
 -spec stop(pid()) -> ok.
 stop(Pid)->gen_server:call(Pid,retire,infinity).
 
--doc "Checks complete actor ownership, reserves distinct return routes, and starts serialized attachment. Each broker may hold one credited frame for this owner.".
+-doc "Checks static deployment routing and fresh sessions before reserving distinct return routes and starting serialized attachment. Each broker may hold one credited frame for this owner.".
 -spec init({map(), map(), map(), pid(), raw | map()}) -> {ok, state()}.
 init({Plan = #{devices := Devices,
         limits := Limits = #{commands := Commands, events := Events, crossings := Crossings}},
         Brokers, Sessions, Client, Application})
         when is_integer(Commands), Commands > 0, is_integer(Events), Events >= 2 ->
-    Roles = lists:sort(maps:keys(Devices)),
+    Routing = hls_protocol_routing:plan(Plan),
+    Roles = hls_protocol_routing:roles(Routing),
     Roles = lists:sort(maps:keys(Brokers)),
     true = length(Roles) =:= length(lists:usort(maps:values(Brokers))),
-    Queue = hls_protocol_relay_queue:new(Plan, Sessions),
+    Queue = hls_protocol_relay_queue:new(Routing, Sessions),
     Bindings = [begin
         true = is_integer(Host) andalso Host > 0 andalso Host < 65536,
         true = is_integer(Service) andalso Service > 0 andalso Service < 65536 andalso Service =/= Host,

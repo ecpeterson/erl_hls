@@ -57,6 +57,59 @@ endpoints_test() ->
           South#{sources => []}]),
     ok.
 
+%% An undersized crossing budget rejects before hardware rendering, not merely before file writes.
+-spec routing_before_render_test_() -> term().
+routing_before_render_test_() -> {timeout, 30, fun routing_before_render/0}.
+
+%% The positive control proves tracing observes both real role emitters.
+-spec routing_before_render() -> ok.
+routing_before_render() ->
+    Config = #{limits := Limits} = config(),
+    Directory = filename:join("_build", "deployment-routing-" ++ integer_to_list(erlang:system_time(nanosecond))),
+    {ok, 0} = trace_bridges(fun() ->
+        ?assertException(error, _, hls_protocol_deployment:write(
+            Config#{limits := Limits#{crossings := 1}}, Directory)),
+        ok
+    end),
+    ?assertEqual(false, filelib:is_dir(Directory)),
+    {#{result := #{devices := Devices}}, Calls} = trace_bridges(fun() -> hls_protocol_deployment:emit(Config) end),
+    ?assertEqual(2, map_size(Devices)),
+    ?assertEqual(2, Calls).
+
+%% A private session traces only this process; a delivery barrier excludes delayed trace messages.
+-spec trace_bridges(fun(() -> term())) -> {term(), non_neg_integer()}.
+trace_bridges(Build) ->
+    {module, hls_protocol_bridge} = code:ensure_loaded(hls_protocol_bridge),
+    {Collector, Monitor} = spawn_monitor(fun() -> collect_bridges(0) end),
+    Session = trace:session_create(deployment_bridge_emission, Collector, []),
+    try
+        1 = trace:process(Session, self(), true, [call]),
+        1 = trace:function(Session, {hls_protocol_bridge, emit, 2}, [], []),
+        Result = Build(),
+        1 = trace:process(Session, self(), false, [call]),
+        Ref = trace:delivered(Session, self()),
+        receive {trace_delivered, _, Ref} -> ok
+        after 5000 -> error(bridge_trace_delivery_timeout) end,
+        Collector ! {collect, self(), Ref},
+        receive {Ref, Count} -> {Result, Count}
+        after 5000 -> error(bridge_trace_collection_timeout) end
+    after
+        trace:session_destroy(Session),
+        exit(Collector, kill),
+        receive {'DOWN', Monitor, process, Collector, _} -> ok
+        after 5000 -> error(bridge_trace_cleanup_timeout) end
+    end.
+
+%% Count actual bridge emission calls without retaining the source program arguments.
+-spec collect_bridges(non_neg_integer()) -> ok.
+collect_bridges(Count) ->
+    receive
+        %% A traced role has reached hardware generation.
+        {trace, _, call, {hls_protocol_bridge, emit, [_, _]}} -> collect_bridges(Count + 1);
+        %% Trace delivery was confirmed before this request was sent.
+        {collect, Owner, Ref} -> Owner ! {Ref, Count}, ok
+    end.
+
 %% Arbitrary role names/addresses ensure the builder does not assume integer roles or service 7.
 -spec config() -> map().
 config() -> #{sources=>[{"test/hls_protocol_network_fixture.erl",[]},{"test/hls_protocol_inbox_fixture.erl",[]}],

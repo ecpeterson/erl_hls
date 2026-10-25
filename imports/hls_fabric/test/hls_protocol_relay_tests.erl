@@ -45,11 +45,36 @@ endpoint_test() ->
         hls_protocol_bridge:write(#{native_actors=>[a],host=>H,service=>S},"unused")) end,
         [{1.5,7},{1,7.5},{0,7},{1,1},{1,65536}]),ok.
 
-%% Shared identities or incomplete native ownership must never create a new incarnation.
--spec plan_test() -> ok.
-plan_test() ->
-    ?assertException(error,_,hls_protocol_relay_queue:new(plan(),#{0=>11,1=>11})),
-    ?assertException(error,_,hls_protocol_relay_queue:new((plan())#{actors:=3},#{0=>11,1=>12})),ok.
+%% Session binding requires every checked role exactly once and distinct nonzero 64-bit identities.
+-spec session_rejection_test() -> ok.
+session_rejection_test() ->
+    Routing = hls_protocol_routing:plan(deployment()),
+    Sessions = sessions(),
+    Invalid = [maps:remove(42, Sessions), Sessions#{unknown => 104}] ++
+        [Sessions#{north := Value} || Value <- [0, -1, 1 bsl 64, 101.0, session, 102]],
+    lists:foreach(fun(Binding) ->
+        ?assertException(error, _, hls_protocol_relay_queue:new(Routing, Binding))
+    end, Invalid).
+
+%% Reusing checked routes never carries credit, counters or packet sequences into a fresh incarnation.
+-spec reusable_routing_test() -> ok.
+reusable_routing_test() ->
+    Routing = hls_protocol_routing:plan(plan()),
+    First = hls_protocol_relay_queue:new(Routing, #{0 => 11, 1 => 12}),
+    Second = hls_protocol_relay_queue:new(Routing, #{0 => 21, 1 => 22}),
+    FirstData = hls_protocol_relay_queue:event(0, packet(1, 11, 0, 0), First),
+    FirstReady = hls_protocol_relay_queue:event(1, packet(2, 12, 0, 0), FirstData),
+    {1, #{session := 12, sequence := 0}, Data, Writing} = hls_protocol_relay_queue:next(FirstReady),
+    {0, _, Ack, Acking} = hls_protocol_relay_queue:next(hls_protocol_relay_queue:complete(Data, Writing)),
+    Completed = hls_protocol_relay_queue:complete(Ack, Acking),
+    ?assertMatch(#{forwarded := 1, acknowledged := 1}, hls_protocol_relay_queue:info(Completed)),
+    ?assertMatch(#{events := #{0 := 0, 1 := 0}, available_credits := 0,
+        records := 0, forwarded := 0, acknowledged := 0}, hls_protocol_relay_queue:info(Second)),
+    SecondData = hls_protocol_relay_queue:event(0, packet(1, 21, 0, 0), Second),
+    ?assertEqual(none, hls_protocol_relay_queue:next(SecondData)),
+    SecondReady = hls_protocol_relay_queue:event(1, packet(2, 22, 0, 0), SecondData),
+    ?assertMatch({1, #{session := 22, sequence := 0}, {data, 0, 0}, _},
+        hls_protocol_relay_queue:next(SecondReady)).
 
 %% One fully constant canonical frame suffices to test ownership without a fake compiler.
 -spec plan() -> map().
@@ -61,7 +86,7 @@ plan() ->
 
 %% Every test starts with no granted credits and distinct fresh sessions.
 -spec new() -> map().
-new() -> hls_protocol_relay_queue:new(plan(),#{0=>11,1=>12}).
+new() -> hls_protocol_relay_queue:new(hls_protocol_routing:plan(plan()), #{0 => 11, 1 => 12}).
 %% One packet identity is retained across destination forwarding and source acknowledgment.
 -spec packet(1|2,pos_integer(),non_neg_integer(),non_neg_integer()) -> map().
 packet(Kind,Session,Seq,Link) -> #{kind=>Kind,session=>Session,sequence=>Seq,link=>Link,slot=>0,frame=>0}.
@@ -139,19 +164,6 @@ deployment_failure_test() ->
         await(fun()->lists:all(fun(R)->maps:get(owner,hls_protocol_relay_peer:stats(maps:get(R,Peers)))=:=retired end,[42,north]) end)
     end).
 
-%% Deployment validation rejects incomplete ownership, mismatched codecs and exceeded explicit bounds.
--spec deployment_rejection_test() -> ok.
-deployment_rejection_test() ->
-    P=#{devices:=D}=deployment(),Sessions=sessions(),
-    ?assertException(error,_,hls_protocol_relay_queue:new(P#{limits:=#{crossings=>1}},Sessions)),
-    ?assertException(error,_,hls_protocol_relay_queue:new(P,maps:remove(42,Sessions))),
-    #{links:=Links}=maps:get(42,D),[L]=Links,
-    Bad=D#{42:=(maps:get(42,D))#{links:=[L#{source_index:=2}]}},
-    ?assertException(error,_,hls_protocol_relay_queue:new(P#{devices:=Bad},Sessions)),
-    %% Duplicate descriptors must not be silently collapsed by maps:from_list.
-    N=maps:get(north,D),Bad2=D#{north:=N#{links:=maps:get(links,N)++maps:get(links,N)}},
-    ?assertException(error,_,hls_protocol_relay_queue:new(P#{devices:=Bad2},Sessions)),ok.
-
 %% A three-node fanout uses ordinary constant codecs, not application arithmetic.
 -spec deployment() -> map().
 deployment() ->
@@ -189,7 +201,7 @@ packets(P)->
 -spec await(fun(()->boolean())) -> ok.
 await(F)->hls_bridge_phi_live:await(F,1000).
 
-%% Ambiguous return routes and invalid capacities fail before registering any broker route.
+%% Invalid endpoints, event capacities and static crossing budgets fail before broker registration.
 -spec endpoint_binding_rejection_test() -> ok.
 endpoint_binding_rejection_test() ->
     P=#{devices:=D}=deployment(),Sessions=sessions(),
@@ -199,6 +211,8 @@ endpoint_binding_rejection_test() ->
         Ambiguous=P#{devices:=D#{{tile,south}:=South#{host:=maps:get(host,North),service:=maps:get(service,North)}}},
         ?assertError({badmatch,false},hls_protocol_stream:init({Ambiguous,Peers,Sessions,self(),raw})),
         ?assertError(function_clause,hls_protocol_stream:init({P#{limits:=#{crossings=>2,commands=>1,events=>1}},Peers,Sessions,self(),raw})),
+        ?assertException(error, _, hls_protocol_stream:init({
+            P#{limits := #{crossings => 1, commands => 1, events => 2}}, Peers, Sessions, self(), raw})),
         [?assertEqual(none,maps:get(owner,hls_protocol_relay_peer:stats(Peer)))||Peer<-maps:values(Peers)]
     after [gen_server:stop(Peer)||Peer<-maps:values(Peers)] end,ok.
 

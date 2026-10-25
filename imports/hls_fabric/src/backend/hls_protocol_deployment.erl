@@ -5,12 +5,12 @@
 %% A role keeps its checked transport separate from the framed adapter's options.
 -type role() :: #{device := term(), directory := string(), transport := hls_protocol_transport:build(), options := map()}.
 
--doc "Prepares one source program for all devices, checks complete disjoint ownership and distinct return endpoints, then plans every role before creating output. devices maps arbitrary device IDs to native_actors, host and service; limits supplies crossings, commands and events. Writes numbered role directories and deployment.etf for hls_protocol_stream:start_application/3. At least two proper partitions are required, each with crossing inputs/outputs and rectangle control. Crossing codecs and relay limits are checked before output is created. All devices form one retirement/reset domain. Generation failures create no output; I/O failures retain partial output. This does not grant capacity, progress, timing or device admission.".
+-doc "Writes a fresh deployment and numbered role bundles from a trusted config map or filename. Each device supplies native_actors, host and service; limits bounds crossings, commands and events. Requires complete disjoint ownership, distinct return endpoints and rectangle control. Generation failures create no output; I/O failures retain partial output. All roles share one retirement/reset domain; the result remains ineligible for device admission.".
 -spec write(map() | file:filename(), file:filename()) -> map().
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
 
--doc "Generates all role bundles and the host deployment without writing output. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Prepares sources once, validates each role and relay, and returns relative filenames with IO data plus the deployment. Preparation loads sources and invokes trusted constructors; template and support-library reads remain.".
+-doc "Generates all role bundles and the host deployment without writing output. Accepts a trusted source config map or a filename containing one map; source paths remain relative to the caller. Prepares sources once, checks static cross-role routing before rendering bridges, and returns relative filenames with IO data plus the deployment. Preparation loads sources and invokes trusted constructors; template and support-library reads remain.".
 -spec emit(map() | file:filename()) -> hls_generated_files:output().
 emit(Config = #{devices := Devices, limits := Limits = #{commands := Commands, events := Events}})
         when map_size(Devices) >= 2, is_integer(Commands), Commands > 0, is_integer(Events), Events >= 2 ->
@@ -20,13 +20,14 @@ emit(Config = #{devices := Devices, limits := Limits = #{commands := Commands, e
     ok = placement(Devices, Actors),
     Roles = [role(Device, Index, Placement, Common, Program)
         || {Index, {Device, Placement}} <- lists:enumerate(0, lists:sort(maps:to_list(Devices)))],
+    RoutingDevices = maps:from_list([{Device, routing_device(Build)}
+        || #{device := Device, transport := Build} <- Roles]),
+    _ = hls_protocol_routing:plan(#{devices => RoutingDevices, actors => length(Actors), limits => Limits}),
     Outputs = [{Device, Name, hls_protocol_bridge:emit(Build, Options)}
         || #{device := Device, directory := Name, transport := Build, options := Options} <- Roles],
     Bridges = maps:from_list([{Device, Bridge}
         || {Device, _, #{result := #{bridge := Bridge}}} <- Outputs]),
     Plan = #{devices => Bridges, actors => length(Actors), limits => Limits},
-    Sessions = maps:from_list([{D, I} || {I, D} <- lists:enumerate(lists:sort(maps:keys(Devices)))]),
-    _ = hls_protocol_relay_queue:new(Plan, Sessions),
     Owners = maps:from_list([{Id, D} || {D, #{native_actors := Ids}} <- maps:to_list(Devices), Id <- Ids]),
     Hosts = maps:map(fun(_, #{host := H}) -> H end, Bridges),
     Application = hls_protocol_application_binding:bind(Bundle, hls_protocol_transport:control(Program), Owners, Hosts),
@@ -69,3 +70,9 @@ role(Device, Index, Placement = #{native_actors := Ids}, Common, Program) ->
     #{device => Device, directory => "role" ++ integer_to_list(Index),
       transport => hls_protocol_transport:plan(Program, Options),
       options => maps:with([host, service, control, activation, inspection], maps:merge(Common, Placement))}.
+
+%% The framed bridge copies these same checked transport fields into its host descriptor.
+-spec routing_device(hls_protocol_transport:build()) -> hls_protocol_routing:device().
+routing_device(Build) ->
+    #{fabric := #{sources := Sources, crossings := Crossings}} = hls_protocol_transport:descriptor(Build),
+    #{native_indices => [I || #{index := I} <- Sources], links => Crossings}.
