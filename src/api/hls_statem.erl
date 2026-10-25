@@ -125,7 +125,7 @@ are outside this restricted `gen_statem` state-functions vocabulary.
 }.
 -doc "Opens one indexed collection; zero membership completes after entry commits.".
 -type open_gather_action() :: {open_gather, atom(), term(),
-    {members_mask, 1..255, non_neg_integer()}, term()}.
+    {members_mask, 1 .. ((1 bsl 8) - 1), non_neg_integer()}, term()}.
 -doc "Supplies one selected numeric member without mutating callback data or phase.".
 -type gather_contribution() :: {gather, atom(), term(), non_neg_integer(), term()}.
 -doc "A complete fixed-capacity member-indexed view; the mask identifies active values.".
@@ -189,8 +189,9 @@ are outside this restricted `gen_statem` state-functions vocabulary.
     enter_result(DataType) |
     cast_result(DataType) |
     internal_result(DataType).
+%% CPU adapter mailbox bound and output-port routing.
 -type start_option() ::
-    {mailbox_capacity, 1..255} |
+    {mailbox_capacity, 1 .. ((1 bsl 8) - 1)} |
     {outputs, #{output_port() := pid()}}.
 
 -callback init(term()) -> {

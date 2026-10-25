@@ -8,11 +8,11 @@
     callers := #{non_neg_integer() => {gen_server:from(), [atom()]}}}.
 
 -doc "Creates an empty book with capacity for N retained calls.".
--spec new(1..255) -> book().
+-spec new(1 .. ((1 bsl 8) - 1)) -> book().
 new(N) -> #{limit => N, next => 1, callers => #{}}.
 
 -doc "Admits a caller, or replies busy without calling the application; sequence exhaustion raises an error.".
--spec admit(0..255, gen_server:from(), [atom()], book()) ->
+-spec admit(0 .. ((1 bsl 8) - 1), gen_server:from(), [atom()], book()) ->
     {ok, pos_integer(), book()} | full.
 admit(_Tag, _From, _Replies, #{next := Sequence}) when Sequence >= (1 bsl 56) ->
     error(reply_handle_exhausted);

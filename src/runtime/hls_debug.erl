@@ -79,7 +79,7 @@ get_trace(Target, Timeout) ->
     hls_debug_target:collect(Target, get_trace, Timeout).
 
 -doc "Sends a word-aligned management request and returns its raw reply payload.".
--spec query(pid(), 1..127, binary(), timeout()) ->
+-spec query(pid(), 1 .. ((1 bsl 7) - 1), binary(), timeout()) ->
     {ok, binary()} | {error, term()}.
 query(Pid, Tag, Payload, Timeout)
         when Tag > 0, Tag < 128, byte_size(Payload) rem 4 =:= 0,

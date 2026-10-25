@@ -3,7 +3,7 @@
 -export([frame/2, join/1, join_cases/1]).
 
 -doc "Constructs an ordinary three-word frame bound from checked schema fields. Finite field values are exact ABI bitstrings; unknown fields retain all bits. Rejects payloads wider than 96 bits. Does not cover retained replies or arbitrary frames.".
--spec frame(0..255, [map()]) -> #{mask := non_neg_integer(), value := non_neg_integer()}.
+-spec frame(0 .. ((1 bsl 8) - 1), [map()]) -> #{mask := non_neg_integer(), value := non_neg_integer()}.
 frame(Tag, Fields) ->
     Parts = [field(F) || F <- Fields],
     MaskStream = << <<M/bitstring>> || {M, _} <- Parts >>,

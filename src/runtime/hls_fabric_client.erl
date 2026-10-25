@@ -14,11 +14,12 @@
     monitor :: reference() | none,
     context :: term()
 }).
+%% One broker route and its retained transactions, owned by the calling adapter.
 -record(client, {
     broker :: pid(),
     monitor :: reference(),
     route :: hls_fabric:route(),
-    capacity :: 1..256,
+    capacity :: 1 .. (1 bsl 8),
     next = 0 :: byte(),
     pending = #{} :: #{byte() => #pending{}},
     sends = gen_server:reqids_new() :: gen_server:request_id_collection(),
@@ -28,7 +29,8 @@
 }).
 -opaque state() :: #client{}.
 
--spec new(pid(), 0..65535, 0..65535, 1..256) -> {ok, state()} | {error, term()}.
+-doc "Registers the calling owner's inbound broker route with a bounded transaction-ID space. Registration failure releases the broker monitor.".
+-spec new(pid(), 0 .. ((1 bsl 16) - 1), 0 .. ((1 bsl 16) - 1), 1 .. (1 bsl 8)) -> {ok, state()} | {error, term()}.
 new(Broker, Local, Peer, Capacity) ->
     Monitor = monitor(process, Broker),
     case hls_fabric:register_route(Broker, {Peer, Local}, self()) of

@@ -5,6 +5,7 @@ compatibility scaffolding for an obsolete internal format.
 
 ## Erlang
 
+- Express fixed-width integer type bounds as constant expressions, such as `0 .. ((1 bsl 32) - 1)`, rather than expanded decimal limits.
 - Destructure tuples and maps in function heads and `case` clauses when their
   shape determines control flow.
 - Bind a related group of values once instead of repeating `maps:get/2` calls.

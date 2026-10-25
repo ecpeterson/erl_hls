@@ -38,7 +38,8 @@ a possibly applied Pauli update.
 
 -define(U32_MAX, 16#ffffffff).
 
--type endpoint() :: 0..65535.
+%% Unsigned address carried in the fabric envelope.
+-type endpoint() :: 0 .. ((1 bsl 16) - 1).
 -type route() :: {endpoint(), endpoint()}.
 -type header() :: {
     Tag :: byte(),

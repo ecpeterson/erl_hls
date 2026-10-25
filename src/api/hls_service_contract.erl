@@ -7,7 +7,7 @@
 
 -doc "Allowed reply tags by call request, plus supported cast tags.".
 -type contract() :: #{calls := #{atom() => [atom(), ...]}, casts := [atom()],
-    pending_calls => 1..255, continuations => [atom()]}.
+    pending_calls => 1 .. ((1 bsl 8) - 1), continuations => [atom()]}.
 
 -doc "Validates request/reply declarations and returns allowed call replies and cast tags.".
 -spec from_forms([hls_source:form()]) -> contract().

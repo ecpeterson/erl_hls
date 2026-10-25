@@ -19,17 +19,25 @@ normalization laws and the distinction from XLS arithmetic semantics.
 -export_type([float64/0, float32/0, float16/0]).
 
 %%% unsigned integers
--type u8() :: 0 .. (1 bsl 8 - 1).
--type u16() :: 0 .. (1 bsl 16 - 1).
--type u32() :: 0 .. (1 bsl 32 - 1).
--type u64() :: 0 .. (1 bsl 64 - 1).
+-doc "Unsigned 8-bit integer domain.".
+-type u8() :: 0 .. ((1 bsl 8) - 1).
+-doc "Unsigned 16-bit integer domain.".
+-type u16() :: 0 .. ((1 bsl 16) - 1).
+-doc "Unsigned 32-bit integer domain.".
+-type u32() :: 0 .. ((1 bsl 32) - 1).
+-doc "Unsigned 64-bit integer domain.".
+-type u64() :: 0 .. ((1 bsl 64) - 1).
 -type uN(_Width) :: non_neg_integer().
 
 %%% signed integers
--type s8() :: -(1 bsl 7) .. (1 bsl 7 - 1) .
--type s16() :: -(1 bsl 15) .. (1 bsl 15 - 1).
--type s32() :: -(1 bsl 31) .. (1 bsl 31 - 1).
--type s64() :: -(1 bsl 63) .. (1 bsl 63 - 1).
+-doc "Two's-complement signed 8-bit integer domain.".
+-type s8() :: -(1 bsl 7) .. ((1 bsl 7) - 1).
+-doc "Two's-complement signed 16-bit integer domain.".
+-type s16() :: -(1 bsl 15) .. ((1 bsl 15) - 1).
+-doc "Two's-complement signed 32-bit integer domain.".
+-type s32() :: -(1 bsl 31) .. ((1 bsl 31) - 1).
+-doc "Two's-complement signed 64-bit integer domain.".
+-type s64() :: -(1 bsl 63) .. ((1 bsl 63) - 1).
 -type sN(_Width) :: integer().
 
 %%% floats
