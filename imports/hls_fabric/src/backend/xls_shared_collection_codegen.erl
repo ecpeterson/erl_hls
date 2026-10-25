@@ -1,7 +1,13 @@
 -module(xls_shared_collection_codegen).
 -moduledoc "Selects opportunistic admission capture or explicitly asserted exclusive epoch collection.".
 -export([validate/2, requirements/3, helpers/1, state_fields/1, ticket_field/1,
-    ticket_value/1, loader_value/1, retire/1, retire_binding/1, admit/1, admission_guard/1, commit/1, resolve/1, selection/1, issue/1, capture/1, captured_field/1]).
+    ticket_value/1, loader_value/1, retire/1, retire_binding/1, admit/1, admission_guard/1, commit/1, resolve/1, selection/2, issue/1, capture/1, captured_field/1]).
+
+-export_type([selection_bindings/0]).
+
+-doc "Compiler-generated DSLX identifiers for the ordinary admission source, independent collector source and new ordinary intent. Sources must already be bound; these names are rendered directly, never parsed or rewritten.".
+-type selection_bindings() :: #{ordinary_state := string(),
+    collection_state := string(), ordinary_result := string()}.
 
 -doc "Requires an ordinary reduced actor; collection never replaces aggregate-only delivery.".
 -spec validate(map(), map()) -> ok.
@@ -154,18 +160,41 @@ resolve(#{admission_reductions := exclusive_epoch}) ->
     "        let resolved = collection_resolve(state, result.slot, resolved);\n";
 resolve(_) -> [].
 
--doc "Selects ordinary mail and reserved contributions independently, with fairness within each class.".
--spec selection(map()) -> iodata().
-selection(#{gather_collection := true, admission_reductions := exclusive_epoch}) ->
-    "\n        let intent = collection_select_ordinary(indexed_ordinary_state(state));\n        let collection_intent = collection_select(state);\n";
-selection(Spec = #{gather_collection := true}) ->
-    Text = iolist_to_binary(selection(maps:remove(gather_collection, Spec))),
-    ["\n        let ordinary_state = indexed_ordinary_state(state);\n",
-     binary:replace(Text, <<"state.">>, <<"ordinary_state.">>, [global])];
-selection(#{admission_reductions := exclusive_epoch}) ->
-    "\n        let intent = collection_select_ordinary(state);\n        let collection_intent = collection_select(state);\n";
-selection(_) ->
-    "\n        let intent = mailbox::select_admission(\n          state.occupied, state.used, state.admission_cursor,\n          state.pending, state.pending_valid, false, u32:0, false, u32:0);\n".
+-doc "Renders independent ordinary-mail and reserved-contribution selection from the supplied state identifiers. Indexed collection filters only the ordinary source. Exclusive epoch mode also binds collection_intent from the separate collector source; other modes do not emit collector selection. The caller owns reservation masking and retention of the resulting ordinary intent.".
+-spec selection(map(), selection_bindings()) -> iodata().
+selection(Spec, #{ordinary_state := Ordinary, collection_state := Collection,
+        ordinary_result := Result}) ->
+    [ordinary_selection(Spec, Ordinary, Result), collection_selection(Spec, Collection)].
+
+%% Indexed filtering and exclusive ownership choose the operation, not generated-text edits.
+-spec ordinary_selection(map(), string(), string()) -> iodata().
+ordinary_selection(#{gather_collection := true, admission_reductions := exclusive_epoch}, State, Result) ->
+    exclusive_selection(["indexed_ordinary_state(", State, ")"], Result);
+ordinary_selection(#{admission_reductions := exclusive_epoch}, State, Result) ->
+    exclusive_selection(State, Result);
+ordinary_selection(#{gather_collection := true}, State, Result) ->
+    ["\n        let ordinary_state = indexed_ordinary_state(", State, ");\n",
+        mailbox_selection("ordinary_state", Result)];
+ordinary_selection(_, State, Result) ->
+    mailbox_selection(State, Result).
+
+%% Exclusive ownership protects mailbox admission while keeping collector fairness separate.
+-spec exclusive_selection(iodata(), string()) -> iodata().
+exclusive_selection(State, Result) ->
+    ["\n        let ", Result, " = collection_select_ordinary(", State, ");\n"].
+
+%% Ordinary and opportunistic collection share the same free-cell admission selector.
+-spec mailbox_selection(string(), string()) -> iodata().
+mailbox_selection(State, Result) ->
+    ["\n        let ", Result, " = mailbox::select_admission(\n          ",
+        State, ".occupied, ", State, ".used, ", State, ".admission_cursor,\n          ",
+        State, ".pending, ", State, ".pending_valid, false, u32:0, false, u32:0);\n"].
+
+%% Collector selection observes its original ownership source, never the ordinary mask.
+-spec collection_selection(map(), string()) -> iodata().
+collection_selection(#{admission_reductions := exclusive_epoch}, State) ->
+    ["        let collection_intent = collection_select(", State, ");\n"];
+collection_selection(_, _) -> [].
 
 -doc "Retains completion ownership until its callback retires and requests release.".
 -spec issue(map()) -> iodata().

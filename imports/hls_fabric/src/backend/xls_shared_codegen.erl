@@ -488,500 +488,166 @@ shared_loader(Spec) ->
         {<<"@@MACHINE_BITS@@">>, xls_shared_collection_codegen:loader_value(Spec)} |
         xls_indexed_memory_codegen:loader_bindings(Spec)]).
 
-%% Emits RAM-backed scheduling, retaining one pending request per producer.
+%% The RAM owner keeps its owner phases in DSLX; bindings specialize only feature hooks.
 -spec shared_service(spec()) -> iodata().
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
-    SharedService = maps:get(shared_service, Spec, ordinary),
+    Mode = maps:get(shared_service, Spec, ordinary),
+    Path = filename:join(code:priv_dir(hls_fabric), "xls/templates/shared_service.x.in"),
+    {ok, Template} = file:read_file(Path),
+    Bindings = service_ports(Spec, Reductions, Mode) ++
+        service_capture(Spec, Reductions, Mode) ++
+        service_retirement(Spec, Reductions, Mode) ++
+        service_admission(Spec, Reductions, Mode) ++ service_memory(Spec),
+    [?REDUCTION_SERVICE:shared_service_helpers(Reductions, Mode),
+        xls_template:render(Template, Bindings)].
+
+%% Slots carry DSLX fragments, not actor options or a second validation authority.
+-type service_bindings() :: [{binary(), iodata()}].
+
+%% Wire RAM ownership and optional observation/aggregate channels. Indexed preparation
+%% supplies the loader directly; ordinary actors retain the request-stage boundary.
+-spec service_ports(spec(), none | map(), ordinary | aggregate_only) -> service_bindings().
+service_ports(Spec, Reductions, SharedService) ->
     RamParameters = xls_scheduler_ram_dslx:parameters(write, [], [], Spec),
     RamConfigParameters = xls_scheduler_ram_dslx:parameters(all, [], [], Spec),
     RamNames = xls_scheduler_ram_dslx:names(write, [], Spec),
     [
-    ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
-    """
-    fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        cursor: u32,
-        in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-      scheduler::select(
-        scheduler::Candidates<ACTOR_COUNT> {
-          entry: state.entry_probes,
-          mail: state.mail_candidates,
-          egress: state.egress_waiters,
-          ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
-        }, state.egress_busy, scheduler::exclude_reserved(in_flight, state.outbox_busy), cursor)
-    }
+        {<<"@@PROC_PORTS@@">>, [
+            lists:join("\n", [["  ", Parameter, ";"] || Parameter <- RamParameters]),
+            ?REDUCTION_SERVICE:shared_proc_field(Reductions, SharedService),
+            xls_scheduler_observation:proc_field(Spec),
+            xls_collection_observation:proc_field(Spec)]},
+        {<<"@@CONFIG_PORTS@@">>, [
+            lists:join(",\n", [["      ", Parameter] || Parameter <- RamConfigParameters]),
+            ?REDUCTION_SERVICE:shared_config_parameter(Reductions, SharedService),
+            xls_scheduler_observation:config_parameter(Spec),
+            xls_collection_observation:config_parameter(Spec)]},
+        {<<"@@REQUEST_STAGE_CHANNEL@@">>, case maps:get(gather_collection, Spec, false) of
+            true -> [];
+            false ->
+                "    let (queued_ticket_p, queued_ticket_c) = "
+                "chan<SharedDispatchTicket, u32:1>(\"queued_ticket\");\n"
+        end},
+        {<<"@@EXECUTOR_INSTANCE@@">>, xls_state_projection:argument(Spec)},
+        {<<"@@REQUEST_STAGE_SPAWN@@">>, case maps:get(gather_collection, Spec, false) of
+            true -> [];
+            false -> "    spawn SharedRequestStage(dispatch_c, queued_ticket_p);\n"
+        end},
+        {<<"@@LOADER_INPUT@@">>, case maps:get(gather_collection, Spec, false) of
+            true -> "      dispatch_c";
+            false -> "      queued_ticket_c"
+        end},
+        {<<"@@LOADER_GATHER_PORTS@@">>, xls_indexed_memory_codegen:optional(Spec,
+            ", gather_read_req_out, gather_read_resp_in")},
+        {<<"@@CONFIG_VALUES@@">>, [
+            lists:join("\n", [["      ", Name, ","] || Name <- RamNames]),
+            ?REDUCTION_SERVICE:shared_config_endpoint(Reductions, SharedService),
+            xls_scheduler_observation:config_value(Spec),
+            xls_collection_observation:config_value(Spec)]}
+    ].
 
-    // Translate actor-specific results into the shared metadata transition.
-    fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        valid: u1,
-        slot: u32,
-        stepped: SharedStep,
-        received: u1,
-        mailbox_index: u8,
-        order_index: u8) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      let metadata = mailbox::retire(
-        mailbox::Metadata<ACTOR_COUNT, MAILBOX_DEPTH> {
-          occupied: state.occupied,
-          order: state.order,
-          used: state.used,
-          postponed: state.postponed,
-          mail_candidates: state.mail_candidates,
-          entry_probes: state.entry_probes,
-          egress_waiters: state.egress_waiters,
-        }, slot, order_index, mailbox_index,
-        mailbox::Retirement {
-          valid,
-          consume: received && stepped.dispatched &&
-            stepped.directive == Directive::CONSUME,
-          postpone: received && stepped.dispatched &&
-            stepped.directive == Directive::POSTPONE,
-    """, "\n      phase_boundary: stepped.phase_boundary",
-        xls_statem_reply_codegen:optional(Spec, " || hls_failure::failed(stepped.machine.failure)"), ",\n",
-        "      failed: ", case xls_statem_reply_codegen:enabled(Spec) of
-            true -> "false"; false -> "hls_failure::failed(stepped.machine.failure)" end, ",\n",
-        "      enter_pending: stepped.machine.enter_pending",
-        xls_statem_event_codegen:optional(Spec, " || stepped.machine.next_event != u8:0"),
-        xls_statem_reply_codegen:optional(Spec, " || (hls_failure::failed(stepped.machine.failure) && hls_reply::first(stepped.machine.replies.slots, true).0)"), ",\n", """
-          egress_blocked: stepped.egress_blocked,
-        });
-      SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-        occupied: metadata.occupied,
-        order: metadata.order,
-        used: metadata.used,
-        postponed: metadata.postponed,
-        mail_candidates: metadata.mail_candidates,
-        entry_probes: metadata.entry_probes,
-        egress_waiters: metadata.egress_waiters,
-        ..state
-      }
-    }
+%% Sample prior state and capture producers independently of loader responses. Aggregate
+%% capture extends the token chain used by BOOT, STARTUP and result reception.
+-spec service_capture(spec(), none | map(), ordinary | aggregate_only) -> service_bindings().
+service_capture(Spec, Reductions, SharedService) ->
+    [
+        {<<"@@OBSERVATIONS@@">>, [
+            xls_scheduler_observation:sample(Spec),
+            xls_collection_observation:sample(Spec)]},
+        {<<"@@CAPTURE_INPUTS@@">>, [
+            xls_shared_collection_codegen:capture(Spec),
+            ?REDUCTION_SERVICE:shared_capture(Reductions, SharedService)]},
+        {<<"@@BOOT_TOKEN@@">>, ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService)},
+        {<<"@@STARTUP_TOKEN@@">>, ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService)},
+        {<<"@@RESULT_TOKEN@@">>, ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService)}
+    ].
 
-    // One metadata owner reserves actors and completion storage before handing
-    // a registered ticket to the independent RAM loader. One outstanding ticket
-    // per actor bounds completion demand by ACTOR_COUNT. Retirement returns that
-    // reservation; prior writes must complete before another read ticket leaves.
-    // Producer and credit capture do not depend on the loader's RAM responses.
-    // PER_ACTOR_EGRESS requires one independently drained batch slot per actor.
-    // A credit names the drained actor; no second activation issues while its
-    // slot is occupied. The demultiplexer must accept every reserved batch.
-    pub proc SharedService<
-        ACTOR_COUNT: u32,
-        PRODUCER_COUNT: u32,
-        STARTUP_COUNT: u32,
-        INSTANCE_ID: u32,
-        PER_ACTOR_EGRESS: u1 = {u1:0}
-    > {
-      request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
-      startup_in: chan<ScheduledRequest> in;
-      egress_out: chan<ScheduledEffects> out;
-    """,
-        "\n", lists:join("\n", [["  ", Parameter, ";"]
-            || Parameter <- RamParameters]),
-        ?REDUCTION_SERVICE:shared_proc_field(Reductions, SharedService),
-        xls_scheduler_observation:proc_field(Spec), xls_collection_observation:proc_field(Spec),
-    """
-      dispatch_out: chan<SharedDispatchTicket> out;
-      executor_result_in: chan<SharedExecutorResult> in;
-
-      config(
-          request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
-          startup_in: chan<ScheduledRequest> in,
-          egress_out: chan<ScheduledEffects> out,
-    """,
-        "\n", lists:join(",\n", [["      ", Parameter]
-            || Parameter <- RamConfigParameters]),
-        ?REDUCTION_SERVICE:shared_config_parameter(
-            Reductions, SharedService
-        ),
-        xls_scheduler_observation:config_parameter(Spec), xls_collection_observation:config_parameter(Spec),
-    """
-      ) {
-    """, case maps:get(gather_collection, Spec, false) of
-        true -> [];
-        false -> "    let (queued_ticket_p, queued_ticket_c) = chan<SharedDispatchTicket, u32:1>(\"queued_ticket\");\n"
-    end, """
-        let (loaded_request_p, loaded_request_c) =
-          chan<SharedExecutorRequest, u32:0>("loaded_request");
-        // One reserved result per actor: the FIFO plus the existing skid slot
-        // can park every outstanding activation even while shared egress stops.
-        let (executor_result_p, executor_result_c) =
-          chan<SharedExecutorResult, {if ACTOR_COUNT > u32:1 {
-            ACTOR_COUNT - u32:1
-          } else { u32:1 }}>("executor_result");
-        let (dispatch_p, dispatch_c) = chan<SharedDispatchTicket, u32:1>("dispatch_ticket");
-    """, "    spawn SharedExecutor", xls_state_projection:argument(Spec), "(loaded_request_c, executor_result_p);\n",
-    case maps:get(gather_collection, Spec, false) of
-        true -> [];
-        false -> "    spawn SharedRequestStage(dispatch_c, queued_ticket_p);\n"
-    end, """
-        spawn SharedLoader<INSTANCE_ID, {mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH)}>(
-    """, case maps:get(gather_collection, Spec, false) of
-        true -> "      dispatch_c";
-        false -> "      queued_ticket_c"
-    end, """
-          , loaded_request_p,
-          ram_read_req_out, ram_read_resp_in, mailbox_read_req_out, mailbox_read_resp_in
-    """, xls_indexed_memory_codegen:optional(Spec, ", gather_read_req_out, gather_read_resp_in"), """
-        );
-        (
-          request_in,
-          startup_in,
-          egress_out,
-    """,
-        "\n", lists:join("\n", [["      ", Name, ","]
-            || Name <- RamNames]),
-        ?REDUCTION_SERVICE:shared_config_endpoint(Reductions, SharedService),
-        xls_scheduler_observation:config_value(Spec), xls_collection_observation:config_value(Spec),
-    """
-          dispatch_p,
-          executor_result_c,
-        )
-      }
-
-      init {
-        (join(), SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          instance_id: INSTANCE_ID,
-          phase: SharedPhase::BOOT,
-          ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
-        })
-      }
-
-      next(prior: (token, SharedState<ACTOR_COUNT, PRODUCER_COUNT>)) {
-        let (memory_tok, state) = prior;
-    """,
-        "\n", xls_scheduler_observation:sample(Spec), xls_collection_observation:sample(Spec),
-    """
-        // Each producer is visited once. Select one slot's value before
-        // updating the array, keeping unrolled type inference linear.
-        let capture_enabled = state.phase == SharedPhase::RUN;
-        let (capture_tok, captured_pending, captured_pending_valid) =
-          unroll_for! (producer, acc):
-              (u32, (
-                token,
-                ScheduledRequest[PRODUCER_COUNT],
-                u1[PRODUCER_COUNT]
-              )) in u32:0..PRODUCER_COUNT {
-            let (next_tok, request, captured) =
-              recv_if_non_blocking(
-                acc.0,
-                request_in[producer],
-                capture_enabled && !state.pending_valid[producer],
-                zero!<ScheduledRequest>());
-            (
-              next_tok,
-              update(acc.1, producer,
-                if captured { request } else { state.pending[producer] }),
-              update(acc.2, producer, state.pending_valid[producer] || captured)
-            )
-          }((memory_tok, state.pending, state.pending_valid));
-    """,
-        xls_shared_collection_codegen:capture(Spec),
-        ?REDUCTION_SERVICE:shared_capture(Reductions, SharedService),
-    """
-        match state.phase {
-          SharedPhase::BOOT => {
-            let write_tok = send(
-    """,
-        "\n          ",
-        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
-        ",\n",
-    """
-              ram_write_req_out,
-              machine_write(state.cursor as u32, initial_shared_machine()));
-            let (_done, _) = recv(write_tok, ram_write_resp_in);
-            let entry_probes = update(
-              state.entry_probes, state.cursor as u32, u1:1);
-            let cursor = scheduler::advance_cursor<ACTOR_COUNT>(
-              state.cursor, true, state.cursor as u32);
-            let next_state = if (state.cursor as u32) == ACTOR_COUNT - u32:1 {
-              SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-                phase: if STARTUP_COUNT == u32:0 {
-                  SharedPhase::RUN
-                } else {
-                  SharedPhase::STARTUP
-                },
-                cursor,
-                entry_probes,
-                ..state
-              }
-            } else {
-              SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-                cursor,
-                entry_probes,
-                ..state
-              }
-            };
-            (write_tok, next_state)
-          },
-          SharedPhase::STARTUP => {
-            let (tok, request) = recv(
-    """,
-        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
-        ", startup_in);\n",
-    """
-            let physical = state.occupied[request.slot];
-            let write_tok = send(
-              tok,
-              mailbox_write_req_out,
-              mailbox::write(
-                request.slot, physical, mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH), request.frame));
-            let (_done, _) = recv(write_tok, mailbox_write_resp_in);
-            let occupied = update(
-              state.occupied, request.slot, physical + u8:1);
-            let row = update(
-              state.order[request.slot], physical as u32, physical);
-            let order = update(state.order, request.slot, row);
-            let used = update(state.used, request.slot,
-              update(state.used[request.slot], physical as u32, true));
-            let mail_candidates = update(
-              state.mail_candidates, request.slot, u1:1);
-            let startup_seen = state.startup_seen + u32:1;
-            let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              phase: if startup_seen == STARTUP_COUNT {
-                SharedPhase::RUN
-              } else {
-                SharedPhase::STARTUP
-              },
-              startup_seen,
-              occupied,
-              order,
-              used,
-              mail_candidates,
-              ..state
-            };
-            (write_tok, next_state)
-          },
-          SharedPhase::RUN => {
-            // Return credits must already occupy a pending receptacle.
-            // Using a newly captured credit here closes a combinational path
-            // through result retirement, the router, and its credit output.
-            let (credit_pending_valid, credit_count, credit_outboxes) =
-              if PER_ACTOR_EGRESS {
-                let (pending, busy) = mailbox::collect_actor_credits(
-                  state.pending, state.pending_valid,
-                  captured_pending_valid, state.outbox_busy);
-                (pending, u2:0, busy)
-              } else {
-                let (pending, count) = mailbox::collect_publication_credit(
-                  state.pending, state.pending_valid,
-                  captured_pending_valid, state.publication_outstanding);
-                (pending, count, state.outbox_busy)
-              };
-            let buffered_can_retire = state.completed_valid &&
-    """, xls_indexed_memory_codegen:optional(Spec, "          state.indexed_retirement_valid &&\n"), """
-              (!state.completed.effects_valid || credit_count < PUBLICATION_CAPACITY);
-            let accept_executor_result =
-              !state.completed_valid || buffered_can_retire;
-            let (executor_result_tok, incoming_result, incoming_valid) =
-              recv_if_non_blocking(
-    """,
-        "\n            ",
-        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
-        ",\n",
-    """
-                executor_result_in,
-                accept_executor_result,
-                zero!<SharedExecutorResult>());
-            // Every executor result crosses the retained completion boundary.
-            // An empty slot must not bypass arithmetic into commit/publication.
-            let result = state.completed;
-            let retire_valid = buffered_can_retire;
-            let resolved = SharedStep {
-    """, "          machine: ", decode_machine(Spec, "result.machine", "result.slot"), ",\n", """
-              effects: result.effects,
-              effects_valid: result.effects_valid,
-              dispatched: result.dispatched,
-              directive: result.directive,
-              phase_boundary: result.phase_boundary,
-              egress_blocked: result.egress_blocked,
-            };
-    """, xls_shared_collection_codegen:resolve(Spec), xls_indexed_collection_codegen:resolve(Spec), """
-            let credited = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-    """, xls_shared_collection_codegen:captured_field(Spec), """
-              pending: captured_pending,
-              pending_valid: credit_pending_valid,
-              publication_outstanding: if PER_ACTOR_EGRESS { u2:0 } else {
-                credit_count + (retire_valid && resolved.effects_valid) as u2 },
-              egress_busy: !PER_ACTOR_EGRESS &&
-                credit_count + (retire_valid && resolved.effects_valid) as u2 == PUBLICATION_CAPACITY,
-              outbox_busy: if PER_ACTOR_EGRESS && retire_valid && resolved.effects_valid {
-                update(credit_outboxes, result.slot, u1:1)
-              } else { credit_outboxes },
-    """,
-        "\n          ..",
-        ?REDUCTION_SERVICE:shared_state_source(Reductions, SharedService),
-        "\n        };\n",
+%% Merge captured inputs with prior credits, resolve the held result, then retire metadata. Incoming
+%% results cannot bypass completion storage; failed reply actors must drain retained replies.
+-spec service_retirement(spec(), none | map(), ordinary | aggregate_only) -> service_bindings().
+service_retirement(Spec, Reductions, SharedService) ->
+    [
+        {<<"@@REPLY_PHASE_FAILURE@@">>, xls_statem_reply_codegen:optional(Spec,
+            " || hls_failure::failed(stepped.machine.failure)")},
+        {<<"@@FAILURE_RETIRES@@">>, case xls_statem_reply_codegen:enabled(Spec) of
+            true -> "false";
+            false -> "hls_failure::failed(stepped.machine.failure)"
+        end},
+        {<<"@@CONTINUATION_PENDING@@">>, [
+            xls_statem_event_codegen:optional(Spec,
+                " || stepped.machine.next_event != u8:0"),
+            xls_statem_reply_codegen:optional(Spec,
+                " || (hls_failure::failed(stepped.machine.failure) && "
+                "hls_reply::first(stepped.machine.replies.slots, true).0)")]},
+        {<<"@@INDEXED_RETIREMENT_READY@@">>, xls_indexed_memory_codegen:optional(Spec,
+            "          state.indexed_retirement_valid &&\n")},
+        {<<"@@DECODE_RESULT@@">>, decode_machine(Spec, "result.machine", "result.slot")},
+        {<<"@@RESOLVE_RESULT@@">>, [
+            xls_shared_collection_codegen:resolve(Spec),
+            xls_indexed_collection_codegen:resolve(Spec)]},
+        {<<"@@CAPTURED_FIELDS@@">>, xls_shared_collection_codegen:captured_field(Spec)},
+        {<<"@@CREDITED_SOURCE@@">>, ?REDUCTION_SERVICE:shared_state_source(Reductions, SharedService)},
+        {<<"@@RETIRE_METADATA@@">>, [
             ?REDUCTION_SERVICE:shared_retire_binding(Reductions,
                 xls_shared_collection_codegen:retire_binding(Spec)),
             xls_shared_collection_codegen:retire(Spec),
             xls_shared_gather_codegen:retire(Spec),
-            xls_indexed_collection_codegen:retire(Spec),
-    """
-            let retired_in_flight = if retire_valid {
-              update(retired.in_flight, result.slot, u1:0)
-            } else {
-              retired.in_flight
-            };
-            let completed_valid = if accept_executor_result {
-              incoming_valid
-            } else { state.completed_valid };
-            let completed = if incoming_valid { incoming_result }
-              else { state.completed };
-    """,
-            "\n",
-            xls_shared_gather_codegen:issue_bindings(Spec),
-    """
-            let (received, order_index, mailbox_index) =
-              mailbox::select(
-                state.order[read_slot], state.occupied[read_slot],
-                state.postponed[read_slot]);
-            let (state_completion_tok, _) = recv_if(
-              join(), ram_write_resp_in, state.state_write_pending,
-              zero!<MachineRamWriteResp>());
-            let (mailbox_completion_tok, _) = recv_if(
-              join(), mailbox_write_resp_in,
-              state.mailbox_write_pending,
-              zero!<MailboxRamWriteResp>());
-    """, xls_indexed_memory_codegen:optional(Spec,
-        "        let (gather_completion_tok, _) = recv_if(join(), gather_write_resp_in,\n"
-        "          state.gather_write_pending, zero!<GatherRamWriteResp>());\n"), """
-            // Both arbiters see only committed metadata and registered inputs.
-            // Apply this intent after retirement; never replace a whole stale row.
-            // An already-free cell cannot alias the live message in a dispatch
-            // ticket, so admission does not depend on this cycle's actor choice.
-    """, ordinary_selection(Spec), xls_shared_collection_codegen:admit(Spec), xls_indexed_collection_codegen:admit(Spec), """
-            let admission = mailbox::Admission {
-    """, "          valid: intent.valid", xls_shared_collection_codegen:admission_guard(Spec), " && !(retire_valid &&\n", """
-                hls_failure::failed(resolved.machine.failure) && intent.slot == result.slot),
-              ..intent
-            };
-            let reservation = mailbox::apply_admission(
-              retired.occupied, retired.order, retired.used, retired.mail_candidates,
-              state.admission_cursor, credit_pending_valid, admission);
-            let reserved = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              pending: captured_pending,
-              pending_valid: reservation.pending_valid,
-              occupied: reservation.occupied,
-              order: reservation.order,
-              used: reservation.used,
-              mail_candidates: reservation.mail_candidates,
-              admission_cursor: reservation.cursor,
-              ..retired
-            };
-    """,
+            xls_indexed_collection_codegen:retire(Spec)]}
+    ].
+
+%% Select from prior snapshots, apply admission to retired metadata, then reserve dispatch.
+%% Exclusive collection selects from its own unmasked snapshot; opportunistic collection
+%% uses ordinary intent. Indexed preparation reserves its actor before payload loading.
+-spec service_admission(spec(), none | map(), ordinary | aggregate_only) -> service_bindings().
+service_admission(Spec, Reductions, SharedService) ->
+    [
+        {<<"@@SELECT_ACTOR@@">>, xls_shared_gather_codegen:issue_bindings(Spec)},
+        {<<"@@SELECT_ADMISSION@@">>, [
+            ordinary_selection(Spec),
+            xls_shared_collection_codegen:admit(Spec),
+            xls_indexed_collection_codegen:admit(Spec)]},
+        {<<"@@COLLECTED_GUARD@@">>, xls_shared_collection_codegen:admission_guard(Spec)},
+        {<<"@@ADMIT_AND_ISSUE@@">>, [
             xls_shared_collection_codegen:commit(Spec),
             xls_indexed_collection_codegen:commit(Spec),
             xls_shared_collection_codegen:issue(Spec),
             xls_indexed_collection_codegen:issue(Spec),
-            ?REDUCTION_SERVICE:shared_post_issue_state(
-                Reductions, SharedService
-            ),
-    """
-    """, issue_ownership(Spec), """
-            let selection_state = SharedState<
-                ACTOR_COUNT, PRODUCER_COUNT> {
-              in_flight: issued_in_flight,
-    """,
-            "\n          ..",
-            ?REDUCTION_SERVICE:shared_post_issue_state_name(
-                Reductions, SharedService
-            ),
-            "\n",
-    """
-            };
-            let ticket = SharedDispatchTicket {
-              slot: read_slot,
-    """,
-            "\n",
-            ?REDUCTION_SERVICE:shared_executor_request_value(
-                Reductions, SharedService
-            ),
+            ?REDUCTION_SERVICE:shared_post_issue_state(Reductions, SharedService)]},
+        {<<"@@ISSUE_OWNERSHIP@@">>, issue_ownership(Spec)},
+        {<<"@@ISSUED_SOURCE@@">>,
+            ?REDUCTION_SERVICE:shared_post_issue_state_name(Reductions, SharedService)},
+        {<<"@@TICKET_FIELDS@@">>, [
+            ?REDUCTION_SERVICE:shared_executor_request_value(Reductions, SharedService),
             xls_shared_collection_codegen:ticket_value(Spec),
-            xls_indexed_collection_codegen:ticket_value(Spec),
-    """
-              received: read_mailbox && received,
-              mailbox_index,
-              order_index,
-            };
-            // Preserve the write-visibility fence before transferring read ownership.
-            let dispatch_tok = send_if(
-              join(memory_tok, state_completion_tok, mailbox_completion_tok
-    """, xls_indexed_memory_codegen:optional(Spec, ", gather_completion_tok"), """
-              ),
-              dispatch_out, issue_valid, ticket);
-            let scheduled = ScheduledEffects {
-              slot: result.slot,
-              effects: result.effects,
-            };
-            let egress_tok = send_if(
-              executor_result_tok,
-              egress_out,
-              state.publish_valid,
-              state.publish);
-            let state_write_tok = send_if(
-              join(memory_tok, egress_tok),
-              ram_write_req_out,
-              state.write_machine_valid,
-              state.write_machine);
-            // Admission selects only registered-valid producers; capture cannot
-            // replace that producer's frame until a later iteration.
-            let admission_frame =
-              state.pending[reservation.admission.producer].frame;
-            let mailbox_write_tok = send_if(
-              join(memory_tok, egress_tok),
-              mailbox_write_req_out,
-              state.write_mailbox_valid,
-              state.write_mailbox);
-    """, xls_indexed_memory_codegen:optional(Spec,
-        "        let gather_write_tok = send_if(join(memory_tok, gather_completion_tok),\n"
-        "          gather_write_req_out, state.write_gather_valid, GatherRamWriteReq {\n"
-        "            addr: state.write_gather_addr, mask: state.write_gather_mask,\n"
-        "            data: indexed_write_data(state.write_gather_value) });\n"), """
-            let _done = join(
-              state_write_tok,
-              mailbox_write_tok,
-              dispatch_tok,
-              state_completion_tok,
-              mailbox_completion_tok
-    """, xls_indexed_memory_codegen:optional(Spec, ", gather_completion_tok, gather_write_tok"), """
-              );
-            let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              in_flight: issued_in_flight,
-              completed_valid,
-              completed,
-              cursor,
-              ordinary_intent: next_intent,
-              state_write_pending: state.write_machine_valid,
-              mailbox_write_pending: state.write_mailbox_valid,
-              write_machine_valid: retire_valid,
-              write_machine_slot: result.slot,
-              write_machine: machine_write(result.slot, resolved.machine),
-              write_mailbox_valid: reservation.admission.valid,
-              write_mailbox_slot: reservation.admission.slot,
-              write_mailbox: mailbox::write(reservation.admission.slot,
-                reservation.admission.physical, mailbox::physical_stride(ACTOR_COUNT, MAILBOX_DEPTH), admission_frame),
-              publish_valid: retire_valid && resolved.effects_valid,
-              publish: scheduled,
-    """, xls_indexed_memory_codegen:optional(Spec,
-        "          gather_write_pending: state.write_gather_valid,\n"
-        "          write_gather_valid: indexed_admission.write_valid,\n"
-        "          write_gather_slot: indexed_intent.slot,\n"
-        "          write_gather_addr: indexed_admission.write.addr,\n"
-        "          write_gather_mask: indexed_admission.write.mask,\n"
-        "          write_gather_value: indexed_transport_contribution(state.indexed_input.frame).value,\n"), """
-              ..selection_state
-            };
-            (join(state_write_tok, mailbox_write_tok
-    """, xls_indexed_memory_codegen:optional(Spec, ", gather_write_tok"), """
-            ), next_state)
-          },
-        }
-      }
-    }
+            xls_indexed_collection_codegen:ticket_value(Spec)]}
+    ].
 
-    """
+%% Acknowledge prior writes before dispatch; send old commands and register new ones.
+%% Indexed payload RAM participates in the same write-visibility fence and memory-token chain.
+-spec service_memory(spec()) -> service_bindings().
+service_memory(Spec) ->
+    [
+        {<<"@@GATHER_COMPLETION@@">>, xls_indexed_memory_codegen:optional(Spec,
+            "        let (gather_completion_tok, _) = recv_if(join(), gather_write_resp_in,\n"
+            "          state.gather_write_pending, zero!<GatherRamWriteResp>());\n")},
+        {<<"@@GATHER_DISPATCH_FENCE@@">>,
+            xls_indexed_memory_codegen:optional(Spec, ", gather_completion_tok")},
+        {<<"@@GATHER_WRITE@@">>, xls_indexed_memory_codegen:optional(Spec,
+            "        let gather_write_tok = send_if(join(memory_tok, gather_completion_tok),\n"
+            "          gather_write_req_out, state.write_gather_valid, GatherRamWriteReq {\n"
+            "            addr: state.write_gather_addr, mask: state.write_gather_mask,\n"
+            "            data: indexed_write_data(state.write_gather_value) });\n")},
+        {<<"@@GATHER_DONE@@">>, xls_indexed_memory_codegen:optional(Spec,
+            ", gather_completion_tok, gather_write_tok")},
+        {<<"@@GATHER_NEXT_COMMANDS@@">>, xls_indexed_memory_codegen:optional(Spec,
+            "          gather_write_pending: state.write_gather_valid,\n"
+            "          write_gather_valid: indexed_admission.write_valid,\n"
+            "          write_gather_slot: indexed_intent.slot,\n"
+            "          write_gather_addr: indexed_admission.write.addr,\n"
+            "          write_gather_mask: indexed_admission.write.mask,\n"
+            "          write_gather_value: indexed_transport_contribution(state.indexed_input.frame).value,\n")},
+        {<<"@@GATHER_MEMORY_TOKEN@@">>, xls_indexed_memory_codegen:optional(Spec, ", gather_write_tok")}
     ].
 
 %% The selector is present for finite events and for the shared retained-call outcome.
@@ -1028,15 +694,14 @@ command_helpers() ->
 %% Grant an ordinary mailbox cell before applying the retained intent at a later edge.
 -spec ordinary_selection(spec()) -> iodata().
 ordinary_selection(Spec) ->
-    Original = iolist_to_binary(xls_shared_collection_codegen:selection(Spec)),
-    Snapshot = re:replace(Original, "\\bstate\\b", "admission_snapshot", [global, {return, binary}]),
-    Selected = re:replace(Snapshot, "\\bintent\\b", "next_intent", [global, {return, binary}]),
-    Independent = binary:replace(Selected, <<"collection_select(admission_snapshot)">>, <<"collection_select(state)">>),
+    Selected = xls_shared_collection_codegen:selection(Spec, #{
+        ordinary_state => "admission_snapshot", collection_state => "state",
+        ordinary_result => "next_intent"}),
     Source = case maps:get(gather_collection, Spec, false) of
         true -> "indexed_preparation_source(state, prepare_valid, prepare_slot)";
         false -> "state"
     end,
-    ["\n        let admission_snapshot = ordinary_selection_source(", Source, ");\n", Independent,
+    ["\n        let admission_snapshot = ordinary_selection_source(", Source, ");\n", Selected,
      "        let intent = state.ordinary_intent;\n"].
 
 %% Indexed actors reserve at preparation and release only on cancellation or
