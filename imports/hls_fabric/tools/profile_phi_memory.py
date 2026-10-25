@@ -5,14 +5,14 @@ import json
 import os
 import re
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import shutil
 import subprocess
 import time
 
 from backend_commands import digest, execute
-from backend_paths import erl_command
-from test_phi_bridge import ROOT, read_build
+from backend_paths import ROOT, debug_rtl, erl_command
+from phi_build_artifacts import read_bridge_build
 from phi_service_metrics import summarize
 from phi_service_analysis import analyze
 from phi_cycle_trace import plan as cycle_plan, read as read_cycles, verify_queries
@@ -21,7 +21,7 @@ from phi_cycle_trace import plan as cycle_plan, read as read_cycles, verify_quer
 def profile(args: argparse.Namespace) -> None:
     """Validate immutable device artifacts, compile only the testbench, and check the selected oracle."""
     provenance_path = args.build / "provenance.json"
-    provenance = read_build(args.build)
+    provenance = read_bridge_build(args.build)
     args.stage.mkdir(parents=True, exist_ok=False)
     for name in ("config.term", "deployment.term", "bridge.json"):
         shutil.copy(args.build / "source" / name, args.stage)
@@ -64,8 +64,7 @@ def profile(args: argparse.Namespace) -> None:
     sources = [ROOT / "test/rtl/phi_bridge_tb.sv", ROOT / "rtl/hls_async_fifo.v"]
     sources += [args.build / f"device{d}/debug" / name for d in (0, 1)
                 for name in ("debug_top.v", "instrumented.v")]
-    sources += [args.erl_hls / "priv/rtl/debug" / name for name in
-                ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
+    sources += debug_rtl(args.erl_hls)
     hardware = [*sources, ROOT / "test/rtl/phi_memory_profile.svh",
                 ROOT / "test/rtl/phi_memory_transport.svh", ROOT / "test/rtl/phi_link_delay.svh", args.build / "phi_devices.vh"]
     hardware_hashes = {str(p): digest(p) for p in hardware}
@@ -144,7 +143,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("build", type=Path)
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--clock-halves", type=int, nargs=2, default=[3, 7])
     parser.add_argument("--stalls", action="store_true")
     parser.add_argument("--actors", action="store_true", help="capture every channel for actor work reconstruction")
@@ -153,6 +152,7 @@ def main() -> None:
     parser.add_argument("--reuse-testbench", type=Path, help="reuse a verified prior profile compilation")
     parser.add_argument("--timeout", type=int, default=900)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     if min(args.clock_halves) < 1 or args.timeout < 1:
         parser.error("clock half periods and timeout must be positive")
     for name in ("build", "stage", "erl_hls"):

@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """Build the decoder profile and its wrapper as one published artifact set."""
 import argparse
+import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import signal
-
-try:
-    import compile_xls
-except ModuleNotFoundError:
-    from compiler_paths import PUBLIC
-
-from compile_xls import build, duration, interrupted, sha
-
+import sys
+from types import ModuleType
 
 INPUTS = "phi_decoder_profile.inputs.json"
 PROFILE = "phi_decoder_profile.json"
@@ -39,7 +35,7 @@ def checked_inputs(snapshot: Path, *, assets: Path | None = None) -> dict:
         if Path(name).name != name or not (name.endswith(".x") or name in (WRAPPER, PROFILE)):
             raise ValueError(f"invalid profile input name: {name!r}")
         path = snapshot / name if name.endswith(".x") else assets / name
-        if sha(path) != expected:
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise ValueError(f"generated profile input changed: {name}")
     if not isinstance(manifest.get("ram_configurations"), str) or not manifest["ram_configurations"]:
         raise ValueError("profile input manifest omits RAM configurations")
@@ -49,13 +45,39 @@ def checked_inputs(snapshot: Path, *, assets: Path | None = None) -> dict:
     return manifest
 
 
+def selected_compiler(profile: str, public: Path | None) -> ModuleType:
+    """Use an explicit compiler or this detached driver's retained standalone helper.
+
+    Checkout invocation resolves only the requested rebar profile. A detached
+    stage needs compile_xls.py beside this script, with no repository or rebar.
+    """
+    retained = Path(__file__).resolve().with_name("compile_xls.py")
+    if public is None and retained.is_file():
+        name = "_retained_compile_xls_" + hashlib.sha256(str(retained).encode()).hexdigest()
+        if name not in sys.modules:
+            spec = importlib.util.spec_from_file_location(name, retained)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"cannot load retained compiler: {retained}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            try:
+                spec.loader.exec_module(module)
+            except BaseException:
+                del sys.modules[name]
+                raise
+        return sys.modules[name]
+    from compiler_paths import compiler_root, compiler_tool
+    return compiler_tool(compiler_root(profile, public), "compile_xls")
+
+
 def main() -> None:
     """Compile the requested profile with checked geometry and explicit timing settings."""
-    signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--erl-hls", type=Path)
+    parser.add_argument("--profile", default="test")
     parser.add_argument("stage", type=Path)
     parser.add_argument("xls_root", type=Path)
-    parser.add_argument("timeout", nargs="?", type=duration, default=7200)
+    parser.add_argument("timeout", nargs="?", default="7200")
     parser.add_argument("shards", nargs="?", type=int, default=3)
     parser.add_argument("pipeline_stages", nargs="?", type=int, default=2)
     parser.add_argument("initiation_interval", nargs="?", type=int, default=1)
@@ -64,6 +86,12 @@ def main() -> None:
     args = parser.parse_args()
     if min(args.shards, args.pipeline_stages, args.initiation_interval) < 1:
         parser.error("shards, pipeline stages, and initiation interval must be positive")
+    compiler = selected_compiler(args.profile, args.erl_hls)
+    try:
+        timeout = compiler.duration(args.timeout)
+    except argparse.ArgumentTypeError as error:
+        parser.error(str(error))
+    signal.signal(signal.SIGTERM, compiler.interrupted)
     stage = args.stage.resolve()
 
     def metadata(snapshot: Path) -> dict:
@@ -81,11 +109,11 @@ def main() -> None:
         """Pass through RAM bindings emitted from the same checked scheduler plan."""
         return checked_inputs(snapshot)["ram_configurations"]
 
-    build(stage / TOPOLOGY, args.xls_root, stage / "compiled",
+    compiler.build(stage / TOPOLOGY, args.xls_root, stage / "compiled",
           name="phi_decoder_profile", pipeline_stages=args.pipeline_stages,
           initiation_interval=args.initiation_interval, ram_configurations=ram_configurations,
           assets=[stage / name for name in (WRAPPER, "hls_1r1w_ram.v", PROFILE, INPUTS)],
-          metadata=metadata, timeout=args.timeout, delay_model=args.delay_model, delay_table=args.delay_table)
+          metadata=metadata, timeout=timeout, delay_model=args.delay_model, delay_table=args.delay_table)
 
 
 if __name__ == "__main__":

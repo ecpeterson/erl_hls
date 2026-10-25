@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 
-from test_phi_bridge import ROOT
+from backend_paths import ROOT
 from phi_cycle_trace import executor_requests, plan
 
 

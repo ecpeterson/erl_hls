@@ -1,31 +1,28 @@
 #!/usr/bin/env python3
 """Map one immutable D6 device at matched scheduler/reduction placements."""
 import argparse
-import importlib
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 import statistics
 import subprocess
-import sys
 
+from backend_paths import debug_rtl
 from backend_commands import digest
-from test_phi_mesh import artifacts
+from phi_build_artifacts import mesh_artifacts
 
 
 def measure(args: argparse.Namespace) -> None:
     """Retain complete device resource counts; reject any changed compiled input or output."""
     device = args.build / f'device{args.device}'
-    if json.loads((device/'complete.json').read_text()) != artifacts(device):
+    if json.loads((device/'complete.json').read_text()) != mesh_artifacts(device):
         raise ValueError('device differs from its checked build')
-    if json.loads((args.build/'source-hashes.json').read_text()) != artifacts(args.build/'source'):
+    if json.loads((args.build/'source-hashes.json').read_text()) != mesh_artifacts(args.build/'source'):
         raise ValueError('generated source differs from its checked build')
     args.stage.mkdir(parents=True, exist_ok=False)
-    sys.path.insert(0, str(args.erl_hls/'tools'))
-    accounting = importlib.import_module('measure_topology_debug')
+    accounting = compiler_tool(args.erl_hls, 'measure_topology_debug')
     sources = [device/'debug'/name for name in ('instrumented.v', 'debug_top.v')]
-    sources += [args.erl_hls/'priv/rtl/debug'/name for name in
-                ('hls_debug_frame_rx.v', 'hls_debug_route.v', 'hls_topology_debug.v', 'hls_actor_snapshot.v')]
+    sources += debug_rtl(args.erl_hls)
     hashes = {str(path): digest(path) for path in sources}
     manifest = json.loads((device/'debug/manifest.json').read_text())
     top = f'hls_phi_debug_{args.device}'
@@ -73,12 +70,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('build', type=Path)
     parser.add_argument('--stage', type=Path, required=True)
-    parser.add_argument('--erl-hls', type=Path, default=PUBLIC)
+    parser.add_argument('--erl-hls', type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--yosys', default='yosys')
     parser.add_argument('--seeds', type=int, nargs='+', default=[1])
     parser.add_argument('--timeout', type=int, default=3600)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     for name in ('build', 'stage', 'erl_hls'):
         setattr(args, name, getattr(args, name).resolve())
     measure(args)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SAT-check mailbox selection and inductive metadata contracts at explicit sizes."""
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import argparse
 import copy
 import hashlib
@@ -32,7 +32,7 @@ def prove(source: str, args: argparse.Namespace, name: str, expected: str = 'uns
     (stage / 'contract.x').write_text('import mailbox_refinement;\n' + source)
     started = time.monotonic()
     run([str(args.xls / 'ir_converter_main'), '--top=contract', '--warnings_as_errors=false',
-         '--dslx_path=' + str(ROOT / 'test_data') + ':' + str(args.library) + ':' + str(ROOT / 'priv/xls/lib') + ':' + str(PUBLIC / 'priv/xls/lib'),
+         '--dslx_path=' + str(ROOT / 'test_data') + ':' + str(args.library) + ':' + str(ROOT / 'priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
          '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), str(stage / 'contract.x')], stage, 'contract.ir')
     run([str(args.xls / 'opt_main'), str(stage / 'contract.ir')], stage, 'contract.opt.ir')
     run([str(args.xls / 'codegen_main'), '--generator=combinational', '--module_name=contract',
@@ -63,7 +63,7 @@ def main() -> None:
     inputs = [args.library / 'mailbox.x', ROOT / 'test_data/mailbox_refinement.x', Path(__file__),
               args.yosys, *[args.xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
               *sorted((ROOT / 'priv/xls/lib').glob('*.x')),
-              *sorted((PUBLIC / 'priv/xls/lib').glob('*.x')),
+              *sorted((compiler_root('test') / 'priv/xls/lib').glob('*.x')),
               *sorted((args.xls / 'xls/dslx/stdlib').rglob('*.x'))]
     identities = {str(p): digest(p) for p in inputs}
     results = []

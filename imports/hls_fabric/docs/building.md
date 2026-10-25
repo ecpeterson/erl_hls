@@ -76,7 +76,9 @@ The release launcher delegates to `erl_hls`'s `priv/tools/compile_source_build.p
 
 Existing simulation/report drivers still use Python and shell. Build their declared profile before calling fixtures; `source tools/backend_env.sh test` selects a test build and `default` selects an ordinary build. The helper replaces `ERL_AFLAGS`; unrelated VM flags belong in `ERL_FLAGS`. These helpers are unnecessary for `hls-fabric`.
 
-Compiler-dependent legacy Python drivers still use `compiler_paths` to import the compiler's unpackaged Python helpers. Report-only helpers are independent of it. Porting the remaining older experiment drivers is separate from the source toolchain.
+External Python drivers select a compiler when invoked, using their declared rebar profile or an explicit `--erl-hls` checkout. Compiler sources, Python helpers and BEAM files must come from that selection; a missing build is an error, with no fallback to a different profile. The shell helper also accepts an explicit checkout: `source tools/backend_env.sh test /path/to/erl_hls`. `ERL_HLS_ROOT` is an output of that selection, not an implicit Python override.
+
+Compiler helpers live in the compiler's `erl_hls_tools` package. Fabric loads them in a namespace specific to the selected checkout, so two compilers can be used in one Python process without sharing helper modules. Importing the compiler package or production modules in `tools/` does not select a compiler or change `sys.path` or the environment. Shared build, artifact and finite-witness support is independent of test entry points; tests and experiment drivers call that support.
 
 ## Complete decoder example
 

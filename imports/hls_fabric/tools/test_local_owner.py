@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 import json
 
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 from backend_paths import ROOT, erlang_environment
 from backend_commands import run
 
@@ -73,17 +73,17 @@ fn owner_readout(w: OwnerWitness) {
 """
 
 
-def check_provider_initializers(xls: Path, stage: Path, paths: str) -> None:
-    """Lower real provider-backed initialization through the sampled-clock proc."""
+def check_provider_initializers(xls: Path, stage: Path, paths: str, public: Path) -> None:
+    """Lower provider-backed initialization with the same compiler sources and beams as the owner."""
     # Actual provider-backed initializers must lower as a clocked proc, not constexpr.
-    providers = PUBLIC/'src/examples/phi_decoder'
+    providers = public/'src/examples/phi_decoder'
     provider_options = stage/'provider-options.term'
-    provider_options.write_text('[{i,'+json.dumps(str(PUBLIC/'include'))+'},{i,'+
+    provider_options.write_text('[{i,'+json.dumps(str(public/'include'))+'},{i,'+
                                 json.dumps(str(providers))+'}].\n')
     for role in ['phi_line_cell', 'phi_halo_cell']:
         generated = stage/(role+'.x')
         run(['escript', 'tools/emit_local_actor.escript', providers/(role+'.erl'),
-             provider_options, generated], stage, role+'-emit', env=erlang_environment('default'))
+             provider_options, generated], stage, role+'-emit', env=erlang_environment('default', compiler=public))
         run([xls/'ir_converter_main', '--top=local_owner_clock',
              '--warnings_as_errors=false', '--dslx_path='+paths+':'+str(providers),
              '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), generated],
@@ -101,10 +101,11 @@ def main() -> None:
     stage = args.stage
     stage.mkdir()
     run(['rebar3', 'compile'], stage, 'build')
+    public = compiler_root('default')
     options = stage/'options.term'
     options.write_text('[].\n')
     paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
-                              PUBLIC/'priv/xls/lib', PUBLIC/'priv/xls/fabric']))
+                              public/'priv/xls/lib', public/'priv/xls/fabric']))
     common = ['--warnings_as_errors=false', '--dslx_path='+paths,
               '--dslx_stdlib_path='+str(args.xls/'xls/dslx/stdlib')]
     batch_source = stage/'batch.erl'
@@ -114,17 +115,17 @@ def main() -> None:
         '{cast, result, #total{value = Value}}, {cast, extra, #total{value = Value + 100}}'))
     cases = [('batch', batch_source, PLAIN.replace('w.emitted, u32:2', 'w.emitted, u32:4')),
              ('plain', ROOT/'test/hls_local_actor_fixture.erl', PLAIN),
-             ('scalar', PUBLIC/'test_data/hls_statem_reduction_lower_fixture.erl', SCALAR),
-             ('gather', PUBLIC/'test_data/xls_statem_gather_fixture.erl', GATHER)]
+             ('scalar', public/'test_data/hls_statem_reduction_lower_fixture.erl', SCALAR),
+             ('gather', public/'test_data/xls_statem_gather_fixture.erl', GATHER)]
     cases = [case for case in cases if case[0] in args.cases]
     for name, source, fixture in cases:
         generated = stage/(name+'.x')
         run(['escript', 'tools/emit_local_actor.escript', source, options, generated], stage, name+'-emit',
-            env=erlang_environment('default'))
+            env=erlang_environment('default', compiler=public))
         test = stage/(name+'_test.x')
         test.write_bytes(generated.read_bytes() + (ROOT/'test/local_owner_semantics.x.in').read_bytes().replace(b'@@FIXTURE@@', fixture.encode()))
         run([args.xls/'interpreter_main', '--evaluator=ir-jit', '--compare=none', *common, test], stage, name+'-witness')
-        run(['python3', 'tools/compile_local_actor.py', args.xls, generated, stage/(name+'-rtl')],
+        run(['python3', 'tools/compile_local_actor.py', '--erl-hls', public, args.xls, generated, stage/(name+'-rtl')],
             stage, name+'-rtl-build')
     for name, _, _ in cases:
         role = {'plain':0, 'scalar':1, 'gather':2, 'batch':3}[name]
@@ -132,7 +133,7 @@ def main() -> None:
              stage/(name+'-rtl/actor.v'), ROOT/'test/rtl/local_owner_tb.sv'], stage, name+'-rtl-compile')
         run(['vvp', stage/(name+'-sim')], stage, name+'-rtl-sim')
         assert 'LOCAL_OWNER_PASS' in (stage/(name+'-rtl-sim.log')).read_text()
-    check_provider_initializers(args.xls, stage, paths)
+    check_provider_initializers(args.xls, stage, paths, public)
     (stage/'result.json').write_text(json.dumps({'passed':True, 'source_roles':[n for n, _, _ in cases],
         'witness_clocks_per_role':160, 'reset_positions_per_role':60, 'provider_initializers':['phi_line_cell', 'phi_halo_cell'],
         'evidence':'finite whole-test JIT and RTL witnesses; no general refinement or progress theorem'}, indent=2)+'\n')

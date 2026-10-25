@@ -4,11 +4,11 @@ from collections import defaultdict
 import gzip
 import json
 from pathlib import Path
-import sys
 from types import ModuleType
 
 from phi_transport_metrics import distribution
 from backend_commands import digest
+from compiler_paths import compiler_root, compiler_tool
 
 
 def remote_intervals(message: dict, read: dict, events: dict, incoming: dict) -> dict[str, int] | None:
@@ -72,10 +72,9 @@ def render(graph: dict, target: dict, destination: Path, name: str, renderer: Mo
     return {'target':target['id'],'message':message,'window_ns':[left,right]}
 
 
-def report(stage: Path, destination: Path, name: str, profile_tools: Path) -> dict:
+def report(stage: Path, destination: Path, name: str, public: Path) -> dict:
     """Retain an identity-preserving retry example without labelling queue waits as arbiter delay."""
-    sys.path.insert(0,str(profile_tools))
-    import hls_profile
+    hls_profile = compiler_tool(public, "hls_profile")
     source=stage/'messages.profile.json.gz'
     graph=json.loads(gzip.decompress(source.read_bytes()))
     events={e['id']:e for e in graph['events']}
@@ -130,11 +129,13 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run',nargs=2,action='append',required=True,metavar=('NAME','STAGE'))
     parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--profile-tools',type=Path,required=True)
+    parser.add_argument('--erl-hls', type=Path, help='explicit compiler root')
+    parser.add_argument('--profile', default='default', help='rebar dependency profile')
     args=parser.parse_args()
+    public = compiler_root(args.profile, args.erl_hls)
     args.output.mkdir(parents=True,exist_ok=True)
     for name,path in args.run:
-        print(name,json.dumps(report(Path(path),args.output,name,args.profile_tools)),flush=True)
+        print(name,json.dumps(report(Path(path),args.output,name,public)),flush=True)
 
 
 if __name__=='__main__':

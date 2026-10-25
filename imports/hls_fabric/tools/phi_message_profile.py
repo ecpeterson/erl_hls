@@ -15,9 +15,10 @@ from phi_reduction_profile import bindings as reduction_bindings
 from phi_link_packet import packets
 from backend_commands import digest
 from backend_paths import erl_command
+from compiler_paths import compiler_root, compiler_tool
 
 
-def routes(stage: Path, public: Path) -> dict:
+def routes(stage: Path, public: Path, *, profile: str = "test") -> dict:
     """Retain source ports and fragment multiplicities from the checked deployment."""
     expression = '''[Stage] = init:get_plain_arguments(),
     {ok,[P]} = file:consult(filename:join(Stage,"deployment.term")),
@@ -39,7 +40,7 @@ def routes(stage: Path, public: Path) -> dict:
        || I <- maps:get(ingresses,P)],
     io:put_chars(json:encode(#{actors=>LA,lanes=>LL,ingresses=>LI})), halt().'''
     before = digest(stage/'deployment.term')
-    result = json.loads(subprocess.check_output(erl_command(public, expression, stage, profile="test"), text=True))
+    result = json.loads(subprocess.check_output(erl_command(public, expression, stage, profile=profile), text=True))
     if before != digest(stage/'deployment.term'):
         raise ValueError('deployment changed during route binding')
     result['deployment_sha256'] = before
@@ -125,16 +126,15 @@ def observed_effect(item: dict, accepted: dict, device: int, capture_end: int) -
     return payload
 
 
-def analyze(stage: Path, public: Path, profile_tools: Path) -> tuple[dict, dict]:
+def analyze(stage: Path, public: Path, *, profile: str = "test") -> tuple[dict, dict]:
     """Build a checked message graph with explicit external roots and capture frontiers."""
-    sys.path.insert(0, str(profile_tools))
-    import hls_profile
+    hls_profile = compiler_tool(public, "hls_profile")
     inputs = json.loads((stage/'profile-inputs.json').read_text())
     if inputs['reductions'] != 'source_fragments':
         raise ValueError('message correlation requires the fixed source-fragment proof')
     devices = list(range(len(inputs['device_periods_ns'])))
     split_cycles(stage, devices)
-    route = routes(stage, public)
+    route = routes(stage, public, profile=profile)
     channels, messages = payloads(stage)
     graph = {'schema': 1, 'unit': 'ns', 'tracks': [], 'events': [], 'edges': [], 'counters': [],
              'resource_dependencies': [], 'metadata': {}}
@@ -339,11 +339,12 @@ def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', type=Path)
-    parser.add_argument('--erl-hls', type=Path, required=True)
-    parser.add_argument('--profile-tools', type=Path, required=True)
+    parser.add_argument('--erl-hls', type=Path, help='explicit compiler root')
+    parser.add_argument('--profile', default='test', help='rebar dependency profile')
     args = parser.parse_args()
-    graph, report = analyze(args.stage.resolve(), args.erl_hls.resolve(), args.profile_tools.resolve())
-    import hls_profile
+    public = compiler_root(args.profile, args.erl_hls)
+    graph, report = analyze(args.stage.resolve(), public, profile=args.profile)
+    hls_profile = compiler_tool(public, "hls_profile")
     for suffix in ('profile.json','perfetto.json','summary.json'):
         value=hls_profile.perfetto(graph) if suffix=='perfetto.json' else graph if suffix=='profile.json' else report
         with gzip.open(args.stage/f'messages.{suffix}.gz', 'wt', compresslevel=1) as output:

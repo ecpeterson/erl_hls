@@ -14,7 +14,13 @@ from artifacts import artifact_root, archive_path
 from backend_paths import erlang_paths
 from backend_commands import digest as sha
 import compile_backend
-from optimizer_pipeline import prepare as prepare_optimizer
+from functools import partial
+from compiler_paths import compiler_root, compiler_tool
+from optimizer_pipeline import prepare
+
+public = compiler_root("test")
+compiler_helpers = compiler_tool(public, "compile_xls")
+prepare_optimizer = partial(prepare, public=public, profile="test")
 
 
 class PackagingTests(unittest.TestCase):
@@ -35,9 +41,9 @@ class PackagingTests(unittest.TestCase):
                 "assets": {"placement.json": sha(raw / "placement.json")},
             }
             (raw / "example.build.json").write_text(json.dumps(manifest))
-            with patch.object(compile_backend, "build", return_value=raw) as build:
-                args = dict(name="example", assets=[], executor_result_delay=6)
-                with compile_backend.locked(root / ".compiled.lock"):
+            with patch.object(compiler_helpers, "build", return_value=raw) as build:
+                args = dict(name="example", assets=[], executor_result_delay=6, public=public, profile="test")
+                with compiler_helpers.locked(root / ".compiled.lock"):
                     with self.assertRaisesRegex(ValueError, "build already active"):
                         compile_backend.compile_topology(root / "source.x", root / "xls", output, **args)
                 build.assert_not_called()
@@ -137,10 +143,10 @@ class OptimizerPipelineTests(unittest.TestCase):
                         "assets": {"optimizer_pipeline.txtpb": sha(selected)}}
             (raw / "optimizer_pipeline.txtpb").write_bytes(selected.read_bytes())
             (raw / "example.build.json").write_text(json.dumps(manifest))
-            with patch.object(compile_backend, "build", return_value=raw) as compiler:
+            with patch.object(compiler_helpers, "build", return_value=raw) as compiler:
                 release = compile_backend.compile_topology(
                     root / "source.x", xls, root / "compiled", name="example", assets=[],
-                    optimizer_pipeline=selected)
+                    optimizer_pipeline=selected, public=public, profile="test")
                 passed = compiler.call_args
                 self.assertNotEqual(passed.args[1], xls)
                 frozen = passed.kwargs["assets"][0]
@@ -155,7 +161,7 @@ class OptimizerPipelineTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "reserved optimizer pipeline"):
                     compile_backend.compile_topology(
                         root / "source.x", xls, root / "other", name="example", assets=[frozen],
-                        optimizer_pipeline=selected)
+                        optimizer_pipeline=selected, public=public, profile="test")
 
     def test_changed_optimizer_is_rejected_by_old_overlay(self) -> None:
         """An old wrapper cannot silently execute a newly replaced optimizer."""

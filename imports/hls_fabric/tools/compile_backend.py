@@ -10,8 +10,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from compiler_paths import PUBLIC
-from compile_xls import build, identity, locked, sha
+from compiler_paths import compiler_root, compiler_source, compiler_tool
 from completion_fifo import transform
 from optimizer_pipeline import prepare as prepare_optimizer_pipeline
 
@@ -29,6 +28,8 @@ def compile_topology(
     completion_storage: str = "registers",
     optimizer_pipeline: Path | None = None,
     timeout: int = 1800,
+    public: Path | None = None,
+    profile: str = "default",
 ) -> Path:
     """Publish an immutable, provenance-checked release after all requested lowering passes.
 
@@ -36,21 +37,24 @@ def compile_topology(
     picoseconds. It changes XLS scheduling, not pipeline depth. LUTRAM keeps
     completion queue capacity and latency fixed; unknown FIFO shapes fail. An
     explicit optimizer pipeline is frozen and hashed alongside the original tool.
+    public selects compiler tools explicitly; otherwise profile selects the built dependency.
     """
+    public = compiler_root(profile, public)
+    compiler = compiler_tool(public, "compile_xls")
     if executor_result_delay < 0 or completion_storage not in ("registers", "lutram"):
         raise ValueError("invalid executor budget or completion storage policy")
     output = output.resolve() if not output.is_symlink() else output.absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
-    with locked(output.parent / f".{output.name}.lock"):
+    with compiler.locked(output.parent / f".{output.name}.lock"):
         optimizer_policy = {}
         if optimizer_pipeline is not None:
             if any(path.name == "optimizer_pipeline.txtpb" for path in assets):
                 raise ValueError("reserved optimizer pipeline asset name")
             xls, frozen_pipeline, optimizer_policy = prepare_optimizer_pipeline(
-                xls, optimizer_pipeline, output.parent / ".xls-optimizer-pipelines")
+                xls, optimizer_pipeline, output.parent / ".xls-optimizer-pipelines", public=public)
             assets = [*assets, frozen_pipeline]
         raw = output.parent / ("." + output.name + "-xls")
-        release = build(
+        release = compiler.build(
             source,
             xls,
             raw,
@@ -70,15 +74,15 @@ def compile_topology(
             **optimizer_policy,
             "executor_result_delay": executor_result_delay,
             "completion_storage": completion_storage,
-            "driver_sha256": sha(Path(__file__)),
-            "compiler_extension_sha256": sha(PUBLIC / "tools/compile_xls.py"),
+            "driver_sha256": compiler.sha(Path(__file__)),
+            "compiler_extension_sha256": compiler.sha(compiler_source(public, "compile_xls")),
         }
         if completion_storage == "lutram":
             text, audit = transform(text)
             policy.update(
                 {
                     "completion_fifo": audit,
-                    "legalization_sha256": sha(Path(__file__).with_name("completion_fifo.py")),
+                    "legalization_sha256": compiler.sha(Path(__file__).with_name("completion_fifo.py")),
                 }
             )
         digest = hashlib.sha256(text.encode()).hexdigest()
@@ -88,7 +92,7 @@ def compile_topology(
             "rtl": {**manifest["rtl"], rtl_name: digest},
             "artifacts": {**manifest["artifacts"], rtl_name: digest},
         }
-        destination = output.parent / ("." + output.name + "-backend") / identity(manifest)
+        destination = output.parent / ("." + output.name + "-backend") / compiler.identity(manifest)
         destination.parent.mkdir(exist_ok=True)
         if not destination.exists():
             with tempfile.TemporaryDirectory(prefix="release-", dir=destination.parent) as tmp:
@@ -101,7 +105,7 @@ def compile_topology(
                 staged.rename(destination)
         actual = json.loads((destination / (name + ".build.json")).read_text())
         if actual != manifest or any(
-            sha(destination / n) != h for table in ("artifacts", "assets") for n, h in manifest[table].items()
+            compiler.sha(destination / n) != h for table in ("artifacts", "assets") for n, h in manifest[table].items()
         ):
             raise ValueError("backend release changed; preserve it and rebuild in a fresh output directory")
         pending = output.with_name(output.name + ".pending")
@@ -114,6 +118,8 @@ def compile_topology(
 def main() -> None:
     """Compile once; simulations and physical measurements consume the same release."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--erl-hls", type=Path, help="Explicit compiler source and Python tool root.")
+    parser.add_argument("--profile", default="default", help="Compiled rebar profile when no compiler override is supplied.")
     parser.add_argument("source", type=Path)
     parser.add_argument("xls", type=Path)
     parser.add_argument("--output", type=Path, required=True)
@@ -139,6 +145,7 @@ def main() -> None:
             completion_storage=args.completion_storage,
             optimizer_pipeline=args.optimizer_pipeline,
             timeout=args.timeout,
+            public=args.erl_hls, profile=args.profile,
         )
     )
 

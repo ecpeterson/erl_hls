@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from backend_commands import digest, execute
-from test_phi_bridge import ROOT
+from backend_paths import ROOT
 
 
 def main() -> None:

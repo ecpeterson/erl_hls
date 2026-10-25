@@ -2,12 +2,11 @@
 """Exercise production-generated parallel outboxes with aliased and independent lanes."""
 import argparse
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import shutil
 
 from backend_paths import erl_command
 from backend_commands import execute
-from test_credit_link import run
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,11 +24,11 @@ def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
         ([str(xls/'codegen_main'), '--pipeline_stages=2', '--delay_model=unit', '--flop_inputs=false',
           '--flop_outputs=true', '--reset=reset', '--fifo_module=', '--use_system_verilog=false',
           '--module_name=parallel_outbox', 'top.opt.ir'], 'codegen', 'top.v')]:
-        run(command, stage, name, output)
+        execute(command, stage, name, timeout=600, output=stage / output)
     ports = [f'._fragment_{i}(fragments[{i}]), ._fragment_{i}_vld(fragment_valid[{i}]), ._fragment_{i}_rdy(fragment_ready[{i}])' for i in range(lanes)]
     (stage/'test.sv').write_text((ROOT/'test/rtl/parallel_outbox_tb.sv').read_text().replace('@@CONNECTIONS@@', ',\n    '.join(ports)))
-    run(['iverilog', '-g2012', '-s', 'parallel_outbox_tb', f'-Pparallel_outbox_tb.LANES={lanes}', '-o', 'test.vvp', 'test.sv', 'top.v'], stage, 'compile')
-    run(['vvp', 'test.vvp'], stage, 'simulate')
+    execute(['iverilog', '-g2012', '-s', 'parallel_outbox_tb', f'-Pparallel_outbox_tb.LANES={lanes}', '-o', 'test.vvp', 'test.sv', 'top.v'], stage, 'compile', timeout=600)
+    execute(['vvp', 'test.vvp'], stage, 'simulate', timeout=600)
     log = (stage/'simulate.log').read_text()
     if 'PASS parallel prefix' not in log:
         raise ValueError('incomplete parallel-outbox test')
@@ -41,8 +40,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
     parser.add_argument('--stage', type=Path, required=True)
-    parser.add_argument('--erl-hls', type=Path, default=PUBLIC)
+    parser.add_argument('--erl-hls', type=Path, default=None)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     for lanes in (4, 2, 3):
         check(args.xls.resolve(), args.erl_hls.resolve(), args.stage.resolve()/f'lanes-{lanes}', lanes)
 

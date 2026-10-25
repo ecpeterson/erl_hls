@@ -5,8 +5,8 @@ import json
 import shutil
 import time
 
-from compiler_paths import PUBLIC
-from backend_paths import ROOT
+from compiler_paths import compiler_root
+from backend_paths import ROOT, erlang_environment
 from test_local_actor import manifest
 from backend_commands import digest, run
 
@@ -46,20 +46,21 @@ def main() -> None:
     args.yosys = Path(shutil.which(args.yosys) or args.yosys).resolve()
     stage = args.stage
     stage.mkdir()
+    run(['rebar3', 'compile'], stage, 'compile-backend')
+    public = compiler_root('default')
     options = stage / 'options.term'
     options.write_text('[].\n')
     properties = ROOT / 'test/local_protocol_properties.x.in'
     cases = [('plain', ROOT / 'test/hls_local_actor_fixture.erl', ['protocol_drop_internal']),
-             ('scalar', PUBLIC / 'test_data/hls_statem_reduction_lower_fixture.erl',
+             ('scalar', public / 'test_data/hls_statem_reduction_lower_fixture.erl',
               ['protocol_wrong_state', 'protocol_drop_internal']),
-             ('gather', PUBLIC / 'test_data/xls_statem_gather_fixture.erl',
+             ('gather', public / 'test_data/xls_statem_gather_fixture.erl',
               ['protocol_wrong_state', 'protocol_stale_completion', 'protocol_drop_internal'])]
     cases = [case for case in cases if args.case == 'all' or case[0] == args.case]
-    inputs = [Path(__file__), properties, ROOT / 'tools/emit_local_actor.sh',
-              ROOT / 'tools/emit_local_actor.escript', *[source for _, source, _ in cases],
+    inputs = [Path(__file__), properties, ROOT / 'tools/emit_local_actor.escript', *[source for _, source, _ in cases],
               args.yosys, *[args.xls / p for p in ['ir_converter_main', 'opt_main', 'codegen_main']]]
     for base, pattern in [(ROOT / 'src', '*.erl'), (ROOT / 'priv/xls', '*.x*'),
-                          (PUBLIC / 'src', '*.erl'), (PUBLIC / 'priv/xls', '*.x*'),
+                          (public / 'src', '*.erl'), (public / 'priv/xls', '*.x*'),
                           (args.xls / 'xls/dslx/stdlib', '*.x')]:
         inputs.extend(sorted(base.rglob(pattern)))
     bindings = {str(p): digest(p) for p in inputs}
@@ -74,7 +75,8 @@ def main() -> None:
     results, actors = [], []
     for name, source, negatives in cases:
         built = stage / (name + '.x')
-        run(['bash', ROOT / 'tools/emit_local_actor.sh', source, options, built], stage, name + '-build')
+        run(['escript', ROOT / 'tools/emit_local_actor.escript', source, options, built],
+            stage, name + '-build', env=erlang_environment('default', compiler=public))
         report = manifest(built)
         assert report['receipt_result_fields'] == ['handled', 'deferred_completion', 'private_machine', 'dispatched', 'directive']
         assert {'local_protocol_at', 'local_slow_step_at', 'local_action_at', 'local_enter_at'} <= set(report['function_ports'])
@@ -87,7 +89,7 @@ def main() -> None:
         proof.write_bytes(f'import {name} as actor;\n\n'.encode() + properties.read_bytes())
         raw = stage / (module + '.ir')
         paths = ':'.join(map(str, [stage, ROOT / 'priv/xls/lib', ROOT / 'priv/xls/fabric',
-                                  PUBLIC / 'priv/xls/lib', PUBLIC / 'priv/xls/fabric']))
+                                  public / 'priv/xls/lib', public / 'priv/xls/fabric']))
         run([args.xls / 'ir_converter_main', '--warnings_as_errors=false', '--dslx_path=' + paths,
              '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), proof], stage, name + '-convert', raw)
         for prop, expected in [(p, True) for p in positive] + [(p, False) for p in negatives]:

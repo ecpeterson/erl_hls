@@ -3,18 +3,13 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import re
 import shutil
-import statistics
 
-from test_credit_link import ROOT, digest, run
-
-
-def summarize(values: list[float]) -> dict:
-    """Return population statistics over equal measurement windows."""
-    return {'samples': len(values), 'best': max(values), 'mean': statistics.mean(values),
-            'variance': statistics.pvariance(values), 'worst': min(values)}
+from backend_paths import ROOT
+from backend_commands import digest, execute
+from link_service_witness import summarize
 
 
 def measure(xls: Path, public: Path, stage: Path) -> dict:
@@ -23,7 +18,8 @@ def measure(xls: Path, public: Path, stage: Path) -> dict:
     source = ROOT/'priv/xls/hls_credit_link.x'
     axis = public/'priv/xls/lib/axis.x'
     template = ROOT/'test/rtl/credit_service_tb.sv'
-    tracked = [source, axis, template, Path(__file__),
+    tracked = [source, axis, template, Path(__file__), ROOT/'tools/link_service_witness.py',
+               ROOT/'tools/backend_commands.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls/'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}
@@ -55,14 +51,14 @@ pub proc Top {
         ([str(xls/'codegen_main'), '--pipeline_stages=2', '--delay_model=unit', '--flop_inputs=false',
           '--flop_outputs=true', '--use_system_verilog=false', '--reset=reset', '--fifo_module=',
           '--module_name=credit_service', 'bridge.opt.ir'], 'codegen', 'bridge.v')]
-    for command, name, output in commands: run(command, stage, name, output)
+    for command, name, output in commands: execute(command, stage, name, timeout=600, output=stage / output)
     rows = []
     for active in (1, 2, 4, 8):
         for delay in (0, 2, 8, 16, 64):
             name = f'active-{active}-delay-{delay}'
-            run(['iverilog', '-g2012', '-s', 'credit_service_tb', f'-Pcredit_service_tb.ACTIVE={active}',
-                 f'-Pcredit_service_tb.DELAY={delay}', '-o', 'test.vvp', 'test.sv', 'bridge.v'], stage, name+'-compile')
-            run(['vvp', 'test.vvp'], stage, name)
+            execute(['iverilog', '-g2012', '-s', 'credit_service_tb', f'-Pcredit_service_tb.ACTIVE={active}',
+                 f'-Pcredit_service_tb.DELAY={delay}', '-o', 'test.vvp', 'test.sv', 'bridge.v'], stage, name+'-compile', timeout=600)
+            execute(['vvp', 'test.vvp'], stage, name, timeout=600)
             log = (stage/f'{name}.log').read_text()
             bins = [dict(zip(('device', 'bin', 'cycles', 'words', 'frames', 'blocked'), map(int, m)))
                     for m in re.findall(r'METRIC device=(\d+) bin=(\d+) cycles=(\d+) words=(\d+) frames=(\d+) blocked=(\d+)', log)]
@@ -89,9 +85,10 @@ def main() -> None:
     """Choose pinned tools and a new directory for all build and simulation evidence."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('xls', type=Path)
-    p.add_argument('--erl-hls', type=Path, default=PUBLIC)
+    p.add_argument('--erl-hls', type=Path, default=None)
     p.add_argument('--stage', type=Path, required=True)
     a = p.parse_args()
+    a.erl_hls = compiler_root("test", a.erl_hls)
     measure(a.xls.resolve(), a.erl_hls.resolve(), a.stage.resolve())
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from backend_commands import digest, execute
-from test_packed_credit import simulate
+from link_service_witness import simulate
 from transport_codegen import replace_module
 
 
@@ -59,7 +59,8 @@ def measure(original: Path, updated: Path, stage: Path, yosys: str) -> dict:
         raise ValueError('adapter module names differ across builds')
     variants = {'baseline': before, 'receive': replace_module(before, receive_name, new_receive),
                 'transmit': replace_module(after, receive_name, old_receive), 'combined': after}
-    report = {'inputs': {str(p): digest(p) for p in (original, updated, Path(__file__))},
+    report = {'inputs': {str(p): digest(p) for p in (original, updated, Path(__file__), Path(__file__).with_name("link_service_witness.py"),
+                                                               Path(__file__).with_name("backend_commands.py"))},
               'scope': 'Eight lanes, four 32-bit words per transfer, four credits, 8 ns clock; first unstalled frame after reset.',
               'variants': {}}
     stage.mkdir(parents=True, exist_ok=False)

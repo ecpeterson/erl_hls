@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """Build and verify a periodic repetition-code workload; optionally map XC7 resources."""
-from compiler_paths import PUBLIC
-from backend_paths import erlang_paths
+from compiler_paths import compiler_root, compiler_tool
+from backend_paths import erl_command, erlang_environment
 import argparse
+import importlib.util
 import json
-import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
-import sys
 
-from compile_xls import build
-from measure_topology_debug import cell_counts
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,52 +29,58 @@ def sequences(rows: list[list]) -> dict[int, list]:
     return result
 
 
-def map_xc7(stage: Path, compiled: Path, yosys: Path) -> dict:
+def map_xc7(stage: Path, compiled: Path, yosys: Path, public: Path) -> dict:
     """Measure application resources, excluding board I/O, transport and clocking."""
-    sys.path.insert(0, str(ROOT / "experiments/07-openxc7"))
-    from phi_timing import mapped_stage, quote
+    source = ROOT / "experiments/07-openxc7/phi_timing.py"
+    spec = importlib.util.spec_from_file_location("_repetition_phi_timing", source)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load mapping support: {source}")
+    timing = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(timing)
+    accounting = compiler_tool(public, "measure_topology_debug")
 
     stage.mkdir(exist_ok=True)
     sources = [compiled / name for name in
                ("repetition.v", "phi_repetition_top.v", "hls_1r1w_ram.v")]
-    script = "read_verilog -sv " + " ".join(map(quote, sources)) + "\n"
+    script = "read_verilog -sv " + " ".join(map(timing.quote, sources)) + "\n"
     script += "hierarchy -check -top phi_repetition_top\nproc\nflatten\nopt\nmemory_collect\n"
     script += "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_repetition_top\n"
     script += "check -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
-    receipt = mapped_stage(stage, "map", script, sources, ["stat.json", "map.log"], yosys)
+    receipt = timing.mapped_stage(stage, "map", script, sources, ["stat.json", "map.log"], yosys)
     cells = json.loads((stage / "stat.json").read_text())["design"]["num_cells_by_type"]
-    return {**cell_counts(cells), "DSP": cells.get("DSP48E1", 0),
+    return {**accounting.cell_counts(cells), "DSP": cells.get("DSP48E1", 0),
             "CARRY4": cells.get("CARRY4", 0), "completion": receipt}
 
 
 def profile(stage: Path, xls: Path, count: int, table: Path | None,
-            yosys: Path | None) -> None:
+            yosys: Path | None, *, public: Path | None = None) -> None:
     """Reject per-actor BEAM/RTL event mismatches before reporting performance."""
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "results.json").unlink(missing_ok=True)
     run(["rebar3", "as", "test", "compile"], ROOT, stage / "beam.log")
+    public = compiler_root("test", public)
+    compiler = compiler_tool(public, "compile_xls")
     expression = ('S=os:getenv("REPETITION_STAGE"), '
                   'N=list_to_integer(os:getenv("REPETITION_COUNT")), '
                   'phi_repetition_fixture:write(S,N), '
                   'phi_repetition_fixture:oracle(S,N), halt().')
     with (stage / "prepare.log").open("w") as out:
-        subprocess.run(["erl", "+S", "2", "-noshell", "-pa",
-                        *map(str, erlang_paths("test")), "-eval", expression],
-                       cwd=ROOT, env=dict(os.environ, REPETITION_STAGE=str(stage),
-                                        REPETITION_COUNT=str(count)),
+        subprocess.run(erl_command(public, expression, profile="test"),
+                       cwd=ROOT, env=dict(erlang_environment("test", compiler=public),
+                                        REPETITION_STAGE=str(stage), REPETITION_COUNT=str(count)),
                        stdout=out, stderr=subprocess.STDOUT, check=True, timeout=120)
-    for directory in (ROOT / "priv/xls/lib", PUBLIC / "priv/xls/lib", PUBLIC / "priv/xls/fabric"):
+    for directory in (ROOT / "priv/xls/lib", public / "priv/xls/lib", public / "priv/xls/fabric"):
         for source in directory.glob("*.x"):
             shutil.copy2(source, stage / source.name)
-    for source in (PUBLIC / "src/examples/phi_decoder/phi_field.x",
-                   PUBLIC / "priv/rtl/hls_1r1w_ram.v"):
+    for source in (public / "src/examples/phi_decoder/phi_field.x",
+                   public / "priv/rtl/hls_1r1w_ram.v"):
         shutil.copy2(source, stage / source.name)
     configurations = ",".join(
         f"scheduler_{i}_{kind}:1R1W:_scheduler_{i}_{stem}_read_req_out:"
         f"_scheduler_{i}_{stem}_read_resp_in:_scheduler_{i}_{stem}_write_req_out:"
         f"_scheduler_{i}_{stem}_write_resp_in"
         for i in range(3) for kind, stem in [("state", "ram"), ("mailbox", "mailbox")])
-    compiled = build(stage / "phi_repetition_topology.x", xls, stage / "compiled",
+    compiled = compiler.build(stage / "phi_repetition_topology.x", xls, stage / "compiled",
                      name="repetition", pipeline_stages=2, initiation_interval=1,
                      ram_configurations=configurations, timeout=1200,
                      assets=[stage / "phi_repetition_top.v", stage / "hls_1r1w_ram.v"],
@@ -112,7 +115,7 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
                              "cycles_per_step": float(match[1]), "result": log})
     result = {"cells": count, "actors": 3 * count, "simulations": measurements}
     if yosys:
-        result["mapping"] = map_xc7(stage / "mapping", compiled, yosys)
+        result["mapping"] = map_xc7(stage / "mapping", compiled, yosys, public)
     (stage / "results.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
 
@@ -120,6 +123,7 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
 def main() -> None:
     """Require explicit tool paths and a line bounded by u16 coordinates."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler source with matching test-profile beams.")
     parser.add_argument("stage", type=lambda s: Path(s).resolve())
     parser.add_argument("--xls", type=lambda s: Path(s).resolve(), required=True)
     parser.add_argument("--cells", type=int, default=3)
@@ -128,7 +132,7 @@ def main() -> None:
     args = parser.parse_args()
     if not 2 <= args.cells <= 65535:
         parser.error("cells must be in 2..65535")
-    profile(args.stage, args.xls, args.cells, args.table, args.yosys)
+    profile(args.stage, args.xls, args.cells, args.table, args.yosys, public=args.erl_hls)
 
 
 if __name__ == "__main__":

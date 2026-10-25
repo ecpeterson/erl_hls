@@ -5,16 +5,19 @@ import hashlib
 from pathlib import Path
 import tempfile
 
-from compiler_paths import PUBLIC
-from compile_xls import identity, locked, sha
+from compiler_paths import compiler_root, compiler_source, compiler_tool
 
 
-def prepare(xls: Path, pipeline: Path, cache: Path) -> tuple[Path, Path, dict[str, str]]:
+def prepare(xls: Path, pipeline: Path, cache: Path, *, public: Path | None = None,
+            profile: str = "default") -> tuple[Path, Path, dict[str, str]]:
     """Return a checked tool overlay, retained pipeline and provenance for one configuration.
 
     The original optimizer must support --pipeline_textproto. No default policy is
     inferred, and modified cached tools/configurations are rejected before reuse.
+    Compiler helpers come from public or the explicitly named rebar profile.
     """
+    public = compiler_root(profile, public)
+    compiler = compiler_tool(public, "compile_xls")
     xls = xls.resolve()
     cache = cache.resolve()
     if (xls / "optimizer_pipeline.txtpb").exists():
@@ -22,7 +25,7 @@ def prepare(xls: Path, pipeline: Path, cache: Path) -> tuple[Path, Path, dict[st
     optimizer = (xls / "opt_main").resolve()
     data = pipeline.read_bytes()
     policy = {"optimizer_pipeline_sha256": hashlib.sha256(data).hexdigest(),
-              "optimizer_executable_sha256": sha(optimizer)}
+              "optimizer_executable_sha256": compiler.sha(optimizer)}
     wrapper = "\n".join([
         "#!/usr/bin/env python3",
         '"""Execute the recorded optimizer and pipeline only while their bytes match."""',
@@ -43,10 +46,10 @@ def prepare(xls: Path, pipeline: Path, cache: Path) -> tuple[Path, Path, dict[st
     if any(not path.exists() for path in links.values()):
         raise ValueError("incomplete XLS tool bundle")
     signature = {"wrapper": wrapper, "links": {name: str(path) for name, path in links.items()},
-                 "cache_helpers": sha(PUBLIC / "tools/compile_xls.py")}
+                 "cache_helpers": compiler.sha(compiler_source(public, "compile_xls"))}
     cache.mkdir(parents=True, exist_ok=True)
-    output = cache / identity(signature)
-    with locked(cache / (output.name + ".lock")):
+    output = cache / compiler.identity(signature)
+    with compiler.locked(cache / (output.name + ".lock")):
         if not output.exists():
             with tempfile.TemporaryDirectory(prefix="pipeline-", dir=cache) as temporary:
                 staged = Path(temporary) / "content"

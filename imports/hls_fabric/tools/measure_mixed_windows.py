@@ -7,7 +7,7 @@ its cycles are independent of the separate live debug regression's host timing.
 Optional area mapping includes the complete application and topology/actor
 query service, but no boundary counter/trace monitor or board transport.
 """
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 import argparse
 import hashlib
 import json
@@ -16,15 +16,14 @@ import re
 import shutil
 import subprocess
 
-from measure_topology_debug import cell_counts, distribution
-from topology_debug import quote, yosys_run
-from test_topology_debug_integration import DEBUG_RTL
+from backend_paths import debug_rtl
 
 ROOT = Path(__file__).resolve().parents[1]
 MODES = ("components_global", "components_weak")
 
 
-def simulate(build, stage, stages):
+def simulate(build: Path, stage: Path, stages: list[int], public: Path) -> None:
+    """Record finite public-port cycle witnesses for each chosen pipeline depth."""
     samples = []
     for mode in MODES:
         source = build / mode
@@ -34,7 +33,7 @@ def simulate(build, stage, stages):
             tb = ROOT / "test/rtl/mixed_effect_windows_tb.sv"
             shutil.copy(source / "expected.hex", output / "expected.hex")
             rtl = [source / f"topology_{depth}.v", source / "mixed_topology_wrapper.v",
-                   PUBLIC / "priv/rtl/hls_1r1w_ram.v"]
+                   public / "priv/rtl/hls_1r1w_ram.v"]
             with (output / "compile.log").open("w") as log:
                 subprocess.run(["iverilog", "-g2012", "-s", "window_tb", "-o", str(output / "test.vvp"),
                                 str(tb), *map(str, rtl)], stdout=log, stderr=subprocess.STDOUT,
@@ -56,29 +55,32 @@ def simulate(build, stage, stages):
     (stage / "cycles.json").write_text(json.dumps(samples, indent=2) + "\n")
 
 
-def measure(build, stage, yosys, seeds):
+def measure(build: Path, stage: Path, yosys: str, seeds: int, public: Path) -> None:
+    """Map complete fixture variants using helpers from the selected compiler."""
+    topology = compiler_tool(public, "topology_debug")
+    accounting = compiler_tool(public, "measure_topology_debug")
     area = stage / "area"
     area.mkdir(exist_ok=True)
     rows, sources = [], {}
     for mode in MODES:
         source = build / mode / "p2"
-        files = [source / "instrumented.json", source / "debug_top.v", *DEBUG_RTL]
+        files = [source / "instrumented.json", source / "debug_top.v", *debug_rtl(public)]
         sources[mode] = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
         for seed in range(1, seeds+1):
             name = f"{mode}-{seed}"
             report = area / f"{name}.json"
-            script = f"read_json {quote(files[0])}\nread_verilog -sv " + " ".join(map(quote, files[1:])) + "\n"
+            script = f"read_json {topology.quote(files[0])}\nread_verilog -sv " + " ".join(map(topology.quote, files[1:])) + "\n"
             script += "hierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\n"
             script += f"rename -scramble-name -seed {seed}\n"
             script += "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\n"
-            script += f"tee -o {quote(report)} stat -json -tech xilinx\n"
-            yosys_run(yosys, script, area, name)
+            script += f"tee -o {topology.quote(report)} stat -json -tech xilinx\n"
+            topology.yosys_run(yosys, script, area, name)
             cells = json.loads(report.read_text())["design"]["num_cells_by_type"]
-            row = {"mode": mode, "seed": seed, **cell_counts(cells)}
+            row = {"mode": mode, "seed": seed, **accounting.cell_counts(cells)}
             rows.append(row)
             print(json.dumps(row), flush=True)
             (area / "samples.json").write_text(json.dumps(rows, indent=2) + "\n")
-    summary = {mode: {metric: distribution([r[metric] for r in rows if r["mode"] == mode])
+    summary = {mode: {metric: accounting.distribution([r[metric] for r in rows if r["mode"] == mode])
                       for metric in rows[0] if metric not in ("mode", "seed")} for mode in MODES}
     provenance = {"sources": sources, "yosys": subprocess.check_output([yosys, "-V"], text=True).strip(),
                   "pipeline_stages": 2, "seeds": seeds, "samples": rows, "summary": summary}
@@ -88,15 +90,17 @@ def measure(build, stage, yosys, seeds):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("build", type=Path)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--stage", type=Path, default=Path("_build/mixed-windows"))
     parser.add_argument("--stages", type=int, nargs="+", default=[2, 3], choices=[2, 3])
     parser.add_argument("--area", action="store_true")
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--seeds", type=int, default=2)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     if args.seeds < 1:
         parser.error("seeds must be positive")
     args.stage.mkdir(parents=True, exist_ok=True)
-    simulate(args.build.resolve(), args.stage.resolve(), args.stages)
+    simulate(args.build.resolve(), args.stage.resolve(), args.stages, args.erl_hls)
     if args.area:
-        measure(args.build.resolve(), args.stage.resolve(), args.yosys, args.seeds)
+        measure(args.build.resolve(), args.stage.resolve(), args.yosys, args.seeds, args.erl_hls)

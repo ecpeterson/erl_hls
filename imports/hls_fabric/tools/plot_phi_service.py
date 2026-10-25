@@ -6,12 +6,6 @@ import json
 from pathlib import Path
 import re
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
-
 from phi_service_metrics import PORTS, cycles
 from phi_cycle_trace import read as read_cycles, verify_queries
 
@@ -56,6 +50,11 @@ def label(device: int, resource: dict) -> str:
 
 def render(stage: Path, first: int, last: int, output: Path, zoom_ns: int | None = None, devices: list[int] | None = None) -> None:
     """Show cycle-level port duty, committed actor metadata and FIFO depth, with independent query samples."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
     inputs = json.loads((stage / "profile-inputs.json").read_text())
     progress = json.loads((stage / "progress.json").read_text())
     rounds = {r["step"]: r["time_ns"] for r in progress["complete_rounds"]}

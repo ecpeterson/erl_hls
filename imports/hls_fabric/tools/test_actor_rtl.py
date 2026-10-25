@@ -5,60 +5,18 @@ Run rebar3 as test compile first. XLS_ROOT contains ir_converter_main, opt_main,
 codegen_main and xls/dslx/stdlib. The same generated RTL exercises both carriers.
 """
 import argparse
-import importlib
 import json
 import os
 from pathlib import Path
-from compiler_paths import PUBLIC
-from backend_paths import erl_command
+from compiler_paths import compiler_root, compiler_tool
+from backend_paths import erl_command, debug_rtl
 from backend_commands import digest, execute
+from actor_build_artifacts import inputs, outputs, validate_build
 import shutil
 import subprocess
-import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def inputs(args: argparse.Namespace) -> dict:
-    """Hash compiler, fixture and tool inputs used to validate reuse of the actor RTL build."""
-    private = [ROOT / path for path in (
-        "test/hls_actor_pid_fixture.erl", "test/hls_actor_pid_dslx.erl",
-        "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/backend_commands.py",
-        "tools/backend_paths.py", "tools/compiler_paths.py", "tools/phi_scheduler_rams.sh", "rebar.config", "rebar.lock")]
-    private += list((ROOT / "src").rglob("*.erl"))
-    private += list((ROOT / "priv/xls").rglob("*.x"))
-    private += list((ROOT / "test/xls").rglob("*.x"))
-    public = [args.erl_hls / path for path in (
-        "priv/rtl/hls_1r1w_ram.v",
-        "test/rtl/xls_sim_bridge.c", "test/rtl/xls_sim_axis.h")]
-    for pattern in ("src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x",
-                    "priv/rtl/debug/*.v", "tools/topology_debug*.py"):
-        public += list(args.erl_hls.glob(pattern))
-    files = {"private/" + str(path.relative_to(ROOT)): digest(path) for path in private}
-    files.update({"public/" + str(path.relative_to(args.erl_hls)): digest(path) for path in public})
-    tools = {name: digest(args.xls / name) for name in ("ir_converter_main", "opt_main", "codegen_main")}
-    for path in (args.xls / "xls/dslx/stdlib").rglob("*.x"):
-        files["stdlib/" + str(path.relative_to(args.xls / "xls/dslx/stdlib"))] = digest(path)
-    for name, executable in (("yosys", args.yosys), ("iverilog", "iverilog"), ("iverilog-vpi", "iverilog-vpi")):
-        path = Path(shutil.which(executable) or executable).resolve()
-        tools[name] = {"path": str(path), "sha256": digest(path)}
-    return {"files": files, "tools": tools}
-
-
-def outputs(stage):
-    paths = [path for directory in ("source", "debug") for path in (stage / directory).iterdir()
-             if path.suffix in (".x", ".v", ".json", ".ir")]
-    paths += [stage / "actor.vvp", stage / "xls_sim_bridge.vpi"]
-    return {str(path.relative_to(stage)): digest(path) for path in sorted(paths)}
-
-
-def validate_build(args):
-    saved = json.loads((args.stage / "provenance.json").read_text())
-    if saved["inputs"] != inputs(args):
-        raise ValueError("RTL build inputs changed; use a fresh --stage without --reuse-build")
-    if saved["outputs"] != outputs(args.stage):
-        raise ValueError("generated RTL or instrumentation changed; rebuild before simulation")
 
 
 def build(args: argparse.Namespace) -> None:
@@ -102,8 +60,7 @@ def build(args: argparse.Namespace) -> None:
 
     # Use the public instrumentation generator and wire ABI without copying its
     # observation logic into this private project.
-    sys.path.insert(0, str(public / "tools"))
-    topology = importlib.import_module("topology_debug")
+    topology = compiler_tool(args.erl_hls, "topology_debug")
     topology.instrument(argparse.Namespace(
         rtl=[source / "actor_pid.v", source / "actor_pid_wrapper.v", source / "hls_1r1w_ram.v"],
         top="actor_pid_wrapper", clock="clk", reset="reset", reset_active_low=False,
@@ -123,11 +80,9 @@ def build(args: argparse.Namespace) -> None:
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(public / "test/rtl" / name, stage)
     execute(["iverilog-vpi", "xls_sim_bridge.c"], stage, "vpi", timeout=60)
-    debug_rtl = [public / "priv/rtl/debug" / name for name in
-                 ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
     execute(["iverilog", "-g2012", "-s", "actor_device_tb", "-o", str(stage / "actor.vvp"),
              str(ROOT / "test/rtl/actor_device_tb.sv"), str(stage / "debug/debug_top.v"),
-             str(stage / "debug/instrumented.v"), *map(str, debug_rtl)], stage, "iverilog")
+             str(stage / "debug/instrumented.v"), *map(str, debug_rtl(public))], stage, "iverilog")
     if provenance != inputs(args):
         raise RuntimeError("RTL build inputs changed while the build was running")
     (stage / "provenance.json").write_text(json.dumps({
@@ -175,13 +130,14 @@ def simulate(args: argparse.Namespace, carrier: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls", type=Path)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/actor-pids")
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--carriers", choices=("inet_tcp", "hls_local"), nargs="+", default=["inet_tcp", "hls_local"])
     parser.add_argument("--build-only", action="store_true")
     parser.add_argument("--reuse-build", action="store_true", help="reuse this invocation's generated RTL for host-test iteration")
     arguments = parser.parse_args()
+    arguments.erl_hls = compiler_root("test", arguments.erl_hls)
     for name in ("xls", "erl_hls", "stage"):
         setattr(arguments, name, getattr(arguments, name).resolve())
     if not arguments.reuse_build:

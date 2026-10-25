@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 
 from backend_paths import ROOT, erl_command
 from backend_commands import digest, execute
@@ -73,10 +73,11 @@ def main() -> None:
     """Exercise both the one-producer boundary and the final two-way merger."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
-    parser.add_argument('--erl-hls', type=Path, default=PUBLIC)
+    parser.add_argument('--erl-hls', type=Path, default=None)
     parser.add_argument('--stage', type=Path, required=True)
     parser.add_argument('--counts', type=int, nargs='+', default=[1, 2])
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     for count in args.counts:
         if count not in (1, 2):
             parser.error('input count must be one or two')

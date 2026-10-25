@@ -7,20 +7,21 @@ includes downstream optimization enabled by the addressed protocol's constants.
 This is a small-fixture synthesis measurement, not placed-and-routed timing.
 """
 import argparse
-import importlib
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 import shutil
 import statistics
 import subprocess
-import sys
 
-import test_actor_rtl as fixture
+from actor_build_artifacts import validate_build
+from backend_paths import debug_rtl
+from backend_commands import digest, execute
 
 
-def measure(args):
-    fixture.validate_build(args)
+def measure(args: argparse.Namespace) -> None:
+    """Build a matched direct-ingress baseline only from validated actor fixture artifacts."""
+    validate_build(args)
     area = args.stage / "area"
     area.mkdir()
     source = area / "baseline"
@@ -32,10 +33,9 @@ def measure(args):
     commands = [[part.replace("actor_pid", "actor_pid_baseline") for part in command]
                 for command in original["commands"]]
     for suffix, command in zip((".ir", ".opt.ir", ".v"), commands):
-        fixture.execute(command, source, "baseline" + suffix, timeout=600,
+        execute(command, source, "baseline" + suffix, timeout=600,
                         output=source / ("actor_pid_baseline" + suffix))
-    sys.path.insert(0, str(args.erl_hls / "tools"))
-    topology = importlib.import_module("topology_debug")
+    topology = compiler_tool(args.erl_hls, "topology_debug")
     topology.instrument(argparse.Namespace(
         rtl=[source / "actor_pid_baseline.v", source / "actor_pid_baseline_wrapper.v",
              source / "hls_1r1w_ram.v"], top="actor_pid_baseline_wrapper", clock="clk",
@@ -45,19 +45,18 @@ def measure(args):
     map_variants(args, area, commands)
 
 
-def map_variants(args, area, commands):
-    sys.path.insert(0, str(args.erl_hls / "tools"))
-    topology = importlib.import_module("topology_debug")
-    accounting = importlib.import_module("measure_topology_debug")
-    debug_sources = [args.erl_hls / "priv/rtl/debug" / name for name in (
-        "hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
+def map_variants(args: argparse.Namespace, area: Path, commands: list[list[str]]) -> None:
+    """Map both ingress variants with identical seeds and retain cell counts and source hashes."""
+    topology = compiler_tool(args.erl_hls, "topology_debug")
+    accounting = compiler_tool(args.erl_hls, "measure_topology_debug")
+    debug_sources = debug_rtl(args.erl_hls)
     version = subprocess.check_output([args.yosys, "-V"], text=True).strip()
-    results, provenance = [], {"yosys": version, "script": fixture.digest(Path(__file__)),
+    results, provenance = [], {"yosys": version, "script": digest(Path(__file__)),
                               "baseline_commands": commands, "variants": {}}
     for label, directory in (("direct", area / "baseline-debug"), ("addressed", args.stage / "debug")):
         rtl = [directory / "debug_top.v", *debug_sources]
         application = directory / "instrumented.json"
-        provenance["variants"][label] = {str(path): fixture.digest(path) for path in [application, *rtl]}
+        provenance["variants"][label] = {str(path): digest(path) for path in [application, *rtl]}
         for seed in (1, 2):
             name = f"{label}-{seed}"
             # The simulation Verilog is exported with -noattr. Reading that
@@ -71,7 +70,7 @@ def map_variants(args, area, commands):
             script += f"tee -o {topology.quote(area / (name + '.json'))} stat -json -tech xilinx\n"
             path = area / (name + ".ys")
             path.write_text(script)
-            fixture.execute([args.yosys, "-Q", "-T", "-s", str(path)], area, name, timeout=600)
+            execute([args.yosys, "-Q", "-T", "-s", str(path)], area, name, timeout=600)
             cells = json.loads((area / (name + ".json")).read_text())["design"]["num_cells_by_type"]
             result = {"variant": label, "seed": seed, **accounting.cell_counts(cells)}
             results.append(result)
@@ -91,9 +90,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls", type=Path)
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--yosys", default="yosys")
     arguments = parser.parse_args()
+    arguments.erl_hls = compiler_root("test", arguments.erl_hls)
     for name in ("xls", "stage", "erl_hls"):
         setattr(arguments, name, getattr(arguments, name).resolve())
     measure(arguments)

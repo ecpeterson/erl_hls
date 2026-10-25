@@ -5,14 +5,14 @@
 %% Usage: tools/profile_interfaces.escript CHECKOUT OUTPUT.json
 %% Prepare CHECKOUT with `rebar3 as test compile` first. Run the same script
 %% against two checkouts to compare source parsing and topology planning.
+-doc "Measure source parsing and planning in one explicitly compiled test-profile checkout.".
+-spec main([string()]) -> ok.
 main([Checkout0, Output0]) ->
     Checkout = filename:absname(Checkout0),
     Output = filename:absname(Output0),
     ok = file:set_cwd(Checkout),
-    true = code:add_patha(filename:join(Checkout, "_build/test/lib/erl_hls/ebin")),
-    true = code:add_patha(filename:join(Checkout, "_build/test/lib/erl_hls/test")),
-    true = code:add_patha(filename:join(Checkout, "_build/test/lib/hls_fabric/ebin")),
-    true = code:add_patha(filename:join(Checkout, "_build/test/lib/hls_fabric/test")),
+    Paths = profile_paths(Checkout),
+    lists:foreach(fun(Path) -> true = code:add_patha(Path) end, Paths),
     Cases = [{"exact_1", exact(1, 1)}, {"exact_32", exact(32, 1)},
         {"exact_256", exact(256, 1)}, {"fanout_256x8", exact(256, 8)},
         {"families_1", families(1, 8)}, {"families_32", families(32, 8)},
@@ -29,6 +29,17 @@ main([Checkout0, Output0]) ->
     end),
     ok = file:write_file(Output, json:encode(Normalization ++ [Scheduler, Phi])),
     io:format("Wrote ~s~n", [Output]).
+
+%% Resolve only the compiled test profile; checkout applications override fetched libraries.
+-spec profile_paths(file:filename()) -> [file:filename()].
+profile_paths(Checkout) ->
+    Base = filename:join(Checkout, "_build/test"),
+    Applications = lists:foldl(fun(Path, Acc) ->
+        Acc#{filename:basename(filename:dirname(Path)) => filename:dirname(Path)}
+    end, #{}, lists:append([filelib:wildcard(filename:join([Base, Kind, "*", "ebin"]))
+        || Kind <- ["lib", "checkouts"]])),
+    #{"erl_hls" := Compiler, "hls_fabric" := Fabric} = Applications,
+    [filename:join(Application, Kind) || Application <- [Compiler, Fabric], Kind <- ["ebin", "test"]].
 
 measure(Name, Fun) ->
     _ = Fun(),

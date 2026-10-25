@@ -5,7 +5,6 @@ Run build_phi_debug.py first. This maps the entire design, including the shared
 debug transport, compiler-generated samples and one boundary monitor. LUT RAM
 is included in LUT totals. No placement/routing or power estimate is implied.
 """
-from compiler_paths import PUBLIC
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
@@ -14,13 +13,16 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from measure_topology_debug import cell_counts, distribution
-from topology_debug import quote, yosys_run
-from topology_debug_services import rtl_files
+from compiler_paths import compiler_root, compiler_tool
 from build_phi_debug import validate
 
 
-def measure(args):
+def measure(args: argparse.Namespace) -> None:
+    """Map matched production and debug RTL using helpers from the selected compiler."""
+    public = compiler_root(args.profile, args.erl_hls)
+    accounting = compiler_tool(public, "measure_topology_debug")
+    topology = compiler_tool(public, "topology_debug")
+    debug_services = compiler_tool(public, "topology_debug_services")
     build, stage = args.build.resolve(), args.stage.resolve()
     validate(build)
     stage.mkdir(parents=True, exist_ok=True)
@@ -29,7 +31,7 @@ def measure(args):
     snapshot = stage / "sources"
     snapshot.mkdir(exist_ok=True)
     # Snapshot once: every seed consumes identical inputs, even during local work.
-    support = rtl_files(monitor=True)
+    support = debug_services.rtl_files(monitor=True)
     files = [build / "debug/instrumented.json", build / "debug/debug_top.v",
              build / "debug/manifest.json", *support,
              *[build / "production" / name for name in ("phi_memory_top.v", "phi_memory_gateway.v", "hls_1r1w_ram.v")],
@@ -37,33 +39,34 @@ def measure(args):
     for source in files:
         shutil.copy(source, snapshot)
     production = [snapshot / name for name in ("phi_memory_top.v", "phi_memory_gateway.v", "hls_1r1w_ram.v", "hls_fabric_router.v")]
-    yosys_run(args.yosys, "read_verilog -sv " + " ".join(map(quote, production)) +
+    topology.yosys_run(args.yosys, "read_verilog -sv " + " ".join(map(topology.quote, production)) +
               "\nhierarchy -check -top phi_memory_top\nproc\nflatten\n" +
-              f"write_json {quote(snapshot / 'production.json')}\n", stage, "production")
+              f"write_json {topology.quote(snapshot / 'production.json')}\n", stage, "production")
     sources = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in snapshot.iterdir()}
     (stage / "provenance.json").write_text(json.dumps({"sources": sources,
         "yosys": subprocess.check_output([args.yosys, "-V"], text=True).strip(),
         "seeds": args.seeds, "flow": "opt; memory_collect; scramble; synth_xilinx -abc9 -arch xc7 -noiopad -noclkbuf; check; scc"
     }, indent=2) + "\n")
 
-    def run(job):
+    def run(job: tuple[str, int]) -> dict:
+        """Map one retained design and return its primitive accounting."""
         mode, seed = job
         prefix = stage / f"{mode}-{seed}"
         if mode == "production":
-            script = f"read_json {quote(snapshot / 'production.json')}\n"
+            script = f"read_json {topology.quote(snapshot / 'production.json')}\n"
             top = "phi_memory_top"
         else:
-            script = f"read_json {quote(snapshot / 'instrumented.json')}\n"
+            script = f"read_json {topology.quote(snapshot / 'instrumented.json')}\n"
             services = [snapshot / "debug_top.v", *[snapshot / p.name for p in support],
                         snapshot / "hls_debug_observer.v", snapshot / "hls_debug_server.v"]
-            script += "read_verilog -sv " + " ".join(map(quote, services)) + "\n"
+            script += "read_verilog -sv " + " ".join(map(topology.quote, services)) + "\n"
             top = "hls_debug_application"
         script += f"hierarchy -check -top {top}\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed {seed}\n"
         script += f"synth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top {top}\ncheck -assert\nscc -expect 0\n"
-        script += f"tee -o {quote(prefix.with_suffix('.json'))} stat -json -tech xilinx\n"
-        yosys_run(args.yosys, script, stage, prefix.name)
+        script += f"tee -o {topology.quote(prefix.with_suffix('.json'))} stat -json -tech xilinx\n"
+        topology.yosys_run(args.yosys, script, stage, prefix.name)
         cells = json.loads(prefix.with_suffix(".json").read_text())["design"]["num_cells_by_type"]
-        row = {"mode": mode, "seed": seed, **cell_counts(cells), "DSP": cells.get("DSP48E1", 0)}
+        row = {"mode": mode, "seed": seed, **accounting.cell_counts(cells), "DSP": cells.get("DSP48E1", 0)}
         row["BRAM18_equivalent"] = row["RAMB18"] + 2*row["RAMB36"]
         print(json.dumps(row), flush=True)
         return row
@@ -87,7 +90,7 @@ def measure(args):
             (stage / "results.json").write_text(json.dumps(rows, indent=2) + "\n")
     if failures:
         raise RuntimeError(f"synthesis failed for {failures}; completed measurements are retained")
-    summary = {mode: {key: distribution([row[key] for row in rows if row["mode"] == mode])
+    summary = {mode: {key: accounting.distribution([row[key] for row in rows if row["mode"] == mode])
                      for key in rows[0] if key not in ("mode", "seed")} for mode in ("production", "all")}
     (stage / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary), flush=True)
@@ -97,6 +100,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("build", type=Path)
     parser.add_argument("--stage", type=Path, default=Path("_build/phi-debug/area"))
+    parser.add_argument("--erl-hls", type=Path, help="explicit compiler root")
+    parser.add_argument("--profile", default="default", help="rebar dependency profile")
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--jobs", type=int, default=1, help="concurrent full designs; increase only with memory headroom")

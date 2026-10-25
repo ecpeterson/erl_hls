@@ -32,6 +32,10 @@ if [[ "$suite" == all || "$suite" == software ]]; then
         case "$name" in ''|\#*) ;; *) tests+=("$name");; esac
     done < tools/ci_unit_tests.txt
     PYTHONPATH=tools python3 -m unittest "${tests[@]}"
+    # Only mocked board-support contracts; never discover hardware/image witnesses here.
+    for test in test_regsvc_context.py test_packaging_support.py; do
+        python3 -m unittest discover -s experiments/07-openxc7 -p "$test"
+    done
     python3 tools/check_source_contracts.py
     rebar3 dialyzer
     record_time software

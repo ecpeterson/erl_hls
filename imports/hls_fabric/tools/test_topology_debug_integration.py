@@ -5,8 +5,8 @@ Takes the same RTL/top/clock/reset arguments as topology_debug.py. The test
 compares original and instrumented application outputs every cycle, blocks the
 first external sink, then releases it after the host has inspected its wait chain.
 """
-from compiler_paths import PUBLIC
-from backend_paths import erlang_paths
+from compiler_paths import compiler_root, compiler_tool
+from backend_paths import erlang_paths, debug_rtl
 
 import argparse
 import json
@@ -16,16 +16,13 @@ import shutil
 import subprocess
 import time
 
-import topology_debug as topology
-import topology_debug_report as reporting
 
 ROOT = Path(__file__).resolve().parents[1]
-DEBUG_RTL = [PUBLIC / "priv/rtl/debug" / name for name in
-             ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
 
 
 def testbench(args: argparse.Namespace, ports: dict, manifest: dict) -> str:
     """Drive public boundaries and check unchanged outputs plus fixture-specific conservation."""
+    topology = compiler_tool(args.erl_hls, "topology_debug")
     lines = ["`timescale 1ns/1ps", "module topology_live_tb;", "reg clk=0, resetn=0;",
              "always #5 clk=~clk;", "reg released=0, contributions=0; integer fd, cycles=0;",
              "reg [31:0] s_dbg_tdata=0; reg [3:0] s_dbg_tkeep=15;",
@@ -223,6 +220,8 @@ def testbench(args: argparse.Namespace, ports: dict, manifest: dict) -> str:
 
 def run(args: argparse.Namespace) -> None:
     """Instrument matching RTL, query it through VPI and retain the finite execution witness."""
+    topology = compiler_tool(args.erl_hls, "topology_debug")
+    reporting = compiler_tool(args.erl_hls, "topology_debug_report")
     topology.instrument(args)
     stage = args.stage.resolve()
     manifest = json.loads((stage / "manifest.json").read_text())
@@ -252,7 +251,7 @@ def run(args: argparse.Namespace) -> None:
     for name in ("release", "released", "contributions", "contributions_released", "application_complete", "provisional_written", "done", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
-        shutil.copy(PUBLIC / "test/rtl" / name, stage)
+        shutil.copy(args.erl_hls / "test/rtl" / name, stage)
     reference_rtl = getattr(args, "reference_rtl", None) or []
     if reference_rtl:
         # Independent XLS builds reuse internal proc/FIFO module names. Flatten
@@ -272,7 +271,7 @@ def run(args: argparse.Namespace) -> None:
         reference_rtl = [reference_flat]
     commands = [["iverilog-vpi", "xls_sim_bridge.c"],
         ["iverilog", "-g2012", "-s", "topology_live_tb", "-o", "test.vvp", "tb.sv", "debug_top.v", "instrumented.v",
-         *map(str, DEBUG_RTL), *[str(p.resolve()) for p in args.rtl],
+         *map(str, debug_rtl(args.erl_hls)), *[str(p.resolve()) for p in args.rtl],
          *[str(p.resolve()) for p in reference_rtl]]]
     with (stage / "compile.log").open("w") as log:
         for command in commands:
@@ -291,7 +290,7 @@ def run(args: argparse.Namespace) -> None:
                 time.sleep(0.01)
             # Paths are passed as arguments, never interpolated into Erlang code.
             host_module = "hls_indexed_debug_live" if args.actor_test == "indexed_gather" else "hls_topology_debug_live"
-            host = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test")), "-eval",
+            host = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test", compiler=args.erl_hls)), "-eval",
                     f'case {host_module}:run(hd(init:get_plain_arguments())) of ok -> halt(0); Error -> io:format("~p~n",[Error]), halt(1) end.',
                     "-extra", str(stage)]
             with (stage / "host.log").open("w") as host_log:
@@ -324,6 +323,7 @@ def run(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rtl", type=Path, nargs="+")
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--top", required=True)
     parser.add_argument("--clock", default="clk")
     parser.add_argument("--reset", default="reset")
@@ -339,4 +339,6 @@ if __name__ == "__main__":
                                                 "components_global", "components_weak"))
     parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")
     parser.add_argument("--reference-top", default="actor_debug_production_wrapper")
-    run(parser.parse_args())
+    args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
+    run(args)

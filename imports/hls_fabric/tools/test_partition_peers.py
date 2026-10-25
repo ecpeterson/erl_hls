@@ -3,12 +3,12 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import shutil
 
 from backend_commands import digest, execute
 from backend_paths import erl_command
-from test_phi_bridge import ROOT
+from backend_paths import ROOT
 
 
 def connections() -> str:
@@ -39,8 +39,9 @@ def main() -> None:
     parser.add_argument("xls", type=Path)
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/partition-peers")
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, default=None)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     stage, xls, public = args.stage.resolve(), args.xls.resolve(), args.erl_hls.resolve()
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",

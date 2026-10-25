@@ -4,16 +4,15 @@ import argparse
 import json
 import os
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import re
 import shutil
 import subprocess
 import time
 
 from backend_commands import digest, execute
-from backend_paths import erl_command
-from test_phi_bridge import ROOT
-from test_phi_mesh import artifacts
+from backend_paths import ROOT, debug_rtl, erl_command
+from phi_build_artifacts import mesh_artifacts
 from phi_mesh_metrics import layout, analyze
 from phi_capture import compressed_capture, prune_simulation
 from phi_cycle_trace import executor_requests, plan as cycle_plan, read as read_cycles, verify_queries
@@ -80,12 +79,12 @@ def connections(devices: list[dict], link_stages: int = 1) -> str:
 def prepare(args: argparse.Namespace) -> list[dict]:
     """Check immutable RTL, retain public manifests, and compile a mesh-only testbench."""
     source = args.build / "source"
-    if json.loads((args.build / "source-hashes.json").read_text()) != artifacts(source):
+    if json.loads((args.build / "source-hashes.json").read_text()) != mesh_artifacts(source):
         raise ValueError("generated device source changed")
     devices = json.loads((source / "bridge.json").read_text())["devices"]
     for device in devices:
         directory = args.build / f"device{device['id']}"
-        if json.loads((directory / "complete.json").read_text()) != artifacts(directory):
+        if json.loads((directory / "complete.json").read_text()) != mesh_artifacts(directory):
             raise ValueError(f"device {device['id']} changed after its checked build")
     args.stage.mkdir(parents=True, exist_ok=False)
     for name in ("config.term", "deployment.term", "bridge.json"):
@@ -130,8 +129,7 @@ def prepare(args: argparse.Namespace) -> list[dict]:
     (args.stage / "phi_mesh_devices.vh").write_text(connections(devices, args.link_stages))
     sources = [ROOT / "test/rtl/phi_mesh_tb.sv", ROOT / "rtl/hls_async_fifo.v"]
     sources += [args.build / f"device{d['id']}/debug" / name for d in devices for name in ("debug_top.v", "instrumented.v")]
-    sources += [args.erl_hls / "priv/rtl/debug" / name for name in
-                ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
+    sources += debug_rtl(args.erl_hls)
     if getattr(args, "messages", False):
         from phi_message_trace import plan as message_plan
         sources.append(message_plan(args.build, args.stage, tuple(d["id"] for d in devices), args.erl_hls))
@@ -231,7 +229,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("build", type=Path)
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--clock-half", type=int, default=4)
     parser.add_argument("--stalls", action="store_true")
     parser.add_argument("--link-stages", type=int, default=1,
@@ -244,6 +242,7 @@ def main() -> None:
     parser.add_argument("--transport", action="store_true", help="observe transport FIFO boundary handshakes")
     parser.add_argument("--timeout", type=int, default=3600)
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     if args.messages and (not args.actors or not args.transport or args.actor_devices is not None):
         parser.error("--messages requires --actors --transport across all devices")
     if args.transport and args.stalls:

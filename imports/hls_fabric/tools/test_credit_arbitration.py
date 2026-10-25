@@ -3,10 +3,11 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import shutil
 
-from test_credit_link import ROOT, digest, run
+from backend_paths import ROOT
+from backend_commands import digest, execute
 
 
 def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int) -> None:
@@ -15,7 +16,7 @@ def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int)
     sources = [source, ROOT / 'test/xls/credit_arbitration.x',
                public / 'priv/xls/lib/axis.x']
     template = ROOT / 'test/rtl/credit_arbitration_tb.sv'
-    tracked = [*sources, template, Path(__file__), ROOT / 'tools/test_credit_link.py',
+    tracked = [*sources, template, Path(__file__), ROOT / 'tools/backend_commands.py',
                *[xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls / 'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}
@@ -36,10 +37,10 @@ def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int)
           '--flop_outputs=true', '--use_system_verilog=false', '--reset=reset', '--fifo_module=',
           '--module_name=arbiter', 'arbiter.opt.ir'], 'codegen', 'arbiter.v')]
     for command, label, output in commands:
-        run(command, stage, label, output)
-    run(['iverilog', '-g2012', '-s', 'credit_arbitration_tb',
-         f'-Pcredit_arbitration_tb.SPARSE_LIMIT={sparse_limit}', '-o', 'test.vvp', 'test.sv', 'arbiter.v'], stage, 'compile')
-    run(['vvp', 'test.vvp'], stage, 'simulation')
+        execute(command, stage, label, timeout=600, output=stage / output)
+    execute(['iverilog', '-g2012', '-s', 'credit_arbitration_tb',
+         f'-Pcredit_arbitration_tb.SPARSE_LIMIT={sparse_limit}', '-o', 'test.vvp', 'test.sv', 'arbiter.v'], stage, 'compile', timeout=600)
+    execute(['vvp', 'test.vvp'], stage, 'simulation', timeout=600)
     print((stage / 'simulation.log').read_text(), end='')
     if inputs != {str(p): digest(p) for p in tracked}:
         raise ValueError('arbitration inputs changed during validation')
@@ -51,11 +52,12 @@ def main() -> None:
     """Select the pinned XLS installation, public libraries and a fresh artifact directory."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
-    parser.add_argument('--erl-hls', type=Path, default=PUBLIC)
+    parser.add_argument('--erl-hls', type=Path, default=None)
     parser.add_argument('--stage', type=Path, required=True)
     parser.add_argument('--source', type=Path, default=ROOT / 'priv/xls/hls_credit_link.x', help='explicit historical source for matched comparisons')
     parser.add_argument('--sparse-limit', type=int, default=400, help='maximum cycles for the sparse workload')
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     if args.sparse_limit < 1:
         parser.error('sparse cycle limit must be positive')
     check(args.xls.resolve(), args.erl_hls.resolve(), args.stage.resolve(), args.source.resolve(), args.sparse_limit)

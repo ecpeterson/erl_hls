@@ -7,7 +7,7 @@ import subprocess
 from types import SimpleNamespace
 
 from backend_paths import ROOT, erlang_environment
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 from backend_commands import run
 from test_local_protocol import prove
 from compile_local_actor import compile_owner
@@ -28,7 +28,7 @@ pub fn initial_publication() -> bits[{width+8}] {{
   step.effect_layout ++ step.effect_payload
 }}
 """.encode())
-    paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', PUBLIC/'priv/xls/lib', PUBLIC/'priv/xls/fabric']))
+    paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', compiler_root('default')/'priv/xls/lib', compiler_root('default')/'priv/xls/fabric']))
     run([xls/'ir_converter_main', '--top=initial_publication', '--warnings_as_errors=false',
          '--dslx_path='+paths, '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), reference],
         stage, 'initial-convert', stage/'initial.ir')
@@ -150,7 +150,7 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
         seen.add(shape); converted+=1
         stem=directory.name+'-receiver-'+str(receiver['index'])
         paths=':'.join(map(str,[directory/'actors',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',
-            PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric',PUBLIC/'src/examples/phi_decoder']))
+            compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',compiler_root('default')/'src/examples/phi_decoder']))
         run([xls/'ir_converter_main','--top=local_inbox_clock','--warnings_as_errors=false',
              '--dslx_path='+paths,'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],
             stage,stem,stage/(stem+'.ir'))
@@ -169,7 +169,8 @@ def main() -> None:
                       '{hls_protocol_inbox_fixture,topology,[]},actor_limit => 3}.\n')
     fixture=stage/'fixture'
     run(emit_command('transport', config, fixture),stage,'emit', env=erlang_environment('default'))
-    compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver', [fixture/'actors'])
+    compile_owner(args.xls,fixture/'actors/receiver_2.x',stage/'receiver', [fixture/'actors'],
+                  public=compiler_root('default'), profile='default')
     compile_build(args.xls,fixture)
     simulate(args.xls,fixture,stage/'receiver',stage)
     selection_checks(args.xls,stage)

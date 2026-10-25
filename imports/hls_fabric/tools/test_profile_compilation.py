@@ -1,13 +1,13 @@
 """Check emitted profile inputs and publication metadata using compiler stubs."""
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_source, compiler_tool
 from backend_paths import ROOT
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import unittest
-import compile_xls as compiler
-from test_compile_xls import BuildFixture
+compiler = compiler_tool(compiler_root("test"), "compile_xls")
+BuildFixture = compiler_tool(compiler_root("test"), "testing").BuildFixture
 
 
 class ProfileBuilds(BuildFixture):
@@ -39,7 +39,8 @@ class ProfileBuilds(BuildFixture):
         # Prepared stages retain standalone helpers and may run from any cwd.
         for helper in ('compile_xls.py', 'compile_phi_decoder_profile.py',
                        'compile_phi_decoder_profile.sh'):
-            source = (PUBLIC if helper == 'compile_xls.py' else ROOT) / 'tools' / helper
+            source = (compiler_source(compiler_root('test'), 'compile_xls') if helper == 'compile_xls.py'
+                      else ROOT / 'tools' / helper)
             shutil.copyfile(source, self.inputs / helper)
         self.command = ['bash', str(self.inputs / 'compile_phi_decoder_profile.sh'),
                         str(self.inputs), str(self.xls)]

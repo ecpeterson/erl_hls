@@ -2,7 +2,7 @@
 
 `erl_hls` owns Erlang callback semantics and dedicated communicating actors. This repository adds physical sharing: multiple logical actors use an executor and state/mailbox storage. Logical actor identities, messages and callback behavior remain unchanged by placement.
 
-Build with `rebar3 as test compile`. The dependency is pinned in `rebar.config`; for coordinated development, put the matching public checkout at `_checkouts/erl_hls`. Tools also accept `ERL_HLS_ROOT` when locating compiler sources.
+Build with `rebar3 as test compile`. The dependency is pinned in `rebar.config`; for coordinated development, put the matching public checkout at `_checkouts/erl_hls`. External drivers accept an explicit `--erl-hls` checkout where needed; the selected compiler must have matching beams for the declared profile. See [build context](../building.md).
 
 ## Compile and place
 

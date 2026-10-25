@@ -2,7 +2,7 @@
 """Run the complete D3 memory experiment across two independently clocked RTL devices."""
 import argparse
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import test_phi_bridge as bridge
 
 
@@ -10,7 +10,7 @@ def main() -> None:
     """Build or validate the hardware, then compare corrections and measurements with BEAM."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls", type=Path)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, default=None)
     parser.add_argument("--stage", type=Path, default=bridge.ROOT / "_build/phi-memory")
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--clock-halves", type=int, nargs=2, default=[3, 7])
@@ -26,6 +26,7 @@ def main() -> None:
     parser.add_argument("--devices-only", action="store_true",
                         help="emit and instrument devices without the unused bridge simulation harness")
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     if args.devices_only:
         args.build_only = True
     if min(args.clock_halves) < 1:

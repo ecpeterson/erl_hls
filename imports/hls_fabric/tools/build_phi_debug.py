@@ -4,8 +4,8 @@
 Uses native XLS plus Yosys. Each directory retains DSLX, IR, RTL, source hashes,
 commands and logs; debug/ contains the deployable shared-transport wrapper.
 """
-from compiler_paths import PUBLIC
-from backend_paths import erlang_paths
+from compiler_paths import compiler_root, compiler_tool
+from backend_paths import erl_command, erlang_environment
 import argparse
 import hashlib
 import json
@@ -13,12 +13,13 @@ from pathlib import Path
 import shutil
 import subprocess
 
-import topology_debug as topology
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def compile_dslx(xls, stage, module, top, stages, ii=1, rams=None):
+def compile_dslx(xls: Path, stage: Path, module: str, top: str, stages: int,
+                 ii: int = 1, rams: str | None = None) -> None:
+    """Compile a staged DSLX unit and bind source, tool and output hashes to its receipt."""
     commands = [
         (".ir", [str(xls / "ir_converter_main"), "--warnings_as_errors=false", "--dslx_path=.",
                  f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}", f"--top={top}", f"{module}.x"]),
@@ -41,7 +42,7 @@ def compile_dslx(xls, stage, module, top, stages, ii=1, rams=None):
     }, indent=2) + "\n")
 
 
-def validate(build):
+def validate(build: Path) -> None:
     """Reject stale compiler outputs or a manifest detached from its source RTL."""
     for directory, modules in (("production", ["phi_memory_gateway"]), ("observed", ["phi_memory_gateway"]),
                                ("support", ["hls_fabric_router", "hls_debug_observer", "hls_debug_server"])):
@@ -67,14 +68,18 @@ def build(args: argparse.Namespace) -> None:
     """Compile the test profile and emit matched production and observed Phi devices."""
     stage, xls = args.stage.resolve(), args.xls.resolve()
     subprocess.run(["rebar3", "as", "test", "compile"], cwd=ROOT, check=True)
+    public = compiler_root("test", getattr(args, "erl_hls", None))
+    topology = compiler_tool(public, "topology_debug")
     for mode in ("production", "observed"):
         out = stage / mode
         out.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["erl", "-noshell", "-pa", *map(str, erlang_paths("test")), "-eval",
-                        '[Dir, Flag, Shards] = init:get_plain_arguments(), ok = hls_phi_debug_dslx:write(Dir, Flag =:= "true", list_to_integer(Shards)), halt().',
-                        "-extra", str(out), str(mode == "observed").lower(), str(args.shards)], cwd=ROOT, check=True)
-        for source in [*PUBLIC.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x"), *PUBLIC.glob("priv/xls/fabric/*.x"),
-                       PUBLIC / "src/examples/phi_decoder/phi_field.x", PUBLIC / "priv/rtl/hls_1r1w_ram.v"]:
+        expression = ('[Dir, Flag, Shards] = init:get_plain_arguments(), '
+                      'ok = hls_phi_debug_dslx:write(Dir, Flag =:= "true", list_to_integer(Shards)), halt().')
+        subprocess.run(erl_command(public, expression, out, str(mode == "observed").lower(),
+                                  str(args.shards), profile="test"), cwd=ROOT,
+                       env=erlang_environment("test", compiler=public), check=True)
+        for source in [*public.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x"), *public.glob("priv/xls/fabric/*.x"),
+                       public / "src/examples/phi_decoder/phi_field.x", public / "priv/rtl/hls_1r1w_ram.v"]:
             shutil.copy(source, out)
         banks = len(json.loads((out / "actors.json").read_text())["banks"])
         rams = subprocess.check_output(["bash", "-c", 'source tools/phi_scheduler_rams.sh; phi_scheduler_ram_configurations "$1"',
@@ -84,7 +89,7 @@ def build(args: argparse.Namespace) -> None:
     (stage / "fixture.json").write_text(json.dumps({"shards": args.shards}) + "\n")
     support = stage / "support"
     support.mkdir(exist_ok=True)
-    for source in [*PUBLIC.glob("priv/xls/debug/*.x"), *PUBLIC.glob("priv/xls/fabric/*.x"), *PUBLIC.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x")]:
+    for source in [*public.glob("priv/xls/debug/*.x"), *public.glob("priv/xls/fabric/*.x"), *public.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x")]:
         shutil.copy(source, support)
     for module, top, stages, ii in (("hls_fabric_router", "HostRoutedTx", 1, 1),
                                     ("hls_debug_observer", "Observer", 2, 1),
@@ -101,6 +106,7 @@ def build(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler source with matching test-profile beams.")
     parser.add_argument("xls", type=Path)
     parser.add_argument("--stage", type=Path, default=Path("_build/phi-debug"))
     parser.add_argument("--yosys", default="yosys")

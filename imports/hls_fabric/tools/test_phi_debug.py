@@ -5,7 +5,7 @@ First run build_phi_debug.py. The VPI plugin transports external stream words;
 it never reads application internals. The RTL also compares the application
 against its independently compiled production variant on every clock.
 """
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 from backend_paths import erlang_paths
 import argparse
 import json
@@ -16,12 +16,13 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-from topology_debug_services import rtl_files
 from build_phi_debug import validate
 
 
 def run(build: Path, stage: Path) -> None:
     """Validate a matched build and replay it through public debug APIs in the test profile."""
+    public = compiler_root("test")
+    rtl_files = compiler_tool(public, "topology_debug_services").rtl_files
     validate(build)
     stage.mkdir(parents=True, exist_ok=True)
     for name in ("block", "blocked", "hold_debug", "debug_held", "reply_held", "debug_released", "done",
@@ -31,7 +32,7 @@ def run(build: Path, stage: Path) -> None:
     shutil.copy(build / "debug/manifest.json", stage)
     shutil.copy(build / "fixture.json", stage)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
-        shutil.copy(PUBLIC / "test/rtl" / name, stage)
+        shutil.copy(compiler_root('test') / "test/rtl" / name, stage)
     # Alias-only instrumentation must not alter the observed application's cells.
     raw = json.loads((build / "debug/flat.json").read_text())["modules"]["phi_memory_top"]
     instrumented = json.loads((build / "debug/instrumented.json").read_text())["modules"]["hls_instrumented_application"]

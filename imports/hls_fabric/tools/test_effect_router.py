@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 from backend_paths import erlang_paths
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,7 +100,7 @@ def main() -> None:
     # widening the production API or retaining a copied implementation.
     run('fixture-compile', ['erlc', '+export_all', '-o', ebin, *(p for p in sources if p.suffix == '.erl')])
     stdlib = xls / 'xls/dslx/stdlib'
-    options = ['--warnings_as_errors=false', f'--dslx_path={fixture}:{ROOT / "priv/xls/lib"}:{PUBLIC / "priv/xls/lib"}',
+    options = ['--warnings_as_errors=false', f'--dslx_path={fixture}:{ROOT / "priv/xls/lib"}:{compiler_root('test') / "priv/xls/lib"}',
         f'--dslx_stdlib_path={stdlib}']
     for mode in ('ordinary', 'prefix', 'parallel2', 'parallel3', 'parallel6'):
         folder = stage / mode

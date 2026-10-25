@@ -11,10 +11,10 @@ For the cached D6 mesh:
 ```sh
 python3 tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport
 python3 tools/phi_actor_profile.py RUN --device 0 \
-  --profile-tools /path/to/erl_hls/tools --publication-cycles 2
+  --erl-hls /path/to/erl_hls --publication-cycles 2
 ```
 
-Use `--trace RUN/device0-trace.csv.gz` for an already retained subset and `--output STEM` to preserve previous analyses. The second command uses the common exporter introduced in [erl_hls #165](https://github.com/ecpeterson/erl_hls/pull/165). The analysis-tools checkout can differ from the experiment's pinned hardware dependency; retain both revisions. It writes a canonical timing graph, Perfetto-compatible JSON and distributional statistics. `device0-trace.csv.gz` is a digest-checked subset of the recording, reusable without simulation.
+Use `--trace RUN/device0-trace.csv.gz` for an already retained subset and `--output STEM` to preserve previous analyses. Report commands load the profiler from the selected compiler root. Omit `--erl-hls` to use the `default` rebar profile, or choose another with `--profile NAME`. A report-only compiler checkout can differ from the experiment's pinned hardware dependency; retain both revisions. It writes a canonical timing graph, Perfetto-compatible JSON and distributional statistics. `device0-trace.csv.gz` is a digest-checked subset of the recording, reusable without simulation.
 
 Use `--actor-devices 0` on the mesh capture to limit detailed internal handshakes to a representative board. All eighteen devices still run; every FIFO occupancy, actor publication and requested transport handshake remains recorded across the mesh. This reduces recording volume without substituting a smaller simulation. Two-device profiles accept `--actors` as well.
 
@@ -46,13 +46,12 @@ Add `--messages` to a fresh mesh capture with `--actors --transport` on all devi
 
 ```sh
 python3 tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport --messages --compress-capture
-python3 tools/phi_message_profile.py RUN --erl-hls HARDWARE_DEPENDENCY \
-  --profile-tools /path/to/erl_hls/tools
+python3 tools/phi_message_profile.py RUN --erl-hls HARDWARE_DEPENDENCY
 python3 tools/phi_message_report.py --run example RUN --output REPORT \
-  --profile-tools /path/to/erl_hls/tools
+  --erl-hls /path/to/erl_hls
 ```
 
-The common exporter must include [erl_hls #166](https://github.com/ecpeterson/erl_hls/pull/166). The hardware dependency remains the build's pinned revision. This mode requires source-fragment reductions, full-format packets, one reset epoch and capture from reset. It emits compressed canonical and Perfetto graphs. `phi_message_report.py` renders a reduction handoff; `phi_mailbox_report.py` accepts the same arguments and renders an ordinary delivery plus a retry when present. Its remote-message intervals separate receive forwarding, scheduler admission and first selection over the same message population. Both retain source-profile digests.
+Message reconstruction selects one compiler for both Erlang route binding and profile export; its default rebar profile is `test`, selectable with `--profile NAME`. Use the experiment's pinned hardware dependency when binding retained deployments. The compiler must provide the packaged profiling tools; source helpers and Erlang beams come from that same root. This mode requires source-fragment reductions, full-format packets, one reset epoch and capture from reset. It emits compressed canonical and Perfetto graphs. `phi_message_report.py` renders a reduction handoff; `phi_mailbox_report.py` accepts the same arguments and renders an ordinary delivery plus a retry when present. Its remote-message intervals separate receive forwarding, scheduler admission and first selection over the same message population. Both retain source-profile digests.
 
 A passive observer records every accepted payload, including repeated identical values. Deployment source ports and ordered lane ordinals establish identity; checked payload bits corroborate it. The graph connects producer activation, effect acceptance, packetizer admission, complete peer delivery, fragment arrival, collection and consuming activation. It rejects inconsistent order, payloads or clock boundaries. Payload aliases are retained for observation; the exporter checks that application cells, ports and public debug projections are unchanged. Ordinary-message analysis requires complete payload bits. Missing final-edge evidence is disclosed; missing earlier evidence fails analysis. Saved actor reconstructions and per-device extracts are checked against their inputs before reuse. `--compress-capture` writes cycle observations directly to gzip without a large raw intermediate. Failed captures retain an unpublished `.partial` file. Successful mesh captures discard the simulation executable and generated payload-observer RTL; recordings, manifests, source digests, logs and the compiled device cache remain. Use `--keep-simulation` to retain those intermediates for repeated RTL execution. `cycle-trace.csv.gz` may also replace the raw CSV after capture; replay verifies the decoded bytes against the same digest.
 
@@ -68,7 +67,7 @@ Mailbox replay currently requires one ordinary producer stream per actor, fixed 
 
 ```sh
 python3 tools/phi_step_report.py RUN --output REPORT \
-  --profile-tools /path/to/erl_hls/tools --step 12
+  --erl-hls /path/to/erl_hls --step 12
 ```
 
 `step-contributors` retains every required branch back to the preceding status boundary, including its carry-in events. `step-latest` groups the latest observed prerequisites into readable boundary tracks; tied branches remain separate. Both export canonical graphs and Perfetto traces. The elapsed overlay partitions one representative path; it adds no causal edges. `step-budget.json` includes componentwise bounds over tied alternatives and one continuous chain across the measurement window, which avoids repeatedly charging the final status-output tail. Those bounds are observations, not predicted savings from rescheduling.

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Map the two link and four debug clock crossings to XC7 primitives."""
 import argparse
-import importlib
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
 import statistics
 import subprocess
-import sys
+
 from backend_commands import digest, execute
+from compiler_paths import compiler_root, compiler_tool
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def wrapper():
+def wrapper() -> str:
+    """Expose independent ready/valid interfaces for the six fixed clock crossings."""
     ports = ["input wire reset, host_clk, clk0, clk1"]
     instances = []
     crossings = [("link01", 33, "clk0", "clk1"), ("link10", 33, "clk1", "clk0")]
@@ -31,10 +31,11 @@ def wrapper():
     return "module crossings(\n    " + ",\n    ".join(ports) + ");\n" + "\n".join(instances) + "\nendmodule\n"
 
 
-def measure(args):
+def measure(args: argparse.Namespace) -> None:
+    """Map the crossing fixture and retain compiler-derived primitive accounting."""
+    public = compiler_root(args.profile, args.erl_hls)
+    accounting = compiler_tool(public, "measure_topology_debug")
     args.stage.mkdir(parents=True, exist_ok=False)
-    sys.path.insert(0, str(args.erl_hls / "tools"))
-    accounting = importlib.import_module("measure_topology_debug")
     rtl = ROOT / "rtl/hls_async_fifo.v"
     (args.stage / "crossings.v").write_text(wrapper())
     samples = []
@@ -73,7 +74,8 @@ write_json mapped-{seed}.json
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/clock-crossing-area")
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="explicit compiler root")
+    parser.add_argument("--profile", default="default", help="rebar dependency profile")
     parser.add_argument("--yosys", default="yosys")
     args = parser.parse_args()
     args.stage = args.stage.resolve()

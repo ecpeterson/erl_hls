@@ -13,7 +13,7 @@ import re
 
 from transport_codegen import specialize
 from backend_commands import digest, execute
-from test_phi_mesh import artifacts
+from phi_build_artifacts import mesh_artifacts
 
 
 def modules(text: str) -> dict[str, str]:
@@ -69,7 +69,7 @@ def gateway(source: str) -> tuple[str, str]:
 
 def validate_sources(base: Path, source: Path, words: int, credits: int, compact: bool = False) -> None:
     """Permit only explicit transport bindings and new deployment-identity constants."""
-    if json.loads((base/'source-hashes.json').read_text()) != artifacts(base/'source'):
+    if json.loads((base/'source-hashes.json').read_text()) != mesh_artifacts(base/'source'):
         raise ValueError('base generated sources differ from their recorded build')
     for path in (base/'source').glob('*.x'):
         current = source/path.name
@@ -140,7 +140,7 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> None:
     components = {}
     for device in devices:
         d = device['id']
-        if json.loads((base/f'device{d}/complete.json').read_text()) != artifacts(base/f'device{d}'):
+        if json.loads((base/f'device{d}/complete.json').read_text()) != mesh_artifacts(base/f'device{d}'):
             raise ValueError(f'base device {d} changed')
         for link in device['links']:
             tx, rx = link['tx_lanes'], link['rx_lanes']

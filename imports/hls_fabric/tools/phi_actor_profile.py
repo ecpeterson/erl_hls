@@ -7,11 +7,11 @@ import gzip
 import json
 from pathlib import Path
 import re
-import sys
 
 from phi_cycle_trace import capture_path, executor_requests, read, trace_digest
 from phi_transport_metrics import dense, distribution
 from backend_commands import digest
+from compiler_paths import compiler_root, compiler_tool
 
 
 def reduction(resource: dict, value: int) -> dict:
@@ -357,17 +357,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', type=Path)
     parser.add_argument('--device', type=int, default=0)
-    parser.add_argument('--profile-tools', type=Path, required=True, help='erl_hls tools directory')
+    parser.add_argument('--erl-hls', type=Path, help='explicit compiler root')
+    parser.add_argument('--profile', default='default', help='rebar dependency profile')
     parser.add_argument('--trace', type=Path)
     parser.add_argument('--output', type=Path, help='output stem; preserve the original analysis when rereading a capture')
     parser.add_argument('--publication-cycles', type=int, default=1,
                         help='required result-to-state-write latency; reject any retirement that differs')
     args = parser.parse_args()
-    sys.path.insert(0, str(args.profile_tools))
-    import hls_profile
+    public = compiler_root(args.profile, args.erl_hls)
+    hls_profile = compiler_tool(public, "hls_profile")
     trace = args.trace or extract(args.stage, args.device)
     if not hasattr(hls_profile, 'display_duration'):
-        raise ValueError('use the common profiler with clock-width boundary support (erl_hls PR #165)')
+        raise ValueError('selected compiler profiler lacks clock-width boundary support')
     profile, report = reconstruct(args.stage, args.device, trace, publication_cycles=args.publication_cycles)
     from phi_profile_phases import extend as explain
     explain(profile, report, args.stage, args.device, trace)

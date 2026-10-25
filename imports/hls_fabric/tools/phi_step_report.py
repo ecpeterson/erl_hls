@@ -6,10 +6,10 @@ import gzip
 import json
 from pathlib import Path
 import re
-import sys
 
 from phi_transport_metrics import distribution
 from backend_commands import digest
+from compiler_paths import compiler_root, compiler_tool
 
 
 def attach_status(graph: dict, statuses: list[dict], routes: dict) -> list[dict]:
@@ -260,10 +260,9 @@ def publication_spacing(budget: dict, events: list[dict]) -> dict:
             'scope': 'Observed acceptance spacing, not predicted throughput gain. Positions number observed publications; concurrent lanes have no causal ordering.'}
 
 
-def analyze(stage: Path, destination: Path, profile_tools: Path, focus_step: int) -> dict:
+def analyze(stage: Path, destination: Path, public: Path, focus_step: int) -> dict:
     """Check all public round boundaries and export one full contributor cone and elapsed overlay."""
-    sys.path.insert(0, str(profile_tools))
-    import hls_profile
+    hls_profile = compiler_tool(public, "hls_profile")
     graph = json.loads(gzip.decompress((stage/'messages.profile.json.gz').read_bytes()))
     routes = json.loads((stage/'message-routes.json').read_text())
     targets = attach_status(graph, json.loads((stage/'status-events.json').read_text()), routes)
@@ -331,11 +330,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', type=Path)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--profile-tools', type=Path, required=True)
+    parser.add_argument('--erl-hls', type=Path, help='explicit compiler root')
+    parser.add_argument('--profile', default='default', help='rebar dependency profile')
     parser.add_argument('--step', type=int, default=12)
     args = parser.parse_args()
+    public = compiler_root(args.profile, args.erl_hls)
     args.output.mkdir(parents=True, exist_ok=True)
-    result = analyze(args.stage, args.output, args.profile_tools, args.step)
+    result = analyze(args.stage, args.output, public, args.step)
     print(json.dumps(result['representative_distributions_ns'], indent=2))
 
 

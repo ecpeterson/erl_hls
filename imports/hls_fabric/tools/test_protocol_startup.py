@@ -7,7 +7,7 @@ import subprocess
 from types import SimpleNamespace
 
 from backend_paths import ROOT, erlang_environment
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 from protocol_test_build import compile_build, compile_clock, emit_command
 from test_protocol_network import area
 from backend_commands import run
@@ -85,7 +85,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
         assert source!=original;part=stage/name;part.mkdir()
         for receiver in (fixture/'actors').glob('receiver_*.x'): shutil.copy2(receiver,part/receiver.name)
         (part/'receiver_0.x').write_text(source)
-        imports=[part,fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',PUBLIC/'priv/xls/lib',PUBLIC/'priv/xls/fabric']
+        imports=[part,fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
         # Deliberate test corruption bypasses the production direct-component hash check.
         compile_clock(xls,fixture/'network/network.x',part,'network_clock','protocol_network_core',imports)
         simulate(fixture,part,part/'core.v',reject=True)

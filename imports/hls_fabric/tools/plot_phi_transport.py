@@ -6,11 +6,6 @@ import csv
 import json
 from pathlib import Path
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-
 COLORS = {'data_header': '#147d92', 'payload': '#147d92', 'credit_header': '#72b7b2',
           'arbitration_idle': '#ee9753', 'credit_idle': '#d45663', 'no_offer_idle': '#e6eaef'}
 LABELS = {'payload': 'Data words', 'credit_header': 'Credit words', 'arbitration_idle': 'Arbitration idle',
@@ -19,6 +14,10 @@ LABELS = {'payload': 'Data words', 'credit_header': 'Credit words', 'arbitration
 
 def render(stage: Path, output: Path, start: int, duration: int) -> None:
     """Show exact per-direction accounting and D0 north/south production over a chosen ns interval."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
     report = json.loads((stage/'transport.json').read_text())
     periods = json.loads((stage/'profile-inputs.json').read_text())['device_periods_ns']
     with (stage/'transport-timeline.csv').open() as stream:

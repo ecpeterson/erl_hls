@@ -1,13 +1,12 @@
 """Retain mailbox payload aliases for passive, identity-preserving simulation capture."""
 import argparse
-import importlib
 import gzip
 import shutil
 import json
 from pathlib import Path
-import sys
 
 from backend_commands import digest
+from compiler_paths import compiler_source, compiler_tool
 
 
 def payload_net(channel: str) -> str:
@@ -18,8 +17,7 @@ def payload_net(channel: str) -> str:
 
 def retained_rtl(build: Path, stage: Path, device: int, public: Path, selected: dict) -> tuple[Path, dict, dict]:
     """Preserve selected aliases while requiring identical cells, ports and public observations."""
-    sys.path.insert(0, str(public/'tools'))
-    topology = importlib.import_module('topology_debug')
+    topology = compiler_tool(public, 'topology_debug')
     target = stage/'message-rtl'/f'device{device}'
     target.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((stage/f'device{device}-manifest.json').read_text())
@@ -27,7 +25,7 @@ def retained_rtl(build: Path, stage: Path, device: int, public: Path, selected: 
     sources = [build/f'device{device}/{name}.v', build/f'source/{name}_ram.v', public/'priv/rtl/hls_1r1w_ram.v']
     yosys = Path(json.loads((build/'inputs.json').read_text())['tools']['yosys']['path'])
     inputs = [*sources, yosys, build/f'source/{name}_actors.json',
-              *sorted((public/'tools').glob('topology_debug*.py'))]
+              *sorted(compiler_source(public, 'topology_debug').parent.glob('topology_debug*.py'))]
     hashes = {str(p): digest(p) for p in inputs}
     cache = target/'payload-aliases.json.gz'
     if cache.exists():

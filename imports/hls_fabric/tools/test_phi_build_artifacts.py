@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from test_phi_bridge import outputs, read_build
+from phi_build_artifacts import bridge_outputs, read_bridge_build
 
 
 class BuildArtifactsTests(unittest.TestCase):
@@ -18,12 +18,12 @@ class BuildArtifactsTests(unittest.TestCase):
             rtl.write_text('module fixture; endmodule\n')
             (root / 'phi_devices.vh').write_text('// ports\n')
             record = {'inputs': {'config': {'devices_only': True}},
-                      'outputs': outputs(root, devices_only=True)}
+                      'outputs': bridge_outputs(root, devices_only=True)}
             (root / 'provenance.json').write_text(json.dumps(record))
-            self.assertEqual(read_build(root), record)
+            self.assertEqual(read_bridge_build(root), record)
             rtl.write_text('module changed; endmodule\n')
             with self.assertRaisesRegex(ValueError, 'artifacts|instrumentation'):
-                read_build(root)
+                read_bridge_build(root)
 
     def test_existing_mode_still_requires_harness(self) -> None:
         """Records without the optional mode flag retain their original required-adapter contract."""
@@ -32,12 +32,12 @@ class BuildArtifactsTests(unittest.TestCase):
             (root / 'phi_devices.vh').write_text('// ports\n')
             harness = root / 'phi_bridge.vvp'
             harness.write_text('simulation\n')
-            record = {'inputs': {'config': {}}, 'outputs': outputs(root)}
+            record = {'inputs': {'config': {}}, 'outputs': bridge_outputs(root)}
             (root / 'provenance.json').write_text(json.dumps(record))
-            self.assertEqual(read_build(root), record)
+            self.assertEqual(read_bridge_build(root), record)
             harness.unlink()
             with self.assertRaises(FileNotFoundError):
-                read_build(root)
+                read_bridge_build(root)
 
 
 if __name__ == '__main__':

@@ -12,11 +12,13 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+from backend_paths import erlang_paths, erlang_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(public, rtl, stage, carrier):
+def run(public: Path, rtl: Path, stage: Path, carrier: str) -> None:
+    """Check retained RTL hashes and exercise two nodes with the supplied compiler's test beams."""
     manifest = dict((name, digest) for digest, name in
                     (line.split() for line in (public / 'test/golden/xls_verilog.sha256').read_text().splitlines()))
     generated = [rtl / name for name in ('regsvc.v', 'hls_debug_observer.v', 'hls_debug_server.v')]
@@ -59,15 +61,13 @@ def run(public, rtl, stage, carrier):
             if any(p.poll() is not None for p in simulations) or time.monotonic() > deadline:
                 raise RuntimeError(f'simulator startup failed; see {stage}')
             time.sleep(0.02)
-        dependency = (ROOT / '_build/test/checkouts/erl_hls/ebin')
-        if not dependency.exists():
-            dependency = ROOT / '_build/test/lib/erl_hls/ebin'
-        paths = [ROOT / '_build/test/lib/hls_fabric/ebin', ROOT / '_build/test/lib/hls_fabric/test', dependency]
+        paths = erlang_paths('test', compiler=public)
         with (stage / 'host.log').open('w') as log:
             subprocess.run(['erl', '+S', '2:2', '-noshell', '-proto_dist', carrier, '-pa', *map(str, paths), '-eval',
                             '[A,B] = init:get_plain_arguments(), ok = hls_device_rtl:run(A,B), halt().',
                             '-extra', str(stage / 'a'), str(stage / 'b')], cwd=ROOT,
-                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90)
+                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90,
+                           env=erlang_environment('test', compiler=public))
         for process in simulations:
             if process.wait(timeout=10):
                 raise RuntimeError(f'simulator failed; see {stage}')

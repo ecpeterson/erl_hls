@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root
 import shutil
 
 from backend_commands import digest, execute
@@ -60,9 +60,10 @@ def main() -> None:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--ordered", action="store_true", help="exercise explicit ordered start and actual activation acknowledgment")
     modes.add_argument("--tile", action="store_true", help="exercise wrapper-bound configuration using the same protocol checks")
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, default=None)
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/partition-io")
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     for name in ("xls", "erl_hls", "stage"):
         setattr(args, name, getattr(args, name).resolve())
     run(args)

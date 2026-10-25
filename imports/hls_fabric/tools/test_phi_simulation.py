@@ -4,7 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from test_phi_bridge import execute, simulation_netlist
+from backend_commands import execute
+from phi_device_build import simulation_netlist
 
 REFERENCE = r"""
 module reference(input clk, reset, enable, input [7:0] data,

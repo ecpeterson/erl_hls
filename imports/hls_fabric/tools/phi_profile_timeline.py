@@ -2,7 +2,7 @@
 """Render a standalone cross-shard phi profile SVG from a VPI trace."""
 
 from __future__ import annotations
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 
 import argparse
 from collections import defaultdict, deque
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import html
 import json
 
-import hls_profile
+from types import ModuleType
 from itertools import groupby
 from pathlib import Path
 import re
@@ -916,8 +916,9 @@ def render(
 
 
 
-def timing_profile(events: list[Event], dependencies: list[Dependency], period_ns: int) -> dict:
-    """Preserve the original trace details and checked dependencies in the common timing model."""
+def timing_profile(events: list[Event], dependencies: list[Dependency], period_ns: int,
+                   exporter: ModuleType | None = None) -> dict:
+    """Build and validate the common timing model, using an injected exporter or the default compiler."""
     if period_ns <= 0:
         raise ValueError("clock period must be positive")
     identifiers = {id(event): f"event-{i}" for i, event in enumerate(events)}
@@ -942,12 +943,16 @@ def timing_profile(events: list[Event], dependencies: list[Dependency], period_n
                'edges': list(edges.values()),
                'metadata': {'dependency_scope': 'source-fragment fixture dependencies; events are instants',
                             'clock_period_ns': period_ns}}
-    hls_profile.validate(profile)
+    if exporter is None:
+        exporter = compiler_tool(compiler_root("default"), "hls_profile")
+    exporter.validate(profile)
     return profile
 
 def main() -> None:
     """Validate the recording and emit the original SVG plus optional reusable profiles."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler containing the optional profile exporter.")
+    parser.add_argument("--build-profile", default="default")
     parser.add_argument("trace", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument(
@@ -985,11 +990,12 @@ def main() -> None:
         events, groups, planes, router_map, tables
     )
     if args.profile or args.perfetto:
-        profile = timing_profile(events, dependencies, args.period_ns)
+        exporter = compiler_tool(compiler_root(args.build_profile, args.erl_hls), "hls_profile")
+        profile = timing_profile(events, dependencies, args.period_ns, exporter)
         if args.profile:
             args.profile.write_text(json.dumps(profile, separators=(',', ':'))+'\n')
         if args.perfetto:
-            args.perfetto.write_text(json.dumps(hls_profile.perfetto(profile), separators=(',', ':'))+'\n')
+            args.perfetto.write_text(json.dumps(exporter.perfetto(profile), separators=(',', ':'))+'\n')
     focus_cycle = choose_focus(
         events, args.scheduler, args.occurrence, args.focus_cycle
     )

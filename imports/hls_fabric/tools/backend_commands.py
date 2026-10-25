@@ -50,3 +50,22 @@ def execute(command: list[str | Path], directory: Path, name: str,
                                check=True, timeout=timeout, env=env)
 
 
+def logged_command(argv: list[str | int | Path], cwd: Path, log: Path, timeout: int = 1200) -> None:
+    """Retain merged output; on timeout/interruption allow 10s for child cleanup before killing it."""
+    with log.open("w") as output:
+        with subprocess.Popen(list(map(str, argv)), cwd=cwd, stdout=output,
+                              stderr=subprocess.STDOUT) as process:
+            try:
+                code = process.wait(timeout=timeout)
+            except BaseException:
+                # Let the XLS driver's signal handler clean up its compiler
+                # process group before resorting to an unconditional kill.
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise
+            if code:
+                raise RuntimeError(f"command exited {code}; see {log}")

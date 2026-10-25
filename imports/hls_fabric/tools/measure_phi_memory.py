@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Map validated full-device builds, with public debug and five clock crossings per device."""
 import argparse
-import importlib
 import json
 from pathlib import Path
-from compiler_paths import PUBLIC
+from compiler_paths import compiler_root, compiler_tool
 import statistics
 import subprocess
-import sys
 
-from test_phi_bridge import ROOT, read_build
+from backend_paths import ROOT, debug_rtl
+from phi_build_artifacts import read_bridge_build
 from backend_commands import digest
 
 
@@ -51,12 +50,10 @@ def wrapper(device: int) -> str:
 
 def measure(args: argparse.Namespace) -> None:
     """Retain cell distributions and hashes; reject edits to the simulated application artifacts."""
-    provenance = read_build(args.build)
+    provenance = read_bridge_build(args.build)
     args.stage.mkdir(parents=True, exist_ok=False)
-    sys.path.insert(0, str(args.erl_hls / "tools"))
-    accounting = importlib.import_module("measure_topology_debug")
-    sources = [ROOT / "rtl/hls_async_fifo.v", *[args.erl_hls / "priv/rtl/debug" / name for name in
-        ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]]
+    accounting = compiler_tool(args.erl_hls, "measure_topology_debug")
+    sources = [ROOT / "rtl/hls_async_fifo.v", *debug_rtl(args.erl_hls)]
     report = {"scope": "Full devices: actors, RAM, application gateway, credited link, public topology/actor queries and five CDC FIFOs each; excludes optional counter/trace services, PS, DMA, Ethernet/GT and I/O pads. Synthesis only, no placement/timing claim.",
         "build_provenance_sha256": digest(args.build / "provenance.json"),
         "placement": provenance["inputs"]["config"].get("placement", "direct"),
@@ -101,12 +98,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("build", type=Path)
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--erl-hls", type=Path, default=PUBLIC)
+    parser.add_argument("--erl-hls", type=Path, help="Compiler override; defaults to the built test profile.")
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--mapping-timeout", type=int, default=3600,
                         help="per-device, per-seed native synthesis budget in seconds")
     args = parser.parse_args()
+    args.erl_hls = compiler_root("test", args.erl_hls)
     for name in ("build", "stage", "erl_hls"):
         setattr(args, name, getattr(args, name).resolve())
     measure(args)
