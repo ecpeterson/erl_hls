@@ -42,6 +42,46 @@ partial_fields_and_aliases_test() ->
     ?assertNot(maps:is_key(known, field(opaque, First))),
     ?assertNot(maps:is_key(slices, field(opaque, First))).
 
+%% Complete plan views expose records and ordered families without breaking opacity.
+-spec complete_plan_views_test() -> ok.
+complete_plan_views_test() ->
+    File = "test_data/xls_statem_gather_fixture.erl",
+    Program = xls_actor_program:from_file(File, []),
+    Plan = xls_actor_program:plan(Program),
+    Records = xls_statem_plan:records(Plan),
+    ?assertEqual([cell, begin_set, piece, scalar, result, element, parity],
+        [Name || {attribute, _, record, {Name, _}} <- Records]),
+    [Piece] = [Fields || {attribute, _, record, {piece, Fields}} <- Records],
+    ?assertEqual([{key, hls_nums:u32()}, {member, hls_nums:u32()}, {value, hls_nums:u8()}],
+        [{xls_parse:record_field_name(Field), hls_type:descriptor(Type)}
+            || {typed_record_field, Field, Type} <- Piece]),
+    Callbacks = xls_statem_plan:callbacks(Plan),
+    ?assertEqual(
+        [{Phase, enter, 1} || Phase <- [idle, collecting, copied, reducing, publishing, done]] ++
+        [{idle, cast, N} || N <- [1, 2, 3, 4]] ++
+        [{collecting, cast, N} || N <- [1, 2, 3]] ++ [{reducing, cast, 1}] ++
+        [{collecting, internal, 1}, {collecting, internal, 2}, {copied, internal, 1},
+            {reducing, internal, 1}, {reducing, internal, 2}, {publishing, internal, 1}],
+        [{P, K, N} || #{phase := P, kind := K, ordinal := N} <- Callbacks]),
+    ?assert(lists:all(fun(#{clause := Clause, helpers := _, providers := _}) ->
+        element(1, Clause) =:= clause
+    end, Callbacks)),
+    #{callbacks := Selected, records := Records} =
+        xls_statem_plan:select(Plan, [{collecting, cast}]),
+    ?assertEqual(Selected, [C || C = #{phase := collecting, kind := cast} <- Callbacks]),
+    Provenance = xls_statem_plan:provenance(Plan),
+    ?assertEqual([artifact_sha256, planner_md5, source, source_sha256],
+        lists:sort(maps:keys(Provenance))),
+    ?assertEqual(File, maps:get(source, Provenance)),
+    ?assertEqual(crypto:hash(sha256, term_to_binary(xls_actor_program:spec(Program), [deterministic])),
+        maps:get(artifact_sha256, Provenance)),
+    Manifest = xls_statem_plan:manifest(Plan),
+    lists:foreach(fun({Key, Bytes}) ->
+        Raw = maps:get(Key, Provenance),
+        ?assertEqual(Bytes, byte_size(Raw)),
+        ?assertEqual(binary:encode_hex(Raw, lowercase), maps:get(Key, Manifest))
+    end, [{source_sha256, 32}, {artifact_sha256, 32}, {planner_md5, 16}]).
+
 %% A selected or hand-built map is not a program, even with plausible field names.
 -spec supplied_artifacts_are_rejected_test() -> ok.
 supplied_artifacts_are_rejected_test() ->
@@ -64,6 +104,8 @@ source_snapshot_lifetime_test() ->
         Spec = xls_actor_program:spec(Program), Plan = xls_actor_program:plan(Program),
         Effects = xls_actor_program:entry_effects(Program),
         Before = xls_statem_plan:manifest(Plan),
+        Records = xls_statem_plan:records(Plan), Callbacks = xls_statem_plan:callbacks(Plan),
+        Provenance = xls_statem_plan:provenance(Plan),
         Changed = binary:replace(Original, <<"bor 16#8040">>, <<"bor 16#8080">>),
         ?assertNotEqual(Original, Changed),
         ok = file:write_file(File, Changed),
@@ -75,6 +117,9 @@ source_snapshot_lifetime_test() ->
         ok = file:delete(File),
         ?assertEqual(Spec, xls_actor_program:spec(Program)),
         ?assertEqual(Plan, xls_actor_program:plan(Program)),
+        ?assertEqual(Records, xls_statem_plan:records(Plan)),
+        ?assertEqual(Callbacks, xls_statem_plan:callbacks(Plan)),
+        ?assertEqual(Provenance, xls_statem_plan:provenance(Plan)),
         ?assertEqual(Effects, xls_actor_program:entry_effects(Program))
     after
         file:delete(File), file:del_dir(Root)
