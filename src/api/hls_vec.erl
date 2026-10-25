@@ -46,8 +46,11 @@ dslx_imports(Names) ->
     hls_lists:dslx_imports(Names) ++ [hls_vec || lists:member(dot, Names)].
 dslx_codec(vector, Args) -> hls_lists:dslx_codec(list, Args).
 
+-doc "Lowers vector descriptors, checked element access and dot products with a static accumulator type.".
+-spec transpile(vector | nth | set | dot, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state() | {fallible, badarg, xls_clause_lower:ir()}.
 transpile(vector, [{phantom, type, Subtype}, {static, integer, Size}], State) ->
-    xls_parse:reference(State, {phantom, type, vector(Subtype, Size)});
+    xls_clause_lower:reference(State, {phantom, type, vector(Subtype, Size)});
 transpile(nth, Args, State) -> hls_lists:transpile(nth, Args, State);
 transpile(set, Args, State) -> hls_lists:transpile(set, Args, State);
 transpile(dot, [{phantom, type, AccumulatorType}, Left, Right], _State) ->

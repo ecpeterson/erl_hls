@@ -80,13 +80,15 @@ variable_unsigned_round_trip_test() ->
     ?assertError(function_clause, hls_nums:uN(0)),
     ?assertEqual(3, hls_type:value_width(hls_nums:uN(3))).
 
+%% A parameterized unsigned constructor survives lowering as the requested DSLX cast width.
+-spec variable_unsigned_type_transpiles_test() -> ok.
 variable_unsigned_type_transpiles_test() ->
     {ok, Tokens, _EndLine} = erl_scan:string(
         "probe() -> hls_type:as(hls_nums:uN(24), 0)."
     ),
     {ok, {function, _Line, probe, 0, [Clause]}} =
         erl_parse:parse_form(Tokens),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         [],
         state,
@@ -94,7 +96,7 @@ variable_unsigned_type_transpiles_test() ->
         "failure",
         #{}
     ),
-    DSLX = iolist_to_binary(xls_parse:print([Body, Result])),
+    DSLX = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertNotEqual(nomatch, binary:match(DSLX, <<"(0 as uN[24])">>)).
 
 transformed_record_supports_variable_width_fields_and_lists_test() ->

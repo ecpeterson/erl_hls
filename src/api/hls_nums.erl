@@ -103,16 +103,19 @@ zero(float16, []) -> 0.0;
 zero(float32, []) -> 0.0;
 zero(float64, []) -> 0.0 .
 
+-doc "Lowers numeric type constructors and explicit fixed-width wrapping. Parameterized widths must be static.".
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state().
 transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, Name, _}}, Value], State) ->
     _ = signedness(Name),
     wrap_expression(Type, Value, State);
 transpile(Type, [{static, integer, Width}], State) when Type =:= uN; Type =:= sN ->
-    xls_parse:reference(
+    xls_clause_lower:reference(
         State,
         {phantom, type, ?MODULE:Type(Width)}
     );
 transpile(Type, [], State) ->
-    xls_parse:reference(State, {phantom, type, ?MODULE:Type()}).
+    xls_clause_lower:reference(State, {phantom, type, ?MODULE:Type()}).
 
 %% A literal has no source width from which to cast. Normalize it before giving
 %% it the target type so an out-of-range literal never reaches the DSLX parser.

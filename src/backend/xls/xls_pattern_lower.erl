@@ -7,7 +7,7 @@
 -module(xls_pattern_lower).
 -moduledoc false.
 
--include("xls_parse.hrl").
+-include("xls_clause_lower.hrl").
 
 -export([
     lower/3,
@@ -21,18 +21,21 @@
 %% `raw` is the struct or primitive used for field access and comparisons.
 %% `value` is the tagged representation expected by the existing expression
 %% lowerer when a whole callback argument is bound to an Erlang variable.
+-doc "A pattern subject with its raw projection value and its whole-variable representation; record subjects also carry their nominal tag.".
 -type argument() :: #{
-    raw := xls_parse:printable(),
-    value := xls_parse:printable(),
+    raw := xls_clause_lower:printable(),
+    value := xls_clause_lower:printable(),
     record => atom()
 }.
 
--spec record_argument(atom(), xls_parse:printable(),
-    xls_parse:printable()) -> argument().
+-doc "Creates a record subject whose raw fields and whole tagged value can differ.".
+-spec record_argument(atom(), xls_clause_lower:printable(),
+    xls_clause_lower:printable()) -> argument().
 record_argument(Name, Raw, Value) ->
     #{record => Name, raw => Raw, value => Value}.
 
--spec value_argument(xls_parse:printable()) -> argument().
+-doc "Creates an untagged subject whose projected and whole-variable representations agree.".
+-spec value_argument(xls_clause_lower:printable()) -> argument().
 value_argument(Value) ->
     #{raw => Value, value => Value}.
 
@@ -51,8 +54,8 @@ record_pattern_name(Pattern) ->
 -spec lower(
     [erl_parse:abstract_expr()],
     [argument()],
-    xls_parse:clause_state()
-) -> {xls_parse:clause_state(), [xls_parse:printable()]}.
+    xls_clause_lower:clause_state()
+) -> {xls_clause_lower:clause_state(), [xls_clause_lower:printable()]}.
 lower(Patterns, Arguments, State)
         when length(Patterns) =:= length(Arguments) ->
     Context0 = #{state => State, conditions => []},
@@ -74,15 +77,15 @@ lower(Patterns, Arguments, _State) ->
 %% Assignments use the same projections and equality predicates as clause
 %% heads, but a mismatch contributes a failure instead of selecting another arm.
 -doc "Lowers an assignment pattern, recording badmatch on mismatch and retaining the assigned value.".
--spec match(erl_parse:abstract_expr(), xls_parse:printable(),
-    xls_parse:clause_state()) -> xls_parse:clause_state().
+-spec match(erl_parse:abstract_expr(), xls_clause_lower:printable(),
+    xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 match(Pattern, Value, State) ->
     #{state := Bound, conditions := Conditions} = compile_pattern(Pattern,
         value_argument(Value), #{state => State, conditions => []}),
     Checked = lists:foldl(fun({Line, Condition}, Acc) ->
-        xls_parse:add_match_failure(["!(", Condition, ")"], Line, Acc)
+        xls_clause_lower:add_match_failure(["!(", Condition, ")"], Line, Acc)
     end, Bound, lists:reverse(Conditions)),
-    xls_parse:reference(Checked, Value).
+    xls_clause_lower:reference(Checked, Value).
 
 %% Project supported patterns, checking tags only for callback record values.
 -spec compile_pattern(term(), argument(), map()) -> map().
@@ -98,8 +101,8 @@ compile_pattern({record, Line, {value, Name}, Fields}, Subject = #{record := _},
 compile_pattern({record, Line, {value, Name}, Fields}, #{value := Value}, Context = #{state := State}) ->
     %% A projection or case subject has no nominal type in this lowerer. Let XLS
     %% check it before projecting fields, even when the pattern has no fields.
-    Typed = xls_parse:instr(State, xls_parse:record_raw({value, Name}, Value)),
-    Checked = xls_parse:reference(Typed),
+    Typed = xls_clause_lower:instr(State, xls_clause_lower:record_raw({value, Name}, Value)),
+    Checked = xls_clause_lower:reference(Typed),
     compile_pattern({record, Line, Name, Fields}, record_argument(Name, Checked, Checked),
         Context#{state := Typed});
 compile_pattern({record, Line, Name, Fields}, Subject, Context0) ->
@@ -196,10 +199,16 @@ compile_list({match, _, Left, Right}, Line, Subject, Offset, Context) ->
 compile_list(Pattern, _Line, _Subject, _Offset, _Context) ->
     error({unsupported_xls_list_tail_pattern, Pattern}).
 
+%% A repeated variable adds an equality condition; a new name binds once in the clause.
+-spec bind_or_compare(atom(), erl_anno:anno(), xls_clause_lower:printable(),
+    #{state := xls_clause_lower:clause_state(), conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
+        comparison => integer | bits}) ->
+    #{state := xls_clause_lower:clause_state(), conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
+        comparison => integer | bits}.
 bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
-    case xls_parse:find_binding(Name, Line, State) of
+    case xls_clause_lower:find_binding(Name, Line, State) of
         {ok, Bound} -> add_condition(equality(Bound, Value, Context), Line, Context);
-        error -> Context#{state := xls_parse:bind(Name, Line, Value, State)}
+        error -> Context#{state := xls_clause_lower:bind(Name, Line, Value, State)}
     end.
 
 equality(Left, Right, #{comparison := Mode}) ->

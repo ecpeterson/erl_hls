@@ -1,6 +1,8 @@
 -module(xls_helpers_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Reachable local helpers are named and emitted once while unused host-only code is excluded.
+-spec reachable_graph_test() -> ok.
 reachable_graph_test() ->
     {Forms, Helpers} = prepare([
         "root() -> outer(1) + outer(2).",
@@ -15,7 +17,7 @@ reachable_graph_test() ->
     [{clause, _, _, _, [{op, _, '+',
         {xls_helper_call, _, "hls_local_outer__1", _},
         {xls_helper_call, _, "hls_local_outer__1", _}}]}] =
-        xls_parse:find_function(Forms, root, 0),
+        hls_source:find_function(Forms, root, 0),
     Emitted = iolist_to_binary(xls_helpers:emit(Helpers, cell, #{})),
     ?assertNotEqual(nomatch, binary:match(Emitted, <<"{  // L1\n">>)),
     ?assertEqual(nomatch, binary:match(Emitted, <<"unused">>)).

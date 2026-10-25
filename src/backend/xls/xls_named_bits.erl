@@ -40,7 +40,7 @@ print_type(qualified, [Module, Name, _Width]) ->
     [atom_to_list(Module), "::", atom_to_list(Name)].
 
 -doc "Rejects source calls: these descriptors belong to compiler-generated structures, not the source-language type API.".
--spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) -> no_return().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> no_return().
 transpile(Operation, _Args, _State) ->
     error({internal_type_operation, Operation}).
 

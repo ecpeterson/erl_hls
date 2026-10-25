@@ -16,8 +16,8 @@ parse_transform(Forms0, Options) ->
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
     ok = xls_names:wire_tags(Forms),
-    PublicStructNames = xls_parse:find_tags(Forms),
-    StateName = xls_parse:state(Forms),
+    PublicStructNames = hls_actor_source:tags(Forms),
+    StateName = hls_actor_source:state(Forms),
     AnalysisForms = Forms ++ [{attribute, element(2, ModuleAttr),
         hls_source_context, Context}],
     InterfaceAttributes = actor_interface_attributes(AnalysisForms, ModuleAttr),
@@ -28,7 +28,7 @@ parse_transform(Forms0, Options) ->
     end,
     SerializableStructNames = [StateName | PublicStructNames],
     NestedRecords = hls_records:declarations(Forms, SerializableStructNames),
-    [xls_parse:validate_record_defaults(R) || R <- NestedRecords],
+    [hls_records:validate_defaults(R) || R <- NestedRecords],
     RewrittenBodyForms = rewrite_record_defaults(BodyForms, Forms),
     ExportAttr = {attribute, element(2, ModuleAttr), export,
         [
@@ -52,9 +52,9 @@ parse_transform(Forms0, Options) ->
                     default,
                     [bitstring]
                 }
-                ||  {attribute, _L, record, {_T, Fields}} <- [xls_parse:find_record(Forms, Tag)],
+                ||  {attribute, _L, record, {_T, Fields}} <- [hls_records:find(Forms, Tag)],
                     {typed_record_field, Field, Desc} <- Fields,
-                    FieldAtom <- [xls_parse:record_field_name(Field)]
+                    FieldAtom <- [hls_records:field_name(Field)]
             ]}
         ]}
         ||  Tag <- SerializableStructNames
@@ -70,7 +70,7 @@ parse_transform(Forms0, Options) ->
                     fun(Call, Acc) -> {cons, Line, Call, Acc} end,
                     {nil, Line},
                     [descriptor_expression(hls_type:descriptor(Desc), Line)
-                        ||  {attribute, _L, record, {_T, Fields}} <- [xls_parse:find_record(Forms, Tag)],
+                        ||  {attribute, _L, record, {_T, Fields}} <- [hls_records:find(Forms, Tag)],
                             {typed_record_field, _record_Field, Desc} <- Fields]
             )},
             {match, Line,
@@ -119,15 +119,17 @@ parse_transform(Forms0, Options) ->
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
 
+%% Strip earlier source-reader metadata before emitting the captured build context.
+-spec is_source_context(hls_source:form()) -> boolean().
 is_source_context({attribute, _, hls_source_context, _}) -> true;
 is_source_context(_) -> false.
 
 %% Embed immediate or retained-server contracts for source-independent host proxies.
 -spec service_contract_attributes([hls_source:form()], tuple()) -> [tuple()].
 service_contract_attributes(Forms, {attribute, Line, module, _}) ->
-    case xls_parse:find_optional_attribute(Forms, hls_phases) of
+    case hls_source:find_optional_attribute(Forms, hls_phases) of
         {ok, _} ->
-            case xls_parse:find_optional_attribute(Forms, hls_pending_calls) of
+            case hls_source:find_optional_attribute(Forms, hls_pending_calls) of
                 none -> [];
                 {ok, _} -> [{attribute, Line, hls_service_contract,
                     hls_service_contract:from_forms(Forms)}]
@@ -149,7 +151,7 @@ service_contract_attributes(Forms, {attribute, Line, module, _}) ->
 record_width_expression(Forms, Tag, Location) ->
     Line = erl_anno:new(Location),
     {attribute, _RecordLine, record, {_Tag, Fields}} =
-        xls_parse:find_record(Forms, Tag),
+        hls_records:find(Forms, Tag),
     lists:foldl(
         fun({typed_record_field, _Field, Descriptor}, Sum) ->
             Width = {call,
@@ -166,8 +168,10 @@ record_width_expression(Forms, Tag, Location) ->
         Fields
     ).
 
+%% Embed a structural interface when the actor belongs to the supported source subset.
+-spec actor_interface_attributes([hls_source:form()], tuple()) -> [tuple()].
 actor_interface_attributes(Forms, ModuleAttr) ->
-    case xls_parse:find_optional_attribute(Forms, hls_phases) of
+    case hls_source:find_optional_attribute(Forms, hls_phases) of
         {ok, PhaseNames} ->
             %% Interface inference validates only the structurally observable
             %% HLS subset; lowering callback expressions to DSLX happens later.
@@ -195,7 +199,7 @@ rewrite_record_defaults(Body, Resolved) ->
 %% Unrelated ordinary Erlang records retain their explicit defaults.
 -spec rewrite_record_defaults_in_form(tuple(), [hls_source:form()]) -> tuple().
 rewrite_record_defaults_in_form({attribute, Line, record, {Name, Fields}}, Resolved) ->
-    {attribute, _, record, {Name, Types}} = xls_parse:find_record(Resolved, Name),
+    {attribute, _, record, {Name, Types}} = hls_records:find(Resolved, Name),
     {attribute, Line, record, {Name, [rewrite_record_field_default(Field, Type)
         || {Field, Type} <- lists:zip(Fields, Types)]}};
 rewrite_record_defaults_in_form(Form, _Resolved) -> Form.
@@ -205,7 +209,7 @@ rewrite_record_defaults_in_form(Form, _Resolved) -> Form.
 rewrite_record_field_default({typed_record_field,
         {record_field, Line, Name, Default}, Type} = Field,
         {typed_record_field, _, ResolvedType}) ->
-    case xls_parse:is_zero_default(Default) of
+    case hls_records:is_zero_default(Default) of
         true ->
             Expanded = {call, Line,
                 {remote, Line, {atom, Line, hls_type}, {atom, Line, zero}},

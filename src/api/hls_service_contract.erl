@@ -12,7 +12,7 @@
 -doc "Validates request/reply declarations and returns allowed call replies and cast tags.".
 -spec from_forms([hls_source:form()]) -> contract().
 from_forms(Forms) ->
-    Public = xls_parse:find_tags(Forms),
+    Public = hls_actor_source:tags(Forms),
     {Calls, Casts} = request_tags(Forms),
     case [Tag || Tag <- Calls ++ Casts, not lists:member(Tag, Public)] of
         [] -> ok;
@@ -35,7 +35,7 @@ from_forms(Forms) ->
 %% State functions use the same schema/reply contract as server callbacks.
 -spec request_tags([hls_source:form()]) -> {[atom()], [atom()]}.
 request_tags(Forms) ->
-    case xls_parse:find_optional_attribute(Forms, hls_phases) of
+    case hls_source:find_optional_attribute(Forms, hls_phases) of
         none -> {[Tag || {Tag, _} <- groups(Forms, handle_call)],
             [Tag || {Tag, _} <- groups(Forms, handle_cast)]};
         {ok, Phases} ->
@@ -85,7 +85,7 @@ from_module(Module) ->
 call_arity(Forms) ->
     Two = clauses(Forms, handle_call, 2),
     Three = clauses(Forms, handle_call, 3),
-    case {Two, Three, xls_parse:find_optional_attribute(Forms, hls_pending_calls)} of
+    case {Two, Three, hls_source:find_optional_attribute(Forms, hls_pending_calls)} of
         {_, [], none} -> 2;
         {[], _, {ok, N}} when is_integer(N), N > 0, N =< 255 -> 3;
         _ -> error(invalid_hls_pending_calls)
@@ -97,8 +97,8 @@ extended(Forms, Contract) ->
     case call_arity(Forms) of
         2 -> Contract;
         3 ->
-            {ok, N} = xls_parse:find_optional_attribute(Forms, hls_pending_calls),
-            Names = case xls_parse:find_optional_attribute(Forms, hls_continuations) of
+            {ok, N} = hls_source:find_optional_attribute(Forms, hls_pending_calls),
+            Names = case hls_source:find_optional_attribute(Forms, hls_continuations) of
                 none -> [];
                 {ok, Value} -> Value
             end,

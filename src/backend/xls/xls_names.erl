@@ -23,8 +23,8 @@ enum_member(Name) -> string:uppercase(atom_to_list(Name)).
 -doc "Rejects duplicate or reserved wire tags, independently of DSLX identifier spelling.".
 -spec wire_tags([hls_source:form()]) -> ok.
 wire_tags(Forms) ->
-    Data = xls_parse:state(Forms),
-    Tags = xls_parse:find_tags(Forms),
+    Data = hls_actor_source:state(Forms),
+    Tags = hls_actor_source:tags(Forms),
     _ = lists:foldl(fun(Name, Seen) ->
         Origin = record_origin(Forms, Name),
         claim(wire_tag, Name, Origin, Seen)
@@ -36,8 +36,8 @@ wire_tags(Forms) ->
 actor(Forms, Kind) ->
     ok = control_names(Forms, Kind),
     ok = wire_tags(Forms),
-    Names = [xls_parse:state(Forms) | xls_parse:find_tags(Forms)],
-    SymbolKind = case {Kind, xls_parse:find_optional_attribute(Forms, hls_pending_calls)} of
+    Names = [hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)],
+    SymbolKind = case {Kind, hls_source:find_optional_attribute(Forms, hls_pending_calls)} of
         {hls_gs, {ok, _}} -> hls_gs_deferred;
         _ -> Kind
     end,
@@ -47,12 +47,14 @@ actor(Forms, Kind) ->
     ok = records(Resolved, ValueNames, SymbolKind),
     tags(Forms, Names).
 
+%% State-machine phase and port names must fit their enums and generated channel namespaces.
+-spec control_names([hls_source:form()], hls_gs | hls_statem) -> ok.
 control_names(Forms, Kind) ->
     case Kind of
         hls_gs -> ok;
         hls_statem ->
-            Phases = xls_parse:find_attribute(Forms, hls_phases),
-            Outputs = xls_parse:find_attribute(Forms, hls_outputs),
+            Phases = hls_source:find_attribute(Forms, hls_phases),
+            Outputs = hls_source:find_attribute(Forms, hls_outputs),
             ok = count(phase, Phases, 256),
             ok = count(output, Outputs, 255),
             lists:foreach(fun(Phase) ->
@@ -84,12 +86,12 @@ port_channels(Ports) ->
 -doc "Checks the private accumulator and reducer names against the actor's generated namespaces.".
 -spec reduction([hls_source:form()], atom(), [map()]) -> ok.
 reduction(Forms, Accumulator, Opens) ->
-    Public = xls_parse:find_tags(Forms),
+    Public = hls_actor_source:tags(Forms),
     case length(Public) =< 252 of
         true -> ok;
         false -> error({too_many_hls_tags_for_reduction, length(Public), 252})
     end,
-    Names = [xls_parse:state(Forms) | Public] ++ [Accumulator],
+    Names = [hls_actor_source:state(Forms) | Public] ++ [Accumulator],
     ok = records(Forms, Names, hls_statem),
     ok = tags(Forms, Names),
     %% The same reducer can be opened by several phases; only distinct
@@ -132,10 +134,10 @@ records(Forms, Names, Kind) ->
                 false -> claim(module, Symbol, Origin#{kind := Role}, Acc)
             end
         end, Seen, Symbols),
-        {attribute, _, record, {Name, Fields}} = xls_parse:find_record(Forms, Name),
+        {attribute, _, record, {Name, Fields}} = hls_records:find(Forms, Name),
         _ = lists:foldl(fun(Field, Acc) ->
             Bare = case Field of {typed_record_field, F, _} -> F; F -> F end,
-            FieldName = xls_parse:record_field_name(Bare),
+            FieldName = hls_records:field_name(Bare),
             FieldOrigin = Origin#{kind := field, name := {Name, FieldName},
                 line := erl_anno:line(element(2, Bare))},
             Symbol = atom_to_list(FieldName),

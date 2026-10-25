@@ -8,17 +8,21 @@
 -module(xls_case_lower).
 -moduledoc false.
 
--include("xls_parse.hrl").
+-include("xls_clause_lower.hrl").
 
 -export([lower/4, lower_if/3]).
+
+%% A lowered case arm keeps its head evaluation, selection predicate and isolated body state.
+-type branch() :: #{head := xls_clause_lower:printable(), guard := xls_clause_lower:printable(),
+    state := xls_clause_lower:clause_state()}.
 
 -doc "Lowers ordered case selection, joining surviving bindings and propagating only the selected arm's failure.".
 -spec lower(
     erl_anno:location(),
     erl_parse:abstract_expr(),
     [erl_parse:abstract_clause(), ...],
-    xls_parse:clause_state()
-) -> xls_parse:clause_state().
+    xls_clause_lower:clause_state()
+) -> xls_clause_lower:clause_state().
 lower(Line, Condition, Clauses, State) ->
     case boolean_only(Clauses) of
         true -> lower_boolean_case(Line, Condition, Clauses, State);
@@ -30,16 +34,16 @@ lower(Line, Condition, Clauses, State) ->
 %%%
 
 %% Compare ordered alternatives against their concrete struct or tagged callback shape.
--spec lower_ordered_case(erl_anno:location(), term(), [tuple()], xls_parse:clause_state(), atom()) -> xls_parse:clause_state().
+-spec lower_ordered_case(erl_anno:location(), term(), [tuple()], xls_clause_lower:clause_state(), atom()) -> xls_clause_lower:clause_state().
 lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     Clauses = [normalize_clause(Clause) || Clause <- Clauses0],
     Shape = case_shape(Clauses),
-    ConditionState = xls_parse:statement_from_statement(
+    ConditionState = xls_clause_lower:statement_from_statement(
         Condition,
         State0#clause_state{reference = none}
     ),
     ok = validate_nonfinal_fallbacks(lists:droplast(Clauses), ConditionState, FailureKind),
-    Subject = xls_parse:reference(ConditionState),
+    Subject = xls_clause_lower:reference(ConditionState),
     Argument = case Shape of
         {record, {value, _Name}} ->
             xls_pattern_lower:value_argument(Subject);
@@ -57,7 +61,7 @@ lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     Failure = xls_failure_sites:at(FailureKind, Line),
     join(Line, ConditionState, Branches, fun(Exports) ->
         ["{\n", xls_parse_io:indent(
-            xls_parse:print(render_chain(Branches, Exports, Failure)), 2), "}"]
+            xls_clause_lower:print(render_chain(Branches, Exports, Failure)), 2), "}"]
     end).
 
 normalize_clause({clause, Line, [Pattern], Guards, Body})
@@ -81,10 +85,12 @@ validate_nonfinal_fallbacks([_Clause | Rest], State, Kind) ->
 fallback_error(case_clause) -> nonfinal_xls_case_fallback;
 fallback_error(if_clause) -> nonfinal_xls_if_fallback.
 
+%% Wildcards and unbound variable aliases are unconditional pattern fallbacks.
+-spec fallback_pattern(erl_parse:abstract_expr(), xls_clause_lower:clause_state()) -> boolean().
 fallback_pattern({var, _Line, '_'}, _State) ->
     true;
 fallback_pattern({var, Line, Name}, State) ->
-    xls_parse:find_binding(Name, Line, State) =:= error;
+    xls_clause_lower:find_binding(Name, Line, State) =:= error;
 fallback_pattern({match, _Line, Left, Right}, State) ->
     fallback_pattern(Left, State) andalso fallback_pattern(Right, State);
 fallback_pattern(_Pattern, _State) ->
@@ -136,34 +142,40 @@ merge_shape(Shape, Shape, _Line) ->
 merge_shape(Left, Right, Line) ->
     error({incompatible_xls_case_pattern_shapes, Line, Left, Right}).
 
+%% Lower a normalized pattern, guard and body without leaking its temporary bindings.
+-spec lower_branch({erl_anno:anno(), erl_parse:abstract_expr(),
+    [[erl_parse:abstract_expr()]], [term()]}, xls_pattern_lower:argument(),
+    xls_clause_lower:printable(), xls_clause_lower:clause_state()) -> branch().
 lower_branch({Line, Pattern, Guards, Body}, Argument, Subject, BranchBase) ->
     {PatternState, Conditions} = xls_pattern_lower:lower([Pattern], [Argument], BranchBase),
     Guard = xls_guard_lower:condition(Guards,
         record_tag_condition(Pattern, Subject) ++ Conditions, Line),
-    GuardState = xls_parse:statement_from_statement(Guard, PatternState#clause_state{reference = none}),
+    GuardState = xls_clause_lower:statement_from_statement(Guard, PatternState#clause_state{reference = none}),
     #{head => lists:reverse(GuardState#clause_state.statements),
-        guard => xls_parse:reference(GuardState),
+        guard => xls_clause_lower:reference(GuardState),
         state => lower_expressions(Body, branch_base(GuardState))}.
 
 %% The last arm supplies the XLS value type even when it does not match.
 %% Its value/bindings are then unobservable: the selection failure takes
 %% precedence over any body failure and consumers discard the whole outcome.
+-spec render_chain([branch(), ...], [atom()], xls_clause_lower:printable()) ->
+    xls_clause_lower:printable().
 render_chain([#{head := Head, guard := "bool:true", state := State}], Exports, _Kind) ->
     [Head, selected(State, Exports)];
 render_chain([#{head := Head, guard := Guard, state := State}], Exports, Code) ->
-    Failure = ["if ", Guard, " { ", xls_parse:failure_code(State),
+    Failure = ["if ", Guard, " { ", xls_clause_lower:failure_code(State),
         " } else { ", Code, " }"],
     [Head, selected(State, Exports, Failure)];
 render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, Kind) ->
     [Head, "if ", Guard, " {\n",
-        xls_parse_io:indent(xls_parse:print(selected(State, Exports)), 2),
+        xls_parse_io:indent(xls_clause_lower:print(selected(State, Exports)), 2),
         "} else {\n",
-        xls_parse_io:indent(xls_parse:print(render_chain(Rest, Exports, Kind)), 2), "}"].
+        xls_parse_io:indent(xls_clause_lower:print(render_chain(Rest, Exports, Kind)), 2), "}"].
 
 %% Guard-only clauses share case's ordering, branch joins, and failure carrier.
 -doc "Lowers guard-only selection with Erlang clause order and if_clause failure on no match.".
 -spec lower_if(erl_anno:location(), [erl_parse:abstract_clause(), ...],
-    xls_parse:clause_state()) -> xls_parse:clause_state().
+    xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 lower_if(Line, Clauses, State) ->
     Normalized = [if_clause(Clause) || Clause <- Clauses],
     lower_ordered_case(Line, "()", Normalized, State, if_clause).
@@ -196,10 +208,12 @@ top_record_name({match, _Line, Pattern, {var, _VarLine, _Name}}) ->
 top_record_name(_Pattern) ->
     none.
 
+%% Lower prepared expressions in order, replacing only the current value reference.
+-spec lower_expressions([term()], xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 lower_expressions(Expressions, State0) ->
     lists:foldl(
         fun(Expression, State) ->
-            xls_parse:statement_from_statement(
+            xls_clause_lower:statement_from_statement(
                 Expression,
                 State#clause_state{reference = none}
             )
@@ -214,6 +228,9 @@ branch_base(State) ->
 %% Every arm returns the expression value, its own failure kind, and the
 %% same ordered set of new bindings. Pre-existing names retain their original
 %% value; matching them inside an arm contributes only to that arm's failure.
+-spec join(erl_anno:anno(), xls_clause_lower:clause_state(),
+    nonempty_list(branch() | #{state := xls_clause_lower:clause_state()}),
+    fun(([atom()]) -> xls_clause_lower:printable())) -> xls_clause_lower:clause_state().
 join(Line, Base = #clause_state{bindings = Bound, unsafe_bindings = Unsafe}, Branches, Render) ->
     States = [State || #{state := State} <- Branches],
     BindingSets = [S#clause_state.bindings || S <- States],
@@ -227,19 +244,23 @@ join(Line, Base = #clause_state{bindings = Bound, unsafe_bindings = Unsafe}, Bra
     Merged = Base#clause_state{
         anonymous_counter = lists:max([S#clause_state.anonymous_counter || S <- States]),
         unsafe_bindings = maps:merge(maps:from_list([{Name, Line} || Name <- Partial]), Unsafe)},
-    Outcome = xls_parse:instr(Merged, Render(Exports)),
-    Result = xls_parse:reference(Outcome),
+    Outcome = xls_clause_lower:instr(Merged, Render(Exports)),
+    Result = xls_clause_lower:reference(Outcome),
     Joined = lists:foldl(fun({Index, Name}, Acc) ->
-        xls_parse:bind(Name, Line, [Result, ".2.", integer_to_list(Index)], Acc)
+        xls_clause_lower:bind(Name, Line, [Result, ".2.", integer_to_list(Index)], Acc)
     end, Outcome, lists:enumerate(0, Exports)),
-    xls_parse:outcome_value(xls_parse:reference(Joined, Result)).
+    xls_clause_lower:outcome_value(xls_clause_lower:reference(Joined, Result)).
 
+%% Package the chosen value, its selected failure and the bindings needed after the join.
+-spec selected(xls_clause_lower:clause_state(), [atom()]) -> xls_clause_lower:printable().
 selected(State, Exports) ->
-    selected(State, Exports, xls_parse:failure_code(State)).
+    selected(State, Exports, xls_clause_lower:failure_code(State)).
 
+%% Allow no-match handling to replace the branch failure without evaluating another body.
+-spec selected(xls_clause_lower:clause_state(), [atom()], xls_clause_lower:printable()) -> xls_clause_lower:printable().
 selected(State = #clause_state{bindings = Bindings}, Exports, Failure) ->
     [lists:reverse(State#clause_state.statements),
-        "(", xls_parse:reference(State), ", ", Failure,
+        "(", xls_clause_lower:reference(State), ", ", Failure,
         case Exports of
             [] -> [];
             _ -> [", (", [[maps:get(Name, Bindings), ", "] || Name <- Exports], ")"]
@@ -261,17 +282,20 @@ boolean_only(Clauses) ->
         Clauses
     ).
 
+%% Keep the exact true/false case compact while sharing ordinary branch-join semantics.
+-spec lower_boolean_case(erl_anno:anno(), term(), [erl_parse:abstract_clause(), ...],
+    xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
 lower_boolean_case(Line, Condition, Clauses, State0) ->
     {TrueBody, FalseBody} = boolean_case_bodies(Clauses),
-    ConditionState = xls_parse:statement_from_statement(Condition, State0#clause_state{reference = none}),
+    ConditionState = xls_clause_lower:statement_from_statement(Condition, State0#clause_state{reference = none}),
     BranchBase = branch_base(ConditionState),
     TrueState = lower_expressions(TrueBody, BranchBase),
     FalseState = lower_expressions(FalseBody, BranchBase),
     join(Line, ConditionState, [#{state => TrueState}, #{state => FalseState}], fun(Exports) ->
-        ["if ", xls_parse:reference(ConditionState), " {\n",
-            xls_parse_io:indent(xls_parse:print(selected(TrueState, Exports)), 2),
+        ["if ", xls_clause_lower:reference(ConditionState), " {\n",
+            xls_parse_io:indent(xls_clause_lower:print(selected(TrueState, Exports)), 2),
             "} else {\n",
-            xls_parse_io:indent(xls_parse:print(selected(FalseState, Exports)), 2), "}"]
+            xls_parse_io:indent(xls_clause_lower:print(selected(FalseState, Exports)), 2), "}"]
     end).
 
 boolean_case_bodies(Clauses) ->

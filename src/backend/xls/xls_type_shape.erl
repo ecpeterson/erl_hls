@@ -8,21 +8,27 @@
 -type shape() :: unknown | {array, shape(), non_neg_integer()} |
     {record, atom(), #{atom() => shape()}}.
 
+%% An include-expanded module and the exact source context used to read it.
+-type source() :: #{path := file:filename(), context := hls_source:context(),
+    forms := [hls_source:form()]}.
+%% Cache both successful reads and files whose module name is not the requested provider.
+-type cache() :: #{file:filename() => source() | unknown}.
+
 %% Deliberately independent of loaded modules and provider callbacks. Aliases
 %% are source declarations, not proof of a provider's emitted hardware type;
 %% consumers must retain and check the dimensions on which they rely in DSLX.
 -doc "Resolves requested record-field shapes from source aliases. Returned dimensions still require validation against emitted DSLX types.".
 -spec records([hls_source:form()], #{atom() => [atom()]}) -> #{atom() => shape()}.
 records(Forms, Requests) ->
-    Context = case xls_parse:find_optional_attribute(Forms, hls_source_context) of
+    Context = case hls_source:find_optional_attribute(Forms, hls_source_context) of
         {ok, Captured} -> Captured;
         none -> hls_source:from_forms(Forms, [])
     end,
     Source = #{path := SourcePath} = source(Forms, Context),
     {Records, _Cache} = lists:mapfoldl(fun({Name, RequestedFields}, Cache) ->
-        {attribute, _, record, {Name, Fields}} = xls_parse:find_record(Forms, Name),
+        {attribute, _, record, {Name, Fields}} = hls_records:find(Forms, Name),
         {Shapes, Next} = lists:mapfoldl(fun({typed_record_field, Field, Type}, Acc) ->
-            FieldName = xls_parse:record_field_name(Field),
+            FieldName = hls_records:field_name(Field),
             {Shape, Updated} = case lists:member(FieldName, RequestedFields) of
                 true -> resolve(Type, #{}, Source, Acc, []);
                 false -> {unknown, Acc}
@@ -87,6 +93,8 @@ alias(Name, Args, Source = #{path := Path, forms := Forms}, Cache, Stack) ->
             end
     end.
 
+%% Resolve a provider beside the source or explicit includes, caching source rather than loaded BEAMs.
+-spec provider(module(), source(), cache()) -> {source() | unknown, cache()}.
 provider(Module, #{path := Path, context := Context}, Cache) ->
     #{directory := Directory, includes := Includes} = Context,
     %% Source-relative discovery has the same answer in a clean tree and with
@@ -104,7 +112,7 @@ provider(Module, #{path := Path, context := Context}, Cache) ->
                     ProviderContext = (maps:remove(origins, Context))#{source_name := Filename},
                     Forms = hls_source:read(Filename, ProviderContext),
                     %% A file with another module name is not this alias.
-                    Provider = case xls_parse:find_optional_attribute(Forms, module) of
+                    Provider = case hls_source:find_optional_attribute(Forms, module) of
                         {ok, Module} -> source(Forms, ProviderContext);
                         _ -> unknown
                     end,

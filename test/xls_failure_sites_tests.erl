@@ -1,15 +1,17 @@
 -module(xls_failure_sites_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Preprocessing line numbers acquire the correct include origin before failure sites are assigned.
+-spec include_origins_and_real_annotations_test() -> ok.
 include_origins_and_real_annotations_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_actor_debug_fixture.erl"),
     Functions = [F || F = {function, _, _, _, _} <- Forms],
     Annotations = lists:append([erl_parse:fold_anno(fun(A, Acc) -> [A | Acc] end, [], F)
         || F <- Functions]),
     %% epp's actual input to this pass uses line numbers and file attributes.
     ?assert(lists:all(fun is_integer/1, Annotations)),
     {Prepared, Sites} = xls_failure_sites:prepare(Forms),
-    [{clause, Anno, _, _, _}] = xls_parse:find_function(Prepared, included_inner, 1),
+    [{clause, Anno, _, _, _}] = hls_source:find_function(Prepared, included_inner, 1),
     ?assertEqual("hls_actor_debug_helpers.hrl", erl_anno:file(Anno)),
     ?assertEqual(6, erl_anno:line(Anno)),
     ?assertMatch([_], [S || S = #{file := <<"hls_actor_debug_helpers.hrl">>,
@@ -19,16 +21,20 @@ include_origins_and_real_annotations_test() ->
     ok = xls_failure_sites:validate_origins(Sites).
 
 
+%% Relative and absolute spellings of the same source produce the same failure-site codebook.
+-spec absolute_source_spelling_keeps_codebook_test() -> ok.
 absolute_source_spelling_keeps_codebook_test() ->
     Source = "test/hls_actor_debug_fixture.erl",
-    {ok, Relative} = xls_parse:parse_file(Source),
-    {ok, Absolute} = xls_parse:parse_file(filename:absname(Source)),
+    {ok, Relative} = hls_source:parse_file(Source),
+    {ok, Absolute} = hls_source:parse_file(filename:absname(Source)),
     {_, Expected} = xls_failure_sites:prepare(Relative),
     {_, Actual} = xls_failure_sites:prepare(Absolute),
     ?assertEqual(Expected, Actual).
 
+%% Selected BEAM exceptions identify the same file, line and kind as prepared failure sites.
+-spec beam_reports_the_same_selected_origins_test() -> ok.
 beam_reports_the_same_selected_origins_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_actor_debug_fixture.erl"),
     {_, Sites} = xls_failure_sites:prepare(Forms),
     lists:foreach(fun({Value, Kind}) ->
         try hls_actor_debug_fixture:active(enter, boot, {cell, Value}) of
@@ -52,10 +58,12 @@ beam_kind(if_clause) -> if_clause;
 beam_kind(badarith) -> badarith;
 beam_kind(badarg) -> badarg.
 
+%% Only complete referenced failure identifiers retain declarations; longer names do not match.
+-spec unused_sites_are_not_declared_test() -> ok.
 unused_sites_are_not_declared_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_actor_debug_fixture.erl"),
     {Prepared, Sites} = xls_failure_sites:prepare(Forms),
-    [{clause, Anno, _, _, _}] = xls_parse:find_function(Prepared, included_inner, 1),
+    [{clause, Anno, _, _, _}] = hls_source:find_function(Prepared, included_inner, 1),
     Name = iolist_to_binary(xls_failure_sites:at(function_clause, Anno)),
     %% A longer identifier must not accidentally keep this site's declaration.
     Other = [Name, "_suffix"],
@@ -67,6 +75,8 @@ unused_sites_are_not_declared_test() ->
     Expected = iolist_to_binary(["const ", Name, " = u16:", integer_to_list(Code), ";"]),
     ?assertMatch({_, _}, binary:match(Emitted, Expected)).
 
+%% Each actor declares exactly its referenced failure sites with consecutive local IDs and valid kinds.
+-spec generated_failure_declarations_test_() -> [{file:filename(), fun(() -> ok)}].
 generated_failure_declarations_test_() ->
     [{File, fun() ->
         Source = iolist_to_binary(xls_parse:to_xls(File)),
@@ -76,7 +86,7 @@ generated_failure_declarations_test_() ->
             <<>>, [global, multiline, {return, binary}]),
         References = captures(Body, <<"\\b(", Pattern/binary, ")\\b">>, []),
         ?assertEqual(lists:usort(Declarations), lists:usort(References)),
-        {ok, Forms} = xls_parse:parse_file(File),
+        {ok, Forms} = hls_source:parse_file(File),
         {_, Origins} = xls_failure_sites:prepare(Forms),
         Sites = xls_failure_sites:from_artifact(Origins, Source),
         ?assertEqual(lists:seq(1, length(Sites)), [C bsr 4 || #{code := C} <- Sites]),
@@ -106,8 +116,10 @@ capacity_applies_only_to_retained_sites_test() ->
     ?assertError({failure_site_capacity, 4096, 4095},
         xls_failure_sites:allocate(Origins, [Name(L) || L <- lists:seq(1, 4096)])).
 
+%% Changed failure constants and references absent from the source codebook are rejected.
+-spec artifact_declarations_must_agree_with_codebook_test() -> ok.
 artifact_declarations_must_agree_with_codebook_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_actor_debug_fixture.erl"),
     {_, Origins} = xls_failure_sites:prepare(Forms),
     Source = iolist_to_binary(xls_parse:to_xls("test/hls_actor_debug_fixture.erl")),
     Bad = re:replace(Source, <<"= u16:[0-9]+;">>, <<"= u16:65535;">>, [{return, binary}]),

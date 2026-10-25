@@ -62,9 +62,9 @@ XLS expression. A `fallible` result renders `(value, failed: bool)`; the compile
 attaches the call's source location and propagates its registered failure kind.
 """.
 %% TODO: might need to supply clause state for anonymous variables
--callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) ->
-    xls_parse:ir() | xls_parse:clause_state() |
-    {fallible, atom(), xls_parse:ir()}.
+-callback transpile(FnName :: atom(), XLSArgs :: [xls_clause_lower:ir()], State :: xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state() |
+    {fallible, atom(), xls_clause_lower:ir()}.
 
 -doc """
 Declares the DSLX modules used by this provider's types and expressions.
@@ -88,15 +88,15 @@ element. Omission means ordinary bit casts; value_width/2 declares whether
 such casts add or remove padding. Padding must match the host codec policy.
 """.
 -callback dslx_codec(atom(), [arg()]) -> bit_cast |
-    {fun((xls_parse:printable()) -> xls_parse:printable()),
-     fun((xls_parse:printable()) -> xls_parse:printable())}.
+    {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
+     fun((xls_clause_lower:printable()) -> xls_clause_lower:printable())}.
 -optional_callbacks([dslx_imports/0, dslx_imports/1, dslx_codec/2]).
 
 -doc "Builds an empty Erlang instance of this type.".
 -callback zero(TypeName :: atom(), Args :: [arg()]) -> any().
 
 -doc "Emits the corresponding XLS type for the Erlang type descriptor.".
--callback print_type(TypeName :: atom(), Args :: [any()]) -> xls_parse:printable().
+-callback print_type(TypeName :: atom(), Args :: [any()]) -> xls_clause_lower:printable().
 
 -doc "Serialized bit width, including padding; pack/3 must return this many bits.".
 -callback width(Name :: atom(), Args :: [any()]) -> integer().
@@ -141,7 +141,7 @@ as(_Descriptor, Value) ->
     Value.
 
 -doc "Lowers a type ascription; rejects host-only normalization and exact-packing operations.".
--spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) -> xls_parse:ir().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_clause_lower:ir().
 transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
     ["(", Value, " as ", print_type(Descriptor), ")"];
 transpile(Operation, _Args, _State) when Operation =:= normalize;
@@ -211,12 +211,12 @@ unpack(Packed, Type = {hls_type, Module, Name, Args}) ->
     {Value, Rest}.
 
 -doc "Renders the descriptor's DSLX value type.".
--spec print_type(descriptor()) -> xls_parse:printable().
+-spec print_type(descriptor()) -> xls_clause_lower:printable().
 print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).
 
 -doc "Returns the provider's from-bits/to-bits renderers, or bit_cast for ordinary value types.".
--spec dslx_codec(descriptor()) -> bit_cast | {fun((xls_parse:printable()) -> xls_parse:printable()), fun((xls_parse:printable()) -> xls_parse:printable())}.
+-spec dslx_codec(descriptor()) -> bit_cast | {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), fun((xls_clause_lower:printable()) -> xls_clause_lower:printable())}.
 dslx_codec({hls_type, Module, Name, Args}) ->
     _ = code:ensure_loaded(Module),
     case erlang:function_exported(Module, dslx_codec, 2) of
@@ -225,7 +225,7 @@ dslx_codec({hls_type, Module, Name, Args}) ->
     end.
 
 -doc "Renders wire bits as a typed DSLX value using the provider's padding policy.".
--spec dslx_from_bits(descriptor(), xls_parse:printable()) -> xls_parse:printable().
+-spec dslx_from_bits(descriptor(), xls_clause_lower:printable()) -> xls_clause_lower:printable().
 dslx_from_bits(Type, Bits) ->
     case dslx_codec(Type) of
         bit_cast -> [Bits, " as ", print_type(Type)];
@@ -233,7 +233,7 @@ dslx_from_bits(Type, Bits) ->
     end.
 
 -doc "Renders a DSLX value as serialized bits, including the provider's padding.".
--spec dslx_to_bits(descriptor(), xls_parse:printable()) -> xls_parse:printable().
+-spec dslx_to_bits(descriptor(), xls_clause_lower:printable()) -> xls_clause_lower:printable().
 dslx_to_bits(Type, Value) ->
     case dslx_codec(Type) of
         bit_cast -> [Value, " as bits[", integer_to_list(width(Type)), "]"];

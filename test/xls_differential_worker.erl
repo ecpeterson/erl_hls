@@ -24,13 +24,17 @@ prepare(#{<<"source">> := Source, <<"dslx">> := Dslx, <<"cases">> := Cases}) ->
         Error -> #{status => invalid_source, reason => text(Error)}
     end.
 
+%% Writes DSLX for the checked differential cases and their independently executed BEAM results.
+-spec lower(binary(), file:filename_all(), [map()], [Result]) ->
+    #{status := ok, cases := [Result]}
+    when Result :: #{name := binary(), expected := [non_neg_integer()]}.
 lower(Source, Dslx, Cases, Results) ->
     {ok, Forms0} = epp:parse_file(binary_to_list(Source), [], []),
     Roots = [{binary_to_existing_atom(maps:get(<<"name">>, C)), 3} || C <- Cases],
     {Forms, Helpers} = xls_helpers:prepare(Forms0, Roots),
     Declarations = ["enum Tag : u8 { STATE = 1 }\n",
         xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
-        [[xls_parse:struct_from_record(Record), xls_parse:bitsfromstruct_from_record(Record)]
+        [[xls_record_codegen:declaration(Record), xls_record_codegen:encoder(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
     Functions = [function(Case, Forms) || Case <- Cases],
     ok = file:write_file(Dslx, [Declarations, xls_helpers:emit(Helpers, state, #{}),
@@ -59,16 +63,18 @@ oracle(Module, #{<<"name">> := Name, <<"width">> := Width,
 integer(Value, Width, true) when Value >= (1 bsl (Width - 1)) -> Value - (1 bsl Width);
 integer(Value, _Width, _Signed) -> Value.
 
+%% Renders one JSON case descriptor as a fixed-width probe carrying the selected failure kind.
+-spec function(map(), [hls_source:form()]) -> iodata().
 function(#{<<"name">> := Name, <<"width">> := Width, <<"signed">> := Signed}, Forms) ->
-    [Clause] = xls_parse:find_function(Forms, binary_to_existing_atom(Name), 3),
+    [Clause] = hls_source:find_function(Forms, binary_to_existing_atom(Name), 3),
     #{body := Body, result := Value, failure := Failure} =
-        xls_parse:clause_outcome(Clause, ["x", "y", "values"], state, #{}),
+        xls_clause_lower:clause_outcome(Clause, ["x", "y", "values"], state, #{}),
     Type = type(Width, Signed),
     ["fn ", Name, "(x: ", Type, ", y: ", Type, ", values: ", Type, "[3]) -> bits[36] {\n",
-        xls_parse:print(Body), "let code = ", xls_parse:print(Failure), ";\n",
+        xls_clause_lower:print(Body), "let code = ", xls_clause_lower:print(Failure), ";\n",
         "(hls_failure::kind(code) as u4) ++ ",
         "if code != hls_failure::NONE { u32:0 } else { (",
-        xls_parse:print(Value), " as uN[", integer_to_list(Width), "]) as u32 }\n}\n"].
+        xls_clause_lower:print(Value), " as uN[", integer_to_list(Width), "]) as u32 }\n}\n"].
 
 dispatcher(Cases) ->
     ["pub fn probe(mode: u32, x: u32, y: u32, a: u32, b: u32, c: u32) -> bits[36] {\n",

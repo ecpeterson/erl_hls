@@ -6,8 +6,8 @@
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), xls_actor_codegen:spec(), xls_phase_values:facts(), [map()]}.
 from_file(File, Options) ->
-    {ok, Source} = xls_parse:parse_file(File, Options),
-    Phases = xls_parse:find_attribute(Source, hls_phases),
+    {ok, Source} = hls_source:parse_file(File, Options),
+    Phases = hls_source:find_attribute(Source, hls_phases),
     Ordinary = xls_statem_lower:artifact(File, Source, Phases),
     Facts = xls_phase_values:analyze(Source, Ordinary),
     #{data_name := Data} = Ordinary,

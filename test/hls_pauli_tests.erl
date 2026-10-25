@@ -108,8 +108,10 @@ pauli_constants_transpile_test() ->
         [<<"u32:0">>, <<"u32:2">>, <<"u32:3">>, <<"u32:1">>]
     ).
 
+%% Renders a Pauli-operation clause with explicit runtime argument expressions.
+-spec lower(erl_parse:abstract_clause(), [xls_clause_lower:printable()]) -> binary().
 lower(Clause, Arguments) ->
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         Arguments,
         state,
@@ -117,7 +119,7 @@ lower(Clause, Arguments) ->
         "failure",
         #{}
     ),
-    iolist_to_binary(xls_parse:print([Body, Result])).
+    iolist_to_binary(xls_clause_lower:print([Body, Result])).
 
 parse_clause(Source) ->
     {ok, Tokens, _EndLocation} = erl_scan:string(Source),

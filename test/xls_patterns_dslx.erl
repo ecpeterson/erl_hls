@@ -1,6 +1,8 @@
 -module(xls_patterns_dslx).
 -export([write/1]).
 
+-doc "Writes bounded-pattern DSLX tests, BEAM-derived RTL vectors, a reduction actor and rejection fixtures into an existing directory. Raises on source or file errors; does not execute generated tests.".
+-spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, Forms0} = epp:parse_file("test/xls_patterns_fixture.erl", [], []),
     Names = xls_patterns_fixture:probes(),
@@ -11,7 +13,7 @@ write(Stage) ->
         || {I, Name} <- lists:enumerate(0, Names)],
     Text = ["enum Tag : u8 { CELL = 1 }\n",
         xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
-        [[xls_parse:struct_from_record(R), xls_parse:bitsfromstruct_from_record(R)]
+        [[xls_record_codegen:declaration(R), xls_record_codegen:encoder(R)]
             || R = {attribute, _, record, _} <- Forms],
         xls_helpers:emit(Helpers, cell, #{}),
         [function(Name, Forms) || Name <- Names],
@@ -26,14 +28,16 @@ write(Stage) ->
         xls_parse:to_xls("test_data/hls_list_reduction_fixture.erl")),
     write_rejections(Stage).
 
+%% Renders a scalar/list pattern probe with its selected failure kind and zero failure value.
+-spec function(atom(), [hls_source:form()]) -> iodata().
 function(Name, Forms) ->
-    [Clause] = xls_parse:find_function(Forms, Name, 2),
+    [Clause] = hls_source:find_function(Forms, Name, 2),
     #{body := Body, result := Value, failure := Failure} =
-        xls_parse:clause_outcome(Clause, ["x", "values"], cell, #{}),
+        xls_clause_lower:clause_outcome(Clause, ["x", "values"], cell, #{}),
     ["fn probe_", atom_to_list(Name), "(x: s32, values: s32[3]) -> bits[36] {\n",
-        xls_parse:print(Body), "let code = ", xls_parse:print(Failure), ";\n",
+        xls_clause_lower:print(Body), "let code = ", xls_clause_lower:print(Failure), ";\n",
         "let value = if code != hls_failure::NONE { s32:0 } else { ",
-        xls_parse:print(Value), " };\n",
+        xls_clause_lower:print(Value), " };\n",
         "(hls_failure::kind(code) as u4) ++ (value as u32)\n}\n"].
 
 expected(Name, {X, Values}) ->

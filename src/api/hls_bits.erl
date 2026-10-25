@@ -59,7 +59,10 @@ dslx_codec(padded, [Type, Width]) ->
      end,
      fun(Value) -> ["hls_bits::pad<u32:", integer_to_list(SubWidth), ", u32:",
         integer_to_list(Width), ">(", hls_type:dslx_to_bits(Type, Value), ")"] end}.
+-doc "Creates compile-time bitstream and padded-type descriptors from static widths.".
+-spec transpile(bits | padded, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:clause_state().
 transpile(bits, [{static, integer, Width}], State) ->
-    xls_parse:reference(State, {phantom, type, bits(Width)});
+    xls_clause_lower:reference(State, {phantom, type, bits(Width)});
 transpile(padded, [{phantom, type, Type}, {static, integer, Width}], State) ->
-    xls_parse:reference(State, {phantom, type, padded(Type, Width)}).
+    xls_clause_lower:reference(State, {phantom, type, padded(Type, Width)}).

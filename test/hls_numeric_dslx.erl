@@ -39,12 +39,15 @@ to_dslx() ->
         Semantics
     ].
 
+%% Wraps lowered numeric conversion syntax in a typed DSLX function whose failure branch aborts.
+-spec function(string(), string(), hls_type:descriptor(), string(), string(),
+    [xls_clause_lower:printable()]) -> iodata().
 function(Name, Parameters, Type, Arguments, Expression, References) ->
     {ok, Tokens, _} = erl_scan:string(lists:flatten(
         ["probe(", Arguments, ") -> ", Expression, "."])),
     {ok, {function, _, probe, _, [Clause]}} = erl_parse:parse_form(Tokens),
     Failure = ["fail!(\"unexpected_failure\", zero!<", hls_type:print_type(Type), ">())"],
-    {Body, Result} = xls_parse:branch_from_clause(Clause, References, state,
+    {Body, Result} = xls_clause_lower:branch_from_clause(Clause, References, state,
         fun(Reference) -> Reference end, Failure, #{}),
     ["fn ", Name, "(", Parameters, ") -> ", hls_type:print_type(Type), " {\n",
-        xls_parse:print([Body, Result]), "\n}\n"].
+        xls_clause_lower:print([Body, Result]), "\n}\n"].

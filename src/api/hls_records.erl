@@ -1,6 +1,7 @@
 -module(hls_records).
--moduledoc false.
--export([resolve/1, resolve/2, references/1, declarations/2, values/2, used/1, wire_names/1]).
+-moduledoc "Resolves actor record declarations and type-directed defaults. Field descriptors preserve Erlang declaration order and provider wire padding; hardware rendering belongs to the backend.".
+-export([resolve/1, resolve/2, references/1, declarations/2, values/2, used/1, wire_names/1,
+    find/2, fields/1, width/1, field_name/1, validate_defaults/1, is_zero_default/1]).
 
 -doc "Resolves wire layouts and explicit typed zeros, leaving unrelated host records alone.".
 -spec resolve([hls_source:form()]) -> [hls_source:form()].
@@ -26,7 +27,7 @@ resolve(Forms, Extra) ->
 %% A typed zero opts its field into HLS layout rules, even in a host-only record.
 -spec typed_zero(tuple()) -> boolean().
 typed_zero({typed_record_field, {record_field, _, _, Default}, _}) ->
-    xls_parse:is_zero_default(Default);
+    is_zero_default(Default);
 typed_zero(_) -> false.
 
 %% Follow only layouts reached from hardware roots, without inspecting other record types.
@@ -67,9 +68,9 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
         true -> error({nested_hls_wire_record, Name});
         false -> ok
     end,
-    {attribute, _, record, {Name, Fields}} = xls_parse:find_record(Forms, Name),
+    {attribute, _, record, {Name, Fields}} = find(Forms, Name),
     Descriptor = {hls_type, hls_record, Name, [
-        {xls_parse:record_field_name(Field),
+        {field_name(Field),
             hls_type:descriptor(resolve_type(Type, Forms, [Name | Stack]))}
         || {typed_record_field, Field, Type} <- Fields]},
     case length(Fields) =:= length(element(4, Descriptor)) of
@@ -89,7 +90,7 @@ resolve_type(Value, _Forms, _Stack) -> Value.
 -doc "Returns dependency-ordered declarations for wire records and reachable internal values.".
 -spec declarations([hls_source:form()], [atom()]) -> [hls_source:record_declaration()].
 declarations(Forms, Roots) ->
-    Extra = case xls_parse:find_optional_attribute(Forms, hls_value_records) of
+    Extra = case hls_source:find_optional_attribute(Forms, hls_value_records) of
         {ok, Names} -> Names;
         none -> []
     end,
@@ -101,7 +102,7 @@ declarations(Forms, Roots) ->
 -spec visit(atom(), [hls_source:form()], {map(), [tuple()]}) -> {map(), [tuple()]}.
 visit(Name, _Forms, {Seen, _} = Acc) when is_map_key(Name, Seen) -> Acc;
 visit(Name, Forms, {Seen, Records}) ->
-    Record = xls_parse:find_record(Forms, Name),
+    Record = find(Forms, Name),
     Dependencies = nested_names(Record),
     {Next, Ordered} = lists:foldl(fun(N, Acc) -> visit(N, Forms, Acc) end,
         {Seen#{Name => true}, Records}, Dependencies),
@@ -142,7 +143,7 @@ used(_) -> [].
 -doc "Returns callback records and the existing private reduction accumulator tags.".
 -spec wire_names([hls_source:form()]) -> [atom()].
 wire_names(Forms) ->
-    lists:usort([xls_parse:state(Forms) | xls_parse:find_tags(Forms)] ++ accumulator_names(Forms)).
+    lists:usort([hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)] ++ accumulator_names(Forms)).
 
 %% The literal seed identifies the accumulator before reduction analysis runs.
 -spec accumulator_names(term()) -> [atom()].
@@ -151,3 +152,49 @@ accumulator_names({tuple, _, [{atom, _, open_reduction}, _, _, _,
 accumulator_names(Tuple) when is_tuple(Tuple) -> accumulator_names(tuple_to_list(Tuple));
 accumulator_names(List) when is_list(List) -> lists:usort(lists:append([accumulator_names(X) || X <- List]));
 accumulator_names(_) -> [].
+
+
+-doc "Returns the first named record declaration; raises when it is absent.".
+-spec find([hls_source:form()], atom()) -> hls_source:record_declaration().
+find(Forms, Name) ->
+    {value, Record} = lists:search(
+        fun ({attribute, _, record, {RecordName, _}}) -> RecordName == Name;
+            (_) -> false
+        end, Forms),
+    Record.
+
+-doc "Returns typed fields in declaration order with resolved provider descriptors. Untyped fields are omitted; validate_defaults/1 rejects them at actor compilation boundaries.".
+-spec fields(hls_source:record_declaration()) -> hls_record:fields().
+fields({attribute, _, record, {_, Fields}}) ->
+    [{field_name(Field), hls_type:descriptor(Type)}
+        || {typed_record_field, Field, Type} <- Fields].
+
+-doc "Sums serialized field widths, including provider padding and zero-width fields.".
+-spec width(hls_source:record_declaration()) -> non_neg_integer().
+width(Record = {attribute, _, record, {Name, _}}) ->
+    hls_record:width(Name, fields(Record)).
+
+-doc "Returns a declared field's name, whether or not it has a default.".
+-spec field_name(hls_source:record_field()) -> atom().
+field_name({record_field, _, {atom, _, Name}}) -> Name;
+field_name({record_field, _, {atom, _, Name}, _}) -> Name.
+
+-doc "Requires a type and hls_type:zero() default on every translated record field. Reports missing or explicit defaults with their record, field and source line.".
+-spec validate_defaults(hls_source:record_declaration()) -> ok.
+validate_defaults({attribute, _, record, {RecordName, Fields}}) ->
+    lists:foreach(fun
+        ({typed_record_field, {record_field, Line, {atom, _, FieldName}, Default}, _}) ->
+            case is_zero_default(Default) of
+                true -> ok;
+                false -> error({invalid_hls_record_default, RecordName, FieldName, Line})
+            end;
+        ({typed_record_field, {record_field, Line, {atom, _, FieldName}}, _}) ->
+            error({missing_hls_record_default, RecordName, FieldName, Line});
+        (Field) -> error({untyped_xls_record_field, RecordName, Field})
+    end, Fields),
+    ok.
+
+-doc "Recognizes the source hls_type:zero() marker before parse-transform expansion.".
+-spec is_zero_default(erl_parse:abstract_expr()) -> boolean().
+is_zero_default({call, _, {remote, _, {atom, _, hls_type}, {atom, _, zero}}, []}) -> true;
+is_zero_default(_) -> false.

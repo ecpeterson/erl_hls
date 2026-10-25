@@ -30,7 +30,7 @@ fresh_compilation_and_alias_identity_test() ->
 %% Source outside callback dispatch still participates in the source identity.
 -spec complete_source_is_bound_test() -> ok.
 complete_source_is_bound_test() ->
-    {ok, Forms} = xls_parse:parse_file(?GATHER, []),
+    {ok, Forms} = hls_source:parse_file(?GATHER, []),
     {_, Before} = planned(Forms),
     {_, After} = planned(Forms ++ [form("host_only() -> 42.")]),
     A = xls_statem_plan:identity(Before), B = xls_statem_plan:identity(After),
@@ -169,7 +169,7 @@ origins(Value, _Mode) -> Value.
 %% Compile an extended source list through ordinary preparation and closure checks.
 -spec planned([hls_source:form()]) -> {xls_actor_codegen:spec(), xls_statem_plan:plan()}.
 planned(Forms) ->
-    xls_statem_lower:planned_artifact(?GATHER, Forms, xls_parse:find_attribute(Forms, hls_phases)).
+    xls_statem_lower:planned_artifact(?GATHER, Forms, hls_source:find_attribute(Forms, hls_phases)).
 
 %% Parse a small declaration so its source fingerprint uses the actual Erlang AST.
 -spec form(string()) -> hls_source:form().

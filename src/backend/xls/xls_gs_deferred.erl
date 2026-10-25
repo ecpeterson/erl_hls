@@ -12,21 +12,21 @@ emit(Filename, Forms0) ->
     ok = xls_names:actor(Forms, hls_gs),
     #{calls := Calls, pending_calls := N, continuations := Names} =
         hls_service_contract:from_forms(Forms),
-    StateName = xls_parse:state(Forms),
-    Tags = [error, StateName | xls_parse:find_tags(Forms)],
+    StateName = hls_actor_source:state(Forms),
+    Tags = [error, StateName | hls_actor_source:tags(Forms)],
     Enum = maps:from_list([{Name, ["u8:", integer_to_list(I)]} || {I, Name} <- lists:enumerate(1, Names)]),
-    Width = xls_parse:record_width(xls_parse:find_record(Forms, StateName)),
+    Width = hls_records:width(hls_records:find(Forms, StateName)),
     Records = hls_records:declarations(Forms, tl(Tags)),
-    [xls_parse:validate_record_defaults(R) || R <- Records],
-    [xls_parse:message_words(Forms, Name) || Name <- xls_parse:find_tags(Forms)],
+    [hls_records:validate_defaults(R) || R <- Records],
+    [hls_actor_source:message_words(Forms, Name) || Name <- hls_actor_source:tags(Forms)],
     Mask = lists:sum([1 bsl I || {I, Name} <- lists:enumerate(1, Tags), maps:is_key(Name, Calls)]),
     Body = ["// ", Filename, " - generated bounded server.\n",
      xls_dslx_imports:emit([axis, hls_bits, hls_failure, hls_server], xls_dslx_imports:from_forms(Forms)),
      "\npub enum Tag : u8 { NONE = 0,\n",
      [["  ", xls_names:enum_member(Name), " = ", integer_to_list(I), ",\n"]
          || {I, Name} <- lists:enumerate(1, Tags)], "}\n",
-     [[xls_parse:struct_from_record(R), "\n", xls_parse:structfrombits_from_record(R), "\n",
-       xls_parse:bitsfromstruct_from_record(R), "\n"] || R <- Records],
+     [[xls_record_codegen:declaration(R), "\n", xls_record_codegen:decoder(R), "\n",
+       xls_record_codegen:encoder(R), "\n"] || R <- Records],
      "const STATE_BITS = u32:", integer_to_list(Width), ";\n",
      "type Invocation = hls_server::Invocation<STATE_BITS>;\n",
      "type Outcome = hls_server::Outcome<STATE_BITS>;\n",
@@ -76,7 +76,7 @@ arm(Kind, {Tag, Clauses}, Forms, StateName, Enum) ->
     Args = [Record] ++ case Kind of call -> [xls_pattern_lower:value_argument("inv.from")]; cast -> [] end
         ++ [state_argument(StateName)],
     ["Tag::", xls_names:enum_member(Tag), " => {\n",
-     " if inv.frame.header.payload_words != u8:", integer_to_list(xls_parse:message_words(Forms, Tag)),
+     " if inv.frame.header.payload_words != u8:", integer_to_list(hls_actor_source:message_words(Forms, Tag)),
      " { ", failure("u32:3"), " } else {\n",
      " let request = ", xls_names:record_codec(Tag), "_from_bits(inv.frame.payload);\n",
      lower(Clauses, Args, Kind, StateName, Enum), "\n }\n},\n"].
@@ -101,7 +101,7 @@ lower(Clauses, Args, Kind, StateName, Enum) ->
             xls_names:record_codec(StateName), "(", R, ".2.1), continuation: ", R,
             ".3, reply_allowed: ", R, ".4, error: u32:0 }"] end,
         failure("u32:1"), fun(Code) -> failure(["hls_failure::kind(", Code, ") as u32"]) end, Enum),
-    [xls_parse:print(Body), xls_parse:print(Value)].
+    [xls_clause_lower:print(Body), xls_clause_lower:print(Value)].
 
 %% A callback fault preserves its input data and emits no successful action.
 -spec failure(iodata()) -> iolist().

@@ -79,11 +79,11 @@ print_type(field, []) -> "phi_field::Field".
 dslx_imports() -> [phi_field].
 
 -doc "Lowers field types and arithmetic calls to the matching static DSLX module.".
--spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) -> xls_parse:ir().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_clause_lower:ir().
 transpile(scalar, [], State) ->
-    xls_parse:reference(State, {phantom, type, scalar()});
+    xls_clause_lower:reference(State, {phantom, type, scalar()});
 transpile(field, [], State) ->
-    xls_parse:reference(State, {phantom, type, field()});
+    xls_clause_lower:reference(State, {phantom, type, field()});
 transpile(accumulate, [Sum, Value], _State) ->
     ["phi_field::accumulate(", Sum, ", ", Value, ")"];
 transpile(relax, [Anyon, Field, Sum0, Sum1], _State) ->

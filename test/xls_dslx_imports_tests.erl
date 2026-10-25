@@ -80,9 +80,11 @@ malformed_declaration_test() ->
         end)
     end, ["string", 'bad-name', 'bad..path', 'bad;\nimport injected']).
 
+%% Provider types from included records retain their imports and qualified calls in server output.
+-spec included_types_reach_gs_emission_test() -> ok.
 included_types_reach_gs_emission_test() ->
     Source = "test_data/hls_companion_gs_fixture.erl",
-    {ok, Forms} = xls_parse:parse_file(Source),
+    {ok, Forms} = hls_source:parse_file(Source),
     ?assertEqual([hls_bits, hls_fixed, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
     Generated = iolist_to_binary(xls_parse:to_xls(Source)),
     ?assertEqual(1, length(binary:matches(Generated, <<"import phi_field;">>))),

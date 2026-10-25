@@ -27,7 +27,7 @@ generated_event_storage_test() ->
 %% Unsupported actions must fail during translation, before any hardware is produced.
 -spec invalid_call_directive_test() -> ok.
 invalid_call_directive_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_statem_reply_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_statem_reply_fixture.erl"),
     Changed = [case Form of
         {function, L, waiting, 3, Clauses} ->
             {function, L, waiting, 3, [postpone_call(C) || C <- Clauses]};

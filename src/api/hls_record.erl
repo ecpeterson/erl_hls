@@ -41,7 +41,7 @@ print_type(Name, _Fields) -> xls_names:record_type(Name).
 
 -doc "Uses the record's generated field-wise codecs, preserving nested padding.".
 -spec dslx_codec(atom(), fields()) ->
-    {fun((xls_parse:printable()) -> iolist()), fun((xls_parse:printable()) -> iolist())}.
+    {fun((xls_clause_lower:printable()) -> iolist()), fun((xls_clause_lower:printable()) -> iolist())}.
 dslx_codec(Name, _Fields) ->
     Codec = xls_names:record_codec(Name),
     {fun(Bits) -> [Codec, "_from_bits(", Bits, ")"] end,

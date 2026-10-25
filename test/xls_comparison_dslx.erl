@@ -47,7 +47,7 @@ function(W, V, S, T) ->
     #{body := Statements, result := Result} = outcome(Spec, Body,
         [io_lib:format("(x as ~sN[~B])", [S, W]), io_lib:format("(y as ~sN[~B])", [T, V])]),
     [io_lib:format("fn cmp_~s~s(x: bits[~B], y: bits[~B]) -> bits[6] {\n", [S, T, W, V]),
-        xls_parse:print(Statements), lists:join(" ++ ", [["(", Result, ".", integer_to_list(I), " as u1)"]
+        xls_clause_lower:print(Statements), lists:join(" ++ ", [["(", Result, ".", integer_to_list(I), " as u1)"]
             || I <- lists:seq(0, 5)]), "\n}\n"].
 
 %% Constants outside an operand's representable range must not narrow to it.
@@ -59,13 +59,13 @@ literals(W) ->
     Spec = lists:flatten(io_lib:format("-spec probe(hls_nums:sN(~B)) -> {boolean(), boolean(), boolean(), boolean()}.", [W])),
     #{body := Statements, result := Result} = outcome(Spec, Source, ["x"]),
     ["#[test]\nfn wide_literals() {\nlet x = sN[", integer_to_list(W), "]:0;\n",
-        xls_parse:print(Statements), "assert_eq(", Result, ", (true, true, false, true));\n}\n"].
+        xls_clause_lower:print(Statements), "assert_eq(", Result, ", (true, true, false, true));\n}\n"].
 
 %% Parse a real concrete source signature to classify both arguments.
--spec outcome(string(), string(), [xls_parse:printable()]) -> map().
+-spec outcome(string(), string(), [xls_clause_lower:printable()]) -> map().
 outcome(Spec, Source, Args) ->
     [_, {function, _, _, _, [Clause]}] = xls_comparison:prepare([form(Spec), form(Source)]),
-    xls_parse:clause_outcome(Clause, Args, state, #{}).
+    xls_clause_lower:clause_outcome(Clause, Args, state, #{}).
 
 %% Parse the single declaration used by each source probe.
 -spec form(string()) -> erl_parse:abstract_form().

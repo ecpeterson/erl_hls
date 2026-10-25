@@ -38,19 +38,21 @@ write(Stage) ->
         Sign ++ "N(" ++ integer_to_list(W) ++ ")"}
         || W <- [1, 3, 8, 9, 16, 32, 64], Sign <- ["u", "s"]]).
 
+%% Lowers wrapped division or remainder into a width-specific probe with an explicit failure flag.
+-spec function(string(), hls_type:descriptor(), 'div' | 'rem') -> iodata().
 function(Constructor, Type, Op) ->
     Source = lists:flatten(io_lib:format(
         "probe(X, Y) -> hls_nums:wrap(hls_nums:~s, X ~s Y).", [Constructor, Op])),
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     W = hls_type:value_width(Type),
-    #{body := Body, result := Result, failed := Failed} = xls_parse:clause_outcome(
+    #{body := Body, result := Result, failed := Failed} = xls_clause_lower:clause_outcome(
         Clause, [["(x as ", hls_type:print_type(Type), ")"],
                  ["(y as ", hls_type:print_type(Type), ")"]], state, #{}),
     Function = case Op of 'div' -> "quotient"; 'rem' -> "remainder" end,
     [io_lib:format("fn ~s(x: uN[~p], y: uN[~p]) -> (uN[~p], bool) {\n", [Function, W, W, W]),
-        xls_parse:print(Body), "let failed = ", xls_parse:print(Failed), ";\n",
-        "((if failed { 0 } else { ", xls_parse:print(Result), " }) as uN[",
+        xls_clause_lower:print(Body), "let failed = ", xls_clause_lower:print(Failed), ";\n",
+        "((if failed { 0 } else { ", xls_clause_lower:print(Result), " }) as uN[",
         integer_to_list(W), "], failed)\n}\n"].
 
 oracle(Type, A, B) ->

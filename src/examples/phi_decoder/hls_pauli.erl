@@ -81,8 +81,12 @@ unpack(<<Code:32/little-unsigned-integer, Rest/binary>>, pauli, []) ->
 
 print_type(pauli, []) -> "u32".
 
+-doc "Lowers Pauli descriptors and operations using the shared two-bit symplectic encoding inside u32 values.".
+-spec transpile(pauli | i | x | y | z | multiply | anticommutes | is_pauli,
+    [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state().
 transpile(pauli, [], State) ->
-    xls_parse:reference(State, {phantom, type, pauli()});
+    xls_clause_lower:reference(State, {phantom, type, pauli()});
 transpile(i, [], _State) -> "u32:0";
 transpile(x, [], _State) -> "u32:2";
 transpile(y, [], _State) -> "u32:3";

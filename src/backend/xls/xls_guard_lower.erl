@@ -11,7 +11,7 @@
 -doc "Combines pattern predicates and guards; guard errors cause fallthrough.".
 -spec condition(
     [[erl_parse:abstract_expr()]],
-    [xls_parse:printable()],
+    [xls_clause_lower:printable()],
     erl_anno:location()
 ) -> term().
 condition([], Conditions, _Line) ->

@@ -8,6 +8,27 @@ For a communicating graph, normalize the source topology with `hls_topology`, ob
 
 Scalar clause lowering retains [structured arithmetic and comparison expressions](expression-ir.md) until DSLX rendering. Bit-vector optimization belongs to XLS.
 
+## Compiler implementation boundaries
+
+`xls_parse` is the compilation facade: `to_xls/1,2`, `actor_interface/1,2` and `actor_artifact/2`. It selects the server or state-machine path; it does not provide source queries, expression operations or record codecs. Internal consumers call the owning module directly. These APIs move with the compiler revision rather than retaining forwarding functions on the facade.
+
+| Work on | Start here | Result or responsibility |
+| --- | --- | --- |
+| Preprocessing and source lookup | `hls_source` | Captured context, include-expanded forms, attributes, functions and specs |
+| Actor declarations | `hls_actor_source` | Ordered wire tags, explicit/inferred state and message limits |
+| Record analysis | `hls_records` | Resolved declarations, typed fields, serialized widths and checked defaults |
+| Record DSLX | `xls_record_codegen` | Declarations and codecs over `xls_struct_codec` and the same field descriptors used by the host codec |
+| Immediate or retained-call servers | `xls_gs_immediate`, `xls_gs_deferred` | Complete service rendering with the corresponding callback/scheduling model |
+| State-machine semantics | `xls_statem_lower` | Checked callbacks and actor artifact; dedicated execution is rendered by `xls_actor_codegen` and `xls_statem_codegen` |
+| Callback and expression lowering | `xls_callback_lower`, `xls_clause_lower` | Clause selection, ordered evaluation, bindings and first selected failure |
+| Pattern, branch and binary operations | `xls_pattern_lower`, `xls_case_lower`, `xls_binary_lower` | Specialized operations over the shared clause state |
+
+`hls_source:parse_file/2` accepts either source options or an already captured context. Options append the installed compiler include directory; a captured context is used unchanged. Source queries and record validation do not depend on the XLS backend. Type-provider `transpile/3` callbacks intentionally use `xls_clause_lower` for values, statements and failures: that is a backend extension hook, not source inspection.
+
+The internal `xls_clause_lower.hrl` record belongs to expression lowering and its cooperating passes. Branches retain separate bindings, statements and failures; a join exports only values valid in every selected arm. `xls_clause_lower:print/1` renders scalar IR and textual leaves, and rejects compile-time phantom types. Adding a source query must not require exporting a lowering helper through `xls_parse`.
+
+The supported expression, guard and failure semantics are documented in [control flow](control-flow.md), [bit syntax](bit-syntax.md), [entry outcomes](entry-outcomes.md) and [local helpers](local-helpers.md). Wire-tag ordering and generated-name constraints are in [actor names](actor-names.md).
+
 ## Alternate execution bodies
 
 Compiler extensions can call `xls_parse:actor_artifact(Path, SourceOptions)` for a validated `hls_statem` artifact. It contains initialization, typed dispatch, ordered effects, internal events, retained replies, reductions and failure origins. Unsupported actor kinds are rejected explicitly.

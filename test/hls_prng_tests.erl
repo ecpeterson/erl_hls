@@ -29,7 +29,7 @@ xorshift32_transpiles_to_sequential_fixed_width_steps_test() ->
     Clause = parse_clause(
         "probe(Value) -> hls_prng:xorshift32(Value)."
     ),
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause,
         ["value"],
         state,
@@ -37,7 +37,7 @@ xorshift32_transpiles_to_sequential_fixed_width_steps_test() ->
         "failure",
         #{}
     ),
-    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    XLS = iolist_to_binary(xls_clause_lower:print([Body, Result])),
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<

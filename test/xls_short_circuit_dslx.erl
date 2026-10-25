@@ -8,15 +8,17 @@ to_dslx() ->
     ["import hls_failure;\n",
         [function(Name, Clause) || {function, _, Name, 3, [Clause]} <- Forms]].
 
+%% Emits a Boolean short-circuit probe and BEAM comparisons for all eight input triples.
+-spec function(atom(), erl_parse:abstract_clause()) -> iodata().
 function(Name, Clause) ->
-    {Body, Result} = xls_parse:branch_from_clause(
+    {Body, Result} = xls_clause_lower:branch_from_clause(
         Clause, ["left", "right", "extra"], state,
         fun(Reference) -> ["(false, ", Reference, ")"] end,
         "(true, false)", #{}),
     Function = atom_to_list(Name),
     [
         "fn ", Function, "(left: bool, right: bool, extra: bool) -> (bool, bool) {\n",
-        xls_parse:print([Body, Result]), "\n}\n",
+        xls_clause_lower:print([Body, Result]), "\n}\n",
         "#[test]\nfn ", Function, "_matches_beam() {\n",
         [assertion(Name, [Left, Right, Extra])
             || Left <- [false, true], Right <- [false, true],

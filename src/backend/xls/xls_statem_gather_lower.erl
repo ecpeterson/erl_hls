@@ -144,7 +144,7 @@ padding(#{identity_expression := Zero, line := Line}, Data, #{dslx_type := Type}
     Failure = ["zero!<", Type, ">()"],
     {Body, Result} = xls_callback_lower:lower([{clause, Line, [], [], [Zero]}], [], Data,
         fun(R) -> case Zero of {record, _, {value, _}, _} -> R; _ -> [R, ".1"] end end, Failure, fun(_) -> Failure end, #{}),
-    #{body => xls_parse:print(Body), result => xls_parse:print(Result)}.
+    #{body => xls_clause_lower:print(Body), result => xls_clause_lower:print(Result)}.
 
 %% The ordered array is passed directly to source code; no application record receives it implicitly.
 -spec completion([term()], atom(), atom(), [atom()], [atom()]) -> map().
@@ -165,7 +165,7 @@ completion(Clauses0, Phase, DataName, Phases, Names) ->
         fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3, ", R, ".4",
             case Names of [] -> []; _ -> [", ", R, ".5"] end, ")"] end,
         Failure(xls_failure_sites:at(function_clause, Line)), Failure, Enum),
-    #{body => xls_parse:print(Body), result => xls_parse:print(Result)}.
+    #{body => xls_clause_lower:print(Body), result => xls_clause_lower:print(Result)}.
 
 -doc "Strips lowered expressions from a public structural gather interface.".
 -spec interface(none | map()) -> none | map().

@@ -74,7 +74,7 @@ with_server(Fun) ->
 %% Reject invalid resource declarations before either adapter starts executing callbacks.
 -spec declaration_bounds_test() -> ok.
 declaration_bounds_test() ->
-    {ok, Forms} = xls_parse:parse_file("test/hls_deferred_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("test/hls_deferred_fixture.erl"),
     [?assertError(invalid_hls_pending_calls,
         hls_service_contract:from_forms(attribute(Forms, hls_pending_calls, N))) || N <- [0, 256, bad]],
     [?assertError({invalid_hls_continuations, Names},

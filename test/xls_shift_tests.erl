@@ -31,8 +31,10 @@ dynamic_shift_requires_typed_value_test() ->
     ?assertError({untyped_shift_value, 1, {use, hls_type, as, 2}},
         lower("hls_nums:wrap(hls_nums:u32(), 1 bsl X)")).
 
+%% Renders the result of a shift expression with one runtime operand.
+-spec lower(string()) -> binary().
 lower(Expression) ->
     {ok, Tokens, _} = erl_scan:string("probe(X) -> " ++ Expression ++ "."),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    #{result := Result} = xls_parse:clause_outcome(Clause, ["x"], state, #{}),
-    iolist_to_binary(xls_parse:print(Result)).
+    #{result := Result} = xls_clause_lower:clause_outcome(Clause, ["x"], state, #{}),
+    iolist_to_binary(xls_clause_lower:print(Result)).

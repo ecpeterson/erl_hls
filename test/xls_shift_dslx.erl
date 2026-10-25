@@ -48,6 +48,8 @@ write(Stage, V, C) ->
         || {A, B} <- Cases]),
     io_lib:format("~s ~p ~p ~p\n", [Name, W, CW, length(Cases)]).
 
+%% Renders a wrapped shift with independent value and count types, preserving count signedness.
+-spec function(atom(), hls_type:descriptor(), hls_type:descriptor(), 'bsl' | 'bsr') -> iodata().
 function(_Name, VT = {hls_type, hls_nums, Name, Args}, CT, Op) ->
     Constructor = atom_to_list(Name) ++ "(" ++
         lists:join(",", [integer_to_list(Arg) || Arg <- Args]) ++ ")",
@@ -56,12 +58,12 @@ function(_Name, VT = {hls_type, hls_nums, Name, Args}, CT, Op) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     W = hls_type:value_width(VT), CW = hls_type:value_width(CT),
-    #{body := Body, result := Result} = xls_parse:clause_outcome(
+    #{body := Body, result := Result} = xls_clause_lower:clause_outcome(
         Clause, [["(x as ", hls_type:print_type(VT), ")"],
                  ["(y as ", hls_type:print_type(CT), ")"]], state, #{}),
     Function = case Op of 'bsl' -> "left"; 'bsr' -> "right" end,
     [io_lib:format("fn ~s(x: uN[~p], y: uN[~p]) -> uN[~p] {\n", [Function, W, CW, W]),
-        xls_parse:print(Body), "(", xls_parse:print(Result), ") as uN[",
+        xls_clause_lower:print(Body), "(", xls_clause_lower:print(Result), ") as uN[",
         integer_to_list(W), "]\n}\n"].
 
 oracle(VT, CT, A, B) ->

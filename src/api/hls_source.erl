@@ -12,7 +12,8 @@ Contexts are build-local metadata, not artifact fingerprints. Includes and
 BEAM builds omit this metadata, as they omit the compiler's source path.
 """.
 
--export([capture/2, from_forms/2, options/2, read/2]).
+-export([capture/2, from_forms/2, options/2, read/2, parse_file/1, parse_file/2,
+    find_attribute/2, find_optional_attribute/2, find_function/3, find_spec/3]).
 -export_type([context/0, option/0, compiler_option/0, form/0,
               record_declaration/0, record_field/0, function_spec/0]).
 
@@ -196,3 +197,65 @@ source_errors([{error, {Location, Module, Reason}} | Forms], File, Errors) ->
     source_errors(Forms, File, [{File, Location, Module, Reason} | Errors]);
 source_errors([_ | Forms], File, Errors) -> source_errors(Forms, File, Errors);
 source_errors([], _File, Errors) -> Errors.
+
+
+-doc "Reads actor source with the compiler include directory and no caller preprocessing options.".
+-spec parse_file(file:filename()) -> {ok, [form()]}.
+parse_file(Filename) ->
+    parse_file(Filename, []).
+
+-doc "Reads source using caller options plus the compiler include directory, or an exact captured context. Captured contexts receive no additional include paths; source failures raise.".
+-spec parse_file(file:filename(), [option()] | context()) -> {ok, [form()]}.
+parse_file(Filename, Context) when is_map(Context) ->
+    {ok, read(Filename, Context)};
+parse_file(Filename, Options) ->
+    Context = options(Filename, Options),
+    #{includes := Includes} = Context,
+    {ok, read(Filename, Context#{includes := Includes ++ application_includes()})}.
+
+%% A source-only checkout can read its own headers before the application is loaded.
+-spec application_includes() -> [file:filename()].
+application_includes() ->
+    case code:lib_dir(erl_hls) of
+        {error, bad_name} -> [filename:absname("include")];
+        Application -> [filename:join(Application, "include")]
+    end.
+
+-doc "Returns the first named attribute's value; raises when it is absent.".
+-spec find_attribute([form()], atom()) -> term().
+find_attribute(Forms, Atom) ->
+    {value, {attribute, _Line, _Name, Value}} = lists:search(
+        fun ({attribute, _, Name, _}) -> Name == Atom;
+            (_) -> false
+        end, Forms),
+    Value.
+
+-doc "Returns the first named attribute's value, or none when it is absent.".
+-spec find_optional_attribute([form()], atom()) -> none | {ok, term()}.
+find_optional_attribute(Forms, Atom) ->
+    case lists:search(
+        fun ({attribute, _, Name, _}) -> Name =:= Atom;
+            (_) -> false
+        end, Forms) of
+        {value, {attribute, _, Atom, Value}} -> {ok, Value};
+        false -> none
+    end.
+
+-doc "Returns the named function's source-ordered clauses; raises when it is absent.".
+-spec find_function([form()], atom(), arity()) -> [erl_parse:abstract_clause(), ...].
+find_function(Forms, Function, Arity) ->
+    {value, {function, _, Function, Arity, Clauses}} = lists:search(
+        fun ({function, _, Name, Count, _}) -> Function == Name andalso Arity == Count;
+            (_) -> false
+        end, Forms),
+    Clauses.
+
+-doc "Returns the first local specification for a function and arity; raises when it is absent.".
+-spec find_spec([form()], atom(), arity()) -> function_spec().
+find_spec(Forms, Function, Arity) ->
+    {value, Spec} = lists:search(
+        fun ({attribute, _, spec, {{Name, Count}, _}}) ->
+                Function == Name andalso Arity == Count;
+            (_) -> false
+        end, Forms),
+    Spec.

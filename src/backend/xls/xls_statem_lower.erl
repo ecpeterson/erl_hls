@@ -2,7 +2,7 @@
 %%%%
 %%%% Validates the Erlang callback surface and lowers it to the closed data
 %%%% consumed by xls_statem_codegen.  Generic expression and record lowering
-%%%% remains in xls_parse; the renderer never sees Erlang abstract forms.
+%%%% belongs to xls_clause_lower; the renderer never sees Erlang abstract forms.
 
 -module(xls_statem_lower).
 -moduledoc false.
@@ -56,7 +56,7 @@ compile_artifact(Filename, Source, PhaseNames, Mode) ->
     ok = xls_names:actor(Forms, hls_statem),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
-        {Name, xls_parse:message_words(Forms, Name)} || Name <- MessageNames
+        {Name, hls_actor_source:message_words(Forms, Name)} || Name <- MessageNames
     ]),
     Prepared = prepare_callbacks(Forms, Declarations),
     OutputNames = maps:get(output_names, Prepared),
@@ -88,12 +88,12 @@ compile_artifact(Filename, Source, PhaseNames, Mode) ->
     Reductions = maps:get(reductions, Prepared),
     EmittedRecords = hls_records:declarations(Forms,
         [N || {attribute, _, record, {N, _}} <- Records]),
-    ok = lists:foreach(fun xls_parse:validate_record_defaults/1, EmittedRecords),
-    RecordDeclarations = xls_parse:print([
+    ok = lists:foreach(fun hls_records:validate_defaults/1, EmittedRecords),
+    RecordDeclarations = xls_clause_lower:print([
         [
-            xls_parse:struct_from_record(Record), "\n",
-            xls_parse:structfrombits_from_record(Record), "\n",
-            xls_parse:bitsfromstruct_from_record(Record), "\n"
+            xls_record_codegen:declaration(Record), "\n",
+            xls_record_codegen:decoder(Record), "\n",
+            xls_record_codegen:encoder(Record), "\n"
         ]
         || Record <- EmittedRecords
     ]),
@@ -134,21 +134,21 @@ prepare_interface(Forms, PhaseNames) ->
 -spec declarations([hls_source:form()], [atom(), ...]) -> map().
 declarations(Forms, PhaseNames) ->
     ok = xls_names:actor(Forms, hls_statem),
-    MessageNames = xls_parse:find_tags(Forms),
-    OutputNames = xls_parse:find_attribute(Forms, hls_outputs),
-    Capacity = xls_parse:find_attribute(Forms, hls_mailbox_capacity),
-    DataName = xls_parse:find_attribute(Forms, hls_data),
+    MessageNames = hls_actor_source:tags(Forms),
+    OutputNames = hls_source:find_attribute(Forms, hls_outputs),
+    Capacity = hls_source:find_attribute(Forms, hls_mailbox_capacity),
+    DataName = hls_source:find_attribute(Forms, hls_data),
     ok = validate_names(PhaseNames, MessageNames, OutputNames, DataName),
     ok = validate_capacity(Capacity),
 
     RecordNames = MessageNames ++ [DataName],
     Records = hls_records:declarations(Forms, RecordNames),
     ok = lists:foreach(
-        fun xls_parse:validate_record_defaults/1,
+        fun hls_records:validate_defaults/1,
         Records
     ),
     #{
-        module => xls_parse:find_attribute(Forms, module),
+        module => hls_source:find_attribute(Forms, module),
         phases => PhaseNames,
         message_names => MessageNames,
         output_names => OutputNames,
@@ -162,11 +162,11 @@ declarations(Forms, PhaseNames) ->
 %% Retained replies leave through one declared output; it must route back to the owning host.
 -spec retained_calls([hls_source:form()], [atom()]) -> none | map().
 retained_calls(Forms, Outputs) ->
-    case xls_parse:find_optional_attribute(Forms, hls_pending_calls) of
+    case hls_source:find_optional_attribute(Forms, hls_pending_calls) of
         none -> none;
         {ok, _} ->
             Contract = hls_service_contract:from_forms(Forms),
-            Port = xls_parse:find_attribute(Forms, hls_reply_port),
+            Port = hls_source:find_attribute(Forms, hls_reply_port),
             true = lists:member(Port, Outputs),
             true = map_size(maps:get(calls, Contract)) > 0,
             Contract#{port => Port}
@@ -222,7 +222,7 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
     },
     #{gathers := Gathers, cast_groups := GatherCasts} =
         xls_statem_gather_lower:analyze(Forms, ReductionContext, ReductionMode),
-    ExtraRecords = [xls_parse:find_record(Forms, N) || N <- xls_statem_gather_lower:records(Gathers)],
+    ExtraRecords = [hls_records:find(Forms, N) || N <- xls_statem_gather_lower:records(Gathers)],
     ReductionSlots0 = prepare_reduction_slots(ReductionMode, Forms,
         ReductionContext#{cast_groups := GatherCasts}, lists:uniq(maps:get(records, Declarations) ++ ExtraRecords)),
     ReductionSlots = ReductionSlots0#{gathers => Gathers},
@@ -252,11 +252,15 @@ prepare_reduction_slots(interface, Forms, Context, Records) ->
         reduction_interface => ReductionInterface
     }.
 
+%% Include the actor-private accumulator declaration when a reduction is present.
+-spec reduction_records([hls_source:form()], [hls_source:record_declaration()],
+    none | #{accumulator := #{name := atom(), atom() => term()}, atom() => term()}) ->
+    [hls_source:record_declaration()].
 reduction_records(_Forms, Records, none) ->
     Records;
 reduction_records(Forms, Records, Reduction) ->
     Name = maps:get(name, maps:get(accumulator, Reduction)),
-    Records ++ [xls_parse:find_record(Forms, Name)].
+    Records ++ [hls_records:find(Forms, Name)].
 
 %%%
 %%% Actor interface analysis
@@ -373,10 +377,13 @@ schema_summary(Record, Name, Selector) ->
         fields => record_fields(Record)
     }.
 
+%% Preserve declaration order while exposing concrete field types to interface consumers.
+-spec record_fields(hls_source:record_declaration()) ->
+    [#{name := atom(), type := hls_type:descriptor()}].
 record_fields({attribute, _Line, record, {_Name, Fields}}) ->
     [
         #{
-            name => xls_parse:record_field_name(Field),
+            name => hls_records:field_name(Field),
             type => hls_type:descriptor(Type)
         }
         || {typed_record_field, Field, Type} <- Fields
@@ -508,11 +515,11 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
                         PayloadBits, #{reductions => Reductions, gathers => maps:get(gathers, Prepared, none)})
                 end}
             end),
-        Outcome = xls_parse:clause_outcome(Clause, enter_args(DataName),
+        Outcome = xls_clause_lower:clause_outcome(Clause, enter_args(DataName),
             DataName, EnumAtoms),
         #{phase => Phase, layouts => lists:uniq([
                 maps:with([phase, layout, actions, storage], Layout) || Layout <- EntryLayouts]),
-            evaluation => maps:map(fun(_Key, V) -> xls_parse:print(V) end, Outcome)}
+            evaluation => maps:map(fun(_Key, V) -> xls_clause_lower:print(V) end, Outcome)}
     end || {#{phase := Phase, program := Program}, EntryLayouts} <-
         lists:zip(Entries, Layouts)].
 
@@ -587,8 +594,8 @@ lower_cast_group(
     #{
         tag => Tag,
         phase => Phase,
-        body => xls_parse:print(Body),
-        result => xls_parse:print(Result)
+        body => xls_clause_lower:print(Body),
+        result => xls_clause_lower:print(Result)
     }.
 
 %% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize
