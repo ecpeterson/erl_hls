@@ -16,7 +16,7 @@ access_and_cast_test() ->
 %% Grouping preserves precedence and all argument/field order, including struct spreads.
 -spec expression_order_test() -> ok.
 expression_order_test() ->
-    Sum = {xls_bits_binary, '+', "a", "b"},
+    Sum = xls_dslx:binary('+', xls_dslx:ref("a"), xls_dslx:ref("b")),
     ?assertEqual(<<"((a + b) * c)">>, text(xls_dslx:binary('*', Sum, xls_dslx:ref("c")))),
     Choice = xls_dslx:binary('&&', xls_dslx:ref("ready"),
         xls_dslx:unary('!', xls_dslx:ref("failed"))),
@@ -25,7 +25,7 @@ expression_order_test() ->
         {"sum", xls_dslx:call("sum", [Sum, "c"])},
         {"ready", Choice}, {"pair", Pair}], xls_dslx:ref("previous")),
     ?assertEqual(<<"Result {\n"
-        "  sum: sum(a + b, c),\n"
+        "  sum: sum((a + b), c),\n"
         "  ready: (ready && !(failed)),\n"
         "  pair: (u8:3 ++ u8:4),\n"
         "  ..previous\n"
@@ -43,6 +43,20 @@ scoped_selection_test() ->
     ?assertMatch({xls_dslx, choose, _, {xls_dslx, block, [{xls_dslx, bind, "next", _}], _},
         {xls_dslx, match, _, [_, _]}}, Tree),
     ?assertEqual(<<"if take {\n  let next = step(old);\n  (next, false)\n} else {\n  match kind {\n    u1:0 => (old, false),\n    _ => (old, true),\n  }\n}">>, text(Tree)).
+
+%% Text remains opaque; only the enclosing operation supplies grouping.
+-spec opaque_operand_test() -> ok.
+opaque_operand_test() ->
+    ?assertEqual(<<"((a + b) * c)">>,
+        text(xls_dslx:binary('*', "a + b", xls_dslx:ref("c")))).
+
+%% Untyped integers remain width-directed leaves; floats and compile-time types cannot become runtime text.
+-spec source_value_boundary_test() -> ok.
+source_value_boundary_test() ->
+    ?assertEqual(<<"-256">>, text({static, integer, -256})),
+    ?assertError({untyped_float_literal, 1.5, {use, hls_float, literal, 2}},
+        text({static, float, 1.5})),
+    ?assertError(function_clause, xls_clause_lower:print({phantom, type, hls_nums:u8()})).
 
 %% Freeze rendering only for these small syntax examples, never generated actor RTL.
 -spec text(xls_dslx:value()) -> binary().

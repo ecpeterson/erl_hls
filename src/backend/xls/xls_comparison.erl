@@ -1,7 +1,7 @@
 %%%% Classify integer comparisons before source values become untyped DSLX text.
 -module(xls_comparison).
 -moduledoc false.
--export([prepare/1, emit/2]).
+-export([prepare/1, lower/2]).
 
 %% Only proven integer values select widening comparison. Unknown providers and
 %% structural equality remain XLS's responsibility; this is not type inference.
@@ -213,16 +213,15 @@ pattern(_, _, Env, _) -> Env.
 field(Name, Slot, #{records := Records}) ->
     maps:get(Slot, maps:get(Name, Records, #{}), unknown).
 
--doc "Emits a mathematical integer comparison; literals retain sufficient independent width.".
--spec emit(atom(), [xls_clause_lower:printable()]) -> xls_clause_lower:printable().
-emit(Op, [Left, Right]) ->
+-doc "Lowers a mathematical integer comparison to structured DSLX helper calls, preserving widening and signedness. Literals retain sufficient independent width.".
+-spec lower(atom(), [xls_clause_lower:printable()]) -> xls_dslx:expr().
+lower(Op, [Left, Right]) ->
     Function = case Op of '<' -> "less"; '=<' -> "less_equal";
         '>' -> "less"; '>=' -> "less_equal";
         '=:=' -> "equal"; '=/=' -> "equal" end,
     Args = case Op of '>' -> [Right, Left]; '>=' -> [Right, Left]; _ -> [Left, Right] end,
-    Negation = case Op of '=/=' -> "!"; _ -> [] end,
-    [Negation, "hls_integer::", Function, "(",
-        lists:join(", ", [literal(A) || A <- Args]), ")"].
+    Call = xls_dslx:call("hls_integer::" ++ Function, [literal(A) || A <- Args]),
+    case Op of '=/=' -> xls_dslx:unary('!', Call); _ -> Call end.
 
 %% A literal's mathematical value must not inherit its neighbor's narrow type.
 -spec literal(xls_clause_lower:printable()) -> xls_clause_lower:printable().

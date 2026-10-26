@@ -412,9 +412,9 @@ fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_
   let _5 = hls_integer::shift<false>(v_Mask_1, u2:3);
   let _6 = _5 & 1;
   let v_South_1 = _6;
-  let _7 = v_North_1 + v_East_1;
-  let _8 = _7 + v_West_1;
-  let _9 = _8 + v_South_1;
+  let _7 = ((v_North_1) + (v_East_1));
+  let _8 = ((_7) + (v_West_1));
+  let _9 = ((_8) + (v_South_1));
   let v_Count_1 = _9;
   let _10 = v_Random_1 & 2147483647;
   let _11 = (_10 as u64);
@@ -433,13 +433,13 @@ fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_
       if _16 {
         (u32:1, hls_failure::NONE)
       } else {
-        let _16 = v_North_1 + v_East_1;
+        let _16 = ((v_North_1) + (v_East_1));
         let _17 = hls_integer::less(v_Rank_1, _16);
         if _17 {
           (u32:2, hls_failure::NONE)
         } else {
-          let _16 = v_North_1 + v_East_1;
-          let _17 = _16 + v_West_1;
+          let _16 = ((v_North_1) + (v_East_1));
+          let _17 = ((_16) + (v_West_1));
           let _18 = hls_integer::less(v_Rank_1, _17);
           if _18 {
             (u32:4, hls_failure::NONE)
@@ -784,8 +784,8 @@ fn reduction_reduce(
       let v_Xls_clause_1_Left1_1 = left.value1;
       let v_Xls_clause_1_Right0_1 = right.value0;
       let v_Xls_clause_1_Right1_1 = right.value1;
-      let _0 = v_Xls_clause_1_Left0_1 + v_Xls_clause_1_Right0_1;
-let _1 = v_Xls_clause_1_Left1_1 + v_Xls_clause_1_Right1_1;
+      let _0 = ((v_Xls_clause_1_Left0_1) + (v_Xls_clause_1_Right0_1));
+let _1 = ((v_Xls_clause_1_Left1_1) + (v_Xls_clause_1_Right1_1));
 let _2 = Phifold {
   value0: _0,
   value1: _1,
@@ -867,7 +867,7 @@ if ((_5.1) != hls_failure::NONE) {
       let v_Xls_clause_1_LeftInvalid_1 = left.value1;
       let v_Xls_clause_1_RightParity_1 = right.value0;
       let v_Xls_clause_1_RightInvalid_1 = right.value1;
-      let _0 = v_Xls_clause_1_LeftParity_1 ^ v_Xls_clause_1_RightParity_1;
+      let _0 = ((v_Xls_clause_1_LeftParity_1) ^ (v_Xls_clause_1_RightParity_1));
 let _1 = v_Xls_clause_1_LeftInvalid_1 | v_Xls_clause_1_RightInvalid_1;
 let _2 = Phifold {
   value0: _0,
@@ -965,7 +965,7 @@ fn reduction_dispatch_completion(
   let _1 = v_Xls_clause_1_Cell_1.1.phi;
   let _2 = phi_field::relax(_0, _1, v_Xls_clause_1_Sum0_1, v_Xls_clause_1_Sum1_1);
   let v_Xls_clause_1_NewPhi_1 = _2;
-  let _3 = v_Xls_clause_1_Epoch_1 + u32:1;
+  let _3 = ((v_Xls_clause_1_Epoch_1) + (u32:1));
   let _4 = _3 & u32:4294967295;
   let v_Xls_clause_1_NextEpoch_1 = _4;
   let _5 = Cell {
@@ -975,7 +975,7 @@ fn reduction_dispatch_completion(
   };
   let _6 = (Tag::CELL, _5);
   let v_Xls_clause_1_Updated_1 = _6;
-  let _7 = v_Xls_clause_1_Step_1 + 1;
+  let _7 = ((v_Xls_clause_1_Step_1) + (1));
   let _8 = _7 * 12;
   let _9 = _8 & 4294967295;
   let v_Xls_clause_1_NextStepEpoch_1 = _9;
@@ -1067,14 +1067,14 @@ fn reduction_dispatch_completion(
           if v_Xls_clause_1_Step_1 == data.step {
   let _0 = v_Xls_clause_1_Invalid_1 == 0;
   let _12 = if _0 {
-    let _1 = v_Xls_clause_1_Step_1 + u32:1;
+    let _1 = ((v_Xls_clause_1_Step_1) + (u32:1));
     let _2 = _1 & u32:4294967295;
     let v_Xls_clause_1_NextStep_1 = _2;
     let _3 = v_Xls_clause_1_NextStep_1 * u32:12;
     let _4 = _3 & u32:4294967295;
     let _5 = v_Xls_clause_1_Cell_1.1.anyon;
     let _6 = (v_Xls_clause_1_IncomingParity_1 as u32);
-    let _7 = _5 ^ _6;
+    let _7 = ((_5) ^ (_6));
     let _8 = Cell {
       step: v_Xls_clause_1_NextStep_1,
       diffusion_epoch: _4,
@@ -1180,7 +1180,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _1 = hls_integer::equal(_0, sN[2]:1);
       let _20 = if _1 {
         let _2 = v_Cell_1.1.step;
-        let _3 = _2 - u32:1;
+        let _3 = ((_2) - (u32:1));
         let _4 = _3 & u32:4294967295;
         let _5 = v_Cell_1.1.x;
         let _6 = v_Cell_1.1.y;
@@ -1396,7 +1396,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _5 = hls_integer::equal(_4, sN[2]:1);
         let _11 = if _5 {
           let _6 = v_Cell_1.1.best_direction;
-          let _7 = !hls_integer::equal(_6, sN[2]:0);
+          let _7 = !(hls_integer::equal(_6, sN[2]:0));
           let _10 = if _7 {
             let _8 = hls_integer::shift<false>(v_NextRandom_1, u5:31);
             let _9 = hls_integer::equal(_8, sN[2]:1);
@@ -1462,7 +1462,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _23 = (Tag::ANYON_MOVE, _22, bits_from_anyonmove(_22));
           let v_Message_1 = _23;
           let _24 = v_Cell_1.1.anyon;
-          let _25 = _24 ^ v_Present_1;
+          let _25 = ((_24) ^ (v_Present_1));
           let _26 = Cell {
             anyon: _25,
             random_state: v_NextRandom_1,
@@ -1562,7 +1562,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             let _9 = (Tag::ANYON_MOVE, _8, bits_from_anyonmove(_8));
             let v_Message_1 = _9;
             let _10 = v_Cell_1.1.anyon;
-            let _11 = _10 ^ v_Present_1;
+            let _11 = ((_10) ^ (v_Present_1));
             let _12 = Cell {
               anyon: _11,
               random_state: v_NextRandom_1,
@@ -2152,7 +2152,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let _12 = hls_integer::shift<false>(_11, u1:1);
             let v_Xls_clause_1_Quiet_1 = _12;
             let _13 = v_Xls_clause_1_Cell_1.1.anyon;
-            let _14 = _13 ^ v_Xls_clause_1_Present_1;
+            let _14 = ((_13) ^ (v_Xls_clause_1_Present_1));
             let _15 = Cell {
               anyon: _14,
               x: v_Xls_clause_1_X_1,
@@ -2184,7 +2184,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_EventStep_1 = message.step;
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {
@@ -2210,7 +2210,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_EventStep_1 = message.step;
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {
@@ -2236,7 +2236,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_EventStep_1 = message.step;
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {

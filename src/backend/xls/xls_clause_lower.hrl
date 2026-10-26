@@ -6,8 +6,6 @@
 -record(clause_state, {
     anonymous_counter = 0 :: integer(),
     named_counters = #{} :: #{string() => integer()},
-    %% Scalar provenance is local to this clause/branch and never reconstructed from text.
-    expressions = #{} :: xls_expr_ir:definitions(),
     bindings = #{} :: #{atom() => xls_clause_lower:printable()},
     unsafe_bindings = #{} :: #{atom() => erl_anno:location()},
     live_bindings = #{} :: #{atom() => true},

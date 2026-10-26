@@ -310,12 +310,11 @@ boolean_case_preserves_branch_badmatches_test() ->
 %% Short-circuit operators do not duplicate their left operand.
 -spec short_circuit_evaluates_left_once_test_() -> [term()].
 short_circuit_evaluates_left_once_test_() ->
-    [?_assertEqual(1, length(binary:matches(
-        lower_expression_clause(
-            "probe(Value, Right) -> (Value + 1 =:= 2) " ++
-                Operator ++ " Right.",
-            ["value", "right"]
-        ), <<"v_Value_1 + 1">>))) || Operator <- ["andalso", "orelse"]].
+    [?_test(begin
+        Clause = parse_clause("probe(Value, Right) -> (Value + 1 =:= 2) " ++ Operator ++ " Right."),
+        #{body := Body} = xls_clause_lower:clause_outcome(Clause, ["value", "right"], state, #{}),
+        ?assertEqual(1, length([Node || Node = {xls_dslx, binary, '+', _, _} <- expression_nodes(Body)]))
+    end) || Operator <- ["andalso", "orelse"]].
 
 %% Right-side short-circuit bindings exist only inside the selected branch.
 -spec short_circuit_rhs_bindings_stay_in_their_branch_test_() -> [term()].
@@ -387,13 +386,9 @@ ordered_integer_case_uses_guards_then_falls_through_test() ->
 %% A case subject is evaluated once before pattern selection.
 -spec general_case_evaluates_its_scrutinee_once_test() -> ok.
 general_case_evaluates_its_scrutinee_once_test() ->
-    XLS = lower_expression_clause(
-        "probe(Value) -> case Value + 1 of "
-        "0 -> 10; "
-        "_ -> 20 end.",
-        ["value"]
-    ),
-    ?assertEqual(1, length(binary:matches(XLS, <<"v_Value_1 + 1">>))).
+    Clause = parse_clause("probe(Value) -> case Value + 1 of 0 -> 10; _ -> 20 end."),
+    #{body := Body} = xls_clause_lower:clause_outcome(Clause, ["value"], state, #{}),
+    ?assertEqual(1, length([Node || Node = {xls_dslx, binary, '+', _, _} <- expression_nodes(Body)])).
 
 %% Tuple patterns compare repeated bindings rather than replacing them.
 -spec tuple_case_projects_and_compares_repeated_variables_test() -> ok.
@@ -774,8 +769,9 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
     CastSource =
         "waiting(cast, #message{}, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
+    ModuleName = "statem_conditional_entry_fixture",
     with_statem_fixture(
-        "statem_conditional_entry_fixture",
+        ModuleName,
         "[waiting]",
         EnterSource,
         CastSource,
@@ -788,10 +784,12 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
                 nomatch,
                 binary:match(XLS, <<"egress_valid: has_effect && can_advance">>)
             ),
-            ?assertNotEqual(
-                nomatch,
-                binary:match(XLS, <<"!hls_integer::equal(">>)
-            )
+            #{entries := Entries} = xls_parse:actor_artifact(
+                filename:join("_build", ModuleName ++ ".erl"), []),
+            Nodes = lists:append([expression_nodes(maps:get(body, Evaluation))
+                || #{evaluation := Evaluation} <- Entries]),
+            ?assertMatch([_ | _], [Node || Node = {xls_dslx, unary, '!',
+                {xls_dslx, call, "hls_integer::equal", [_, {xls_dslx, literal, _, 0}]}} <- Nodes])
         end
     ).
 

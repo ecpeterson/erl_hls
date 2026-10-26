@@ -16,7 +16,7 @@ selected_entry_structure_test() ->
         lists:sort([N || Fields <- Effects,
             {"layout", {xls_dslx, literal, "u8", N}} <- Fields])),
     ?assertMatch([_ | _], [N || N = {xls_dslx, choose, _, _, _} <- Nodes]),
-    ?assertMatch([_ | _], [N || N = {xls_bits_binary, '+', _, _} <- Nodes]),
+    ?assertMatch([_ | _], [N || N = {xls_dslx, binary, '+', _, _} <- Nodes]),
     ?assertMatch([_ | _], [N || N = {xls_dslx, call, "bit_slice_update", _} <- Nodes]),
     ?assertEqual([], [F || F <- Nodes, is_function(F)]),
     lists:foreach(fun(Fields) ->

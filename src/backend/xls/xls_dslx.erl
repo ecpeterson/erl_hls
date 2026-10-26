@@ -1,5 +1,5 @@
 -module(xls_dslx).
--moduledoc "Structured DSLX expressions for checked compiler wiring; rendering preserves child order and lexical blocks.".
+-moduledoc "Shared structured DSLX expressions for source lowering and hardware wiring. Rendering preserves child order and lexical blocks; semantic analysis belongs to the source lowerers.".
 -export([ref/1, field/2, index/2, slice/3, call/2, literal/2, tuple/1,
     construct/2, construct/3, bind/2, block/2, choose/3, match/2,
     binary/3, unary/2, cast/2, render/1]).
@@ -9,8 +9,8 @@
 -type name() :: string() | binary().
 -doc "A named DSLX type or a statically sized bit-vector type.".
 -type type() :: name() | {bits, pos_integer()}.
--doc "Expression children retain existing clause IR leaves and structured syntax nodes.".
--type value() :: xls_clause_lower:printable().
+-doc "Renderable syntax with context-sized source literals and opaque provider snippets. Static floats must be lowered by their provider before rendering; compile-time phantom types are excluded.".
+-type value() :: char() | binary() | [value()] | xls_clause_lower:static() | expr() | binding().
 -doc "Ordered struct fields; order is retained even when their values contain lexical blocks.".
 -type fields() :: [{name(), value()}].
 %% Operator atoms use DSLX spelling so no source-language operator translation occurs here.
@@ -102,7 +102,7 @@ unary(Operator, Value) -> {xls_dslx, unary, Operator, Value}.
 -spec cast(value(), type()) -> expr().
 cast(Value, Type) -> {xls_dslx, cast, Value, Type}.
 
--doc "Renders a retained expression or existing clause leaf; no lowering or source parsing occurs here.".
+-doc "Renders shared syntax and opaque leaves without source parsing or semantic lowering. Untyped integers retain contextual sizing; unlowered floats and phantom types are rejected.".
 -spec render(value()) -> iodata() | char().
 render({xls_dslx, ref, Name}) -> Name;
 render({xls_dslx, field, Value, Name}) -> [postfix(Value), ".", member(Name)];
@@ -133,7 +133,9 @@ render({xls_dslx, unary, Operator, Value}) -> [atom_to_list(Operator), "(", rend
 render({xls_dslx, cast, Value, Type}) -> ["(", operand(Value), " as ", type(Type), ")"];
 render(Value) when is_binary(Value); is_integer(Value) -> Value;
 render(Values) when is_list(Values) -> [render(Value) || Value <- Values];
-render(Value) -> xls_clause_lower:print(Value).
+render({static, integer, Integer}) -> integer_to_list(Integer);
+render({static, float, Value}) ->
+    error({untyped_float_literal, Value, {use, hls_float, literal, 2}}).
 
 %% Native type names remain leaves; widths are compiler-checked constants.
 -spec type(type()) -> iodata().
@@ -156,7 +158,7 @@ postfix({xls_dslx, cast, _, _} = Value) -> render(Value);
 postfix({xls_dslx, binary, _, _, _} = Value) -> render(Value);
 postfix(Value) -> ["(", render(Value), ")"].
 
-%% Existing scalar nodes and opaque snippets may contain operators of lower precedence.
+%% Opaque provider snippets may contain operators of lower precedence.
 -spec operand(value()) -> iodata() | char().
 operand({xls_dslx, choose, _, _, _} = Value) -> ["(", render(Value), ")"];
 operand({xls_dslx, match, _, _} = Value) -> ["(", render(Value), ")"];

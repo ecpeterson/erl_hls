@@ -955,7 +955,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let v_Xls_clause_2_QueryStep_1 = message.step;
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let v_Xls_clause_2_Step_1 = data.step;
-            let _0 = v_Xls_clause_2_Step_1 + 1;
+            let _0 = ((v_Xls_clause_2_Step_1) + (1));
             let _1 = _0 & 4294967295;
             let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
             if _2 {
@@ -983,7 +983,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Source_1 = message.source;
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_QueryStep_1, _1);
           let _10 = if _2 {
@@ -1107,7 +1107,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let v_Xls_clause_2_Step_1 = data.step;
             let _3 = if data.reply_resume == 1 {
-              let _0 = v_Xls_clause_2_Step_1 + 1;
+              let _0 = ((v_Xls_clause_2_Step_1) + (1));
               let _1 = _0 & 4294967295;
               let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
               (_2, hls_failure::NONE)
@@ -1128,7 +1128,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
               let v_Xls_clause_3_Step_1 = data.step;
               let _11 = if data.reply_resume == 2 {
-                let _0 = v_Xls_clause_3_Step_1 + 1;
+                let _0 = ((v_Xls_clause_3_Step_1) + (1));
                 let _1 = _0 & 4294967295;
                 let _2 = hls_integer::equal(v_Xls_clause_3_QueryStep_1, _1);
                 let _10 = if _2 {

@@ -472,7 +472,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _29 = {
         if _0 == 15 {
           let _1 = v_Syndrome_1.1.step;
-          let _2 = _1 + u32:1;
+          let _2 = ((_1) + (u32:1));
           let _3 = _2 & u32:4294967295;
           let v_NextStep_1 = _3;
           let _4 = v_Syndrome_1.1.step;
@@ -1033,7 +1033,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let v_Xls_clause_1_Quiet_1 = _15;
             let _16 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;
             let v_Xls_clause_1_NewSeen_1 = _16;
-            let _17 = v_Xls_clause_1_Parity_1 ^ v_Xls_clause_1_Present_1;
+            let _17 = ((v_Xls_clause_1_Parity_1) ^ (v_Xls_clause_1_Present_1));
             let v_Xls_clause_1_NewParity_1 = _17;
             let _18 = v_Xls_clause_1_Syndrome_1.1.data_quiet;
             let _19 = _18 & v_Xls_clause_1_Quiet_1;
@@ -1088,8 +1088,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               };
               let v_Xls_clause_1_NextRandom_1 = _35.0.0;
               let v_Xls_clause_1_Measurement_1 = _35.0.1;
-              let _36 = v_Xls_clause_1_NewParity_1 ^ v_Xls_clause_1_Measurement_1;
-              let _37 = _36 ^ v_Xls_clause_1_PreviousMeasurement_1;
+              let _36 = ((v_Xls_clause_1_NewParity_1) ^ (v_Xls_clause_1_Measurement_1));
+              let _37 = ((_36) ^ (v_Xls_clause_1_PreviousMeasurement_1));
               let v_Xls_clause_1_Detection_1 = _37;
               let _38 = if v_Xls_clause_1_NoiseDisabled_1 {
                 (v_Xls_clause_1_NewDataQuiet_1, hls_failure::NONE)
@@ -1144,7 +1144,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_NextStep_1 = message.step;
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_NextStep_1, _1);
           if _2 {

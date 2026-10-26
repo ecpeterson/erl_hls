@@ -174,7 +174,10 @@ slice(Value, Offset, Width) ->
 endian(big, _Direction, Bits) -> Bits;
 endian(little, Direction, Bits) -> ["hls_bits::", atom_to_list(Direction), "(", Bits, ")"].
 
+-doc "Returns a signed DSLX literal with enough independent width for the integer, including its sign. Numeric comparison and pattern lowering use it without truncating to another operand's type.".
+-spec integer_literal(integer()) -> xls_dslx:expr().
 integer_literal(N) ->
-    ["sN[", integer_to_list(length(integer_to_list(abs(N), 2)) + 1), "]:", integer_to_list(N)].
+    Width = length(integer_to_list(abs(N), 2)) + 1,
+    xls_dslx:literal("sN[" ++ integer_to_list(Width) ++ "]", N).
 
 unsupported(Line, Reason) -> error({unsupported_xls_bit_syntax, Line, Reason}).
