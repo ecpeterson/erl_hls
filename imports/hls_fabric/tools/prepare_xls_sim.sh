@@ -157,7 +157,7 @@ cp priv/xls/lib/*.x "$stage/"
 cp test/rtl/phi_noise_topology_smoke_tb.sv test/rtl/phi_noise_topology_tb.sv \
    test/rtl/phi_decoder_profile_tb.sv test/rtl/phi_memory_bridge_tb.sv "$stage/"
 cp tools/phi_scheduler_rams.sh tools/compile_phi_decoder_profile.py \
-   tools/compile_phi_decoder_profile.sh "$stage/"
+   tools/compile_phi_decoder_profile.sh tools/backend_build_profile.py "$stage/"
 erlc -P \
     -o "$stage/test_src" test/phi_memory_bridge_tests.erl
 cp "$stage/test_src/phi_memory_bridge_tests.P" "$stage/test_src/phi_memory_bridge_tests.erl"

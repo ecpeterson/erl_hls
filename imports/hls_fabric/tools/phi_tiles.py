@@ -9,11 +9,16 @@ import time
 
 from transport_codegen import specialize
 from backend_commands import digest, execute
+from backend_build_profile import read as read_profile
 
 
 def identity(source: Path, xls: Path, ram_helper: Path, schedulers: int,
-             delay_model: str = "unit", delay_table: Path | None = None) -> dict:
-    """Fingerprint shared source, compiler binaries, standard library and codegen settings."""
+             build_profile: Path, delay_table: Path | None = None) -> dict:
+    """Fingerprint shared source, external tools and the supplied Erlang-owned build policy."""
+    profile = read_profile(build_profile)
+    if profile["profile"]["postprocess"]["completion_storage"] != "registers":
+        raise ValueError("Phi tiles support only registers completion storage")
+    delay_model = profile["profile"]["schedules"]["channel"]["delay_model"]
     sources = {p.name: digest(p) for p in sorted(source.glob('*.x'))
                if not p.name.startswith(('device_', 'phi_device_'))}
     if (delay_model == 'xc7_7030') != (delay_table is not None):
@@ -24,9 +29,8 @@ def identity(source: Path, xls: Path, ram_helper: Path, schedulers: int,
             'stdlib': {str(p.relative_to(xls/'xls/dslx/stdlib')): digest(p)
                        for p in sorted((xls/'xls/dslx/stdlib').rglob('*.x'))},
             'ram_helper': digest(ram_helper), 'schedulers': schedulers,
-            'flags': ['--pipeline_stages=2', f'--delay_model={delay_model}', '--flop_inputs=false',
-                      '--flop_outputs=true', '--use_system_verilog=false', '--reset=reset',
-                      '--fifo_module=', '--module_name=phi_tile']}
+            'build_profile': profile, 'build_profile_sha256': digest(build_profile),
+            'flags': [*profile['codegen_flags'], '--module_name=phi_tile']}
     if delay_table is not None:
         result['delay_table_sha256'] = digest(delay_table)
         result['flags'].append('--xc7_delay_table=xc7_delay_table.tsv')
@@ -52,8 +56,10 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> Path:
     if len(counts) != 1:
         raise ValueError('congruent tiles require one RAM layout')
     helper = RAM_HELPER
-    delay_model, delay_table = getattr(args, 'delay_model', 'unit'), getattr(args, 'delay_table', None)
-    inputs = identity(source, args.xls, helper, counts.pop(), delay_model, delay_table)
+    build_profile = source/'build-profile.json'
+    delay_table = getattr(args, 'delay_table', None)
+    inputs = identity(source, args.xls, helper, counts.pop(), build_profile, delay_table)
+    delay_model = inputs['build_profile']['profile']['schedules']['channel']['delay_model']
     key = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     cache = args.tile_cache/key
     manifest = cache/'complete.json'
@@ -64,6 +70,9 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> Path:
         reused = True
     else:
         cache.mkdir(parents=True, exist_ok=False)
+        shutil.copyfile(build_profile, cache/'build-profile.json')
+        if digest(cache/'build-profile.json') != inputs['build_profile_sha256']:
+            raise ValueError('build profile changed during snapshot')
         if delay_table is not None:
             shutil.copyfile(delay_table, cache/'xc7_delay_table.tsv')
             if digest(cache/'xc7_delay_table.tsv') != inputs['delay_table_sha256']:
@@ -86,14 +95,15 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> Path:
         specialize(args.xls/'codegen_main', cache/'phi_tile.opt.ir', cache/'phi_tile.v', cache/'adapters',
                    delay_options=[f'--delay_model={delay_model}'] +
                    ([f'--xc7_delay_table={cache / "xc7_delay_table.tsv"}'] if delay_table is not None else []))
-        if inputs != identity(source, args.xls, helper, inputs['schedulers'], delay_model, delay_table):
+        if inputs != identity(source, args.xls, helper, inputs['schedulers'], build_profile, delay_table):
             raise ValueError('tile inputs changed during compilation')
         saved = {'inputs': inputs, 'outputs': outputs(cache), 'seconds': timings,
                  'commands': [c for _, c, _ in commands]}
         manifest.write_text(json.dumps(saved, indent=2)+'\n')
         reused = False
     (args.stage/'tile.json').write_text(json.dumps({'key': key, 'cache': str(cache),
-        'reused': reused, 'seconds': saved['seconds'], 'rtl_sha256': saved['outputs']['phi_tile.v']}, indent=2)+'\n')
+        'reused': reused, 'seconds': saved['seconds'], 'rtl_sha256': saved['outputs']['phi_tile.v'],
+        'build_profile': inputs['build_profile'], 'build_profile_sha256': inputs['build_profile_sha256']}, indent=2)+'\n')
     return cache/'phi_tile.v'
 
 
@@ -101,18 +111,26 @@ RAM_HELPER = Path(__file__).resolve().with_name("phi_scheduler_rams.sh")
 
 def outputs(cache: Path) -> dict[str, str]:
     """Hash compiler products; log files do not establish cache validity."""
-    names = ['phi_tile.ir', 'phi_tile.opt.ir', 'phi_tile.v']
+    names = ['phi_tile.ir', 'phi_tile.opt.ir', 'phi_tile.v', 'build-profile.json']
     if (cache/'xc7_delay_table.tsv').exists():
         names.append('xc7_delay_table.tsv')
     return {name: digest(cache/name) for name in names}
 
 
 def bind(args: argparse.Namespace, device: dict, rtl: Path) -> None:
-    """Copy the same compiled logic beside the board's constant and RAM wrapper."""
+    """Bind compiled logic and its retained policy; reject changed source policy before output."""
+    retained_profile = rtl.parent/'build-profile.json'
+    saved = json.loads((rtl.parent/'complete.json').read_text())
+    profile_sha256 = saved['inputs']['build_profile_sha256']
+    profile = read_profile(retained_profile)
+    if (digest(retained_profile) != profile_sha256
+            or digest(args.stage/'source/build-profile.json') != profile_sha256):
+        raise ValueError('build profile changed since tile compilation')
     directory = args.stage/f'device{device["id"]}'
     directory.mkdir()
     name = f'phi_device_{device["id"]}.v'
     shutil.copyfile(rtl, directory/name)
     (directory/'build.json').write_text(json.dumps({'tile': str(rtl), 'rtl_sha256': digest(rtl),
+        'build_profile': profile, 'build_profile_sha256': profile_sha256,
         'configuration_sha256': digest(args.stage/f'source/phi_device_{device["id"]}_config.json'),
         'wrapper_sha256': digest(args.stage/f'source/phi_device_{device["id"]}_ram.v')}, indent=2)+'\n')

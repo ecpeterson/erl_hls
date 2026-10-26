@@ -1,5 +1,7 @@
 # Pure tooling/packaging tests. Adding a hardware build here defeats the tier boundary.
 test_backend_context
+test_backend_build_profile
+test_debug_build_policy
 test_ci_diagnostics
 test_direct_collection_boundary
 test_packaging
@@ -8,6 +10,7 @@ test_packed_credit_cases
 test_phi_actor_profile
 test_phi_capture
 test_phi_build_artifacts
+test_phi_device_build
 test_phi_cycle_trace.CycleTraceTest.test_selected_internal_channels
 test_phi_cycle_trace.CycleTraceTest.test_executor_boundary_uses_consumer
 test_phi_link_packet

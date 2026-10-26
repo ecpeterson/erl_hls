@@ -20,7 +20,7 @@ erl -noshell \
 if [[ "$kind" == phi ]]; then
     cp "$erl_hls_root"/priv/xls/lib/*.x priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$erl_hls_root/src/examples/phi_decoder/phi_field.x" "$stage/"
     cp tools/phi_scheduler_rams.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
-    bash tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" 2h 3 2 1
+    bash tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
     python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \

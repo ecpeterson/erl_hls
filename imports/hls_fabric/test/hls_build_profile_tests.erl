@@ -69,6 +69,57 @@ delay_model_normalization_test() ->
         || Model <- [unit, "unit", <<"unit">>]],
     ?assertEqual(1, length(lists:usort(Profiles))).
 
+%% Prepared experiment policy reuses the channel renderer and records its external placement boundary.
+-spec experiment_policy_test() -> ok.
+experiment_policy_test() ->
+    #{version := 1, profile := Profile, codegen_flags := Flags} = hls_build_profile:experiment(#{
+        schedule => #{pipeline_stages => 4, initiation_interval => tool_default,
+            delay_model => "test-model", executor_result_delay => 7}, completion_storage => lutram}),
+    ?assertMatch(#{backend := channel_scheduler, placement := prepared_source,
+        postprocess := #{completion_storage := lutram},
+        schedules := #{channel := #{initiation_interval := tool_default}}}, Profile),
+    ?assertEqual([<<"--pipeline_stages=4">>, <<"--delay_model=test-model">>, <<"--flop_inputs=false">>,
+        <<"--flop_outputs=true">>, <<"--use_system_verilog=false">>, <<"--reset=reset">>,
+        <<"--fifo_module=">>, <<"--additional_channel_delay_ps=_result_out:send=7">>], Flags),
+    Scheduler = hls_build_profile:scheduler(scheduler_placement(), #{pipeline_stages => 4,
+        initiation_interval => tool_default, delay_model => <<"test-model">>, executor_result_delay => 7}),
+    ?assertEqual(hls_build_profile:flags(Scheduler, channel), Flags),
+    ?assertException(error, {hls_diagnostic, #{code := unsupported_build_schedule}},
+        hls_build_profile:flags(Profile, sampled_clock)).
+
+%% Defaults remain explicit; unsupported experiment fields and storage never fall through.
+-spec experiment_rejection_test() -> ok.
+experiment_rejection_test() ->
+    #{profile := #{postprocess := #{completion_storage := registers}}, codegen_flags := Flags} =
+        hls_build_profile:experiment(#{}),
+    ?assertEqual(channel_flags(2) ++ [<<"--worst_case_throughput=1">>], Flags),
+    ?assertException(error, {hls_diagnostic, #{code := unknown_experiment_options}},
+        hls_build_profile:experiment(#{backend => source_protocol})),
+    ?assertException(error, {hls_diagnostic, #{code := invalid_completion_storage}},
+        hls_build_profile:experiment(#{completion_storage => block_ram})),
+    ?assertException(error, {hls_diagnostic, #{code := invalid_schedule_option}},
+        hls_build_profile:experiment(#{schedule => #{initiation_interval => false}})).
+
+%% The CLI resolves duplicate options first, writes only valid JSON, and never replaces an existing file.
+-spec profile_cli_test() -> ok.
+profile_cli_test() ->
+    Output = filename:join(["_build", "profile-tests", integer_to_list(erlang:unique_integer([positive, monotonic])) ++ ".json"]),
+    try
+        ?assertException(error, {hls_diagnostic, #{code := invalid_schedule_option}},
+            hls_fabric_cli:run(["profile", "--output", Output, "--pipeline-stages", "0"])),
+        ?assertNot(filelib:is_file(Output)),
+        ok = hls_fabric_cli:run(["profile", "--output", Output, "--pipeline-stages", "bad", "--pipeline-stages", "4",
+            "--initiation-interval", "tool_default", "--delay-model", "test-model", "--completion-storage", "lutram"]),
+        {ok, Bytes} = file:read_file(Output),
+        #{<<"version">> := 1, <<"profile">> := #{<<"placement">> := <<"prepared_source">>,
+            <<"schedules">> := #{<<"channel">> := #{<<"pipeline_stages">> := 4,
+                <<"initiation_interval">> := <<"tool_default">>}},
+            <<"postprocess">> := #{<<"completion_storage">> := <<"lutram">>}}} = json:decode(Bytes),
+        ?assertException(error, {hls_diagnostic, #{code := output_exists}},
+            hls_fabric_cli:run(["profile", "--output", Output])),
+        ?assertEqual({ok, Bytes}, file:read_file(Output))
+    after file:delete(Output) end.
+
 %% Configuration validation checks shape without opening these unused test inputs.
 -spec source_config() -> hls_source_config:boundary().
 source_config() -> #{sources => [{"unused.erl", []}], topology => {unused, topology, []}, actor_limit => 4}.

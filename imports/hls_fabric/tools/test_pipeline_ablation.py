@@ -1,6 +1,6 @@
 """Check experimental source derivation without invoking XLS or RTL tools."""
 from backend_paths import ROOT
-from compile_phi_decoder_profile import INPUTS, checked_inputs
+from compile_phi_decoder_profile import INPUTS, BUILD_PROFILE, checked_inputs
 import importlib.util
 import json
 from pathlib import Path
@@ -33,6 +33,7 @@ let completed_valid = if accept_executor_result { incoming_valid }
             "phi_decoder_profile_topology.x": "import actor;\n",
             "phi_decoder_profile_top.v": "// wrapper\n",
             "phi_decoder_profile.json": "{}\n",
+            BUILD_PROFILE: "{}\n",
         }
         for name, content in files.items():
             (self.reference / name).write_text(content)

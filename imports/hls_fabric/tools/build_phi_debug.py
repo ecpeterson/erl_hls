@@ -5,6 +5,7 @@ Uses native XLS plus Yosys. Each directory retains DSLX, IR, RTL, source hashes,
 commands and logs; debug/ contains the deployable shared-transport wrapper.
 """
 from compiler_paths import compiler_root, compiler_tool
+from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 from backend_paths import erl_command, erlang_environment
 import argparse
 import hashlib
@@ -18,20 +19,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def compile_dslx(xls: Path, stage: Path, module: str, top: str, stages: int,
-                 ii: int = 1, rams: str | None = None) -> None:
-    """Compile a staged DSLX unit and bind source, tool and output hashes to its receipt."""
+                 ii: int = 1, rams: str | None = None, build_profile: Path | None = None) -> None:
+    """Compile a staged unit; application RAM builds consume emitted policy, debug peripherals keep their explicit clock recipe."""
+    policy = read_build_profile(build_profile) if build_profile is not None else None
+    if rams and policy is None:
+        raise ValueError("application compilation requires an emitted build profile")
+    if policy is not None and policy["profile"]["postprocess"]["completion_storage"] != "registers":
+        raise ValueError("debug build does not implement completion-storage legalization")
+    flags = policy["codegen_flags"] if policy is not None else [
+        f"--pipeline_stages={stages}", f"--worst_case_throughput={ii}",
+        "--delay_model=unit", "--use_system_verilog=false", "--reset=reset", "--fifo_module="]
     commands = [
         (".ir", [str(xls / "ir_converter_main"), "--warnings_as_errors=false", "--dslx_path=.",
                  f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}", f"--top={top}", f"{module}.x"]),
         (".opt.ir", [str(xls / "opt_main"), f"{module}.ir"]),
-        (".v", [str(xls / "codegen_main"), f"--pipeline_stages={stages}", f"--worst_case_throughput={ii}",
-                "--delay_model=unit", "--use_system_verilog=false", "--reset=reset", "--fifo_module=",
-                *(["--flop_inputs=false", "--flop_outputs=true", f"--ram_configurations={rams}"] if rams else []),
+        (".v", [str(xls / "codegen_main"), *flags,
+                *([f"--ram_configurations={rams}"] if rams else []),
                 f"{module}.opt.ir"])]
     for suffix, command in commands:
         with (stage / f"{module}{suffix}").open("w") as output, (stage / f"{module}{suffix}.log").open("w") as log:
             subprocess.run(command, cwd=stage, stdout=output, stderr=log, check=True)
     (stage / f"{module}.build.json").write_text(json.dumps({
+        "build_profile": policy,
+        "assets": {build_profile.name: hashlib.sha256(build_profile.read_bytes()).hexdigest()} if build_profile else {},
         "commands": commands, "tools": {name: hashlib.sha256((xls / name).read_bytes()).hexdigest()
             for name in ("ir_converter_main", "opt_main", "codegen_main")},
         "sources": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in stage.glob("*.x")},
@@ -49,7 +59,7 @@ def validate(build: Path) -> None:
         stage = build / directory
         for module in modules:
             metadata = json.loads((stage / f"{module}.build.json").read_text())
-            for name, expected in (metadata["sources"] | metadata["outputs"]).items():
+            for name, expected in (metadata["sources"] | metadata["outputs"] | metadata.get("assets", {})).items():
                 if hashlib.sha256((stage / name).read_bytes()).hexdigest() != expected:
                     raise ValueError(f"stale build input/output: {stage / name}")
     manifest = json.loads((build / "debug/manifest.json").read_text())
@@ -85,7 +95,9 @@ def build(args: argparse.Namespace) -> None:
         rams = subprocess.check_output(["bash", "-c", 'source tools/phi_scheduler_rams.sh; phi_scheduler_ram_configurations "$1"',
                                         "phi-ram-config", str(banks)], cwd=ROOT, text=True).strip()
         print(f"Building {mode}: {banks} scheduler banks", flush=True)
-        compile_dslx(xls, out, "phi_memory_gateway", "Top", 2, rams=rams)
+        policy = out / "build-profile.json"
+        emit_build_profile(policy, profile="test", public=public)
+        compile_dslx(xls, out, "phi_memory_gateway", "Top", 2, rams=rams, build_profile=policy)
     (stage / "fixture.json").write_text(json.dumps({"shards": args.shards}) + "\n")
     support = stage / "support"
     support.mkdir(exist_ok=True)

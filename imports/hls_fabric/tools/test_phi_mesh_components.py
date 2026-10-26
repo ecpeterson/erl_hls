@@ -1,12 +1,32 @@
 #!/usr/bin/env python3
 """Fail closed when the component linker sees changed wiring or unsupported generated syntax."""
+import argparse
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from phi_mesh_components import modules, namespace, ports, widen
+from phi_mesh_components import compile_component, modules, namespace, ports, widen
 
 
 class ComponentSyntaxTest(unittest.TestCase):
     """The build accelerator changes only named module types and link declarations."""
+
+    def test_unsupported_policy_rejected_before_outputs(self) -> None:
+        """Reject completion legalization and custom timing before any component cache is created."""
+        for storage, model, error in [("lutram", "unit", "completion storage"),
+                                      ("registers", "xc7_7030", "unit delay model")]:
+            with self.subTest(storage=storage, model=model), tempfile.TemporaryDirectory() as directory:
+                stage = Path(directory)
+                policy = {"profile": {"postprocess": {"completion_storage": storage},
+                                      "schedules": {"channel": {"delay_model": model}}}}
+                args = argparse.Namespace(stage=stage, xls=stage / "xls")
+                with patch("phi_mesh_components.read_profile", return_value=policy), \
+                        patch("phi_mesh_components.execute") as execute:
+                    with self.assertRaisesRegex(ValueError, error):
+                        compile_component(args, "link", "pub proc Top {}")
+                execute.assert_not_called()
+                self.assertEqual(list(stage.iterdir()), [])
 
     def test_namespace_and_ports(self) -> None:
         """Renaming types retains data widths, port names, body expressions and instance wiring."""

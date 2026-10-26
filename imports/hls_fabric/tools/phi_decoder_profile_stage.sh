@@ -2,14 +2,18 @@
 set -euo pipefail
 export LC_ALL=C
 
-stage=${1:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS PIPELINE_STAGES II}
-xls_root=${2:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS PIPELINE_STAGES II}
+stage=${1:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT [TIMEOUT] [--build-profile FILE] [--delay-table FILE]}
+xls_root=${2:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT [TIMEOUT] [--build-profile FILE] [--delay-table FILE]}
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
-stage_timeout=${3:-2h}
-shard_count=${4:-3}
-pipeline_stages=${5:-2}
-initiation_interval=${6:-1}
+shift 2
+stage_timeout=2h
+if [[ $# -gt 0 && "$1" != --* ]]; then
+    stage_timeout=$1
+    shift
+fi
+compiler_arguments=("$@")
+invocation_directory=$PWD
 trace_enabled=${ERL_HLS_PHI_PROFILE_TRACE:-0}
 
 if [[ "$trace_enabled" != 0 && "$trace_enabled" != 1 ]]; then
@@ -66,17 +70,23 @@ timed_command() {
     fi
 }
 
-bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
-    "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval" "${@:7}"
+(
+    cd "$invocation_directory"
+    bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
+        --timeout "$stage_timeout" "${compiler_arguments[@]}"
+)
 compiled=$(cd "$stage/compiled" && pwd -P)
 
 # Read the immutable artifact configuration, not the caller's environment.
-read -r width height x_enabled z_enabled scheduler_count plane_count < <(
-    python3 - "$compiled/phi_decoder_profile.json" <<'PYCONFIG'
+read -r width height x_enabled z_enabled scheduler_count plane_count shard_count pipeline_stages initiation_interval < <(
+    python3 - "$compiled/phi_decoder_profile.build.json" <<'PYCONFIG'
 import json, sys
-c = json.load(open(sys.argv[1]))
+build = json.load(open(sys.argv[1]))
+c = build["profile"]
+schedule = build["build_profile"]["profile"]["schedules"]["channel"]
 print(c["width"], c["height"], int("x" in c["planes"]), int("z" in c["planes"]),
-      c["scheduler_count"], len(c["planes"]))
+      c["scheduler_count"], len(c["planes"]), c["shards_per_plane"],
+      schedule["pipeline_stages"], schedule["initiation_interval"])
 PYCONFIG
 )
 

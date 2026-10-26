@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 
 from backend_commands import digest, execute
+from backend_build_profile import emit as emit_profile
 from backend_paths import ROOT, erl_command
 from phi_build_artifacts import mesh_artifacts
 from phi_device_build import inputs, build_device, instrument_device
@@ -69,6 +70,8 @@ def build(args: argparse.Namespace, *, transform: Callable[[Path], None] | None 
     else:
         args.stage.mkdir(parents=True, exist_ok=False)
         source.mkdir()
+        emit_profile(source/"build-profile.json", profile="test", public=args.erl_hls,
+                     initiation_interval=None, delay_model=getattr(args, "delay_model", "unit"))
         transport = ('serial' if args.transport == 'serial' else
                      f"#{{words => {args.link_words}, credits => {args.link_credits}"
                      + (", compact => true" if args.link_compact else "") + "}")
@@ -129,6 +132,8 @@ def build(args: argparse.Namespace, *, transform: Callable[[Path], None] | None 
 
     with ThreadPoolExecutor(max_workers=args.jobs) as workers:
         list(workers.map(compile_device, selected))
+    if json.loads((args.stage / "source-hashes.json").read_text()) != mesh_artifacts(source):
+        raise ValueError("generated source changed while compiling devices")
     current = build_inputs(args)
     if experiment is not None:
         current['experiment'] = experiment

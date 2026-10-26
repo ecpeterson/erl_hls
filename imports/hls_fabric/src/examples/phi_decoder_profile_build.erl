@@ -7,7 +7,7 @@
 -type options() :: #{mailbox_debug => boolean(), direct_actor_debug => boolean(),
     effect_window_partition => global | weak_components}.
 
--doc "Returns generated relative files and the matching topology/profile/artifact requirements without writing output. Compiles each required actor once; wrapper, observation projection and RAM configuration derive from the same profile. The input manifest hashes actor DSLX, topology DSLX, wrapper and profile metadata so an external compiler can reject changed bytes without parsing DSLX. Options may select observations or effect-window partitioning, not replace placement. Source/provider and template reads remain; no XLS or admission checks run.".
+-doc "Returns generated relative files and the matching topology/profile/artifact requirements without writing output. Compiles each required actor once; wrapper, observation projection and RAM configuration derive from the same profile. The input manifest hashes actor DSLX, topology DSLX, wrapper, geometry and the default compilation policy so an external compiler can reject changed bytes without parsing DSLX. Options may select observations or effect-window partitioning, not replace placement. Source/provider and template reads remain; no XLS or admission checks run.".
 -spec emit(pos_integer() | map(), options()) -> hls_generated_files:output().
 emit(ProfileOptions, Options) ->
     ok = options(Options),
@@ -28,7 +28,9 @@ emit(ProfileOptions, Options) ->
     Inputs = hls_generated_files:merge([ActorFiles, #{
         "phi_decoder_profile_topology.x" => xls_shared_topology_dslx:emit(Topology, Profile),
         "phi_decoder_profile_top.v" => phi_decoder_profile_top_v:emit(Planes, Scheduler, Options),
-        "phi_decoder_profile.json" => json:encode(phi_decoder_profile:manifest(Config))}]),
+        "phi_decoder_profile.json" => json:encode(phi_decoder_profile:manifest(Config)),
+        "phi_decoder_profile.build-profile.json" => json:encode(
+            hls_diagnostic:json_value(hls_build_profile:experiment(#{})))}]),
     %% Experiment comparisons need a RAM recipe identity independent of actor count or source.
     Manifest = #{version => 1,
         ram_configuration => hls_generated_files:hash(term_to_binary(

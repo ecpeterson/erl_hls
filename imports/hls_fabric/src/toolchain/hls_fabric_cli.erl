@@ -6,7 +6,7 @@
 -spec main() -> no_return().
 main() -> hls_cli:main("hls-fabric", fun run/1).
 
--doc "Plans or emits one trusted source configuration without launching rebar or XLS. plan prints a read-only stage report; emit requires a fresh output path. Source paths are relative to the caller.".
+-doc "Plans or emits one trusted source configuration, or writes a prepared-source experiment profile, without launching rebar or XLS. plan prints a read-only report; emit and profile require fresh output paths. Source paths are relative to the caller.".
 -spec run([string()]) -> ok.
 run([]) -> usage();
 run(["--help"]) -> usage();
@@ -18,6 +18,22 @@ run(["emit" | Args]) ->
     Output = hls_cli:required(output, Options),
     _ = hls_build:write(hls_build:plan(Request#{configuration := ConfigPath}), Output),
     ok;
+run(["profile" | Args]) ->
+    Options = hls_cli:options(Args, [{"--output", output, value},
+        {"--pipeline-stages", pipeline_stages, value}, {"--initiation-interval", initiation_interval, value},
+        {"--delay-model", delay_model, value}, {"--executor-result-delay", executor_result_delay, value},
+        {"--completion-storage", completion_storage, value}]),
+    Output = hls_cli:required(output, Options),
+    Interval = case maps:get(initiation_interval, Options, "1") of
+        "tool_default" -> tool_default;
+        Value -> hls_cli:integer(initiation_interval, Value)
+    end,
+    Schedule = #{pipeline_stages => hls_cli:integer(pipeline_stages, maps:get(pipeline_stages, Options, "2")),
+        initiation_interval => Interval, delay_model => maps:get(delay_model, Options, "unit"),
+        executor_result_delay => hls_cli:integer(executor_result_delay, maps:get(executor_result_delay, Options, "0"))},
+    Policy = hls_build_profile:experiment(#{schedule => Schedule,
+        completion_storage => completion_storage(maps:get(completion_storage, Options, "registers"))}),
+    write_profile(Output, Policy);
 run(["plan" | Args]) ->
     Options = hls_cli:options(Args, [{"--backend", backend, value}, {"--kind", kind, value}, {"--config", config, value},
         {"--stage", stage, value}, {"--format", format, value}]),
@@ -32,7 +48,30 @@ run(["plan" | Args]) ->
         json -> io:put_chars([json:encode(hls_diagnostic:json_value(Report)), "\n"])
     end;
 run(Args) -> hls_diagnostic:raise(command_line, unknown_command,
-    <<"Expected plan or emit; use --help for syntax.">>, #{arguments => [unicode:characters_to_binary(Arg) || Arg <- Args]}).
+    <<"Expected plan, emit or profile; use --help for syntax.">>, #{arguments => [unicode:characters_to_binary(Arg) || Arg <- Args]}).
+
+%% Storage names are a closed backend vocabulary; command input never creates atoms.
+-spec completion_storage(string()) -> registers | lutram.
+completion_storage("registers") -> registers;
+completion_storage("lutram") -> lutram;
+completion_storage(Other) -> hls_diagnostic:raise(command_line, invalid_completion_storage,
+    <<"Completion storage must be registers or lutram.">>, #{value => unicode:characters_to_binary(Other)}).
+
+%% Resolve policy before touching the filesystem and preserve any existing profile exactly.
+-spec write_profile(file:filename(), hls_build_profile:experiment()) -> ok.
+write_profile(Output, Policy) ->
+    Data = [json:encode(hls_diagnostic:json_value(Policy)), "\n"],
+    Result = case filelib:ensure_dir(Output) of
+        ok -> file:write_file(Output, Data, [exclusive]);
+        Error -> Error
+    end,
+    case Result of
+        ok -> ok;
+        {error, eexist} -> hls_diagnostic:raise(packaging, output_exists,
+            <<"Profile output must be a fresh file.">>, #{output => unicode:characters_to_binary(Output)});
+        {error, Reason} -> hls_diagnostic:raise(packaging, output_unavailable,
+            unicode:characters_to_binary(file:format_error(Reason)), #{output => unicode:characters_to_binary(Output)})
+    end.
 
 %% A missing backend preserves the explicit source-kind frontend; scheduler placement has its own config.
 -spec request(map(), file:filename()) -> hls_build:request().
@@ -88,9 +127,12 @@ format(Other) -> hls_diagnostic:raise(command_line, unknown_output_format,
 usage() ->
     io:put_chars("Usage: hls-fabric plan --config FILE [--backend BACKEND] [--kind KIND] [--stage STAGE] [--format erlang|json]\n"
         "       hls-fabric emit --config FILE --output FRESH_DIRECTORY [--backend BACKEND] [--kind KIND]\n"
-        "       Add --diagnostics text|json to either command (default text).\n"
+        "       hls-fabric profile --output FRESH_FILE [--pipeline-stages N] [--initiation-interval N|tool_default]\n"
+        "           [--delay-model NAME] [--executor-result-delay N] [--completion-storage registers|lutram]\n"
+        "       Add --diagnostics text|json to any command (default text).\n"
         "Backends: source_protocol (default), channel_scheduler.\n"
         "Source kinds: transport, network, boundary, application, bridge, deployment, mixed.\n"
         "Stages: summary, configuration, source, topology, placement, composition, schedule, profile.\n"
         "Plans inspect checked source and wiring; emit writes source-build.json, DSLX and pin adapters.\n"
+        "profile records channel policy for prepared experiment DSLX; it does not read source or invoke XLS.\n"
         "XLS is separate; compile-source-build --dry-run previews its commands.\n").

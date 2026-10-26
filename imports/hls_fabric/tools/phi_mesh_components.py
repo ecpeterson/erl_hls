@@ -13,6 +13,7 @@ import re
 
 from transport_codegen import specialize
 from backend_commands import digest, execute
+from backend_build_profile import read as read_profile
 from phi_build_artifacts import mesh_artifacts
 
 
@@ -100,25 +101,37 @@ def validate_sources(base: Path, source: Path, words: int, credits: int, compact
 def compile_component(args: argparse.Namespace, name: str, source: str) -> dict:
     """Compile and cache one small component with the same XLS scheduling options as full devices."""
     stage = args.stage/'components'/name
+    build_profile = args.stage/'source/build-profile.json'
+    profile = read_profile(build_profile)
+    if profile['profile']['postprocess']['completion_storage'] != 'registers':
+        raise ValueError('Phi components support only registers completion storage')
+    if profile['profile']['schedules']['channel']['delay_model'] != 'unit':
+        raise ValueError('Phi components support only the unit delay model; use tiles for custom timing')
     inputs = {'top': source, 'source_hashes_sha256': digest(args.stage/'source-hashes.json'),
+              'build_profile': profile, 'build_profile_sha256': digest(build_profile),
               'transport_codegen': digest(Path(__file__).with_name('transport_codegen.py')), 'tools': {tool: digest(args.xls/tool) for tool in ('ir_converter_main', 'opt_main', 'codegen_main')}}
     if (stage/'complete.json').exists():
         record = json.loads((stage/'complete.json').read_text())
-        if record['inputs'] != inputs or record['rtl_sha256'] != digest(stage/'component.v'):
+        if (record['inputs'] != inputs or record['rtl_sha256'] != digest(stage/'component.v')
+                or digest(stage/'build-profile.json') != inputs['build_profile_sha256']):
             raise ValueError('completed component changed')
         return record
     stage.mkdir(parents=True, exist_ok=False)
+    (stage/'build-profile.json').write_bytes(build_profile.read_bytes())
+    if digest(stage/'build-profile.json') != inputs['build_profile_sha256']:
+        raise ValueError('build profile changed during snapshot')
     (stage/'top.x').write_text(source)
     commands = [
         ('convert', [str(args.xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false',
                      f'--dslx_path={args.stage/"source"}', f'--dslx_stdlib_path={args.xls/"xls/dslx/stdlib"}', str(stage/'top.x')], 'component.ir'),
         ('optimize', [str(args.xls/'opt_main'), str(stage/'component.ir')], 'component.opt.ir'),
-        ('codegen', [str(args.xls/'codegen_main'), '--pipeline_stages=2', '--delay_model=unit', '--flop_inputs=false',
-                     '--flop_outputs=true', '--use_system_verilog=false', '--reset=reset', '--fifo_module=',
+        ('codegen', [str(args.xls/'codegen_main'), *profile['codegen_flags'],
                      '--module_name=component', str(stage/'component.opt.ir')], 'component.v')]
     for label, command, output in commands:
         execute(command, stage, label, timeout=1200, output=stage/output)
     specialize(args.xls/'codegen_main', stage/'component.opt.ir', stage/'component.v', stage/'adapters')
+    if digest(build_profile) != inputs['build_profile_sha256']:
+        raise ValueError('build profile changed during compilation')
     record = {'inputs': inputs, 'rtl_sha256': digest(stage/'component.v'),
               'commands': [command for _, command, _ in commands]}
     (stage/'complete.json').write_text(json.dumps(record, indent=2)+'\n')
@@ -131,6 +144,8 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> None:
     base = args.reuse_actors
     source = args.stage/'source'
     validate_sources(base, source, args.link_words, args.link_credits, args.link_compact)
+    if read_profile(base/'source/build-profile.json') != read_profile(source/'build-profile.json'):
+        raise ValueError('actor reuse requires identical backend build policies')
     old_inputs = json.loads((base/'inputs.json').read_text())
     current_inputs = json.loads((args.stage/'inputs.json').read_text())
     if (old_inputs['tools'] != current_inputs['tools']
@@ -231,6 +246,7 @@ def link_device(args: argparse.Namespace, device: dict) -> None:
     output = stage/f'phi_device_{d}.v'
     output.write_text('\n'.join(library[name] for name in sorted(included)))
     record = {'mode': 'checked-component-link', 'base': str(old_path), 'base_rtl_sha256': digest(old_path),
+              'build_profile': read_profile(args.stage/'source/build-profile.json'),
               'base_complete_sha256': digest(old_path.parent/'complete.json'),
               'source_hashes_sha256': digest(args.stage/'source-hashes.json'),
               'driver_sha256': digest(Path(__file__)), 'replacements': replacements,

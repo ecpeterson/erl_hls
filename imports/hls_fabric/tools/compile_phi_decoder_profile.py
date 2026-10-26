@@ -9,10 +9,13 @@ import signal
 import sys
 from types import ModuleType
 
+from backend_build_profile import read as read_build_profile
+
 INPUTS = "phi_decoder_profile.inputs.json"
 PROFILE = "phi_decoder_profile.json"
 TOPOLOGY = "phi_decoder_profile_topology.x"
 WRAPPER = "phi_decoder_profile_top.v"
+BUILD_PROFILE = "phi_decoder_profile.build-profile.json"
 
 
 def checked_inputs(snapshot: Path, *, assets: Path | None = None) -> dict:
@@ -29,10 +32,10 @@ def checked_inputs(snapshot: Path, *, assets: Path | None = None) -> dict:
     if type(manifest.get("version")) is not int or manifest["version"] != 1:
         raise ValueError("unsupported profile input manifest version")
     inputs = manifest.get("inputs")
-    if not isinstance(inputs, dict) or not {TOPOLOGY, WRAPPER, PROFILE} <= inputs.keys():
+    if not isinstance(inputs, dict) or not {TOPOLOGY, WRAPPER, PROFILE, BUILD_PROFILE} <= inputs.keys():
         raise ValueError("profile input manifest omits required generated files")
     for name, expected in inputs.items():
-        if Path(name).name != name or not (name.endswith(".x") or name in (WRAPPER, PROFILE)):
+        if Path(name).name != name or not (name.endswith(".x") or name in (WRAPPER, PROFILE, BUILD_PROFILE)):
             raise ValueError(f"invalid profile input name: {name!r}")
         path = snapshot / name if name.endswith(".x") else assets / name
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
@@ -71,21 +74,21 @@ def selected_compiler(profile: str, public: Path | None) -> ModuleType:
 
 
 def main() -> None:
-    """Compile the requested profile with checked geometry and explicit timing settings."""
+    """Compile checked geometry using an Erlang-emitted, frozen scheduling policy.
+
+    The default policy is bound by the producer input manifest. Local callers may
+    select a separately emitted policy; the detached adapter never resolves
+    schedule defaults or rewrites its literal flags.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--erl-hls", type=Path)
     parser.add_argument("--profile", default="test")
     parser.add_argument("stage", type=Path)
     parser.add_argument("xls_root", type=Path)
-    parser.add_argument("timeout", nargs="?", default="7200")
-    parser.add_argument("shards", nargs="?", type=int, default=3)
-    parser.add_argument("pipeline_stages", nargs="?", type=int, default=2)
-    parser.add_argument("initiation_interval", nargs="?", type=int, default=1)
-    parser.add_argument("--delay-model", default="unit")
+    parser.add_argument("--timeout", default="7200")
+    parser.add_argument("--build-profile", type=Path, help="Emitted policy; defaults to the producer-bound sidecar.")
     parser.add_argument("--delay-table", type=Path)
     args = parser.parse_args()
-    if min(args.shards, args.pipeline_stages, args.initiation_interval) < 1:
-        parser.error("shards, pipeline stages, and initiation interval must be positive")
     compiler = selected_compiler(args.profile, args.erl_hls)
     try:
         timeout = compiler.duration(args.timeout)
@@ -94,15 +97,30 @@ def main() -> None:
     signal.signal(signal.SIGTERM, compiler.interrupted)
     stage = args.stage.resolve()
 
+    selected = (args.build_profile or stage / BUILD_PROFILE).resolve()
+    expected_policy = hashlib.sha256(selected.read_bytes()).hexdigest()
+    assets = [stage / name for name in (WRAPPER, "hls_1r1w_ram.v", PROFILE, INPUTS, BUILD_PROFILE)]
+    collisions = [path for path in assets if path.name == selected.name]
+    if collisions and collisions[0].resolve() != selected:
+        raise ValueError("selected build profile collides with a bound profile asset")
+    if not collisions:
+        assets.append(selected)
+
+    def policy(snapshot: Path) -> dict:
+        """Read only selected policy bytes frozen before executor snapshotting."""
+        path = snapshot / "assets" / selected.name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected_policy:
+            raise ValueError("selected build profile changed during snapshot")
+        value = read_build_profile(path)
+        if value["profile"]["postprocess"]["completion_storage"] != "registers":
+            raise ValueError("Phi profile compilation does not support completion legalization")
+        return value
+
     def metadata(snapshot: Path) -> dict:
-        """Read the Erlang-owned population after checking the snapshotted build inputs."""
+        """Keep application geometry distinct from the retained hardware policy."""
         inputs = checked_inputs(snapshot)
         config = json.loads((snapshot / "assets" / PROFILE).read_text())
-        if config["shards_per_plane"] != args.shards:
-            raise ValueError("requested shards disagree with the staged configuration")
-        return {"profile": {**config,
-                            "pipeline_stages": args.pipeline_stages, "initiation_interval": args.initiation_interval,
-                            "delay_model": args.delay_model, "flop_inputs": False, "flop_outputs": True},
+        return {"profile": config, "build_profile": policy(snapshot),
                 "ram_configuration": inputs["ram_configuration"]}
 
     def ram_configurations(snapshot: Path) -> str:
@@ -110,10 +128,9 @@ def main() -> None:
         return checked_inputs(snapshot)["ram_configurations"]
 
     compiler.build(stage / TOPOLOGY, args.xls_root, stage / "compiled",
-          name="phi_decoder_profile", pipeline_stages=args.pipeline_stages,
-          initiation_interval=args.initiation_interval, ram_configurations=ram_configurations,
-          assets=[stage / name for name in (WRAPPER, "hls_1r1w_ram.v", PROFILE, INPUTS)],
-          metadata=metadata, timeout=timeout, delay_model=args.delay_model, delay_table=args.delay_table)
+          name="phi_decoder_profile", codegen_flags=lambda snapshot: policy(snapshot)["codegen_flags"],
+          ram_configurations=ram_configurations, assets=assets, metadata=metadata,
+          timeout=timeout, delay_table=args.delay_table)
 
 
 if __name__ == "__main__":

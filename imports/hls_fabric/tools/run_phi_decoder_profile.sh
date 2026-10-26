@@ -28,6 +28,7 @@ done
 
 ERL_HLS_PHI_PROFILE_SHARDS="$shard_count" \
     "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+local_stage=$(cd "$local_stage" && pwd)
 cp "$project_root/tools/phi_decoder_profile_stage.sh" \
     "$local_stage/phi_decoder_profile_stage.sh"
 if [[ "$trace_enabled" == 1 ]]; then
@@ -36,10 +37,17 @@ if [[ "$trace_enabled" == 1 ]]; then
 fi
 rm -f -- "$local_stage/phi_decoder_profile.causality.svg"
 
+# Resolve overrides locally; the copied stage only consumes the resulting frozen policy.
+source "$project_root/tools/backend_env.sh" test
+policy_directory=$(mktemp -d "$local_stage/build-policy.XXXXXX")
+policy_path="$policy_directory/selected-build-profile.json"
+erl +S 2:2 -noshell -s hls_fabric_cli main -extra profile \
+    --output "$policy_path" --pipeline-stages "$pipeline_stages" \
+    --initiation-interval "$initiation_interval"
+
 ERL_HLS_PHI_PROFILE_TRACE="$trace_enabled" \
     bash "$local_stage/phi_decoder_profile_stage.sh" \
-    "$local_stage" "$xls_root" "$stage_timeout" "$shard_count" \
-    "$pipeline_stages" "$initiation_interval"
+    "$local_stage" "$xls_root" "$stage_timeout" --build-profile "$policy_path"
 
 if [[ "$trace_enabled" == 1 ]]; then
     python3 "$project_root/tools/phi_profile_timeline.py" \

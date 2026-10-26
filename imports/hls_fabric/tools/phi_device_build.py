@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 from compiler_paths import compiler_tool
+from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 from transport_codegen import specialize
 from backend_commands import digest, execute
 from backend_paths import ROOT, erl_command, debug_rtl
@@ -27,6 +28,7 @@ def inputs(args: argparse.Namespace) -> dict:
                            "tools/test_phi_bridge.py", "tools/phi_device_build.py", "tools/phi_build_artifacts.py",
                            "tools/test_actor_rtl.py", "tools/backend_commands.py",
                            "tools/backend_paths.py", "tools/compiler_paths.py", "tools/transport_codegen.py",
+                           "tools/backend_build_profile.py",
                            "rebar.config", "rebar.lock")),
         ("public", args.erl_hls, ("src/**/*.erl", "src/examples/phi_decoder/phi_field.x",
                                   "include/**/*.hrl", "priv/xls/**/*.x",
@@ -142,6 +144,11 @@ def build_device(args: argparse.Namespace, device: dict) -> None:
     ident = device["id"]
     source = args.stage / "source"
     stage = args.stage / f"device{ident}"
+    policy = read_build_profile(source / "build-profile.json")
+    if policy["profile"]["postprocess"]["completion_storage"] != "registers":
+        raise ValueError("Phi device builds support only registers completion storage")
+    if policy["profile"]["schedules"]["channel"]["delay_model"] != "unit":
+        raise ValueError("Phi device builds support only the unit delay model; use tiles for custom timing")
     stage.mkdir()
     name = f"phi_device_{ident}"
     if not device.get("application"):
@@ -158,14 +165,14 @@ def build_device(args: argparse.Namespace, device: dict) -> None:
                      f"--dslx_path={source}", f"--dslx_stdlib_path={args.xls / 'xls/dslx/stdlib'}",
                      str(source / f"{name}.x")], stage / f"{name}.ir"),
         ("optimize", [str(args.xls / "opt_main"), str(stage / f"{name}.ir")], stage / f"{name}.opt.ir"),
-        ("codegen", [str(args.xls / "codegen_main"), "--pipeline_stages=2", "--delay_model=unit",
-                     "--flop_inputs=false", "--flop_outputs=true", "--use_system_verilog=false",
-                     "--reset=reset", "--fifo_module=", f"--module_name={name}", *ram_options,
+        ("codegen", [str(args.xls / "codegen_main"), *policy["codegen_flags"],
+                     f"--module_name={name}", *ram_options,
                      str(stage / f"{name}.opt.ir")], stage / f"{name}.v")]
     for label, command, output in commands:
         execute(command, stage, label, timeout=getattr(args, "compiler_timeout", 1200), output=output)
     specialize(args.xls/'codegen_main', stage/f'{name}.opt.ir', stage/f'{name}.v', stage/'adapters')
     (stage / "build.json").write_text(json.dumps({
+        "build_profile": policy,
         "commands": [command for _, command, _ in commands],
         "outputs": {path.name: digest(path) for _, _, path in commands}}, indent=2) + "\n")
     instrument_device(args, device)
@@ -229,6 +236,8 @@ def build(args: argparse.Namespace) -> None:
     args.stage.mkdir(parents=True, exist_ok=False)
     source = args.stage / "source"
     source.mkdir()
+    emit_build_profile(source / "build-profile.json", profile="test", public=args.erl_hls,
+                       initiation_interval=None)
     width, height = args.shape
     (source / "config.term").write_text(
         f"#{{shape => [{width}, {height}], planes => [{', '.join(args.planes)}]}}.\n")

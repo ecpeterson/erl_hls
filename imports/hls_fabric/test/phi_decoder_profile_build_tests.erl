@@ -78,10 +78,12 @@ check_bundle(Files, Schedulers, Actors, Debug) ->
     #{<<"version">> := 1, <<"inputs">> := Hashes, <<"ram_configurations">> := Configurations} =
         document(Files, "phi_decoder_profile.inputs.json"),
     Names = ["phi_halo_cell.x", "phi_syndrome_replay_cell.x", "phi_decoder_profile_topology.x",
-        "phi_decoder_profile_top.v", "phi_decoder_profile.json"],
+        "phi_decoder_profile_top.v", "phi_decoder_profile.json", "phi_decoder_profile.build-profile.json"],
     ?assertEqual(lists:sort([list_to_binary(Name) || Name <- Names]), lists:sort(maps:keys(Hashes))),
     [?assertEqual(binary:encode_hex(crypto:hash(sha256, bytes(Files, Name)), lowercase),
         maps:get(list_to_binary(Name), Hashes)) || Name <- Names],
+    ?assertEqual(hls_diagnostic:json_value(hls_build_profile:experiment(#{})),
+        document(Files, "phi_decoder_profile.build-profile.json")),
     #{<<"banks">> := Banks} = document(Files, "phi-actors.json"),
     ?assertEqual(Schedulers, length(Banks)),
     ?assertEqual(Actors, lists:sum([length(Members) || #{<<"actors">> := Members} <- Banks])),

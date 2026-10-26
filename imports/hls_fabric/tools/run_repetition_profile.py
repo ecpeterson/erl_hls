@@ -2,6 +2,7 @@
 """Build and verify a periodic repetition-code workload; optionally map XC7 resources."""
 from compiler_paths import compiler_root, compiler_tool
 from backend_paths import erl_command, erlang_environment
+from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 import argparse
 import importlib.util
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,12 +82,24 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
         f"_scheduler_{i}_{stem}_read_resp_in:_scheduler_{i}_{stem}_write_req_out:"
         f"_scheduler_{i}_{stem}_write_resp_in"
         for i in range(3) for kind, stem in [("state", "ram"), ("mailbox", "mailbox")])
+    policy_file = Path(tempfile.mkdtemp(prefix="build-policy-", dir=stage)) / "repetition-build-profile.json"
+    emit_build_profile(policy_file, profile="test", public=public,
+                       delay_model="xc7_7030" if table else "unit")
+    expected_policy = compiler.sha(policy_file)
+
+    def policy(snapshot: Path) -> dict:
+        """Consume selected policy bytes from the compiler's immutable candidate."""
+        selected = snapshot / "assets" / policy_file.name
+        if compiler.sha(selected) != expected_policy:
+            raise ValueError("repetition build policy changed during snapshot")
+        return read_build_profile(selected)
+
     compiled = compiler.build(stage / "phi_repetition_topology.x", xls, stage / "compiled",
-                     name="repetition", pipeline_stages=2, initiation_interval=1,
+                     name="repetition", codegen_flags=lambda snapshot: policy(snapshot)["codegen_flags"],
                      ram_configurations=configurations, timeout=1200,
-                     assets=[stage / "phi_repetition_top.v", stage / "hls_1r1w_ram.v"],
-                     metadata={"line_cells": count},
-                     delay_model="xc7_7030" if table else "unit", delay_table=table)
+                     assets=[stage / "phi_repetition_top.v", stage / "hls_1r1w_ram.v", policy_file],
+                     metadata=lambda snapshot: {"line_cells": count, "build_profile": policy(snapshot)},
+                     delay_table=table)
     oracle = json.loads((stage / "oracle.json").read_text())
     expected = sequences([[x, step, kind, value] for _, x, _, step, kind, value in oracle])
     measurements = []

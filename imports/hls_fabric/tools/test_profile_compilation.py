@@ -1,6 +1,7 @@
 """Check emitted profile inputs and publication metadata using compiler stubs."""
 from compiler_paths import compiler_root, compiler_source, compiler_tool
 from backend_paths import ROOT
+from compile_phi_decoder_profile import BUILD_PROFILE
 import json
 from pathlib import Path
 import shutil
@@ -8,6 +9,23 @@ import subprocess
 import unittest
 compiler = compiler_tool(compiler_root("test"), "compile_xls")
 BuildFixture = compiler_tool(compiler_root("test"), "testing").BuildFixture
+
+
+def policy(stages: int = 2, interval: int = 1, model: str = "unit") -> dict:
+    """Represent a retained emitter result; CLI/EUnit tests qualify its Erlang producer separately."""
+    return {"version": 1, "profile": {
+        "backend": "channel_scheduler", "placement": "prepared_source",
+        "frame_abi": {"name": "canonical_actor_v1", "header_bits": 32,
+                      "payload_bits": 96, "frame_bits": 128, "payload_words": 3,
+                      "parameterized": False},
+        "schedules": {"channel": {"pipeline_stages": stages, "initiation_interval": interval,
+            "delay_model": model, "executor_result_delay": 0, "flop_inputs": False,
+            "flop_outputs": True, "fifo_module": "none"}},
+        "tools": {"provider": "xls", "identity": "external_compilation"},
+        "postprocess": {"completion_storage": "registers"}},
+        "codegen_flags": [f"--pipeline_stages={stages}", f"--delay_model={model}",
+            "--flop_inputs=false", "--flop_outputs=true", "--use_system_verilog=false",
+            "--reset=reset", "--fifo_module=", f"--worst_case_throughput={interval}"]}
 
 
 class ProfileBuilds(BuildFixture):
@@ -29,16 +47,17 @@ class ProfileBuilds(BuildFixture):
         (self.inputs / self.config_name).write_text(json.dumps(self.config))
         for asset in ('hls_1r1w_ram.v', self.wrapper):
             (self.inputs / asset).write_text('// ' + asset)
+        (self.inputs / BUILD_PROFILE).write_text(json.dumps(policy()))
         self.ram = 'profile_bank:1R1W:request:response:completion'
         self.recipe = '0123456789abcdef' * 4
         self.input_manifest = dict(version=1, ram_configurations=self.ram,
             ram_configuration=self.recipe,
             inputs={name: compiler.sha(self.inputs / name) for name in
-                    (self.topology, self.wrapper, self.config_name, 'actor.x')})
+                    (self.topology, self.wrapper, self.config_name, BUILD_PROFILE, 'actor.x')})
         self.manifest_path.write_text(json.dumps(self.input_manifest))
         # Prepared stages retain standalone helpers and may run from any cwd.
         for helper in ('compile_xls.py', 'compile_phi_decoder_profile.py',
-                       'compile_phi_decoder_profile.sh'):
+                       'compile_phi_decoder_profile.sh', 'backend_build_profile.py'):
             source = (compiler_source(compiler_root('test'), 'compile_xls') if helper == 'compile_xls.py'
                       else ROOT / 'tools' / helper)
             shutil.copyfile(source, self.inputs / helper)
@@ -66,12 +85,14 @@ class ProfileBuilds(BuildFixture):
 
     def test_profile_metadata_ram_configuration_and_cache(self) -> None:
         """Trust emitted metadata without rediscovering DSLX geometry or RAM ports."""
-        options = ('7200', '3', '4', '2', '--delay-model', 'test-model')
+        selected = self.root / 'selected-build-profile.json'
+        selected.write_text(json.dumps(policy(4, 2, 'test-model')))
+        options = ('--timeout', '7200', '--build-profile', str(selected))
         release = self.publish(*options)
         manifest = json.loads((release / 'phi_decoder_profile.build.json').read_text())
-        self.assertEqual(manifest['profile'], {**self.config, 'pipeline_stages': 4,
-                         'initiation_interval': 2, 'delay_model': 'test-model',
-                         'flop_inputs': False, 'flop_outputs': True})
+        self.assertEqual(manifest['profile'], self.config)
+        self.assertEqual(manifest['build_profile'], policy(4, 2, 'test-model'))
+        self.assertEqual(manifest['assets'][selected.name], compiler.sha(selected))
         self.assertEqual(manifest['ram_configuration'], self.recipe)
         codegen = manifest['options']['codegen']
         self.assertIn('--worst_case_throughput=2', codegen)
@@ -132,7 +153,7 @@ class ProfileBuilds(BuildFixture):
             *[{**self.input_manifest, 'ram_configuration': value} for value in
               (None, 7, '0' * 63, 'g' * 64, self.recipe.upper())],
         ]
-        for required in (self.topology, self.wrapper, self.config_name):
+        for required in (self.topology, self.wrapper, self.config_name, BUILD_PROFILE):
             invalid.append({**self.input_manifest, 'inputs': {
                 key: value for key, value in self.input_manifest['inputs'].items()
                 if key != required}})
@@ -162,10 +183,44 @@ class ProfileBuilds(BuildFixture):
                                                         'inputs': bindings}))
                 self.reject(release)
 
-    def test_requested_shards_must_match_emitted_profile(self) -> None:
-        """Do not reinterpret a valid emitted topology for a different shard count."""
+    def test_schedule_is_not_reconstructed_by_the_external_adapter(self) -> None:
+        """A literal extra flag survives, while removed schedule CLI arguments are rejected."""
+        selected = self.root / 'selected-build-profile.json'
+        value = policy()
+        value['codegen_flags'].append('--test_emitted_policy=preserved')
+        selected.write_text(json.dumps(value))
+        release = self.publish('--build-profile', str(selected))
+        manifest = json.loads((release / 'phi_decoder_profile.build.json').read_text())
+        self.assertIn('--test_emitted_policy=preserved', manifest['options']['codegen'])
+        self.assertEqual(manifest['build_profile'], value)
+        self.reject(release, '--pipeline-stages', '3')
+
+    def test_selected_policy_is_required_and_checked_before_tools(self) -> None:
+        """Invalid or unsupported selected policies cannot change the chosen release."""
         release = self.publish()
-        self.reject(release, '7200', '2')
+        selected = self.root / 'selected-build-profile.json'
+        self.reject(release, '--build-profile', str(selected))
+        value = policy()
+        value['profile']['postprocess']['completion_storage'] = 'lutram'
+        selected.write_text(json.dumps(value))
+        self.reject(release, '--build-profile', str(selected))
+        selected.write_text('{}')
+        self.reject(release, '--build-profile', str(selected))
+        collision = self.root / BUILD_PROFILE
+        collision.write_text(json.dumps(policy()))
+        self.reject(release, '--build-profile', str(collision))
+
+    def test_delay_table_follows_the_selected_emitted_model(self) -> None:
+        """Freeze custom timing input without introducing a parallel schedule selector."""
+        selected = self.root / 'selected-build-profile.json'
+        selected.write_text(json.dumps(policy(model='xc7_7030')))
+        table = self.root / 'delay.tsv'
+        table.write_text('op\tdelay\nadd\t1\n')
+        release = self.publish('--build-profile', str(selected), '--delay-table', str(table))
+        manifest = json.loads((release / 'phi_decoder_profile.build.json').read_text())
+        self.assertIn('--xc7_delay_table=assets/xc7_delay_table.tsv', manifest['options']['codegen'])
+        self.assertEqual(manifest['assets']['xc7_delay_table.tsv'], compiler.sha(table))
+        self.reject(release, '--build-profile', str(selected))
 
 
 if __name__ == '__main__':

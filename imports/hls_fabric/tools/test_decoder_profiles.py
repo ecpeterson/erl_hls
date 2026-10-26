@@ -3,11 +3,13 @@
 from compiler_paths import compiler_root, compiler_source
 from backend_paths import erlang_paths
 from backend_commands import logged_command
+from backend_build_profile import emit as emit_build_profile
 from decoder_profile_witness import sequences, rtl_events
 import argparse
 import json
 from pathlib import Path
 import shutil
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
@@ -38,8 +40,10 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
         shutil.copyfile(path, stage / path.name)
     logged_command(["iverilog", "-g2012", "-tnull", "-i", stage / "phi_decoder_profile_top.v",
              stage / "hls_1r1w_ram.v"], stage, stage / "shell-check.log")
+    selected = Path(tempfile.mkdtemp(prefix="build-policy-", dir=stage)) / "selected-build-profile.json"
+    emit_build_profile(selected, profile="test", public=args.erl_hls, delay_model=args.delay_model)
     logged_command(["bash", ROOT / "tools/compile_phi_decoder_profile.sh", stage, args.xls_root,
-             "20m", shards, 2, 1, "--erl-hls", args.erl_hls, "--profile", "test", "--delay-model", args.delay_model,
+             "--timeout", "20m", "--build-profile", selected, "--erl-hls", args.erl_hls, "--profile", "test",
              *(["--delay-table", args.delay_table] if args.delay_table else [])], ROOT, stage / "compile.log", 3700)
     compiled = (stage / "compiled").resolve()
     expected = sequences(json.loads((stage / "oracle.json").read_text()))
@@ -67,13 +71,13 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
                         "metrics": [line for line in log.splitlines() if line.startswith("PROFILE_")]})
     summary = {"configuration": json.loads((compiled / "phi_decoder_profile.json").read_text()), "samples": samples}
     if args.trace:
-        for helper in ("compile_xls.py", "compile_phi_decoder_profile.py", "compile_phi_decoder_profile.sh"):
+        for helper in ("compile_xls.py", "compile_phi_decoder_profile.py", "compile_phi_decoder_profile.sh", "backend_build_profile.py"):
             source = compiler_source(args.erl_hls, "compile_xls") if helper == "compile_xls.py" else ROOT / "tools" / helper
             shutil.copyfile(source, stage / helper)
         for source in ("phi_decoder_profile_tb.sv", "phi_profile_trace.c"):
             shutil.copyfile(ROOT / "test/rtl" / source, stage / source)
         logged_command(["env", "ERL_HLS_PHI_PROFILE_TRACE=1", "bash", ROOT / "tools/phi_decoder_profile_stage.sh",
-                 stage, args.xls_root, "20m", shards, 2, 1, "--delay-model", args.delay_model,
+                 stage, args.xls_root, "20m", "--build-profile", selected,
                  *(["--delay-table", args.delay_table] if args.delay_table else [])], ROOT, stage / "profile.log", 3700)
         logged_command(["python3", ROOT / "tools/phi_profile_timeline.py", stage / "phi_decoder_profile.trace.csv",
                  stage / "timeline.svg", "--erl-hls", args.erl_hls, "--build-profile", "test", "--profile", stage / "timing.profile.json",
