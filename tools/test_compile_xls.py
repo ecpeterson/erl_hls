@@ -70,6 +70,109 @@ class Builds(BuildFixture):
         self.assertNotEqual((old / 'counter.v').read_bytes(), (new / 'counter.v').read_bytes())
         self.assertTrue(old.is_dir())
 
+    def test_literal_codegen_flags_preserve_order_repetitions_and_omitted_interval(self) -> None:
+        """An emitter-owned schedule bypasses defaults while RAM settings remain adapter-owned."""
+        flags = ['--pipeline_stages=4', '--pipeline_stages=2', '--delay_model=unit',
+                 '--flop_inputs=false', '--flop_outputs=false', '--reset=rst']
+        release = self.build(codegen_flags=flags, ram_configurations='ram:1RW:1')
+        manifest = json.loads((release / 'counter.build.json').read_text())
+        expected = [*flags, '--ram_configurations=ram:1RW:1']
+        self.assertEqual(manifest['options'], {'top': 'Top', 'codegen': expected})
+        self.assertEqual(json.loads((release / 'counter.v').read_text())['args'], [*expected, 'counter.opt.ir'])
+        self.assertFalse(any(flag.startswith('--worst_case_throughput') for flag in expected))
+        self.assertEqual(self.build(codegen_flags=tuple(flags), ram_configurations='ram:1RW:1'), release)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+
+    def test_literal_codegen_conflicts_and_malformed_values_fail_before_tools(self) -> None:
+        """There is one schedule authority; reserved path options cannot replace owned outputs or inputs."""
+        flags = ['--pipeline_stages=2', '--delay_model=unit']
+        for conflict in ({'pipeline_stages': 2}, {'initiation_interval': 1}, {'delay_model': 'xc7_7030'},
+                         {'channel_delays': {'output:send': 3}}):
+            with self.subTest(conflict=conflict), self.assertRaisesRegex(ValueError, 'conflicts'):
+                self.build(codegen_flags=flags, **conflict)
+        for invalid in ('--pipeline_stages=2', {'flag': 'value'}, [2], ['unqualified'], ['--flag=\0']):
+            with self.subTest(flags=invalid), self.assertRaisesRegex(ValueError, 'complete option strings'):
+                self.build(codegen_flags=invalid)
+        for flag in ('--ram_configurations=caller', '--module_name=other',
+                     '--xc7_delay_table=outside.tsv', '--output_verilog_path=outside.v'):
+            with self.subTest(flag=flag), self.assertRaisesRegex(ValueError, 'compiler-owned'):
+                self.build(codegen_flags=[flag])
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.output.exists())
+
+    def test_literal_schedule_callback_reads_frozen_assets(self) -> None:
+        """Changing the original policy during preparation cannot change the already captured schedule."""
+        sidecar = self.inputs / 'policy.json'
+        original = {'flags': ['--pipeline_stages=3', '--delay_model=unit', '--flop_outputs=false']}
+        sidecar.write_text(json.dumps(original))
+        original_bytes = sidecar.read_bytes()
+        snapshots = []
+
+        def schedule(snapshot: Path) -> list[str]:
+            """Mutate only the caller-owned source after the executor has captured the policy file."""
+            snapshots.append(snapshot)
+            sidecar.write_text(json.dumps({'flags': ['--pipeline_stages=99']}))
+            return json.loads((snapshot / 'assets/policy.json').read_text())['flags']
+
+        release = self.build(assets=[sidecar], codegen_flags=schedule,
+                             metadata=lambda snapshot: {'policy': json.loads((snapshot / 'assets/policy.json').read_text())})
+        manifest = json.loads((release / 'counter.build.json').read_text())
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(manifest['options']['codegen'], original['flags'])
+        self.assertEqual(manifest['policy'], original)
+        self.assertEqual((release / 'policy.json').read_bytes(), original_bytes)
+        self.assertNotEqual(sidecar.read_bytes(), original_bytes)
+        self.assertEqual(manifest['assets']['policy.json'], compiler.sha(release / 'policy.json'))
+
+    def test_optimizer_pipeline_is_frozen_and_invalidates_only_dependent_stages(self) -> None:
+        """Changing pipeline bytes reruns optimization and its changed output, preserving conversion reuse."""
+        optimizer = self.xls / 'opt_main'
+        optimizer.write_text(optimizer.read_text().replace('print(json.dumps(result, sort_keys=True))',
+            "pipeline = next((arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('--pipeline_textproto=')), None)\n"
+            "if pipeline is not None: result['pipeline'] = p(pipeline).read_text()\n"
+            'print(json.dumps(result, sort_keys=True))'))
+        pipeline = self.root / 'pipeline.txtpb'
+        pipeline.write_text('pipeline { pass_name: "first" }\n')
+        first = self.build(optimizer_pipeline=pipeline)
+        manifest = json.loads((first / 'counter.build.json').read_text())
+        self.assertEqual(manifest['tools']['opt_main'], compiler.sha(optimizer))
+        self.assertEqual(manifest['options']['optimizer'], ['--pipeline_textproto=assets/optimizer_pipeline.txtpb'])
+        self.assertEqual(manifest['assets']['optimizer_pipeline.txtpb'], compiler.sha(pipeline))
+        self.assertEqual(json.loads((first / 'counter.opt.ir').read_text())['pipeline'], pipeline.read_text())
+        self.assertEqual(self.build(optimizer_pipeline=pipeline), first)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+        pipeline.write_text('pipeline { pass_name: "second" }\n')
+        second = self.build(optimizer_pipeline=pipeline)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=False, codegen=False))
+        self.assertEqual((first / 'optimizer_pipeline.txtpb').read_text(), 'pipeline { pass_name: "first" }\n')
+        self.assertEqual((second / 'optimizer_pipeline.txtpb').read_text(), pipeline.read_text())
+        self.assertEqual(json.loads((second / 'counter.opt.ir').read_text())['pipeline'], pipeline.read_text())
+        duplicate = self.root / 'optimizer_pipeline.txtpb'
+        duplicate.write_text('reserved')
+        with self.assertRaisesRegex(ValueError, 'reserved optimizer pipeline asset name'):
+            self.build(optimizer_pipeline=pipeline, assets=[duplicate])
+
+    def test_literal_delay_model_uses_last_option_and_tracks_table_bytes(self) -> None:
+        """Delay-table dependencies follow the effective explicit model and invalidate codegen alone."""
+        table = self.root / 'costs.tsv'
+        table.write_text('add 8 2 100 200\n')
+        flags = ['--pipeline_stages=2', '--delay_model=unit', '--delay_model=xc7_7030',
+                 '--flop_outputs=true', '--worst_case_throughput=2']
+        first = self.build(codegen_flags=flags, delay_table=table)
+        expected = [*flags[:-1], '--xc7_delay_table=assets/xc7_delay_table.tsv', flags[-1]]
+        self.assertEqual(json.loads((first / 'counter.build.json').read_text())['options']['codegen'], expected)
+        table.write_text('add 8 2 200 400\n')
+        second = self.build(codegen_flags=flags, delay_table=table)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=False))
+        self.assertEqual((second / 'xc7_delay_table.tsv').read_text(), table.read_text())
+        with self.assertRaisesRegex(ValueError, 'requires a delay table'):
+            self.build(codegen_flags=flags)
+        with self.assertRaisesRegex(ValueError, 'other models do not accept one'):
+            self.build(codegen_flags=[*flags, '--delay_model=unit'], delay_table=table)
+        release = self.build(codegen_flags=[*flags, '--delay_model=unit'])
+        self.assertEqual(json.loads((release / 'counter.build.json').read_text())['options']['codegen'],
+                         [*flags, '--delay_model=unit'])
+
     def test_delay_table_changes_only_invalidate_codegen(self) -> None:
         """A changed table cannot silently reuse RTL scheduled with older costs."""
         table = self.root / 'costs.tsv'

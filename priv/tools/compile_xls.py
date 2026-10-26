@@ -423,6 +423,34 @@ def execute(files: Mapping[str, Path | str], tools: Mapping[str, Path | str], ou
                 shutil.rmtree(attempt)
 
 
+
+def checked_codegen_flags(value: Sequence[str]) -> list[str]:
+    """Copy literal options without normalizing their order, repetitions or omitted schedule choices."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise ValueError("codegen_flags must be a sequence of complete option strings")
+    flags = list(value)
+    if any(not isinstance(flag, str) or not flag.startswith("--") or "\0" in flag for flag in flags):
+        raise ValueError("codegen_flags must be a sequence of complete option strings")
+    owned = {"--ram_configurations", "--xc7_delay_table", "--module_name", "--output_verilog_path"}
+    if any(flag.split("=", 1)[0] in owned for flag in flags):
+        raise ValueError("codegen_flags contains compiler-owned RAM, table, module or output options")
+    return flags
+
+
+def with_delay_table(flags: list[str], table: bool) -> list[str]:
+    """Bind the frozen table to the last selected model while preserving other literal option order."""
+    models = [flag.split("=", 1)[1] for flag in flags if flag.startswith("--delay_model=")]
+    model = models[-1] if models else None
+    if (model == "xc7_7030") != table:
+        raise ValueError("xc7_7030 requires a delay table; other models do not accept one")
+    if not table:
+        return flags
+    # This is the flat adapter's historical position: before channel delays and II.
+    position = next((index for index, flag in enumerate(flags)
+                     if flag.startswith(("--additional_channel_delay_ps=", "--worst_case_throughput="))), len(flags))
+    return [*flags[:position], "--xc7_delay_table=assets/xc7_delay_table.tsv", *flags[position:]]
+
+
 def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
           name: str | None = None, top: str = "Top", pipeline_stages: int = 1,
           initiation_interval: int | None = None,
@@ -431,17 +459,27 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
           timeout: float = 7200, cache: Path | str | None = None,
           delay_model: str = "unit", delay_table: Path | str | None = None,
           channel_delays: dict[str, int] | None = None,
+          codegen_flags: Sequence[str] | Callable[[Path], Sequence[str]] | None = None,
+          optimizer_pipeline: Path | str | None = None,
           finalize: Callable[[Path, dict[str, Any]], dict[str, Any]] | None = None) -> Path:
     """Adapt a prepared flat DSLX stage to the shared executor and familiar release layout.
 
-    This recipe has input flops disabled and output flops enabled. Sampled-clock
-    owners must supply their exact recipe to execute() instead. Channel delays
-    affect scheduling, not channel semantics or a physical timing guarantee.
+    Without codegen_flags this adapter retains its input-flops-disabled,
+    output-flops-enabled schedule. Literal flags (or a callback reading snapshot
+    inputs) instead supply the entire schedule and cannot accompany nondefault
+    legacy scheduling options. Their order, repetitions and omissions survive.
+    RAM arguments and frozen delay-table paths remain adapter-owned. Optimizer
+    pipelines and delay tables are snapshotted inputs of their consuming stages.
     finalize may transform products and add manifest metadata before publication;
     artifacts and RTL hashes are refreshed afterwards. Inputs remain frozen.
     """
     source, xls_root = Path(source).resolve(), Path(xls_root).resolve()
-    if (delay_model == "xc7_7030") != (delay_table is not None):
+    if codegen_flags is not None:
+        if pipeline_stages != 1 or initiation_interval is not None or delay_model != "unit" or channel_delays:
+            raise ValueError("codegen_flags conflicts with legacy scheduling options")
+        if not callable(codegen_flags):
+            codegen_flags = checked_codegen_flags(codegen_flags)
+    elif (delay_model == "xc7_7030") != (delay_table is not None):
         raise ValueError("xc7_7030 requires a delay table; other models do not accept one")
     name = name or source.stem
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
@@ -467,30 +505,42 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
         if "xc7_delay_table.tsv" in asset_files or "xc7_delay_table.tsv" in sources:
             raise ValueError("reserved delay table asset name")
         asset_files["xc7_delay_table.tsv"] = Path(delay_table).resolve()
+    if optimizer_pipeline is not None:
+        if "optimizer_pipeline.txtpb" in asset_files or "optimizer_pipeline.txtpb" in sources:
+            raise ValueError("reserved optimizer pipeline asset name")
+        asset_files["optimizer_pipeline.txtpb"] = Path(optimizer_pipeline).resolve()
     files = {**sources, **stdlib_files, **{f"assets/{asset}": path for asset, path in asset_files.items()}}
     prepared: dict[str, Any] = {}
 
     def prepare(snapshot: Path) -> list[StageSpec]:
-        """Resolve only adapter-owned metadata and RAM settings against frozen copies."""
+        """Resolve options and metadata against frozen inputs before selecting stage dependencies."""
         source_hashes = {path: sha(snapshot / path) for path in sources}
         stdlib_hashes = {str(Path(path).relative_to("_stdlib")): sha(snapshot / path) for path in stdlib_files}
         asset_hashes = {asset: sha(snapshot / "assets" / asset) for asset in asset_files}
         extra = metadata(snapshot) if callable(metadata) else (metadata or {})
         convert = ["--warnings_as_errors=false", "--dslx_path=.", "--dslx_stdlib_path=_stdlib", f"--top={top}", source.name]
-        codegen = [f"--pipeline_stages={pipeline_stages}", f"--delay_model={delay_model}", "--flop_inputs=false",
-                   "--flop_outputs=true", "--use_system_verilog=false", "--reset=reset", "--fifo_module="]
-        if delay_table is not None:
-            codegen.append("--xc7_delay_table=assets/xc7_delay_table.tsv")
-        if channel_delays:
-            codegen.append("--additional_channel_delay_ps=" + ",".join(
-                f"{channel}={value}" for channel, value in sorted(channel_delays.items())))
-        if initiation_interval is not None:
-            codegen.append(f"--worst_case_throughput={initiation_interval}")
+        if codegen_flags is None:
+            codegen = [f"--pipeline_stages={pipeline_stages}", f"--delay_model={delay_model}", "--flop_inputs=false",
+                       "--flop_outputs=true", "--use_system_verilog=false", "--reset=reset", "--fifo_module="]
+            if channel_delays:
+                codegen.append("--additional_channel_delay_ps=" + ",".join(
+                    f"{channel}={value}" for channel, value in sorted(channel_delays.items())))
+            if initiation_interval is not None:
+                codegen.append(f"--worst_case_throughput={initiation_interval}")
+        else:
+            codegen = checked_codegen_flags(codegen_flags(snapshot) if callable(codegen_flags) else codegen_flags)
+        codegen = with_delay_table(codegen, delay_table is not None)
+        optimizer = ["--pipeline_textproto=assets/optimizer_pipeline.txtpb"] if optimizer_pipeline is not None else []
         rams = ram_configurations(snapshot) if callable(ram_configurations) else ram_configurations
         if rams is not None:
             codegen.append(f"--ram_configurations={rams}")
         prepared.update(sources=source_hashes, stdlib=stdlib_hashes, assets=asset_hashes, metadata=extra, codegen=codegen)
+        if optimizer:
+            prepared["optimizer"] = optimizer
         save(snapshot / "inputs.json", {**prepared, "tools": {tool: sha(path) for tool, path in tools.items()}, "convert": convert})
+        optimization_inputs: dict[str, Dependency] = {f"{name}.ir": f"{name}.ir"}
+        if optimizer_pipeline is not None:
+            optimization_inputs["assets/optimizer_pipeline.txtpb"] = "assets/optimizer_pipeline.txtpb"
         dependencies: dict[str, Dependency] = {f"{name}.opt.ir": f"{name}.opt.ir"}
         if delay_table is not None:
             dependencies["assets/xc7_delay_table.tsv"] = "assets/xc7_delay_table.tsv"
@@ -498,8 +548,8 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
             {"id": "ir", "cache": "ir", "tool": "ir_converter_main", "arguments": convert,
              "output": f"{name}.ir", "inputs": {"sources": {path: path for path in sources},
                 "stdlib": {str(Path(path).relative_to("_stdlib")): path for path in stdlib_files}}},
-            {"id": "opt", "cache": "opt", "tool": "opt_main", "arguments": [f"{name}.ir"],
-             "output": f"{name}.opt.ir", "inputs": {f"{name}.ir": f"{name}.ir"}},
+            {"id": "opt", "cache": "opt", "tool": "opt_main", "arguments": [*optimizer, f"{name}.ir"],
+             "output": f"{name}.opt.ir", "inputs": optimization_inputs},
             {"id": "codegen", "cache": "codegen", "tool": "codegen_main", "arguments": [*codegen, f"{name}.opt.ir"],
              "output": f"{name}.v", "inputs": dependencies}]
 
@@ -511,6 +561,8 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
                     "options": {"top": top, "codegen": prepared["codegen"]}, "assets": prepared["assets"],
                     "artifacts": artifacts, "rtl": {key: value for key, value in {**artifacts, **prepared["assets"]}.items() if key.endswith('.v')},
                     "stages": {label: run["key"] for label, run in runs.items()}}
+        if "optimizer" in prepared:
+            manifest["options"]["optimizer"] = prepared["optimizer"]
         if prepared["metadata"].keys() & manifest.keys():
             raise ValueError("application metadata shadows compiler manifest fields")
         manifest.update(prepared["metadata"])
@@ -550,6 +602,7 @@ def main() -> None:
     parser.add_argument("--ram-configurations")
     parser.add_argument("--delay-model", default="unit")
     parser.add_argument("--delay-table", type=Path)
+    parser.add_argument("--optimizer-pipeline", type=Path)
     parser.add_argument("--asset", type=Path, action="append", default=[])
     parser.add_argument("--timeout", type=duration, default=7200)
     parser.add_argument("--cache", type=Path)
