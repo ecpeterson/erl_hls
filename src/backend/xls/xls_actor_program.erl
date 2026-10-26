@@ -1,13 +1,13 @@
 -module(xls_actor_program).
 -moduledoc "An immutable in-process snapshot of one complete checked actor compilation. Rendering, planning and entry-effect consumers share the same source lowering without rereading files.".
--export([from_file/2, spec/1, plan/1, entry_effects/1]).
+-export([from_file/2, from_file/3, spec/1, plan/1, entry_effects/1]).
 -export_type([program/0, entry_effect/0]).
 
 %% The constructor owns the pair; consumers cannot supply a rendering artifact
 %% and an independently selected or modified planning sidecar through this API.
 -record(program, {spec :: xls_actor_codegen:spec(), plan :: xls_statem_plan:plan()}).
 
--doc "Complete source snapshot created only by from_file/2. Retain it unchanged in process; saved or caller-constructed terms are not compilation inputs. Later file edits require a new compilation.".
+-doc "Complete source snapshot created only by from_file/2 or from_file/3. Retain it unchanged in process; saved or caller-constructed terms are not compilation inputs. Later file edits require a new compilation.".
 -opaque program() :: #program{}.
 
 -doc "One ordered entry effect with its phase and layout identity. All original effect and field metadata is retained; storage offsets and slices are meaningful within that layout, preserving established field sharing.".
@@ -17,8 +17,13 @@
 
 -doc "Freshly parses and lowers the complete actor with ordinary source options. Returns one source-bound rendering/planning pair; invalid source fails in ordinary lowering. There is no constructor from supplied artifacts or alternatives.".
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) -> program().
-from_file(Filename, Options) ->
-    {Spec, Plan} = xls_statem_plan:from_file(Filename, Options),
+from_file(Filename, Options) -> from_file(Filename, Options, hls_frame_layout:default()).
+
+-doc "Compiles one complete source snapshot with an explicit checked ordinary-frame layout; the same layout binds both rendering and planning.".
+-spec from_file(file:filename(), [hls_source:option()] | hls_source:context(),
+    hls_frame_layout:layout()) -> program().
+from_file(Filename, Options, Layout) ->
+    {Spec, Plan} = xls_statem_plan:from_file(Filename, Options, Layout),
     #program{spec = Spec, plan = Plan}.
 
 -doc "Returns the complete ordinary rendering artifact from the snapshot, without rereading source. Editing the returned map does not change the program.".

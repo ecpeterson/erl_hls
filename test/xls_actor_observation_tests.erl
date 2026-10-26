@@ -15,10 +15,10 @@ diagnostic_outputs_are_explicit_test() ->
         Production = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
         ?assertEqual(Production, iolist_to_binary(xls_topology_dslx:emit(Plan,
             Profile#{direct_actor_debug => false}))),
-        ?assertEqual(#{hls_dense_statem_fixture => #{direct_actor_debug => false}},
+        ?assertEqual(#{hls_dense_statem_fixture => #{direct_actor_debug => false, frame_payload_words => 3}},
             xls_topology_dslx:artifact_requirements(Plan, Profile)),
         ?assertEqual(#{hls_dense_statem_fixture =>
-            #{direct_actor_debug => true}},
+            #{direct_actor_debug => true, frame_payload_words => 3}},
             xls_topology_dslx:artifact_requirements(Plan, Profile#{direct_actor_debug => true})),
         ?assertError({direct_actor_debug, yes},
             xls_topology_dslx:emit(Plan, Profile#{direct_actor_debug => yes}))

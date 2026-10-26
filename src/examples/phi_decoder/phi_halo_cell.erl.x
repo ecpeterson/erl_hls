@@ -9,6 +9,8 @@ import direct_mailbox_observation;
 import hls_integer;
 import phi_field;
 
+const_assert!(axis::FRAME_BITS == u32:128);
+
 const MAILBOX_CAPACITY = u8:5;
 const MAILBOX_DEPTH = u32:5;
 

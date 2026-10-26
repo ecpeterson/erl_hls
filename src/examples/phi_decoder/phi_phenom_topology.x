@@ -6,6 +6,8 @@ import phenom_data_cell;
 import phenom_syndrome_cell;
 import phi_halo_cell;
 
+const_assert!(axis::FRAME_BITS == u32:128);
+
 const CHANNEL_DEPTH = u32:1;
 
 proc ActorIngress0 {

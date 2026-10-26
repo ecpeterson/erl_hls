@@ -1,20 +1,25 @@
 -module(xls_message_facts).
 -moduledoc "Conservative outgoing-message facts from the ordinary entry encoder. Facts condition on an emitted message; they do not establish reachability, delivery, receiver acceptance or permission to erase evaluated expressions. No rendering is changed.".
--export([from_file/2, validate/3, manifest/1, on_ports/2, frame_bits/2, frame_cases/2]).
+-export([from_file/2, from_file/3, validate/3, manifest/1, on_ports/2, frame_bits/2, frame_cases/2]).
 -export_type([facts/0, domain/0]).
 
 -doc "ABI-stream field bounds: a finite value set, a fixed-bit mask/value pair, or unknown. Bounds overapproximate emitted values and do not imply reachability.".
 -type domain() :: unknown | {values, [bitstring(), ...]} | {bits, bitstring(), bitstring()}.
 
 -doc "Source-bound analysis of all ordinary entry alternatives. Saved values must be validated against current source before use.".
--opaque facts() :: #{version := 3, tags := #{atom() => 0 .. ((1 bsl 8) - 1)}, identity := map(), outputs := [atom()],
+-opaque facts() :: #{version := 3, frame_layout := hls_frame_layout:layout(), tags := #{atom() => 0 .. ((1 bsl 8) - 1)}, identity := map(), outputs := [atom()],
     reply_port := none | {port, atom()}, alternatives := [map()]}.
 
 -doc "Returns unchanged ordinary lowering and message facts from its exact entry-storage layouts. Options retain ordinary preprocessing semantics; invalid actors fail ordinary lowering.".
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), facts()}.
-from_file(Filename, Options) ->
-    {Spec, Plan} = xls_statem_plan:from_file(Filename, Options),
+from_file(Filename, Options) -> from_file(Filename, Options, hls_frame_layout:default()).
+
+-doc "Derives source-bound message facts and ordinary lowering under the same explicit frame layout.".
+-spec from_file(file:filename(), [hls_source:option()] | hls_source:context(),
+    hls_frame_layout:layout()) -> {xls_actor_codegen:spec(), facts()}.
+from_file(Filename, Options, FrameLayout) ->
+    {Spec, Plan} = xls_statem_plan:from_file(Filename, Options, FrameLayout),
     Identity = maps:with([source, source_sha256, artifact_sha256, planner_md5],
         xls_statem_plan:manifest(Plan)),
     #{entries := Entries, output_names := Outputs, retained_calls := Calls} = Spec,
@@ -24,21 +29,21 @@ from_file(Filename, Options) ->
         || #{layouts := Layouts} <- Entries,
             #{phase := Phase, layout := Layout, storage := #{effects := Effects}} <- Layouts,
             {Order, #{port := Port, tag := Tag, fields := Fields}} <- lists:enumerate(0, Effects)],
-    {Spec, #{version => 3, tags => maps:from_list([{T, I} || {I, T} <- lists:enumerate(3, maps:get(message_names, Spec))]), identity => Identity#{analyzer_md5 =>
+    {Spec, #{version => 3, frame_layout => FrameLayout, tags => maps:from_list([{T, I} || {I, T} <- lists:enumerate(3, maps:get(message_names, Spec))]), identity => Identity#{analyzer_md5 =>
         binary:encode_hex(?MODULE:module_info(md5), lowercase)}, outputs => Outputs,
         reply_port => ReplyPort, alternatives => Alternatives}}.
 
 -doc "Recompiles source and compares the complete analysis, including all facts and identities. Rejects edited or stale facts; this is freshness checking, not an equivalence proof.".
 -spec validate(file:filename(), [hls_source:option()] | hls_source:context(), facts()) -> ok.
-validate(Filename, Options, Facts) ->
-    {_, Current} = from_file(Filename, Options),
+validate(Filename, Options, Facts = #{frame_layout := Layout}) ->
+    {_, Current} = from_file(Filename, Options, Layout),
     case Current =:= Facts of true -> ok; false -> error(stale_message_facts) end.
 
 -doc "Returns source/tool identities and analysis scope. This inventory is not a certificate of protocol safety or hardware savings.".
 -spec manifest(facts()) -> map().
-manifest(#{version := Version, identity := Identity, outputs := Outputs,
+manifest(#{frame_layout := Layout, version := Version, identity := Identity, outputs := Outputs,
         alternatives := Alternatives, reply_port := Reply}) ->
-    Identity#{version => Version, role => message_analysis_only, outputs => Outputs,
+    Identity#{frame_layout => hls_frame_layout:descriptor(Layout), version => Version, role => message_analysis_only, outputs => Outputs,
         entry_alternatives => length(Alternatives), reply_port => Reply}.
 
 -doc "Joins all selected source ports, including aliases on one lane. Requires a nonempty set of declared ports and freshly derived or validated facts. Closed entry schemas bound emitted messages, not source evaluations or incoming traffic. Alternatives preserve phase/layout/order and field correlations; marginal domains lose correlations. A retained-reply port makes the full schema set unknown, including generated error replies. An empty closed set means no entry emission, never a proof of receiver acceptance.".
@@ -115,7 +120,7 @@ domain_bits({values, [First | Rest]}) ->
         (1 bsl N) - 1, Rest),
     {<<M:N>>, <<(V band M):N>>}.
 
--doc "Returns a 128-bit axis::bits_from_frame known mask/value for ordinary emitted messages on selected ports. Requires fresh facts and an exact closed internal producer binding. Unknown replies and empty emission retain every bit. This is a conditional value bound, not a contract for arbitrary external frames or a temporal proof.".
+-doc "Returns a selected-layout axis::bits_from_frame known mask/value for ordinary emitted messages on selected ports. Requires fresh facts and an exact closed internal producer binding. Unknown replies and empty emission retain every bit. This is a conditional value bound, not a contract for arbitrary external frames or a temporal proof.".
 -spec frame_bits(facts(), [atom(), ...]) -> #{mask := non_neg_integer(), value := non_neg_integer()}.
 frame_bits(Facts, Ports) ->
     case frame_cases(Facts, Ports) of
@@ -125,12 +130,12 @@ frame_bits(Facts, Ports) ->
 
 -doc "Returns per-operation ordinary-frame bit bounds for selected emitted ports, or unknown when retained replies are possible. Requires fresh facts and complete physical producer bindings. Schema alternatives with the same operation are joined; no phase, reachability, acceptance or lifetime guarantee follows. A closed empty set is silent, not permission to change incoming frames.".
 -spec frame_cases(facts(), [atom(), ...]) -> unknown | [#{op := 0 .. ((1 bsl 8) - 1), mask := non_neg_integer(), value := non_neg_integer()}].
-frame_cases(Facts = #{tags := Tags}, Ports) ->
+frame_cases(Facts = #{tags := Tags, frame_layout := Layout}, Ports) ->
     case on_ports(Facts, Ports) of
         #{closed := true, schemas := Schemas} ->
             [begin
                 Op = maps:get(Tag, Tags),
-                Bound = xls_message_bits:frame(Op, Fields),
+                Bound = xls_message_bits:frame(Op, Fields, Layout),
                 Bound#{op => Op}
             end || #{tag := Tag, fields := Fields} <- Schemas];
         _ -> unknown

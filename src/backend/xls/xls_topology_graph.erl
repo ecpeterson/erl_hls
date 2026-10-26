@@ -3,11 +3,12 @@
 -moduledoc false.
 -export([lower/2, lanes/1, check_lanes/3]).
 
--define(MAX_PAYLOAD_BITS, 96).
 
 %% Profile is normalized by the caller. Family rules have already been
 %% expanded into exact actor IDs; public logical identities are retained by
 %% the placement planner. This module owns wire-layout and startup checks.
+-doc "Resolves a materialized graph using a normalized profile, validating public schemas and startup values against its ordinary-frame capacity.".
+-spec lower(map(), xls_topology_profile:profile()) -> map().
 lower(Plan = #{
         families := [],
         ingresses := [],
@@ -15,10 +16,12 @@ lower(Plan = #{
         lane_relations := []
     }, Profile) ->
     #{name := Name, channel_depth := Depth,
-        actor_egress_depth := EgressDepth, direct_actor_debug := ActorDebug} =
+        actor_egress_depth := EgressDepth, direct_actor_debug := ActorDebug,
+        frame_payload_words := PayloadWords} =
         Profile,
+    Layout = hls_frame_layout:new(PayloadWords),
     ok = validate_lanes(Plan),
-    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth),
+    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth, Layout),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
@@ -29,6 +32,7 @@ lower(Plan = #{
     Startup = pack_startup(maps:get(startup, Plan), ActorIndex),
     #{
         name => Name,
+        frame_layout => Layout,
         depth => Depth,
         direct_actor_debug => ActorDebug,
         actors => Actors,
@@ -87,9 +91,11 @@ lanes(Routes) ->
     ].
 
 
-annotate_actors(Actors, EgressDepth) ->
+%% Source summaries stay intrinsic; each physical graph checks its chosen capacity.
+-spec annotate_actors([map()], burst | non_neg_integer(), hls_frame_layout:layout()) -> [map()].
+annotate_actors(Actors, EgressDepth, Layout) ->
     Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Actors]),
+        [Module || #{module := Module} <- Actors], Layout),
     [annotate_actor(Index, Actor, Interfaces, EgressDepth)
         || {Index, Actor} <- lists:enumerate(0, Actors)].
 
@@ -294,13 +300,18 @@ pack_startup(Startup, ActorIndex) ->
     [Item#{frames => pack_startup_messages(Target, Messages, ActorIndex)}
         || Item = #{target := Target, messages := Messages} <- Startup].
 
+%% Bind every startup pack to the destination actor's selected frame layout.
+-spec pack_startup_messages(term(), [term()], map()) -> [map()].
 pack_startup_messages(Target, Messages, ActorIndex) ->
     Actor = maps:get(Target, ActorIndex),
     Module = maps:get(module, Actor),
-    [pack_startup_message(Target, Index, Module, Message)
+    Layout = maps:get(frame_layout, maps:get(interface, Actor)),
+    [pack_startup_message(Target, Index, Module, Message, Layout)
         || {Index, Message} <- lists:enumerate(0, Messages)].
 
-pack_startup_message(Target, Index, Module, Message)
+%% Validate provider-packed startup values before emitting a fixed-capacity axis frame.
+-spec pack_startup_message(term(), non_neg_integer(), module(), term(), hls_frame_layout:layout()) -> map().
+pack_startup_message(Target, Index, Module, Message, Layout)
         when is_tuple(Message), tuple_size(Message) > 0,
              is_atom(element(1, Message)) ->
     TagName = element(1, Message),
@@ -322,7 +333,7 @@ pack_startup_message(Target, Index, Module, Message)
     end,
     Width = bit_size(Payload),
     case Width > 0 andalso Width rem 32 =:= 0 andalso
-            Width =< ?MAX_PAYLOAD_BITS of
+            Width =< hls_frame_layout:payload_bits(Layout) of
         true -> #{
             tag => Tag,
             payload => xls_nums:packed_unsigned_literal(Payload)
@@ -330,6 +341,6 @@ pack_startup_message(Target, Index, Module, Message)
         false -> error({unsupported_startup_payload_width,
             Target, Index, Width})
     end;
-pack_startup_message(Target, Index, _Module, Message) ->
+pack_startup_message(Target, Index, _Module, Message, _Layout) ->
     error({invalid_startup_message, Target, Index, Message}).
 

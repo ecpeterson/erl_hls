@@ -6,7 +6,7 @@
 -module(xls_gs_lower).
 -moduledoc false.
 
--export([initial_state/2, callback_arms/2]).
+-export([initial_state/2, callback_arms/2, callback_arms/3]).
 
 initial_state(Forms, StateName) ->
     Clause = xls_init:clause(Forms, hls_gs),
@@ -15,14 +15,18 @@ initial_state(Forms, StateName) ->
 
 -doc "Emits request dispatch, ordered callback selection and reply-contract checks for an hls_gs service.".
 -spec callback_arms([hls_source:form()], atom()) -> iolist().
-callback_arms(Forms, StateName) ->
+callback_arms(Forms, StateName) -> callback_arms(Forms, StateName, hls_frame_layout:default()).
+
+-doc "Emits checked callback dispatch under an explicit ordinary-frame capacity.".
+-spec callback_arms([hls_source:form()], atom(), hls_frame_layout:layout()) -> iolist().
+callback_arms(Forms, StateName, Layout) ->
     #{calls := Replies} = hls_service_contract:from_forms(Forms),
     CallGroups = hls_service_contract:groups(Forms, handle_call),
     CastGroups = hls_service_contract:groups(Forms, handle_cast),
     [
-        [callback_arm({call, maps:get(Tag, Replies)}, Group, StateName, Forms)
+        [callback_arm({call, maps:get(Tag, Replies)}, Group, StateName, Forms, Layout)
             || Group = {Tag, _} <- CallGroups],
-        [callback_arm(cast, Group, StateName, Forms) || Group <- CastGroups],
+        [callback_arm(cast, Group, StateName, Forms, Layout) || Group <- CastGroups],
         "\n_ => {\n",
         xls_parse_io:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
         "}\n"
@@ -30,8 +34,8 @@ callback_arms(Forms, StateName) ->
 
 %% Validate frame length before decoding and selecting this request tag's callback clauses.
 -spec callback_arm(cast | {call, [atom(), ...]},
-    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()]) -> iolist().
-callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
+    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
+callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
     Arguments = [
         xls_pattern_lower:record_argument(
             Tag,
@@ -57,7 +61,7 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
     [
         "\nTag::", xls_names:enum_member(Tag), " => {\n",
         "  if frame.header.payload_words != u8:",
-        integer_to_list(hls_actor_source:message_words(Forms, Tag)), " {\n",
+        integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)), " {\n",
         "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
         "  } else {\n",
         "    let request = ", xls_names:record_codec(Tag),

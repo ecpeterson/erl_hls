@@ -10,6 +10,8 @@ import axis;
 import frame_transport;
 import phi_halo_cell;
 
+const_assert!(axis::FRAME_BITS == u32:128);
+
 const CHANNEL_DEPTH = u32:1;
 const WIDTH = u32:2;
 const HEIGHT = u32:3;

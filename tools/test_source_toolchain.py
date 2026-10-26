@@ -55,11 +55,17 @@ class SourceToolchainTests(unittest.TestCase):
             command = [release/'bin/hlsc', 'emit', fixture, '--output', stage/'superseded',
                        '--pipeline-stages', 'invalid', '--source-options', stage/'absent.erl',
                        '-I', includes, '-D', 'CLI_DEFINE', '-D', 'CLI_DEFINE=7', '-D', 'BARE=2', '-D', 'BARE',
-                       '--source-options', defaults, '--output', emitted, '--pipeline-stages', '3']
+                       '--source-options', defaults, '--output', emitted, '--pipeline-stages', '3',
+                       '--frame-payload-words', '1', '--frame-payload-words', '5']
             result = subprocess.run(command, cwd=stage, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             manifest = json.loads((emitted/'source-build.json').read_text())
-            self.assertEqual(manifest['metadata'], {'kind': 'actor'})
+            self.assertEqual(manifest['metadata'], {'kind': 'actor', 'frame_abi': {
+                'name': 'canonical_actor_v1', 'header_bits': 32, 'payload_words': 5,
+                'payload_bits': 160, 'frame_bits': 192, 'parameterized': True}})
+            self.assertIn('pub const PAYLOAD_WORDS = u32:5;',
+                          (emitted/'support/compiler/xls/lib/frame_config.x').read_text())
+            self.assertIn('const_assert!(axis::FRAME_BITS == u32:192)', (emitted/'actor.x').read_text())
             self.assertFalse((stage/'superseded').exists())
             self.assertIn('--pipeline_stages=3', manifest['units'][0]['codegen_flags'])
             self.assertIn('proc Top {', (emitted/'actor.x').read_text())

@@ -5,7 +5,8 @@
 %% Internal lowering operations belong to their owning passes, not the facade.
 -spec public_entrypoints_test() -> ok.
 public_entrypoints_test() ->
-    Expected = [{actor_artifact, 2}, {actor_interface, 1}, {actor_interface, 2},
+    Expected = [{actor_artifact, 2}, {actor_artifact, 3},
+        {actor_interface, 1}, {actor_interface, 2}, {actor_interface, 3},
         {to_xls, 1}, {to_xls, 2}, {module_info, 0}, {module_info, 1}],
     ?assertEqual(lists:sort(Expected), lists:sort(xls_parse:module_info(exports))).
 

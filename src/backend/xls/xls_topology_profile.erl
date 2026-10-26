@@ -16,7 +16,8 @@
     name := atom() | string(),
     channel_depth := 1..?U32_MAX,
     actor_egress_depth := egress_policy(),
-    direct_actor_debug => boolean()
+    direct_actor_debug => boolean(),
+    frame_payload_words => hls_frame_layout:words()
 }.
 
 %% Validate one physical option contract before inserting defaults. Backend
@@ -27,7 +28,7 @@
 normalize(Profile) when is_map(Profile) ->
     Required = [actor_egress_depth, channel_depth, name],
     Keys = lists:sort(maps:keys(Profile)),
-    Allowed = Required ++ [direct_actor_debug],
+    Allowed = Required ++ [direct_actor_debug, frame_payload_words],
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
@@ -54,7 +55,9 @@ validate_egress_depth(Depth) -> error({egress_depth, Depth}).
 %% Observation is independent of buffering and routing.
 -spec normalize_options(profile()) -> profile().
 normalize_options(Profile) ->
-    Profile#{direct_actor_debug => xls_actor_observation:enabled(Profile)}.
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile, 3)),
+    Profile#{direct_actor_debug => xls_actor_observation:enabled(Profile),
+        frame_payload_words => hls_frame_layout:payload_words(Layout)}.
 
 %% The registered producer already holds one effect; burst reserves only the
 %% remaining capacity in the explicit egress FIFO. Literal depths pass through.

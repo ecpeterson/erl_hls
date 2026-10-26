@@ -60,3 +60,20 @@ empty_support_import_test() ->
     after
         ok = file:del_dir_r(Root)
     end.
+
+%% Independent source bundles may choose different capacities without touching installed support.
+-spec frame_support_test() -> ok.
+frame_support_test() ->
+    Default = filename:join([code:priv_dir(erl_hls), "xls", "lib", "frame_config.x"]),
+    {ok, Before} = file:read_file(Default),
+    lists:foreach(fun(Words) ->
+        Root = filename:join("_build", "frame-support-" ++ integer_to_list(Words) ++ "-" ++
+            integer_to_list(erlang:system_time(nanosecond))),
+        Layout = hls_frame_layout:new(Words),
+        _ = hls_compile:support(Root, [], Layout),
+        {ok, Config} = file:read_file(filename:join(Root, "support/compiler/xls/lib/frame_config.x")),
+        ?assertEqual(iolist_to_binary(hls_frame_layout:config_dslx(Layout)), Config),
+        ok = file:write_file(filename:join(Root, "source-build.json"), <<"{}">>, [exclusive]),
+        ?assertError({published_bundle, Root}, hls_compile:configure_support(Root, Layout))
+    end, [1, 3]),
+    ?assertEqual({ok, Before}, file:read_file(Default)).

@@ -46,7 +46,9 @@ This summary is internal compiler data, not a stable application protocol.
     dispatched_schemas/1,
     dispatched_schemas/2,
     from_module/1,
+    from_module/2,
     from_modules/1,
+    from_modules/2,
     initial_effects/1,
     max_entry_effects/1,
     output_schemas/2,
@@ -90,6 +92,21 @@ from_module(Module) ->
 -doc "Reads each distinct module once for a planning pass; retains no global cache.".
 from_modules(Modules) ->
     maps:from_list([{Module, from_module(Module)}
+        || Module <- lists:usort(Modules)]).
+
+-doc "Loads the source-bound interface and checks every public schema against a selected ordinary-frame capacity. Embedded source summaries remain independent of physical placement.".
+-spec from_module(module(), hls_frame_layout:layout()) -> summary().
+from_module(Module, Layout) ->
+    Summary = from_module(Module),
+    _ = [hls_frame_layout:check_payload(Layout, lists:sum([
+        hls_type:width(Type) || #{type := Type} <- Fields]))
+        || #{fields := Fields} <- maps:get(schemas, Summary)],
+    Summary#{frame_layout => Layout}.
+
+-doc "Loads each distinct actor interface once and validates all schemas for the selected ordinary-frame layout.".
+-spec from_modules([module()], hls_frame_layout:layout()) -> #{module() => summary()}.
+from_modules(Modules, Layout) ->
+    maps:from_list([{Module, from_module(Module, Layout)}
         || Module <- lists:usort(Modules)]).
 
 -spec dispatched_schemas(summary()) -> [atom()].

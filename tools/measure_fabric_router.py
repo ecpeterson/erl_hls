@@ -59,7 +59,8 @@ hls_fabric_egress #(.PORTS({ports}),.ENDPOINTS({16*ports}'d{ids})) egress(
     return text + 'endmodule\n'
 
 
-def main():
+def main() -> None:
+    """Measure router variants with the baseline's complete axis configuration dependency."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
     parser.add_argument('--baseline', required=True)
@@ -70,8 +71,15 @@ def main():
     xls = args.xls.resolve()
     baseline = subprocess.check_output(['git', 'rev-parse', args.baseline], cwd=ROOT, text=True).strip()
     old = stage / 'baseline'; old.mkdir(exist_ok=True)
-    for path in ('priv/xls/lib/axis.x', 'priv/xls/fabric/hls_fabric_router.x'):
-        (old / Path(path).name).write_bytes(subprocess.check_output(['git', 'show', f'{baseline}:{path}'], cwd=ROOT))
+    sources = ['priv/xls/lib/axis.x', 'priv/xls/fabric/hls_fabric_router.x']
+    axis = subprocess.check_output(['git', 'show', f'{baseline}:{sources[0]}'], cwd=ROOT)
+    if b'import frame_config;' in axis:
+        sources.append('priv/xls/lib/frame_config.x')
+    source_hashes = {}
+    for path in sources:
+        data = subprocess.check_output(['git', 'show', f'{baseline}:{path}'], cwd=ROOT)
+        (old / Path(path).name).write_bytes(data)
+        source_hashes[path] = hashlib.sha256(data).hexdigest()
     for top, name in (('PairIngress', 'ingress'), ('PairEgress', 'egress')):
         for invocation, target in (
             ([xls/'ir_converter_main', '--warnings_as_errors=false', f'--dslx_path={old}',
@@ -81,7 +89,7 @@ def main():
               '--use_system_verilog=false', '--reset=reset', '--fifo_module=', old/f'{name}.opt.ir'], old/f'{name}.v')):
             with target.open('w') as output, target.with_suffix(target.suffix+'.stderr').open('w') as errors:
                 subprocess.run(list(map(str, invocation)), stdout=output, stderr=errors, check=True, timeout=120)
-    report = {'baseline': baseline, 'yosys': subprocess.check_output([args.yosys, '-V'], text=True).strip(), 'variants': {}}
+    report = {'baseline': baseline, 'baseline_sources': source_hashes, 'yosys': subprocess.check_output([args.yosys, '-V'], text=True).strip(), 'variants': {}}
     for name, ports, before in [('baseline-2', 2, True), ('current-1', 1, False), ('current-2', 2, False), ('current-3', 3, False), ('current-8', 8, False)]:
         directory = stage/name;directory.mkdir(exist_ok=True)
         top = directory/'router_area.v';top.write_text(wrapper(ports, before))

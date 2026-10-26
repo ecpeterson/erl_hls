@@ -7,7 +7,7 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([interface/2, lower/3, lower/4, artifact/3, planned_artifact/3]).
+-export([interface/2, interface/3, lower/3, lower/4, artifact/3, artifact/4, planned_artifact/3, planned_artifact/4]).
 
 -type interface() :: map().
 
@@ -17,6 +17,14 @@ interface(Forms, PhaseNames) ->
     {Annotated, Sites} = xls_failure_sites:prepare(hls_records:resolve(Forms)),
     (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
+-doc "Summarizes an actor and validates its public schemas against the selected ordinary-frame capacity.".
+-spec interface([hls_source:form()], [atom(), ...], hls_frame_layout:layout()) -> interface().
+interface(Forms, Phases, Layout) ->
+    Resolved = hls_records:resolve(Forms),
+    _ = [hls_actor_source:message_words(Resolved, Name, Layout)
+        || Name <- hls_actor_source:tags(Resolved)],
+    (interface(Forms, Phases))#{frame_layout => Layout}.
+
 -doc "Validates callbacks and renders a dedicated actor.".
 -spec lower(file:filename(), [hls_source:form()], [atom(), ...]) -> iolist().
 lower(Filename, Forms, Phases) -> lower(Filename, Forms, Phases, #{}).
@@ -24,30 +32,42 @@ lower(Filename, Forms, Phases) -> lower(Filename, Forms, Phases, #{}).
 -doc "Renders a dedicated actor with optional committed-state observations.".
 -spec lower(file:filename(), [hls_source:form()], [atom(), ...], map()) -> iolist().
 lower(Filename, Forms, Phases, Options) ->
-    case maps:keys(Options) -- [direct_actor_debug] of
+    case maps:keys(Options) -- [direct_actor_debug, frame_layout] of
         [] -> ok;
         Keys -> error({invalid_xls_options, Keys})
     end,
-    Spec = artifact(Filename, Forms, Phases),
+    Spec = artifact(Filename, Forms, Phases, maps:get(frame_layout, Options, hls_frame_layout:default())),
     xls_statem_codegen:emit(Spec#{direct_actor_debug => xls_actor_observation:enabled(Options)}).
 
 -doc "Lowers actor semantics to a closed artifact without choosing storage or execution placement.".
 -spec artifact(file:filename(), [hls_source:form()], [atom(), ...]) -> xls_actor_codegen:spec().
 artifact(Filename, Source, PhaseNames) ->
-    {Spec, none} = compile_artifact(Filename, Source, PhaseNames, render),
+    artifact(Filename, Source, PhaseNames, hls_frame_layout:default()).
+
+-doc "Lowers actor semantics with a checked ordinary-frame capacity retained in the closed artifact.".
+-spec artifact(file:filename(), [hls_source:form()], [atom(), ...],
+    hls_frame_layout:layout()) -> xls_actor_codegen:spec().
+artifact(Filename, Source, PhaseNames, Layout) ->
+    {Spec, none} = compile_artifact(Filename, Source, PhaseNames, render, Layout),
     Spec.
 
 -doc "Returns the ordinary closed artifact and a source-bound planning sidecar from the same lowering. The sidecar preserves evaluation structure; it does not authorize reordering or projection.".
 -spec planned_artifact(file:filename(), [hls_source:form()], [atom(), ...]) ->
     {xls_actor_codegen:spec(), xls_statem_plan:plan()}.
 planned_artifact(Filename, Source, PhaseNames) ->
-    compile_artifact(Filename, Source, PhaseNames, plan).
+    planned_artifact(Filename, Source, PhaseNames, hls_frame_layout:default()).
+
+-doc "Returns rendering and source-bound planning from one lowering under an explicit ordinary-frame capacity.".
+-spec planned_artifact(file:filename(), [hls_source:form()], [atom(), ...],
+    hls_frame_layout:layout()) -> {xls_actor_codegen:spec(), xls_statem_plan:plan()}.
+planned_artifact(Filename, Source, PhaseNames, Layout) ->
+    compile_artifact(Filename, Source, PhaseNames, plan, Layout).
 
 %% Planning observes the same preparation that produces renderer input. Ordinary
 %% compilation neither builds the sidecar nor passes abstract forms to a renderer.
--spec compile_artifact(file:filename(), [hls_source:form()], [atom(), ...], render | plan) ->
+-spec compile_artifact(file:filename(), [hls_source:form()], [atom(), ...], render | plan, hls_frame_layout:layout()) ->
     {xls_actor_codegen:spec(), none | xls_statem_plan:plan()}.
-compile_artifact(Filename, Source, PhaseNames, Mode) ->
+compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
     Forms0 = hls_records:resolve(Source),
     Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
@@ -56,9 +76,9 @@ compile_artifact(Filename, Source, PhaseNames, Mode) ->
     ok = xls_names:actor(Forms, hls_statem),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
-        {Name, hls_actor_source:message_words(Forms, Name)} || Name <- MessageNames
+        {Name, hls_actor_source:message_words(Forms, Name, Layout)} || Name <- MessageNames
     ]),
-    Prepared = prepare_callbacks(Forms, Declarations),
+    Prepared = (prepare_callbacks(Forms, Declarations))#{frame_layout => Layout},
     OutputNames = maps:get(output_names, Prepared),
     Capacity = maps:get(capacity, Prepared),
     DataName = maps:get(data_name, Prepared),
@@ -99,6 +119,7 @@ compile_artifact(Filename, Source, PhaseNames, Mode) ->
     ]),
     Spec = #{
         source => Filename,
+        frame_layout => Layout,
         failure_sites => Sites,
         imports => xls_dslx_imports:from_forms(Forms),
         capacity => Capacity,
@@ -504,7 +525,8 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
         end, {0, #{}}, Entries),
     true = LayoutCount > 0,
     AllLayouts = lists:append(Layouts),
-    PayloadBits = max(case xls_statem_reply_codegen:enabled(Prepared) of true -> 128; false -> 1 end,
+    PayloadBits = max(case xls_statem_reply_codegen:enabled(Prepared) of
+        true -> hls_frame_layout:frame_bits(maps:get(frame_layout, Prepared)); false -> 1 end,
         lists:max([xls_entry_storage:width(Storage) || #{storage := Storage} <- AllLayouts])),
     [begin
         Clause = xls_statem_entry:map_leaves(strip_dispatched_phase(Program),

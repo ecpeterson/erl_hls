@@ -8,6 +8,9 @@ stdlib="$xls_root/xls/dslx/stdlib"
 
 cd "$stage"
 
+# The staged axis module selects its ordinary ABI from this generated dependency.
+test -f frame_config.x
+
 iverilog \
     -g2012 \
     -s hls_debug_tap_tb \
@@ -433,6 +436,9 @@ erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/hls_fabric.erl" \
     "$stage/erl_src/hls_fabric_io.erl" \
+    "$stage/erl_src/hls_frame_layout.erl" \
+    "$stage/erl_src/hls_record.erl" \
+    "$stage/erl_src/hls_diagnostic.erl" \
     "$stage/erl_src/hls_fabric_lease.erl" \
     "$stage/erl_src/hls_fabric_session.erl" \
     "$stage/erl_src/hls_fabric_client.erl" \

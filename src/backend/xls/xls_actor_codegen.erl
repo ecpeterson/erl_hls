@@ -25,7 +25,8 @@
     capacity := 1 .. ((1 bsl 8) - 1),
     phases := [atom(), ...],
     message_names := [atom(), ...],
-    message_words := #{atom() => 0..3},
+    message_words := #{atom() => hls_nums:u8()},
+    frame_layout := hls_frame_layout:layout(),
     output_names := [atom(), ...],
     data_name := atom(),
     data_width := non_neg_integer(),
@@ -84,6 +85,7 @@ preamble(#{
             case maps:get(gathers, Spec, none) of none -> []; _ -> [hls_integer] end ++
             case xls_statem_reply_codegen:enabled(Spec) of true -> [hls_reply]; false -> [] end, Imports),
         "\n",
+        hls_frame_layout:assert_dslx(maps:get(frame_layout, Spec)),
         "const MAILBOX_CAPACITY = u8:", integer_to_list(Capacity), ";\n",
         "const MAILBOX_DEPTH = u32:", integer_to_list(Capacity), ";\n\n",
         "pub enum Tag : u8 {\n",
@@ -123,7 +125,7 @@ declarations(#{output_names := OutputNames, max_entry_effects := MaxEntryEffects
     DataStruct = xls_names:record_type(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = max(entry_effect_payload_bits(Entries),
-        case xls_statem_reply_codegen:enabled(Spec) of true -> 128; false -> 0 end),
+        case xls_statem_reply_codegen:enabled(Spec) of true -> hls_frame_layout:frame_bits(maps:get(frame_layout, Spec)); false -> 0 end),
     [
         "pub enum OutputPort : u8 {\n",
         [
@@ -431,7 +433,7 @@ end.
 reply_layout_effect(Spec = #{retained_calls := #{port := Port}}) ->
     ["    u8:", integer_to_list(xls_statem_reply_codegen:layout(Spec)),
      " => Egress { port: OutputPort::", xls_names:enum_member(Port),
-     ", frame: axis::frame_from_bits(effects.payloads as bits[128]) },\n"];
+     ", frame: axis::frame_from_bits(effects.payloads as bits[axis::FRAME_BITS]) },\n"];
 reply_layout_effect(_) -> [].
 
 %% Caller-contract faults become actor failures without publishing the invalid reply.

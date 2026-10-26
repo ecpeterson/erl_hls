@@ -1,22 +1,19 @@
 -module(xls_message_bits).
 -moduledoc "Known-bit algebra for the ordinary entry frame ABI. Fields are physical stream bitstrings; padding and header construction match hls_bits::frame_payload and axis::pack. Consumers must establish source and route provenance before using a bound.".
--export([frame/2, join/1, join_cases/1]).
+-export([frame/2, frame/3, join/1, join_cases/1]).
 
--doc "Constructs an ordinary three-word frame bound from checked schema fields. Finite field values are exact ABI bitstrings; unknown fields retain all bits. Rejects payloads wider than 96 bits. Does not cover retained replies or arbitrary frames.".
--spec frame(0 .. ((1 bsl 8) - 1), [map()]) -> #{mask := non_neg_integer(), value := non_neg_integer()}.
-frame(Tag, Fields) ->
+-doc "Constructs an ordinary emitted-frame bound with the default three-word capacity. Fields are checked physical ABI streams; does not cover arbitrary frames or retained replies.".
+-spec frame(hls_nums:u8(), [map()]) -> #{mask := non_neg_integer(), value := non_neg_integer()}.
+frame(Tag, Fields) -> frame(Tag, Fields, hls_frame_layout:default()).
+
+-doc "Constructs an emitted-frame bound using the selected capacity. Rejects over-capacity schemas; all header and zero padding bits remain known.".
+-spec frame(hls_nums:u8(), [map()], hls_frame_layout:layout()) ->
+    #{mask := non_neg_integer(), value := non_neg_integer()}.
+frame(Tag, Fields, Layout) ->
     Parts = [field(F) || F <- Fields],
     MaskStream = << <<M/bitstring>> || {M, _} <- Parts >>,
     ValueStream = << <<V/bitstring>> || {_, V} <- Parts >>,
-    N = bit_size(MaskStream),
-    true = N =< 96,
-    Words = (N + 31) div 32,
-    Padding = Words * 32 - N,
-    <<Mask:96/little>> = <<MaskStream/bitstring, ((1 bsl Padding) - 1):Padding,
-        ((1 bsl (96 - Words * 32)) - 1):(96 - Words * 32)>>,
-    <<Value:96/little>> = <<ValueStream/bitstring, 0:(96 - N)>>,
-    #{mask => (Mask bsl 32) bor 16#ffffffff,
-        value => (Value bsl 32) bor (Tag bsl 24) bor Words}.
+    hls_frame_layout:bounds(Layout, Tag, MaskStream, ValueStream).
 
 -doc "Joins nonempty alternative bounds of the same bit layout, retaining only bits known and equal in every alternative. Values contain zero in unknown positions.".
 -spec join([#{mask := non_neg_integer(), value := non_neg_integer()}, ...]) ->
