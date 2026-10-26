@@ -1153,10 +1153,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:0, payloads: zero!<bits[224]>() } }
+        EntryOutcome {
+          data: evaluated.0.1,
+          reduction: zero!<ReductionState>(),
+          failure: hls_failure::NONE,
+          effects: EntryEffects {
+            layout: u8:0,
+            payloads: zero!<bits[224]>(),
+          },
+        }
       };
       if bool:false {
-        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _3
       }
@@ -1199,7 +1211,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _18 = (v_Xls_entry_1_1, _16, _17, );
         let _19 = {
           let evaluated = _18;
-          EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:1, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]) } }
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: zero!<ReductionState>(),
+            failure: hls_failure::NONE,
+            effects: EntryEffects {
+              layout: u8:1,
+              payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]),
+            },
+          }
         };
         (_19, hls_failure::NONE)
       } else {
@@ -1216,12 +1236,24 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _7 = (v_Xls_entry_3_1, _5, _6, );
         let _8 = {
           let evaluated = _7;
-          EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:2, payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]) } }
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: zero!<ReductionState>(),
+            failure: hls_failure::NONE,
+            effects: EntryEffects {
+              layout: u8:2,
+              payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]),
+            },
+          }
         };
         (_8, hls_failure::NONE)
       };
       if (_20.1) != hls_failure::NONE {
-        EntryOutcome { data: data, failure: _20.1, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: _20.1,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _20.0
       }
@@ -1258,10 +1290,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _10 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _9, );
       let _11 = {
         let evaluated = _10;
-        EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:3, payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]) } }
+        EntryOutcome {
+          data: evaluated.0.1,
+          reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
+          failure: hls_failure::NONE,
+          effects: EntryEffects {
+            layout: u8:3,
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]),
+          },
+        }
       };
       if bool:false {
-        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _11
       }
@@ -1318,10 +1362,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _18 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _17, );
       let _19 = {
         let evaluated = _18;
-        EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:4, payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]) } }
+        EntryOutcome {
+          data: evaluated.0.1,
+          reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
+          failure: hls_failure::NONE,
+          effects: EntryEffects {
+            layout: u8:4,
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]),
+          },
+        }
       };
       if (hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379)) != hls_failure::NONE {
-        EntryOutcome { data: data, failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379), ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379),
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _19
       }
@@ -1453,7 +1509,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _42 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _41, );
           let _43 = {
             let evaluated = _42;
-            EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:5, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]) } }
+            EntryOutcome {
+              data: evaluated.0.1,
+              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+              failure: hls_failure::NONE,
+              effects: EntryEffects {
+                layout: u8:5,
+                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]),
+              },
+            }
           };
           (_43, _20.1)
         } else {
@@ -1545,14 +1609,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             let _28 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _27, );
             let _29 = {
               let evaluated = _28;
-              EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:6, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]) } }
+              EntryOutcome {
+                data: evaluated.0.1,
+                reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+                failure: hls_failure::NONE,
+                effects: EntryEffects {
+                  layout: u8:6,
+                  payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]),
+                },
+              }
             };
             (_29, _6.1)
           }
         }
       };
       if (_44.1) != hls_failure::NONE {
-        EntryOutcome { data: data, failure: _44.1, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: _44.1,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _44.0
       }

@@ -446,10 +446,21 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:0, payloads: zero!<bits[128]>() } }
+        EntryOutcome {
+          data: evaluated.0.1,
+          failure: hls_failure::NONE,
+          effects: EntryEffects {
+            layout: u8:0,
+            payloads: zero!<bits[128]>(),
+          },
+        }
       };
       if bool:false {
-        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _3
       }
@@ -526,7 +537,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let _27 = (v_Xls_entry_1_1, _25, _26, );
           let _28 = {
             let evaluated = _27;
-            EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:1, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]) } }
+            EntryOutcome {
+              data: evaluated.0.1,
+              failure: hls_failure::NONE,
+              effects: EntryEffects {
+                layout: u8:1,
+                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]),
+              },
+            }
           };
           (_28, hls_failure::NONE)
         } else {
@@ -579,14 +597,25 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
             let _16 = (v_Xls_entry_6_1, _14, _15, );
             let _17 = {
               let evaluated = _16;
-              EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:2, payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]) } }
+              EntryOutcome {
+                data: evaluated.0.1,
+                failure: hls_failure::NONE,
+                effects: EntryEffects {
+                  layout: u8:2,
+                  payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]),
+                },
+              }
             };
             (_17, hls_failure::NONE)
           }
         }
       };
       if (_29.1) != hls_failure::NONE {
-        EntryOutcome { data: data, failure: _29.1, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: _29.1,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _29.0
       }
@@ -600,10 +629,21 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:3, payloads: zero!<bits[128]>() } }
+        EntryOutcome {
+          data: evaluated.0.1,
+          failure: hls_failure::NONE,
+          effects: EntryEffects {
+            layout: u8:3,
+            payloads: zero!<bits[128]>(),
+          },
+        }
       };
       if bool:false {
-        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
       } else {
         _3
       }

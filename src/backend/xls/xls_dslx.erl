@@ -116,9 +116,9 @@ render({xls_dslx, literal, Type, Integer}) ->
 render({xls_dslx, tuple, [Value]}) -> ["(", render(Value), ",)"];
 render({xls_dslx, tuple, Values}) -> ["(", join([render(Value) || Value <- Values]), ")"];
 render({xls_dslx, construct, Type, Fields, Base}) ->
-    Members = [[Name, ": ", render(Value)] || {Name, Value} <- Fields],
-    Spread = case Base of none -> []; {base, Value} -> [["..", render(Value)]] end,
-    [type(Type), " { ", join(Members ++ Spread), " }"];
+    Members = [[Name, ": ", render(Value), ",\n"] || {Name, Value} <- Fields],
+    Spread = case Base of none -> []; {base, Value} -> ["..", render(Value), "\n"] end,
+    [type(Type), " {\n", xls_parse_io:indent([Members, Spread], 2), "}"];
 render({xls_dslx, bind, Name, Value}) -> ["let ", Name, " = ", render(Value), ";\n"];
 render({xls_dslx, block, Statements, Result}) ->
     ["{\n", xls_parse_io:indent([render(Statements), render(Result), "\n"], 2), "}"];

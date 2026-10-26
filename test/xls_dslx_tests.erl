@@ -24,8 +24,12 @@ expression_order_test() ->
     Value = xls_dslx:construct("Result", [
         {"sum", xls_dslx:call("sum", [Sum, "c"])},
         {"ready", Choice}, {"pair", Pair}], xls_dslx:ref("previous")),
-    ?assertEqual(<<"Result { sum: sum(a + b, c), ready: (ready && !(failed)), pair: (u8:3 ++ u8:4), ..previous }">>,
-        text(Value)).
+    ?assertEqual(<<"Result {\n"
+        "  sum: sum(a + b, c),\n"
+        "  ready: (ready && !(failed)),\n"
+        "  pair: (u8:3 ++ u8:4),\n"
+        "  ..previous\n"
+        "}">>, text(Value)).
 
 %% Branch-local bindings stay inside their selected branch, before its tuple result.
 -spec scoped_selection_test() -> ok.
