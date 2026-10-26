@@ -48,10 +48,15 @@ read_loop(FD, Broker) ->
         {'EXIT', Broker, _Reason} -> ok
     end.
 
+%% The routing prefix is independent; the application header shares the canonical schema.
+-spec read_frame(file:io_device()) -> {ok, {non_neg_integer(), non_neg_integer()},
+    {hls_nums:u8(), hls_nums:u8(), hls_nums:u8()}, binary()} | {error, term()}.
 read_frame(FD) ->
-    case read_exact(FD, 8) of
-        {ok, <<Destination:16/little, Source:16/little, Words:8, TxID:8, Flags:8, Tag:8>>} ->
-            case read_exact(FD, 4 * Words) of
+    case read_exact(FD, 4 + hls_frame_layout:header_bits() div 8) of
+        {ok, <<Destination:16/little, Source:16/little, Header/binary>>} ->
+            #{payload_words := Words, txid := TxID, flags := Flags, op := Tag} =
+                hls_frame_layout:unpack_header(Header),
+            case read_exact(FD, hls_frame_layout:word_bits() div 8 * Words) of
                 {ok, Payload} -> {ok, {Source, Destination}, {Tag, TxID, Flags}, Payload};
                 Error -> Error
             end;
@@ -67,6 +72,8 @@ read_exact(FD, Length, Acc) ->
         {error, _} = Error -> Error
     end.
 
+-doc "Encodes a routed physical frame with the canonical application header. Payload must be complete words fitting the header's eight-bit length; this generic broker does not select an actor capacity.".
+-spec encode(term(), term(), term()) -> {ok, binary()} | {error, term()}.
 encode({Source, Destination} = Route, {Tag, TxID, Flags}, Payload)
         when is_integer(Tag), Tag >= 0, Tag =< 255,
              is_integer(TxID), TxID >= 0, TxID =< 255,
@@ -77,8 +84,9 @@ encode({Source, Destination} = Route, {Tag, TxID, Flags}, Payload)
         {true, Size} when Size rem 4 =/= 0 -> {error, {unaligned_payload, Size}};
         {true, Size} when Size > 1020 -> {error, {payload_too_large, Size}};
         {true, Size} ->
-            {ok, <<Destination:16/little, Source:16/little,
-                (Size div 4):8, TxID:8, Flags:8, Tag:8, Payload/binary>>}
+            Header = hls_frame_layout:pack_header(#{payload_words => Size div 4,
+                txid => TxID, flags => Flags, op => Tag}),
+            {ok, <<Destination:16/little, Source:16/little, Header/binary, Payload/binary>>}
     end;
 encode(Route, Header, Payload) -> {error, {invalid_frame, Route, Header, Payload}}.
 

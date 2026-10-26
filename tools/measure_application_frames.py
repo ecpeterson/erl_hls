@@ -37,7 +37,8 @@ def digest(path):
     return result.hexdigest()
 
 
-def measure(args):
+def measure(args: argparse.Namespace) -> None:
+    """Measure each revision with its own selected-frame support and record copied source hashes."""
     args.stage.mkdir(parents=True, exist_ok=True)
     baseline = git('rev-parse', '--verify', args.baseline + '^{commit}').decode().strip()
     report = {'baseline': baseline, 'head': git('rev-parse', 'HEAD').decode().strip(),
@@ -52,7 +53,12 @@ def measure(args):
         directory.mkdir(exist_ok=True)
         (directory / 'receivers.x').write_text(RECEIVERS)
         hashes = {}
-        for name, path in SOURCES.items():
+        sources = dict(SOURCES)
+        axis = (git('show', f'{baseline}:{sources["axis.x"]}') if version == 'baseline'
+                else (ROOT / sources['axis.x']).read_bytes())
+        if b'import frame_config;' in axis:
+            sources['frame_config.x'] = 'priv/xls/lib/frame_config.x'
+        for name, path in sources.items():
             data = git('show', f'{baseline}:{path}') if version == 'baseline' else (ROOT / path).read_bytes()
             (directory / name).write_bytes(data)
             hashes[name] = hashlib.sha256(data).hexdigest()

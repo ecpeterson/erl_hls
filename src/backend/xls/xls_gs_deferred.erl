@@ -1,10 +1,14 @@
 -module(xls_gs_deferred).
 -moduledoc "Lowers bounded server callbacks into a worker for the static retained-reply driver.".
--export([emit/2]).
+-export([emit/2, emit/3]).
 
 -doc "Emits checked callbacks, finite continuations and the standard frame/beat service wrappers.".
 -spec emit(file:filename(), [hls_source:form()]) -> iolist().
-emit(Filename, Forms0) ->
+emit(Filename, Forms) -> emit(Filename, Forms, hls_frame_layout:default()).
+
+-doc "Emits the server using an explicit checked ordinary-frame layout and rejects any public schema exceeding it.".
+-spec emit(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
+emit(Filename, Forms0, Layout) ->
     ok = xls_names:actor(Forms0, hls_gs),
     {Source, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(Source,
@@ -18,11 +22,12 @@ emit(Filename, Forms0) ->
     Width = hls_records:width(hls_records:find(Forms, StateName)),
     Records = hls_records:declarations(Forms, tl(Tags)),
     [hls_records:validate_defaults(R) || R <- Records],
-    [hls_actor_source:message_words(Forms, Name) || Name <- hls_actor_source:tags(Forms)],
+    [hls_actor_source:message_words(Forms, Name, Layout) || Name <- hls_actor_source:tags(Forms)],
     Mask = lists:sum([1 bsl I || {I, Name} <- lists:enumerate(1, Tags), maps:is_key(Name, Calls)]),
     Body = ["// ", Filename, " - generated bounded server.\n",
      xls_dslx_imports:emit([axis, hls_bits, hls_failure, hls_server], xls_dslx_imports:from_forms(Forms)),
-     "\npub enum Tag : u8 { NONE = 0,\n",
+     "\n", hls_frame_layout:assert_dslx(Layout),
+     "pub enum Tag : u8 { NONE = 0,\n",
      [["  ", xls_names:enum_member(Name), " = ", integer_to_list(I), ",\n"]
          || {I, Name} <- lists:enumerate(1, Tags)], "}\n",
      [[xls_record_codegen:declaration(R), "\n", xls_record_codegen:decoder(R), "\n",
@@ -39,7 +44,7 @@ emit(Filename, Forms0) ->
      "(initial_state()), reply_allowed: true, ..zero!<Outcome>() } }\n",
      "  else if inv.continuation != u8:0 {\n",
      continuation(Forms, StateName, Enum), "\n  } else { match inv.frame.header.op as Tag {\n",
-     [arm(Kind, Group, Forms, StateName, Enum) || Kind <- [call, cast],
+     [arm(Kind, Group, Forms, StateName, Enum, Layout) || Kind <- [call, cast],
          Group <- hls_service_contract:groups(Forms, callback(Kind))],
      "_ => ", failure("u32:1"), ",\n  } }\n}\n",
      service(N, Mask),
@@ -68,15 +73,15 @@ allowed(Calls) ->
      end, "\n}\n"].
 
 %% Validate input length before any callback or application-state mutation.
--spec arm(call | cast, {atom(), [erl_parse:abstract_clause()]}, [hls_source:form()], atom(), map()) -> iolist().
-arm(Kind, {Tag, Clauses}, Forms, StateName, Enum) ->
+-spec arm(call | cast, {atom(), [erl_parse:abstract_clause()]}, [hls_source:form()], atom(), map(), hls_frame_layout:layout()) -> iolist().
+arm(Kind, {Tag, Clauses}, Forms, StateName, Enum, Layout) ->
     Raw = "request",
     Record = xls_pattern_lower:record_argument(Tag, Raw,
         ["(Tag::", xls_names:enum_member(Tag), ", request, bits_from_", xls_names:record_codec(Tag), "(request))"]),
     Args = [Record] ++ case Kind of call -> [xls_pattern_lower:value_argument("inv.from")]; cast -> [] end
         ++ [state_argument(StateName)],
     ["Tag::", xls_names:enum_member(Tag), " => {\n",
-     " if inv.frame.header.payload_words != u8:", integer_to_list(hls_actor_source:message_words(Forms, Tag)),
+     " if inv.frame.header.payload_words != u8:", integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)),
      " { ", failure("u32:3"), " } else {\n",
      " let request = ", xls_names:record_codec(Tag), "_from_bits(inv.frame.payload);\n",
      lower(Clauses, Args, Kind, StateName, Enum), "\n }\n},\n"].

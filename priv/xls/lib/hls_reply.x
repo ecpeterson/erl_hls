@@ -23,7 +23,7 @@ pub fn lookup<N: u32>(slots: Slot[N], handle: u64) -> (bool, u32) {
 
 // Service failures use the ERROR tag and one payload word.
 pub fn error_frame(txid: u8, code: u32) -> axis::Frame {
-  axis::Frame { header: axis::Header { op: u8:1, payload_words: u8:1, txid, flags: u8:0 }, payload: code as bits[96] }
+  axis::Frame { header: axis::Header { op: u8:1, payload_words: u8:1, txid, flags: u8:0 }, payload: code as bits[axis::PAYLOAD_BITS] }
 }
 
 // The first sequence is one; no valid handle equals zero.

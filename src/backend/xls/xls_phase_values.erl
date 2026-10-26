@@ -1,32 +1,37 @@
 -module(xls_phase_values).
 -moduledoc "Infers small scalar value sets at successful actor callback boundaries. Facts are source-bound, field-wise overapproximations, not protocol or progress proofs.".
--export([from_file/2, analyze/2, validate/3, manifest/1, field/3]).
+-export([from_file/2, from_file/3, analyze/2, validate/3, manifest/1, field/3]).
 -export_type([facts/0, domain/0]).
 
 -doc "A finite scalar set, an unreachable phase (empty set), or unknown; sets widen to unknown above sixteen values.".
 -type domain() :: unknown | [integer() | atom()].
 -doc "Source- and analyzer-bound phase marginals; only the checked normal callback execution model may consume them.".
--opaque facts() :: #{version := 1, source_sha256 := binary(), analyzer_md5 := binary(),
+-opaque facts() :: #{version := 1, frame_layout := hls_frame_layout:layout(), source_sha256 := binary(), analyzer_md5 := binary(),
     evaluator_md5 := binary(), data := atom(), phases := [atom()], fields := map(), limitations := [term()]}.
 
 -doc "Runs ordinary validation and then derives successful committed-state marginals. Does not alter the ordinary artifact or assume valid incoming messages. Failing callbacks are terminal and cannot establish a later live state.".
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), facts()}.
-from_file(File, Options) ->
+from_file(File, Options) -> from_file(File, Options, hls_frame_layout:default()).
+
+-doc "Derives committed-state marginals after ordinary validation under the selected frame capacity.".
+-spec from_file(file:filename(), [hls_source:option()] | hls_source:context(),
+    hls_frame_layout:layout()) -> {xls_actor_codegen:spec(), facts()}.
+from_file(File, Options, Layout) ->
     {ok, Source} = hls_source:parse_file(File, Options),
     Phases = hls_source:find_attribute(Source, hls_phases),
-    Spec = xls_statem_lower:artifact(File, Source, Phases),
+    Spec = xls_statem_lower:artifact(File, Source, Phases, Layout),
     {Spec, analyze(Source, Spec)}.
 
 -doc "Analyzes exactly the source of a successfully lowered artifact. Internal entry point: the caller must not combine unrelated source and Spec values.".
 -spec analyze([hls_source:form()], xls_actor_codegen:spec()) -> facts().
-analyze(Source, #{data_name := Data, phases := Phases}) ->
+analyze(Source, #{data_name := Data, phases := Phases, frame_layout := Layout}) ->
     Forms = hls_records:resolve(Source),
     C = xls_phase_eval:context(Forms),
     {attribute, _, record, {Data, Fields}} = hls_records:find(Forms, Data),
     Results = [{hls_records:field_name(F), infer(hls_records:field_name(F),
         Data, Phases, Forms, C)} || {typed_record_field, F, _} <- Fields],
-    #{version => 1, source_sha256 => crypto:hash(sha256, term_to_binary(Source, [deterministic])),
+    #{version => 1, frame_layout => Layout, source_sha256 => crypto:hash(sha256, term_to_binary(Source, [deterministic])),
         analyzer_md5 => ?MODULE:module_info(md5), evaluator_md5 => xls_phase_eval:module_info(md5),
         data => Data, phases => Phases,
         fields => maps:from_list([{F, D} || {F, {D, _}} <- Results]),
@@ -34,8 +39,8 @@ analyze(Source, #{data_name := Data, phases := Phases}) ->
 
 -doc "Recomputes the complete certificate against source, includes, preprocessing options and analyzer implementation; rejects edited or stale facts.".
 -spec validate(file:filename(), [hls_source:option()] | hls_source:context(), facts()) -> ok.
-validate(File, Options, Facts) ->
-    {_, Current} = from_file(File, Options),
+validate(File, Options, Facts = #{frame_layout := Layout}) ->
+    {_, Current} = from_file(File, Options, Layout),
     case Facts =:= Current of true -> ok; false -> error(stale_phase_values) end.
 
 -doc "Returns the conservative values of one stored field on entry to a phase callback. Empty means no successful path reached that phase in this abstraction, not permission to erase arbitrary-input behavior.".

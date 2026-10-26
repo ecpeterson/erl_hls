@@ -1,7 +1,7 @@
 -module(hls_codec).
 -moduledoc false.
 -export([checked_integer/3, pack_integer/3, wrap_integer/3, pack_float/2,
-    unpack_float16/1, unsigned/1, join/1, split/2, pad_to/2, align/2]).
+    unpack_float16/1, unsigned/1, stream_bit_index/2, join/1, split/2, pad_to/2, align/2]).
 
 %% Scalar fields use Erlang's little-endian bit syntax. Aggregates concatenate
 %% those bitstrings directly; XLS performs the fixed wire permutation.
@@ -10,6 +10,12 @@ unsigned(Packed) ->
     Width = bit_size(Packed),
     <<Value:Width/little>> = Packed,
     Value.
+
+-doc "Maps a numeric bit index to its physical stream position under little-endian packing, including a final partial byte. The mapping is its own inverse; the index must lie within Width.".
+-spec stream_bit_index(non_neg_integer(), non_neg_integer()) -> non_neg_integer().
+stream_bit_index(Width, Index) when Index < Width ->
+    Start = (Index div 8) * 8,
+    Start + min(8, Width - Start) - 1 - (Index rem 8).
 
 -spec join([bitstring()]) -> bitstring().
 join(Fields) -> list_to_bitstring(Fields).

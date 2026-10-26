@@ -8,7 +8,6 @@
 
 -define(U16_MAX, 16#ffff).
 -define(U32_MAX, 16#ffffffff).
--define(MAX_PAYLOAD_BITS, 96).
 
 -doc "Emits deterministic regular-family DSLX from a normalized plan.".
 -spec emit(hls_topology:plan(), xls_topology_dslx:profile()) -> iolist().
@@ -18,7 +17,7 @@ emit(Plan, Profile) ->
 -doc "Returns the actor-artifact specializations selected by a profile.".
 -spec artifact_requirements(
     hls_topology:plan(), xls_topology_dslx:profile()
-) -> #{module() := #{direct_actor_debug => boolean()}}.
+) -> #{module() := #{direct_actor_debug => boolean(), frame_payload_words => hls_frame_layout:words()}}.
 artifact_requirements(Plan, Profile) ->
     maps:get(artifact_requirements, lower(Plan, Profile)).
 
@@ -35,11 +34,13 @@ lower(Plan, Profile) ->
         name := Name,
         channel_depth := Depth,
         actor_egress_depth := EgressDepth,
-        direct_actor_debug := ActorDebug
+        direct_actor_debug := ActorDebug,
+        frame_payload_words := PayloadWords
     } = xls_topology_profile:normalize(Profile),
+    Layout = hls_frame_layout:new(PayloadWords),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
-    Families1 = annotate_families(Families0, EgressDepth),
+    Families1 = annotate_families(Families0, EgressDepth, Layout),
     FamilyIndex = index_by_id(Families1),
     Ingresses = xls_topology_ingress:lower(
         maps:get(ingresses, Plan, []),
@@ -78,10 +79,11 @@ lower(Plan, Profile) ->
     ok = validate_external_lanes(Externals, Lanes),
     #{
         name => Name,
+        frame_layout => Layout,
         depth => Depth,
         direct_actor_debug => ActorDebug,
         artifact_requirements => maps:from_list([{Module,
-            #{direct_actor_debug => ActorDebug}} || #{module := Module} <- Families]),
+            #{direct_actor_debug => ActorDebug, frame_payload_words => PayloadWords}} || #{module := Module} <- Families]),
         families => Families,
         width => Width,
         height => Height,
@@ -132,9 +134,11 @@ validate_dimensions(FamilyId, Width, Height) ->
 require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
-annotate_families(Families, EgressDepth) ->
+%% Resolve source interfaces once, checking all schemas against this build's frame layout.
+-spec annotate_families([map()], burst | non_neg_integer(), hls_frame_layout:layout()) -> [map()].
+annotate_families(Families, EgressDepth, Layout) ->
     Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Families]),
+        [Module || #{module := Module} <- Families], Layout),
     [
         begin
             Module = maps:get(module, Family),
@@ -547,6 +551,8 @@ annotate_startup_item(
 annotate_startup_item(Item, _FamilyIndex) ->
     error({unsupported_family_startup, Item}).
 
+%% Startup values use the selected actor layout after source-provider packing.
+-spec pack_startup_message(term(), module(), map(), term()) -> map().
 pack_startup_message(Target, Module, Interface, Message)
         when is_tuple(Message), tuple_size(Message) > 0,
              is_atom(element(1, Message)) ->
@@ -561,7 +567,7 @@ pack_startup_message(Target, Module, Interface, Message)
     end,
     Width = bit_size(Payload),
     case Width > 0 andalso Width rem 32 =:= 0 andalso
-            Width =< ?MAX_PAYLOAD_BITS of
+            Width =< hls_frame_layout:payload_bits(maps:get(frame_layout, Interface)) of
         true -> #{
             tag => Tag,
             payload => xls_nums:packed_unsigned_literal(Payload),
@@ -600,6 +606,8 @@ render(Spec) ->
         top_proc(Spec)
     ].
 
+%% Imported support must use exactly the same ordinary capacity as graph planning.
+-spec preamble(map()) -> iodata().
 preamble(Spec) ->
     Families = maps:get(families, Spec),
     Modules = lists:usort([
@@ -627,6 +635,7 @@ preamble(Spec) ->
         end,
         [["import ", Module, ";\n"] || Module <- Modules],
         "\n",
+        hls_frame_layout:assert_dslx(maps:get(frame_layout, Spec)),
         "const CHANNEL_DEPTH = u32:", integer_to_list(maps:get(depth, Spec)),
         ";\n",
         "const WIDTH = u32:", integer_to_list(maps:get(width, Spec)), ";\n",

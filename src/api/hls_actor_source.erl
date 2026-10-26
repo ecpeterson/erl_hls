@@ -1,6 +1,6 @@
 -module(hls_actor_source).
 -moduledoc "Actor state and message declarations from preprocessed source. Source order determines wire tags; these queries do not lower callback bodies or emit hardware.".
--export([state/1, tags/1, message_words/2]).
+-export([state/1, tags/1, message_words/2, message_words/3]).
 
 %% The u8 wire tag reserves none, error and actor data before public messages.
 -define(MAX_PUBLIC_TAGS, 253).
@@ -57,16 +57,21 @@ duplicate_tags([Tag | Rest], Counts, Duplicates) ->
     Next = case Count of 1 -> [Tag | Duplicates]; _ -> Duplicates end,
     duplicate_tags(Rest, Counts#{Tag => Count + 1}, Next).
 
--doc "Returns a record's 32-bit transport word count, including provider padding. Rejects payloads exceeding the current 96-bit actor message limit.".
--spec message_words([hls_source:form()], atom()) -> 0..3.
-message_words(Forms, Name) ->
+-doc "Returns a record's transport word count using the default ordinary frame capacity, including provider padding.".
+-spec message_words([hls_source:form()], atom()) -> hls_nums:u8().
+message_words(Forms, Name) -> message_words(Forms, Name, hls_frame_layout:default()).
+
+-doc "Returns a record's transport word count under the selected ordinary capacity; rejects wider schemas with their source location.".
+-spec message_words([hls_source:form()], atom(), hls_frame_layout:layout()) -> hls_nums:u8().
+message_words(Forms, Name, Layout) ->
     Record = hls_records:find(Forms, Name),
     Width = hls_records:width(Record),
-    case Width =< 96 of
-        true -> (Width + 31) div 32;
+    Capacity = hls_frame_layout:payload_bits(Layout),
+    case Width =< Capacity of
+        true -> hls_frame_layout:check_payload(Layout, Width);
         false -> hls_diagnostic:raise(actor_source, message_too_wide,
-            <<"Actor message exceeds the 96-bit transport payload limit">>,
-            (record_context(Forms, Name, #{}))#{record => Name, width => Width, max_width => 96})
+            <<"Actor message exceeds the selected transport payload limit">>,
+            (record_context(Forms, Name, #{}))#{record => Name, width => Width, max_width => Capacity})
     end.
 
 %% File attributes track include entry/return, so the record points to its actual declaration.

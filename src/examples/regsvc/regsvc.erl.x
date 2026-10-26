@@ -15,7 +15,7 @@ const ERROR_FUNCTION_CLAUSE = u32:1;
 const ERROR_REQUEST_LENGTH = u32:3;
 const ERROR_REPLY_CONTRACT = u32:15;
 
-const MAX_PAYLOAD = u32:3;
+const_assert!(axis::FRAME_BITS == u32:128);
 
 pub enum Tag : u8 {
   NONE = u8:0,

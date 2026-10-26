@@ -14,7 +14,7 @@ run(["emit", Source | Args]) ->
     Options = hls_cli:options(Args, [{"--output", output, value}, {"-I", includes, repeat},
         {"-D", defines, repeat}, {"--source-options", source_options, value},
         {"--dslx-path", imports, repeat}, {"--direct-actor-debug", debug, flag},
-        {"--pipeline-stages", stages, value}]),
+        {"--pipeline-stages", stages, value}, {"--frame-payload-words", frame_words, value}]),
     Output = hls_cli:required(output, Options),
     SourceOptions = case maps:find(source_options, Options) of
         error -> [];
@@ -25,7 +25,8 @@ run(["emit", Source | Args]) ->
         [define(D) || D <- maps:get(defines, Options, [])]),
         direct_actor_debug => maps:get(debug, Options, false),
         dslx_path => maps:get(imports, Options, []),
-        pipeline_stages => hls_cli:integer(stages, maps:get(stages, Options, "2"))}, Output),
+        pipeline_stages => hls_cli:integer(stages, maps:get(stages, Options, "2")),
+        frame_payload_words => hls_cli:integer(frame_words, maps:get(frame_words, Options, "3"))}, Output),
     ok;
 run(Args) -> hls_diagnostic:raise(arguments, unknown_command,
     <<"Unknown compiler command">>, #{arguments => [unicode:characters_to_binary(Arg) || Arg <- Args]}).
@@ -71,5 +72,6 @@ define(Value) ->
 usage() ->
     io:put_chars("Usage: hlsc emit SOURCE --output FRESH_DIRECTORY [-I DIRECTORY] [-D NAME[=TERM]]\n"
         "                 [--source-options FILE] [--dslx-path DIRECTORY]\n"
-        "                 [--direct-actor-debug] [--pipeline-stages N] [--diagnostics text|json]\n"
+        "                 [--direct-actor-debug] [--pipeline-stages N] [--frame-payload-words 1..255]\n"
+        "                 [--diagnostics text|json]\n"
         "Emits DSLX and source-build.json. XLS invocation and hardware qualification are separate.\n").

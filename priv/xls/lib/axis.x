@@ -1,38 +1,34 @@
 // axis.x
 //
-// Beats remain 32 bits. Frame preserves the three-payload-word actor ABI;
-// FrameN lets boundary adapters select another static payload capacity.
+// Beats remain 32 bits. The per-build configuration selects ordinary actor
+// capacity; FrameN remains available for independent boundary formats.
 
-pub const MAX_PAYLOAD = u32:3;
-const PAYLOAD_BITS = MAX_PAYLOAD * 32;
-pub const FRAME_BITS = PAYLOAD_BITS + 32;
+import frame_config;
 
+pub const MAX_PAYLOAD = frame_config::PAYLOAD_WORDS;
+pub const PAYLOAD_BITS = frame_config::PAYLOAD_BITS;
+pub const FRAME_BITS = frame_config::FRAME_BITS;
+
+// One complete transport beat; adapters require all four bytes to be valid.
 pub struct Beat {
   tlast: u1,
   word: u32,
 }
 
-pub struct Header {
-  payload_words: u8,
-  txid: u8,
-  flags: u8,
-  op: u8,
+// Header shape and byte positions share the generated canonical schema.
+pub type Header = frame_config::Header;
+
+// Decodes exactly one canonical header word.
+pub fn header_from_bits(raw: bits[frame_config::HEADER_BITS]) -> Header {
+  frame_config::header_from_bits(raw)
 }
 
-// bridge.erl@167: {<<1,10,0,4>>,<<210,4,0,0>>}
-pub fn header_from_bits(raw: bits[bit_count<Header>()]) -> Header {
-  Header {
-    payload_words: raw[0:8],
-    txid: raw[8:16],
-    flags: raw[16:24],
-    op: raw[24:32],
-  }
+// Encodes the canonical numeric header word.
+pub fn bits_from_header(header: Header) -> bits[frame_config::HEADER_BITS] {
+  frame_config::bits_from_header(header)
 }
 
-pub fn bits_from_header(header: Header) -> bits[bit_count<Header>()] {
-  header.op ++ header.flags ++ header.txid ++ header.payload_words
-}
-
+// A frame with an independently selected payload capacity in complete words.
 pub struct FrameN<PAYLOAD_WORDS: u32> {
   header: Header,
   payload: bits[PAYLOAD_WORDS * u32:32],
@@ -41,14 +37,14 @@ pub struct FrameN<PAYLOAD_WORDS: u32> {
 // The wire header carries an eight-bit payload length, so RxN and TxN can
 // transfer at most 255 payload words even when PAYLOAD_WORDS is larger.
 
-// Preserve the actor-facing ABI while allowing boundary adapters to assemble
-// a wider frame without widening every internal actor channel.
+// Ordinary actor frames use the checked capacity selected for this build.
 pub type Frame = FrameN<MAX_PAYLOAD>;
 
+// Decodes the fixed-width ordinary frame selected for this build.
 pub fn frame_from_bits(raw: bits[bit_count<Frame>()]) -> Frame {
   Frame {
-    header: header_from_bits(raw[0:32]),
-    payload: raw[32:],
+    header: header_from_bits(raw[0+:bits[frame_config::HEADER_BITS]]),
+    payload: raw[frame_config::HEADER_BITS+:bits[PAYLOAD_BITS]],
   }
 }
 
@@ -257,16 +253,20 @@ struct TxState {
   beats_sent: u8,
 }
 
+// Serializes a checked ordinary frame as its header followed by declared payload words.
 pub proc Tx {
   resp_in: chan<Frame> in;
   axis_out: chan<Beat> out;
 
+  // The caller supplies frames whose declared payload length fits the selected capacity.
   config(resp_in: chan<Frame> in, axis_out: chan<Beat> out) {
     (resp_in, axis_out)
   }
 
+  // Starts idle and accepts a complete frame before emitting its first beat.
   init { zero!<TxState>() }
 
+  // Emits the header then each declared payload word; widen the bit offset before multiplication.
   next(state: TxState) {
     let (tok, state2) = if state.active {
       (join(), state)
@@ -280,7 +280,7 @@ pub proc Tx {
     let last = state2.beats_sent == state2.header.payload_words;
     send(tok, axis_out, Beat {
       tlast: last,
-      word: state2.payload[32 * state2.beats_sent +: u32],
+      word: state2.payload[u32:32 * (state2.beats_sent as u32) +: u32],
     });
 
     if last {
@@ -339,6 +339,43 @@ pub proc TxN<PAYLOAD_WORDS: u32> {
       let beats_sent = state2.beats_sent + u32:1;
       TxStateN<PAYLOAD_WORDS> { beats_sent, ..state2 }
     }
+  }
+}
+
+// Exercises the ordinary alias at the selected capacity, including word offsets above u8.
+#[test_proc]
+proc OrdinaryCapacityRoundTripTest {
+  terminator: chan<bool> out;
+  frame_out: chan<Frame> out;
+  frame_in: chan<Frame> in;
+
+  // Connects the ordinary transmitter and receiver through a bounded beat channel.
+  config(terminator: chan<bool> out) {
+    let (frame_p, frame_c) = chan<Frame, u32:1>("ordinary_capacity_frame");
+    let (beat_p, beat_c) = chan<Beat, u32:1>("ordinary_capacity_beat");
+    let (received_p, received_c) = chan<Frame, u32:1>("ordinary_capacity_received");
+    spawn Tx(frame_c, beat_p);
+    spawn Rx(beat_c, received_p);
+    (terminator, frame_p, received_c)
+  }
+
+  // One complete round trip supplies the termination witness.
+  init { () }
+
+  // Distinct word values expose any truncation or wrapping in the selected-width path.
+  next(state: ()) {
+    let payload = for (i, payload): (u32, bits[PAYLOAD_BITS]) in u32:0..MAX_PAYLOAD {
+      bit_slice_update(payload, i * u32:32, i + u32:1)
+    } (zero!<bits[PAYLOAD_BITS]>());
+    let expected = Frame {
+      header: Header { payload_words: MAX_PAYLOAD as u8, txid: u8:23,
+        flags: u8:42, op: u8:99 }, payload,
+    };
+    let sent_tok = send(join(), frame_out, expected);
+    let (received_tok, actual) = recv(sent_tok, frame_in);
+    assert_eq(actual, expected);
+    let _done = send(received_tok, terminator, true);
+    state
   }
 }
 
@@ -437,7 +474,9 @@ proc RxNRejectsMalformedAndResynchronizesTest {
   }
 }
 
+// Packs a numeric payload only when its width fits the selected ordinary capacity.
 pub fn pack<N: u32>(op: u8, payload: bits[N]) -> Frame {
+  const_assert!(N <= PAYLOAD_BITS);
   let payload_words = ((N + u32:31) / u32:32) as u8;
   Frame {
     header: Header { op, payload_words, ..zero!<Header>() },
@@ -445,12 +484,12 @@ pub fn pack<N: u32>(op: u8, payload: bits[N]) -> Frame {
   }
 }
 
+// A sub-word payload retains its exact low bits and receives a complete word length.
 #[test]
 fn densely_packed_payload() {
   let frame = pack(u8:7, uN[13]:0x1abc);
   assert_eq(frame.header.payload_words, u8:1);
-  assert_eq(frame.payload, bits[96]:0x1abc);
-  assert_eq(pack(u8:7, uN[33]:1).header.payload_words, u8:2);
+  assert_eq(frame.payload, bits[PAYLOAD_BITS]:0x1abc);
   assert_eq(pack(u8:7, bits[0]:0).header.payload_words, u8:0);
 }
 

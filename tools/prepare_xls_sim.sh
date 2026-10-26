@@ -152,6 +152,9 @@ cp "$project_root/test/rtl/debug/hls_debug_server_tb.sv" "$stage/hls_debug_serve
 for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
     "$project_root/src/runtime/hls_fabric_io.erl" \
+    "$project_root/src/api/hls_frame_layout.erl" \
+    "$project_root/src/api/hls_record.erl" \
+    "$project_root/src/api/hls_diagnostic.erl" \
     "$project_root/src/runtime/hls_fabric_lease.erl" \
     "$project_root/src/runtime/hls_fabric_session.erl" \
     "$project_root/src/runtime/hls_fabric_client.erl" \

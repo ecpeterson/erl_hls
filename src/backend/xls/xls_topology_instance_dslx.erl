@@ -12,7 +12,7 @@ emit(Plan, Profile) ->
 %% Resolves validated logical actors and routes into a renderable physical graph.
 -spec lower(map(),map()) -> map().
 lower(Plan, Profile0) ->
-    Profile = #{direct_actor_debug := ActorDebug} = xls_topology_profile:normalize(Profile0),
+    Profile = #{direct_actor_debug := ActorDebug, frame_payload_words := PayloadWords} = xls_topology_profile:normalize(Profile0),
     xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
     xls_topology_graph:check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
     {Materialized, Origins} = materialize(Plan),
@@ -36,7 +36,7 @@ lower(Plan, Profile0) ->
         {I, {Source, Recipient}} <- lists:enumerate(0, Lanes0)],
     Direct1 = [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Direct],
     Units = Direct1 ++ [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Ingresses],
-    Requirements = maps:from_list([{Module, #{direct_actor_debug => ActorDebug}} || #{module := Module} <- Actors]),
+    Requirements = maps:from_list([{Module, #{direct_actor_debug => ActorDebug, frame_payload_words => PayloadWords}} || #{module := Module} <- Actors]),
     Base#{actors := Actors, direct => Direct1, units => Units, lanes := Lanes,
         actor_index => ActorIndex, semantic_plan => Plan, ingresses => Ingresses,
         artifact_requirements => flag_modules(Requirements, Direct1, direct_actor_debug, ActorDebug)}.
@@ -129,13 +129,15 @@ render(Spec = #{units := Units, direct := Direct}) ->
 
 %% Emits module identity, imports and constants required by generated declarations.
 -spec preamble(map()) -> [any(),...].
-preamble(#{name := Name, actors := Actors, depth := Depth, ingresses := Ingresses}) ->
+preamble(#{name := Name, actors := Actors, depth := Depth, ingresses := Ingresses,
+        frame_layout := Layout}) ->
     ["// ", Name, ".x\n// Materialized logical graph; placement does not change actor identity.\n",
         "import axis;\nimport frame_transport;\n",
         case Ingresses of [] -> []; _ -> "import hls_spatial_router;\n" end,
         [["import ", Module, ";\n"] || Module <- lists:usort([
             M || #{module_name := M} <- Actors])],
-        "\nconst CHANNEL_DEPTH = u32:", n(Depth), ";\n\n",
+        "\n", hls_frame_layout:assert_dslx(Layout),
+        "const CHANNEL_DEPTH = u32:", n(Depth), ";\n\n",
         [xls_topology_ingress:target_enum(Ingress) || Ingress <- Ingresses]].
 
 %% Renders ordered source effects into the recipient lanes selected by the topology.

@@ -1,6 +1,6 @@
 -module(xls_statem_plan).
 -moduledoc "Retains checked callback structure for a bounded ownership-planning consumer. This sidecar establishes provenance and dependency closure, not field independence, protocol refinement or physical benefit.".
--export([from_file/2, build/5, validate/3, records/1, callbacks/1, provenance/1,
+-export([from_file/2, from_file/3, build/5, validate/3, records/1, callbacks/1, provenance/1,
     select/2, manifest/1, identity/1]).
 -export_type([plan/0, selection/0, provenance/0, identity/0]).
 
@@ -30,10 +30,15 @@
 -doc "Compiles an actor once and returns its unchanged rendering artifact with a planning sidecar. Source options have the ordinary compiler's preprocessing meaning; invalid actors fail in ordinary lowering.".
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), plan()}.
-from_file(Filename, Options) ->
+from_file(Filename, Options) -> from_file(Filename, Options, hls_frame_layout:default()).
+
+-doc "Compiles rendering and planning together using an explicit checked ordinary-frame layout, retained in the plan protocol.".
+-spec from_file(file:filename(), [hls_source:option()] | hls_source:context(),
+    hls_frame_layout:layout()) -> {xls_actor_codegen:spec(), plan()}.
+from_file(Filename, Options, Layout) ->
     {ok, Source} = hls_source:parse_file(Filename, Options),
     Phases = hls_source:find_attribute(Source, hls_phases),
-    xls_statem_lower:planned_artifact(Filename, Source, Phases).
+    xls_statem_lower:planned_artifact(Filename, Source, Phases, Layout).
 
 -doc "Builds a sidecar from one successful ordinary lowering's source, prepared helpers/callbacks and closed artifact. Internal lowerer entry point: callers must not combine inputs from different compilations.".
 -spec build([hls_source:form()], [hls_source:form()], [map()], map(),
@@ -58,13 +63,13 @@ build(Source, Forms, Helpers, Prepared, Spec = #{source := Filename, phases := P
         records => [F || F = {attribute, _, record, _} <- Forms],
         callbacks => Callbacks, entries => maps:get(entries, Prepared), roots => Roots,
         helpers => Helpers,
-        protocol => maps:with([capacity, output_names, message_names, message_words,
+        protocol => maps:with([frame_layout, capacity, output_names, message_names, message_words,
             retained_calls, continuations, reductions, gathers, failure_sites], Spec)}.
 
 -doc "Recompiles current source and compares the complete sidecar, renaming only compilation-local payload-origin identities. Rejects stale or modified plans; this freshness check is not an equivalence proof.".
 -spec validate(file:filename(), [hls_source:option()] | hls_source:context(), plan()) -> ok.
-validate(Filename, Options, Plan) ->
-    {_, Current} = from_file(Filename, Options),
+validate(Filename, Options, Plan = #{protocol := #{frame_layout := Layout}}) ->
+    {_, Current} = from_file(Filename, Options, Layout),
     case canonical(Current) =:= canonical(Plan) of
         true -> ok;
         false -> error(stale_statem_plan)

@@ -1,10 +1,14 @@
 -module(xls_gs_immediate).
 -moduledoc "Lowers immediate-reply server callbacks into the compact frame service, without retained-call storage.".
--export([emit/2]).
+-export([emit/2, emit/3]).
 
 -doc "Emits a checked immediate-reply hls_gs service from include-expanded source forms. Validates names, records, payload bounds and callback results; the caller selects this backend only for handle_call/2. Returns DSLX IO data without writing files.".
 -spec emit(file:filename(), [hls_source:form()]) -> iolist().
-emit(Filename, Forms0) ->
+emit(Filename, Forms) -> emit(Filename, Forms, hls_frame_layout:default()).
+
+-doc "Emits the server using an explicit checked ordinary-frame layout and rejects any public schema exceeding it.".
+-spec emit(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
+emit(Filename, Forms0, Layout) ->
     ok = xls_names:actor(Forms0, hls_gs),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
@@ -15,7 +19,7 @@ emit(Filename, Forms0) ->
     StateStructName = xls_names:record_type(StateName),
     Records = hls_records:declarations(Forms, PublicStructNames ++ [StateName]),
     ok = lists:foreach(fun hls_records:validate_defaults/1, Records),
-    _ = [hls_actor_source:message_words(Forms, Name) || Name <- PublicStructNames],
+    _ = [hls_actor_source:message_words(Forms, Name, Layout) || Name <- PublicStructNames],
 
     Preamble = ["// ", Filename, ".x\n",
     """
@@ -35,7 +39,7 @@ emit(Filename, Forms0) ->
 
 
     """,
-    "const MAX_PAYLOAD = u32:3;\n\n",  % TODO: don't bake this in.
+    hls_frame_layout:assert_dslx(Layout),
     "pub enum Tag : u8 {\n",
     "  NONE = u8:0,\n",
     [
@@ -70,7 +74,7 @@ emit(Filename, Forms0) ->
         let (resp, new_state) = match frame.header.op as Tag {
 
     """],
-    xls_gs_lower:callback_arms(Forms, StateName),
+    xls_gs_lower:callback_arms(Forms, StateName, Layout),
     """
 
         };

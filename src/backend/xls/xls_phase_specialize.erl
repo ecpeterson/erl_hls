@@ -1,14 +1,20 @@
 -module(xls_phase_specialize).
 -moduledoc "Opt-in phase-value specialization of constant-base shifts. Ordinary compilation and failure checks remain unchanged.".
--export([from_file/2]).
+-export([from_file/2, from_file/3]).
 
 -doc "Infers fresh phase invariants and specializes direct committed-field shift counts to at most four constant alternatives. Valid only for normal initialized, nonfailed actor executions; no incoming-message assumption is added. Returns the ordinary and specialized artifacts, certificate and exact sites. Does not change storage, scheduling, guards or helper bodies.".
 -spec from_file(file:filename(), [hls_source:option()] | hls_source:context()) ->
     {xls_actor_codegen:spec(), xls_actor_codegen:spec(), xls_phase_values:facts(), [map()]}.
-from_file(File, Options) ->
+from_file(File, Options) -> from_file(File, Options, hls_frame_layout:default()).
+
+-doc "Runs phase specialization with ordinary and rewritten artifacts bound to the same explicit frame layout.".
+-spec from_file(file:filename(), [hls_source:option()] | hls_source:context(),
+    hls_frame_layout:layout()) ->
+    {xls_actor_codegen:spec(), xls_actor_codegen:spec(), xls_phase_values:facts(), [map()]}.
+from_file(File, Options, Layout) ->
     {ok, Source} = hls_source:parse_file(File, Options),
     Phases = hls_source:find_attribute(Source, hls_phases),
-    Ordinary = xls_statem_lower:artifact(File, Source, Phases),
+    Ordinary = xls_statem_lower:artifact(File, Source, Phases, Layout),
     Facts = xls_phase_values:analyze(Source, Ordinary),
     #{data_name := Data} = Ordinary,
     {Rewritten, Sites} = lists:mapfoldl(fun
@@ -21,7 +27,7 @@ from_file(File, Options) ->
             end;
         (F, Acc) -> {F, Acc}
     end, [], Source),
-    Specialized = xls_statem_lower:artifact(File, Rewritten, Phases),
+    Specialized = xls_statem_lower:artifact(File, Rewritten, Phases, Layout),
     {Ordinary, Specialized, Facts, lists:reverse(Sites)}.
 
 %% Only the original committed-data binding qualifies. A similarly named field
