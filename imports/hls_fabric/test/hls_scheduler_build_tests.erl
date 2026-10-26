@@ -12,6 +12,8 @@ direct_and_ram() ->
     Direct = hls_scheduler_build:plan(config(#{})),
     #{backend := channel_scheduler, scheduler := #{groups := [], direct_members := DirectMembers},
       topology := Topology, requirements := Requirements} = hls_scheduler_build:descriptor(Direct),
+    #{generation := DirectGeneration} = hls_scheduler_build:descriptor(Direct),
+    ?assertMatch(#{representation := materialized, effect_window_domains := []}, DirectGeneration),
     ?assertEqual([{actor, left}, {actor, right}], DirectMembers),
     ?assertEqual([hls_scheduler_build_fixture], maps:keys(Requirements)),
     #{data := [DirectUnit]} = hls_scheduler_build:inspect(Direct, schedule),
@@ -20,6 +22,8 @@ direct_and_ram() ->
     Ram = hls_scheduler_build:plan(config(groups())),
     #{topology := Topology, scheduler := #{groups := [_], direct_members := []}, ram_bindings := [Binding]} =
         hls_scheduler_build:descriptor(Ram),
+    #{data := #{generation := RamGeneration}} = hls_scheduler_build:inspect(Ram, composition),
+    ?assertMatch(#{representation := materialized, effect_window_domains := [[0]]}, RamGeneration),
     ?assertEqual(128, maps:get(mailbox_width, Binding)),
     #{data := [RamUnit]} = hls_scheduler_build:inspect(Ram, schedule),
     RamFlags = [F || F <- maps:get(codegen_flags, RamUnit),

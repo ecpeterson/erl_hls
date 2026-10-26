@@ -79,7 +79,7 @@ descriptor(#plan{kind = Kind, config = Config, stage = Stage}) ->
     Builder = builder(Kind),
     #{kind => Kind, build => Builder:descriptor(Stage), dslx_path => maps:get(dslx_path, Config, [])}.
 
--doc "Inspects a retained build without source recompilation, rendering, output files or external tools. Source, topology and placement views are indexed by role (whole for an unpartitioned build); configuration includes resolved library locations. Schedule uses the exact retained units later written to source-build.json. Reports are diagnostic data, not portable executable plans.".
+-doc "Inspects a retained build without source recompilation, rendering, output files or external tools. Source, topology and placement views are indexed by role (whole for an unpartitioned build); configuration includes resolved library locations. Composition includes role-indexed transport transitions and, for a network build, its named clock phases. Schedule uses the exact retained units later written to source-build.json. Reports are diagnostic data, not portable executable plans.".
 -spec inspect(plan(), inspection_stage()) -> inspection().
 inspect(Plan = #plan{kind = Kind}, Stage) ->
     #{version => 1, kind => Kind, stage => Stage, data => inspection_data(Plan, Stage)}.
@@ -97,10 +97,17 @@ inspection_data(#plan{config = Config, cwd = Cwd, libraries = Libraries}, config
           || {Source, Target, Extensions} <- Libraries]};
 inspection_data(#plan{units = Units}, schedule) -> Units;
 inspection_data(#plan{profile = Profile}, profile) -> Profile;
-inspection_data(Plan, composition) ->
-    case descriptor(Plan) of
+inspection_data(Plan = #plan{kind = Kind, stage = Stage}, composition) ->
+    Descriptor = case descriptor(Plan) of
         D = #{kind := transport, build := Transport} -> D#{build := transport_report(Transport)};
         D -> D
+    end,
+    Transitions = maps:map(fun(_, Transport) ->
+        maps:get(transition, hls_protocol_transport:descriptor(Transport)) end, transports(Plan)),
+    Report = Descriptor#{transport_transitions => Transitions},
+    case Kind of
+        network -> Report#{network_phases => hls_protocol_network:phases(Stage)};
+        _ -> Report
     end;
 inspection_data(Plan, Stage) when Stage =:= source; Stage =:= topology; Stage =:= placement ->
     maps:map(fun(_, Transport) -> transport_view(Transport, Stage) end, transports(Plan)).

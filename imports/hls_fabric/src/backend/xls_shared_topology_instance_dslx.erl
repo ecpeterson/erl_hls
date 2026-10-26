@@ -1,7 +1,7 @@
 %%%% A materialized topology graph with independent placement decisions.
 -module(xls_shared_topology_instance_dslx).
 -moduledoc false.
--export([required/2, artifact_requirements/2, emit/2, message_inputs/2]).
+-export([required/2, lower/2, render/1, message_inputs/2]).
 
 %% The compact renderer preserves generated loops for wholly direct or wholly
 %% shared families. An explicit graph is materialized: route size
@@ -15,17 +15,7 @@ required(Plan, Profile) ->
     Width > 1 orelse map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
         lists:any(fun(Group) -> maps:get(gathers, Group, none) =/= none end, Groups).
 
--doc "Returns per-module compiler options required by the selected placement.".
--spec artifact_requirements(map(),map()) -> map().
-artifact_requirements(Plan, Profile) ->
-    maps:get(artifact_requirements, lower(Plan, Profile)).
-
--doc "Renders a complete checked backend module with its channel interfaces.".
--spec emit(map(),map()) -> iodata().
-emit(Plan, Profile) ->
-    render(lower(Plan, Profile)).
-
--doc "Returns physical receive lanes from the same validated lowering used by emit/2. Every lane includes all routed actor/port sources, including aliases merged by a scheduler. External ingress is explicit and supplies no actor value guarantee. Startup and credit are separate from these message lanes.".
+-doc "Returns physical receive lanes from the same validated lowering used by the common topology generation plan. Every lane includes all routed actor/port sources, including aliases merged by a scheduler. External ingress is explicit and supplies no actor value guarantee. Startup and credit are separate from these message lanes.".
 -spec message_inputs(map(), map()) -> [map()].
 message_inputs(Plan, Profile) ->
     case maps:get(families, Plan) of [] -> ok; _ -> error(message_inputs_requires_exact_graph) end,
@@ -42,8 +32,8 @@ message_inputs(Plan, Profile) ->
         || Unit = #{unit := Key, kind := Kind} <- Units,
             Kind =:= scheduler orelse Kind =:= direct].
 
-%% Resolves validated logical actors and routes into a renderable physical graph.
--spec lower(map(),map()) -> map().
+-doc "Resolves logical actors, physical units, receive lanes and backpressure domains into a retained materialized graph. Checks startup, collection placement and actor requirements before rendering.".
+-spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
 lower(Plan, Profile0) ->
     Profile = #{scheduler_groups := GroupSpecs,
         effect_window_partition := WindowPartition,
@@ -286,7 +276,7 @@ unit_routes(Unit = #{unit := Key}, Routes, Actors, Lanes) ->
         inbound => [Lane || Lane = #{destination := Destination} <- Lanes,
             Destination =:= Key]}.
 
-%% Assembles declarations, routing procs and the top-level composition.
+-doc "Renders a retained materialized graph from lower/2 without repeating placement, lane allocation or source interface analysis.".
 -spec render(map()) -> iodata().
 render(Spec = #{units := Units, direct := Direct, schedulers := Schedulers}) ->
     [preamble(Spec), [direct_ingress(Actor) || Actor <- Direct],

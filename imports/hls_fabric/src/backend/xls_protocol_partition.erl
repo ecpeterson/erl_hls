@@ -1,6 +1,11 @@
 -module(xls_protocol_partition).
 -moduledoc "Elaborates canonical crossing codecs and named raw ports for a checked source partition. All behavioral control uses shared DSLX; this module supplies static wiring.".
--export([ports/1, emit/1, write/2, fragments/1, name/1, files/1]).
+-export([ports/1, emit/1, write/2, wiring/1, name/1, files/1]).
+-export_type([wiring/0]).
+
+-doc "Retained crossing composition: declarations plus structured canonical-validation bindings, registered updates and pre-edge output expressions. Imports and state declarations depend only on checked codec/link identities.".
+-type wiring() :: #{imports := iodata(), state := iodata(), views := [xls_dslx:binding()],
+    next := [{string(), xls_dslx:expr()}], values := [{string(), xls_dslx:expr()}]}.
 
 -doc "Returns sampled crossing input/output fields grouped by direction, preserving global link order within each group. Incoming links expose ready/fault and a per-class free mask; outgoing links expose immutable slot/frame while valid. Each peer supplies the complementary handshake. No serial framing or clock crossing is provided.".
 -spec ports(map()) -> {[{string(),pos_integer()}],[{string(),pos_integer()}]}.
@@ -23,46 +28,67 @@ emit(Plan) ->
         || #{index := I, classes := Classes} <- maps:get(crossings, Plan, []),
            #{slot := K, codec := Codec} <- Classes]).
 
--doc "Returns DSLX imports, state fields, old-state views, next-state fields and output expressions for transport composition. Incoming canonical checks precede capture; outgoing frames restore destination schemas from held source projections. No additional payload state is introduced.".
--spec fragments(map()) -> map().
-fragments(Plan) ->
-    Cross=maps:get(crossings,Plan,[]),
-    Incoming=[L||L=#{direction:=incoming}<-Cross],
-    Imports=case Cross of []->[];_->["import protocol_partition as crossing_control;\n",
-        [["import ",codec_name(I,K),";\n"]||#{index:=I,classes:=Cs}<-Cross,#{slot:=K}<-Cs]] end,
-    #{imports=>Imports,
-      state=>[[name(I),": crossing_control::State,\n"]||#{index:=I}<-Incoming],
-      views=>[view(L)||L<-Cross],
-      next=>[[name(I),": crossing_control::next(s.",name(I),", ",name(I),"_input),\n"]||#{index:=I}<-Incoming],
-      values=>lists:append([values(L)||L<-Cross])}.
+-doc "Resolves crossing wiring from checked partition classes without rendering expressions. Incoming canonical validation precedes capture; outgoing frames restore schemas from held source projections. No payload register or arbitration stage is introduced.".
+-spec wiring(hls_protocol_fabric:plan()) -> wiring().
+wiring(Plan) ->
+    Cross = maps:get(crossings, Plan, []),
+    Incoming = [L || L = #{direction := incoming} <- Cross],
+    Imports = case Cross of
+        [] -> [];
+        _ -> ["import protocol_partition as crossing_control;\n",
+            [["import ", codec_name(I,K), ";\n"] || #{index := I, classes := Cs} <- Cross, #{slot := K} <- Cs]]
+    end,
+    #{imports => Imports,
+      state => [[name(I), ": crossing_control::State,\n"] || #{index := I} <- Incoming],
+      views => lists:append([view(L) || L <- Cross]),
+      next => [{name(I), xls_dslx:call("crossing_control::next", [
+          field("s", name(I)), ref(name(I)++"_input")])} || #{index := I} <- Incoming],
+      values => lists:append([values(L) || L <- Cross])}.
 
-%% Canonical incoming projections are zero-extended to this pair's widest slot.
--spec view(map()) -> iodata().
-view(#{index:=I,direction:=incoming,input_bits:=W,classes:=Classes}) ->
-    R=name(I),
-    ["let (",R,"_canonical, ",R,"_payload) = match io.",R,"_slot {\n",
-     [["u8:",n(K)," => { let converted = ",codec_name(I,K),"::convert(io.",R,"_frame, bits[",n(P),"]:0, false, false, false, false);\n",
-       "(converted.2, converted.0 as bits[",n(W),"]) },\n"]||#{slot:=K,codec:=#{physical_width:=P}}<-Classes],
-     "_ => (false, bits[",n(W),"]:0), };\n",
-     "let ",R,"_input = crossing_control::Inputs { reset: io.reset, valid: io.",R,"_valid, canonical: ",R,
-     "_canonical, slot_ready: link_",n(I),".ready };\n",
-     "let ",R," = crossing_control::observe(s.",R,", ",R,"_input);\n"];
-view(#{index:=I,direction:=outgoing,source_index:=S,output_index:=D,output:=#{offset:=At,width:=W},classes:=Classes}) ->
-    R=name(I),
-    ["let ",R,"_slot = source_",n(S),".channel[",n(D*8),"+:u8];\n",
-     "let ",R,"_payload = source_",n(S),".data[",n(At),"+:bits[",n(W),"]];\n",
-     "let ",R,"_frame = match ",R,"_slot {\n",
-     [["u8:",n(K)," => ",codec_name(I,K),"::convert(bits[128]:0, ",R,"_payload as bits[",n(P),"], false, false, false, false).1,\n"]
-        ||#{slot:=K,codec:=#{physical_width:=P}}<-Classes],"_ => bits[128]:0, };\n"].
+%% Decode only the offered class, preserving canonical rejection before native capture.
+-spec view(hls_protocol_partition:crossing()) -> [xls_dslx:binding()].
+view(#{index := I, direction := incoming, input_bits := W, classes := Classes}) ->
+    R = name(I),
+    Arms = [{xls_dslx:literal("u8", K), xls_dslx:block([
+        xls_dslx:bind("converted", xls_dslx:call(codec_name(I,K)++"::convert", [
+            field("io", R++"_frame"), xls_dslx:literal({bits,P},0), ref("false"), ref("false"), ref("false"), ref("false")]))],
+        xls_dslx:tuple([field("converted",2), xls_dslx:cast(field("converted",0), {bits,W})]))}
+        || #{slot := K, codec := #{physical_width := P}} <- Classes],
+    [xls_dslx:bind("("++R++"_canonical, "++R++"_payload)", xls_dslx:match(field("io", R++"_slot"),
+        Arms++[{ref("_"), xls_dslx:tuple([ref("false"), xls_dslx:literal({bits,W},0)])}])),
+     xls_dslx:bind(R++"_input", xls_dslx:construct("crossing_control::Inputs", [
+        {"reset",field("io","reset")}, {"valid",field("io",R++"_valid")},
+        {"canonical",ref(R++"_canonical")}, {"slot_ready",field("link_"++n(I),"ready")}])),
+     xls_dslx:bind(R, xls_dslx:call("crossing_control::observe", [field("s",R),ref(R++"_input")]))];
+view(#{index := I, direction := outgoing, source_index := S, output_index := D,
+        output := #{offset := At, width := W}, classes := Classes}) ->
+    R = name(I),
+    [xls_dslx:bind(R++"_slot", xls_dslx:slice(field("source_"++n(S),"channel"),D*8,8)),
+     xls_dslx:bind(R++"_payload", xls_dslx:slice(field("source_"++n(S),"data"),At,W)),
+     xls_dslx:bind(R++"_frame", xls_dslx:match(ref(R++"_slot"),
+        [{xls_dslx:literal("u8",K), xls_dslx:field(xls_dslx:call(codec_name(I,K)++"::convert", [
+            xls_dslx:literal({bits,128},0), xls_dslx:cast(ref(R++"_payload"),{bits,P}),
+            ref("false"),ref("false"),ref("false"),ref("false")]),1)}
+            || #{slot := K, codec := #{physical_width := P}} <- Classes]++[{ref("_"),xls_dslx:literal({bits,128},0)}]))].
 
-%% Transport observations are forwarded without another register or arbitration stage.
--spec values(map()) -> [{string(),iodata()}].
-values(#{index:=I,direction:=incoming,slots:=N}) ->
-    [{name(I)++"_free",["if io.reset { bits[",n(N),"]:0 } else { !(link_",n(I),".available | link_",n(I),".leased) }"]}]++
-    [{name(I)++"_"++K,name(I)++"."++K}||K<-["ready","fault"]];
-values(#{index:=I,direction:=outgoing,source_index:=S,output_index:=D}) ->
-    [{name(I)++"_valid",["source_",n(S),".valid[",n(D),"+:u1]"]},
-     {name(I)++"_slot",name(I)++"_slot"},{name(I)++"_frame",name(I)++"_frame"}].
+%% Remote outputs remain observations of held state; free credit cannot see this edge's release.
+-spec values(hls_protocol_partition:crossing()) -> [{string(), xls_dslx:expr()}].
+values(#{index := I, direction := incoming, slots := N}) ->
+    R = name(I), L = "link_"++n(I),
+    [{R++"_free", xls_dslx:choose(field("io","reset"), xls_dslx:literal({bits,N},0),
+        xls_dslx:unary('!', xls_dslx:binary('|',field(L,"available"),field(L,"leased"))))}]++
+    [{R++"_"++K,field(R,K)} || K <- ["ready","fault"]];
+values(#{index := I, direction := outgoing, source_index := S, output_index := D}) ->
+    R = name(I),
+    [{R++"_valid",xls_dslx:slice(field("source_"++n(S),"valid"),D,1)},
+     {R++"_slot",ref(R++"_slot")},{R++"_frame",ref(R++"_frame")}].
+
+%% Local names remain structured until the final DSLX renderer.
+-spec ref(string()) -> xls_dslx:expr().
+ref(Name) -> xls_dslx:ref(Name).
+%% Select a named struct field or an existing codec tuple position.
+-spec field(string(), string() | non_neg_integer()) -> xls_dslx:expr().
+field(Name, Member) -> xls_dslx:field(ref(Name), Member).
 
 -doc "Lists generated codec paths relative to the network build for content binding before compilation.".
 -spec files(map()) -> [string()].

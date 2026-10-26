@@ -1,0 +1,28 @@
+// Each payload slot has independent ownership; the order state spans only this sender/destination pair.
+pub struct @@STATE_DECL@@ {
+  @@CAPTURES@@
+  order: p::Order<@@ORDER_SLOTS@@>
+}
+@@VIEW@@
+
+// Selection reads old availability and sender order. Release cannot create same-edge credit.
+fn @@VIEW_FUNCTION@@(s: @@VIEW_STATE@@, reset: bool, eligible: bits[@@ELIGIBLE_BITS@@], slot: u8) -> @@VIEW_RESULT@@ {
+  @@VIEW_CONSTRUCTOR@@ {
+    ready: !reset && (@@READY@@),
+    selected: p::select(s.order, reset, eligible),
+    available: @@AVAILABLE@@,
+    leased: @@LEASED@@,
+    payloads: @@PAYLOADS@@
+  }
+}
+
+// Capture, lease and release use the chosen old-state view; reset dominates every state transition.
+fn @@NEXT_FUNCTION@@(s: @@NEXT_STATE@@, reset: bool, valid: bool, slot: u8,
+                    payload: bits[@@INPUT_BITS@@], take: bool,
+                    release: bits[@@RELEASE_BITS@@], view: @@NEXT_VIEW@@) -> @@NEXT_RESULT@@ {
+  @@ARRIVALS@@
+  @@NEXT_CONSTRUCTOR@@ {
+    @@CAPTURE_UPDATES@@
+    order: p::order_next(s.order, reset, @@ARRIVAL_MASK@@, view.selected, take)
+  }
+}

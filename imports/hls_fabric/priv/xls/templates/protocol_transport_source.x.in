@@ -1,0 +1,39 @@
+// One held publication and sticky invalid-layout fault; field order preserves the packed state ABI.
+pub struct @@STATE_DECL@@ {
+  publication: p::Publication<@@SNAPSHOT_BITS@@, @@PUBLICATION_DESTINATIONS@@, @@SEQUENCE_SLOTS@@>,
+  fault: bool
+}
+@@VIEW@@
+
+// Only source-proved layout identifiers can enter the publication.
+fn @@MASK_FUNCTION@@(layout: u8) -> (bool, bits[@@MASK_TYPE_BITS@@]) {
+  match layout {
+    @@MASK_ARMS@@
+    _ => (false, bits[@@EMPTY_MASK_BITS@@]:0),
+  }
+}
+
+// Observe held data and old pending masks; recipient readiness cannot feed this view.
+fn @@VIEW_FUNCTION@@(s: @@VIEW_STATE@@, reset: bool, offered_layout: u8) -> @@VIEW_RESULT@@ {
+  let (valid, indices) = p::publication_view(s.publication, reset);
+  let payload = s.publication.payload as bits[@@VIEW_PAYLOAD_BITS@@];
+  let layout = (s.publication.payload >> u32:@@LAYOUT_OFFSET@@) as u8;
+  @@PROJECTIONS@@
+  @@VIEW_CONSTRUCTOR@@ {
+    ready: !reset && !s.publication.busy && @@VIEW_MASK@@(offered_layout).0,
+    fault: s.fault,
+    valid,
+    data: @@DATA@@,
+    channel: @@CHANNEL@@
+  }
+}
+
+// Reset dominates admission and retirement; unsupported idle offers latch the fault.
+fn @@NEXT_FUNCTION@@(s: @@NEXT_STATE@@, reset: bool, valid: bool, layout: u8,
+               payload: bits[@@INPUT_PAYLOAD_BITS@@], ready: bits[@@READY_BITS@@]) -> @@NEXT_RESULT@@ {
+  let (supported, mask) = @@NEXT_MASK@@(layout);
+  @@NEXT_CONSTRUCTOR@@ {
+    publication: p::publication_next(s.publication, reset, valid && supported, layout ++ payload, mask, ready),
+    fault: !reset && (s.fault || (!s.publication.busy && valid && !supported))
+  }
+}

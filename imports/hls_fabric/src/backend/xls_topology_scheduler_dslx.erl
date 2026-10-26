@@ -8,9 +8,9 @@
 -export([emit/1, effect_router/3]).
 
 -doc "Renders a complete checked backend module with its channel interfaces.".
--spec emit(map()) -> iolist().
-emit(Spec0) ->
-    Spec = annotate(xls_topology_source_fragment_dslx:prepare(Spec0)),
+-spec emit(xls_topology_scheduler_plan:plan()) -> iolist().
+emit(Plan) ->
+    Spec = xls_topology_scheduler_plan:graph(Plan),
     [
         preamble(Spec),
         address_support(Spec),
@@ -23,174 +23,6 @@ emit(Spec0) ->
         grid_proc(Spec),
         top_proc(Spec)
     ].
-
-%% Attaches domain identity and local arbitration position to each execution group.
--spec annotate(map()) -> map().
-annotate(Spec = #{
-    families := Families,
-    schedulers := Schedulers,
-    effect_window_partition := WindowPartition
-}) ->
-    FamilyIndex = maps:from_list([
-        {maps:get(id, Family), Family} || Family <- Families
-    ]),
-    SchedulerIndex = maps:from_list([
-        {maps:get(index, Scheduler), Scheduler} || Scheduler <- Schedulers
-    ]),
-    FamilySchedulers = maps:from_list([
-        {maps:get(id, Family), [maps:get(group, Binding)
-            || Binding <- maps:get(schedulers, Family)]}
-        || Family <- Families
-    ]),
-    Annotated0 = [
-        annotate_scheduler(
-            Scheduler,
-            Families,
-            FamilyIndex,
-            SchedulerIndex,
-            FamilySchedulers
-        )
-        || Scheduler <- Schedulers
-    ],
-    %% Source-fragment routing is pruned from the ordinary route graph before
-    %% this annotation pass.  Its bounded plane can nevertheless propagate
-    %% backpressure between every scheduler incident to that plane, so those
-    %% schedulers must remain in one effect-window ownership domain.
-    PlaneIncidences = [maps:get(source_schedulers, Plane)
-        || Plane <- maps:get(source_fragment_planes, Spec, [])],
-    Dependencies = [[Index, Destination] ||
-        #{index := Index, destinations := Destinations} <- Annotated0,
-        #{index := Destination} <- Destinations] ++ PlaneIncidences,
-    Domains = xls_topology_effect_windows:partition(
-        [Index || #{index := Index} <- Annotated0], WindowPartition, Dependencies),
-    Annotated = xls_topology_effect_windows:annotate(Annotated0, Domains),
-    Externals = [annotate_external(External, Annotated)
-        || External <- maps:get(externals, Spec)],
-    Spec#{
-        family_index => FamilyIndex,
-        scheduler_index => maps:from_list([
-            {maps:get(index, Scheduler), Scheduler}
-            || Scheduler <- Annotated
-        ]),
-        family_schedulers => FamilySchedulers,
-        schedulers => Annotated,
-        effect_window_domains => Domains,
-        externals => Externals
-    }.
-
-%% Lists the shared sources that can emit to an external output.
--spec annotate_external(map(),[map()]) -> map().
-annotate_external(External = #{id := Id}, Schedulers) ->
-    Sources = [
-        maps:get(index, Scheduler)
-        || Scheduler <- Schedulers,
-           lists:member(Id, maps:get(external_ids, Scheduler))
-    ],
-    [_ | _] = Sources,
-    External#{source_schedulers => Sources}.
-
-%% Assigns actor addresses, producer lanes and routed destinations to one group.
--spec annotate_scheduler(map(),[map()],map(),map(),map()) -> map().
-annotate_scheduler(
-    Scheduler = #{index := Index, members := Members},
-    Families,
-    FamilyIndex,
-    SchedulerIndex,
-    FamilySchedulers
-) ->
-    MemberIds = [maps:get(id, Member) || Member <- Members],
-    MemberFamilies = [maps:get(Id, FamilyIndex) || Id <- MemberIds],
-    SourceGroups = lists:usort(lists:append([
-        maps:get(maps:get(id, SourceFamily), FamilySchedulers)
-        || SourceFamily <- Families,
-           route_targets_group(
-               maps:get(routes, SourceFamily),
-               MemberIds
-           )
-    ])),
-    HasControl = lists:any(
-        fun(#{ingress := Ingress}) -> Ingress =/= none end,
-        MemberFamilies
-    ),
-    Producers0 = [{scheduler, Source} || Source <- SourceGroups],
-    MessageProducers = case HasControl of
-        true -> Producers0 ++ [control];
-        false -> Producers0
-    end,
-    Producers = MessageProducers ++ [egress_credit],
-    ProducerIndex = maps:from_list([
-        {Producer, ProducerNumber}
-        || {ProducerNumber, Producer} <- lists:enumerate(0, Producers)
-    ]),
-    Destinations = lists:usort(lists:append([
-        maps:get(DestinationId, FamilySchedulers)
-        || Family <- MemberFamilies,
-           Route <- maps:get(routes, Family),
-           {family, DestinationId, _} <- maps:get(recipients, Route)
-    ])),
-    Externals = lists:usort([
-        ExternalId
-        || Family <- MemberFamilies,
-           Route <- maps:get(routes, Family),
-           {external, ExternalId} <- maps:get(recipients, Route)
-    ]),
-    Startup = lists:append([
-        scheduler_startup_items(Family, Scheduler)
-        || Family <- MemberFamilies
-    ]),
-    Scheduler#{
-        families => MemberFamilies,
-        producers => Producers,
-        producer_index => ProducerIndex,
-        destinations => [
-            maps:get(Destination, SchedulerIndex)
-            || Destination <- Destinations
-        ],
-        external_ids => Externals,
-        startup_items => Startup,
-        startup_count => length(Startup),
-        has_control => HasControl,
-        index => Index
-    }.
-
-%% Tests whether a logical route reaches a member of the group.
--spec route_targets_group([any()],[any()]) -> boolean().
-route_targets_group(Routes, MemberIds) ->
-    lists:any(
-        fun(#{recipients := Recipients}) ->
-            lists:any(
-                fun
-                    ({family, Id, _}) -> lists:member(Id, MemberIds);
-                    ({external, _}) -> false
-                end,
-                Recipients
-            )
-        end,
-        Routes
-    ).
-
-%% Collects startup frames in the group's dense-slot order.
--spec scheduler_startup_items(map(),map()) -> [map()].
-scheduler_startup_items(#{startup := none}, _Scheduler) -> [];
-scheduler_startup_items(
-    Family = #{startup := #{items := Items}},
-    Scheduler
-) ->
-    Member = scheduler_family_member(Family, Scheduler),
-    Coordinates = maps:from_list([
-        {maps:get(coordinates, Instance),
-            maps:get(base_slot, Member) + maps:get(local_index, Instance)}
-        || Instance <- maps:get(instances, Member)
-    ]),
-    [Item#{slot => maps:get([X, Y], Coordinates)}
-        || Item = #{coordinates := [X, Y]} <- Items,
-           maps:is_key([X, Y], Coordinates)].
-
-%% Resolves a family instance to its owning group member.
--spec scheduler_family_member(map(),map()) -> map().
-scheduler_family_member(#{id := Id}, #{members := Members}) ->
-    hd([Member || Member = #{kind := family, id := MemberId} <- Members,
-        MemberId =:= Id]).
 
 %%%
 %%% Preamble and common control
@@ -272,16 +104,7 @@ destination_support(Families) ->
 
 %% Defines one family's destination selectors and coordinate tables.
 -spec family_destination_support(map()) -> iodata().
-family_destination_support(#{id := Id, schedulers := Bindings}) ->
-    Entries = lists:append([
-        [
-            {maps:get(coordinates, Instance), maps:get(group, Binding),
-                maps:get(base_slot, Binding) +
-                    maps:get(local_index, Instance)}
-            || Instance <- maps:get(instances, Binding)
-        ]
-        || Binding <- Bindings
-    ]),
+family_destination_support(#{id := Id, destination_entries := Entries}) ->
     [
         "fn ", atom_to_list(Id),
         "_destination(x: u16, y: u16) -> ScheduledDestination {\n",
@@ -300,12 +123,9 @@ family_destination_support(#{id := Id, schedulers := Bindings}) ->
 
 %% Maps a group's dense slots back to logical actor coordinates.
 -spec scheduler_address_support(map(),map()) -> [any(),...].
-scheduler_address_support(_Spec, Scheduler = #{
-    stem := Stem,
-    slot_count := SlotCount
+scheduler_address_support(_Spec, #{
+    stem := Stem, slot_count := SlotCount, addresses := Entries
 }) ->
-    Entries = scheduler_address_entries(Scheduler),
-    true = length(Entries) =:= SlotCount,
     [
         "fn ", Stem, "_address(slot: u32) -> ScheduledAddress {\n",
         "  match slot {\n",
@@ -332,25 +152,6 @@ scheduler_address_support(_Spec, Scheduler = #{
         "}\n\n"
     ].
 
-%% Enumerates the logical coordinates assigned to a physical group.
--spec scheduler_address_entries(map()) -> [tuple()].
-scheduler_address_entries(#{members := Members}) ->
-    lists:keysort(1, lists:append([
-        family_address_entries(Member) || Member <- Members
-    ])).
-
-%% Enumerates physical group and slot addresses for a family.
--spec family_address_entries(map()) -> [{number(),term(),term(),term()}].
-family_address_entries(#{
-    id := Family,
-    base_slot := Base,
-    instances := Instances
-}) ->
-    [
-        {Base + Local, Family, X, Y}
-        || #{coordinates := [X, Y], local_index := Local} <- Instances
-    ].
-
 %% Encodes one logical coordinate's owning scheduler and RAM slot.
 -spec scheduled_address(atom(),term(),term()) -> [any(),...].
 scheduled_address(Family, X, Y) ->
@@ -369,70 +170,26 @@ u16_value(Value) -> Value.
 %% Renders external control delivery to the selected actor families.
 -spec control_support(map()) -> iodata().
 control_support(#{ingresses := []}) -> [];
-control_support(Spec = #{ingresses := [Ingress]}) ->
-    Controlled = [
-        Family
-        || Family <- maps:get(families, Spec),
-           maps:get(ingress, Family) =/= none
-    ],
-    [
-        "enum ControlFamily : u8 {\n",
-        [control_family_member(Index, Family)
-            || {Index, Family} <- lists:enumerate(0, Controlled)],
-        "}\n\n",
-        "struct ControlState {\n",
-        "  active: u1,\n",
-        "  packet: hls_spatial_router::SpatialFrame,\n",
-        "  family: u8,\n",
-        "  x: u16,\n",
-        "  y: u16,\n",
-        "}\n\n",
-        "proc ControlDispatcher {\n",
-        "  spatial_in: chan<hls_spatial_router::SpatialFrame> in;\n",
-        [control_member(Spec, Group) || Group <-
-            controlled_groups(Controlled)],
-        "\n",
-        config_signature(
+control_support(Spec = #{ingresses := [Ingress], controlled_families := Controlled,
+        controlled_groups := Groups, width := Width, height := Height}) ->
+    render_template("scheduler_control.x.in", [
+        {<<"@@FAMILY_MEMBERS@@">>, [control_family_member(Index, Family)
+            || {Index, Family} <- lists:enumerate(0, Controlled)]},
+        {<<"@@CHANNEL_FIELDS@@">>, [control_member(Spec, Group) || Group <- Groups]},
+        {<<"@@CONFIG_SIGNATURE@@">>, config_signature(
             ["spatial_in: chan<hls_spatial_router::SpatialFrame> in"] ++
-                [control_argument(Spec, Group)
-                    || Group <- controlled_groups(Controlled)],
-            2
-        ),
-        "    (spatial_in",
-        [[", ", control_output_name(Group)]
-            || Group <- controlled_groups(Controlled)],
-        ")\n  }\n\n",
-        "  init { zero!<ControlState>() }\n\n",
-        "  next(state: ControlState) {\n",
-        "    if !state.active {\n",
-        "      let (_tok, packet) = recv(join(), spatial_in);\n",
-        "      ControlState { active: u1:1, packet,\n",
-        "        ..zero!<ControlState>() }\n",
-        "    } else {\n",
-        "      let _done = match state.family as ControlFamily {\n",
-        [control_family_arm(Spec, Ingress, Family)
-            || Family <- Controlled],
-        "        _ => join(),\n",
-        "      };\n",
-        control_advance(Spec, length(Controlled)),
-        "    }\n",
-        "  }\n",
-        "}\n\n"
-    ].
+                [control_argument(Spec, Group) || Group <- Groups], 2)},
+        {<<"@@CHANNEL_NAMES@@">>, [[", ", control_output_name(Group)] || Group <- Groups]},
+        {<<"@@DELIVERY_ARMS@@">>, [control_family_arm(Spec, Ingress, Family) || Family <- Controlled]},
+        {<<"@@HEIGHT@@">>, integer_to_list(Height)},
+        {<<"@@WIDTH@@">>, integer_to_list(Width)},
+        {<<"@@FAMILY_COUNT@@">>, integer_to_list(length(Controlled))}
+    ]).
 
 %% Finds the grouped family member addressed by a control request.
 -spec control_family_member(integer(),map()) -> [string(),...].
 control_family_member(Index, #{id := Id}) ->
     ["  ", xls_names:enum_member(Id), " = u8:", integer_to_list(Index), ",\n"].
-
-%% Collects groups reachable by external control traffic.
--spec controlled_groups([map()]) -> [any()].
-controlled_groups(Families) ->
-    lists:usort(lists:append([
-        [maps:get(group, Binding)
-            || Binding <- maps:get(schedulers, Family)]
-        || Family <- Families
-    ])).
 
 %% Tests whether a group member is included in the control address space.
 -spec control_member(map(),integer()) -> [any(),...].
@@ -533,69 +290,31 @@ control_address(ScaleX, ScaleY, OffsetX, OffsetY) ->
 control_target_condition(TargetIds, Ingress) ->
     xls_topology_ingress:condition(TargetIds, Ingress, "state.packet").
 
-%% Advances a rectangular control walk after accepted delivery.
--spec control_advance(map(),non_neg_integer()) -> [string(),...].
-control_advance(#{width := Width, height := Height}, FamilyCount) ->
-    [
-        "      let last_y = state.y + u16:1 == u16:",
-        integer_to_list(Height), ";\n",
-        "      let last_x = state.x + u16:1 == u16:",
-        integer_to_list(Width), ";\n",
-        "      let last_family = state.family + u8:1 == u8:",
-        integer_to_list(FamilyCount), ";\n",
-        "      let family_done = last_y && last_x;\n",
-        "      let all_done = family_done && last_family;\n",
-        "      ControlState {\n",
-        "        active: !all_done,\n",
-        "        family: if family_done { state.family + u8:1 }\n",
-        "          else { state.family },\n",
-        "        x: if last_y {\n",
-        "          if last_x { u16:0 } else { state.x + u16:1 }\n",
-        "        } else { state.x },\n",
-        "        y: if last_y { u16:0 } else { state.y + u16:1 },\n",
-        "        ..state\n",
-        "      }\n"
-    ].
-
 %%%
 %%% Startup and group routing
 %%%
 
--spec startup_proc(map(),map()) -> [any()].
+%% Bind prepared startup frames to the fixed ordered sender.
+-spec startup_proc(map(),map()) -> iodata().
 startup_proc(_Spec, #{startup_count := 0}) -> [];
-startup_proc(_Spec, Scheduler = #{
-    module_name := Module,
-    startup_items := Items
-}) ->
-    [
-        "proc ", startup_name(Scheduler), " {\n",
-        "  request_out: chan<", Module, "::ScheduledRequest> out;\n\n",
-        "  config(request_out: chan<", Module,
-        "::ScheduledRequest> out) { (request_out,) }\n\n",
-        "  init { u32:0 }\n\n",
-        "  next(index: u32) {\n",
-        "    let request = match index {\n",
-        [startup_arm(Module, Index, Item)
-            || {Index, Item} <- lists:enumerate(0, Items)],
-        "      _ => zero!<", Module, "::ScheduledRequest>(),\n",
-        "    };\n",
-        "    let active = index < u32:", integer_to_list(length(Items)),
-        ";\n",
-        "    let _done = send_if(join(), request_out, active, request);\n",
-        "    if active { index + u32:1 } else { index }\n",
-        "  }\n",
-        "}\n\n"
-    ].
+startup_proc(_Spec, Scheduler = #{module_name := Module, startup_items := Items}) ->
+    render_template("scheduler_startup.x.in", [
+        {<<"@@PROC_NAME@@">>, startup_name(Scheduler)},
+        {<<"@@FIELD_MODULE@@">>, Module},
+        {<<"@@CONFIG_MODULE@@">>, Module},
+        {<<"@@REQUEST_ARMS@@">>, [startup_arm(Module, Index, Item)
+            || {Index, Item} <- lists:enumerate(0, Items)]},
+        {<<"@@EMPTY_MODULE@@">>, Module},
+        {<<"@@REQUEST_COUNT@@">>, integer_to_list(length(Items))}
+    ]).
 
 %% Emits one startup frame for its assigned actor slot.
 -spec startup_arm(term(),integer(),map()) -> [any(),...].
 startup_arm(Module, Index, #{
     slot := Slot,
     schema := Schema,
-    fields := Fields
+    packed_payload := Payload
 }) ->
-    Payload = hls_codec:align(hls_codec:join([hls_type:pack(Value, Type)
-        || #{type := Type, value := Value} <- Fields]), 32),
     [
         "      u32:", integer_to_list(Index), " => ",
         Module, "::ScheduledRequest {\n",
@@ -747,37 +466,21 @@ router_family_arm(Spec, Family = #{id := Id}) ->
 
 %% Collects the output-port routes emitted by one family.
 -spec router_family_routes(map(),map()) -> iodata().
-router_family_routes(Spec, Family) ->
-    Module = maps:get(module_name, Family),
-    RouteIndex = maps:from_list([
-        {Port, Route}
-        || Route <- maps:get(routes, Family),
-           {_Family, Port} <- [maps:get(source, Route)]
-    ]),
+router_family_routes(Spec, Family = #{module_name := Module, output_routes := Outputs}) ->
     [
         "        let x = address.x;\n",
         "        let y = address.y;\n",
         "        match effect.port {\n",
-        [router_port_arm(Spec, Family, Module, Port, RouteIndex)
-            || Port <- maps:get(outputs, Family)],
+        [router_port_arm(Spec, Family, Module, Port, Route) || {Port, Route} <- Outputs],
         "        }\n"
     ].
 
-%% Selects routes for the current actor output port.
--spec router_port_arm(map(),map(),term(),atom(),map()) -> [any(),...].
-router_port_arm(Spec, Family, Module, Port, RouteIndex) ->
-    case maps:find(Port, RouteIndex) of
-        {ok, Route} ->
-            router_route_arm(Spec, Module, Port, Route);
-        error ->
-            true = xls_topology_source_fragment_dslx:captured_port(
-                Family, Port
-            ),
-            [
-                "        ", Module, "::OutputPort::", xls_names:enum_member(Port),
-                " => grant_tok,\n"
-            ]
-    end.
+%% Render the selected output owner without rediscovering or validating ownership.
+-spec router_port_arm(map(), map(), term(), atom(), map() | source_fragment) -> iodata().
+router_port_arm(_Spec, _Family, Module, Port, source_fragment) ->
+    ["        ", Module, "::OutputPort::", xls_names:enum_member(Port), " => grant_tok,\n"];
+router_port_arm(Spec, _Family, Module, Port, Route) ->
+    router_route_arm(Spec, Module, Port, Route).
 
 %% Renders delivery along one checked topology relation.
 -spec router_route_arm(map(),term(),atom(),map()) -> [any(),...].
@@ -1074,12 +777,7 @@ router_spawn(Spec, Scheduler = #{
 %% Connects the topology's external control fanout.
 -spec control_spawn(map()) -> [any()].
 control_spawn(#{ingresses := []}) -> [];
-control_spawn(Spec = #{ingresses := [#{input_name := InputName}]}) ->
-    Groups = controlled_groups([
-        Family
-        || Family <- maps:get(families, Spec),
-           maps:get(ingress, Family) =/= none
-    ]),
+control_spawn(Spec = #{ingresses := [#{input_name := InputName}], controlled_groups := Groups}) ->
     [
         "    spawn ControlDispatcher(", InputName,
         [
@@ -1275,3 +973,10 @@ separator(_Index, _Count) -> "".
 %% Join rendered channel names without flattening their fragments.
 -spec join_with(iodata(), [iodata(), ...]) -> iolist().
 join_with(Separator, Items) -> lists:join(Separator, Items).
+
+%% Load packaged fixed algorithms through the same application resource boundary as the effect router.
+-spec render_template(file:filename(), [{binary(), iodata()}]) -> binary().
+render_template(Name, Bindings) ->
+    Path = filename:join([code:priv_dir(hls_fabric), "xls", "templates", Name]),
+    {ok, Template} = file:read_file(Path),
+    xls_template:render(Template, Bindings).

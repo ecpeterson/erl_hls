@@ -1,20 +1,9 @@
 -module(xls_shared_topology_family_dslx).
 -moduledoc "Adds shared placement to the common regular-family routing graph.".
--export([artifact_requirements/2, emit/2]).
--doc "Returns the actor specializations needed by the physical placement.".
--spec artifact_requirements(hls_topology:plan(), map()) -> map().
-artifact_requirements(Plan, Profile) -> maps:get(artifact_requirements, lower(Plan, Profile)).
--doc "Emits direct or shared regular-family wiring with the same logical routes.".
--spec emit(hls_topology:plan(), map()) -> iodata().
-emit(Plan, Profile) ->
-    case lower(Plan, Profile) of
-        #{schedulers := []} -> xls_topology_family_dslx:emit(Plan,
-            maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug], Profile));
-        Spec -> xls_topology_scheduler_dslx:emit(Spec)
-    end.
+-export([lower/2]).
 
-%% Route checking and startup encoding retain one public implementation.
--spec lower(hls_topology:plan(), map()) -> map().
+-doc "Checks family placement and reduction requirements, retaining compiler family annotations and explicit scheduler bindings. Compact shared ownership is completed by xls_topology_scheduler_plan before rendering.".
+-spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
 lower(Plan, Profile0) ->
     Profile = #{scheduler_groups := Groups, reduction_placements := Placements,
         effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug} =

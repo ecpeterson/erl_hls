@@ -57,7 +57,7 @@ emit_protocol_transport.sh → hls-fabric emit --kind transport
       → local_actor:prepare/2 + topology normalization/elaboration + inventory
       → capture:plan/2 + transactions:plan/2 → source:plan/3
       → inbox:plan/1 → fabric:plan/2
-    → transport:plan/2 (placement and checked receiver layouts)
+    → transport:plan/2 (placement, receiver layouts and retained transport transition)
   → hls_source_build:write/2
     → transport:emit/1
       → local_actor:emit/2 + inbox:attach/2 (same source and receiver layouts)
@@ -70,7 +70,7 @@ Each internal source/port/schema/destination gets one fixed capture slot. The bu
 
 A **source snapshot** is the evaluated values needed for one ordinary entry’s outgoing effects, together with its layout selector. It is not the actor’s entire state, a debugger snapshot or an application readout. For example, if B accepts a send while C stalls, the source retains that batch’s values until C also accepts. A **capture slot** then retains one recipient’s compact message until acquisition and last-read release.
 
-Publication, capture ownership, sender order, selectors, projections and topology composition are DSLX. `protocol_transport.x` uses static payload, destination and slot parameters; heterogeneous slots retain their individual widths. XLS creates the registers. The generated `protocol_fabric` Verilog wrapper only packs named pins into the proc’s input record and unpacks its output record; `sv_protocol_ports` contains no state machine, arbitration or selection. The proc samples every clock with channel-valid/ready tied high. Recipient stalls are fields in that sample, so they cannot stop other recipients or releases. The required XLS schedule is one stage with input/output flops disabled. Changing that schedule changes the clock contract.
+Publication, capture ownership, sender order, selectors, projections and topology composition are DSLX. The transport planner retains named transition expressions before emission; fixed source and link algorithms live in DSLX templates, with named publication, capture and order state fields. `protocol_transport.x` uses static payload, destination and slot parameters; heterogeneous slots retain their individual widths. XLS creates the registers. The generated `protocol_fabric` Verilog wrapper only packs named pins into the proc’s input record and unpacks its output record; `sv_protocol_ports` contains no state machine, arbitration or selection. The proc samples every clock with channel-valid/ready tied high. Recipient stalls are fields in that sample, so they cannot stop other recipients or releases. The required XLS schedule is one stage with input/output flops disabled. Changing that schedule changes the clock contract.
 
 The 128-bit **ordinary frame ABI** is separate from these variable storage widths: `axis::Frame` is currently `FrameN<3>`, comprising a 32-bit header and capacity for three 32-bit payload words. The header records the actual payload length. `axis::FrameN<PAYLOAD_WORDS>` already supports other static boundary capacities, but the ordinary actor compiler and its frame analysis currently select three words. Generated DSLX asserts that this ABI agrees with the projection planner. Widening it requires a coordinated compiler/adapter ABI change, not a transport-only knob. Internal capture payloads omit the proved header, padding and whole-field constants.
 

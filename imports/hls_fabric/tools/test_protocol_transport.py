@@ -168,6 +168,7 @@ def main() -> None:
     fixture = stage / 'fixture'
     run(['bash','tools/emit_protocol_transport.sh',args.xls,config,fixture], stage, 'emit-fixture', timeout=1000)
     compiled=(fixture/'compiled').resolve()
+    rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
     run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:prepare(hd(init:get_plain_arguments())),halt().','-extra',fixture], stage, 'prepare-witness')
     compiler = Path(os.environ['ERL_HLS_ROOT'])
     paths = ':'.join(str(p) for p in [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', compiler/'priv/xls/lib', compiler/'priv/xls/fabric'])
@@ -177,10 +178,10 @@ def main() -> None:
     run([args.xls/'codegen_main','--generator=combinational','--use_system_verilog=false','--module_name=reference_effect',
          '--output_verilog_path='+str(fixture/'reference.sv'),fixture/'reference.opt.ir'],stage,'reference-codegen')
     (fixture/'tb.sv').write_text(bench(json.loads((fixture/'witness.json').read_text())))
-    run(['iverilog','-g2012','-s','tb','-o',fixture/'run.vvp','-F',compiled/'files.f',fixture/'reference.sv',fixture/'tb.sv'],stage,'iverilog')
+    run(['iverilog','-g2012','-s','tb','-o',fixture/'run.vvp',*rtl_files,fixture/'reference.sv',fixture/'tb.sv'],stage,'iverilog')
     run(['vvp',fixture/'run.vvp'],stage,'simulation')
     (fixture/'invalid-layout.sv').write_text(invalid_layout_bench(json.loads((fixture/'witness.json').read_text())))
-    run(['iverilog','-g2012','-s','tb','-o',fixture/'invalid-layout.vvp','-F',compiled/'files.f',fixture/'invalid-layout.sv'],stage,'invalid-layout-compile')
+    run(['iverilog','-g2012','-s','tb','-o',fixture/'invalid-layout.vvp',*rtl_files,fixture/'invalid-layout.sv'],stage,'invalid-layout-compile')
     run(['vvp',fixture/'invalid-layout.vvp'],stage,'invalid-layout')
     # The public command must reject incomplete ownership before writing RTL.
     original_config = config.read_text()
@@ -215,11 +216,12 @@ def main() -> None:
         output = stage/key
         run(['bash','tools/emit_protocol_transport.sh',args.xls,config,output],stage,'emit-'+key,timeout=1000)
         compiled=(output/'compiled').resolve()
+        rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
         run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:startup(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'startup-reference-'+key)
         run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:ingress(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'ingress-reference-'+key)
         report = json.loads((output/'summary.json').read_text())
         assert report['actors']==expected and report['eligible'] is False
-        run(['iverilog','-g2012','-s','protocol_fabric','-o',output/'elaborated.vvp','-F',compiled/'files.f'],stage,'elaborate-'+key)
+        run(['iverilog','-g2012','-s','protocol_fabric','-o',output/'elaborated.vvp',*rtl_files],stage,'elaborate-'+key)
         receiver_lowerings += lower_receivers(args.xls, output, stage, receiver_shapes)
         applications.append({'name':key,'actors':expected,'links':report['links']})
     (stage/'result.json').write_text(json.dumps({'passed':True,'applications':applications,

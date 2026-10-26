@@ -17,7 +17,7 @@
     sources := hls_protocol_source:plan(), inbox := hls_protocol_inbox:plan(),
     fabric := hls_protocol_fabric:plan(), ingress := none | hls_protocol_control:plan(),
     whole_control := none | hls_protocol_control:plan(), actor_functions := [actor_descriptor()],
-    receivers := [actor_descriptor()], protocol_model => hls_protocol_model:report()}.
+    receivers := [actor_descriptor()], transition := xls_protocol_transport:descriptor(), protocol_model => hls_protocol_model:report()}.
 
 %% Source-wide facts are shared by every placement; role selection never recompiles them.
 -record(program, {bundle :: bundle(), capture :: hls_protocol_capture:plan(),
@@ -30,7 +30,7 @@
 %% Placement retains source-wide facts by reference; public descriptors are derived views.
 -record(build, {program :: program(), fabric :: hls_protocol_fabric:plan(),
     ingress :: none | hls_protocol_control:plan(), arithmetic :: [hls_protocol_arithmetic:group()],
-    functions :: [actor_descriptor()], receivers = [] :: [#receiver{}]}).
+    functions :: [actor_descriptor()], receivers = [] :: [#receiver{}], hardware :: xls_protocol_transport:plan()}).
 %% Each rendered actor couples its finalized interface to its exact generated files.
 -record(emitted_actor, {descriptor :: actor_descriptor(), files :: hls_generated_files:files()}).
 
@@ -69,7 +69,7 @@ control(#program{ingress = Control}) -> Control.
 plan(Config) ->
     plan(prepare(Config), maps:with([native_actors, arithmetic_groups], Config)).
 
--doc "Plans native placement and optional shared arithmetic from one unchanged source program. Options accepts only native_actors and arithmetic_groups; omitted placement selects all actors. Checks receiver layouts without source reads or hardware rendering. Global actor indices and crossing ports remain stable. Ordinary receivers share their source module's generated functions, while retaining independent state. Ordered delivery, common clock/reset and stable offers remain caller obligations.".
+-doc "Plans native placement and optional shared arithmetic from one unchanged source program. Options accepts only native_actors and arithmetic_groups; omitted placement selects all actors. Checks receiver layouts and retains normalized transport transitions without source reads or hardware rendering. Global actor indices and crossing ports remain stable. Ordinary receivers share their source module's generated functions, while retaining independent state. Ordered delivery, common clock/reset and stable offers remain caller obligations.".
 -spec plan(program(), hls_source_config:placement_options()) -> build().
 plan(Program = #program{bundle = Bundle = #{topology := #{actors := Actors}, modules := Modules},
         capture = Capture, fabric = WholeFabric, ingress = WholeIngress}, Options) ->
@@ -78,7 +78,7 @@ plan(Program = #program{bundle = Bundle = #{topology := #{actors := Actors}, mod
         Options, Bundle, Capture, WholeFabric, WholeIngress),
     Arithmetic = hls_protocol_arithmetic:plan(maps:get(arithmetic_groups, Options, []), Bundle, Native),
     Build = #build{program = Program, fabric = Fabric, ingress = Ingress,
-        arithmetic = Arithmetic, functions = function_descriptors(Modules)},
+        arithmetic = Arithmetic, functions = function_descriptors(Modules), hardware = xls_protocol_transport:plan(Fabric)},
     Receivers = [plan_receiver(Index, Actor, Build)
         || {Index, Actor} <- lists:enumerate(0, Actors), lists:member(Index, Native)],
     Build#build{receivers = Receivers}.
@@ -91,7 +91,7 @@ descriptor(Build = #build{program = #program{bundle = Bundle}, functions = Funct
 -doc "Returns relative filenames with IO data and the finalized transport descriptor, without writing output. Config maps are prepared and planned; filenames are consulted as config maps with source paths relative to the caller. A retained build needs no source rereads, but emission reads templates. Saved ETF descriptors are not configuration.".
 -spec emit(hls_source_config:transport() | file:filename() | build()) -> hls_generated_files:output(descriptor()).
 emit(Build = #build{program = #program{bundle = Bundle = #{modules := Sources}},
-        functions = FunctionDescriptors, receivers = ReceiverPlans}) ->
+        functions = FunctionDescriptors, receivers = ReceiverPlans, hardware = Hardware}) ->
     Modules = maps:map(fun(_, Source) -> hls_local_actor:render(Source) end, Sources),
     Functions = [emit_actor(D, maps:get(Module, Modules)) || D = #{module := Module} <- FunctionDescriptors],
     Receivers = [emit_receiver(Receiver, Modules) || Receiver <- ReceiverPlans],
@@ -99,7 +99,7 @@ emit(Build = #build{program = #program{bundle = Bundle = #{modules := Sources}},
         [D || #emitted_actor{descriptor = D} <- Functions],
         [D || #emitted_actor{descriptor = D} <- Receivers]),
     ActorFiles = [Files || #emitted_actor{files = Files} <- Functions ++ Receivers],
-    #{files => transport_files(Plan, ActorFiles), result => Plan};
+    #{files => transport_files(Plan, Hardware, ActorFiles), result => Plan};
 emit(Config) when is_map(Config) -> emit(plan(Config));
 emit(Filename) -> emit(hls_source_config:read(Filename)).
 
@@ -228,10 +228,10 @@ actor_filename(Kind, Index) ->
 -spec transport_descriptor(build(), bundle(), [actor_descriptor()], [actor_descriptor()]) -> descriptor().
 transport_descriptor(#build{program = #program{capture = Capture, transactions = Transactions,
         sources = Publishers, inbox = Inbox, ingress = WholeIngress, model = Model},
-        fabric = Fabric, ingress = Ingress, arithmetic = Arithmetic}, Bundle, Functions, Receivers) ->
+        fabric = Fabric, ingress = Ingress, arithmetic = Arithmetic, hardware = Hardware}, Bundle, Functions, Receivers) ->
     Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
         sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, whole_control => WholeIngress,
-        actor_functions => Functions, receivers => Receivers},
+        actor_functions => Functions, receivers => Receivers, transition => xls_protocol_transport:descriptor(Hardware)},
     case Model of
         none -> Transport;
         _ -> Transport#{protocol_model => Model}
@@ -250,10 +250,10 @@ emit_actor(Descriptor = #{file := Relative}, Artifact) ->
         files = hls_local_actor:emit(Artifact, binary_to_list(Relative))}.
 
 %% Package finalized actors, fabric and reports without changing public file names or manifest schemas.
--spec transport_files(descriptor(), [hls_generated_files:files()]) -> hls_generated_files:files().
+-spec transport_files(descriptor(), xls_protocol_transport:plan(), [hls_generated_files:files()]) -> hls_generated_files:files().
 transport_files(Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
-        actor_functions := Functions, receivers := Receivers}, ActorFiles) ->
-    #{files := TransportFiles} = xls_protocol_transport:emit(Fabric),
+        actor_functions := Functions, receivers := Receivers}, Hardware, ActorFiles) ->
+    #{files := TransportFiles} = xls_protocol_transport:emit(Hardware),
     ModelFiles = hls_protocol_model:emit(maps:get(protocol_model, Plan, none)),
     Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,

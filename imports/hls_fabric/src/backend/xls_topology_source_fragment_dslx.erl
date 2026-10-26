@@ -9,10 +9,8 @@
 
 -export([
     aggregate_mux_spawns/1,
-    captured_port/2,
     plane_channels/1,
     plane_spawns/1,
-    prepare/1,
     router_arguments/2,
     router_argument_names/2,
     router_batch_bindings/2,
@@ -24,110 +22,6 @@
     scheduler_service_argument/2,
     support/1
 ]).
-
-%%%
-%%% Closed backend annotation
-%%%
-
--doc "Checks and annotates source-fragment planes before topology rendering.".
--spec prepare(map()) -> map().
-prepare(Spec = #{families := Families, schedulers := Schedulers}) ->
-    ReductionPlan = maps:get(reduction_plan, Spec, #{placements => []}),
-    Placements = maps:get(placements, ReductionPlan, []),
-    FamilyIndex = maps:from_list([
-        {maps:get(id, Family), Family} || Family <- Families
-    ]),
-    SchedulerIndex = maps:from_list([
-        {maps:get(id, Scheduler), Scheduler} || Scheduler <- Schedulers
-    ]),
-    Planes = [annotate_plane(Placement, FamilyIndex, SchedulerIndex)
-        || Placement <- Placements],
-    PlaneIndex = maps:from_list([
-        {maps:get(id, Plane), Plane} || Plane <- Planes
-    ]),
-    Spec#{
-        families := [prepare_family(Family, PlaneIndex)
-            || Family <- Families],
-        source_fragment_planes => Planes
-    }.
-
-%% Assigns destination groups and channel identities to one reduction plane.
--spec annotate_plane(map(),map(),map()) -> map().
-annotate_plane(Placement = #{
-    kind := source_fragments,
-    family := FamilyId,
-    module := Module,
-    shape := Shape,
-    scheduler_groups := GroupIds,
-    population := Population,
-    fragments := Fragments,
-    fragment_capacity := 2
-}, FamilyIndex, SchedulerIndex) ->
-    Family = maps:get(FamilyId, FamilyIndex),
-    SourceSchedulers = [
-        maps:get(index, maps:get(GroupId, SchedulerIndex))
-        || GroupId <- GroupIds
-    ],
-    OrderedFragments = lists:keysort(1, [
-        {maps:get(ordinal, Fragment), Fragment} || Fragment <- Fragments
-    ]),
-    Placement#{
-        id => FamilyId,
-        module_name => maps:get(module_name, Family),
-        module => Module,
-        shape => Shape,
-        population => Population,
-        fragments => [Fragment || {_Ordinal, Fragment} <- OrderedFragments],
-        source_schedulers => SourceSchedulers,
-        destinations => destination_rows(Family),
-        stem => [atom_to_list(FamilyId), "_reduction"]
-    }.
-
-%% Builds each actor's reciprocal contribution-source row.
--spec destination_rows(map()) -> [map()].
-destination_rows(#{schedulers := Bindings}) ->
-    Rows = lists:append([
-        [
-            #{
-                index => maps:get(linear_index, Instance),
-                x => X,
-                y => Y,
-                group => maps:get(group, Binding),
-                slot => maps:get(base_slot, Binding) +
-                    maps:get(local_index, Instance)
-            }
-            || Instance = #{coordinates := [X, Y]} <-
-                   maps:get(instances, Binding)
-        ]
-        || Binding <- Bindings
-    ]),
-    [Row || {_Index, Row} <- lists:keysort(1, [
-        {maps:get(index, Row), Row} || Row <- Rows
-    ])].
-
-%% Attaches the selected plane and captured ports to a logical family.
--spec prepare_family(map(),map()) -> map().
-prepare_family(Family = #{id := Id, routes := Routes}, PlaneIndex) ->
-    case maps:find(Id, PlaneIndex) of
-        error -> Family;
-        {ok, Plane} ->
-            CapturedPorts = [maps:get(port, Fragment)
-                || Fragment <- maps:get(fragments, Plane)],
-            Family#{
-                routes := [Route || Route <- Routes,
-                    begin
-                        {_Source, Port} = maps:get(source, Route),
-                        not lists:member(Port, CapturedPorts)
-                    end],
-                source_fragment => Plane,
-                source_fragment_ports => CapturedPorts
-            }
-    end.
-
--doc "Tests whether an actor output belongs to a source-fragment prefix.".
--spec captured_port(map(), atom()) -> boolean().
-captured_port(Family, Port) ->
-    lists:member(Port, maps:get(source_fragment_ports, Family, [])).
 
 %%%
 %%% Router integration

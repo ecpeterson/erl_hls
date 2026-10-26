@@ -212,7 +212,9 @@ inspection() ->
     ?assert(filelib:is_dir(Compiler)), ?assert(filelib:is_dir(Fabric)),
     ?assert(filelib:is_dir(Directory)),
     ?assertMatch(#{data := #{kind := network, build := #{actors := 3,
-        native_indices := [0, 1, 2]}}}, proplists:get_value(composition, Inspections)),
+        native_indices := [0, 1, 2]}, transport_transitions := #{whole := #{}},
+        network_phases := #{observe := #{actors := [0, 1, 2]}}}},
+        proplists:get_value(composition, Inspections)),
     #{data := Schedule} = proplists:get_value(schedule, Inspections),
     ?assertMatch([#{top := _, codegen_flags := [_ | _]} | _], Schedule).
 
@@ -237,7 +239,10 @@ inspect_and_write(Kind) ->
     #{data := SourceRoles} = maps:get(source, Views),
     #{data := Topologies} = maps:get(topology, Views),
     #{data := Placements} = maps:get(placement, Views),
+    #{data := #{transport_transitions := Transitions}} = maps:get(composition, Views),
     Roles = case Kind of deployment -> [north, south]; _ -> [whole] end,
+    ?assertEqual(Roles, lists:sort(maps:keys(Transitions))),
+    ?assert(lists:all(fun is_map/1, maps:values(Transitions))),
     ?assertEqual(Roles, lists:sort(maps:keys(SourceRoles))),
     ?assertEqual(Roles, lists:sort(maps:keys(Topologies))),
     ?assertEqual(Roles, lists:sort(maps:keys(Placements))),

@@ -29,13 +29,13 @@ steps(Groups) ->
 updates(Groups) -> [[name(G), ": ", name(G), "_next as bits[", n(W), "],\n"]
     || #{index := G, cursor_bits := W} <- Groups].
 
--doc "Wires a member's one-hot grant and named action fields; ungrouped receivers have no extra inputs. The action is ignored unless this exact member was granted.".
--spec inputs(non_neg_integer(), [map()]) -> iodata().
-inputs(I, Groups) ->
-    [["completion_granted: ", name(G), "_pick.mask[", n(J), "+:u1],\n",
-      "completion_action: actor_", n(I), "::LocalAction {\n",
-      [[F, ": ", name(G), "_action.", F, ",\n"] || F <- ["private_machine", "dispatched", "directive", "phase_boundary"]], "},\n"]
-     || #{index := G, members := Members} <- Groups, {J, Member} <- lists:enumerate(0, Members), Member =:= I].
+-doc "Renders a receiver's resolved one-hot grant and named action fields. none supplies no extra inputs. Network planning binds the exact group/member; this renderer does not search topology membership. The action is ignored unless this member was granted.".
+-spec inputs(non_neg_integer(), none | #{group := non_neg_integer(), member := non_neg_integer()}) -> iodata().
+inputs(_, none) -> [];
+inputs(I, #{group := G, member := J}) ->
+    ["completion_granted: ", name(G), "_pick.mask[", n(J), "+:u1],\n",
+     "completion_action: actor_", n(I), "::LocalAction {\n",
+     [[F, ": ", name(G), "_action.", F, ",\n"] || F <- ["private_machine", "dispatched", "directive", "phase_boundary"]], "},\n"].
 
 %% Group identifiers come only from deterministic fresh-plan enumeration.
 -spec name(non_neg_integer()) -> string().

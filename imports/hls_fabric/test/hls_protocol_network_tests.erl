@@ -1,5 +1,5 @@
 -module(hls_protocol_network_tests).
--moduledoc "Public network boundary rejects unsupported activation before source or filesystem work.".
+-moduledoc "Public network modes reject before source work; retained phase wiring preserves receiver-owned slices and sparse host retirement order.".
 -include_lib("eunit/include/eunit.hrl").
 
 %% An invalid mode cannot be silently interpreted as automatic activation.
@@ -24,7 +24,7 @@ imported_owner_test() ->
         ?assert(maps:get(mask_bits, Inbox) > 0)
     end, Receivers).
 
-%% Rendering regression only: transport slices use receiver spans, with startup and host retirement kept separate.
+%% Planning and rendering regression only: receiver-owned spans remain distinct from startup and host retirement.
 -spec receiver_owned_slices_test() -> ok.
 receiver_owned_slices_test() ->
     Inbox = #{links => [#{index => 19, slots => 2}, #{index => 3, slots => 1},
@@ -50,8 +50,20 @@ receiver_owned_slices_test() ->
     %% Stub components supply content hashes only; this test does not claim an XLS-compiled network.
     Components = #{"dslx/transport.x" => "// Rendering fixture transport.\n",
         "receivers/receiver_2.x" => "// Rendering fixture receiver.\n"},
+    Layout = xls_protocol_network:plan(Plan),
+    #{observe := Observe, preview := #{eligible := Eligible}, select := [],
+      advance := Advance, commit := #{retire := Retire, activation := none}} =
+        xls_protocol_network:phases(Layout),
+    ?assertEqual(#{actors => [2], host => true, inspection => false}, Observe),
+    ?assertEqual([
+        #{index => 3, destination => 2, slots => 1, offset => 2},
+        #{index => 11, destination => 2, slots => 3, offset => 3},
+        #{index => 19, destination => 2, slots => 2, offset => 0}], Eligible),
+    ?assertEqual(Eligible, Retire),
+    ?assertMatch(#{receivers := [#{index := 2, host_slot := 8, completion := none}],
+        ingress := [#{actor := 2, slot := 8}, none, none]}, Advance),
     #{files := #{"network/network.x" := Source}, result := Manifest} =
-        xls_protocol_network:emit(xls_protocol_network:plan(Plan), Components),
+        xls_protocol_network:emit(Layout, Components),
     {match, Slices} = re:run(Source,
         <<"link_[0-9]+_(?:eligible|take|release_valid): [^,\\n]+">>,
         [global, {capture, first, binary}]),

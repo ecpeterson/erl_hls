@@ -18,6 +18,12 @@ inspected_plans() ->
     NetworkInterface = #{actors := 4, native_indices := [0, 1, 2, 3], inspection := process,
         inputs := Inputs} = hls_protocol_network:descriptor(Network),
     ?assert(lists:member(#{name => <<"inspect_address">>, width => 32}, Inputs)),
+    ?assertMatch(#{observe := #{actors := [0, 1, 2, 3], inspection := true, host := true},
+        select := [], advance := #{ingress := [#{actor := 3, slot := 1},
+            #{actor := 2, slot := 1}, #{actor := 1, slot := 0}, #{actor := 0, slot := 0}]},
+        commit := #{activation := #{host := true,
+            faults := [ingress, {actor, 0}, {actor, 1}, {actor, 2}, {actor, 3}]}}},
+        hls_protocol_network:phases(Network)),
     BoundaryInterface = #{inspection := process, arbitration_state_bits := 5, externals := Groups} =
         hls_protocol_boundary:descriptor(Boundary),
     ?assertEqual([3, 1, 0], [length(Members) || #{members := Members} <- Groups]),
@@ -44,9 +50,10 @@ bridge_plan_test_() -> {timeout, 30, fun bridge_plan/0}.
 %% The planned bridge retains exact cuts while its emitter adds attachment-only evidence.
 -spec bridge_plan() -> ok.
 bridge_plan() ->
-    {Plan, PlanningCalls} = trace_renderers(fun() ->
+    {{Plan, Network}, PlanningCalls} = trace_renderers(fun() ->
         Build = hls_protocol_transport:plan(partition()),
-        hls_protocol_bridge:plan(Build, #{host => 2, service => 29, control => rectangle})
+        {hls_protocol_bridge:plan(Build, #{host => 2, service => 29, control => rectangle}),
+         hls_protocol_network:plan(Build, #{activation => explicit_start})}
     end),
     ?assertEqual(#{}, PlanningCalls),
     Interface = #{native_indices := [0, 2], incoming := Incoming, outgoing := Outgoing,
@@ -55,6 +62,12 @@ bridge_plan() ->
     ?assert(Outgoing =/= []),
     ?assert(Credits =/= []),
     ?assertEqual(lists:sort(Links), lists:sort(Incoming ++ Outgoing)),
+    #{observe := #{actors := [0, 2], host := true},
+      advance := #{ingress := HostRetirements},
+      commit := #{activation := #{faults := Faults}}} = hls_protocol_network:phases(Network),
+    ?assertEqual([ingress] ++ [{crossing, I} || #{index := I} <- Incoming] ++
+        [{actor, 0}, {actor, 2}], Faults),
+    ?assertMatch([none, none, #{actor := 0}], HostRetirements),
     ?assertNot(maps:is_key(identity, Interface)),
     ?assertNot(maps:is_key(libraries, Interface)),
     {#{result := #{bridge := Bridge}}, Calls} = trace_renderers(fun() -> hls_protocol_bridge:emit(Plan) end),
@@ -155,8 +168,15 @@ shared_arithmetic_plan() ->
     Config = #{sources => [{"test/hls_protocol_arithmetic_fixture.erl", []}],
         topology => {hls_protocol_arithmetic_fixture, topology, [3]}, actor_limit => 3,
         arithmetic_groups => [[0, 1, 2]]},
-    {Plan, PlanningCalls} = trace_renderers(fun() -> hls_protocol_transport:plan(Config) end),
+    {{Plan, Network}, PlanningCalls} = trace_renderers(fun() ->
+        Transport = hls_protocol_transport:plan(Config),
+        {Transport, hls_protocol_network:plan(Transport, #{activation => explicit_start})}
+    end),
     ?assertEqual(#{}, PlanningCalls),
+    #{select := [#{index := 0, members := [0, 1, 2]}],
+      advance := #{receivers := Steps, ingress := none}} = hls_protocol_network:phases(Network),
+    ?assertEqual([{I, #{group => 0, member => I}} || I <- [0, 1, 2]],
+        [{I, Binding} || #{index := I, completion := Binding} <- Steps]),
     #{receivers := StaticReceivers, bundle := #{modules := Modules}} = hls_protocol_transport:descriptor(Plan),
     lists:foreach(fun(Source) -> ?assertNot(maps:is_key(dslx, Source)) end, maps:values(Modules)),
     ?assertEqual([0, 1, 2], [I || #{index := I} <- StaticReceivers]),

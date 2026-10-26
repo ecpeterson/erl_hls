@@ -1,6 +1,6 @@
 -module(hls_protocol_network).
 -moduledoc "Connects ordinary DSLX owners and source-bound transport with declared startup messages. Host commands enter ordinary inbox slots; application admission remains separate.".
--export([plan/2, descriptor/1, transport/1, write/2, write/3, emit/1, emit/2]).
+-export([plan/2, descriptor/1, phases/1, transport/1, write/2, write/3, emit/1, emit/2]).
 -export_type([plan/0, options/0, activation/0, descriptor/0, manifest/0, result/0, output/0]).
 
 -doc "Whether source captures run automatically after reset or wait for the ordered start handshake.".
@@ -62,6 +62,10 @@ plan(Build, Options) ->
 -doc "Returns the checked static network interface, including ports, endpoints, state costs and inspection mode (none or process). It contains no generated-byte hashes or inspection catalog; emit/1 adds those to its final manifest. Treat this descriptor as read-only.".
 -spec descriptor(plan()) -> descriptor().
 descriptor(#plan{layout = Layout}) -> xls_protocol_network:descriptor(Layout).
+
+-doc "Returns retained observe, preview, select, advance and commit wiring without source compilation or rendering. Includes native actor/grant identities, receiver-owned slices, sparse global host retirements and activation fault origins. These diagnostic facts are not executable plan input.".
+-spec phases(plan()) -> xls_protocol_network:phases().
+phases(#plan{layout = Layout}) -> xls_protocol_network:phases(Layout).
 
 -doc "Returns the retained transport placement for source, topology and receiver-layout inspection. Reuses the checked snapshot without recompiling or rendering; retain it unchanged.".
 -spec transport(plan()) -> hls_protocol_transport:build().

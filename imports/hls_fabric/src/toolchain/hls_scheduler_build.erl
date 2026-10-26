@@ -15,7 +15,7 @@
 %% A plan retains rendered bytes so publication never recompiles source or reloads modules.
 -record(plan, {config :: config(), profile :: hls_build_profile:profile(),
     sources :: [source_descriptor()], topology :: hls_topology:plan(),
-    scheduler :: hls_scheduler_plan:plan(), requirements :: requirements(),
+    scheduler :: hls_scheduler_plan:plan(), generation :: xls_shared_topology_dslx:plan(), requirements :: requirements(),
     bindings :: [map()], files :: hls_generated_files:files(),
     libraries :: [hls_artifact_bundle:library()], unit :: hls_artifact_bundle:unit(),
     cwd :: file:filename()}).
@@ -23,9 +23,10 @@
 -doc "A checked in-process source build with generated DSLX retained in memory. Planning compiles and loads trusted sources and renders scheduler hardware, but creates no output directory and invokes no XLS tools. Support libraries are copied only when written.".
 -opaque plan() :: #plan{}.
 
--doc "Read-only backend profile, logical topology, checked scheduler placement, actor requirements and physical RAM interfaces. Descriptors are inspection data, not saved executable plans or hardware admission.".
+-doc "Read-only backend profile, logical topology, checked scheduler placement, prepared generation graph, actor requirements and physical RAM interfaces. Descriptors are inspection data, not saved executable plans or hardware admission.".
 -type descriptor() :: #{backend := channel_scheduler, profile := hls_build_profile:profile(),
     topology := hls_topology:plan(), scheduler := hls_scheduler_plan:plan(),
+    generation := xls_shared_topology_dslx:descriptor(),
     sources := [source_descriptor()], requirements := requirements(), ram_bindings := [map()]}.
 
 -doc "The shared compiler bundle schema with scheduler backend policy serialized as tagged JSON values. Inputs bind every packaged file; units retain external schedules and RTL lists are indexed by role. Neither eligibility nor native timing is established.".
@@ -58,10 +59,11 @@ prepare(Config = #{sources := Sources, topology := Constructor, placement := Pla
     #{libraries := Libraries, imports := Imports} = hls_build_support:layout(maps:get(dslx_path, Config, [])),
     Loaded = load_sources(Sources),
     Topology = topology(Constructor, Loaded),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Topology, Placement),
+    Generation = xls_shared_topology_dslx:plan(Topology, Placement),
+    Requirements = xls_shared_topology_dslx:artifact_requirements(Generation),
     ok = require_actors(maps:keys(Requirements), Loaded),
     ActorFiles = actors(Requirements, Loaded, Placement),
-    TopologyBytes = xls_shared_topology_dslx:emit(Topology, Placement),
+    TopologyBytes = xls_shared_topology_dslx:emit(Generation),
     Scheduler = hls_scheduler_plan:normalize(Topology, maps:get(scheduler_groups, Placement)),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler),
     RamFlags = case iolist_to_binary(xls_scheduler_ram_v:configurations(Bindings)) of
@@ -75,7 +77,7 @@ prepare(Config = #{sources := Sources, topology := Constructor, placement := Pla
         "profile.json" => json:encode(hls_diagnostic:json_value(Profile))}]),
     {ok, Cwd} = file:get_cwd(),
     #plan{config = Config, profile = Profile, sources = [D || {D, _} <- Loaded],
-        topology = Topology, scheduler = Scheduler, requirements = Requirements,
+        topology = Topology, scheduler = Scheduler, generation = Generation, requirements = Requirements,
         bindings = Bindings, files = Files, libraries = Libraries, unit = Unit, cwd = Cwd};
 prepare(Config) ->
     ok = config_keys(Config),
@@ -92,12 +94,13 @@ config_keys(Config) ->
             #{missing => lists:sort(Missing), unsupported => lists:sort(Unknown)})
     end.
 
--doc "Returns retained source, topology, physical placement and profile information without recompiling, rendering or reading source files.".
+-doc "Returns retained source, topology, physical placement, prepared generation graph and profile information without recompiling, rendering or reading source files.".
 -spec descriptor(plan()) -> descriptor().
 descriptor(#plan{profile = Profile, sources = Sources, topology = Topology,
-        scheduler = Scheduler, requirements = Requirements, bindings = Bindings}) ->
+        scheduler = Scheduler, generation = Generation, requirements = Requirements, bindings = Bindings}) ->
     #{backend => channel_scheduler, profile => Profile, sources => Sources, topology => Topology,
-        scheduler => Scheduler, requirements => Requirements, ram_bindings => Bindings}.
+        scheduler => Scheduler, generation => xls_shared_topology_dslx:descriptor(Generation),
+        requirements => Requirements, ram_bindings => Bindings}.
 
 -doc "Reports one retained planning view. Schedule contains the exact external compilation units, including RAM configurations. No view executes tools, creates output or resumes a serialized plan.".
 -spec inspect(plan(), inspection_stage()) -> inspection().
