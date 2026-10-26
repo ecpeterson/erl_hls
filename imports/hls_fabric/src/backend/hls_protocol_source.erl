@@ -22,7 +22,7 @@
     invariant_scope := source_bound_constant_omissions_not_runtime_input_validation}.
 
 -doc "The source-wide publisher catalogue; source snapshots do not establish cross-sender chronology or protocol admission.".
--type plan() :: #{sources := [source()], snapshot := ordinary_evaluated_payload_and_layout,
+-type plan() :: #{frame_layout := hls_frame_layout:layout(), sources := [source()], snapshot := ordinary_evaluated_payload_and_layout,
     no_cross_sender_chronology := true, whole_protocol_eligible := false}.
 
 %% Only wiring and constant requirements differ between internal and boundary recipients.
@@ -37,7 +37,7 @@
         atom() => term()}], atom() => term()},
     modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()}, atom() => term()},
     hls_protocol_transactions:plan(), hls_protocol_capture:plan()) -> plan().
-plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Capture) ->
+plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Capture=#{frame_layout:=FrameLayout}) ->
     #{pairs:=Pairs}=hls_protocol_inbox:plan(Capture),
     Components=[begin
         [Transaction]=[T||T=#{actor:=A}<-Transactions,A=:=Id],
@@ -45,14 +45,15 @@ plan(#{topology:=#{actors:=Actors},modules:=Modules},#{actors:=Transactions},Cap
         Spec=xls_actor_program:spec(Program),
         actor(I,Id,Spec,Transaction,Capture,Pairs)
     end || {I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
-    #{sources=>Components,snapshot=>ordinary_evaluated_payload_and_layout,
+    #{frame_layout=>FrameLayout,sources=>Components,snapshot=>ordinary_evaluated_payload_and_layout,
       no_cross_sender_chronology=>true,whole_protocol_eligible=>false}.
 
 %% Original layout payloads are retained once; their width includes shared dynamic fields.
 -spec actor(non_neg_integer(), hls_protocol_topology:id(), xls_actor_codegen:spec(),
     hls_protocol_transactions:actor(), hls_protocol_capture:plan(), [hls_protocol_inbox:pair()]) -> source().
 actor(I,Id,Spec,#{batches:=Batches},Capture,Pairs) ->
-    Projection=hls_protocol_projection:plan(Spec),#{payload_width:=Width,rows:=Effects}=Projection,
+    Projection=hls_protocol_projection:plan(Spec),#{frame_layout:=FrameLayout,payload_width:=Width,rows:=Effects}=Projection,
+    FrameLayout=maps:get(frame_layout,Capture),
     Destinations=lists:usort([D || #{per_recipient:=Rs}<-Batches,#{destination:=D}<-Rs]),
     Depth=lists:max([0|[N || #{required_pair_sequence_depth:=N}<-Batches]]),
     Slots=max(1,Depth),
@@ -91,13 +92,13 @@ recipient_rows(Source,Destination,#{layout:=Layout,deliveries:=Deliveries},Effec
     [hls_protocol_projection:bit()], hls_protocol_capture:plan(), [hls_protocol_inbox:pair()]) -> projection().
 projection(_, {external,_},_,_,Frame,_,_) ->
     #{bits=>Frame,capture_slot=>0,constant_requirements=>[]};
-projection(Source,Destination,Port,Tag,Frame,#{channels:=Channels},Pairs) ->
+projection(Source,Destination,Port,Tag,Frame,#{frame_layout:=FrameLayout,channels:=Channels},Pairs) ->
     [C]=[C0||C0=#{source:=S,destination:=D,port:=P,tag:=T}<-Channels,
         S=:=Source,D=:=Destination,P=:=Port,T=:=Tag],
     %% Operation comes from the complete ordinary projection and must be constant.
-    OpBits=lists:sublist(Frame,25,8),true=lists:all(fun(B)->B=:=0 orelse B=:=1 end,OpBits),
+    OpBits=lists:sublist(Frame,hls_frame_layout:header_offset(op)+1,8),true=lists:all(fun(B)->B=:=0 orelse B=:=1 end,OpBits),
     Op=hls_protocol_projection:evaluate(OpBits,0),
-    #{frame_positions:=Positions,mask:=Mask,value:=Value}=hls_protocol_codec:plan(C,Op),
+    #{frame_positions:=Positions,mask:=Mask,value:=Value}=hls_protocol_codec:plan(C,Op,FrameLayout),
     Requirements=lists:filtermap(fun(J)->
         Expected=(Value bsr J) band 1,Actual=lists:nth(J+1,Frame),
         case (Mask bsr J) band 1 of
@@ -105,7 +106,7 @@ projection(Source,Destination,Port,Tag,Frame,#{channels:=Channels},Pairs) ->
             1->case Actual of Expected->false;{payload,_}->{true,{Actual,Expected}};
                 _->error({inconsistent_static_channel,Source,Destination,Port,Tag,J}) end
         end
-    end,lists:seq(0,127)),
+    end,lists:seq(0,hls_frame_layout:frame_bits(FrameLayout)-1)),
     [#{slots:=PairSlots}]=[P||P=#{source:=S,destination:=D}<-Pairs,S=:=Source,D=:=Destination],
     [Index]=[N||#{index:=N,channel:=#{port:=P,tag:=T}}<-PairSlots,P=:=Port,T=:=Tag],
     Bits=case Positions of []->[0];_->[lists:nth(J+1,Frame)||J<-Positions] end,

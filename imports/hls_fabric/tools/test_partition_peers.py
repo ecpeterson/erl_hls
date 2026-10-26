@@ -46,7 +46,8 @@ def main() -> None:
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",
                         stage / "partition_peers.x", profile="test"), stage, "generation", timeout=60)
-    sources = [ROOT / "priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x"]
+    sources = [ROOT / "priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
+               public / "priv/xls/lib/frame_config.x"]
     for path in sources:
         shutil.copy(path, stage)
     tracked = sources + [ROOT / "test/rtl/partition_peers_tb.sv", Path(__file__),

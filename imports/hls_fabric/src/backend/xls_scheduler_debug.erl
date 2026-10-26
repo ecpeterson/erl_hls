@@ -15,7 +15,8 @@ projection(Plan, Specs, Artifacts) ->
 
 -doc "Builds the physical actor observation map from matching topology and generated artifacts.".
 -spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
-    #{module() => iodata()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean(), direct_collections => #{module() => exclusive_epoch}}) -> map().
+    #{module() => iodata()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean(), direct_collections => #{module() => exclusive_epoch},
+        frame_payload_words => hls_frame_layout:words()}) -> map().
 projection(Plan, Specs, Artifacts, Options) ->
     build(Plan, Specs, Options, fun(Module, Origins) ->
         xls_failure_sites:from_artifact(Origins, maps:get(Module, Artifacts))
@@ -30,13 +31,15 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
     Banks = Shared ++ maps:get(<<"direct">>, Projection, []),
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
     MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Shared),
-    Placements = hls_scheduler_plan:placements(hls_scheduler_plan:normalize(Plan, Specs)),
+    Words = maps:get(<<"frame_payload_words">>, Projection, 3),
+    Placements = hls_scheduler_plan:placements(
+        hls_scheduler_plan:normalize(Plan, Specs, hls_frame_layout:new(Words))),
     Direct = xls_actor_observation:bindings(Plan, Placements),
     Policies = maps:from_list([{M, exclusive_epoch} || #{module := M} <- Direct,
         B <- maps:get(<<"direct">>, Projection, []), maps:get(<<"module">>, B) =:= atom_to_binary(M),
         maps:get(<<"early_collection">>, maps:get(<<"reduction">>, B, #{}), false)]),
     Options = #{mailbox_debug => MailboxDebug, direct_actor_debug => maps:is_key(<<"direct">>, Projection),
-        direct_collections => Policies},
+        direct_collections => Policies, frame_payload_words => Words},
     Expected = build(Plan, Specs, Options, fun(Module, Origins) ->
         Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
         xls_failure_sites:number([O || O <- Origins, is_map_key(json_value(O), Values)])
@@ -51,7 +54,8 @@ validate(_Plan, _Specs, _Projection) -> error(actor_projection_mismatch).
 -spec build(map(),map(),map(),fun((term(),term()) -> [map()])) -> 'false' | 'null' | 'true' | binary() | ['false' | 'null' | 'true' | binary() | [any()] | number() | map()] | number() | map().
 build(Plan, Specs, Options, Codebook) ->
     MailboxDebug = xls_scheduler_observation:enabled(Options),
-    Scheduler = #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs),
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Options, 3)),
+    Scheduler = #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs, Layout),
     Placements = hls_scheduler_plan:placements(Scheduler),
     Direct = case xls_actor_observation:enabled(Options) of
         true -> xls_actor_observation:bindings(Plan, Placements);
@@ -70,7 +74,11 @@ build(Plan, Specs, Options, Codebook) ->
         maps:get(gathers, G, none) =/= none end, Groups) of true -> 5; false -> 4 end,
     Policies = maps:get(direct_collections, Options, #{}),
     Binding = case map_size(Policies) of 0 -> {Plan, Scheduler}; _ -> {Plan, Scheduler, Policies} end,
-    Projection = #{schema => Schema, binding => xls_actor_debug:actor_key(Binding), banks => Banks},
+    BaseProjection = #{schema => Schema, binding => xls_actor_debug:actor_key(Binding), banks => Banks},
+    Projection = case hls_frame_layout:payload_words(Layout) of
+        3 -> BaseProjection;
+        Words -> BaseProjection#{frame_payload_words => Words}
+    end,
     json_value(case xls_actor_observation:enabled(Options) of
         false -> Projection;
         true -> Projection#{direct => [direct_bank(Index, Actor,

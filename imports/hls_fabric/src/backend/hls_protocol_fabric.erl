@@ -15,7 +15,7 @@
 -type boundary() :: #{source_index := non_neg_integer(), output := hls_protocol_source:output()}.
 
 -doc "Connected publishers, capture links and external outputs. Native placement may retain a crossing catalogue; no temporal admission is implied.".
--type plan() :: #{sources := [hls_protocol_source:source()], links := [link()], boundaries := [boundary()],
+-type plan() :: #{frame_layout := hls_frame_layout:layout(), sources := [hls_protocol_source:source()], links := [link()], boundaries := [boundary()],
     whole_protocol_eligible := false, ordering := per_logical_sender_destination,
     crossings => [hls_protocol_partition:crossing()]}.
 
@@ -24,7 +24,10 @@
 
 -doc "Binds every internal source output to exactly one logical sender/destination link and checks all typed widths and class indices. External outputs retain independent ordinary frames. Missing, duplicate or mismatched endpoints fail instead of introducing a generic route. The result does not establish actor lifetime, generation or network progress.".
 -spec plan(hls_protocol_source:plan(), hls_protocol_inbox:plan()) -> plan().
-plan(#{sources:=Sources},Inbox=#{pairs:=Pairs}) ->
+plan(SourcePlan=#{sources:=Sources},Inbox=#{pairs:=Pairs}) ->
+    FrameLayout=maps:get(frame_layout,SourcePlan,hls_frame_layout:default()),
+    FrameLayout=maps:get(frame_layout,Inbox,FrameLayout),
+    FrameBits=hls_frame_layout:frame_bits(FrameLayout),
     Shapes=hls_protocol_link:components(Inbox),
     Links=[bind_link(I,P,Sources,Shapes)||{I,P}<-lists:enumerate(0,Pairs)],
     Internal=[{maps:get(index,S),maps:get(index,O)}||S<-Sources,O<-maps:get(outputs,S),
@@ -33,10 +36,10 @@ plan(#{sources:=Sources},Inbox=#{pairs:=Pairs}) ->
     true=lists:sort(Internal)=:=lists:sort(Bound),
     true=length(Bound)=:=length(lists:usort(Bound)),
     Boundaries=[#{source_index=>I,output=>O}||#{index:=I,outputs:=Os}<-Sources,
-        O=#{destination:={external,_},width:=128}<-Os],
+        O=#{destination:={external,_},width:=Width}<-Os,Width=:=FrameBits],
     true=length(Boundaries)=:=length([O||S<-Sources,O<-maps:get(outputs,S),
         {external,_}<-[maps:get(destination,O)]]),
-    #{sources=>Sources,links=>Links,boundaries=>Boundaries,
+    #{frame_layout=>FrameLayout,sources=>Sources,links=>Links,boundaries=>Boundaries,
       whole_protocol_eligible=>false,ordering=>per_logical_sender_destination}.
 
 %% The source projection and destination catalogue must identify the same logical message classes.

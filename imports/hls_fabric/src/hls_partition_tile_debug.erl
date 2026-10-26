@@ -10,7 +10,8 @@ catalog(Plan = #{actors := [#{logical_identity := _} | _]}, Specs,
     %% Validate storage dimensions, codebooks and the exact physical schedule first.
     ok = xls_scheduler_debug:validate(Plan, Specs, Physical),
     Identities = maps:from_list([{Id, Logical} || #{id := Id, logical_identity := Logical} <- maps:get(actors, Plan)]),
-    #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs),
+    #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs,
+        hls_frame_layout:new(maps:get(<<"frame_payload_words">>, Physical, 3))),
     Local = #{tile => true, schedulers => [G#{index => I, actors => [#{identity => maps:get(Id, Identities), slot => Slot}
         || #{id := Id, base_slot := Slot} <- maps:get(members, G)]} || {I, G} <- lists:enumerate(0, Groups)]},
     Projection = hls_partition_tile:projection(Local, Physical),

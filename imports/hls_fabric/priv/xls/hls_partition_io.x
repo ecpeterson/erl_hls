@@ -7,6 +7,9 @@ import protocol_framing as framing;
 import protocol_rectangle as rectangle;
 import hls_spatial_router;
 
+// Ordinary events must fit the fixed routed gateway storage before conversion.
+const_assert!(axis::MAX_PAYLOAD <= u32:8);
+
 // Fixed external-event endpoint allocation shared with hls_partition_wire.
 const FIRST_EVENT_ENDPOINT = u16:8;
 

@@ -37,7 +37,7 @@ receiver_owned_slices_test() ->
             #{index => 5, link => 11, slot => 2}],
         physical_slots => 6, mask_bits => 9,
         startup => #{count => 2, offset => 6}, host => #{slots => 1, offset => 8}},
-    Plan = #{fabric => #{sources => [#{index => 2}], boundaries => [],
+    Plan = #{fabric => #{frame_layout => hls_frame_layout:default(), sources => [#{index => 2}], boundaries => [],
             links => [#{index => 3, destination_index => 2, slots => 1},
                 #{index => 11, destination_index => 2, slots => 3},
                 #{index => 19, destination_index => 2, slots => 2}]},

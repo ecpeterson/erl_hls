@@ -7,14 +7,15 @@ to_xls(Filename) -> to_xls(Filename, #{}).
 -doc "Selects shared reduction placement and optional physical observations.".
 -spec to_xls(file:filename(), map()) -> iolist().
 to_xls(Filename, Options) ->
-    case maps:keys(Options) -- [source_options, shared_service, mailbox_debug, direct_actor_debug, state_projection, admission_reductions, direct_collection, gather_collection] of
+    case maps:keys(Options) -- [source_options, shared_service, mailbox_debug, direct_actor_debug, state_projection, admission_reductions, direct_collection, gather_collection, frame_payload_words] of
         [] -> ok;
         Unknown -> error({invalid_xls_options, Unknown})
     end,
     Mode = maps:get(shared_service, Options, ordinary),
     case Mode of ordinary -> ok; aggregate_only -> ok; _ -> error({invalid_xls_shared_service, Mode}) end,
     Path = source(Filename),
-    try xls_parse:actor_artifact(Path, maps:get(source_options, Options, [])) of
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Options, 3)),
+    try xls_parse:actor_artifact(Path, maps:get(source_options, Options, []), Layout) of
         Spec ->
             ok = validate_shared_service(Mode, maps:get(reductions, Spec)),
             ok = xls_shared_collection_codegen:validate(Spec, Options),
@@ -46,7 +47,7 @@ to_xls(Filename, Options) ->
         case maps:is_key(state_projection, Options) of
             true -> error(state_projection_requires_hls_statem); false -> ok end,
         case {Mode, xls_scheduler_observation:enabled(Options)} of
-            {ordinary, false} -> xls_parse:to_xls(Path, maps:with([source_options, direct_actor_debug], Options));
+            {ordinary, false} -> xls_parse:to_xls(Path, maps:with([source_options, direct_actor_debug, frame_payload_words], Options));
             {ordinary, true} -> error(mailbox_debug_requires_hls_statem);
             _ -> error({unsupported_hls_gs_shared_service, Mode})
         end

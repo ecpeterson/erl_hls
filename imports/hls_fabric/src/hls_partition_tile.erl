@@ -124,10 +124,12 @@ constants(Local, #{identity := Identity, host := Host}) ->
 
 %% Little-indexed tables match DSLX's dynamic bit slices; all frame bits are explicit.
 -spec graph_constants(map()) -> [{string(), pos_integer(), non_neg_integer()}].
-graph_constants(#{schedulers := Groups, ingresses := [#{bindings := Bindings}]}) ->
-    [{"tile_startup_" ++ integer_to_list(I), length(Frames)*128, table(Frames, 128)}
+graph_constants(Local = #{schedulers := Groups, ingresses := [#{bindings := Bindings}]}) ->
+    Layout = maps:get(frame_layout, Local, hls_frame_layout:default()),
+    FrameBits = hls_frame_layout:frame_bits(Layout),
+    [{"tile_startup_" ++ integer_to_list(I), length(Frames)*FrameBits, table(Frames, FrameBits)}
         || #{index := I, actors := Actors} <- Groups,
-           Frames <- [[frame(F) || #{startup := Fs} <- Actors, F <- Fs]]] ++
+           Frames <- [[frame(F, Layout) || #{startup := Fs} <- Actors, F <- Fs]]] ++
     [{"tile_points", 32*length(Bindings), table([(X bsl 16) bor Y || #{point := [X, Y]} <- Bindings], 32)}].
 
 %% Pack a table with entry zero in the least significant bits.
@@ -135,9 +137,9 @@ graph_constants(#{schedulers := Groups, ingresses := [#{bindings := Bindings}]})
 table(Values, Width) -> lists:sum([V bsl (I*Width) || {I, V} <- lists:enumerate(0, Values)]).
 
 %% The startup wire table uses axis::bits_from_frame, not the native struct layout.
--spec frame(map()) -> non_neg_integer().
-frame(#{selector := Tag, payload := Payload}) ->
-    (hls_codec:unsigned(Payload) bsl 32) bor (Tag bsl 24) bor (bit_size(Payload) div 32).
+-spec frame(map(), hls_frame_layout:layout()) -> non_neg_integer().
+frame(#{selector := Tag, payload := Payload}, Layout) ->
+    hls_frame_layout:pack_integer(Layout, Tag, Payload).
 
 -doc "Returns a source-local RTL lane name index, or the ordinary deployment index.".
 -spec lane_id(map()) -> non_neg_integer().

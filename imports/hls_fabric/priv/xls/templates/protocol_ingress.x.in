@@ -6,7 +6,7 @@ pub type Offer = control::Offer<ACTORS>;
 pub type Decoded = control::Decoded<ACTORS>;
 
 // Accept the inherited ordinary SpatialFrame wire representation.
-pub fn decode(packet: bits[194]) -> Decoded {
+pub fn decode(packet: bits[axis::FRAME_BITS + u32:66]) -> Decoded {
   control::decode(packet, TARGETS, WIDTH, HEIGHT)
 }
 // Startup enable and reset affect visibility; live packets and consumption do not.

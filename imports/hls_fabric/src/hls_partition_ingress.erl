@@ -32,7 +32,9 @@ commands(Partition, Id, TargetId, Rectangle, Message) ->
 -doc "Validates and packs one rectangle, returning its exact selected actor bindings with the common spatial frame. Selection may be empty; each consumer decides whether that is admissible. Preserves checked binding order and metadata so host and native recipients share one geometry decision. Raises on invalid bounds, target or record encoding before any delivery.".
 -spec select(map(), atom(), atom(), {integer(), integer(), integer(), integer()}, tuple()) ->
     #{packet := bitstring(), recipients := [map()]}.
-select(#{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
+select(Partition = #{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
+    Layout = maps:get(frame_layout, Partition, hls_frame_layout:default()),
+    Capacity = hls_frame_layout:payload_bits(Layout),
     [#{shape := Shape, targets := Targets, bindings := Bindings}] =
         [I || I = #{id := Name} <- Ingresses, Name =:= Id],
     ok = bounds(Rectangle, Shape),
@@ -43,13 +45,14 @@ select(#{ingresses := Ingresses}, Id, TargetId, Rectangle, Message) ->
     Candidates = [A || A = #{targets := Names} <- Bindings, lists:member(TargetId, Names)],
     [#{module := Module} | _] = Candidates,
     Selector = Module:pack_tag(Schema),
-    Payload = hls_codec:align(Module:pack(Message), 32),
+    Stream = Module:pack(Message),
+    Payload = hls_codec:align(Stream, hls_frame_layout:word_bits()),
     Width = bit_size(Payload),
-    true = Width =< 96,
+    _ = hls_frame_layout:pack(Layout, Selector, Stream),
     <<Value:Width/little>> = Payload,
     {X0, Y0, X1, Y1} = Rectangle,
     Packet = <<X0:16, Y0:16, X1:16, Y1:16, Target:2,
-        (Width div 32):8, 0:16, Selector:8, Value:96>>,
+        (Width div 32):8, 0:16, Selector:8, Value:Capacity>>,
     Recipients = [A || A = #{point := [X, Y]} <- Candidates,
         X0 =< X, X =< X1, Y0 =< Y, Y =< Y1],
     #{packet => Packet, recipients => Recipients}.

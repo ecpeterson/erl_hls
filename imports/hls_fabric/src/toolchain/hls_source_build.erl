@@ -163,6 +163,8 @@ write(#plan{kind = Kind, config = Config, stage = Stage, libraries = Libraries, 
     _ = hls_generated_files:write(Builder:emit(Stage), Directory),
     ok = file:write_file(filename:join(Directory, "config.erl"), io_lib:format("~tp.~n", [Config]), [exclusive]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
+    ok = hls_compile:configure_support(Directory,
+        hls_frame_layout:new(maps:get(frame_payload_words, Config, 3))),
     hls_artifact_bundle:finish(Directory, Units, #{kind => Kind, backend => source_protocol, profile => hls_diagnostic:json_value(Profile)}).
 
 %% Low-level compositions share the ordinary source planner; complete application builders own theirs.

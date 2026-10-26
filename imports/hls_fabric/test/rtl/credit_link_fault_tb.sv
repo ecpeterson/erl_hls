@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 module credit_link_fault_tb;
+  parameter FRAME_WORDS=4;
+  localparam FRAME_BITS=32*FRAME_WORDS;
   reg clk=0;
   always #5 clk=~clk;
   reg reset=1;
@@ -11,8 +13,8 @@ module credit_link_fault_tb;
   wire frame0_valid,frame1_valid;
   integer timeout,observed;
   link dut(.clk(clk),.reset(reset),._link_in(beat),._link_in_vld(valid),._link_in_rdy(ready),
-    ._link_out_rdy(1'b1),._frames_in__0(128'b0),._frames_in__0_vld(1'b0),
-    ._frames_in__1(128'b0),._frames_in__1_vld(1'b0),
+    ._link_out_rdy(1'b1),._frames_in__0({FRAME_BITS{1'b0}}),._frames_in__0_vld(1'b0),
+    ._frames_in__1({FRAME_BITS{1'b0}}),._frames_in__1_vld(1'b0),
     ._frames_out__0_vld(frame0_valid),._frames_out__0_rdy(1'b1),
     ._frames_out__1_vld(frame1_valid),._frames_out__1_rdy(1'b1),
     ._fault_out(fault),._fault_out_vld(fault_valid),._fault_out_rdy(1'b1));
@@ -59,7 +61,7 @@ module credit_link_fault_tb;
     restart();send(32'h48500000,1);expect_fault(3);
     restart();send(32'h48508000,0);expect_fault(3);
     restart();send(32'h48500000,0);send(32'h0,1);expect_fault(3);
-    restart();send(32'h48500000,0);send(0,0);send(0,0);send(0,0);send(0,0);expect_fault(3);
+    restart();send(32'h48500000,0);repeat(FRAME_WORDS) send(0,0);expect_fault(3);
     restart();send(32'h48508000,1);expect_fault(4);
     $display("PASS: tag, lane, short/long framing and excess-credit faults");$finish;
   end

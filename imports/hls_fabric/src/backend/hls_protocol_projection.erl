@@ -1,6 +1,6 @@
 -module(hls_protocol_projection).
 -moduledoc "Projects ordinary entry snapshots into statically bound messages using only constants and bit wiring. Unsupported type codecs are rejected, not approximated.".
--export([plan/1, frame/2, evaluate/2]).
+-export([plan/1, frame/2, frame/3, evaluate/2]).
 -export_type([bit/0]).
 
 -doc "A constant bit or one numeric bit of the already evaluated ordinary entry payload.".
@@ -8,24 +8,32 @@
 
 -doc "Plans every ordinary entry layout and effect from the compiler's storage metadata. Keeps layout/index correlations and output port numbering. Accepts integer, boolean, recursively composed records and custom full-width bit-cast codecs with no unused representation bits. Custom codecs still require comparison against the ordinary generated decoder before protocol admission. This establishes projection structure, not source eligibility, payload lifetime or delivery order.".
 -spec plan(map()) -> map().
-plan(#{entries:=Entries,message_names:=Messages,output_names:=Ports}) ->
+plan(#{entries:=Entries,message_names:=Messages,output_names:=Ports,frame_layout:=FrameLayout}) ->
     Layouts=lists:append([Ls||#{layouts:=Ls}<-Entries]),
     Ids=[L||#{layout:=L}<-Layouts],true=length(Ids)=:=length(lists:usort(Ids)),
-    Rows=[#{layout=>L,index=>I,port=>P,tag=>T,frame=>frame(E,Messages),
+    Rows=[#{layout=>L,index=>I,port=>P,tag=>T,frame=>frame(E,Messages,FrameLayout),
         port_number=>number(P,Ports,0)} || #{layout:=L,storage:=#{effects:=Es}}<-Layouts,
         {I,E=#{port:=P,tag:=T}}<-lists:enumerate(0,Es)],
     Width=lists:max([1|[B||#{storage:=#{bits:=B}}<-Layouts]]),
     true=lists:all(fun(#{frame:=Bits})->lists:all(fun
         ({payload,J})->J<Width;(_)->true end,Bits) end,Rows),
-    #{payload_width=>Width,rows=>Rows,layouts=>Ids,invalid_layout_or_index=>zero}.
+    #{frame_layout=>FrameLayout,payload_width=>Width,rows=>Rows,layouts=>Ids,invalid_layout_or_index=>zero}.
 
--doc "Returns the complete ordinary actor frame in numeric low-bit-first order: the current axis::Frame = FrameN<3> ABI has a 32-bit header and 96-bit payload capacity. This is an external ABI bound, not the source snapshot or compact capture width. Field constants use physical source bitstrings; dynamic fields use ordinary storage offsets and known-bit slices. Representation-preserving built-ins and full-width ordinary bit-cast codecs are admitted; custom conversion or padding is rejected.".
+-doc "Returns an ordinary actor frame projection with the default canonical capacity. Use frame/3 when the enclosing compiler program selects a different layout.".
 -spec frame(map(),[atom()]) -> [bit()].
-frame(#{tag:=Tag,fields:=Fields},Messages) ->
-    Stream=lists:append([field(F)||F<-Fields]),N=length(Stream),true=N=<96,
-    Header=(number(Tag,Messages,3) bsl 24) bor ((N+31) div 32),
-    Padded=Stream++lists:duplicate(96-N,0),
-    integer_bits(Header,32)++[lists:nth(stream_bit(J,96)+1,Padded)||J<-lists:seq(0,95)].
+frame(Effect, Messages) -> frame(Effect, Messages, hls_frame_layout:default()).
+
+-doc "Returns the complete selected canonical frame in numeric low-bit-first order. Field constants use physical bitstrings; dynamic fields retain compiler storage offsets and known-bit slices. Rejects messages exceeding the layout or codecs with custom conversion or padding; capture width remains independent of frame capacity.".
+-spec frame(map(), [atom()], hls_frame_layout:layout()) -> [bit()].
+frame(#{tag:=Tag,fields:=Fields},Messages,FrameLayout) ->
+    Stream=lists:append([field(F)||F<-Fields]),N=length(Stream),
+    PayloadBits=hls_frame_layout:payload_bits(FrameLayout),
+    Words=hls_frame_layout:check_payload(FrameLayout,N),
+    Header=hls_codec:unsigned(hls_frame_layout:pack_header(#{op=>number(Tag,Messages,3),flags=>0,txid=>0,
+        payload_words=>Words})),
+    Padded=Stream++lists:duplicate(PayloadBits-N,0),
+    integer_bits(Header,hls_frame_layout:header_bits())++
+        [lists:nth(hls_codec:stream_bit_index(PayloadBits,J)+1,Padded)||J<-lists:seq(0,PayloadBits-1)].
 
 -doc "Evaluates a planned low-bit-first projection for diagnostics and host-codec comparisons. Payload is a nonnegative numeric ordinary entry snapshot; bits outside referenced positions are irrelevant.".
 -spec evaluate([bit()],non_neg_integer()) -> non_neg_integer().
@@ -38,7 +46,7 @@ field(F=#{type:=Type}) ->
     ok=wire_type(Type),Width=hls_type:width(Type),
     case F of
         #{constant:=Bits}->Width=bit_size(Bits),[B||<<B:1>><=Bits];
-        _->Raw=raw(F,Width),[lists:nth(stream_bit(J,Width)+1,Raw)||J<-lists:seq(0,Width-1)]
+        _->Raw=raw(F,Width),[lists:nth(hls_codec:stream_bit_index(Width,J)+1,Raw)||J<-lists:seq(0,Width-1)]
     end.
 
 %% Integer slices are packed low-first by the ordinary compiler; every omitted bit is fixed.
@@ -62,16 +70,11 @@ wire_type({hls_type,hls_bool,bool,[]}) -> ok;
 wire_type({hls_type,hls_record,_,Fields}) -> lists:foreach(fun({_,T})->wire_type(T) end,Fields);
 wire_type(Type) ->
     Width=hls_type:width(Type),
-    case hls_type:dslx_codec(Type)=:=bit_cast andalso Width>0 andalso Width=<96
+    case hls_type:dslx_codec(Type)=:=bit_cast andalso Width>0
             andalso hls_type:value_width(Type)=:=Width of
         true->ok;
         false->error({unsupported_protocol_codec,Type})
     end.
-
-%% Complete low bytes precede a partial high byte, exactly as in the shared hls_bits codec.
--spec stream_bit(non_neg_integer(),pos_integer()) -> non_neg_integer().
-stream_bit(J,Width) when J<(Width div 8)*8 -> (J div 8)*8+7-(J rem 8);
-stream_bit(J,Width) -> Width-1-(J-(Width div 8)*8).
 
 %% Header, port and known-field constants use numeric low-bit-first order.
 -spec integer_bits(non_neg_integer(),non_neg_integer()) -> [0|1].

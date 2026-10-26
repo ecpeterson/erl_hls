@@ -4,24 +4,25 @@
 
 -doc "Finds homogeneous batches with identical stored fields and only constant-field differences. Unrecognized layouts remain serial.".
 -spec plan(map()) -> map().
-plan(#{entries := Entries}) ->
+plan(Spec = #{entries := Entries}) ->
+    Layout = maps:get(frame_layout, Spec, hls_frame_layout:default()),
     Layouts = lists:append([Ls || #{layouts := Ls} <- Entries]),
-    Shared = lists:filtermap(fun shared_layout/1, Layouts),
+    Shared = lists:filtermap(fun(L) -> shared_layout(L, Layout) end, Layouts),
     Mask = lists:foldl(fun(#{values := Values}, Acc) ->
         [Base | _] = Values,
         lists:foldl(fun(Value, M) -> M bor (Value bxor Base) end, Acc, Values)
     end, 0, Shared),
-    Positions = [Bit || Bit <- lists:seq(0, 127), Mask band (1 bsl Bit) =/= 0],
+    Positions = [Bit || Bit <- lists:seq(0, hls_frame_layout:frame_bits(Layout) - 1), Mask band (1 bsl Bit) =/= 0],
     #{positions => Positions, layouts => Shared}.
 
 %% Equality requires the same tag and matching field type/storage provenance.
--spec shared_layout(map()) -> false | {true, map()}.
-shared_layout(#{layout := Id, storage := #{effects := [First, _ | _] = Effects}}) ->
+-spec shared_layout(map(), hls_frame_layout:layout()) -> false | {true, map()}.
+shared_layout(#{layout := Id, storage := #{effects := [First, _ | _] = Effects}}, Layout) ->
     case lists:all(fun(Effect) -> compatible(First, Effect) end, Effects) of
-        true -> {true, #{layout => Id, values => [constant_frame(E) || E <- Effects]}};
+        true -> {true, #{layout => Id, values => [constant_frame(E, Layout) || E <- Effects]}};
         false -> false
     end;
-shared_layout(_) -> false.
+shared_layout(_, _) -> false.
 
 %% Constants may vary; every live field must reuse the identical stored slice.
 -spec compatible(map(), map()) -> boolean().
@@ -38,11 +39,11 @@ same_field(_, _) -> false.
 
 %% Match the record's physical bitstream, frame word padding and low wire header.
 %% Dynamic fields are zero only for calculating differences between equal values.
--spec constant_frame(map()) -> non_neg_integer().
-constant_frame(#{fields := Fields}) ->
+-spec constant_frame(map(), hls_frame_layout:layout()) -> non_neg_integer().
+constant_frame(#{fields := Fields}, Layout) ->
     Stream = << <<(field_bits(F))/bitstring>> || F <- Fields >>,
-    Padding = (32 - bit_size(Stream) rem 32) rem 32,
-    binary:decode_unsigned(<<Stream/bitstring, 0:Padding>>, little) bsl 32.
+    %% Equal-tag batches share the same header; only payload differences survive XOR.
+    hls_frame_layout:pack_integer(Layout, 0, Stream).
 
 %% The entry storage planner already serialized constants with the field codec.
 -spec field_bits(map()) -> bitstring().
@@ -68,8 +69,8 @@ helpers(Spec) ->
      "// Apply the selected constant-field difference; all other bits are unchanged.\n",
      "pub fn publication_frame(base: axis::Frame, difference: PublicationPatch) -> axis::Frame {\n",
      "  let raw = axis::bits_from_frame(base);\n",
-     "  axis::frame_from_bits(raw ^ (", lists:join(" | ", ["bits[128]:0" |
-       [["(((difference >> u32:", n(I), ") as u1) as bits[128]) << u32:", n(Bit)]
+     "  axis::frame_from_bits(raw ^ (", lists:join(" | ", ["bits[axis::FRAME_BITS]:0" |
+       [["(((difference >> u32:", n(I), ") as u1) as bits[axis::FRAME_BITS]) << u32:", n(Bit)]
         || {I, Bit} <- lists:enumerate(0, Positions)]]), "))\n}\n\n"].
 
 %% Gather only the union of varying bits, in ascending physical-bit order.

@@ -1,10 +1,14 @@
 -module(hls_topology_constants).
 -moduledoc "Derives phase-local constants from exact actor routes and fixed startup messages.".
--export([specialize/2, requirements/2]).
+-export([specialize/2, specialize/3, requirements/2]).
 
 -doc "Annotates opted-in exact-actor groups with compact state layouts; other groups retain ordinary storage.".
 -spec specialize(hls_topology:plan(), [map()]) -> [map()].
-specialize(Plan, Groups) ->
+specialize(Plan, Groups) -> specialize(Plan, Groups, hls_frame_layout:default()).
+
+-doc "Annotates opted-in exact-actor groups using the selected ordinary-frame capacity for source validation.".
+-spec specialize(hls_topology:plan(), [map()], hls_frame_layout:layout()) -> [map()].
+specialize(Plan, Groups, Layout) ->
     case lists:any(fun(G) -> maps:get(specialize_state, G, false) end, Groups) of
         false -> Groups;
         true ->
@@ -12,9 +16,9 @@ specialize(Plan, Groups) ->
                 {[], []} -> ok;
                 _ -> error(state_specialization_requires_exact_topology)
             end,
-            Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- maps:get(actors, Plan)]),
+            Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- maps:get(actors, Plan)], Layout),
             Selected = lists:usort([M || #{module := M, specialize_state := true} <- Groups]),
-            Sources = maps:from_list([{M, source(M, maps:get(M, Interfaces))} || M <- Selected]),
+            Sources = maps:from_list([{M, source(M, maps:get(M, Interfaces), Layout)} || M <- Selected]),
             Facts = maps:from_list([{Id, actor(Plan, Id, maps:get(M, Sources), maps:get(M, Interfaces), Interfaces)} ||
                 #{id := Id, module := M} <- maps:get(actors, Plan),
                 lists:member(M, Selected)]),
@@ -81,8 +85,8 @@ field_constant({tuple, Values}, Index) when Index =< length(Values) ->
 field_constant(_, _) -> unknown.
 
 %% Source validation is shared across instances, only within this planning pass.
--spec source(module(), map()) -> map().
-source(Module, Interface) ->
+-spec source(module(), map(), hls_frame_layout:layout()) -> map().
+source(Module, Interface, Layout) ->
     case maps:get(reply_storage_width, Interface, 0) of
         0 -> ok;
         _ -> error({state_specialization_protocol, Module})
@@ -90,7 +94,7 @@ source(Module, Interface) ->
     [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
     Source = maps:get(source_name, Context), Forms = hls_records:resolve(hls_source:read(Source, Context)),
     %% Validate ordinary lowering, then inspect its current source without executing callbacks.
-    _ = xls_parse:actor_artifact(Source, Context),
+    _ = xls_parse:actor_artifact(Source, Context, Layout),
     #{forms => Forms, phases => maps:get(phases, Interface),
       source_hash => binary:encode_hex(crypto:hash(sha256, term_to_binary(Forms)))}.
 

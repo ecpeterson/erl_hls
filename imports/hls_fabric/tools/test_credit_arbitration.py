@@ -14,13 +14,13 @@ def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int)
     """Compile the static transmitter and validate opaque traffic under sparse/saturated loads."""
     stage.mkdir(parents=True, exist_ok=False)
     sources = [source, ROOT / 'test/xls/credit_arbitration.x',
-               public / 'priv/xls/lib/axis.x']
+               public / 'priv/xls/lib/axis.x', public / 'priv/xls/lib/frame_config.x']
     template = ROOT / 'test/rtl/credit_arbitration_tb.sv'
     tracked = [*sources, template, Path(__file__), ROOT / 'tools/backend_commands.py',
                *[xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls / 'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}
-    for original, name in zip(sources, ['hls_credit_link.x', 'credit_arbitration.x', 'axis.x']):
+    for original, name in zip(sources, ['hls_credit_link.x', 'credit_arbitration.x', 'axis.x', 'frame_config.x']):
         shutil.copy(original, stage / name)
     ports = []
     for i in range(12):

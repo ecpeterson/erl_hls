@@ -1,3 +1,4 @@
+import axis;
 import arbitration;
 
 // Cursor and held producer indices are legal only below the caller's fan-in N.
@@ -6,7 +7,7 @@ pub struct State<C: u32> { cursor: bits[C], held: bool, owner: bits[C] }
 // One frame and one-hot producer acceptance. Frame is unspecified while invalid;
 // selected/index are diagnostic values.
 pub struct Observation<N: u32> {
-  valid: bool, frame: bits[128], ready: bits[N], selected: bits[N], index: u32,
+  valid: bool, frame: bits[axis::FRAME_BITS], ready: bits[N], selected: bits[N], index: u32,
 }
 // Registered arbitration ownership plus pre-edge output/handshake observations.
 pub struct Tick<N: u32, C: u32> { state: State<C>, output: Observation<N> }
@@ -15,7 +16,7 @@ pub struct Tick<N: u32, C: u32> { state: State<C>, output: Observation<N> }
 // valid/frame until ready. The held index makes later arrivals unable to replace
 // a stalled frame. Current valid/frame/selection never depend on out_ready.
 pub fn observe<N: u32, C: u32>(s: State<C>, reset: bool, valid: bits[N],
-                               frames: bits[128][N], out_ready: bool) -> Observation<N> {
+                               frames: bits[axis::FRAME_BITS][N], out_ready: bool) -> Observation<N> {
   const_assert!(N > u32:0 && N <= u32:256 && C > u32:0 && C <= u32:8 && (u32:1 << C) >= N);
   let (fresh_valid, fresh_index) = arbitration::select(rev(valid) as bool[N], s.cursor);
   let index = if s.held { s.owner } else { fresh_index };
@@ -33,7 +34,7 @@ pub fn observe<N: u32, C: u32>(s: State<C>, reset: bool, valid: bits[N],
 // stalled frame locks its source; reset cancels the lock. Fairness counts accepted
 // competing transfers under persistent requests, not elapsed clocks or progress.
 pub fn tick<N: u32, C: u32>(s: State<C>, reset: bool, valid: bits[N],
-                            frames: bits[128][N], out_ready: bool) -> Tick<N,C> {
+                            frames: bits[axis::FRAME_BITS][N], out_ready: bool) -> Tick<N,C> {
   let output = observe(s, reset, valid, frames, out_ready);
   let transferred = output.valid && out_ready;
   let state = if reset { zero!<State<C>>() }

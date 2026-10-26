@@ -212,17 +212,17 @@ encode(#{source_module := Module, classes := Classes}, Port, Message) ->
 
 %% The destination fixes the ordinary header while the source contributes the exact record bitstream.
 -spec ordinary_frame(class() | codec_class(), bitstring()) -> non_neg_integer().
-ordinary_frame(#{codec := #{value := Value}, message_bits := Width}, Packed) ->
+ordinary_frame(#{codec := #{value := Value, frame_layout := Layout}, message_bits := Width}, Packed) ->
     Width = bit_size(Packed),
-    Payload = binary:decode_unsigned(hls_codec:pad_to(Packed, 96), little),
-    (Value band 16#ffffffff) bor (Payload bsl 32).
+    hls_frame_layout:pack_integer(Layout, (Value bsr 24) band 255, Packed).
 
 -doc "Checks a canonical crossing frame and decodes its bound destination record, including a packed round trip. Caller authenticates the link/session and must acknowledge only after actual destination admission; failure is never permission to replay.".
 -spec decode(link() | decoder_link(), byte(), non_neg_integer()) -> tuple().
 decode(#{destination_module := Module, classes := Classes}, Slot, Frame) ->
     [#{tag := Tag, codec := Codec, message_bits := Width}] = [C || C = #{slot := I} <- Classes, I =:= Slot],
     {ok, _} = hls_protocol_codec:encode(Codec, Frame),
-    <<Packed:Width/bitstring, _/bitstring>> = <<(Frame bsr 32):96/little>>,
+    {_, Payload} = hls_frame_layout:unpack_integer(maps:get(frame_layout, Codec), Frame),
+    <<Packed:Width/bitstring, _/bitstring>> = Payload,
     {Message, <<>>} = Module:unpack(Tag, Packed),
     Packed = Module:pack(Message),
     Message.

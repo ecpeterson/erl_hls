@@ -10,11 +10,12 @@
 -doc "Returns sampled crossing input/output fields grouped by direction, preserving global link order within each group. Incoming links expose ready/fault and a per-class free mask; outgoing links expose immutable slot/frame while valid. Each peer supplies the complementary handshake. No serial framing or clock crossing is provided.".
 -spec ports(map()) -> {[{string(),pos_integer()}],[{string(),pos_integer()}]}.
 ports(Plan) ->
+    FrameBits=hls_frame_layout:frame_bits(maps:get(frame_layout,Plan,hls_frame_layout:default())),
     Incoming=[L||L=#{direction:=incoming}<-maps:get(crossings,Plan,[])],
     Outgoing=[L||L=#{direction:=outgoing}<-maps:get(crossings,Plan,[])],
-    {lists:append([offer(I)||#{index:=I}<-Incoming])++[{name(I)++"_ready",1}||#{index:=I}<-Outgoing],
+    {lists:append([offer(I,FrameBits)||#{index:=I}<-Incoming])++[{name(I)++"_ready",1}||#{index:=I}<-Outgoing],
         lists:append([[{name(I)++"_ready",1},{name(I)++"_fault",1},{name(I)++"_free",N}]||#{index:=I,slots:=N}<-Incoming])++
-        lists:append([offer(I)||#{index:=I}<-Outgoing])}.
+        lists:append([offer(I,FrameBits)||#{index:=I}<-Outgoing])}.
 
 -doc "Writes each source-bound crossing codec to an exclusive DSLX file beside transport.x. Requires the fresh partition planner's classes; generated logic validates header, padding and omitted constants and preserves every dynamic bit.".
 -spec write(map(),file:filename()) -> ok.
@@ -32,6 +33,7 @@ emit(Plan) ->
 -spec wiring(hls_protocol_fabric:plan()) -> wiring().
 wiring(Plan) ->
     Cross = maps:get(crossings, Plan, []),
+    FrameBits=hls_frame_layout:frame_bits(maps:get(frame_layout,Plan,hls_frame_layout:default())),
     Incoming = [L || L = #{direction := incoming} <- Cross],
     Imports = case Cross of
         [] -> [];
@@ -40,14 +42,14 @@ wiring(Plan) ->
     end,
     #{imports => Imports,
       state => [[name(I), ": crossing_control::State,\n"] || #{index := I} <- Incoming],
-      views => lists:append([view(L) || L <- Cross]),
+      views => lists:append([view(L,FrameBits) || L <- Cross]),
       next => [{name(I), xls_dslx:call("crossing_control::next", [
           field("s", name(I)), ref(name(I)++"_input")])} || #{index := I} <- Incoming],
       values => lists:append([values(L) || L <- Cross])}.
 
 %% Decode only the offered class, preserving canonical rejection before native capture.
--spec view(hls_protocol_partition:crossing()) -> [xls_dslx:binding()].
-view(#{index := I, direction := incoming, input_bits := W, classes := Classes}) ->
+-spec view(hls_protocol_partition:crossing(), pos_integer()) -> [xls_dslx:binding()].
+view(#{index := I, direction := incoming, input_bits := W, classes := Classes}, _FrameBits) ->
     R = name(I),
     Arms = [{xls_dslx:literal("u8", K), xls_dslx:block([
         xls_dslx:bind("converted", xls_dslx:call(codec_name(I,K)++"::convert", [
@@ -61,15 +63,15 @@ view(#{index := I, direction := incoming, input_bits := W, classes := Classes}) 
         {"canonical",ref(R++"_canonical")}, {"slot_ready",field("link_"++n(I),"ready")}])),
      xls_dslx:bind(R, xls_dslx:call("crossing_control::observe", [field("s",R),ref(R++"_input")]))];
 view(#{index := I, direction := outgoing, source_index := S, output_index := D,
-        output := #{offset := At, width := W}, classes := Classes}) ->
+        output := #{offset := At, width := W}, classes := Classes}, FrameBits) ->
     R = name(I),
     [xls_dslx:bind(R++"_slot", xls_dslx:slice(field("source_"++n(S),"channel"),D*8,8)),
      xls_dslx:bind(R++"_payload", xls_dslx:slice(field("source_"++n(S),"data"),At,W)),
      xls_dslx:bind(R++"_frame", xls_dslx:match(ref(R++"_slot"),
         [{xls_dslx:literal("u8",K), xls_dslx:field(xls_dslx:call(codec_name(I,K)++"::convert", [
-            xls_dslx:literal({bits,128},0), xls_dslx:cast(ref(R++"_payload"),{bits,P}),
+            xls_dslx:literal({bits,FrameBits},0), xls_dslx:cast(ref(R++"_payload"),{bits,P}),
             ref("false"),ref("false"),ref("false"),ref("false")]),1)}
-            || #{slot := K, codec := #{physical_width := P}} <- Classes]++[{ref("_"),xls_dslx:literal({bits,128},0)}]))].
+            || #{slot := K, codec := #{physical_width := P}} <- Classes]++[{ref("_"),xls_dslx:literal({bits,FrameBits},0)}]))].
 
 %% Remote outputs remain observations of held state; free credit cannot see this edge's release.
 -spec values(hls_protocol_partition:crossing()) -> [{string(), xls_dslx:expr()}].
@@ -99,8 +101,8 @@ files(Plan) -> ["dslx/"++codec_name(I,K)++".x"||#{index:=I,classes:=Cs}<-maps:ge
 name(I) -> "remote_"++n(I).
 
 %% Every offer has the same canonical frame width regardless of compact slot width.
--spec offer(non_neg_integer()) -> [{string(),pos_integer()}].
-offer(I) -> [{name(I)++"_valid",1},{name(I)++"_slot",8},{name(I)++"_frame",128}].
+-spec offer(non_neg_integer(), pos_integer()) -> [{string(),pos_integer()}].
+offer(I,FrameBits) -> [{name(I)++"_valid",1},{name(I)++"_slot",8},{name(I)++"_frame",FrameBits}].
 
 %% One static codec per source-derived slot avoids any caller-selected schema.
 -spec codec_name(non_neg_integer(),non_neg_integer()) -> string().

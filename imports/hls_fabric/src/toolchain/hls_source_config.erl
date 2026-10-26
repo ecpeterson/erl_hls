@@ -10,7 +10,8 @@
 %% fields one owner while keeping every exported per-kind map closed.
 -define(SOURCE_FIELDS,
     sources := [source_file(), ...], topology := topology(), actor_limit := 1 .. (1 bsl 16),
-    protocol_model => hls_protocol_model:request(), dslx_path => [file:filename()]).
+    protocol_model => hls_protocol_model:request(), dslx_path => [file:filename()],
+    frame_payload_words => hls_frame_layout:words()).
 -define(PLACEMENT_FIELDS,
     native_actors => [hls_protocol_topology:id(), ...],
     arithmetic_groups => [[hls_protocol_topology:id(), ...]]).
@@ -125,7 +126,7 @@ validate(Kind, Config) ->
 -spec fields(hls_source_build:kind()) -> {[atom()], [atom()]}.
 fields(Kind) ->
     Source = [sources, topology, actor_limit],
-    Optional = [protocol_model, dslx_path, arithmetic_groups],
+    Optional = [protocol_model, dslx_path, arithmetic_groups, frame_payload_words],
     case Kind of
         transport -> {Source, Optional ++ [native_actors]};
         K when K =:= network; K =:= boundary ->
@@ -171,6 +172,8 @@ field(topology, Value, Path) ->
         _ -> false
     end,
     need(Valid, Path, <<"{module, function, argument_list}">>, Value);
+field(frame_payload_words, Value, _Path) ->
+    _ = hls_frame_layout:new(Value), ok;
 field(actor_limit, Value, Path) ->
     need(is_integer(Value) andalso Value >= 1 andalso Value =< 65536, Path, <<"integer in 1..65536">>, Value);
 field(dslx_path, Value, Path) ->

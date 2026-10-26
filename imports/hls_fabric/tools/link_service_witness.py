@@ -36,7 +36,7 @@ pub proc Top {{
 
 def compile_link(xls: Path, public: Path, stage: Path, words: int, credits: int, compact: bool = False) -> dict:
     """Compile a fresh bridge, or reuse only a complete digest-matched build."""
-    tracked = [ROOT/'priv/xls/hls_packed_link.x', public/'priv/xls/lib/axis.x', Path(__file__),
+    tracked = [ROOT/'priv/xls/hls_packed_link.x', public/'priv/xls/lib/axis.x', public/'priv/xls/lib/frame_config.x', Path(__file__),
                ROOT/'tools/test_packed_credit.py', ROOT/'tools/backend_commands.py',
                ROOT/'tools/transport_codegen.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
@@ -49,7 +49,7 @@ def compile_link(xls: Path, public: Path, stage: Path, words: int, credits: int,
             raise ValueError('packed-link inputs or completed RTL changed')
         return record
     stage.mkdir(parents=True, exist_ok=False)
-    for path in tracked[:2]:
+    for path in tracked[:3]:
         shutil.copy(path, stage/path.name)
     (stage/'top.x').write_text(wrapper(words, credits, compact))
     commands = [

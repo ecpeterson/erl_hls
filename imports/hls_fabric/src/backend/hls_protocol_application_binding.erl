@@ -17,7 +17,7 @@
 %% Wire selection indexes targets independently of actor and transport endpoint identities.
 -type target() :: #{id := hls_protocol_topology:id(), selector := non_neg_integer(), schemas := [atom()]}.
 %% A rectangle's checked source recipients retain global coordinates through native placement.
--type ingress() :: #{id := hls_protocol_topology:id(), shape := [pos_integer()],
+-type ingress() :: #{frame_layout := hls_frame_layout:layout(), id := hls_protocol_topology:id(), shape := [pos_integer()],
     targets := [target()], bindings := [recipient()]}.
 %% Source ports use the shared partition actor identity while logical recipient IDs stay unchanged.
 -type route() :: #{source := {{actor, hls_protocol_topology:id()}, atom()},
@@ -25,7 +25,7 @@
     delivery := direct | coupled | buffered | queued | best_effort}.
 
 -doc "The checked host view of source actors, routes and rectangle ingress. It contains no sessions, queues or emitted hardware identities.".
--type partition() :: #{actors := [actor()], routes := [route()], ingresses := [ingress()]}.
+-type partition() :: #{frame_layout := hls_frame_layout:layout(), actors := [actor()], routes := [route()], ingresses := [ingress()]}.
 
 %% This is the compiler interface field shape emitted by xls_statem_lower:record_fields/1.
 -type schema_field() :: #{name := atom(), type := hls_type:descriptor()}.
@@ -38,17 +38,17 @@
 -doc "Static source-checked host endpoints and event codecs for one device, before a gateway adapter or attachment identity is added.".
 -type binding() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
     ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
-    activation := explicit_start}.
+    frame_layout := hls_frame_layout:layout(), activation := explicit_start}.
 
 -doc "A whole-application host binding with its checked framed control adapter; emitted attachment identity is still absent.".
 -type gateway() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
     ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
-    activation := explicit_start, control_adapter := hls_protocol_control:hardware()}.
+    frame_layout := hls_frame_layout:layout(), activation := explicit_start, control_adapter := hls_protocol_control:hardware()}.
 
 -doc "The emitted whole-application binding, with the exact hardware attachment identity required by the stream client.".
 -type attached_gateway() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
     ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
-    activation := explicit_start, control_adapter := hls_protocol_control:hardware(), identity := binary()}.
+    frame_layout := hls_frame_layout:layout(), activation := explicit_start, control_adapter := hls_protocol_control:hardware(), identity := binary()}.
 
 -doc "Source partition and device bindings, parameterized only by the owning build stage's concrete endpoint binding.".
 -type application(Binding) :: #{partition := partition(), devices := #{hls_source_config:device() => Binding}}.
@@ -77,7 +77,7 @@
 -spec bind(hls_protocol_transport:bundle(), none | hls_protocol_control:plan(),
     #{hls_protocol_topology:id() => hls_source_config:device()},
     #{hls_source_config:device() => hls_source_config:endpoint()}) -> application().
-bind(#{topology := Topology = #{actors := Actors, routes := Routes, externals := Externals},
+bind(#{frame_layout := Layout, topology := Topology = #{actors := Actors, routes := Routes, externals := Externals},
         modules := Modules}, Control, Owners, Hosts) ->
     ok = check_ownership(Actors, Owners, Hosts),
     Interfaces = checked_interfaces(Modules),
@@ -86,11 +86,11 @@ bind(#{topology := Topology = #{actors := Actors, routes := Routes, externals :=
     Ingresses = hls_protocol_control:host_ingresses(Control, Bound),
     PortRoutes = [R#{source := {{actor, Id}, Port}} || R = #{source := {Id, Port}} <- Routes],
     Ports = [E#{port => "external_" ++ integer_to_list(I)} || {I, E} <- lists:enumerate(0, Externals)],
-    Partition = #{actors => Bound, routes => PortRoutes, ingresses => Ingresses},
+    Partition = #{frame_layout => Layout, actors => Bound, routes => PortRoutes, ingresses => Ingresses},
     Devices = maps:map(fun(Device, Host) ->
         Raw = hls_partition_wire:binding(Partition, Device, Host,
             #{ingresses => Ingresses, externals => Ports}),
-        (maps:remove(identity, Raw))#{activation => explicit_start}
+        (maps:remove(identity, Raw))#{frame_layout => Layout, activation => explicit_start}
     end, Hosts),
     #{partition => Partition, devices => Devices}.
 
@@ -134,17 +134,12 @@ delivery(#{partition := Partition}, {Ingress, Target, Bounds, Record}) ->
 -doc "Decodes a canonical external frame at the emitted global endpoint index, using only the emitting device's producer schemas. Rejects unknown selectors, wrong word counts and noncanonical padding. This is codec validation, not application-semantic validation.".
 -spec event(checked_application(), hls_source_config:device(), byte(), non_neg_integer()) ->
     {hls_protocol_topology:id(), tuple()}.
-event(#{devices := Devices}, Device, Index, Frame) when Frame >= 0, Frame < (1 bsl 128) ->
-    Binding = #{host := Host, events := Events} = maps:get(Device, Devices),
+event(#{devices := Devices}, Device, Index, Frame) ->
+    Binding = #{host := Host, events := Events, frame_layout := Layout} = maps:get(Device, Devices),
     Port = "external_" ++ integer_to_list(Index),
     [Endpoint] = [E || {E, #{port := P}} <- maps:to_list(Events), P =:= Port],
-    Words = Frame band 255,
-    true = Words =< 3,
-    0 = (Frame bsr 8) band 65535,
-    Value = Frame bsr 32,
-    true = Value < (1 bsl (Words * 32)),
-    Tag = (Frame bsr 24) band 255,
-    hls_partition_wire:event(Binding, {Endpoint, Host}, {Tag, 0, 0}, <<Value:(Words * 32)/little>>).
+    {#{op := Tag, txid := 0, flags := 0}, Payload} = hls_frame_layout:unpack_integer(Layout, Frame),
+    hls_partition_wire:event(Binding, {Endpoint, Host}, {Tag, 0, 0}, Payload).
 
 %% Field names/order, types, selectors and packed width must match fresh compiler records.
 -spec check_codec(module(), hls_local_actor:source() | hls_local_actor:artifact(), hls_actor_interface:summary()) -> ok.

@@ -2,6 +2,7 @@
 // coordinated reset; sessions identify incarnations, not authenticated principals.
 // One RX frame and one immutable TX frame. No replay after ambiguous delivery.
 
+import axis;
 import protocol_framing as framing;
 import protocol_envelope as envelope;
 
@@ -107,7 +108,8 @@ fn inspect_receive<I: u32, C: u32, O: u32, E: u32>(s: State<I,C,O>, io: Inputs<I
       owner.sequence == packet.sequence && owner.slot == packet.slot)
   }(bool[O]:[false,...]);
   let known_ack = for (i, any): (u32, bool) in u32:0..O { any || acknowledgments[i] }(false);
-  let data = envelope && packet.kind == u8:1 && credited && input_ready && sequence_ok;
+  let fits = packet.frame == ((packet.frame as bits[axis::FRAME_BITS]) as bits[128]);
+  let data = envelope && packet.kind == u8:1 && credited && input_ready && sequence_ok && fits;
   let ack = envelope && packet.kind == u8:2 && packet.frame == bits[128]:0 && known_ack;
   let legal = attach || setup || start || data || ack;
   Reception { packet, attach, setup, start, data, ack, inputs, credits, acknowledgments,

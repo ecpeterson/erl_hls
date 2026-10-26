@@ -10,7 +10,7 @@ dense_constant_patch_test() ->
         xls_publication_codegen:plan(spec([layout(0, Effects)])),
     ?assertEqual([33, 34], Positions),
     %% ERTS writes the three key bits before the seven member bits, then value.
-    ?assertEqual([V bsl 32 || V <- [16#4000, 16#4004, 16#4002]], Values).
+    ?assertEqual([(V bsl 32) bor 1 || V <- [16#4000, 16#4004, 16#4002]], Values).
 
 %% The member field uses its packed little-endian bytes, including beyond byte 0.
 -spec multibyte_constant_patch_test() -> ok.
@@ -19,7 +19,7 @@ multibyte_constant_patch_test() ->
         || V <- [1, 257]],
     #{positions := [72], layouts := [#{values := Values}]} =
         xls_publication_codegen:plan(spec([layout(0, Effects)])),
-    ?assertEqual([1 bsl 64, 257 bsl 64], Values).
+    ?assertEqual([(1 bsl 64) bor 2, (257 bsl 64) bor 2], Values).
 
 %% Empty records still carry their tag, and identical frames need no patch bits.
 -spec empty_message_batch_test() -> ok.

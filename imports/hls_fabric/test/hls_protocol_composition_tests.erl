@@ -190,7 +190,8 @@ shared_arithmetic_plan() ->
     assert_early_emissions(Calls),
     lists:foreach(fun({#{manifest := Before}, #{manifest := After = #{dslx_sha256 := Hash}}}) ->
         ?assertEqual(64, byte_size(Hash)),
-        ?assertEqual(Before, maps:remove(dslx_sha256, After))
+        ?assertEqual(64, byte_size(maps:get(frame_config_sha256, After))),
+        ?assertEqual(Before, maps:without([dslx_sha256, frame_config_sha256], After))
     end, lists:zip(StaticReceivers, Receivers)).
 
 %% Unsupported reply ownership must reject at preparation, before owner rendering can begin.
@@ -229,7 +230,7 @@ retained_plan(Builder, Config) ->
         case Builder of
             hls_protocol_deployment ->
                 ?assertEqual(2, maps:get({compile, file, 2}, PlanningCalls, 0)),
-                ?assertEqual(2, maps:get({xls_actor_program, from_file, 2}, PlanningCalls, 0)),
+                ?assertEqual(2, maps:get({xls_actor_program, from_file, 3}, PlanningCalls, 0)),
                 ?assertEqual(1, maps:get({hls_protocol_transport, prepare, 1}, PlanningCalls, 0));
             _ -> ok
         end,
@@ -388,8 +389,8 @@ composition_targets() -> [{hls_protocol_transport, emit, 1}, {xls_protocol_netwo
 
 %% Source preparation and source topology evaluation are distinct from support/template reads.
 -spec source_targets() -> [{module(), atom(), arity()}].
-source_targets() -> [{compile, file, 2}, {xls_actor_program, from_file, 2},
-    {xls_statem_plan, from_file, 2}, {hls_protocol_transport, prepare, 1},
+source_targets() -> [{compile, file, 2}, {xls_actor_program, from_file, 3},
+    {xls_statem_plan, from_file, 3}, {hls_protocol_transport, prepare, 1},
     {hls_protocol_topology, elaborate, 2}].
 
 %% Select actual hardware generation without counting legitimate source preparation during planning.

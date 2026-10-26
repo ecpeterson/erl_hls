@@ -66,10 +66,15 @@ command(#{partition := Partition, devices := Devices}, {Ingress, Target, Bounds,
         {Device, {Host, Control}, {2, 0, 0}, control_payload(Packet)}
     end || {Device, Packet} <- hls_partition_ingress:commands(Partition, Ingress, Target, Bounds, Message)].
 
--doc "Converts a checked 194-bit spatial command to its routed little-endian rectangle payload. Keeps global bounds and sends exactly the declared ordinary payload words. This is wire packing, not source schema validation; use select/5 or commands/5 in hls_partition_ingress first.".
+-doc "Converts a checked spatial command with any ordinary-frame capacity to its routed little-endian rectangle payload. Keeps global bounds and sends exactly the declared ordinary payload words. This is wire packing, not source schema validation; use select/5 or commands/5 in hls_partition_ingress first.".
 -spec control_payload(bitstring()) -> binary().
-control_payload(<<X0:16, Y0:16, X1:16, Y1:16, Kind:2, Words:8, 0:16, Tag:8, Payload:96>>)
-        when Words =< 3 ->
+control_payload(<<X0:16, Y0:16, X1:16, Y1:16, Kind:2, Words:8, 0:16, Tag:8, Bits/bitstring>>)
+        when Words =< 3, bit_size(Bits) rem 32 =:= 0, Words * 32 =< bit_size(Bits) ->
+    %% The external rectangle envelope stays fixed; a wider native capacity
+    %% is valid only when the actual message and all unused bits fit it.
+    Capacity = bit_size(Bits),
+    <<Payload:Capacity>> = Bits,
+    true = Payload < (1 bsl (Words * 32)),
     Header = binary:decode_unsigned(<<Words:8, 0:16, Tag:8>>, little),
     hls_protocol_envelope:pack_rectangle(#{x0 => X0, y0 => Y0, x1 => X1, y1 => Y1,
         target => Kind, header => Header, payload => Payload}, Words).
@@ -87,12 +92,19 @@ event(#{host := Host, events := Events}, {Endpoint, Host}, {Tag, 0, 0}, Payload)
     Payload = hls_codec:align(Module:pack(Message), 32),
     {Id, Message}.
 
--doc "Wraps a generated device graph with the static routed application gateway; link ports remain separate.".
+-doc "Wraps a generated device graph with the static routed application gateway; link ports remain separate. Rejects ordinary layouts above the fixed eight-word event envelope before rendering.".
 -spec wrapper(map(), term(), atom()) -> iolist().
 wrapper(#{devices := Devices}, Device, Graph) ->
     #{identity := Identity, host := Host, control := Control,
       local := Local = #{ingresses := [#{input_name := Input}],
         externals := Externals}} = maps:get(Device, Devices),
+    Words = hls_frame_layout:payload_words(maps:get(frame_layout, Local)),
+    case Words =< 8 of
+        true -> ok;
+        false -> hls_diagnostic:raise(partition, gateway_payload_capacity,
+            <<"The partition application gateway supports at most eight payload words.">>,
+            #{payload_words => Words, maximum => 8})
+    end,
     IdentityArgs = lists:join(", ", ["u64:" ++ integer_to_list(Word) || <<Word:64/little>> <= Identity]),
     Tile = maps:get(tile, Local, false),
     Count = length(Externals),

@@ -23,7 +23,8 @@
     reduction_placements => map(),
     direct_collections => #{module() => exclusive_epoch},
     effect_window_partition => global | weak_components,
-    effect_delivery_width => 1..6
+    effect_delivery_width => 1..6,
+    frame_payload_words => hls_frame_layout:words()
 }.
 
 %% Validate one physical option contract before inserting defaults. Backend
@@ -35,7 +36,7 @@ normalize(Profile) when is_map(Profile) ->
     Required = [actor_egress_depth, channel_depth, name],
     Keys = lists:sort(maps:keys(Profile)),
     Allowed = Required ++ [effect_window_partition, reduction_placements,
-        scheduler_groups, mailbox_debug, direct_actor_debug, direct_collections, effect_delivery_width],
+        scheduler_groups, mailbox_debug, direct_actor_debug, direct_collections, effect_delivery_width, frame_payload_words],
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
@@ -66,6 +67,7 @@ validate_egress_depth(Depth) -> error({egress_depth, Depth}).
 %% Validates optional placement and observation settings before adding defaults.
 -spec normalize_options(map()) -> map().
 normalize_options(Profile) ->
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile, 3)),
     Groups = map_option(scheduler_groups, Profile),
     Placements = map_option(reduction_placements, Profile),
     Partition = maps:get(effect_window_partition, Profile, global),
@@ -80,6 +82,7 @@ normalize_options(Profile) ->
         _ -> error({effect_delivery_width, Width})
     end,
     Profile#{
+        frame_payload_words => hls_frame_layout:payload_words(Layout),
         effect_delivery_width => Width,
         mailbox_debug => xls_scheduler_observation:enabled(Profile),
         direct_actor_debug => xls_actor_observation:enabled(Profile),

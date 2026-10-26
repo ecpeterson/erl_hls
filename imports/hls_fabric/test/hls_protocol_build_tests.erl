@@ -70,11 +70,13 @@ finalized_transport(Static = #{bundle := #{modules := Sources}},
         actor_functions := [static_actor(A, Files) || A <- Functions],
         receivers := [static_actor(A, Files) || A <- Receivers]}).
 
-%% Verify byte identities before removing exactly the two fields unavailable during planning.
+%% Verify emitted module/configuration identities before removing hashes unavailable during planning.
 -spec static_actor(map(), hls_generated_files:files()) -> map().
 static_actor(Actor = #{file := File, manifest := Manifest = #{dslx_sha256 := Hash}}, Files) ->
     ?assertEqual(Hash, digest(maps:get(binary_to_list(File), Files))),
-    Static = maps:remove(dslx_sha256, Manifest),
+    ConfigFile = filename:join(filename:dirname(binary_to_list(File)), "frame_config.x"),
+    ?assertEqual(maps:get(frame_config_sha256, Manifest), digest(maps:get(ConfigFile, Files))),
+    Static = maps:without([dslx_sha256, frame_config_sha256], Manifest),
     case maps:get(owner_import, Static, none) of
         none -> Actor#{manifest := Static};
         Import = #{file := OwnerFile, dslx_sha256 := OwnerHash} ->
@@ -151,7 +153,7 @@ trace_build(Build) ->
     Session = trace:session_create(protocol_build_compilations, Collector, []),
     try
         1 = trace:process(Session, self(), true, [call]),
-        1 = trace:function(Session, {xls_statem_plan, from_file, 2}, [], []),
+        1 = trace:function(Session, {xls_statem_plan, from_file, 3}, [], []),
         Result = Build(),
         1 = trace:process(Session, self(), false, [call]),
         Ref = trace:delivered(Session, self()),
@@ -178,7 +180,7 @@ trace_build(Build) ->
 collect_compilations(Files) ->
     receive
         %% Each ordinary planner entry is one actual source compilation by the traced build process.
-        {trace, _, call, {xls_statem_plan, from_file, [File, _Options]}} ->
+        {trace, _, call, {xls_statem_plan, from_file, [File, _Options, _FrameLayout]}} ->
             collect_compilations([File | Files]);
         %% The delivery barrier guarantees every preceding call is already in this mailbox.
         {collect, Owner, Ref} -> Owner ! {Ref, lists:reverse(Files)}, ok

@@ -25,7 +25,7 @@ protocol_placement_test() ->
     ?assertEqual(#{kind => boundary, actor_limit => 4, native_actors => [left], arithmetic_groups => [],
         activation => explicit_start, inspection => process}, Placement),
     ?assertEqual(#{name => canonical_actor_v1, header_bits => 32, payload_bits => 96,
-        frame_bits => 128, payload_words => 3, parameterized => false}, Frame),
+        frame_bits => 128, payload_words => 3, parameterized => true}, Frame),
     ?assertException(error, {hls_diagnostic, #{code := unknown_config_fields}},
         hls_build_profile:protocol(boundary, Config#{schedule => #{pipeline_stages => 2}})).
 
@@ -138,3 +138,13 @@ sampled_flags() -> [<<"--pipeline_stages=1">>, <<"--delay_model=unit">>, <<"--fl
 channel_flags(Stages) -> [<<"--pipeline_stages=", (integer_to_binary(Stages))/binary>>, <<"--delay_model=unit">>,
     <<"--flop_inputs=false">>, <<"--flop_outputs=true">>, <<"--use_system_verilog=false">>,
     <<"--reset=reset">>, <<"--fifo_module=">>].
+
+%% Profile metadata records capacity without changing gateway or sampled-clock policy.
+-spec frame_capacity_test() -> ok.
+frame_capacity_test() ->
+    #{frame_abi := Narrow, schedules := Schedules} =
+        hls_build_profile:protocol(network, (source_config())#{frame_payload_words => 1}),
+    #{frame_abi := Wide, schedules := Schedules} =
+        hls_build_profile:protocol(network, (source_config())#{frame_payload_words => 3}),
+    ?assertEqual({32, 64}, {maps:get(payload_bits, Narrow), maps:get(frame_bits, Narrow)}),
+    ?assertEqual({96, 128}, {maps:get(payload_bits, Wide), maps:get(frame_bits, Wide)}).

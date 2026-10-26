@@ -34,18 +34,18 @@ artifact_requirements_follow_the_selected_profile_test() ->
     ?assertEqual(
         #{
             hls_topology_source_fragment_fixture => #{
-                shared_service => ordinary
+                frame_payload_words => 3, shared_service => ordinary
             },
-            hls_topology_source_fixture => #{shared_service => ordinary}
+            hls_topology_source_fixture => #{frame_payload_words => 3, shared_service => ordinary}
         },
         xls_shared_topology_dslx:artifact_requirements(Plan, Base)
     ),
     ?assertEqual(
         #{
             hls_topology_source_fragment_fixture => #{
-                shared_service => aggregate_only
+                frame_payload_words => 3, shared_service => aggregate_only
             },
-            hls_topology_source_fixture => #{shared_service => ordinary}
+            hls_topology_source_fixture => #{frame_payload_words => 3, shared_service => ordinary}
         },
         xls_shared_topology_dslx:artifact_requirements(
             Plan,

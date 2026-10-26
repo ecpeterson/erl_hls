@@ -6,9 +6,11 @@
 -spec write(file:filename(), non_neg_integer(), map(), #{module() => iodata()}) -> non_neg_integer().
 write(Stage, Device, Local = #{schedulers := Groups}, Artifacts) ->
     {Plan, Specs} = hls_partition_tile:planning(Local),
-    Schedule = hls_scheduler_plan:normalize(Plan, Specs),
+    Layout = maps:get(frame_layout, Local, hls_frame_layout:default()),
+    Schedule = hls_scheduler_plan:normalize(Plan, Specs, Layout),
     Projection = hls_partition_tile:projection(Local,
-        xls_scheduler_debug:projection(Plan, Specs, Artifacts, #{mailbox_debug => true})),
+        xls_scheduler_debug:projection(Plan, Specs, Artifacts, #{mailbox_debug => true,
+            frame_payload_words => hls_frame_layout:payload_words(Layout)})),
     Prefix = "phi_device_" ++ integer_to_list(Device),
     ok = file:write_file(filename:join(Stage, Prefix ++ "_actors.json"), json:encode(Projection)),
     ok = file:write_file(filename:join(Stage, Prefix ++ "_schedule.term"),
@@ -19,7 +21,7 @@ write(Stage, Device, Local = #{schedulers := Groups}, Artifacts) ->
 %% RAM and observation port layout is owned by the public scheduler helpers.
 -spec wrapper(string(), hls_scheduler_plan:plan(), map()) -> iolist().
 wrapper(Name, Schedule, Local) ->
-    Bindings = xls_scheduler_ram_v:bindings(Schedule),
+    Bindings = xls_scheduler_ram_v:bindings(Schedule, maps:get(frame_layout, Local, hls_frame_layout:default())),
     Ports = hls_partition_links:ports(Local) ++ [
         {"_app_in", 33, in}, {"_app_out", 33, out}],
     ["module ", Name, "_ram(input wire clk, reset,\n",

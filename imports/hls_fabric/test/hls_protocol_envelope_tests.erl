@@ -49,7 +49,7 @@ rectangle_vectors_test() ->
         ?assertEqual(Expected, hls_protocol_envelope:pack_rectangle(Value, Words)),
         ?assertEqual(16+4*Words, byte_size(Expected)),
         Spatial = <<16#1234:16,16#2345:16,16#4567:16,16#5678:16,
-            2:2, Words:8, 0:16, 16#9a:8, (maps:get(payload, Rectangle)):96>>,
+            2:2, Words:8, 0:16, 16#9a:8, (maps:get(payload, Rectangle) band ((1 bsl (Words*32))-1)):96>>,
         ?assertEqual(Expected, hls_partition_wire:control_payload(Spatial))
     end, lists:enumerate(0, Payloads)).
 
@@ -104,3 +104,20 @@ packet() -> #{kind => 1, session => 16#1122334455667788, sequence => 16#99aabbcc
 -spec rectangle() -> map().
 rectangle() -> #{x0 => 16#1234, y0 => 16#2345, x1 => 16#4567, y1 => 16#5678,
     target => 2, header => 16#9a000003, payload => 16#0123456789abcdeffedcba98}.
+
+%% Native-to-envelope conversion cannot silently drop undeclared or out-of-capacity bits.
+-spec rectangle_padding_rejection_test() -> ok.
+rectangle_padding_rejection_test() ->
+    lists:foreach(fun(Capacity) ->
+        Clean = <<0:64, 0:2, 1:8, 0:16, 7:8, 19:Capacity>>,
+        ?assertEqual(<<0:96, 1:8, 0:16, 7:8, 19:32/little>>,
+            hls_partition_wire:control_payload(Clean)),
+        BadLength = <<0:64, 0:2, 4:8, 0:16, 7:8, 0:Capacity>>,
+        ?assertException(error, _, hls_partition_wire:control_payload(BadLength)),
+        case Capacity > 32 of
+            true ->
+                BadPadding = <<0:64, 0:2, 1:8, 0:16, 7:8, (1 bsl 32):Capacity>>,
+                ?assertException(error, _, hls_partition_wire:control_payload(BadPadding));
+            false -> ok
+        end
+    end, [32, 96]).

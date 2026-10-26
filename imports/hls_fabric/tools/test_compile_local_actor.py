@@ -18,6 +18,8 @@ class LocalActorCompilationTests(BuildFixture):
         """Create a source-bound owner and a nested import whose bytes affect stub conversion."""
         super().setUp()
         self.manifest = Path(str(self.source) + '.json')
+        self.frame_config = self.source.parent / 'frame_config.x'
+        self.frame_config.write_bytes((public / 'priv/xls/lib/frame_config.x').read_bytes())
         self.bind_source()
         self.imports = self.root / 'import with spaces'
         self.library = self.imports / 'nested/helper.x'
@@ -36,7 +38,8 @@ class LocalActorCompilationTests(BuildFixture):
                                             'codegen_flags': ['--pipeline_stages=1', '--delay_model=unit',
                                                 '--flop_inputs=false', '--flop_outputs=false',
                                                 '--use_system_verilog=false', '--reset=reset'],
-                                            'dslx_sha256': compile_local_actor.digest(self.source)}))
+                                            'dslx_sha256': compile_local_actor.digest(self.source),
+                                            'frame_config_sha256': compile_local_actor.digest(self.frame_config)}))
 
     def compile(self) -> Path:
         """Run only stub XLS tools with the same public adapter used by RTL witnesses."""
@@ -80,6 +83,31 @@ class LocalActorCompilationTests(BuildFixture):
         self.bind_source('unsupported_clock')
         with self.assertRaisesRegex(ValueError, 'changed or unsupported'):
             self.compile()
+        self.assertEqual(self.calls.read_text(), calls)
+        self.assertEqual(self.output.resolve(), release)
+
+    def test_frame_configuration_rejects_before_tools_and_after_snapshot(self) -> None:
+        """An unbound frame configuration cannot change either a live source or its retained snapshot."""
+        release = self.compile()
+        calls = self.calls.read_text()
+        original = self.frame_config.read_bytes()
+        changed = original + b'// unbound configuration edit\n'
+        self.frame_config.write_bytes(changed)
+        with self.assertRaisesRegex(ValueError, 'changed or unsupported'):
+            self.compile()
+        self.frame_config.write_bytes(original)
+        compiler = compiler_tool(public, 'compile_xls')
+        execute = compiler.execute
+
+        def alter_before_snapshot(*args, **kwargs):
+            """Change the dependency after admission, before the shared executor freezes input bytes."""
+            self.frame_config.write_bytes(changed)
+            return execute(*args, **kwargs)
+
+        with patch.object(compile_local_actor, 'compiler_tool', return_value=compiler), patch.object(
+                compiler, 'execute', side_effect=alter_before_snapshot):
+            with self.assertRaisesRegex(ValueError, 'configuration or manifest during snapshot'):
+                self.compile()
         self.assertEqual(self.calls.read_text(), calls)
         self.assertEqual(self.output.resolve(), release)
 

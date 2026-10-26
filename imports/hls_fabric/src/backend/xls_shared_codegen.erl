@@ -38,7 +38,7 @@ emit(Spec) ->
 -doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies and physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization.".
 -spec execution(xls_actor_codegen:spec()) -> iolist().
 execution(Closed) ->
-    case maps:keys(Closed) -- [source, failure_sites, imports, capacity, phases,
+    case maps:keys(Closed) -- [source, failure_sites, imports, capacity, phases, frame_layout,
             message_names, message_words, output_names, max_entry_effects,
             data_name, data_width, record_declarations, helper_functions, init,
             entries, casts, continuations, retained_calls, internal_steps,

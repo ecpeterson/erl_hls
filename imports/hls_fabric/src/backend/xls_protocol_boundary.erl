@@ -9,7 +9,7 @@
 
 %% Interface layout is identical before and after emitted evidence is attached.
 -define(INTERFACE_FIELDS(Inspection),
-    top := protocol_boundary, clock_proc := boundary_clock, actors := non_neg_integer(),
+    top := protocol_boundary, frame_layout := hls_frame_layout:layout(), clock_proc := boundary_clock, actors := non_neg_integer(),
     actor_runtime := true, eligible := false, ordering := per_logical_sender_destination,
     activation := hls_protocol_network:activation(), inspection := Inspection,
     additional_state_bits := non_neg_integer(), arbitration_state_bits := non_neg_integer(),
@@ -30,15 +30,15 @@
 
 -doc "Plans endpoint arbitration from a static network descriptor and checked external groups. Replaces individual producer ports with endpoint streams while retaining their declared order and arbitration-state accounting. Requires hls_protocol_boundary's checked groups; reads no templates and emits no hardware.".
 -spec plan(#{network := xls_protocol_network:descriptor(), externals := [group()]}) -> plan().
-plan(#{network:=Network=#{inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups}) ->
+plan(#{network:=Network=#{frame_layout:=Layout,inputs:=NetworkInputs,outputs:=NetworkOutputs,boundaries:=Boundaries},externals:=Groups}) ->
     BoundaryNames=lists:append([[<<Name/binary,"_ready">>,<<Name/binary,"_valid">>,<<Name/binary,"_data">>]||#{name:=Name}<-Boundaries]),
     PassInputs=[P||P=#{name:=Name}<-NetworkInputs,not lists:member(Name,BoundaryNames)],
     PassOutputs=[P||P=#{name:=Name}<-NetworkOutputs,not lists:member(Name,BoundaryNames)],
     Inputs=PassInputs++[#{name=>list_to_binary(external(I)++"_ready"),width=>1}||#{index:=I}<-Groups],
     Outputs=PassOutputs++lists:append([[#{name=>list_to_binary(external(I)++"_valid"),width=>1},
-        #{name=>list_to_binary(external(I)++"_data"),width=>128}]||#{index:=I}<-Groups]),
+        #{name=>list_to_binary(external(I)++"_data"),width=>hls_frame_layout:frame_bits(Layout)}]||#{index:=I}<-Groups]),
     Bits=lists:sum([N||#{state_bits:=N}<-Groups]),
-    Descriptor=#{top=>protocol_boundary,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
+    Descriptor=#{top=>protocol_boundary,frame_layout=>Layout,clock_proc=>boundary_clock,actors=>maps:get(actors,Network),
         actor_runtime=>true,eligible=>false,ordering=>per_logical_sender_destination,
         activation=>maps:get(activation,Network),inspection=>maps:get(inspection,Network),additional_state_bits=>Bits+maps:get(additional_state_bits,Network),
         arbitration_state_bits=>Bits,externals=>Groups,inputs=>Inputs,outputs=>Outputs},
@@ -99,7 +99,7 @@ acceptance(#{index:=I,members:=Members}) ->
 
 %% Empty declarations remain visible as an invalid zero stream for stable host binding.
 -spec observation(group()) -> iodata().
-observation(#{index:=I,members:=[]}) -> [external(I),"_valid: false, ",external(I),"_data: bits[128]:0,\n"];
+observation(#{index:=I,members:=[]}) -> [external(I),"_valid: false, ",external(I),"_data: bits[axis::FRAME_BITS]:0,\n"];
 observation(#{index:=I,members:=[#{name:=Name}]}) ->
     [external(I),"_valid: preview.",Name,"_valid, ",external(I),"_data: preview.",Name,"_data,\n"];
 observation(#{index:=I}) ->

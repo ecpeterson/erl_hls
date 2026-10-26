@@ -47,7 +47,7 @@ source_fragment_dependency_test() ->
     ?assertEqual([[], []], [maps:get(destinations, S) || S <- Schedulers]),
     ?assertEqual(9, length(Rows)),
     ?assertEqual([0, 1], [maps:get(effect_window_position, S) || S <- Schedulers]),
-    ?assertEqual(#{hls_topology_source_fragment_fixture => #{shared_service => aggregate_only}},
+    ?assertEqual(#{hls_topology_source_fragment_fixture => #{frame_payload_words => 3, shared_service => aggregate_only}},
         xls_shared_topology_dslx:artifact_requirements(Plan)),
     ok.
 

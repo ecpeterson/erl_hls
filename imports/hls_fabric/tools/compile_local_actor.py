@@ -27,8 +27,10 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
     source, xls = source.resolve(), xls.resolve()
     manifest_file = Path(str(source) + '.json')
     manifest = json.loads(manifest_file.read_text())
-    if manifest['dslx_sha256'] != digest(source) or manifest['clock_proc'] not in ['local_owner_clock', 'local_inbox_clock']:
-        raise ValueError('changed or unsupported actor source')
+    if (manifest['dslx_sha256'] != digest(source)
+            or manifest['frame_config_sha256'] != digest(source.parent/'frame_config.x')
+            or manifest['clock_proc'] not in ['local_owner_clock', 'local_inbox_clock']):
+        raise ValueError('changed or unsupported actor source/configuration')
     flags = manifest['codegen_flags']
     hardware_profile = manifest['build_profile']
     schedule = hardware_profile['schedules']['sampled_clock']
@@ -51,8 +53,9 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
     def prepare(snapshot: Path) -> list[dict]:
         """Check the retained actor manifest before compiling only its frozen source tree."""
         retained = json.loads((snapshot/manifest_file.name).read_text())
-        if retained != manifest or retained['dslx_sha256'] != digest(snapshot/source.name):
-            raise ValueError('changed actor source or manifest during snapshot')
+        if (retained != manifest or retained['dslx_sha256'] != digest(snapshot/source.name)
+                or retained['frame_config_sha256'] != digest(snapshot/'frame_config.x')):
+            raise ValueError('changed actor source, configuration or manifest during snapshot')
         return [
             {'id': 'convert', 'cache': 'owner_ir', 'tool': 'ir_converter_main',
              'arguments': ['--warnings_as_errors=false', '--top='+retained['clock_proc'],

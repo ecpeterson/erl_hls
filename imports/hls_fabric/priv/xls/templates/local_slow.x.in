@@ -38,7 +38,7 @@ pub struct LocalAction {
 
 // The checked shared owner uses complete_locally=false after intercepting pending
 // scalar work. Constant selection removes the local callback from that datapath.
-fn local_action_selected_at(raw: MachineBits, frame: bits[128], received: bool,
+fn local_action_selected_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool,
     slot: u32, complete_locally: bool) -> LocalAction {
   let machine = local_machine(raw, slot);
   let dispatched = { @@SELECTED@@ };
@@ -53,7 +53,7 @@ fn local_action_selected_at(raw: MachineBits, frame: bits[128], received: bool,
 // Select source callback work after receipt interception. Suppress received while
 // local_pending_at is true. Retain the returned action and the selected mailbox
 // head together; do not run another action while its entry is outstanding.
-pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool,
+pub fn local_action_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool,
     slot: u32) -> LocalAction {
   local_action_selected_at(raw, frame, received, slot, true)
 }
@@ -79,7 +79,7 @@ pub fn local_enter_at(action: LocalAction, effects_reserved: bool, slot: u32) ->
 // Compose the action and its entry immediately for the existing callback path.
 // A final gather first supplies its private receipt state with received=false.
 // The complete result equals local_step_at under the receipt/pending-work domain.
-pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool,
+pub fn local_slow_step_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool,
     effects_reserved: bool, slot: u32) -> LocalStepResult {
   local_enter_at(local_action_at(raw, frame, received, slot), effects_reserved, slot)
 }

@@ -52,7 +52,7 @@ descriptor(#plan{transition = Transition}) -> Transition.
 -spec emit(plan()) -> hls_generated_files:output().
 emit(#plan{fabric = Fabric = #{links := Links}, definitions = Definitions, sources = Sources,
         links = Shapes, crossing = Crossing, transition = T = #{inputs := Inputs, outputs := Outputs}}) ->
-    Source = ["import protocol_transport as p;\nimport axis;\nconst_assert!(axis::FRAME_BITS == u32:128);\n",
+    Source = ["import protocol_transport as p;\nimport axis;\n",
         maps:get(imports, Crossing), structure("Inputs", Inputs), structure("Outputs", Outputs),
         [source(S) || S <- Definitions], [link_shape(L) || L <- Shapes],
         "pub struct State {\n", [[sname(I), ": S", n(Shape), ",\n"] || #source_instance{source = #{index := I}, shape = Shape} <- Sources],

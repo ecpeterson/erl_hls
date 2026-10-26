@@ -28,8 +28,8 @@ single_plane_test_() -> {timeout, 60, fun single_plane/0}.
 single_plane() ->
     #{files := Files, result := #{requirements := Requirements, topology := Topology}} =
         phi_decoder_profile_build:emit(#{shape => [2, 1], planes => [z], shards => 2}, #{}),
-    ?assertEqual(#{phi_halo_cell => #{shared_service => aggregate_only},
-        phi_syndrome_replay_cell => #{shared_service => ordinary}}, Requirements),
+    ?assertEqual(#{phi_halo_cell => #{shared_service => aggregate_only, frame_payload_words => 3},
+        phi_syndrome_replay_cell => #{shared_service => ordinary, frame_payload_words => 3}}, Requirements),
     ?assertEqual([phi_z, syndrome_z], lists:sort([Id || #{id := Id} <- maps:get(families, Topology)])),
     ?assertMatch(#{<<"width">> := 2, <<"height">> := 1, <<"planes">> := [<<"z">>],
         <<"scheduler_count">> := 3, <<"source_scheduler_count">> := 1,

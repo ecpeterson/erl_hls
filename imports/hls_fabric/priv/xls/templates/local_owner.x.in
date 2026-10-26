@@ -22,7 +22,7 @@ pub struct LocalOwnerState {
 pub struct LocalOwnerInputs {
   reset: bool,
   received: bool,
-  frame: bits[128],
+  frame: bits[axis::FRAME_BITS],
   slot: u32,
   output_ready: bool,
 @@SHARED_INPUTS@@}

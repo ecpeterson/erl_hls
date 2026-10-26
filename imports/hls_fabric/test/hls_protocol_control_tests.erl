@@ -67,7 +67,7 @@ target_coordinates_and_projection_test() ->
     Targets = [#{id => near, schemas => [work], recipients => [
         #{actor => left, at => [0, 0]}, #{actor => right, at => [1, 0]}]},
         #{id => far, schemas => [work], recipients => [#{actor => left, at => [3, 0]}]}],
-    Whole = hls_protocol_control:plan(#{modules => #{Module => Artifact},
+    Whole = hls_protocol_control:plan(#{frame_layout => hls_frame_layout:default(), modules => #{Module => Artifact},
         topology => #{actors => Actors, ingresses => [#{id => host, kind => rectangle,
             shape => [4, 1], targets => Targets}]}}),
     Native = hls_protocol_control:project(Whole, [1]),
@@ -128,7 +128,7 @@ framed_capabilities_test() ->
 -spec bundle() -> map().
 bundle() ->
     Artifact = artifact([work], u32),
-    #{topology => #{actors => [#{id => left, module => a}, #{id => right, module => b}],
+    #{frame_layout => hls_frame_layout:default(), topology => #{actors => [#{id => left, module => a}, #{id => right, module => b}],
         ingresses => [#{id => host, kind => rectangle, shape => [3, 2], targets => [
             #{id => all, schemas => [work], recipients => [
                 #{actor => left, at => [0, 0]}, #{actor => right, at => [2, 1]}]}]}]},
@@ -139,3 +139,20 @@ bundle() ->
 artifact(Names, Type) ->
     Fields = [{n, "hls_nums:" ++ atom_to_list(Type) ++ "()"}],
     hls_protocol_schema_test_source:compile([{Name, Fields} || Name <- Names]).
+
+%% Native capacity changes handshake/storage widths; fixed framing rejects excess capacity before rendering.
+-spec selected_frame_capacity_test() -> ok.
+selected_frame_capacity_test() ->
+    Layout = hls_frame_layout:new(1),
+    Artifact = hls_local_actor:prepare("test/hls_protocol_frame_fixture.erl", [], Layout),
+    Plan = hls_protocol_control:plan(#{frame_layout => Layout,
+        modules => #{hls_protocol_frame_fixture => Artifact},
+        topology => #{actors => [#{id => cell, module => hls_protocol_frame_fixture}],
+            ingresses => [#{id => host, kind => rectangle, shape => [1, 1],
+                targets => [#{id => all, schemas => [small], recipients => [#{actor => cell, at => [0, 0]}]}]}]}}),
+    ?assertMatch(#{input_bits := 130, state_bits := 66}, Plan),
+    ?assertMatch(#{input_bits := 130, command_bits := 131, frame_layout := Layout},
+        hls_protocol_control:framed(Plan, #{})),
+    ?assertError({hls_diagnostic, #{code := framed_payload_capacity,
+        context := #{payload_bits := 128, maximum := 96}}},
+        hls_protocol_control:framed(Plan#{frame_layout := hls_frame_layout:new(4), input_bits := 226}, #{})).

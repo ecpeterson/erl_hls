@@ -1,5 +1,6 @@
 // Receiver-specific inboxes import one source owner instead of recompiling its callbacks.
 import @@MODULE@@ as source_owner;
+import axis;
 // Payload layout remains defined by the same source entry planner.
 pub const ENTRY_EFFECT_PAYLOAD_BITS = source_owner::ENTRY_EFFECT_PAYLOAD_BITS;
 // Retain the ordinary owner API and its source-defined type identity.
@@ -43,12 +44,12 @@ pub fn local_pending_at(raw: MachineBits, slot: u32) -> bool {
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_step(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool) -> LocalStepResult {
+pub fn local_step(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, effects_reserved: bool) -> LocalStepResult {
   source_owner::local_step(raw, frame, received, effects_reserved)
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_step_at(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
+pub fn local_step_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
   source_owner::local_step_at(raw, frame, received, effects_reserved, slot)
 }
 
@@ -63,17 +64,17 @@ pub fn local_observe(raw: MachineBits, slot: u32) -> LocalObservation {
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_cycle(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, out_layout: u8, out_payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], out_index: u8, slot: u32) -> LocalCycleResult {
+pub fn local_cycle(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, effects_reserved: bool, out_layout: u8, out_payload: bits[ENTRY_EFFECT_PAYLOAD_BITS], out_index: u8, slot: u32) -> LocalCycleResult {
   source_owner::local_cycle(raw, frame, received, effects_reserved, out_layout, out_payload, out_index, slot)
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_protocol_at(raw: MachineBits, frame: bits[128], received: bool, slot: u32) -> LocalProtocolResult {
+pub fn local_protocol_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, slot: u32) -> LocalProtocolResult {
   source_owner::local_protocol_at(raw, frame, received, slot)
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_action_at(raw: MachineBits, frame: bits[128], received: bool, slot: u32) -> LocalAction {
+pub fn local_action_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, slot: u32) -> LocalAction {
   source_owner::local_action_at(raw, frame, received, slot)
 }
 
@@ -83,7 +84,7 @@ pub fn local_enter_at(action: LocalAction, effects_reserved: bool, slot: u32) ->
 }
 
 // Delegate unchanged to the shared source definition; each caller still owns separate state.
-pub fn local_slow_step_at(raw: MachineBits, frame: bits[128], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
+pub fn local_slow_step_at(raw: MachineBits, frame: bits[axis::FRAME_BITS], received: bool, effects_reserved: bool, slot: u32) -> LocalStepResult {
   source_owner::local_slow_step_at(raw, frame, received, effects_reserved, slot)
 }
 

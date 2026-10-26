@@ -79,8 +79,8 @@ source_fragment_profile_specializes_only_the_phi_actor_test() ->
     Plan = hls_topology:from_module(phi_decoder_profile_topology),
     ?assertEqual(
         #{
-            phi_halo_cell => #{shared_service => aggregate_only},
-            phi_syndrome_replay_cell => #{shared_service => ordinary}
+            phi_halo_cell => #{shared_service => aggregate_only, frame_payload_words => 3},
+            phi_syndrome_replay_cell => #{shared_service => ordinary, frame_payload_words => 3}
         },
         xls_shared_topology_dslx:artifact_requirements(
             Plan,

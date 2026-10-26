@@ -9,9 +9,10 @@
 -doc "Reports whether placement or dedicated collection requires an explicit instance graph.".
 -spec required(map(),map()) -> boolean().
 required(Plan, Profile) ->
-    #{scheduler_groups := Specs, direct_collections := Collections, effect_delivery_width := Width} =
+    #{scheduler_groups := Specs, direct_collections := Collections, effect_delivery_width := Width,
+        frame_payload_words := PayloadWords} =
         xls_shared_topology_profile:normalize(Profile),
-    #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs),
+    #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs, hls_frame_layout:new(PayloadWords)),
     Width > 1 orelse map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
         lists:any(fun(Group) -> maps:get(gathers, Group, none) =/= none end, Groups).
 
@@ -39,15 +40,18 @@ lower(Plan, Profile0) ->
         effect_window_partition := WindowPartition,
         reduction_placements := Reductions,
         direct_actor_debug := ActorDebug,
-        mailbox_debug := MailboxDebug} =
+        mailbox_debug := MailboxDebug, frame_payload_words := PayloadWords} =
         xls_shared_topology_profile:normalize(Profile0),
     require_empty(reduction_placements, maps:to_list(Reductions)),
-    Schedule = #{groups := Groups0} = hls_scheduler_plan:normalize(Plan, GroupSpecs),
+    Schedule = #{groups := Groups0} = hls_scheduler_plan:normalize(Plan, GroupSpecs, hls_frame_layout:new(PayloadWords)),
     Placements = hls_scheduler_plan:placements(Schedule),
     xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
     xls_topology_graph:check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
     {Materialized, Origins} = materialize(Plan),
-    Base = xls_topology_graph:lower(Materialized, Profile),
+    %% Compiler graph lowering owns buffering and frame layout; placement stays here.
+    GraphProfile = maps:with([name, channel_depth, actor_egress_depth,
+        direct_actor_debug, frame_payload_words], Profile),
+    Base = xls_topology_graph:lower(Materialized, GraphProfile),
     Startup = maps:from_list([{Id, Frames} || #{target := Id, frames := Frames}
         <- maps:get(startup, Base)]),
     Actors = [place_actor(Actor, maps:get(maps:get(id, Actor), Origins),
@@ -98,7 +102,9 @@ lower(Plan, Profile0) ->
     Base#{actors := Actors, direct => Direct1, schedulers => Schedulers1,
         units => Units, lanes := Lanes, actor_index => ActorIndex,
         semantic_plan => Plan, mailbox_debug => MailboxDebug, ingresses => Ingresses,
-        artifact_requirements => WithMailbox,
+        artifact_requirements => maps:map(fun(_, Requirement) ->
+            Requirement#{frame_payload_words => maps:get(frame_payload_words, Profile)}
+        end, WithMailbox),
         effect_window_domains => Domains,
         effect_delivery_width => maps:get(effect_delivery_width, Profile)}.
 

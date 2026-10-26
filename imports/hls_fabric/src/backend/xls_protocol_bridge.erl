@@ -4,7 +4,7 @@
 -export_type([manifest/0]).
 
 -doc "The emitted bridge's packed ports, compact crossing codecs, raw-boundary manifest and required hardware/support hashes. The attachment identity is lowercase hex here; the host bridge descriptor retains its raw bytes.".
--type manifest() :: #{host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), control := rectangle,
+-type manifest() :: #{frame_layout := hls_frame_layout:layout(), host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), control := rectangle,
     control_adapter := hls_protocol_control:hardware(), native_indices := [non_neg_integer()],
     actors := non_neg_integer(), externals := [xls_protocol_boundary:group()], eligible := false,
     libraries := [xls_protocol_network:component()], top := protocol_bridge_top,
@@ -62,7 +62,7 @@ source(#{identity := Identity, host := Host, service := Service,
         {<<"@@STATE_DIMENSIONS@@">>, dimensions([I, C, O])},
         {<<"@@INPUT_DIMENSIONS@@">>, dimensions([I, C, O, E])},
         {<<"@@SAMPLE_FIELDS@@">>, [[remote(Link), "_slot: packet.slot, ",
-            remote(Link), "_frame: packet.frame,\n"] || Link <- Incoming]},
+            remote(Link), "_frame: packet.frame as bits[axis::FRAME_BITS],\n"] || Link <- Incoming]},
         {<<"@@CHILD_FAULT@@">>, child_fault(NativeOutputs)},
         {<<"@@INCOMING_LINKS@@">>, link_indices(Incoming)},
         {<<"@@INCOMING_READY@@">>, lists:join(",", [["old.", remote(Link), "_ready"]
@@ -119,7 +119,7 @@ dimensions(Values) -> lists:join(",", [n(Value) || Value <- Values]).
 -spec offer(string(),string(),string()) -> iodata().
 offer(P,Slot,Frame) ->
     ["b::Offer {valid:old.",P,"_valid,slot:",case Slot of "zero"->"u8:0";_->["old.",P,"_",Slot] end,
-      ",frame:old.",P,"_",Frame,"}"].
+      ",frame:old.",P,"_",Frame," as bits[128]}"].
 %% Only original global link indices determine raw crossing names.
 -spec remote(hls_protocol_partition:crossing()) -> string().
 remote(#{index:=I}) -> xls_protocol_partition:name(I).

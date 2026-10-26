@@ -11,4 +11,6 @@ hardware(Plan, Specs, Boundaries) ->
 hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
     Projection = maps:get(<<"actor_projection">>, Manifest, none),
     ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
-    hls_debug_catalog:bind(hardware(Plan, Specs, Boundaries), Projection, Session).
+    Layout = hls_frame_layout:new(maps:get(<<"frame_payload_words">>, Projection, 3)),
+    Placements = hls_scheduler_plan:placements(hls_scheduler_plan:normalize(Plan, Specs, Layout)),
+    hls_debug_catalog:bind(hls_debug_catalog:hardware(Plan, Placements, Boundaries), Projection, Session).

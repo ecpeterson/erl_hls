@@ -21,7 +21,8 @@ def run(args: argparse.Namespace) -> None:
                ROOT / "priv/xls/hls_partition_tile_io.x",
                ROOT / "priv/xls/lib/protocol_framing.x", ROOT / "priv/xls/lib/protocol_rectangle.x",
                ROOT / "priv/xls/lib/protocol_envelope.x",
-               public / "priv/xls/lib/axis.x", public / "priv/xls/fabric/hls_spatial_router.x"]
+               public / "priv/xls/lib/axis.x", public / "priv/xls/lib/frame_config.x",
+               public / "priv/xls/fabric/hls_spatial_router.x"]
     bench = ROOT / "test/rtl" / (top + ".sv")
     bridges = [ROOT / "priv/rtl/hls_partition_activation.sv"] if args.ordered else []
     tracked = sources + bridges + [bench, Path(__file__), ROOT / "tools/test_actor_rtl.py"]

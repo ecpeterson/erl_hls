@@ -62,7 +62,7 @@ exact_only_scheduler_group_uses_same_backend_test() ->
     ?assertNotEqual(nomatch, binary:match(DirectText, <<"actor_0_debug_out">>)),
     ?assertNotEqual(nomatch, binary:match(DirectText, <<"actor_1_debug_out">>)),
     ?assertEqual(#{hls_topology_source_fixture =>
-        #{shared_service => ordinary, direct_actor_debug => true}},
+        #{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true}},
         xls_shared_topology_dslx:artifact_requirements(Plan, DirectProfile)).
 
 %% Checks same artifact can supply both physical services.
@@ -70,12 +70,12 @@ exact_only_scheduler_group_uses_same_backend_test() ->
 same_artifact_can_supply_both_physical_services_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, profile(Specs)),
-    ?assertEqual(#{shared_service => ordinary, direct_actor_debug => true,
+    ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true,
         mailbox_debug => true}, maps:get(hls_mixed_worker, Requirements)),
-    ?assertEqual(#{shared_service => ordinary, direct_actor_debug => true},
+    ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true},
         maps:get(hls_mixed_source, Requirements)),
     {Coalesced, Groups} = hls_mixed_topology_dslx:fixture(coalesced),
-    ?assertEqual(#{shared_service => ordinary, mailbox_debug => true},
+    ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, mailbox_debug => true},
         maps:get(hls_mixed_worker,
             xls_shared_topology_dslx:artifact_requirements(Coalesced, profile(Groups)))).
 

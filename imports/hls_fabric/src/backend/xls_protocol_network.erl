@@ -22,7 +22,8 @@
     classes := [#{slot := non_neg_integer(), codec := hls_protocol_codec:plan()}]}.
 
 -doc "Source-derived values read by this renderer, with checked composition modes. The enclosing transport descriptor also retains capture/publication provenance.".
--type input() :: #{bundle := hls_protocol_transport:bundle(), fabric := hls_protocol_fabric:plan(),
+-type input() :: #{frame_layout := hls_frame_layout:layout(),
+    bundle := hls_protocol_transport:bundle(), fabric := hls_protocol_fabric:plan(),
     receivers := [hls_protocol_transport:actor_descriptor()], ingress := none | hls_protocol_control:plan(),
     arithmetic => [hls_protocol_arithmetic:group()], activation := hls_protocol_network:activation(),
     inspection := none | process, capture => hls_protocol_capture:plan(),
@@ -33,7 +34,7 @@
 
 %% The static and emitted interfaces share their layout; only emitted evidence differs.
 -define(INTERFACE_FIELDS(Inspection),
-    top := protocol_network, clock_proc := network_clock, actor_runtime := true, eligible := false,
+    top := protocol_network, frame_layout := hls_frame_layout:layout(), clock_proc := network_clock, actor_runtime := true, eligible := false,
     actors := non_neg_integer(), links := non_neg_integer(), additional_state_bits := non_neg_integer(),
     arithmetic := [hls_protocol_arithmetic:group()], activation := hls_protocol_network:activation(),
     inspection := Inspection, native_indices := [non_neg_integer()], crossings := [crossing()],
@@ -340,7 +341,7 @@ static_descriptor(#{fabric := Fabric = #{sources := Sources, links := Links, bou
     StartupMessages = lists:sum([N || #{manifest := #{inbox := #{startup := #{count := N}}}} <- Receivers]),
     AdditionalState = control_state_bits(Ingress, Activation) +
         lists:sum([Width || #{cursor_bits := Width} <- Arithmetic]),
-    #{top => protocol_network, clock_proc => network_clock, actor_runtime => true, eligible => false,
+    #{top => protocol_network, frame_layout => maps:get(frame_layout, Fabric), clock_proc => network_clock, actor_runtime => true, eligible => false,
       actors => length(Sources), links => length(Links), additional_state_bits => AdditionalState,
       arithmetic => Arithmetic, activation => Activation, inspection => Inspection,
       native_indices => [I || #{index := I} <- Sources],

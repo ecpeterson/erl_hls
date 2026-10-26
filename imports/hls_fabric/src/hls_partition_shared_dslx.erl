@@ -89,21 +89,22 @@ ingress_receive(I) ->
 
 %% Startup is preloaded by SharedService before any ordinary producer becomes eligible.
 -spec startup(map(), map()) -> iolist().
-startup(#{index := I, module_name := Module, actors := Actors}, #{tile := true}) ->
+startup(#{index := I, module_name := Module, actors := Actors}, Local = #{tile := true}) ->
     Items = [{Slot, F} || #{slot := Slot, startup := Frames} <- Actors, F <- Frames],
     Count = length(Items),
+    FrameBits = hls_frame_layout:frame_bits(maps:get(frame_layout, Local, hls_frame_layout:default())),
     ["proc SchedulerStartup", n(I), " {\n",
-     "  values: chan<bits[", n(128*Count), "]> in;\n",
+     "  values: chan<bits[", n(FrameBits*Count), "]> in;\n",
      "  request_out: chan<", Module, "::ScheduledRequest> out;\n",
-     "  config(values: chan<bits[", n(128*Count), "]> in, request_out: chan<", Module, "::ScheduledRequest> out) { (values, request_out) }\n",
+     "  config(values: chan<bits[", n(FrameBits*Count), "]> in, request_out: chan<", Module, "::ScheduledRequest> out) { (values, request_out) }\n",
      "  init { u32:0 }\n  next(index: u32) {\n",
      "    let starting = index < u32:", n(Count), ";\n",
-     "    let (tok, data) = recv_if(join(), values, starting, bits[", n(128*Count), "]:0);\n",
+     "    let (tok, data) = recv_if(join(), values, starting, bits[", n(FrameBits*Count), "]:0);\n",
      "    let slot = match index {\n",
      [["      u32:", n(J), " => u32:", n(Slot), ",\n"] || {J, {Slot, _}} <- lists:enumerate(0, Items)],
      "      _ => u32:0,\n    };\n",
      "    let request = ", Module, "::ScheduledRequest { slot, credit: u1:0,\n",
-     "      frame: axis::frame_from_bits(data[index*u32:128+:bits[128]]) };\n",
+     "      frame: axis::frame_from_bits(data[index*axis::FRAME_BITS+:bits[axis::FRAME_BITS]]) };\n",
      "    let _done = send_if(tok, request_out, starting, request);\n",
      "    if starting { index + u32:1 } else { index }\n  }\n}\n\n"];
 startup(#{index := I, module_name := Module, actors := Actors}, _) ->
@@ -118,10 +119,10 @@ startup(#{index := I, module_name := Module, actors := Actors}, _) ->
      "    let _done = send_if(join(), request_out, starting, request);\n",
      "    if starting { index + u32:1 } else { index }\n  }\n}\n\n"].
 
-%% Render the same 96-bit prepacked startup ABI as the direct partition.
+%% Render the same selected prepacked startup ABI as the direct partition.
 -spec frame(map()) -> iolist().
 frame(#{selector := Tag, payload := Payload}) ->
-    Value = case Payload of <<>> -> "uN[96]:0"; _ -> [xls_nums:packed_unsigned_literal(Payload), " as uN[96]"] end,
+    Value = case Payload of <<>> -> "bits[axis::PAYLOAD_BITS]:0"; _ -> [xls_nums:packed_unsigned_literal(Payload), " as bits[axis::PAYLOAD_BITS]"] end,
     ["axis::Frame { header: axis::Header { op: u8:", n(Tag), ", payload_words: u8:", n(bit_size(Payload) div 32),
         ", ..zero!<axis::Header>() }, payload: ", Value, " }"] .
 

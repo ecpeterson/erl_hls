@@ -11,7 +11,7 @@
 
 %% Framing ownership is unchanged when emission adds attachment identity and support hashes.
 -define(INTERFACE_FIELDS,
-    host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), links := [hls_protocol_partition:crossing()],
+    frame_layout := hls_frame_layout:layout(), host := 1 .. ((1 bsl 16) - 1), service := 1 .. ((1 bsl 16) - 1), links := [hls_protocol_partition:crossing()],
     control := rectangle, control_adapter := hls_protocol_control:hardware(),
     native_indices := [non_neg_integer()], actors := non_neg_integer(),
     externals := [xls_protocol_boundary:group()], incoming := [hls_protocol_partition:crossing()],
@@ -107,7 +107,7 @@ plan(Build, Config = #{host := Host, service := Service, control := _}) ->
               outgoing => length(Outgoing), externals => length(Externals)})
     end,
     #plan{boundary = BoundaryPlan,
-        interface = #{host => Host, service => Service, links => Cross, control => maps:get(kind, Hardware),
+        interface = #{frame_layout => maps:get(frame_layout, Fabric), host => Host, service => Service, links => Cross, control => maps:get(kind, Hardware),
             control_adapter => Hardware, native_indices => [I || #{index := I} <- Sources],
             actors => length(Actors), externals => Externals,
             incoming => Incoming, outgoing => Outgoing, credits => Credits, eligible => false}}.

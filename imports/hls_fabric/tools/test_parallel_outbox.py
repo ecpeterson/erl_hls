@@ -15,7 +15,8 @@ def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
     """Compile the real private drainer, then check all accepted effects and credits in RTL."""
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, f'[Path] = init:get_plain_arguments(), ok = hls_partition_outbox_tests:write(Path, {lanes}), halt().', stage/'top.x', profile="test"), stage, 'generate')
-    shutil.copy(public/'priv/xls/lib/axis.x', stage/'axis.x')
+    for name in ('axis.x', 'frame_config.x'):
+        shutil.copy(public/'priv/xls/lib'/name, stage/name)
     shutil.copy(ROOT/'test/rtl/parallel_outbox_actor.x', stage/'parallel_outbox_actor.x')
     for command, name, output in [
         ([str(xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false', '--dslx_path=.',

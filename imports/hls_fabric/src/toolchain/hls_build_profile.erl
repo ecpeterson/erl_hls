@@ -1,6 +1,6 @@
 -module(hls_build_profile).
 -moduledoc "Backend policy shared by source packaging and external compilation. Profiles describe placement, frame ABI and legal clock schedules; actual tool hashes belong to the external executor.".
--export([protocol/2, owner/0, scheduler/2, experiment/1, flags/2]).
+-export([protocol/2, owner/0, owner/1, scheduler/2, scheduler/3, experiment/1, flags/2]).
 -export_type([profile/0, schedule_options/0, experiment_options/0, experiment/0]).
 
 %% XLS schedule counts and explicit channel-delay budgets fit its integer option range.
@@ -21,8 +21,7 @@
     service => hls_source_config:endpoint(), devices => #{hls_source_config:device() => hls_source_config:role()},
     limits => hls_source_config:limits()} | #{kind := local_owner}.
 %% This names the current ordinary actor ABI; bridge envelopes and compact captures are different formats.
--type frame_abi() :: #{name := canonical_actor_v1, header_bits := 32, payload_bits := 96,
-    frame_bits := 128, payload_words := 3, parameterized := false}.
+-type frame_abi() :: hls_frame_layout:descriptor().
 %% Input/output register policy belongs to the clock owner, not an optimization preference.
 -type schedule() :: #{pipeline_stages := count(), delay_model := binary(),
     flop_inputs := false, flop_outputs := boolean(), fifo_module := default | none,
@@ -56,17 +55,28 @@ protocol(Kind, Config) ->
         application -> #{sampled_clock => sampled_clock(), gateway => channel(2, <<"unit">>)};
         _ -> #{sampled_clock => sampled_clock()}
     end,
-    profile(source_protocol, Placement, Schedules).
+    profile(source_protocol, Placement, Schedules,
+        hls_frame_layout:new(maps:get(frame_payload_words, Checked, 3))).
 
 -doc "Returns the fixed schedule for one ordinary or sender-local inbox actor owner. Its sampled command and observation pins require valid/ready asserted every clock; compilation does not establish connected-protocol admission.".
 -spec owner() -> profile().
-owner() -> profile(source_protocol, #{kind => local_owner}, #{sampled_clock => sampled_clock()}).
+owner() -> owner(hls_frame_layout:default()).
+
+-doc "Returns an owner profile with its selected ordinary frame layout; compact captures and debug observations keep their own widths.".
+-spec owner(hls_frame_layout:layout()) -> profile().
+owner(Layout) -> profile(source_protocol, #{kind => local_owner}, #{sampled_clock => sampled_clock()}, Layout).
 
 -doc "Normalizes scheduler placement and requested XLS scheduling options. Rejects unknown options, noninteger counts or delays, and malformed delay-model names. Result delay reserves scheduler budget at result sends; it changes neither requested pipeline depth nor physical time by itself.".
 -spec scheduler(xls_shared_topology_profile:profile(), schedule_options()) -> profile().
-scheduler(Placement, Options) ->
-    profile(channel_scheduler, xls_shared_topology_profile:normalize(Placement),
-        #{channel => channel_schedule(Options)}).
+scheduler(Placement, Options) -> scheduler(Placement, Options,
+    hls_frame_layout:new(maps:get(frame_payload_words, Placement, 3))).
+
+-doc "Normalizes scheduler policy with a checked ordinary-frame layout; every emitted actor and mailbox must use this ABI.".
+-spec scheduler(xls_shared_topology_profile:profile(), schedule_options(), hls_frame_layout:layout()) -> profile().
+scheduler(Placement, Options, Layout) ->
+    profile(channel_scheduler, xls_shared_topology_profile:normalize(Placement#{
+        frame_payload_words => hls_frame_layout:payload_words(Layout)}),
+        #{channel => channel_schedule(Options)}, Layout).
 
 -doc "Resolves channel scheduling and completion-storage policy without reading source or invoking XLS. Rejects unknown fields and unsupported storage; prepared_source records that placement was performed elsewhere. The returned flags use the same renderer as public scheduler bundles and cannot select sampled-clock retiming.".
 -spec experiment(experiment_options()) -> experiment().
@@ -121,9 +131,14 @@ protocol_defaults(Kind, Placement) ->
 -spec profile(source_protocol | channel_scheduler, source_placement() | xls_shared_topology_profile:profile() | prepared_source,
     #{sampled_clock => schedule(), gateway => schedule(), channel => schedule()}) -> profile().
 profile(Backend, Placement, Schedules) ->
+    profile(Backend, Placement, Schedules, hls_frame_layout:default()).
+
+%% Layout descriptors are derived from the compiler authority rather than copied ABI literals.
+-spec profile(source_protocol | channel_scheduler, source_placement() | xls_shared_topology_profile:profile() | prepared_source,
+    #{sampled_clock => schedule(), gateway => schedule(), channel => schedule()}, hls_frame_layout:layout()) -> profile().
+profile(Backend, Placement, Schedules, Layout) ->
     #{backend => Backend, placement => Placement,
-      frame_abi => #{name => canonical_actor_v1, header_bits => 32, payload_bits => 96,
-          frame_bits => 128, payload_words => 3, parameterized => false},
+      frame_abi => hls_frame_layout:descriptor(Layout),
       schedules => Schedules, tools => #{provider => xls, identity => external_compilation}}.
 
 %% Feedback circuits expose existing registers directly through sampled pins.

@@ -2,6 +2,12 @@
 // Subword i occupies bits [34*i+:34]: valid, TLAST, data[31:0]. Valid subwords
 // form a nonempty prefix, in wire order. Both endpoints and storage reset together.
 import axis;
+import std;
+
+// Full packets serialize the ordinary header plus every configured payload word.
+const FRAME_WORDS = axis::MAX_PAYLOAD + u32:1;
+// Include zero (idle) and the last full-frame stage without fixed-width overflow.
+type Stage = uN[std::clog2(FRAME_WORDS + u32:1)];
 
 const CREDIT_BIT = u32:0x8000;
 const LANE_MASK = u32:0x7fff;
@@ -25,16 +31,16 @@ struct TxState<TX: u32, RX: u32> {
   // Incoming credits affect the following activation, breaking reciprocal link
   // feedback without putting a register in the outgoing data path.
   pending_credits: u32[TX],
-  frames: bits[128][2][TX],
+  frames: bits[axis::FRAME_BITS][2][TX],
   head: bool[TX],
   count: u32[TX],
   returns: u32[RX],
   data_served: bool[TX],
   return_served: bool[RX],
   prefer_return: bool,
-  stage: u3,
-  last_stage: u3,
-  payload: bits[128],
+  stage: Stage,
+  last_stage: Stage,
+  payload: bits[axis::FRAME_BITS],
   failed: bool,
 }
 
@@ -51,8 +57,8 @@ fn transmit_word<TX: u32, RX: u32, TAG: u16, COMPACT: bool>(state: TxState<TX, R
   let returning = rv && (state.prefer_return || !dv);
   let frame = state.frames[dl][state.head[dl] as u32];
   let length = frame[0+:u8];
-  let compact = COMPACT && dl < u32:32 && length <= u8:3
-    && frame[8+:u16] == u16:0 && (frame >> (u32:32 + (length as u32)*u32:32)) == bits[128]:0;
+  let compact = COMPACT && dl < u32:32 && length <= u8:7 && (length as u32) <= axis::MAX_PAYLOAD
+    && frame[8+:u16] == u16:0 && (frame >> (u32:32 + (length as u32)*u32:32)) == bits[axis::FRAME_BITS]:0;
   let data_header = if compact {
     (((TAG ^ u16:1) as u32) << u32:16) | ((frame[24+:u8] as u32) << u32:8)
       | ((length as u32) << u32:5) | dl
@@ -60,10 +66,10 @@ fn transmit_word<TX: u32, RX: u32, TAG: u16, COMPACT: bool>(state: TxState<TX, R
   let return_header = ((TAG as u32) << u32:16) | CREDIT_BIT | rl;
   if state.failed {
     (state, bits[34]:0)
-  } else if state.stage != u3:0 {
+  } else if state.stage != Stage:0 {
     let last = state.stage == state.last_stage;
     (TxState<TX, RX> { payload: state.payload >> u32:32,
-       stage: if last { u3:0 } else { state.stage + u3:1 }, ..state },
+       stage: if last { Stage:0 } else { state.stage + Stage:1 }, ..state },
      u1:1 ++ last ++ state.payload[0+:u32])
   } else if returning {
     (TxState<TX, RX> { returns: update(state.returns, rl, state.returns[rl] - u32:1),
@@ -72,8 +78,8 @@ fn transmit_word<TX: u32, RX: u32, TAG: u16, COMPACT: bool>(state: TxState<TX, R
   } else if dv {
     (TxState<TX, RX> { credits: update(state.credits, dl, state.credits[dl] - u32:1),
        payload: if compact { frame >> u32:32 } else { frame },
-       stage: if compact && length == u8:0 { u3:0 } else { u3:1 },
-       last_stage: if compact { length as u3 } else { u3:4 },
+       stage: if compact && length == u8:0 { Stage:0 } else { Stage:1 },
+       last_stage: if compact { length as Stage } else { (FRAME_WORDS as Stage) },
        head: update(state.head, dl, !state.head[dl]),
        count: update(state.count, dl, state.count[dl] - u32:1),
        data_served: dm, prefer_return: true, ..state },
@@ -101,13 +107,13 @@ proc Packetize<TX: u32, RX: u32, TAG: u16, WORDS: u32, CREDITS: u32, COMPACT: bo
   // Frame staging is bounded and independent even while a lane has no peer credit.
   next(state: TxState<TX, RX>) {
     let (tok, incoming_credits, incoming_frames, offered) = unroll_for! (i, acc):
-        (u32, (token, u32[TX], bits[128][TX], bool[TX])) in u32:0..TX {
+        (u32, (token, u32[TX], bits[axis::FRAME_BITS][TX], bool[TX])) in u32:0..TX {
       let (tok, credit, valid) = recv_if_non_blocking(acc.0, credits_in[i], !state.failed, u32:0);
       let (tok, frame, offered) = recv_if_non_blocking(tok, frames_in[i],
         !state.failed && state.count[i] < u32:2, zero!<axis::Frame>());
       (tok, update(acc.1, i, if valid { credit } else { u32:0 }),
        update(acc.2, i, axis::bits_from_frame(frame)), update(acc.3, i, offered))
-    }((join(), zero!<u32[TX]>(), zero!<bits[128][TX]>(), zero!<bool[TX]>()));
+    }((join(), zero!<u32[TX]>(), zero!<bits[axis::FRAME_BITS][TX]>(), zero!<bool[TX]>()));
     let (captured, fault) = for (i, acc): (u32, (TxState<TX, RX>, bool)) in u32:0..TX {
       let credit = state.pending_credits[i];
       let balance = state.credits[i] + credit;
@@ -142,20 +148,20 @@ proc Packetize<TX: u32, RX: u32, TAG: u16, WORDS: u32, CREDITS: u32, COMPACT: bo
 
 // A single assembly state spans packed transfers; all complete packets retain order.
 struct RxState {
-  stage: u3,
-  last_stage: u3,
+  stage: Stage,
+  last_stage: Stage,
   compact: bool,
   lane: u32,
-  payload: bits[128],
+  payload: bits[axis::FRAME_BITS],
   failed: bool,
 }
 
 // Decode a common header or an opaque extended frame without inferring application metadata.
 fn receive_word<TX: u32, RX: u32, TAG: u16, COMPACT: bool>(state: RxState, word: bits[33])
-    -> (RxState, u32, bool, u32, bits[128], bool, u32) {
+    -> (RxState, u32, bool, u32, bits[axis::FRAME_BITS], bool, u32) {
   let data = word[0+:u32];
   let last = word[32+:u1];
-  let first = state.stage == u3:0;
+  let first = state.stage == Stage:0;
   let common = COMPACT && data[16+:u16] == (TAG ^ u16:1);
   let length = data[5+:u3];
   let credit = !common && (data & CREDIT_BIT) != u32:0;
@@ -165,19 +171,19 @@ fn receive_word<TX: u32, RX: u32, TAG: u16, COMPACT: bool>(state: RxState, word:
   let fault = if state.failed { u32:0 }
     else if first && data[16+:u16] != TAG && !common { u32:1 }
     else if first && lane >= if credit { TX } else { RX } { u32:2 }
-    else if last != expected_last || (first && common && length > u3:3) { u32:3 }
+    else if last != expected_last || (first && common && (length as u32) > axis::MAX_PAYLOAD) { u32:3 }
     else { u32:0 };
   let valid = !state.failed && fault == u32:0;
   let shift = (state.stage as u32 - u32:1 + state.compact as u32) * u32:32;
   let header = (data[8+:u8] as u32 << u32:24) | length as u32;
-  let payload = if first { header as bits[128] }
-    else { state.payload | ((data as bits[128]) << shift) };
+  let payload = if first { header as bits[axis::FRAME_BITS] }
+    else { state.payload | ((data as bits[axis::FRAME_BITS]) << shift) };
   let next_state = if !valid { RxState { failed: true, ..state } }
     else if last { zero!<RxState>() }
-    else if first { RxState { stage: u3:1, lane, compact: common,
-      last_stage: if common { length } else { u3:4 },
-      payload: if common { payload } else { bits[128]:0 }, failed: false } }
-    else { RxState { stage: state.stage + u3:1, payload, ..state } };
+    else if first { RxState { stage: Stage:1, lane, compact: common,
+      last_stage: if common { length as Stage } else { (FRAME_WORDS as Stage) },
+      payload: if common { payload } else { bits[axis::FRAME_BITS]:0 }, failed: false } }
+    else { RxState { stage: state.stage + Stage:1, payload, ..state } };
   (next_state, fault, valid && first && credit, lane, payload,
    valid && last && (!first || !credit), if first { lane } else { state.lane })
 }
@@ -210,7 +216,7 @@ proc Receive<TX: u32, RX: u32, TAG: u16, WORDS: u32, COMPACT: bool> {
       !state.failed && buffer.held == bits[WORDS * u32:34]:0, bits[WORDS * u32:34]:0);
     let transfer = if buffer.held != bits[WORDS * u32:34]:0 { buffer.held } else { incoming };
     let (next_state, fault, _, counts, complete, payload, held) = for (i, acc):
-        (u32, (RxState, u32, bool, u32[TX], bool[RX], bits[128][RX], bits[WORDS * u32:34])) in u32:0..WORDS {
+        (u32, (RxState, u32, bool, u32[TX], bool[RX], bits[axis::FRAME_BITS][RX], bits[WORDS * u32:34])) in u32:0..WORDS {
       if acc.6 != bits[WORDS * u32:34]:0 { acc } else {
         let word = (transfer >> (i * u32:34)) as bits[34];
         let valid = word[33+:u1];
@@ -231,7 +237,7 @@ proc Receive<TX: u32, RX: u32, TAG: u16, WORDS: u32, COMPACT: bool> {
            if valid && !fail && done { update(acc.5, recipient, frame) } else { acc.5 }, acc.6)
         }
       }
-    }((state, u32:0, true, zero!<u32[TX]>(), zero!<bool[RX]>(), zero!<bits[128][RX]>(), bits[WORDS * u32:34]:0));
+    }((state, u32:0, true, zero!<u32[TX]>(), zero!<bool[RX]>(), zero!<bits[axis::FRAME_BITS][RX]>(), bits[WORDS * u32:34]:0));
     let tok = unroll_for! (i, tok): (u32, token) in u32:0..TX {
       send_if(tok, credits_out[i], counts[i] != u32:0, counts[i])
     }(tok);
@@ -297,7 +303,7 @@ proc FaultMux {
   }
 }
 
-// Packed transport preserves every 128-bit frame; only serialization and lane
+// Packed transport preserves every configured ordinary frame; only serialization and lane
 // capacity change. Validity/TLAST are internal sidebands, not a physical encoding.
 pub proc Bridge<TX: u32, RX: u32, TAG: u16, WORDS: u32, CREDITS: u32, COMPACT: bool = {false}> {
   // Word grouping is independent of frame boundaries; repeated lanes drain from bounded staging.
@@ -326,4 +332,55 @@ pub proc Bridge<TX: u32, RX: u32, TAG: u16, WORDS: u32, CREDITS: u32, COMPACT: b
   init { () }
   // Child procs implement the link.
   next(state: ()) { state }
+}
+
+// The extended lane format transports every configured bit, including noncanonical actor headers.
+#[test]
+fn configured_extended_frame_test() {
+  let frame = !bits[axis::FRAME_BITS]:0;
+  let source = TxState<u32:1,u32:1> {
+    credits: [u32:1], count: [u32:1], frames: [[frame, bits[axis::FRAME_BITS]:0]],
+    ..zero!<TxState<u32:1,u32:1>>()
+  };
+  let (tx, header) = transmit_word<u32:1,u32:1,u16:0x4850,true>(source);
+  assert_eq(header[16+:u16], u16:0x4850);
+  let (rx, fault, credit, _, _, done, _) =
+    receive_word<u32:1,u32:1,u16:0x4850,true>(zero!<RxState>(), header as bits[33]);
+  assert_eq((fault, credit, done), (u32:0, false, false));
+  let (tx, rx) = for (i, states): (u32, (TxState<u32:1,u32:1>, RxState)) in u32:0..FRAME_WORDS {
+    let (tx, beat) = transmit_word<u32:1,u32:1,u16:0x4850,true>(states.0);
+    let (rx, fault, credit, _, payload, done, _) =
+      receive_word<u32:1,u32:1,u16:0x4850,true>(states.1, beat as bits[33]);
+    assert_eq(fault, u32:0);
+    assert_eq(credit, false);
+    assert_eq(done, i + u32:1 == FRAME_WORDS);
+    if done { assert_eq(payload, frame) } else { () };
+    (tx, rx)
+  }((tx, rx));
+  assert_eq((tx.stage, rx.stage), (Stage:0, Stage:0));
+}
+
+// Compact headers retain their fixed three-bit length; selected capacity only bounds admissibility.
+#[test]
+fn configured_compact_frame_test() {
+  let frame = (bits[axis::FRAME_BITS]:0x12345678 << u32:32) | bits[axis::FRAME_BITS]:0xa5000001;
+  let source = TxState<u32:1,u32:1> {
+    credits: [u32:1], count: [u32:1], frames: [[frame, bits[axis::FRAME_BITS]:0]],
+    ..zero!<TxState<u32:1,u32:1>>()
+  };
+  let (tx, header) = transmit_word<u32:1,u32:1,u16:0x4850,true>(source);
+  assert_eq(header[16+:u16], u16:0x4851);
+  let (rx, fault, _, _, _, done, _) =
+    receive_word<u32:1,u32:1,u16:0x4850,true>(zero!<RxState>(), header as bits[33]);
+  assert_eq((fault, done), (u32:0, false));
+  let (_, beat) = transmit_word<u32:1,u32:1,u16:0x4850,true>(tx);
+  let (rx, fault, credit, _, payload, done, _) =
+    receive_word<u32:1,u32:1,u16:0x4850,true>(rx, beat as bits[33]);
+  assert_eq((rx.stage, fault, credit, done, payload), (Stage:0, u32:0, false, true, frame));
+  if axis::MAX_PAYLOAD < u32:7 {
+    let too_long = bits[33]:0x4851a500 | (((axis::MAX_PAYLOAD + u32:1) as bits[33]) << u32:5);
+    let (bad, fault, _, _, _, done, _) =
+      receive_word<u32:1,u32:1,u16:0x4850,true>(zero!<RxState>(), too_long);
+    assert_eq((bad.failed, fault, done), (true, u32:3, false));
+  } else { () }
 }

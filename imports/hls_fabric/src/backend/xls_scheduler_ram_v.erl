@@ -12,12 +12,16 @@ from a normalized scheduler plan, then renders declarations, application port
 bindings, and `hls_1r1w_ram` instances for a surrounding Verilog shell.
 """.
 
--export([bindings/1, configurations/1, wires/1, application_ports/1, instances/2, mailbox_stride/2, assets/1]).
+-export([bindings/1, bindings/2, configurations/1, wires/1, application_ports/1, instances/2, mailbox_stride/2, assets/1]).
 
 -doc "Derives indexed RAM bindings from a normalized scheduler plan.".
 -spec bindings(hls_scheduler_plan:plan()) -> [map()].
-bindings(#{groups := Groups}) ->
-    [binding(Index, Group) || {Index, Group} <- lists:enumerate(0, Groups)].
+bindings(Plan) -> bindings(Plan, hls_frame_layout:default()).
+
+-doc "Derives RAM bindings with the selected ordinary-frame width; actor state, gather storage and debug words remain independently sized.".
+-spec bindings(hls_scheduler_plan:plan(), hls_frame_layout:layout()) -> [map()].
+bindings(#{groups := Groups}, Layout) ->
+    [binding(Index, Group, Layout) || {Index, Group} <- lists:enumerate(0, Groups)].
 
 -doc "Returns the XLS --ram_configurations value for these ordered physical bindings. Uses the scheduler DSLX channel interface for state, mailbox and optional masked-gather stores; indices need not be contiguous. An empty binding list returns empty IO data.".
 -spec configurations([map()]) -> iodata().
@@ -67,8 +71,8 @@ assets(Bindings) ->
     end.
 
 %% Derive physical row widths including optional actor-private state.
--spec binding(non_neg_integer(), map()) -> map().
-binding(Index, Group) ->
+-spec binding(non_neg_integer(), map(), hls_frame_layout:layout()) -> map().
+binding(Index, Group, Layout) ->
     StateWidth = xls_shared_codegen:shared_machine_width(
         maps:get(physical_data_width, Group, maps:get(width, maps:get(state, Group))),
         maps:get(reduction_storage_width, Group, 0),
@@ -80,7 +84,7 @@ binding(Index, Group) ->
         index => Index,
         state_width => StateWidth,
         state_address_width => address_width(SlotCount),
-        mailbox_width => 128,
+        mailbox_width => hls_frame_layout:frame_bits(Layout),
         mailbox_stride => mailbox_stride(SlotCount, MailboxCapacity),
         mailbox_address_width => address_width(SlotCount * MailboxCapacity)
     }).

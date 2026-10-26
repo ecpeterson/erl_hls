@@ -41,7 +41,7 @@ release. Those remain topology-level channel-dependency and reserved-progress
 obligations.
 """.
 
--export([normalize/2, placements/1]).
+-export([normalize/2, normalize/3, placements/1]).
 -export_type([plan/0, spec/0]).
 
 %% Physical implementation selected for a bounded state or mailbox store.
@@ -68,7 +68,11 @@ obligations.
 
 -doc "Validates scheduler groups against one normalized semantic topology.".
 -spec normalize(hls_topology:plan(), spec()) -> plan().
-normalize(Topology = #{actors := _, families := _}, Specs)
+normalize(Topology, Specs) -> normalize(Topology, Specs, hls_frame_layout:default()).
+
+-doc "Validates scheduler groups and requested source specialization against the selected ordinary-frame capacity.".
+-spec normalize(hls_topology:plan(), spec(), hls_frame_layout:layout()) -> plan().
+normalize(Topology = #{actors := _, families := _}, Specs, Layout)
         when is_map(Specs) ->
     MemberIndex = member_index(Topology),
     Declarations = [
@@ -76,10 +80,10 @@ normalize(Topology = #{actors := _, families := _}, Specs)
         || {Id, Group} <- lists:sort(maps:to_list(Specs))
     ],
     Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Declarations]),
+        [Module || #{module := Module} <- Declarations], Layout),
     Groups = hls_topology_constants:specialize(Topology,
         [layout_group(Group, maps:get(Module, Interfaces))
-        || Group = #{module := Module} <- Declarations]),
+        || Group = #{module := Module} <- Declarations], Layout),
     Grouped = lists:append([
         [member_reference(Member) || Member <- maps:get(members, Group)]
         || Group <- Groups
@@ -95,7 +99,7 @@ normalize(Topology = #{actors := _, families := _}, Specs)
                not member_grouped(Reference, Grouped)
         ]
     };
-normalize(_Topology, Specs) ->
+normalize(_Topology, Specs, _Layout) ->
     error({scheduler_groups, Specs}).
 
 %% Validates one homogeneous group and expands its member references.

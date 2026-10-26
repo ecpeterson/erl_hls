@@ -28,6 +28,21 @@ event_padding_is_checked_test() ->
     ?assertException(error, _, hls_partition_wire:event(Binding, {8, 1}, {Tag, 0, 0},
         <<(Value bxor (1 bsl 31)):32/little>>)).
 
+%% The fixed event envelope admits its last complete word and rejects truncating layouts.
+-spec gateway_payload_capacity_test() -> ok.
+gateway_payload_capacity_test() ->
+    #{devices := Devices} = Deployment = deployment(),
+    #{local := Local} = Binding = maps:get(a, Devices),
+    AtCapacity = Deployment#{devices := Devices#{a := Binding#{local :=
+        Local#{frame_layout := hls_frame_layout:new(8)}}}},
+    Text = iolist_to_binary(hls_partition_wire:wrapper(AtCapacity, a, test_graph)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"spawn hls_partition_io::Boundary">>)),
+    OverCapacity = Deployment#{devices := Devices#{a := Binding#{local :=
+        Local#{frame_layout := hls_frame_layout:new(9)}}}},
+    ?assertError({hls_diagnostic, #{stage := partition, code := gateway_payload_capacity,
+        context := #{payload_words := 9, maximum := 8}}},
+        hls_partition_wire:wrapper(OverCapacity, a, test_graph)).
+
 %% Route credits bound retained events; a timed-out receive leaves no abandoned interest.
 -spec credited_events_and_timeout_test() -> ok.
 credited_events_and_timeout_test() ->

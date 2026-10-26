@@ -148,3 +148,18 @@ fresh(Name) ->
 %% Root enumeration is enough to detect unexpected plan-time writes beside the copied source.
 -spec files(file:filename()) -> [file:filename()].
 files(Root) -> {ok, Names} = file:list_dir(Root), lists:sort(Names).
+
+%% One checked capacity controls actor lowering, physical mailbox rows and bundled support.
+-spec frame_capacity_test_() -> term().
+frame_capacity_test_() -> {timeout, 30, fun() ->
+    lists:foreach(fun(Words) ->
+        Plan = hls_scheduler_build:plan((config(groups()))#{frame_payload_words => Words}),
+        #{ram_bindings := [Binding], profile := #{frame_abi := #{payload_words := Words}}} =
+            hls_scheduler_build:descriptor(Plan),
+        ?assertEqual(32 + Words * 32, maps:get(mailbox_width, Binding)),
+        Output = fresh("frame-" ++ integer_to_list(Words)),
+        _ = hls_scheduler_build:write(Plan, Output),
+        {ok, Config} = file:read_file(filename:join(Output, "support/compiler/xls/lib/frame_config.x")),
+        ?assertEqual(iolist_to_binary(hls_frame_layout:config_dslx(hls_frame_layout:new(Words))), Config)
+    end, [1, 3])
+end}.

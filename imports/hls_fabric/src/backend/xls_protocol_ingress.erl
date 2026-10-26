@@ -12,7 +12,7 @@ write(Plan, Directory) ->
 emit(#{kind:=rectangle,actors:=N,width:=W,height:=H,targets:=Targets}) ->
     D=lists:max([length(Domains)||#{domains:=Domains}<-Targets]),
     {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/protocol_ingress.x.in")),
-    Source=["import protocol_ingress as control;\nconst ACTORS = u32:",n(N),";\n",
+    Source=["import protocol_ingress as control;\nimport axis;\nconst ACTORS = u32:",n(N),";\n",
         "const WIDTH = u32:",n(W),";\nconst HEIGHT = u32:",n(H),";\n",
         "const TARGETS = control::Target<ACTORS,u32:",n(D),">[",n(length(Targets)),"]:[\n",
         [target(T,N,D)||T<-Targets],"];\n",Template],
@@ -25,8 +25,8 @@ target(#{recipients:=Recipients,domains:=Domains},N,D) ->
      lists:join(",",[case [P||P=#{index:=J}<-Recipients,J=:=I] of
        [#{x:=X,y:=Y}]->["control::Point { present:true,x:u16:",n(X),",y:u16:",n(Y)," }"];
        []->"zero!<control::Point>()" end||I<-lists:seq(0,N-1)]),"], domains: [",
-     lists:join(",",[["control::Domain { valid:true,mask:bits[128]:0x",integer_to_list(M,16),
-         ",value:bits[128]:0x",integer_to_list(V,16)," }"]||#{mask:=M,value:=V}<-Domains]++
+     lists:join(",",[["control::Domain { valid:true,mask:bits[axis::FRAME_BITS]:0x",integer_to_list(M,16),
+         ",value:bits[axis::FRAME_BITS]:0x",integer_to_list(V,16)," }"]||#{mask:=M,value:=V}<-Domains]++
          lists:duplicate(D-length(Domains),"zero!<control::Domain>()")),"] },\n"].
 
 %% Checked plan integers alone enter the constant declarations.

@@ -14,14 +14,14 @@
       capture_bit_offset := non_neg_integer()}.
 
 -doc "A source-bound internal capture channel, with joined constant fields and exact ordinary/compact widths.".
--type channel() :: #{source := hls_protocol_topology:id(), port := atom(), tag := atom(),
+-type channel() :: #{frame_layout := hls_frame_layout:layout(), source := hls_protocol_topology:id(), port := atom(), tag := atom(),
     destination := {actor, hls_protocol_topology:id()}, fields := [field()],
     source_operation := 3 .. ((1 bsl 8) - 1), message_bits := non_neg_integer(), payload_bits := non_neg_integer(),
     parameters := #{width := pos_integer()}, writer_count := 1, reader_count := 1,
     snapshot_slots := 1, capacity_bound := unestablished, source_alternatives_hash := binary()}.
 
 -doc "Complete internal capture catalogue and per-producer compiler provenance; temporal admission remains explicitly unestablished.".
--type plan() :: #{channels := [channel()], sources := #{hls_protocol_topology:id() => source_manifest()},
+-type plan() :: #{frame_layout := hls_frame_layout:layout(), channels := [channel()], sources := #{hls_protocol_topology:id() => source_manifest()},
     storage := one_reserved_snapshot_per_static_channel, source_ownership := declared_producer_binding,
     overwrite := requires_consumer_release, generation_fields := retained_unless_source_constant,
     same_sender_cross_channel_order := requires_publication_and_receive_contract,
@@ -40,6 +40,7 @@
 -spec plan(#{channels := [binding()], atom() => term()},
     #{hls_protocol_topology:id() => xls_actor_program:program()}) -> plan().
 plan(#{channels := Channels}, Programs) ->
+    FrameLayout = common_layout(Programs),
     Internal = [C || C = #{destination := {actor, _}} <- Channels],
     Producers = lists:usort([S || #{source := S} <- Internal]),
     Sources = maps:from_list([{S, source(maps:get(S, Programs))} || S <- Producers]),
@@ -47,14 +48,24 @@ plan(#{channels := Channels}, Programs) ->
         #{alternatives := Entries, message_names := Names} = maps:get(S, Sources),
         Row = channel(C, [E || E = #{port := P, tag := T} <- Entries, P =:= Port, T =:= Tag]),
         [Op] = [N || {N, T} <- lists:enumerate(3, Names), T =:= Tag],
-        Row#{source_operation => Op}
+        Row#{frame_layout => FrameLayout, source_operation => Op}
     end || C = #{source := S, port := Port, tag := Tag} <- Internal],
-    #{channels => Rows, sources => maps:map(fun(_, #{provenance := P}) -> P end, Sources),
+    #{frame_layout => FrameLayout, channels => Rows, sources => maps:map(fun(_, #{provenance := P}) -> P end, Sources),
       storage => one_reserved_snapshot_per_static_channel,
       source_ownership => declared_producer_binding, overwrite => requires_consumer_release,
       generation_fields => retained_unless_source_constant,
       same_sender_cross_channel_order => requires_publication_and_receive_contract,
       network_progress => unestablished, eligible => false}.
+
+%% Every native and host actor in one source build shares the same ordinary frame layout.
+-spec common_layout(#{hls_protocol_topology:id() => xls_actor_program:program()}) -> hls_frame_layout:layout().
+common_layout(Programs) ->
+    case lists:usort([maps:get(frame_layout, xls_actor_program:spec(Program))
+            || Program <- maps:values(Programs)]) of
+        [] -> hls_frame_layout:default();
+        [Layout] -> Layout;
+        Layouts -> error({inconsistent_frame_layouts, Layouts})
+    end.
 
 %% Only the compiler constructor creates programs; there is no selected-alternative input.
 -spec source(xls_actor_program:program()) -> source().

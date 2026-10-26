@@ -101,6 +101,34 @@ emitted_boundary_inputs(#{files := Files, result := #{transport := Plan}}) ->
     ?assertEqual(Identity, hls_protocol_identity:boundary(Plan, ChangedReports)),
     ok.
 
+%% Capacity changes the actual attachment identity without renumbering logical actors or crossing lanes.
+-spec frame_capacity_identity_test_() -> term().
+frame_capacity_identity_test_() -> {timeout, 60, fun frame_capacity_identity/0}.
+
+%% Two fresh compilations retain identical source identities but bind distinct frame-aware artifacts.
+-spec frame_capacity_identity() -> ok.
+frame_capacity_identity() ->
+    Config = (bridge_config())#{native_actors => [left,sink], host => 2,service => 29,control => rectangle},
+    Narrow = #{result := #{transport := NarrowTransport}} =
+        hls_protocol_bridge:emit(Config#{frame_payload_words => 1}),
+    Wide = #{result := #{transport := WideTransport}} =
+        hls_protocol_bridge:emit(Config#{frame_payload_words => 3}),
+    ?assertNotEqual(bridge_identity(Narrow), bridge_identity(Wide)),
+    #{bundle := #{topology := Topology,modules := NarrowModules},fabric := NarrowFabric} = NarrowTransport,
+    #{bundle := #{topology := Topology,modules := WideModules},fabric := WideFabric} = WideTransport,
+    LaneKeys = [index,source_index,destination_index,output_index,direction,pair],
+    ?assertEqual([maps:with(LaneKeys,L) || L <- maps:get(crossings,NarrowFabric)],
+        [maps:with(LaneKeys,L) || L <- maps:get(crossings,WideFabric)]),
+    NarrowIdentities = hls_protocol_identity:source_modules(NarrowModules),
+    WideIdentities = hls_protocol_identity:source_modules(WideModules),
+    maps:foreach(fun(Module,NarrowIdentity) ->
+        WideIdentity = maps:get(Module,WideIdentities),
+        ?assertEqual(maps:get(source_sha256,NarrowIdentity),maps:get(source_sha256,WideIdentity)),
+        ?assertNotEqual(maps:get(artifact_sha256,NarrowIdentity),maps:get(artifact_sha256,WideIdentity)),
+        ?assertNotEqual(maps:get(plan_sha256,NarrowIdentity),maps:get(plan_sha256,WideIdentity))
+    end,NarrowIdentities),
+    ok.
+
 %% Independent complete deployments must derive the same identities for both real source partitions.
 -spec deployment_identity_test_() -> term().
 deployment_identity_test_() -> {timeout, 120, fun deployment_identity/0}.

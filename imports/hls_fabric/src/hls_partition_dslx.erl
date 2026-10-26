@@ -26,7 +26,8 @@ emit(Partition, Device, Options) ->
         "import axis;\nimport mailbox;\nimport frame_transport;\nimport hls_spatial_router;\n",
         [["import ", atom_to_list(Module), ";\n"]
             || Module <- lists:usort([M || #{module := M} <- Actors])],
-        "\nconst CHANNEL_DEPTH = u32:", integer_to_list(Depth), ";\n\n",
+        "\n", hls_frame_layout:assert_dslx(maps:get(frame_layout, Local)),
+        "const CHANNEL_DEPTH = u32:", integer_to_list(Depth), ";\n\n",
         [router(A, Local) || A <- Actors],
         hls_partition_shared_dslx:support(Local),
         [hls_partition_shared_dslx:ingress_support(A, Local, ingress_inputs(A, Partition, Local))
@@ -101,7 +102,7 @@ prefix(A = #{startup := Startup}, HasInput) ->
 frame(#{selector := Selector, payload := Payload}) ->
     Size = bit_size(Payload),
     Words = Size div 32,
-    Value = case Payload of <<>> -> "uN[96]:0"; _ -> [xls_nums:packed_unsigned_literal(Payload), " as uN[96]"] end,
+    Value = case Payload of <<>> -> "bits[axis::PAYLOAD_BITS]:0"; _ -> [xls_nums:packed_unsigned_literal(Payload), " as bits[axis::PAYLOAD_BITS]"] end,
     ["axis::Frame { header: axis::Header { op: u8:", integer_to_list(Selector),
         ", payload_words: u8:", integer_to_list(Words),
         ", ..zero!<axis::Header>() }, payload: ", Value, " }"] .

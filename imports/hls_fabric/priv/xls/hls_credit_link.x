@@ -2,14 +2,21 @@
 // Both ends must reset together. A physical transport must preserve complete
 // words and their TLAST exactly once; this layer supplies no CRC or replay.
 import axis;
+import std;
+
+// Full packets serialize the ordinary header plus every configured payload word.
+const FRAME_WORDS = axis::MAX_PAYLOAD + u32:1;
+// Include zero (idle) and the last full-frame stage without fixed-width overflow.
+type Stage = uN[std::clog2(FRAME_WORDS + u32:1)];
 
 const CREDIT_BIT = u32:0x8000;
 const LANE_MASK = u32:0x7fff;
 
+// One complete frame is assembled after its unchanged tag/lane prefix.
 struct ReceiveState {
-  stage: u3,
+  stage: Stage,
   lane: u32,
-  payload: bits[128],
+  payload: bits[axis::FRAME_BITS],
   failed: bool,
 }
 
@@ -21,6 +28,7 @@ pub proc Receive<TX: u32, RX: u32, TAG: u16> {
   credits_out: chan<u1>[TX] out;
   fault_out: chan<u32> out;
 
+  // The tag/lane prefix is independent of ordinary frame capacity.
   config(link_in: chan<axis::Beat> in,
          frames_out: chan<axis::Frame>[RX] out,
          credits_out: chan<u1>[TX] out, fault_out: chan<u32> out) {
@@ -28,15 +36,17 @@ pub proc Receive<TX: u32, RX: u32, TAG: u16> {
     const_assert!(RX > u32:0 && RX <= u32:32768);
     (link_in, frames_out, credits_out, fault_out)
   }
+  // Common reset cancels partial input and the sticky fault.
   init { zero!<ReceiveState>() }
+  // Accept exactly FRAME_WORDS after a data prefix; credits terminate at their prefix.
   next(state: ReceiveState) {
     let (tok, beat) = recv_if(join(), link_in, !state.failed, zero!<axis::Beat>());
-    let first = state.stage == u3:0;
+    let first = state.stage == Stage:0;
     let credit = (beat.word & CREDIT_BIT) != u32:0;
     let lane = beat.word & LANE_MASK;
     let tag_ok = (beat.word >> u32:16) as u16 == TAG;
     let lane_ok = lane < if credit { TX } else { RX };
-    let last_ok = if first { beat.tlast == credit } else { beat.tlast == (state.stage == u3:4) };
+    let last_ok = if first { beat.tlast == credit } else { beat.tlast == (state.stage == (FRAME_WORDS as Stage)) };
     let fault = if state.failed { u32:0 }
       else if first && !tag_ok { u32:1 }
       else if first && !lane_ok { u32:2 }
@@ -48,9 +58,9 @@ pub proc Receive<TX: u32, RX: u32, TAG: u16> {
     }(tok);
     // Words follow the public axis::bits_from_frame encoding, least first.
     let shift = ((state.stage as u32) - u32:1) * u32:32;
-    let payload = state.payload | ((beat.word as bits[128]) << shift);
+    let payload = state.payload | ((beat.word as bits[axis::FRAME_BITS]) << shift);
     let tok = unroll_for! (i, tok): (u32, token) in u32:0..RX {
-      send_if(tok, frames_out[i], valid && state.stage == u3:4 && state.lane == i,
+      send_if(tok, frames_out[i], valid && state.stage == (FRAME_WORDS as Stage) && state.lane == i,
         axis::frame_from_bits(payload))
     }(tok);
     let _done = send_if(tok, fault_out, fault != u32:0, fault);
@@ -59,9 +69,9 @@ pub proc Receive<TX: u32, RX: u32, TAG: u16> {
     } else if beat.tlast {
       zero!<ReceiveState>()
     } else if first {
-      ReceiveState { stage: u3:1, lane, ..zero!<ReceiveState>() }
+      ReceiveState { stage: Stage:1, lane, ..zero!<ReceiveState>() }
     } else {
-      ReceiveState { stage: state.stage + u3:1, payload, ..state }
+      ReceiveState { stage: state.stage + Stage:1, payload, ..state }
     }
   }
 }
@@ -90,8 +100,8 @@ proc Deliver {
 // Per-class service rounds admit each lane once before starting the next round.
 struct TransmitState<TX: u32, RX: u32> {
   credits: bool[TX],
-  stage: u3,
-  payload: bits[128],
+  stage: Stage,
+  payload: bits[axis::FRAME_BITS],
   data_served: bool[TX],
   return_served: bool[RX],
   prefer_return: bool,
@@ -125,7 +135,7 @@ proc Packetize<TX: u32, RX: u32, TAG: u16> {
       (tok, update(acc.1, i, acc.1[i] || returned), acc.2 || (returned && acc.1[i]))
     }((join(), state.credits, false));
     let active = !state.failed && !excess;
-    let idle = state.stage == u3:0 && active;
+    let idle = state.stage == Stage:0 && active;
     // Check every unserved lane, granting only the first available one.
     // XLS permits one nonblocking receive per channel, so an empty scan
     // clears that class's round rather than rescanning it in the same step.
@@ -155,7 +165,7 @@ proc Packetize<TX: u32, RX: u32, TAG: u16> {
     } else if taking {
       axis::Beat { tlast: false, word: data_header }
     } else {
-      axis::Beat { tlast: state.stage == u3:4, word: state.payload as u32 }
+      axis::Beat { tlast: state.stage == (FRAME_WORDS as Stage), word: state.payload as u32 }
     };
     let tok = send_if(tok, link_out, active && (returning || taking || !idle), beat);
     let _done = send_if(tok, fault_out, excess && !state.failed, u32:4);
@@ -168,13 +178,13 @@ proc Packetize<TX: u32, RX: u32, TAG: u16> {
       TransmitState<TX, RX> { failed: true, ..state }
     } else if taking {
       TransmitState<TX, RX> { credits: update(credits, data_lane, false),
-        stage: u3:1, payload: axis::bits_from_frame(frame),
+        stage: Stage:1, payload: axis::bits_from_frame(frame),
         prefer_return: true, ..state }
     } else if idle {
       TransmitState<TX, RX> { credits, prefer_return: !state.prefer_return, ..state }
     } else {
       TransmitState<TX, RX> { credits, payload: state.payload >> u32:32,
-        stage: if state.stage == u3:4 { u3:0 } else { state.stage + u3:1 }, ..state }
+        stage: if state.stage == (FRAME_WORDS as Stage) { Stage:0 } else { state.stage + Stage:1 }, ..state }
     }
   }
 }
@@ -235,6 +245,7 @@ proc FaultMux {
 }
 
 pub proc Bridge<TX: u32, RX: u32, TAG: u16> {
+  // The tag/lane prefix is independent of ordinary frame capacity.
   config(link_in: chan<axis::Beat> in, link_out: chan<axis::Beat> out,
          frames_in: chan<axis::Frame>[TX] in, frames_out: chan<axis::Frame>[RX] out,
          fault_out: chan<u32> out) {

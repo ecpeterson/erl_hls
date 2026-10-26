@@ -23,7 +23,7 @@ fn local_protocol_unhandled(machine: ActorState) -> LocalProtocolResult {
 
 // Recognize source-defined receipts only after ordinary tag/failure/pending checks.
 // This path cannot publish effects, so it needs no outbox reservation.
-pub fn local_protocol_at(raw: MachineBits, raw_frame: bits[128],
+pub fn local_protocol_at(raw: MachineBits, raw_frame: bits[axis::FRAME_BITS],
                          received: bool, slot: u32) -> LocalProtocolResult {
   let machine = local_machine(raw, slot);
   let frame = axis::frame_from_bits(raw_frame);

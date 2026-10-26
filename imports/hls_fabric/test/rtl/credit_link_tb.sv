@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 module credit_link_tb;
+  parameter FRAME_WORDS=4;
+  localparam FRAME_BITS=32*FRAME_WORDS;
   reg clk = 0;
   always #5 clk = ~clk;
   reg reset = 1;
@@ -8,8 +10,8 @@ module credit_link_tb;
   localparam COUNT = 48;
   integer sent [0:3];
   integer received [0:3];
-  wire [127:0] input_frame [0:3];
-  wire [127:0] output_frame [0:3];
+  wire [FRAME_BITS-1:0] input_frame [0:3];
+  wire [FRAME_BITS-1:0] output_frame [0:3];
   wire [3:0] input_ready, output_valid;
   reg [3:0] output_ready;
   wire [32:0] a_tx, b_tx;
@@ -21,9 +23,10 @@ module credit_link_tb;
   assign a_ready = b_rx_ready && ab_gate;
   assign b_ready = a_rx_ready && ba_gate;
 
-  function automatic [127:0] sample(input integer lane, input integer ordinal);
-    sample = {32'h03000042 ^ lane ^ (epoch * 32'h10000), 32'h31415926 ^ ordinal,
-              32'hf0e1d2c3 ^ (ordinal * 32'd17), 32'habcd0000 + lane * 32'd256 + ordinal};
+  function automatic [FRAME_BITS-1:0] sample(input integer lane, input integer ordinal);
+    integer word;
+    for(word=0;word<FRAME_WORDS;word=word+1)
+      sample[word*32+:32] = 32'h31415926 ^ (lane*32'h10000) ^ ordinal ^ (epoch*32'h1000000) ^ (word*32'h101);
   endfunction
   genvar i;
   generate for (i=0; i<4; i=i+1) begin
@@ -102,8 +105,8 @@ module credit_link_tb;
           a_stage=1;
         end
       end else begin
-        if(a_tx[32] !== (a_stage==4)) $fatal(1,"A framing");
-        a_stage=(a_stage==4)?0:a_stage+1;
+        if(a_tx[32] !== (a_stage==FRAME_WORDS)) $fatal(1,"A framing");
+        a_stage=(a_stage==FRAME_WORDS)?0:a_stage+1;
       end
     end
     if(b_valid && b_ready) begin
@@ -119,8 +122,8 @@ module credit_link_tb;
           b_stage=1;
         end
       end else begin
-        if(b_tx[32] !== (b_stage==4)) $fatal(1,"B framing");
-        b_stage=(b_stage==4)?0:b_stage+1;
+        if(b_tx[32] !== (b_stage==FRAME_WORDS)) $fatal(1,"B framing");
+        b_stage=(b_stage==FRAME_WORDS)?0:b_stage+1;
       end
     end
     for(k=0;k<4;k=k+1) begin

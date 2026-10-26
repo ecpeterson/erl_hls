@@ -13,12 +13,16 @@ identities. `hls_partition_schedule:shared/2` optionally binds every actor to a
 device-local RAM executor. `hls_partition_reduction:attach/3` can then offload
 eligible closed family exchanges while retaining these same transport lanes.
 """.
--export([normalize/2, device/2]).
+-export([normalize/2, normalize/3, device/2]).
 
 -doc "Builds a checked multi-device deployment from actor placements. Rejects incompatible encodings and unsupported route delivery.".
 -spec normalize(hls_topology:plan(), map()) -> map().
+normalize(Plan, Placement) -> normalize(Plan, Placement, hls_frame_layout:default()).
+
+-doc "Builds a deployment with one checked ordinary-frame capacity. Every actor, mailbox, startup table and support bundle must use this same layout; bridge envelopes retain their independent limits.".
+-spec normalize(hls_topology:plan(), map(), hls_frame_layout:layout()) -> map().
 normalize(Plan = #{actors := Exact, families := Families, ingresses := _Ingresses,
-        externals := Externals, startup := Startup}, Placement) when is_map(Placement) ->
+        externals := Externals, startup := Startup}, Placement, Layout) when is_map(Placement) ->
     Expanded = expand_actors(Exact, Families),
     Identities = [Id || #{identity := Id} <- Expanded],
     ok = check_placement(Identities, Placement),
@@ -28,22 +32,22 @@ normalize(Plan = #{actors := Exact, families := Families, ingresses := _Ingresse
         _ -> error({partition_device_count, Devices})
     end,
     RawIds = maps:from_list([{Raw, Id} || #{raw_id := Raw, identity := Id} <- Expanded]),
-    Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Expanded]),
+    Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Expanded], Layout),
     StartupIndex = maps:from_list([{maps:get(Target, RawIds), Messages}
         || #{target := Target, messages := Messages} <- Startup]),
-    Actors = [actor(A, Index, Placement, Interfaces, StartupIndex)
+    Actors = [actor(A, Index, Placement, Interfaces, StartupIndex, Layout)
         || {Index, A} <- lists:enumerate(0, Expanded)],
     ActorIndex = maps:from_list([{Id, A} || A = #{identity := Id} <- Actors]),
     Routes = routes(Plan, Expanded, RawIds),
-    ok = validate_routes(Routes, ActorIndex, Interfaces),
-    ok = validate_external_encodings(Routes, ActorIndex, Interfaces),
+    ok = validate_routes(Routes, ActorIndex, Interfaces, Layout),
+    ok = validate_external_encodings(Routes, ActorIndex, Interfaces, Layout),
     Lanes = lanes(Routes, ActorIndex),
-    #{version => 1, devices => Devices, actors => local_slots(Actors),
+    #{version => 1, frame_layout => Layout, devices => Devices, actors => local_slots(Actors),
         routes => Routes, lanes => Lanes,
         ingresses => hls_partition_ingress:lower(Plan, Actors, Interfaces),
         externals => [E#{index => I, port => "external_" ++ integer_to_list(I) ++ "_out"}
             || {I, E} <- lists:enumerate(0, Externals)]};
-normalize(_Plan, _Placement) -> error(invalid_partition_input).
+normalize(_Plan, _Placement, _Layout) -> error(invalid_partition_input).
 
 -doc "Returns derived local bindings; the deployment remains their authority.".
 -spec device(map(), term()) -> map().
@@ -60,6 +64,7 @@ device(Partition = #{devices := Devices, actors := Actors, lanes := Lanes, exter
     ExternalIds = lists:usort([Id || #{destination := {external, Id}} <- LocalLanes]),
     hls_partition_tile:local(Partition, hls_partition_schedule:local(Partition, #{id => Device, actors => LocalActors, lanes => LocalLanes,
         transport => maps:get(transport, Partition, serial),
+        frame_layout => maps:get(frame_layout, Partition, hls_frame_layout:default()),
         reduction_inputs => maps:with([Id || #{identity := Id} <- LocalActors],
             maps:get(reduction_inputs, Partition, #{})),
         tx_lanes => Tx, rx_lanes => Rx, links => links(Tx, Rx),
@@ -94,8 +99,8 @@ check_placement(Identities, Placement) ->
     end.
 
 %% Attach device assignment and packed startup messages; reject conflicting initial effects.
--spec actor(map(), non_neg_integer(), map(), map(), map()) -> map().
-actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Startup) ->
+-spec actor(map(), non_neg_integer(), map(), map(), map(), hls_frame_layout:layout()) -> map().
+actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Startup, Layout) ->
     Interface = maps:get(Module, Interfaces),
     Messages = maps:get(Id, Startup, []),
     case {Messages, hls_actor_interface:initial_effects(Interface)} of
@@ -106,7 +111,7 @@ actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Sta
     _ = xls_shared_topology_profile:identifier(Module, partition_actor),
     A#{index => Index, device => maps:get(Id, Placement),
         max_entry_effects => hls_actor_interface:max_entry_effects(Interface),
-        startup => [pack_startup(Id, Module, Message) || Message <- Messages]}.
+        startup => [pack_startup(Id, Module, Message, Layout) || Message <- Messages]}.
 
 %% Number actors densely within each device while retaining global order.
 -spec local_slots([map()]) -> [map()].
@@ -117,16 +122,16 @@ local_slots(Actors) ->
     end, #{}, Actors),
     Result.
 
-%% Encode one startup record and enforce the bridge frame bound.
--spec pack_startup(term(), module(), tuple()) -> map().
-pack_startup(Id, Module, Message) when is_tuple(Message), tuple_size(Message) > 0 ->
+%% Encode one startup record and enforce the ordinary frame bound.
+-spec pack_startup(term(), module(), tuple(), hls_frame_layout:layout()) -> map().
+pack_startup(Id, Module, Message, Layout) when is_tuple(Message), tuple_size(Message) > 0 ->
     Tag = Module:pack_tag(element(1, Message)),
     Payload = hls_codec:align(Module:pack(Message), 32),
-    case Tag >= 0 andalso Tag =< 255 andalso bit_size(Payload) =< 96 of
+    case Tag >= 0 andalso Tag =< 255 andalso bit_size(Payload) =< hls_frame_layout:payload_bits(Layout) of
         true -> #{selector => Tag, payload => Payload};
         false -> error({partition_startup_encoding, Id, Message})
     end;
-pack_startup(Id, _Module, Message) -> error({partition_startup_message, Id, Message}).
+pack_startup(Id, _Module, Message, _) -> error({partition_startup_message, Id, Message}).
 
 %% Expand compact routes and replace raw names by canonical logical identities.
 -spec routes(hls_topology:plan(), [map()], map()) -> [map()].
@@ -141,8 +146,8 @@ routes(Plan = #{routes := Exact}, Actors, RawIds) ->
         || R = #{source := {Source, Port}, recipients := Recipients} <- Expanded]).
 
 %% Check delivery policy and exact schema compatibility on every actor-to-actor route.
--spec validate_routes([map()], map(), map()) -> ok.
-validate_routes(Routes, Actors, Interfaces) ->
+-spec validate_routes([map()], map(), map(), hls_frame_layout:layout()) -> ok.
+validate_routes(Routes, Actors, Interfaces, Layout) ->
     lists:foreach(fun(#{source := Source = {Id, Port}, delivery := Delivery,
             recipients := Recipients}) ->
         case {Delivery, length(Recipients)} of
@@ -154,11 +159,11 @@ validate_routes(Routes, Actors, Interfaces) ->
         Interface = maps:get(Module, Interfaces),
         Schemas = hls_actor_interface:output_schemas(Interface, Port),
         lists:foreach(fun(Schema) ->
-            Encoding = encoding(Interface, Schema),
+            Encoding = encoding(Interface, Schema, Layout),
             lists:foreach(fun
                 ({actor, Target}) ->
                     #{module := TargetModule} = maps:get(Target, Actors),
-                    TargetEncoding = encoding(maps:get(TargetModule, Interfaces), Schema),
+                    TargetEncoding = encoding(maps:get(TargetModule, Interfaces), Schema, Layout),
                     case Encoding =:= TargetEncoding of
                         true -> ok;
                         false -> error({partition_route_encoding, Source, Target, Schema})
@@ -168,24 +173,24 @@ validate_routes(Routes, Actors, Interfaces) ->
         end, Schemas)
     end, Routes).
 
-%% Read a schema's selector and fields, rejecting representations outside the bridge ABI.
--spec encoding(hls_actor_interface:summary(), atom()) -> {byte(), [map()]}.
-encoding(Interface, Schema) ->
+%% Read a schema's selector and fields, rejecting representations outside the ordinary frame ABI.
+-spec encoding(hls_actor_interface:summary(), atom(), hls_frame_layout:layout()) -> {byte(), [map()]}.
+encoding(Interface, Schema, Layout) ->
     #{selector := Selector, fields := Fields} = hls_actor_interface:schema(Interface, Schema),
     Width = lists:sum([hls_type:width(Type) || #{type := Type} <- Fields]),
-    case Selector >= 0 andalso Selector =< 255 andalso Width =< 96 of
+    case Selector >= 0 andalso Selector =< 255 andalso Width =< hls_frame_layout:payload_bits(Layout) of
         true -> {Selector, Fields};
         false -> error({partition_frame_encoding, Schema, Selector, Width})
     end.
 
 %% Require all producers of each external schema/selector to agree on its encoding.
--spec validate_external_encodings([map()], map(), map()) -> ok.
-validate_external_encodings(Routes, Actors, Interfaces) ->
+-spec validate_external_encodings([map()], map(), map(), hls_frame_layout:layout()) -> ok.
+validate_external_encodings(Routes, Actors, Interfaces, Layout) ->
     _ = lists:foldl(fun(#{source := {Id, Port}, recipients := Recipients}, Acc0) ->
         #{module := Module} = maps:get(Id, Actors),
         Interface = maps:get(Module, Interfaces),
         lists:foldl(fun({External, Schema}, Acc) ->
-            Encoding = {Selector, _Fields} = encoding(Interface, Schema),
+            Encoding = {Selector, _Fields} = encoding(Interface, Schema, Layout),
             Acc1 = consistent({External, schema, Schema}, Encoding, Acc),
             consistent({External, selector, Selector}, Schema, Acc1)
         end, Acc0, [{External, Schema} || {external, External} <- Recipients,

@@ -1,20 +1,24 @@
 -module(hls_protocol_schema_test_source).
 -moduledoc "Compiles small source actors for protocol schema tests without supplying compiler artifacts by hand.".
--export([compile/1]).
+-export([compile/1, compile/2]).
 
 %% Record names and ordered fields use ordinary Erlang type syntax.
 -type schema() :: {atom(), [{atom(), string()}]}.
 
 -doc "Compiles a complete idle receiver for the supplied nonempty record declarations. Removes its temporary source before returning the fresh local-actor artifact, so consumers must use the retained compiler snapshot.".
 -spec compile([schema(), ...]) -> hls_local_actor:artifact().
-compile(Schemas) ->
+compile(Schemas) -> compile(Schemas, hls_frame_layout:default()).
+
+-doc "Compiles the same ordinary receiver using an explicit canonical frame layout; oversized schemas reject before a rendered artifact is returned.".
+-spec compile([schema(), ...], hls_frame_layout:layout()) -> hls_local_actor:artifact().
+compile(Schemas, FrameLayout) ->
     Root = filename:join("_build", "protocol-schema-" ++
         integer_to_list(erlang:unique_integer([positive]))),
     File = filename:join(Root, "actor.erl"),
     ok = filelib:ensure_dir(File),
     try
         ok = file:write_file(File, source(Schemas)),
-        hls_local_actor:compile(File, [])
+        hls_local_actor:render(hls_local_actor:prepare(File, [], FrameLayout))
     after
         file:delete(File), file:del_dir(Root)
     end.

@@ -17,7 +17,7 @@
 %% Other transport options belong to their owning planners and are ignored by this cut.
 -type options() :: #{native_actors => [hls_protocol_topology:id()], atom() => term()}.
 
--doc "Selects all actors by default, or a nonempty proper subset of unique logical IDs in native_actors. Keeps global actor/link indices, local publications and destination-owned captures; crossing links carry a slot and canonical 128-bit destination frame. Derives every codec from fresh capture/source schemas, never supplied constants. Filters rectangle recipients without renumbering the host mask. Returns fabric, ingress and native indices; malformed selections fail before hardware emission. All roles must share clock/reset and stable ready/valid handshakes. No capacity, progress or multi-board admission is established.".
+-doc "Selects all actors by default, or a nonempty proper subset of unique logical IDs in native_actors. Keeps global actor/link indices, local publications and destination-owned captures; crossing links carry a slot and canonical destination frame in the common source-build layout. Derives every codec from fresh capture/source schemas, never supplied constants. Filters rectangle recipients without renumbering the host mask. Returns fabric, ingress and native indices; malformed selections fail before hardware emission. All roles must share clock/reset and stable ready/valid handshakes. No capacity, progress or multi-board admission is established.".
 -spec plan(options(), hls_protocol_transport:bundle(), hls_protocol_capture:plan(),
     hls_protocol_fabric:plan(), none | hls_protocol_control:plan()) -> plan().
 plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sources,links:=Links,boundaries:=Boundaries},Ingress) ->
@@ -51,9 +51,9 @@ plan(Config,Bundle=#{topology:=#{actors:=Actors}},Capture,Fabric=#{sources:=Sour
 classes(#{destination_index:=D,pair:=#{slots:=Slots}},#{topology:=#{actors:=Actors},modules:=Modules},#{channels:=Channels}) ->
     #{module:=M}=lists:nth(D+1,Actors),
     #{program:=Program}=maps:get(M,Modules),
-    #{message_names:=Names}=xls_actor_program:spec(Program),
+    #{message_names:=Names,frame_layout:=FrameLayout}=xls_actor_program:spec(Program),
     [begin
         [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
         [Op]=[O||{O,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
-        #{slot=>I,channel=>C,codec=>hls_protocol_codec:plan(Channel,Op)}
+        #{slot=>I,channel=>C,codec=>hls_protocol_codec:plan(Channel,Op,FrameLayout)}
     end||#{index:=I,channel:=C}<-Slots].

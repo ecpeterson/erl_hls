@@ -2,17 +2,17 @@
 -moduledoc "Binds startup values and host frame domains to the receiving actor's fresh ordinary schema. Source callbacks retain semantic validation.".
 -export([frames/2, domains/2]).
 
--doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the ordinary 128-bit frame ABI (at most 96 payload bits). Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs raise schema diagnostics. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
+-doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the canonical frame layout retained by its compiler program. Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs raise schema diagnostics. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
 -spec frames(hls_local_actor:source() | hls_local_actor:artifact(), [tuple()]) -> [non_neg_integer()].
 frames(#{program := Program}, Messages) ->
-    #{message_names := Names} = xls_actor_program:spec(Program),
+    #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
-    [frame(Message, Names, Records) || Message <- Messages].
+    [frame(Message, Names, Records, FrameLayout) || Message <- Messages].
 
--doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond 96 bits reject; invalid tags and unsupported codecs raise schema diagnostics; semantic invalid values must still reach the source callback.".
+-doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond the selected frame capacity reject; invalid tags and unsupported codecs raise schema diagnostics; semantic invalid values must still reach the source callback.".
 -spec domains(hls_local_actor:source() | hls_local_actor:artifact(), [atom()]) -> [map()].
 domains(#{program := Program}, Tags) ->
-    #{message_names := Names} = xls_actor_program:spec(Program),
+    #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     case Tags =/= [] andalso length(Tags) =:= length(lists:usort(Tags)) of
         true -> ok;
@@ -23,7 +23,7 @@ domains(#{program := Program}, Tags) ->
            [Fs || {attribute,_,record,{T,Fs}} <- Records, T =:= Tag]} of
         {[Op],[Fields]} ->
             (maps:with([mask,value],xls_message_bits:frame(Op,
-                [#{type=>field_type(F),domain=>unknown} || F<-Fields])))#{tag=>Tag,schema_sha256=>schema_hash(Fields)};
+                [#{type=>field_type(F),domain=>unknown} || F<-Fields],FrameLayout)))#{tag=>Tag,schema_sha256=>schema_hash(Fields)};
         _ -> hls_diagnostic:raise(schema, undeclared_protocol_schema,
             <<"An ingress message tag must be declared by its receiving actor.">>,
             #{schema => Tag, declared_schemas => Names})
@@ -38,19 +38,19 @@ schema_hash(Fields) ->
     binary:encode_hex(crypto:hash(sha256,term_to_binary(Layout,[deterministic])),lowercase).
 
 %% Match the receiving module's tag enumeration and typed record field order exactly.
--spec frame(tuple(), [atom()], [term()]) -> non_neg_integer().
-frame(Message, Names, Records) when is_tuple(Message), tuple_size(Message) > 0 ->
+-spec frame(tuple(), [atom()], [term()], hls_frame_layout:layout()) -> non_neg_integer().
+frame(Message, Names, Records, FrameLayout) when is_tuple(Message), tuple_size(Message) > 0 ->
     [Tag | Values] = tuple_to_list(Message),
     case {[I || {I,T} <- lists:enumerate(3,Names), T =:= Tag],
           [Fs || {attribute,_,record,{T,Fs}} <- Records, T =:= Tag]} of
         {[Op], [Fields]} when length(Values) =:= length(Fields) ->
             Bound = [#{type => Type, domain => {values,[hls_type:pack_exact(V,Type)]}}
                 || {V,Type} <- lists:zip(Values,[field_type(F) || F <- Fields])],
-            #{mask := Mask, value := Value} = xls_message_bits:frame(Op,Bound),
-            true = Mask =:= (1 bsl 128)-1, Value;
+            #{mask := Mask, value := Value} = xls_message_bits:frame(Op,Bound,FrameLayout),
+            true = Mask =:= (1 bsl hls_frame_layout:frame_bits(FrameLayout))-1, Value;
         _ -> invalid_startup(Message, Names)
     end;
-frame(Message, Names, _) -> invalid_startup(Message, Names).
+frame(Message, Names, _, _) -> invalid_startup(Message, Names).
 
 %% Startup is source input; wrong record identity or arity is not a compiler invariant failure.
 -spec invalid_startup(term(), [atom()]) -> no_return().
@@ -73,7 +73,7 @@ wire_scalar(Descriptor) ->
     Printed = iolist_to_binary(hls_type:print_type(Descriptor)),
     Width = hls_type:width(Descriptor),
     case {hls_type:dslx_codec(Descriptor), re:run(Printed,"^[us]([1-9][0-9]*)$",[{capture,[1],binary}])} of
-        {bit_cast,{match,[Bits]}} when Width > 0, Width =< 96 ->
+        {bit_cast,{match,[Bits]}} when Width > 0 ->
             case binary_to_integer(Bits) =:= Width andalso hls_type:value_width(Descriptor) =:= Width of
                 true -> Descriptor;
                 false -> unsupported_codec(Descriptor)

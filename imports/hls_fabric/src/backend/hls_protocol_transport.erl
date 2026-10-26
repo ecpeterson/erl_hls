@@ -4,7 +4,7 @@
 -export_type([program/0, build/0, bundle/0, descriptor/0, actor_descriptor/0]).
 
 -doc "One elaborated topology, its checked source snapshots and source inventory. Emission adds DSLX to module artifacts without changing these semantic bindings.".
--type bundle() :: #{topology := hls_protocol_topology:plan(),
+-type bundle() :: #{frame_layout := hls_frame_layout:layout(), topology := hls_protocol_topology:plan(),
     modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
     inventory := hls_protocol_inventory:report()}.
 
@@ -12,7 +12,7 @@
 -type actor_descriptor() :: #{module := module(), file := binary(), manifest := hls_local_actor:descriptor() | hls_local_actor:manifest(), index => non_neg_integer()}.
 
 -doc "Checked placement, publication, capture and receiver interfaces. Before emission module snapshots contain no DSLX and manifests omit byte hashes; emit/1 returns the finalized descriptor with those artifacts and identities attached.".
--type descriptor() :: #{arithmetic := [hls_protocol_arithmetic:group()], bundle := bundle(),
+-type descriptor() :: #{frame_layout := hls_frame_layout:layout(), arithmetic := [hls_protocol_arithmetic:group()], bundle := bundle(),
     capture := hls_protocol_capture:plan(), transactions := hls_protocol_transactions:plan(),
     sources := hls_protocol_source:plan(), inbox := hls_protocol_inbox:plan(),
     fabric := hls_protocol_fabric:plan(), ingress := none | hls_protocol_control:plan(),
@@ -48,12 +48,13 @@ write(Input, Output) ->
 -doc "Loads the declared sources, invokes the trusted topology constructor and lowers each distinct actor module once. Checks source inventories, captures, publishers, startup and optional rectangle control before placement. All roles share the retained compiler programs; owner and inbox hardware is rendered only by emit/1. Creates no output files. Constructors may have effects; retain the loaded source modules while deriving placements. Optional protocol-model checks establish neither source refinement nor progress admission.".
 -spec prepare(hls_source_config:config()) -> program().
 prepare(Config = #{sources := Sources, topology := Constructor, actor_limit := Limit}) ->
+    FrameLayout = hls_frame_layout:new(maps:get(frame_payload_words, Config, 3)),
     Loaded = load_sources(Sources),
     Topology = prepare_topology(Constructor, Limit, Loaded),
-    Modules = prepare_actors(Topology, Loaded),
+    Modules = prepare_actors(Topology, Loaded, FrameLayout),
     Inventory = inspect_sources(Topology, Modules),
     Model = hls_protocol_model:check(maps:get(protocol_model, Config, none), Inventory),
-    Bundle = #{topology => Topology, modules => Modules, inventory => Inventory},
+    Bundle = #{frame_layout => FrameLayout, topology => Topology, modules => Modules, inventory => Inventory},
     prepare_transport(Bundle, Model).
 
 -doc "Returns the source bundle for downstream placement and host-codec binding. Treat it as read-only and retain the program's source modules; this accessor does not validate supplied bundles.".
@@ -134,8 +135,8 @@ prepare_topology({Module, Function, Arguments}, Limit, Loaded) ->
     Topology.
 
 %% Compile each distinct actor module once, retaining every affected logical actor in diagnostics.
--spec prepare_actors(hls_protocol_topology:plan(), [module()]) -> #{module() => hls_local_actor:source()}.
-prepare_actors(#{actors := Actors}, Loaded) ->
+-spec prepare_actors(hls_protocol_topology:plan(), [module()], hls_frame_layout:layout()) -> #{module() => hls_local_actor:source()}.
+prepare_actors(#{actors := Actors}, Loaded, FrameLayout) ->
     Missing = [#{actor => Id, module => Module} || #{id := Id, module := Module} <- Actors,
         not lists:member(Module, Loaded)],
     case Missing of
@@ -147,7 +148,7 @@ prepare_actors(#{actors := Actors}, Loaded) ->
     Used = lists:usort([Module || #{module := Module} <- Actors]),
     maps:from_list([{Module, hls_diagnostic:with_context(
         #{module => Module, actors => [Id || #{id := Id, module := Owner} <- Actors, Owner =:= Module]},
-        fun() -> compile(Module) end)} || Module <- Used]).
+        fun() -> compile(Module, FrameLayout) end)} || Module <- Used]).
 
 %% Inventory diagnostics retain their original ordering and detailed source contexts.
 -spec inspect_sources(hls_protocol_topology:plan(), #{module() => hls_local_actor:source()}) -> hls_protocol_inventory:report().
@@ -229,7 +230,7 @@ actor_filename(Kind, Index) ->
 transport_descriptor(#build{program = #program{capture = Capture, transactions = Transactions,
         sources = Publishers, inbox = Inbox, ingress = WholeIngress, model = Model},
         fabric = Fabric, ingress = Ingress, arithmetic = Arithmetic, hardware = Hardware}, Bundle, Functions, Receivers) ->
-    Transport = #{arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
+    Transport = #{frame_layout => maps:get(frame_layout, Bundle), arithmetic => Arithmetic, bundle => Bundle, capture => Capture, transactions => Transactions,
         sources => Publishers, inbox => Inbox, fabric => Fabric, ingress => Ingress, whole_control => WholeIngress,
         actor_functions => Functions, receivers => Receivers, transition => xls_protocol_transport:descriptor(Hardware)},
     case Model of
@@ -255,12 +256,17 @@ transport_files(Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
         actor_functions := Functions, receivers := Receivers}, Hardware, ActorFiles) ->
     #{files := TransportFiles} = xls_protocol_transport:emit(Hardware),
     ModelFiles = hls_protocol_model:emit(maps:get(protocol_model, Plan, none)),
-    Summary = #{actors => length(Receivers), links => length(maps:get(links, Fabric)),
+    Summary = #{frame_layout => maps:get(frame_layout, Plan), actors => length(Receivers), links => length(maps:get(links, Fabric)),
         source_modules => lists:sort(maps:keys(Modules)), top => protocol_fabric, eligible => false,
         source_plans => maps:map(fun(_, #{program := Program}) -> maps:with([source_sha256, artifact_sha256, planner_md5],
             xls_statem_plan:manifest(xls_actor_program:plan(Program))) end, Modules),
         actor_functions => Functions, receivers => Receivers, actor_runtime => false, hardware => dslx, rtl => []},
-    hls_generated_files:merge(ActorFiles ++ [
+    %% Every actor uses the retained bundle layout; publish its shared dependency once per directory.
+    Config = hls_frame_layout:config_dslx(maps:get(frame_layout, Plan)),
+    ConfigFiles = maps:from_list([{filename:join(filename:dirname(binary_to_list(File)), "frame_config.x"), Config}
+        || #{file := File} <- Functions ++ Receivers]),
+    SourceFiles = [maps:without(maps:keys(ConfigFiles), Files) || Files <- ActorFiles],
+    hls_generated_files:merge([ConfigFiles | SourceFiles] ++ [
         hls_generated_files:prefix("dslx", TransportFiles), ModelFiles,
         #{"transport.etf" => term_to_binary(Plan, [deterministic]), "summary.json" => json:encode(Summary)}]).
 
@@ -269,8 +275,8 @@ transport_files(Plan = #{bundle := #{modules := Modules}, fabric := Fabric,
 load(File, Options) -> hls_build_sources:load(File, Options).
 
 %% The parse transform's context retains includes and preprocessing options.
--spec compile(module()) -> hls_local_actor:source().
-compile(Module) ->
+-spec compile(module(), hls_frame_layout:layout()) -> hls_local_actor:source().
+compile(Module, FrameLayout) ->
     Context = case proplists:get_value(hls_source_context, Module:module_info(attributes)) of
         [Captured] -> Captured;
         undefined -> hls_diagnostic:raise(source, missing_actor_source_context,
@@ -279,7 +285,7 @@ compile(Module) ->
     end,
     Source = maps:get(source_name, Context),
     Artifact = hls_diagnostic:with_context(#{module => Module, source => unicode:characters_to_binary(Source)},
-        fun() -> hls_local_actor:prepare(Source, Context) end),
+        fun() -> hls_local_actor:prepare(Source, Context, FrameLayout) end),
     Artifact#{context => Context}.
 
 %% Independent destination acceptance implements direct and buffered delivery only.

@@ -1,11 +1,11 @@
 -module(hls_protocol_codec).
 -moduledoc "Lossless projection between a source-bound ordinary frame and a typed capture payload. This is a wire codec, not receipt eligibility or a network lifetime proof.".
--export([plan/2, encode/2, decode/2, emit/2, write/3]).
+-export([plan/2, plan/3, encode/2, decode/2, emit/2, write/3]).
 -export_type([plan/0]).
 
 -doc "Checked compact-to-ordinary frame wiring. Mask/value fix all omitted bits; frame_positions lists each retained stream bit in compact order.".
--type plan() :: #{mask := non_neg_integer(), value := non_neg_integer(),
-    frame_positions := [0 .. ((1 bsl 7) - 1)], payload_bits := 0..96, physical_width := 1..96,
+-type plan() :: #{frame_layout := hls_frame_layout:layout(), mask := non_neg_integer(), value := non_neg_integer(),
+    frame_positions := [non_neg_integer()], payload_bits := non_neg_integer(), physical_width := pos_integer(),
     operation := 0 .. ((1 bsl 8) - 1)}.
 
 %% Codec callers may omit field names; physical offsets and typed widths determine the wiring.
@@ -16,31 +16,36 @@
 
 %% The codec consumes a layout view; source/channel provenance is checked by its caller.
 -type channel_layout() :: #{fields := [field()],
-    message_bits := non_neg_integer(), payload_bits := non_neg_integer(), atom() => term()}.
+    message_bits := non_neg_integer(), payload_bits := non_neg_integer(), frame_layout => hls_frame_layout:layout(), atom() => term()}.
 
--doc "Builds a bit permutation for one capture channel and its ordinary operation byte. Header, padding and source-constant fields use the shared entry ABI; dynamic fields remain exact, including partial bytes. Compact bit zero is the first dynamic physical stream bit. Rejects inconsistent capture offsets, overlapping fields or payloads wider than the ordinary 96-bit frame. The caller must establish source/schema/route provenance before omitting fields.".
+-doc "Builds a bit permutation for one capture channel and its ordinary operation byte. Header, padding and source-constant fields use the shared entry ABI; dynamic fields remain exact, including partial bytes. Compact bit zero is the first dynamic physical stream bit. Rejects inconsistent capture offsets, overlapping fields or payloads wider than the selected frame. The layout comes from the channel; standalone layouts without one use the default capacity. The caller must establish source/schema/route provenance before omitting fields.".
 -spec plan(channel_layout(), 0 .. ((1 bsl 8) - 1)) -> plan().
-plan(#{fields:=Fields, message_bits:=MessageBits, payload_bits:=PayloadBits}, Op)
+plan(Channel, Op) -> plan(Channel, Op, maps:get(frame_layout, Channel, hls_frame_layout:default())).
+
+-doc "Plans a compact codec with an explicit canonical frame layout. A channel carrying layout metadata must agree with it; header and padding constraints come from the compiler schema.".
+-spec plan(channel_layout(), byte(), hls_frame_layout:layout()) -> plan().
+plan(Channel=#{fields:=Fields, message_bits:=MessageBits, payload_bits:=PayloadBits}, Op, FrameLayout)
         when Op >= 0, Op < 256 ->
+    FrameLayout=maps:get(frame_layout,Channel,FrameLayout),
     {MessageBits,PayloadBits}=lists:foldl(fun check_field/2,{0,0},Fields),
-    Bound=xls_message_bits:frame(Op,[bound(F)||F<-Fields]),
+    Bound=xls_message_bits:frame(Op,[bound(F)||F<-Fields],FrameLayout),
     Positions=lists:append([case maps:is_key(constant,F) of
         true->[];
-        false->[32+wire_bit(J)||J<-lists:seq(maps:get(message_bit_offset,F),
+        false->[hls_frame_layout:header_bits()+hls_codec:stream_bit_index(hls_frame_layout:payload_bits(FrameLayout),J)||J<-lists:seq(maps:get(message_bit_offset,F),
             maps:get(message_bit_offset,F)+hls_type:width(maps:get(type,F))-1)]
     end||F<-Fields]),
     PayloadBits=length(Positions),
     Dynamic=lists:foldl(fun(J,M)->M bor (1 bsl J) end,0,Positions),
     true=length(lists:usort(Positions))=:=PayloadBits,
-    true=(Dynamic bxor maps:get(mask,Bound))=:=(1 bsl 128)-1,
-    Bound#{frame_positions=>Positions,payload_bits=>PayloadBits,
+    true=(Dynamic bxor maps:get(mask,Bound))=:=(1 bsl hls_frame_layout:frame_bits(FrameLayout))-1,
+    Bound#{frame_layout=>FrameLayout,frame_positions=>Positions,payload_bits=>PayloadBits,
         physical_width=>max(1,PayloadBits),operation=>Op}.
 
--doc "Projects a canonical ordinary frame, rejecting a wrong operation, header, padding or omitted constant field. Runtime receipt guards and generation matching are separate checks. The integer frame is the ordinary 128-bit DSLX representation.".
+-doc "Projects a canonical ordinary frame, rejecting a wrong operation, header, padding or omitted constant field. Runtime receipt guards and generation matching are separate checks. The integer frame uses the layout retained in the codec.".
 -spec encode(plan(), non_neg_integer()) -> {ok,non_neg_integer()} | {error,invalid_frame}.
-encode(#{mask:=Mask,value:=Value,frame_positions:=Positions},Frame)
-        when Frame >= 0, Frame < (1 bsl 128) ->
-    case Frame band Mask =:= Value of
+encode(#{frame_layout:=FrameLayout,mask:=Mask,value:=Value,frame_positions:=Positions},Frame)
+        when Frame >= 0 ->
+    case Frame < (1 bsl hls_frame_layout:frame_bits(FrameLayout)) andalso Frame band Mask =:= Value of
         true->{ok,lists:foldl(fun({I,J},Bits)->Bits bor (((Frame bsr J) band 1) bsl I) end,
             0,lists:enumerate(0,Positions))};
         false->{error,invalid_frame}
@@ -62,19 +67,20 @@ write(Plan, Name, Path) ->
 
 -doc "Returns the combinational ready/valid codec as DSLX bytes without writing files. Preserves canonical-frame checks, constant-only dummy validation and the write/3 tuple interface; Name must be a simple DSLX identifier.".
 -spec emit(plan(), string()) -> iodata().
-emit(#{mask:=Mask,value:=Value,frame_positions:=Positions,physical_width:=Width,payload_bits:=Bits},Name) ->
+emit(#{frame_layout:=FrameLayout,mask:=Mask,value:=Value,frame_positions:=Positions,physical_width:=Width,payload_bits:=Bits},Name) ->
+    FrameBits=hls_frame_layout:frame_bits(FrameLayout),
     match=re:run(Name,"^[a-zA-Z_][a-zA-Z0-9_]*$",[{capture,none}]),
     Inverse=maps:from_list([{J,I}||{I,J}<-lists:enumerate(0,Positions)]),
-    Source=["import axis;\nconst_assert!(axis::FRAME_BITS == u32:128);\n",
-        "pub fn ",Name,"(frame: bits[128], payload: bits[",n(Width),"], frame_valid: bool, encoded_ready: bool, payload_valid: bool, decoded_ready: bool) ->\n",
-        "(bits[",n(Width),"], bits[128], bool, bool, bool, bool, bool, bool, bool) {\n",
-        "let canonical = (frame & bits[128]:",n(Mask),") == bits[128]:",n(Value),";\n",
+    Source=["import axis;\nconst_assert!(axis::FRAME_BITS == u32:",n(FrameBits),");\n",
+        "pub fn ",Name,"(frame: bits[",n(FrameBits),"], payload: bits[",n(Width),"], frame_valid: bool, encoded_ready: bool, payload_valid: bool, decoded_ready: bool) ->\n",
+        "(bits[",n(Width),"], bits[",n(FrameBits),"], bool, bool, bool, bool, bool, bool, bool) {\n",
+        "let canonical = (frame & bits[",n(FrameBits),"]:",n(Mask),") == bits[",n(FrameBits),"]:",n(Value),";\n",
         "let payload_canonical = ",case Bits of 0->"payload == u1:0";_->"true" end,";\n",
         "let encoded = ",concat(case Positions of []->["u1:0"];_->[["frame[",n(J),"+:u1]"]||J<-lists:reverse(Positions)] end),";\n",
         "let decoded = ",concat([case maps:find(J,Inverse) of
             {ok,I}->["payload[",n(I),"+:u1]"];
             error->["u1:",n((Value bsr J) band 1)]
-        end||J<-lists:seq(127,0,-1)]),";\n",
+        end||J<-lists:seq(FrameBits-1,0,-1)]),";\n",
         "(encoded, decoded, canonical, encoded_ready && canonical, frame_valid && canonical, frame_valid && !canonical,\n",
         " decoded_ready && payload_canonical, payload_valid && payload_canonical, payload_valid && !payload_canonical) }\n"],
     Source.
@@ -95,10 +101,6 @@ check_field(F=#{type:=Type,message_bit_offset:=Wire},{Wire,At}) ->
 bound(F=#{type:=Type}) ->
     Domain=case maps:find(constant,F) of {ok,Bits}->{values,[Bits]};error->unknown end,
     #{type=>Type,domain=>Domain}.
-
-%% Each complete frame byte is little-endian numerically, with stream bits MSB-first within it.
--spec wire_bit(non_neg_integer()) -> non_neg_integer().
-wire_bit(Stream) -> 8*(Stream div 8)+7-(Stream rem 8).
 
 %% Static wiring concatenations contain no runtime index or selection logic.
 -spec concat([iolist()]) -> iolist().

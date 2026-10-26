@@ -44,7 +44,8 @@ balanced_groups({Device, Module}, Ids, Count, Groups) ->
 shared(Partition = #{actors := Actors}, Members) ->
     [ok = startup_capacity(A) || A <- Actors],
     Specs = maps:map(fun(_, Ids) -> group_spec(Ids) end, Members),
-    #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(topology(Actors), Specs),
+    #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(topology(Actors), Specs,
+        maps:get(frame_layout, Partition, hls_frame_layout:default())),
     case Direct of [] -> ok; _ -> error({partition_unscheduled, Direct}) end,
     Index = maps:from_list([{Id, A} || A = #{identity := Id} <- Actors]),
     Partition#{schedulers => [bind(Group, Index) || Group <- Groups]}.

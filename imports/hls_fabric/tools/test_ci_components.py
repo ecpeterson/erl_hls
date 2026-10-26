@@ -2,11 +2,12 @@
 import argparse
 import json
 from pathlib import Path
+import shutil
 import sys
 import time
 
 from backend_commands import run
-from backend_paths import ROOT, application_directory
+from backend_paths import ROOT, application_directory, erlang_environment
 from test_protocol_boundary import configuration, expected, simulate
 from test_protocol_bridge import build, qualify, reset_witness
 from test_protocol_inspection import shapes
@@ -25,10 +26,11 @@ def main() -> None:
                '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib')]
     times = {}
 
-    def command(name: str, argv: list[str | Path], timeout: int = 180) -> None:
+    def command(name: str, argv: list[str | Path], timeout: int = 180,
+                env: dict[str, str] | None = None) -> None:
         """Record wall time for one external test, including its setup, and preserve a failure log."""
         started = time.monotonic()
-        run(argv, args.stage, name, timeout=timeout)
+        run(argv, args.stage, name, timeout=timeout, env=env)
         times[name] = time.monotonic() - started
         (args.stage / 'times.json').write_text(json.dumps(times, indent=2) + '\n')
 
@@ -41,6 +43,27 @@ def main() -> None:
         '--compare=none', *options, ROOT / 'test/xls/protocol_envelope_test.x'])
     command('bridge-transitions', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
         '--compare=none', *options, ROOT / 'test/rtl/protocol_bridge_transitions.x'])
+    # Ordinary frame capacity is shared by codec bits, serialization and packed lane storage.
+    command('frame-codecs', ['bash', 'tools/test_protocol_codecs.sh', args.xls,
+        args.stage / 'frame-codecs', 'layouts'])
+    for words in [1, 9]:
+        capacity = args.stage / ('frame-words' + str(words))
+        capacity.mkdir()
+        for source in [compiler / 'priv/xls/lib/axis.x', ROOT / 'priv/xls/hls_packed_link.x']:
+            shutil.copyfile(source, capacity / source.name)
+        command('frame-config-' + str(words), ['erl', '+S', '2:2', '-noshell', '-eval',
+            '[W,P]=init:get_plain_arguments(),L=hls_frame_layout:new(list_to_integer(W)),'
+            'ok=file:write_file(P,hls_frame_layout:config_dslx(L),[exclusive]),halt().',
+            '-extra', str(words), capacity / 'frame_config.x'], env=erlang_environment('test'))
+        selected = ['--warnings_as_errors=false', '--max_ticks=1000',
+            '--dslx_path=' + ':'.join(map(str, [capacity, *imports])),
+            '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib')]
+        # Word nine catches the former u8 bit-offset wrap; the lane tests exercise both wire formats.
+        for module, test_filter in [('axis', 'OrdinaryCapacityRoundTripTest'),
+                ('hls_packed_link', 'configured_.*_frame_test')]:
+            command(module + '-words' + str(words), [args.xls / 'interpreter_main',
+                '--evaluator=ir-jit', '--compare=none', '--test_filter=' + test_filter,
+                *selected, capacity / (module + '.x')])
     command('execution', ['bash', 'tools/test_local_execution.sh', args.xls, args.stage / 'execution'])
     command('receipt-contracts', [sys.executable, 'tools/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
     shapes(args.xls, args.stage / 'inspection-shapes')

@@ -71,7 +71,7 @@ emit(#plan{boundary = BoundaryPlan, application = Application, device = Device})
         "deployment.etf" => term_to_binary(Deployment, [deterministic])}]),
     Files=maps:keys(GatewayFiles)++["deployment.etf","application/protocol_application_top.sv"]++
         case maps:get(inspection,Boundary) of none->[];_->["network/inspection.json","network/inspection.etf"] end,
-    Manifest=#{top=>protocol_application_top,activation=>explicit_start,eligible=>false,control_adapter=>Hardware,
+    Manifest=#{frame_layout=>maps:get(frame_layout,Boundary),top=>protocol_application_top,activation=>explicit_start,eligible=>false,control_adapter=>Hardware,
         inspection=>maps:get(inspection,Boundary),
         identity=>binary:encode_hex(maps:get(identity,Binding),lowercase),
         actors=>maps:get(actors,Boundary),externals=>maps:get(externals,Boundary),

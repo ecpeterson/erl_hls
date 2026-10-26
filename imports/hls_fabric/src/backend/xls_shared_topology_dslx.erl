@@ -61,7 +61,7 @@ plan(Topology, Profile0) ->
             case xls_shared_topology_family_dslx:lower(Topology, Profile) of
                 #{schedulers := [], artifact_requirements := Requirements} ->
                     Bytes = xls_topology_family_dslx:emit(Topology,
-                        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug], Profile)),
+                        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug, frame_payload_words], Profile)),
                     #plan{implementation = {compact_direct, Bytes}, requirements = Requirements,
                         descriptor = #{representation => compact_direct, topology => Topology, profile => Profile}};
                 Graph ->

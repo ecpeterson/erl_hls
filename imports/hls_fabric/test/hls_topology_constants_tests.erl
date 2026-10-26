@@ -28,6 +28,32 @@ closed_state_projection_test() ->
     {ok, Checks} = file:read_file("test/xls/state_projection_checks.xinc"),
     ok = file:write_file("_build/state-projection/fixture.x", [Text, Checks]).
 
+%% Source specialization and observation validation use the artifact's selected frame capacity.
+-spec selected_frame_capacity_test() -> ok.
+selected_frame_capacity_test() ->
+    Module = hls_projection_wide_fixture,
+    Plan = hls_topology:normalize(#{version => 1, actors => #{a => Module},
+        families => #{}, externals => [], route_relations => [], ingresses => [],
+        routes => [{{a, out}, [{actor, a}]}], startup => [{a, [{configure, 1 bsl 96}]}]}),
+    Groups = #{workers => #{members => [{actor, a}], state_storage => block_ram,
+        mailbox_storage => block_ram, specialize_state => true}},
+    Layout = hls_frame_layout:new(4),
+    #{groups := [#{state_projection := Projection, physical_data_width := 1}]} =
+        hls_scheduler_plan:normalize(Plan, Groups, Layout),
+    ?assertEqual([id], maps:get(constants, Projection)),
+    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+        #{name => wide_projection, channel_depth => 1, actor_egress_depth => burst,
+          scheduler_groups => Groups, frame_payload_words => 4}),
+    Options = maps:get(Module, Requirements),
+    ?assertEqual(4, maps:get(frame_payload_words, Options)),
+    Text = xls_shared_parse:to_xls("test/hls_projection_wide_fixture.erl", Options),
+    ?assertNotEqual(nomatch, binary:match(iolist_to_binary(Text),
+        <<"const_assert!(axis::FRAME_BITS == u32:160)">>)),
+    Debug = xls_scheduler_debug:projection(Plan, Groups, #{Module => Text},
+        #{frame_payload_words => 4}),
+    ?assertEqual(4, maps:get(<<"frame_payload_words">>, Debug)),
+    ?assertEqual(ok, xls_scheduler_debug:validate(Plan, Groups, Debug)).
+
 %% An entirely constant record needs no physical data bits; metadata and both codecs still exist.
 -spec all_constant_state_test() -> ok.
 all_constant_state_test() ->

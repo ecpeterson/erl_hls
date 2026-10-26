@@ -27,6 +27,7 @@ def manifest(output: Path) -> dict:
     report = json.loads(Path(str(output) + '.json').read_text())
     data = output.read_bytes()
     assert report['dslx_sha256'] == hashlib.sha256(data).hexdigest()
+    assert report['frame_config_sha256'] == hashlib.sha256((output.parent / 'frame_config.x').read_bytes()).hexdigest()
     declarations = data
     owner = report.get('owner_import', 'none')
     if owner != 'none':
@@ -89,7 +90,7 @@ def main() -> None:
     assert actor['clock_proc'] == 'local_owner_clock'
     receivers = summary['receivers']
     assert [receiver['index'] for receiver in receivers] == [0, 1, 2]
-    expected_files = {role['file']}
+    expected_files = {role['file'], 'actors/frame_config.x'}
     ordinary = (transport / role['file']).read_bytes()
     for receiver in receivers:
         assert receiver['module'] == role['module']
@@ -101,9 +102,9 @@ def main() -> None:
         assert bound['owner_import'] == {'file': role['file'],
             'dslx_sha256': hashlib.sha256(ordinary).hexdigest()}
         expected_files.add(receiver['file'])
-    # One shared ordinary definition plus one bound receiver per instance; no extras.
+    # One shared ordinary definition, one receiver per instance, and the selected frame configuration.
     actual_files = {str(p.relative_to(transport)) for p in (transport / 'actors').glob('*.x')}
-    assert len(expected_files) == 4 and actual_files == expected_files
+    assert len(expected_files) == 5 and actual_files == expected_files
     (stage / 'result.json').write_text(json.dumps({'passed': True, 'single_actor': standalone['source_plan'],
         'transport_actor_instances': 3, 'transport_function_definitions': 1,
         'transport_receiver_definitions': len(receivers),

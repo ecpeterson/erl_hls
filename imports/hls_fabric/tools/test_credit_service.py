@@ -17,13 +17,14 @@ def measure(xls: Path, public: Path, stage: Path) -> dict:
     stage.mkdir(parents=True, exist_ok=False)
     source = ROOT/'priv/xls/hls_credit_link.x'
     axis = public/'priv/xls/lib/axis.x'
+    frame_config = public/'priv/xls/lib/frame_config.x'
     template = ROOT/'test/rtl/credit_service_tb.sv'
-    tracked = [source, axis, template, Path(__file__), ROOT/'tools/link_service_witness.py',
+    tracked = [source, axis, frame_config, template, Path(__file__), ROOT/'tools/link_service_witness.py',
                ROOT/'tools/backend_commands.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls/'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}
-    for p in (source, axis): shutil.copy(p, stage/p.name)
+    for p in (source, axis, frame_config): shutil.copy(p, stage/p.name)
     wrapper = '''// Eight independent lanes in each direction, using the production bridge.
 import axis;
 import hls_credit_link;

@@ -6,9 +6,10 @@
 -spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
 lower(Plan, Profile0) ->
     Profile = #{scheduler_groups := Groups, reduction_placements := Placements,
-        effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug} =
+        effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug,
+        frame_payload_words := PayloadWords} =
         xls_shared_topology_profile:normalize(Profile0),
-    SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
+    SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups, hls_frame_layout:new(PayloadWords)),
     case SchedulerPlan of
         #{groups := [_ | _], direct_members := [_ | _]} -> error(mixed_topology_requires_materialized_backend);
         _ -> ok
@@ -21,7 +22,7 @@ lower(Plan, Profile0) ->
         _ -> ok
     end,
     Base = #{families := Families} = xls_topology_family_dslx:lower(Plan,
-        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug], Profile)),
+        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug, frame_payload_words], Profile)),
     ReductionPlan = hls_reduction_plan:normalize(Plan, SchedulerPlan, Placements),
     Bindings = scheduler_bindings(Schedulers),
     Requirements = maps:merge(maps:from_list([{Module, #{shared_service => ordinary}} ||
@@ -30,7 +31,8 @@ lower(Plan, Profile0) ->
         schedulers => Schedulers, mailbox_debug => MailboxDebug,
         effect_window_partition => WindowPartition, reduction_plan => ReductionPlan,
         artifact_requirements := maps:map(fun(_, Requirement) ->
-            WithMailbox = case MailboxDebug of true -> Requirement#{mailbox_debug => true}; false -> Requirement end,
+            WithLayout = Requirement#{frame_payload_words => maps:get(frame_payload_words, Profile)},
+            WithMailbox = case MailboxDebug of true -> WithLayout#{mailbox_debug => true}; false -> WithLayout end,
             case maps:get(direct_actor_debug, Profile) andalso Schedulers =:= [] of
                 true -> WithMailbox#{direct_actor_debug => true}; false -> WithMailbox
             end

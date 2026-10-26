@@ -18,7 +18,7 @@
     reuse_contract := capture_credit_and_absent_pending_message}.
 
 -doc "Checked sender-local histories; capacity and network progress remain unestablished.".
--type plan() :: #{pairs := [pair()], cross_sender_chronology := none,
+-type plan() :: #{frame_layout := hls_frame_layout:layout(), pairs := [pair()], cross_sender_chronology := none,
     selection := oldest_eligible_within_logical_sender,
     postponed_message := retained_without_blocking_later_eligible_message,
     leased_payload := held_separately_until_consumer_release,
@@ -29,7 +29,7 @@
     width := non_neg_integer(), payload_offset := non_neg_integer(), codec := hls_protocol_codec:plan()}.
 
 -doc "Static receiver mask, startup, host and frame-codec layout. Fields describe ownership and bit placement, not hardware timing or application progress.".
--type metadata() :: #{physical_slots := non_neg_integer(), mask_bits := pos_integer(), cursor_bits := pos_integer(),
+-type metadata() :: #{frame_layout := hls_frame_layout:layout(), physical_slots := non_neg_integer(), mask_bits := pos_integer(), cursor_bits := pos_integer(),
     additional_state_bits := non_neg_integer(),
     host := #{slots := 0 | 1, offset := non_neg_integer(), retirement := source_consume},
     startup := #{count := non_neg_integer(), offset := non_neg_integer(), frames := [non_neg_integer()],
@@ -45,11 +45,12 @@
 
 -doc "Plans independent sender/destination histories over exact typed capture channels. Channels from distinct ports of one sender share a history; separate senders do not. Each pending channel currently has one slot, so a repeated send must wait for its lease to be released. This establishes neither sufficient application capacity nor transport deadlock freedom; whole-protocol eligibility remains false.".
 -spec plan(hls_protocol_capture:plan()) -> plan().
-plan(#{channels:=Channels}) ->
+plan(Capture=#{channels:=Channels}) ->
+    FrameLayout=maps:get(frame_layout,Capture,hls_frame_layout:default()),
     Groups=lists:foldl(fun(C=#{source:=Source,destination:=Destination},Acc)->
         maps:update_with({Source,Destination},fun(Cs)->[C|Cs] end,[C],Acc)
     end,#{},Channels),
-    #{pairs=>[pair(Key,Cs)||{Key,Cs}<-lists:sort(maps:to_list(Groups))],
+    #{frame_layout=>FrameLayout,pairs=>[pair(Key,Cs)||{Key,Cs}<-lists:sort(maps:to_list(Groups))],
       cross_sender_chronology=>none,selection=>oldest_eligible_within_logical_sender,
       postponed_message=>retained_without_blocking_later_eligible_message,
       leased_payload=>held_separately_until_consumer_release,
@@ -72,15 +73,17 @@ pair({Source,Destination},Channels) ->
 
 -doc "Checks receiver slots, source startup records, frame codecs and host/completion fields without reading templates or rendering DSLX. Requires the same checked source and capture plan as the incoming links; total capture, startup and host slots must not exceed 256.".
 -spec plan(hls_local_actor:source() | hls_local_actor:artifact(), [hls_protocol_fabric:link()], hls_protocol_capture:plan(), [tuple()], boolean()) -> layout().
-plan(Artifact=#{program:=Program}, Links, #{channels:=Channels}, Messages, Host) ->
-    #{message_names:=Names}=xls_actor_program:spec(Program),
+plan(Artifact=#{program:=Program}, Links, Capture=#{channels:=Channels}, Messages, Host) ->
+    #{message_names:=Names,frame_layout:=FrameLayout}=xls_actor_program:spec(Program),
+    FrameLayout=maps:get(frame_layout,Capture,FrameLayout),
+    FrameBits=hls_frame_layout:frame_bits(FrameLayout),
     Starts=hls_protocol_schema:frames(Artifact,Messages),
     Rows=lists:append([[begin
         [Op]=[N||{N,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
         [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
         #{link=>I,slot=>K,width=>lists:nth(K+1,Widths),
           payload_offset=>lists:sum(lists:sublist(Widths,K)),
-          codec=>hls_protocol_codec:plan(Channel,Op)}
+          codec=>hls_protocol_codec:plan(Channel,Op,FrameLayout)}
     end||#{index:=K,channel:=C}<-Slots]
     ||#{index:=I,widths:=Widths,pair:=#{slots:=Slots}}<-Links]),
     Count=length(Rows), StartupCount=length(Starts), HostCount=case Host of true->1;false->0 end, Total=Count+StartupCount+HostCount,
@@ -93,10 +96,10 @@ plan(Artifact=#{program:=Program}, Links, #{channels:=Channels}, Messages, Host)
         true -> #{machine_bits := MW} = hls_local_actor:descriptor(Artifact),
             [{"completion_granted",1},{"completion_action",MW+1+2+1}]
     end,
-    Fields=[{"reset",1},{"output_ready",1}]++CompletionFields++(case Host of true->[{"host_valid",1},{"host_frame",128}];false->[] end)++lists:append([
+    Fields=[{"reset",1},{"output_ready",1}]++CompletionFields++(case Host of true->[{"host_valid",1},{"host_frame",FrameBits}];false->[] end)++lists:append([
         [{link_name(I)++"_selected",S},{link_name(I)++"_available",S},
          {link_name(I)++"_payloads",W}]||#{index:=I,slots:=S,payload_bits:=W}<-Links]),
-    #layout{links = Links, shared = Shared, metadata = #{physical_slots=>Count,mask_bits=>N,
+    #layout{links = Links, shared = Shared, metadata = #{frame_layout=>FrameLayout,physical_slots=>Count,mask_bits=>N,
         cursor_bits=>Cursor,additional_state_bits=>3*N+Cursor+1+StartupCount,
         host=>#{slots=>HostCount,offset=>Count+StartupCount,retirement=>source_consume},
         startup=>#{count=>StartupCount,offset=>Count,frames=>Starts,
@@ -114,9 +117,10 @@ descriptor(#layout{metadata = Metadata}) -> Metadata.
 -doc "Renders the checked inbox around its matching owner artifact without source reads or layout analysis. Templates are read here; the owner and layout must originate from the same trusted transport build.".
 -spec attach(hls_local_actor:artifact(), layout()) -> hls_local_actor:artifact().
 attach(Artifact = #{dslx := Body}, #layout{links = Links, shared = Shared,
-        metadata = Metadata = #{physical_slots := Count, mask_bits := N, cursor_bits := Cursor,
+        metadata = Metadata = #{frame_layout := FrameLayout, physical_slots := Count, mask_bits := N, cursor_bits := Cursor,
             host := #{slots := HostCount}, startup := #{count := StartupCount, frames := Starts},
             inputs := Inputs, slots := Indexed}}) ->
+    FrameBits = hls_frame_layout:frame_bits(FrameLayout),
     Host = HostCount =:= 1,
     Fields = [{binary_to_list(Name), Width} || #{name := Name, width := Width} <- Inputs],
     {ok,Template}=file:read_file(filename:join(code:priv_dir(hls_fabric),"xls/templates/local_inbox.x.in")),
@@ -131,11 +135,11 @@ attach(Artifact = #{dslx := Body}, #layout{links = Links, shared = Shared,
         [[Name,": ",case Name of "completion_action" -> "LocalAction"; _ -> ["bits[",n(Width),"]"] end,",\n"]||{Name,Width}<-Fields],"}\n",
         mask_function("selected",Links,N,Host,Count+StartupCount),mask_function("available",Links,N,Host,Count+StartupCount),
         "// Reconstruct the selected capture, startup or held host record as an ordinary destination frame.\n",
-        "fn inbox_frame(io: LocalInboxInputs, index: u32) -> bits[128] { match index {\n",
+        "fn inbox_frame(io: LocalInboxInputs, index: u32) -> bits[",n(FrameBits),"] { match index {\n",
         [["u32:",n(I)," => ",frame(R),",\n"]||R=#{index:=I}<-Indexed],
-        [["u32:",n(Count+I)," => bits[128]:0x",integer_to_list(F,16),",\n"]||{I,F}<-lists:enumerate(0,Starts)],
+        [["u32:",n(Count+I)," => bits[",n(FrameBits),"]:0x",integer_to_list(F,16),",\n"]||{I,F}<-lists:enumerate(0,Starts)],
         case Host of true-> ["u32:",n(Count+StartupCount)," => io.host_frame,\n"];false->[] end,
-        "_ => bits[128]:0, } }\n",Inbox],
+        "_ => bits[",n(FrameBits),"]:0, } }\n",Inbox],
     Artifact#{dslx := iolist_to_binary(Source), inbox => Metadata}.
 
 -doc "Returns incoming link mask spans from an attached inbox manifest. Checks that link order/counts describe exactly the indexed physical slots; rejects inconsistent layout with invalid_inbox_link_layout. Link identifiers need not be consecutive or numerically ordered. Startup and host slots are outside these spans.".
@@ -165,12 +169,12 @@ mask_function(Field,Links,N,Host,At) ->
 
 %% Codec constants and bit positions come from the checked current source channel.
 -spec frame(map()) -> iodata().
-frame(#{link:=Link,payload_offset:=At,codec:=#{value:=Value,frame_positions:=Positions}}) ->
+frame(#{link:=Link,payload_offset:=At,codec:=#{frame_layout:=FrameLayout,value:=Value,frame_positions:=Positions}}) ->
     Inverse=maps:from_list([{J,I}||{I,J}<-lists:enumerate(0,Positions)]),
     Bits = [case maps:find(J, Inverse) of
         {ok, I} -> {payload, At + I};
         error -> (Value bsr J) band 1
-    end || J <- lists:seq(0, 127)],
+    end || J <- lists:seq(0, hls_frame_layout:frame_bits(FrameLayout)-1)],
     xls_protocol_bits:expression("io." ++ link_name(Link) ++ "_payloads", Bits).
 
 %% Numeric names refer to the unchanged fabric link identities.
