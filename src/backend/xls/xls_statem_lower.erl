@@ -511,7 +511,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
             fun(Id, Value) ->
                 Variant = lists:nth(Id + 1, EntryLayouts),
                 {xls_map, 0, Value, fun(R) ->
-                    xls_actor_codegen:entry_value(R, Variant,
+                    xls_actor_codegen:entry_expression(R, Variant,
                         PayloadBits, #{reductions => Reductions, gathers => maps:get(gathers, Prepared, none)})
                 end}
             end),
@@ -519,7 +519,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
             DataName, EnumAtoms),
         #{phase => Phase, layouts => lists:uniq([
                 maps:with([phase, layout, actions, storage], Layout) || Layout <- EntryLayouts]),
-            evaluation => maps:map(fun(_Key, V) -> xls_clause_lower:print(V) end, Outcome)}
+            evaluation => Outcome}
     end || {#{phase := Phase, program := Program}, EntryLayouts} <-
         lists:zip(Entries, Layouts)].
 

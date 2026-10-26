@@ -11,41 +11,23 @@ leaves. print/1 is the rendering boundary; phantom type values cannot cross it.
     statement_from_statement/2, outcome_value/1, failure_expression/1, failure_code/1,
     add_match_failure/3, add_failure/2, find_binding/3, bind/4, record_raw/2,
     reference/1, reference/2, instr/2, instr/3]).
--export_type([ir/0, printable/0, static/0, phantom/0, clause_state/0]).
+-export_type([ir/0, printable/0, static/0, phantom/0, clause_state/0, outcome/0]).
 -include("xls_clause_lower.hrl").
 
-%% The clause IR retains scalar operation nodes alongside:
-%%  + static objects which admit expression in terms of the XLS runtime,
-%%  + phantom objects which do not admit expression in terms of the XLS runtime,
-%%  + snippets of XLS code.
-%%
-%% "Closed" IR generally only contains static objects and snippets; phantoms
-%% appear temporarily during code generation, e.g., when "passing" the "result"
-%% of an Erlang type constructor to XLS's `zero!`.
+%% Clause values add compile-time type arguments to the shared DSLX syntax.
+%% Provider snippets remain opaque leaves; phantom types cannot be rendered.
 -doc "Untyped source numbers retained until a consuming operation determines their hardware type.".
 -type static() :: {static, integer, integer()} | {static, float, float()}.
 -doc "Compile-time type arguments accepted by provider callbacks, never emitted as runtime values.".
 -type phantom() :: {phantom, type, hls_type:descriptor()}.
--doc "Renderable clause IR: literals, structured scalar nodes and opaque DSLX leaves.".
--type printable() :: char() | [printable()] | static() | xls_expr_ir:expr().
+-doc "Renderable values use the shared DSLX syntax, static literals and opaque provider leaves.".
+-type printable() :: xls_dslx:value().
 -doc "Clause values additionally admit compile-time-only type descriptors.".
--type ir() :: char() | [ir()] | phantom() | static() | xls_expr_ir:expr().
+-type ir() :: printable() | phantom() | [ir()].
 
--doc "Renders clause IR recursively; structured operations are rendered only here, and phantom types are rejected.".
--spec print(printable()) -> iolist() | char().
-print(List) when is_list(List) ->
-    lists:map(fun print/1, List);
-print(Char) when is_integer(Char) ->
-    Char;
-print(Node = {xls_bits_binary, _, _, _}) ->
-    print(xls_expr_ir:render(Node));
-print(Node = {xls_integer_comparison, _, _, _}) ->
-    print(xls_expr_ir:render(Node));
-print({static, integer, Integer}) ->
-    integer_to_list(Integer);
-print({static, float, Value}) ->
-    error({untyped_float_literal, Value, {use, hls_float, literal, 2}}).
-%% NOTE: We deliberately fail through on (unprintable!) phantom objects.
+-doc "Renders clause values through the shared DSLX renderer; phantom types are rejected.".
+-spec print(printable()) -> iodata() | char().
+print(Value) -> xls_dslx:render(Value).
 
 -doc "Clause-local bindings, emitted statements and selected failures; branches carry their own copy.".
 -type clause_state() :: #clause_state{}.
@@ -96,9 +78,11 @@ branch_from_state(ComputeState, Postprocessor, Failure) ->
 
 %% Keep the computed value and its selected failure together. Consumers may
 %% commit a compound result only when the whole callback has succeeded.
--doc "Lowers a callback clause to statements, result and first-failure expressions.".
--spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) ->
-    #{body := printable(), result := printable(), failed := printable(), failure := printable()}.
+-doc "A lowered callback retains ordered statements, its value and the first selected failure.".
+-type outcome() :: #{body := [printable()], result := printable(), failed := printable(), failure := printable()}.
+
+-doc "Lowers a callback clause to statements, result and first-failure expressions without rendering them.".
+-spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) -> outcome().
 clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
     State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
     #{
@@ -207,8 +191,7 @@ statement_from_statement({op, Line, Op, Left, Right}, State)
 %% Integer facts are attached before callback/helper normalization.
 statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
     {References, Evaluated} = lower_arguments([Left, Right], State),
-    [LeftRef, RightRef] = References,
-    instr(Evaluated, {xls_integer_comparison, Op, LeftRef, RightRef});
+    instr(Evaluated, xls_comparison:lower(Op, References));
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
@@ -473,14 +456,12 @@ instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
         Expr
     ).
 
--doc "Emits and records one binding without rewriting its expression; preserves evaluation order and failure tracking.".
--spec instr(clause_state(), printable(), printable()) -> clause_state().
-instr(ClauseState = #clause_state{expressions = Definitions}, Place, Expr) ->
-    % TODO: we should admit structured `Place`s in reference and print them in statements
+-doc "Retains one named binding without rewriting its expression; preserves evaluation order and failure tracking.".
+-spec instr(clause_state(), xls_dslx:name(), printable()) -> clause_state().
+instr(ClauseState, Place, Expr) ->
     ClauseState#clause_state{
         reference = Place,
-        expressions = xls_expr_ir:remember(Place, Expr, Definitions),
-        statements = [["let ", Place, " = ", Expr, ";\n"] | ClauseState#clause_state.statements]
+        statements = [xls_dslx:bind(Place, Expr) | ClauseState#clause_state.statements]
     }.
 
 %%%
@@ -488,15 +469,15 @@ instr(ClauseState = #clause_state{expressions = Definitions}, Place, Expr) ->
 %%%
 
 -spec op(Op :: atom(), Args :: [printable()]) -> printable().
--doc "Builds arithmetic nodes for add/sub/xor; other supported built-ins retain their existing DSLX lowering.".
-op('+', [Left, Right]) -> {xls_bits_binary, '+', Left, Right};
-op('-', [Left, Right]) -> {xls_bits_binary, '-', Left, Right};
+-doc "Lowers source operators to shared DSLX expressions or existing provider leaves; numeric comparisons are classified separately.".
+op('+', [Left, Right]) -> xls_dslx:binary('+', Left, Right);
+op('-', [Left, Right]) -> xls_dslx:binary('-', Left, Right);
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
 op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
-op('bxor', [Left, Right]) -> {xls_bits_binary, 'bxor', Left, Right};
+op('bxor', [Left, Right]) -> xls_dslx:binary('^', Left, Right);
 op('bnot', [Operand]) -> ["!", Operand];
 op('not', [Operand]) -> ["!", Operand];
 op('<', [Left, Right]) -> [Left, " < ", Right];

@@ -1,12 +1,12 @@
 -module(xls_actor_codegen).
 -moduledoc false.
--export([emit/3, entry_value/4, input_tag_ok/3, reply_failure_binding/1]).
+-export([emit/3, entry_expression/4, input_tag_ok/3, reply_failure_binding/1]).
 -export_type([spec/0]).
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 %% One phase's checked evaluation and possible ordered effect layouts.
 -type entry() :: #{
     phase := atom(),
-    evaluation := #{body := iodata(), result := iodata(), failed := iodata(), failure := iodata()},
+    evaluation := xls_clause_lower:outcome(),
     layouts := [map()]
 }.
 %% Lowered dispatch arm for one phase and message schema.
@@ -224,62 +224,59 @@ enter_function(#{data_name := DataName, entries := Entries} = Spec) ->
 -spec entry_arm(entry()) -> iodata().
 entry_arm(#{phase := Phase,
         evaluation := #{body := Body, result := Result, failed := Failed, failure := Failure}}) ->
-    [
-        "    Phase::", xls_names:enum_member(Phase), " => {\n",
-        xls_parse_io:indent(Body, 6),
-        "      if ", Failed, " {\n",
-        "        EntryOutcome { data, failure: ", Failure, ", ..zero!<EntryOutcome>() }\n",
-        "      } else { ", Result, " }\n",
-        "    },\n"
-    ].
+    Rejected = xls_dslx:construct("EntryOutcome",
+        [{"data", xls_dslx:ref("data")}, {"failure", Failure}],
+        xls_dslx:call("zero!<EntryOutcome>", [])),
+    Outcome = xls_dslx:block(Body, xls_dslx:choose(Failed, Rejected, Result)),
+    xls_parse_io:indent(["Phase::", xls_names:enum_member(Phase), " => ",
+        xls_dslx:render(Outcome), ",\n"], 4).
 
-%% Each selected source leaf becomes the same typed value before control flow
-%% rejoins. The expression lowerer still owns branch-local failure predicates.
--doc "Encodes one selected entry result and ordered effects without reevaluating payloads.".
--spec entry_value(iodata(), map(), pos_integer(), none | map()) -> iodata().
-entry_value(Result, Variant, PayloadBits, Reductions) when Reductions =:= none; not is_map_key(reductions, Reductions) ->
-    entry_value(Result, Variant, PayloadBits, #{reductions => Reductions});
-entry_value(Result, #{phase := Phase, layout := Layout,
+%% Each source leaf becomes the same typed result before control flow rejoins.
+%% Branch-local expression and failure nodes remain available to backend consumers.
+-doc "Constructs one selected entry's transactional result without rendering or reevaluating payloads.".
+-spec entry_expression(xls_clause_lower:printable(), map(), pos_integer(),
+    #{reductions := none | xls_statem_reduction_ir:reduction(), gathers => none | map()}) -> xls_dslx:expr().
+entry_expression(Result, #{phase := Phase, layout := Layout,
         storage := Storage, reduction := Reduction}, PayloadBits,
         #{reductions := Reductions} = Spec) ->
-    [
-        "{\n",
-        "  let evaluated = ", Result, ";\n",
-        "  EntryOutcome {\n",
-        "    data: evaluated.0.1,\n",
-        entry_reduction_field(Reductions, is_map(Reduction) andalso maps:get(kind, Reduction, reduction) =:= reduction, Phase),
-        xls_statem_gather_codegen:entry_fields(Spec, Reduction, Phase),
-        "    failure: hls_failure::NONE,\n",
-        "    effects: EntryEffects {\n",
-        "      layout: u8:", integer_to_list(Layout), ",\n",
-        "      payloads: ", xls_entry_storage:encode(Storage, PayloadBits), ",\n",
-        "    },\n",
-        "  }\n",
-        "}"
-    ].
+    IsReduction = is_map(Reduction) andalso maps:get(kind, Reduction, reduction) =:= reduction,
+    Effects = xls_dslx:construct("EntryEffects", [
+        {"layout", xls_dslx:literal("u8", Layout)},
+        {"payloads", xls_entry_storage:encode(Storage, PayloadBits)}]),
+    Fields = [{"data", xls_dslx:field(xls_dslx:field(xls_dslx:ref("evaluated"), 0), 1)}] ++
+        entry_reduction_fields(Reductions, IsReduction, Phase) ++
+        xls_statem_gather_codegen:entry_fields(Spec, Reduction, Phase) ++
+        [{"failure", xls_dslx:ref("hls_failure::NONE")}, {"effects", Effects}],
+    xls_dslx:block([xls_dslx:bind("evaluated", Result)],
+        xls_dslx:construct("EntryOutcome", Fields)).
 
 %% Initializes the selected reduction open or preserves the absence of an open.
--spec entry_reduction_field(term(),boolean(),term()) -> iodata().
-entry_reduction_field(none, false, _Phase) -> [];
-entry_reduction_field(_Reductions, false, _Phase) ->
-    "    reduction: zero!<ReductionState>(),\n";
-entry_reduction_field(Reductions, true, Phase) ->
-    ["    reduction: reduction_open_site(ReductionSite::", xls_names:enum_member(Phase),
-        ", evaluated.1.0, evaluated.1.1.1", entry_reduction_mask(Reductions, Phase), "),\n"].
+-spec entry_reduction_fields(none | xls_statem_reduction_ir:reduction(), boolean(), atom()) ->
+    xls_dslx:fields().
+entry_reduction_fields(none, false, _Phase) -> [];
+entry_reduction_fields(_Reductions, false, _Phase) ->
+    [{"reduction", xls_dslx:call("zero!<ReductionState>", [])}];
+entry_reduction_fields(Reductions, true, Phase) ->
+    Open = xls_dslx:field(xls_dslx:ref("evaluated"), 1),
+    [{"reduction", xls_dslx:call("reduction_open_site", [
+        xls_dslx:ref("ReductionSite::" ++ xls_names:enum_member(Phase)),
+        xls_dslx:field(Open, 0), xls_dslx:field(xls_dslx:field(Open, 1), 1)
+        | entry_reduction_mask(Reductions, Phase)])}].
 
 %% Mask-bearing entry values carry the checked expected set; static sites use all members.
--spec entry_reduction_mask(map(), atom()) -> iodata().
+-spec entry_reduction_mask(xls_statem_reduction_ir:reduction(), atom()) -> [xls_dslx:expr()].
 entry_reduction_mask(Reductions = #{sites := Sites}, Phase) ->
     case xls_statem_reduction_ir:has_runtime_members(Reductions) of
         false -> [];
         true ->
             [#{population := Population}] = [Site || Site = #{phase := P} <- Sites, P =:= Phase],
             case maps:get(runtime_mask, Population, false) of
-                true -> ", evaluated.1.2 as ReductionMembers";
+                true -> [xls_dslx:cast(xls_dslx:field(
+                    xls_dslx:field(xls_dslx:ref("evaluated"), 1), 2), "ReductionMembers")];
                 false -> case Population of
-                    #{mode := count} -> ", ReductionMembers:0";
+                    #{mode := count} -> [xls_dslx:literal("ReductionMembers", 0)];
                     #{mode := members, size := Size} ->
-                        [", ReductionMembers:", integer_to_list((1 bsl Size) - 1)]
+                        [xls_dslx:literal("ReductionMembers", (1 bsl Size) - 1)]
                 end
             end
     end.

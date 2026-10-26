@@ -144,21 +144,28 @@ constant(_Origin, _Type) -> error.
 -spec width(plan()) -> non_neg_integer().
 width(#{bits := Bits}) -> Bits.
 
--doc "Packs selected evaluated fields without reevaluating any message expression.".
--spec encode(plan(), pos_integer()) -> iodata().
+-doc "Builds packed selected-field wiring without rendering or reevaluating any message expression.".
+-spec encode(plan(), pos_integer()) -> xls_dslx:expr().
 encode(#{stores := Stores}, Width) ->
     lists:foldl(fun(Store = #{index := Index, name := Name, type := Type, offset := Offset}, Acc) ->
-        Value = ["evaluated.2.", integer_to_list(Index), ".1.", atom_to_list(Name)],
+        Actions = xls_dslx:field(xls_dslx:ref("evaluated"), 2),
+        Message = xls_dslx:field(xls_dslx:field(Actions, Index), 1),
+        Value = xls_dslx:field(Message, atom_to_list(Name)),
         Raw = hls_type:dslx_to_bits(Type, Value),
         case Store of
             #{slices := Slices} ->
                 {Packed, _} = lists:foldl(fun({Start, Size}, {Bits, At}) ->
-                    {update(Bits, At, slice(["(", Raw, ")"], Start, Size)), At + Size}
+                    {pack_update(Bits, At, xls_dslx:slice(Raw, Start, Size)), At + Size}
                 end, {Acc, Offset}, Slices),
                 Packed;
-            _ -> update(Acc, Offset, Raw)
+            _ -> pack_update(Acc, Offset, Raw)
         end
-    end, ["zero!<bits[", integer_to_list(Width), "]>()"], Stores).
+    end, xls_dslx:call("zero!<bits[" ++ integer_to_list(Width) ++ "]>", []), Stores).
+
+%% Offsets retain the same numeric low-bit-first packing order as decode/2.
+-spec pack_update(xls_dslx:expr(), non_neg_integer(), xls_clause_lower:printable()) -> xls_dslx:expr().
+pack_update(Value, Offset, Bits) ->
+    xls_dslx:call("bit_slice_update", [Value, xls_dslx:literal("u32", Offset), Bits]).
 
 -doc "Reconstructs one ordered message and its original routed output port.".
 -spec decode(map(), non_neg_integer()) -> iodata().

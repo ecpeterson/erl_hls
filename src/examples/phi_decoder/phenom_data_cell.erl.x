@@ -487,8 +487,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
         }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
+      } else {
+        _3
+      }
     },
     Phase::COLLECTING => {
       let _v__OldPhase_1 = old_phase;
@@ -509,8 +515,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
         }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
+      } else {
+        _3
+      }
     },
     Phase::REPORTING => {
       let _v__OldPhase_1 = old_phase;
@@ -572,8 +584,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
         }
       };
       if (_1.1) != hls_failure::NONE {
-        EntryOutcome { data, failure: _1.1, ..zero!<EntryOutcome>() }
-      } else { _18 }
+        EntryOutcome {
+          data: data,
+          failure: _1.1,
+          ..zero!<EntryOutcome>()
+        }
+      } else {
+        _18
+      }
     },
     Phase::REPLYING => {
       let _v__OldPhase_1 = old_phase;
@@ -608,8 +626,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
         }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _9 }
+        EntryOutcome {
+          data: data,
+          failure: hls_failure::NONE,
+          ..zero!<EntryOutcome>()
+        }
+      } else {
+        _9
+      }
     },
   }
 }
@@ -870,7 +894,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   if _26 {
                     (u32:1, hls_failure::NONE)
                   } else {
-                    (u32:0, hls_failure::NONE)
+                    {
+                      (u32:0, hls_failure::NONE)
+                    }
                   }
                 };
                 let v_Xls_clause_1_Hit_1 = _27.0;
@@ -886,8 +912,10 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   let _32 = (_30 ^ _31);
                   (_32, hls_failure::NONE)
                 } else {
-                  let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  (_30, hls_failure::NONE)
+                  {
+                    let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
+                    (_30, hls_failure::NONE)
+                  }
                 }
               };
               let v_Xls_clause_1_AccumulatedPauli_1 = _33.0;
@@ -927,7 +955,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let v_Xls_clause_2_QueryStep_1 = message.step;
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let v_Xls_clause_2_Step_1 = data.step;
-            let _0 = v_Xls_clause_2_Step_1 + 1;
+            let _0 = ((v_Xls_clause_2_Step_1) + (1));
             let _1 = _0 & 4294967295;
             let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
             if _2 {
@@ -955,7 +983,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Source_1 = message.source;
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 + 1;
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));
           let _1 = _0 & 4294967295;
           let _2 = hls_integer::equal(v_Xls_clause_1_QueryStep_1, _1);
           let _10 = if _2 {
@@ -1079,7 +1107,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let v_Xls_clause_2_Step_1 = data.step;
             let _3 = if data.reply_resume == 1 {
-              let _0 = v_Xls_clause_2_Step_1 + 1;
+              let _0 = ((v_Xls_clause_2_Step_1) + (1));
               let _1 = _0 & 4294967295;
               let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
               (_2, hls_failure::NONE)
@@ -1100,7 +1128,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
               let v_Xls_clause_3_Step_1 = data.step;
               let _11 = if data.reply_resume == 2 {
-                let _0 = v_Xls_clause_3_Step_1 + 1;
+                let _0 = ((v_Xls_clause_3_Step_1) + (1));
                 let _1 = _0 & 4294967295;
                 let _2 = hls_integer::equal(v_Xls_clause_3_QueryStep_1, _1);
                 let _10 = if _2 {

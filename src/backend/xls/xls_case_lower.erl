@@ -60,8 +60,7 @@ lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     Branches = [lower_branch(Clause, Argument, Subject, BranchBase) || Clause <- Clauses],
     Failure = xls_failure_sites:at(FailureKind, Line),
     join(Line, ConditionState, Branches, fun(Exports) ->
-        ["{\n", xls_parse_io:indent(
-            xls_clause_lower:print(render_chain(Branches, Exports, Failure)), 2), "}"]
+        selection_chain(Branches, Exports, Failure)
     end).
 
 normalize_clause({clause, Line, [Pattern], Guards, Body})
@@ -158,19 +157,16 @@ lower_branch({Line, Pattern, Guards, Body}, Argument, Subject, BranchBase) ->
 %% The last arm supplies the XLS value type even when it does not match.
 %% Its value/bindings are then unobservable: the selection failure takes
 %% precedence over any body failure and consumers discard the whole outcome.
--spec render_chain([branch(), ...], [atom()], xls_clause_lower:printable()) ->
-    xls_clause_lower:printable().
-render_chain([#{head := Head, guard := "bool:true", state := State}], Exports, _Kind) ->
-    [Head, selected(State, Exports)];
-render_chain([#{head := Head, guard := Guard, state := State}], Exports, Code) ->
-    Failure = ["if ", Guard, " { ", xls_clause_lower:failure_code(State),
-        " } else { ", Code, " }"],
-    [Head, selected(State, Exports, Failure)];
-render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, Kind) ->
-    [Head, "if ", Guard, " {\n",
-        xls_parse_io:indent(xls_clause_lower:print(selected(State, Exports)), 2),
-        "} else {\n",
-        xls_parse_io:indent(xls_clause_lower:print(render_chain(Rest, Exports, Kind)), 2), "}"].
+-spec selection_chain([branch(), ...], [atom()], xls_clause_lower:printable()) ->
+    xls_dslx:expr().
+selection_chain([#{head := Head, guard := "bool:true", state := State}], Exports, _Kind) ->
+    xls_dslx:block(Head, selected(State, Exports));
+selection_chain([#{head := Head, guard := Guard, state := State}], Exports, Code) ->
+    Failure = xls_dslx:choose(Guard, xls_clause_lower:failure_code(State), Code),
+    xls_dslx:block(Head, selected(State, Exports, Failure));
+selection_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, Kind) ->
+    xls_dslx:block(Head, xls_dslx:choose(Guard, selected(State, Exports),
+        selection_chain(Rest, Exports, Kind))).
 
 %% Guard-only clauses share case's ordering, branch joins, and failure carrier.
 -doc "Lowers guard-only selection with Erlang clause order and if_clause failure on no match.".
@@ -259,12 +255,12 @@ selected(State, Exports) ->
 %% Allow no-match handling to replace the branch failure without evaluating another body.
 -spec selected(xls_clause_lower:clause_state(), [atom()], xls_clause_lower:printable()) -> xls_clause_lower:printable().
 selected(State = #clause_state{bindings = Bindings}, Exports, Failure) ->
-    [lists:reverse(State#clause_state.statements),
-        "(", xls_clause_lower:reference(State), ", ", Failure,
-        case Exports of
-            [] -> [];
-            _ -> [", (", [[maps:get(Name, Bindings), ", "] || Name <- Exports], ")"]
-        end, ")"].
+    Exported = case Exports of
+        [] -> [];
+        _ -> [xls_dslx:tuple([maps:get(Name, Bindings) || Name <- Exports])]
+    end,
+    xls_dslx:block(lists:reverse(State#clause_state.statements),
+        xls_dslx:tuple([xls_clause_lower:reference(State), Failure] ++ Exported)).
 
 %%%
 %%% Exact Boolean case
@@ -292,10 +288,8 @@ lower_boolean_case(Line, Condition, Clauses, State0) ->
     TrueState = lower_expressions(TrueBody, BranchBase),
     FalseState = lower_expressions(FalseBody, BranchBase),
     join(Line, ConditionState, [#{state => TrueState}, #{state => FalseState}], fun(Exports) ->
-        ["if ", xls_clause_lower:reference(ConditionState), " {\n",
-            xls_parse_io:indent(xls_clause_lower:print(selected(TrueState, Exports)), 2),
-            "} else {\n",
-            xls_parse_io:indent(xls_clause_lower:print(selected(FalseState, Exports)), 2), "}"]
+        xls_dslx:choose(xls_clause_lower:reference(ConditionState),
+            selected(TrueState, Exports), selected(FalseState, Exports))
     end).
 
 boolean_case_bodies(Clauses) ->
