@@ -446,18 +446,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[128]>(),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:0, payloads: zero!<bits[128]>() } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _3
+      }
     },
     Phase::COLLECTING => {
       let _v__OldPhase_1 = old_phase;
@@ -531,80 +526,70 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let _27 = (v_Xls_entry_1_1, _25, _26, );
           let _28 = {
             let evaluated = _27;
-            EntryOutcome {
-              data: evaluated.0.1,
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:1,
-                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]),
-              },
-            }
+            EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:1, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]) } }
           };
           (_28, hls_failure::NONE)
         } else {
-          let _1 = v_Syndrome_1.1.step;
-          let v_NextStep_1 = _1;
-          let _2 = Phenomquery {
-            step: v_NextStep_1,
-            ..zero!<Phenomquery>()
-          };
-          let _3 = (Tag::PHENOM_QUERY, _2, bits_from_phenomquery(_2));
-          let v_Query_1 = _3;
-          let _4 = Syndrome {
-            step: v_NextStep_1,
-            seen_sources: u32:0,
-            announcement: u32:0,
-            data_quiet: u32:1,
-            announcement_quiet: u32:0,
-            ..(v_Syndrome_1).1
-          };
-          let _5 = (Tag::SYNDROME, _4);
-          let v_Cleared_1 = _5;
-          let v_Xls_entry_6_1 = v_Cleared_1;
-          let _6 = Phenomquery {
-            source: u32:8,
-            ..(v_Query_1).1
-          };
-          let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));
-          let v_Xls_entry_7_1 = _7;
-          let _8 = Phenomquery {
-            source: u32:4,
-            ..(v_Query_1).1
-          };
-          let _9 = (Tag::PHENOM_QUERY, _8, bits_from_phenomquery(_8));
-          let v_Xls_entry_8_1 = _9;
-          let _10 = Phenomquery {
-            source: u32:2,
-            ..(v_Query_1).1
-          };
-          let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));
-          let v_Xls_entry_9_1 = _11;
-          let _12 = Phenomquery {
-            source: u32:1,
-            ..(v_Query_1).1
-          };
-          let _13 = (Tag::PHENOM_QUERY, _12, bits_from_phenomquery(_12));
-          let v_Xls_entry_10_1 = _13;
-          let _14 = ();
-          let _15 = (v_Xls_entry_7_1, v_Xls_entry_8_1, v_Xls_entry_9_1, v_Xls_entry_10_1, );
-          let _16 = (v_Xls_entry_6_1, _14, _15, );
-          let _17 = {
-            let evaluated = _16;
-            EntryOutcome {
-              data: evaluated.0.1,
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:2,
-                payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]),
-              },
-            }
-          };
-          (_17, hls_failure::NONE)
+          {
+            let _1 = v_Syndrome_1.1.step;
+            let v_NextStep_1 = _1;
+            let _2 = Phenomquery {
+              step: v_NextStep_1,
+              ..zero!<Phenomquery>()
+            };
+            let _3 = (Tag::PHENOM_QUERY, _2, bits_from_phenomquery(_2));
+            let v_Query_1 = _3;
+            let _4 = Syndrome {
+              step: v_NextStep_1,
+              seen_sources: u32:0,
+              announcement: u32:0,
+              data_quiet: u32:1,
+              announcement_quiet: u32:0,
+              ..(v_Syndrome_1).1
+            };
+            let _5 = (Tag::SYNDROME, _4);
+            let v_Cleared_1 = _5;
+            let v_Xls_entry_6_1 = v_Cleared_1;
+            let _6 = Phenomquery {
+              source: u32:8,
+              ..(v_Query_1).1
+            };
+            let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));
+            let v_Xls_entry_7_1 = _7;
+            let _8 = Phenomquery {
+              source: u32:4,
+              ..(v_Query_1).1
+            };
+            let _9 = (Tag::PHENOM_QUERY, _8, bits_from_phenomquery(_8));
+            let v_Xls_entry_8_1 = _9;
+            let _10 = Phenomquery {
+              source: u32:2,
+              ..(v_Query_1).1
+            };
+            let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));
+            let v_Xls_entry_9_1 = _11;
+            let _12 = Phenomquery {
+              source: u32:1,
+              ..(v_Query_1).1
+            };
+            let _13 = (Tag::PHENOM_QUERY, _12, bits_from_phenomquery(_12));
+            let v_Xls_entry_10_1 = _13;
+            let _14 = ();
+            let _15 = (v_Xls_entry_7_1, v_Xls_entry_8_1, v_Xls_entry_9_1, v_Xls_entry_10_1, );
+            let _16 = (v_Xls_entry_6_1, _14, _15, );
+            let _17 = {
+              let evaluated = _16;
+              EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:2, payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]) } }
+            };
+            (_17, hls_failure::NONE)
+          }
         }
       };
       if (_29.1) != hls_failure::NONE {
-        EntryOutcome { data, failure: _29.1, ..zero!<EntryOutcome>() }
-      } else { _29.0 }
+        EntryOutcome { data: data, failure: _29.1, ..zero!<EntryOutcome>() }
+      } else {
+        _29.0
+      }
     },
     Phase::ANNOUNCING => {
       let _v__OldPhase_1 = old_phase;
@@ -615,18 +600,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: zero!<bits[128]>(),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:3, payloads: zero!<bits[128]>() } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _3
+      }
     },
   }
 }
@@ -1057,7 +1037,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                   if _32 {
                     (u32:1, hls_failure::NONE)
                   } else {
-                    (u32:0, hls_failure::NONE)
+                    {
+                      (u32:0, hls_failure::NONE)
+                    }
                   }
                 };
                 let v_Xls_clause_1_Hit_1 = _33.0;

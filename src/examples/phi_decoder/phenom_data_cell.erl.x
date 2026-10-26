@@ -477,18 +477,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[96]>(),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:0, payloads: zero!<bits[96]>() } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _3
+      }
     },
     Phase::COLLECTING => {
       let _v__OldPhase_1 = old_phase;
@@ -499,18 +494,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:1,
-            payloads: zero!<bits[96]>(),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:1, payloads: zero!<bits[96]>() } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _3
+      }
     },
     Phase::REPORTING => {
       let _v__OldPhase_1 = old_phase;
@@ -562,18 +552,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _17 = (v_Xls_entry_0_1, _15, _16, );
       let _18 = {
         let evaluated = _17;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:2,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:2, payloads: bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]) } }
       };
       if (_1.1) != hls_failure::NONE {
-        EntryOutcome { data, failure: _1.1, ..zero!<EntryOutcome>() }
-      } else { _18 }
+        EntryOutcome { data: data, failure: _1.1, ..zero!<EntryOutcome>() }
+      } else {
+        _18
+      }
     },
     Phase::REPLYING => {
       let _v__OldPhase_1 = old_phase;
@@ -598,18 +583,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _8 = (v_Xls_entry_0_1, _6, _7, );
       let _9 = {
         let evaluated = _8;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.request_id as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.anticommutes as bits[32]),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, failure: hls_failure::NONE, effects: EntryEffects { layout: u8:3, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.request_id as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.anticommutes as bits[32]) } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _9 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _9
+      }
     },
   }
 }
@@ -870,7 +850,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   if _26 {
                     (u32:1, hls_failure::NONE)
                   } else {
-                    (u32:0, hls_failure::NONE)
+                    {
+                      (u32:0, hls_failure::NONE)
+                    }
                   }
                 };
                 let v_Xls_clause_1_Hit_1 = _27.0;
@@ -886,8 +868,10 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   let _32 = (_30 ^ _31);
                   (_32, hls_failure::NONE)
                 } else {
-                  let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  (_30, hls_failure::NONE)
+                  {
+                    let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
+                    (_30, hls_failure::NONE)
+                  }
                 }
               };
               let v_Xls_clause_1_AccumulatedPauli_1 = _33.0;

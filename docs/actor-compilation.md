@@ -25,13 +25,13 @@ Scalar clause lowering retains [structured arithmetic and comparison expressions
 
 `hls_source:parse_file/2` accepts either source options or an already captured context. Options append the installed compiler include directory; a captured context is used unchanged. Source queries and record validation do not depend on the XLS backend. Type-provider `transpile/3` callbacks intentionally use `xls_clause_lower` for values, statements and failures: that is a backend extension hook, not source inspection.
 
-The internal `xls_clause_lower.hrl` record belongs to expression lowering and its cooperating passes. Branches retain separate bindings, statements and failures; a join exports only values valid in every selected arm. `xls_clause_lower:print/1` renders scalar IR and textual leaves, and rejects compile-time phantom types. Adding a source query must not require exporting a lowering helper through `xls_parse`.
+The internal `xls_clause_lower.hrl` record belongs to expression lowering and its cooperating passes. Branches retain separate bindings, statements and failures; a join exports only values valid in every selected arm. `xls_clause_lower:print/1` renders scalar IR, `xls_dslx` structural syntax and textual leaves, and rejects compile-time phantom types. Adding a source query must not require exporting a lowering helper through `xls_parse`.
 
 The supported expression, guard and failure semantics are documented in [control flow](control-flow.md), [bit syntax](bit-syntax.md), [entry outcomes](entry-outcomes.md) and [local helpers](local-helpers.md). Wire-tag ordering and generated-name constraints are in [actor names](actor-names.md).
 
 ## Alternate execution bodies
 
-Compiler extensions can call `xls_parse:actor_artifact(Path, SourceOptions)` for a validated `hls_statem` artifact. It contains initialization, typed dispatch, ordered effects, internal events, retained replies, reductions and failure origins. Unsupported actor kinds are rejected explicitly.
+Compiler extensions can call `xls_parse:actor_artifact(Path, SourceOptions)` for a validated `hls_statem` artifact. It contains initialization, typed dispatch, ordered effects, internal events, retained replies, reductions and failure origins. Entry `evaluation` fields retain structured branch, field-access, effect-packing and result-constructor expressions until `xls_actor_codegen:emit/3`; consumers can inspect them without parsing generated text. Unsupported actor kinds are rejected explicitly.
 
 `xls_actor_codegen:emit(Artifact, RuntimeImports, Body)` renders common semantics with an execution body. The body must preserve callback ordering, failure behavior and effect ownership. `xls_statem_codegen:body/1` supplies dedicated execution. These are source-level compiler interfaces: pin the compiler revision when consuming them. They are not a serialized deployment protocol.
 

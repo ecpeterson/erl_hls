@@ -444,7 +444,9 @@ fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_
           if _18 {
             (u32:4, hls_failure::NONE)
           } else {
-            (u32:8, hls_failure::NONE)
+            {
+              (u32:8, hls_failure::NONE)
+            }
           }
         }
       }
@@ -835,9 +837,11 @@ let _5 = {
             let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );
             (_2, hls_failure::NONE)
           } else {
-            let _1 = v_Xls_clause_1_LeftMask_1 | v_Xls_clause_1_RightMask_1;
-            let _2 = (v_Xls_clause_1_LeftValue_1, _1, );
-            (_2, hls_failure::NONE)
+            {
+              let _1 = v_Xls_clause_1_LeftMask_1 | v_Xls_clause_1_RightMask_1;
+              let _2 = (v_Xls_clause_1_LeftValue_1, _1, );
+              (_2, hls_failure::NONE)
+            }
           }
         }
       }
@@ -1149,19 +1153,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _2 = (v_Xls_entry_0_1, _0, _1, );
       let _3 = {
         let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: zero!<ReductionState>(),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[224]>(),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:0, payloads: zero!<bits[224]>() } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _3 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _3
+      }
     },
     Phase::MEASURING => {
       let _v__OldPhase_1 = old_phase;
@@ -1201,15 +1199,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _18 = (v_Xls_entry_1_1, _16, _17, );
         let _19 = {
           let evaluated = _18;
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: zero!<ReductionState>(),
-            failure: hls_failure::NONE,
-            effects: EntryEffects {
-              layout: u8:1,
-              payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]),
-            },
-          }
+          EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:1, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]) } }
         };
         (_19, hls_failure::NONE)
       } else {
@@ -1226,21 +1216,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _7 = (v_Xls_entry_3_1, _5, _6, );
         let _8 = {
           let evaluated = _7;
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: zero!<ReductionState>(),
-            failure: hls_failure::NONE,
-            effects: EntryEffects {
-              layout: u8:2,
-              payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]),
-            },
-          }
+          EntryOutcome { data: evaluated.0.1, reduction: zero!<ReductionState>(), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:2, payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]) } }
         };
         (_8, hls_failure::NONE)
       };
       if (_20.1) != hls_failure::NONE {
-        EntryOutcome { data, failure: _20.1, ..zero!<EntryOutcome>() }
-      } else { _20.0 }
+        EntryOutcome { data: data, failure: _20.1, ..zero!<EntryOutcome>() }
+      } else {
+        _20.0
+      }
     },
     Phase::GATHERING => {
       let _v__OldPhase_1 = old_phase;
@@ -1274,19 +1258,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _10 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _9, );
       let _11 = {
         let evaluated = _10;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:3, payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]) } }
       };
       if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
-      } else { _11 }
+        EntryOutcome { data: data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      } else {
+        _11
+      }
     },
     Phase::COMPARING => {
       let _v__OldPhase_1 = old_phase;
@@ -1340,19 +1318,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _18 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _17, );
       let _19 = {
         let evaluated = _18;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:4,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]),
-          },
-        }
+        EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:4, payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]) } }
       };
       if (hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379)) != hls_failure::NONE {
-        EntryOutcome { data, failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379), ..zero!<EntryOutcome>() }
-      } else { _19 }
+        EntryOutcome { data: data, failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_5D43C7C0_L379), ..zero!<EntryOutcome>() }
+      } else {
+        _19
+      }
     },
     Phase::FLIPPING => {
       let _v__OldPhase_1 = old_phase;
@@ -1413,8 +1385,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
                     let _19 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Present_1, );
                     (_19, hls_failure::NONE)
                   } else {
-                    let _19 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-                    (_19, hls_failure::NONE)
+                    {
+                      let _19 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
+                      (_19, hls_failure::NONE)
+                    }
                   }
                 }
               }
@@ -1479,119 +1453,109 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _42 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _41, );
           let _43 = {
             let evaluated = _42;
-            EntryOutcome {
-              data: evaluated.0.1,
-              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:5,
-                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]),
-              },
-            }
+            EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:5, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]) } }
           };
           (_43, _20.1)
         } else {
-          let v_Present_1 = v_Absent_1;
-          let _4 = v_Cell_1.1.best_direction;
-          let _6 = {
-            if _4 == 1 {
-              let _5 = (v_Present_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-              (_5, hls_failure::NONE)
-            } else {
-              if _4 == 2 {
-                let _5 = (v_Absent_1, v_Present_1, v_Absent_1, v_Absent_1, );
+          {
+            let v_Present_1 = v_Absent_1;
+            let _4 = v_Cell_1.1.best_direction;
+            let _6 = {
+              if _4 == 1 {
+                let _5 = (v_Present_1, v_Absent_1, v_Absent_1, v_Absent_1, );
                 (_5, hls_failure::NONE)
               } else {
-                if _4 == 4 {
-                  let _5 = (v_Absent_1, v_Absent_1, v_Present_1, v_Absent_1, );
+                if _4 == 2 {
+                  let _5 = (v_Absent_1, v_Present_1, v_Absent_1, v_Absent_1, );
                   (_5, hls_failure::NONE)
                 } else {
-                  if _4 == 8 {
-                    let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Present_1, );
+                  if _4 == 4 {
+                    let _5 = (v_Absent_1, v_Absent_1, v_Present_1, v_Absent_1, );
                     (_5, hls_failure::NONE)
                   } else {
-                    let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-                    (_5, hls_failure::NONE)
+                    if _4 == 8 {
+                      let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Present_1, );
+                      (_5, hls_failure::NONE)
+                    } else {
+                      {
+                        let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
+                        (_5, hls_failure::NONE)
+                      }
+                    }
                   }
                 }
               }
-            }
-          };
-          let _v__NorthPresent_1 = _6.0.0;
-          let v_EastPresent_1 = _6.0.1;
-          let v_WestPresent_1 = _6.0.2;
-          let _v__SouthPresent_1 = _6.0.3;
-          let _7 = v_Cell_1.1.step;
-          let _8 = Anyonmove {
-            step: _7,
-            ..zero!<Anyonmove>()
-          };
-          let _9 = (Tag::ANYON_MOVE, _8, bits_from_anyonmove(_8));
-          let v_Message_1 = _9;
-          let _10 = v_Cell_1.1.anyon;
-          let _11 = _10 ^ v_Present_1;
-          let _12 = Cell {
-            anyon: _11,
-            random_state: v_NextRandom_1,
-            ..(v_Cell_1).1
-          };
-          let _13 = (Tag::CELL, _12);
-          let v_Updated_1 = _13;
-          let v_Xls_entry_7_1 = v_Updated_1;
-          let _14 = v_Cell_1.1.step;
-          let _15 = (_14 as u32);
-          let _16 = Phifold {
-            value0: s64:0,
-            value1: s64:0,
-            ..zero!<Phifold>()
-          };
-          let _17 = (Tag::PHI_FOLD, _16, bits_from_phifold(_16));
-          let _18 = (_15, _17, );
-          let v_Xls_entry_8_1 = _18;
-          let _19 = Anyonmove {
-            present: _v__NorthPresent_1,
-            ..(v_Message_1).1
-          };
-          let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
-          let v_Xls_entry_9_1 = _20;
-          let _21 = Anyonmove {
-            present: v_EastPresent_1,
-            ..(v_Message_1).1
-          };
-          let _22 = (Tag::ANYON_MOVE, _21, bits_from_anyonmove(_21));
-          let v_Xls_entry_10_1 = _22;
-          let _23 = Anyonmove {
-            present: v_WestPresent_1,
-            ..(v_Message_1).1
-          };
-          let _24 = (Tag::ANYON_MOVE, _23, bits_from_anyonmove(_23));
-          let v_Xls_entry_11_1 = _24;
-          let _25 = Anyonmove {
-            present: _v__SouthPresent_1,
-            ..(v_Message_1).1
-          };
-          let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-          let v_Xls_entry_12_1 = _26;
-          let _27 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );
-          let _28 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _27, );
-          let _29 = {
-            let evaluated = _28;
-            EntryOutcome {
-              data: evaluated.0.1,
-              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:6,
-                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]),
-              },
-            }
-          };
-          (_29, _6.1)
+            };
+            let _v__NorthPresent_1 = _6.0.0;
+            let v_EastPresent_1 = _6.0.1;
+            let v_WestPresent_1 = _6.0.2;
+            let _v__SouthPresent_1 = _6.0.3;
+            let _7 = v_Cell_1.1.step;
+            let _8 = Anyonmove {
+              step: _7,
+              ..zero!<Anyonmove>()
+            };
+            let _9 = (Tag::ANYON_MOVE, _8, bits_from_anyonmove(_8));
+            let v_Message_1 = _9;
+            let _10 = v_Cell_1.1.anyon;
+            let _11 = _10 ^ v_Present_1;
+            let _12 = Cell {
+              anyon: _11,
+              random_state: v_NextRandom_1,
+              ..(v_Cell_1).1
+            };
+            let _13 = (Tag::CELL, _12);
+            let v_Updated_1 = _13;
+            let v_Xls_entry_7_1 = v_Updated_1;
+            let _14 = v_Cell_1.1.step;
+            let _15 = (_14 as u32);
+            let _16 = Phifold {
+              value0: s64:0,
+              value1: s64:0,
+              ..zero!<Phifold>()
+            };
+            let _17 = (Tag::PHI_FOLD, _16, bits_from_phifold(_16));
+            let _18 = (_15, _17, );
+            let v_Xls_entry_8_1 = _18;
+            let _19 = Anyonmove {
+              present: _v__NorthPresent_1,
+              ..(v_Message_1).1
+            };
+            let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+            let v_Xls_entry_9_1 = _20;
+            let _21 = Anyonmove {
+              present: v_EastPresent_1,
+              ..(v_Message_1).1
+            };
+            let _22 = (Tag::ANYON_MOVE, _21, bits_from_anyonmove(_21));
+            let v_Xls_entry_10_1 = _22;
+            let _23 = Anyonmove {
+              present: v_WestPresent_1,
+              ..(v_Message_1).1
+            };
+            let _24 = (Tag::ANYON_MOVE, _23, bits_from_anyonmove(_23));
+            let v_Xls_entry_11_1 = _24;
+            let _25 = Anyonmove {
+              present: _v__SouthPresent_1,
+              ..(v_Message_1).1
+            };
+            let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
+            let v_Xls_entry_12_1 = _26;
+            let _27 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );
+            let _28 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _27, );
+            let _29 = {
+              let evaluated = _28;
+              EntryOutcome { data: evaluated.0.1, reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1), failure: hls_failure::NONE, effects: EntryEffects { layout: u8:6, payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]) } }
+            };
+            (_29, _6.1)
+          }
         }
       };
       if (_44.1) != hls_failure::NONE {
-        EntryOutcome { data, failure: _44.1, ..zero!<EntryOutcome>() }
-      } else { _44.0 }
+        EntryOutcome { data: data, failure: _44.1, ..zero!<EntryOutcome>() }
+      } else {
+        _44.0
+      }
     },
   }
 }

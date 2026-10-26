@@ -145,12 +145,23 @@ field(Spec) -> optional(Spec,"  gather: GatherState,\n").
 -spec copy(map()) -> iodata().
 copy(Spec) -> optional(Spec,"    gather: machine.gather,\n").
 
--doc "Initializes the selected gather from its transactional entry value.".
--spec entry_fields(map(), none | map(), atom()) -> iodata().
-entry_fields(Spec, #{kind:=gather,identity_expression:=Zero}, Phase) ->
-    Suffix=case Zero of {record,_,{value,_},_}->[];_->".1" end,
-    optional(Spec,["    gather: gather_open_",atom_to_list(Phase),"(evaluated.1.0, evaluated.1.1",Suffix,", evaluated.1.2 as GatherMembers),\n"]);
-entry_fields(Spec, _, _) -> optional(Spec,"    gather: zero!<GatherState>(),\n").
+-doc "Constructs the selected gather field from its transactional entry value without rendering it.".
+-spec entry_fields(map(), none | map(), atom()) -> xls_dslx:fields().
+entry_fields(#{gathers := none}, _, _) -> [];
+entry_fields(Spec, Reduction, Phase) when not is_map_key(gathers, Spec) ->
+    entry_fields(Spec#{gathers => none}, Reduction, Phase);
+entry_fields(_Spec, #{kind := gather, identity_expression := Zero}, Phase) ->
+    Open = xls_dslx:field(xls_dslx:ref("evaluated"), 1),
+    Identity = xls_dslx:field(Open, 1),
+    Value = case Zero of
+        {record, _, {value, _}, _} -> Identity;
+        _ -> xls_dslx:field(Identity, 1)
+    end,
+    [{"gather", xls_dslx:call("gather_open_" ++ atom_to_list(Phase),
+        [xls_dslx:field(Open, 0), Value,
+            xls_dslx:cast(xls_dslx:field(Open, 2), "GatherMembers")])}];
+entry_fields(_Spec, _, _) ->
+    [{"gather", xls_dslx:call("zero!<GatherState>", [])}].
 
 -doc "Rejects concurrent logical collections before committing entry data or effects.".
 -spec entry_bindings(map()) -> iodata().

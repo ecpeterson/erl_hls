@@ -39,11 +39,11 @@ ordinary_lowering_test() ->
     ?assertNotEqual(nomatch, binary:match(Rendered, <<"hls_integer::equal(">>)),
     ok.
 
-%% The existing branch renderer leaves joined values opaque to the enclosing clause.
+%% Branch-local operations survive joins, without exposing an arm as an unconditional alias.
 -spec branch_boundary_test() -> ok.
 branch_boundary_test() ->
     #{body := Body} = lower("T = case A =:= B of true -> A + B; false -> A - B end, T =:= A"),
-    ?assertEqual(0, count_nodes(xls_bits_binary, Body)),
+    ?assertEqual(2, count_nodes(xls_bits_binary, Body)),
     Text = iolist_to_binary(xls_clause_lower:print(Body)),
     ?assertNotEqual(nomatch, binary:match(Text, <<" + ">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<" - ">>)),

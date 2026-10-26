@@ -11,7 +11,7 @@ leaves. print/1 is the rendering boundary; phantom type values cannot cross it.
     statement_from_statement/2, outcome_value/1, failure_expression/1, failure_code/1,
     add_match_failure/3, add_failure/2, find_binding/3, bind/4, record_raw/2,
     reference/1, reference/2, instr/2, instr/3]).
--export_type([ir/0, printable/0, static/0, phantom/0, clause_state/0]).
+-export_type([ir/0, printable/0, static/0, phantom/0, clause_state/0, outcome/0]).
 -include("xls_clause_lower.hrl").
 
 %% The clause IR retains scalar operation nodes alongside:
@@ -27,16 +27,20 @@ leaves. print/1 is the rendering boundary; phantom type values cannot cross it.
 -doc "Compile-time type arguments accepted by provider callbacks, never emitted as runtime values.".
 -type phantom() :: {phantom, type, hls_type:descriptor()}.
 -doc "Renderable clause IR: literals, structured scalar nodes and opaque DSLX leaves.".
--type printable() :: char() | [printable()] | static() | xls_expr_ir:expr().
+-type printable() :: char() | binary() | [printable()] | static() | xls_expr_ir:expr() |
+    xls_dslx:expr() | xls_dslx:binding().
 -doc "Clause values additionally admit compile-time-only type descriptors.".
--type ir() :: char() | [ir()] | phantom() | static() | xls_expr_ir:expr().
+-type ir() :: char() | binary() | [ir()] | phantom() | static() | xls_expr_ir:expr() |
+    xls_dslx:expr() | xls_dslx:binding().
 
 -doc "Renders clause IR recursively; structured operations are rendered only here, and phantom types are rejected.".
--spec print(printable()) -> iolist() | char().
+-spec print(printable()) -> iodata() | char().
 print(List) when is_list(List) ->
     lists:map(fun print/1, List);
-print(Char) when is_integer(Char) ->
+print(Char) when is_integer(Char); is_binary(Char) ->
     Char;
+print(Node) when is_tuple(Node), element(1, Node) =:= xls_dslx ->
+    xls_dslx:render(Node);
 print(Node = {xls_bits_binary, _, _, _}) ->
     print(xls_expr_ir:render(Node));
 print(Node = {xls_integer_comparison, _, _, _}) ->
@@ -96,9 +100,11 @@ branch_from_state(ComputeState, Postprocessor, Failure) ->
 
 %% Keep the computed value and its selected failure together. Consumers may
 %% commit a compound result only when the whole callback has succeeded.
--doc "Lowers a callback clause to statements, result and first-failure expressions.".
--spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) ->
-    #{body := printable(), result := printable(), failed := printable(), failure := printable()}.
+-doc "A lowered callback retains ordered statements, its value and the first selected failure.".
+-type outcome() :: #{body := [printable()], result := printable(), failed := printable(), failure := printable()}.
+
+-doc "Lowers a callback clause to statements, result and first-failure expressions without rendering them.".
+-spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) -> outcome().
 clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
     State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
     #{
