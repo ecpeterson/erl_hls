@@ -2,70 +2,14 @@
 // No hierarchy or actor state is read. The host supplies every command/reply decision.
 #include "Vprotocol_bridge_top.h"
 #include "verilated.h"
+#include "framed_fifo_stream.h"
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <deque>
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <unistd.h>
-
-// Bounded transport queues and framing state for one independent public stream.
-struct Stream {
-    int input, output;
-    std::deque<uint8_t> rx, tx;
-    unsigned phase=0, remaining=0;
-    uint32_t word=0, prior=0;
-    bool valid=false,last=false,blocked=false,prior_last=false;
-    uint64_t inputs=0,outputs=0,stalls=0;
-    FILE *trace;
-    explicit Stream(const std::string& prefix) {
-        if (mkfifo((prefix+"_tx").c_str(),0600) || mkfifo((prefix+"_rx").c_str(),0600))
-            throw std::runtime_error("fresh FIFO creation failed");
-        input=open((prefix+"_tx").c_str(),O_RDWR|O_NONBLOCK);
-        output=open((prefix+"_rx").c_str(),O_RDWR|O_NONBLOCK);
-        trace=fopen((prefix+"-words.log").c_str(),"wx");
-        if(input<0||output<0||!trace) throw std::runtime_error("FIFO open failed");
-    }
-    ~Stream(){close(input);close(output);fclose(trace);}
-    // Partial OS reads/writes never change the held public beat.
-    void pump(){
-        uint8_t bytes[4096];
-        if(rx.size()+sizeof(bytes)<=65536){
-            ssize_t n=read(input,bytes,sizeof(bytes));
-            if(n>0)rx.insert(rx.end(),bytes,bytes+n);
-            else if(n<0&&errno!=EAGAIN&&errno!=EINTR)throw std::runtime_error("FIFO read");
-        }
-        size_t count=std::min(tx.size(),sizeof(bytes));
-        for(size_t i=0;i<count;i++)bytes[i]=tx[i];
-        if(count){ssize_t n=write(output,bytes,count);
-            if(n>0)for(ssize_t i=0;i<n;i++)tx.pop_front();
-            else if(n<0&&errno!=EAGAIN&&errno!=EINTR)throw std::runtime_error("FIFO write");}
-        if(!valid&&rx.size()>=4){
-            word=0;for(unsigned i=0;i<4;i++){word|=uint32_t(rx.front())<<(8*i);rx.pop_front();}
-            valid=true;
-            if(phase==0){last=false;phase=1;}
-            else if(phase==1){remaining=word&255;last=remaining==0;phase=last?0:2;}
-            else{last=--remaining==0;if(last)phase=0;}
-        }
-    }
-    // Verify ready/valid stability and retain only accepted words.
-    void sample(bool in_ready,uint32_t out_word,bool out_valid,bool out_last,bool out_ready,uint64_t cycle){
-        if(blocked&&(!out_valid||out_word!=prior||out_last!=prior_last))throw std::runtime_error("stalled output changed");
-        blocked=out_valid&&!out_ready;prior=out_word;prior_last=out_last;
-        if(blocked)stalls++;
-        if(valid&&in_ready){fprintf(trace,"I %llu %08x %u\n",(unsigned long long)cycle,word,last);inputs++;valid=false;}
-        if(out_valid&&out_ready){
-            if(tx.size()>65532)throw std::runtime_error("output capacity");
-            fprintf(trace,"O %llu %08x %u\n",(unsigned long long)cycle,out_word,out_last);outputs++;
-            for(unsigned i=0;i<4;i++)tx.push_back(uint8_t(out_word>>(8*i)));
-        }
-    }
-};
 
 // The clock label is simulation time only; no throughput claim uses this rate.
 int main(int argc,char**argv){
@@ -74,7 +18,7 @@ int main(int argc,char**argv){
         std::string dir=argv[1];
         Verilated::commandArgs(argc,argv);
         Vprotocol_bridge_top dut;
-        Stream app(dir+"/app");
+        FramedFifoStream app(dir+"/app");
         auto began=std::chrono::steady_clock::now();
         uint64_t cycle=0,activation=0;
         for(;cycle<4000000;cycle++){
@@ -82,7 +26,7 @@ int main(int argc,char**argv){
             if(!reset){app.pump();}
             dut.clk=0;dut.reset=reset;dut.retire=0;
             dut.s_app_tdata=app.word;dut.s_app_tlast=app.last;dut.s_app_tvalid=!reset&&app.valid;
-            dut.m_app_tready=!reset&&app.tx.size()<65532&&cycle%19>=7;
+            dut.m_app_tready=!reset&&app.output_ready()&&cycle%19>=7;
             dut.eval();
             if(!reset){
                 if(dut.fault)throw std::runtime_error("source fault "+std::to_string(dut.fault));
@@ -95,7 +39,7 @@ int main(int argc,char**argv){
                     dut.clk=0;dut.retire=1;dut.eval();
                     if(dut.s_app_tready||dut.m_app_tvalid)throw std::runtime_error("retired handshake");
                     if(app.stalls<50)throw std::runtime_error("missing output stalls");
-                    printf("RETIRED pending_input_bytes=%zu held_beats=%u\n",app.rx.size(),unsigned(app.valid));
+                    printf("RETIRED pending_input_bytes=%zu held_beats=%u\n",app.pending_input_bytes(),unsigned(app.valid));
                     printf("PASS live application cycles=%llu activation=%llu input_words=%llu output_words=%llu output_stalls=%llu\n",(unsigned long long)cycle,(unsigned long long)activation,(unsigned long long)app.inputs,(unsigned long long)app.outputs,(unsigned long long)app.stalls);
                     dut.final();return 0;
                 }

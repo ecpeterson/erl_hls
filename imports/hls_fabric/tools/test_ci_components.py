@@ -34,6 +34,11 @@ def main() -> None:
         times[name] = time.monotonic() - started
         (args.stage / 'times.json').write_text(json.dumps(times, indent=2) + '\n')
 
+    # Shared public-port FIFO mechanics need no generated hardware or decoder workload.
+    fifo_test = args.stage / 'fifo-stream-test'
+    command('fifo-stream-compile', ['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+        ROOT / 'test/rtl/framed_fifo_stream_test.cpp', '-o', fifo_test])
+    command('fifo-stream', [fifo_test, args.stage / 'fifo-stream'], timeout=30)
     for name in ['effect_window', 'frame_queue', 'indexed_gather_ram', 'mailbox', 'scheduler', 'scheduler_observation']:
         command(name, [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none', '--max_ticks=1000', *options,
                        ROOT / 'priv/xls/lib' / (name + '.x')])

@@ -49,7 +49,7 @@ def qualify(build: Path, stage: Path, width: int) -> dict:
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage,str(width)],stage,'oracle')
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
-    tracked=rtl+[source,build/'deployment.etf',stage/'oracle.json']
+    tracked=rtl+[source,source.with_name("framed_fifo_stream.h"),build/'deployment.etf',stage/'oracle.json']
     hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_application_top',
          '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',*rtl,source],stage,'verilator')

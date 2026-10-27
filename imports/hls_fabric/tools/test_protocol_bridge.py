@@ -74,10 +74,15 @@ def qualify(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
     run(['erlc',*[v for p in erlang_paths("test") for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
          ROOT/'test/hls_protocol_network_fixture.erl',ROOT/'test/hls_protocol_bridge_live.erl'],stage,'host-compile')
     wrapper,rtl=pair(roles,stage)
+    source=ROOT/'test/rtl/protocol_bridge_sim.cpp'
+    tracked=[wrapper,*rtl,source,source.with_name('framed_fifo_stream.h')]
+    hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_pair',
         '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',
-        wrapper,*rtl,ROOT/'test/rtl/protocol_bridge_sim.cpp'],stage,'verilator')
+        wrapper,*rtl,source],stage,'verilator')
     for i in [1,2]:witness(roles,stage/'obj_dir/simulation',ebin,stage/f'live-{i}',100+i)
+    assert hashes=={str(p):digest(p) for p in tracked}
+    (stage/'simulation-inputs.json').write_text(json.dumps(hashes,indent=2)+'\n')
     return wrapper,rtl
 
 

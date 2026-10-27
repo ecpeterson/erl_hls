@@ -97,7 +97,7 @@ def qualify(build: Path, stage: Path) -> None:
     expression='[S]=init:get_plain_arguments(),ok=phi_protocol_repetition_fixture:oracle(S,3),halt().'
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("test"),'-eval',expression,'-extra',stage],stage,'oracle')
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()];source=simulator_source(build,stage)
-    inputs=rtl+[source,build/'deployment.etf',build/'network/inspection.etf',build/'network/inspection.json']
+    inputs=rtl+[source,source.with_name("framed_fifo_stream.h"),build/'deployment.etf',build/'network/inspection.etf',build/'network/inspection.json']
     hashes={str(p):digest(p) for p in inputs}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_application_top',
          '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',*rtl,source],stage,'verilator')

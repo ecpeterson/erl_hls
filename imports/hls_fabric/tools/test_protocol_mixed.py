@@ -42,7 +42,7 @@ def qualify(build: Path, stage: Path) -> list[Path]:
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage,build],stage,'oracle-and-queue')
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=ROOT/'test/rtl/protocol_mixed_sim.cpp'
-    tracked=[*rtl,source,build/'mixed.etf',stage/'oracle.json'];hashes={str(p):digest(p) for p in tracked}
+    tracked=[*rtl,source,source.with_name("framed_fifo_stream.h"),build/'mixed.etf',stage/'oracle.json'];hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_top','--Mdir',stage/'obj_dir',
          '-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',*rtl,source],stage,'verilator')
     expected=json.loads((stage/'oracle.json').read_text());results=[]

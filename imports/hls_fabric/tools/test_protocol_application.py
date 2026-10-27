@@ -51,7 +51,7 @@ def main() -> None:
 
 
 def simulator_source(build: Path, stage: Path) -> Path:
-    """Observe all public source fault pins; the four-source expansion retains the original runner bytes."""
+    """Stage the shared FIFO helper and wire every public source fault pin into one finite runner."""
     manifest=json.loads((build/'application/manifest.json').read_text())
     actors=manifest['actors']
     indices=range(actors)
@@ -61,6 +61,7 @@ def simulator_source(build: Path, stage: Path) -> Path:
     from protocol_inspection_sim import debug_fragments
     for key,value in debug_fragments(manifest.get('inspection','none') != 'none').items():text=text.replace('@@DEBUG_'+key+'@@',value)
     source.write_text(text)
+    source.with_name("framed_fifo_stream.h").write_bytes((ROOT/"test/rtl/framed_fifo_stream.h").read_bytes())
     return source
 
 
@@ -71,7 +72,7 @@ def qualify(build: Path, stage: Path) -> None:
         ROOT/'test/hls_protocol_boundary_fixture.erl',ROOT/'test/hls_protocol_application_live.erl'],stage,'host-compile')
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
-    tracked=rtl+[source,build/'deployment.etf']
+    tracked=rtl+[source,source.with_name("framed_fifo_stream.h"),build/'deployment.etf']
     hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_application_top',
         '--Mdir',stage/'obj_dir','-j','1','-Wno-fatal','-CFLAGS','-std=c++17','-o','simulation',
