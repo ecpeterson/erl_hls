@@ -140,12 +140,13 @@ used(Tuple) when is_tuple(Tuple) -> used(tuple_to_list(Tuple));
 used(List) when is_list(List) -> lists:usort(lists:append([used(X) || X <- List]));
 used(_) -> [].
 
--doc "Returns callback records and the existing private reduction accumulator tags.".
+-doc "Returns state/public records and reduction accumulator tags found in the supplied function clauses. Declaration defaults do not declare reductions; hardware callers must select their function closure first.".
 -spec wire_names([hls_source:form()]) -> [atom()].
 wire_names(Forms) ->
-    lists:usort([hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)] ++ accumulator_names(Forms)).
+    Clauses = [Cs || {function, _, _, _, Cs} <- Forms],
+    lists:usort([hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)] ++ accumulator_names(Clauses)).
 
-%% The literal seed identifies the accumulator before reduction analysis runs.
+%% The literal function-body seed identifies the accumulator before reduction analysis runs.
 -spec accumulator_names(term()) -> [atom()].
 accumulator_names({tuple, _, [{atom, _, open_reduction}, _, _, _,
         {tuple, _, [{atom, _, commutative_monoid}, {record, _, Name, _}]}]}) -> [Name];

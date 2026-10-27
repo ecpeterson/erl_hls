@@ -14,13 +14,14 @@
 -spec interface([hls_source:form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
-    {Annotated, Sites} = xls_failure_sites:prepare(hls_records:resolve(Forms)),
+    Selected = xls_hardware_source:statem(Forms, PhaseNames),
+    {Annotated, Sites} = xls_failure_sites:prepare(hls_records:resolve(Selected)),
     (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
 -doc "Summarizes an actor and validates its public schemas against the selected ordinary-frame capacity.".
 -spec interface([hls_source:form()], [atom(), ...], hls_frame_layout:layout()) -> interface().
 interface(Forms, Phases, Layout) ->
-    Resolved = hls_records:resolve(Forms),
+    Resolved = hls_records:resolve(xls_hardware_source:statem(Forms, Phases)),
     _ = [hls_actor_source:message_words(Resolved, Name, Layout)
         || Name <- hls_actor_source:tags(Resolved)],
     (interface(Forms, Phases))#{frame_layout => Layout}.
@@ -68,7 +69,7 @@ planned_artifact(Filename, Source, PhaseNames, Layout) ->
 -spec compile_artifact(file:filename(), [hls_source:form()], [atom(), ...], render | plan, hls_frame_layout:layout()) ->
     {xls_actor_codegen:spec(), none | xls_statem_plan:plan()}.
 compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
-    Forms0 = hls_records:resolve(Source),
+    Forms0 = hls_records:resolve(xls_hardware_source:statem(Source, PhaseNames)),
     Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,

@@ -1,0 +1,32 @@
+%% Shared declarations keep private record dependencies outside the actor file.
+-compile({no_auto_import, [{bit_size, 1}]}).
+-export([sample_value/1, bit_size/1]).
+-ifdef(HOST_COMPARISON).
+-export([host_comparison/0]).
+-endif.
+-ifdef(HOST_REDUCTION).
+-export([host_reduction/0]).
+-endif.
+-record(closure_inner, {value = hls_type:zero() :: hls_nums:u32()}).
+-record(closure_sample, {inner = hls_type:zero() :: #closure_inner{}}).
+-record(state, {value = hls_type:zero() :: hls_nums:u32()}).
+-record(request, {value = hls_type:zero() :: hls_nums:u32()}).
+-record(report, {value = hls_type:zero() :: hls_nums:u32()}).
+
+-ifdef(REACH_COMPARISON).
+-define(INPUT(Value), begin host_comparison(), Value end).
+-else.
+-ifdef(REACH_BINARY).
+-define(INPUT(Value), begin host_binary(Value), Value end).
+-else.
+-ifdef(REACH_RECURSION).
+-define(INPUT(Value), host_recursion(Value)).
+-else.
+-ifdef(REACH_PROVIDER).
+-define(INPUT(Value), host_provider(Value)).
+-else.
+-define(INPUT(Value), Value).
+-endif.
+-endif.
+-endif.
+-endif.

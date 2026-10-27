@@ -5,16 +5,19 @@
 
 %% Discover declarations from syntax, not from the text emitted by transpile/3.
 %% Walking type arguments also finds providers nested inside hls_lists:list/2.
--doc "Returns the unique DSLX imports required by types, provider calls and supported syntax.".
+-doc "Returns the unique DSLX imports required by types, provider calls and supported syntax. Calls qualified by the source module remain local helper calls, not provider dependencies.".
 -spec from_forms([hls_source:form()]) -> [atom()].
 from_forms(Forms) ->
     Uses = uses(Forms),
-    Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),
+    Self = hls_source:find_optional_attribute(Forms, module),
+    References = lists:usort([{M, N} || {provider, M, N} <- Uses] ++
+        [{M, N} || {provider_call, M, N} <- Uses, {ok, M} =/= Self]),
+    Providers = lists:usort([Module || {Module, _Name} <- References]),
     OperatorImports = [hls_integer || {operator, _} <- Uses] ++
         [hls_patterns || {pattern, tail} <- Uses] ++
         [hls_bits || bit_syntax <- Uses],
     lists:usort(OperatorImports ++ lists:append([imports(Module,
-        lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
+        [Name || {M, Name} <- References, M =:= Module]) || Module <- Providers])).
 
 %% Walk source and normalized syntax for direct companion dependencies.
 -spec uses(term()) -> [tuple() | bit_syntax].
@@ -29,7 +32,7 @@ uses({hls_type, Module, Name, Args}) -> [{provider, Module, Name} | uses(Args)];
 uses({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
     [{provider, Module, Name} | uses(Args)];
 uses({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
-    [{provider, Module, Name} | uses(Args)];
+    [{provider_call, Module, Name} | uses(Args)];
 uses({op, _, Op, Left, Right}) when Op =:= 'rem'; Op =:= 'bsl'; Op =:= 'bsr' ->
     [{operator, Op} | uses([Left, Right])];
 uses(Tuple) when is_tuple(Tuple) ->

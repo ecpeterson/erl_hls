@@ -9,10 +9,11 @@ emit(Filename, Forms) -> emit(Filename, Forms, hls_frame_layout:default()).
 -doc "Emits the server using an explicit checked ordinary-frame layout and rejects any public schema exceeding it.".
 -spec emit(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
 emit(Filename, Forms0, Layout) ->
-    ok = xls_names:actor(Forms0, hls_gs),
-    {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
-    {Forms, Helpers} = xls_helpers:prepare(SourceForms,
-        [{init, 1}, {handle_call, 2}, {handle_cast, 2}]),
+    2 = hls_service_contract:call_arity(Forms0),
+    Roots = [{init, 1}, {handle_call, 2}, {handle_cast, 2}],
+    Selected = xls_hardware_source:select(Forms0, Roots),
+    {SourceForms, Sites} = xls_failure_sites:prepare(Selected),
+    {Forms, Helpers} = xls_helpers:prepare(SourceForms, Roots),
     ok = xls_names:actor(Forms, hls_gs),
     PublicStructNames = hls_actor_source:tags(Forms),
     StateName = hls_actor_source:state(Forms),
