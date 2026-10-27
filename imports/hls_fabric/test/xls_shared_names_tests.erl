@@ -13,11 +13,11 @@ backend_namespace_test() ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{reductions := #{accumulator => #{name => Name}}}))
     end, ['SharedOperands', 'IndexedOwnedInput', 'PublicationPatch', 'SharedState', 'SharedExecutor', 'SharedLoader', 'SharedRequestStage', 'SharedDispatchTicket',
-         'ReductionAggregate', 'MachineBits', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'DirectCollectionGrant', 'IndexedContext', 'GatherRamReadReq']),
+         'ReductionAggregate', 'MachineBits', 'MachineRow', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'DirectCollectionGrant', 'IndexedContext', 'GatherRamReadReq']),
     lists:foreach(fun(Alias) ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
             xls_shared_names:validate(Base#{imports := [Alias]}))
-    end, ['backend.indexed_prepare_mask', 'backend.indexed_prepared_finish',
+    end, ['backend.machine_row_from_bits', 'backend.bits_from_machine_row', 'backend.indexed_prepare_mask', 'backend.indexed_prepared_finish',
           'backend.indexed_preparation_source', 'backend.indexed_prepared_in_flight',
           'backend.indexed_prepared_ticket', 'backend.indexed_owned_mask', 'backend.indexed_capture_result', 'backend.indexed_write_data', 'backend.indexed_capture_retirement',
           'backend.indexed_check_owned', 'backend.indexed_capture_input', 'backend.indexed_retire_owned',

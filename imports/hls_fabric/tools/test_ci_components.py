@@ -64,6 +64,15 @@ def main() -> None:
             command(module + '-words' + str(words), [args.xls / 'interpreter_main',
                 '--evaluator=ir-jit', '--compare=none', '--test_filter=' + test_filter,
                 *selected, capacity / (module + '.x')])
+    # Tiny actor rows cover every optional storage feature without another application build.
+    rows = args.stage / 'machine-rows'
+    command('machine-rows-generate', ['erl', '-noshell', '-eval',
+        'ok=xls_shared_machine_layout_tests:write(hd(init:get_plain_arguments())),halt().',
+        '-extra', rows], env=erlang_environment('test'))
+    for name in ['ordinary', 'events', 'reduction_replies', 'gather', 'gather_external',
+                 'projected', 'projected_empty']:
+        command('machine-row-' + name, [args.xls / 'interpreter_main', '--evaluator=ir-jit',
+            '--compare=none', *options, rows / (name + '.x')])
     command('execution', ['bash', 'tools/test_local_execution.sh', args.xls, args.stage / 'execution'])
     command('receipt-contracts', [sys.executable, 'tools/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
     shapes(args.xls, args.stage / 'inspection-shapes')

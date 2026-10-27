@@ -1,15 +1,7 @@
 -module(xls_shared_codegen).
 -moduledoc false.
--export([publication_depth/0, emit/1, artifact/1, execution/1, execution_artifact/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
--export_type([machine_layout/0]).
+-export([publication_depth/0, emit/1, artifact/1, execution/1, execution_artifact/1]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
-%% A packed field may be empty when its source feature is absent.
--type field() :: #{offset := non_neg_integer(), width := non_neg_integer()}.
-
--doc "Packed ordinary machine fields, in low-to-high order. The two-argument layout omits gather; the three-argument layout includes it even at zero width.".
--type machine_layout() :: #{width := pos_integer(), phase := field(), entered_from := field(),
-    data := field(), enter_pending := field(), failure := field(), reduction := field(), gather => field()}.
-
 %% Checked actor artifact augmented with private physical options.
 -type spec() :: map().
 
@@ -43,7 +35,7 @@ artifact(Spec) ->
 -spec execution(xls_actor_codegen:spec()) -> binary().
 execution(Closed) -> xls_emitted:bytes(execution_artifact(Closed)).
 
--doc "Renders checked ordinary activation semantics and retains its emitted failure codebook. The same closed-artifact and ownership constraints as execution/1 apply; enclosing protocol composition must preserve this metadata.".
+-doc "Renders checked ordinary activation semantics and retains its emitted failure codebook. Rejects collisions with generated backend names. The same closed-artifact and ownership constraints as execution/1 apply; enclosing protocol composition must preserve this metadata.".
 -spec execution_artifact(xls_actor_codegen:spec()) -> xls_emitted:artifact().
 execution_artifact(Closed) ->
     case maps:keys(Closed) -- [source, failure_locations, imports, capacity, phases, frame_layout,
@@ -67,6 +59,7 @@ execution_artifact(Closed) ->
             end;
         error -> ok
     end,
+    ok = xls_shared_names:validate(Spec),
     xls_actor_codegen:artifact(Spec, [bram, mailbox, scheduler, arbitration, std],
         [machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
          xls_shared_gather_codegen:helpers(Spec),
@@ -95,12 +88,9 @@ execution_ports(Spec = #{reductions := Reduction, continuations := Events}) ->
 %% Defines accepted-work tickets, RAM row types and scheduler-owned metadata.
 -spec machine_declarations(spec()) -> iodata().
 machine_declarations(#{capacity := Capacity} = Spec) ->
-    DataWidth = xls_state_projection:width(Spec),
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
-    ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    GatherWidth = xls_shared_gather_codegen:storage_width(Spec),
-    MachineBits = shared_machine_width(DataWidth, ReductionWidth, GatherWidth) + event_width(Spec) + xls_statem_reply_codegen:width(Spec),
+    MachineBits = xls_shared_machine_layout:width(xls_shared_machine_layout:from_spec(Spec)),
     [
         "// One router slot is reserved for the existing borrowed lookahead credit.\n",
         "const PUBLICATION_CAPACITY = u2:", integer_to_list(publication_depth() + 1), ";\n",
@@ -211,92 +201,59 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "}\n\n"
     ].
 
--doc "Returns the packed actor-state width including private runtime metadata.".
--spec shared_machine_width(non_neg_integer()) -> pos_integer().
-shared_machine_width(DataWidth) ->
-    shared_machine_width(DataWidth, 0).
-
--doc "Returns the packed actor-state width including private runtime metadata.".
--spec shared_machine_width(non_neg_integer(), non_neg_integer()) ->
-    pos_integer().
-shared_machine_width(DataWidth, ReductionWidth) ->
-    shared_machine_width(DataWidth, ReductionWidth, 0).
-
--doc "Returns the physical row width including independently sized gather storage.".
--spec shared_machine_width(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> pos_integer().
-shared_machine_width(DataWidth, ReductionWidth, GatherWidth) ->
-    maps:get(width, shared_machine_layout(DataWidth, ReductionWidth, GatherWidth)).
-
-%% Low-to-high packed RAM layout, shared by the codec and passive debug taps.
--doc "Returns bit offsets used consistently by codecs and observation extraction.".
--spec shared_machine_layout(non_neg_integer(), non_neg_integer()) -> machine_layout().
-shared_machine_layout(DataWidth, ReductionWidth) ->
-    maps:remove(gather, shared_machine_layout(DataWidth, ReductionWidth, 0)).
-
--doc "Places gather storage after reduction storage, preserving ordinary observation offsets.".
--spec shared_machine_layout(non_neg_integer(), non_neg_integer(), non_neg_integer()) -> machine_layout().
-shared_machine_layout(DataWidth, ReductionWidth, GatherWidth) ->
-    {Width, Fields} = lists:foldl(fun({Name, Bits}, {Offset, Acc}) ->
-        {Offset + Bits, Acc#{Name => #{offset => Offset, width => Bits}}}
-    end, {0, #{}}, [{phase, 8}, {entered_from, 8}, {data, DataWidth},
-        {enter_pending, 1}, {failure, 16}, {reduction, ReductionWidth}, {gather, GatherWidth}]),
-    Fields#{width => Width}.
-
-%% Packs shared RAM rows; optional private fields follow the stable observation offsets.
+%% The generic codec owns every offset; semantic conversion retains slot/phase context.
 -spec machine_codec(spec()) -> iodata().
 machine_codec(Spec) ->
-    DataWidth = xls_state_projection:width(Spec),
-    Reductions = maps:get(reductions, Spec, none),
-    ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    #{data := #{offset := DataStart}, enter_pending := #{offset := EnterStart},
-        failure := #{offset := FailureStart}, reduction := #{offset := ReductionStart},
-        gather := #{offset := GatherStart}, width := PrivateEnd} =
-        shared_machine_layout(DataWidth, ReductionWidth, xls_shared_gather_codegen:storage_width(Spec)),
-    ReductionEnd = ReductionStart + ReductionWidth,
+    Layout = #{fields := Fields} = xls_shared_machine_layout:from_spec(Spec),
     [
+        xls_struct_codec:declaration("MachineRow", Layout), "\n",
+        xls_struct_codec:decoder("MachineRow", "machine_row_from_bits", Layout), "\n",
+        xls_struct_codec:encoder("MachineRow", "bits_from_machine_row", Layout), "\n",
         "fn machine_from_bits", xls_state_projection:parameter(Spec), "(raw: MachineBits",
         case maps:is_key(state_projection, Spec) of true -> ", slot: u32"; false -> "" end,
         ") -> ActorState {\n",
+        "  let row = machine_row_from_bits(raw);\n",
         "  ActorState {\n",
-        "    phase: raw[0:8] as Phase,\n",
-        "    entered_from: raw[8:16] as Phase,\n",
-        "    data: ", xls_state_projection:decode(Spec,
-            ["raw[", integer_to_list(DataStart), ":", integer_to_list(EnterStart), "]"], "slot"), ",\n",
-        xls_statem_reply_codegen:optional(Spec, ["    replies: hls_reply::from_bits<REPLY_CAPACITY>(raw[",
-            integer_to_list(PrivateEnd + event_width(Spec)), ":",
-            integer_to_list(PrivateEnd + event_width(Spec) + xls_statem_reply_codegen:width(Spec)), "]),\n"]),
-        xls_statem_event_codegen:optional(Spec, ["    next_event: raw[", integer_to_list(PrivateEnd), ":", integer_to_list(PrivateEnd + 8), "],\n"]),
-        "    enter_pending: raw[", integer_to_list(EnterStart), ":",
-        integer_to_list(FailureStart), "],\n",
-        "    failure: raw[", integer_to_list(FailureStart), ":",
-        integer_to_list(FailureStart + 16), "],\n",
-        ?REDUCTION_SERVICE:machine_decode_field(
-            Reductions,
-            ReductionStart,
-            ReductionEnd
-        ),
-        xls_shared_gather_codegen:machine_decode_field(Spec, GatherStart, PrivateEnd),
-        "  }\n",
-        "}\n\n",
+        [["    ", atom_to_list(Name), ": ", machine_value(Spec, Name,
+            hls_type:dslx_to_bits(Type, ["row.", atom_to_list(Name)])), ",\n"] ||
+            #{name := Name, type := Type, width := Width} <- Fields,
+            Name =:= data orelse Width > 0],
+        "  }\n}\n\n",
         "fn bits_from_machine(machine: ActorState) -> MachineBits {\n",
-        xls_statem_reply_codegen:optional(Spec, "  hls_reply::to_bits(machine.replies) ++\n"),
-        xls_statem_event_codegen:optional(Spec, "  machine.next_event ++\n"),
-        xls_shared_gather_codegen:machine_encode_prefix(Spec),
-        ?REDUCTION_SERVICE:machine_encode_prefix(Reductions),
-        "  machine.failure ++\n",
-        "    machine.enter_pending ++\n",
-        "    ", xls_state_projection:encode(Spec, "machine.data"), " ++\n",
-        "    (machine.entered_from as bits[8]) ++\n",
-        "    (machine.phase as bits[8])\n",
-        "}\n\n",
+        "  bits_from_machine_row(MachineRow {\n",
+        [["    ", atom_to_list(Name), ": ", hls_type:dslx_from_bits(Type,
+            case Width of
+                0 -> "zero!<bits[0]>()";
+                _ -> machine_bits(Spec, Name)
+            end), ",\n"] || #{name := Name, type := Type, width := Width} <- Fields],
+        "  })\n}\n\n",
         "fn machine_read(slot: u32) -> MachineRamReadReq {\n",
-        "  bram::read(slot)\n",
-        "}\n\n",
+        "  bram::read(slot)\n}\n\n",
         "fn machine_write(\n",
         "    slot: u32, machine: ActorState) -> MachineRamWriteReq {\n",
-        "  bram::write(slot, bits_from_machine(machine))\n",
-        "}\n\n"
+        "  bram::write(slot, bits_from_machine(machine))\n}\n\n"
     ].
+
+%% Row data reconstruction alone needs instance, slot and decoded phase context.
+-spec machine_value(spec(), xls_shared_machine_layout:name(), iodata()) -> iodata().
+machine_value(_Spec, Name, Raw) when Name =:= phase; Name =:= entered_from ->
+    [Raw, " as Phase"];
+machine_value(Spec, data, Raw) ->
+    xls_state_projection:decode(Spec, Raw, "slot", "row.phase as Phase");
+machine_value(_Spec, reduction, Raw) -> ["reduction_state_from_bits(", Raw, ")"];
+machine_value(Spec, gather, Raw) -> xls_shared_gather_codegen:decode(Spec, Raw);
+machine_value(_Spec, replies, Raw) -> ["hls_reply::from_bits<REPLY_CAPACITY>(", Raw, ")"];
+machine_value(_Spec, _Name, Raw) -> Raw.
+
+%% Feature codecs convert semantic values; the row schema determines their placement.
+-spec machine_bits(spec(), xls_shared_machine_layout:name()) -> iodata().
+machine_bits(Spec, data) -> xls_state_projection:encode(Spec, "machine.data");
+machine_bits(_Spec, reduction) -> "bits_from_reduction_state(machine.reduction)";
+machine_bits(Spec, gather) -> xls_shared_gather_codegen:encode(Spec, "machine.gather");
+machine_bits(_Spec, replies) -> "hls_reply::to_bits(machine.replies)";
+machine_bits(_Spec, Name) when Name =:= phase; Name =:= entered_from ->
+    ["machine.", atom_to_list(Name), " as bits[8]"];
+machine_bits(_Spec, Name) -> ["machine.", atom_to_list(Name)].
 
 %% Tags an ordered effect batch with its owning actor slot.
 -spec scheduled_effect_function(map()) -> iodata().
@@ -665,10 +622,6 @@ service_memory(Spec) ->
             "          write_gather_value: indexed_transport_contribution(state.indexed_input.frame).value,\n")},
         {<<"@@GATHER_MEMORY_TOKEN@@">>, xls_indexed_memory_codegen:optional(Spec, ", gather_write_tok")}
     ].
-
-%% The selector is present for finite events and for the shared retained-call outcome.
--spec event_width(map()) -> 0 | 8.
-event_width(Spec) -> case maps:get(continuations, Spec, []) =/= [] orelse xls_statem_reply_codegen:enabled(Spec) of true -> 8; false -> 0 end.
 
 %% A reply precedes phase entry; that entry remains pending for the next activation.
 -spec shared_reply_effect(map()) -> iodata().

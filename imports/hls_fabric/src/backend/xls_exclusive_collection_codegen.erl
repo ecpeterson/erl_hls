@@ -41,14 +41,15 @@ actor_spec(Spec) ->
 -doc "Generates checked early folding and merges callback opens with current collection progress.".
 -spec helpers(map()) -> xls_dslx:value().
 helpers(Spec = #{reductions := R}) ->
-    #{reduction := #{offset := Start}, failure := #{offset := Failure}, width := End} =
-        xls_shared_codegen:shared_machine_layout(xls_state_projection:width(Spec),
-            xls_statem_reduction_codegen:private_width(R)),
+    Layout = xls_shared_machine_layout:from_spec(Spec),
+    #{offset := Start, width := Width} = xls_shared_machine_layout:field(Layout, reduction),
+    #{offset := Failure} = xls_shared_machine_layout:field(Layout, failure),
+    End = Start + Width,
     {ok, Template} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls", "templates", "exclusive_collection.x"])),
     [core(Spec), selected_input(R),
      "// Dispatch sees only an opened collection; early input remains scheduler-owned.\n",
      "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState, failure: hls_failure::Code) -> MachineBits {\n  ",
-     case maps:get(continuations, Spec, []) =/= [] orelse maps:get(gathers, Spec, none) =/= none of
+     case End < xls_shared_machine_layout:width(Layout) of
          false -> []; true -> ["raw[", integer_to_list(End), ":] ++ "] end,
      "(if reduction.status == ReductionStatus::IDLE { raw[", integer_to_list(Start), ":", integer_to_list(End), "] } else { bits_from_reduction_state(reduction) }) ++ hls_failure::first(raw[", integer_to_list(Failure), ":", integer_to_list(Start), "] as hls_failure::Code, failure) ++ raw[0:", integer_to_list(Failure), "]\n}\n\n",
      Template].

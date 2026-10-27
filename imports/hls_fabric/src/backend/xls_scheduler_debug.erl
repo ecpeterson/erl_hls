@@ -125,18 +125,15 @@ with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
 
 %% Describe observation fields without truncating optional private RAM storage.
 -spec bank(non_neg_integer(), map(), map(), map(), [map()]) -> map().
-bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWidth},
-        reduction_storage_width := ReductionWidth, state_storage := block_ram} = Group,
+bank(Index, #{module := Module, slot_count := Slots, state_storage := block_ram} = Group,
         Interface = #{phases := Phases}, Placements, Sites) ->
-    Layout = xls_shared_codegen:shared_machine_layout(
-        maps:get(physical_data_width, Group, DataWidth), ReductionWidth,
-        maps:get(gather_storage_width, Group, 0)),
-    Fields = maps:with([phase, enter_pending, failure], Layout),
+    Layout = xls_shared_machine_layout:from_group(Group),
+    Fields = maps:with([phase, enter_pending, failure], xls_shared_machine_layout:fields(Layout)),
     Entries = lists:keysort(1, [{Slot, #{key => xls_actor_debug:actor_key(Id), slot => Slot,
         name => iolist_to_binary(io_lib:format("~p", [Id]))}} ||
         {Id, #{index := I, slot := Slot}} <- maps:to_list(Placements), I =:= Index]),
     Bank = #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
-        slots => Slots, width => maps:get(width, Layout) + maps:get(continuation_width, Group, 0) + maps:get(reply_storage_width, Group, 0), fields => Fields,
+        slots => Slots, width => xls_shared_machine_layout:width(Layout), fields => Fields,
         failures => xls_actor_debug:failures(Sites),
         module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]},
     Observed = case maps:find(state_projection, Group) of
@@ -169,9 +166,10 @@ bank(Index, _Group, _Interface, _Placements, _Codebook) ->
     error({debug_requires_state_ram, Index}).
 
 %% Adds reduction progress fields without exposing accumulator payloads.
--spec with_reduction('none' | map(),map(),map()) -> map().
+-spec with_reduction(none | map(), xls_shared_machine_layout:layout(), map()) -> map().
 with_reduction(none, _Layout, Bank) -> Bank;
-with_reduction(Reduction = #{sites := Sites}, #{reduction := #{offset := Start}}, Bank) ->
+with_reduction(Reduction = #{sites := Sites}, MachineLayout, Bank) ->
+    #{offset := Start} = xls_shared_machine_layout:field(MachineLayout, reduction),
     Layout = xls_statem_reduction_ir:packed_layout(Reduction),
     Names = xls_statem_reduction_ir:observation_fields(Reduction),
     {Width, Fields} = lists:foldl(fun(Name, {Offset, Acc}) ->

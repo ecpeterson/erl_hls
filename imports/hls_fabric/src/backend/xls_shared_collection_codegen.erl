@@ -86,11 +86,10 @@ helpers(Spec = #{message_names := Names, message_words := Words}) ->
     case enabled(Spec) of
         false -> [];
         true ->
-            R = maps:get(reductions, Spec),
-            #{reduction := #{offset := Start}, width := End} =
-                xls_shared_codegen:shared_machine_layout(xls_state_projection:width(Spec),
-                    xls_statem_reduction_codegen:private_width(R)),
-            HasTail = maps:get(continuations, Spec, []) =/= [] orelse maps:get(gathers, Spec, none) =/= none,
+            Layout = xls_shared_machine_layout:from_spec(Spec),
+            #{offset := Start, width := Width} = xls_shared_machine_layout:field(Layout, reduction),
+            End = Start + Width,
+            HasTail = End < xls_shared_machine_layout:width(Layout),
             ["// RAM retains the last executor result, not current collection progress.\n",
              "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState) -> MachineBits {\n  ",
              case HasTail of true -> ["raw[", integer_to_list(End), ":] ++ "]; false -> [] end,

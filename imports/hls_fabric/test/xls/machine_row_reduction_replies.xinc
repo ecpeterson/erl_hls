@@ -1,0 +1,42 @@
+// Private reduction, continuation and active caller ownership occupy distinct ordered segments.
+#[test]
+fn physical_reduction_caller_row_abi() {
+  let data = Cell {from: u64:0x123456789abcdef0, total: u32:0x13579bdf};
+  let reduction = ReductionState {status: ReductionStatus::COMPLETE,
+    site: ReductionSite::COLLECTING, key: u32:0x89abcdef, remaining: ReductionRemaining:2,
+    seen: ReductionMembers:1, accumulator: Sum {value: u32:0x12345678}, failure: u16:0x123d};
+  let reduction_bits = u16:0x123d ++ u32:0x12345678 ++ u1:1 ++ u2:2 ++
+    u32:0x89abcdef ++ u1:0 ++ u2:2;
+  let replies = hls_reply::Book<u32:1> {slots: [hls_reply::Slot {
+    handle: u64:0x1020304050607080, txid: u8:0x53}],
+    sequence: u64:0x0123456789abcdef, failure: u32:0x2468ace0};
+  let reply_bits = u32:0x2468ace0 ++ u64:0x0123456789abcdef ++
+    u64:0x1020304050607080 ++ u8:0x53;
+  let machine = ActorState {phase: Phase::READY, entered_from: Phase::COLLECTING,
+    data, reduction, replies, next_event: u8:1, enter_pending: true, failure: u16:0xa55a};
+  let expected = reply_bits ++ u8:1 ++ reduction_bits ++ u16:0xa55a ++ u1:1 ++
+    bits_from_cell(data) ++ (Phase::COLLECTING as u8) ++ (Phase::READY as u8);
+  assert_eq(bits_from_machine(machine), expected);
+  assert_eq(machine_from_bits(expected), machine);
+}
+
+// Packing each live step retains the owner while a blocked reply has not committed.
+#[test]
+fn physical_active_call_roundtrips() {
+  let entered = machine_step(initial_machine(), zero!<axis::Frame>(), false, true).machine;
+  let request = axis::pack(Tag::RUN as u8, u32:0);
+  let request = axis::Frame {header: axis::Header {txid: u8:7, ..request.header}, ..request};
+  let started = machine_step(entered, request, true, true).machine;
+  let open = machine_step(started, zero!<axis::Frame>(), false, true).machine;
+  let first = machine_step(open, axis::pack(Tag::VALUE as u8, u32:11), true, true).machine;
+  let second = machine_step(first, axis::pack(Tag::VALUE as u8, u32:22), true, true).machine;
+  let completed = machine_step(second, zero!<axis::Frame>(), false, true).machine;
+  let ready = machine_step(completed, zero!<axis::Frame>(), false, true).machine;
+  let released = machine_step(ready, axis::pack(Tag::RELEASE as u8, u32:0), true, true).machine;
+  for (m, _): (Machine, ()) in [started, open, first, second, completed, ready, released] {
+    let actor = actor_state(m);
+    assert_eq(hls_reply::first(actor.replies.slots, true).0, true);
+    assert_eq(machine_from_bits(bits_from_machine(actor)), actor);
+    ()
+  }(())
+}

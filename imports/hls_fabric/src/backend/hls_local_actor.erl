@@ -20,7 +20,7 @@
 %% Static and emitted interfaces share fields; the latter requires a generated-byte identity.
 -define(INTERFACE_FIELDS, completion := completion(), version := 1, stage := source_actor_and_owner,
     source := binary(), source_plan := #{atom() | binary() => inventory_value()},
-    machine_layout := xls_shared_codegen:machine_layout(), continuation_bits := 0 | 8,
+    machine_layout := xls_shared_machine_layout:descriptor(), continuation_bits := 0 | 8,
     machine_bits := pos_integer(), effect_payload_bits := pos_integer(), source_imports := [atom()],
     output_ports := [atom()], message_schemas := [atom()],
     completion_sites := [#{id := non_neg_integer(), phase := atom()}], phase_names := [atom()],
@@ -144,18 +144,14 @@ manifest(Artifact = #{emitted := Emitted, program := Program}) ->
     Descriptor#{failure_sites => xls_emitted:sites(Emitted, Locations), dslx_sha256 => hls_generated_files:hash(Bytes),
         frame_config_sha256 => hls_generated_files:hash(hls_frame_layout:config_dslx(Layout))}.
 
--doc "Returns source layouts, port obligations and optional checked inbox metadata before rendering. Prepared sources contain no generated-byte hashes; an already rendered input retains its import identity. manifest/1 adds the owner module and frame-configuration identities. A source snapshot alone does not establish network admission or physical locality.".
+-doc "Returns the complete packed machine layout, port obligations and optional checked inbox metadata before rendering. Zero-width optional fields retain their offsets; machine_layout.width and machine_bits are identical. Prepared sources contain no generated-byte hashes; an already rendered input retains its import identity. manifest/1 adds the owner module and frame-configuration identities. A source snapshot alone does not establish network admission or physical locality.".
 -spec descriptor(source() | artifact()) -> descriptor().
 descriptor(Artifact = #{program := Program, source := Source}) ->
     Spec = xls_actor_program:spec(Program),
     Plan = xls_actor_program:plan(Program),
-    #{entries := Entries, reductions := Reductions,
-        gathers := Gathers, continuations := Events} = Spec,
-    DataWidth = xls_state_projection:width(Spec),
-    ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    GatherWidth = xls_statem_gather_codegen:storage_width(Gathers),
-    Layout = xls_shared_codegen:shared_machine_layout(DataWidth, ReductionWidth, GatherWidth),
-    EventWidth = case Events of [] -> 0; _ -> 8 end,
+    #{entries := Entries, gathers := Gathers} = Spec,
+    Layout = xls_shared_machine_layout:from_spec(Spec),
+    #{width := EventWidth} = xls_shared_machine_layout:field(Layout, next_event),
     PayloadWidth = lists:max([1 | [xls_entry_storage:width(Storage)
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
     FrameLayout = maps:get(frame_layout, Spec),
@@ -163,8 +159,8 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
     Base = #{frame_layout => FrameLayout, build_profile => Profile, codegen_flags => hls_build_profile:flags(Profile, sampled_clock),
         completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
-        machine_layout => Layout, continuation_bits => EventWidth,
-        machine_bits => maps:get(width, Layout) + EventWidth,
+        machine_layout => xls_shared_machine_layout:fields(Layout), continuation_bits => EventWidth,
+        machine_bits => xls_shared_machine_layout:width(Layout),
         effect_payload_bits => PayloadWidth,
         source_imports => maps:get(imports, Spec),
         output_ports => maps:get(output_names, Spec),

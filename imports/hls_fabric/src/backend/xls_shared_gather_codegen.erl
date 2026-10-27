@@ -1,7 +1,7 @@
 -module(xls_shared_gather_codegen).
 -moduledoc "Shared indexed-gather state codecs and transient completion injection.".
 -export([enabled/1, progress_width/1, storage_width/1,
-    machine_decode_field/3, machine_encode_prefix/1, helpers/1,
+    decode/2, encode/2, helpers/1,
     shared_dispatch/2, state_fields/1, selection_helpers/1, issue_bindings/1, retire/1]).
 
 -doc "Reports whether the checked actor specification declares any indexed gather.".
@@ -22,33 +22,18 @@ storage_width(Spec) ->
         false -> xls_statem_gather_codegen:storage_width(Gathers)
     end.
 
--doc "Decodes the declared gather slice; physical collection reconstructs no stored payload copy.".
--spec machine_decode_field(map(), non_neg_integer(), non_neg_integer()) -> iodata().
-machine_decode_field(Spec, Start, End) ->
-    case enabled(Spec) of
-        false -> [];
-        true ->
-            Width = storage_width(Spec),
-            case End - Start =:= Width of
-                true -> ok;
-                false -> error({gather_storage_width, Width, End - Start})
-            end,
-            Slice = ["raw[", integer_to_list(Start), ":", integer_to_list(End), "]"],
-            case maps:get(gather_collection, Spec, false) of
-                false -> ["    gather: gather_state_from_bits(", Slice, "),\n"];
-                true -> ["    gather: GatherState { progress: gather_progress_from_bits(",
-                    Slice, "), values: zero!<GatherValues>() },\n"]
-            end
-    end.
+-doc "Reconstructs semantic gather state from its physical storage. Physical collection stores progress only and injects an empty payload until completion.".
+-spec decode(map(), iodata()) -> iodata().
+decode(#{gather_collection := true}, Raw) ->
+    ["GatherState { progress: gather_progress_from_bits(", Raw,
+        "), values: zero!<GatherValues>() }"];
+decode(_Spec, Raw) -> ["gather_state_from_bits(", Raw, ")"].
 
--doc "Encodes the gather slice before the lower-order reduction and actor fields.".
--spec machine_encode_prefix(map()) -> iodata().
-machine_encode_prefix(Spec) ->
-    case {enabled(Spec), maps:get(gather_collection, Spec, false)} of
-        {false, _} -> [];
-        {true, false} -> "  bits_from_gather_state(machine.gather) ++\n";
-        {true, true} -> "  bits_from_gather_progress(machine.gather.progress) ++\n"
-    end.
+-doc "Serializes semantic gather state using full ordinary storage or progress alone for physical collection.".
+-spec encode(map(), iodata()) -> iodata().
+encode(#{gather_collection := true}, Gather) ->
+    ["bits_from_gather_progress((", Gather, ").progress)"];
+encode(_Spec, Gather) -> ["bits_from_gather_state(", Gather, ")"].
 
 -doc "Emits a checked transient completion helper and ordinary fused-contribution dispatch.".
 -spec helpers(map()) -> iodata().

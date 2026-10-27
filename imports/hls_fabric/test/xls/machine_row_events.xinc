@@ -1,0 +1,11 @@
+// The continuation selector follows metadata, without moving source state or failure.
+#[test]
+fn physical_continuation_row_abi() {
+  let data = Cell {remaining: u32:0x12345678, value: u32:0x89abcdef};
+  let machine = ActorState {phase: Phase::SENDING, entered_from: Phase::WAITING,
+    data, enter_pending: true, failure: u16:0xa55a, next_event: u8:1};
+  let expected = u8:1 ++ u16:0xa55a ++ u1:1 ++ bits_from_cell(data) ++
+    (Phase::WAITING as u8) ++ (Phase::SENDING as u8);
+  assert_eq(bits_from_machine(machine), expected);
+  assert_eq(machine_from_bits(expected), machine);
+}

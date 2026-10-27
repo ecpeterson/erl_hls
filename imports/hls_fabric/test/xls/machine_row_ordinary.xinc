@@ -1,0 +1,14 @@
+// Exhaust the byte-valued data independently of the generated row schema.
+#[test]
+fn physical_ordinary_row_abi() {
+  for (value, _): (u32, ()) in u32:0..u32:256 {
+    let data = Cell {value: value as u8};
+    let machine = ActorState {phase: Phase::REPORTED, entered_from: Phase::READY,
+      data, enter_pending: true, failure: u16:0xa55a};
+    let expected = u16:0xa55a ++ u1:1 ++ (value as u8) ++
+      (Phase::READY as u8) ++ (Phase::REPORTED as u8);
+    assert_eq(bits_from_machine(machine), expected);
+    assert_eq(machine_from_bits(expected), machine);
+    ()
+  }(())
+}

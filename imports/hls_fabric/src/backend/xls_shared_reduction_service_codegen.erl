@@ -1,33 +1,12 @@
 -module(xls_shared_reduction_service_codegen).
 -moduledoc false.
 -export([shared_dispatch_effective_binding/3, shared_dispatch_failed_binding/3, shared_dispatch_dispatched_field/3, shared_entry_step/2, shared_machine_support/3]).
--export([machine_decode_field/3, machine_encode_prefix/1, shared_state_fields/2, shared_executor_request_field/2, shared_machine_support/2, shared_dispatch_bindings/3, shared_dispatch_effective_binding/2, shared_dispatch_failed_binding/2, shared_dispatch_reduction_field/2, shared_dispatch_dispatched_field/2, shared_entry_step/1, shared_executor_dispatch/2, shared_service_helpers/2, shared_retire_binding/2, shared_issue_bindings/2, shared_executor_request_value/2, shared_proc_field/2, shared_config_parameter/2, shared_config_endpoint/2, shared_capture/2, shared_capture_token/2, shared_state_source/2, shared_post_issue_state/2, shared_post_issue_state_name/2]).
+-export([shared_state_fields/2, shared_executor_request_field/2, shared_machine_support/2, shared_dispatch_bindings/3, shared_dispatch_effective_binding/2, shared_dispatch_failed_binding/2, shared_dispatch_reduction_field/2, shared_dispatch_dispatched_field/2, shared_entry_step/1, shared_executor_dispatch/2, shared_service_helpers/2, shared_retire_binding/2, shared_issue_bindings/2, shared_executor_request_value/2, shared_proc_field/2, shared_config_parameter/2, shared_config_endpoint/2, shared_capture/2, shared_capture_token/2, shared_state_source/2, shared_post_issue_state/2, shared_post_issue_state_name/2]).
 %% Checked actor reduction declarations, or absence of reduction support.
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
 %% Ordinary frame delivery or precombined aggregate delivery.
 -type service_mode() :: ordinary | aggregate_only.
 
-
--doc "Extracts private reduction metadata from the packed actor-state row.".
--spec machine_decode_field(reductions(), non_neg_integer(), non_neg_integer()) ->
-    iodata().
-machine_decode_field(none, _Start, _End) ->
-    [];
-machine_decode_field(_Reductions, Start, End) ->
-    [
-        "    reduction: reduction_state_from_bits(raw[",
-        integer_to_list(Start),
-        ":",
-        integer_to_list(End),
-        "]),\n"
-    ].
-
--doc "Prepends private reduction metadata to the actor-state row.".
--spec machine_encode_prefix(reductions()) -> iodata().
-machine_encode_prefix(none) ->
-    [];
-machine_encode_prefix(_Reductions) ->
-    "  bits_from_reduction_state(machine.reduction) ++\n".
 
 -doc "Adds held-aggregate state only for aggregate-only services.".
 -spec shared_state_fields(reductions(), service_mode()) -> iodata().

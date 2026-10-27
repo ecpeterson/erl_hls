@@ -40,7 +40,7 @@ reserved() ->
      "direct_collection_finish", "direct_collection_execute",
      "direct_collection_command", "direct_collection_advance",
      "DirectCollectionGrant", "direct_collection_next_grant", "STARTUP_BITS",
-     "PUBLICATION_CAPACITY", "PublicationPatch", "publication_patch", "publication_frame", "MachineBits", "MachineRamReadReq", "MachineRamReadResp",
+     "PUBLICATION_CAPACITY", "PublicationPatch", "publication_patch", "publication_frame", "MachineBits", "MachineRow", "machine_row_from_bits", "bits_from_machine_row", "MachineRamReadReq", "MachineRamReadResp",
      "MachineRamWriteReq", "MachineRamWriteResp", "MailboxRamReadReq",
      "MailboxRamReadResp", "MailboxRamWriteReq", "MailboxRamWriteResp",
      "ScheduledRequest", "ScheduledEffects", "SharedStep", "SharedExecutorRequest",

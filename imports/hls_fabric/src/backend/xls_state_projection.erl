@@ -1,6 +1,6 @@
 -module(xls_state_projection).
 -moduledoc "Encodes mutable state fields and reconstructs topology-established constants.".
--export([width/1, functions/1, decode/3, encode/2, parameter/1, argument/1, manifest/1, validate/3]).
+-export([width/1, functions/1, decode/4, encode/2, parameter/1, argument/1, manifest/1, validate/3]).
 
 -doc "Returns the physical callback-data width, retaining ordinary storage when unspecialized.".
 -spec width(map()) -> non_neg_integer().
@@ -39,10 +39,10 @@ argument(#{state_projection := _}) -> "<INSTANCE_ID>";
 argument(_) -> "".
 
 -doc "Renders physical data decoding, including slot/phase reconstruction when selected.".
--spec decode(map(), iodata(), iodata()) -> iodata().
-decode(#{state_projection := _}, Raw, Slot) ->
-    ["shared_data_from_bits<INSTANCE_ID>(", Raw, ", ", Slot, ", raw[0:8] as Phase)"];
-decode(#{data_name := Name}, Raw, _Slot) -> [xls_names:record_codec(Name), "_from_bits(", Raw, ")"].
+-spec decode(map(), iodata(), iodata(), iodata()) -> iodata().
+decode(#{state_projection := _}, Raw, Slot, Phase) ->
+    ["shared_data_from_bits<INSTANCE_ID>(", Raw, ", ", Slot, ", ", Phase, ")"];
+decode(#{data_name := Name}, Raw, _Slot, _Phase) -> [xls_names:record_codec(Name), "_from_bits(", Raw, ")"].
 
 -doc "Renders the compact physical data encoding without circulating inferred constants.".
 -spec encode(map(), iodata()) -> iodata().
