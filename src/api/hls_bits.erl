@@ -6,6 +6,7 @@ without changing the host value or XLS type. Packing appends zero padding
 bits; decoding ignores them. Collections preserve padding per element.
 """.
 -behavior(hls_type).
+-export([codec_dependencies/0]).
 -export([bits/1, padded/2, width/2, value_width/2, zero/2, pack/3, unpack/3,
     print_type/2, dslx_codec/2, dslx_imports/0, transpile/3]).
 -export_type([bits/1, padded/2]).
@@ -66,3 +67,7 @@ transpile(bits, [{static, integer, Width}], State) ->
     xls_clause_lower:reference(State, {phantom, type, bits(Width)});
 transpile(padded, [{phantom, type, Type}, {static, integer, Width}], State) ->
     xls_clause_lower:reference(State, {phantom, type, padded(Type, Width)}).
+
+-doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
+-spec codec_dependencies() -> [module()].
+codec_dependencies() -> [hls_type, hls_codec].
