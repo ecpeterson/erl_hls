@@ -47,6 +47,28 @@ rectangular_binding_order_test() ->
     Specs = maps:from_keys([Id || #{id := Id} <- Bindings], true),
     ?assertEqual([], xls_actor_observation:bindings(plan(rectangle), Specs)).
 
+%% Retained catalogs preserve physical graphs and reject a different checked frame capacity.
+-spec retained_interface_lowering_test() -> ok.
+retained_interface_lowering_test() ->
+    lists:foreach(fun(Kind) ->
+        Plan = plan(Kind),
+        Profile = xls_topology_profile:normalize((profile(Kind))#{frame_payload_words => 1}),
+        Layout = hls_frame_layout:new(1),
+        Catalog = hls_actor_interface:from_modules([hls_dense_statem_fixture], Layout),
+        Lower = case Kind of scalar -> xls_topology_graph; rectangle -> xls_topology_family_dslx end,
+        Graph = Lower:lower(Plan, Profile, Catalog),
+        ?assertEqual(Lower:lower(Plan, Profile), Graph),
+        ?assertEqual(xls_actor_observation:bindings(Plan, #{}),
+            xls_actor_observation:bindings(Plan, #{}, Catalog)),
+        Wrong = hls_actor_interface:from_modules([hls_dense_statem_fixture], hls_frame_layout:new(2)),
+        ?assertException(error, {badmatch, _}, Lower:lower(Plan, Profile, Wrong)),
+        case Kind of
+            rectangle -> ?assertEqual(iolist_to_binary(xls_topology_family_dslx:emit(Plan, Profile)),
+                iolist_to_binary(xls_topology_family_dslx:render(Graph)));
+            scalar -> ok
+        end
+    end, [scalar, rectangle]).
+
 %% Native compiler smoke fixtures: a standalone actor, scalar topology, and
 %% genuinely two-dimensional rectangular family exercise each output path.
 write(Stage) ->

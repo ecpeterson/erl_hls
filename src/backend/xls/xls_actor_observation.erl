@@ -1,6 +1,6 @@
 -module(xls_actor_observation).
 -moduledoc "Optional observations of committed register-backed actor state.".
--export([enabled/1, imports/1, layout/1, collection/1, bindings/2, wires/1, ports/1,
+-export([enabled/1, imports/1, layout/1, collection/1, bindings/2, bindings/3, wires/1, ports/1,
     scalar_name/1, family_name/1, validate_channels/1, declarations/1, proc_field/1,
     config_parameter/1, config_value/1, sample/1, spawn_argument/2]).
 
@@ -65,7 +65,19 @@ integer_width(Value) -> 1 + integer_width(Value bsr 1).
 %% emission. XLS lowers a channel array [height][width] to __x_y port suffixes.
 -doc "Lists observation ports for actors not assigned to another execution backend.".
 -spec bindings(map(),term()) -> [map()].
-bindings(#{actors := Actors, families := Families}, Excluded) ->
+bindings(Plan, Excluded) ->
+    Direct = direct(Plan, Excluded),
+    Interfaces = hls_actor_interface:from_modules([Module || {_, Module, _} <- Direct]),
+    observation_bindings(Direct, Interfaces).
+
+-doc "Lists direct observation ports using the checked interfaces retained by the topology planner; excludes scheduler-owned identities without reloading their modules.".
+-spec bindings(hls_topology:plan(), map(), #{module() => hls_actor_interface:summary()}) -> [map()].
+bindings(Plan, Excluded, Interfaces) ->
+    observation_bindings(direct(Plan, Excluded), Interfaces).
+
+%% Logical ordering determines stable observation indices and generated port names.
+-spec direct(hls_topology:plan(), map()) -> [{term(), module(), iodata()}].
+direct(#{actors := Actors, families := Families}, Excluded) ->
     Logical = [{{actor, Id}, Module, ["_", scalar_name(I)]} ||
         {I, #{id := Id, module := Module}} <- lists:enumerate(0, Actors)] ++
         [{{family, Id, [X, Y]}, Module, ["_", family_name(I), "__",
@@ -73,8 +85,12 @@ bindings(#{actors := Actors, families := Families}, Excluded) ->
             {I, #{id := Id, module := Module, shape := [Width, Height]}} <-
                 lists:enumerate(0, Families),
             X <- lists:seq(0, Width - 1), Y <- lists:seq(0, Height - 1)],
-    Direct = [Entry || Entry = {Id, _, _} <- Logical, not maps:is_key(Id, Excluded)],
-    Interfaces = hls_actor_interface:from_modules([Module || {_, Module, _} <- Direct]),
+    [Entry || Entry = {Id, _, _} <- Logical, not maps:is_key(Id, Excluded)].
+
+%% Only public observation metadata is derived; no callback payload is exposed.
+-spec observation_bindings([{term(), module(), iodata()}],
+    #{module() => hls_actor_interface:summary()}) -> [map()].
+observation_bindings(Direct, Interfaces) ->
     [begin
         Interface = maps:get(Module, Interfaces),
         #{width := Width} = layout(collection(Interface)),
