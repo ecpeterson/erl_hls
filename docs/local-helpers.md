@@ -2,6 +2,8 @@
 
 Initializers and actor callbacks can call pure functions defined in the same include-expanded Erlang module. A helper needs no export. Both `helper(Value)` and `?MODULE:helper(Value)` name the same definition. Only functions reachable from `init/1`, `hls_gs` handlers, declared `hls_statem` phase functions, or `reduce/3` are translated; unrelated host utilities retain their ordinary Erlang implementation.
 
+The compiler selects that function graph before hardware expression checks, record analysis and provider-import discovery. It retains each selected function’s complete clauses and signature, then follows the required record and local type declarations. Uncalled host utilities and unrelated declarations cannot add DSLX dependencies or fail hardware-only checks. This does not remove branches within a selected function or make unsupported reachable operations valid. BEAM compilation and source-bound plans still retain the complete original module. Host fields that explicitly request `hls_type:zero()` remain subject to the packing transform’s typed-zero rules.
+
 ```erlang
 -spec prepare_reply(#data_cell{}, hls_nums:u32(), hls_pauli:pauli()) -> #data_cell{}.
 prepare_reply(Cell, RequestId, Measurement) ->

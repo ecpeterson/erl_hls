@@ -11,7 +11,7 @@ parse_transform(Forms0, Options) ->
     %% Source-reader annotations carry preprocessing facts into compile:forms
     %% too. Emit one context attribute, subject to deterministic-build rules.
     OriginalForms = [F || F <- Forms0, not is_source_context(F)],
-    Forms = hls_records:resolve(OriginalForms),
+    Forms = resolve_records(OriginalForms),
     [FileAttr, ModuleAttr | TailForms] = OriginalForms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
@@ -119,6 +119,52 @@ parse_transform(Forms0, Options) ->
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
 
+%% Hardware functions determine accumulator layouts, while every declaration
+%% remains available for explicit host typed-zero defaults. Restore the full
+%% source after resolution so BEAM code and captured provenance stay complete.
+-spec resolve_records([hls_source:form()]) -> [hls_source:form()].
+resolve_records(Forms) ->
+    Resolved = hls_records:resolve(record_resolution_forms(Forms)),
+    Records = maps:from_list([{Name, Record}
+        || Record = {attribute, _, record, {Name, _}} <- Resolved]),
+    [case Form of
+        {attribute, _, record, {Name, _}} -> maps:get(Name, Records);
+        _ -> Form
+    end || Form <- Forms].
+
+%% Select functions only; dropping unused records here would prevent their
+%% requested typed-zero defaults from being expanded in the host module.
+-spec record_resolution_forms([hls_source:form()]) -> [hls_source:form()].
+record_resolution_forms(Forms) ->
+    Selected = case hls_source:find_optional_attribute(Forms, hls_phases) of
+        {ok, Phases} -> xls_hardware_source:statem(Forms, Phases);
+        none ->
+            case has_server_callbacks(Forms) of
+                false -> Forms;
+                true ->
+                    CallArity = hls_service_contract:call_arity(Forms),
+                    Roots = [{init, 1}, {handle_call, CallArity}, {handle_cast, 2}] ++
+                        case CallArity of 2 -> []; 3 -> [{handle_continue, 2}] end,
+                    xls_hardware_source:select(Forms, Roots)
+            end
+    end,
+    Functions = maps:from_keys([{Name, Arity}
+        || {function, _, Name, Arity, _} <- Selected], true),
+    [Form || Form <- Forms, case Form of
+        {function, _, Name, Arity, _} -> is_map_key({Name, Arity}, Functions);
+        _ -> true
+    end].
+
+%% Match the existing server-contract boundary; codec-only modules retain
+%% their full resolution behavior even when they declare init/1 for packing.
+-spec has_server_callbacks([hls_source:form()]) -> boolean().
+has_server_callbacks(Forms) ->
+    lists:any(fun
+        ({function, _, handle_call, Arity, _}) when Arity =:= 2; Arity =:= 3 -> true;
+        ({function, _, handle_cast, 2, _}) -> true;
+        (_) -> false
+    end, Forms).
+
 %% Strip earlier source-reader metadata before emitting the captured build context.
 -spec is_source_context(hls_source:form()) -> boolean().
 is_source_context({attribute, _, hls_source_context, _}) -> true;
@@ -135,11 +181,7 @@ service_contract_attributes(Forms, {attribute, Line, module, _}) ->
                     hls_service_contract:from_forms(Forms)}]
             end;
         none ->
-            case lists:any(fun
-                ({function, _, handle_call, Arity, _}) when Arity =:= 2; Arity =:= 3 -> true;
-                ({function, _, handle_cast, 2, _}) -> true;
-                (_) -> false
-            end, Forms) of
+            case has_server_callbacks(Forms) of
                 true -> [{attribute, Line, hls_service_contract,
                     hls_service_contract:from_forms(Forms)}];
                 false -> []

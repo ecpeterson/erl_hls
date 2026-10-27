@@ -16,6 +16,7 @@ Scalar clause lowering retains [structured arithmetic and comparison expressions
 | --- | --- | --- |
 | Preprocessing and source lookup | `hls_source` | Captured context, include-expanded forms, attributes, functions and specs |
 | Actor declarations | `hls_actor_source` | Ordered wire tags, explicit/inferred state and message limits |
+| Hardware source selection | `xls_hardware_source` | Callback function/type closure before hardware validation; original forms retained for BEAM and source identity |
 | Record analysis | `hls_records` | Resolved declarations, typed fields, serialized widths and checked defaults |
 | Record DSLX | `xls_record_codegen` | Declarations and codecs over `xls_struct_codec` and the same field descriptors used by the host codec |
 | Immediate or retained-call servers | `xls_gs_immediate`, `xls_gs_deferred` | Complete service rendering with the corresponding callback/scheduling model |

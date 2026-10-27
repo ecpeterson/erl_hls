@@ -20,8 +20,9 @@
 -spec prepare([hls_source:form()], [{atom(), arity()}]) ->
     {[hls_source:form()], [helper()]}.
 prepare(Forms0, Roots) ->
-    Module = hls_source:find_attribute(Forms0, module),
-    WireForms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Forms0)), Module)),
+    Selected = xls_hardware_source:select(Forms0, Roots),
+    Module = hls_source:find_attribute(Selected, module),
+    WireForms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Selected)), Module)),
     Definitions = definitions(WireForms, undefined, #{}),
     Context = #{definitions => Definitions, roots => Roots, forms => WireForms,
         data => hls_actor_source:state(WireForms), tags => hls_records:wire_names(WireForms) -- [hls_actor_source:state(WireForms)]},

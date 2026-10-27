@@ -26,7 +26,7 @@ from_file(File, Options, Layout) ->
 -doc "Analyzes exactly the source of a successfully lowered artifact. Internal entry point: the caller must not combine unrelated source and Spec values.".
 -spec analyze([hls_source:form()], xls_actor_codegen:spec()) -> facts().
 analyze(Source, #{data_name := Data, phases := Phases, frame_layout := Layout}) ->
-    Forms = hls_records:resolve(Source),
+    Forms = hls_records:resolve(xls_hardware_source:statem(Source, Phases)),
     C = xls_phase_eval:context(Forms),
     {attribute, _, record, {Data, Fields}} = hls_records:find(Forms, Data),
     Results = [{hls_records:field_name(F), infer(hls_records:field_name(F),
