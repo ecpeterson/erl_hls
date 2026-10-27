@@ -1,18 +1,15 @@
 %%%% A materialized topology graph with independent placement decisions.
 -module(xls_shared_topology_instance_dslx).
 -moduledoc false.
--export([required/2, lower/2, render/1, message_inputs/2]).
+-export([required/2, lower/2, lower/4, render/1, message_inputs/2]).
 
 %% The compact renderer preserves generated loops for wholly direct or wholly
 %% shared families. An explicit graph is materialized: route size
 %% follows deployed instances, while actor artifacts remain shared.
--doc "Reports whether placement or dedicated collection requires an explicit instance graph.".
--spec required(map(),map()) -> boolean().
-required(Plan, Profile) ->
-    #{scheduler_groups := Specs, direct_collections := Collections, effect_delivery_width := Width,
-        frame_payload_words := PayloadWords} =
-        xls_shared_topology_profile:normalize(Profile),
-    #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs, hls_frame_layout:new(PayloadWords)),
+-doc "Selects explicit-instance generation from a normalized profile and its retained scheduler. It performs no source reads or placement analysis.".
+-spec required(xls_shared_topology_profile:profile(), hls_scheduler_plan:plan()) -> boolean().
+required(#{direct_collections := Collections, effect_delivery_width := Width},
+        #{groups := Groups, direct_members := Direct}) ->
     Width > 1 orelse map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
         lists:any(fun(Group) -> maps:get(gathers, Group, none) =/= none end, Groups).
 
@@ -33,17 +30,23 @@ message_inputs(Plan, Profile) ->
         || Unit = #{unit := Key, kind := Kind} <- Units,
             Kind =:= scheduler orelse Kind =:= direct].
 
--doc "Resolves logical actors, physical units, receive lanes and backpressure domains into a retained materialized graph. Checks startup, collection placement and actor requirements before rendering.".
+-doc "Prepares interfaces and placement once, then lowers an explicit graph. Use lower/4 when those inputs already belong to a common generation plan.".
 -spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
 lower(Plan, Profile0) ->
-    Profile = #{scheduler_groups := GroupSpecs,
-        effect_window_partition := WindowPartition,
-        reduction_placements := Reductions,
-        direct_actor_debug := ActorDebug,
-        mailbox_debug := MailboxDebug, frame_payload_words := PayloadWords} =
+    Profile = #{scheduler_groups := Specs, frame_payload_words := Words} =
         xls_shared_topology_profile:normalize(Profile0),
+    Layout = hls_frame_layout:new(Words),
+    Interfaces = hls_scheduler_plan:interfaces(Plan, Layout),
+    Scheduler = hls_scheduler_plan:normalize(Plan, Specs, Layout, Interfaces),
+    lower(Plan, Profile, Scheduler, Interfaces).
+
+-doc "Resolves physical lanes, startup, collections and ownership from one checked profile, scheduler and selected-layout interface catalog. It does not reread source or repeat placement.".
+-spec lower(hls_topology:plan(), xls_shared_topology_profile:profile(),
+    hls_scheduler_plan:plan(), #{module() => hls_actor_interface:summary()}) -> map().
+lower(Plan, Profile = #{effect_window_partition := WindowPartition,
+        reduction_placements := Reductions, direct_actor_debug := ActorDebug,
+        mailbox_debug := MailboxDebug}, Schedule = #{groups := Groups0}, Interfaces) ->
     require_empty(reduction_placements, maps:to_list(Reductions)),
-    Schedule = #{groups := Groups0} = hls_scheduler_plan:normalize(Plan, GroupSpecs, hls_frame_layout:new(PayloadWords)),
     Placements = hls_scheduler_plan:placements(Schedule),
     xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
     xls_topology_graph:check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
@@ -51,7 +54,7 @@ lower(Plan, Profile0) ->
     %% Compiler graph lowering owns buffering and frame layout; placement stays here.
     GraphProfile = maps:with([name, channel_depth, actor_egress_depth,
         direct_actor_debug, frame_payload_words], Profile),
-    Base = xls_topology_graph:lower(Materialized, GraphProfile),
+    Base = xls_topology_graph:lower(Materialized, GraphProfile, Interfaces),
     Startup = maps:from_list([{Id, Frames} || #{target := Id, frames := Frames}
         <- maps:get(startup, Base)]),
     Actors = [place_actor(Actor, maps:get(maps:get(id, Actor), Origins),

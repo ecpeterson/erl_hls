@@ -68,8 +68,8 @@ prepare(Config = #{sources := Sources, topology := Constructor, placement := Pla
     ok = require_actors(maps:keys(Requirements), Loaded),
     ActorFiles = actors(Requirements, Loaded, Placement),
     TopologyBytes = xls_shared_topology_dslx:emit(Generation),
-    Scheduler = hls_scheduler_plan:normalize(Topology, maps:get(scheduler_groups, Placement), Layout),
-    Bindings = xls_scheduler_ram_v:bindings(Scheduler, Layout),
+    #{scheduler := Scheduler, interfaces := Interfaces} = xls_shared_topology_dslx:analysis(Generation),
+    Bindings = xls_scheduler_ram_v:bindings(Scheduler, Layout, Interfaces),
     RamFlags = case iolist_to_binary(xls_scheduler_ram_v:configurations(Bindings)) of
         <<>> -> [];
         Flags -> [<<"--ram_configurations=", Flags/binary>>]

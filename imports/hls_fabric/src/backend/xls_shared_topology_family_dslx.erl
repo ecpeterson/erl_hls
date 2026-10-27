@@ -1,15 +1,13 @@
 -module(xls_shared_topology_family_dslx).
 -moduledoc "Adds shared placement to the common regular-family routing graph.".
--export([lower/2]).
+-export([lower/4]).
 
--doc "Checks family placement and reduction requirements, retaining compiler family annotations and explicit scheduler bindings. Compact shared ownership is completed by xls_topology_scheduler_plan before rendering.".
--spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
-lower(Plan, Profile0) ->
-    Profile = #{scheduler_groups := Groups, reduction_placements := Placements,
-        effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug,
-        frame_payload_words := PayloadWords} =
-        xls_shared_topology_profile:normalize(Profile0),
-    SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups, hls_frame_layout:new(PayloadWords)),
+-doc "Checks family placement and reductions using one normalized profile, scheduler and selected-layout interface catalog. Retains compiler family annotations without rereading source; compact shared ownership is completed by xls_topology_scheduler_plan.".
+-spec lower(hls_topology:plan(), xls_shared_topology_profile:profile(),
+    hls_scheduler_plan:plan(), #{module() => hls_actor_interface:summary()}) -> map().
+lower(Plan, Profile = #{reduction_placements := Placements,
+        effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug},
+        SchedulerPlan, Interfaces) ->
     case SchedulerPlan of
         #{groups := [_ | _], direct_members := [_ | _]} -> error(mixed_topology_requires_materialized_backend);
         _ -> ok
@@ -22,8 +20,8 @@ lower(Plan, Profile0) ->
         _ -> ok
     end,
     Base = #{families := Families} = xls_topology_family_dslx:lower(Plan,
-        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug, frame_payload_words], Profile)),
-    ReductionPlan = hls_reduction_plan:normalize(Plan, SchedulerPlan, Placements),
+        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug, frame_payload_words], Profile), Interfaces),
+    ReductionPlan = hls_reduction_plan:normalize(Plan, SchedulerPlan, Placements, Interfaces),
     Bindings = scheduler_bindings(Schedulers),
     Requirements = maps:merge(maps:from_list([{Module, #{shared_service => ordinary}} ||
         #{module := Module} <- Families]), hls_reduction_plan:artifact_requirements(ReductionPlan)),

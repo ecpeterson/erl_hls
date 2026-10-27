@@ -1,4 +1,4 @@
 [{<<"erl_hls">>,
   {git,"https://github.com/ecpeterson/erl_hls.git",
-       {ref,"fbf8b72dd7a9a4141755b50597e7d17c998fde77"}},
+       {ref,"ab8c9ae46db9818aff646b4705abda8cc2818f06"}},
   0}].

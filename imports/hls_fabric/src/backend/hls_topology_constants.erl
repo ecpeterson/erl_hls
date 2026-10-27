@@ -1,6 +1,6 @@
 -module(hls_topology_constants).
 -moduledoc "Derives phase-local constants from exact actor routes and fixed startup messages.".
--export([specialize/2, specialize/3, requirements/2]).
+-export([specialize/2, specialize/3, specialize/4, requirements/2]).
 
 -doc "Annotates opted-in exact-actor groups with compact state layouts; other groups retain ordinary storage.".
 -spec specialize(hls_topology:plan(), [map()]) -> [map()].
@@ -11,12 +11,21 @@ specialize(Plan, Groups) -> specialize(Plan, Groups, hls_frame_layout:default())
 specialize(Plan, Groups, Layout) ->
     case lists:any(fun(G) -> maps:get(specialize_state, G, false) end, Groups) of
         false -> Groups;
+        true -> specialize(Plan, Groups, Layout, hls_scheduler_plan:interfaces(Plan, Layout))
+    end.
+
+-doc "Derives opted-in exact-actor state projections using supplied summaries checked for Layout. Source is validated once per selected module during this analysis; interfaces are not reloaded.".
+-spec specialize(hls_topology:plan(), [map()], hls_frame_layout:layout(),
+    hls_scheduler_plan:interfaces()) -> [map()].
+specialize(Plan, Groups, Layout, Interfaces) ->
+    maps:foreach(fun(_, #{frame_layout := Selected}) -> Layout = Selected end, Interfaces),
+    case lists:any(fun(G) -> maps:get(specialize_state, G, false) end, Groups) of
+        false -> Groups;
         true ->
             case {maps:get(families, Plan), maps:get(route_relations, Plan)} of
                 {[], []} -> ok;
                 _ -> error(state_specialization_requires_exact_topology)
             end,
-            Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- maps:get(actors, Plan)], Layout),
             Selected = lists:usort([M || #{module := M, specialize_state := true} <- Groups]),
             Sources = maps:from_list([{M, source(M, maps:get(M, Interfaces), Layout)} || M <- Selected]),
             Facts = maps:from_list([{Id, actor(Plan, Id, maps:get(M, Sources), maps:get(M, Interfaces), Interfaces)} ||

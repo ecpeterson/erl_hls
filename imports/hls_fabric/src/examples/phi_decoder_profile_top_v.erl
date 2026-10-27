@@ -11,7 +11,7 @@ plumbing is derived from the same normalized physical profile that emits the
 DSLX topology, keeping profiling fixtures independent of scheduler widths.
 """.
 
--export([to_verilog/0, to_verilog/1, to_verilog/2, emit/3]).
+-export([to_verilog/0, to_verilog/1, to_verilog/2, emit/3, emit/4]).
 
 -doc "Renders the checked three-shard decoder-only wrapper.".
 -spec to_verilog() -> binary().
@@ -30,10 +30,14 @@ to_verilog(ProfileOptions, Options) ->
     Plan = phi_decoder_profile_topology_dslx:scheduler_plan(Config),
     emit(Planes, Plan, Options).
 
--doc "Renders a wrapper from the selected planes and their matching normalized scheduler plan, without rebuilding topology or placement. Options selects observation aliases. This is a trusted in-process build boundary; retain the profile's plane order and scheduler unchanged.".
+-doc "Derives default-frame RAM bindings for a normalized scheduler and renders its wrapper. This convenience call reads current actor interfaces; prepared builds use emit/4 to reuse retained bindings.".
 -spec emit([x | z], hls_scheduler_plan:plan(), map()) -> binary().
-emit(Planes, Plan = #{groups := Groups}, Options) ->
-    Bindings = xls_scheduler_ram_v:bindings(Plan),
+emit(Planes, Plan, Options) ->
+    emit(Planes, Plan, xls_scheduler_ram_v:bindings(Plan), Options).
+
+-doc "Renders a wrapper using the selected planes, normalized scheduler and matching ordered RAM bindings without actor-source reads or placement analysis. Options selects observation aliases. These trusted in-process inputs must come from the same generation plan.".
+-spec emit([x | z], hls_scheduler_plan:plan(), [map()], map()) -> binary().
+emit(Planes, Plan = #{groups := Groups}, Bindings, Options) ->
     {DebugWires, DebugPorts} = case xls_scheduler_observation:enabled(Options) of
         false -> {[], []};
         true -> {xls_scheduler_observation:wires(Plan), xls_scheduler_observation:ports(Plan)}

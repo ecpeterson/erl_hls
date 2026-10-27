@@ -22,8 +22,8 @@ path, counting the producer's required output register. Code generation must
 retain `--flop_outputs=true`. A literal nonnegative depth specifies XLS FIFO
 storage, so zero retains only that producer holding slot.
 """.
--export([plan/2, descriptor/1, artifact_requirements/1, artifact_requirements/2, emit/1, emit/2, from_module/2]).
--export_type([profile/0, plan/0, descriptor/0]).
+-export([plan/2, analysis/1, descriptor/1, artifact_requirements/1, artifact_requirements/2, emit/1, emit/2, from_module/2]).
+-export_type([profile/0, plan/0, analysis/0, descriptor/0]).
 -doc "Physical generation options; logical actor identities and callback semantics remain separate.".
 -type profile() :: xls_shared_topology_profile:profile().
 
@@ -37,40 +37,53 @@ storage, so zero retains only that producer holding slot.
     #{representation := materialized, topology := hls_topology:plan(), profile := profile(),
       lanes := [lane()], effect_window_domains := [[non_neg_integer()]]} |
     #{representation := compact_direct, topology := hls_topology:plan(), profile := profile()}.
-%% Each representation retains the exact graph or compiler-produced bytes used by emit/1.
+-doc "The checked topology, physical profile, scheduler and source interfaces used by one generation plan. Consumers reuse this snapshot for RAM and observation metadata without rereading source or repeating placement.".
+-type analysis() :: #{topology := hls_topology:plan(), profile := profile(),
+    scheduler := hls_scheduler_plan:plan(),
+    interfaces := #{module() => hls_actor_interface:summary()}}.
+%% Each representation retains the exact graph used by emit/1.
 -record(plan, {implementation :: {compact_shared, xls_topology_scheduler_plan:plan()} |
-    {materialized, map()} | {compact_direct, iodata()}, descriptor :: descriptor(),
-    requirements :: #{module() => map()}}).
--doc "A checked in-process hardware generation plan. Shared and materialized graphs are lowered once; dedicated family source is retained from the compiler renderer. No output files or external tools are created.".
+    {materialized, map()} | {compact_direct, map()}, descriptor :: descriptor(),
+    analysis :: analysis(), requirements :: #{module() => map()}}).
+-doc "A checked in-process hardware generation plan. Interfaces and placement are resolved once, and each representation retains its lowered graph. No output files or external tools are created.".
 -opaque plan() :: #plan{}.
 
 -doc "Checks the selected placement, prepares its physical graph and retains actor requirements. Compact shared planning includes source-fragment capture and startup packing. This is the common authority used for both inspection and generation.".
 -spec plan(hls_topology:plan(), profile()) -> plan().
 plan(Topology, Profile0) ->
-    Profile = xls_shared_topology_profile:normalize(Profile0),
-    case backend(Topology, Profile) of
+    Profile = #{scheduler_groups := Specs, frame_payload_words := Words} =
+        xls_shared_topology_profile:normalize(Profile0),
+    Layout = hls_frame_layout:new(Words),
+    Interfaces = hls_scheduler_plan:interfaces(Topology, Layout),
+    Scheduler = hls_scheduler_plan:normalize(Topology, Specs, Layout, Interfaces),
+    Analysis = #{topology => Topology, profile => Profile, scheduler => Scheduler,
+        interfaces => Interfaces},
+    case backend(Topology, Profile, Scheduler) of
         xls_shared_topology_instance_dslx ->
-            Graph = xls_shared_topology_instance_dslx:lower(Topology, Profile),
-            #plan{implementation = {materialized, Graph},
+            Graph = xls_shared_topology_instance_dslx:lower(Topology, Profile, Scheduler, Interfaces),
+            #plan{implementation = {materialized, Graph}, analysis = Analysis,
                 requirements = maps:get(artifact_requirements, Graph),
                 descriptor = #{representation => materialized, topology => Topology, profile => Profile,
                     lanes => [maps:with([index, source, destination, recipient], Lane)
                         || Lane <- maps:get(lanes, Graph)],
                     effect_window_domains => maps:get(effect_window_domains, Graph)}};
         xls_shared_topology_family_dslx ->
-            case xls_shared_topology_family_dslx:lower(Topology, Profile) of
-                #{schedulers := [], artifact_requirements := Requirements} ->
-                    Bytes = xls_topology_family_dslx:emit(Topology,
-                        maps:with([name, channel_depth, actor_egress_depth, direct_actor_debug, frame_payload_words], Profile)),
-                    #plan{implementation = {compact_direct, Bytes}, requirements = Requirements,
+            case xls_shared_topology_family_dslx:lower(Topology, Profile, Scheduler, Interfaces) of
+                Graph = #{schedulers := [], artifact_requirements := Requirements} ->
+                    #plan{implementation = {compact_direct, Graph}, analysis = Analysis,
+                        requirements = Requirements,
                         descriptor = #{representation => compact_direct, topology => Topology, profile => Profile}};
                 Graph ->
                     Prepared = xls_topology_scheduler_plan:prepare(Graph),
-                    #plan{implementation = {compact_shared, Prepared},
+                    #plan{implementation = {compact_shared, Prepared}, analysis = Analysis,
                         requirements = xls_topology_scheduler_plan:artifact_requirements(Prepared),
                         descriptor = xls_topology_scheduler_plan:descriptor(Prepared)}
             end
     end.
+
+-doc "Returns the topology, profile, normalized scheduler and checked interfaces retained by this plan. It does not reload sources or repeat specialization.".
+-spec analysis(plan()) -> analysis().
+analysis(#plan{analysis = Analysis}) -> Analysis.
 
 -doc "Returns the retained generation representation without reloading sources or rerunning placement and routing analysis.".
 -spec descriptor(plan()) -> descriptor().
@@ -84,7 +97,7 @@ from_module(Module, Profile) -> emit(hls_topology:from_module(Module), Profile).
 -spec emit(plan()) -> iodata().
 emit(#plan{implementation = {compact_shared, Prepared}}) -> xls_topology_scheduler_dslx:emit(Prepared);
 emit(#plan{implementation = {materialized, Graph}}) -> xls_shared_topology_instance_dslx:render(Graph);
-emit(#plan{implementation = {compact_direct, Bytes}}) -> Bytes.
+emit(#plan{implementation = {compact_direct, Graph}}) -> xls_topology_family_dslx:render(Graph).
 
 -doc "Checks and renders a topology in one call. Call plan/2 followed by descriptor/1 and emit/1 when inspecting the same retained graph.".
 -spec emit(hls_topology:plan(), profile()) -> iodata().
@@ -98,13 +111,13 @@ artifact_requirements(#plan{requirements = Requirements}) -> Requirements.
 -spec artifact_requirements(hls_topology:plan(), profile()) -> #{module() => map()}.
 artifact_requirements(Topology, Profile) -> artifact_requirements(plan(Topology, Profile)).
 
-%% Artifact signatures and graph generation choose the same representation.
--spec backend(hls_topology:plan(), profile()) -> xls_shared_topology_family_dslx | xls_shared_topology_instance_dslx.
-backend(#{actors := [_ | _], families := _}, _Profile) -> xls_shared_topology_instance_dslx;
-backend(#{families := []}, _Profile) -> xls_shared_topology_instance_dslx;
-backend(Topology = #{actors := [], families := [_ | _]}, Profile) ->
-    case xls_shared_topology_instance_dslx:required(Topology, Profile) of
+%% Artifact signatures and graph generation select a representation from the retained placement.
+-spec backend(hls_topology:plan(), profile(), hls_scheduler_plan:plan()) ->
+    xls_shared_topology_family_dslx | xls_shared_topology_instance_dslx.
+backend(#{actors := [_ | _], families := _}, _Profile, _Scheduler) -> xls_shared_topology_instance_dslx;
+backend(#{families := []}, _Profile, _Scheduler) -> xls_shared_topology_instance_dslx;
+backend(#{actors := [], families := [_ | _]}, Profile, Scheduler) ->
+    case xls_shared_topology_instance_dslx:required(Profile, Scheduler) of
         true -> xls_shared_topology_instance_dslx;
         false -> xls_shared_topology_family_dslx
-    end;
-backend(Topology, _Profile) -> error({invalid_topology_plan, Topology}).
+    end.

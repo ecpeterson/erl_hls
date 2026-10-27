@@ -41,8 +41,11 @@ release. Those remain topology-level channel-dependency and reserved-progress
 obligations.
 """.
 
--export([normalize/2, normalize/3, placements/1]).
--export_type([plan/0, spec/0]).
+-export([normalize/2, normalize/3, normalize/4, interfaces/2, placements/1]).
+-export_type([plan/0, spec/0, interfaces/0]).
+
+-doc "Checked actor summaries indexed by module; physical consumers use summaries checked for their selected frame layout.".
+-type interfaces() :: #{module() => hls_actor_interface:summary()}.
 
 %% Physical implementation selected for a bounded state or mailbox store.
 -type storage() :: registers | block_ram.
@@ -74,16 +77,23 @@ normalize(Topology, Specs) -> normalize(Topology, Specs, hls_frame_layout:defaul
 -spec normalize(hls_topology:plan(), spec(), hls_frame_layout:layout()) -> plan().
 normalize(Topology = #{actors := _, families := _}, Specs, Layout)
         when is_map(Specs) ->
+    normalize(Topology, Specs, Layout, interfaces(Topology, Layout));
+normalize(_Topology, Specs, _Layout) ->
+    error({scheduler_groups, Specs}).
+
+-doc "Validates scheduler groups using supplied summaries checked for Layout, without reacquiring actor interfaces. Requested state specialization still validates and analyzes actor source.".
+-spec normalize(hls_topology:plan(), spec(), hls_frame_layout:layout(), interfaces()) -> plan().
+normalize(Topology = #{actors := _, families := _}, Specs, Layout, Interfaces)
+        when is_map(Specs) ->
+    maps:foreach(fun(_, #{frame_layout := Selected}) -> Layout = Selected end, Interfaces),
     MemberIndex = member_index(Topology),
     Declarations = [
         normalize_group(Id, Group, MemberIndex)
         || {Id, Group} <- lists:sort(maps:to_list(Specs))
     ],
-    Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Declarations], Layout),
     Groups = hls_topology_constants:specialize(Topology,
         [layout_group(Group, maps:get(Module, Interfaces))
-        || Group = #{module := Module} <- Declarations], Layout),
+        || Group = #{module := Module} <- Declarations], Layout, Interfaces),
     Grouped = lists:append([
         [member_reference(Member) || Member <- maps:get(members, Group)]
         || Group <- Groups
@@ -99,8 +109,13 @@ normalize(Topology = #{actors := _, families := _}, Specs, Layout)
                not member_grouped(Reference, Grouped)
         ]
     };
-normalize(_Topology, Specs, _Layout) ->
+normalize(_Topology, Specs, _Layout, _Interfaces) ->
     error({scheduler_groups, Specs}).
+
+-doc "Loads each distinct exact-actor and family module summary once, validating public schemas against Layout. Retain the result for one preparation; a later preparation obtains fresh summaries.".
+-spec interfaces(hls_topology:plan(), hls_frame_layout:layout()) -> interfaces().
+interfaces(#{actors := Actors, families := Families}, Layout) ->
+    hls_actor_interface:from_modules([Module || #{module := Module} <- Actors ++ Families], Layout).
 
 %% Validates one homogeneous group and expands its member references.
 -spec normalize_group(term(),map(),map()) -> map().

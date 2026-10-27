@@ -115,7 +115,8 @@ local_actor_layout_files_test() ->
     ?assertEqual(Expected, iolist_to_binary(maps:get("nested/frame_config.x", Files))),
     #{frame_config_sha256 := Hash} = hls_local_actor:manifest(Actor),
     ?assertEqual(hls_generated_files:hash(Expected), Hash),
-    Root = filename:join("_build", "local-frame-layout-" ++ integer_to_list(erlang:unique_integer([positive]))),
+    Root = filename:join("_build", "local-frame-layout-" ++ integer_to_list(erlang:system_time(nanosecond)) ++
+        "-" ++ integer_to_list(erlang:unique_integer([positive]))),
     First = filename:join(Root, "first.x"),
     ok = filelib:ensure_dir(First),
     _ = hls_local_actor:write(Actor, First),

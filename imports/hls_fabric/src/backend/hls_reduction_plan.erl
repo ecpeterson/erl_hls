@@ -19,7 +19,7 @@ unrelated mail. Each placement therefore reports those properties as
 current and one following reduction, reported as `fragment_capacity => 2`.
 """.
 
--export([artifact_requirements/1, normalize/3]).
+-export([artifact_requirements/1, normalize/3, normalize/4]).
 -export_type([plan/0]).
 
 -doc "Normalized physical execution graph with logical identities retained for routing and debugging.".
@@ -34,9 +34,15 @@ current and one following reduction, reported as `fragment_capacity => 2`.
 -spec normalize(hls_topology:plan(), hls_scheduler_plan:plan(), map()) -> plan().
 normalize(Topology, Scheduler, Requested) ->
     ok = validate_inputs(Topology, Scheduler, Requested),
+    normalize(Topology, Scheduler, Requested, module_interfaces(maps:get(families, Topology))).
+
+-doc "Validates requested source-fragment placements using supplied actor summaries without reloading interfaces. Retains the same structural proof and explicit semantic assumptions as normalize/3.".
+-spec normalize(hls_topology:plan(), hls_scheduler_plan:plan(), map(),
+    hls_scheduler_plan:interfaces()) -> plan().
+normalize(Topology, Scheduler, Requested, Interfaces) ->
+    ok = validate_inputs(Topology, Scheduler, Requested),
     Families = maps:get(families, Topology),
     FamilyIndex = index_by_id(Families),
-    Interfaces = module_interfaces(Families),
     Selections = validate_selections(Requested, FamilyIndex),
     ok = validate_scheduler_modules(Topology, Scheduler),
     Placements = [
@@ -518,7 +524,7 @@ validate_selections(Requested, FamilyIndex) ->
     end, lists:sort(maps:to_list(Requested))).
 
 %% Loads each actor interface once for the current planning pass.
--spec module_interfaces([map()]) -> map().
+-spec module_interfaces([map()]) -> hls_scheduler_plan:interfaces().
 module_interfaces(Families) ->
     hls_actor_interface:from_modules([Module || #{module := Module} <- Families]).
 

@@ -1,7 +1,7 @@
 -module(xls_collection_observation).
 -moduledoc "Publishes authoritative shared collector progress independently of actor RAM writes.".
 -export([width/1, layout/1, declarations/1, proc_field/1, config_parameter/1, config_value/1,
-    sample/1, state_fields/1, retire/1, top_ports/1, spawn_argument/1, binding/1, wires/1, ports/1]).
+    sample/1, state_fields/1, retire/1, top_ports/1, spawn_argument/1, binding/1, binding/2, enabled/1, wires/1, ports/1]).
 
 -doc "Returns phase, validity and collection metadata width from a legacy reduction descriptor or actor specification; payloads are excluded.".
 -spec width(map()) -> pos_integer().
@@ -220,10 +220,18 @@ spawn_argument(G = #{stem := Stem}) -> optional(G, [",\n      ", Stem, "_collect
 -doc "Adds optional observation dimensions to a RAM wrapper binding.".
 -spec binding(map()) -> map().
 binding(Group) -> case enabled(Group) of
+    false -> binding(Group, #{});
+    true ->
+        #{module := Module} = Group,
+        binding(Group, hls_actor_interface:from_module(Module))
+end.
+
+-doc "Adds optional collection observation dimensions using the supplied actor summary without reloading it. Disabled observations return an empty map and do not consume the summary.".
+-spec binding(map(), hls_actor_interface:summary()) -> map().
+binding(Group, Interface) -> case enabled(Group) of
     false -> #{};
     true ->
-        #{module := Module, slot_count := Slots} = Group,
-        Interface = maps:get(Module, hls_actor_interface:from_modules([Module])),
+        #{slot_count := Slots} = Group,
         Width = case maps:get(gathers, Interface, none) of
             none -> width(maps:get(reductions, Interface));
             _ -> width(Interface)
@@ -242,7 +250,7 @@ ports(Bindings) -> [[",\n        ._scheduler_", integer_to_list(I), "_collection
     "        ._scheduler_", integer_to_list(I), "_collection_debug_out_rdy(1'b1)"] ||
     #{index := I, collection_observation_width := _} <- Bindings].
 
-%% Artifact and group validation establish this boolean policy.
+-doc "Reports whether the checked actor or scheduler group requires collection observations, including indexed gathers. The same policy selects generated ports and their RAM-wrapper metadata.".
 -spec enabled(map()) -> boolean().
 enabled(Spec) -> maps:get(admission_reductions, Spec, false) =/= false orelse
     maps:get(gather_collection, Spec, false) orelse maps:get(gathers, Spec, none) =/= none.

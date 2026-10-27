@@ -1,6 +1,14 @@
 -module(xls_scheduler_debug).
 -moduledoc "Compiler-owned projections of committed actor state and scheduler metadata.".
--export([projection/3, projection/4, validate/3]).
+-export([projection/2, projection/3, projection/4, validate/3]).
+
+-doc "Builds the actor observation map from a retained generation plan and its matching actor artifacts. Uses that plan's observation options, scheduler and checked interfaces without reading sources or redoing placement.".
+-spec projection(xls_shared_topology_dslx:plan(), #{module() => xls_emitted:artifact()}) -> map().
+projection(Prepared, Artifacts) ->
+    Analysis = #{profile := Options} = xls_shared_topology_dslx:analysis(Prepared),
+    build(Analysis, Options, fun(Module, Locations) ->
+        xls_emitted:sites(maps:get(Module, Artifacts), Locations)
+    end).
 
 %% Emit beside the RTL generated from this exact plan. The instrumentation tool
 %% checks RAM interfaces and fingerprints this document with the RTL sources.
@@ -18,7 +26,7 @@ projection(Plan, Specs, Artifacts) ->
     #{module() => xls_emitted:artifact()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean(), direct_collections => #{module() => exclusive_epoch},
         frame_payload_words => hls_frame_layout:words()}) -> map().
 projection(Plan, Specs, Artifacts, Options) ->
-    build(Plan, Specs, Options, fun(Module, Locations) ->
+    build(prepare(Plan, Specs, Options), Options, fun(Module, Locations) ->
         xls_emitted:sites(maps:get(Module, Artifacts), Locations)
     end).
 
@@ -32,15 +40,16 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
     MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Shared),
     Words = maps:get(<<"frame_payload_words">>, Projection, 3),
-    Placements = hls_scheduler_plan:placements(
-        hls_scheduler_plan:normalize(Plan, Specs, hls_frame_layout:new(Words))),
-    Direct = xls_actor_observation:bindings(Plan, Placements),
+    Analysis = #{scheduler := Scheduler, interfaces := Interfaces} =
+        prepare(Plan, Specs, #{frame_payload_words => Words}),
+    Placements = hls_scheduler_plan:placements(Scheduler),
+    Direct = xls_actor_observation:bindings(Plan, Placements, Interfaces),
     Policies = maps:from_list([{M, exclusive_epoch} || #{module := M} <- Direct,
         B <- maps:get(<<"direct">>, Projection, []), maps:get(<<"module">>, B) =:= atom_to_binary(M),
         maps:get(<<"early_collection">>, maps:get(<<"reduction">>, B, #{}), false)]),
     Options = #{mailbox_debug => MailboxDebug, direct_actor_debug => maps:is_key(<<"direct">>, Projection),
         direct_collections => Policies, frame_payload_words => Words},
-    Expected = build(Plan, Specs, Options, fun(Module, Locations) ->
+    Expected = build(Analysis, Options, fun(Module, Locations) ->
         try xls_failure_sites:from_catalog(Locations, maps:get(atom_to_binary(Module), ByModule, #{}))
         catch error:_ -> error(actor_projection_mismatch) end
     end),
@@ -50,19 +59,29 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
     end;
 validate(_Plan, _Specs, _Projection) -> error(actor_projection_mismatch).
 
-%% Combines observation banks and artifact fingerprints into a deterministic projection.
--spec build(map(),map(),map(),fun((term(),term()) -> [map()])) -> 'false' | 'null' | 'true' | binary() | ['false' | 'null' | 'true' | binary() | [any()] | number() | map()] | number() | map().
-build(Plan, Specs, Options, Codebook) ->
+%% Fresh host validation and convenience projection each acquire one current interface catalog.
+-spec prepare(hls_topology:plan(), hls_scheduler_plan:spec(), map()) -> map().
+prepare(Topology, Specs, Options) ->
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Options, 3)),
+    Interfaces = hls_scheduler_plan:interfaces(Topology, Layout),
+    Scheduler = hls_scheduler_plan:normalize(Topology, Specs, Layout, Interfaces),
+    #{topology => Topology, scheduler => Scheduler, interfaces => Interfaces}.
+
+%% Combine only observed modules' codebooks with the retained physical ownership.
+-spec build(#{topology := hls_topology:plan(), scheduler := hls_scheduler_plan:plan(),
+    interfaces := #{module() => hls_actor_interface:summary()},
+    profile => xls_shared_topology_profile:profile()}, map(),
+    fun((module(), [xls_failure_sites:location()]) -> [map()])) -> map().
+build(#{topology := Plan, scheduler := Scheduler = #{groups := Groups},
+        interfaces := Catalog}, Options, Codebook) ->
     MailboxDebug = xls_scheduler_observation:enabled(Options),
     Layout = hls_frame_layout:new(maps:get(frame_payload_words, Options, 3)),
-    Scheduler = #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs, Layout),
     Placements = hls_scheduler_plan:placements(Scheduler),
     Direct = case xls_actor_observation:enabled(Options) of
-        true -> xls_actor_observation:bindings(Plan, Placements);
+        true -> xls_actor_observation:bindings(Plan, Placements, Catalog);
         false -> []
     end,
-    Interfaces = hls_actor_interface:from_modules(lists:usort(
-        [M || #{module := M} <- Groups ++ Direct])),
+    Interfaces = maps:with(lists:usort([M || #{module := M} <- Groups ++ Direct]), Catalog),
     Codebooks = maps:map(fun(Module, #{failure_locations := Locations}) ->
         Codebook(Module, Locations)
     end, Interfaces),
