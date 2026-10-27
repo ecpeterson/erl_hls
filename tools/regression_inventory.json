@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "groups": [
+    "test",
+    "topology"
+  ],
+  "cases": {
+    "application_frames": {
+      "group": "test",
+      "default_stage": "_build/application_frames",
+      "dependencies": [
+        "test/rtl/application_frames_tb.sv",
+        "test/rtl/application_service_tb.sv",
+        "test_data/application_frames_rtl.x"
+      ]
+    },
+    "binary": {
+      "group": "test",
+      "default_stage": "_build/binary",
+      "dependencies": [
+        "test/xls_binary_dslx.erl"
+      ]
+    },
+    "collections": {
+      "group": "test",
+      "default_stage": "_build/collections",
+      "dependencies": [
+        "test/rtl/xls_collection_tb.sv",
+        "test/xls_collection_dslx.erl"
+      ]
+    },
+    "comparisons": {
+      "group": "test",
+      "default_stage": "_build/comparisons",
+      "dependencies": [
+        "test/rtl/logical_service_tb.sv",
+        "test/rtl/xls_comparison_tb.sv",
+        "test/xls_comparison_dslx.erl"
+      ]
+    },
+    "control_failures": {
+      "group": "test",
+      "default_stage": "_build/control_failures",
+      "dependencies": [
+        "test/rtl/xls_control_failure_tb.sv",
+        "test/xls_control_failure_dslx.erl"
+      ]
+    },
+    "deferred_replies": {
+      "group": "test",
+      "default_stage": "_build/deferred-replies",
+      "dependencies": [
+        "test/rtl/deferred_server_tb.sv"
+      ]
+    },
+    "direct_actor_codegen": {
+      "group": null,
+      "default_stage": "_build/direct-actor-codegen",
+      "dependencies": [
+        "test/rtl/debug/hls_actor_observation_tb.sv",
+        "test/xls_actor_observation_tests.erl"
+      ]
+    },
+    "direct_admission": {
+      "group": "test",
+      "default_stage": "_build/direct-admission-tests",
+      "dependencies": [
+        "test/rtl/direct_admission_tb.sv",
+        "test/rtl/ordered_egress_topology_tb.sv",
+        "test/xls_large_mailbox_dslx.erl"
+      ]
+    },
+    "entry_outcomes": {
+      "group": "test",
+      "default_stage": "_build/entry_outcomes",
+      "dependencies": [
+        "test/xls_entry_branch_dslx.erl",
+        "test/xls_entry_outcome_dslx.erl",
+        "test/xls_entry_storage_dslx.erl",
+        "test/xls_known_bits_dslx.erl"
+      ]
+    },
+    "float_arithmetic": {
+      "group": "test",
+      "default_stage": "_build/typed-float",
+      "dependencies": [
+        "test/hls_float_dslx.erl",
+        "test/rtl/hls_float_actor_tb.sv",
+        "test/rtl/hls_float_probe_tb.sv"
+      ]
+    },
+    "helpers": {
+      "group": "test",
+      "default_stage": "_build/helpers",
+      "dependencies": [
+        "test/hls_nested_records_dslx.erl",
+        "test/xls_helpers_dslx.erl",
+        "test/xls_literal_types_dslx.erl"
+      ]
+    },
+    "initialization": {
+      "group": "test",
+      "default_stage": "_build/initialization",
+      "dependencies": [
+        "test/rtl/xls_init_gs_tb.sv",
+        "test/rtl/xls_init_topology_tb.sv",
+        "test/xls_init_dslx.erl"
+      ]
+    },
+    "integer_arithmetic": {
+      "group": "test",
+      "default_stage": "_build/integer-arithmetic",
+      "dependencies": [
+        "test/rtl/xls_integer_tb.sv",
+        "test/xls_integer_dslx.erl"
+      ]
+    },
+    "integer_shifts": {
+      "group": "test",
+      "default_stage": "_build/integer-shifts",
+      "dependencies": [
+        "test/rtl/xls_shift_tb.sv",
+        "test/xls_shift_dslx.erl"
+      ]
+    },
+    "logical_types": {
+      "group": "test",
+      "default_stage": "_build/logical-types",
+      "dependencies": [
+        "test/hls_dense_topology_dslx.erl",
+        "test/hls_logical_dslx.erl",
+        "test/rtl/logical_codecs_tb.sv",
+        "test/rtl/logical_service_tb.sv",
+        "test/rtl/logical_topology_tb.sv",
+        "test/xls_struct_codec_dslx.erl"
+      ]
+    },
+    "mixed_topology": {
+      "group": "topology",
+      "default_stage": "_build/mixed-topology",
+      "dependencies": [
+        "test/hls_mixed_topology_dslx.erl"
+      ]
+    },
+    "names": {
+      "group": "test",
+      "default_stage": "_build/names",
+      "dependencies": [
+        "test/xls_names_dslx.erl",
+        "test/xls_short_circuit_dslx.erl"
+      ]
+    },
+    "patterns": {
+      "group": "test",
+      "default_stage": "_build/patterns",
+      "dependencies": [
+        "test/xls_patterns_dslx.erl"
+      ]
+    },
+    "phase_values": {
+      "group": null,
+      "default_stage": "_build/phase_values",
+      "dependencies": [
+        "test/xls_phase_values_dslx.erl"
+      ]
+    },
+    "reduction_dslx": {
+      "group": "test",
+      "default_stage": "_build/reduction-semantics",
+      "dependencies": [
+        "test_data/hls_reduction_failure_ordinary_semantics.inc.x",
+        "test_data/hls_reduction_failure_semantics.inc.x",
+        "test_data/hls_statem_mask_debug_semantics.inc.x",
+        "test_data/hls_statem_mask_reduction_semantics.inc.x",
+        "test_data/hls_statem_reduction_semantics.inc.x"
+      ]
+    },
+    "serial": {
+      "group": "test",
+      "default_stage": "_build/serial",
+      "dependencies": [
+        "test/hls_serial_dslx.erl",
+        "test/rtl/hls_serial_tb.sv",
+        "test/rtl/logical_service_tb.sv"
+      ]
+    },
+    "service_contracts": {
+      "group": "test",
+      "default_stage": "_build/service_contracts",
+      "dependencies": [
+        "test/rtl/service_contracts_tb.sv"
+      ]
+    },
+    "source_context": {
+      "group": "test",
+      "default_stage": "_build/source_context",
+      "dependencies": [
+        "test/hls_source_dslx.erl"
+      ]
+    },
+    "statem_gathers": {
+      "group": "test",
+      "default_stage": "_build/statem-gathers",
+      "dependencies": [
+        "test/xls_statem_gather_dslx.erl"
+      ]
+    },
+    "statem_replies": {
+      "group": "test",
+      "default_stage": "_build/statem-replies",
+      "dependencies": [
+        "test/hls_statem_reply_dslx.erl",
+        "test/rtl/statem_reply_direct_tb.sv",
+        "test/rtl/statem_reply_topology_tb.sv"
+      ]
+    },
+    "type_shapes": {
+      "group": "test",
+      "default_stage": "_build/type-shapes",
+      "dependencies": [
+        "test/xls_type_shape_dslx.erl"
+      ]
+    }
+  }
+}

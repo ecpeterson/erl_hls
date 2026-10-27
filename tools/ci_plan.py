@@ -1,34 +1,12 @@
 #!/usr/bin/env python3
 """Select affected CI groups and identify identical, previously qualified inputs."""
-import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import subprocess
 
-
-def documentation(path: str) -> bool:
-    """Recognize prose and rendered assets, never executable examples or data fixtures."""
-    file = PurePosixPath(path)
-    return file.suffix == '.md' or (
-        file.suffix in {'.png', '.svg', '.pdf', '.jpg', '.jpeg'}
-        and (path.startswith(('docs/', 'yap/')) or '/results/' in path)
-    )
-
-
-def changed_paths(base: str, root: Path) -> list[str] | None:
-    """Read both sides of renames; missing history requires all checks."""
-    if not base or set(base) == {'0'}:
-        return None
-    try:
-        result = subprocess.run(
-            ['git', 'diff', '--name-only', '--no-renames', '-z', base, 'HEAD', '--'],
-            cwd=root, check=True, capture_output=True,
-        )
-    except subprocess.CalledProcessError:
-        return None
-    return [os.fsdecode(path) for path in result.stdout.split(b'\0') if path]
+from regression_inventory import Inventory, changed_paths, documentation, load_inventory, select_cases
 
 
 def source_fingerprint(root: Path, suite: str, extended: bool) -> str:
@@ -47,22 +25,18 @@ def source_fingerprint(root: Path, suite: str, extended: bool) -> str:
     return digest.hexdigest()
 
 
-def plan(paths: list[str] | None, config: dict, manual: bool = False,
-         extended: bool = False) -> dict:
-    """Select the union of matching rules; unknown paths fail closed."""
-    groups = set(config['groups']) if manual or paths is None else set()
-    for path in paths or []:
-        if documentation(path):
-            continue
-        for rule in config['rules']:
-            if any(fnmatch.fnmatchcase(path, pattern) for pattern in rule['paths']):
-                groups.update(rule['groups'])
-                break
-        else:
-            groups.update(config['groups'])
-    selected = {group: group in groups for group in config['groups']}
-    outputs = config.get('extended_outputs' if extended else 'outputs', {})
-    return {**selected, 'qualify': bool(groups), **outputs}
+def plan(paths: list[str] | None, config: Inventory, manual: bool = False) -> dict:
+    """Select shared feature cases and retain broad base checks for every executable change."""
+    cases = select_cases(paths, config, full=manual)
+    selected = {group: any(config['cases'][name]['group'] == group for name in cases)
+                for group in config['groups']}
+    # Local-only witnesses can change alongside ordinary EUnit fixtures.
+    # The base test job still runs even when it has no selected XLS features.
+    selected['test'] = selected['test'] or paths is None or manual or any(
+        not documentation(path) for path in paths)
+    return {**selected, 'qualify': any(selected.values()),
+            **{f'{group}_cases': [name for name in cases if config['cases'][name]['group'] == group]
+               for group in config['groups']}}
 
 
 def main() -> None:
@@ -70,22 +44,9 @@ def main() -> None:
     root = Path.cwd()
     manual = os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
     extended = manual and os.environ.get('CI_EXTENDED') == 'true'
-    config = json.loads((root/'tools/ci_groups.json').read_text())
+    config = load_inventory(root)
     paths = changed_paths(os.environ.get('CI_BASE', ''), root)
-    # Do not skip changed executable Markdown or documentation symlinks.
-    if paths is not None:
-        for path in paths:
-            if documentation(path):
-                for revision in ('HEAD', os.environ.get('CI_BASE', '')):
-                    if not revision:
-                        continue
-                    entry = subprocess.check_output(['git', 'ls-tree', revision, '--', path], cwd=root)
-                    if entry and not entry.startswith(b'100644 '):
-                        paths = None
-                        break
-                if paths is None:
-                    break
-    selected = plan(paths, config, manual, extended)
+    selected = plan(paths, config, manual)
     suite_groups = os.environ.get('CI_GROUPS', ','.join(config['groups'])).split(',')
     selected['qualify'] = any(selected[group] for group in suite_groups)
     selected['reusable'] = paths is not None and not manual
