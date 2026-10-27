@@ -8,7 +8,7 @@
     application :: hls_protocol_application_binding:application(hls_protocol_application_binding:gateway()),
     device :: hls_source_config:device()}).
 
--doc "A complete checked application composition, retained unchanged with its source codecs loaded. Emission adds generated-byte identities; this is not a saved-plan input or device admission.".
+-doc "A complete checked application composition, retained unchanged with compatible provider type and encoding contracts. Emission adds generated-byte identities; this is not a saved-plan input or device admission.".
 -opaque plan() :: #plan{}.
 
 -doc "Source-checked host bindings and the static external boundary. Device attachment identities and the emitted inspection catalog are absent until emission.".
@@ -58,7 +58,7 @@ plan(Filename) when is_list(Filename); is_binary(Filename) -> plan(hls_source_co
 descriptor(#plan{boundary = Boundary, application = Application}) ->
     Application#{source_boundary => hls_protocol_boundary:descriptor(Boundary), eligible => false}.
 
--doc "Renders a checked plan or plans a trusted config map/filename before rendering. Returns relative files and the final deployment, without output writes. A retained plan needs no source reread or host-binding check; keep its loaded source codecs unchanged. Templates and support inputs are read during emission.".
+-doc "Renders a checked plan or plans a trusted config map/filename before rendering. Returns relative files and the final deployment, without output writes. A retained plan needs no source reread or host-binding check; retained host record schemas are independent of later actor reloads. Templates and support inputs are read during emission.".
 -spec emit(hls_source_config:application() | file:filename() | plan()) -> output().
 emit(#plan{boundary = BoundaryPlan, application = Application, device = Device}) ->
     #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Transport}} =

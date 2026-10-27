@@ -1,7 +1,6 @@
 -module(hls_protocol_class_selection_tests).
--moduledoc "Canonical source-class selection checks only deliberate mismatches; source packer faults remain visible.".
+-moduledoc "Canonical source-class selection checks only deliberate mismatches; retained record codec faults remain visible.".
 -include_lib("eunit/include/eunit.hrl").
--export([pack/1]).
 
 %% Different source constants disambiguate ports sharing a tag and destination with one packing call.
 -spec constant_selection_test() -> ok.
@@ -34,18 +33,9 @@ malformed_selection_test() ->
 -spec packer_failure_test() -> ok.
 packer_failure_test() ->
     Class = constant_class(2, first, 7),
-    ?assertError(source_packer_failed, hls_protocol_mixed:encode(encoder([Class#{tag := broken}]), {broken, 7})),
+    ?assertError({invalid_hls_record_value, token, {broken, 7}},
+        hls_protocol_mixed:encode(encoder([Class#{tag := broken}]), {broken, 7})),
     ?assertError({badmatch, 8}, hls_protocol_mixed:encode(encoder([Class#{message_bits := 16}]), {token, 7})).
-
--doc "Packs the tiny test record while counting calls only inside an explicitly enabled counting scope; a broken record raises the original source fault.".
--spec pack({token | broken, byte()}) -> binary().
-pack({broken, _}) -> error(source_packer_failed);
-pack({token, Value}) ->
-    case get({?MODULE, packing_calls}) of
-        undefined -> ok;
-        Count -> put({?MODULE, packing_calls}, Count + 1)
-    end,
-    <<Value:8>>.
 
 %% Both alternatives use a destination selector deliberately unrelated to a source tag enumeration.
 -spec constant_class(byte(), atom(), byte()) -> hls_protocol_mixed:codec_class().
@@ -53,20 +43,44 @@ constant_class(Slot, Port, Value) ->
     Codec = hls_protocol_codec:plan(#{message_bits => 8, payload_bits => 0,
         fields => [#{type => {hls_type, hls_nums, uN, [8]}, message_bit_offset => 0,
             constant => <<Value:8>>}]}, 17),
-    #{slot => Slot, port => Port, tag => token, codec => Codec, message_bits => 8}.
+    Record = hls_record_codec:bind(token, [{value, hls_nums:u8()}]),
+    #{slot => Slot, port => Port, tag => token, codec => Codec, message_bits => 8,
+        source_record => Record, destination_record => Record}.
 
 %% A standalone class-selection view has no transport session or physical capture metadata.
 -spec encoder([hls_protocol_mixed:codec_class()]) -> hls_protocol_mixed:encoder_link().
 encoder(Classes) -> #{source_module => ?MODULE, classes => Classes}.
 
-%% Limit instrumentation to this process and restore it even when a checked operation raises.
+%% Observe only this caller's public record-packing boundary; provider calls do not inflate the count.
 -spec counted(fun(() -> Value)) -> {Value, non_neg_integer()}.
 counted(Action) ->
-    Previous = put({?MODULE, packing_calls}, 0),
-    try {Action(), get({?MODULE, packing_calls})}
+    {module, hls_record_codec} = code:ensure_loaded(hls_record_codec),
+    {Collector, Monitor} = spawn_monitor(fun() -> collect(0) end),
+    Session = trace:session_create(protocol_class_packing, Collector, []),
+    try
+        1 = trace:process(Session, self(), true, [call]),
+        1 = trace:function(Session, {hls_record_codec, pack, 2}, [], []),
+        Result = Action(),
+        1 = trace:process(Session, self(), false, [call]),
+        Ref = trace:delivered(Session, self()),
+        receive {trace_delivered, _, Ref} -> ok
+        after 5000 -> error(codec_trace_delivery_timeout) end,
+        Collector ! {collect, self(), Ref},
+        receive {Ref, Count} -> {Result, Count}
+        after 5000 -> error(codec_trace_collection_timeout) end
     after
-        case Previous of
-            undefined -> erase({?MODULE, packing_calls});
-            _ -> put({?MODULE, packing_calls}, Previous)
-        end
+        trace:session_destroy(Session),
+        exit(Collector, kill),
+        receive {'DOWN', Monitor, process, Collector, _} -> ok
+        after 5000 -> error(codec_trace_cleanup_timeout) end
+    end.
+
+%% Keep no user records; only observed packing calls contribute to this finite witness.
+-spec collect(non_neg_integer()) -> ok.
+collect(Count) ->
+    receive
+        %% One call crosses the retained record-codec boundary.
+        {trace, _, call, {hls_record_codec, pack, _}} -> collect(Count + 1);
+        %% Delivery synchronization guarantees earlier call events have arrived.
+        {collect, Pid, Ref} -> Pid ! {Ref, Count}, ok
     end.

@@ -90,10 +90,10 @@ independent_devices_test() ->
 %% Automatic bindings cannot silently acquire explicit-start semantics.
 -spec automatic_start_rejected_test() -> ok.
 automatic_start_rejected_test() ->
-    #{devices := #{a := B0}} = deployment(),
+    Deployment = #{devices := #{a := B0}} = deployment(),
     B = maps:remove(activation, B0),
     {ok, P} = hls_partition_peer:start(B),
-    {ok, S} = hls_partition_stream:start_link(#{devices => #{a => B}}, #{a => P}, #{}),
+    {ok, S} = hls_partition_stream:start_link(Deployment#{devices := #{a => B}}, #{a => P}, #{}),
     unlink(S),
     try
         ?assertMatch({error, {invalid_command, start_unavailable}}, hls_partition_stream:submit(S, start)),

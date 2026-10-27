@@ -68,6 +68,10 @@ init({Plan = #{devices := Devices,
         limits := Limits = #{commands := Commands, events := Events, crossings := Crossings}},
         Brokers, Sessions, Client, Application})
         when is_integer(Commands), Commands > 0, is_integer(Events), Events >= 2 ->
+    case Application of
+        raw -> ok;
+        _ -> ok = hls_partition_wire:check(Application)
+    end,
     Routing = hls_protocol_routing:plan(Plan),
     Roles = hls_protocol_routing:roles(Routing),
     Roles = lists:sort(maps:keys(Brokers)),

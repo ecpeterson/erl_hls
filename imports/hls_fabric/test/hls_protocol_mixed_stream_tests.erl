@@ -125,18 +125,23 @@ plan() ->
     Codec = hls_protocol_codec:plan(#{message_bits => 32, payload_bits => 32,
         fields => [#{type => {hls_type, hls_nums, uN, [32]}, message_bit_offset => 0, capture_bit_offset => 0}]},
         Module:pack_tag(total)),
-    Class = #{slot => 0, port => out, tag => total, codec => Codec, message_bits => 32},
+    Record = hls_record_codec:bind(total, [{value, hls_nums:u32()}]),
+    Schemas = #{total => #{name => total, selector => Module:pack_tag(total), width => 32, codec => Record}},
+    Class = #{slot => 0, port => out, tag => total, codec => Codec, message_bits => 32,
+        source_record => Record, destination_record => Record},
     Links = [#{index => I, source_index => S, destination_index => D, direction => Direction,
         source_module => Module, destination_module => Module, classes => [Class]}
         || {I, S, D, Direction} <- [{10, 0, 2, to_rtl}, {20, 2, 0, to_beam}, {21, 2, 1, to_beam}]],
     Actors = maps:from_list([{I, #{module => Module, capacity => 2, startup => [],
-        outputs => #{out => {actor, native}}}} || I <- [0, 1]]),
+        outputs => #{out => {actor, native}}, schemas => Schemas, output_schemas => #{out => [total]}}}
+        || I <- [0, 1]]),
     Ingress = #{id => host, shape => [2, 1], targets => [#{id => all, selector => 0, schemas => [total]}],
-        bindings => [#{module => Module, index => I, device => board, point => [I, 0], targets => [all]} || I <- [0, 1]]},
+        bindings => [#{module => Module, schemas => Schemas, index => I, device => board,
+            point => [I, 0], targets => [all]} || I <- [0, 1]]},
     #{actors => Actors, targets => #{{actor, native} => {actor, 2}}, binding => #{host => 55, control => 7},
         mixed => #{identity => <<1:256>>, host_actors => [0, 1], links => Links},
         application => #{partition => #{ingresses => [Ingress]},
-            devices => #{board => #{host => 55, control => 7, ingress => host}}}}.
+            devices => #{board => #{host => 55, control => 7, ingress => host, events => #{}}}}}.
 
 %% Rectangle zero selects the consuming actor; one also selects the postponed actor.
 -spec control(0 | 1, non_neg_integer()) -> hls_partition_wire:command().

@@ -32,7 +32,7 @@
 %% Static bridge ownership is checked before the boundary or its parents are emitted.
 -record(plan, {boundary :: hls_protocol_boundary:plan(), interface :: descriptor()}).
 
--doc "A checked framed partition from plan/2. Retain unchanged in process with its source codecs loaded. Build identity and library hashes are added only during emission; no device or progress admission is granted.".
+-doc "A checked framed partition from plan/2. Retain unchanged in process with compatible provider type and encoding contracts. Build identity and library hashes are added only during emission; no device or progress admission is granted.".
 -opaque plan() :: #plan{}.
 
 -doc "The emitted bridge manifest, host bridge descriptor and source transport descriptor, all from the same role build.".

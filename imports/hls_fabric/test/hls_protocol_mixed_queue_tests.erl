@@ -1,6 +1,6 @@
 -module(hls_protocol_mixed_queue_tests).
 -moduledoc "Finite host-admission witness against the actual N3 source cut. Fixture PIDs test binding and lifetime bookkeeping; this is not the complete BEAM/RTL application witness.".
--export([run/1, retired/1, pack/1]).
+-export([run/1, retired/1]).
 -include_lib("eunit/include/eunit.hrl").
 
 -doc "Exercises bounded admission, cross-sender progress, per-pair order, credits, replay rejection, exact reverse destinations and invalidation from a retained mixed plan. All fixture processes are stopped before returning.".
@@ -84,26 +84,24 @@ pending_head_selection_test() ->
     ?assertMatch(#{queued := 0, available_credits := 0, next_event := 3},
         hls_protocol_mixed_queue:info(TailSent)).
 
-%% A genuine source packer fault reaches the caller rather than masquerading as no matching class.
--spec packer_error_propagation_test() -> ok.
-packer_error_propagation_test() ->
+%% Invalid record shape reaches the caller rather than masquerading as no matching class.
+-spec codec_error_propagation_test() -> ok.
+codec_error_propagation_test() ->
     Queue = hls_protocol_mixed_queue:new(attachment(), #{0 => self()}, 123, 4),
-    ?assertError(queue_packer_failed, hls_protocol_mixed_queue:offer(Queue, self(), 1, {sample, broken})),
+    ?assertError({invalid_hls_record_value, sample, {sample}},
+        hls_protocol_mixed_queue:offer(Queue, self(), 1, {sample})),
     ?assertMatch(#{queued := 0, available_credits := 0}, hls_protocol_mixed_queue:info(Queue)).
 
 %% Two constant source classes share a tag and destination; native slots remain distinct.
 -spec attachment() -> hls_protocol_mixed_queue:attachment().
 attachment() ->
+    Record = hls_record_codec:bind(sample, [{value, hls_nums:u8()}]),
     Classes = [begin
         Codec = hls_protocol_codec:plan(#{message_bits => 8, payload_bits => 0,
             fields => [#{type => hls_nums:u8(), message_bit_offset => 0, constant => <<Value:8>>}]}, 17),
-        #{slot => Slot, port => Port, tag => sample, codec => Codec, message_bits => 8}
+        #{slot => Slot, port => Port, tag => sample, codec => Codec, message_bits => 8,
+            source_record => Record, destination_record => Record}
     end || {Slot, Port, Value} <- [{0, first, 7}, {1, second, 9}]],
     Links = [#{index => I, source_index => 0, destination_index => Target, direction => to_rtl,
         source_module => ?MODULE, classes => Classes} || {I, Target} <- [{4, 1}, {9, 2}]],
     #{host_actors => [0], identity => <<0:256>>, links => Links}.
-
--doc "Packs the finite queue fixture's byte record; the explicit broken value raises a recognizable source error.".
--spec pack({sample, byte() | broken}) -> binary().
-pack({sample, broken}) -> error(queue_packer_failed);
-pack({sample, Value}) -> <<Value:8>>.

@@ -8,7 +8,7 @@
 %% Retain the validated graph and every role from one unchanged source program.
 -record(plan, {roles :: [role()], routing :: hls_protocol_routing:plan(), descriptor :: descriptor()}).
 
--doc "A complete checked deployment: all role layouts, shared source bindings and routing. Retain unchanged in process with source codecs loaded; emission adds attachment identities.".
+-doc "A complete checked deployment: all role layouts, shared source bindings and routing. Retain unchanged in process with compatible provider type and encoding contracts; emission adds attachment identities.".
 -opaque plan() :: #plan{}.
 
 -doc "All static bridge interfaces, host bindings, budgets and role directories. Devices have no generated-byte identities or support-library hashes before emission.".
@@ -31,7 +31,7 @@
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
 
--doc "Checks all roles from one freshly prepared source program without rendering hardware. Accepts a trusted config map or filename; checks complete disjoint ownership, bridge layouts, crossing routes and host codecs before returning. Source constructors may have effects. Retain the plan unchanged with its loaded codecs; saved deployment terms are not planning inputs.".
+-doc "Checks all roles from one freshly prepared source program without rendering hardware. Accepts a trusted config map or filename; checks complete disjoint ownership, bridge layouts, crossing routes and host codecs before returning. Source constructors may have effects. Retain the plan unchanged with compatible provider type and encoding contracts; saved deployment terms are not planning inputs.".
 -spec plan(hls_source_config:deployment() | file:filename()) -> plan().
 plan(Config = #{devices := Devices, limits := Limits = #{commands := Commands, events := Events}})
         when map_size(Devices) >= 2, is_integer(Commands), Commands > 0, is_integer(Events), Events >= 2 ->

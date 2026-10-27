@@ -1,6 +1,6 @@
 -module(hls_partition_wire).
 -moduledoc "Checked application bindings and codecs for one rectangle ingress per device.".
--export([deployment/1, binding/4, command/2, control_payload/1, event/4, wrapper/3]).
+-export([deployment/1, binding/4, command/2, control_payload/1, event/4, wrapper/3, check/1]).
 -export_type([command/0, rectangle/0]).
 
 %% Fixed application-gateway bindings, unrelated to actor IDs or geometry.
@@ -39,18 +39,27 @@ binding(Partition, Device, Host, #{ingresses := [#{id := Ingress}], externals :=
 %% All producers of an external already agree on each schema's representation.
 -spec external(map(), term(), map()) -> map().
 external(#{actors := Actors, routes := Routes}, Device, #{id := Id, port := Port}) ->
-    Producers = [{Module, Output} || #{source := {Actor, Output}, recipients := Recipients} <- Routes,
+    Producers = [{Actor, Output} || #{source := {Id0, Output}, recipients := Recipients} <- Routes,
         lists:member({external, Id}, Recipients),
-        #{identity := A, module := Module, device := D} <- Actors, A =:= Actor, D =:= Device],
-    Schemas = lists:append([begin
-        Interface = hls_actor_interface:from_module(Module),
-        [begin
-            #{fields := Fields} = hls_actor_interface:schema(Interface, Name),
-            Width = Module:pack_width(Name),
-            {Module:pack_tag(Name), #{module => Module, name => Name, width => Width, fields => Fields}}
-        end || Name <- hls_actor_interface:output_schemas(Interface, Output)]
-    end || {Module, Output} <- Producers]),
+        Actor = #{identity := A, device := D} <- Actors, A =:= Id0, D =:= Device],
+    Schemas = lists:append([[begin
+        Schema = #{selector := Selector} = maps:get(Name, Codecs),
+        {Selector, Schema}
+    end || Name <- maps:get(Output, Outputs, [])]
+        || {#{schemas := Codecs, output_schemas := Outputs}, Output} <- Producers]),
     #{id => Id, port => Port, schemas => maps:from_list(Schemas)}.
+
+-doc "Checks current command and event codec availability and retained widths before host attachment. The descriptor is trusted build output; this does not validate encoding compatibility, transport or actor behavior.".
+-spec check(map()) -> ok.
+check(#{partition := #{ingresses := Ingresses}, devices := Devices}) ->
+    lists:foreach(fun(#{bindings := Bindings}) ->
+        lists:foreach(fun(#{schemas := Schemas}) -> hls_host_codec:check(Schemas) end, Bindings)
+    end, Ingresses),
+    maps:foreach(fun(_, #{events := Events}) ->
+        maps:foreach(fun(_, #{schemas := Schemas}) ->
+            maps:foreach(fun(_, #{codec := Codec}) -> hls_record_codec:check(Codec) end, Schemas)
+        end, Events)
+    end, Devices).
 
 -doc "Validates a rectangle command or explicit start before returning routed packets. Start targets every bound device; the stream client separately enforces single-use admission.".
 -spec command(map(), command()) ->
@@ -85,11 +94,11 @@ event(#{activation := explicit_start, host := Host, control := Control},
         {Control, Host}, {16#83, 0, 0}, <<0:32>>) -> {application, {started}};
 event(#{host := Host, events := Events}, {Endpoint, Host}, {Tag, 0, 0}, Payload) ->
     #{id := Id, schemas := Schemas} = maps:get(Endpoint, Events),
-    #{module := Module, name := Name, width := Width} = maps:get(Tag, Schemas),
+    #{codec := Codec, width := Width} = maps:get(Tag, Schemas),
     true = byte_size(Payload) =:= ((Width+31) div 32)*4,
     <<Packed:Width/bitstring, _Padding/bitstring>> = Payload,
-    {Message, <<>>} = Module:unpack(Name, Packed),
-    Payload = hls_codec:align(Module:pack(Message), 32),
+    {Message, <<>>} = hls_record_codec:unpack(Codec, Packed),
+    Payload = hls_codec:align(hls_record_codec:pack(Codec, Message), 32),
     {Id, Message}.
 
 -doc "Wraps a generated device graph with the static routed application gateway; link ports remain separate. Rejects ordinary layouts above the fixed eight-word event envelope before rendering.".

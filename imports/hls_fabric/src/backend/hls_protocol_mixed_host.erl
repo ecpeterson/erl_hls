@@ -26,14 +26,15 @@ controls(#{application:=Application,actors:=Actors},Command)->
 -spec startup(map()) -> [{non_neg_integer(),tuple()}].
 startup(#{actors:=Actors})->[{I,Record}||{I,#{startup:=Records}}<-lists:sort(maps:to_list(Actors)),Record<-Records].
 
--doc "Checks a real BEAM external output against its exact sender actor, declared destination and output schema. Returns a canonical typed application event. This relies on admitted source behavior for source-field meaning; cookie authentication does not isolate a malicious BEAM process.".
+-doc "Checks a real BEAM external output against its exact sender actor, declared destination and retained output schema, without reloading its interface or actor packer. Returns a canonical typed application event. This relies on admitted source behavior for source-field meaning; cookie authentication does not isolate a malicious BEAM process.".
 -spec external(map(),non_neg_integer(),atom(),tuple()) -> {atom(),tuple()}.
 external(#{actors:=Actors,application:=#{devices:=#{board:=Binding=#{host:=Host,events:=Events}}}},Index,Id,Record)->
-    #{module:=Module,outputs:=Outputs}=maps:get(Index,Actors),
+    #{outputs:=Outputs,schemas:=Schemas,output_schemas:=OutputSchemas}=maps:get(Index,Actors),
     Ports=[P||{P,{external,E}}<-maps:to_list(Outputs),E=:=Id],true=Ports=/=[],
-    Interface=hls_actor_interface:from_module(Module),Name=element(1,Record),
-    true=lists:any(fun(P)->lists:member(Name,hls_actor_interface:output_schemas(Interface,P)) end,Ports),
-    Tag=Module:pack_tag(Name),Payload=hls_codec:align(Module:pack(Record),32),
+    Name=element(1,Record),
+    true=lists:any(fun(P)->lists:member(Name,maps:get(P,OutputSchemas,[])) end,Ports),
+    #{selector:=Tag,codec:=Codec}=maps:get(Name,Schemas),
+    Payload=hls_codec:align(hls_record_codec:pack(Codec,Record),32),
     [Endpoint]=[E||{E,#{id:=J}}<-maps:to_list(Events),J=:=Id],
     {Id,Record}=hls_partition_wire:event(Binding,{Endpoint,Host},{Tag,0,0},Payload).
 

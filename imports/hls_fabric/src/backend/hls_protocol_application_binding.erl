@@ -7,13 +7,15 @@
 -doc "One globally indexed actor and its checked device owner, retaining the source module's output and mailbox declarations.".
 -type actor() :: #{id := hls_protocol_topology:id(), module := module(), outputs := [atom()],
     mailbox_capacity := pos_integer(), identity := {actor, hls_protocol_topology:id()},
-    index := non_neg_integer(), device := hls_source_config:device()}.
+    index := non_neg_integer(), device := hls_source_config:device(),
+    schemas := hls_host_codec:catalog(), output_schemas := #{atom() => [atom()]}}.
 
 %% Each ingress binding adds a two-dimensional point and its accepted target identifiers.
 -type recipient() :: #{id := hls_protocol_topology:id(), module := module(), outputs := [atom()],
     mailbox_capacity := pos_integer(), identity := {actor, hls_protocol_topology:id()},
     index := non_neg_integer(), device := hls_source_config:device(),
-    point := [non_neg_integer()], targets := [hls_protocol_topology:id()]}.
+    point := [non_neg_integer()], targets := [hls_protocol_topology:id()],
+    schemas := hls_host_codec:catalog(), output_schemas := #{atom() => [atom()]}}.
 %% Wire selection indexes targets independently of actor and transport endpoint identities.
 -type target() :: #{id := hls_protocol_topology:id(), selector := non_neg_integer(), schemas := [atom()]}.
 %% A rectangle's checked source recipients retain global coordinates through native placement.
@@ -27,10 +29,8 @@
 -doc "The checked host view of source actors, routes and rectangle ingress. It contains no sessions, queues or emitted hardware identities.".
 -type partition() :: #{frame_layout := hls_frame_layout:layout(), actors := [actor()], routes := [route()], ingresses := [ingress()]}.
 
-%% This is the compiler interface field shape emitted by xls_statem_lower:record_fields/1.
--type schema_field() :: #{name := atom(), type := hls_type:descriptor()}.
-%% Runtime decoding uses the loaded module's exact record tag and packed width.
--type event_schema() :: #{module := module(), name := atom(), width := non_neg_integer(), fields := [schema_field()]}.
+%% Events share the retained compiler record codec used by command admission.
+-type event_schema() :: hls_host_codec:schema().
 
 -doc "One external stream and its unambiguous ordinary-message selectors, checked against all local producer codecs.".
 -type event() :: #{id := hls_protocol_topology:id(), port := string(), schemas := #{byte() => event_schema()}}.
@@ -62,7 +62,8 @@
 %% Standalone selection needs coordinates, codecs and indices, without the full actor inventory.
 -type selection_recipient() :: #{module := module(), index := non_neg_integer(),
     device := hls_source_config:device(), point := [non_neg_integer()],
-    targets := [hls_protocol_topology:id()], id => hls_protocol_topology:id()}.
+    targets := [hls_protocol_topology:id()], schemas := hls_host_codec:catalog(),
+    id => hls_protocol_topology:id()}.
 %% The independent selector accepts a checked ingress without the surrounding topology graph.
 -type selection_ingress() :: #{id := hls_protocol_topology:id(), shape := [pos_integer()],
     targets := [target()], bindings := [selection_recipient()]}.
@@ -82,7 +83,7 @@ bind(#{frame_layout := Layout, topology := Topology = #{actors := Actors, routes
     ok = check_ownership(Actors, Owners, Hosts),
     Interfaces = checked_interfaces(Modules),
     ok = check_externals(Topology, Modules, Interfaces),
-    Bound = bind_actors(Actors, Owners),
+    Bound = bind_actors(Actors, Owners, Interfaces),
     Ingresses = hls_protocol_control:host_ingresses(Control, Bound),
     PortRoutes = [R#{source := {{actor, Id}, Port}} || R = #{source := {Id, Port}} <- Routes],
     Ports = [E#{port => "external_" ++ integer_to_list(I)} || {I, E} <- lists:enumerate(0, Externals)],
@@ -113,10 +114,15 @@ checked_interfaces(Modules) ->
 
 %% Global source order defines indices independently of role names and sparse native placement.
 -spec bind_actors([hls_protocol_topology:actor()],
-    #{hls_protocol_topology:id() => hls_source_config:device()}) -> [actor()].
-bind_actors(Actors, Owners) ->
-    [A#{identity => {actor, Id}, index => I, device => maps:get(Id, Owners)}
-        || {I, A = #{id := Id}} <- lists:enumerate(0, Actors)].
+    #{hls_protocol_topology:id() => hls_source_config:device()},
+    #{module() => hls_actor_interface:summary()}) -> [actor()].
+bind_actors(Actors, Owners, Interfaces) ->
+    Codecs = maps:map(fun(_, Interface) ->
+        #{schemas => hls_host_codec:schemas(Interface),
+            output_schemas => hls_host_codec:outputs(Interface)}
+    end, Interfaces),
+    [(maps:merge(A, maps:get(Module, Codecs)))#{identity => {actor, Id},
+        index => I, device => maps:get(Id, Owners)} || {I, A = #{id := Id, module := Module}} <- lists:enumerate(0, Actors)].
 
 -doc "Encodes a typed rectangle using the checked source schemas. All selected devices must share the same command bytes. The relay broadcasts those global bounds; each native sparse mask discards unowned targets. An empty selection or malformed command is rejected before queue admission.".
 -spec control(control_view(), hls_partition_wire:rectangle()) -> binary().

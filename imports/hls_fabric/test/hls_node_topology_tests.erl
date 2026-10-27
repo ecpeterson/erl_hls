@@ -1,6 +1,8 @@
 -module(hls_node_topology_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Retained scheduler bindings preserve selector, payload and per-actor slot encoding.
+-spec placement_and_cast_codec_test() -> ok.
 placement_and_cast_codec_test() ->
     {Plan, Specs, Endpoints} = hls_actor_pid_dslx:fixture(),
     #{actors := Actors, groups := Groups} = hls_node_topology:normalize(Plan, Specs, Endpoints),
@@ -19,7 +21,8 @@ placement_and_cast_codec_test() ->
         ?assertEqual(maps:get(Id, Placements), Placement),
         #{id := Group} = Placement,
         ?assertEqual(maps:get(Group, Endpoints), Endpoint),
-        ?assertEqual(#{work => #{selector => Tag, width => 32}}, Schemas),
+        ?assertEqual([work], maps:keys(Schemas)),
+        ?assertMatch(#{work := #{selector := Tag, width := 32, codec := _}}, Schemas),
         ?assertEqual({{Tag, 255, 1}, <<Slot:32/little, 16#01234567:32/little>>},
             hls_node_topology:encode_cast(Actor, {work, 16#01234567}))
     end, Actors).

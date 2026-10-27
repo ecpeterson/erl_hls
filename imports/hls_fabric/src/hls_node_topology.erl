@@ -83,6 +83,7 @@ validate_actor(#{identity := Id} = Actor, Groups) ->
         #{kind := actor, module := Module, endpoint := Endpoint, slot := Slot,
           schemas := Schemas, placement := #{kind := scheduler, id := Group,
             index := Index, slot := Slot}} when is_integer(Slot), Slot >= 0, is_map(Schemas) ->
+            ok = hls_host_codec:check(Schemas),
             case Groups of
                 #{Group := #{module := Module, endpoint := Endpoint, index := Index,
                     slot_count := Count}} when Slot < Count -> ok;
@@ -117,6 +118,7 @@ actor(Id, Target, Placement = #{id := GroupId, slot := Slot}, ById, Codecs) ->
 %% Cross-check generated codecs against the actor interface and the three-word payload bound.
 -spec schemas(module(), hls_actor_interface:summary()) -> map().
 schemas(Module, Interface) ->
+    Codecs = hls_host_codec:schemas(Interface),
     maps:from_list([begin
         #{selector := Selector, fields := Fields} = hls_actor_interface:schema(Interface, Name),
         Selector = Module:pack_tag(Name),
@@ -125,17 +127,17 @@ schemas(Module, Interface) ->
         %% The generated actor ABI holds three payload words. The ingress
         %% adds its slot word outside that frame before mailbox admission.
         true = Selector >= 0 andalso Selector =< 255 andalso Width =< 96,
-        {Name, #{selector => Selector, width => Width}}
+        {Name, maps:get(Name, Codecs)}
     end || Name <- hls_actor_interface:dispatched_schemas(Interface)]).
 
 -doc "Packs a cast with its scheduler slot; rejects unknown schemas and invalid payloads.".
 -spec encode_cast(map(), tuple()) -> {{byte(), 255, 1}, binary()}.
-encode_cast(#{module := Module, slot := Slot, schemas := Schemas}, Message)
+encode_cast(#{slot := Slot, schemas := Schemas}, Message)
         when is_tuple(Message), tuple_size(Message) > 0 ->
     Tag = element(1, Message),
     case Schemas of
-        #{Tag := #{selector := Selector, width := Width}} ->
-            Packed = Module:pack(Message),
+        #{Tag := #{selector := Selector, width := Width, codec := Codec}} ->
+            Packed = hls_record_codec:pack(Codec, Message),
             Width = bit_size(Packed),
             Payload = hls_codec:align(Packed, 32),
             {{Selector, 255, 1}, <<Slot:32/little, Payload/binary>>};

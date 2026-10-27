@@ -19,8 +19,10 @@ command_encoding_test() ->
 -spec event_padding_is_checked_test() -> ok.
 event_padding_is_checked_test() ->
     Tag = packed_samples:pack_tag(clear),
+    Schema = #{name => clear, selector => Tag, width => 1,
+        codec => hls_record_codec:bind(clear, [{value, hls_nums:uN(1)}])},
     Binding = #{host => 1, events => #{8 => #{id => samples,
-        schemas => #{Tag => #{module => packed_samples, name => clear, width => 1}}}}},
+        schemas => #{Tag => Schema}}}},
     Message = {clear, 1},
     Payload = hls_codec:align(packed_samples:pack(Message), 32),
     ?assertEqual({samples, Message}, hls_partition_wire:event(Binding, {8, 1}, {Tag, 0, 0}, Payload)),

@@ -22,7 +22,7 @@
 -type inspection() :: #{version := 1, kind := kind(), stage := inspection_stage(), data := term()}.
 
 
--doc "One complete checked source composition selected by plan/2. Keep it unchanged in process with its source codecs loaded. Provider/support files are read during packaging, so this is not a saved or hermetic external-tool input.".
+-doc "One complete checked source composition selected by plan/2. Keep it unchanged in process with compatible provider type and encoding contracts. Provider/support files are read during packaging, so this is not a saved or hermetic external-tool input.".
 -opaque plan() :: #plan{}.
 
 -doc "The selected kind, its read-only static builder descriptor and provider import paths. Generated-byte identities and support snapshots belong to the written bundle; inspect/2 exposes the retained external-tool schedules.".

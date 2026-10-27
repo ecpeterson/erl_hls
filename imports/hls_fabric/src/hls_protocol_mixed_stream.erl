@@ -64,10 +64,11 @@ info(Stream) -> gen_server:call(Stream, info).
 -spec stop(pid()) -> ok.
 stop(Stream) -> gen_server:call(Stream, retire, infinity).
 
--doc "Installs actor/transport/consumer monitors and reserves one broker route. Startup admission and any write ambiguity are terminal on failure.".
+-doc "Checks current codec availability and retained widths before startup admission or route registration, then installs actor/transport/consumer monitors and reserves one broker route. Startup admission and any write ambiguity are terminal on failure.".
 -spec init(tuple()) -> {ok, state()}.
 init({Plan = #{actors := Actors, mixed := Mixed = #{identity := Identity, links := Links},
         binding := #{host := Host, control := Service}}, Broker, Pids, Session, Options, Client}) ->
+    ok = hls_protocol_mixed:check_codecs(Plan),
     #{admission_timeout := Timeout} = Config = maps:merge(#{admission_timeout => 1000}, Options),
     1 = map_size(Config),
     true = Timeout > 0,

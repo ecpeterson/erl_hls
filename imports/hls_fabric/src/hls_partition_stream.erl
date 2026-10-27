@@ -47,6 +47,7 @@ init({Owner, Deployment = #{devices := Devices}, Brokers, Options}) ->
     true = lists:all(fun(V) -> is_integer(V) andalso V > 0 end, maps:values(Options)),
     true = lists:sort(maps:keys(Devices)) =:= lists:sort(maps:keys(Brokers)),
     true = length(lists:usort(maps:values(Brokers))) =:= map_size(Brokers),
+    ok = hls_partition_wire:check(Deployment),
     Settings = maps:merge(Defaults, Options),
     Sessions = open_sessions(lists:sort(maps:to_list(Brokers)), #{}),
     try

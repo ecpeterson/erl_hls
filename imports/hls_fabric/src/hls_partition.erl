@@ -33,9 +33,13 @@ normalize(Plan = #{actors := Exact, families := Families, ingresses := _Ingresse
     end,
     RawIds = maps:from_list([{Raw, Id} || #{raw_id := Raw, identity := Id} <- Expanded]),
     Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Expanded], Layout),
+    HostCodecs = maps:map(fun(_, Interface) ->
+        #{schemas => hls_host_codec:schemas(Interface),
+            output_schemas => hls_host_codec:outputs(Interface)}
+    end, Interfaces),
     StartupIndex = maps:from_list([{maps:get(Target, RawIds), Messages}
         || #{target := Target, messages := Messages} <- Startup]),
-    Actors = [actor(A, Index, Placement, Interfaces, StartupIndex, Layout)
+    Actors = [actor(A, Index, Placement, Interfaces, HostCodecs, StartupIndex, Layout)
         || {Index, A} <- lists:enumerate(0, Expanded)],
     ActorIndex = maps:from_list([{Id, A} || A = #{identity := Id} <- Actors]),
     Routes = routes(Plan, Expanded, RawIds),
@@ -99,8 +103,8 @@ check_placement(Identities, Placement) ->
     end.
 
 %% Attach device assignment and packed startup messages; reject conflicting initial effects.
--spec actor(map(), non_neg_integer(), map(), map(), map(), hls_frame_layout:layout()) -> map().
-actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Startup, Layout) ->
+-spec actor(map(), non_neg_integer(), map(), map(), map(), map(), hls_frame_layout:layout()) -> map().
+actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, HostCodecs, Startup, Layout) ->
     Interface = maps:get(Module, Interfaces),
     Messages = maps:get(Id, Startup, []),
     case {Messages, hls_actor_interface:initial_effects(Interface)} of
@@ -109,7 +113,7 @@ actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Sta
         {_, Effects} -> error({partition_startup_initial_effects, Id, Effects})
     end,
     _ = xls_shared_topology_profile:identifier(Module, partition_actor),
-    A#{index => Index, device => maps:get(Id, Placement),
+    (maps:merge(A, maps:get(Module, HostCodecs)))#{index => Index, device => maps:get(Id, Placement),
         max_entry_effects => hls_actor_interface:max_entry_effects(Interface),
         startup => [pack_startup(Id, Module, Message, Layout) || Message <- Messages]}.
 
