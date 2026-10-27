@@ -2,7 +2,6 @@
 -moduledoc "Typed host codecs and DSLX conversion through type-provider descriptors.".
 -export([
     as/2,
-    codec_dependencies/0,
     descriptor/1,
     dslx_codec/1,
     dslx_from_bits/2,
@@ -49,6 +48,10 @@ Each provider defines its accepted domain and normalization policy. Every
 successful pack must unpack completely and repack to identical bits; repeated
 normalization must preserve the decoded value. Reject invalid shapes and values
 outside that domain. These are codec laws, not arithmetic equivalence laws.
+An existing constructor and arguments name a stable encoding contract across
+code upgrades. Incompatible encodings require a distinct constructor name or
+version argument; provider availability and width checks cannot establish
+semantic compatibility.
 """.
 -callback pack(Value :: any(), atom(), [any()]) -> bitstring().
 
@@ -92,18 +95,7 @@ such casts add or remove padding. Padding must match the host codec policy.
 -callback dslx_codec(atom(), [arg()]) -> bit_cast |
     {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
      fun((xls_clause_lower:printable()) -> xls_clause_lower:printable())}.
--doc """
-Lists additional application BEAM modules whose code affects host width, pack or unpack
-callbacks. Retained record codecs bind these modules transitively, together
-with providers appearing in nested descriptor arguments. Omission declares
-no hidden code dependencies. Helpers may export the same callback to declare
-further dependencies; cycles are allowed. The Erlang/OTP runtime is trusted.
-Do not use this callback for DSLX imports. Host codecs must be deterministic from their arguments and declared
-code: mutable external state and concurrent code reload during a codec call
-are outside the retained-codec contract.
-""".
--callback codec_dependencies() -> [module()].
--optional_callbacks([dslx_imports/0, dslx_imports/1, dslx_codec/2, codec_dependencies/0]).
+-optional_callbacks([dslx_imports/0, dslx_imports/1, dslx_codec/2]).
 
 -doc "Builds an empty Erlang instance of this type.".
 -callback zero(TypeName :: atom(), Args :: [arg()]) -> any().
@@ -127,11 +119,7 @@ are outside the retained-codec contract.
 %%% Descriptor-level versions which dispatch on Module
 %%%
 
--doc "Declares the host bitstring helper used by generic descriptor unpacking.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_codec].
-
--doc "Returns the sorted unique providers named by a descriptor and its nested arguments, including internal record fields. This structural inventory does not invoke provider callbacks or include hidden helpers; retained codecs follow codec_dependencies/0 separately.".
+-doc "Returns the sorted unique providers named by a descriptor and its nested arguments, including internal record fields. This structural inventory does not invoke provider callbacks or inspect helper implementations.".
 -spec providers(descriptor()) -> [module()].
 providers(Type = #hls_type{}) -> lists:usort(provider_modules(Type)).
 

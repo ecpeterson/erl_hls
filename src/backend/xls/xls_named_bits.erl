@@ -1,7 +1,6 @@
 -module(xls_named_bits).
 -moduledoc "Internal descriptors for already-declared nominal DSLX bit types. Host values are unsigned encoded integers; enum membership remains the declaring code's responsibility.".
 -behavior(hls_type).
--export([codec_dependencies/0]).
 -export([local/2, qualified/3, width/2, zero/2, pack/3, unpack/3,
     print_type/2, transpile/3]).
 
@@ -48,7 +47,3 @@ transpile(Operation, _Args, _State) ->
 %% Reuse the established integer domain and little-endian host representation.
 -spec unsigned(local | qualified, [hls_type:arg()]) -> hls_type:descriptor().
 unsigned(Kind, Args) -> hls_nums:uN(width(Kind, Args)).
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_type, hls_nums].

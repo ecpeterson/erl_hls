@@ -9,7 +9,6 @@ normalization laws and the distinction from XLS arithmetic semantics.
 """.
 
 -behavior(hls_type).
--export([codec_dependencies/0]).
 -export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2]).  % hls_type callbacks
 -export([dslx_imports/1, dslx_codec/2, value_width/2]).
 
@@ -184,7 +183,3 @@ dslx_codec(Type, []) when Type =:= float16; Type =:= float32; Type =:= float64 -
         integer_to_list(F), ">(", Bits, ")"] end,
      fun(Value) -> ["apfloat::flatten(", Value, ")"] end};
 dslx_codec(_Type, _Args) -> bit_cast.
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_codec].

@@ -28,81 +28,136 @@ nested_record_test() ->
     ?assertEqual({{empty}, <<3:2>>}, hls_record_codec:unpack(Empty, <<3:2>>)),
     ok.
 
-%% Same-width provider replacement must fail before either value callback runs.
--spec provider_replacement_test() -> ok.
-provider_replacement_test() ->
+%% Compatible provider and helper implementations retain bytes through ordinary reloads.
+-spec compatible_reload_test() -> ok.
+compatible_reload_test() ->
     Provider = hls_record_codec_provider_fixture,
-    with_modules([Provider], fun(Directory) ->
-        load(Directory, Provider, provider_exports(false), provider(0, none)),
-        Type = {hls_type, Provider, value, []},
+    Helper = hls_record_codec_helper_fixture,
+    with_modules([Provider, Helper], fun(Directory) ->
+        load(Directory, Helper, "[mask/1, revision/0]", helper(1)),
+        load(Directory, Provider, exports(), provider(8, 1, Helper)),
+        Type = {hls_type, Provider, value, [v1]},
         Codec = hls_record_codec:bind(message, [{value, Type}]),
         ?assertEqual(<<37>>, hls_record_codec:pack(Codec, {message, 37})),
+        load(Directory, Provider, exports(), provider(8, 2, Helper)),
+        load(Directory, Helper, "[mask/1, revision/0]", helper(2)),
+        ?assertEqual(ok, hls_record_codec:check(Codec)),
+        ?assertEqual(<<37>>, hls_record_codec:pack(Codec, {message, 37})),
+        ?assertEqual({pack, 2}, get(codec_callback)),
         ?assertEqual({{message, 37}, <<>>}, hls_record_codec:unpack(Codec, <<37>>)),
-        load(Directory, Provider, provider_exports(false), provider(255, none)),
+        ?assertEqual({unpack, 2}, get(codec_callback)),
+        ?assertEqual(Codec, hls_record_codec:bind(message, [{value, Type}])),
+        ?assertError(badarg, hls_record_codec:pack(Codec, {message, invalid})),
+        ok
+    end).
+
+%% Explicit constructor arguments let one current provider serve old and new wire encodings.
+-spec versioned_encodings_test() -> ok.
+versioned_encodings_test() ->
+    Provider = hls_record_codec_provider_fixture,
+    with_modules([Provider], fun(Directory) ->
+        load(Directory, Provider, exports(), provider(8, 1, 0)),
+        Old = hls_record_codec:bind(message, [{value, {hls_type, Provider, value, [v1]}}]),
+        load(Directory, Provider, exports(), provider(8, 2, 0)),
+        New = hls_record_codec:bind(message, [{value, {hls_type, Provider, value, [v2]}}]),
+        ?assertEqual(8, hls_record_codec:width(Old)),
+        ?assertEqual(8, hls_record_codec:width(New)),
+        ?assertEqual(<<37>>, hls_record_codec:pack(Old, {message, 37})),
+        ?assertEqual(<<218>>, hls_record_codec:pack(New, {message, 37})),
+        ?assertEqual({{message, 37}, <<>>}, hls_record_codec:unpack(Old, <<37>>)),
+        ?assertEqual({{message, 37}, <<>>}, hls_record_codec:unpack(New, <<218>>)),
+        ok
+    end).
+
+%% Checks catch missing providers and callbacks before invoking a value codec.
+-spec unavailable_codec_test() -> ok.
+unavailable_codec_test() ->
+    Provider = hls_record_codec_provider_fixture,
+    with_modules([Provider], fun(Directory) ->
+        load(Directory, Provider, exports(), provider(8, 1, 0)),
+        Fields = [{value, {hls_type, Provider, value, [v1]}}],
+        Codec = hls_record_codec:bind(message, Fields),
+        load(Directory, Provider, "[width/2, pack/3]", provider(8, 2, 0)),
         erase(codec_callback),
-        ?assertError({stale_record_codec_provider, Provider}, hls_record_codec:check(Codec)),
-        ?assertError({stale_record_codec_provider, Provider}, hls_record_codec:pack(Codec, {message, 37})),
-        ?assertError({stale_record_codec_provider, Provider}, hls_record_codec:unpack(Codec, <<37>>)),
+        Missing = {missing_record_codec_callback, Provider, unpack, 3},
+        ?assertError(Missing, hls_record_codec:check(Codec)),
+        ?assertError(Missing, hls_record_codec:pack(Codec, {message, 37})),
+        ?assertError(Missing, hls_record_codec:unpack(Codec, <<37>>)),
+        ?assertError(Missing, hls_record_codec:bind(message, Fields)),
+        ?assertEqual(undefined, get(codec_callback)),
+        code:purge(Provider), code:delete(Provider),
+        Unavailable = {record_codec_provider_unavailable, Provider, nofile},
+        ?assertError(Unavailable, hls_record_codec:check(Codec)),
+        ?assertError(Unavailable, hls_record_codec:pack(Codec, {message, 37})),
+        ?assertError(Unavailable, hls_record_codec:unpack(Codec, <<37>>)),
+        ?assertError(Unavailable, hls_record_codec:bind(message, Fields)),
+        ?assertEqual(undefined, get(codec_callback)),
+        ok
+    end).
+
+%% The retained total width catches an incompatible expansion before packing or decoding.
+-spec changed_width_test() -> ok.
+changed_width_test() ->
+    Provider = hls_record_codec_provider_fixture,
+    with_modules([Provider], fun(Directory) ->
+        load(Directory, Provider, exports(), provider(8, 1, 0)),
+        Fields = [{value, {hls_type, Provider, value, [v1]}}],
+        Codec = hls_record_codec:bind(message, Fields),
+        load(Directory, Provider, exports(), provider(9, 2, 0)),
+        erase(codec_callback),
+        Changed = {record_codec_width_changed, message, 8, 9},
+        ?assertError(Changed, hls_record_codec:check(Codec)),
+        ?assertError(Changed, hls_record_codec:pack(Codec, {message, 37})),
+        ?assertError(Changed, hls_record_codec:unpack(Codec, <<37>>)),
         ?assertEqual(undefined, get(codec_callback)),
         ?assertEqual(8, hls_record_codec:width(Codec)),
-        Current = hls_record_codec:bind(message, [{value, Type}]),
-        ?assertEqual(<<218>>, hls_record_codec:pack(Current, {message, 37})),
-        ?assertError(badarg, hls_record_codec:pack(Current, {message, invalid})),
+        ?assertEqual(9, hls_record_codec:width(hls_record_codec:bind(message, Fields))),
         ok
     end).
 
-%% Nested descriptors and declared helper cycles form one finite checked dependency set.
--spec hidden_helper_replacement_test() -> ok.
-hidden_helper_replacement_test() ->
+%% A deliberately violated stable-constructor contract demonstrates the check's semantic limit.
+-spec same_width_semantics_are_provider_contract_test() -> ok.
+same_width_semantics_are_provider_contract_test() ->
     Provider = hls_record_codec_provider_fixture,
-    First = hls_record_codec_helper_fixture,
-    Leaf = hls_record_codec_leaf_fixture,
-    with_modules([Provider, First, Leaf], fun(Directory) ->
-        load(Directory, Leaf, "[mask/0, codec_dependencies/0]",
-            "mask() -> 0.\ncodec_dependencies() -> [hls_record_codec_helper_fixture].\n"),
-        load(Directory, First, "[mask/0, codec_dependencies/0]",
-            "mask() -> hls_record_codec_leaf_fixture:mask().\n"
-            "codec_dependencies() -> [hls_record_codec_leaf_fixture].\n"),
-        load(Directory, Provider, provider_exports(true), provider(0, First)),
-        Type = {hls_type, Provider, value, []},
-        Fields = [{nested, {hls_type, hls_record, inner,
-            [{values, hls_vec:vector(hls_bits:padded(Type, 9), 2)}]}}],
-        Codec = hls_record_codec:bind(message, Fields),
-        Value = {message, {inner, [5, 17]}},
-        ?assertEqual(<<17, 0:1, 5, 0:1>>, hls_record_codec:pack(Codec, Value)),
-        load(Directory, Leaf, "[mask/0, codec_dependencies/0]",
-            "mask() -> 255.\ncodec_dependencies() -> [hls_record_codec_helper_fixture].\n"),
-        erase(codec_callback),
-        ?assertError({stale_record_codec_provider, Leaf}, hls_record_codec:pack(Codec, Value)),
-        ?assertEqual(undefined, get(codec_callback)),
-        code:purge(Leaf), code:delete(Leaf),
-        ?assertError({record_codec_provider_unavailable, Leaf, nofile}, hls_record_codec:check(Codec)),
-        ?assertError({record_codec_provider_unavailable, Leaf, nofile}, hls_record_codec:bind(message, Fields)),
+    with_modules([Provider], fun(Directory) ->
+        load(Directory, Provider, exports(), provider(8, 1, 0)),
+        Codec = hls_record_codec:bind(message, [{value, {hls_type, Provider, value, [v1]}}]),
+        ?assertEqual(<<37>>, hls_record_codec:pack(Codec, {message, 37})),
+        load(Directory, Provider, exports(), provider(8, 2, 255)),
+        ?assertEqual(ok, hls_record_codec:check(Codec)),
+        ?assertEqual(<<218>>, hls_record_codec:pack(Codec, {message, 37})),
+        ?assertEqual({{message, 37}, <<>>}, hls_record_codec:unpack(Codec, <<218>>)),
         ok
     end).
 
-%% These generated fixtures deliberately alter only code, keeping the declared width fixed.
--spec provider_exports(boolean()) -> string().
-provider_exports(false) -> "[width/2, pack/3, unpack/3]";
-provider_exports(true) -> "[width/2, pack/3, unpack/3, codec_dependencies/0]".
+%% The provider's required public codec functions are independent of its helper implementation.
+-spec exports() -> string().
+exports() -> "[width/2, pack/3, unpack/3]".
 
-%% Side effects are test-only probes proving stale identities reject before callbacks.
--spec provider(byte(), none | module()) -> iodata().
-provider(Mask, Helper) ->
-    Expression = case Helper of
-        none -> integer_to_list(Mask);
-        _ -> atom_to_list(Helper) ++ ":mask()"
-    end,
-    ["width(value, []) -> 8.\n",
-     "pack(V, value, []) when is_integer(V), V >= 0, V < 256 ->\n",
-     "  put(codec_callback, pack), <<(V bxor ", Expression, "):8>>;\n",
-     "pack(_, value, []) -> error(badarg).\n",
-     "unpack(<<V:8, Rest/bitstring>>, value, []) ->\n",
-     "  put(codec_callback, unpack), {V bxor ", Expression, ", Rest}.\n",
-     case Helper of none -> []; _ ->
-         ["codec_dependencies() -> [", atom_to_list(Helper), "].\n"] end].
+%% Test-only callback probes identify the current implementation without changing its encoding.
+-spec provider(pos_integer(), pos_integer(), byte() | module()) -> iodata().
+provider(Width, Revision, Mask) ->
+    W = integer_to_list(Width),
+    R = integer_to_list(Revision),
+    ["width(value, [_Version]) -> ", W, ".\n",
+     "pack(V, value, [Version]) when is_integer(V), V >= 0, V < (1 bsl ", W, ") ->\n",
+     "  put(codec_callback, {pack, ", R, "}), <<(V bxor mask(Version)):", W, ">>;\n",
+     "pack(_, value, _) -> error(badarg).\n",
+     "unpack(<<V:", W, ", Rest/bitstring>>, value, [Version]) ->\n",
+     "  put(codec_callback, {unpack, ", R, "}), {V bxor mask(Version), Rest}.\n",
+     case Mask of
+         M when is_atom(M) -> ["mask(Version) -> ", atom_to_list(M), ":mask(Version).\n"];
+         M -> ["mask(v1) -> ", integer_to_list(M), ";\n",
+             "mask(v2) -> ", integer_to_list(M bxor 255), ".\n"]
+     end].
 
-%% Compile fixtures to memory so deleting a loaded helper cannot silently reload a beam file.
+%% Changing the helper's revision leaves both explicitly versioned encodings unchanged.
+-spec helper(pos_integer()) -> iodata().
+helper(Revision) ->
+    ["revision() -> ", integer_to_list(Revision), ".\n",
+     "mask(v1) -> revision() - revision();\nmask(v2) -> 255.\n"].
+
+%% Compile fixtures to memory so deleting a loaded provider cannot silently reload a beam file.
 -spec load(file:filename(), module(), string(), iodata()) -> ok.
 load(Directory, Module, Exports, Functions) ->
     Path = filename:join(Directory, atom_to_list(Module) ++ ".erl"),

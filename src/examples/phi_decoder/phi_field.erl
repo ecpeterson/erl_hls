@@ -16,7 +16,6 @@ the sign boundary. Each experiment must still validate its numerical range
 and decide whether gauge recentering is preferable.
 """.
 -behavior(hls_type).
--export([codec_dependencies/0]).
 -export([scalar/0, field/0, from_integer/1, from_ratio/2, to_float/1,
     accumulate/2, relax/4, relax_center/4, relax_bulk/3, relax_line/4]).
 -export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2,
@@ -95,7 +94,3 @@ transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum], _State) ->
     ["phi_field::relax_center(", Anyon, ", ", Phi0, ", ", Phi1, ", ", NeighborSum, ")"];
 transpile(relax_bulk, [Phi0, Phi1, NeighborSum], _State) ->
     ["phi_field::relax_bulk(", Phi0, ", ", Phi1, ", ", NeighborSum, ")"].
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_type, hls_fixed, hls_vec].

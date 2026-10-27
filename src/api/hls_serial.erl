@@ -12,7 +12,6 @@ Use these functions explicitly: ordinary Erlang operators retain their usual
 integer semantics. This is not a total order for sorting arbitrary counters.
 """.
 -behavior(hls_type).
--export([codec_dependencies/0]).
 -export([counter/1, wrap/2, add/3, difference/3, before/3]).
 -export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3,
     dslx_imports/0]).
@@ -112,7 +111,3 @@ operand(Type = {hls_type, ?MODULE, counter, _}, {static, integer, Value}) ->
     [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
 operand(Type = {hls_type, ?MODULE, counter, _}, Value) ->
     ["(", Value, " as ", hls_type:print_type(Type), ")"].
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_codec].

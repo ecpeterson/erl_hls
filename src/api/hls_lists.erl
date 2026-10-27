@@ -9,7 +9,6 @@ after the selected range. `array_slice/4` returns exactly the requested length,
 which must be a positive compile-time constant when translating to XLS. Empty
 collections are supported by the host codecs; XLS does not support their values.
 """.
--export([codec_dependencies/0]).
 -export([list/2]).
 -export_type([list/2]).
 -export([new/2, sublist/4, nth/2, set/3, array_slice/4]).
@@ -185,7 +184,3 @@ codec_map(Input, OutputType, Count, Convert) ->
         OutputType, ") in u32:0..u32:", integer_to_list(Count),
         " { update(codec_output, codec_index, ", Convert(["codec_input[u32:", integer_to_list(Count - 1), " - codec_index]"]),
         ") } (zero!<", OutputType, ">()) }"].
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_type, hls_codec].

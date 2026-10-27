@@ -1,7 +1,6 @@
 -module(hls_record).
 -moduledoc false.
 
--export([codec_dependencies/0]).
 -export([zero/2, width/2, value_width/2, pack/3, unpack/3, print_type/2, dslx_codec/2]).
 -export_type([fields/0]).
 
@@ -47,7 +46,3 @@ dslx_codec(Name, _Fields) ->
     Codec = xls_names:record_codec(Name),
     {fun(Bits) -> [Codec, "_from_bits(", Bits, ")"] end,
      fun(Value) -> ["bits_from_", Codec, "(", Value, ")"] end}.
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_type].

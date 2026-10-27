@@ -11,7 +11,6 @@ argument declares the accumulator type. Every intermediate sum must fit that
 type. Fixed-point products retain their combined scale; no rescaling is implicit.
 """.
 -behavior(hls_type).
--export([codec_dependencies/0]).
 -export([vector/2, nth/2, set/3, dot/3]).
 -export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3, dslx_imports/1]).
 -export_type([vector/2]).
@@ -57,7 +56,3 @@ transpile(set, Args, State) -> hls_lists:transpile(set, Args, State);
 transpile(dot, [{phantom, type, AccumulatorType}, Left, Right], _State) ->
     ["hls_vec::dot<u32:", integer_to_list(hls_type:value_width(AccumulatorType)),
         ">(", Left, ", ", Right, ")"].
-
--doc "Declares host-code helpers used by this provider's width, packing and unpacking callbacks.".
--spec codec_dependencies() -> [module()].
-codec_dependencies() -> [hls_type, hls_lists].
