@@ -130,13 +130,23 @@ def cached_artifact(directory: Path) -> Path:
     return directory / artifact
 
 
-def run(argv: list[str], work: Path, output: str, timeout: float) -> dict[str, Any]:
-    """Wait for this child, retaining its CPU/RSS; stop its whole group on failure to wait."""
+def run(argv: list[str], work: Path, output: str, timeout: float, *,
+        cwd: Path | None = None, allow_empty: bool = False,
+        expect_failure: str | None = None) -> dict[str, Any]:
+    """Retain child CPU/RSS and logs; stop its whole group on failure to wait.
+
+    Defaults require successful nonempty compiler output. Regression callers may
+    allow empty stdout or require a positive exit and a matching diagnostic;
+    signals and timeouts never count as an expected rejection. cwd only changes
+    the command's working directory, not the retained log/product location.
+    """
+    if expect_failure is not None:
+        re.compile(expect_failure)
     started = time.monotonic()
     (work / "time.json").unlink(missing_ok=True)
     (work / output).parent.mkdir(parents=True, exist_ok=True)
     with (work / output).open("wb") as stdout, (work / "stderr.log").open("wb") as stderr:
-        process = subprocess.Popen(argv, cwd=work, stdout=stdout, stderr=stderr,
+        process = subprocess.Popen(argv, cwd=work if cwd is None else cwd, stdout=stdout, stderr=stderr,
                                    env=dict(os.environ, LC_ALL="C"), start_new_session=True)
         try:
             while True:
@@ -169,9 +179,13 @@ def run(argv: list[str], work: Path, output: str, timeout: float) -> dict[str, A
                "max_rss_bytes": usage.ru_maxrss * (1 if platform.system() == "Darwin" else 1024),
                "returncode": process.returncode}
     save(work / "time.json", metrics)
-    if process.returncode:
+    if expect_failure is not None:
+        diagnostics = (work / "stderr.log").read_text(errors="replace") + (work / output).read_text(errors="replace")
+        if process.returncode <= 0 or re.search(expect_failure, diagnostics) is None:
+            raise RuntimeError(f"expected rejection did not match (exit {process.returncode}): {work / 'stderr.log'}")
+    elif process.returncode:
         raise RuntimeError(f"compiler exited {process.returncode}: {work / 'stderr.log'}")
-    if not (work / output).stat().st_size:
+    if not allow_empty and not (work / output).stat().st_size:
         raise ValueError(f"compiler produced empty {output}")
     return metrics
 

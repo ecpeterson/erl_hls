@@ -29,6 +29,7 @@ jobs:
     outputs:
       test: ${{ steps.plan.outputs.test == 'true' && steps.passed.outputs.cache-hit != 'true' }}
       topology: ${{ steps.plan.outputs.topology == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      test_cases: ${{ steps.plan.outputs.test_cases }}
       qualify: ${{ steps.plan.outputs.qualify == 'true' && steps.passed.outputs.cache-hit != 'true' }}
       key: ${{ steps.plan.outputs.key }}
     steps:
@@ -111,6 +112,7 @@ jobs:
           rebar3 release
           python3 tools/test_source_toolchain.py
           python3 -m unittest tools.test_source_build_executor
+          python3 tools/test_regression.py
 
       - name: Prepare simulation inputs
         run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
@@ -128,8 +130,10 @@ jobs:
           python3 tools/compiler_differential.py "$RUNNER_TEMP/xls" \
             --count 16 --depth 3 --inputs 20 --rtl-batches 2 --shrink-budget 40
 
-      - name: Compare macro-configured actors with BEAM
-        run: bash tools/test_source_context.sh "$RUNNER_TEMP/xls"
+      - name: Check localized compiler regressions
+        env:
+          REGRESSION_CASES: ${{ needs.select.outputs.test_cases }}
+        run: python3 tools/run_regression.py "$RUNNER_TEMP/xls" --cases-json "$REGRESSION_CASES"
 
       - name: Fault-inject the VPI transport
         run: python3 tools/test_sim_bridge.py
@@ -151,79 +155,8 @@ jobs:
       - name: Prove round-robin selection and grant fairness
         run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
 
-      - name: Compare entry outcomes with BEAM and simulate RTL
-        run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare control-flow failures with BEAM and routed RTL
-        run: bash tools/test_control_failures.sh "$RUNNER_TEMP/xls"
-
-      - name: Check service reply contracts under backpressure
-        run: bash tools/test_service_contracts.sh "$RUNNER_TEMP/xls"
-
-      - name: Check retained replies and iterative continuation drains
-        run: bash tools/test_deferred_replies.sh "$RUNNER_TEMP/xls"
-
-      - name: Check state-machine internal events and retained calls through dedicated actors and topologies
-        run: bash tools/test_statem_replies.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare fixed bit syntax and diagnose packed samples through public debug APIs
-        run: bash tools/test_binary.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare dense and padded codecs with BEAM and RTL
-        run: bash tools/test_logical_types.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare typed floats with BEAM, JIT, and routed RTL
-        run: bash tools/test_float_arithmetic.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare integer division and remainder with BEAM, JIT, and RTL
-        run: bash tools/test_integer_arithmetic.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare mixed-width integers with BEAM, JIT, and RTL
-        run: bash tools/test_comparisons.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare wrapping counters with BEAM, JIT, and RTL
-        run: bash tools/test_serial.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare signed and mixed-width shifts with BEAM, JIT, and RTL
-        run: bash tools/test_integer_shifts.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare checked collections with BEAM, JIT, and RTL
-        run: bash tools/test_collections.sh "$RUNNER_TEMP/xls"
-
-      - name: Compare bounded patterns and guarded helpers with BEAM, JIT, and RTL
-        run: bash tools/test_patterns.sh "$RUNNER_TEMP/xls"
-
-      - name: Check source type shapes and destructured reductions
-        run: bash tools/test_type_shapes.sh "$RUNNER_TEMP/xls"
-
-      - name: Check actor namespaces and mixed-case record codecs
-        run: bash tools/test_names.sh "$RUNNER_TEMP/xls"
-
       - name: Check configurable routed streams and prove packet conservation
         run: python3 tools/test_fabric_router.py
-
-      - name: Check application framing and admission conservation
-        run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
-
-      - name: Check direct actor admission, self-delivery, and credit conservation
-        run: bash tools/test_direct_admission.sh "$RUNNER_TEMP/xls"
-
-      - name: Inspect admitted receive backpressure through the debug endpoint
-        run: |
-          python3 tools/test_topology_debug_integration.py \
-            --top application_frames --stage _build/application_frames/debug \
-            _build/application_frames/DebugTop-p2-ii1.v
-
-      - name: Compare typed helpers with BEAM and inline RTL
-        run: bash tools/test_helpers.sh "$RUNNER_TEMP/xls"
-
-      - name: Check initialization and reset against BEAM
-        run: bash tools/test_initialization.sh "$RUNNER_TEMP/xls"
-
-      - name: Run generated reduction and indexed gather semantics
-        run: |
-          bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
-          bash tools/test_statem_gathers.sh "$RUNNER_TEMP/xls"
 
       - name: Run generated RTL and bridged EUnit regressions
         env:
@@ -297,21 +230,10 @@ jobs:
             _build/sim_bridge/**/*.log
             _build/sim_bridge/**/*.sv
             _build/deferred-replies/**
-            _build/service_contracts/*.log
-            _build/service_contracts/*.json
-            _build/service_contracts/**/*.v
-            _build/service_contracts/**/*.x
-            _build/binary/**/*.log
-            _build/binary/live/*.term
-            _build/binary/*.x
-            _build/binary/*.v
-            _build/logical-types/*.x
-            _build/logical-types/*.mem
-            _build/logical-types/**/*.v
-            _build/entry_outcomes/*.x
-            _build/entry_outcomes/*.ir
-            _build/entry_outcomes/*.v
-            _build/entry_outcomes/*.sv
+            _build/service_contracts/**
+            _build/binary/**
+            _build/logical-types/**
+            _build/entry_outcomes/**
             _build/application_frames/**
             _build/direct-admission-tests/**
             _build/initialization/**
@@ -326,6 +248,8 @@ jobs:
             _build/aggregate-debug/**
             _build/reduction-semantics/**
             _build/statem-gathers/**
+            _build/statem-replies/**
+            _build/source_context/**
             _build/mailbox-formal/**
             _build/helpers/**
             _build/control_failures/**
@@ -406,6 +330,8 @@ jobs:
           name: mixed-topology-${{ matrix.workload }}-reports
           paths: |
             _build/mixed-topology/**/*.log
+            _build/mixed-topology/**/logs/**
+            _build/mixed-topology/**/regression.json
             _build/mixed-topology/**/*.term
             _build/mixed-topology/**/*.hex
             _build/mixed-topology/**/*.x

@@ -35,7 +35,7 @@ expected(A, B) ->
     Value = binary:decode_unsigned(xls_names_fixture:pack(Output), little),
     (1 bsl 96) bor (Value bsl 64) bor (Value bsl 32) bor Value.
 
-%% Emits a mixed-case server and reply checks using the same names as its host wire codec.
+%% Emits a mixed-case server and reply checks, rendering lowered callback syntax at the file boundary.
 -spec gs() -> iodata().
 gs() ->
     {ok, Forms} = hls_source:parse_file("test/xls_names_gs_fixture.erl"),
@@ -44,7 +44,7 @@ gs() ->
         "  let state_record = (Tag::SERVER_DATA, ServerData { Value: value });\n",
         "  let frame = axis::pack(Tag::GET_VALUE as u8, u32:0);\n",
         "  let (response, state) = match frame.header.op as Tag {\n",
-        xls_gs_lower:callback_arms(Forms, 'Server_Data'), "};\n",
+        xls_dslx:render(xls_gs_lower:callback_arms(Forms, 'Server_Data')), "};\n",
         "  replyvalue_from_bits(response.payload).Value\n}\n",
         "#[test]\nfn server_reply() {\n",
         [begin

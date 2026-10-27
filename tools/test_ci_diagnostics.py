@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check storage bounds and preservation of useful failure information."""
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -52,6 +53,79 @@ class DiagnosticsTests(unittest.TestCase):
             (parent / "outside.log").write_text("outside")
             report = collect(root, ["../*.log", "missing/**"], root / "empty.zip")
             self.assertEqual(report["matched_files"], 0)
+
+    def test_failed_regression_precedes_small_success_logs(self) -> None:
+        """Hundreds of empty success logs cannot hide the failure or its external stdout product."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage = root / "case"
+            log = stage / "logs/007-convert"
+            log.mkdir(parents=True)
+            product = stage / "rejected.ir"
+            product.write_text("incomplete compiler output\n")
+            (log / "stderr.log").write_bytes(b"x" * FILE_BYTES + b"the actual failure")
+            (log / "command.json").write_text(json.dumps({"argv": ["converter"], "stdout": str(product)}))
+            (log / "time.json").write_text('{"returncode": 1}')
+            (stage / "regression.json").write_text(json.dumps({
+                "case": "feature", "status": "failed", "error": "conversion failed",
+                "steps": [{"status": "passed", "log": "old"},
+                          {"status": "failed", "log": str(log)}]}))
+            success = root / "successful"
+            success.mkdir()
+            (success / "regression.json").write_text('{"status": "passed", "steps": []}')
+            for index in range(FILE_COUNT + 20):
+                (success / f"{index:03}.log").write_text("")
+            bundle = root / "result.zip"
+            report = collect(root, ["case/**", "successful/**"], bundle)
+            with zipfile.ZipFile(bundle) as archive:
+                names = set(archive.namelist())
+                expected = {"case/regression.json", "case/rejected.ir", "successful/regression.json",
+                            "case/logs/007-convert/stderr.log", "case/logs/007-convert/command.json",
+                            "case/logs/007-convert/time.json"}
+                self.assertTrue(expected <= names)
+                self.assertTrue(archive.read("case/logs/007-convert/stderr.log").endswith(b"the actual failure"))
+                self.assertEqual(archive.read("case/rejected.ir"), product.read_bytes())
+            self.assertEqual(report["files"][0]["path"], "case/regression.json")
+            self.assertEqual(len(report["files"]), FILE_COUNT)
+            self.assertLessEqual(report["payload_bytes"], TOTAL_BYTES)
+            self.assertTrue(all(item.get("retained_bytes", 0) <= FILE_BYTES for item in report["files"]))
+
+    def test_regression_metadata_is_bounded_and_cannot_add_paths(self) -> None:
+        """Malformed receipts are harmless; references cannot expand workflow path selection."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / "root"
+            log = root / "case/logs/000-failure"
+            log.mkdir(parents=True)
+            outside = parent / "outside.log"
+            outside.write_text("external")
+            unselected = root / "unselected.log"
+            unselected.write_text("not in workflow paths")
+            (log / "stderr.log").write_text("failure")
+            (log / "command.json").write_text(json.dumps({"stdout": str(unselected)}))
+            (log / "stdout.log").symlink_to(outside)
+            (root / "case/regression.json").write_text(json.dumps({"status": "failed", "steps": [
+                {"status": "failed", "log": str(log)}]}))
+            for name, content in (("truncated", b'{"status": "failed",'),
+                                  ("oversized", b"x" * (FILE_BYTES + 1)),
+                                  ("not-object", b"[]"),
+                                  ("bad-steps", b'{"status":"failed","steps":123}'),
+                                  ("deep", b"[" * 2000 + b"]" * 2000),
+                                  ("external", json.dumps({"status": "failed", "steps": [
+                                      {"status": "failed", "log": str(parent)}]}).encode())):
+                folder = root / name
+                folder.mkdir()
+                (folder / "regression.json").write_bytes(content)
+            bundle = root / "result.zip"
+            report = collect(root, ["case/**", "*/regression.json", "../outside.log"], bundle)
+            with zipfile.ZipFile(bundle) as archive:
+                self.assertNotIn("unselected.log", archive.namelist())
+                self.assertNotIn("outside.log", archive.namelist())
+                self.assertNotIn("case/logs/000-failure/stdout.log", archive.namelist())
+                self.assertIn("case/logs/000-failure/stderr.log", archive.namelist())
+            oversized = next(item for item in report["files"] if item["path"] == "oversized/regression.json")
+            self.assertEqual(oversized["omitted"], "file limit")
+            self.assertLessEqual(report["payload_bytes"], TOTAL_BYTES)
 
     def test_workflow_upload_policy(self) -> None:
         """Every workflow upload is bounded and gated on failure or explicit opt-in."""
