@@ -10,6 +10,7 @@
     pack/2,
     pack_exact/2,
     print_type/1,
+    providers/1,
     unpack/2,
     transpile/3,
     value_width/1,
@@ -47,6 +48,10 @@ Each provider defines its accepted domain and normalization policy. Every
 successful pack must unpack completely and repack to identical bits; repeated
 normalization must preserve the decoded value. Reject invalid shapes and values
 outside that domain. These are codec laws, not arithmetic equivalence laws.
+An existing constructor and arguments name a stable encoding contract across
+code upgrades. Incompatible encodings require a distinct constructor name or
+version argument; provider availability and width checks cannot establish
+semantic compatibility.
 """.
 -callback pack(Value :: any(), atom(), [any()]) -> bitstring().
 
@@ -113,6 +118,19 @@ such casts add or remove padding. Padding must match the host codec policy.
 %%%
 %%% Descriptor-level versions which dispatch on Module
 %%%
+
+-doc "Returns the sorted unique providers named by a descriptor and its nested arguments, including internal record fields. This structural inventory does not invoke provider callbacks or inspect helper implementations.".
+-spec providers(descriptor()) -> [module()].
+providers(Type = #hls_type{}) -> lists:usort(provider_modules(Type)).
+
+%% Descriptor arguments contain literals, nested types or named record fields.
+-spec provider_modules(arg() | [arg()]) -> [module()].
+provider_modules(#hls_type{module = Module, args = Args}) ->
+    [Module | provider_modules(Args)];
+provider_modules({_Field, Type}) -> provider_modules(Type);
+provider_modules(Args) when is_list(Args) ->
+    lists:append([provider_modules(Arg) || Arg <- Args]);
+provider_modules(_Literal) -> [].
 
 -spec zero() -> no_return().
 -doc """
