@@ -11,40 +11,40 @@
 
 
 -doc "Builds a committed-state projection for dedicated actors and the exact generated artifacts.".
--spec projection(hls_topology:plan(), #{module() => iodata()}) -> map().
+-spec projection(hls_topology:plan(), #{module() => xls_emitted:artifact()}) -> map().
 projection(Plan, Artifacts) -> projection(Plan, Artifacts, #{direct_actor_debug => true}).
 -doc "Builds the enabled dedicated actor projections; binds failure codes to generated artifacts.".
--spec projection(hls_topology:plan(), #{module() => iodata()}, map()) -> map().
+-spec projection(hls_topology:plan(), #{module() => xls_emitted:artifact()}, map()) -> map().
 projection(Plan, Artifacts, Options) ->
-    build(Plan, Options, fun(Module, Origins) ->
-        xls_failure_sites:from_artifact(Origins, maps:get(Module, Artifacts))
+    build(Plan, Options, fun(Module, Locations) ->
+        xls_emitted:sites(maps:get(Module, Artifacts), Locations)
     end).
 -doc "Checks actor identities, state layouts and source-bound failure codes against a projection.".
 -spec validate(hls_topology:plan(), map()) -> ok.
 validate(Plan, Projection = #{<<"banks">> := [], <<"direct">> := Banks}) ->
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
-    Expected = build(Plan, #{direct_actor_debug => true}, fun(Module, Origins) ->
-        Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
-        xls_failure_sites:number([O || O <- Origins, is_map_key(json_value(O), Values)])
+    Expected = build(Plan, #{direct_actor_debug => true}, fun(Module, Locations) ->
+        try xls_failure_sites:from_catalog(Locations, maps:get(atom_to_binary(Module), ByModule, #{}))
+        catch error:_ -> error(actor_projection_mismatch) end
     end),
     case Projection =:= Expected of true -> ok; false -> error(actor_projection_mismatch) end;
 validate(_, _) -> error(actor_projection_mismatch).
 
 %% Derive state observations independently of any physical sharing policy.
--spec build(hls_topology:plan(), map(), fun((module(), [map()]) -> [map()])) -> map().
+-spec build(hls_topology:plan(), map(), fun((module(), [xls_failure_sites:location()]) -> [xls_failure_sites:site()])) -> map().
 build(Plan, Options, Codebook) ->
     Direct = case xls_actor_observation:enabled(Options) of
         true -> xls_actor_observation:bindings(Plan, #{});
         false -> []
     end,
     Interfaces = hls_actor_interface:from_modules(lists:usort([M || #{module := M} <- Direct])),
-    Codebooks = maps:map(fun(Module, #{failure_origins := Origins}) -> Codebook(Module, Origins) end, Interfaces),
+    Codebooks = maps:map(fun(Module, #{failure_locations := Locations}) -> Codebook(Module, Locations) end, Interfaces),
     json_value(#{schema => 4, binding => digest({Plan, direct}), banks => [],
         direct => [direct_bank(Index, Binding, maps:get(Module, Interfaces), maps:get(Module, Codebooks)) ||
             {Index, Binding = #{module := Module}} <- lists:enumerate(0, Direct)]}).
 
 -doc "Builds one actor's register observation schema and failure catalog.".
--spec direct_bank(non_neg_integer(), map(), hls_actor_interface:summary(), [map()]) -> map().
+-spec direct_bank(non_neg_integer(), map(), hls_actor_interface:summary(), [xls_failure_sites:site()]) -> map().
 direct_bank(Index, #{id := Id, module := Module, port := Port},
         #{phases := Phases} = Interface, Sites) ->
     Reduction = xls_actor_observation:collection(Interface),
@@ -64,7 +64,7 @@ direct_bank(Index, #{id := Id, module := Module, port := Port},
     end.
 
 -doc "Indexes artifact-local failure codes by their wire representation.".
--spec failures([map()]) -> #{binary() => map()}.
+-spec failures([xls_failure_sites:site()]) -> #{binary() => map()}.
 failures(Sites) ->
     maps:from_list([{integer_to_binary(Code), maps:remove(code, Site)} ||
         Site = #{code := Code} <- [#{code => C, kind => K} ||

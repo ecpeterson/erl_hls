@@ -37,7 +37,7 @@ lower(Source, Dslx, Cases, Results) ->
         [[xls_record_codegen:declaration(Record), xls_record_codegen:encoder(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
     Functions = [function(Case, Forms) || Case <- Cases],
-    ok = file:write_file(Dslx, [Declarations, xls_helpers:emit(Helpers, state, #{}),
+    ok = file:write_file(Dslx, [Declarations, xls_dslx:render(xls_helpers:emit(Helpers, state, #{})),
         Functions, dispatcher(Cases), [test(C, R) || {C, R} <- lists:zip(Cases, Results)]]),
     #{status => ok, cases => Results}.
 

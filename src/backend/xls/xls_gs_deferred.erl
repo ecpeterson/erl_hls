@@ -1,6 +1,6 @@
 -module(xls_gs_deferred).
 -moduledoc "Lowers bounded server callbacks into a worker for the static retained-reply driver.".
--export([emit/2, emit/3]).
+-export([emit/2, emit/3, artifact/3]).
 
 -doc "Emits checked callbacks, finite continuations and the standard frame/beat service wrappers.".
 -spec emit(file:filename(), [hls_source:form()]) -> iolist().
@@ -8,7 +8,11 @@ emit(Filename, Forms) -> emit(Filename, Forms, hls_frame_layout:default()).
 
 -doc "Emits the server using an explicit checked ordinary-frame layout and rejects any public schema exceeding it.".
 -spec emit(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
-emit(Filename, Forms0, Layout) ->
+emit(Filename, Forms, Layout) -> [xls_emitted:bytes(artifact(Filename, Forms, Layout))].
+
+-doc "Finalizes a checked server and its retained failure codebook without writing files.".
+-spec artifact(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> xls_emitted:artifact().
+artifact(Filename, Forms0, Layout) ->
     3 = hls_service_contract:call_arity(Forms0),
     Roots = [{init, 1}, {handle_call, 3}, {handle_cast, 2}, {handle_continue, 2}],
     Selected = xls_hardware_source:select(Forms0, Roots),
@@ -55,7 +59,7 @@ emit(Filename, Forms0, Layout) ->
      "  let (resp_p, resp_c) = chan<axis::Frame, u32:1>(\"reply\");\n",
      "  spawn axis::Rx(input, req_p); spawn Service(req_c, resp_p); spawn axis::Tx(resp_c, output); ()\n",
      " }\n init { () }\n next(state: ()) { state }\n}\n"],
-    xls_failure_sites:emit(Sites, Body).
+    xls_emitted:new(Sites, Body).
 
 %% Callback names share the contract's record grouping.
 -spec callback(call | cast) -> atom().
@@ -74,7 +78,7 @@ allowed(Calls) ->
      end, "\n}\n"].
 
 %% Validate input length before any callback or application-state mutation.
--spec arm(call | cast, {atom(), [erl_parse:abstract_clause()]}, [hls_source:form()], atom(), map(), hls_frame_layout:layout()) -> iolist().
+-spec arm(call | cast, {atom(), [erl_parse:abstract_clause()]}, [hls_source:form()], atom(), map(), hls_frame_layout:layout()) -> xls_dslx:value().
 arm(Kind, {Tag, Clauses}, Forms, StateName, Enum, Layout) ->
     Raw = "request",
     Record = xls_pattern_lower:record_argument(Tag, Raw,
@@ -88,7 +92,7 @@ arm(Kind, {Tag, Clauses}, Forms, StateName, Enum, Layout) ->
      lower(Clauses, Args, Kind, StateName, Enum), "\n }\n},\n"].
 
 %% Continuation names are finite atoms; all operation arguments live in application state.
--spec continuation([hls_source:form()], atom(), map()) -> iolist().
+-spec continuation([hls_source:form()], atom(), map()) -> xls_dslx:value().
 continuation(Forms, StateName, Enum) ->
     Clauses = lists:append([C || {function, _, handle_continue, 2, C} <- Forms]),
     lower(Clauses, [xls_pattern_lower:value_argument("inv.continuation"), state_argument(StateName)],
@@ -99,7 +103,7 @@ continuation(Forms, StateName, Enum) ->
 state_argument(Name) -> xls_pattern_lower:record_argument(Name, "state_record.1", "state_record").
 
 %% Normalize each selected result before joining differently shaped Erlang alternatives.
--spec lower([erl_parse:abstract_clause()], [xls_pattern_lower:argument()], call | cast | continue, atom(), map()) -> iolist().
+-spec lower([erl_parse:abstract_clause()], [xls_pattern_lower:argument()], call | cast | continue, atom(), map()) -> xls_dslx:value().
 lower(Clauses, Args, Kind, StateName, Enum) ->
     Normalized = [xls_callback_result:map_actions(C, fun(R) -> result(R, Kind, Enum) end) || C <- Clauses],
     {Body, Value} = xls_callback_lower:lower(Normalized, Args, StateName,
@@ -107,10 +111,10 @@ lower(Clauses, Args, Kind, StateName, Enum) ->
             xls_names:record_codec(StateName), "(", R, ".2.1), continuation: ", R,
             ".3, reply_allowed: ", R, ".4, error: u32:0 }"] end,
         failure("u32:1"), fun(Code) -> failure(["hls_failure::kind(", Code, ") as u32"]) end, Enum),
-    [xls_clause_lower:print(Body), xls_clause_lower:print(Value)].
+    [Body, Value].
 
 %% A callback fault preserves its input data and emits no successful action.
--spec failure(iodata()) -> iolist().
+-spec failure(xls_dslx:value()) -> xls_dslx:value().
 failure(Code) -> ["Outcome { state: inv.state, error: ", Code, ", ..zero!<Outcome>() }"] .
 
 %% Source result forms deliberately bound each step to one reply and one continuation.

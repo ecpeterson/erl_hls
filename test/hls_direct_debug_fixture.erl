@@ -17,4 +17,4 @@ fixture(direct_reduction) ->
 -doc "Translates the fixture's actors with options matching their physical placement.".
 -spec artifacts('direct_reduction',term()) -> map().
 artifacts(direct_reduction, Options) ->
-    #{hls_reduction_failure_fixture => xls_parse:to_xls("test/hls_reduction_failure_fixture.erl", Options)}.
+    #{hls_reduction_failure_fixture => xls_parse:to_artifact("test/hls_reduction_failure_fixture.erl", Options)}.

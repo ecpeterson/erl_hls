@@ -5,12 +5,12 @@
 
 
 -doc "Defines private reduction storage around the declared accumulator type.".
--spec declarations(spec()) -> iolist().
+-spec declarations(spec()) -> xls_dslx:value().
 declarations(Spec) ->
     declarations_value(Spec).
 
 %% Emits reduction types only when the actor has a reduction site.
--spec declarations_value(spec()) -> iolist().
+-spec declarations_value(spec()) -> xls_dslx:value().
 declarations_value(none) ->
     [];
 declarations_value(Spec = #{
@@ -94,12 +94,12 @@ declarations_value(Spec = #{
     ].
 
 -doc "Renders opening, contribution and completion semantics for actor-owned reductions.".
--spec functions(spec()) -> iolist().
+-spec functions(spec()) -> xls_dslx:value().
 functions(Spec) ->
     functions_value(Spec).
 
 %% Omits reduction operations for actors without a reduction site.
--spec functions_value(spec()) -> iolist().
+-spec functions_value(spec()) -> xls_dslx:value().
 functions_value(none) ->
     [];
 functions_value(Spec) ->
@@ -121,7 +121,8 @@ private_width(Spec) ->
 
 %% The accumulator record is private, but its generated codec uses the same
 %% tagged record-value representation as public wire schemas.
--spec tag_member(spec(), non_neg_integer()) -> iolist().
+-doc "Declares the private accumulator tag for a selected u8 selector, or emits nothing when reduction is absent.".
+-spec tag_member(spec(), non_neg_integer()) -> iodata().
 tag_member(none, _Selector) ->
     [];
 tag_member(#{accumulator := #{name := Name}}, Selector)
@@ -129,7 +130,7 @@ tag_member(#{accumulator := #{name := Name}}, Selector)
     ["  ", xls_names:enum_member(Name), " = u8:", integer_to_list(Selector), ",\n"].
 
 %% Encode and decode exactly the optional member-mask storage described by the IR.
--spec codec_functions(map()) -> iodata().
+-spec codec_functions(map()) -> xls_dslx:value().
 codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     Layout = xls_statem_reduction_ir:layout(Spec),
     SiteBits = maps:get(site_bits, Layout),
@@ -225,7 +226,7 @@ site_functions(Spec = #{sites := Sites}) ->
     ].
 
 %% Runtime membership adds an expected mask only to actors which use that form.
--spec open_functions(map()) -> iodata().
+-spec open_functions(map()) -> xls_dslx:value().
 open_functions(Spec = #{accumulator := #{dslx_type := AccumulatorType}}) ->
     [
         "fn reduction_open_site(\n",
@@ -290,13 +291,16 @@ contribution_tag_arm(Tag, Contributions) ->
         "    },\n"
     ].
 
+%% Preserve the selected contribution's body until the enclosing module is rendered.
+-spec contribution_phase_arm({xls_statem_reduction_ir:site(),
+    xls_statem_reduction_ir:contribution()}) -> xls_dslx:value().
 contribution_phase_arm({Site, #{
     build := #{body := Body, result := Result}
 }}) ->
     [
         "        Phase::", xls_names:enum_member(maps:get(phase, Site)), " => {\n",
         "          let built = {\n",
-        xls_parse_io:indent(Body, 12),
+        xls_dslx:indent(Body, 12),
         "            ", Result, "\n",
         "          };\n",
         "          ReductionContribution {\n",
@@ -324,16 +328,18 @@ reducer_function(#{
         "}\n\n"
     ].
 
+%% Each reducer retains the failure references carried by its selected outcome.
+-spec reducer_arm(xls_statem_reduction_ir:reducer()) -> xls_dslx:value().
 reducer_arm(#{name := Name, body := Body, result := Result}) ->
     [
         "    ReductionName::", xls_names:enum_member(Name), " => {\n",
-        xls_parse_io:indent(Body, 6),
+        xls_dslx:indent(Body, 6),
         "      ", Result, "\n",
         "    },\n"
     ].
 
 %% Check an expected runtime mask before accepting any member contribution.
--spec apply_function(map()) -> iodata().
+-spec apply_function(map()) -> xls_dslx:value().
 apply_function(Spec) ->
     [
         "fn reduction_apply(\n",
@@ -398,7 +404,7 @@ apply_function(Spec) ->
     ].
 
 %% Dispatches only completed scalar folds and carries any declared continuation.
--spec completion_function(map()) -> iodata().
+-spec completion_function(map()) -> xls_dslx:value().
 completion_function(#{
     data := #{dslx_type := DataType},
     accumulator := #{dslx_type := AccumulatorType},
@@ -434,7 +440,7 @@ completion_function(#{
     ].
 
 %% Each source completion owns its selected failure and optional next event.
--spec completion_arm(map()) -> iodata().
+-spec completion_arm(map()) -> xls_dslx:value().
 completion_arm(Site = #{
     phase := Phase,
     completion := #{body := Body, result := Result}
@@ -443,7 +449,7 @@ completion_arm(Site = #{
         "      (ReductionSite::", site_label(Site), ", Phase::",
         xls_names:enum_member(Phase), ") => {\n",
         "        let conclusion = {\n",
-        xls_parse_io:indent(Body, 10),
+        xls_dslx:indent(Body, 10),
         "          ", Result, "\n",
         "        };\n",
         "        ReductionDispatch {\n",
@@ -497,6 +503,6 @@ site_label(#{phase := Phase}) ->
     xls_names:enum_member(Phase).
 
 %% Static-only actors retain the original private-state fields and widths.
--spec runtime_members(map(), iodata()) -> iodata().
+-spec runtime_members(map(), xls_dslx:value()) -> xls_dslx:value().
 runtime_members(Spec, Text) ->
     case xls_statem_reduction_ir:has_runtime_members(Spec) of true -> Text; false -> [] end.

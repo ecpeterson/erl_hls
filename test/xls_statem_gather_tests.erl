@@ -142,7 +142,7 @@ bound_record_element_test() ->
             Spec = xls_parse:actor_artifact(Path, []),
             [#{contributions := [#{build := Build, independent_lift := Lift}]}] = maps:get(sites, maps:get(gathers, Spec)),
             ?assert(is_map(Lift)),
-            ?assertNotEqual(nomatch, binary:match(iolist_to_binary(maps:get(result, Build)), <<".2)">>)),
+            ?assertNotEqual(nomatch, binary:match(iolist_to_binary(xls_dslx:render(maps:get(result, Build))), <<".2)">>)),
             ?assert(is_binary(iolist_to_binary(xls_parse:to_xls(Path))))
         end).
 

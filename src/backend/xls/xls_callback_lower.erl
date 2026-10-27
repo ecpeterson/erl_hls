@@ -96,11 +96,9 @@ lower_chain(
     Selected = [
         lists:reverse(BodyState#clause_state.statements),
         "if (", BodyMismatch, ") {\n",
-        xls_parse_io:indent(xls_clause_lower:print(BodyFailure(xls_clause_lower:failure_code(BodyState))), 2),
+        xls_dslx:indent(BodyFailure(xls_clause_lower:failure_code(BodyState)), 2),
         "} else {\n",
-        xls_parse_io:indent(xls_clause_lower:print(
-            Postprocessor(BodyState#clause_state.reference)
-        ), 2),
+        xls_dslx:indent(Postprocessor(BodyState#clause_state.reference), 2),
         "}"
     ],
     {NextBody, NextResult} = lower_chain(
@@ -116,9 +114,9 @@ lower_chain(
         "bool:true" -> Selected;
         _ -> [
             "if ", GuardReference, " {\n",
-            xls_parse_io:indent(xls_clause_lower:print(Selected), 2),
+            xls_dslx:indent(Selected, 2),
             "} else {\n",
-            xls_parse_io:indent(xls_clause_lower:print([NextBody, NextResult]), 2),
+            xls_dslx:indent([NextBody, NextResult], 2),
             "}"
         ]
     end,

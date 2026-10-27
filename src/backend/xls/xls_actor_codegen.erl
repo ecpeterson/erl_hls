@@ -1,6 +1,6 @@
 -module(xls_actor_codegen).
 -moduledoc false.
--export([emit/3, entry_expression/4, input_tag_ok/3, reply_failure_binding/1]).
+-export([emit/3, artifact/3, entry_expression/4, input_tag_ok/3, reply_failure_binding/1]).
 -export_type([spec/0]).
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 %% One phase's checked evaluation and possible ordered effect layouts.
@@ -13,13 +13,13 @@
 -type cast_clause() :: #{
     tag := atom(),
     phase := atom(),
-    body := iodata(),
-    result := iodata()
+    body := xls_dslx:value(),
+    result := xls_dslx:value()
 }.
-%% Complete renderer input, including the emitted failure-site catalog.
+%% Complete deferred renderer input and the source positions permitted for failure allocation.
 -doc "Validated actor rendering input; extra annotations belong to the selected execution backend.".
 -type spec() :: #{
-    failure_sites := [map()],
+    failure_locations := [xls_failure_sites:location()],
     source := file:filename(),
     imports := [atom()],
     capacity := 1 .. ((1 bsl 8) - 1),
@@ -30,8 +30,8 @@
     output_names := [atom(), ...],
     data_name := atom(),
     data_width := non_neg_integer(),
-    record_declarations := iodata(),
-    helper_functions := iodata(),
+    record_declarations := xls_dslx:value(),
+    helper_functions := xls_dslx:value(),
     init := xls_init:lowered(),
     entries := [entry(), ...],
     max_entry_effects := non_neg_integer(),
@@ -47,8 +47,13 @@
 
 
 -doc "Renders checked callback semantics and a supplied execution body into one DSLX module.".
--spec emit(spec(), [atom()], iodata()) -> iolist().
+-spec emit(spec(), [atom()], xls_dslx:value()) -> iolist().
 emit(Spec, RuntimeImports, Body) ->
+    [xls_emitted:bytes(artifact(Spec, RuntimeImports, Body))].
+
+-doc "Finalizes checked callback semantics and execution structure with their allocated failure codebook.".
+-spec artifact(spec(), [atom()], xls_dslx:value()) -> xls_emitted:artifact().
+artifact(Spec, RuntimeImports, Body) ->
     Reductions = maps:get(reductions, Spec, none),
     Common = [maps:get(record_declarations, Spec), maps:get(helper_functions, Spec),
         xls_statem_reduction_codegen:declarations(Reductions),
@@ -60,15 +65,14 @@ emit(Spec, RuntimeImports, Body) ->
         enter_function(Spec), entry_effects_valid_function(),
         xls_statem_reply_codegen:functions(Spec), dispatch_function(Spec),
         xls_statem_event_codegen:functions(Spec), Body],
-    [preamble(Spec, RuntimeImports),
-        xls_failure_sites:emit(maps:get(failure_sites, Spec, []), Common)].
+    xls_emitted:new(maps:get(failure_locations, Spec), preamble(Spec, RuntimeImports), Common).
 
 %%%
 %%% Module declarations
 %%%
 
 %% Declares the actor vocabulary and imports optional runtime modules.
--spec preamble(spec(), [atom()]) -> iodata().
+-spec preamble(spec(), [atom()]) -> xls_dslx:value().
 preamble(#{
     imports := Imports,
     capacity := Capacity,
@@ -118,7 +122,7 @@ reduction_imports(Reductions) ->
     end.
 
 %% Defines the typed values exchanged by callbacks and their execution backend.
--spec declarations(spec()) -> iodata().
+-spec declarations(spec()) -> xls_dslx:value().
 declarations(#{output_names := OutputNames, max_entry_effects := MaxEntryEffects,
         entries := Entries, data_name := DataName} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
@@ -180,7 +184,7 @@ declarations(#{output_names := OutputNames, max_entry_effects := MaxEntryEffects
     ].
 
 %% Allocates the private completion selector after public message tags, rejecting overflow.
--spec reduction_tag_member(none | xls_statem_reduction_ir:reduction(), [atom()]) -> iodata().
+-spec reduction_tag_member(none | xls_statem_reduction_ir:reduction(), [atom()]) -> xls_dslx:value().
 reduction_tag_member(none, _MessageNames) ->
     [];
 reduction_tag_member(Reductions, MessageNames)
@@ -193,7 +197,7 @@ reduction_tag_member(_Reductions, MessageNames) ->
     error({too_many_hls_tags_for_reduction, length(MessageNames), 252}).
 
 %% Assigns stable selectors in declared phase order.
--spec phase_declaration([atom()]) -> iodata().
+-spec phase_declaration([atom()]) -> xls_dslx:value().
 phase_declaration(Phases) ->
     [
         "enum Phase : u8 {\n",
@@ -208,7 +212,7 @@ phase_declaration(Phases) ->
     ].
 
 %% Evaluates one checked phase entry and encodes its selected effect layout.
--spec enter_function(spec()) -> iodata().
+-spec enter_function(spec()) -> xls_dslx:value().
 enter_function(#{data_name := DataName, entries := Entries} = Spec) ->
     Layouts = entry_layouts(Entries),
     [
@@ -223,15 +227,15 @@ enter_function(#{data_name := DataName, entries := Entries} = Spec) ->
     ].
 
 %% Selects a phase entry and preserves its first evaluated failure.
--spec entry_arm(entry()) -> iodata().
+-spec entry_arm(entry()) -> xls_dslx:value().
 entry_arm(#{phase := Phase,
         evaluation := #{body := Body, result := Result, failed := Failed, failure := Failure}}) ->
     Rejected = xls_dslx:construct("EntryOutcome",
         [{"data", xls_dslx:ref("data")}, {"failure", Failure}],
         xls_dslx:call("zero!<EntryOutcome>", [])),
     Outcome = xls_dslx:block(Body, xls_dslx:choose(Failed, Rejected, Result)),
-    xls_parse_io:indent(["Phase::", xls_names:enum_member(Phase), " => ",
-        xls_dslx:render(Outcome), ",\n"], 4).
+    xls_dslx:indent(["Phase::", xls_names:enum_member(Phase), " => ",
+        Outcome, ",\n"], 4).
 
 %% Each source leaf becomes the same typed result before control flow rejoins.
 %% Branch-local expression and failure nodes remain available to backend consumers.
@@ -289,7 +293,7 @@ entry_layouts(Entries) ->
     lists:append([Layouts || #{layouts := Layouts} <- Entries]).
 
 %% Counts the selected entry batch, including a reserved single-reply layout.
--spec entry_effect_count_function([map()], spec()) -> iodata().
+-spec entry_effect_count_function([map()], spec()) -> xls_dslx:value().
 entry_effect_count_function(Layouts, Spec) ->
     [
         "fn entry_effect_count(effects: EntryEffects) -> u8 {\n",
@@ -304,7 +308,7 @@ entry_effect_count_function(Layouts, Spec) ->
     ].
 
 %% Decodes a selected effect into its statically routed output frame.
--spec entry_effect_function([map()], spec()) -> iodata().
+-spec entry_effect_function([map()], spec()) -> xls_dslx:value().
 entry_effect_function(Layouts, Spec) ->
     [
         "fn entry_effect(effects: EntryEffects, index: u8) -> Egress {\n",
@@ -317,7 +321,7 @@ entry_effect_function(Layouts, Spec) ->
     ].
 
 %% Selects the ordered effect list represented by a layout tag.
--spec entry_effect_layout_arm(map()) -> iodata().
+-spec entry_effect_layout_arm(map()) -> xls_dslx:value().
 entry_effect_layout_arm(#{layout := Layout, actions := []}) ->
     ["    u8:", integer_to_list(Layout), " => zero!<Egress>(),\n"];
 entry_effect_layout_arm(#{layout := Layout, storage := #{effects := Effects}}) ->
@@ -336,7 +340,7 @@ entry_effect_payload_bits(Entries) ->
         || #{storage := Storage} <- entry_layouts(Entries)])).
 
 %% Recognizes batches that contain at least one effect.
--spec entry_effects_valid_function() -> iodata().
+-spec entry_effects_valid_function() -> xls_dslx:value().
 entry_effects_valid_function() ->
     [
         """
@@ -349,7 +353,7 @@ entry_effects_valid_function() ->
     ].
 
 %% Dispatches declared input records with optional caller ownership.
--spec dispatch_function(spec()) -> iodata().
+-spec dispatch_function(spec()) -> xls_dslx:value().
 dispatch_function(#{
     message_names := MessageNames,
     data_name := DataName,
@@ -370,7 +374,7 @@ dispatch_function(#{
     ].
 
 %% Checks a schema length before invoking its phase-specific callback.
--spec dispatch_tag_arm(atom(), [cast_clause()], spec()) -> iodata().
+-spec dispatch_tag_arm(atom(), [cast_clause()], spec()) -> xls_dslx:value().
 dispatch_tag_arm(Tag, Casts, Spec) ->
     TagCasts = [Cast || Cast <- Casts, maps:get(tag, Cast) =:= Tag],
     [
@@ -389,7 +393,7 @@ dispatch_tag_arm(Tag, Casts, Spec) ->
     ].
 
 %% Emits the callback branch selected by the actor's current phase.
--spec dispatch_phase_arm(map()) -> iodata().
+-spec dispatch_phase_arm(map()) -> xls_dslx:value().
 dispatch_phase_arm(#{
     phase := Phase,
     body := Body,
@@ -397,13 +401,13 @@ dispatch_phase_arm(#{
 }) ->
     [
         "        Phase::", xls_names:enum_member(Phase), " => {\n",
-        xls_parse_io:indent(Body, 10),
-        xls_parse_io:indent(Result, 10),
+        xls_dslx:indent(Body, 10),
+        xls_dslx:indent(Result, 10),
         "        },\n"
     ].
 
 %% Checks membership in the permitted input schema set.
--spec tag_ok_expression([atom()], spec()) -> iodata().
+-spec tag_ok_expression([atom()], spec()) -> xls_dslx:value().
 tag_ok_expression(MessageNames, MessageWords) ->
     join_with(" || ", [
         [
@@ -415,21 +419,21 @@ tag_ok_expression(MessageNames, MessageWords) ->
     ]).
 
 %% Interleaves a delimiter without adding a leading or trailing separator.
--spec join_with(iodata(), [iodata()]) -> iodata().
+-spec join_with(xls_dslx:value(), [xls_dslx:value()]) -> xls_dslx:value().
 join_with(_Separator, []) ->
     [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
 
 %% Replies use the existing effect sequencer with one reserved frame layout.
--spec reply_layout_count(map()) -> iodata().
+-spec reply_layout_count(map()) -> xls_dslx:value().
 reply_layout_count(Spec) -> case xls_statem_reply_codegen:enabled(Spec) of
     false -> [];
     true -> ["    u8:", integer_to_list(xls_statem_reply_codegen:layout(Spec)), " => u8:1,\n"]
 end.
 
 %% The reply carries its original transaction ID through ordinary topology routing.
--spec reply_layout_effect(map()) -> iodata().
+-spec reply_layout_effect(map()) -> xls_dslx:value().
 reply_layout_effect(Spec = #{retained_calls := #{port := Port}}) ->
     ["    u8:", integer_to_list(xls_statem_reply_codegen:layout(Spec)),
      " => Egress { port: OutputPort::", xls_names:enum_member(Port),
@@ -438,7 +442,7 @@ reply_layout_effect(_) -> [].
 
 %% Caller-contract faults become actor failures without publishing the invalid reply.
 -doc "Checks a pending reply against its declared result schemas.".
--spec reply_failure_binding(map()) -> iodata().
+-spec reply_failure_binding(map()) -> xls_dslx:value().
 reply_failure_binding(Spec) -> xls_statem_reply_codegen:optional(Spec,
     "    let contract_fault = failure == hls_failure::NONE && reply_book.failure == u32:15;\n"
     "    let failure = hls_failure::first(failure, if reply_book.failure != u32:0 { hls_failure::REPLY_CONTRACT } else { hls_failure::NONE });\n"
@@ -446,7 +450,7 @@ reply_failure_binding(Spec) -> xls_statem_reply_codegen:optional(Spec,
 
 %% Known calls reserve ownership before length validation, allowing their failure to complete them.
 -doc "Renders accepted message selectors, including retained-call reply handling.".
--spec input_tag_ok(map(), [atom()], map()) -> iodata().
+-spec input_tag_ok(map(), [atom()], map()) -> xls_dslx:value().
 input_tag_ok(Spec, Names, Words) -> case xls_statem_reply_codegen:enabled(Spec) of
     false -> tag_ok_expression(Names, Words);
     true -> join_with(" || ", [["frame.header.op == Tag::", xls_names:enum_member(Name), " as u8"] || Name <- Names])

@@ -1,15 +1,18 @@
 -module(xls_statem_codegen).
 -moduledoc false.
--export([emit/1, body/1]).
+-export([emit/1, artifact/1, body/1]).
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 %% Validated callback artifact; execution options do not alter its semantics.
 -type spec() :: xls_actor_codegen:spec().
 
 -doc "Renders a dedicated actor with register-backed state, mailbox and ordered effects.".
 -spec emit(spec()) -> iolist().
-emit(Spec) ->
-    xls_actor_codegen:emit(Spec, [direct_mailbox_observation],
-        body(Spec)).
+emit(Spec) -> [xls_emitted:bytes(artifact(Spec))].
+
+-doc "Finalizes the dedicated actor and binds its failure codebook to its emitted DSLX.".
+-spec artifact(spec()) -> xls_emitted:artifact().
+artifact(Spec) ->
+    xls_actor_codegen:artifact(Spec, [direct_mailbox_observation], body(Spec)).
 
 -doc "Renders dedicated mailbox and service storage around the common callback declarations.".
 -spec body(spec()) -> iodata().

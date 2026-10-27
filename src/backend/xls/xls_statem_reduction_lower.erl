@@ -1078,8 +1078,8 @@ close_reducer(#{name := Name, clause := {clause, Line, [
     ),
     #{
         name => Name,
-        body => xls_clause_lower:print(LoweredBody),
-        result => xls_clause_lower:print(Result)
+        body => LoweredBody,
+        result => Result
     }.
 
 accumulator_argument(Name, Variable) ->
@@ -1354,7 +1354,7 @@ split_last(List) -> {lists:droplast(List), lists:last(List)}.
 %% Render both pieces only after reduction lowering has produced a closed expression.
 -spec lowered(xls_clause_lower:printable(), xls_clause_lower:printable()) -> xls_statem_reduction_ir:expression().
 lowered(Body, Result) ->
-    #{body => xls_clause_lower:print(Body), result => xls_clause_lower:print(Result)}.
+    #{body => Body, result => Result}.
 
 enum_atoms(Phases) ->
     maps:from_list(

@@ -19,8 +19,8 @@ float_failure_codebook_test() ->
     Source = "test/hls_float_fixture.erl",
     {ok, Forms} = hls_source:parse_file(Source),
     {_, Origins} = xls_failure_sites:prepare(Forms),
-    Dslx = xls_parse:to_xls(Source),
-    Sites = xls_failure_sites:from_artifact(Origins, Dslx),
+    Dslx = xls_parse:to_artifact(Source),
+    Sites = xls_emitted:sites(Dslx, Origins),
     Arithmetic = [S || S = #{kind := badarith} <- Sites],
     ?assertEqual(7, length(Arithmetic)),
     lists:foreach(fun(#{code := C, file := F, line := L}) ->

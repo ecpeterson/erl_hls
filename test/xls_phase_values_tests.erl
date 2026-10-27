@@ -20,9 +20,8 @@ freshness_and_specialization_test() ->
     ?assertError(stale_phase_values, xls_phase_values:validate(?FIXTURE, [], F#{fields := #{}})),
     ?assertMatch([#{phase := active, field := kind, values := [2, 4]}], Sites),
     ?assertNotEqual(maps:get(entries, A), maps:get(entries, B)),
-    ?assertEqual(maps:without([entries, failure_sites], A), maps:without([entries, failure_sites], B)),
-    OriginalSites = maps:get(failure_sites, A),
-    ?assertEqual(OriginalSites, [S || S = #{line := L} <- maps:get(failure_sites, B), L =/= 0]).
+    ?assertEqual(maps:without([entries, failure_locations], A), maps:without([entries, failure_locations], B)),
+    ?assertEqual(maps:get(failure_locations, A), maps:get(failure_locations, B)).
 
 %% Finite source witness: every admitted state value and every 8-bit command.
 %% This is an exhaustive one-callback containment check, not compiler soundness.

@@ -43,7 +43,7 @@ list_pattern_origins_cover_length_and_element_failures_test() ->
     {Annotated, Sites} = xls_failure_sites:prepare(Forms),
     [Clause] = hls_source:find_function(Annotated, f, 1),
     Outcome = xls_clause_lower:clause_outcome(Clause, ["values"], cell, #{}),
-    Body = xls_clause_lower:print([maps:get(body, Outcome), maps:get(failure, Outcome)]),
+    Body = [maps:get(body, Outcome), maps:get(failure, Outcome)],
     Retained = xls_failure_sites:allocate(Sites, Body),
     ?assertEqual([{2, match_failure}, {3, match_failure}],
         [{Line, Kind} || #{line := Line, kind := Kind} <- Retained]).

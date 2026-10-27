@@ -1,8 +1,8 @@
 %%%% xls_statem_reduction_ir
 %%%%
-%%%% Closed, typed description of actor-local reductions.  Source syntax and
-%%%% locations are deliberately absent: consumers see only values that are
-%%%% sufficient to render or summarize the reduction implementation. Opening
+%%%% Closed, typed description of actor-local reductions. Source syntax is
+%%%% absent; structured failure references retain the origins needed by the
+%%%% containing module. Consumers can render or summarize the implementation. Opening
 %%%% values belong to the containing entry outcome, not separate evaluators.
 
 -module(xls_statem_reduction_ir).
@@ -36,9 +36,10 @@
     reduction/0
 ]).
 
+-doc "A closed computation retaining structured failure references until its containing module is rendered.".
 -type expression() :: #{
-    body := iolist(),
-    result := iolist()
+    body := xls_dslx:value(),
+    result := xls_dslx:value()
 }.
 -type field() :: #{
     name := atom(),
@@ -72,10 +73,11 @@
     contributions := [contribution(), ...],
     completion := expression()
 }.
+-doc "A named reducer with deferred body and selected result fragments.".
 -type reducer() :: #{
     name := atom(),
-    body := iolist(),
-    result := iolist()
+    body := xls_dslx:value(),
+    result := xls_dslx:value()
 }.
 -type reduction() :: #{
     data := type_ref(),
@@ -319,14 +321,11 @@ validate_independent_lift(Contribution) ->
         Expression -> validate_expression(independent_lift, Expression)
     end.
 
+%% Validate the closed fragment without erasing source failures through rendering.
+-spec validate_expression(atom(), expression()) -> ok.
 validate_expression(_Context, #{body := Body, result := Result}) ->
-    try
-        _ = iolist_size(Body),
-        _ = iolist_size(Result),
-        ok
-    catch
-        error:badarg ->
-            error({invalid_hls_statem_reduction_expression, Body, Result})
+    try xls_dslx:validate([Body, Result])
+    catch error:_ -> error({invalid_hls_statem_reduction_expression, Body, Result})
     end.
 
 validate_reducers(Sites, Reducers) when is_list(Reducers) ->

@@ -67,7 +67,7 @@ source_failure_sites_test() ->
         [Clause] = hls_source:find_function(Forms, Name, 2),
         #{body := Body, failure := Failure} =
             xls_clause_lower:clause_outcome(Clause, ["x", "b"], unused, #{}),
-        xls_clause_lower:print([Body, Failure])
+        [Body, Failure]
     end || Name <- [bad_prefix, assignment, same_bits]],
     Sites = xls_failure_sites:allocate(Origins, Bodies),
     ?assert(lists:any(fun(#{kind := K}) -> K =:= badarg end, Sites)),
@@ -75,8 +75,7 @@ source_failure_sites_test() ->
     ?assert(lists:all(fun(#{line := L, file := F}) ->
         L > 0 andalso F =:= <<"xls_binary_fixture.erl">>
     end, Sites)),
-    ?assertEqual(Sites, xls_failure_sites:from_artifact(Origins,
-        xls_failure_sites:emit(Origins, Bodies))).
+    ?assertEqual(Sites, xls_emitted:sites(xls_emitted:new(Origins, Bodies), Origins)).
 
 cpu_service_test() ->
     {ok, PID} = hls_gs:start_link(packed_samples, [], []),

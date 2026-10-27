@@ -77,3 +77,34 @@ frame_support_test() ->
         ?assertError({published_bundle, Root}, hls_compile:configure_support(Root, Layout))
     end, [1, 3]),
     ?assertEqual({ok, Before}, file:read_file(Default)).
+
+%% Source preprocessing may use an isolated peer; no external XLS tools run in this test.
+-spec actor_failure_sidecar_test_() -> {timeout, pos_integer(), fun(() -> ok)}.
+actor_failure_sidecar_test_() -> {timeout, 60, fun actor_failure_sidecar/0}.
+
+%% The portable actor bundle binds its located codebook and exact DSLX bytes into the input manifest.
+-spec actor_failure_sidecar() -> ok.
+actor_failure_sidecar() ->
+    Root = filename:join("_build", "actor-sidecar-" ++ integer_to_list(erlang:unique_integer([positive]))),
+    try
+        #{inputs := Inputs} = hls_compile:actor("test/hls_serial_fixture.erl", #{}, Root),
+        {ok, Dslx} = file:read_file(filename:join(Root, "actor.x")),
+        {ok, SidecarBytes} = file:read_file(filename:join(Root, "actor.x.json")),
+        #{<<"dslx_sha256">> := DslxHash, <<"failure_sites">> := Sites} = json:decode(SidecarBytes),
+        ?assertEqual(binary:encode_hex(crypto:hash(sha256, Dslx), lowercase), DslxHash),
+        ?assert(Sites =/= []),
+        ?assertEqual(2, length([S || S = #{<<"kind">> := <<"badarg">>} <- Sites])),
+        ?assert(lists:all(fun(#{<<"file">> := File, <<"line">> := Line}) ->
+            File =:= <<"hls_serial_fixture.erl">> andalso Line > 0
+        end, Sites)),
+        ?assertEqual(lists:seq(1, length(Sites)),
+            [Code bsr 4 || #{<<"code">> := Code} <- Sites]),
+        SidecarHash = binary:encode_hex(crypto:hash(sha256, SidecarBytes), lowercase),
+        ?assert(lists:member(#{file => <<"actor.x.json">>, sha256 => SidecarHash}, Inputs)),
+        ?assert(lists:member(#{file => <<"actor.x">>, sha256 => DslxHash}, Inputs)),
+        {ok, ManifestBytes} = file:read_file(filename:join(Root, "source-build.json")),
+        #{<<"inputs">> := Published} = json:decode(ManifestBytes),
+        ?assert(lists:member(#{<<"file">> => <<"actor.x.json">>, <<"sha256">> => SidecarHash}, Published))
+    after
+        ok = file:del_dir_r(Root)
+    end.

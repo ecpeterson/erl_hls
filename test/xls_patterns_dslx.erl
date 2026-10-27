@@ -15,7 +15,7 @@ write(Stage) ->
         xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
         [[xls_record_codegen:declaration(R), xls_record_codegen:encoder(R)]
             || R = {attribute, _, record, _} <- Forms],
-        xls_helpers:emit(Helpers, cell, #{}),
+        xls_dslx:render(xls_helpers:emit(Helpers, cell, #{})),
         [function(Name, Forms) || Name <- Names],
         "pub fn probe(mode: u32, x: s32, a: s32, b: s32, c: s32) -> bits[36] {\n",
         "match mode {\n", [["u32:", integer_to_list(I), " => probe_", atom_to_list(Name),
