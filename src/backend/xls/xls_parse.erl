@@ -8,7 +8,7 @@ lowers state machines. Shared callback expression lowering is xls_clause_lower.
 See docs/actor-compilation.md for these internal boundaries and docs/control-flow.md
 for the supported source semantics.
 """.
--export([actor_artifact/2, actor_artifact/3, actor_interface/1, actor_interface/2, actor_interface/3, to_xls/1, to_xls/2]).
+-export([actor_artifact/2, actor_artifact/3, actor_interface/1, actor_interface/2, actor_interface/3, to_xls/1, to_xls/2, to_artifact/1, to_artifact/2]).
 
 -doc "Transpiles an Erlang actor into a dedicated XLS service.".
 -spec to_xls(file:filename()) -> iolist().
@@ -17,7 +17,16 @@ to_xls(Filename) -> to_xls(Filename, #{}).
 -doc "Transpiles an actor with preprocessing and optional direct-actor observations.".
 -spec to_xls(file:filename(), #{source_options => [hls_source:option()] | hls_source:context(),
     direct_actor_debug => boolean(), frame_payload_words => hls_frame_layout:words()}) -> iolist().
-to_xls(Filename, Options0) ->
+to_xls(Filename, Options) -> [xls_emitted:bytes(to_artifact(Filename, Options))].
+
+-doc "Compiles an actor to final DSLX with its allocated failure codebook and consistency seal.".
+-spec to_artifact(file:filename()) -> xls_emitted:artifact().
+to_artifact(Filename) -> to_artifact(Filename, #{}).
+
+-doc "Compiles with explicit preprocessing, frame capacity and optional direct observations; preserves failure metadata for debug consumers.".
+-spec to_artifact(file:filename(), #{source_options => [hls_source:option()] | hls_source:context(),
+    direct_actor_debug => boolean(), frame_payload_words => hls_frame_layout:words()}) -> xls_emitted:artifact().
+to_artifact(Filename, Options0) ->
     Options = validate_xls_options(Options0),
     {ok, Forms} = hls_source:parse_file(Filename, maps:get(source_options, Options)),
     case hls_source:find_optional_attribute(Forms, hls_phases) of
@@ -26,8 +35,9 @@ to_xls(Filename, Options0) ->
                 true -> error(direct_actor_debug_requires_hls_statem);
                 false -> server(Filename, Forms, maps:get(frame_layout, Options))
             end;
-        {ok, Phases} -> xls_statem_lower:lower(Filename, Forms, Phases,
-            maps:with([direct_actor_debug, frame_layout], Options))
+        {ok, Phases} ->
+            Spec = xls_statem_lower:artifact(Filename, Forms, Phases, maps:get(frame_layout, Options)),
+            xls_statem_codegen:artifact(Spec#{direct_actor_debug => maps:get(direct_actor_debug, Options)})
     end.
 
 -doc "Returns validated state-machine callback semantics for a backend, using explicit source context.".
@@ -85,9 +95,9 @@ actor_interface(Filename, SourceOptions, Layout) ->
     end.
 
 %% Select the server emitter after checking its callback contract.
--spec server(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
+-spec server(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> xls_emitted:artifact().
 server(Filename, Forms, Layout) ->
     case hls_service_contract:call_arity(Forms) of
-        3 -> xls_gs_deferred:emit(Filename, Forms, Layout);
-        2 -> xls_gs_immediate:emit(Filename, Forms, Layout)
+        3 -> xls_gs_deferred:artifact(Filename, Forms, Layout);
+        2 -> xls_gs_immediate:artifact(Filename, Forms, Layout)
     end.

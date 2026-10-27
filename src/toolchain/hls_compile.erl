@@ -7,7 +7,7 @@
 -type options() :: #{source_options => [hls_source:option()], direct_actor_debug => boolean(),
     dslx_path => [file:filename()], pipeline_stages => pos_integer(), frame_payload_words => hls_frame_layout:words()}.
 
--doc "Lowers one supported actor into a fresh portable DSLX bundle using xls_parse:to_xls/2. Caller include paths/macros/features pass unchanged to hls_source; the compiler include directory is appended. Records a Top proc with module hls_actor and an explicit XLS unit-delay pipeline recipe, not a timing claim. Unknown options and nonpositive stage counts fail; partial output is retained. Original source paths in request.erl are descriptive, not a portable source-recompilation recipe.".
+-doc "Lowers one supported actor into a fresh portable DSLX bundle using xls_parse:to_artifact/2. Caller include paths/macros/features pass unchanged to hls_source; the compiler include directory is appended. Retains a hashed failure-codebook sidecar. Records a Top proc with module hls_actor and an explicit XLS unit-delay pipeline recipe, not a timing claim. Unknown options and nonpositive stage counts fail; partial output is retained. Original source paths in request.erl are descriptive, not a portable source-recompilation recipe.".
 -spec actor(file:filename(), options(), file:filename()) -> map().
 actor(Source, Options, Output) ->
     case maps:keys(Options) -- [source_options, direct_actor_debug, dslx_path, pipeline_stages, frame_payload_words] of
@@ -24,11 +24,15 @@ actor(Source, Options, Output) ->
     end,
     SourceOptions = maps:get(source_options, Options, []) ++
         [{i, filename:join(code:lib_dir(erl_hls), "include")}],
-    Dslx = xls_parse:to_xls(Source, #{source_options => SourceOptions,
+    Emitted = xls_parse:to_artifact(Source, #{source_options => SourceOptions,
         direct_actor_debug => maps:get(direct_actor_debug, Options, false),
         frame_payload_words => hls_frame_layout:payload_words(Layout)}),
+    Dslx = xls_emitted:bytes(Emitted),
     Directory = hls_artifact_bundle:open(Output),
     ok = file:write_file(filename:join(Directory, "actor.x"), Dslx, [exclusive]),
+    ok = file:write_file(filename:join(Directory, "actor.x.json"), json:encode(#{
+        dslx_sha256 => string:lowercase(binary:encode_hex(crypto:hash(sha256, Dslx))),
+        failure_sites => xls_emitted:sites(Emitted)}), [exclusive]),
     ok = file:write_file(filename:join(Directory, "request.erl"),
         io_lib:format("~tp.~n", [#{source => Source, options => Options}]), [exclusive]),
     Imports = support(Directory, maps:get(dslx_path, Options, []), Layout),

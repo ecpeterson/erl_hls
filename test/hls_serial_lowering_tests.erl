@@ -9,8 +9,8 @@ provider_and_failure_origins_test() ->
     {ok, Forms} = hls_source:parse_file(Source),
     ?assert(lists:member(hls_serial, xls_dslx_imports:from_forms(Forms))),
     {_, Origins} = xls_failure_sites:prepare(Forms),
-    Generated = xls_parse:to_xls(Source),
-    Sites = xls_failure_sites:from_artifact(Origins, Generated),
+    Generated = xls_parse:to_artifact(Source),
+    Sites = xls_emitted:sites(Generated, Origins),
     Failures = [Site || Site = #{kind := badarg} <- Sites],
     ?assertEqual(2, length(Failures)),
     lists:foreach(fun(#{code := Code, file := File, line := Line}) ->

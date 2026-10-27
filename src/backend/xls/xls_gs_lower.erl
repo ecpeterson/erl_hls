@@ -8,17 +8,19 @@
 
 -export([initial_state/2, callback_arms/2, callback_arms/3]).
 
+-doc "Constructs the checked initializer while preserving source failure references.".
+-spec initial_state([hls_source:form()], atom()) -> xls_dslx:value().
 initial_state(Forms, StateName) ->
     Clause = xls_init:clause(Forms, hls_gs),
     Init = xls_init:lower(Clause, StateName, fun(R) -> [R, ".1"] end, #{}),
     xls_init:emit("initial_state", xls_names:record_type(StateName), Init).
 
 -doc "Emits request dispatch, ordered callback selection and reply-contract checks for an hls_gs service.".
--spec callback_arms([hls_source:form()], atom()) -> iolist().
+-spec callback_arms([hls_source:form()], atom()) -> xls_dslx:value().
 callback_arms(Forms, StateName) -> callback_arms(Forms, StateName, hls_frame_layout:default()).
 
 -doc "Emits checked callback dispatch under an explicit ordinary-frame capacity.".
--spec callback_arms([hls_source:form()], atom(), hls_frame_layout:layout()) -> iolist().
+-spec callback_arms([hls_source:form()], atom(), hls_frame_layout:layout()) -> xls_dslx:value().
 callback_arms(Forms, StateName, Layout) ->
     #{calls := Replies} = hls_service_contract:from_forms(Forms),
     CallGroups = hls_service_contract:groups(Forms, handle_call),
@@ -28,13 +30,13 @@ callback_arms(Forms, StateName, Layout) ->
             || Group = {Tag, _} <- CallGroups],
         [callback_arm(cast, Group, StateName, Forms, Layout) || Group <- CastGroups],
         "\n_ => {\n",
-        xls_parse_io:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
+        xls_dslx:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
         "}\n"
     ].
 
 %% Validate frame length before decoding and selecting this request tag's callback clauses.
 -spec callback_arm(cast | {call, [atom(), ...]},
-    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
+    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()], hls_frame_layout:layout()) -> xls_dslx:value().
 callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
     Arguments = [
         xls_pattern_lower:record_argument(
@@ -66,12 +68,16 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
         "  } else {\n",
         "    let request = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
-        xls_parse_io:indent(xls_clause_lower:print(Body), 4),
-        xls_parse_io:indent(xls_clause_lower:print(Result), 4),
+        xls_dslx:indent(Body, 4),
+        xls_dslx:indent(Result, 4),
         "  }\n",
         "},\n"
     ].
 
+%% Calls enforce their reply vocabulary; casts carry only the proposed state.
+-spec callbacks(cast | {call, [atom(), ...]}, atom()) ->
+    {fun((xls_dslx:value()) -> xls_dslx:value()), xls_dslx:value(),
+        fun((xls_dslx:value()) -> xls_dslx:value())}.
 callbacks({call, Replies}, StateName) ->
     {
         fun(R) ->
@@ -80,7 +86,7 @@ callbacks({call, Replies}, StateName) ->
             ]), " {\n",
             "  (axis::pack(", R, ".1.0 as u8, hls_bits::frame_payload(", R, ".1.2)), ", R, ".2)\n",
             "} else {\n",
-            xls_parse_io:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
+            xls_dslx:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
             "\n}"]
         end,
         failure("ERROR_FUNCTION_CLAUSE", StateName),

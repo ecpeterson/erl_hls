@@ -4,8 +4,9 @@
 -export([clause/2, lower/4, emit/3]).
 -export_type([lowered/0]).
 
--type lowered() :: #{line := non_neg_integer(), body := iodata(),
-    result := iodata(), failed := iodata()}.
+-doc "Initialization retains its selected failure references until module allocation.".
+-type lowered() :: #{line := non_neg_integer(), body := xls_dslx:value(),
+    result := xls_dslx:value(), failed := xls_dslx:value()}.
 
 -doc "Returns the sole init([]) clause; rejects guards, other heads and multiple initializers.".
 -spec clause([hls_source:form()], hls_gs | hls_statem) ->
@@ -30,22 +31,22 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
         xls_clause_lower:clause_outcome(Clause, [], DataName, EnumAtoms),
     #{
         line => erl_anno:line(Line),
-        body => xls_clause_lower:print(Body),
-        result => xls_clause_lower:print(Postprocess(Result)),
-        failed => xls_clause_lower:print(Failed)
+        body => Body,
+        result => Postprocess(Result),
+        failed => Failed
     }.
 
 -doc "Emits an initializer that rejects failed matches during DSLX conversion.".
 %% Evaluate the outcome as a constant even if the caller runs after proc init().
--spec emit(string(), string(), lowered()) -> iolist().
+-spec emit(string(), string(), lowered()) -> xls_dslx:value().
 emit(Name, Type, #{line := Line, body := Body, result := Result,
         failed := Failed}) ->
     Constant = string:uppercase(Name),
     [
         "fn ", Name, "_outcome() -> (bool, ", Type, ") {  // L",
         integer_to_list(Line), "\n",
-        xls_parse_io:indent(Body, 2),
-        xls_parse_io:indent(["(", Failed, ", ", Result, ")"], 2),
+        xls_dslx:indent(Body, 2),
+        xls_dslx:indent(["(", Failed, ", ", Result, ")"], 2),
         "}\n",
         "const ", Constant, " = ", Name, "_outcome();\n",
         "const_assert!(!", Constant, ".0);\n\n",

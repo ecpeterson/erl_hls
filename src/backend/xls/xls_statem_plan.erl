@@ -64,7 +64,7 @@ build(Source, Forms, Helpers, Prepared, Spec = #{source := Filename, phases := P
         callbacks => Callbacks, entries => maps:get(entries, Prepared), roots => Roots,
         helpers => Helpers,
         protocol => maps:with([frame_layout, capacity, output_names, message_names, message_words,
-            retained_calls, continuations, reductions, gathers, failure_sites], Spec)}.
+            retained_calls, continuations, reductions, gathers, failure_locations], Spec)}.
 
 -doc "Recompiles current source and compares the complete sidecar, renaming only compilation-local payload-origin identities. Rejects stale or modified plans; this freshness check is not an equivalence proof.".
 -spec validate(file:filename(), [hls_source:option()] | hls_source:context(), plan()) -> ok.

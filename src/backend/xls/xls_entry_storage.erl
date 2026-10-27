@@ -168,7 +168,7 @@ pack_update(Value, Offset, Bits) ->
     xls_dslx:call("bit_slice_update", [Value, xls_dslx:literal("u32", Offset), Bits]).
 
 -doc "Reconstructs one ordered message and its original routed output port.".
--spec decode(map(), non_neg_integer()) -> iodata().
+-spec decode(map(), non_neg_integer()) -> xls_dslx:value().
 decode(#{tag := Tag, port := Port, fields := Fields}, Index) ->
     ["      u8:", integer_to_list(Index), " => Egress {\n",
         "        port: OutputPort::", xls_names:enum_member(Port), ",\n",
@@ -179,7 +179,7 @@ decode(#{tag := Tag, port := Port, fields := Fields}, Index) ->
         "          }))),\n      },\n"].
 
 %% Stored values retain the type codec's exact bit layout, including nested records.
--spec decode_field(map()) -> iodata().
+-spec decode_field(map()) -> xls_dslx:value().
 decode_field(#{type := Type, constant := Bits}) ->
     Width = bit_size(Bits),
     Raw = case Width of 0 -> 0; _ -> <<Value:Width>> = Bits, Value end,
@@ -196,11 +196,11 @@ decode_field(#{type := Type, offset := Offset}) ->
         integer_to_list(Offset + hls_type:width(Type)), "]"]).
 
 %% Static slices and updates express wiring without variable shifts or selectors.
--spec slice(iodata(), non_neg_integer(), pos_integer()) -> iodata().
+-spec slice(xls_dslx:value(), non_neg_integer(), pos_integer()) -> xls_dslx:value().
 slice(Value, Start, Size) ->
     [Value, "[", integer_to_list(Start), ":", integer_to_list(Start + Size), "]"].
 
 %% Offsets are compile-time constants in the packed payload's numeric bit order.
--spec update(iodata(), non_neg_integer(), iodata()) -> iodata().
+-spec update(xls_dslx:value(), non_neg_integer(), xls_dslx:value()) -> xls_dslx:value().
 update(Value, Offset, Bits) ->
     ["bit_slice_update(", Value, ", u32:", integer_to_list(Offset), ", ", Bits, ")"].

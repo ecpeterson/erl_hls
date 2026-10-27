@@ -131,7 +131,8 @@ encode_integer(Value, #{width := Width, endian := Endian}) ->
 %% clause; an assignment instead reports the ordinary badmatch failure.
 -doc "Returns a binary pattern's length predicate and field projections for subsequent matching.".
 -spec pattern(erl_parse:abstract_expr(), xls_clause_lower:printable()) ->
-    {{erl_anno:anno(), iolist()}, [{erl_parse:abstract_expr(), iolist(), integer | bits}]}.
+    {{erl_anno:anno(), xls_dslx:value()},
+        [{erl_parse:abstract_expr(), xls_dslx:value(), integer | bits}]}.
 pattern({bin, Line, Elements}, Value) ->
     {Parts, Offset, Tail} = pattern_segments(segments(Elements), Value, 0),
     Predicate = case Tail of

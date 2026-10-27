@@ -18,7 +18,7 @@ reachable_graph_test() ->
         {xls_helper_call, _, "hls_local_outer__1", _},
         {xls_helper_call, _, "hls_local_outer__1", _}}]}] =
         hls_source:find_function(Forms, root, 0),
-    Emitted = iolist_to_binary(xls_helpers:emit(Helpers, cell, #{})),
+    Emitted = iolist_to_binary(xls_dslx:render(xls_helpers:emit(Helpers, cell, #{}))),
     ?assertNotEqual(nomatch, binary:match(Emitted, <<"{  // L1\n">>)),
     ?assertEqual(nomatch, binary:match(Emitted, <<"unused">>)).
 
@@ -57,13 +57,15 @@ overloaded_arities_have_distinct_names_test() ->
     ?assertEqual(["hls_local_value__0", "hls_local_value__1"],
         [Name || #{name := Name} <- Helpers]).
 
+%% Patterned helper bodies remain structured until the test reads emitted syntax.
+-spec patterned_helper_heads_test_() -> [term()].
 patterned_helper_heads_test_() ->
     [?_test(begin
         {_, Helpers} = prepare([
             "root() -> helper(1, 2).",
             "-spec helper(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().", Source
         ]),
-        Emitted = iolist_to_binary(xls_helpers:emit(Helpers, cell, #{})),
+        Emitted = iolist_to_binary(xls_dslx:render(xls_helpers:emit(Helpers, cell, #{}))),
         ?assertNotEqual(nomatch, binary:match(Emitted, <<"if ">>))
     end) || Source <- [
         "helper(X, X) -> X.",

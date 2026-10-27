@@ -15,8 +15,8 @@
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
     Selected = xls_hardware_source:statem(Forms, PhaseNames),
-    {Annotated, Sites} = xls_failure_sites:prepare(hls_records:resolve(Selected)),
-    (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
+    {Annotated, Locations} = xls_failure_sites:prepare(hls_records:resolve(Selected)),
+    (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_locations => Locations}.
 
 -doc "Summarizes an actor and validates its public schemas against the selected ordinary-frame capacity.".
 -spec interface([hls_source:form()], [atom(), ...], hls_frame_layout:layout()) -> interface().
@@ -71,7 +71,7 @@ planned_artifact(Filename, Source, PhaseNames, Layout) ->
 compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
     Forms0 = hls_records:resolve(xls_hardware_source:statem(Source, PhaseNames)),
     Declarations = declarations(Forms0, PhaseNames),
-    {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
+    {SourceForms, Locations} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- PhaseNames]]),
     ok = xls_names:actor(Forms, hls_statem),
@@ -110,18 +110,18 @@ compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
     EmittedRecords = hls_records:declarations(Forms,
         [N || {attribute, _, record, {N, _}} <- Records]),
     ok = lists:foreach(fun hls_records:validate_defaults/1, EmittedRecords),
-    RecordDeclarations = xls_clause_lower:print([
+    RecordDeclarations = [
         [
             xls_record_codegen:declaration(Record), "\n",
             xls_record_codegen:decoder(Record), "\n",
             xls_record_codegen:encoder(Record), "\n"
         ]
         || Record <- EmittedRecords
-    ]),
+    ],
     Spec = #{
         source => Filename,
         frame_layout => Layout,
-        failure_sites => Sites,
+        failure_locations => Locations,
         imports => xls_dslx_imports:from_forms(Forms),
         capacity => Capacity,
         phases => PhaseNames,
@@ -617,8 +617,8 @@ lower_cast_group(
     #{
         tag => Tag,
         phase => Phase,
-        body => xls_clause_lower:print(Body),
-        result => xls_clause_lower:print(Result)
+        body => Body,
+        result => Result
     }.
 
 %% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize

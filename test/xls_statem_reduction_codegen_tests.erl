@@ -8,12 +8,14 @@ none_is_zero_cost_test() ->
     ?assertEqual(0, xls_statem_reduction_codegen:private_width(none)),
     ?assertEqual([], xls_statem_reduction_codegen:tag_member(none, 17)).
 
+%% Reduction fragments retain structured bodies until one final syntax render.
+-spec site_nested_ir_renders_local_reduction_test() -> ok.
 site_nested_ir_renders_local_reduction_test() ->
     Spec = spec(),
-    Text = iolist_to_binary([
+    Text = iolist_to_binary(xls_dslx:render([
         xls_statem_reduction_codegen:declarations(Spec),
         xls_statem_reduction_codegen:functions(Spec)
-    ]),
+    ])),
     ?assertEqual(88, xls_statem_reduction_codegen:private_width(Spec)),
     ?assertEqual(
         <<"  SUM_VALUE = u8:17,\n">>,

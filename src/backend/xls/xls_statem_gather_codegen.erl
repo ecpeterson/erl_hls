@@ -6,7 +6,7 @@
     direct_failure/2, next_field/1, entry_commit/1, receive_gate/1, tags/2]).
 
 -doc "Emits a fragment only when the actor declares indexed gathers.".
--spec optional(map(), iodata()) -> iodata().
+-spec optional(map(), xls_dslx:value()) -> xls_dslx:value().
 optional(Spec, Text) -> case maps:get(gathers, Spec, none) of none -> []; _ -> Text end.
 
 -doc "Reports the packed progress width independently of element payloads.".
@@ -40,7 +40,7 @@ label(#{phase := Phase}) -> xls_names:enum_member(Phase).
 stem(#{phase := Phase}) -> atom_to_list(Phase).
 
 -doc "Defines progress, ordinary storage, narrow contributions and payload-independent completion results.".
--spec declarations(none | map()) -> iodata().
+-spec declarations(none | map()) -> xls_dslx:value().
 declarations(none) -> [];
 declarations(G = #{data := #{dslx_type := Data}, sites := Sites}) ->
     ["enum GatherStatus : u2 { IDLE = u2:0, OPEN = u2:1, COMPLETE = u2:2 }\n",
@@ -56,14 +56,14 @@ declarations(G = #{data := #{dslx_type := Data}, sites := Sites}) ->
      "struct GatherDispatch { progress: GatherProgress, phase: Phase, data: ",Data,", directive: Directive, repeat_phase: bool, failure: hls_failure::Code, dispatched: bool, next_event: u8 }\n\n"].
 
 -doc "Emits gather codecs, member placement, checked contribution dispatch and transient completion consumers.".
--spec functions(map()) -> iodata().
+-spec functions(map()) -> xls_dslx:value().
 functions(Spec) -> case maps:get(gathers,Spec,none) of
     none -> [];
     G = #{sites := Sites} -> [codecs(G), [site_functions(S,G)||S<-Sites], contribution(G), apply_function(Sites), completion(G), actor_completion(Spec)]
 end.
 
 %% Pack and unpack use the same semantic slices; element payload remains above all progress bits.
--spec codecs(map()) -> iodata().
+-spec codecs(map()) -> xls_dslx:value().
 codecs(G) ->
     Layout = xls_statem_gather_layout:codec(G),
     Width = maps:get(width, Layout),
@@ -73,7 +73,7 @@ codecs(G) ->
      "fn gather_state_from_bits(raw: bits[", n(storage_width(G)), "]) -> GatherState { GatherState { progress: gather_progress_from_bits(raw[0:", n(Width), "]), values: raw[", n(Width), ":] } }\n\n"].
 
 %% Per-site typed helpers keep padding and element codecs out of physical storage policy.
--spec site_functions(map(),map()) -> iodata().
+-spec site_functions(map(),map()) -> xls_dslx:value().
 site_functions(S=#{element:=#{name:=Name,dslx_type:=Type},population:=#{size:=N},padding:=#{body:=PadBody,result:=PadResult}},_G) ->
     W=element_width(S), Codec=xls_names:record_codec(Name), Stem=stem(S),
     ["fn gather_values_",Stem,"(raw: GatherValues, members: GatherMembers) -> ",Type,"[",n(N),"] {\n  let padding = {\n",PadBody,PadResult,"\n  };\n  [",
@@ -84,14 +84,14 @@ site_functions(S=#{element:=#{name:=Name,dslx_type:=Type},population:=#{size:=N}
      "  GatherState { progress: GatherProgress { status: if count == u8:0 { GatherStatus::COMPLETE } else { GatherStatus::OPEN }, site: GatherSite::",label(S),", key, remaining: count, expected, ..zero!<GatherProgress>() }, values: payload }\n}\n\n"].
 
 %% Original callback predicates decide whether a frame contributes; lifts remain separately available in the IR.
--spec contribution(map()) -> iodata().
+-spec contribution(map()) -> xls_dslx:value().
 contribution(#{data:=#{dslx_type:=Data},sites:=Sites}) ->
     ["fn gather_contribution(frame: axis::Frame, phase: Phase, data: ",Data,") -> GatherContribution {\n  match (frame.header.op as Tag, phase) {\n",
      [["    (Tag::",xls_names:enum_member(Tag),", Phase::",label(S),") => {\n      let message = ",xls_names:record_codec(Tag),"_from_bits(frame.payload);\n      let built = {\n",Body,Result,"\n      };\n      GatherContribution { valid: built.0, site: GatherSite::",label(S),", key: built.1, member: built.2, value: bits_from_",xls_names:record_codec(maps:get(name,maps:get(element,S))),"(built.3) as bits[",n(lists:max([element_width(T)||T<-Sites])),"] }\n    },\n"] || S<-Sites,#{tag:=Tag,build:=#{body:=Body,result:=Result}}<-maps:get(contributions,S)],
      "    _ => zero!<GatherContribution>(),\n  }\n}\n\n"].
 
 %% Membership is checked before the sole indexed write. Duplicate values never overwrite a slot.
--spec apply_function([map()]) -> iodata().
+-spec apply_function([map()]) -> xls_dslx:value().
 apply_function(Sites) ->
     ["fn gather_apply(state: GatherState, input: GatherContribution) -> GatherApply {\n",
      "  let p = state.progress;\n  if !input.valid { GatherApply { state, outcome: GatherOutcome::NOT_CANDIDATE } }\n",
@@ -104,7 +104,7 @@ apply_function(Sites) ->
      "      };\n      GatherApply { state: GatherState { progress: GatherProgress { status: if remaining == u8:0 { GatherStatus::COMPLETE } else { GatherStatus::OPEN }, remaining, seen: p.seen | member_bit, ..p }, values }, outcome: if remaining == u8:0 { GatherOutcome::COMPLETE } else { GatherOutcome::PENDING } }\n    }\n  }\n}\n\n"].
 
 %% Completion consumes ordered values without requiring those values in its output state.
--spec completion(map()) -> iodata().
+-spec completion(map()) -> xls_dslx:value().
 completion(#{data:=#{dslx_type:=Data},sites:=Sites,continuations:=Names}) ->
     ["fn gather_dispatch_completion(progress: GatherProgress, payload: GatherValues, phase: Phase, data: ",Data,") -> GatherDispatch {\n",
      "  if progress.status != GatherStatus::COMPLETE { GatherDispatch { progress, phase, data, ..zero!<GatherDispatch>() } } else if hls_failure::failed(progress.failure) { GatherDispatch { progress, phase, data, failure: progress.failure, directive: Directive::FAIL, dispatched: true, ..zero!<GatherDispatch>() } } else {\n",
@@ -113,7 +113,7 @@ completion(#{data:=#{dslx_type:=Data},sites:=Sites,continuations:=Names}) ->
      "      _ => GatherDispatch { progress, phase, data, directive: Directive::FAIL, failure: hls_failure::REDUCTION_PROTOCOL, dispatched: true, ..zero!<GatherDispatch>() },\n    }\n  }\n}\n\n"].
 
 %% Existing wire record types keep their tagged source representation inside helper arrays.
--spec source_values(map()) -> iodata().
+-spec source_values(map()) -> xls_dslx:value().
 source_values(#{representation := value}) -> [];
 source_values(#{representation := Representation, element := #{name := Name}, population := #{size := Size}}) ->
     ["        let values = [", lists:join(", ", [["(Tag::", xls_names:enum_member(Name),
@@ -122,7 +122,7 @@ source_values(#{representation := Representation, element := #{name := Name}, po
         ")"] || I <- lists:seq(0, Size - 1)]), "];\n"].
 
 %% The same source consumer is used by ordinary direct execution and physical completion injection.
--spec actor_completion(map()) -> iodata().
+-spec actor_completion(map()) -> xls_dslx:value().
 actor_completion(Spec) ->
     ["fn actor_gather_complete(machine: ActorState) -> ActorDispatch {\n",
      "  let c = gather_dispatch_completion(machine.gather.progress, machine.gather.values, machine.phase, machine.data);\n",
@@ -139,10 +139,10 @@ actor_completion(Spec) ->
      "    enter_pending: boundary && !hls_failure::failed(failure), failure, ..machine }, dispatched: effective, directive: c.directive, phase_boundary: boundary, ..zero!<ActorDispatch>() }\n}\n\n"].
 
 -doc "Adds ordinary gather storage to an actor or entry outcome.".
--spec field(map()) -> iodata().
+-spec field(map()) -> xls_dslx:value().
 field(Spec) -> optional(Spec,"  gather: GatherState,\n").
 -doc "Copies ordinary gather storage between direct and callback-state representations.".
--spec copy(map()) -> iodata().
+-spec copy(map()) -> xls_dslx:value().
 copy(Spec) -> optional(Spec,"    gather: machine.gather,\n").
 
 -doc "Constructs the selected gather field from its transactional entry value without rendering it.".
@@ -164,7 +164,7 @@ entry_fields(_Spec, _, _) ->
     [{"gather", xls_dslx:call("zero!<GatherState>", [])}].
 
 -doc "Rejects concurrent logical collections before committing entry data or effects.".
--spec entry_bindings(map()) -> iodata().
+-spec entry_bindings(map()) -> xls_dslx:value().
 entry_bindings(Spec) ->
     R=maps:get(reductions,Spec,none), G=maps:get(gathers,Spec,none),
     case {R,G} of
@@ -181,7 +181,7 @@ entry_bindings(Spec) ->
     end.
 
 -doc "Evaluates one potential gather contribution before ordinary callback dispatch.".
--spec dispatch_bindings(map()) -> iodata().
+-spec dispatch_bindings(map()) -> xls_dslx:value().
 dispatch_bindings(Spec) -> optional(Spec,
     "      let gather_applied = gather_apply(machine.gather, gather_contribution(selected_frame, machine.phase, machine.data));\n"
     "      let gather_candidate = dispatchable && gather_applied.outcome != GatherOutcome::NOT_CANDIDATE;\n"
@@ -189,13 +189,13 @@ dispatch_bindings(Spec) -> optional(Spec,
     "      let next_gather = if gather_accepted { gather_applied.state } else { machine.gather };\n").
 
 -doc "Selects a checked gather directive or preserves ordinary dispatch when its predicates do not match.".
--spec ordinary_dispatch(map(), iodata()) -> iodata().
+-spec ordinary_dispatch(map(), xls_dslx:value()) -> xls_dslx:value().
 ordinary_dispatch(Spec, Ordinary) -> case maps:get(gathers,Spec,none) of none -> Ordinary; _ ->
     ["if gather_candidate { (machine.phase, machine.data, if gather_applied.outcome == GatherOutcome::MISMATCH { Directive::POSTPONE } else if gather_accepted { Directive::CONSUME } else { Directive::FAIL }, false, if gather_applied.outcome == GatherOutcome::UNEXPECTED_MEMBER || gather_applied.outcome == GatherOutcome::DUPLICATE_MEMBER { hls_failure::REDUCTION_PROTOCOL } else { hls_failure::NONE }",xls_statem_event_codegen:optional(Spec,", u8:0"),") } else { ",Ordinary," }"]
 end.
 
 -doc "Runs a completed gather only after all opening entry effects have committed.".
--spec direct_complete(map()) -> iodata().
+-spec direct_complete(map()) -> xls_dslx:value().
 direct_complete(Spec) -> optional(Spec,
     "  } else if !machine.enter_pending && machine.gather.progress.status == GatherStatus::COMPLETE {\n"
     "    let step = actor_gather_complete(actor_state(machine));\n"
@@ -204,13 +204,13 @@ direct_complete(Spec) -> optional(Spec,
     optional(Spec,[xls_statem_event_codegen:optional(Spec,"next_event: step.machine.next_event, "),"..machine }, ..zero!<MachineStep>() }\n"]).
 
 -doc "Prevents ordinary callbacks from crossing an incomplete gather boundary.".
--spec direct_effective(map(), iodata()) -> iodata().
+-spec direct_effective(map(), xls_dslx:value()) -> xls_dslx:value().
 direct_effective(Spec, Ordinary) -> case maps:get(gathers,Spec,none) of none->Ordinary;_->
     [Ordinary,"      let incomplete_gather = dispatchable && (next_phase != machine.phase || repeat_phase) && directive != Directive::FAIL && machine.gather.progress.status == GatherStatus::OPEN;\n      let effective = effective && !incomplete_gather;\n"]
 end.
 
 -doc "Propagates incomplete gather boundaries through the ordinary dispatch failure priority.".
--spec direct_failure(map(), iodata()) -> iodata().
+-spec direct_failure(map(), xls_dslx:value()) -> xls_dslx:value().
 direct_failure(Spec, Ordinary) -> case maps:get(gathers,Spec,none) of none->Ordinary;_->
     ["      let failure = hls_failure::dispatch(invalid_input, invalid_repeat, incomplete_gather || ",
         case maps:get(reductions, Spec, none) of none -> "false"; _ -> "incomplete_boundary" end,
@@ -218,17 +218,17 @@ direct_failure(Spec, Ordinary) -> case maps:get(gathers,Spec,none) of none->Ordi
 end.
 
 -doc "Commits an accepted member update with its consumed mailbox message.".
--spec next_field(map()) -> iodata().
+-spec next_field(map()) -> xls_dslx:value().
 next_field(Spec) -> optional(Spec,"        gather: next_gather,\n").
 -doc "Commits the gather opening only after every entry effect has advanced.".
--spec entry_commit(map()) -> iodata().
+-spec entry_commit(map()) -> xls_dslx:value().
 entry_commit(Spec) -> optional(Spec,"      gather: if entry_complete { entered_gather } else { machine.gather },\n").
 -doc "Reserves completion precedence over newly received external input.".
--spec receive_gate(map()) -> iodata().
+-spec receive_gate(map()) -> xls_dslx:value().
 receive_gate(Spec) -> optional(Spec," && machine.gather.progress.status != GatherStatus::COMPLETE").
 
 -doc "Allocates internal element-record tags without changing public message selectors.".
--spec tags(map(), [atom()]) -> iodata().
+-spec tags(map(), [atom()]) -> xls_dslx:value().
 tags(Spec, Messages) ->
     Elements=xls_statem_gather_lower:records(maps:get(gathers,Spec,none)),
     Acc=case maps:get(reductions,Spec,none) of none->[];#{accumulator:=#{name:=Name}}->[Name] end,

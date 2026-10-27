@@ -46,7 +46,7 @@ program(Forms0, Name, Args, Signature) ->
             integer_to_list(I)] || {I, Tag} <- lists:enumerate(Tags)]), " }\n",
         [[xls_record_codegen:declaration(Record), xls_record_codegen:encoder(Record)]
             || Record = {attribute, _, record, _} <- Forms],
-        xls_helpers:emit(Helpers, Data, #{}),
+        xls_dslx:render(xls_helpers:emit(Helpers, Data, #{})),
         "pub fn ", Name, "(", Signature, ") -> u33 {\n",
         xls_clause_lower:print([Body, "if ", Failed, " { u33:0x100000000 } else { (",
             Value, " as u32) as u33 }\n"]), "}\n"].

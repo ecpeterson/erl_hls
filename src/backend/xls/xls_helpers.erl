@@ -180,14 +180,14 @@ rewrite(Tuple, Helpers) when is_tuple(Tuple) ->
 rewrite(List, Helpers) when is_list(List) -> [rewrite(X, Helpers) || X <- List];
 rewrite(Value, _Helpers) -> Value.
 
--doc "Emits dependency-ordered helper definitions with concrete signatures and selected failures.".
--spec emit([helper()], atom(), map()) -> iolist().
+-doc "Builds dependency-ordered helper definitions with concrete signatures and structured selected failures.".
+-spec emit([helper()], atom(), map()) -> xls_dslx:value().
 emit(Helpers, DataName, EnumAtoms) ->
     [emit_helper(H, DataName, EnumAtoms) || H <- Helpers].
 
 %% Keep the common irrefutable helper compact. Patterned or guarded clauses
 %% share callback selection, including function_clause versus body failures.
--spec emit_helper(helper(), atom(), map()) -> iolist().
+-spec emit_helper(helper(), atom(), map()) -> xls_dslx:value().
 emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
         arguments := Types, argument_records := Records, result := ResultType}, DataName, EnumAtoms) ->
     Type = xls_literal_types:format(ResultType),
@@ -214,7 +214,7 @@ emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
     ["fn ", Name, "(", lists:join(", ", [[A, ": ", xls_literal_types:format(T)]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
         ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
-        xls_parse_io:indent(xls_clause_lower:print(Body), 2), "}\n\n"].
+        xls_dslx:indent(Body, 2), "}\n\n"].
 
 plain_head([{clause, _, Parameters, [], _}]) ->
     Names = [N || {var, _, N} <- Parameters, N =/= '_'],

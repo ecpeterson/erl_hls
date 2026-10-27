@@ -1,6 +1,6 @@
 -module(xls_gs_immediate).
 -moduledoc "Lowers immediate-reply server callbacks into the compact frame service, without retained-call storage.".
--export([emit/2, emit/3]).
+-export([emit/2, emit/3, artifact/3]).
 
 -doc "Emits a checked immediate-reply hls_gs service from include-expanded source forms. Validates names, records, payload bounds and callback results; the caller selects this backend only for handle_call/2. Returns DSLX IO data without writing files.".
 -spec emit(file:filename(), [hls_source:form()]) -> iolist().
@@ -8,7 +8,11 @@ emit(Filename, Forms) -> emit(Filename, Forms, hls_frame_layout:default()).
 
 -doc "Emits the server using an explicit checked ordinary-frame layout and rejects any public schema exceeding it.".
 -spec emit(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> iolist().
-emit(Filename, Forms0, Layout) ->
+emit(Filename, Forms, Layout) -> [xls_emitted:bytes(artifact(Filename, Forms, Layout))].
+
+-doc "Finalizes a checked server and its retained failure codebook without writing files.".
+-spec artifact(file:filename(), [hls_source:form()], hls_frame_layout:layout()) -> xls_emitted:artifact().
+artifact(Filename, Forms0, Layout) ->
     2 = hls_service_contract:call_arity(Forms0),
     Roots = [{init, 1}, {handle_call, 2}, {handle_cast, 2}],
     Selected = xls_hardware_source:select(Forms0, Roots),
@@ -113,4 +117,4 @@ emit(Filename, Forms0, Layout) ->
 
     """],
 
-    [xls_clause_lower:print(Preamble), xls_failure_sites:emit(Sites, xls_clause_lower:print(Body))].
+    xls_emitted:new(Sites, Preamble, Body).

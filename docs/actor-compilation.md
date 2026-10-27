@@ -4,6 +4,8 @@ The [standalone `hlsc` command](toolchain.md) packages single-actor lowering wit
 
 `xls_parse:to_xls(Path, Options)` emits a complete DSLX actor module. Supported options are `source_options` (preprocessor configuration) and `direct_actor_debug` (committed-state observations). Each generated service owns its state and bounded mailbox. XLS selects the hardware pipeline separately; the Erlang source describes callback behavior.
 
+`xls_parse:to_artifact(Path, Options)` retains the finished module and its allocated failure codebook together. Use `xls_emitted:bytes/1` when writing DSLX, and pass the artifact itself to debug projection builders. The byte-only `to_xls` convenience API uses the same compilation path. These emitted artifacts are distinct from `actor_artifact/2`, which retains callback semantics before execution-backend selection.
+
 For a communicating graph, normalize the source topology with `hls_topology`, obtain module requirements from `xls_topology_dslx:artifact_requirements/2`, translate those actors, then emit the graph with `xls_topology_dslx:emit/2`. The physical profile controls channel and egress capacities. See [topology semantics](mixed-topologies.md).
 
 Scalar clause lowering retains [structured arithmetic and comparison expressions](expression-ir.md) until DSLX rendering. Bit-vector optimization belongs to XLS.

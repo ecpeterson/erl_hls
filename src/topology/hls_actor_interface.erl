@@ -32,7 +32,7 @@ dispatch means that the generated actor has a callback group for that schema
 and phase; it does not claim that every payload passes the group's patterns and
 guards.
 
-The summary also carries candidate failure origins and the callback-state layout.
+The summary also carries source syntax positions and the callback-state layout.
 Failure codes are allocated separately from the generated actor artifact. Its packed width is derived
 when queried, after custom `hls_type` modules are available; computing it while
 the actor's parse transform runs would make compilation depend on incidental
@@ -227,7 +227,7 @@ validate(Module, Summary = #{
     schemas := Schemas,
     dispatches := Dispatches,
     entry_effects := Effects,
-    failure_origins := Origins
+    failure_locations := Locations
 }) when is_list(Phases), is_list(Outputs),
         is_integer(Capacity), Capacity > 0,
         is_list(Schemas), is_list(Dispatches), is_list(Effects) ->
@@ -236,7 +236,7 @@ validate(Module, Summary = #{
     ok = require_unique(interface_phase, Phases),
     ok = require_unique(interface_output, Outputs),
     ok = validate_state(State),
-    ok = xls_failure_sites:validate_origins(Origins),
+    ok = xls_failure_sites:validate_locations(Locations),
     _ = reduction_storage_width(Summary),
     _ = gather_storage_width(Summary),
     SchemaNames = [maps:get(name, Schema) || Schema <- Schemas],

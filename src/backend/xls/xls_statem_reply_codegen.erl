@@ -8,7 +8,7 @@
 enabled(Spec) -> maps:get(retained_calls, Spec, none) =/= none.
 
 -doc "Emits a fragment only when caller ownership is present.".
--spec optional(map(), iodata()) -> iodata().
+-spec optional(map(), xls_dslx:value()) -> xls_dslx:value().
 optional(Spec, Code) -> case enabled(Spec) of true -> Code; false -> [] end.
 
 -doc "Returns the actor-local caller book's packed width.".
@@ -26,34 +26,34 @@ layout(#{entries := Entries}) ->
     case N < 256 of true -> N; false -> error(too_many_hls_statem_reply_layouts) end.
 
 -doc "Declares the private caller-book type used by the machine codec.".
--spec declarations(map()) -> iodata().
+-spec declarations(map()) -> xls_dslx:value().
 declarations(Spec) -> case enabled(Spec) of
     false -> [];
     true -> ["const REPLY_CAPACITY = u32:", integer_to_list(count(Spec)), ";\ntype ReplyBook = hls_reply::Book<REPLY_CAPACITY>;\n\n"]
 end.
 
 -doc "Initializes nonzero handle allocation before any input is dispatched.".
--spec initial(map()) -> iodata().
+-spec initial(map()) -> xls_dslx:value().
 initial(Spec) -> case enabled(Spec) of
     false -> [];
     true -> ["  replies: hls_reply::initial<u32:", integer_to_list(count(Spec)), ">(),\n"]
 end.
 
 -doc "Allocates only for a declared call whose mailbox callback can run.".
--spec admit(map(), iodata(), iodata()) -> iodata().
+-spec admit(map(), xls_dslx:value(), xls_dslx:value()) -> xls_dslx:value().
 admit(Spec, Frame, Valid) ->
     optional(Spec, ["    let (admitted_replies, call_from, call_error) = if ", Valid,
         " && is_call(", Frame, ".header.op) { hls_reply::admit(machine.replies, ", Frame,
         ") } else { (machine.replies, u64:0, u32:0) };\n"]).
 
 -doc "Validates the final scheduling outcome before completing or exposing any caller reply.".
--spec finish(map(), iodata()) -> iodata().
+-spec finish(map(), xls_dslx:value()) -> xls_dslx:value().
 finish(Spec, Frame) ->
     optional(Spec, ["    let (reply_book, response, response_valid) = finish_reply(admitted_replies, ", Frame,
         ", call_error, reply_from, reply_frame, reply_allowed, failure);\n"]).
 
 -doc "Emits call classification, reply-contract checks and rejected-call completion.".
--spec functions(map()) -> iodata().
+-spec functions(map()) -> xls_dslx:value().
 functions(Spec = #{retained_calls := #{calls := Calls}}) ->
     ["fn is_call(tag: u8) -> bool { ", lists:join(" || ", [["tag == Tag::", xls_names:enum_member(T), " as u8"] || T <- maps:keys(Calls)]), " }\n",
      "fn reply_allowed(from: u64, tag: u8) -> bool { ",
@@ -79,6 +79,6 @@ functions(Spec = #{retained_calls := #{calls := Calls}}) ->
 functions(_Spec) -> [].
 
 -doc "Forms the ordinary one-frame effect from a checked reply.".
--spec effect(map()) -> iodata().
+-spec effect(map()) -> xls_dslx:value().
 effect(Spec) -> ["EntryEffects { layout: u8:", integer_to_list(layout(Spec)),
     ", payloads: axis::bits_from_frame(dispatched.reply) as bits[ENTRY_EFFECT_PAYLOAD_BITS] }"] .

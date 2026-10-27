@@ -82,5 +82,5 @@ lower(Groups, Names, DataName, Enum, Calls, Normalize) ->
         {Body, Value} = xls_callback_lower:lower(Clauses, Args, DataName,
             fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3, ", R, ".4, ", R, ".5", case Calls of true -> [", ", R, ".6, ", R, ".7, ", R, ".8"]; false -> [] end, ")"] end,
             Failure(xls_failure_sites:at(function_clause, Line)), Failure, Enum),
-        #{event => index(Name, Names, 1), phase => Phase, body => xls_clause_lower:print(Body), result => xls_clause_lower:print(Value)}
+        #{event => index(Name, Names, 1), phase => Phase, body => Body, result => Value}
     end || {{Name, Phase}, Group} <- Groups].

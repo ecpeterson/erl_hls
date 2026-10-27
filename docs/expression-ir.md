@@ -4,7 +4,7 @@
 
 Source semantics remain the responsibility of clause lowering. Integer classification selects `hls_integer` comparison helpers that preserve mixed-width and signed comparisons; literal operands receive sufficient independent signed width. Untyped static integers retain their width-directed behavior, while untyped floats and compile-time phantom types cannot cross the rendering boundary. DSLX enforces arithmetic operand types and widths. Algebraic bit-vector simplifications belong to XLS, where operand types and node identities are available.
 
-Bindings preserve evaluation order and reuse earlier values without duplicating arithmetic. Branch-local statements and failures remain in their selected arms, and joins export only the required values and bindings. The syntax tree carries no separate alias/provenance table or frontend optimization pass.
+Bindings preserve evaluation order and reuse earlier values without duplicating arithmetic. Branch-local statements and failures remain in their selected arms, and joins export only the required values and bindings. Failure references retain their file, line and kind until whole-module allocation, and indentation is deferred so it cannot erase those references. The syntax tree carries no separate alias table or frontend optimization pass.
 
 Entry lowering retains this tree in each artifact's `evaluation` outcome until `xls_actor_codegen:emit/3`. Selected control, effect packing and `EntryOutcome` constructors remain inspectable there. `xls_clause_lower:print/1` delegates to the common DSLX renderer. Existing initialization, dispatch and helper artifacts can still contain rendered leaves.
 

@@ -4,13 +4,13 @@
 
 
 -doc "Emits a fragment only for actors declaring finite internal events.".
--spec optional(map(), iodata()) -> iodata().
+-spec optional(map(), xls_dslx:value()) -> xls_dslx:value().
 optional(Spec, Code) -> case maps:get(continuations, Spec, []) =/= [] orelse xls_statem_reply_codegen:enabled(Spec) of
     true -> Code; false -> []
 end.
 
 -doc "Preserves a pending continuation across collection completion and rejects a second request as an invalid effect.".
--spec completion_bindings(map(), iodata()) -> iodata().
+-spec completion_bindings(map(), xls_dslx:value()) -> xls_dslx:value().
 completion_bindings(Spec, Requested) ->
     optional(Spec, [
         "    let completion_event_failure = hls_failure::check(machine.next_event != u8:0 && ",
@@ -20,7 +20,7 @@ completion_bindings(Spec, Requested) ->
     ]).
 
 -doc "Emits phase-sensitive internal dispatch and its checked state transition.".
--spec functions(map()) -> iodata().
+-spec functions(map()) -> xls_dslx:value().
 functions(Spec = #{data_name := DataName, internal_steps := Steps, reductions := Reduction}) ->
     optional(Spec, ["fn dispatch_internal(event: u8, phase: Phase, data: ", xls_names:record_type(DataName),
      ") -> (Phase, ", xls_names:record_type(DataName), ", Directive, u1, hls_failure::Code, u8", xls_statem_reply_codegen:optional(Spec, ", u64, axis::Frame, bool"), ") {\n",
@@ -60,7 +60,7 @@ functions(Spec = #{data_name := DataName, internal_steps := Steps, reductions :=
      "  }\n}\n\n"]).
 
 -doc "Runs one private step after phase entry, retaining every mailbox slot.".
--spec direct_step(map()) -> iodata().
+-spec direct_step(map()) -> xls_dslx:value().
 direct_step(Spec) -> optional(Spec, ["""
       } else if machine.next_event != u8:0 {
     """, "    let step = ", "actor_next_event(actor_state(machine));\n",
@@ -84,6 +84,6 @@ direct_step(Spec) -> optional(Spec, ["""
     """]).
 
 %% Port lookup stays harmless for actors with no reply facility.
--spec reply_port(map()) -> iodata().
+-spec reply_port(map()) -> xls_dslx:value().
 reply_port(#{retained_calls := #{port := Port}}) -> xls_names:enum_member(Port);
 reply_port(_) -> [].

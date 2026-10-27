@@ -15,7 +15,7 @@ write(Stage) ->
         X <- [0, 1, 2, 3, 7, 8, 15, 1000], Y <- [0, 1, 2, 3, 7, 8, 15, 1000]],
     Expected = [{Case, expected(Case)} || Case <- Cases],
     ok = file:write_file(filename:join(Stage, "helpers.x"), [Declarations,
-        xls_helpers:emit(Helpers, cell, #{}),
+        xls_dslx:render(xls_helpers:emit(Helpers, cell, #{})),
         [function(Name, Forms) || Name <- [factored, inline]],
         [beam_test(Mode, [Case || Case = {{M, _, _}, _} <- Expected, M =:= Mode])
             || Mode <- lists:seq(0, 29)]]),
@@ -81,7 +81,7 @@ write_rejections(Stage, Base) ->
         #{body := Body, result := Value, failed := Failed} =
             xls_clause_lower:clause_outcome(Clause, ["x"], cell, #{}),
         ok = file:write_file(filename:join(Stage, Kind ++ ".x"), [
-            "import hls_failure;\n", xls_helpers:emit(Helpers, cell, #{}),
+            "import hls_failure;\n", xls_dslx:render(xls_helpers:emit(Helpers, cell, #{})),
             "pub fn root(x: u32) -> (u32, bool) {\n",
             xls_clause_lower:print([Body, "(", Value, ", ", Failed, ")\n"]), "}\n"])
     end, [

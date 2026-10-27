@@ -1,6 +1,8 @@
 -module(xls_binary_dslx).
 -export([write/1]).
 
+-doc "Writes finite BEAM-derived binary-operation vectors and codec witnesses; does not execute them.".
+-spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, Forms0} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
     Probes = xls_binary_fixture:probes(),
@@ -11,7 +13,7 @@ write(Stage) ->
     Expected = [{I, Name, [{Input, expected(Name, Input)} || Input <- Grid]}
         || {I, {Name, _}} <- lists:enumerate(0, Probes)],
     Text = [xls_dslx_imports:emit([hls_failure], xls_dslx_imports:from_forms(Forms)),
-        xls_helpers:emit(Helpers, unused, #{}),
+        xls_dslx:render(xls_helpers:emit(Helpers, unused, #{})),
         [function(Name, Kind, Forms) || {Name, Kind} <- Probes],
         "pub fn probe(mode: u32, x: s32, raw: u24) -> bits[36] {\nmatch mode {\n",
         [["u32:", integer_to_list(I), " => probe_", atom_to_list(Name), "(x, (raw,)),\n"]

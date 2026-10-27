@@ -58,7 +58,7 @@ Depth-zero bypass FIFOs are wires. Empty bypass transfers may occupy no storage;
 
 ## Register-backed actor snapshots
 
-Set `direct_actor_debug => true` in the topology profile, pass `artifact_requirements/2` options to actor translation, and use the same option in `xls_actor_debug:projection/3`. Shells must forward outputs using `xls_actor_observation:bindings/2`, `wires/1` and `ports/1`; the latter ties readiness high. Enabling an artifact alone does not instrument an arbitrary wrapper.
+Set `direct_actor_debug => true` in the topology profile, pass `artifact_requirements/2` options to actor translation, and use the same option in `xls_actor_debug:projection/3`. Pass the `xls_parse:to_artifact/2` results to that projection builder; extract DSLX with `xls_emitted:bytes/1` only when writing files. Shells must forward outputs using `xls_actor_observation:bindings/2`, `wires/1` and `ports/1`; the latter ties readiness high. Enabling an artifact alone does not instrument an arbitrary wrapper.
 
 Snapshots describe the committed state **entering** an actor step and can lag through its output pipeline. A stalled next-state computation is not published. Phase, failure, reduction and mailbox fields share one publication. Initial state can become visible before the initial entry executes. Constant observation readiness is mandatory: a backpressured observation consumer could stall the actor.
 
