@@ -3,7 +3,7 @@
 -export([write/4]).
 
 -doc "Writes the RAM shell, actor projection and normalized group count beside generated device source. Tiles require constant bindings from hls_partition_tile:constants/2.".
--spec write(file:filename(), non_neg_integer(), map(), #{module() => iodata()}) -> non_neg_integer().
+-spec write(file:filename(), non_neg_integer(), map(), #{module() => xls_emitted:artifact()}) -> non_neg_integer().
 write(Stage, Device, Local = #{schedulers := Groups}, Artifacts) ->
     {Plan, Specs} = hls_partition_tile:planning(Local),
     Layout = maps:get(frame_layout, Local, hls_frame_layout:default()),

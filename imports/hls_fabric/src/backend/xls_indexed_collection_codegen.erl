@@ -81,7 +81,7 @@ declarations(Spec) -> optional(Spec, fun() ->
 end).
 
 -doc "Emits source predicates and pure shared-scheduler ownership/admission helpers.".
--spec helpers(map()) -> iodata().
+-spec helpers(map()) -> xls_dslx:value().
 helpers(Spec) -> optional(Spec, fun() ->
     #{gathers := #{sites := [Site]}, message_words := Words} = Spec,
     Tags = lists:usort([maps:get(tag, C) || C <- maps:get(contributions, Site)]),
@@ -125,7 +125,7 @@ selected_frame(_Tags) ->
     "fn indexed_selected_frame(frame: axis::Frame) -> axis::Frame { frame }\n\n".
 
 %% Transport construction never grants key eligibility; the original callback still does that.
--spec transport(map()) -> iodata().
+-spec transport(map()) -> xls_dslx:value().
 transport(Site = #{contributions := Contributions, element := #{name := Element}}) ->
     Codec = xls_names:record_codec(Element),
     ["// Decode one held frame independently of mutable actor state.\n",
@@ -136,7 +136,7 @@ transport(Site = #{contributions := Contributions, element := #{name := Element}
         #{body := Body, result := Result} = maps:get(independent_lift, C, maps:get(transport, C, none)),
         ["    Tag::", xls_names:enum_member(Tag), " => {\n",
          "      let message = ", xls_names:record_codec(Tag), "_from_bits(frame.payload);\n",
-         "      let built = {\n", xls_parse_io:indent(Body, 8), "        ", Result, "\n      };\n",
+         "      let built = {\n", xls_dslx:indent(Body, 8), "        ", Result, "\n      };\n",
          "      GatherContribution { valid: built.0, site: GatherSite::", xls_names:enum_member(maps:get(phase, Site)),
          ", key: built.1, member: built.2, value: bits_from_", Codec, "(built.3) }\n    },\n"]
       end || C <- Contributions],
@@ -225,7 +225,7 @@ end).
 enabled(Spec) -> maps:get(gather_collection, Spec, false) =:= true.
 
 %% Delay shape-dependent rendering until the corresponding option is enabled.
--spec optional(map(), fun(() -> iodata())) -> iodata().
+-spec optional(map(), fun(() -> Value)) -> Value | [].
 optional(Spec, Render) -> case enabled(Spec) of true -> Render(); false -> [] end.
 
 %% Proc-independent ownership logic stays readable in a static DSLX template.

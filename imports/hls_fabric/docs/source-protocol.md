@@ -90,7 +90,7 @@ Transport generation leaves `eligible: false`: its source and capture ports need
 
 ## Source actor functions
 
-The same transport build now writes `actors/actor_N.x` and its `.json` manifest for each distinct source module. These are the ordinary activation functions from the exact compilation used to plan publication. Actor instances share function definitions, not mutable state. `summary.json` binds module names, relative paths, source-plan identities, DSLX hashes and machine/effect layouts. The generated transport RTL remains separate: it does not instantiate these functions or own actor state.
+The same transport build now writes `actors/actor_N.x` and its `.json` manifest for each distinct source module. These are the ordinary activation functions from the exact compilation used to plan publication. Each manifest retains the allocated `failure_sites` codebook with the final `dslx_sha256`; inbox and imported-owner composition preserve those codes. Process inspection uses each finalized receiver’s codebook, including source file and line, rather than scanning DSLX or numbering the unspecialized source inventory. Actor instances share function definitions, not mutable state. `summary.json` binds module names, relative paths, source-plan identities, DSLX hashes and machine/effect layouts. The generated transport RTL remains separate: it does not instantiate these functions or own actor state.
 
 For a single actor without a topology:
 

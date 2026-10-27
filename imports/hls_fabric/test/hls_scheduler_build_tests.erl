@@ -55,8 +55,13 @@ retained_plan() ->
       eligible := false, native_measured := false} = hls_scheduler_build:write(Plan, Output),
     ?assertEqual(hls_diagnostic:json_value(Profile), Encoded),
     lists:foreach(fun(File) -> ?assert(filelib:is_regular(filename:join(Output, File))) end,
-        ["actors/hls_scheduler_build_fixture.x", "scheduler/topology.x", "ram/bindings.json",
+        ["actors/hls_scheduler_build_fixture.x", "actors/hls_scheduler_build_fixture.x.json", "scheduler/topology.x", "ram/bindings.json",
          "ram/wires.vh", "ram/application_ports.vh", "ram/instances.vh", "source-build.json"]),
+    {ok, ActorBytes} = file:read_file(filename:join(Output, "actors/hls_scheduler_build_fixture.x")),
+    {ok, MetadataBytes} = file:read_file(filename:join(Output, "actors/hls_scheduler_build_fixture.x.json")),
+    #{<<"dslx_sha256">> := ActorHash, <<"failure_sites">> := Sites} = json:decode(MetadataBytes),
+    ?assertEqual(hls_generated_files:hash(ActorBytes), ActorHash),
+    ?assert(is_list(Sites)),
     ?assertException(error, {generated_output_exists, _}, hls_scheduler_build:write(Plan, Output)),
     ok.
 

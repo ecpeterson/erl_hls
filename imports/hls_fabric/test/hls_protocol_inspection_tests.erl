@@ -25,3 +25,30 @@ catalog_test() ->
     ?assertException(error,_,hls_protocol_observation:catalog(Plan,#{manifest=>Manifest#{<<"fingerprint">>:=<<"bad">>}})),
     ?assertException(error,_,hls_process_profile:capture(Catalog,[{actor,a},{actor,a}],
         #{session=><<"test">>,reset_free=>true,rounds=>1,timeout_ms=>10,interval_ms=>0,budget_ms=>100})),ok.
+
+
+%% Public network emission must bind inspection to the finalized inbox/import codebooks.
+-spec receiver_codebooks_test() -> ok.
+receiver_codebooks_test() ->
+    #{result := #{network := #{inspection := Inspection},
+        transport := #{bundle := #{modules := Modules}, actor_functions := Functions,
+            receivers := Receivers}}, files := Files} = hls_protocol_network:emit(#{
+        sources => [{"test/hls_protocol_inbox_fixture.erl", []}],
+        topology => {hls_protocol_inbox_fixture, topology, []}, actor_limit => 3,
+        inspection => process}),
+    #{hls_protocol_inbox_fixture := #{emitted := Emitted, program := Program}} = Modules,
+    #{failure_locations := Locations} = xls_actor_program:spec(Program),
+    Sites = xls_emitted:sites(Emitted, Locations),
+    ?assertMatch([_ | _], [S || S = #{kind := explicit_fail} <- Sites]),
+    [#{file := OwnerFile, manifest := #{dslx_sha256 := OwnerHash}}] = Functions,
+    Resources = maps:get(<<"resources">>, Inspection),
+    ?assertEqual(length(Receivers), length(Resources)),
+    lists:foreach(fun({#{file := File, manifest := Manifest}, Resource}) ->
+        ReceiverSites = maps:get(failure_sites, Manifest),
+        ?assertEqual(Sites, ReceiverSites),
+        Expected = json:decode(iolist_to_binary(json:encode(xls_actor_debug:failures(ReceiverSites)))),
+        ?assertEqual(Expected, maps:get(<<"failures">>, Resource)),
+        ?assertEqual(#{file => OwnerFile, dslx_sha256 => OwnerHash}, maps:get(owner_import, Manifest)),
+        ?assertEqual(hls_generated_files:hash(maps:get(binary_to_list(File), Files)),
+            maps:get(dslx_sha256, Manifest))
+    end, lists:zip(Receivers, Resources)).

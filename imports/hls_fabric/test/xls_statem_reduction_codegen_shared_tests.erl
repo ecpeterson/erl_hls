@@ -15,14 +15,14 @@ aggregate_only_requires_reductions_test() ->
 -spec aggregate_only_renders_transport_and_complete_apply_test() -> 'ok'.
 aggregate_only_renders_transport_and_complete_apply_test() ->
     Spec = spec(),
-    Ordinary = iolist_to_binary([
+    Ordinary = iolist_to_binary(xls_dslx:render([
         xls_statem_reduction_codegen:declarations(Spec),
         xls_statem_reduction_codegen:functions(Spec)
-    ]),
-    AggregateOnly = iolist_to_binary([
+    ])),
+    AggregateOnly = iolist_to_binary(xls_dslx:render([
         xls_shared_reduction_codegen:declarations(Spec, aggregate_only),
         xls_shared_reduction_codegen:functions(Spec, aggregate_only)
-    ]),
+    ])),
     ?assertEqual(nomatch,
         binary:match(Ordinary, <<"ReductionAggregate">>)),
     assert_contains(AggregateOnly, "pub struct ReductionAggregate {"),

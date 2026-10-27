@@ -35,7 +35,7 @@ inspected_plans() ->
     end),
     assert_emissions(#{
         {hls_protocol_transport, emit, 1} => 2,
-        {xls_protocol_network, emit, 2} => 2,
+        {xls_protocol_network, emit, 3} => 2,
         {xls_protocol_boundary, emit, 2} => 1,
         {hls_protocol_inspection, emit, 1} => 2}, Calls),
     #{result := #{network := NetworkManifest}} = NetworkOutput,
@@ -73,7 +73,7 @@ bridge_plan() ->
     {#{result := #{bridge := Bridge}}, Calls} = trace_renderers(fun() -> hls_protocol_bridge:emit(Plan) end),
     assert_emissions(#{
         {hls_protocol_transport, emit, 1} => 1,
-        {xls_protocol_network, emit, 2} => 1,
+        {xls_protocol_network, emit, 3} => 1,
         {xls_protocol_boundary, emit, 2} => 1,
         {xls_protocol_bridge, emit, 3} => 1}, Calls),
     ?assertEqual(Interface, maps:without([identity, libraries], Bridge)),
@@ -134,7 +134,7 @@ application_rejection() ->
     end),
     assert_emissions(#{
         {hls_protocol_transport, emit, 1} => 1,
-        {xls_protocol_network, emit, 2} => 1,
+        {xls_protocol_network, emit, 3} => 1,
         {xls_protocol_boundary, emit, 2} => 1,
         {xls_protocol_application, emit, 1} => 1}, Calls).
 
@@ -178,7 +178,7 @@ shared_arithmetic_plan() ->
     ?assertEqual([{I, #{group => 0, member => I}} || I <- [0, 1, 2]],
         [{I, Binding} || #{index := I, completion := Binding} <- Steps]),
     #{receivers := StaticReceivers, bundle := #{modules := Modules}} = hls_protocol_transport:descriptor(Plan),
-    lists:foreach(fun(Source) -> ?assertNot(maps:is_key(dslx, Source)) end, maps:values(Modules)),
+    lists:foreach(fun(Source) -> ?assertNot(maps:is_key(emitted, Source)) end, maps:values(Modules)),
     ?assertEqual([0, 1, 2], [I || #{index := I} <- StaticReceivers]),
     lists:foreach(fun(#{manifest := Manifest}) ->
         #{completion := #{mode := shared, group := 0},
@@ -188,10 +188,13 @@ shared_arithmetic_plan() ->
     end, StaticReceivers),
     {#{result := #{receivers := Receivers}}, Calls} = trace_renderers(fun() -> hls_protocol_transport:emit(Plan) end),
     assert_early_emissions(Calls),
+    #{hls_protocol_arithmetic_fixture := #{program := Program}} = Modules,
+    #{failure_locations := Locations} = xls_actor_program:spec(Program),
     lists:foreach(fun({#{manifest := Before}, #{manifest := After = #{dslx_sha256 := Hash}}}) ->
+        ?assertEqual(ok, xls_failure_sites:validate_sites(Locations, maps:get(failure_sites, After))),
         ?assertEqual(64, byte_size(Hash)),
         ?assertEqual(64, byte_size(maps:get(frame_config_sha256, After))),
-        ?assertEqual(Before, maps:without([dslx_sha256, frame_config_sha256], After))
+        ?assertEqual(Before, maps:without([dslx_sha256, frame_config_sha256, failure_sites], After))
     end, lists:zip(StaticReceivers, Receivers)).
 
 %% Unsupported reply ownership must reject at preparation, before owner rendering can begin.
@@ -378,12 +381,12 @@ trace_renderers(Build) -> trace_calls(Build, renderer_targets()).
 %% Trace leaf renderers as well as composition wrappers, so moving generation into planning is observable.
 -spec renderer_targets() -> [{module(), atom(), arity()}].
 renderer_targets() -> composition_targets() ++ [
-    {xls_shared_codegen, execution, 1}, {hls_local_protocol, ports, 2},
+    {xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2},
     {xls_template, render, 2}, {xls_protocol_transport, emit, 1}].
 
 %% Existing complete-renderer controls retain exact composition multiplicities.
 -spec composition_targets() -> [{module(), atom(), arity()}].
-composition_targets() -> [{hls_protocol_transport, emit, 1}, {xls_protocol_network, emit, 2},
+composition_targets() -> [{hls_protocol_transport, emit, 1}, {xls_protocol_network, emit, 3},
     {xls_protocol_boundary, emit, 2}, {xls_protocol_bridge, emit, 3},
     {xls_protocol_application, emit, 1}, {hls_protocol_inspection, emit, 1}].
 
@@ -411,7 +414,7 @@ assert_emissions(Expected, Calls) ->
 -spec assert_early_emissions(map()) -> ok.
 assert_early_emissions(Calls) ->
     lists:foreach(fun(Target) -> ?assert(maps:get(Target, Calls, 0) > 0) end,
-        [{xls_shared_codegen, execution, 1}, {hls_local_protocol, ports, 2},
+        [{xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2},
          {xls_template, render, 2}]).
 
 %% A private trace session observes only this caller and waits for all call events before returning.

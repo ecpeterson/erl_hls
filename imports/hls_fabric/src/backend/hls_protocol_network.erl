@@ -42,7 +42,7 @@ write(Build, Options, Directory) ->
 -spec emit(hls_source_config:network() | file:filename() | plan()) -> output().
 emit(#plan{transport = Build, layout = Layout}) ->
     #{files := TransportFiles, result := Transport} = hls_protocol_transport:emit(Build),
-    #{files := NetworkFiles, result := Network} = xls_protocol_network:emit(Layout, TransportFiles),
+    #{files := NetworkFiles, result := Network} = xls_protocol_network:emit(Layout, maps:get(receivers, Transport), TransportFiles),
     #{files => hls_generated_files:merge([TransportFiles, NetworkFiles]),
       result => #{transport => Transport, network => Network}};
 emit(Config) when is_map(Config) ->

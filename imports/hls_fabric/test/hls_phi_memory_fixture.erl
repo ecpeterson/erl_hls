@@ -88,9 +88,9 @@ write(Stage, Mode, Case, Limits, ReductionMode, Transport, Tile) ->
     Dependency = code:lib_dir(erl_hls),
     Artifacts = maps:from_list([begin
         Source = filename:join([Dependency, "src", "examples", "phi_decoder", atom_to_list(Module) ++ ".erl"]),
-        Artifact = xls_shared_parse:to_xls(Source,
+        Artifact = xls_shared_parse:to_artifact(Source,
             (maps:get(Module, Requirements, #{shared_service => ordinary}))#{mailbox_debug => Mode =/= direct}),
-        save(Stage, atom_to_list(Module) ++ ".x", Artifact),
+        save(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)),
         {Module, Artifact}
     end || Module <- [phi_halo_cell, phenom_syndrome_cell, phenom_data_cell]]),
     Devices = [begin

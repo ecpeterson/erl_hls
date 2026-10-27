@@ -60,10 +60,10 @@ reusable_program_test() ->
 finalized_transport(Static = #{bundle := #{modules := Sources}},
         Final = #{bundle := Bundle = #{modules := Modules}, actor_functions := Functions, receivers := Receivers}, Files) ->
     maps:foreach(fun(Module, Source) ->
-        ?assertNot(maps:is_key(dslx, Source)),
-        Artifact = #{dslx := Bytes} = maps:get(Module, Modules),
-        ?assert(is_binary(Bytes)),
-        ?assertEqual(Source, maps:remove(dslx, Artifact))
+        ?assertNot(maps:is_key(emitted, Source)),
+        Artifact = #{emitted := Emitted} = maps:get(Module, Modules),
+        ?assert(is_binary(xls_emitted:bytes(Emitted))),
+        ?assertEqual(Source, maps:remove(emitted, Artifact))
     end, Sources),
     ?assertEqual(lists:sort(maps:keys(Sources)), lists:sort(maps:keys(Modules))),
     ?assertEqual(Static, Final#{bundle := Bundle#{modules := Sources},
@@ -76,7 +76,7 @@ static_actor(Actor = #{file := File, manifest := Manifest = #{dslx_sha256 := Has
     ?assertEqual(Hash, digest(maps:get(binary_to_list(File), Files))),
     ConfigFile = filename:join(filename:dirname(binary_to_list(File)), "frame_config.x"),
     ?assertEqual(maps:get(frame_config_sha256, Manifest), digest(maps:get(ConfigFile, Files))),
-    Static = maps:without([dslx_sha256, frame_config_sha256], Manifest),
+    Static = maps:without([dslx_sha256, frame_config_sha256, failure_sites], Manifest),
     case maps:get(owner_import, Static, none) of
         none -> Actor#{manifest := Static};
         Import = #{file := OwnerFile, dslx_sha256 := OwnerHash} ->

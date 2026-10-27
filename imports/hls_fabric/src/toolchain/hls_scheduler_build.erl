@@ -191,16 +191,19 @@ require_actors(Required, Loaded) ->
 actors(Requirements, Loaded, Placement) ->
     Sources = maps:from_list([{Module, File} || {#{module := Module}, File} <- Loaded]),
     Observation = maps:with([mailbox_debug, direct_actor_debug, frame_payload_words], Placement),
-    maps:from_list([begin
+    hls_generated_files:merge([begin
         File = maps:get(Module, Sources),
         Context = case proplists:get_value(hls_source_context, Module:module_info(attributes)) of
             [Captured] -> Captured;
             undefined -> hls_diagnostic:raise(source, missing_actor_source_context,
                 <<"Compile actors with their HLS transform and retain source metadata.">>, #{module => Module})
         end,
-        Bytes = xls_shared_parse:to_xls(File, maps:merge(Requirement,
+        Artifact = xls_shared_parse:to_artifact(File, maps:merge(Requirement,
             Observation#{source_options => Context})),
-        {"actors/" ++ atom_to_list(Module) ++ ".x", Bytes}
+        Bytes = xls_emitted:bytes(Artifact),
+        Name = "actors/" ++ atom_to_list(Module) ++ ".x",
+        #{Name => Bytes, Name ++ ".json" => json:encode(#{
+            dslx_sha256 => hls_generated_files:hash(Bytes), failure_sites => xls_emitted:sites(Artifact)})}
     end || {Module, Requirement} <- lists:sort(maps:to_list(Requirements))]).
 
 %% The generated core leaves external RAM ports visible; fragments are included by an application shell.

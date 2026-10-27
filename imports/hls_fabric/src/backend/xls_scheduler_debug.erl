@@ -4,22 +4,22 @@
 
 %% Emit beside the RTL generated from this exact plan. The instrumentation tool
 %% checks RAM interfaces and fingerprints this document with the RTL sources.
-%% Artifacts are the exact actor DSLX files passed to XLS, indexed by module.
+%% Artifacts retain the exact actor DSLX bytes and allocated codebooks, indexed by module.
 %% Keys are opaque hashes of logical Erlang IDs; the host never interns atoms
 %% or decodes external Erlang terms supplied by a device or manifest.
 -doc "Builds the physical actor observation map from matching topology and generated artifacts.".
 -spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
-    #{module() => iodata()}) -> map().
+    #{module() => xls_emitted:artifact()}) -> map().
 projection(Plan, Specs, Artifacts) ->
     projection(Plan, Specs, Artifacts, #{}).
 
 -doc "Builds the physical actor observation map from matching topology and generated artifacts.".
 -spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
-    #{module() => iodata()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean(), direct_collections => #{module() => exclusive_epoch},
+    #{module() => xls_emitted:artifact()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean(), direct_collections => #{module() => exclusive_epoch},
         frame_payload_words => hls_frame_layout:words()}) -> map().
 projection(Plan, Specs, Artifacts, Options) ->
-    build(Plan, Specs, Options, fun(Module, Origins) ->
-        xls_failure_sites:from_artifact(Origins, maps:get(Module, Artifacts))
+    build(Plan, Specs, Options, fun(Module, Locations) ->
+        xls_emitted:sites(maps:get(Module, Artifacts), Locations)
     end).
 
 %% Runtime binding checks the artifact's canonical codebook against structural
@@ -40,9 +40,9 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
         maps:get(<<"early_collection">>, maps:get(<<"reduction">>, B, #{}), false)]),
     Options = #{mailbox_debug => MailboxDebug, direct_actor_debug => maps:is_key(<<"direct">>, Projection),
         direct_collections => Policies, frame_payload_words => Words},
-    Expected = build(Plan, Specs, Options, fun(Module, Origins) ->
-        Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
-        xls_failure_sites:number([O || O <- Origins, is_map_key(json_value(O), Values)])
+    Expected = build(Plan, Specs, Options, fun(Module, Locations) ->
+        try xls_failure_sites:from_catalog(Locations, maps:get(atom_to_binary(Module), ByModule, #{}))
+        catch error:_ -> error(actor_projection_mismatch) end
     end),
     case Projection =:= Expected of
         true -> ok;
@@ -63,8 +63,8 @@ build(Plan, Specs, Options, Codebook) ->
     end,
     Interfaces = hls_actor_interface:from_modules(lists:usort(
         [M || #{module := M} <- Groups ++ Direct])),
-    Codebooks = maps:map(fun(Module, #{failure_origins := Origins}) ->
-        Codebook(Module, Origins)
+    Codebooks = maps:map(fun(Module, #{failure_locations := Locations}) ->
+        Codebook(Module, Locations)
     end, Interfaces),
     Banks = [with_mailbox(MailboxDebug, Group,
         bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||

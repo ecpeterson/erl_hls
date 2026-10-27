@@ -35,8 +35,8 @@
 -doc "Source/owner interface metadata before the module's generated-byte identity. Imported receivers may retain their owner's hash; source_plan is compiler-owned JSON provenance, not a backend planning input.".
 -type descriptor() :: #{?INTERFACE_FIELDS}.
 
--doc "The source/owner interface with hashes of its rendered DSLX and selected frame configuration bytes.".
--type manifest() :: #{?INTERFACE_FIELDS, dslx_sha256 := binary(), frame_config_sha256 := binary()}.
+-doc "The source/owner interface with its allocated failure codebook and hashes of rendered DSLX and selected frame configuration bytes.".
+-type manifest() :: #{?INTERFACE_FIELDS, dslx_sha256 := binary(), frame_config_sha256 := binary(), failure_sites := [xls_failure_sites:site()]}.
 
 %% Planning binds the import path; emission additionally binds the rendered owner bytes.
 -type owner_import() :: #{file := binary(), dslx_sha256 => binary()}.
@@ -46,7 +46,7 @@
 
 -doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by hls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
 -type artifact() :: #{program := xls_actor_program:program(),
-    dslx := binary(), source := file:filename(), context => hls_source:context(),
+    emitted := xls_emitted:artifact(), source := file:filename(), context => hls_source:context(),
     inbox => hls_protocol_inbox:metadata(), completion => completion(), owner_import => owner_import()}.
 
 -doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
@@ -75,11 +75,14 @@ prepare(Source, Options, FrameLayout) ->
 render(Source = #{program := Program}) ->
     Spec = xls_actor_program:spec(Program),
     Mode = maps:get(mode, maps:get(completion, Source, #{mode => local})),
-    Source#{dslx => iolist_to_binary([xls_shared_codegen:execution(Spec), hls_local_protocol:ports(Spec, Mode)])}.
+    Execution = xls_shared_codegen:execution_artifact(Spec),
+    Source#{emitted => xls_emitted:with_bytes(Execution,
+        iolist_to_binary([xls_emitted:bytes(Execution), hls_local_protocol:ports(Spec, Mode)]))}.
 
 -doc "Returns an existing artifact's DSLX, JSON provenance and selected frame_config.x beside the relative source filename, without recompilation or output I/O. The enclosing writer validates paths; multiple actors in one directory must share the same configuration.".
 -spec emit(artifact(), string()) -> hls_generated_files:files().
-emit(Artifact = #{dslx := Bytes}, RelativeFilename) ->
+emit(Artifact = #{emitted := Emitted}, RelativeFilename) ->
+    Bytes = xls_emitted:bytes(Emitted),
     Manifest = #{frame_layout := Layout} = manifest(Artifact),
     ConfigName = case filename:dirname(RelativeFilename) of
         "." -> "frame_config.x";
@@ -134,9 +137,11 @@ fresh(Path) ->
 
 -doc "Reports activation/receipt/action layouts, caller obligations and source/DSLX identities. Includes the clocked owner, completion mode and optional source-bound inbox contract; no network admission or timing benefit is established.".
 -spec manifest(artifact()) -> manifest().
-manifest(Artifact = #{dslx := Bytes}) ->
+manifest(Artifact = #{emitted := Emitted, program := Program}) ->
+    Bytes = xls_emitted:bytes(Emitted),
+    #{failure_locations := Locations} = xls_actor_program:spec(Program),
     Descriptor = #{frame_layout := Layout} = descriptor(Artifact),
-    Descriptor#{dslx_sha256 => hls_generated_files:hash(Bytes),
+    Descriptor#{failure_sites => xls_emitted:sites(Emitted, Locations), dslx_sha256 => hls_generated_files:hash(Bytes),
         frame_config_sha256 => hls_generated_files:hash(hls_frame_layout:config_dslx(Layout))}.
 
 -doc "Returns source layouts, port obligations and optional checked inbox metadata before rendering. Prepared sources contain no generated-byte hashes; an already rendered input retains its import identity. manifest/1 adds the owner module and frame-configuration identities. A source snapshot alone does not establish network admission or physical locality.".

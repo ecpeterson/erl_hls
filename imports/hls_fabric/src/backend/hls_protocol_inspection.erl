@@ -20,11 +20,13 @@ mode(Other) -> error({unsupported_protocol_inspection,Other}).
 write(Plan, Directory) ->
     hls_generated_files:write_into(emit(Plan), Directory).
 
--doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. The result is the same bound manifest; no output files are created or read back.".
+-doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. Requires finalized receiver manifests from the same transport emission so allocated failures match the emitted owners. The result is the same bound manifest; no output files are created or read back.".
 -spec emit(hls_protocol_transport:descriptor() | xls_protocol_network:input()) -> hls_generated_files:output(manifest()).
 emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receivers}) ->
     Rows=[#{index=>I,id=>Id,module=>M}||{I,#{id:=Id,module:=M}}<-lists:enumerate(0,Actors)],
-    Resources=[resource(A,maps:get(M,Modules))||A=#{module:=M}<-Rows],
+    ReceiverManifests = maps:from_list([{I, Manifest} || #{index := I, manifest := Manifest} <- Receivers]),
+    Resources=[resource(A,maps:get(M,Modules),maps:get(I,ReceiverManifests))
+        || A=#{index:=I,module:=M}<-Rows],
     Source=[observation(R,maps:get(M,Modules))||R=#{module:=M}<-Receivers],
     Manifest0=json(#{schema=>5,resources=>Resources,probes=>[],catalogue_sha256=>digest(term_to_binary(Rows,[deterministic])),
         inspection=>#{scope=>process,coherence=>one_process_pre_edge,history=>unavailable,
@@ -37,14 +39,14 @@ emit(#{bundle:=#{topology:=#{actors:=Actors},modules:=Modules},receivers:=Receiv
         "inspection.json" => json:encode(Manifest),
         "inspection.etf" => term_to_binary(#{actors=>Rows,manifest=>Manifest},[deterministic])}}.
 
-%% Resource order is the exact normalized actor order, including composite logical identities.
--spec resource(map(),map()) -> map().
-resource(#{index:=I,id:=Id,module:=M},#{program:=Program}) ->
+%% Resource order follows normalized actors; each finalized receiver supplies the codebook actually emitted for its owner.
+-spec resource(map(),map(),hls_local_actor:manifest()) -> map().
+resource(#{index:=I,id:=Id,module:=M},#{program:=Program},#{failure_sites:=FailureSites}) ->
     Spec=xls_actor_program:spec(Program),
     Collection=xls_actor_observation:collection(Spec),Layout=xls_actor_observation:layout(Collection),
     Base=#{id=>I,kind=>actor,name=>iolist_to_binary(["owner/",integer_to_list(I)]),owner_index=>I,
         logical_key=>xls_actor_debug:actor_key(Id),logical_name=>iolist_to_binary(io_lib:format("~0tp",[Id])),
-        role=>M,phases=>maps:get(phases,Spec),failures=>xls_actor_debug:failures(maps:get(failure_sites,Spec)),
+        role=>M,phases=>maps:get(phases,Spec),failures=>xls_actor_debug:failures(FailureSites),
         width=>case Collection of none->26;_->56+maps:get(width,maps:get(reduction,Layout)) end},
     case Collection of none->Base;#{sites:=Sites}->Base#{reduction=>(maps:get(reduction,Layout))#{
         sites=>[maps:with([id,phase,name,population,kind],S)||S<-Sites]}} end.

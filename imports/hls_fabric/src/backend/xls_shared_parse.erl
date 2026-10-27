@@ -1,12 +1,20 @@
 -module(xls_shared_parse).
 -moduledoc "Builds shared actor services from the public compiler's validated callback artifact.".
--export([to_xls/1, to_xls/2]).
+-export([to_xls/1, to_xls/2, to_artifact/1, to_artifact/2]).
 -doc "Renders ordinary shared execution and its dedicated service from the same callbacks.".
--spec to_xls(file:filename()) -> iolist().
+-spec to_xls(file:filename()) -> binary().
 to_xls(Filename) -> to_xls(Filename, #{}).
 -doc "Selects shared reduction placement and optional physical observations.".
--spec to_xls(file:filename(), map()) -> iolist().
-to_xls(Filename, Options) ->
+-spec to_xls(file:filename(), map()) -> binary().
+to_xls(Filename, Options) -> xls_emitted:bytes(to_artifact(Filename, Options)).
+
+-doc "Compiles ordinary shared execution with its sealed emitted failure codebook.".
+-spec to_artifact(file:filename()) -> xls_emitted:artifact().
+to_artifact(Filename) -> to_artifact(Filename, #{}).
+
+-doc "Compiles the selected physical specialization, retaining exact DSLX bytes and its allocated source failure codes. Debug projections must use this result rather than reconstruct metadata from text.".
+-spec to_artifact(file:filename(), map()) -> xls_emitted:artifact().
+to_artifact(Filename, Options) ->
     case maps:keys(Options) -- [source_options, shared_service, mailbox_debug, direct_actor_debug, state_projection, admission_reductions, direct_collection, gather_collection, frame_payload_words] of
         [] -> ok;
         Unknown -> error({invalid_xls_options, Unknown})
@@ -31,7 +39,7 @@ to_xls(Filename, Options) ->
                     ok = xls_state_projection:validate(Spec, Projection, hls_source:read(Path, Context)),
                     Spec#{state_projection => Projection}
             end,
-            xls_shared_codegen:emit(Specialized#{shared_service => Mode,
+            xls_shared_codegen:artifact(Specialized#{shared_service => Mode,
                 admission_reductions => maps:get(admission_reductions, Options, false),
                 gather_collection => maps:get(gather_collection, Options, false),
                 direct_collection => maps:get(direct_collection, Options, false),
@@ -47,7 +55,7 @@ to_xls(Filename, Options) ->
         case maps:is_key(state_projection, Options) of
             true -> error(state_projection_requires_hls_statem); false -> ok end,
         case {Mode, xls_scheduler_observation:enabled(Options)} of
-            {ordinary, false} -> xls_parse:to_xls(Path, maps:with([source_options, direct_actor_debug, frame_payload_words], Options));
+            {ordinary, false} -> xls_parse:to_artifact(Path, maps:with([source_options, direct_actor_debug, frame_payload_words], Options));
             {ordinary, true} -> error(mailbox_debug_requires_hls_statem);
             _ -> error({unsupported_hls_gs_shared_service, Mode})
         end

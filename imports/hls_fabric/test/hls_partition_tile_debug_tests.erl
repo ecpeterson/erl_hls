@@ -35,7 +35,7 @@ fixture() ->
     Plan = #{actors => Actors, families => []},
     Specs = #{cells => #{members => [{actor, 0}, {actor, 1}],
         state_storage => block_ram, mailbox_storage => block_ram}},
-    Physical = xls_scheduler_debug:projection(Plan, Specs, #{hls_partition_fixture => <<>>}, #{mailbox_debug => true}),
+    Physical = xls_scheduler_debug:projection(Plan, Specs, #{hls_partition_fixture => xls_emitted:new([], <<>>)}, #{mailbox_debug => true}),
     Projection = hls_partition_tile:projection(#{tile => true, schedulers => [#{index => 0,
         actors => [#{identity => {family, cells, [7, I]}, slot => I} || I <- [0, 1]]}]}, Physical),
     [#{<<"actors">> := Bound, <<"module">> := Module, <<"phases">> := Phases,

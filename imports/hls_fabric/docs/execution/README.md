@@ -34,7 +34,7 @@ For ordinary development, `hls_scheduler_build` performs the following sequence 
 
 1. Compile every declared source and normalize the logical graph with `hls_topology` from `erl_hls`.
 2. Normalize `placement` with `xls_shared_topology_profile`, selecting scheduler groups, state/mailbox storage, queue depths and optional reduction placements.
-3. Obtain each actor's requirements from `xls_shared_topology_dslx:artifact_requirements/2` and pass them to `xls_shared_parse:to_xls/2` using its captured source context.
+3. Obtain each actor's requirements from `xls_shared_topology_dslx:artifact_requirements/2` and pass them to `xls_shared_parse:to_artifact/2` using its captured source context. Retain that emitted artifact for debug projection; `xls_emitted:bytes/1` returns its DSLX.
 4. Emit the graph with `xls_shared_topology_dslx:emit/2`, derive RAM bindings with `xls_scheduler_ram_v`, and package the retained hardware profile and unit schedule.
 5. Invoke the independent `compile-source-build` driver, or another build system, against the emitted bundle.
 
@@ -72,7 +72,7 @@ All board experiments now live under `experiments/`. Existing report paths are p
 
 ## Maintenance boundary
 
-The common compiler's `xls_parse:actor_artifact/2` returns checked callback semantics: initialization, dispatch, effects, continuations, retained replies, reductions and source failures. `xls_actor_codegen:emit/3` renders those semantics with a supplied execution body. The artifact is a versioned-source interface through the dependency pin, not a stable serialized interchange format.
+The common compiler's `xls_parse:actor_artifact/2` returns checked callback semantics: initialization, dispatch, effects, continuations, retained replies, reductions and source failures. `xls_actor_codegen:artifact/3` finalizes those semantics and a supplied execution body into an `xls_emitted` artifact. The artifact binds exact bytes to the failure codebook allocated from retained structured references; `xls_emitted:sites/2` additionally checks source locations at debug boundaries. The byte-only `emit/3`, `to_xls/2` and `execution/1` conveniences remain available when no metadata is needed. Fabric uses `xls_shared_parse:to_artifact/2` and `xls_shared_codegen:execution_artifact/1` where metadata must survive specialization or owner composition. The artifact is a versioned-source interface through the dependency pin, not a stable serialized interchange format.
 
 Private code owns reservation, actor selection, storage transactions, execution handoff, retirement, effect windows and offloaded reductions. Pipeline changes belong here. Dedicated actors continue to use the public execution body, including in mixed graphs; XLS can pipeline their generated procs independently.
 

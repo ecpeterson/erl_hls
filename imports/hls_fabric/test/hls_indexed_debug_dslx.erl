@@ -22,11 +22,11 @@ write(Stage) ->
         scheduler_groups => Groups, mailbox_debug => true},
     Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, Options),
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_shared_parse:to_xls(filename:join("test", atom_to_list(Module) ++ ".erl"),
+        xls_shared_parse:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, #{mailbox_debug => true}))
     end, Requirements),
     maps:foreach(fun(Module, Actor) ->
-        ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), Actor)
+        ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), xls_emitted:bytes(Actor))
     end, Artifacts),
     ok = file:write_file(filename:join(Stage, "actor_debug.x"), xls_shared_topology_dslx:emit(Plan, Options)),
     Scheduler = #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Groups),
@@ -36,7 +36,7 @@ write(Stage) ->
     ProgressWidth = xls_statem_gather_codegen:progress_width(maps:get(gathers, Interface)),
     ProgressWidth = maps:get(gather_storage_width, Group),
     #{gather_members := 3, gather_element_bits := 8} = Binding,
-    ActorText = iolist_to_binary(maps:get(hls_indexed_debug_fixture, Artifacts)),
+    ActorText = xls_emitted:bytes(maps:get(hls_indexed_debug_fixture, Artifacts)),
     lists:foreach(fun(Name) ->
         {match, [Body]} = re:run(ActorText, ["struct ", Name, " \\{([^}]+)\\}"], [{capture, [1], binary}]),
         nomatch = binary:match(Body, <<"GatherValues">>),

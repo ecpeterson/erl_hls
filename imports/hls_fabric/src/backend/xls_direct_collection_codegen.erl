@@ -22,7 +22,7 @@ validate(Spec, Options) ->
     end.
 
 -doc "Adds an optional singleton receiver around the ordinary compiled actor callbacks.".
--spec body(map()) -> iodata().
+-spec body(map()) -> xls_dslx:value().
 body(#{direct_collection := exclusive_epoch} = Spec) ->
     {ok, Template} = file:read_file(filename:join([code:priv_dir(hls_fabric),
         "xls", "templates", "direct_collection.x"])),

@@ -1,6 +1,6 @@
 -module(xls_protocol_network).
 -moduledoc "Connects source-bound receivers and transport using the explicit clock transition in protocol_network.x.in. Erlang elaborates heterogeneous connections; DSLX retains the observe, select and commit order.".
--export([plan/1, descriptor/1, phases/1, emit/2]).
+-export([plan/1, descriptor/1, phases/1, emit/3]).
 -export_type([plan/0, input/0, descriptor/0, manifest/0, packed_port/0, component/0, external/0, producer/0, crossing/0, phases/0]).
 
 -doc "One named packed port, in the declaration order shared by DSLX, adapters and manifests.".
@@ -112,11 +112,17 @@ descriptor(#plan{descriptor = Descriptor}) -> Descriptor.
 -spec phases(plan()) -> phases().
 phases(#plan{phases = Phases}) -> Phases.
 
--doc "Returns network files and a manifest from an unchanged composition plan and exact upstream bytes, without writing output. Adds actual inspection evidence and emitted-byte hashes to the static descriptor. The DSLX template samples old state, selects shared arithmetic, advances receivers and commits transport once. Template reads remain; no capacity, progress or physical qualification is granted.".
--spec emit(plan(), hls_generated_files:files()) -> hls_generated_files:output(manifest()).
+-doc "Returns network files and a manifest from an unchanged composition plan and exact upstream bytes, without writing output. Adds actual inspection evidence and emitted-byte hashes to the static descriptor. The DSLX template samples old state, selects shared arithmetic, advances receivers and commits transport once. The caller supplies final receiver manifests from the same transport emission so observation codebooks match emitted owners; receiver identities must match the retained plan. Template reads remain; no capacity, progress or physical qualification is granted.".
+-spec emit(plan(), [hls_protocol_transport:actor_descriptor()], hls_generated_files:files()) ->
+    hls_generated_files:output(manifest()).
 emit(#plan{input = Input, phases = Phases, inputs = Inputs, outputs = Outputs,
-        descriptor = Descriptor, components = Components}, UpstreamFiles) ->
-    {Debug, OptionalFiles} = optional_files(Input),
+        descriptor = Descriptor, components = Components}, Receivers, UpstreamFiles) ->
+    PlannedIdentities = [maps:remove(manifest, R) || R <- maps:get(receivers, Input)],
+    case [maps:remove(manifest, R) || R <- Receivers] =:= PlannedIdentities of
+        true -> ok;
+        false -> error(network_receiver_identity_mismatch)
+    end,
+    {Debug, OptionalFiles} = optional_files(Input#{receivers := Receivers}),
     Source = render(Phases, Inputs, Outputs),
     GeneratedFiles = hls_generated_files:merge([OptionalFiles,
         #{"network/network.x" => Source,

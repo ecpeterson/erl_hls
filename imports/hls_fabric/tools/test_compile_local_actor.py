@@ -38,6 +38,7 @@ class LocalActorCompilationTests(BuildFixture):
                                             'codegen_flags': ['--pipeline_stages=1', '--delay_model=unit',
                                                 '--flop_inputs=false', '--flop_outputs=false',
                                                 '--use_system_verilog=false', '--reset=reset'],
+                                            'failure_sites': [{'code': 22, 'kind': 'explicit_fail', 'file': 'fixture.erl', 'line': 7}],
                                             'dslx_sha256': compile_local_actor.digest(self.source),
                                             'frame_config_sha256': compile_local_actor.digest(self.frame_config)}))
 
@@ -58,6 +59,7 @@ class LocalActorCompilationTests(BuildFixture):
         self.assertIn('--module_name=local_actor', commands[2]['command'])
         self.assertIn('--pipeline_stages=1', commands[2]['command'])
         self.assertIn('--flop_outputs=false', commands[2]['command'])
+        self.assertEqual(owner['actor']['failure_sites'], json.loads(self.manifest.read_text())['failure_sites'])
         self.assertFalse(owner['network_admitted'])
         self.assertFalse(owner['native_measured'])
         self.assertEqual(owner['rtl_sha256'], compile_local_actor.digest(release / 'actor.v'))
@@ -102,6 +104,27 @@ class LocalActorCompilationTests(BuildFixture):
         def alter_before_snapshot(*args, **kwargs):
             """Change the dependency after admission, before the shared executor freezes input bytes."""
             self.frame_config.write_bytes(changed)
+            return execute(*args, **kwargs)
+
+        with patch.object(compile_local_actor, 'compiler_tool', return_value=compiler), patch.object(
+                compiler, 'execute', side_effect=alter_before_snapshot):
+            with self.assertRaisesRegex(ValueError, 'configuration or manifest during snapshot'):
+                self.compile()
+        self.assertEqual(self.calls.read_text(), calls)
+        self.assertEqual(self.output.resolve(), release)
+
+    def test_failure_metadata_change_during_snapshot_rejects(self) -> None:
+        """Retain the emitter's codebook with the frozen source and reject a mismatched sidecar."""
+        release = self.compile()
+        calls = self.calls.read_text()
+        compiler = compiler_tool(public, 'compile_xls')
+        execute = compiler.execute
+
+        def alter_before_snapshot(*args, **kwargs):
+            """Change only the codebook after admission, before copying the artifact bundle."""
+            manifest = json.loads(self.manifest.read_text())
+            manifest['failure_sites'][0]['line'] += 1
+            self.manifest.write_text(json.dumps(manifest))
             return execute(*args, **kwargs)
 
         with patch.object(compile_local_actor, 'compiler_tool', return_value=compiler), patch.object(

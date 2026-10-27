@@ -77,7 +77,7 @@ artifacts(Kind, Options) ->
                 phi_decoder_profile_topology_dslx:profile())}
     end,
     maps:map(fun(Module, Requirement) ->
-        xls_shared_parse:to_xls(filename:join(Directory, atom_to_list(Module) ++ ".erl"),
+        xls_shared_parse:to_artifact(filename:join(Directory, atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, Options))
     end, Requirements).
 
@@ -107,7 +107,7 @@ write(Kind, Stage, Options0) ->
     end,
     {Plan, Specs} = fixture(Kind),
     Small = artifacts(Kind, Options0),
-    maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", Actor) end, Small),
+    maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Actor)) end, Small),
     ok = write_file(Stage, "actor_debug.x", xls_shared_topology_dslx:emit(Plan,
         maps:merge(#{name => actor_debug, channel_depth => 1, actor_egress_depth => burst,
             scheduler_groups => Specs}, Options))),

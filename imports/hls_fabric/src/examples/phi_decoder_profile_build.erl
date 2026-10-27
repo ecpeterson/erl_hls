@@ -19,12 +19,12 @@ emit(ProfileOptions, Options) ->
     ActorOptions = maps:with([mailbox_debug, direct_actor_debug], Options),
     Artifacts = maps:map(fun(Module, Requirement) ->
         Source = filename:join("src/examples/phi_decoder", atom_to_list(Module) ++ ".erl"),
-        xls_shared_parse:to_xls(Source, maps:merge(Requirement, ActorOptions))
+        xls_shared_parse:to_artifact(Source, maps:merge(Requirement, ActorOptions))
     end, Requirements),
     Scheduler = hls_scheduler_plan:normalize(Topology, Specs),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler),
-    ActorFiles = maps:from_list([{atom_to_list(Module) ++ ".x", Bytes}
-        || {Module, Bytes} <- maps:to_list(Artifacts)]),
+    ActorFiles = maps:from_list([{atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)}
+        || {Module, Artifact} <- maps:to_list(Artifacts)]),
     Inputs = hls_generated_files:merge([ActorFiles, #{
         "phi_decoder_profile_topology.x" => xls_shared_topology_dslx:emit(Topology, Profile),
         "phi_decoder_profile_top.v" => phi_decoder_profile_top_v:emit(Planes, Scheduler, Options),

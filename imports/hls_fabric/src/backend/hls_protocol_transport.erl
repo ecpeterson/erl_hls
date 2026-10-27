@@ -300,8 +300,10 @@ delivery(#{source := {Actor, Port}, delivery := Mode}) ->
 %% binds the file; only emission can bind its generated-byte identity.
 -spec receiver_owner(hls_local_actor:source(), hls_local_actor:artifact()) -> hls_local_actor:artifact().
 receiver_owner(Source = #{completion := #{mode := shared}}, _) -> hls_local_actor:render(Source);
-receiver_owner(#{owner_import := #{file := File}}, Owner = #{dslx := Bytes}) ->
+receiver_owner(#{owner_import := #{file := File}}, Owner = #{emitted := Emitted}) ->
+    Bytes = xls_emitted:bytes(Emitted),
     Name = filename:basename(binary_to_list(File), ".x"),
     {ok, Template} = file:read_file(filename:join(code:priv_dir(hls_fabric), "xls/templates/local_owner_import.x.in")),
-    Owner#{dslx := xls_template:render(Template, [{<<"@@MODULE@@">>, Name}]),
+    Owner#{emitted := xls_emitted:with_bytes(Emitted,
+        xls_template:render(Template, [{<<"@@MODULE@@">>, Name}])),
         owner_import => #{file => File, dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)}}.

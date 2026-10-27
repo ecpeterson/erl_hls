@@ -116,7 +116,7 @@ descriptor(#layout{metadata = Metadata}) -> Metadata.
 
 -doc "Renders the checked inbox around its matching owner artifact without source reads or layout analysis. Templates are read here; the owner and layout must originate from the same trusted transport build.".
 -spec attach(hls_local_actor:artifact(), layout()) -> hls_local_actor:artifact().
-attach(Artifact = #{dslx := Body}, #layout{links = Links, shared = Shared,
+attach(Artifact = #{emitted := Emitted}, #layout{links = Links, shared = Shared,
         metadata = Metadata = #{frame_layout := FrameLayout, physical_slots := Count, mask_bits := N, cursor_bits := Cursor,
             host := #{slots := HostCount}, startup := #{count := StartupCount, frames := Starts},
             inputs := Inputs, slots := Indexed}}) ->
@@ -127,7 +127,7 @@ attach(Artifact = #{dslx := Body}, #layout{links = Links, shared = Shared,
     CompletionInputs = case Shared of false -> []; true ->
         "completion_granted: io.completion_granted, completion_action: io.completion_action," end,
     Inbox = xls_template:render(Template, [{<<"@@COMPLETION_INPUTS@@">>, CompletionInputs}]),
-    Source=[Body,"\nimport protocol_inbox as inbox_control;\nimport protocol_startup as startup_control;\n",
+    Source=[xls_emitted:bytes(Emitted),"\nimport protocol_inbox as inbox_control;\nimport protocol_startup as startup_control;\n",
         "const INBOX_SLOTS = u32:",n(N),";\nconst INBOX_CURSOR_BITS = u32:",n(Cursor),";\n",
         "const CAPTURE_SLOTS = u32:",n(Count),";\nconst STARTUP_BITS = u32:",n(max(1,StartupCount)),";\n",
         "const STARTUP_VALID = bits[STARTUP_BITS]:",n((1 bsl StartupCount)-1),";\n",
@@ -140,7 +140,7 @@ attach(Artifact = #{dslx := Body}, #layout{links = Links, shared = Shared,
         [["u32:",n(Count+I)," => bits[",n(FrameBits),"]:0x",integer_to_list(F,16),",\n"]||{I,F}<-lists:enumerate(0,Starts)],
         case Host of true-> ["u32:",n(Count+StartupCount)," => io.host_frame,\n"];false->[] end,
         "_ => bits[",n(FrameBits),"]:0, } }\n",Inbox],
-    Artifact#{dslx := iolist_to_binary(Source), inbox => Metadata}.
+    Artifact#{emitted := xls_emitted:with_bytes(Emitted, iolist_to_binary(Source)), inbox => Metadata}.
 
 -doc "Returns incoming link mask spans from an attached inbox manifest. Checks that link order/counts describe exactly the indexed physical slots; rejects inconsistent layout with invalid_inbox_link_layout. Link identifiers need not be consecutive or numerically ordered. Startup and host slots are outside these spans.".
 -spec link_bindings(metadata()) -> [link_binding()].

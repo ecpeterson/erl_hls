@@ -41,7 +41,7 @@ module(Name, #{program := Program}) ->
       messages => maps:get(message_names, Spec), alternatives => Entries,
       entry_layouts => entry_layouts(maps:get(entries, Spec)),
       families => Families, collections => collections(Spec),
-      failure_sites => maps:get(failure_sites, Spec),
+      failure_locations => maps:get(failure_locations, Spec),
       diagnostics => case maps:get(retained_calls, Spec) of
           none -> [];
           _ -> [diagnostic(retained_calls, #{module => Name},

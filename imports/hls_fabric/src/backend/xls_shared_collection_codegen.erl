@@ -79,7 +79,7 @@ loader_value(Spec) ->
     end.
 
 -doc "Emits collection admission and authoritative-state handoff functions without changing callback semantics.".
--spec helpers(map()) -> iodata().
+-spec helpers(map()) -> xls_dslx:value().
 helpers(Spec = #{admission_reductions := exclusive_epoch}) ->
     xls_exclusive_collection_codegen:helpers(Spec);
 helpers(Spec = #{message_names := Names, message_words := Words}) ->

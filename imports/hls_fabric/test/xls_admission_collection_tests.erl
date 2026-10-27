@@ -85,11 +85,11 @@ direct_topology_and_debug_test() ->
     Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, Profile),
     Options = maps:get(Module, Requirements),
     ?assertMatch(#{direct_collection := exclusive_epoch, direct_actor_debug := true}, Options),
-    Body = xls_shared_parse:to_xls("test/hls_projection_reduction_fixture.erl", Options),
+    Artifact = xls_shared_parse:to_artifact("test/hls_projection_reduction_fixture.erl", Options),
     Topology = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
     ?assertNotEqual(nomatch, binary:match(Topology, <<"::CollectionService<u32:1, u32:0>">>)),
     Projection = #{<<"direct">> := [Bank]} = xls_scheduler_debug:projection(
-        Plan, #{}, #{Module => Body}, Profile),
+        Plan, #{}, #{Module => Artifact}, Profile),
     ?assertEqual(ok, xls_scheduler_debug:validate(Plan, #{}, Projection)),
     R = #{<<"fields">> := Fields, <<"width">> := Width} = maps:get(<<"reduction">>, Bank),
     ?assertMatch(#{<<"early_collection">> := true}, R),

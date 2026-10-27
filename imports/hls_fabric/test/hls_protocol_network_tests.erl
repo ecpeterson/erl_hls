@@ -62,8 +62,11 @@ receiver_owned_slices_test() ->
     ?assertEqual(Eligible, Retire),
     ?assertMatch(#{receivers := [#{index := 2, host_slot := 8, completion := none}],
         ingress := [#{actor := 2, slot := 8}, none, none]}, Advance),
+    [Receiver] = maps:get(receivers, Plan),
     #{files := #{"network/network.x" := Source}, result := Manifest} =
-        xls_protocol_network:emit(Layout, Components),
+        xls_protocol_network:emit(Layout, [Receiver], Components),
+    ?assertError(network_receiver_identity_mismatch,
+        xls_protocol_network:emit(Layout, [Receiver#{index := 0}], Components)),
     {match, Slices} = re:run(Source,
         <<"link_[0-9]+_(?:eligible|take|release_valid): [^,\\n]+">>,
         [global, {capture, first, binary}]),

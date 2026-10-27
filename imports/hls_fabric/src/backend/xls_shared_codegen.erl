@@ -1,6 +1,6 @@
 -module(xls_shared_codegen).
 -moduledoc false.
--export([publication_depth/0, emit/1, execution/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
+-export([publication_depth/0, emit/1, artifact/1, execution/1, execution_artifact/1, shared_machine_width/1, shared_machine_width/2, shared_machine_width/3, shared_machine_layout/2, shared_machine_layout/3]).
 -export_type([machine_layout/0]).
 -define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
 %% A packed field may be empty when its source feature is absent.
@@ -18,12 +18,16 @@
 publication_depth() -> 2.
 
 -doc "Renders RAM-backed shared execution of a validated actor artifact.".
--spec emit(spec()) -> iolist().
-emit(Spec) ->
+-spec emit(spec()) -> binary().
+emit(Spec) -> xls_emitted:bytes(artifact(Spec)).
+
+-doc "Renders one specialized shared actor and retains its allocated failure codebook beside the exact module bytes.".
+-spec artifact(spec()) -> xls_emitted:artifact().
+artifact(Spec) ->
     ok = xls_shared_names:validate(Spec),
     Reductions = maps:get(reductions, Spec, none),
     Mode = maps:get(shared_service, Spec, ordinary),
-    xls_actor_codegen:emit(xls_exclusive_collection_codegen:actor_spec(Spec), [bram, mailbox, scheduler, arbitration, std, direct_mailbox_observation] ++ xls_scheduler_observation:imports(Spec) ++ xls_indexed_collection_codegen:imports(Spec),
+    xls_actor_codegen:artifact(xls_exclusive_collection_codegen:actor_spec(Spec), [bram, mailbox, scheduler, arbitration, std, direct_mailbox_observation] ++ xls_scheduler_observation:imports(Spec) ++ xls_indexed_collection_codegen:imports(Spec),
         [xls_shared_reduction_codegen:declarations(Reductions, Mode),
          xls_exclusive_collection_codegen:declarations(Spec),
          xls_indexed_collection_codegen:declarations(Spec),
@@ -36,9 +40,13 @@ emit(Spec) ->
          scheduled_effect_function(Spec), xls_publication_codegen:helpers(Spec), shared_machine_step_function(Spec),
          shared_executor(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
 -doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies and physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization.".
--spec execution(xls_actor_codegen:spec()) -> iolist().
-execution(Closed) ->
-    case maps:keys(Closed) -- [source, failure_sites, imports, capacity, phases, frame_layout,
+-spec execution(xls_actor_codegen:spec()) -> binary().
+execution(Closed) -> xls_emitted:bytes(execution_artifact(Closed)).
+
+-doc "Renders checked ordinary activation semantics and retains its emitted failure codebook. The same closed-artifact and ownership constraints as execution/1 apply; enclosing protocol composition must preserve this metadata.".
+-spec execution_artifact(xls_actor_codegen:spec()) -> xls_emitted:artifact().
+execution_artifact(Closed) ->
+    case maps:keys(Closed) -- [source, failure_locations, imports, capacity, phases, frame_layout,
             message_names, message_words, output_names, max_entry_effects,
             data_name, data_width, record_declarations, helper_functions, init,
             entries, casts, continuations, retained_calls, internal_steps,
@@ -59,7 +67,7 @@ execution(Closed) ->
             end;
         error -> ok
     end,
-    xls_actor_codegen:emit(Spec, [bram, mailbox, scheduler, arbitration, std],
+    xls_actor_codegen:artifact(Spec, [bram, mailbox, scheduler, arbitration, std],
         [machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
          xls_shared_gather_codegen:helpers(Spec),
          shared_machine_step_function(Spec), shared_executor(Spec),

@@ -13,7 +13,7 @@ declarations(Spec = #{accumulator := #{dslx_type := Type}}, aggregate_only) ->
     ok = require_fixed_membership(Spec),
     aggregate_declarations(aggregate_only, Site, Remaining, Member, Type).
 -doc "Renders transport aggregation around the actor's common reduction functions.".
--spec functions(spec(), ordinary | aggregate_only) -> iodata().
+-spec functions(spec(), ordinary | aggregate_only) -> xls_dslx:value().
 functions(_, ordinary) -> [];
 functions(none, aggregate_only) -> error(aggregate_only_requires_reductions);
 functions(Spec, aggregate_only) ->
@@ -41,7 +41,7 @@ aggregate_declarations(aggregate_only, SiteBits, RemainingBits, MemberBits,
     ].
 
 %% Renders aggregate capture, combination and actor-state application.
--spec aggregate_functions('aggregate_only',map()) -> iodata().
+-spec aggregate_functions('aggregate_only',map()) -> xls_dslx:value().
 aggregate_functions(aggregate_only, Spec) ->
     SiteBits = xls_statem_reduction_ir:site_width(Spec),
     [
@@ -59,14 +59,14 @@ aggregate_functions(aggregate_only, Spec) ->
     ].
 
 -doc "Builds a checked contribution using only the frame, rejecting state-dependent source clauses.".
--spec transport_function(map()) -> iodata().
+-spec transport_function(map()) -> xls_dslx:value().
 transport_function(#{sites := Sites}) ->
     Contributions = xls_statem_reduction_codegen:site_contributions(Sites),
     ok = require_aggregate_contributions(Contributions),
     transport_text(Contributions).
 
 -doc "Uses a message-only lift under an explicit exclusive protocol assertion; ordinary actor patterns remain checked.".
--spec transport_function(map(), exclusive_epoch) -> iodata().
+-spec transport_function(map(), exclusive_epoch) -> xls_dslx:value().
 transport_function(#{sites := Sites}, exclusive_epoch) ->
     Lift = fun(C) ->
         case maps:get(independent_lift, C, maps:get(transport, C)) of
@@ -81,7 +81,7 @@ transport_function(#{sites := Sites}, exclusive_epoch) ->
     end.
 
 %% Both checked and asserted placements use the same lowered expression renderer.
--spec transport_text([{map(), map()}]) -> iodata().
+-spec transport_text([{map(), map()}]) -> xls_dslx:value().
 transport_text(Contributions) ->
     ["fn reduction_transport_contribution(\n    frame: axis::Frame) -> ReductionContribution {\n",
      "  match frame.header.op as Tag {\n",
@@ -89,7 +89,7 @@ transport_text(Contributions) ->
      "    _ => zero!<ReductionContribution>(),\n  }\n}\n\n"].
 
 %% Classifies a frame and constructs its state-independent contribution.
--spec transport_contribution_arm({map(),map()}) -> iodata().
+-spec transport_contribution_arm({map(),map()}) -> xls_dslx:value().
 transport_contribution_arm({Site, #{
     tag := Tag,
     transport := #{body := Body, result := Result}
@@ -99,7 +99,7 @@ transport_contribution_arm({Site, #{
         "      let message = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         "      let built = {\n",
-        xls_parse_io:indent(Body, 8),
+        xls_dslx:indent(Body, 8),
         "        ", Result, "\n",
         "      };\n",
         "      ReductionContribution {\n",

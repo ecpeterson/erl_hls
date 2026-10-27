@@ -26,7 +26,7 @@ selected_frame_codegen_test() ->
     Spec = (xls_parse:actor_artifact("test/hls_indexed_adapter_fixture.erl", []))#{gather_collection => true},
     #{gathers := Gathers = #{sites := [Site = #{contributions := [Contribution]}]},
         message_words := Words} = Spec,
-    Single = iolist_to_binary(xls_indexed_collection_codegen:helpers(Spec)),
+    Single = iolist_to_binary(xls_dslx:render(xls_indexed_collection_codegen:helpers(Spec))),
     Literal = <<"fn indexed_selected_frame(frame: axis::Frame) -> axis::Frame {\n"
         "  axis::Frame { header: axis::Header { op: Tag::PIECE as u8, ..frame.header }, ..frame }\n}">>,
     Identity = <<"fn indexed_selected_frame(frame: axis::Frame) -> axis::Frame { frame }">>,
@@ -36,6 +36,6 @@ selected_frame_codegen_test() ->
     MultiSite = Site#{contributions := [Contribution, Contribution#{tag := other_piece}]},
     MultiSpec = Spec#{gathers := Gathers#{sites := [MultiSite]},
         message_words := Words#{other_piece => maps:get(piece, Words)}},
-    Multi = iolist_to_binary(xls_indexed_collection_codegen:helpers(MultiSpec)),
+    Multi = iolist_to_binary(xls_dslx:render(xls_indexed_collection_codegen:helpers(MultiSpec))),
     ?assertNotEqual(nomatch, binary:match(Multi, Identity)),
     ?assertEqual(nomatch, binary:match(Multi, Literal)).

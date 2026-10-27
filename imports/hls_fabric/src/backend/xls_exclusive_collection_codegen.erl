@@ -39,7 +39,7 @@ actor_spec(Spec) ->
     end.
 
 -doc "Generates checked early folding and merges callback opens with current collection progress.".
--spec helpers(map()) -> iodata().
+-spec helpers(map()) -> xls_dslx:value().
 helpers(Spec = #{reductions := R}) ->
     #{reduction := #{offset := Start}, failure := #{offset := Failure}, width := End} =
         xls_shared_codegen:shared_machine_layout(xls_state_projection:width(Spec),
@@ -67,7 +67,7 @@ selected_input(R = #{accumulator := #{name := Name}}) ->
 
 
 -doc "Renders message-only lifting, membership checks, early folding and opening reconciliation for either execution backend.".
--spec core(map()) -> iodata().
+-spec core(map()) -> xls_dslx:value().
 core(Spec = #{reductions := R, message_names := Names, message_words := Words}) ->
     #{sites := [#{population := #{size := Size}}]} = R,
     Tags = lists:usort([maps:get(tag, C) || {_, C} <-
