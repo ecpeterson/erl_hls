@@ -1,7 +1,7 @@
 %%%% Shared preparation of a resolved, instance-addressed topology graph.
 -module(xls_topology_graph).
 -moduledoc false.
--export([lower/2, lanes/1, check_lanes/3]).
+-export([lower/2, lower/3, lanes/1, check_lanes/3]).
 
 
 %% Profile is normalized by the caller. Family rules have already been
@@ -9,19 +9,26 @@
 %% the placement planner. This module owns wire-layout and startup checks.
 -doc "Resolves a materialized graph using a normalized profile, validating public schemas and startup values against its ordinary-frame capacity.".
 -spec lower(map(), xls_topology_profile:profile()) -> map().
+lower(Plan = #{actors := Actors}, Profile) ->
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile)),
+    Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Actors], Layout),
+    lower(Plan, Profile, Interfaces).
+
+-doc "Lowers a materialized graph with a retained interface catalog from hls_actor_interface:from_modules/2. The catalog must cover every actor and use the profile frame layout; no interface or source is reloaded.".
+-spec lower(map(), xls_topology_profile:profile(), #{module() => hls_actor_interface:summary()}) -> map().
 lower(Plan = #{
         families := [],
         ingresses := [],
         route_relations := [],
         lane_relations := []
-    }, Profile) ->
+    }, Profile, Interfaces) ->
     #{name := Name, channel_depth := Depth,
         actor_egress_depth := EgressDepth, direct_actor_debug := ActorDebug,
         frame_payload_words := PayloadWords} =
         Profile,
     Layout = hls_frame_layout:new(PayloadWords),
     ok = validate_lanes(Plan),
-    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth, Layout),
+    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth, Layout, Interfaces),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
@@ -91,13 +98,14 @@ lanes(Routes) ->
     ].
 
 
-%% Source summaries stay intrinsic; each physical graph checks its chosen capacity.
--spec annotate_actors([map()], burst | non_neg_integer(), hls_frame_layout:layout()) -> [map()].
-annotate_actors(Actors, EgressDepth, Layout) ->
-    Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Actors], Layout),
-    [annotate_actor(Index, Actor, Interfaces, EgressDepth)
-        || {Index, Actor} <- lists:enumerate(0, Actors)].
+%% Retained summaries must have been checked for this physical frame capacity.
+-spec annotate_actors([map()], burst | non_neg_integer(), hls_frame_layout:layout(),
+    #{module() => hls_actor_interface:summary()}) -> [map()].
+annotate_actors(Actors, EgressDepth, Layout, Interfaces) ->
+    [begin
+        #{frame_layout := Layout} = maps:get(Module, Interfaces),
+        annotate_actor(Index, Actor, Interfaces, EgressDepth)
+    end || {Index, Actor = #{module := Module}} <- lists:enumerate(0, Actors)].
 
 annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     Module = maps:get(module, Actor),

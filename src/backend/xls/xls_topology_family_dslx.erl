@@ -4,7 +4,7 @@
 
 -module(xls_topology_family_dslx).
 -moduledoc "Compact DSLX wiring for regular families of dedicated actors.".
--export([artifact_requirements/2, emit/2, lower/2]).
+-export([artifact_requirements/2, emit/2, lower/2, lower/3, render/1]).
 
 -define(U16_MAX, 16#ffff).
 -define(U32_MAX, 16#ffffffff).
@@ -27,7 +27,17 @@ artifact_requirements(Plan, Profile) ->
 
 -doc "Resolves validated logical actors and routes into a renderable physical graph.".
 -spec lower(map(),map()) -> map().
-lower(Plan, Profile) ->
+lower(Plan, Profile0) ->
+    Profile = xls_topology_profile:normalize(Profile0),
+    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile)),
+    Interfaces = hls_actor_interface:from_modules(
+        [M || #{module := M} <- maps:get(families, Plan, [])], Layout),
+    lower(Plan, Profile, Interfaces).
+
+-doc "Lowers regular families with a retained interface catalog from hls_actor_interface:from_modules/2. All family modules must be present and checked for the profile frame layout; sources and interfaces are not reloaded.".
+-spec lower(hls_topology:plan(), xls_topology_dslx:profile(),
+    #{module() => hls_actor_interface:summary()}) -> map().
+lower(Plan, Profile, Interfaces) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
     #{
@@ -40,7 +50,7 @@ lower(Plan, Profile) ->
     Layout = hls_frame_layout:new(PayloadWords),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
-    Families1 = annotate_families(Families0, EgressDepth, Layout),
+    Families1 = annotate_families(Families0, EgressDepth, Layout, Interfaces),
     FamilyIndex = index_by_id(Families1),
     Ingresses = xls_topology_ingress:lower(
         maps:get(ingresses, Plan, []),
@@ -134,15 +144,14 @@ validate_dimensions(FamilyId, Width, Height) ->
 require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
-%% Resolve source interfaces once, checking all schemas against this build's frame layout.
--spec annotate_families([map()], burst | non_neg_integer(), hls_frame_layout:layout()) -> [map()].
-annotate_families(Families, EgressDepth, Layout) ->
-    Interfaces = hls_actor_interface:from_modules(
-        [Module || #{module := Module} <- Families], Layout),
+%% Use the same frame-bound catalog for every family instance.
+-spec annotate_families([map()], burst | non_neg_integer(), hls_frame_layout:layout(),
+    #{module() => hls_actor_interface:summary()}) -> [map()].
+annotate_families(Families, EgressDepth, Layout, Interfaces) ->
     [
         begin
             Module = maps:get(module, Family),
-            Interface = maps:get(Module, Interfaces),
+            Interface = #{frame_layout := Layout} = maps:get(Module, Interfaces),
             Family#{
                 index => Index,
                 module_name => xls_topology_profile:identifier(
@@ -593,7 +602,8 @@ startup_fields(Target, Fields, Values) ->
 %%% Rendering
 %%%
 
--spec render(map()) -> [[[any()]],...].
+-doc "Renders a graph returned by lower/2 or lower/3 without repeating topology, source or interface analysis.".
+-spec render(map()) -> iodata().
 render(Spec) ->
     [
         preamble(Spec),
