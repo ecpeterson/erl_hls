@@ -7,8 +7,7 @@
         kernel,
         stdlib,
         crypto,
-        compiler,
-        erl_hls
+        hls_runtime
     ]},
     {env, []},
     {modules, []},

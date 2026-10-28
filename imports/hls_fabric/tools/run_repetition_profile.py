@@ -71,7 +71,7 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
                        cwd=ROOT, env=dict(erlang_environment("test", compiler=public),
                                         REPETITION_STAGE=str(stage), REPETITION_COUNT=str(count)),
                        stdout=out, stderr=subprocess.STDOUT, check=True, timeout=120)
-    for directory in (ROOT / "priv/xls/lib", public / "priv/xls/lib", public / "priv/xls/fabric"):
+    for directory in (ROOT / "apps/hls_lowering/priv/xls/lib", public / "priv/xls/lib", public / "priv/xls/fabric"):
         for source in directory.glob("*.x"):
             shutil.copy2(source, stage / source.name)
     for source in (public / "src/examples/phi_decoder/phi_field.x",

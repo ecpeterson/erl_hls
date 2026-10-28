@@ -83,7 +83,7 @@ def build(args: argparse.Namespace, *, transform: Callable[[Path], None] | None 
         for library in ("lib", "fabric"):
             for path in (args.erl_hls / "priv/xls" / library).glob("*.x"):
                 shutil.copy(path, source)
-        for path in (ROOT / "priv/xls").rglob("*.x"):
+        for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
             shutil.copy(path, source)
         shutil.copy(args.erl_hls / "src/examples/phi_decoder/phi_field.x", source)
         if transform is not None:

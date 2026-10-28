@@ -18,7 +18,7 @@ erl -noshell \
             mailbox_mixed -> #{direct_actor_debug => true, mailbox_debug => true}; _ -> #{mailbox_debug => true} end,
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
-    cp "$erl_hls_root"/priv/xls/lib/*.x priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$erl_hls_root/src/examples/phi_decoder/phi_field.x" "$stage/"
+    cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$erl_hls_root/src/examples/phi_decoder/phi_field.x" "$stage/"
     cp tools/phi_scheduler_rams.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
     bash tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
@@ -29,7 +29,7 @@ if [[ "$kind" == phi ]]; then
     exit 0
 fi
 scheduler_count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$stage/small-actors.json")
-options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
@@ -48,7 +48,7 @@ path = Path(sys.argv[1])
 path.write_text(path.read_text().replace("actor_debug", "actor_debug_production"))
 PY
     "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
-        --dslx_path="$production:$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$production:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$production/actor_debug.x" > "$production/actor_debug.ir"
     "$xls_root/opt_main" "$production/actor_debug.ir" > "$production/actor_debug.opt.ir"
 fi

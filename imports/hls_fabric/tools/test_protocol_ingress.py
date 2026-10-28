@@ -52,7 +52,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
     offset=json.loads((fixture/'actors/receiver_0.x.json').read_text())['inbox']['host']['offset']
     cases=[('early-retire',f'step_0.output.take[{offset}+:u1]',f'step_0.output.accepted[{offset}+:u1]'),
            ('live-packet','host_frame: ingress_offer.frame','host_frame: ingress::decode(io.ingress_data).frame')]
-    paths=[fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+    paths=[fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     for name,before,after in cases:
         part=stage/name;part.mkdir();source=part/'network.x';assert before in original
         source.write_text(original.replace(before,after))
@@ -64,7 +64,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
 def properties(xls: Path, fixture: Path, stage: Path) -> None:
     """Prove finite-state ingress rules and actual generated cuts, retaining a rejecting control."""
     args=SimpleNamespace(xls=xls,yosys='yosys');raw=stage/'properties.ir'
-    imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+    imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     converter=[xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
                '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib')]
     run([*converter,ROOT/'test/protocol_ingress_properties.x'],stage,'properties-convert',raw)

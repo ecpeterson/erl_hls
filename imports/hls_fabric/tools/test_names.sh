@@ -10,7 +10,7 @@ cd "$project_root"
 rebar3 as test compile
 source tools/backend_env.sh test
 erl -noshell -eval 'ok = xls_names_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for kind in names gs; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/$kind.x"

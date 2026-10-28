@@ -32,7 +32,7 @@ def prove(source: str, args: argparse.Namespace, name: str, expected: str = 'uns
     (stage / 'contract.x').write_text('import mailbox_refinement;\n' + source)
     started = time.monotonic()
     run([str(args.xls / 'ir_converter_main'), '--top=contract', '--warnings_as_errors=false',
-         '--dslx_path=' + str(ROOT / 'test_data') + ':' + str(args.library) + ':' + str(ROOT / 'priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
+         '--dslx_path=' + str(ROOT / 'test_data') + ':' + str(args.library) + ':' + str(ROOT / 'apps/hls_lowering/priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
          '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), str(stage / 'contract.x')], stage, 'contract.ir')
     run([str(args.xls / 'opt_main'), str(stage / 'contract.ir')], stage, 'contract.opt.ir')
     run([str(args.xls / 'codegen_main'), '--generator=combinational', '--module_name=contract',
@@ -57,12 +57,12 @@ def main() -> None:
     parser.add_argument('xls', type=lambda p: Path(p).resolve())
     parser.add_argument('--yosys', type=Path, default=Path('yosys'))
     parser.add_argument('--stage', type=lambda p: Path(p).resolve(), default=ROOT / '_build/mailbox-formal')
-    parser.add_argument('--library', type=lambda p: Path(p).resolve(), default=ROOT / 'priv/xls/lib')
+    parser.add_argument('--library', type=lambda p: Path(p).resolve(), default=ROOT / 'apps/hls_lowering/priv/xls/lib')
     args = parser.parse_args()
     args.yosys = Path(shutil.which(str(args.yosys)) or args.yosys).resolve()
     inputs = [args.library / 'mailbox.x', ROOT / 'test_data/mailbox_refinement.x', Path(__file__),
               args.yosys, *[args.xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
-              *sorted((ROOT / 'priv/xls/lib').glob('*.x')),
+              *sorted((ROOT / 'apps/hls_lowering/priv/xls/lib').glob('*.x')),
               *sorted((compiler_root('test') / 'priv/xls/lib').glob('*.x')),
               *sorted((args.xls / 'xls/dslx/stdlib').rglob('*.x'))]
     identities = {str(p): digest(p) for p in inputs}

@@ -33,7 +33,7 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     erl = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test", compiler=args.erl_hls))]
     logged_command([*erl, "-eval", "[Stage] = init:get_plain_arguments(), phi_decoder_profile_fixture:write(Stage), "
              "phi_decoder_profile_fixture:oracle(Stage), halt().", "-extra", stage], ROOT, stage / "prepare.log", 120)
-    for directory in (ROOT / "priv/xls/lib", args.erl_hls / "priv/xls/lib", args.erl_hls / "priv/xls/fabric"):
+    for directory in (ROOT / "apps/hls_lowering/priv/xls/lib", args.erl_hls / "priv/xls/lib", args.erl_hls / "priv/xls/fabric"):
         for path in directory.glob("*.x"):
             shutil.copyfile(path, stage / path.name)
     for path in (args.erl_hls / "src/examples/phi_decoder/phi_field.x", args.erl_hls / "priv/rtl/hls_1r1w_ram.v"):

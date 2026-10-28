@@ -33,7 +33,7 @@ def build(args: argparse.Namespace) -> None:
     for library in ("lib", "fabric"):
         for path in (public / "priv/xls" / library).glob("*.x"):
             shutil.copy(path, source)
-    for path in (ROOT / "priv/xls").rglob("*.x"):
+    for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
         shutil.copy(path, source)
     shutil.copy(public / "priv/rtl/hls_1r1w_ram.v", source)
     banks = len(json.loads((source / "actors.json").read_text())["banks"])

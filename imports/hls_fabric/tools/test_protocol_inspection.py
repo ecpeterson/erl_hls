@@ -31,7 +31,7 @@ def properties(xls: Path, build: Path, stage: Path) -> None:
         'pub fn wrong_same_value(s: network::State, io: network::Inputs) -> bool { '
         'network::tick(s, network::Inputs { inspect_address: u32:0, ..io }).output.inspect_value == '
         'network::tick(s, network::Inputs { inspect_address: u32:1, ..io }).output.inspect_value }\n')
-    imports=[build/'network',build/'actors',build/'dslx',ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',compiler_root('default')/'src/examples/phi_decoder']
+    imports=[build/'network',build/'actors',build/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',compiler_root('default')/'src/examples/phi_decoder']
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
@@ -51,7 +51,7 @@ def shapes(xls: Path, stage: Path) -> None:
 def shape_case(xls: Path, part: Path) -> None:
     """Check one freshly emitted shape against the ordinary typed machine unpacker."""
     source=part/'shape.x';raw=part/'shape.ir'
-    imports=[part,ROOT/'priv/xls/lib',compiler_root('test')/'priv/xls/lib',compiler_root('test')/'priv/xls/fabric']
+    imports=[part,ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('test')/'priv/xls/lib',compiler_root('test')/'priv/xls/fabric']
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],part,'shape-convert',raw)
     result=prove(SimpleNamespace(xls=xls,yosys='yosys'),part,raw,'shape','metadata',True)

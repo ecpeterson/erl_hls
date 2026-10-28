@@ -171,7 +171,7 @@ def main() -> None:
     rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
     run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:prepare(hd(init:get_plain_arguments())),halt().','-extra',fixture], stage, 'prepare-witness')
     compiler = Path(os.environ['ERL_HLS_ROOT'])
-    paths = ':'.join(str(p) for p in [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', compiler/'priv/xls/lib', compiler/'priv/xls/fabric'])
+    paths = ':'.join(str(p) for p in [ROOT/'apps/hls_lowering/priv/xls/lib', ROOT/'apps/hls_lowering/priv/xls/fabric', compiler/'priv/xls/lib', compiler/'priv/xls/fabric'])
     run([args.xls/'ir_converter_main','--warnings_as_errors=false','--top=local_effect','--dslx_path='+paths,
          '--dslx_stdlib_path='+str(args.xls/'xls/dslx/stdlib'),fixture/'reference.x'],stage,'reference-convert',fixture/'reference.ir')
     run([args.xls/'opt_main',fixture/'reference.ir'],stage,'reference-opt',fixture/'reference.opt.ir')

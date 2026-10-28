@@ -6,6 +6,7 @@ import shutil
 
 from backend_commands import digest
 from backend_paths import ROOT
+from compiler_paths import compiler_source_root
 
 
 def inputs(args: argparse.Namespace) -> dict:
@@ -15,16 +16,18 @@ def inputs(args: argparse.Namespace) -> dict:
         "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/actor_build_artifacts.py", "tools/backend_commands.py",
         "tools/backend_paths.py", "tools/compiler_paths.py", "tools/phi_scheduler_rams.sh", "rebar.config", "rebar.lock")]
     private += list((ROOT / "src").rglob("*.erl"))
-    private += list((ROOT / "priv/xls").rglob("*.x"))
+    private += list((ROOT / "apps/hls_lowering/src").rglob("*.erl"))
+    private += list((ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"))
     private += list((ROOT / "test/xls").rglob("*.x"))
-    public = [args.erl_hls / path for path in (
+    source_root = compiler_source_root(args.erl_hls)
+    public = [source_root / path for path in (
         "priv/rtl/hls_1r1w_ram.v",
         "test/rtl/xls_sim_bridge.c", "test/rtl/xls_sim_axis.h")]
-    for pattern in ("src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x",
+    for pattern in ("src/**/*.erl", "apps/*/src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x",
                     "priv/rtl/debug/*.v", "tools/erl_hls_tools/*.py"):
-        public += list(args.erl_hls.glob(pattern))
+        public += list(source_root.glob(pattern))
     files = {"private/" + str(path.relative_to(ROOT)): digest(path) for path in private}
-    files.update({"public/" + str(path.relative_to(args.erl_hls)): digest(path) for path in public})
+    files.update({"public/" + str(path.relative_to(source_root)): digest(path) for path in public})
     tools = {name: digest(args.xls / name) for name in ("ir_converter_main", "opt_main", "codegen_main")}
     for path in (args.xls / "xls/dslx/stdlib").rglob("*.x"):
         files["stdlib/" + str(path.relative_to(args.xls / "xls/dslx/stdlib"))] = digest(path)

@@ -12,7 +12,7 @@ rebar3 as test compile
 source tools/backend_env.sh test
 erl -noshell \
     -eval 'ok = hls_statem_reply_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-cp "$erl_hls_root"/priv/xls/lib/*.x priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
+cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
 interpreter=${ERL_HLS_INTERPRETER:-"$xls_root/interpreter_main"}
 for unit in "$stage/statem_direct.x" "$stage/statem_events.x" "$stage/statem_reduction_replies.x" "$stage/hls_reply.x"; do
     "$interpreter" --compare=jit --warnings_as_errors=false \

@@ -6,13 +6,15 @@ Use OTP 28 and rebar3 3.24.0. Erlang compilation and source emission require nei
 rebar3 compile
 rebar3 eunit
 rebar3 dialyzer
-rebar3 release
+rebar3 release -n hls
 _build/default/rel/hls/bin/hls-fabric --help
 ```
 
-`rebar.config` and `rebar.lock` select the public `erl_hls` revision. Rebar fetches and compiles it normally. For deliberate compiler development, put its checkout in `_checkouts/erl_hls`; rebar gives that explicit override precedence. Checkouts are not locked, so remove the override when qualifying the pinned dependency. There is no second compiler manifest, Python dependency preparer or managed checkout cache. Existing legacy caches are left untouched and can remain explicit overrides until their owners retire them.
+`rebar.config` selects `erl_hls` and `hls_runtime` from the same compiler repository revision, with both exact sources retained in `rebar.lock`. The compiler remains the root Git application; `hls_runtime` is fetched with `git_subdir` from `apps/hls_runtime`. Rebar does not discover a fetched root application's sibling applications automatically. For deliberate compiler development, link the compiler checkout at `_checkouts/erl_hls` and its `apps/hls_runtime` directory at `_checkouts/hls_runtime`. Both overrides must come from that checkout. Checkouts are not locked; remove both when qualifying the pinned dependencies.
 
-The release directory `_build/default/rel/hls/` contains the CLI, resolved BEAM dependencies, headers, templates and example sources. Copy the **whole directory**, not just `bin/hls-fabric`, to use it elsewhere with a compatible OTP 28 runtime. `include_src` retains the example sources that the HLS compiler consumes. The tiny shell launcher supplies the release's fixed library directory; all argument handling, configuration and source compilation run in Erlang. It does not start a fabric node or invoke rebar at runtime.
+The build release `rebar3 release -n hls` produces `_build/default/rel/hls/`, which contains the CLI, resolved BEAM dependencies, headers, templates and example sources. Copy the **whole directory**, not just `bin/hls-fabric`, to use it elsewhere with a compatible OTP 28 runtime. `include_src` retains the example sources that the HLS compiler consumes. The tiny shell launcher supplies the release's fixed library directory; all argument handling, configuration and source compilation run in Erlang. It does not start a fabric node or invoke rebar at runtime.
+
+The root `hls_fabric` application owns the virtual-node runtime and retained wire schemas. `apps/hls_lowering` owns planning, hardware generation, build frontends, example inputs and `priv` assets. Run `rebar3 release -n hls_fabric` for the runtime-only `_build/default/rel/hls_fabric/` release. Its closure includes `hls_runtime`, not `hls_lowering`, `erl_hls` or OTP's `compiler` application; it contains no build launchers or source templates. The compiler and lowering packages are libraries without startup callbacks. Only `hls_fabric` starts its node supervisor.
 
 The compiler itself owns `hlsc` for ordinary actor lowering, source preprocessing, the shared bundle schema and optional XLS invocation. This project owns `hls-fabric`, deployment roles, adapters and their required schedules. Repetition settings live in the example frontend, not either generic command.
 
@@ -27,17 +29,17 @@ Select the backend in the build request. The application declares actor semantic
 
 These are different checked execution models. A scheduler placement is not a source-protocol configuration, and choosing a backend does not translate unsupported constructs. `source_protocol` accepts kinds `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. `channel_scheduler` has one topology boundary and rejects `--kind`.
 
-The two-counter example uses the same actor and topology with both backends. Run from the repository root after `rebar3 release`; choose fresh output directories:
+The two-counter example uses the same actor and topology with both backends. Run from the repository root after `rebar3 release -n hls`; choose fresh output directories:
 
 ```sh
 _build/default/rel/hls/bin/hls-fabric plan --backend source_protocol --kind application \
-    --config src/examples/counter/source.config --stage profile
+    --config apps/hls_lowering/src/examples/counter/source.config --stage profile
 _build/default/rel/hls/bin/hls-fabric emit --backend source_protocol --kind application \
-    --config src/examples/counter/source.config --output _build/counter-source
+    --config apps/hls_lowering/src/examples/counter/source.config --output _build/counter-source
 _build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
-    --config src/examples/counter/scheduler.config --stage profile
+    --config apps/hls_lowering/src/examples/counter/scheduler.config --stage profile
 _build/default/rel/hls/bin/hls-fabric emit --backend channel_scheduler \
-    --config src/examples/counter/scheduler.config --output _build/counter-scheduler
+    --config apps/hls_lowering/src/examples/counter/scheduler.config --output _build/counter-scheduler
 ```
 
 `hls_counter_example` owns two independent totals, addressed through one rectangular ingress and reported on separate outputs. `source.config` asks for a framed native application; `scheduler.config` leaves both counters as dedicated channel actors, with no shared-executor group or external state/mailbox RAM. Neither command runs a simulation. Both produce the compiler-owned `source-build.json` bundle consumed by the same [external compilation command](#optional-external-compilation). Component and application tests use this public emission/compilation boundary too; they add their own bounded execution assertions.
@@ -46,9 +48,9 @@ To share one executor, use the same actor/topology with the alternative RAM-back
 
 ```sh
 _build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
-    --config src/examples/counter/scheduler-ram.config --stage placement
+    --config apps/hls_lowering/src/examples/counter/scheduler-ram.config --stage placement
 _build/default/rel/hls/bin/hls-fabric emit --backend channel_scheduler \
-    --config src/examples/counter/scheduler-ram.config --output _build/counter-scheduler-ram
+    --config apps/hls_lowering/src/examples/counter/scheduler-ram.config --output _build/counter-scheduler-ram
 ```
 
 This variant selects `block_ram` for both state and mailbox storage. Its core exposes RAM ports and emits the connection fragments described below; an enclosing shell must connect the physical RAMs.
@@ -59,7 +61,7 @@ The common Erlang API follows the same path:
 
 ```erlang
 Request = #{backend => channel_scheduler,
-    configuration => "src/examples/counter/scheduler.config"},
+    configuration => "apps/hls_lowering/src/examples/counter/scheduler.config"},
 Plan = hls_build:plan(Request),
 Profile = hls_build:inspect(Plan, profile),
 Descriptor = hls_build:descriptor(Plan),

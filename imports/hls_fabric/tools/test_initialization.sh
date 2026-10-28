@@ -12,7 +12,7 @@ source tools/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_init_dslx:write(hd(init:get_plain_arguments())), halt().' \
     -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for kind in gs statem; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/init_$kind.x"

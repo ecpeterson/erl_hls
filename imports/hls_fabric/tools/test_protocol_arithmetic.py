@@ -91,7 +91,7 @@ def action_contract(xls: Path, build: Path, stage: Path) -> None:
         "let b=shared::local_reduce_action_at(raw,u32:0);\n"
         "!shared::local_reduce_pending(raw,u32:0) || a.private_machine == (b.private_machine ^ reference::MachineBits:1) }\n" + ORDINARY_CONTRACT)
     raw = stage / "contract.ir"
-    paths = [build / "actors", ROOT / "priv/xls/lib", ROOT / "priv/xls/fabric", compiler_root('test') / "priv/xls/lib", compiler_root('test') / "priv/xls/fabric"]
+    paths = [build / "actors", ROOT / "apps/hls_lowering/priv/xls/lib", ROOT / "apps/hls_lowering/priv/xls/fabric", compiler_root('test') / "priv/xls/lib", compiler_root('test') / "priv/xls/fabric"]
     run([xls / "ir_converter_main", "--warnings_as_errors=false", "--dslx_path=" + ":".join(map(str, paths)),
          "--dslx_stdlib_path=" + str(xls / "xls/dslx/stdlib"), source], stage, "contract-convert", raw)
     args = SimpleNamespace(xls=xls, yosys="yosys")

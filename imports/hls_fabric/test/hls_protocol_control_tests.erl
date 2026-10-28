@@ -76,7 +76,7 @@ target_coordinates_and_projection_test() ->
     ?assertNot(hls_protocol_control:addressed(Native, 0)),
     ?assert(hls_protocol_control:addressed(Whole, 0)),
     ?assertEqual(none, hls_protocol_control:project(none, [1])),
-    Codecs = hls_host_codec:schemas(hls_actor_interface:from_module(Module)),
+    Codecs = hls_host_codec_plan:schemas(hls_actor_interface:from_module(Module)),
     Bound = [A#{index => I, device => maps:get(id, A), schemas => Codecs}
         || {I, A} <- lists:enumerate(0, Actors)],
     Partition = #{ingresses => hls_protocol_control:host_ingresses(Whole, Bound)},

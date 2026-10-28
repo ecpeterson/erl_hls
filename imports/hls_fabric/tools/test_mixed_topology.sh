@@ -28,7 +28,7 @@ for placement in "${placements[@]}"; do
             end,
             ok = hls_mixed_topology_dslx:write(Placement, Stage), halt().' -extra "$build" "$placement"
     "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
-        --dslx_path="$build:$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$build:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$build/mixed_topology.x" > "$build/topology.ir" 2> "$build/convert.log"
     "$xls_root/opt_main" "$build/topology.ir" > "$build/topology.opt.ir" 2> "$build/opt.log"
     count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$build/actors.json")

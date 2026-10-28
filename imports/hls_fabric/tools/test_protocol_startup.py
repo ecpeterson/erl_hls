@@ -85,7 +85,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
         assert source!=original;part=stage/name;part.mkdir()
         for receiver in (fixture/'actors').glob('receiver_*.x'): shutil.copy2(receiver,part/receiver.name)
         (part/'receiver_0.x').write_text(source)
-        imports=[part,fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+        imports=[part,fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
         # Deliberate test corruption bypasses the production direct-component hash check.
         compile_clock(xls,fixture/'network/network.x',part,'network_clock','protocol_network_core',imports)
         simulate(fixture,part,part/'core.v',reject=True)
@@ -94,7 +94,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
 def selection_checks(xls: Path, stage: Path) -> None:
     """Prove oldest eligible startup selection for every finite mask in three widths."""
     source=ROOT/'test/protocol_startup_properties.x';raw=stage/'selection.ir'
-    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'priv/xls/lib'),
+    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'selection-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     results=[prove(args,stage,raw,'protocol_startup_properties',p,p!='wrong_eligibility')

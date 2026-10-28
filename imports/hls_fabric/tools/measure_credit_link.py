@@ -30,14 +30,14 @@ def measure(args: argparse.Namespace) -> None:
               "tools": {name: digest(args.xls / name)
                         for name in ("ir_converter_main", "opt_main", "codegen_main")},
               "sources": {str(path.relative_to(ROOT)): digest(path) for path in
-                          (ROOT / "priv/xls/hls_credit_link.x", ROOT / "tools/backend_commands.py", Path(__file__))},
+                          (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "tools/backend_commands.py", Path(__file__))},
               "compiler_sources": {name: digest(args.erl_hls / "priv/xls/lib" / name)
                                    for name in ("axis.x", "frame_config.x")},
               "configurations": []}
     for lanes in args.lanes:
         stage = args.stage / f"lanes-{lanes}"
         stage.mkdir()
-        for path in (ROOT / "priv/xls/hls_credit_link.x", args.erl_hls / "priv/xls/lib/axis.x",
+        for path in (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", args.erl_hls / "priv/xls/lib/axis.x",
                      args.erl_hls / "priv/xls/lib/frame_config.x"):
             shutil.copyfile(path, stage / path.name)
         (stage / "endpoint.x").write_text(wrapper(lanes))

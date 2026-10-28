@@ -15,7 +15,7 @@ from link_service_witness import summarize
 def measure(xls: Path, public: Path, stage: Path) -> dict:
     """Build once and require ordered drain in twenty controlled bidirectional workloads."""
     stage.mkdir(parents=True, exist_ok=False)
-    source = ROOT/'priv/xls/hls_credit_link.x'
+    source = ROOT/'apps/hls_lowering/priv/xls/hls_credit_link.x'
     axis = public/'priv/xls/lib/axis.x'
     frame_config = public/'priv/xls/lib/frame_config.x'
     template = ROOT/'test/rtl/credit_service_tb.sv'

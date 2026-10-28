@@ -110,7 +110,7 @@ local_actor_layout_files_test() ->
     Layout = hls_frame_layout:new(1),
     Schema = [{message,[{value,"hls_nums:uN(13)"}]}],
     Actor = hls_protocol_schema_test_source:compile(Schema, Layout),
-    Expected = iolist_to_binary(hls_frame_layout:config_dslx(Layout)),
+    Expected = iolist_to_binary(xls_frame_layout:config(Layout)),
     Files = hls_local_actor:emit(Actor, "nested/owner.x"),
     ?assertEqual(Expected, iolist_to_binary(maps:get("nested/frame_config.x", Files))),
     #{frame_config_sha256 := Hash} = hls_local_actor:manifest(Actor),

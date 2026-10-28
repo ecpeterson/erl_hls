@@ -24,7 +24,7 @@ def main() -> None:
     args.erl_hls = compiler_root("test", args.erl_hls)
     stage, xls = args.stage.resolve(), args.xls.resolve()
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x",
+    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x",
                args.erl_hls / "priv/xls/lib/axis.x", args.erl_hls / "priv/xls/lib/frame_config.x"]
     tests = [ROOT / "test/rtl" / f"{name}.sv" for name in ("credit_link_tb", "credit_link_fault_tb")]
     tracked = sources + tests + [Path(__file__), ROOT/'tools/backend_commands.py'] + list((xls / "xls/dslx/stdlib").rglob("*.x"))
@@ -35,7 +35,7 @@ def main() -> None:
     # The compiler owns the schema; this external witness only selects its public capacity.
     execute(["erl", "+S", "2:2", "-noshell", "-eval",
         "[W,P]=init:get_plain_arguments(),L=hls_frame_layout:new(list_to_integer(W)),"
-        "ok=file:write_file(P,hls_frame_layout:config_dslx(L)),halt().", "-extra",
+        "ok=file:write_file(P,xls_frame_layout:config(L)),halt().", "-extra",
         str(args.frame_payload_words), str(stage / "frame_config.x")], stage,
         "frame-config", timeout=60, env=erlang_environment("test"))
     commands = [

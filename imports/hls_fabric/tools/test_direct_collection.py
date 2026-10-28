@@ -28,7 +28,7 @@ def state_paths(dslx: str) -> dict[int, str]:
             module, kind = kind.split('::', 1)
             if module not in sources:
                 locations = [root/'priv/xls'/folder/(module+'.x')
-                             for root in (ROOT, compiler_root("test")) for folder in ('lib', 'fabric')]
+                             for root in (ROOT/'apps/hls_lowering', compiler_root("test")) for folder in ('lib', 'fabric')]
                 found = next((p for p in locations if p.is_file()), None)
                 if found is None:
                     raise ValueError(f'missing imported state layout: {module}')
@@ -200,7 +200,7 @@ pub proc CollectionTest {
 ''')
     commands = [
         ([str(xls/'ir_converter_main'), '--top=CollectionTest', '--warnings_as_errors=false',
-          f'--dslx_path={ROOT/"priv/xls/lib"}:{compiler_root('test')/"priv/xls/lib"}:{compiler_root('test')/"priv/xls/fabric"}',
+          f'--dslx_path={ROOT/"apps/hls_lowering/priv/xls/lib"}:{compiler_root('test')/"priv/xls/lib"}:{compiler_root('test')/"priv/xls/fabric"}',
           f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}', str(stage/'collector.x')], 'convert', 'collector.ir'),
         ([str(xls/'opt_main'), str(stage/'collector.ir')], 'opt', 'collector.opt.ir'),
         ([str(xls/'codegen_main'), f'--pipeline_stages={args.pipeline_stages}', '--delay_model=unit',

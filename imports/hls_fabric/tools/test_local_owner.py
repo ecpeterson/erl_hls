@@ -104,7 +104,7 @@ def main() -> None:
     public = compiler_root('default')
     options = stage/'options.term'
     options.write_text('[].\n')
-    paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric',
+    paths = ':'.join(map(str, [ROOT/'apps/hls_lowering/priv/xls/lib', ROOT/'apps/hls_lowering/priv/xls/fabric',
                               public/'priv/xls/lib', public/'priv/xls/fabric']))
     common = ['--warnings_as_errors=false', '--dslx_path='+paths,
               '--dslx_stdlib_path='+str(args.xls/'xls/dslx/stdlib')]

@@ -391,8 +391,8 @@ service_channels(
 ) when
     map_size(S) =:= 3
 ->
-    ok = hls_node_topology:validate(Deployment),
+    ok = hls_node_binding:validate(Deployment),
     [{debug, E} | [{application, Endpoint} || #{endpoint := Endpoint} <- Groups]];
 service_channels(#{name := _, module := M, endpoint := E} = S) when map_size(S) =:= 3, is_atom(M) ->
-    {ok, _Contract} = hls_service_contract:from_module(M),
+    {ok, _Contract} = hls_service_schema:from_module(M),
     [{application, E}, {debug, E}].

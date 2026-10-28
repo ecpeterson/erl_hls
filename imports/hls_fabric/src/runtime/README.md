@@ -1,6 +1,6 @@
 # Device interaction
 
-Runtime modules attach retained application descriptors to already-created brokers and exchange messages with a running device. They own leases, pending requests, queueing and retirement. [Wire codecs](../wire/README.md) encode messages; the common `hls_fabric` broker API from `erl_hls` owns the actual physical I/O boundary. The compiler runtime's `hls_fabric_io` is the file-descriptor transport. This directory does not generate DSLX or compile sources.
+Runtime modules attach retained application descriptors to already-created brokers and exchange messages with a running device. They own leases, pending requests, queueing and retirement. [Wire codecs](../wire/README.md) encode messages; the common `hls_fabric` broker API from `hls_runtime` owns the actual physical I/O boundary. The shared runtime's `hls_fabric_io` is the file-descriptor transport. This directory does not generate DSLX or compile sources.
 
 | Entry points | Responsibility |
 | --- | --- |
@@ -13,4 +13,4 @@ Runtime modules attach retained application descriptors to already-created broke
 | [inspection](inspection/README.md) | Public observation decoding and profiling |
 | [node](node/README.md) | ERTS distribution endpoint and local carrier |
 
-Sessions consume checked plans or bindings from [planning](../planning/README.md); that remaining compile-time dependency is explicit, not evidence of an independent runtime package. Setup and shutdown contracts are module-specific: acquiring a lease, retiring a route and resetting hardware are different operations. See [device sessions](../../docs/device-sessions.md) before implementing a new adapter.
+Sessions consume retained descriptors produced by [hls_lowering planning](../../apps/hls_lowering/src/planning/README.md). They validate runtime structure and attachment identity without invoking those planners or loading the compiler. Setup and shutdown contracts are module-specific: acquiring a lease, retiring a route and resetting hardware are different operations. See [device sessions](../../docs/device-sessions.md) before implementing a new adapter.

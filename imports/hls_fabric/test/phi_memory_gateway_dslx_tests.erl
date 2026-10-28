@@ -6,7 +6,7 @@
 -spec checked_gateway_matches_generator_test() -> 'ok'.
 checked_gateway_matches_generator_test() ->
     {ok, Checked} = file:read_file(
-        "src/examples/phi_decoder/phi_memory_gateway.x"
+        "apps/hls_lowering/src/examples/phi_decoder/phi_memory_gateway.x"
     ),
     ?assertEqual(
         Checked,

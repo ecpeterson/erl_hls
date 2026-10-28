@@ -120,10 +120,10 @@ class SourceToolchainTests(unittest.TestCase):
             release = stage/'relocated toolchain'
             shutil.copytree(ROOT/'_build/default/rel/hls', release)
             source = stage/'hls_counter_example.erl'
-            shutil.copyfile(ROOT/'src/examples/counter/hls_counter_example.erl', source)
+            shutil.copyfile(ROOT/'apps/hls_lowering/src/examples/counter/hls_counter_example.erl', source)
             config = stage/'scheduler.config'
-            config.write_text((ROOT/'src/examples/counter/scheduler-ram.config').read_text().replace(
-                '"src/examples/counter/hls_counter_example.erl"', json.dumps(str(source))))
+            config.write_text((ROOT/'apps/hls_lowering/src/examples/counter/scheduler-ram.config').read_text().replace(
+                '"apps/hls_lowering/src/examples/counter/hls_counter_example.erl"', json.dumps(str(source))))
             environment = {**os.environ, 'ERL_AFLAGS': '', 'ERL_HLS_ROOT': '/not-a-compiler'}
             cli = release/'bin/hls-fabric'
 
@@ -155,8 +155,8 @@ class SourceToolchainTests(unittest.TestCase):
             self.assertEqual(rejected.stdout, '')
             self.assertFalse((stage/'rejected-kind').exists())
             override = stage/'source-override.config'
-            source_config = (ROOT/'src/examples/counter/source.config').read_text().replace(
-                '"src/examples/counter/hls_counter_example.erl"', '"missing-source.erl"')
+            source_config = (ROOT/'apps/hls_lowering/src/examples/counter/source.config').read_text().replace(
+                '"apps/hls_lowering/src/examples/counter/hls_counter_example.erl"', '"missing-source.erl"')
             prefix, separator, suffix = source_config.rpartition('}.')
             self.assertEqual(separator, '}.')
             override.write_text(prefix + ', schedule => #{pipeline_stages => 2}}.' + suffix)

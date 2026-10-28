@@ -82,7 +82,7 @@ catalog(#{actors := Actors, manifest := Manifest}, Session = #{manifest := Manif
                 }
             ] = [R || R = #{<<"id">> := J} <- Resources, J =:= I],
             Role = atom_to_binary(M, utf8),
-            Key = xls_actor_debug:actor_key(Id),
+            Key = hls_actor_identity:actor_key(Id),
             ok = codebook(Resource),
             Identity = {actor, Id},
             {Identity,

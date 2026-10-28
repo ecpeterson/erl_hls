@@ -2,7 +2,8 @@
   "include": [
     "*.erl",
     "*.hrl",
-    "priv/xls/*.x"
+    "priv/xls/*.x",
+    "apps/*/priv/xls/*.x"
   ],
   "exclude": [],
   "base_ref": "origin/main"

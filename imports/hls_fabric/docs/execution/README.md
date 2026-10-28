@@ -19,9 +19,9 @@ Inspect the checked hardware contract before invoking external compilation:
 
 ```sh
 _build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
-    --config src/examples/counter/scheduler.config --stage profile
+    --config apps/hls_lowering/src/examples/counter/scheduler.config --stage profile
 _build/default/rel/hls/bin/hls-fabric plan --backend channel_scheduler \
-    --config src/examples/counter/scheduler.config --stage placement
+    --config apps/hls_lowering/src/examples/counter/scheduler.config --stage placement
 ```
 
 The primary `scheduler.config` keeps both counters dedicated. To share an executor, substitute `scheduler-ram.config`; it assigns the same actors to one group with block-RAM state and mailbox storage. That core requires the generated RAM connection fragments to be included in an enclosing shell.
@@ -58,7 +58,7 @@ Run `bash tools/test_local_execution.sh /path/to/xls /path/to/fresh-stage` after
 
 ## Observe and reproduce
 
-Open hardware sessions with `hls_shared_observation:open/2`, then bind actors using `hls_shared_debug_catalog:hardware/4`. Inspection still uses `hls_debug:info`, boundary counters/traces and physical wait queries. The explicitly installed local observer decodes scheduler metadata; incoming packets cannot choose executable decoders. See [debug targets](debug-targets.md).
+Prepare the source-checked binding with `hls_shared_debug_catalog:prepare/4` during lowering. Runtime clients open hardware sessions with `hls_shared_observation:open/2` and attach that retained value using `bind/2`; `open/3` combines these runtime steps. Inspection still uses `hls_debug:info`, boundary counters/traces and physical wait queries. The explicitly installed local observer decodes scheduler metadata; incoming packets cannot choose executable decoders. See [debug targets](debug-targets.md).
 
 `tools/prepare_xls_sim.sh STAGE` combines common compiler assets with shared actor artifacts, RAM bindings and private profiler hooks. The common VPI transport supplies accepted-edge samples; `test/rtl/xls_scheduler_profile.h` adds passive scheduler telemetry. Profile event meaning, SVG/Perfetto rendering and measurement commands remain in [profiling](../profiling.md).
 

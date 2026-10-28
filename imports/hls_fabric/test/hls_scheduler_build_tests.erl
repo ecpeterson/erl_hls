@@ -165,6 +165,6 @@ frame_capacity_test_() -> {timeout, 30, fun() ->
         Output = fresh("frame-" ++ integer_to_list(Words)),
         _ = hls_scheduler_build:write(Plan, Output),
         {ok, Config} = file:read_file(filename:join(Output, "support/compiler/xls/lib/frame_config.x")),
-        ?assertEqual(iolist_to_binary(hls_frame_layout:config_dslx(hls_frame_layout:new(Words))), Config)
+        ?assertEqual(iolist_to_binary(xls_frame_layout:config(hls_frame_layout:new(Words))), Config)
     end, [1, 3])
 end}.

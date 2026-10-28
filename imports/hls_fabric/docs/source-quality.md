@@ -16,10 +16,14 @@ Erlang source moves retain inherited gaps only when one literal `-module` identi
 
 CI cannot assess whether prose is useful or a spec is truthful. Review changed contracts against [STYLE.md](../STYLE.md); favor short behavioral descriptions over implementation narratives. Keep working notes in `yap/`.
 
-Handwritten DSLX under `priv/xls/` uses the same declaration-comment audit as the compiler. Input fragments use `.x.in`; generated complete modules are checked by XLS in the backend regressions. Existing omissions are migration work; new and changed declarations must pass.
+Handwritten DSLX under `apps/hls_lowering/priv/xls/` uses the same declaration-comment audit as the compiler. Input fragments use `.x.in`; generated complete modules are checked by XLS in the backend regressions. Existing omissions are migration work; new and changed declarations must pass.
 
 ## Formatting
 
-`rebar3 fmt` formats owned production Erlang under `src/` and `include/` using the pinned developer-only erlfmt plugin. `rebar3 fmt --check` checks the same scope without writing. The formatter preserves Erlang syntax and comments; module responsibility, export groups and behavioral documentation still need review. Source-location test fixtures and historical experiments are outside this formatting scope.
+`rebar3 fmt` formats owned production Erlang under `src/`, `apps/*/src/` and `include/` using the pinned developer-only erlfmt plugin. `rebar3 fmt --check` checks the same scope without writing. The formatter preserves Erlang syntax and comments; module responsibility, export groups and behavioral documentation still need review. Source-location test fixtures and historical experiments are outside this formatting scope.
 
 Six map-type field-fragment macros are formatted manually, with a per-form `erlfmt:ignore` comment: the formatter cannot parse their partial type syntax. Their surrounding modules remain formatted, and compilation, Dialyzer and the contract audit still check the definitions.
+
+## Package boundaries
+
+After compilation, run `python3 tools/check_package_boundaries.py --runtime hls_runtime --runtime hls_fabric --release _build/default/rel/hls_fabric`. The shared auditor rejects direct BEAM imports, remote type references and declared application dependencies from runtime applications into compiler/build applications. For a supplied runtime release it also checks application and individual BEAM ownership, so moving a compiler module into a runtime package cannot hide it. These static checks do not infer targets of arbitrary dynamic calls; runtime-only behavior tests exercise supported retained-codec and session paths.

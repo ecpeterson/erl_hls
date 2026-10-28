@@ -8,7 +8,7 @@ import re
 import shutil
 import subprocess
 
-from compiler_paths import compiler_tool
+from compiler_paths import compiler_tool, compiler_source_root
 from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 from transport_codegen import specialize
 from backend_commands import digest, execute
@@ -20,17 +20,17 @@ def inputs(args: argparse.Namespace) -> dict:
     """Fingerprint compiler inputs, including the selected full-application fixture."""
     files = {}
     sources = (
-        ("private", ROOT, ("src/**/*.erl", "test/hls_bridge_phi_fixture.erl",
+        ("private", ROOT, ("src/**/*.erl", "apps/hls_lowering/src/**/*.erl", "test/hls_bridge_phi_fixture.erl",
                            "test/rtl/phi_bridge_tb.sv", "test/rtl/phi_link_delay.svh", "test/rtl/phi_memory_transport.svh",
                            "test/rtl/partition_sim_bridge.c",
                            "test/hls_phi_memory_fixture.erl", "test/hls_phi_board_geometry.erl", "tools/test_phi_memory.py",
-                           "rtl/hls_async_fifo.v", "priv/xls/**/*.x", "tools/phi_scheduler_rams.sh",
+                           "rtl/hls_async_fifo.v", "apps/hls_lowering/priv/xls/**/*.x", "tools/phi_scheduler_rams.sh",
                            "tools/test_phi_bridge.py", "tools/phi_device_build.py", "tools/phi_build_artifacts.py",
                            "tools/test_actor_rtl.py", "tools/backend_commands.py",
                            "tools/backend_paths.py", "tools/compiler_paths.py", "tools/transport_codegen.py",
                            "tools/backend_build_profile.py",
                            "rebar.config", "rebar.lock")),
-        ("public", args.erl_hls, ("src/**/*.erl", "src/examples/phi_decoder/phi_field.x",
+        ("public", compiler_source_root(args.erl_hls), ("src/**/*.erl", "apps/*/src/**/*.erl", "src/examples/phi_decoder/phi_field.x",
                                   "include/**/*.hrl", "priv/xls/**/*.x",
                                   "priv/rtl/debug/*.v", "tools/erl_hls_tools/*.py",
                                   "priv/rtl/hls_1r1w_ram.v",
@@ -252,7 +252,7 @@ def build(args: argparse.Namespace) -> None:
     for library in ("lib", "fabric"):
         for path in (args.erl_hls / "priv/xls" / library).glob("*.x"):
             shutil.copy(path, source)
-    for path in (ROOT / "priv/xls").rglob("*.x"):
+    for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
         shutil.copy(path, source)
     shutil.copy(args.erl_hls / "src/examples/phi_decoder/phi_field.x", source)
     devices = json.loads((source / "bridge.json").read_text())["devices"]

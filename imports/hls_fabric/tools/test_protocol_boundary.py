@@ -20,8 +20,8 @@ def configuration(path: Path) -> None:
 
 def imports(fixture: Path) -> list[Path]:
     """Resolve this exact fresh network and its source-derived components."""
-    return [fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',
-            ROOT/'priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+    return [fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',
+            ROOT/'apps/hls_lowering/priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
 
 
 def expected(stage: Path) -> list[list[str]]:
@@ -88,7 +88,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path, frames: list[list[str
 def properties(xls: Path, stage: Path) -> None:
     """Quantify all legal finite component states/inputs at 1/3/8/36 producers, plus finite service witnesses."""
     args=SimpleNamespace(xls=xls,yosys='yosys');results=[]
-    common=['--warnings_as_errors=false','--dslx_path='+':'.join(map(str,[ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib'])),
+    common=['--warnings_as_errors=false','--dslx_path='+':'.join(map(str,[ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib'])),
             '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib')]
     for n in [1,3,8,36]:
         c=max(1,(n-1).bit_length());part=stage/f'properties-{n}';part.mkdir()
@@ -147,7 +147,7 @@ def component_area(xls: Path, stage: Path) -> None:
         c=max(1,(n-1).bit_length());part=stage/f'cost-{n}';part.mkdir();source=part/'cost.x'
         source.write_text((ROOT/'test/protocol_egress_cost.x.in').read_text()
                           .replace('@@N@@',str(n)).replace('@@C@@',str(c)))
-        compile_clock(xls,source,part,'cost_clock','cost',[ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib'])
+        compile_clock(xls,source,part,'cost_clock','cost',[ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib'])
         adapter=part/'pins.sv'
         adapter.write_text((ROOT/'test/rtl/protocol_egress_cost.sv.in').read_text()
                            .replace('@@N@@',str(n)).replace('@@FRAME_BITS@@',str(128*n)))

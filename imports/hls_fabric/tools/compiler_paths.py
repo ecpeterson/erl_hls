@@ -20,16 +20,32 @@ def compiler_root(profile: str, override: Path | None = None, root: Path = ROOT)
         raise ValueError(f"invalid rebar profile: {profile!r}")
     public = (Path(override) if override is not None else
               application_directory("erl_hls", profile, root)).resolve()
-    if not (public / "tools/erl_hls_tools/__init__.py").is_file():
-        raise FileNotFoundError(f"missing compiler Python package in {public}")
-    return public
+    return compiler_source_root(public)
+
+
+def compiler_source_root(public: Path) -> Path:
+    """Resolve sources through the selected app's own projection, never an unrelated checkout.
+
+    Umbrella builds link src/priv/include into an application build directory but
+    omit arbitrary tool directories. Keep that build directory for BEAM selection;
+    source/tool lookup follows its authoritative src link. BEAM selection checks
+    that same link before using the fabric profile's compiled application.
+    """
+    public = public.resolve()
+    candidates = [public]
+    if (public / "src").is_symlink():
+        candidates.append((public / "src").resolve().parent)
+    for source in candidates:
+        if (source / "tools/erl_hls_tools/__init__.py").is_file():
+            return source
+    raise FileNotFoundError(f"missing compiler Python package in {public}")
 
 
 def compiler_source(public: Path, name: str) -> Path:
     """Return a named compiler tool's authoritative source for loading or provenance."""
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
         raise ValueError(f"invalid compiler tool name: {name!r}")
-    source = public.resolve() / "tools/erl_hls_tools" / (name + ".py")
+    source = compiler_source_root(public) / "tools/erl_hls_tools" / (name + ".py")
     if not source.is_file():
         raise FileNotFoundError(f"missing compiler tool: {source}")
     return source

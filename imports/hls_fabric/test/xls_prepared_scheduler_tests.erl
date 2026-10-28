@@ -114,7 +114,7 @@ assert_ownership(Kind, #{analysis := #{scheduler := Scheduler}, descriptor := De
         ?assertEqual(StateWidth, maps:get(<<"width">>, Bank)),
         ?assertEqual(2, maps:get(<<"slots">>, Bank)),
         Family = lists:nth(Index + 1, SharedFamilies),
-        ?assertEqual([{Y, xls_actor_debug:actor_key({family, Family, [0, Y]})} || Y <- [0, 1]],
+        ?assertEqual([{Y, hls_actor_identity:actor_key({family, Family, [0, Y]})} || Y <- [0, 1]],
             [{Slot, Key} || #{<<"slot">> := Slot, <<"key">> := Key} <- maps:get(<<"actors">>, Bank)]),
         Prefix = "scheduler_" ++ integer_to_list(Index),
         lists:foreach(fun(Store) ->
@@ -132,7 +132,7 @@ assert_ownership(Kind, #{analysis := #{scheduler := Scheduler}, descriptor := De
             ?assertEqual(1, length(binary:matches(Declarations, <<"\n  ", Name/binary, ": chan<">>)))
         end, Endpoints)
     end, case Configurations of <<>> -> []; _ -> binary:split(Configurations, <<",">>, [global]) end),
-    ExpectedDirect = [xls_actor_debug:actor_key({family, Family, [0, Y]}) ||
+    ExpectedDirect = [hls_actor_identity:actor_key({family, Family, [0, Y]}) ||
         Family <- [left, right] -- SharedFamilies, Y <- [0, 1]],
     ?assertEqual(lists:sort(ExpectedDirect), lists:sort([Key || #{<<"actors">> := Actors} <- Direct,
         #{<<"key">> := Key} <- Actors])),

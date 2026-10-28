@@ -131,7 +131,7 @@ def properties(xls: Path, role: Path, stage: Path) -> None:
         f'pub fn wrong_accepts_all(s: transport::State, io: transport::Inputs) -> bool {{\n'
         f'!io.remote_{i}_valid || transport::tick(s,io).output.link_{i}_capture }}\n')
     run([xls/'ir_converter_main','--warnings_as_errors=false',
-        '--dslx_path='+':'.join(map(str,[role/'dslx',ROOT/'priv/xls/lib',compiler_root('test')/'priv/xls/lib'])),
+        '--dslx_path='+':'.join(map(str,[role/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('test')/'priv/xls/lib'])),
         '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'properties-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     results=[prove(args,stage,raw,'partition_properties',name,positive)

@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument('xls', type=Path)
     parser.add_argument('--erl-hls', type=Path, default=None)
     parser.add_argument('--stage', type=Path, required=True)
-    parser.add_argument('--source', type=Path, default=ROOT / 'priv/xls/hls_credit_link.x', help='explicit historical source for matched comparisons')
+    parser.add_argument('--source', type=Path, default=ROOT / 'apps/hls_lowering/priv/xls/hls_credit_link.x', help='explicit historical source for matched comparisons')
     parser.add_argument('--sparse-limit', type=int, default=400, help='maximum cycles for the sparse workload')
     args = parser.parse_args()
     args.erl_hls = compiler_root("test", args.erl_hls)

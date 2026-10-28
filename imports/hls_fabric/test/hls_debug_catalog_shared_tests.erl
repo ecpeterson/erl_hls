@@ -39,14 +39,17 @@ snapshot_projection_binding_test() ->
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"fixture">>},
     Session = #{manifest => Manifest, resources => list_to_tuple(Resources)},
-    Catalog = hls_shared_debug_catalog:hardware(Plan, Specs, [], Session),
+    Binding = hls_shared_debug_catalog:prepare(Plan, Specs, [], Projection),
+    Retained = binary_to_term(term_to_binary(Binding)),
+    Catalog = hls_shared_observation:bind(Retained, Session),
+    ?assertEqual(Catalog, hls_shared_debug_catalog:hardware(Plan, Specs, [], Session)),
     lists:foreach(fun(Id) ->
         {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
         [{placement, #{index := Bank, slot := Slot}}, {observation, #{resource := ResourceId}},
             {capabilities, #{info := Fields, trace := false, counters := false, inspect_waits := false}}] =
             hls_debug:info(Actor, [placement, observation, capabilities]),
         #{<<"bank">> := Bank, <<"slot">> := Slot, <<"key">> := Key} = lists:nth(ResourceId+1, Resources),
-        ?assertEqual(xls_actor_debug:actor_key(Id), Key),
+        ?assertEqual(hls_actor_identity:actor_key(Id), Key),
         ?assertEqual([], [phase, initialized, enter_pending, failed, cycle] -- Fields),
         ?assertNot(lists:member(message_queue_len, Fields))
     end, hls_debug_catalog:actors(Catalog)),
@@ -60,12 +63,14 @@ snapshot_projection_binding_test() ->
             xls_scheduler_debug:validate(Plan, Specs, BadProjection))
     end, [Failures#{Code := Origin#{<<"file">> := <<"absent.erl">>}},
         (maps:remove(Code, Failures))#{<<"65535">> => Origin}]),
+    ?assertError(actor_projection_mismatch, hls_shared_observation:bind(Retained,
+        Session#{manifest := Manifest#{<<"actor_projection">> := #{}}})),
     Wrong = maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile(2)),
-    ?assertError(actor_projection_mismatch, hls_shared_debug_catalog:hardware(Plan, Wrong, [], Session)),
+    ?assertError(actor_projection_mismatch, hls_shared_debug_catalog:prepare(Plan, Wrong, [], Projection)),
     [First | Rest] = Resources,
     Bad = Manifest#{<<"resources">> := [First#{<<"slot">> := 99} | Rest]},
-    ?assertError(actor_resources_mismatch, hls_shared_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Bad})),
+    ?assertError(actor_resources_mismatch, hls_shared_observation:bind(Retained, Session#{manifest := Bad})),
     WrongOrigin = Manifest#{<<"resources">> := [First#{<<"failures">> := #{}} | Rest]},
-    ?assertError(actor_resources_mismatch, hls_shared_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := WrongOrigin})),
+    ?assertError(actor_resources_mismatch, hls_shared_observation:bind(Retained, Session#{manifest := WrongOrigin})),
     Duplicate = Manifest#{<<"resources">> := [First | Resources]},
-    ?assertError(actor_resources_mismatch, hls_shared_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Duplicate})).
+    ?assertError(actor_resources_mismatch, hls_shared_observation:bind(Retained, Session#{manifest := Duplicate})).

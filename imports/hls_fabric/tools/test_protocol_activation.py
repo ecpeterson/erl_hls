@@ -55,7 +55,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
             'activation::eligible(activation::State { running: true }, io.reset, '),
            ('premature-start','startup_done, ingress_idle: ingress_offer.ready, ingress_valid: io.ingress_valid',
             'startup_done: true, ingress_idle: true, ingress_valid: false')]
-    paths=[fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+    paths=[fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     for name,before,after in cases:
         part=stage/name;part.mkdir();source=part/'network.x';assert before in original
         source.write_text(original.replace(before,after))
@@ -67,7 +67,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
 def properties(xls: Path, fixture: Path, stage: Path) -> None:
     """Quantify every control bit and all fixture state/input bits for the registered start cut."""
     args=SimpleNamespace(xls=xls,yosys='yosys');raw=stage/'properties.ir'
-    imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
+    imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     converter=[xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
                '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib')]
     run([*converter,ROOT/'test/protocol_activation_properties.x'],stage,'properties-convert',raw)
@@ -101,7 +101,7 @@ def component_area(xls: Path, stage: Path) -> None:
         'pub fn logic(s: activation::State, c: activation::Conditions, valid: bool) -> activation::Tick {\n'
         'activation::tick(s, c, valid) }\n')
     run([xls/'ir_converter_main','--warnings_as_errors=false','--top=logic',
-         '--dslx_path='+str(ROOT/'priv/xls/lib'),'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'cost-convert',raw)
+         '--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'cost-convert',raw)
     run([xls/'opt_main','--top=__activation_cost__logic',raw],stage,'cost-opt',optimized)
     verilog=stage/'activation_cost.v'
     run([xls/'codegen_main','--generator=combinational','--use_system_verilog=false',

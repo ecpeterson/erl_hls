@@ -7,6 +7,6 @@ if [[ $# != 3 ]]; then
 fi
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_root"
-rebar3 release
+rebar3 release -n hls
 "$project_root/_build/default/rel/hls/bin/hls-fabric" emit --kind application --config "$2" --output "$3"
 "$project_root/_build/default/rel/hls/bin/compile-source-build" "$1" "$3"

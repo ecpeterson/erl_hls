@@ -28,7 +28,7 @@ pub fn initial_publication() -> bits[{width+8}] {{
   step.effect_layout ++ step.effect_payload
 }}
 """.encode())
-    paths = ':'.join(map(str, [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', compiler_root('default')/'priv/xls/lib', compiler_root('default')/'priv/xls/fabric']))
+    paths = ':'.join(map(str, [ROOT/'apps/hls_lowering/priv/xls/lib', ROOT/'apps/hls_lowering/priv/xls/fabric', compiler_root('default')/'priv/xls/lib', compiler_root('default')/'priv/xls/fabric']))
     run([xls/'ir_converter_main', '--top=initial_publication', '--warnings_as_errors=false',
          '--dslx_path='+paths, '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'), reference],
         stage, 'initial-convert', stage/'initial.ir')
@@ -97,7 +97,7 @@ def selection_checks(xls: Path, stage: Path) -> None:
     source=ROOT/'test/protocol_inbox_properties.x'
     raw=stage/'selection.ir'
     run([xls/'ir_converter_main','--warnings_as_errors=false',
-         '--dslx_path='+str(ROOT/'priv/xls/lib'),
+         '--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'selection-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     proofs=[prove(args,stage,raw,'protocol_inbox_properties',prop,prop!='wrong_cursor')
@@ -149,7 +149,7 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
             continue
         seen.add(shape); converted+=1
         stem=directory.name+'-receiver-'+str(receiver['index'])
-        paths=':'.join(map(str,[directory/'actors',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',
+        paths=':'.join(map(str,[directory/'actors',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',
             compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',compiler_root('default')/'src/examples/phi_decoder']))
         run([xls/'ir_converter_main','--top=local_inbox_clock','--warnings_as_errors=false',
              '--dslx_path='+paths,'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],

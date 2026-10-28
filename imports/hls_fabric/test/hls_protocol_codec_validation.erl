@@ -20,7 +20,7 @@ prepare_layouts(Stage) ->
         Directory = filename:join(Stage, "words" ++ integer_to_list(Words)),
         ok = file:make_dir(Directory),
         Layout = hls_frame_layout:new(Words),
-        ok = file:write_file(filename:join(Directory, "frame_config.x"), hls_frame_layout:config_dslx(Layout), [exclusive]),
+        ok = file:write_file(filename:join(Directory, "frame_config.x"), xls_frame_layout:config(Layout), [exclusive]),
         Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
             || Tag <- [narrow, constant, small]],
         Program = xls_actor_program:from_file("test/hls_protocol_frame_fixture.erl", [], Layout),

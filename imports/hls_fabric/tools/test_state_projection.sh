@@ -9,7 +9,7 @@ rebar3 eunit --module=hls_topology_constants_tests
 source tools/backend_env.sh test
 for fixture in fixture empty reduction; do
   "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$project_root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$project_root/_build/state-projection/$fixture.x"
 done

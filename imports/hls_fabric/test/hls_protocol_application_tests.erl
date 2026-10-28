@@ -51,7 +51,7 @@ gateway_configuration_test() ->
         host => 19, control => 7, events => #{0 => event}, control_adapter => Hardware},
     First = xls_protocol_application:emit(Binding),
     Second = xls_protocol_application:emit(Binding#{host := 65535, events := #{0 => a, 1 => b}}),
-    {ok, Source} = file:read_file(filename:join(code:priv_dir(hls_fabric),
+    {ok, Source} = file:read_file(filename:join(code:priv_dir(hls_lowering),
         "xls/templates/protocol_application.x")),
     ?assertEqual(Source, maps:get("gateway.x", First)),
     ?assertEqual(Source, maps:get("gateway.x", Second)),

@@ -6,7 +6,10 @@
 logical_catalog_test() ->
     {Plan, Specs, Manifest} = fixture(),
     Session = #{manifest => Manifest},
-    Catalog = hls_partition_tile_debug:catalog(Plan, Specs, Session),
+    Binding = hls_partition_tile_debug:prepare(Plan, Specs, maps:get(<<"actor_projection">>, Manifest)),
+    Retained = binary_to_term(term_to_binary(Binding)),
+    Catalog = hls_shared_observation:bind(Retained, Session),
+    ?assertEqual(Catalog, hls_partition_tile_debug:catalog(Plan, Specs, Session)),
     lists:foreach(fun(I) ->
         Id = {actor, {family, cells, [7, I]}},
         ?assertMatch({ok, {actor, #{identity := Id, scope := #{id := Id}, placement := #{slot := I}},
@@ -17,13 +20,13 @@ logical_catalog_test() ->
     [A | Rest] = maps:get(<<"actors">>, B),
     Bad = Manifest#{<<"actor_projection">> := P#{<<"banks">> := [B#{<<"actors">> :=
         [A#{<<"name">> := <<"misleading actor">>} | Rest]}]}},
-    ?assertException(error, _, hls_partition_tile_debug:catalog(Plan, Specs, Session#{manifest := Bad})),
+    ?assertException(error, _, hls_shared_observation:bind(Retained, Session#{manifest := Bad})),
     [First | Others] = maps:get(actors, Plan),
-    ?assertException(error, _, hls_partition_tile_debug:catalog(
-        Plan#{actors := [First#{logical_identity := unrelated} | Others]}, Specs, Session)),
+    ?assertException(error, _, hls_partition_tile_debug:prepare(
+        Plan#{actors := [First#{logical_identity := unrelated} | Others]}, Specs, P)),
     [Resource | Resources] = maps:get(<<"resources">>, Manifest),
     WrongSlot = Manifest#{<<"resources">> := [Resource#{<<"slot">> := 1} | Resources]},
-    ?assertException(error, _, hls_partition_tile_debug:catalog(Plan, Specs, Session#{manifest := WrongSlot})),
+    ?assertException(error, _, hls_shared_observation:bind(Retained, Session#{manifest := WrongSlot})),
     ok.
 
 %% Use the public projection builder and its resource contract without requiring RTL compilation.

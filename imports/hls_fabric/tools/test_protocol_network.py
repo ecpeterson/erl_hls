@@ -59,7 +59,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
     cases=[('drop-stalled-batch','output_ready: preview.source_0_ready','output_ready: true'),
            ('disconnect-feedback',f'link_{link}_selected: preview.link_{link}_selected',
             f'link_{link}_selected: bits[1]:0')]
-    paths=[fixture/'actors',fixture/'dslx',ROOT/'priv/xls/lib',ROOT/'priv/xls/fabric',
+    paths=[fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',
            compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     for name,before,after in cases:
         part=stage/name;part.mkdir();source=part/'network.x'
@@ -84,7 +84,7 @@ def observation_cut(xls: Path, fixture: Path, stage: Path) -> None:
         'pub fn wrong_reset(s: transport::State, io: transport::Inputs, reset: bool) -> bool {\n'
         'transport::tick(s, io).output == transport::tick(s, transport::Inputs { reset, ..io }).output }\n')
     run([xls/'ir_converter_main','--warnings_as_errors=false',
-         '--dslx_path='+':'.join(map(str,[fixture/'dslx',ROOT/'priv/xls/lib',compiler_root('default')/'priv/xls/lib'])),
+         '--dslx_path='+':'.join(map(str,[fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib'])),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'cut-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     results=[prove(args,stage,raw,'network_cut',name,positive)

@@ -43,7 +43,7 @@ def main() -> None:
     source.write_text(generated + '\n' + helpers + '\n' + reference + '\n' +
                       '// Compare all output bits' + miter)
     run([str(xls / 'ir_converter_main'), '--top=completion_equivalent', '--warnings_as_errors=false',
-         '--dslx_path=' + str(ROOT / 'priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
+         '--dslx_path=' + str(ROOT / 'apps/hls_lowering/priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), str(source)], stage, 'completion.ir')
     run([str(xls / 'opt_main'), str(stage / 'completion.ir')], stage, 'completion.opt.ir')
     run([str(xls / 'codegen_main'), '--generator=combinational', '--module_name=completion',

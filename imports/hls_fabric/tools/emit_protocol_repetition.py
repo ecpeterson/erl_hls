@@ -10,7 +10,7 @@ def emit_application(width: int, directory: Path, inspect: bool = False, split: 
     """Call the native source command; Erlang owns configuration and all placement validation."""
     directory.mkdir()
     build = directory / 'build'
-    run(['rebar3', 'release'], directory, 'compile-backend')
+    run(['rebar3', 'release', '-n', 'hls'], directory, 'compile-backend')
     command = [ROOT / '_build/default/rel/hls/bin/hls-repetition',
                '--width', str(width), '--output', build]
     if split is not None:

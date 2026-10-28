@@ -13,7 +13,7 @@ source tools/backend_env.sh test
 erl -noshell -eval '
 [Stage,Policy]=init:get_plain_arguments(),
 ok=hls_admission_collection_dslx:write(Stage,case Policy of "true" -> true; "exclusive_epoch" -> exclusive_epoch end),halt().' -extra "$stage" "$policy"
-cp "$erl_hls_root"/priv/xls/lib/*.x priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
+cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
 source tools/phi_scheduler_rams.sh
 for stages in 2 3; do
   output="$stage/p$stages"

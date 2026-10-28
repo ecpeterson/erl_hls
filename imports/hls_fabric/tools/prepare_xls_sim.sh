@@ -153,7 +153,7 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         ok = file:write_file(filename:join(Stage, "phi_memory_gateway.x"), PhiMemoryGateway),
         ok = file:write_file(filename:join(Stage, "phi_memory_debug_top.v"), PhiMemoryDebugTop),
         halt().'
-cp priv/xls/lib/*.x "$stage/"
+cp apps/hls_lowering/priv/xls/lib/*.x "$stage/"
 cp test/rtl/phi_noise_topology_smoke_tb.sv test/rtl/phi_noise_topology_tb.sv \
    test/rtl/phi_decoder_profile_tb.sv test/rtl/phi_memory_bridge_tb.sv "$stage/"
 cp tools/phi_scheduler_rams.sh tools/compile_phi_decoder_profile.py \

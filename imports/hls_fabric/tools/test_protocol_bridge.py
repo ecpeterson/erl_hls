@@ -105,7 +105,7 @@ def properties(xls: Path, stage: Path) -> None:
     from types import SimpleNamespace
     from test_local_protocol import prove
     source=ROOT/'test/rtl/protocol_bridge_properties.x';raw=stage/'properties.ir'
-    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'priv/xls/lib'),
+    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'properties-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     results=[prove(args,stage,raw,'protocol_bridge_properties',name,positive) for name,positive in
@@ -134,7 +134,7 @@ def component(xls: Path, stage: Path) -> None:
     """Measure the preregistered controller population including its selection/access logic."""
     source=ROOT/'test/rtl/protocol_bridge_component.x'
     compiler=application_directory('erl_hls','test')
-    imports=[ROOT/'priv/xls/lib',compiler/'priv/xls/lib',compiler/'priv/xls/fabric']
+    imports=[ROOT/'apps/hls_lowering/priv/xls/lib',compiler/'priv/xls/lib',compiler/'priv/xls/fabric']
     compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',imports)
     script=stage/'map.ys';netlist=stage/'mapped.json'
     script.write_text('read_verilog "'+str(stage/'core.v')+'"\n'

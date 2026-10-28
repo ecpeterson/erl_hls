@@ -1,22 +1,22 @@
 # hls_fabric
 
-Private actor execution, device fabrics and timing experiments built on `erl_hls`. The common build frontend supports source-protocol actors and channel-scheduled shared executors. Start with the [two-counter build walkthrough](docs/building.md#one-build-boundary-two-execution-models), then [execution backends](docs/execution/README.md) for their placement and interface contracts.
+Private actor execution, device fabrics and timing experiments. The supervised `hls_fabric` application depends only on the shared `hls_runtime` library; the separate `hls_lowering` library owns builds and depends on the `erl_hls` compiler. The common build frontend supports source-protocol actors and channel-scheduled shared executors. Start with the [two-counter build walkthrough](docs/building.md#one-build-boundary-two-execution-models), then [execution backends](docs/execution/README.md) for their placement and interface contracts.
 
 `hls-fabric plan` inspects a checked backend request; `hls-fabric emit` produces its portable source bundle. XLS compilation, simulation and physical qualification remain separate steps. For a small source-protocol application:
 
 ```sh
-rebar3 release
-_build/default/rel/hls/bin/hls-fabric plan --config src/examples/counter/source.config --stage profile
-_build/default/rel/hls/bin/hls-fabric emit --config src/examples/counter/source.config --output _build/counter-source
+rebar3 release -n hls
+_build/default/rel/hls/bin/hls-fabric plan --config apps/hls_lowering/src/examples/counter/source.config --stage profile
+_build/default/rel/hls/bin/hls-fabric emit --config apps/hls_lowering/src/examples/counter/source.config --output _build/counter-source
 ```
 
-Use `--backend channel_scheduler --config src/examples/counter/scheduler.config` to build the same topology as dedicated channel actors. The alternative `scheduler-ram.config` places both counters on one shared executor with external state/mailbox RAM interfaces. Backend selection belongs to the build request; the actor source and logical routes do not select it. Each backend checks its own configuration and execution restrictions. The ordinary actor frame remains 128 bits; frame-width generalization is separate work.
+Use `--backend channel_scheduler --config apps/hls_lowering/src/examples/counter/scheduler.config` to build the same topology as dedicated channel actors. The alternative `scheduler-ram.config` places both counters on one shared executor with external state/mailbox RAM interfaces. Backend selection belongs to the build request; the actor source and logical routes do not select it. Each backend checks its own configuration and execution restrictions. The ordinary actor frame uses a fixed 32-bit header and configured `frame_payload_words` payload (three words, or 128 total bits, by default).
 
 Source-protocol applications include framed host attachment, connected typed capture links and whole or multi-role placement; see [source protocol](docs/source-protocol.md). The node interface below covers standalone services and scheduled-actor gateways, which have their own documented support limits.
 
 Each configured device has a virtual node name and genuine external Erlang PIDs for standalone services and scheduled actors. One ordinary BEAM hosts the node adapters and physical fabric brokers; no second VM or per-actor proxy process is required.
 
-See the [documentation guide](docs/README.md) for node, addressing and transport contracts. For development, the [source map](src/README.md) explains directory ownership, entry points and dependency direction.
+See the [documentation guide](docs/README.md) for node, addressing and transport contracts. For development, the [runtime source map](src/README.md) and [build source map](apps/hls_lowering/src/README.md) explain ownership, entry points and the one-way dependency. `rebar3 release -n hls` packages the build CLI; `rebar3 release -n hls_fabric` packages the runtime without compiler or lowering modules.
 
 ```erlang
 {ok, _} = application:ensure_all_started(hls_fabric),
@@ -57,13 +57,16 @@ See [host-path measurements](docs/artifacts.md#historical-reports) (`experiments
 `hls_node_topology:normalize/3` derives logical actor identities, generated codecs and scheduler slots from the existing topology and scheduler plans. Supply a physical ingress endpoint for each scheduler group and a matching addressed gateway:
 
 ```erlang
+%% Build-side preparation; retain these values with the emitted application.
 Deployment = hls_node_topology:normalize(Plan, SchedulerSpecs, Endpoints),
+Binding = hls_shared_debug_catalog:prepare(Plan, SchedulerSpecs, [], Projection),
+%% Runtime attachment consumes the retained deployment and inspection binding.
 {ok, Node} = hls_node:start_link('fpga_a@host', Brokers,
     [#{name => workers, topology => Deployment, debug_endpoint => 2}], #{}),
 #{workers := #{actors := Actors, debug := Debug}} = hls_node:services(Node),
 Actor = maps:get({family, cells, [0, 0]}, Actors),
 ok = hls_statem:cast(Actor, {work, 42}),
-{ok, Catalog} = hls_node_topology:bind_debug(Plan, SchedulerSpecs, Debug, Manifest),
+{ok, Catalog} = hls_shared_observation:open(Binding, Debug, Manifest),
 {ok, Target} = hls_debug_catalog:actor(Catalog, {family, cells, [0, 0]}),
 [{phase, Phase}, {message_queue_len, Depth}] =
     hls_debug:info(Target, [phase, message_queue_len]).

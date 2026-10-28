@@ -34,7 +34,7 @@ def compile_owner(xls: Path, source: Path, output: Path, imports: list[Path] | N
     flags = manifest['codegen_flags']
     hardware_profile = manifest['build_profile']
     schedule = hardware_profile['schedules']['sampled_clock']
-    roots = [ROOT/'priv/xls/lib', ROOT/'priv/xls/fabric', public/'priv/xls/lib',
+    roots = [ROOT/'apps/hls_lowering/priv/xls/lib', ROOT/'apps/hls_lowering/priv/xls/fabric', public/'priv/xls/lib',
              public/'priv/xls/fabric', *(imports or [])]
     directories = ['_stdlib', *[f'_imports/{index}' for index in range(len(roots))]]
     files = {path.name: path for path in sorted(source.parent.glob('*.x'))}

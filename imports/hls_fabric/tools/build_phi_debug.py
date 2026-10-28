@@ -88,7 +88,7 @@ def build(args: argparse.Namespace) -> None:
         subprocess.run(erl_command(public, expression, out, str(mode == "observed").lower(),
                                   str(args.shards), profile="test"), cwd=ROOT,
                        env=erlang_environment("test", compiler=public), check=True)
-        for source in [*public.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x"), *public.glob("priv/xls/fabric/*.x"),
+        for source in [*public.glob("priv/xls/lib/*.x"), *ROOT.glob("apps/hls_lowering/priv/xls/lib/*.x"), *public.glob("priv/xls/fabric/*.x"),
                        public / "src/examples/phi_decoder/phi_field.x", public / "priv/rtl/hls_1r1w_ram.v"]:
             shutil.copy(source, out)
         banks = len(json.loads((out / "actors.json").read_text())["banks"])
@@ -101,7 +101,7 @@ def build(args: argparse.Namespace) -> None:
     (stage / "fixture.json").write_text(json.dumps({"shards": args.shards}) + "\n")
     support = stage / "support"
     support.mkdir(exist_ok=True)
-    for source in [*public.glob("priv/xls/debug/*.x"), *public.glob("priv/xls/fabric/*.x"), *public.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/lib/*.x")]:
+    for source in [*public.glob("priv/xls/debug/*.x"), *public.glob("priv/xls/fabric/*.x"), *public.glob("priv/xls/lib/*.x"), *ROOT.glob("apps/hls_lowering/priv/xls/lib/*.x")]:
         shutil.copy(source, support)
     for module, top, stages, ii in (("hls_fabric_router", "HostRoutedTx", 1, 1),
                                     ("hls_debug_observer", "Observer", 2, 1),

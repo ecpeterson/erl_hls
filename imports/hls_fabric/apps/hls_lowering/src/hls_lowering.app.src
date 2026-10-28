@@ -1,0 +1,10 @@
+{application, hls_lowering, [
+    {description, "HLS fabric planning, hardware lowering and build frontends"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [kernel, stdlib, crypto, compiler, erl_hls, hls_runtime, hls_fabric]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

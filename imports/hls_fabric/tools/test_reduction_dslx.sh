@@ -81,47 +81,47 @@ for mode in ordinary aggregate; do
     cat "$project_root/test_data/hls_reduction_failure_semantics.inc.x" \
         "$project_root/test_data/hls_reduction_failure_${mode}_semantics.inc.x" >> "$failure_generated"
     "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-        --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$failure_generated"
 done
 
 cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$test_stage/failure_head.x"
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$test_stage/failure_head.x"
 
 "$xls_root/interpreter_main" \
     --compare=jit \
     --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$generated"
 
 "$xls_root/interpreter_main" \
     --compare=jit \
     --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$aggregate_generated"
 
 "$xls_root/interpreter_main" \
     --compare=jit \
     --warnings_as_errors=false \
-    --dslx_path="$test_stage:$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$test_stage:$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_topology"
 
 "$xls_root/interpreter_main" \
     --compare=jit \
     --warnings_as_errors=false \
-    --dslx_path="$test_stage:$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$test_stage:$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_population"
 
 "$xls_root/ir_converter_main" \
     --top=ReductionSharedCompileTop \
     --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$generated" \
     >/dev/null
@@ -129,7 +129,7 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
 "$xls_root/ir_converter_main" \
     --top=ReductionAggregateSharedCompileTop \
     --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$aggregate_generated" \
     >/dev/null
@@ -137,7 +137,7 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
 "$xls_root/ir_converter_main" \
     --top=SchedulerGrid \
     --warnings_as_errors=false \
-    --dslx_path="$test_stage:$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$test_stage:$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_sharded" \
     >/dev/null
@@ -145,7 +145,7 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
 "$xls_root/ir_converter_main" \
     --top=SchedulerGrid \
     --warnings_as_errors=false \
-    --dslx_path="$test_stage:$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$test_stage:$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_muxed" \
     >/dev/null
@@ -153,7 +153,7 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
 "$xls_root/ir_converter_main" \
     --top=SchedulerGrid \
     --warnings_as_errors=false \
-    --dslx_path="$test_stage:$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+    --dslx_path="$test_stage:$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_population" \
     >/dev/null
@@ -161,6 +161,6 @@ cat "$project_root/test_data/hls_reduction_failure_head_semantics.inc.x" >> "$te
 # The shared typed mux is independent of application-generated callbacks.
 "$xls_root/interpreter_main" \
     --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib:$erl_hls_root/priv/xls/lib" \
+    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$project_root/test/xls/retained_mux_test.x"

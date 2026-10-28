@@ -26,7 +26,7 @@ The fixture gateway validates endpoint, slot, selector, flags, transaction ID, w
 
 ## Inspection
 
-`hls_node_topology:bind_debug/4` opens the shared debug PID with the device manifest and binds the public actor catalog. The device fingerprint and compiler actor projection must match before catalog construction. `hls_debug_catalog:actor/2` then supplies an explicit target for `hls_debug:info/2,3`, including committed phase, failure, mailbox depth, credits and scheduler status where present in the projection.
+During build-side preparation, retain `hls_shared_debug_catalog:prepare(Plan, Specs, [], Projection)`. Runtime clients use `hls_shared_observation:open(Binding, DebugPid, Manifest)` to verify the device fingerprint and attach the public actor catalog without source or scheduler analysis. The retained projection and manifest resources must match. `hls_node_topology:bind_debug/4` remains a build-side convenience for callers that still have compiler inputs. `hls_debug_catalog:actor/2` then supplies an explicit target for `hls_debug:info/2,3`, including committed phase, failure, mailbox depth, credits and scheduler status where present in the projection.
 
 The shared debug PID addresses the topology query service. It does not create per-actor counter/trace histories or imply support for standalone boundary-monitor commands. A bare external PID is not a native `process_info` target; use the catalog handle. Host `hls_fabric:client_info/1` reports adapter work, not hardware mailbox depth. Its pending/queued counts select the logical PID, while its route and ignored-reply count describe the shared physical endpoint.
 

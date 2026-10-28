@@ -91,7 +91,7 @@ bridge_rejections_test() ->
 %% Checked-in DSLX is the reproducible public schema artifact, not a second handwritten layout.
 -spec generated_library_test() -> ok.
 generated_library_test() ->
-    Path = filename:join(code:priv_dir(hls_fabric), "xls/lib/protocol_envelope.x"),
+    Path = filename:join(code:priv_dir(hls_lowering), "xls/lib/protocol_envelope.x"),
     {ok, Source} = file:read_file(Path),
     ?assertEqual(Source, iolist_to_binary(xls_protocol_envelope:emit())).
 

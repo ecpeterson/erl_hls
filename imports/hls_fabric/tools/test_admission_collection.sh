@@ -9,7 +9,7 @@ rebar3 eunit --module=xls_admission_collection_tests
 source tools/backend_env.sh test
 for name in admission-collection exclusive-collection direct-collection; do
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-  --dslx_path="$project_root/priv/xls/lib:$project_root/priv/xls:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+  --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
   --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
   "$project_root/_build/$name/unit/collection.x"
 done

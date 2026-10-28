@@ -46,12 +46,12 @@ def main() -> None:
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",
                         stage / "partition_peers.x", profile="test"), stage, "generation", timeout=60)
-    sources = [ROOT / "priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
+    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
                public / "priv/xls/lib/frame_config.x"]
     for path in sources:
         shutil.copy(path, stage)
     tracked = sources + [ROOT / "test/rtl/partition_peers_tb.sv", Path(__file__),
-        ROOT / "src/backend/xls/hls_partition_links.erl", ROOT / "test/hls_partition_link_fixture.erl"]
+        ROOT / "apps/hls_lowering/src/backend/xls/hls_partition_links.erl", ROOT / "test/hls_partition_link_fixture.erl"]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [Path(shutil.which(args.yosys) or args.yosys).resolve()]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]

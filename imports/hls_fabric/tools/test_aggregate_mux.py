@@ -13,7 +13,7 @@ from transport_codegen import specialize
 def probe(stage: Path, xls: Path, count: int, shortened: bool) -> None:
     """Compile the unchanged production mux and check every accepted request through real RTL."""
     stage.mkdir(parents=True, exist_ok=False)
-    source = ROOT/'priv/xls/partition_reduction.x.in'
+    source = ROOT/'apps/hls_lowering/priv/xls/partition_reduction.x.in'
     body, = re.findall(r'proc ReductionMux<.*?^}', source.read_text(), re.M | re.S)
     (stage/'actor.x').write_text('pub struct ReductionAggregateRequest { slot: u32, aggregate: bits[186] }\n')
     (stage/'top.x').write_text('import actor;\n'+body+f'''

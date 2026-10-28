@@ -494,7 +494,7 @@ issue(
 %% Select the standalone, scheduled-actor or debug request codec.
 -spec encode(map(), call | cast, term()) -> {byte(), byte(), binary(), term()}.
 encode(#{kind := actor} = Actor, cast, Request) ->
-    {{Tag, 255, Flags}, Payload} = hls_node_topology:encode_cast(Actor, Request),
+    {{Tag, 255, Flags}, Payload} = hls_node_binding:encode_cast(Actor, Request),
     {Tag, Flags, Payload, none};
 encode(#{kind := application, module := Module}, Mode, Request) ->
     {Tag, Payload, Context} = hls_gs:encode_request(Module, Mode, Request),

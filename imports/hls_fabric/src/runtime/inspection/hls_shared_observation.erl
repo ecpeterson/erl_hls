@@ -1,11 +1,75 @@
 -module(hls_shared_observation).
 -moduledoc """
-Scheduler inspection clients use this adapter with an existing debug client to open a matching topology session. It decodes committed mailbox/actor observations into the common runtime inspection model.
+Scheduler inspection clients attach retained build bindings to a matching topology session here. Attachment checks manifest projection and resource metadata without loading source, scheduler planners or generators. The same adapter decodes committed mailbox/actor observations into the common runtime inspection model.
 """.
 %% Scheduler inspection attachment.
--export([open/2]).
+-export([open/2, open/3, bind/2]).
+-export_type([binding/0]).
 %% Retained observation decoding.
 -export([decode_observation/2, mailbox_observation/2, actor_fields/1]).
+
+-doc "Source-checked catalog and projection retained by build-side inspection preparation; optional tile metadata maps logical identities to physical resources. This trusted build result is not an admission certificate for untrusted terms.".
+-type binding() :: #{
+    catalog := map(),
+    projection := map(),
+    tile => #{
+        projection := map(),
+        identities := #{term() => term()},
+        resources := #{binary() => {map(), map()}}
+    }
+}.
+
+-doc "Opens a verified topology session and attaches a retained binding. Transport errors are returned; mismatched projection or resource metadata raises an error.".
+-spec open(binding(), pid(), map()) -> {ok, map()} | {error, term()}.
+open(Binding, Client, Manifest) ->
+    case open(Client, Manifest) of
+        {ok, Session} -> {ok, bind(Binding, Session)};
+        Error -> Error
+    end.
+
+-doc "Attaches a prepared catalog after checking exact projection and actor resources. Tile bindings retain logical identities while queries use the original physical session.".
+-spec bind(binding(), map()) -> map().
+bind(
+    #{
+        catalog := Catalog,
+        projection := Physical,
+        tile := #{projection := Projection, identities := Identities, resources := ByKey}
+    },
+    Session = #{manifest := Manifest}
+) ->
+    case maps:get(<<"actor_projection">>, Manifest, none) of
+        Projection -> ok;
+        _ -> error(actor_projection_mismatch)
+    end,
+    Resources = [physical_resource(R, ByKey) || R <- maps:get(<<"resources">>, Manifest)],
+    Checked = hls_debug_catalog:bind(Catalog, Physical, Session#{
+        manifest := Manifest#{<<"actor_projection">> := Physical, <<"resources">> := Resources}
+    }),
+    Checked#{
+        actors := maps:from_list([
+            begin
+                Logical = {actor, maps:get(Id, Identities)},
+                {Logical,
+                    {actor, Metadata#{identity := Logical, scope := Scope#{id := Logical}},
+                        {actor_snapshot, Session, Resource}}}
+            end
+         || {{actor, Id}, {actor, Metadata = #{scope := Scope}, {actor_snapshot, _, Resource}}} <-
+                maps:to_list(maps:get(actors, Checked))
+        ])
+    };
+bind(#{catalog := Catalog, projection := Projection}, Session) ->
+    hls_debug_catalog:bind(Catalog, Projection, Session).
+
+%% Preserve all resource checks while translating the retained logical key/name to its physical row.
+-spec physical_resource(map(), #{binary() => {map(), map()}}) -> map().
+physical_resource(
+    R = #{<<"kind">> := <<"actor">>, <<"key">> := Key, <<"name">> := Name, <<"slot">> := Slot},
+    ByKey
+) ->
+    {#{<<"name">> := Name, <<"slot">> := Slot}, Physical} = maps:get(Key, ByKey),
+    maps:merge(R, maps:with([<<"key">>, <<"name">>], Physical));
+physical_resource(Resource, _) ->
+    Resource.
 
 -doc "Opens a topology session with shared and dedicated actor decoding.".
 -spec open(pid(), map()) -> {ok, map()} | {error, term()}.

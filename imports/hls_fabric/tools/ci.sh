@@ -22,7 +22,7 @@ record_time() {
 if [[ "$suite" != software ]]; then xls_root=$(cd "$xls_root" && pwd); fi
 # Resolve each profile once. Helpers can request the same no-op rebar check.
 rebar3 as test compile
-rebar3 release
+rebar3 release -n hls
 record_time prepare
 if [[ "$suite" == all || "$suite" == software ]]; then
     rebar3 eunit
@@ -38,6 +38,9 @@ if [[ "$suite" == all || "$suite" == software ]]; then
     done
     python3 tools/check_source_contracts.py
     rebar3 dialyzer
+    rebar3 release -n hls_fabric
+    python3 tools/check_package_boundaries.py --runtime hls_runtime --runtime hls_fabric \
+        --release _build/default/rel/hls_fabric
     record_time software
 fi
 if [[ "$suite" == all || "$suite" == components ]]; then

@@ -201,12 +201,12 @@ verify(Bindings, Tag, Packed) -> verify(Bindings, Tag, Packed, message(), [63]).
 verify(Bindings = #{scheduler := Scheduler = #{actors := Actors}, partition := Partition,
         deployment := Deployment}, Tag, Packed, Message, Padding) ->
     Payload = hls_codec:align(Packed, 32),
-    ?assertEqual(ok, hls_node_topology:validate(Scheduler)),
+    ?assertEqual(ok, hls_node_binding:validate(Scheduler)),
     ?assertEqual(ok, hls_partition_wire:check(Deployment)),
     Casts = [begin
         Expected = {{Tag, 255, 1}, <<Slot:32/little, Payload/binary>>},
-        ?assertEqual(Expected, hls_node_topology:encode_cast(Actor, Message)),
-        ?assertError({invalid_request, cast, unused}, hls_node_topology:encode_cast(Actor, {unused, 1})),
+        ?assertEqual(Expected, hls_node_binding:encode_cast(Actor, Message)),
+        ?assertError({invalid_request, cast, unused}, hls_node_binding:encode_cast(Actor, {unused, 1})),
         Expected
     end || Actor = #{slot := Slot} <- Actors],
     Bounds = {0, 0, 2, 0}, Command = {host, cells, Bounds, Message},

@@ -86,6 +86,7 @@ class BuildContextTests(unittest.TestCase):
             override = root/'fixture'
             for app, value in [(compiler, 'dependency'), (override, 'fixture')]:
                 (app/'ebin').mkdir(parents=True)
+                (app/'_build/default/lib/hls_runtime/ebin').mkdir(parents=True)
                 source = app/'compiler_probe.erl'
                 source.write_text(f'-module(compiler_probe).\n-export([value/0]).\nvalue() -> {value}.\n')
                 subprocess.run(['erlc', '-o', app/'ebin', source], check=True, capture_output=True, timeout=15)
@@ -99,6 +100,22 @@ class BuildContextTests(unittest.TestCase):
                 command = erl_command(override, expression, profile='default')
             self.assertEqual(subprocess.check_output(command, env=env, text=True, timeout=15), 'fixture')
 
+    def test_git_subdir_runtime_and_checkout_precedence(self) -> None:
+        """A nested Git application is visible; an explicit runtime checkout wins by app identity."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = root/'_build/test'
+            for name in ['lib/hls_fabric/ebin', 'lib/hls_lowering/ebin',
+                         'lib/hls_runtime/apps/hls_runtime/ebin']:
+                (base/name).mkdir(parents=True)
+            self.assertEqual(application_directory('hls_runtime', 'test', root),
+                             base/'lib/hls_runtime/apps/hls_runtime')
+            (base/'checkouts/hls_runtime/ebin').mkdir(parents=True)
+            selected = erlang_paths('test', root)
+            self.assertIn(base/'checkouts/hls_runtime/ebin', selected)
+            self.assertNotIn(base/'lib/hls_runtime/apps/hls_runtime/ebin', selected)
+            self.assertIn(base/'lib/hls_lowering/ebin', selected)
+
     def test_production_emitter_uses_native_release(self) -> None:
         """The optional driver delegates source configuration to the packaged Erlang CLI."""
         import emit_protocol_repetition as emitter
@@ -106,7 +123,7 @@ class BuildContextTests(unittest.TestCase):
             directory = Path(temporary)/'application'
             with patch.object(emitter, 'run') as invoke:
                 build = emitter.emit_application(6, directory, split=3)
-            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'release'])
+            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'release', '-n', 'hls'])
             self.assertEqual(invoke.call_args_list[1].args[0],
                              [ROOT/'_build/default/rel/hls/bin/hls-repetition',
                               '--width', '6', '--output', build, '--split', '3'])
@@ -187,6 +204,8 @@ def compiler_fixture(public: Path, label: str) -> Path:
     """Create a compiler package with distinguishable direct and transitive helpers."""
     package = public/'tools/erl_hls_tools'
     package.mkdir(parents=True)
+    for profile in ('default', 'test'):
+        (public/'_build'/profile/'lib/hls_runtime/ebin').mkdir(parents=True, exist_ok=True)
     (package/'__init__.py').write_text('"""Inert compiler fixture package."""\n')
     (package/'sibling.py').write_text(f'VALUE = {label!r}\n')
     (package/'compile_xls.py').write_text('from .sibling import VALUE\n')
@@ -229,6 +248,25 @@ class CompilerContextTests(unittest.TestCase):
                 self.assertEqual(compiler_root('test', root=root), test)
                 with self.assertRaises(ValueError):
                     compiler_root('../test', root=root)
+
+    def test_umbrella_projection_keeps_matching_beams_and_resolves_tool_sources(self) -> None:
+        """A built app's src link selects helpers without substituting standalone or stale beams."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = compiler_fixture(root/'source compiler', 'selected')
+            (source/'src').mkdir()
+            selected = root/'_build/test/checkouts/erl_hls'
+            (selected/'ebin').mkdir(parents=True)
+            (selected/'src').symlink_to(source/'src', target_is_directory=True)
+            (root/'_build/test/checkouts/hls_runtime/ebin').mkdir(parents=True)
+            (root/'_build/test/lib/hls_fabric/ebin').mkdir(parents=True)
+            compiler_fixture(root/'_checkouts/erl_hls', 'unrelated')
+            self.assertEqual(compiler_root('test', root=root), source)
+            self.assertEqual(compiler_tool(source, 'compile_xls').VALUE, 'selected')
+            paths = erlang_paths('test', root, compiler=source)
+            self.assertIn(selected/'ebin', paths)
+            self.assertIn(root/'_build/test/checkouts/hls_runtime/ebin', paths)
+            self.assertNotIn(source/'_build/test/lib/erl_hls/ebin', paths)
 
     def test_override_is_explicit_and_never_falls_back(self) -> None:
         """Explicit sources need no build tree; incomplete overrides cannot select another compiler."""

@@ -449,7 +449,7 @@ Consume events with `next/2`; `{ok, board, application, {started}}` confirms the
 
 ## Finite repetition application
 
-After `rebar3 release`, `_build/default/rel/hls/bin/hls-repetition --width 3 --output FRESH_OUTPUT` emits the periodic example without Python or XLS. Add `--split 3` with width 6, `--mixed`, `--inspect` or `--share-arithmetic` within the bounds below. The configuration is owned by `phi_protocol_config:repetition/2`. [The source build manifest](building.md#source-toolchain) supplies a separate external compiler with copied imports, entry points and required schedules.
+After `rebar3 release -n hls`, `_build/default/rel/hls/bin/hls-repetition --width 3 --output FRESH_OUTPUT` emits the periodic example without Python or XLS. Add `--split 3` with width 6, `--mixed`, `--inspect` or `--share-arithmetic` within the bounds below. The configuration is owned by `phi_protocol_config:repetition/2`. [The source build manifest](building.md#source-toolchain) supplies a separate external compiler with copied imports, entry points and required schedules.
 
 As an optional combined emission/XLS convenience, `python3 tools/emit_protocol_repetition.py XLS_ROOT 3 FRESH_OUTPUT` builds a periodic line using the pinned compiler's ordinary Phi, phenomenological data and syndrome actors. The public source-application builder emits the frozen bundle at `FRESH_OUTPUT/build`; external compilation publishes its `compiled` symlink. Resolve that once to obtain `BUILD/deployment.etf` and the complete RTL list `BUILD/files.f`. Width counts data sites: each width-N line has 3N actors. The command accepts N=2..16; only the exercised instances have the evidence below, and emission does not establish board fit or semantic admission.
 

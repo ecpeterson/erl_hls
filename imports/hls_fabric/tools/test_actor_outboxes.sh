@@ -11,10 +11,10 @@ rebar3 as test compile
 source tools/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_actor_outbox_testgen:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$stage:$root/priv/xls/lib:$root/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$root/apps/hls_lowering/priv/xls/lib:$root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for module in mailbox scheduler; do
-    "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$root/priv/xls/lib/$module.x"
+    "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$root/apps/hls_lowering/priv/xls/lib/$module.x"
 done
 source tools/phi_scheduler_rams.sh
 for kind in direct shared; do

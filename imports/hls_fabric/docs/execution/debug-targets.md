@@ -63,15 +63,17 @@ hls_debug:info(Actor, [identity, placement, mailbox_capacity, boundaries]),
 
 Shared placements identify the scheduler group ID, its generated zero-based index, and the actor's slot within it. Interleaved families use the normalized scheduler plan's member instances and local indices; they do not assume that a logical row-major index equals a physical slot. Ungrouped actors have direct placement. The supplied plan and explicitly related boundary handles are host declarations, not a bitstream identity check. They do not associate generated signal names or physical resource IDs with logical actors. Physical resource sessions independently verify the RTL manifest fingerprint.
 
-To inspect committed actor state, generate a diagnostic build with [actor projections](topology-debug.md#shared-actor-snapshots), open its verified topology session, and pass that session as the fourth catalog argument:
+To inspect committed actor state, generate a diagnostic build with [actor projections](topology-debug.md#shared-actor-snapshots). During build-side preparation, validate its source and schedule once and retain the binding. Runtime attachment uses that value and the verified topology session:
 
 ```erlang
-Catalog = hls_shared_debug_catalog:hardware(Plan, Specs, [Boundary], Session),
+Binding = hls_shared_debug_catalog:prepare(Plan, Specs, [Boundary], Projection),
+%% Retain Binding with the build; attachment needs no compiler or source modules.
+Catalog = hls_shared_observation:bind(Binding, Session),
 {ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
 hls_debug:info(Actor, [identity, placement, initialized, phase, enter_pending, failed, cycle]).
 ```
 
-This binding checks the complete compiler projection against the manifest, including phase names and scheduler slots. A different plan, shard count, or actor-resource map is rejected before querying. `phase` is the actor's Erlang phase atom, also used by CPU inspection. Low-level actor resources return the manifest's binary phase name. Multiple fields in one call share a single sample. `initialized = false` gives `undefined` for `phase`, `enter_pending`, `failed`, `failure`, and `reduction`. CPU failures ordinarily terminate the process, so CPU targets do not advertise a persistent hardware failure latch.
+Preparation checks the complete compiler projection against the source and schedule, including phase names and scheduler slots. Runtime attachment checks the retained projection and actor-resource map against the session manifest before querying. A different plan or shard count is rejected at preparation; a mismatched manifest is rejected at attachment. `hls_shared_debug_catalog:hardware/4` remains a build-side convenience that performs both steps. `phase` is the actor's Erlang phase atom, also used by CPU inspection. Low-level actor resources return the manifest's binary phase name. Multiple fields in one call share a single sample. `initialized = false` gives `undefined` for `phase`, `enter_pending`, `failed`, `failure`, and `reduction`. CPU failures ordinarily terminate the process, so CPU targets do not advertise a persistent hardware failure latch.
 
 `observation` identifies the committed-state resource and its manifest fingerprint. The snapshot can lag an in-flight callback and its timestamp dates the query rather than the last state write. The `failure` item is `none` for a healthy initialized actor, or a map such as `#{code => 276, kind => case_clause, file => <<"actor.erl">>, line => 42}`. Protocol failures may omit `file` and `line`. The code is artifact-local; use the decoded reason and origin. All requested actor items share one sample. Direct snapshots include mailbox depth, postponed entries, reservations, and free slots. Shared snapshots advertise mailbox counts and scheduler work flags with `mailbox_debug => true`. It retains no event history or state age. After reset, acquire a fresh transport session and catalog. Counters, traces, and physical wait inspection retain their separate scopes.
 
@@ -88,7 +90,8 @@ The [complete phi-memory build](topology-debug.md#complete-d3-phi-memory-fixture
 {ok, QueryClient} = hls_debug:start_link(undefined, {fabric, DebugFabric, 2}),
 {ok, Session} = hls_shared_observation:open(QueryClient, Manifest),
 Boundary = {boundary, MonitorClient, {phi_memory_gateway, host_stream}},
-Catalog = hls_shared_debug_catalog:hardware(Plan, Specs, [Boundary], Session).
+Binding = hls_shared_debug_catalog:prepare(Plan, Specs, [Boundary], Projection),
+Catalog = hls_shared_observation:bind(Binding, Session).
 ```
 
 The broker can queue requests from both clients. A blocked trace reply holds the shared debug transport until its last word is accepted; it does not pause application execution or passive capture. Selecting the actor's related boundary still returns whole-gateway counters/events.
