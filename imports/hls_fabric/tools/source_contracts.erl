@@ -4,17 +4,20 @@
 
 %% A diagnostic is keyed by declaration identity; fingerprints track changed declarations.
 -type finding() :: #{path := binary(), line := integer(), id := binary(),
-                     rule := binary(), fingerprint := binary()}.
+                     rule := binary(), fingerprint := binary(), reason => binary()}.
+%% Clean files participate in module uniqueness just as files with missing contracts do.
+-type file_audit() :: #{path := binary(), module := binary() | null,
+                        module_line := integer(), findings := [finding()]}.
 
--doc "Print JSON diagnostics for each source path passed after the VM's -- separator.".
+-doc "Print JSON file inventories and diagnostics for paths passed after the VM's -- separator.".
 -spec main() -> no_return().
 main() ->
-    Findings = lists:append([scan(Path) || Path <- init:get_plain_arguments()]),
-    io:put_chars(json:encode(Findings)),
+    Files = [scan(Path) || Path <- init:get_plain_arguments()],
+    io:put_chars(json:encode(Files)),
     halt().
 
 %% Parse without expanding macros so all conditional branches remain visible.
--spec scan(string()) -> [finding()].
+-spec scan(string()) -> file_audit().
 scan(Path) ->
     {ok, Bytes} = file:read_file(Path),
     Lines = string:split(unicode:characters_to_list(Bytes), "\n", all),
@@ -35,9 +38,35 @@ scan(Path) ->
                 {spec, {Key, _}} <- [attribute(F)]]),
             Context = #{path => Path, lines => Lines, exports => Exports,
                         types => Types, all => All, specs => Specs, tokens => Tokens, raw_lines => RawLines},
-            inspect(Forms, Context, [], []);
-        {error, _} -> [finding(Path, 1, <<"file">>, <<"parse">>, Bytes)]
+            file_audit(Path, Forms, inspect(Forms, Context, [], []));
+        {error, _} -> file_audit(Path, [], [finding(Path, 1, <<"file">>, <<"parse">>, Bytes)])
     end.
+
+%% Only one literal module attribute gives an Erlang file a movable identity.
+%% Headers and unresolved module macros retain path identity; no basename is inferred.
+-spec file_audit(string(), [erl_syntax:syntaxTree()], [finding()]) -> file_audit().
+file_audit(Path, Forms, Findings) ->
+    Modules = [F || F <- Forms, filename:extension(Path) =:= ".erl",
+        erl_syntax:type(F) =:= attribute,
+        erl_syntax:atom_value(erl_syntax:attribute_name(F)) =:= module],
+    {Module, ModuleLine, Errors} = case Modules of
+        [Form] ->
+            case erl_syntax:attribute_arguments(Form) of
+                [Name] ->
+                    case erl_syntax:type(Name) of
+                        atom -> {atom_to_binary(erl_syntax:atom_value(Name), utf8), line(Form), []};
+                        _ -> {null, line(Form), []}
+                    end;
+                _ -> {null, line(Form), []}
+            end;
+        [] -> {null, 1, []};
+        [First | _] ->
+            Error = (finding(Path, line(First), <<"module">>, <<"module_identity">>,
+                [formatted(F) || F <- Modules]))#{reason => <<"multiple module declarations prevent unique source identity">>},
+            {null, line(First), [Error]}
+    end,
+    #{path => unicode:characters_to_binary(Path), module => Module,
+        module_line => ModuleLine, findings => Errors ++ Findings}.
 
 %% Read literal attributes, retaining syntax-tree forms elsewhere.
 -spec attribute(erl_syntax:syntaxTree()) -> {atom(), term()} | none.
@@ -118,7 +147,8 @@ declaration(Kind, Key = {Name, Arity}, Public, Form, Pending, Context) ->
         {ok, Spec} when Kind =:= function -> [Spec | Pending];
         _ -> Pending
     end,
-    Fingerprint = [fingerprint_form(Form, Context) | lists:sort([formatted(A) || A <- lists:usort(Attached)])],
+    Fingerprint = [term_to_binary(Public), fingerprint_form(Form, Context) |
+        lists:sort([formatted(A) || A <- lists:usort(Attached)])],
     Doc = lists:any(fun(A) ->
         case attribute(A) of
             {doc, Text} when is_list(Text); is_binary(Text) -> string:trim(Text) =/= "" andalso string:trim(Text) =/= <<>>;

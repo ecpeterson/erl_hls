@@ -10,10 +10,15 @@ The phi families use the same interleaved shared schedulers and external block
 RAM as the complete memory topology.  Each small request-paced syndrome family
 has a separate scheduler because the scheduled topology currently routes only
 between schedulers.  Their counters remain distinct from the decoder counters.
+
+phi_decoder_profile_build consumes this profile through xls_fabric_topology_dslx; the wrapper uses the same hls_scheduler_plan. Logical actors and routes are supplied by phi_decoder_profile_topology.
 """.
 
--export([profile/0, profile/1, scheduler_plan/0, scheduler_plan/1,
-    to_dslx/0, to_dslx/1]).
+%% Example placement and normalized scheduler queries.
+-export([profile/0, profile/1, scheduler_plan/0, scheduler_plan/1]).
+
+%% DSLX fixture generation.
+-export([to_dslx/0, to_dslx/1]).
 
 -doc "Returns the checked three-shard physical profile.".
 -spec profile() -> xls_fabric_topology_dslx:profile().
@@ -30,7 +35,7 @@ profile(Options) ->
         actor_egress_depth => burst,
         reduction_placements => maps:from_list([
             {Phi, source_fragments}
-            || #{phi := Phi} <- phi_decoder_profile:planes(Config)
+         || #{phi := Phi} <- phi_decoder_profile:planes(Config)
         ]),
         scheduler_groups => scheduler_groups(Config)
     }.
@@ -68,19 +73,26 @@ scheduler_groups(Config = #{shards := ShardCount}) ->
     maps:from_list(
         [
             {{Seed, Source}, group([{family, Source}])}
-            || #{source := Source, source_seed := Seed} <- Planes
+         || #{source := Source, source_seed := Seed} <- Planes
         ] ++
-        [
-            {{Seed, Phi, Shard}, group([
-                {family, Phi, {interleaved, Shard, ShardCount}}
-            ])}
-            || #{phi := Phi, phi_seed := Seed} <- Planes,
-               Shard <- lists:seq(0, ShardCount - 1)
-        ]
+            [
+                {
+                    {Seed, Phi, Shard},
+                    group([
+                        {family, Phi, {interleaved, Shard, ShardCount}}
+                    ])
+                }
+             || #{phi := Phi, phi_seed := Seed} <- Planes,
+                Shard <- lists:seq(0, ShardCount - 1)
+            ]
     ).
 
 %% Builds a homogeneous RAM-backed family group.
--spec group([{'family','syndrome_x' | 'syndrome_z'} | {'family','phi_x' | 'phi_z',{term(),term(),term()}},...]) -> map().
+-spec group([
+    {'family', 'syndrome_x' | 'syndrome_z'}
+    | {'family', 'phi_x' | 'phi_z', {term(), term(), term()}},
+    ...
+]) -> map().
 group(Members) ->
     #{
         members => Members,

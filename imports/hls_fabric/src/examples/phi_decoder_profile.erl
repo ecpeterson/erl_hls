@@ -7,9 +7,15 @@ Bounded geometry and executor choices for decoder-only measurements.
 with both planes has eighteen phi actors. The kernel retains its two stored
 field layers and twelve diffusion rounds at every shape; these profiles
 measure a fixed workload, not a distance-dependent decoder algorithm.
+
+phi_decoder_profile_topology and its DSLX/profile builder consume the normalized geometry. manifest/1 exposes measurement configuration without selecting tools or generating hardware.
 """.
 
--export([normalize/1, planes/1, manifest/1]).
+%% Measurement configuration and selected planes.
+-export([normalize/1, planes/1]).
+
+%% Descriptive measurement manifest.
+-export([manifest/1]).
 
 -doc "Validates profile options and fills defaults, with canonical plane order.".
 -spec normalize(pos_integer() | map()) -> map().
@@ -22,9 +28,17 @@ normalize(Options) when is_map(Options) ->
     end,
     Shape = maps:get(shape, Options, [3, 3]),
     case Shape of
-        [W, H] when is_integer(W), W > 0, W =< 50,
-                    is_integer(H), H > 0, H =< 50 -> ok;
-        _ -> error({invalid_profile_shape, Shape})
+        [W, H] when
+            is_integer(W),
+            W > 0,
+            W =< 50,
+            is_integer(H),
+            H > 0,
+            H =< 50
+        ->
+            ok;
+        _ ->
+            error({invalid_profile_shape, Shape})
     end,
     Selected = maps:get(planes, Options, [x, z]),
     case Selected of
@@ -46,12 +60,28 @@ normalize(Options) when is_map(Options) ->
 -doc "Expands the selected decoder planes into their actor and traffic configuration.".
 -spec planes(map()) -> [map()].
 planes(#{planes := Selected}) ->
-    [Plane || Plane = #{id := Id} <- [
-        #{id => x, phi => phi_x, source => syndrome_x,
-            events => x_decoder_events, source_seed => 0, phi_seed => 2},
-        #{id => z, phi => phi_z, source => syndrome_z,
-            events => z_decoder_events, source_seed => 1, phi_seed => 3}
-    ], lists:member(Id, Selected)].
+    [
+        Plane
+     || Plane = #{id := Id} <- [
+            #{
+                id => x,
+                phi => phi_x,
+                source => syndrome_x,
+                events => x_decoder_events,
+                source_seed => 0,
+                phi_seed => 2
+            },
+            #{
+                id => z,
+                phi => phi_z,
+                source => syndrome_z,
+                events => z_decoder_events,
+                source_seed => 1,
+                phi_seed => 3
+            }
+        ],
+        lists:member(Id, Selected)
+    ].
 
 -doc "Describes the generated population without inferring board placement.".
 -spec manifest(pos_integer() | map()) -> map().
@@ -59,7 +89,13 @@ manifest(Options) ->
     #{shape := [Width, Height], planes := Planes, shards := Shards} =
         normalize(Options),
     Count = length(Planes),
-    #{width => Width, height => Height, planes => Planes,
-        shards_per_plane => Shards, scheduler_count => Count * (1 + Shards),
-        source_scheduler_count => Count, phi_actor_count => Count * Width * Height,
-        source_actor_count => Count * Width * Height}.
+    #{
+        width => Width,
+        height => Height,
+        planes => Planes,
+        shards_per_plane => Shards,
+        scheduler_count => Count * (1 + Shards),
+        source_scheduler_count => Count,
+        phi_actor_count => Count * Width * Height,
+        source_actor_count => Count * Width * Height
+    }.

@@ -76,12 +76,12 @@ def main() -> None:
     ebin = stage / 'ebin'
     ebin.mkdir(exist_ok=True)
     fixture = ROOT / 'test/rtl'
-    sources = [ROOT / 'src/backend' / name for name in
+    sources = [ROOT / 'src/backend/xls' / name for name in
         ('xls_topology_scheduler_dslx.erl', 'xls_topology_source_fragment_dslx.erl')]
     sources += [ROOT / 'test/xls_effect_router_testgen.erl', fixture / 'router_probe_actor.x',
         fixture / 'effect_router_top.x.in', fixture / 'effect_router_tb.sv.in',
         ROOT / 'priv/xls/lib/effect_window.x', ROOT / 'priv/xls/templates/parallel_effect_router.x.in',
-        ROOT / 'src/backend/xls_parallel_effect_router_dslx.erl', ROOT / 'src/backend/xls_template.erl', Path(__file__)]
+        ROOT / 'src/backend/xls/xls_parallel_effect_router_dslx.erl', ROOT / 'src/backend/xls/xls_template.erl', Path(__file__)]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
     commands = []
 

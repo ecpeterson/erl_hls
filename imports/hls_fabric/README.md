@@ -16,7 +16,7 @@ Source-protocol applications include framed host attachment, connected typed cap
 
 Each configured device has a virtual node name and genuine external Erlang PIDs for standalone services and scheduled actors. One ordinary BEAM hosts the node adapters and physical fabric brokers; no second VM or per-actor proxy process is required.
 
-See the [documentation guide](docs/README.md) for node, addressing and transport contracts.
+See the [documentation guide](docs/README.md) for node, addressing and transport contracts. For development, the [source map](src/README.md) explains directory ownership, entry points and dependency direction.
 
 ```erlang
 {ok, _} = application:ensure_all_started(hls_fabric),

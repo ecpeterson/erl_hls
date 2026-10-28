@@ -50,7 +50,7 @@ pub proc Top {{
     for command, label, output in commands:
         execute(command, stage, label, output=stage/output)
     (stage/'build.json').write_text(json.dumps({'count': count, 'reference': reference, 'commands': [c for c,_,_ in commands],
-        'rtl_sha256': digest(stage/'ingress.v'), 'emitter_sha256': digest(ROOT/'src/hls_partition_shared_dslx.erl'),
+        'rtl_sha256': digest(stage/'ingress.v'), 'emitter_sha256': digest(ROOT/'src/backend/xls/hls_partition_shared_dslx.erl'),
         'template_sha256': digest(ROOT/'priv/xls/scheduler_ingress.x.in')}, indent=2)+'\n')
 
 

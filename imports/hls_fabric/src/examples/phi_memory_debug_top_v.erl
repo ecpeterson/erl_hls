@@ -11,8 +11,11 @@ and attaches the passive debug monitor.
 The monitor-only and application-only shells share one application template.
 The latter exposes optional always-ready mailbox samples for post-codegen
 composition with physical queries and the boundary monitor.
+
+Staging and observation fixtures call this wrapper generator. Placement comes from phi_shared_noise_topology_dslx; shared RAM/observation renderers and installed priv/rtl templates provide the wiring.
 """.
 
+%% Application and observation shell rendering.
 -export([to_verilog/0, to_verilog/1, application/2]).
 
 -doc "Renders the checked wrapper for the default scheduler profile.".
@@ -31,25 +34,29 @@ application(Profile, Options) ->
     render("phi_memory_top.template.v", Profile, Options).
 
 %% Assembles declarations, routing procs and the top-level composition.
--spec render([1 .. ((1 bsl 8) - 1),...],1 | 2 | {'phi_shards',pos_integer()},map()) -> binary().
+-spec render([1..((1 bsl 8) - 1), ...], 1 | 2 | {'phi_shards', pos_integer()}, map()) -> binary().
 render(Shell, Profile, Options) ->
     Plan = phi_shared_noise_topology_dslx:scheduler_plan(Profile),
     Bindings = xls_scheduler_ram_v:bindings(Plan),
-    {DebugWires, DebugPorts} = case xls_scheduler_observation:enabled(Options) of
-        true -> {xls_scheduler_observation:wires(Plan), xls_scheduler_observation:ports(Plan)};
-        false -> {[], []}
-    end,
+    {DebugWires, DebugPorts} =
+        case xls_scheduler_observation:enabled(Options) of
+            true -> {xls_scheduler_observation:wires(Plan), xls_scheduler_observation:ports(Plan)};
+            false -> {[], []}
+        end,
     Template = template("phi_memory_application.template.v"),
     Replacements = [
-        {<<"@SCHEDULER_WIRES@">>, iolist_to_binary(
-            [xls_scheduler_ram_v:wires(Bindings), DebugWires]
-        )},
-        {<<"@APPLICATION_RAM_PORTS@">>, iolist_to_binary(
-            [xls_scheduler_ram_v:application_ports(Bindings), DebugPorts]
-        )},
-        {<<"@SCHEDULER_RAMS@">>, iolist_to_binary(
-            xls_scheduler_ram_v:instances(Bindings, "aclk")
-        )}
+        {<<"@SCHEDULER_WIRES@">>,
+            iolist_to_binary(
+                [xls_scheduler_ram_v:wires(Bindings), DebugWires]
+            )},
+        {<<"@APPLICATION_RAM_PORTS@">>,
+            iolist_to_binary(
+                [xls_scheduler_ram_v:application_ports(Bindings), DebugPorts]
+            )},
+        {<<"@SCHEDULER_RAMS@">>,
+            iolist_to_binary(
+                xls_scheduler_ram_v:instances(Bindings, "aclk")
+            )}
     ],
     Application = lists:foldl(
         fun({Pattern, Replacement}, Source) ->
@@ -61,7 +68,7 @@ render(Shell, Profile, Options) ->
     binary:replace(template(Shell), <<"@APPLICATION@">>, Application).
 
 %% Loads the owned RTL wrapper template, rejecting a missing installation asset.
--spec template([1 .. ((1 bsl 8) - 1),...]) -> binary().
+-spec template([1..((1 bsl 8) - 1), ...]) -> binary().
 template(Name) ->
     Priv = code:priv_dir(hls_fabric),
     Path = filename:join([Priv, "rtl", Name]),
