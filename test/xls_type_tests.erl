@@ -1,7 +1,7 @@
 -module(xls_type_tests).
 -moduledoc "Compiler-provider dispatch witnesses. Built-ins retain runtime descriptors and host-only imports; custom callbacks compose through the same DSLX boundary without registration.".
 -include_lib("eunit/include/eunit.hrl").
--include("../src/backend/xls/xls_clause_lower.hrl").
+-include("../src/backend/xls/expressions/xls_clause_lower.hrl").
 -behaviour(xls_type).
 
 %% A custom compiler provider used to witness extension dispatch.

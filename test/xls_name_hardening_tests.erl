@@ -1,7 +1,7 @@
 -module(xls_name_hardening_tests).
 -moduledoc "Regressions for provider aliases, deployment keywords and local/type shadowing.".
 -include_lib("eunit/include/eunit.hrl").
--include("../src/backend/xls/xls_clause_lower.hrl").
+-include("../src/backend/xls/expressions/xls_clause_lower.hrl").
 -export([dslx_imports/0]).
 
 -doc "Supplies provider import declarations chosen by each test.".
