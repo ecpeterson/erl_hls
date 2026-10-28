@@ -5,19 +5,13 @@ Initializers and actor callbacks can call pure functions defined in the same inc
 The compiler selects that function graph before hardware expression checks, record analysis and provider-import discovery. It retains each selected function’s complete clauses and signature, then follows the required record and local type declarations. Uncalled host utilities and unrelated declarations cannot add DSLX dependencies or fail hardware-only checks. This does not remove branches within a selected function or make unsupported reachable operations valid. BEAM compilation and source-bound plans still retain the complete original module. Host fields that explicitly request `hls_type:zero()` remain subject to the packing transform’s typed-zero rules.
 
 ```erlang
--spec prepare_reply(#data_cell{}, hls_nums:u32(), hls_pauli:pauli()) -> #data_cell{}.
-prepare_reply(Cell, RequestId, Measurement) ->
-    Anticommutes = hls_pauli:anticommutes(Cell#data_cell.accumulated_pauli, Measurement),
-    Cell#data_cell{
-        reply_request_id = RequestId,
-        reply_anticommutes = case Anticommutes of
-            false -> 0;
-            true -> 1
-        end
-    }.
+-spec scale(hls_nums:s16(), hls_nums:u8(), hls_nums:s16()) -> hls_nums:s32().
+scale(Value, Gain, Offset) ->
+    hls_type:as(hls_nums:s32(), Value) * hls_type:as(hls_nums:s32(), Gain) +
+        hls_type:as(hls_nums:s32(), Offset).
 ```
 
-Each caller separately chooses its state-machine transition and continuation phase.
+This helper widens before arithmetic; its declared operand ranges fit the signed32 result. Each caller separately chooses its state-machine transition and continuation phase. The [telemetry calibrator](../src/examples/telemetry/telemetry_calibrator.erl) extends this pattern with explicit saturation and a typed reading result.
 
 ## Types and supported bodies
 
@@ -74,7 +68,7 @@ Generated functions return `(value, hls_failure::Code)`. The caller retains the 
 
 The compiler emits each reachable helper once, in dependency order, using a name that preserves the source spelling and distinguishes arities. XLS requires callees to be declared first, so direct and mutual recursion are diagnosed while ordering the graph. XLS performs function inlining and optimization; a helper call does not request a separately scheduled hardware unit, add a clock boundary, or promise resource sharing.
 
-Generated helper and initializer function signatures carry trailing source-line comments, such as `fn hls_local_prepare_reply__3(...) -> (...) {  // L581`. Broader source annotations and include-aware source maps remain roadmap work.
+Generated helper and initializer function signatures carry trailing source-line comments, such as `fn hls_local_scale__3(...) -> (...) {  // L42`. Broader source annotations and include-aware source maps remain roadmap work.
 
 ## Verification
 

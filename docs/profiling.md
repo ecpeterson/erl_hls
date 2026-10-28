@@ -2,16 +2,18 @@
 
 A timing profile is a saved, application-independent graph of work, counters and dependencies. Collect once, then render or query it without rerunning simulation. Keep the recording, clock origins, source/tool digests and validation results beside it; a plot alone is not reproducible evidence.
 
-`tools/hls_profile.py` reads schema 1 JSON with `unit: "ns"`:
+`tools/hls_profile.py` validates and renders an existing capture; it does not start simulation, instrument VPI or collect ERTS messages. A workload-specific adapter produces schema 1 JSON with `unit: "ns"`:
 
 - `tracks`: unique `id`, `name`, optional `group`.
-- `events`: unique `id`, `track`, `name`, integer `ts` and `dur`, optional `args` and `category`. Zero duration denotes an observed instant. Use separate tracks for simultaneous or overlapping work.
+- `events`: unique `id`, `track`, `name`, nonnegative integer `ts` and `dur`, optional `args` and `category`. Zero duration denotes an observed instant. Use separate tracks for simultaneous or overlapping work, including distinct instants at the same timestamp.
 - `edges`: `source`, `target`, `kind`, nonempty `evidence`, optional nonnegative `delay_ns`. An edge means the source finishes before the target starts. Delays count only when the adapter explicitly attributes them; elapsed time between two observations is not automatically a causal delay.
 - `resource_dependencies`: optional observed resource-order edges with the same fields plus a nonempty `resource`. These explain this recording’s arbitration, credits or serialization; they do not assert a message/state dependency. They remain in consumer arguments and are excluded from causal arrows and the default longest-path calculation.
 - `counters`: `track`, `name`, integer `ts`, finite `value` exactly representable as a double.
 - `metadata`: provenance and `dependency_scope`, describing which dependencies were observed or reconstructed and which remain unknown.
 
-Convert every clock to a common trace-relative nanosecond origin. Retain original cycle, period and reset/epoch information in arguments. Adapters must resolve transaction identity and record their evidence; the exporter cannot infer causality from temporal proximity.
+Convert every clock to a common trace-relative nanosecond origin. Event display endpoints and counter timestamps must fit within `2^52` nanoseconds. Retain original cycle, period and reset/epoch information in arguments. Adapters must resolve transaction identity and record their evidence; the exporter cannot infer causality from temporal proximity. Validation requires an acyclic graph across causal and resource-order edges, and every edge must respect source completion plus its explicit delay before target start.
+
+The renderer loads the entire JSON capture into memory and imposes no event-count or file-size budget. The collecting adapter must bound and report its duration, retention and drops. A boundary monitor has its own [fixed capture capacity and drain behavior](debug-protocol.md); exporting those events cannot recover traffic it never retained.
 
 ```sh
 python3 tools/hls_profile.py timing.profile.json \
@@ -21,7 +23,7 @@ python3 tools/hls_profile.py timing.profile.json \
 
 Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trace format](https://perfetto.dev/docs/getting-started/other-formats) carries slices, arguments, counters and causal flows. The SVG has native hover details and bold dependency lines for the selected longest chain. Imported consumer slices retain incoming dependency evidence in `profile_dependencies`, because Perfetto does not import Chrome flow arguments. The exporter reserves that argument plus `profile_resource_dependencies`, `event_id`, `duration_ns` and `display_duration_ns`. Counter names include their track identity so same-named series remain separate. Flow arrows attach to event starts; the graph's timing constraint uses source completion.
 
-`--window` restricts exports to complete events inside `--start`/`--end`, retains the preceding counter values and records how many boundary dependencies were omitted. Without it, SVG zooming leaves the analysis graph intact.
+SVG output requires `--start` and `--end`; a Perfetto-only export does not. `--window` restricts exports to events starting at or after `--start` whose displayed endpoint is strictly before `--end`, retains the preceding counter values and records how many boundary dependencies were omitted. Without it, SVG zooming leaves the analysis graph intact.
 
 `--target` computes the longest sum of work durations and declared delays among recorded paths ending at that event. It reports accounted time, elapsed time and the difference as **unassigned time**. This is a critical path only for a complete timing model: missing resource dependencies, unmeasured waits and incomplete captures can change the answer. It is not a prediction of speedup after changing the hardware. Equal-score paths use a deterministic ID tie break.
 
@@ -37,5 +39,7 @@ The check compares every imported event ID, nanosecond timestamp, duration, flow
 Adapters may give a zero-duration boundary event `display_duration_ns` equal to its observed clock period. SVG and Perfetto draw that cycle as a block; `dur` and causal accounting remain unchanged. This denotes the cycle containing a handshake, not a measured computation latency. Include that distinction in event evidence. Visible bins on one track must not overlap, and a window retains only complete displayed bins. Native import verification checks the displayed durations as well as identities and causal endpoints.
 
 The SVG labels blocks where space permits. Adapters can distinguish `service`, `wait`, `unknown` and `handshake` categories by color; classification must describe recorded evidence. A wait slice is elapsed dependency time, not resource occupation.
+
+`--target` and `--observed-target` are alternative analyses; `--observed-resources` requires `--observed-target`.
 
 `--observed-target ID` adds a separate overlay containing the latest recorded causal predecessors of an event, retaining tied arrivals. `--observed-resources` also follows observed resource-order constraints. Neither option adds causal arrows. The overlay records unexplained gaps between prerequisite readiness and service, and boundary roots without recorded predecessors. These gaps are not automatically resource waits. This explains one observed schedule; it neither proves a global critical path nor predicts a reordered schedule. Original events and relations remain intact beneath the overlay.

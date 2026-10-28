@@ -1,6 +1,6 @@
 # Actor topologies
 
-A topology describes actors, messages and routes. An exact actor is one named instance; a family is a rectangular set of instances. Families reduce repetition in declarations without changing actor semantics.
+A topology describes `hls_statem` actors, messages and routes. The public topology frontend rejects `hls_gs` server interfaces; those remain standalone actor compilations. An exact actor is one named instance; a family is a rectangular set of instances. Families reduce repetition in declarations without changing actor semantics.
 
 Each instance compiles to a dedicated actor with register-backed state and a bounded mailbox. It runs when its own input, state and output dependencies permit. Dedicated execution does not imply one-cycle execution: XLS pipeline latency and output backpressure still apply.
 
@@ -37,7 +37,7 @@ The delivery contract is:
 - Messages from one actor to one recipient enter its mailbox in source order, including messages sent through different output ports that name that same recipient. An actor can still postpone messages according to its callback semantics.
 - Messages from different actors can interleave. Placement does not promise a global ordering or identical cycle timing.
 - A `direct` route has one recipient. A `queued` fanout completes the sender's effect at its ordered egress; the router then hands a copy to every listed recipient's lane before advancing to its next effect. Recipients can accept and execute at different times; fanout is not atomic multicast.
-- Startup messages precede ordinary routed messages at their destination, in declaration order. This is a local ordering rule, not a topology-wide startup barrier. Shared startup must fit each actor's mailbox because its group admits startup before dispatching callbacks.
+- Startup messages precede ordinary routed messages at their destination, in declaration order. This is a local ordering rule, not a topology-wide startup barrier.
 - Full buffers propagate backpressure without discarding accepted messages. Bounded queues and fair arbitration do not establish deadlock freedom for an arbitrary application protocol.
 
 ## External commands
@@ -68,7 +68,15 @@ An ingress is another ordered message source. Commands to the same recipient ret
 
 ## Hardware generation and observation
 
-Pass the normalized topology and a physical profile to `xls_topology_dslx:emit/2`. The profile selects the module name, channel depth and optional `direct_actor_debug`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc.
+Pass the normalized topology and a physical profile to `xls_topology_dslx:emit/2`. The required fields select the module name, channel depth and ordered-egress capacity:
+
+```erlang
+Profile = #{name => telemetry, channel_depth => 1,
+            actor_egress_depth => burst, direct_actor_debug => false,
+            frame_payload_words => 3}.
+```
+
+`actor_egress_depth` accepts a nonnegative depth or `burst`, which reserves space beyond the producer's own held effect for its largest entry burst. `direct_actor_debug` and `frame_payload_words` are optional, defaulting to `false` and `3`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc. The [telemetry project](../src/examples/telemetry/README.md) supplies an executable source-bundle writer and CPU launcher. Topology normalization itself neither starts CPU actors nor produces a board transport wrapper.
 
 Messages follow source routers to recipient lanes. Independent lanes may transfer concurrently; senders targeting the same recipient arbitrate. Each actor's effects retain callback order, including aliased output ports. Queue depth controls buffering, not the application's deadlock behavior.
 
