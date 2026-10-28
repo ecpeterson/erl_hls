@@ -10,7 +10,7 @@ order. `dot/3` computes a widened dot product of raw signed integers; its first
 argument declares the accumulator type. Every intermediate sum must fit that
 type. Fixed-point products retain their combined scale; no rescaling is implicit.
 
-hls_type composes host element codecs; xls_type selects the compiler companion for array types and operations. The phi_field example builds its field representation on these vectors.
+hls_type composes host element codecs; xls_type selects the compiler companion for array types and operations. Custom providers can build compound representations on these vectors.
 """.
 -behavior(hls_type).
 %% Application constructor and vector operations.

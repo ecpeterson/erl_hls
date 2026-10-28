@@ -105,9 +105,9 @@ generated_failure_metadata_test_() ->
             ?assert(lists:member(#{file => F, line => L}, Locations))
         end, Sites)
     end} || File <- ["src/examples/regsvc/regsvc.erl",
-        "src/examples/phi_decoder/phenom_data_cell.erl",
-        "src/examples/phi_decoder/phenom_syndrome_cell.erl",
-        "src/examples/phi_decoder/phi_halo_cell.erl",
+        "test/hls_data_cell_fixture.erl",
+        "test/hls_query_cell_fixture.erl",
+        "test_data/hls_statem_reduction_lower_fixture.erl",
         "test/hls_actor_debug_fixture.erl"]].
 
 %% A large source inventory exhausts the namespace only if more than 4095 sites survive lowering.

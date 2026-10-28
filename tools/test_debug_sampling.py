@@ -2,7 +2,7 @@
 """Prove continuous debug sampling and replay overlapping public queries.
 
 Use the production generated Observer (2 stages, II=1) and DebugServer
-(3 stages, II=2), as built by remote_xls_sim.sh or build_phi_debug.py. The
+(3 stages, II=2), as built by remote_xls_sim.sh. The
 unbounded safety proof uses Yosys and its bundled ABC PDR engine. All inputs
 are unconstrained after a shared sampled reset, including later resets and
 indefinitely stalled replies. This is not a liveness or physical timing proof.

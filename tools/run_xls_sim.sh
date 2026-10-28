@@ -31,10 +31,6 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_fabric_fixture.sv" \
     "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
-    "$local_stage/phi_halo_cell_tb.sv" \
-    "$local_stage/phenom_data_cell_tb.sv" \
-    "$local_stage/phi_phenom_topology_tb.sv" \
-    "$local_stage/phi_torus_topology_tb.sv" \
     "$local_stage/hls_fabric_host_tx_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
@@ -55,10 +51,6 @@ ssh -o BatchMode=yes "$remote_host" \
 # by the remote simulation above.
 rsync -a -e "ssh -o BatchMode=yes" \
     --include=regsvc.v \
-    --include=phi_halo_cell.v \
-    --include=phenom_data_cell.v \
-    --include=phenom_syndrome_cell.v \
-    --include=phi_phenom_topology.v \
     --include=hls_debug_observer.v \
     --include=hls_debug_server.v \
     --include=hls_fabric_ingress.v \

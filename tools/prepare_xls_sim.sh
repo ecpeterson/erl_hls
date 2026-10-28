@@ -10,17 +10,10 @@ cd "$project_root"
 rebar3 as test compile
 
 ERL_HLS_REGSVC_X="$stage/regsvc.x" \
-ERL_HLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
-ERL_HLS_PHENOM_DATA_X="$stage/phenom_data_cell.x" \
-ERL_HLS_PHENOM_SYNDROME_X="$stage/phenom_syndrome_cell.x" \
-ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
-ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
-ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
 ERL_HLS_COMPANION_FIXTURE_X="$stage/hls_companion_gs_fixture.x" \
-ERL_HLS_PHI_FIELD_TEST_X="$stage/phi_field_test.x" \
 ERL_HLS_NUMERIC_TEST_X="$stage/hls_numeric_test.x" \
 ERL_HLS_SHORT_CIRCUIT_TEST_X="$stage/xls_short_circuit_test.x" \
 erl \
@@ -32,7 +25,6 @@ erl \
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
-        PhiFieldTest = phi_field_dslx:to_dslx(),
         ok = file:write_file(os:getenv("ERL_HLS_NUMERIC_TEST_X"),
             hls_numeric_dslx:to_dslx()),
         ok = file:write_file(os:getenv("ERL_HLS_SHORT_CIRCUIT_TEST_X"),
@@ -40,49 +32,18 @@ erl \
         CompanionFixture = xls_parse:to_xls(
             "test_data/hls_companion_gs_fixture.erl"
         ),
-        PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
-        PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
-        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(),
-        PhiHalo = xls_parse:to_xls("src/examples/phi_decoder/phi_halo_cell.erl"),
-        PhenomData = xls_parse:to_xls("src/examples/phi_decoder/phenom_data_cell.erl"),
-        PhenomSyndrome = xls_parse:to_xls("src/examples/phi_decoder/phenom_syndrome_cell.erl"),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
         ),
         OrderedEgressTopology = ordered_egress_topology:to_dslx(),
         ok = file:write_file(os:getenv("ERL_HLS_REGSVC_X"), Regsvc),
-        ok = file:write_file(os:getenv("ERL_HLS_PHI_HALO_X"), PhiHalo),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHENOM_DATA_X"),
-            PhenomData
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHENOM_SYNDROME_X"),
-            PhenomSyndrome
-        ),
         ok = file:write_file(
             os:getenv("ERL_HLS_CASE_FIXTURE_X"),
             CaseFixture
         ),
         ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_FIELD_TEST_X"),
-            PhiFieldTest
-        ),
-        ok = file:write_file(
             os:getenv("ERL_HLS_COMPANION_FIXTURE_X"),
             CompanionFixture
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_PHENOM_TOPOLOGY_X"),
-            PhiPhenomTopology
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_TORUS_TOPOLOGY_X"),
-            PhiTorusTopology
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_X"),
-            PhiNoiseTopology
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_ORDERED_EGRESS_ACTOR_X"),
@@ -96,7 +57,7 @@ erl \
     '
 
 cp "$project_root"/priv/xls/lib/*.x "$stage/"
-cp "$project_root/src/examples/phi_decoder/phi_field.x" "$stage/phi_field.x"
+cp "$project_root/test_data/hls_companion_provider.x" "$stage/hls_companion_provider.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
@@ -130,14 +91,6 @@ cp "$project_root/test/rtl/regsvc_pair_tb.sv" "$stage/regsvc_pair_tb.sv"
 cp "$project_root/test/rtl/regsvc_bridge_tb.sv" "$stage/regsvc_bridge_tb.sv"
 cp "$project_root/test/rtl/debug/hls_trace_store_tb.sv" \
     "$stage/hls_trace_store_tb.sv"
-cp "$project_root/test/rtl/phi_halo_cell_tb.sv" \
-    "$stage/phi_halo_cell_tb.sv"
-cp "$project_root/test/rtl/phenom_data_cell_tb.sv" \
-    "$stage/phenom_data_cell_tb.sv"
-cp "$project_root/test/rtl/phi_phenom_topology_tb.sv" \
-    "$stage/phi_phenom_topology_tb.sv"
-cp "$project_root/test/rtl/phi_torus_topology_tb.sv" \
-    "$stage/phi_torus_topology_tb.sv"
 cp "$project_root/test/rtl/hls_fabric_host_tx_tb.sv" \
     "$stage/hls_fabric_host_tx_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
@@ -152,18 +105,7 @@ cp "$project_root/test/rtl/debug/hls_debug_server_tb.sv" "$stage/hls_debug_serve
 for source in \
     "$project_root"/apps/hls_runtime/src/api/*.erl \
     "$project_root"/apps/hls_runtime/src/runtime/*.erl \
-    "$project_root/src/examples/regsvc/regsvc.erl" \
-    "$project_root/src/examples/phi_decoder/hls_pauli.erl" \
-    "$project_root/src/examples/phi_decoder/phi_field.erl" \
-    "$project_root/src/examples/phi_decoder/phenom_data_cell.erl" \
-    "$project_root/src/examples/phi_decoder/phenom_syndrome_cell.erl" \
-    "$project_root/src/examples/phi_decoder/phi_halo_cell.erl" \
-    "$project_root/src/examples/phi_decoder/phi_memory_boundary.erl" \
-    "$project_root/src/examples/phi_decoder/phi_memory_demo.erl" \
-    "$project_root/src/examples/phi_decoder/phi_memory_experiment.erl" \
-    "$project_root/src/examples/phi_decoder/phi_memory_runner.erl" \
-    "$project_root/src/examples/phi_decoder/phi_memory_wire.erl" \
-    "$project_root/src/examples/phi_decoder/phi_noise_topology.erl"
+    "$project_root/src/examples/regsvc/regsvc.erl"
 do
     erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" -pa "$project_root/_build/test/lib/hls_runtime/ebin" \
         -I "$project_root/include" -P -o "$stage/erl_src" "$source"

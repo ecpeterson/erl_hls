@@ -128,6 +128,21 @@ class ExecutionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing regression product"):
                 run_case("missing", case)
 
+    def test_completion_witness_requires_successful_exit_and_marker(self) -> None:
+        """A successful early simulator exit cannot pass without the expected final witness."""
+        with tempfile.TemporaryDirectory() as directory:
+            for index, (program, error) in enumerate([
+                    ("print('PASS: 8192 replies')", None),
+                    ("print('partial results')", ValueError),
+                    ("print('PASS: 8192 replies'); raise SystemExit(1)", RuntimeError)]):
+                case = Case(ROOT, Path("/unused"), Path(directory) / str(index))
+                case.command("simulation", [sys.executable, "-c", program], completion="PASS: 8192 replies")
+                if error is None:
+                    self.assertEqual("passed", run_case("completion", case)["status"])
+                else:
+                    with self.assertRaises(error):
+                        run_case("completion", case)
+
 
 class DescriptionTests(unittest.TestCase):
     """One inventory drives names/defaults; descriptions keep all selected execution boundaries explicit."""
@@ -139,7 +154,7 @@ class DescriptionTests(unittest.TestCase):
         rows = json.loads(output.getvalue())
         inventory = load_inventory()
         self.assertEqual(set(inventory["cases"]), {row["case"] for row in rows})
-        self.assertEqual(26, len(rows))
+        self.assertEqual(28, len(rows))
         self.assertEqual(1, sum(step.get("name") == "beam-compile" for row in rows for step in row["steps"]))
         self.assertTrue(any(step["kind"] == "generated_rows" for row in rows for step in row["steps"]))
         for row in rows:
@@ -177,6 +192,26 @@ class DescriptionTests(unittest.TestCase):
         regression_cases.application_frames(frames)
         self.assertEqual("frame-backpressure-debug", frames.steps[-1].name)
         self.assertIn("/stage/DebugTop-p2-ii1.v", frames.steps[-1].argv)
+
+    def test_promoted_selector_and_state_cases_keep_their_boundaries(self) -> None:
+        """Retain all four SAT comparisons and the exact state schedule/completion oracle."""
+        selector = Case(ROOT, Path("/xls"), Path("/stage"))
+        regression_cases.selection_equivalence(selector)
+        commands = [step for step in selector.steps if isinstance(step, Command)]
+        self.assertEqual({f"{form}{width}-convert" for width in (19, 22)
+            for form in ("indexed", "direct", "early")},
+            {step.name for step in commands if step.name.endswith("-convert")})
+        sat = [step for step in commands if step.name.startswith("equivalence-")]
+        self.assertEqual(4, len(sat))
+        self.assertTrue(all("sat -verify -prove trigger 0" in " ".join(step.argv) for step in sat))
+        rows = Case(ROOT, Path("/xls"), Path("/stage"))
+        regression_cases.state_updates(rows)
+        commands = {step.name: step for step in rows.steps if isinstance(step, Command)}
+        codegen = commands["state_updates-codegen"].argv
+        for flag in ("--pipeline_stages=2", "--flop_inputs=false", "--flop_outputs=true", "--reset=reset"):
+            self.assertIn(flag, codegen)
+        self.assertEqual("PASS: 8192 replies", commands["state_updates-simulate"].completion)
+        self.assertEqual((Path("/stage/state_updates.census.json"),), commands["state-census"].products)
 
 
 if __name__ == "__main__":

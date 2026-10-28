@@ -11,12 +11,6 @@ import unittest
 # Checked source artifacts are the public contract of the refresh command.
 ARTIFACTS = {
     "regsvc.x": "src/examples/regsvc/regsvc.erl.x",
-    "phi_halo_cell.x": "src/examples/phi_decoder/phi_halo_cell.erl.x",
-    "phenom_data_cell.x": "src/examples/phi_decoder/phenom_data_cell.erl.x",
-    "phenom_syndrome_cell.x": "src/examples/phi_decoder/phenom_syndrome_cell.erl.x",
-    "phi_phenom_topology.x": "src/examples/phi_decoder/phi_phenom_topology.x",
-    "phi_torus_topology.x": "src/examples/phi_decoder/phi_torus_topology.x",
-    "phi_noise_topology.x": "src/examples/phi_decoder/phi_noise_topology.x",
 }
 
 
@@ -76,12 +70,12 @@ class GoldenTests(unittest.TestCase):
             )
         self.assertFalse((self.root / "test/golden/xls_verilog.sha256").exists())
 
-    def test_missing_input_prevents_partial_update(self) -> None:
-        """Validate the complete input set before changing any checked file."""
+    def test_missing_input_preserves_checked_source(self) -> None:
+        """Missing generated input must not change the checked source."""
         checked = self.root / ARTIFACTS["regsvc.x"]
         before = checked.read_bytes()
         (self.stage / "regsvc.x").write_text("pub const VALUE = u32:2;\n")
-        (self.stage / "phi_noise_topology.x").unlink()
+        (self.stage / "regsvc.x").unlink()
         result = self.run_goldens("update")
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing generated artifact", result.stderr)

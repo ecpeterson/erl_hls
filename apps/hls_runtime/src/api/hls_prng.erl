@@ -18,7 +18,7 @@ state transition rather than a seeding policy. This generator is suitable for
 simulation fixtures and inexpensive randomized hardware behavior, not for
 cryptography.
 
-Used by the phenomenological-noise and decoder example actors. xls_type selects the compiler companion for generated operations.
+Used by source actors that need deterministic bounded pseudo-random state. xls_type selects the compiler companion for generated operations.
 """.
 
 %% Application state transition.

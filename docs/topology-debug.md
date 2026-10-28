@@ -6,15 +6,15 @@ Start with the [common inspection API](debug-targets.md). Use physical queues to
 
 ## Generate a diagnostic build
 
-Run `tools/topology_debug.py` on the application's generated RTL and RAM shell. For the D3 profile:
+Run `tools/topology_debug.py` on the application's generated RTL and RAM shell. For a generated application called `application_top`:
 
 ```sh
 compiled=$(cd "$stage/compiled" && pwd -P)
 python3 tools/topology_debug.py \
-  --top phi_decoder_profile_top --clock aclk \
+  --top application_top --clock aclk \
   --reset aresetn --reset-active-low \
   --stage "$stage/topology-debug" \
-  "$compiled/phi_decoder_profile.v" "$compiled/phi_decoder_profile_top.v" \
+  "$compiled/application.v" "$compiled/application_top.v" \
   "$compiled/hls_1r1w_ram.v"
 ```
 

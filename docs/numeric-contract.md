@@ -137,7 +137,7 @@ XLS's [floating-point add/subtract and multiply](https://google.github.io/xls/fl
 
 ### Fixed-point rounding in DSLX companions
 
-`hls_fixed::round_ratio<D>(n)` divides a signed raw integer by a positive constant, rounding to nearest with ties away from zero. `round_ratio_chunked<D, LEFT, RIGHT>(n)` has the same numerical contract and exposes smaller partial products to XLS scheduling. Positive limb widths select a hardware decomposition; they do not reduce precision or prescribe register placement, latency, or a faster clock. The phi-field companion uses 24/17-bit limbs for its division by twelve; its Erlang recurrence and the power-of-two division in the line example are unchanged.
+`hls_fixed::round_ratio<D>(n)` divides a signed raw integer by a positive constant, rounding to nearest with ties away from zero. `round_ratio_chunked<D, LEFT, RIGHT>(n)` has the same numerical contract and exposes smaller partial products to XLS scheduling. Positive limb widths select a hardware decomposition; they do not reduce precision or prescribe register placement, latency, or a faster clock. Application companions may select limb widths for their arithmetic; the compiler numeric contract does not select a decoder recurrence.
 
 ### Integer comparisons
 

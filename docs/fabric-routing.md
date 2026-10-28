@@ -28,7 +28,7 @@ Synchronous active-high reset cancels buffered words and packet ownership. Valid
 
 ## Existing compositions
 
-`test/rtl/regsvc_fabric_fixture.sv` instantiates a configurable number of independent generated register services, each with its own passive debug monitor. The default is endpoints 1 and 2; a second live test uses 2, 9, and 42. Both application and debug replies return to host endpoint zero in this fixture. The phi memory debug wrapper uses the same router with one monitor at endpoint 1. Its application gateway retains the exact-source DSLX `EndpointIngress` and compact-frame `HostRoutedTx` serializer.
+`test/rtl/regsvc_fabric_fixture.sv` instantiates a configurable number of independent generated register services, each with its own passive debug monitor. The default is endpoints 1 and 2; a second live test uses 2, 9, and 42. Both application and debug replies return to host endpoint zero in this fixture. Application-specific wrappers and gateway experiments are maintained by hls_fabric.
 
 The topology debug wrapper's `hls_debug_route` has a different ownership contract: it serializes an entire request/reply transaction and retains its caller's return route until the reply finishes. It remains appropriate for those management services. The packet mux here allows independent services to have outstanding responses concurrently; it does not supply a transaction table or copy request routes into replies automatically.
 

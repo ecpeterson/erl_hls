@@ -2,19 +2,16 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-non_reduction_statem_codegen_matches_checked_in_artifacts_test() ->
-    Sources = [
-        "src/examples/phi_decoder/phenom_data_cell.erl",
-        "src/examples/phi_decoder/phenom_syndrome_cell.erl"
-    ],
-    lists:foreach(
-        fun(Source) ->
-            {ok, Expected} = file:read_file(Source ++ ".x"),
-            Generated = iolist_to_binary(xls_parse:to_xls(Source)),
-            ?assertEqual(Expected, Generated)
-        end,
-        Sources
-    ).
+%% Direct actor byte output agrees with the retained artifact and preserves all ordered effects.
+-spec non_reduction_statem_codegen_retains_artifact_bytes_test() -> ok.
+non_reduction_statem_codegen_retains_artifact_bytes_test() ->
+    lists:foreach(fun(Source) ->
+        Artifact = xls_parse:to_artifact(Source),
+        Generated = iolist_to_binary(xls_parse:to_xls(Source)),
+        ?assertEqual(xls_emitted:bytes(Artifact), Generated),
+        ?assertNotEqual(nomatch, binary:match(Generated, <<"proc Service">>)),
+        ?assertNotEqual(nomatch, binary:match(Generated, <<"pub enum OutputPort">>))
+    end, ["test/hls_data_cell_fixture.erl", "test/hls_query_cell_fixture.erl"]).
 
 passive_state_observation_is_not_emitted_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),

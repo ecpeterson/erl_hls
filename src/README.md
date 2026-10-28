@@ -8,7 +8,7 @@ Start at `toolchain/hls_compile_cli.erl` for the command path, `toolchain/hls_co
 | [backend](backend/README.md) | XLS lowering, generated artifacts and physical representations | `xls_parse`, `xls_actor_program`, `xls_topology_dslx` |
 | [topology](topology/README.md) | Logical graph normalization and route compatibility | `hls_topology` |
 | [toolchain](toolchain/README.md) | CLI and portable source bundles | `hls_compile`, `hls_artifact_bundle` |
-| [examples](examples/README.md) | Compileable application fixtures and their host drivers | `regsvc`, `packed_samples`, phi/noise actors |
+| [examples](examples/README.md) | Compileable application fixtures and their host drivers | `regsvc`, `packed_samples`; full applications live in hls_fabric |
 | [runtime API](../apps/hls_runtime/src/api/README.md) | Actor behaviours, type providers and shared frame vocabulary | `hls_gs`, `hls_statem`, `hls_type`, `hls_frame_layout` |
 | [runtime implementation](../apps/hls_runtime/src/runtime/README.md) | CPU reference state, device sessions and host inspection | `hls_fabric`, `hls_debug` |
 

@@ -56,19 +56,6 @@ done
 "$xls_root/interpreter_main" --compare=jit --seed=1 \
     --dslx_path=. --dslx_stdlib_path="$stdlib" hls_fixed.x
 
-# The companion owns the arithmetic properties; the generated fixture checks
-# its public functions against BEAM vectors. Keep the random seed reproducible.
-for test_module in phi_field.x phi_field_test.x
-do
-    "$xls_root/interpreter_main" \
-        --dslx_path=. \
-        --dslx_stdlib_path="$stdlib" \
-        --evaluator=ir-interpreter \
-        --run_quickcheck_when_interpreting \
-        --seed=1 \
-        "$test_module"
-done
-
 python3 "$script_root/compile_xls.py" \
     "$stage/regsvc.x" "$xls_root" --output "$stage/regsvc-build"
 regsvc_build=$(cd "$stage/regsvc-build" && pwd -P)
@@ -78,8 +65,8 @@ cp "$regsvc_build/regsvc.v" regsvc.v.new
 mv regsvc.v.new regsvc.v
 
 # Compile-only conformance coverage for tuple and homogeneous-record case
-# patterns in an hls_gs callback. The phi simulation below covers integer
-# case selection in hls_statem.
+# patterns in an hls_gs callback. State-machine cases have separate local
+# feature regressions in the shared inventory.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
@@ -94,140 +81,6 @@ mv regsvc.v.new regsvc.v
     --dslx_stdlib_path="$stdlib" \
     --top=Top \
     hls_companion_gs_fixture.x > hls_companion_gs_fixture.ir
-
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_halo_cell.x > phi_halo_cell.ir
-
-"$xls_root/opt_main" phi_halo_cell.ir > phi_halo_cell.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    phi_halo_cell.opt.ir > phi_halo_cell.v
-
-# Keep independent actor codegen as a compile check. The combined frame
-# topology below imports these DSLX modules and generates one collision-free
-# RTL graph rather than composing their separately generated Verilog.
-for actor in phenom_data_cell phenom_syndrome_cell; do
-    "$xls_root/ir_converter_main" \
-        --warnings_as_errors=false \
-        --dslx_path=. \
-        --dslx_stdlib_path="$stdlib" \
-        --top=Top \
-        "$actor.x" > "$actor.ir"
-
-    "$xls_root/opt_main" "$actor.ir" > "$actor.opt.ir"
-
-    "$xls_root/codegen_main" \
-        --pipeline_stages=1 \
-        --delay_model=unit \
-        --use_system_verilog=false \
-        --reset=reset \
-        --fifo_module= \
-        "$actor.opt.ir" > "$actor.v"
-done
-
-iverilog \
-    -g2012 \
-    -s phenom_data_cell_tb \
-    -o phenom_data_cell.vvp \
-    phenom_data_cell_tb.sv \
-    phenom_data_cell.v
-
-vvp phenom_data_cell.vvp
-
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_phenom_topology.x > phi_phenom_topology.ir
-
-"$xls_root/opt_main" \
-    phi_phenom_topology.ir > phi_phenom_topology.opt.ir
-
-# All generated topology codegen below follows this policy. Compact family
-# lanes require producer output flops as their bounded holding slots; other
-# topologies retain explicit link FIFOs. Avoid duplicate consumer input queues.
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    phi_phenom_topology.opt.ir > phi_phenom_topology.v
-
-# The regular torus source retains one family node and elaboration-time loops;
-# this compile/codegen check proves the pinned XLS build accepts its channel
-# arrays, statically indexed polling merge, and wrapped node wiring.
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_torus_topology.x > phi_torus_topology.ir
-
-"$xls_root/opt_main" \
-    phi_torus_topology.ir > phi_torus_topology.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    phi_torus_topology.opt.ir > phi_torus_topology.v
-
-iverilog \
-    -g2012 \
-    -s phi_torus_topology_tb \
-    -o phi_torus_topology.vvp \
-    phi_torus_topology_tb.sv \
-    phi_torus_topology.v
-
-vvp phi_torus_topology.vvp
-
-# Elaborate the checked distance-three graph to IR so distinct cross-family
-# shifts and wrapping are accepted by the pinned XLS build. The opt-in
-# run_phi_noise_topology_sim.sh handles full distance-three RTL simulation;
-# this routine regression keeps the cheaper distance-one smoke below.
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_noise_topology.x > phi_noise_topology.ir
-
-iverilog \
-    -g2012 \
-    -s phi_halo_cell_tb \
-    -o phi_halo_cell.vvp \
-    phi_halo_cell_tb.sv \
-    phi_halo_cell.v
-
-vvp phi_halo_cell.vvp
-
-iverilog \
-    -g2012 \
-    -s phi_phenom_topology_tb \
-    -o phi_phenom_topology.vvp \
-    phi_phenom_topology_tb.sv \
-    phi_phenom_topology.v
-
-vvp phi_phenom_topology.vvp
 
 # A small observable fixture distinguishes source action order from the actor's
 # declared port order and holds the shared external lane under backpressure.

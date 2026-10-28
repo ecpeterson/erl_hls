@@ -28,12 +28,12 @@ The BEAM mailbox is upstream of this bounded queue and can also contain control 
 
 Actor state uses the existing `hls_statem:info`/`sys:get_state` path and is observed between callbacks. It requires that the actor return control to its runtime. A query for only `beam_message_queue_len` uses native process inspection and does not wait for the callback. If both are requested, the state and BEAM queue are sampled separately. `info/3` supplies a timeout for state and hardware queries; the default is five seconds. A missing process yields `undefined`, and an inspection timeout yields `{error, timeout}`. Native process inspection uses the BIF's own behavior rather than that timeout.
 
-The phi-memory CPU fabric exposes its logical actor bindings directly:
+A CPU deployment supplies a retained logical topology and an explicit process map:
 
 ```erlang
-Catalog = phi_memory_cpu_fabric:debug_targets(Fabric),
+Catalog = hls_debug_catalog:cpu(Plan, Processes),
 Ids = hls_debug_catalog:actors(Catalog),
-{ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
+{ok, Actor} = hls_debug_catalog:actor(Catalog, {family, workers, [0, 0]}),
 hls_debug:info(Actor, [identity, placement, message_queue_len, postponed]).
 ```
 

@@ -92,13 +92,15 @@ def run_case(name: str, case: Case) -> dict:
                     directory.mkdir(parents=True, exist_ok=True)
                 executor.save(log / "command.json", {"argv": argv, "cwd": str(case.root),
                     "stdout": str(stdout), "timeout": step.timeout, "rejection": step.rejection,
-                    "products": list(map(str, step.products))})
+                    "products": list(map(str, step.products)), "completion": step.completion})
                 print(f"{name}: {label}", flush=True)
                 row["metrics"] = executor.run(argv, log, str(stdout), step.timeout,
                     cwd=case.root, allow_empty=not step.nonempty, expect_failure=step.rejection)
                 for product in step.products:
                     if not product.is_file() or not product.stat().st_size:
                         raise ValueError(f"missing regression product: {product}")
+                if step.completion is not None and step.completion not in stdout.read_text(errors="replace"):
+                    raise ValueError(f"missing regression completion witness: {step.completion}")
                 row["stdout"] = str(stdout)
                 row["expected_rejection"] = step.rejection is not None
             row["status"] = "passed"

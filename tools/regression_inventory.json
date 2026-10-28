@@ -175,6 +175,13 @@
         "test_data/hls_statem_reduction_semantics.inc.x"
       ]
     },
+    "selection_equivalence": {
+      "group": "test",
+      "default_stage": "_build/selection_equivalence",
+      "dependencies": [
+        "test_data/xls_selection.x"
+      ]
+    },
     "serial": {
       "group": "test",
       "default_stage": "_build/serial",
@@ -196,6 +203,14 @@
       "default_stage": "_build/source_context",
       "dependencies": [
         "test/hls_source_dslx.erl"
+      ]
+    },
+    "state_updates": {
+      "group": "test",
+      "default_stage": "_build/state_updates",
+      "dependencies": [
+        "test/rtl/xls_state_updates_tb.sv",
+        "test_data/xls_state_updates.x"
       ]
     },
     "statem_gathers": {

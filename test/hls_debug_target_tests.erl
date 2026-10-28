@@ -2,6 +2,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -export([init/1, waiting/3]).
 
+%% Checks beam queue is distinct from actor mailbox.
+-spec beam_queue_is_distinct_from_actor_mailbox_test() -> ok.
 beam_queue_is_distinct_from_actor_mailbox_test() ->
     {ok, Pid} = hls_statem:start_link(?MODULE, self(),
         [{mailbox_capacity, 4}, {outputs, #{}}]),
@@ -34,7 +36,11 @@ beam_queue_is_distinct_from_actor_mailbox_test() ->
     ?assertEqual(undefined, hls_debug:info(Pid, message_queue_len)),
     ?assertEqual(undefined, hls_debug:info({hls_statem, Pid}, message_queue_len)).
 
+-doc "Retains the test owner for the deliberately blocking callback.".
+-spec init(pid()) -> {ok, waiting, pid()}.
 init(Owner) -> {ok, waiting, Owner}.
+-doc "Postpones or blocks only on the explicit test messages.".
+-spec waiting(enter | cast, term(), pid()) -> tuple().
 waiting(enter, _, Owner) -> {Owner, []};
 waiting(cast, postponed, Owner) -> {waiting, Owner, postpone};
 waiting(cast, block, Owner) ->
@@ -44,36 +50,38 @@ waiting(cast, block, Owner) ->
 %% Checks shared boundary requires explicit selection.
 -spec shared_boundary_requires_explicit_selection_test() -> 'ok'.
 shared_boundary_requires_explicit_selection_test() ->
-    {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+    {ok, Fabric} = hls_fabric_test_wire:start_link(),
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 1}),
     try
         Boundary = {boundary, Client, host_stream},
-        Plan = hls_topology:from_module(phi_noise_topology),
+        Plan = hls_topology:from_module(hls_grid_topology_fixture),
         Catalog = hls_debug_catalog:hardware(Plan,
             #{ }, [Boundary]),
-        {ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
+        {ok, Actor} = hls_debug_catalog:actor(Catalog, {family, grid, [0, 0]}),
         {scope, Scope} = hls_debug:info(Actor, scope),
         ?assertEqual({error, {unsupported_operation, Scope, get_trace}}, hls_debug:get_trace(Actor)),
         ?assertEqual({error, {unsupported_operation, Scope, get_counters}}, hls_debug:get_counters(Actor)),
         ?assertEqual({error, {unsupported_items, Scope, [message_queue_len]}},
             hls_debug:info(Actor, message_queue_len)),
-        ?assertEqual([], phi_memory_fabric_fixture:sends(Fabric)),
+        ?assertEqual([], hls_fabric_test_wire:sends(Fabric)),
         ?assertEqual({boundaries, [Boundary]}, hls_debug:info(Actor, boundaries)),
         %% Rejecting an actor-level trace must not drain the shared bank.
         Parent = self(),
         spawn_link(fun() -> Parent ! {trace, hls_debug:get_trace(Boundary)} end),
-        [{{0, 1}, {3, Tx, 0}, <<>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
-        ok = phi_memory_fabric_fixture:deliver(Fabric, {1, 0}, {16#83, Tx, 0},
+        [{{0, 1}, {3, Tx, 0}, <<>>}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
+        ok = hls_fabric_test_wire:deliver(Fabric, {1, 0}, {16#83, Tx, 0},
             <<2:32/little, 3:32/little, 1:32/little, 0:32/little, 0:32/little, 0:32/little,
                 123:32/little, 0:32/little, 7:8, 42:8, 1:8, 1:8>>),
         receive {trace, {ok, Trace}} ->
             ?assertEqual(#{kind => boundary, id => host_stream}, maps:get(scope, Trace)),
             ?assertMatch([#{cycle := 123, kind := application_rx, tx_id := 42}], maps:get(events, Trace))
         after 1000 -> error(no_trace) end
-    after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.
+    after hls_debug:stop(Client), hls_fabric_test_wire:stop(Fabric) end.
 
+%% Checks resource items use one hardware sample.
+-spec resource_items_use_one_hardware_sample_test() -> ok.
 resource_items_use_one_hardware_sample_test() ->
-    {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+    {ok, Fabric} = hls_fabric_test_wire:start_link(),
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
     try
         Resource = #{<<"kind">> => <<"fifo">>, <<"id">> => 0, <<"name">> => <<"queue">>,
@@ -83,22 +91,22 @@ resource_items_use_one_hardware_sample_test() ->
         {scope, Scope} = hls_debug:info(Target, scope),
         ?assertEqual({error, {unsupported_items, Scope, [message_queue_len]}},
             hls_debug:info(Target, message_queue_len)),
-        ?assertEqual([], phi_memory_fabric_fixture:sends(Fabric)),
+        ?assertEqual([], hls_fabric_test_wire:sends(Fabric)),
         Parent = self(),
         spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target, [cycle, occupancy, free_slots, capacity, occupancy])} end),
-        [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
-        ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
+        [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
+        ok = hls_fabric_test_wire:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
             <<0:32/little, 33:64/little, 3:128/little>>),
         receive {sample, Values} ->
             ?assertEqual([{cycle, 33}, {occupancy, 3}, {free_slots, 1}, {capacity, 4}, {occupancy, 3}], Values)
         after 1000 -> error(no_sample) end,
-        ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric)))
-    after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.
+        ?assertEqual(1, length(hls_fabric_test_wire:sends(Fabric)))
+    after hls_debug:stop(Client), hls_fabric_test_wire:stop(Fabric) end.
 
 %% Checks actor items use one hardware sample.
 -spec actor_items_use_one_hardware_sample_test() -> 'ok'.
 actor_items_use_one_hardware_sample_test() ->
-    {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+    {ok, Fabric} = hls_fabric_test_wire:start_link(),
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
     try
         R = #{<<"kind">> => <<"actor">>, <<"id">> => 0, <<"name">> => <<"actor">>,
@@ -109,8 +117,8 @@ actor_items_use_one_hardware_sample_test() ->
         Parent = self(),
         spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target,
             [phase, initialized, enter_pending, failed, failure, cycle, message_queue_len, postponed, free_slots])} end),
-        [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
-        ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
+        [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
+        ok = hls_fabric_test_wire:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
             <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#800102:32/little, 0:64>>),
         receive {sample, Values} ->
             ?assertEqual([{phase, active}, {initialized, true}, {enter_pending, false},
@@ -119,5 +127,5 @@ actor_items_use_one_hardware_sample_test() ->
         after 1000 -> error(no_sample) end,
         {ok, Resource} = hls_topology_debug:resource(Session, 0),
         ?assertMatch({error, {unsupported_operation, _, inspect_waits}}, hls_debug:inspect_waits(Resource, #{})),
-        ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric)))
-    after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.
+        ?assertEqual(1, length(hls_fabric_test_wire:sends(Fabric)))
+    after hls_debug:stop(Client), hls_fabric_test_wire:stop(Fabric) end.
