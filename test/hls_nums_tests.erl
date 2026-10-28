@@ -44,8 +44,10 @@ integer_boundaries_test_() ->
     [integer_boundaries(Type, Width, -(1 bsl (Width - 1)),
         (1 bsl (Width - 1)) - 1) || {Type, Width} <- Signed].
 
+%% Build a named codec witness at the accepted endpoints and immediately outside them.
+-spec integer_boundaries(hls_type:descriptor(), pos_integer(), integer(), integer()) -> {string(), fun(() -> ok)}.
 integer_boundaries(Type, Width, Minimum, Maximum) ->
-    {lists:flatten(hls_type:print_type(Type)), fun() ->
+    {lists:flatten(xls_type:print_type(Type)), fun() ->
         lists:foreach(fun(Value) ->
             Packed = hls_type:pack(Value, Type),
             ?assertEqual(Width, bit_size(Packed)),
@@ -66,10 +68,12 @@ numeric_wire_bytes_test() ->
     ?assertEqual(<<0, 0, 0, 0, 0, 0, 240, 63>>,
         hls_type:pack(1.0, hls_nums:float64())).
 
+%% Parameterized widths agree between runtime descriptors and compiler type spelling.
+-spec variable_unsigned_type_test() -> ok.
 variable_unsigned_type_test() ->
     Type = hls_nums:uN(96),
     ?assertEqual(96, hls_type:width(Type)),
-    ?assertEqual("uN[96]", lists:flatten(hls_type:print_type(Type))),
+    ?assertEqual("uN[96]", lists:flatten(xls_type:print_type(Type))),
     ?assertEqual(0, hls_type:zero(Type)).
 
 variable_unsigned_round_trip_test() ->

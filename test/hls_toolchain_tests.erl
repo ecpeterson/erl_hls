@@ -72,7 +72,7 @@ frame_support_test() ->
         Layout = hls_frame_layout:new(Words),
         _ = hls_compile:support(Root, [], Layout),
         {ok, Config} = file:read_file(filename:join(Root, "support/compiler/xls/lib/frame_config.x")),
-        ?assertEqual(iolist_to_binary(hls_frame_layout:config_dslx(Layout)), Config),
+        ?assertEqual(iolist_to_binary(xls_frame_layout:config(Layout)), Config),
         ok = file:write_file(filename:join(Root, "source-build.json"), <<"{}">>, [exclusive]),
         ?assertError({published_bundle, Root}, hls_compile:configure_support(Root, Layout))
     end, [1, 3]),

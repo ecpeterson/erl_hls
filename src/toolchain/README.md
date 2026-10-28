@@ -4,4 +4,4 @@
 
 `hls_artifact_bundle` owns fresh output directories, support-tree snapshots and the hashed `source-build.json` manifest. The emitter supplies literal codegen flags and descriptive metadata; this packaging layer does not select placement or run external tools. The separate `priv/tools/compile_source_build.py` driver consumes the published bundle.
 
-Compiler passes belong to [frontend](../frontend/README.md) or [backend](../backend/README.md), not the CLI. Runtime sessions belong to `runtime/`. Keep option parsing and diagnostics reusable without coupling them to a particular application or deployment.
+Compiler passes belong to [frontend](../frontend/README.md) or [backend](../backend/README.md), not the CLI. Runtime sessions and shared structured diagnostics belong to the [hls_runtime library](../../apps/hls_runtime/README.md). Keep option parsing and diagnostics reusable without coupling them to a particular application or deployment.

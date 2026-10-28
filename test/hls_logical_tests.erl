@@ -35,12 +35,14 @@ padding_is_not_value_test() ->
         ?assertEqual({Byte bsr 7 =:= 1, <<>>}, hls_type:unpack(<<Byte>>, hls_bits:padded(hls_bool:bool(), 8)))
     end, lists:seq(0, 255)).
 
+%% Boolean host values retain one-bit encoding and reject numeric lookalikes.
+-spec boolean_test() -> [ok].
 boolean_test() ->
     Type = hls_bool:bool(),
     ?assertEqual(1, hls_type:value_width(Type)),
     ?assertEqual(1, hls_type:width(Type)),
     ?assertEqual(false, hls_type:zero(Type)),
-    ?assertEqual("bool", hls_type:print_type(Type)),
+    ?assertEqual("bool", xls_type:print_type(Type)),
     ?assertEqual(<<0:1>>, hls_type:pack_exact(false, Type)),
     ?assertEqual(<<1:1>>, hls_type:pack_exact(true, Type)),
     [?assertError(badarg, hls_type:pack(Value, Type)) || Value <- [0, 1, undefined, <<1>>]].

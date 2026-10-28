@@ -9,11 +9,11 @@ unsigned_encoding_test() ->
         {xls_named_bits:local('Members', 9), 9, <<"Members">>},
         {xls_named_bits:qualified(hls_failure, 'Code', 16), 16, <<"hls_failure::Code">>}],
     lists:foreach(fun({Type, Width, Name}) ->
-        ?assertEqual(Name, iolist_to_binary(hls_type:print_type(Type))),
+        ?assertEqual(Name, iolist_to_binary(xls_type:print_type(Type))),
         ?assertEqual(Width, hls_type:width(Type)),
         ?assertEqual(Width, hls_type:value_width(Type)),
         ?assertEqual(0, hls_type:zero(Type)),
-        ?assertEqual(bit_cast, hls_type:dslx_codec(Type)),
+        ?assertEqual(bit_cast, xls_type:dslx_codec(Type)),
         lists:foreach(fun(Value) ->
             Packed = <<Value:Width/little>>,
             ?assertEqual(Packed, hls_type:pack_exact(Value, Type)),

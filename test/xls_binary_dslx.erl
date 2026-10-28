@@ -70,6 +70,7 @@ testbench(Expected) ->
 
 %% Check both codec directions against BEAM independently; a pair of inverse
 %% mistakes must not pass merely because encode(decode(x)) returns x.
+-spec codecs(file:filename_all()) -> ok.
 codecs(Stage) ->
     Widths = [0, 1, 3, 7, 8, 9, 13, 16, 17, 23, 24, 31, 32, 33, 65, 127],
     Values = [0, 1, 16#ffffffffffffffffffffffffffffffff,
@@ -82,8 +83,8 @@ codecs(Stage) ->
     Text = ["import hls_bits;\npub fn codec_probe(raw: bits[128], kind: u8) -> bits[256] {\nmatch kind {\n",
         [begin
             T = hls_bits:bits(W), Part = ["raw[0+:bits[", integer_to_list(W), "]]"] ,
-            ["u8:", integer_to_list(I), " => {\nlet decoded = ", hls_type:dslx_from_bits(T, Part),
-                ";\nlet encoded = ", hls_type:dslx_to_bits(T, ["(", Part, ",)"]),
+            ["u8:", integer_to_list(I), " => {\nlet decoded = ", xls_type:dslx_from_bits(T, Part),
+                ";\nlet encoded = ", xls_type:dslx_to_bits(T, ["(", Part, ",)"]),
                 ";\n(decoded.0 as bits[128]) ++ (encoded as bits[128]) },\n"]
         end || {I,W} <- lists:enumerate(0, Widths)],
         "_ => bits[256]:0\n}\n}\n#[test]\nfn host_codec_directions() {\n",

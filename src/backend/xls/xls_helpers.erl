@@ -258,7 +258,7 @@ type(
 type({remote_type, _, _} = Type, _Context, Origin) ->
     try
         Descriptor = hls_type:descriptor(Type),
-        _ = hls_type:print_type(Descriptor),
+        _ = xls_type:print_type(Descriptor),
         {provider, Descriptor}
     catch
         error:Reason -> error({unsupported_xls_helper_type, Origin, Type, Reason})

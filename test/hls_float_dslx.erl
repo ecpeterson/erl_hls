@@ -29,9 +29,9 @@ write(Stage) ->
             xls_clause_lower:clause_outcome(Clause, ["x", "y"], state, #{}),
         ok = file:write_file(filename:join(Stage, Name ++ ".x"),
             ["import hls_bits;\nimport apfloat;\nimport hls_float;\nimport hls_failure;\n",
-                "pub fn probe(x: ", hls_type:print_type(ArgumentType), ", y: ",
-                hls_type:print_type(ArgumentType), ") -> ",
-                hls_type:print_type(hls_nums:float16()), " {\n",
+                "pub fn probe(x: ", xls_type:print_type(ArgumentType), ", y: ",
+                xls_type:print_type(ArgumentType), ") -> ",
+                xls_type:print_type(hls_nums:float16()), " {\n",
                 xls_clause_lower:print([Body, Result]), "\n}\n"])
     end, [{"integer_operator", hls_nums:float16(), "X + Y"},
         {"wrong_precision", hls_nums:float32(), "hls_float:add(hls_nums:float16(), X, Y)"},
@@ -47,11 +47,11 @@ probe(Type = {hls_type, _, Name, []}, Op) ->
     W = hls_type:width(Type),
     #{body := Body, result := Result, failure := Failure} =
         xls_clause_lower:clause_outcome(Clause,
-            [hls_type:dslx_from_bits(Type, "x"), hls_type:dslx_from_bits(Type, "y")], state, #{}),
+            [xls_type:dslx_from_bits(Type, "x"), xls_type:dslx_from_bits(Type, "y")], state, #{}),
     Encoded = case Op of
         eq -> ["(", Result, ") as uN[", integer_to_list(W), "]"];
         lt -> ["(", Result, ") as uN[", integer_to_list(W), "]"];
-        _ -> hls_type:dslx_to_bits(Type, Result)
+        _ -> xls_type:dslx_to_bits(Type, Result)
     end,
     ["pub fn ", atom_to_list(Op), "(x: uN[", integer_to_list(W), "], y: uN[",
         integer_to_list(W), "]) -> (uN[", integer_to_list(W), "], bool) {\n",
@@ -124,12 +124,12 @@ collections(Type = {hls_type, _, Name, []}) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     #{body := Body, result := Result} = xls_clause_lower:clause_outcome(Clause,
-        [hls_type:dslx_from_bits(ListType, "raw"), "start", "count"], state, #{}),
+        [xls_type:dslx_from_bits(ListType, "raw"), "start", "count"], state, #{}),
     {Tiny, <<>>} = hls_type:unpack(<<1:W/little>>, Type),
     Values = [1.5, -Tiny, -0.0],
     Raw = binary:decode_unsigned(hls_type:pack(Values, ListType), little),
     [io_lib:format("fn slice(raw: uN[~p], start: u32, count: u32) -> uN[~p] {\n", [3*W, 3*W]),
-        xls_clause_lower:print([Body, hls_type:dslx_to_bits(ListType, Result)]), "\n}\n",
+        xls_clause_lower:print([Body, xls_type:dslx_to_bits(ListType, Result)]), "\n}\n",
         "#[test]\nfn float_collections() {\n",
         [begin
             Expected = binary:decode_unsigned(hls_type:pack(

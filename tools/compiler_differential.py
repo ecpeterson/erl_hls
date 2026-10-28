@@ -82,6 +82,7 @@ class Runner:
         shutil.copytree(ROOT / "priv/xls/lib", self.library, dirs_exist_ok=True)
         files = [*self.library.glob("*.x"), *self.xls.glob("xls/dslx/stdlib/**/*.x"),
                  *ROOT.glob("_build/test/lib/erl_hls/ebin/*.beam"),
+                 *ROOT.glob("_build/test/lib/hls_runtime/ebin/*.beam"),
                  ROOT / "_build/test/lib/erl_hls/test/xls_differential_worker.beam",
                  Path(__file__), Path(cases.__file__), ROOT / "test/xls_differential_worker.erl"]
         version = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
@@ -105,7 +106,7 @@ class Runner:
                                       "signed": signed, "inputs": p["inputs"]})
         write_json(stage / "request.json", request)
         commands = [
-            ("lower", ["erl", "-noshell", "-pa", ROOT / "_build/test/lib/erl_hls/ebin",
+            ("lower", ["erl", "-noshell", "-pa", ROOT / "_build/test/lib/erl_hls/ebin", ROOT / "_build/test/lib/hls_runtime/ebin",
                        ROOT / "_build/test/lib/erl_hls/test", "-s", "xls_differential_worker", "main",
                        "-extra", stage / "request.json"]),
             ("dslx", [self.xls / "interpreter_main", "--compare=jit", *self.options(), stage / "probe.x"])]

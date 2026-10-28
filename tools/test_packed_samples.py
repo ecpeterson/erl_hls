@@ -41,7 +41,7 @@ def run(rtl, stage):
                 time.sleep(0.02)
             with (stage / 'host.log').open('w') as host:
                 result = subprocess.run(['erl', '-noshell', '-pa',
-                    str(ROOT / '_build/test/lib/erl_hls/ebin'), str(ROOT / '_build/test/lib/erl_hls/test'),
+                    str(ROOT / '_build/test/lib/erl_hls/ebin'), str(ROOT / '_build/test/lib/hls_runtime/ebin'), str(ROOT / '_build/test/lib/erl_hls/test'),
                     '-eval', 'ok = packed_samples_live:run(hd(init:get_plain_arguments())), halt().',
                     '-extra', str(stage)], cwd=stage, stdout=host, stderr=subprocess.STDOUT, timeout=120)
             if result.returncode:

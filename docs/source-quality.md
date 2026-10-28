@@ -1,6 +1,6 @@
 # Source quality checks
 
-Use OTP 28.0.2 and rebar3 3.24.0. Production Erlang under `src/` and headers under `include/` use the pinned erlfmt project plugin (v1.8.0) with a 100-column limit. Run `rebar3 fmt` before review and `rebar3 fmt --check` to check the canonical form. Test and semantic fixture layout is outside that formatting scope.
+Use OTP 28.0.2 and rebar3 3.24.0. Production Erlang under `src/` and `apps/*/src/`, and headers under `include/` use the pinned erlfmt project plugin (v1.8.0) with a 100-column limit. Run `rebar3 fmt` before review and `rebar3 fmt --check` to check the canonical form. Test and semantic fixture layout is outside that formatting scope.
 
 Run the source-contract and type checks as well:
 
@@ -21,3 +21,7 @@ Erlang source moves retain inherited gaps only when one literal `-module` identi
 CI cannot assess whether prose is useful or a spec is truthful. Review changed contracts against [STYLE.md](../STYLE.md); favor short behavioral descriptions over implementation narratives. Keep working notes in `yap/`.
 
 Native `-doc`/`-moduledoc` attributes are available through `code:get_doc/1` and Erlang shell help. For HTML generation, use [ExDoc](https://www.erlang.org/doc/system/documentation.html#using-exdoc-to-generate-html-epub-documentation): EDoc in the pinned OTP release reads comment tags instead. `-moduledoc false` hides the entire module from ExDoc, while its function docs remain in the BEAM chunk for source/shell use. Internal exports still require contracts; hiding a module does not waive the audit. There is not yet a generated HTML documentation build.
+
+## Package boundaries
+
+After compilation, run `python3 tools/test_package_boundaries.py` and `python3 tools/check_package_boundaries.py --runtime hls_runtime`. The source-quality workflow runs both after Dialyzer. The shared auditor rejects direct BEAM imports, remote type references and declared application dependencies from runtime applications into compiler/build applications. For a supplied runtime release it also checks application and individual BEAM ownership, so moving a compiler module into a runtime package cannot hide it. These static checks do not infer targets of arbitrary dynamic calls; runtime-only behavior tests exercise supported retained-codec and session paths.

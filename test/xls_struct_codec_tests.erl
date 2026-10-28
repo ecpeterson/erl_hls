@@ -16,7 +16,7 @@ typed_layout_policies_test() ->
         #{name => count, type => Count, prefix => 8, width => 9}],
     lists:foreach(fun(Encoding) ->
         ?assertEqual(#{encoding => Encoding, width => 17, fields => Expected},
-            xls_struct_codec:layout(Fields, Encoding))
+            hls_field_layout:layout(Fields, Encoding))
     end, [stream, lsb]),
     ok.
 
@@ -25,10 +25,10 @@ typed_layout_policies_test() ->
 zero_width_layout_test() ->
     lists:foreach(fun(Encoding) ->
         ?assertEqual(#{encoding => Encoding, width => 0, fields => []},
-            xls_struct_codec:layout([], Encoding)),
+            hls_field_layout:layout([], Encoding)),
         Type = hls_bits:bits(0),
         ?assertEqual(#{encoding => Encoding, width => 0,
             fields => [#{name => empty, type => Type, prefix => 0, width => 0}]},
-            xls_struct_codec:layout([{empty, Type}], Encoding))
+            hls_field_layout:layout([{empty, Type}], Encoding))
     end, [stream, lsb]),
     ok.

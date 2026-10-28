@@ -6,6 +6,14 @@ Actors use `hls_gs` or `hls_statem` callbacks, typed records and bounded mailbox
 
 Start with the [documentation guide](docs/README.md), [register-service example](src/examples/regsvc/regsvc.erl), or [phi/noise example](src/examples/phi_decoder/phi_phenom_topology.md).
 
+## Packages
+
+This repository builds two library applications. `erl_hls` owns the compiler, parse transform and toolchain assets; [`hls_runtime`](apps/hls_runtime/README.md) owns type providers, retained codecs, CPU actors and device sessions. The compiler depends on the runtime library. Deployed applications can use compiled actors and retained bindings without shipping compiler implementation.
+
+Neither library starts an application supervisor. Actors and sessions have explicit lifecycle APIs; supervised applications decide how to own them. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
+
+`rebar3 compile` builds both locally. Git consumers select root `erl_hls` and `hls_runtime` from `apps/hls_runtime` using `git_subdir` at the same revision; dependency fetching does not discover sibling applications automatically. Runtime deployments depend on `hls_runtime` alone. The compiler CLI release includes the complete compiler and source assets.
+
 ## Build and check
 
 Use OTP 28 and rebar3. The [standalone toolchain](docs/toolchain.md) packages `hlsc` for actor-to-DSLX compilation and an optional independent XLS driver:

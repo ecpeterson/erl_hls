@@ -48,8 +48,10 @@ wide_formats_wire_round_trip_test_() ->
     [wire_patterns(hls_nums:float32(), 32, 8, 23),
         wire_patterns(hls_nums:float64(), 64, 11, 52)].
 
+%% Build a named witness over exponent/sign boundaries and deterministic bit patterns.
+-spec wire_patterns(hls_type:descriptor(), pos_integer(), pos_integer(), pos_integer()) -> {string(), fun(() -> ok)}.
 wire_patterns(Type, Width, ExponentBits, FractionBits) ->
-    {lists:flatten(hls_type:print_type(Type)), fun() ->
+    {lists:flatten(xls_type:print_type(Type)), fun() ->
         %% Visit every exponent, both signs, and fraction boundaries. A fixed
         %% pattern generator supplements those boundaries without flaky seeds.
         MaxExponent = (1 bsl ExponentBits) - 1,
@@ -76,8 +78,10 @@ rounding_and_underflow_test_() ->
     [rounding(hls_nums:float16(), 10, -14, 0.0999755859375),
         rounding(hls_nums:float32(), 23, -126, 0.10000000149011612)].
 
+%% Check rounding, underflow and exact-packing rejection at one declared float format.
+-spec rounding(hls_type:descriptor(), pos_integer(), integer(), float()) -> {string(), fun(() -> ok)}.
 rounding(Type, FractionBits, MinimumExponent, Tenth) ->
-    {lists:flatten(hls_type:print_type(Type)), fun() ->
+    {lists:flatten(xls_type:print_type(Type)), fun() ->
         Step = math:pow(2, -FractionBits),
         Halfway = 1.0 + Step / 2,
         JustAbove = Halfway + math:pow(2, -52),

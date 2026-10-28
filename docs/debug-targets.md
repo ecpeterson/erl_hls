@@ -49,7 +49,7 @@ Hardware actors need the optional [register-backed actor provider](topology-debu
 
 ## Hardware actors and monitored boundaries
 
-Generate actor observations with `direct_actor_debug => true`, instrument the RTL using its actor projection, and open a verified topology session. Bind logical actors with `hls_debug_catalog:hardware(Plan, #{}, Boundaries, Session)`. The empty placement map selects dedicated actors. The catalog rejects a mismatched projection or resource manifest before querying.
+Generate actor observations with `direct_actor_debug => true`, instrument the RTL using its actor projection, and open a verified topology session. Bind logical actors with `xls_actor_debug:catalog(Plan, Boundaries, Session)`. The empty placement map selects dedicated actors. The catalog rejects a mismatched projection or resource manifest before querying.
 
 `phase` is the Erlang phase atom. Requested fields share one sample. Before the first state publication, `initialized = false` and the phase, failure and reduction fields are `undefined`. CPU failure ordinarily terminates the process; hardware retains a failure latch.
 

@@ -14,5 +14,9 @@ width(vector, []) -> hls_type:width(wire()).
 zero(vector, []) -> hls_type:zero(wire()).
 pack(Value, vector, []) -> hls_type:pack(Value, wire()).
 unpack(Bits, vector, []) -> hls_type:unpack(Bits, wire()).
-print_type(vector, []) -> hls_type:print_type(wire()).
-transpile(F, Args, Types) -> hls_vec:transpile(F, Args, Types).
+-doc "Renders the fixture wire shape through the built-in compiler provider.".
+-spec print_type(vector, []) -> xls_dslx:value().
+print_type(vector, []) -> xls_type:print_type(wire()).
+-doc "Delegates fixture vector operations through normal compiler provider dispatch.".
+-spec transpile(vector | nth | set | dot, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_type:result().
+transpile(F, Args, Types) -> xls_type:transpile(hls_vec, F, Args, Types).

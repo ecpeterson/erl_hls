@@ -55,3 +55,7 @@ jobs:
           key: dialyzer-${{ runner.os }}-${{ runner.arch }}-28.0.2-${{ hashFiles('rebar.lock', '**/rebar.config') }}
       - name: Check inferred types
         run: rebar3 dialyzer
+      - name: Enforce runtime package boundaries
+        run: |
+          python3 tools/test_package_boundaries.py
+          python3 tools/check_package_boundaries.py --runtime hls_runtime

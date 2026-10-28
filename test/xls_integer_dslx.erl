@@ -47,8 +47,8 @@ function(Constructor, Type, Op) ->
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     W = hls_type:value_width(Type),
     #{body := Body, result := Result, failed := Failed} = xls_clause_lower:clause_outcome(
-        Clause, [["(x as ", hls_type:print_type(Type), ")"],
-                 ["(y as ", hls_type:print_type(Type), ")"]], state, #{}),
+        Clause, [["(x as ", xls_type:print_type(Type), ")"],
+                 ["(y as ", xls_type:print_type(Type), ")"]], state, #{}),
     Function = case Op of 'div' -> "quotient"; 'rem' -> "remainder" end,
     [io_lib:format("fn ~s(x: uN[~p], y: uN[~p]) -> (uN[~p], bool) {\n", [Function, W, W, W]),
         xls_clause_lower:print(Body), "let failed = ", xls_clause_lower:print(Failed), ";\n",

@@ -71,7 +71,10 @@ pattern_uses(List) when is_list(List) -> lists:append([pattern_uses(P) || P <- L
 pattern_uses(_) ->
     [].
 
-imports(Module, Names) ->
+%% Resolve built-in compiler companions without changing custom provider names.
+-spec imports(module(), [atom()]) -> [atom()].
+imports(SourceModule, Names) ->
+    Module = xls_type:provider(SourceModule),
     _ = code:ensure_loaded(Module),
     case erlang:function_exported(Module, dslx_imports, 1) of
         true ->

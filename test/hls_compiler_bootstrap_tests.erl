@@ -6,8 +6,12 @@
 -spec isolated_interface_test() -> ok.
 isolated_interface_test() ->
     {ok, Config} = file:consult("rebar.config"),
+    %% Runtime is a complete dependency application before any compiler bootstrap file.
+    {ok, [{application, hls_runtime, Runtime}]} = file:consult(
+        filename:join([code:lib_dir(hls_runtime), "ebin", "hls_runtime.app"])),
     Modules = [list_to_atom(filename:basename(Path, ".erl"))
-        || Path <- proplists:get_value(erl_first_files, Config)],
+        || Path <- proplists:get_value(erl_first_files, Config)] ++
+        proplists:get_value(modules, Runtime),
     Directory = filename:absname(filename:join("_build", "compiler-bootstrap-" ++
         integer_to_list(erlang:unique_integer([positive])))),
     ok = filelib:ensure_dir(filename:join(Directory, "placeholder")),

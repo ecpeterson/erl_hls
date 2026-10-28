@@ -30,7 +30,7 @@ write(Stage) ->
 %% Every consumer uses the public numeric layout and independently named codecs.
 -spec codecs(string(), string(), hls_record:fields(), stream | lsb) -> iodata().
 codecs(Type, Stem, Fields, Order) ->
-    Layout = xls_struct_codec:layout(Fields, Order),
+    Layout = hls_field_layout:layout(Fields, Order),
     [xls_struct_codec:declaration(Type, Layout), "\n",
         xls_struct_codec:encoder(Type, "bits_from_" ++ Stem, Layout), "\n",
         xls_struct_codec:decoder(Type, Stem ++ "_from_bits", Layout), "\n"].
