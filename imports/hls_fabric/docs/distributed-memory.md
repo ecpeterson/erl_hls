@@ -33,14 +33,14 @@ Application commands and events use [checked routed streams](application-streams
 
 ```sh
 rebar3 as test compile
-python3 tools/test_phi_memory.py "$XLS_ROOT" --stage _build/phi-memory
+python3 apps/hls_phi/tools/test_phi_memory.py "$XLS_ROOT" --stage _build/phi-memory
 ```
 
 Use `--reuse-build` for another clock ratio after input/output hashes match. The shared witness permits 25 minutes for both activations and diagnostic queries (`--simulation-timeout`); each activation still has its own ten-minute progress deadline. `--clock-halves 7 3` reverses device rates. Shared runs also save actor phase, mailbox depth/free space, work-in-flight and egress-wait observations while the peer or event sink is blocked and after completion. Artifacts include deployment mappings, compiler inputs, debug observations, command counts per activation, retired transport occupancy, host queue statistics and complete BEAM/RTL witnesses.
 
 ## Resource measurements
 
-`tools/measure_phi_memory.py BUILD --stage OUTPUT --yosys YOSYS` maps an unchanged completed build with explicitly selected XC7 mapping seeds (`--seeds 1` suffices for an initial matched comparison). It includes both complete devices, RAM where present, application gateways, credited links, public topology/actor query services and five clock crossings per device. The pair owns one receive crossing per link direction and four host crossings per device. Reports retain all samples and their best, mean, population variance and worst cell counts; one seed does not estimate mapping variance. LUT totals include the footprint of distributed RAM but do not predict post-placement LUT sharing.
+`apps/hls_phi/tools/measure_phi_memory.py BUILD --stage OUTPUT --yosys YOSYS` maps an unchanged completed build with explicitly selected XC7 mapping seeds (`--seeds 1` suffices for an initial matched comparison). It includes both complete devices, RAM where present, application gateways, credited links, public topology/actor query services and five clock crossings per device. The pair owns one receive crossing per link direction and four host crossings per device. Reports retain all samples and their best, mean, population variance and worst cell counts; one seed does not estimate mapping variance. LUT totals include the footprint of distributed RAM but do not predict post-placement LUT sharing.
 
 The measurement excludes optional counter/trace services, PS, DMA, Ethernet/GT, I/O pads and clock buffers. It is synthesis accounting, not placed timing or evidence that a device fits the board. Use the same toolchain, clock-crossing scope and seeds for both placements.
 
@@ -48,13 +48,13 @@ The [coalesced comparison](artifacts.md#historical-reports) (`experiments/result
 
 ## Service profiles
 
-`tools/profile_phi_memory.py` measures an existing shared/coalesced build without rebuilding XLS. It runs the ordinary Erlang experiment reducer synchronously at accepted public packets: host work consumes wall time but zero simulated time. The actors remain autonomous; gateways, link framing, actor outboxes, RAM and clock crossings remain active. Every correction and final measurement must match BEAM. The report measures consecutive complete status intervals starting at round 8, ending at round 18 or earlier closeout, and records the sample count. This finite fixture does not test independently offered measurement traffic or sustained backlog.
+`apps/hls_phi/tools/profile_phi_memory.py` measures an existing shared/coalesced build without rebuilding XLS. It runs the ordinary Erlang experiment reducer synchronously at accepted public packets: host work consumes wall time but zero simulated time. The actors remain autonomous; gateways, link framing, actor outboxes, RAM and clock crossings remain active. Every correction and final measurement must match BEAM. The report measures consecutive complete status intervals starting at round 8, ending at round 18 or earlier closeout, and records the sample count. This finite fixture does not test independently offered measurement traffic or sustained backlog.
 
 ```sh
 rebar3 as test compile
-python3 tools/profile_phi_memory.py _build/phi-memory --stage _build/service
-python3 tools/plot_phi_service.py _build/service _build/service/timeline.svg
-python3 tools/plot_phi_service.py _build/service _build/service/zoom.svg --zoom-ns 1000
+python3 apps/hls_phi/tools/profile_phi_memory.py _build/phi-memory --stage _build/service
+python3 apps/hls_phi/tools/plot_phi_service.py _build/service _build/service/timeline.svg
+python3 apps/hls_phi/tools/plot_phi_service.py _build/service _build/service/zoom.svg --zoom-ns 1000
 ```
 
 The plotter requires Matplotlib. Use `--clock-halves 4 4` for simulated 125 MHz devices, `--stalls` to restore the regression's periodic link stalls, and `--no-debug` for a query-free control. `--reuse-testbench PREVIOUS_STAGE` reuses Icarus output only after hardware-source, simulator-version and artifact hashes match. Device outputs must match their original build provenance.
@@ -75,8 +75,8 @@ Both d=2 cases use ordinary quiet closeout and final measurements:
 - `board_quiet`: zero-noise closeout at step 18, followed by all eight data measurements. It exercises the same field protocol but has no corrections.
 
 ```sh
-python3 tools/test_phi_memory.py "$XLS_ROOT" --placement coalesced --memory-case board_memory --stage _build/board-memory --build-only
-python3 tools/profile_phi_memory.py _build/board-memory --stage _build/board-profile --clock-halves 4 4
+python3 apps/hls_phi/tools/test_phi_memory.py "$XLS_ROOT" --placement coalesced --memory-case board_memory --stage _build/board-memory --build-only
+python3 apps/hls_phi/tools/profile_phi_memory.py _build/board-memory --stage _build/board-profile --clock-halves 4 4
 ```
 
 Use `board_quiet` in a fresh build for the zero-noise control. D3 remains the default; CI checks complete D3 and noisy board-sized witnesses. Both compare with independently scheduled BEAM actors.
@@ -92,9 +92,9 @@ The default enables [source-fragment reductions](partitioned-reductions.md) and 
 
 ```sh
 rebar3 as test compile
-python3 tools/test_phi_mesh.py --xls "$XLS_ROOT" --stage _build/phi-mesh --jobs 2
-python3 tools/profile_phi_mesh.py _build/phi-mesh --stage _build/phi-mesh-profile
-python3 tools/plot_phi_service.py _build/phi-mesh-profile _build/phi-mesh-profile/timeline.svg --devices 0
+python3 apps/hls_phi/tools/test_phi_mesh.py --xls "$XLS_ROOT" --stage _build/phi-mesh --jobs 2
+python3 apps/hls_phi/tools/profile_phi_mesh.py _build/phi-mesh --stage _build/phi-mesh-profile
+python3 apps/hls_phi/tools/plot_phi_service.py _build/phi-mesh-profile _build/phi-mesh-profile/timeline.svg --devices 0
 ```
 
 For congruent boards, `--tiles` compiles one [shared RTL tile](tiles.md) and binds board-specific constants in separate wrappers.
@@ -107,15 +107,15 @@ All corrections, closeout and 72 final data measurements must match fresh indepe
 
 CI retains direct and shared ordinary D3 witnesses, shared offloaded D3, and noisy offloaded D2. A focused collector probe checks opening order, aliased lookahead, delayed contributors, output stalls and full-population failure. A small four-peer RTL regression checks reused wire IDs, exact frame delivery and independent progress while one peer is blocked. The eighteen-board run is an explicit experiment rather than a per-PR CI requirement.
 
-`tools/measure_phi_mesh.py BUILD --stage OUTPUT --yosys YOSYS` synthesizes one representative complete device, including its query interface. It retains raw primitive counts and source/tool hashes. Unlike the two-device area helper, it excludes external clock-crossing FIFOs; compare results only within the same scope. The default is one matched naming seed, which does not estimate mapping variance. No placement or physical clock qualification is performed.
+`apps/hls_phi/tools/measure_phi_mesh.py BUILD --stage OUTPUT --yosys YOSYS` synthesizes one representative complete device, including its query interface. It retains raw primitive counts and source/tool hashes. Unlike the two-device area helper, it excludes external clock-crossing FIFOs; compare results only within the same scope. The default is one matched naming seed, which does not estimate mapping variance. No placement or physical clock qualification is performed.
 
 The [D6 measurement report](artifacts.md#historical-reports) (`experiments/results/phi-neighbor-links-2026-09-22.md`) includes the complete BEAM witness, per-direction load, interval distributions and cycle timelines.
 
 Use `--transport` on a fresh mesh profile to record transport FIFO handshakes through the existing debug projections. `transport.json` separates idle cycles with no offered work, unavailable credits, or arbitration delays; it also reports frame wait and credit round-trip distributions. Reconstruction starts at reset and must explain every frame/credit acceptance and emitted word. This analysis currently requires unstalled links and the current packetizer; mismatches fail rather than produce an attribution.
 
 ```sh
-python3 tools/profile_phi_mesh.py _build/phi-mesh --stage _build/transport-profile --transport
-python3 tools/plot_phi_transport.py _build/transport-profile --output _build/transport-profile/transport
+python3 apps/hls_phi/tools/profile_phi_mesh.py _build/phi-mesh --stage _build/transport-profile --transport
+python3 apps/hls_phi/tools/plot_phi_transport.py _build/transport-profile --output _build/transport-profile/transport
 python3 tools/test_credit_service.py "$XLS_ROOT" --stage _build/credit-service
 ```
 

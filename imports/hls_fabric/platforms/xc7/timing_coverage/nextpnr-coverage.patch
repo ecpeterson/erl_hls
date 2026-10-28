@@ -1,0 +1,73 @@
+--- a/xilinx/main.cc
++++ b/xilinx/main.cc
+@@ -23,10 +23,53 @@
+ #include "command.h"
+ #include "design_utils.h"
+ #include "jsonwrite.h"
++#include "json11.hpp"
+ #include "log.h"
+ #include "timing.h"
+ 
+ USING_NEXTPNR_NAMESPACE
++
++// Report the backend's actual port classification. This is a coverage probe,
++// not a claim that every combinational arc or clock relationship is modeled.
++static void writeTimingCoverage(Context *ctx, const std::string &filename)
++{
++    using json11::Json;
++    static const char *classes[] = {"clock_input", "generated_clock", "register_input", "register_output",
++                                   "comb_input", "comb_output", "startpoint", "endpoint", "ignore"};
++    Json::object cells;
++    for (const auto &entry : ctx->cells) {
++        const CellInfo *cell = entry.second.get();
++        Json::object ports;
++        for (const auto &entry : cell->ports) {
++            const auto &port = entry.second;
++            if (port.net == nullptr)
++                continue;
++            int count = 0;
++            TimingPortClass kind = ctx->getPortTimingClass(cell, port.name, count);
++            Json::array clocks;
++            for (int i = 0; i < count; ++i) {
++                auto info = ctx->getPortClockingInfo(cell, port.name, i);
++                clocks.push_back(Json::object{{"port", info.clock_port.str(ctx)},
++                                             {"edge", info.edge == RISING_EDGE ? "rising" : "falling"},
++                                             {"setup_ns", ctx->getDelayNS(info.setup.maxDelay())},
++                                             {"hold_ns", ctx->getDelayNS(info.hold.maxDelay())},
++                                             {"clock_to_q_ns", ctx->getDelayNS(info.clockToQ.maxDelay())}});
++            }
++            ports[port.name.str(ctx)] = Json::object{{"class", classes[int(kind)]},
++                {"direction", port.type == PORT_IN ? "input" : port.type == PORT_OUT ? "output" : "inout"},
++                {"net", port.net->name.str(ctx)}, {"clocks", clocks}};
++        }
++        cells[cell->name.str(ctx)] = Json::object{{"type", cell->type.str(ctx)},
++                                                 {"placed", cell->bel != BelId()}, {"ports", ports}};
++    }
++    std::ofstream out(filename);
++    if (!out)
++        log_error("Cannot open timing coverage file '%s'\n", filename.c_str());
++    out << Json(Json::object{{"schema", 1}, {"cells", cells}}).dump() << '\n';
++    out.close();
++    if (!out)
++        log_error("Cannot write timing coverage file '%s'\n", filename.c_str());
++}
+ 
+ class UspCommandHandler : public CommandHandler
+ {
+@@ -50,6 +93,7 @@
+     specific.add_options()("chipdb", po::value<std::string>(), "name of chip database binary");
+     specific.add_options()("xdc", po::value<std::vector<std::string>>(), "XDC-style constraints file");
+     specific.add_options()("fasm", po::value<std::string>(), "fasm bitstream file to write");
++    specific.add_options()("timing-coverage", po::value<std::string>(), "write connected-port timing classifications");
+     specific.add_options()("fixed-routes", po::value<std::string>(),
+                            "frozen hard-macro routing to LOCK before routing (net + src->dst pips)");
+     specific.add_options()("write-fixed-routes", po::value<std::string>(),
+@@ -60,6 +104,8 @@
+ 
+ void UspCommandHandler::customBitstream(Context *ctx)
+ {
++    if (vm.count("timing-coverage"))
++        writeTimingCoverage(ctx, vm["timing-coverage"].as<std::string>());
+     if (vm.count("fasm")) {
+         std::string filename = vm["fasm"].as<std::string>();
+         ctx->writeFasm(filename);

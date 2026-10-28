@@ -5,7 +5,7 @@ script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 stage=$(cd "$1" && pwd)
 xls_root=$(cd "$2" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
-. "$stage/phi_scheduler_rams.sh"
+. "$stage/scheduler_ram_configurations.sh"
 
 cd "$stage"
 
@@ -235,7 +235,7 @@ vvp phi_torus_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
+    --ram_configurations="$(scheduler_ram_configurations)" \
     phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
 
 iverilog \
@@ -269,7 +269,7 @@ vvp phi_noise_topology_smoke.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
+    --ram_configurations="$(scheduler_ram_configurations)" \
     phi_memory_gateway.opt.ir > phi_memory_gateway.v
 
 iverilog \

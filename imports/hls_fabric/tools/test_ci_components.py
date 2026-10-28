@@ -10,7 +10,7 @@ from backend_commands import run
 from backend_paths import ROOT, application_directory, erlang_environment
 from test_protocol_boundary import configuration, expected, simulate
 from test_protocol_bridge import build, qualify, reset_witness
-from test_protocol_inspection import shapes
+from test_protocol_inspection_shapes import shapes
 
 
 def main() -> None:
@@ -81,7 +81,7 @@ def main() -> None:
     command('execution', ['bash', 'tools/test_local_execution.sh', args.xls, args.stage / 'execution'])
     command('receipt-contracts', [sys.executable, 'tools/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
     shapes(args.xls, args.stage / 'inspection-shapes')
-    command('trace-probe', [sys.executable, ROOT / 'tools/test_phi_cycle_trace.py', 'CycleTraceTest.test_capture'])
+    command('trace-probe', [sys.executable, ROOT / 'apps/hls_phi/tools/test_phi_cycle_trace.py', 'CycleTraceTest.test_capture'])
     command('return-routes', ['bash', 'tools/test_return_routes.sh'])
     command('async-fifo', [sys.executable, 'tools/test_async_fifo.py', '--stage', args.stage / 'async-fifo'])
     command('credit-link', [sys.executable, 'tools/test_credit_link.py', args.xls, '--stage', args.stage / 'credit-link'])

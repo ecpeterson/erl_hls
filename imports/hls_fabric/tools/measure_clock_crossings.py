@@ -36,7 +36,7 @@ def measure(args: argparse.Namespace) -> None:
     public = compiler_root(args.profile, args.erl_hls)
     accounting = compiler_tool(public, "measure_topology_debug")
     args.stage.mkdir(parents=True, exist_ok=False)
-    rtl = ROOT / "rtl/hls_async_fifo.v"
+    rtl = ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v"
     (args.stage / "crossings.v").write_text(wrapper())
     samples = []
     for seed in (1, 2):

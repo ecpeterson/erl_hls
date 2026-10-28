@@ -82,7 +82,11 @@ The [complete memory experiments](docs/distributed-memory.md) use checked applic
 
 Placement supports register-backed actors and shared-RAM schedulers with independent actor outboxes. Physical Ethernet transport and independent device restart remain separate tasks. See [the device bridge contract and reproduction commands](docs/device-bridge.md).
 
-The TE0715 experiment now carries an [N=6 repetition application](experiments/07-openxc7/docs/repetition-link.md) across two three-cell PL roles. Its bounded board demonstration exposes decoded corrections and complete local status rounds to the two host BEAMs; the cross-host logical-memory closeout remains to be qualified on hardware.
+The TE0715 experiment now carries an [N=6 repetition application](platforms/xc7/docs/repetition-link.md) across two three-cell PL roles. Its bounded board demonstration exposes decoded corrections and complete local status rounds to the two host BEAMs; the cross-host logical-memory closeout remains to be qualified on hardware.
+
+## Application and platform ownership
+
+Complete decoder examples live in [hls_phi](apps/hls_phi/README.md) and [hls_snowflake](apps/hls_snowflake/README.md). `rebar3 release -n hls_examples` packages their optional build tooling. [XC7 platform support](platforms/xc7/README.md) owns board constraints, drivers and installation. [Retained experiments](experiments/README.md) document which architecture alternatives remain separate from maintained applications.
 
 ## Validation
 

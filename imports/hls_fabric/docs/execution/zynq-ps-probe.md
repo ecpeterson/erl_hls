@@ -2,18 +2,18 @@
 
 This bring-up image connects the Zynq processing system's GP0 AXI port to five registers in the programmable logic. CPU reads and writes test that the PS interface, fabric clock and reset operate together, before adding application logic or DMA. It uses FCLK0 and no PL package pins.
 
-The image compiles for `xc7z030sbg485-1` with the [native openXC7 toolchain](../../experiments/07-openxc7/README.md#setup). **Hardware operation is unverified.** Board boot software must configure DDR/MIO, enable GP0 and FCLK0, enable PS–PL level shifters, and release fabric/interface resets. The build does not supply that board configuration. See AMD's [PS–PL interface reference](https://docs.amd.com/r/en-US/ug585-zynq-7000-SoC-TRM/PS-PL-AXI-Interfaces).
+The image compiles for `xc7z030sbg485-1` with the [native openXC7 toolchain](../../platforms/xc7/README.md#setup). **Hardware operation is unverified.** Board boot software must configure DDR/MIO, enable GP0 and FCLK0, enable PS–PL level shifters, and release fabric/interface resets. The build does not supply that board configuration. See AMD's [PS–PL interface reference](https://docs.amd.com/r/en-US/ug585-zynq-7000-SoC-TRM/PS-PL-AXI-Interfaces).
 
 ## Build and check
 
 From the repository root, with Python 3.11+, a C compiler and Icarus Verilog installed:
 
 ```sh
-python3 experiments/07-openxc7/test_zynq_ps_probe.py
-experiments/07-openxc7/run_zynq_ps_probe.sh
+python3 platforms/xc7/test_zynq_ps_probe.py
+platforms/xc7/run_zynq_ps_probe.sh
 ```
 
-The first command tests the register interface and host diagnostic without FPGA tools. The second also simulates the technology-mapped register block, builds the PS7 wrapper through placement/routing and bitstream assembly, and verifies the configuration-bit round trip. It uses the checked [SBG485 package overlay](../../experiments/07-openxc7/zynq7030.md) and its tool/output-directory overrides. Outputs are under `experiments/07-openxc7/build/zynq-ps-probe/` by default.
+The first command tests the register interface and host diagnostic without FPGA tools. The second also simulates the technology-mapped register block, builds the PS7 wrapper through placement/routing and bitstream assembly, and verifies the configuration-bit round trip. It uses the checked [SBG485 package overlay](../../platforms/xc7/zynq7030.md) and its tool/output-directory overrides. Outputs are under `platforms/xc7/build/zynq-ps-probe/` by default.
 
 ## CPU access
 
@@ -33,7 +33,7 @@ On Linux, expose the first 4 KiB at this base as map 0 of a [UIO device](https:/
 
 ```sh
 cc -std=c11 -Wall -Wextra -Werror -O2 \
-  experiments/07-openxc7/probe_zynq_ps.c -o probe_zynq_ps
+  platforms/xc7/probe_zynq_ps.c -o probe_zynq_ps
 ./probe_zynq_ps /dev/uioN
 ```
 

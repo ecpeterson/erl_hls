@@ -7,6 +7,7 @@ import os
 import subprocess
 
 from test_protocol_inbox import lower_receivers
+from backend_paths import application_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -202,6 +203,8 @@ def main() -> None:
     retained = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
     run(['bash','tools/emit_protocol_transport.sh',args.xls,config,fixture],stage,'reject-existing',accepted=False)
     assert retained == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
+    run(['rebar3', 'release', '-n', 'hls_examples'], stage, 'prepare-examples', timeout=300)
+    example_bin = ROOT/'_build/default/rel/hls_examples/bin'
     applications = []
     receiver_shapes: set[tuple] = set()
     receiver_lowerings = lower_receivers(args.xls, fixture, stage, receiver_shapes)
@@ -209,12 +212,14 @@ def main() -> None:
         key = f'{name}-{n}'
         modules = (['phi_line_cell','phenom_line_data_cell','phenom_line_syndrome_cell'] if name=='repetition'
                    else ['phi_halo_cell','phenom_data_cell','phenom_syndrome_cell'])+[topology]
-        directory = compiler/'src/examples/phi_decoder'
-        sources = ','.join('{'+json.dumps(str(directory/(m+'.erl')))+',[{i,'+json.dumps(str(compiler/'include'))+'},{i,'+json.dumps(str(directory))+'}]}' for m in modules)
+        directory = application_directory('hls_phi', 'default')/'src'
+        sources = ','.join('{'+json.dumps(str(directory/(m+'.erl')))+',[{i,'+json.dumps(str(directory.parent/'include'))+'},{i,'+json.dumps(str(directory))+'}]}' for m in modules)
         config = stage/(key+'.config')
-        config.write_text('#{sources => ['+sources+'],topology => {'+topology+',topology,['+str(n)+',16#80000000]},actor_limit => 64}.\n')
+        config.write_text('#{sources => ['+sources+'],topology => {'+topology+',topology,['+str(n)+',16#80000000]},actor_limit => 64,dslx_path => ['+json.dumps(str(directory))+']}.\n')
         output = stage/key
-        run(['bash','tools/emit_protocol_transport.sh',args.xls,config,output],stage,'emit-'+key,timeout=1000)
+        run([example_bin/'hls-fabric', 'emit', '--kind', 'transport', '--config', config,
+             '--output', output], stage, 'emit-'+key, timeout=300)
+        run([example_bin/'compile-source-build', args.xls, output], stage, 'compile-'+key, timeout=1000)
         compiled=(output/'compiled').resolve()
         rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
         run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:startup(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'startup-reference-'+key)

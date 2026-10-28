@@ -1,0 +1,3 @@
+#!/bin/sh
+# Start public-key-only maintenance SSH; -R creates this card's host key on demand.
+exec /usr/sbin/dropbear -R -s -p 22

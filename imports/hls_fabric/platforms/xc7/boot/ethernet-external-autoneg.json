@@ -1,0 +1,93 @@
+{
+  "profile": "ethernet-external-autoneg",
+  "part": "xc7z030sbg485-1",
+  "configuration": {
+    "uio": "erl-hls-ethernet",
+    "program": "probe_ethernet",
+    "source": "ethernet",
+    "loopback": "none",
+    "rx_polarity": 1,
+    "tx_polarity": 1
+  },
+  "link": {
+    "reference_clock_hz": 125000000,
+    "line_rate_bps": 1250000000,
+    "protocol": "1000BASE-X with bounded diagnostic Ethernet frames",
+    "hard_8b10b": false,
+    "hard_comma_alignment": true,
+    "sgmii": false
+  },
+  "route": {
+    "synthesis_and_route": "passed",
+    "seed": 2,
+    "backend_sha256": "d181915ddc9d7e10d962151d0216eec2dd656acd60274f6d5a107f126c15f32c",
+    "fasm_sha256": "7a8e2d2e9f2e6a73a42a57d89233a44bf79a0f92837d59ceee20799861a15f8f",
+    "netlist_sha256": "bbfb9fe08baab31e5e6e54e5927071aba12703e201fa094cd72b1106abd9c2d3",
+    "fmax_partial_only_mhz": {
+      "clock": {"achieved": 93.89, "constraint": 25.0},
+      "rx_clock": {"achieved": 136.97, "constraint": 125.0},
+      "rx_half_clock": {"achieved": 603.86, "constraint": 62.5},
+      "tx_clock": {"achieved": 130.72, "constraint": 125.0},
+      "tx_half_clock": {"achieved": 529.38, "constraint": 62.5}
+    },
+    "lut_audit": {
+      "luts": 2385,
+      "truth_table_rows": 78496,
+      "elided_memory_constant_origins": 0,
+      "elided_logic_constant_origins": 0
+    }
+  },
+  "assembly": {
+    "reference_profile": "ethernet-external",
+    "reference_bitstream_sha256": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6",
+    "fasm_sha256": "7a8e2d2e9f2e6a73a42a57d89233a44bf79a0f92837d59ceee20799861a15f8f",
+    "candidate_frames_sha256": "c1a824df9613d57947a6bf01ef44d3fb155b6f26b71aa11a0df7d3c9f7766f82",
+    "candidate_bits_sha256": "efdb35f3a987e0cd78e6da6dfb45c7288d095985c70bd52ee990ac25be272d3f",
+    "enabled_features": 324,
+    "known_bit_mask": 1933,
+    "missing_enabled_features": [],
+    "extra_known_bits": [],
+    "recovered_non_ecc_bits": 101610,
+    "reproducible": true,
+    "bitstream_header": {
+      "design": "candidate.frames;Generator=xc7frames2bit",
+      "date": "2000/01/01",
+      "time": "00:00:00"
+    }
+  },
+  "source_sha256": {
+    "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+    "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e",
+    "gtx/te0715_gtx_channel.v": "540c26292e313c85c425e2031ae983471d4e018bc2953b6189a2b901d0d90997",
+    "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
+    "ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
+    "ethernet/gtx_packet_endpoint.v": "fcebd0f65b4ae8f9649c282ae51455d7b5c0edb6158c7c74ecc03d5700c38cc4",
+    "ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
+    "ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
+    "ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
+    "ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+    "ethernet/probe_traffic.v": "23a4328f9a53d1e3dccb8b40544e413505e2f07ca111dd99e7296783993c9167",
+    "ethernet/te0715_ethernet_top.v": "69da8b5ba7a5492b105c30f8e67700c3c71e2a82cc8a64649c3b6b3c8955c435",
+    "ethernet/te0715_ethernet.xdc": "b4b2661ee58d9db2a9842d8c8fba37af35a38fddb2557c2a1fb6610a0233ebd8",
+    "ethernet/board.py": "d62e208afd418292d35209f0149bb14ce41cd0198586d9d0da181edac614863a",
+    "ethernet/generate.py": "75eb02a101d0dd00b71dee9b194dced7131e208e135c599c7aedd476abfedbd8",
+    "ethernet/generate_gearbox.py": "bb4466f72a5ff724fb398a0cd4386e8ca674723d124c3437e39628f31eadee8a",
+    "ethernet/prepare.py": "af77fc81c91ac7c878b315219c6dbc63411bbc9f20a27a4c0a2881c0441add15",
+    "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273"
+  },
+  "generated_sha256": {
+    "liteeth_packet_core.v": "d7047c7de4a63237088fbf93a3c9255b356a720bde864d970184f5cecc6aaffc",
+    "liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
+    "liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67"
+  },
+  "qualified_basis": {
+    "mmcm_power": "The same two corrected MMCM power-down features reached lock in the PCS-boundary image.",
+    "autonegotiation": "Two physical peers running the same corrected PCS reached 1000BASE-X RUNNING with a one-second startup offset.",
+    "scope": "Transferred construction evidence only; this packet image has not run on hardware."
+  },
+  "candidate_bitstream_sha256": "1bd868bfeb8d9d8d2cf67684c1e546e2f71ae6d537e8b820891cddc41cadf7c1",
+  "hardware_validated": false,
+  "timing_qualified": false,
+  "limits": "Modeled native paths meet their stated constraints and the GTX known mask matches the retained reference. Packet transmission, reception, CRC checking, sustained operation, BER and complete timing require hardware evidence."
+}

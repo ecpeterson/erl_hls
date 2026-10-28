@@ -15,8 +15,8 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_l
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
-source tools/phi_scheduler_rams.sh
-rams="$(phi_scheduler_ram_configurations 1),scheduler_0_gather:1R1W:_scheduler_0_gather_read_req_out:_scheduler_0_gather_read_resp_in:_scheduler_0_gather_write_req_out:_scheduler_0_gather_write_resp_in"
+source tools/scheduler_ram_configurations.sh
+rams="$(scheduler_ram_configurations 1),scheduler_0_gather:1R1W:_scheduler_0_gather_read_req_out:_scheduler_0_gather_read_resp_in:_scheduler_0_gather_write_req_out:_scheduler_0_gather_write_resp_in"
 for stages in 2 3; do
     "$xls_root/codegen_main" --pipeline_stages="$stages" --delay_model=unit \
         --flop_inputs=false --flop_outputs=true --use_system_verilog=false --reset=reset \

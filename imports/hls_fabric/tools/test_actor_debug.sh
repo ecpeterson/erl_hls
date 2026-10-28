@@ -18,9 +18,9 @@ erl -noshell \
             mailbox_mixed -> #{direct_actor_debug => true, mailbox_debug => true}; _ -> #{mailbox_debug => true} end,
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
-    cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$erl_hls_root/src/examples/phi_decoder/phi_field.x" "$stage/"
-    cp tools/phi_scheduler_rams.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
-    bash tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
+    cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$project_root/apps/hls_phi/src/phi_field.x" "$stage/"
+    cp tools/scheduler_ram_configurations.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
+    bash apps/hls_phi/tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
     python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \
@@ -33,9 +33,9 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_l
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 codegen_options=(--fifo_module=)
-[[ "$scheduler_count" == 0 ]] || codegen_options+=(--ram_configurations="$(phi_scheduler_ram_configurations "$scheduler_count")")
+[[ "$scheduler_count" == 0 ]] || codegen_options+=(--ram_configurations="$(scheduler_ram_configurations "$scheduler_count")")
 if [[ "$kind" == direct_reduction ]]; then
     production="$stage/production"
     mkdir -p "$production"

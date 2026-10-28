@@ -12,7 +12,7 @@ xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
 source tools/backend_env.sh test
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 for placement in "${placements[@]}"; do
     case "$placement" in direct|one|two|coalesced|ingress_direct|ingress_one|ingress_two|ingress_coalesced|components_global|components_weak) ;; *) echo "unknown placement: $placement" >&2; exit 1;; esac
     build="$stage/$placement"
@@ -33,7 +33,7 @@ for placement in "${placements[@]}"; do
     "$xls_root/opt_main" "$build/topology.ir" > "$build/topology.opt.ir" 2> "$build/opt.log"
     count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$build/actors.json")
     codegen_options=(--fifo_module=)
-    [[ "$count" == 0 ]] || codegen_options+=(--ram_configurations="$(phi_scheduler_ram_configurations "$count")")
+    [[ "$count" == 0 ]] || codegen_options+=(--ram_configurations="$(scheduler_ram_configurations "$count")")
     case "$placement" in ingress_*|components_*) actor_test="$placement";; *) actor_test="mixed_$placement";; esac
     for stages in 2 3; do
         "$xls_root/codegen_main" --pipeline_stages="$stages" --delay_model=unit \

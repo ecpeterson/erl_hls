@@ -1,0 +1,41 @@
+/dts-v1/;
+
+/* The original kernel and root filesystem use our replacement PL device tree. */
+/ {
+    description = "TE0715-05-71C33-A register-probe candidate";
+    #address-cells = <1>;
+    images {
+        kernel {
+            description = "Trenz 2023.2 Linux 6.1.30";
+            data = /incbin/("zImage");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x00200000>;
+            entry = <0x00200000>;
+            hash { algo = "sha256"; };
+        };
+        fdt {
+            description = "TE0715 PS and probe UIO page";
+            data = /incbin/("system.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            hash { algo = "sha256"; };
+        };
+        ramdisk {
+            description = "Unmodified Trenz 2023.2 root filesystem";
+            data = /incbin/("rootfs.cpio.gz");
+            type = "ramdisk";
+            arch = "arm";
+            os = "linux";
+            compression = "gzip";
+            hash { algo = "sha256"; };
+        };
+    };
+    configurations {
+        default = "probe";
+        probe { kernel = "kernel"; fdt = "fdt"; ramdisk = "ramdisk"; };
+    };
+};

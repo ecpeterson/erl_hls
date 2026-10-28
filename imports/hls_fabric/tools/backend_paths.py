@@ -23,8 +23,8 @@ def erlang_paths(profile: str, root: Path = ROOT, *, compiler: Path | None = Non
     if compiler is not None:
         applications["erl_hls"] = compiler_ebin(compiler, profile, root)
         applications["hls_runtime"] = compiler_runtime_ebin(compiler, profile, root)
-    tests = base / "lib/hls_fabric/test"
-    return [*applications.values(), *([tests] if profile == "test" and tests.is_dir() else [])]
+    tests = [path.parent / "test" for path in applications.values()]
+    return [*applications.values(), *([path for path in tests if path.is_dir()] if profile == "test" else [])]
 
 
 def built_applications(profile: str, root: Path) -> dict[str, Path]:

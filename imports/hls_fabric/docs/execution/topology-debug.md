@@ -127,10 +127,10 @@ Boundary monitoring also requires `hls_debug_monitor.v`, `hls_debug_tap.v`, `hls
 ## Complete D3 phi-memory fixture
 
 ```sh
-python3 tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
-python3 tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
+python3 apps/hls_phi/tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
+python3 apps/hls_phi/tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
 python3 tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
-python3 tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
+python3 apps/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
   --yosys "$YOSYS" --seeds 2 --jobs 1
 ```
 

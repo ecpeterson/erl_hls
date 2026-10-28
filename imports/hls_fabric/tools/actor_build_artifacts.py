@@ -14,7 +14,7 @@ def inputs(args: argparse.Namespace) -> dict:
     private = [ROOT / path for path in (
         "test/hls_actor_pid_fixture.erl", "test/hls_actor_pid_dslx.erl",
         "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/actor_build_artifacts.py", "tools/backend_commands.py",
-        "tools/backend_paths.py", "tools/compiler_paths.py", "tools/phi_scheduler_rams.sh", "rebar.config", "rebar.lock")]
+        "tools/backend_paths.py", "tools/compiler_paths.py", "tools/scheduler_ram_configurations.sh", "rebar.config", "rebar.lock")]
     private += list((ROOT / "src").rglob("*.erl"))
     private += list((ROOT / "apps/hls_lowering/src").rglob("*.erl"))
     private += list((ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"))

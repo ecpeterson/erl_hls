@@ -1,0 +1,190 @@
+# XC7 platform support
+
+This directory owns Xilinx 7-series board shells, pin/clock constraints, Linux drivers, boot images, target-runtime packaging and physical-tool probes. It is checkout tooling, not an OTP application: installed HLS bundles obtain shared RTL from `hls_lowering/priv/rtl`, while these scripts combine generated application RTL with a selected board's physical interfaces. Application algorithms remain with their application packages.
+
+## Ownership and entry points
+
+- **Board deployment:** `boot/`, `clocking/`, `dma/driver/` and `runtime/` provide the TE0715 boot/Linux boundary; `prepare_te0715_*` and `prepare_partition_link.py` assemble explicit runtime packages and images. `application/`, `ethernet/`, `gtx/` and `sfp/` contain board shells and their local diagnostics. Follow the matching guide below for its hardware acceptance scope.
+- **Compile probes:** `run.sh`, `run_zynq7030.sh` and the earlier two-pin `run_regsvc.sh` use package-valid synthetic pins. Their XDC files are not board wiring. They must not be used to program a board.
+- **Tool characterization:** `bram/`, `lut_legality/`, `timing_model/`, `timing_chains/` and `timing_coverage/` retain bounded backend probes and parsers; `vivado/` retains vendor-reference preparation and checks. Passing these probes does not establish a deployed clock or application throughput.
+- **Local verification:** adjacent `test_*.py` and RTL benches check these boundaries. The repository's software CI selects only the inexpensive mocked packaging/context tests; native tools, image construction and board actions require their explicit entry points.
+
+Keep platform-specific source beside its build/diagnostic owner. Do not put board shells or drivers into installed shared RTL, or move application semantics into the platform. Relative paths within this tree are deliberate, including the pinned tool cache and generated-output layout. Historical `experiments/07-openxc7/...` keys identify unchanged external evidence; they are not current checkout paths.
+
+## Available flows
+
+The native flow checks whether the open-source Xilinx 7-series toolchain can build `erl_hls` designs on Apple Silicon. It includes:
+
+- a small counter smoke test for `xc7z010clg225-1` and `xc7z020clg484-2`;
+- an [XC7Z030-SBG485 package overlay and counter/BRAM/DSP compile check](zynq7030.md);
+- a [PS7/FCLK0/GP0 register probe](../../docs/execution/zynq-ps-probe.md) for CPU-access bring-up;
+- a [native TE0715 SD boot candidate](docs/te0715-boot.md), with source-built FSBL and ARM Linux diagnostic;
+- [matched vendor register/DMA SD kits](docs/ps-sd.md), with a 100-MHz FSBL and checked Linux/BEAM diagnostics for first-board tests;
+- an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
+- a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
+- [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
+- an optional [packet DMA test fixture](docs/ethernet-dma.md), carrying arbitrary Linux frames through the PCS/MAC with independent clock-domain ownership;
+- a [two-board partition actor link](docs/partition-link.md), with typed serial-credit framing, independent DMA debug and a bounded 4,096-exchange physical soak;
+- an [N=6 repetition-link application](docs/repetition-link.md), with three schedulers per role, host-visible corrections and checked paired restart;
+- a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
+- [matched PRBS/Ethernet SD kits](docs/link-sd.md), with retained Vivado images, a 25-MHz FSBL and Linux diagnostics;
+- [checked SD boot-payload maintenance](docs/sd-maintenance.md), verifying flat macOS updates and board-side `BOOT.bin` replacement on media;
+- [Si5338 clock-startup kits](docs/clock-startup.md), with bounded initialization before PL loading and Linux readback;
+- a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing and CPU diagnostics;
+- a [checked native GTX assembly flow](docs/gtx-configuration.md), using measured tile locations, bounded database overlays and retained vendor references;
+- [72-bit simple-dual-port block-RAM guards](docs/bram-sdp72.md), checking Yosys parity mapping, routed width features and the inferred scheduler/trace shapes;
+- a [Vivado reference batch](docs/vivado-reference.md) for exact-part configuration comparisons, vendor primitive simulation, timing/CDC evidence and fallback board candidates;
+- a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader;
+- a [1000BASE-X packet regression](docs/ethernet-packets.md), with bounded frame storage, independent wire checks, [supervised clock-loss recovery](docs/ethernet-gtx.md#supervised-recovery) and a [board-facing compile probe](docs/ethernet-board.md); and
+- a [D3 decoder place-and-route benchmark](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/phi-timing.md`) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
+
+The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
+
+The [XC7 LUT regression](lut_legality/README.md) builds isolated backend candidates and checks placement and emitted LUT functions before decoder routing experiments.
+
+The flow generates exact-package chip databases and runs Yosys,
+nextpnr-xilinx, Project X-Ray frame generation, and bitstream assembly. By
+default, openXC7 packages and outputs remain in ignored directories beneath
+this experiment.
+
+## Setup
+
+From this directory, install Apio and its packages into the experiment-local
+directories. Apio requires Python 3.11 or newer; this setup was tested with
+Python 3.13.
+
+```sh
+python3 -m venv .venv
+PIP_CACHE_DIR="$PWD/pip-cache" \
+    .venv/bin/pip install apio==1.5.1
+APIO_HOME="$PWD/.apio" \
+APIO_REMOTE_CONFIG_URL="file://$PWD/apio-1.5.x.jsonc" \
+    .venv/bin/apio packages install
+```
+
+The package manifest pins openXC7 2026.08.20 and OSS CAD Suite 2026.08.19.
+Every build verifies the installed package metadata before using it. The
+environment, toolchain, chip databases, and build outputs use about 5 GiB
+before the much larger `regsvc` netlists and routing files are generated.
+
+## Counter smoke test
+
+```sh
+./run.sh
+```
+
+This builds both exact parts at a 100 MHz target. Outputs are written beneath
+`build/smoke/`. On an M2, the first run takes about 85 seconds including both
+chip databases; a cached run takes about nine seconds.
+
+## Earlier two-pin `regsvc` compile experiment
+
+The following exporter, harness and measurements predate the board image. For current-source compilation and PS/DMA deployment, use the [TE0715 routed image](docs/te0715-regsvc.md); its wider trace format uses three trace BRAMs per actor.
+
+### Export the generated `regsvc` RTL
+
+This earlier flow exports a verified RTL set from the Linux UTM:
+
+```sh
+./fetch_regsvc_rtl.sh
+```
+
+The exporter creates fresh local and remote stages, runs local EUnit, checks
+the pinned remote XLS version, and runs the complete generated-RTL/Icarus
+regression on UTM. It retrieves exactly the five generated modules needed by
+the routed fixture, verifies their top module names, records input and output
+SHA-256 hashes, and atomically publishes the result at
+`build/regsvc/generated-rtl/`.
+
+Rerun the exporter after changing the compiler, generated DSLX inputs, or
+`regsvc`. The build script resolves the published result to an immutable
+content-addressed release, checks its XLS version and output hashes, and
+verifies the live handwritten RTL inputs against the same manifest.
+
+The UTM defaults match the main simulation flow. They can be overridden with
+`ERL_HLS_REMOTE_HOST`, `ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
+
+## Build the routed pair
+
+```sh
+./run_regsvc.sh
+```
+
+The default target is `xc7z020clg484-2`. The script first synthesizes the
+four-interface logical fixture out of context for an architectural resource
+estimate. It then simulates, synthesizes, and routes a two-pin compile harness.
+The harness enumerates application and debug test cases for both endpoints,
+uses LFSRs for payload and flow-control variation, and folds all responses into
+a registered rotating digest. Flip-flop and block-RAM retention checks guard
+against pruning translated-process state or the four trace RAM primitives without
+pretending that PS-facing AXI streams are physical board pins or creating one
+large combinational output path.
+
+The same design can be retried explicitly on the smaller part:
+
+```sh
+./run_regsvc.sh xc7z010clg225-1
+```
+
+`all` requests the `xc7z020` build followed by the `xc7z010` attempt. Timing
+misses are retained in the reports and do not prevent bitstream assembly;
+placement or routing failures still stop the build.
+
+## Current result
+
+| design | estimated logic cells | flip-flops | `RAMB36E1` |
+| --- | ---: | ---: | ---: |
+| register-backed trace baseline | 16,546 | 21,724 | 0 |
+| version 3: block-RAM trace and passive state mirror | 12,542 | 16,454 | 4 |
+| version 4: block-RAM trace without passive state mirror | 7,229 | 8,108 | 4 |
+
+Moving bounded trace events out of the observer's recurrent state reduces both
+estimated logic cells and flip-flops by about 24%. Removing the always-on
+512-bit state observation path then reduces them by a further 42% and 51%,
+respectively. State serialization remains generated, but no packed state is
+formed or replicated in the live service recurrence. The former state-query
+tags are reserved until a narrow, on-demand replacement has defined coherent
+snapshot semantics.
+
+Each instrumented hardware endpoint uses two `RAMB36E1` primitives for its
+128-bit-wide trace store, so this two-endpoint fixture uses four and an
+otherwise identical N-endpoint design would use 2N. Logical ping-pong banks
+share that physical store rather than doubling it. Host-side `hls_gs` proxy
+processes do not themselves consume FPGA memory. The resource regression
+requires exactly four block RAMs to survive both raw-pair and compile-harness
+synthesis.
+
+The complete version-4 compile harness now places, routes, and assembles for
+both target parts:
+
+| part | `SLICE_LUTX` | `SLICE_FFX` | `RAMB36E1` | estimated maximum clock |
+| --- | ---: | ---: | ---: | ---: |
+| `xc7z010clg225-1` | 9,291 / 35,200 | 8,265 / 35,200 | 4 / 60 | 61.32 MHz |
+| `xc7z020clg484-2` | 9,291 / 106,400 | 8,265 / 106,400 | 4 / 140 | 63.34 MHz |
+
+The LUT denominators count separately addressable O5 and O6 BELs rather than
+physical LUT packages, so those ratios are not physical-LUT occupancy figures.
+Neither result closes the requested 100 MHz timing target, but both are valid
+compile-only bitstreams. Machine-readable Yosys statistics and nextpnr timing
+and utilization reports are retained under `build/regsvc/`.
+
+## Two-pin harness scope
+
+The counter and two-pin harness XDC files select package-valid pins solely to make place-and-route
+possible. They are not board constraints. Do not program any bitstream from
+this experiment until the pins and I/O-bank voltages have been checked against
+the corresponding board schematic.
+
+The two-pin harness is a PL compile proof. It does not instantiate PS7, exercise DMA, validate
+a board design, or demonstrate the harness transactions in silicon. A focused
+Icarus test checks application tags 3–10, the supported counter and trace debug
+requests, and reserved/unsupported-tag errors at both endpoints while observing
+application and debug responses. The routed RTL and bridged EUnit regressions
+remain the fuller behavioral correctness checks.
+
+Repeated builds print a checksum of deterministic Project X-Ray frames rather
+than the final `.bit`, whose metadata includes its build time and input path.
+
+The [reciprocal integration](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/reciprocal-integration-2026-09-27.md`) carries the exact limb arithmetic into the phi executor, compares two/three-stage schedules, and checks mapped ready/valid pipelines.
+
+The [aggregate ready boundary](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/aggregate-ready-boundary-2026-09-27.md`) cuts scheduler-to-reduction backpressure with an existing bypass FIFO and measures its storage, cycles and remaining control cones.

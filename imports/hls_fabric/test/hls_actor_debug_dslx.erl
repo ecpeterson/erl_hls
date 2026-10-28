@@ -73,7 +73,7 @@ artifacts(Kind, Options) ->
         aggregate -> {"test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};
         phi ->
             {Plan, _} = fixture(phi),
-            {"src/examples/phi_decoder", xls_fabric_topology_dslx:artifact_requirements(Plan,
+            {filename:join(code:lib_dir(hls_phi), "src"), xls_fabric_topology_dslx:artifact_requirements(Plan,
                 phi_decoder_profile_topology_dslx:profile())}
     end,
     maps:map(fun(Module, Requirement) ->

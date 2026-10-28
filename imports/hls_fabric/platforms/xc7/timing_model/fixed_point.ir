@@ -1,0 +1,30 @@
+package bulk
+
+
+top fn __bulk__main(a: bits[32] id=106, b: bits[32] id=107, sum: bits[34] id=108) -> bits[32] {
+  sign_ext.316: bits[36] = sign_ext(b, new_bit_count=36, id=316)
+  bit_slice.323: bits[33] = bit_slice(sign_ext.316, start=0, width=33, id=323)
+  literal.322: bits[3] = literal(value=0, id=322)
+  concat.324: bits[36] = concat(bit_slice.323, literal.322, id=324)
+  sign_ext.330: bits[36] = sign_ext(a, new_bit_count=36, id=330)
+  sub.321: bits[36] = sub(concat.324, sign_ext.316, id=321)
+  add.304: bits[36] = add(sign_ext.330, sub.321, id=304)
+  sign_ext.305: bits[37] = sign_ext(add.304, new_bit_count=37, id=305)
+  sign_ext.301: bits[37] = sign_ext(sum, new_bit_count=37, id=301)
+  numerator: bits[37] = add(sign_ext.305, sign_ext.301, id=284)
+  literal.285: bits[39] = literal(value=183251937963, id=285)
+  smul.286: bits[76] = smul(numerator, literal.285, id=286)
+  bit_slice.335: bits[36] = bit_slice(smul.286, start=40, width=36, id=335)
+  literal.340: bits[36] = literal(value=1, id=340)
+  add.337: bits[36] = add(bit_slice.335, literal.340, id=337)
+  bit_slice.343: bits[35] = bit_slice(add.337, start=1, width=35, id=343)
+  literal.325: bits[35] = literal(value=32212254720, id=325)
+  literal.327: bits[35] = literal(value=2147483647, id=327)
+  slt.312: bits[1] = slt(bit_slice.343, literal.325, id=312)
+  bit_slice.341: bits[32] = bit_slice(add.337, start=1, width=32, id=341)
+  literal.295: bits[32] = literal(value=2147483648, id=295)
+  sgt.315: bits[1] = sgt(bit_slice.343, literal.327, id=315)
+  sel.297: bits[32] = sel(slt.312, cases=[bit_slice.341, literal.295], id=297)
+  literal.298: bits[32] = literal(value=2147483647, id=298)
+  ret sel.299: bits[32] = sel(sgt.315, cases=[sel.297, literal.298], id=299)
+}

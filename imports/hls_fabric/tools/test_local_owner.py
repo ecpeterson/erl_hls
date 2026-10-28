@@ -4,7 +4,7 @@ import argparse
 import json
 
 from compiler_paths import compiler_root
-from backend_paths import ROOT, erlang_environment
+from backend_paths import ROOT, erlang_environment, application_directory
 from backend_commands import run
 
 
@@ -76,10 +76,10 @@ fn owner_readout(w: OwnerWitness) {
 def check_provider_initializers(xls: Path, stage: Path, paths: str, public: Path) -> None:
     """Lower provider-backed initialization with the same compiler sources and beams as the owner."""
     # Actual provider-backed initializers must lower as a clocked proc, not constexpr.
-    providers = public/'src/examples/phi_decoder'
+    providers = application_directory('hls_phi', 'default')/'src'
     provider_options = stage/'provider-options.term'
     provider_options.write_text('[{i,'+json.dumps(str(public/'include'))+'},{i,'+
-                                json.dumps(str(providers))+'}].\n')
+                                json.dumps(str(providers.parent/'include'))+'},{i,'+json.dumps(str(providers))+'}].\n')
     for role in ['phi_line_cell', 'phi_halo_cell']:
         generated = stage/(role+'.x')
         run(['escript', 'tools/emit_local_actor.escript', providers/(role+'.erl'),

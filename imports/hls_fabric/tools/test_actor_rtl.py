@@ -38,8 +38,8 @@ def build(args: argparse.Namespace) -> None:
     shutil.copy(public / "priv/rtl/hls_1r1w_ram.v", source)
     banks = len(json.loads((source / "actors.json").read_text())["banks"])
     configurations = subprocess.check_output([
-        "bash", "-c", 'source "$1"; phi_scheduler_ram_configurations "$2"',
-        "actor-ram-config", str(ROOT / "tools/phi_scheduler_rams.sh"), str(banks)], text=True).strip()
+        "bash", "-c", 'source "$1"; scheduler_ram_configurations "$2"',
+        "actor-ram-config", str(ROOT / "tools/scheduler_ram_configurations.sh"), str(banks)], text=True).strip()
     commands = [
         ("convert", [str(xls / "ir_converter_main"), "--top=Top", "--warnings_as_errors=false",
                      "--dslx_path=.", f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}",

@@ -6,7 +6,7 @@ The D6 experiment supports this mode:
 
 ```sh
 rebar3 as test compile
-python3 tools/test_phi_mesh.py --xls "$XLS_ROOT" --stage _build/d6-tiles \
+python3 apps/hls_phi/tools/test_phi_mesh.py --xls "$XLS_ROOT" --stage _build/d6-tiles \
   --tiles --phi-actors-per-scheduler 2 --link-words 4 --link-credits 4
 ```
 

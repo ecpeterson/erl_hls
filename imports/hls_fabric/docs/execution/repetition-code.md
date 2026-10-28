@@ -26,7 +26,7 @@ The line and grid actors share their callbacks, specialized at compile time. `ph
 With rebar3, OTP 28, Icarus and an XLS tool directory:
 
 ```sh
-python3 tools/run_repetition_profile.py _build/repetition/n3 --cells 3 --xls /path/to/xls
+python3 apps/hls_phi/tools/run_repetition_profile.py _build/repetition/n3 --cells 3 --xls /path/to/xls
 ```
 
 The runner generates the complete physical-noise topology, executes BEAM and RTL through round 32, and requires identical per-actor corrections/status under both continuous and stalled output readiness. It measures whole-line progress over rounds 8–32. The testbench observes corrections; it does not feed them back or certify logical-memory performance.

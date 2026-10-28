@@ -90,7 +90,7 @@ The smallest torus deliberately exercises aliased neighbor ports and two externa
 ```sh
 rebar3 eunit
 python3 tools/test_credit_link.py "$XLS_ROOT" --stage _build/credit-link
-python3 tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-bridge --shape 2 2 --planes x z
+python3 apps/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-bridge --shape 2 2 --planes x z
 ```
 
 `XLS_ROOT` supplies the converter, optimizer, code generator and matching standard library. The runner records source/tool hashes, both independent compilation command sequences, generated artifacts, debug manifests and observations, and BEAM/RTL event logs. Instrumentation is checked for structural noninterference, and each generated device passes a combinational-loop check. `--reuse-build` verifies the original inputs and outputs before reusing a completed build for another host-side run; use a fresh stage for changed hardware inputs. The CI job regenerates the two-plane witness with the public dependency's pinned Linux XLS release.

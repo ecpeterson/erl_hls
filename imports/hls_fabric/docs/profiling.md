@@ -9,8 +9,8 @@ The [tooling policy](../STYLE.md#tooling-boundaries) favors a shared simulation/
 For the cached D6 mesh:
 
 ```sh
-python3 tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport
-python3 tools/phi_actor_profile.py RUN --device 0 \
+python3 apps/hls_phi/tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport
+python3 apps/hls_phi/tools/phi_actor_profile.py RUN --device 0 \
   --erl-hls /path/to/erl_hls --publication-cycles 2
 ```
 
@@ -45,9 +45,9 @@ For comparisons against a justified service lower bound, retain absolute interva
 Add `--messages` to a fresh mesh capture with `--actors --transport` on all devices, then reconstruct cross-board deliveries:
 
 ```sh
-python3 tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport --messages --compress-capture
-python3 tools/phi_message_profile.py RUN --erl-hls HARDWARE_DEPENDENCY
-python3 tools/phi_message_report.py --run example RUN --output REPORT \
+python3 apps/hls_phi/tools/profile_phi_mesh.py BUILD --stage RUN --actors --transport --messages --compress-capture
+python3 apps/hls_phi/tools/phi_message_profile.py RUN --erl-hls HARDWARE_DEPENDENCY
+python3 apps/hls_phi/tools/phi_message_report.py --run example RUN --output REPORT \
   --erl-hls /path/to/erl_hls
 ```
 
@@ -66,7 +66,7 @@ Mailbox replay currently requires one ordinary producer stream per actor, fixed 
 `phi_step_report.py` joins independently decoded public status frames to their producing effects by complete frame contents, stream and actor coordinates. It checks every measured round boundary against `progress.json`, then follows causal predecessors across rounds. New captures retain `status-events.json`; an older capture can obtain it through `hls_phi_memory_metrics:status_events/1` without another simulation.
 
 ```sh
-python3 tools/phi_step_report.py RUN --output REPORT \
+python3 apps/hls_phi/tools/phi_step_report.py RUN --output REPORT \
   --erl-hls /path/to/erl_hls --step 12
 ```
 

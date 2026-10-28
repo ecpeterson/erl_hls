@@ -1,0 +1,13 @@
+#!/bin/sh
+# Publish both stable DMA aliases after the PL and root filesystem are available.
+modprobe hls_dma_mailbox || exit 1
+
+driver=/sys/bus/platform/drivers/hls-dma-mailbox
+for device in 40000000.dma-mailbox 40004000.dma-mailbox; do
+    platform=/sys/bus/platform/devices/$device
+    if [ -d "$platform" ] && [ ! -L "$platform/driver" ]; then
+        printf '%s' "$device" > "$driver/bind" 2>/dev/null || true
+    fi
+done
+
+mdev -s

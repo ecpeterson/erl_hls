@@ -6,7 +6,7 @@ import json
 import subprocess
 from types import SimpleNamespace
 
-from backend_paths import ROOT, erlang_environment
+from backend_paths import ROOT, erlang_environment, application_directory
 from compiler_paths import compiler_root
 from backend_commands import run
 from test_local_protocol import prove
@@ -150,7 +150,7 @@ def lower_receivers(xls: Path, directory: Path, stage: Path, seen: set[tuple]) -
         seen.add(shape); converted+=1
         stem=directory.name+'-receiver-'+str(receiver['index'])
         paths=':'.join(map(str,[directory/'actors',ROOT/'apps/hls_lowering/priv/xls/lib',ROOT/'apps/hls_lowering/priv/xls/fabric',
-            compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',compiler_root('default')/'src/examples/phi_decoder']))
+            compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',application_directory('hls_phi', 'default')/'src']))
         run([xls/'ir_converter_main','--top=local_inbox_clock','--warnings_as_errors=false',
              '--dslx_path='+paths,'--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],
             stage,stem,stage/(stem+'.ir'))

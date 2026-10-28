@@ -123,9 +123,9 @@ class BuildContextTests(unittest.TestCase):
             directory = Path(temporary)/'application'
             with patch.object(emitter, 'run') as invoke:
                 build = emitter.emit_application(6, directory, split=3)
-            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'release', '-n', 'hls'])
+            self.assertEqual(invoke.call_args_list[0].args[0], ['rebar3', 'release', '-n', 'hls_examples'])
             self.assertEqual(invoke.call_args_list[1].args[0],
-                             [ROOT/'_build/default/rel/hls/bin/hls-repetition',
+                             [ROOT/'_build/default/rel/hls_examples/bin/hls-repetition',
                               '--width', '6', '--output', build, '--split', '3'])
             self.assertFalse((directory/'config.erl').exists())
             build.mkdir()
@@ -136,7 +136,7 @@ class BuildContextTests(unittest.TestCase):
                 self.assertEqual(emitter.build_application(Path('/xls'), 6, directory, split=3), published.resolve())
             # Whole-bundle time must not undercut the compiler driver's per-stage watchdog.
             self.assertEqual(invoke.call_args.args[0],
-                             [ROOT/'_build/default/rel/hls/bin/compile-source-build', Path('/xls'), build])
+                             [ROOT/'_build/default/rel/hls_examples/bin/compile-source-build', Path('/xls'), build])
             self.assertIsNone(invoke.call_args.kwargs['timeout'])
 
     def test_source_helper_returns_resolved_release(self) -> None:
@@ -214,7 +214,7 @@ def compiler_fixture(public: Path, label: str) -> Path:
 
 def production_sources() -> list[Path]:
     """List tool and experiment Python sources, excluding test entrypoints."""
-    roots = [ROOT/'tools', ROOT/'experiments']
+    roots = [ROOT/'tools', ROOT/'apps/hls_phi/tools', ROOT/'experiments', ROOT/'platforms']
     return sorted(path for root in roots for path in root.rglob('*.py')
                   if not path.name.startswith('test_') and not path.stem.endswith('_test')
                   and '__pycache__' not in path.parts
@@ -307,7 +307,8 @@ class CompilerContextTests(unittest.TestCase):
 
     def test_production_imports_are_inert(self) -> None:
         """Import every production tool without compiler lookup, test imports or child execution."""
-        modules = [path.stem for path in sorted((ROOT/'tools').glob('*.py'))
+        modules = [path.stem for directory in (ROOT/'tools', ROOT/'apps/hls_phi/tools')
+                   for path in sorted(directory.glob('*.py'))
                    if not path.name.startswith('test_')]
         script = import_probe() + '''
 for name in sys.argv[1:]:
@@ -341,7 +342,10 @@ assert Path.cwd() == before_cwd
 '''
         for name in names:
             with self.subTest(name=name):
-                result = self.run_probe(script, [str(ROOT/'tools'/f'{name}.py')])
+                path = next(directory / f'{name}.py' for directory in
+                            (ROOT/'tools', ROOT/'apps/hls_phi/tools')
+                            if (directory / f'{name}.py').is_file())
+                result = self.run_probe(script, [str(path)])
                 self.assertIn('usage:', result.stdout.lower())
 
     def test_production_has_no_test_import_edges(self) -> None:
@@ -372,7 +376,7 @@ assert Path.cwd() == before_cwd
         with tempfile.TemporaryDirectory(prefix='inert tool imports ') as temporary:
             result = subprocess.run([sys.executable, '-B', '-c', script, *arguments],
                 cwd=temporary, capture_output=True, text=True, timeout=15,
-                env={**os.environ, 'PYTHONPATH': str(ROOT/'tools'),
+                env={**os.environ, 'PYTHONPATH': os.pathsep.join(map(str, (ROOT/'tools', ROOT/'apps/hls_phi/tools'))),
                      'ERL_HLS_ROOT': '/nonexistent-compiler', 'ERL_AFLAGS': 'sentinel'})
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             self.assertEqual(list(Path(temporary).iterdir()), [])

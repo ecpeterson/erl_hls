@@ -18,12 +18,12 @@ for unit in "$stage/statem_direct.x" "$stage/statem_events.x" "$stage/statem_red
     "$interpreter" --compare=jit --warnings_as_errors=false \
         --dslx_path="$stage:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$unit"
 done
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 for kind in shared; do
     rams=(--ram-configurations "")
     top="__statem_${kind}__Top_0_next"
     if [[ "$kind" == shared ]]; then
-        rams=(--ram-configurations "$(phi_scheduler_ram_configurations 1)")
+        rams=(--ram-configurations "$(scheduler_ram_configurations 1)")
         top=statem_shared_wrapper
     fi
     for stages in 2 3; do

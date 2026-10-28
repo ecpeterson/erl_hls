@@ -1,0 +1,73 @@
+{
+  "profile": "symbol-external",
+  "part": "xc7z030sbg485-1",
+  "configuration": {
+    "uio": "erl-hls-symbol",
+    "program": "probe_symbols",
+    "source": "ethernet",
+    "loopback": "none",
+    "rx_polarity": 1,
+    "tx_polarity": 1
+  },
+  "link": {
+    "reference_clock_hz": 125000000,
+    "line_rate_bps": 1250000000,
+    "user_clock_hz": 62500000,
+    "pattern": "{K28.5-,K28.5+}",
+    "hard_8b10b": false,
+    "hard_comma_alignment": true
+  },
+  "route": {
+    "synthesis_and_route": "passed",
+    "seed": 1,
+    "backend_sha256": "49e0a84707bfd6ebeb810fc179cb519ecadd73141fced30aec12103e44d6c7c8",
+    "fasm_sha256": "712f7aee1e934bededff40decdce2407004f920af6c0083fb1255c76ad233f60",
+    "netlist_sha256": "4f9d32256887ba5a3c47fd6a0b82e812777a9737c82509f153c616ddfaf2c7bc",
+    "fmax_partial_only_mhz": {
+      "clock": {
+        "achieved": 74.67,
+        "constraint": 25.0
+      },
+      "rx_clock": {
+        "achieved": 121.86,
+        "constraint": 62.5
+      },
+      "tx_clock": {
+        "achieved": 589.62,
+        "constraint": 62.5
+      }
+    }
+  },
+  "assembly": {
+    "reference_profile": "ethernet-external",
+    "reference_bitstream_sha256": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6",
+    "fasm_sha256": "712f7aee1e934bededff40decdce2407004f920af6c0083fb1255c76ad233f60",
+    "candidate_frames_sha256": "8896693b3c331933778c7abf850ebca8729d44eb199bd46c286507dfbdf01bc0",
+    "candidate_bits_sha256": "84ef8fb3a750ccd6815387ad81f2ee1631f80cdb49c994a11a94382a7a86b4b1",
+    "enabled_features": 324,
+    "known_bit_mask": 1933,
+    "missing_enabled_features": [],
+    "extra_known_bits": [],
+    "recovered_non_ecc_bits": 59662,
+    "reproducible": true,
+    "bitstream_header": {
+      "design": "candidate.frames;Generator=xc7frames2bit",
+      "date": "2000/01/01",
+      "time": "00:00:00"
+    }
+  },
+  "source_sha256": {
+    "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+    "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e",
+    "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "gtx/gtx_probe_sample.v": "30d7796f45ab00bb48942ad91311d677c91644f4687f699ed402c51db4413f61",
+    "gtx/te0715_gtx_channel.v": "540c26292e313c85c425e2031ae983471d4e018bc2953b6189a2b901d0d90997",
+    "gtx/te0715_gtx.xdc": "7a7ad41a5fa10c90b9a10b4e943515e13532a0a0e0cbb479b938683ecd6ef07a",
+    "ethernet/symbol_probe_sample.v": "b0dc7d7a551922f5677ed3e4586110597c917c85625bceae4c438899197f8321",
+    "ethernet/te0715_symbol_top.v": "a6e5443f2d90307ec27fc6f71b2fa0601984650596184d42d7fd9ec767bc25bb"
+  },
+  "candidate_bitstream_sha256": "6ddbc473d3748aab219e91efd974cf5044e6ea56a5c949c7f650cf25d7104a54",
+  "hardware_validated": false,
+  "timing_qualified": false,
+  "limits": "Native modeled paths pass their stated constraints, but PS/GTX timing, hard-GTX analog behavior, comma behavior on hardware, Ethernet PCS operation and BER remain unqualified."
+}

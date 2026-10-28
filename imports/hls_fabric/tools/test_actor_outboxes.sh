@@ -16,12 +16,12 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$root/apps/hls_lowering/
 for module in mailbox scheduler; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$root/apps/hls_lowering/priv/xls/lib/$module.x"
 done
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 for kind in direct shared; do
     "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/outbox_$kind.x" > "$stage/$kind.ir"
     "$xls_root/opt_main" "$stage/$kind.ir" > "$stage/$kind.opt.ir"
     rams=""; schedules=(1 2); defines=(-DOUTBOX_FIXTURE)
-    if [[ "$kind" == shared ]]; then rams=$(phi_scheduler_ram_configurations 1); schedules=(2 3); defines=(-DSHARED_OUTBOX); fi
+    if [[ "$kind" == shared ]]; then rams=$(scheduler_ram_configurations 1); schedules=(2 3); defines=(-DSHARED_OUTBOX); fi
     for stages in "${schedules[@]}"; do
         "$xls_root/codegen_main" --pipeline_stages="$stages" --delay_model=unit \
             --flop_inputs=false --flop_outputs=true --use_system_verilog=false \

@@ -11,6 +11,10 @@ source tools/backend_env.sh test
 bash "$erl_hls_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '
     Stage = os:getenv("ERL_HLS_STAGE"),
+        PhiHalo = xls_parse:to_xls("apps/hls_phi/src/phi_halo_cell.erl"),
+        PhiFieldTest = phi_field_dslx:to_dslx(),
+        PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
+        PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
         #{
             distance := DemoDistance,
             noise_rate := DemoNoiseRate
@@ -110,11 +114,11 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         %% Shared staging must agree with the already prepared profile actors.
         [_ = SharedServiceFor(Module) || Module <- maps:keys(ProfileRequirements)],
         PhenomData = xls_scheduler_actor:to_xls(
-            "src/examples/phi_decoder/phenom_data_cell.erl",
+            "apps/hls_phi/src/phenom_data_cell.erl",
             #{shared_service => SharedServiceFor(phenom_data_cell)}
         ),
         PhenomSyndrome = xls_scheduler_actor:to_xls(
-            "src/examples/phi_decoder/phenom_syndrome_cell.erl",
+            "apps/hls_phi/src/phenom_syndrome_cell.erl",
             #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
         ),
         PhiNoiseTopology = xls_fabric_topology_dslx:emit(
@@ -146,6 +150,10 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         maps:foreach(fun(Name, Data) ->
             ok = file:write_file(filename:join(Stage, Name), Data)
         end, ProfileFiles),
+        ok = file:write_file(filename:join(Stage, "phi_halo_cell.x"), PhiHalo),
+        ok = file:write_file(filename:join(Stage, "phi_field_test.x"), PhiFieldTest),
+        ok = file:write_file(filename:join(Stage, "phi_phenom_topology.x"), PhiPhenomTopology),
+        ok = file:write_file(filename:join(Stage, "phi_torus_topology.x"), PhiTorusTopology),
         ok = file:write_file(filename:join(Stage, "phenom_data_cell.x"), PhenomData),
         ok = file:write_file(filename:join(Stage, "phenom_syndrome_cell.x"), PhenomSyndrome),
         ok = file:write_file(filename:join(Stage, "phi_noise_topology.x"), PhiNoiseTopology),
@@ -154,12 +162,24 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         ok = file:write_file(filename:join(Stage, "phi_memory_debug_top.v"), PhiMemoryDebugTop),
         halt().'
 cp apps/hls_lowering/priv/xls/lib/*.x "$stage/"
-cp test/rtl/phi_noise_topology_smoke_tb.sv test/rtl/phi_noise_topology_tb.sv \
-   test/rtl/phi_decoder_profile_tb.sv test/rtl/phi_memory_bridge_tb.sv "$stage/"
-cp tools/phi_scheduler_rams.sh tools/compile_phi_decoder_profile.py \
-   tools/compile_phi_decoder_profile.sh tools/backend_build_profile.py "$stage/"
+cp apps/hls_phi/src/phi_field.x "$stage/"
+cp apps/hls_phi/test/rtl/phi_halo_cell_tb.sv apps/hls_phi/test/rtl/phenom_data_cell_tb.sv \
+   apps/hls_phi/test/rtl/phi_phenom_topology_tb.sv apps/hls_phi/test/rtl/phi_torus_topology_tb.sv "$stage/"
+cp apps/hls_phi/test/rtl/phi_noise_topology_smoke_tb.sv apps/hls_phi/test/rtl/phi_noise_topology_tb.sv \
+   apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv apps/hls_phi/test/rtl/phi_memory_bridge_tb.sv "$stage/"
+cp tools/scheduler_ram_configurations.sh apps/hls_phi/tools/compile_phi_decoder_profile.py \
+   apps/hls_phi/tools/compile_phi_decoder_profile.sh apps/hls_phi/tools/phi_tool_paths.py \
+   tools/backend_build_profile.py "$stage/"
+# Preserve the preprocessed application source used by older remote OTP runtimes.
+for module in hls_pauli phi_field phenom_data_cell phenom_syndrome_cell phi_halo_cell \
+    phi_memory_boundary phi_memory_demo phi_memory_experiment phi_memory_runner \
+    phi_memory_wire phi_noise_topology; do
+    erlc -I apps/hls_phi/include -P -o "$stage/erl_src" "apps/hls_phi/src/$module.erl"
+    cp "$stage/erl_src/$module.P" "$stage/erl_src/$module.erl"
+done
+
 erlc -P \
-    -o "$stage/test_src" test/phi_memory_bridge_tests.erl
+    -o "$stage/test_src" apps/hls_phi/test/phi_memory_bridge_tests.erl
 cp "$stage/test_src/phi_memory_bridge_tests.P" "$stage/test_src/phi_memory_bridge_tests.erl"
 
 cp test/rtl/xls_scheduler_profile.h "$stage/xls_scheduler_profile.h"

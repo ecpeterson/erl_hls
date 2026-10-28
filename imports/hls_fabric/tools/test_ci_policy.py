@@ -26,7 +26,8 @@ class PolicyTests(unittest.TestCase):
                  if line and not line.startswith('#')]
         self.assertEqual(len(names), len(set(names)))
         for name in names:
-            self.assertTrue((ROOT / 'tools' / (name.split('.')[0] + '.py')).is_file(), name)
+            self.assertTrue(any((directory / (name.split('.')[0] + '.py')).is_file()
+                for directory in [ROOT / 'tools', ROOT / 'apps/hls_phi/tools']), name)
         self.assertFalse(any('ci_plan' in name for name in names))
 
 

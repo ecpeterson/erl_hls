@@ -14,6 +14,6 @@ The separate [hls_lowering source tree](../apps/hls_lowering/src/README.md) owns
 
 ## Repository support
 
-Installed DSLX templates and RTL inputs belong to `apps/hls_lowering/priv/`. Top-level `rtl/` contains simulation/device shells and other repository-level harnesses. `test/` owns focused witnesses and fixtures; `tools/` owns checks and external-tool drivers. `experiments/` still contains application and board investigations awaiting a separate promotion/retirement review.
+Reusable DSLX templates and RTL inputs belong to `apps/hls_lowering/priv/`; test-only shells belong to `test/rtl/`. Maintained decoder sources, configurations, drivers and application tests belong to [hls_phi](../apps/hls_phi/README.md) and [hls_snowflake](../apps/hls_snowflake/README.md). [Platform assets](../platforms/README.md) own board shells, constraints, drivers and image packaging. [Experiments](../experiments/README.md) retain executable architecture probes with explicit scopes; they are not a source library for the compiler.
 
 The application resource `hls_fabric.app.src` stays here. Production Erlang in both application source trees and `include/` uses the pinned `rebar3 fmt` configuration; see [source-quality checks](../docs/source-quality.md).

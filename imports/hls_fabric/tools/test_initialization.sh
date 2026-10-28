@@ -35,8 +35,8 @@ for fixture in shared; do
     rams=
     schedules=(1 2)
     if [[ "$fixture" == shared ]]; then
-        source tools/phi_scheduler_rams.sh
-        rams=$(phi_scheduler_ram_configurations 1)
+        source tools/scheduler_ram_configurations.sh
+        rams=$(scheduler_ram_configurations 1)
         # The fixed-latency RAM channel constraints require at least two stages.
         schedules=(2 3)
     fi

@@ -5,21 +5,12 @@
 -doc "Selects the ordinary D2/H2 sources with a twelve-member flat barrier and bounded coordinator mailbox.".
 -spec config() -> map().
 config() ->
-    Actors = "experiments/snowflake/actors/",
-    #{sources => [{"experiments/snowflake/erlang/snowflake_geometry.erl", []},
-        {Actors ++ "snowflake_actor_topology.erl", []},
-        {Actors ++ "snowflake_vertex.erl", []},
-        {Actors ++ "snowflake_coordinator.erl", [{d, 'SNOWFLAKE_COORDINATOR_SOURCES', 12},
-            {d, 'SNOWFLAKE_COORDINATOR_MAILBOX', 16}]},
-        {"test/hls_ci_snowflake.erl", []}],
-      topology => {?MODULE, topology, []}, actor_limit => 13, activation => explicit_start}.
+    snowflake_source:config().
 
 -doc "Uses the ordinary graph with independently accepted command copies. Each vertex receives an ordered slot from the same coordinator; its acknowledgment closes the barrier before the next command. This chooses buffered delivery explicitly instead of the scheduler's queued broadcast.".
 -spec topology() -> hls_topology:spec().
 topology() ->
-    Topology = #{routes := [{{coordinator, command}, queued, Recipients} | Rest]} =
-        snowflake_actor_topology:topology(2, 2),
-    Topology#{routes := [{{coordinator, command}, buffered, Recipients} | Rest]}.
+    snowflake_source:topology().
 
 -doc "Writes one fresh complete source-protocol boundary using production compilation and topology checks.".
 -spec write(file:filename()) -> ok.
@@ -29,14 +20,15 @@ write(Output) ->
 -doc "Runs ordinary BEAM actors on eight finite syndrome sheets and writes independently calculated public frames. The reference checks each round's complete state and retirement; this is a finite witness, not decoder validation.".
 -spec oracle(file:filename()) -> ok.
 oracle(Output) ->
-    Files = ["experiments/snowflake/erlang/snowflake_node.erl",
-        "experiments/snowflake/erlang/snowflake_window.erl",
-        "experiments/snowflake/actors/snowflake_actor_run.erl"],
+    Root = code:lib_dir(hls_snowflake),
+    Files = [filename:join([Root, "src", Name ++ ".erl"]) || Name <-
+        ["snowflake_node", "snowflake_window", "snowflake_actor_run"]],
+    Includes = [{i, filename:join(Root, "include")}],
     %% Use the same ordinary actors/options as emission, independent of generated hardware.
     lists:foreach(fun({File, Options}) ->
         {ok, Module, Bytes} = compile:file(File, [binary, debug_info, warnings_as_errors, report | Options]),
         {module, Module} = code:load_binary(Module, File, Bytes)
-    end, maps:get(sources, config()) ++ [{File, []} || File <- Files]),
+    end, maps:get(sources, config()) ++ [{File, Includes} || File <- Files]),
     Masks = [1, 2, 3, 0, 1, 0, 0, 0],
     Reports = snowflake_actor_run:run(2, 2, Masks),
     8 = length(Reports),

@@ -1,0 +1,9 @@
+{
+  "url": "https://www.trenz-electronic.de/trenzdownloads/Trenz_Electronic/Software/Vivado_IP_Core/2017.4/rgpio_1.0.zip",
+  "archive_sha256": "f834640d421986f7d331a817c86a6041fc54e3dfb860fcfb3af1370c2c6e817e",
+  "member": "rgpio/src/ddsrpi_slave.vhd",
+  "member_sha256": "02d52e5ee42e5cece413855849d9762d9c1416da6ce3996003f08a3451c70a53",
+  "license": "MIT",
+  "license_source": "https://wiki.trenz-electronic.de/display/PD/RGPIO",
+  "verilog_sha256": "34d3285f8dc1e22586f3932b065ff787dd15bc1207c42c3cf5eac0d74bc90bfc"
+}

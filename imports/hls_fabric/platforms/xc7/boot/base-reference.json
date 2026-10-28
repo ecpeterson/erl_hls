@@ -1,0 +1,11 @@
+{
+  "source_artifact": "experiments/07-openxc7/te0715-boot-result.json",
+  "source_artifact_sha256": "73aa529296464d23a2a36c4c9fecfd9451ed7e78d281351b29dd678ce0da7e69",
+  "module": "TE0715-05-71C33-A",
+  "carrier": "TEF1002-03-A",
+  "part": "xc7z030sbg485-1",
+  "vendor_profile": "04_30_1c_1gb",
+  "fclk0_hz": 100000000,
+  "fsbl_partition_sha256": "c04ce7cf627d81b41d108af988c0b0f790bd465b8f67971bac5aacf54d451733",
+  "ps_init_sha256": "b984c818b828b4d9847360ac849acd5eb572e1d1973e4aef30c416a7015cd2e6"
+}

@@ -208,5 +208,34 @@ class SourceToolchainTests(unittest.TestCase):
             rtl = (published/'files.f').read_text().splitlines()
             self.assertTrue(all(not Path(path).is_absolute() and (published/path).is_file() for path in rtl))
 
+    def test_relocated_example_release(self) -> None:
+        """Examples ship separately and resolve source/includes from their installed application."""
+        generic = ROOT / '_build/default/rel/hls/lib'
+        self.assertFalse(list(generic.glob('hls_phi-*')))
+        self.assertFalse(list(generic.glob('hls_snowflake-*')))
+        with tempfile.TemporaryDirectory(prefix='example release ') as temporary:
+            stage = Path(temporary).resolve()
+            release = stage / 'relocated examples'
+            shutil.copytree(ROOT / '_build/default/rel/hls_examples', release)
+            environment = {**os.environ, 'ERL_AFLAGS': '', 'ERL_HLS_ROOT': '/not-a-checkout'}
+            phi = subprocess.run([release / 'bin/hls-repetition', '--width', '2',
+                                  '--output', stage / 'phi'], cwd=stage, env=environment,
+                                 capture_output=True, text=True, timeout=90)
+            self.assertEqual(phi.returncode, 0, phi.stdout + phi.stderr)
+            ebins = sorted((release / 'lib').glob('*/ebin'))
+            expression = 'hls_source_build:write(boundary, snowflake_source:config(), "snowflake"), halt().'
+            snowflake = subprocess.run(['erl', '+S', '2', '-noshell', '-pa', *map(str, ebins),
+                                        '-eval', expression], cwd=stage, env=environment,
+                                       capture_output=True, text=True, timeout=90)
+            self.assertEqual(snowflake.returncode, 0, snowflake.stdout + snowflake.stderr)
+            for application in ('phi', 'snowflake'):
+                bundle = stage / application
+                manifest = json.loads((bundle / 'source-build.json').read_text())
+                self.assertTrue(manifest['units'])
+                for item in manifest['inputs']:
+                    self.assertFalse(Path(item['file']).is_absolute())
+                    self.assertEqual(hashlib.sha256((bundle / item['file']).read_bytes()).hexdigest(),
+                                     item['sha256'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -14,12 +14,12 @@ erl -noshell -eval '
 [Stage,Policy]=init:get_plain_arguments(),
 ok=hls_admission_collection_dslx:write(Stage,case Policy of "true" -> true; "exclusive_epoch" -> exclusive_epoch end),halt().' -extra "$stage" "$policy"
 cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 for stages in 2 3; do
   output="$stage/p$stages"
   python3 "$erl_hls_root/tools/compile_xls.py" "$stage/collection_top.x" "$xls_root" --output "$output" \
     --name collection --top Top --pipeline-stages "$stages" --delay-model unit \
-    --ram-configurations "$(phi_scheduler_ram_configurations 1)"
+    --ram-configurations "$(scheduler_ram_configurations 1)"
   iverilog -g2012 -s admission_collection_tb -o "$stage/test-p$stages.vvp" test/rtl/admission_collection_tb.sv \
     "$output/collection.v" "$stage/collection_wrapper.v" "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"
   vvp "$stage/test-p$stages.vvp"

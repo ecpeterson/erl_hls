@@ -22,5 +22,5 @@ __pycache__/
 
 # Measurement evidence belongs in the external artifact archive.
 /experiments/results/
-/experiments/07-openxc7/results/
+/platforms/xc7/results/
 /experiments/local-artifacts/

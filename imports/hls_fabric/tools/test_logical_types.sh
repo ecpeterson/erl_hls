@@ -12,10 +12,10 @@ source tools/backend_env.sh test
 erl -noshell -eval 'ok = hls_dense_topology_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$stage/"
 cp "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
-source tools/phi_scheduler_rams.sh
+source tools/scheduler_ram_configurations.sh
 for fixture in direct shared; do
     rams=(--pipeline-stages 2)
-    [[ "$fixture" != shared ]] || rams+=(--ram-configurations "$(phi_scheduler_ram_configurations 1)")
+    [[ "$fixture" != shared ]] || rams+=(--ram-configurations "$(scheduler_ram_configurations 1)")
     prefix="$stage/dense_$fixture"
     python3 "$erl_hls_root/tools/compile_xls.py" "$prefix.x" "$xls_root" --output "$prefix-build" \
         --top Top --name "dense_$fixture" \

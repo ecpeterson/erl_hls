@@ -1,0 +1,16 @@
+# Early experiment disposition
+
+Experiments 01–06 were retired from the active source tree after their reusable checks moved to the compiler. The [manifest](retired-experiments-01-06.json) records source commit `548b75eeb07ca9fa55289c6b78210ccb473e66ca`, directory tree identities, original probe hashes and destinations. Git retains each historical input: `git show COMMIT:PATH` retrieves its recorded contents. Large historical reports remain in the external [artifact archive](../docs/artifacts.md); this change neither deletes that evidence nor makes an active build depend on it.
+
+| Former directory | Disposition |
+| --- | --- |
+| `experiments/01-fmac` | Remove the manual floating-point accumulator/socket demo. Current compiler float regressions cover typed arithmetic and actors; no claim is made that they replay this demo's exact recurrence. |
+| `experiments/02-zynqberrydemo` | Remove the vendored ZynqBerry/Vivado/PetaLinux bootstrap project and its binary/demo outputs. Supported board source has its own platform ownership. |
+| `experiments/03-async` | Remove the obsolete AXI DMA/kernel-shim prototype built on experiment 02. |
+| `experiments/04-erlang` | Remove the early hand-packed Erlang DMA client; current runtime broker/session APIs own host interaction. |
+| `experiments/05-xls` | Remove the handwritten register-service prototype and duplicate external-tool drivers. Promote selector equivalence, addressed-state simulation and the IR census as described below. |
+| `experiments/06-parse` | Remove the frozen partial compiler and generated register-service RTL. Current compiler source and regression cases are authoritative. |
+
+The compiler's `selection_equivalence` case owns the former 19/22-input indexed/direct/early selector SAT checks in `test_data/xls_selection.x`. Its `state_updates` case owns `test_data/xls_state_updates.x` and `test/rtl/xls_state_updates_tb.sv`, retaining the two-stage 8,192-reply witness for clamped reads, ignored writes, stalls, hazards and reset. The Python diagnostic is now `tools/erl_hls_tools/xls_ir_census.py`, with the `tools/xls_ir_census.py` entry point and `tools/test_xls_ir_census.py` tests. Run both cases from an `erl_hls` checkout with `python3 tools/run_regression.py XLS_ROOT --cases selection_equivalence state_updates`. See the compiler's [regression guide](https://github.com/ecpeterson/erl_hls/blob/main/docs/ci.md) for evidence scope.
+
+The old `array-flattening.patch` and `row-local-epoch.patch` were optional, uninstalled experiments and are retired, not asserted to be upstream fixes. The 458-line `next-value-no-split.txtpb` was derived from XLS `e9a19b85522b4b192671e737b46560345899306f` and is also retired as an active input; the new case tests the selected optimizer without imposing that version-specific policy. Its SHA-256 remains `93310fd86079f9da0e5dfe4c0e0634933b1ef2d7821081d4321a30b49ba7c85d` in the manifest and the unchanged `experiments/local_admission/reference.json`. That frozen reference's old path/hash identifies historical evidence; the verifier does not open the optimizer pipeline through it. Recover the exact input from the recorded Git commit when reproducing that historical campaign. No existing measurement is reinterpreted as a result of the promoted cases.

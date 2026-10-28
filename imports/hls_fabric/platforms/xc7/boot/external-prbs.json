@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-09",
+  "part": "xc7z030sbg485-1",
+  "profile": "prbs-external",
+  "composition": "Retained timing-closed PRBS frames with the exact eight-bit GTX external-mode delta from retained timing-closed Ethernet images",
+  "inputs_sha256": {
+    "prbs": "b346b9f278b3a1d0f6f63205043ee3340568f9198d8bdeca0adc65cd79de7471",
+    "ethernet-loopback": "26572ac185d85f646b423fc15cc931311a4a1e227bad0cc79800de77c4dd9944",
+    "ethernet-external": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6"
+  },
+  "removed_bits": [
+    "bit_00442494_036_28",
+    "bit_00442495_029_20",
+    "bit_00442496_036_28",
+    "bit_00442498_036_28",
+    "bit_00442499_029_20",
+    "bit_00442499_036_28"
+  ],
+  "added_bits": [
+    "bit_00442495_041_22",
+    "bit_00442499_041_22"
+  ],
+  "non_ecc_set_bits": 41773,
+  "candidate_frames_sha256": "578cba0e3fdfee9b79707e1685186eb5463fa247b92c6c3b13526560f97f86c1",
+  "candidate_bitstream_sha256": "323a3ed9cb5146b6e44be7b796b2cb74c2819858bc3570a6e3aa5020ec8894de",
+  "bitstream_header": {
+    "design": "candidate.frames;Generator=xc7frames2bit",
+    "date": "2000/01/01",
+    "time": "00:00:00"
+  },
+  "tools_sha256": {
+    "bitread": "b38853980b01f87fe542b2ef9517bf6f1fded58787a3e12bf3f5f19afd1b5940",
+    "xc7frames2bit": "629a3e9274a2a4c7f9e01d04b24666ba5abd1505852c0b3394e13db025b919f4"
+  },
+  "timing_basis": {
+    "wns_ns": 6.365,
+    "tns_ns": 0.0,
+    "setup_failing": 0,
+    "setup_endpoints": 1665,
+    "whs_ns": 0.069,
+    "ths_ns": 0.0,
+    "hold_failing": 0,
+    "hold_endpoints": 1665,
+    "wpws_ns": 6.462,
+    "tpws_ns": 0.0,
+    "pulse_failing": 0,
+    "pulse_endpoints": 606
+  },
+  "hardware_validated": false,
+  "limits": "No new route or fabric timing change; the composite hard-GTX mode and external analog path require this hardware test."
+}
