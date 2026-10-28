@@ -1,6 +1,6 @@
 -module(xls_patterns_tests).
 -include_lib("eunit/include/eunit.hrl").
--include("../src/backend/xls/xls_clause_lower.hrl").
+-include("../src/backend/xls/expressions/xls_clause_lower.hrl").
 
 %% Assignment matches an existing binding without replacing it and still binds fresh list elements.
 -spec assignment_preserves_existing_binding_test() -> ok.

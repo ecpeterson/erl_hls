@@ -34,3 +34,5 @@ Import discovery visits only the selected hardware source and nested type argume
 `hls_field_layout:layout/2` derives ordered widths and prefixes from runtime descriptors. `stream` prefixes count physical stream bits; `lsb` prefixes identify numeric low-bit slices. Zero-width fields remain present and do not advance the prefix. Callers supply checked unique field names.
 
 `xls_struct_codec` renders those layouts using `xls_type` conversions. `hls_frame_layout` owns the ordinary header schema and host capacity checks; `xls_frame_layout` emits the matching per-build DSLX configuration. Neither renderer owns a second copy of the layout or host codec policy.
+
+Compiler provider dispatch, built-in companions and typed codec renderers live together in [backend/xls/types](../src/backend/xls/types/README.md); see the [backend directory map](../src/backend/xls/README.md) for their expression, actor and emission collaborators.
