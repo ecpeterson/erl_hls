@@ -1,6 +1,10 @@
 -module(hls_gs_deferred).
--moduledoc "Bounded CPU reply ownership and continuation validation for hls_gs.".
+-moduledoc """
+CPU retained-reply execution used by hls_gs. Dispatches actor callbacks, validates their actions through hls_callback_actions and keeps caller ownership in hls_reply_book; hardware lowering has its own implementation of the same contract.
+""".
+%% Retained-call state and CPU callback execution.
 -export([new/1, dispatch/6]).
+%% Shared type contracts.
 -export_type([pending/0]).
 
 -doc "Pending callers and a nonwrapping allocation sequence, local to one server activation.".
@@ -17,8 +21,10 @@ new(#{pending_calls := N, continuations := Names}) ->
 %% The common ownership book allocates a token before the callback can retain it.
 dispatch(call, Module, Message, {From, Replies}, State, Pending = #{book := Book}) ->
     case hls_reply_book:admit(Module:pack_tag(element(1, Message)), From, Replies, Book) of
-        full -> {State, Pending, none};
-        {ok, Handle, Next} -> finish(Module:handle_call(Message, Handle, State), Handle, Pending#{book := Next})
+        full ->
+            {State, Pending, none};
+        {ok, Handle, Next} ->
+            finish(Module:handle_call(Message, Handle, State), Handle, Pending#{book := Next})
     end;
 %% Casts consume no reply-table slot.
 dispatch(cast, Module, Message, _From, State, Pending) ->
@@ -34,10 +40,15 @@ finish({reply, Reply, State}, Handle, Pending) when is_integer(Handle) ->
     finish({noreply, State, [{reply, Handle, Reply}]}, none, Pending);
 finish({reply, Reply, State, {continue, Name}}, Handle, Pending) when is_integer(Handle) ->
     finish({noreply, State, [{reply, Handle, Reply}, {continue, Name}]}, none, Pending);
-finish({noreply, State}, _Handle, Pending) -> {State, Pending, none};
+finish({noreply, State}, _Handle, Pending) ->
+    {State, Pending, none};
 finish({noreply, State, {continue, Name}}, Handle, Pending) ->
     finish({noreply, State, [{continue, Name}]}, Handle, Pending);
 finish({noreply, State, Actions}, _Handle, Pending = #{names := Names, book := Book}) ->
     {Reply, Name} = hls_callback_actions:split(Actions, server, Names),
-    Continue = case Name of none -> none; _ -> {continue, Name} end,
+    Continue =
+        case Name of
+            none -> none;
+            _ -> {continue, Name}
+        end,
     {State, Pending#{book := hls_reply_book:complete(Reply, Book)}, Continue}.

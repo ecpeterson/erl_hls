@@ -6,7 +6,8 @@
 %%%% names need no joined value and may have different types in different arms.
 
 -module(xls_var_scope).
--moduledoc false.
+-moduledoc "Annotates source branches with continuation uses before callback and expression lowering. xls_clause_lower and xls_case_lower use these marks to join only surviving bindings; definite binding is checked while lowering each arm. This conservative source-use pass neither renames DSLX variables nor optimizes expressions.".
+%% Mark continuation-visible names on source branch expressions.
 -export([annotate/1]).
 
 -doc "Marks branch expressions with variables used by their continuation; later matches count as uses.".
@@ -14,33 +15,43 @@
 annotate(Expressions) -> sequence(Expressions, #{}).
 
 sequence(Expressions, Live) ->
-    {Rewritten, _} = lists:mapfoldr(fun(Expression, After) ->
-        {expression(Expression, After), maps:merge(After, names(Expression))}
-    end, Live, Expressions),
+    {Rewritten, _} = lists:mapfoldr(
+        fun(Expression, After) ->
+            {expression(Expression, After), maps:merge(After, names(Expression))}
+        end,
+        Live,
+        Expressions
+    ),
     Rewritten.
 
 expression({'case', Line, Subject, Clauses}, Live) ->
-    {xls_live, Line, Live, {'case', Line,
-        expression(Subject, maps:merge(Live, names(Clauses))),
-        [clause(Clause, Live) || Clause <- Clauses]}};
+    {xls_live, Line, Live,
+        {'case', Line, expression(Subject, maps:merge(Live, names(Clauses))), [
+            clause(Clause, Live)
+         || Clause <- Clauses
+        ]}};
 expression({'if', Line, Clauses}, Live) ->
     {xls_live, Line, Live, {'if', Line, [clause(Clause, Live) || Clause <- Clauses]}};
 expression({op, Line, Op, Left, Right}, Live) when Op =:= 'andalso'; Op =:= 'orelse' ->
-    {xls_live, Line, Live, {op, Line, Op,
-        expression(Left, maps:merge(Live, names(Right))), expression(Right, Live)}};
+    {xls_live, Line, Live,
+        {op, Line, Op, expression(Left, maps:merge(Live, names(Right))), expression(Right, Live)}};
 expression({match, Line, Pattern, Value}, Live) ->
     {match, Line, Pattern, expression(Value, maps:merge(Live, names(Pattern)))};
 expression(Tuple, Live) when is_tuple(Tuple) ->
     list_to_tuple(sequence(tuple_to_list(Tuple), Live));
 expression(List, Live) when is_list(List) -> sequence(List, Live);
-expression(Value, _Live) -> Value.
+expression(Value, _Live) ->
+    Value.
 
 clause({clause, Line, Patterns, Guards, Body}, Live) ->
     {clause, Line, Patterns, Guards, sequence(Body, Live)}.
 
-names({var, _, '_'}) -> #{};
-names({var, _, Name}) -> #{Name => true};
+names({var, _, '_'}) ->
+    #{};
+names({var, _, Name}) ->
+    #{Name => true};
 names(Tuple) when is_tuple(Tuple) -> names(tuple_to_list(Tuple));
 names(List) when is_list(List) ->
     lists:foldl(fun(Item, Acc) -> maps:merge(Acc, names(Item)) end, #{}, List);
-names(_) -> #{}.
+names(_) ->
+    #{}.

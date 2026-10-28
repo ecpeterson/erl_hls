@@ -11,8 +11,13 @@ Use literal/2 for typed constants in translated code. Variables must already
 have the declared XLS precision; implicit conversion between formats and
 ordinary Erlang operators on float structs are unsupported. See
 docs/numeric-contract.md for the arithmetic and wire contracts.
+
+Actor calls are evaluated directly on BEAM; XLS lowering invokes transpile/3 and imports the matching floating-point support library.
 """.
+%% Application arithmetic.
 -export([literal/2, add/3, sub/3, mul/3, eq/3, lt/3]).
+
+%% XLS provider callbacks and precision lookup.
 -export([transpile/3, dslx_imports/0, format/1]).
 
 -spec literal(hls_type:descriptor(), number()) -> float().
@@ -45,10 +50,12 @@ operand_value(Type, X) ->
 operand_bits(Type, X, E, F) ->
     Width = 1 + E + F,
     %% A failed narrowing is an arithmetic failure, just like result overflow.
-    Bits = try hls_type:pack(X, Type) of
-        <<Packed:Width/little>> -> Packed
-    catch error:badarg -> error(badarith)
-    end,
+    Bits =
+        try hls_type:pack(X, Type) of
+            <<Packed:Width/little>> -> Packed
+        catch
+            error:badarg -> error(badarith)
+        end,
     case (Bits bsr F) band ((1 bsl E) - 1) of
         0 -> (Bits bsr (E + F)) bsl (E + F);
         _ -> Bits
@@ -68,27 +75,32 @@ arithmetic(Operation, Type, X, Y) ->
 decode(Bits, E, F) ->
     Sign = Bits bsr (E + F),
     case (Bits bsr F) band ((1 bsl E) - 1) of
-        0 -> {Sign, 0, 0};
-        Exponent -> {Sign, (1 bsl F) bor (Bits band ((1 bsl F) - 1)),
-            Exponent - ((1 bsl (E - 1)) - 1) - F}
+        0 ->
+            {Sign, 0, 0};
+        Exponent ->
+            {Sign, (1 bsl F) bor (Bits band ((1 bsl F) - 1)), Exponent - ((1 bsl (E - 1)) - 1) - F}
     end.
 
-exact(mul, {SA, A, EA}, {SB, B, EB}) -> {SA bxor SB, A * B, EA + EB};
-exact(sub, A, {SB, B, EB}) -> exact(add, A, {SB bxor 1, B, EB});
+exact(mul, {SA, A, EA}, {SB, B, EB}) ->
+    {SA bxor SB, A * B, EA + EB};
+exact(sub, A, {SB, B, EB}) ->
+    exact(add, A, {SB bxor 1, B, EB});
 exact(add, {SA, A, EA}, {SB, B, EB}) ->
     E = min(EA, EB),
     Sum = signed(SA, A bsl (EA - E)) + signed(SB, B bsl (EB - E)),
-    Sign = case Sum of
-        0 -> SA band SB;
-        _ when Sum < 0 -> 1;
-        _ -> 0
-    end,
+    Sign =
+        case Sum of
+            0 -> SA band SB;
+            _ when Sum < 0 -> 1;
+            _ -> 0
+        end,
     {Sign, abs(Sum), E}.
 
 signed(0, N) -> N;
 signed(1, N) -> -N.
 
-rounded(Sign, 0, _Exponent, E, F) -> Sign bsl (E + F);
+rounded(Sign, 0, _Exponent, E, F) ->
+    Sign bsl (E + F);
 rounded(Sign, Magnitude, Exponent, E, F) ->
     Bias = (1 bsl (E - 1)) - 1,
     Top = integer_bits(Magnitude) - 1,
@@ -116,7 +128,8 @@ nearest_even(N, Shift) ->
         false -> High
     end.
 
-integer_bits(0) -> 0;
+integer_bits(0) ->
+    0;
 integer_bits(N) ->
     <<First, Rest/binary>> = binary:encode_unsigned(N),
     8 * byte_size(Rest) + byte_bits(First).
@@ -129,18 +142,43 @@ value(Type, Bits, Width) ->
 
 dslx_imports() -> [apfloat, hls_float].
 
-transpile(literal, [{phantom, type, Type}, {static, Kind, Value}], _State)
-        when Kind =:= float; Kind =:= integer ->
+transpile(literal, [{phantom, type, Type}, {static, Kind, Value}], _State) when
+    Kind =:= float; Kind =:= integer
+->
     {E, F} = format(Type),
     Width = 1 + E + F,
     <<Bits:Width/little>> = hls_type:pack(Value, Type),
-    ["apfloat::unflatten<u32:", integer_to_list(E), ", u32:", integer_to_list(F),
-        ">(uN[", integer_to_list(Width), "]:", integer_to_list(Bits), ")"];
+    [
+        "apfloat::unflatten<u32:",
+        integer_to_list(E),
+        ", u32:",
+        integer_to_list(F),
+        ">(uN[",
+        integer_to_list(Width),
+        "]:",
+        integer_to_list(Bits),
+        ")"
+    ];
 transpile(literal, _Args, _State) ->
     error(nonconstant_float_literal);
-transpile(Operation, [{phantom, type, Type}, X, Y], _State)
-        when Operation =:= add; Operation =:= sub; Operation =:= mul;
-             Operation =:= eq; Operation =:= lt ->
+transpile(Operation, [{phantom, type, Type}, X, Y], _State) when
+    Operation =:= add;
+    Operation =:= sub;
+    Operation =:= mul;
+    Operation =:= eq;
+    Operation =:= lt
+->
     {E, F} = format(Type),
-    {fallible, badarith, ["hls_float::", atom_to_list(Operation), "<u32:",
-        integer_to_list(E), ", u32:", integer_to_list(F), ">(", X, ", ", Y, ")"]}.
+    {fallible, badarith, [
+        "hls_float::",
+        atom_to_list(Operation),
+        "<u32:",
+        integer_to_list(E),
+        ", u32:",
+        integer_to_list(F),
+        ">(",
+        X,
+        ", ",
+        Y,
+        ")"
+    ]}.

@@ -1,8 +1,10 @@
 -module(xls_statem_reduction_codegen).
--moduledoc false.
--export([declarations/1, functions/1, private_width/1, tag_member/2, site_contributions/1]).
+-moduledoc "Renders scalar reduction definitions from the closed xls_statem_reduction_ir produced by source lowering. Common actor assembly and fabric execution backends share these functions and storage widths; xls_statem_reduction_service_codegen separately integrates them into execution transitions.".
+%% Render reducer types and source-derived operations.
+-export([declarations/1, functions/1]).
+%% Inspect storage and contribution identities for execution backends.
+-export([private_width/1, tag_member/2, site_contributions/1]).
 -type spec() :: none | xls_statem_reduction_ir:reduction().
-
 
 -doc "Defines private reduction storage around the declared accumulator type.".
 -spec declarations(spec()) -> xls_dslx:value().
@@ -13,12 +15,14 @@ declarations(Spec) ->
 -spec declarations_value(spec()) -> xls_dslx:value().
 declarations_value(none) ->
     [];
-declarations_value(Spec = #{
-    data := #{dslx_type := DataType},
-    accumulator := #{dslx_type := AccumulatorType},
-    sites := Sites,
-    reducers := Reducers
-}) ->
+declarations_value(
+    Spec = #{
+        data := #{dslx_type := DataType},
+        accumulator := #{dslx_type := AccumulatorType},
+        sites := Sites,
+        reducers := Reducers
+    }
+) ->
     Layout = xls_statem_reduction_ir:layout(Spec),
     SiteBits = maps:get(site_bits, Layout),
     RemainingBits = maps:get(remaining_bits, Layout),
@@ -35,22 +39,37 @@ declarations_value(Spec = #{
         "}\n\n",
         "enum ReductionName : u8 {\n",
         [
-            ["  ", xls_names:enum_member(maps:get(name, Reducer)), " = u8:",
-                integer_to_list(Index), ",\n"]
-            || {Index, Reducer} <- lists:enumerate(0, Reducers)
+            [
+                "  ",
+                xls_names:enum_member(maps:get(name, Reducer)),
+                " = u8:",
+                integer_to_list(Index),
+                ",\n"
+            ]
+         || {Index, Reducer} <- lists:enumerate(0, Reducers)
         ],
         "}\n\n",
-        "enum ReductionSite : uN[", integer_to_list(SiteBits), "] {\n",
+        "enum ReductionSite : uN[",
+        integer_to_list(SiteBits),
+        "] {\n",
         [
-            ["  ", site_label(Site), " = uN[",
-                integer_to_list(SiteBits), "]:",
-                integer_to_list(maps:get(id, Site)), ",\n"]
-            || Site <- Sites
+            [
+                "  ",
+                site_label(Site),
+                " = uN[",
+                integer_to_list(SiteBits),
+                "]:",
+                integer_to_list(maps:get(id, Site)),
+                ",\n"
+            ]
+         || Site <- Sites
         ],
         "}\n\n",
         "type ReductionRemaining = uN[",
-        integer_to_list(RemainingBits), "];\n",
-        "type ReductionMembers = bits[", integer_to_list(MemberBits),
+        integer_to_list(RemainingBits),
+        "];\n",
+        "type ReductionMembers = bits[",
+        integer_to_list(MemberBits),
         "];\n\n",
         "struct ReductionState {\n",
         "  status: ReductionStatus,\n",
@@ -59,7 +78,9 @@ declarations_value(Spec = #{
         "  remaining: ReductionRemaining,\n",
         "  seen: ReductionMembers,\n",
         runtime_members(Spec, "  expected: ReductionMembers,\n"),
-        "  accumulator: ", AccumulatorType, ",\n",
+        "  accumulator: ",
+        AccumulatorType,
+        ",\n",
         "  failure: hls_failure::Code,\n",
         "}\n\n",
         "struct ReductionContribution {\n",
@@ -67,7 +88,9 @@ declarations_value(Spec = #{
         "  site: ReductionSite,\n",
         "  key: u32,\n",
         "  member: u32,\n",
-        "  value: ", AccumulatorType, ",\n",
+        "  value: ",
+        AccumulatorType,
+        ",\n",
         "}\n\n",
         "enum ReductionOutcome : u3 {\n",
         "  NOT_CANDIDATE = u3:0,\n",
@@ -85,7 +108,9 @@ declarations_value(Spec = #{
         "  next_event: u8,\n",
         "  reduction: ReductionState,\n",
         "  phase: Phase,\n",
-        "  data: ", DataType, ",\n",
+        "  data: ",
+        DataType,
+        ",\n",
         "  directive: Directive,\n",
         "  repeat_phase: u1,\n",
         "  failure: hls_failure::Code,\n",
@@ -125,8 +150,9 @@ private_width(Spec) ->
 -spec tag_member(spec(), non_neg_integer()) -> iodata().
 tag_member(none, _Selector) ->
     [];
-tag_member(#{accumulator := #{name := Name}}, Selector)
-        when Selector >= 0, Selector =< 255 ->
+tag_member(#{accumulator := #{name := Name}}, Selector) when
+    Selector >= 0, Selector =< 255
+->
     ["  ", xls_names:enum_member(Name), " = u8:", integer_to_list(Selector), ",\n"].
 
 %% Encode and decode exactly the optional member-mask storage described by the IR.
@@ -138,47 +164,89 @@ codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     MemberBits = maps:get(member_bits, Layout),
     TotalBits = maps:get(total_bits, Layout),
     StatusBits = maps:get(status_bits, Layout),
-    #{site := #{offset := SiteStart}, key := #{offset := KeyStart},
-        remaining := #{offset := RemainingStart}, seen := #{offset := MemberStart},
-        expected := #{offset := ExpectedStart}, accumulator := #{offset := AccumulatorStart}, failure := #{offset := FailureStart}} =
+    #{
+        site := #{offset := SiteStart},
+        key := #{offset := KeyStart},
+        remaining := #{offset := RemainingStart},
+        seen := #{offset := MemberStart},
+        expected := #{offset := ExpectedStart},
+        accumulator := #{offset := AccumulatorStart},
+        failure := #{offset := FailureStart}
+    } =
         xls_statem_reduction_ir:packed_layout(Spec),
     AccumulatorFunction = xls_names:record_codec(AccumulatorName),
     [
         "fn reduction_state_from_bits(\n",
-        "    raw: bits[", integer_to_list(TotalBits),
+        "    raw: bits[",
+        integer_to_list(TotalBits),
         "]) -> ReductionState {\n",
         "  ReductionState {\n",
-        "    status: raw[0:", integer_to_list(StatusBits),
+        "    status: raw[0:",
+        integer_to_list(StatusBits),
         "] as ReductionStatus,\n",
-        "    site: raw[", integer_to_list(SiteStart), ":",
-        integer_to_list(KeyStart), "] as ReductionSite,\n",
-        "    key: raw[", integer_to_list(KeyStart), ":",
-        integer_to_list(RemainingStart), "] as u32,\n",
-        "    remaining: raw[", integer_to_list(RemainingStart), ":",
-        integer_to_list(MemberStart), "] as ReductionRemaining,\n",
-        "    seen: raw[", integer_to_list(MemberStart), ":",
-        integer_to_list(ExpectedStart), "] as ReductionMembers,\n",
-        runtime_members(Spec, ["    expected: raw[", integer_to_list(ExpectedStart), ":",
-            integer_to_list(AccumulatorStart), "] as ReductionMembers,\n"]),
-        "    accumulator: ", AccumulatorFunction, "_from_bits(raw[",
-        integer_to_list(AccumulatorStart), ":",
-        integer_to_list(FailureStart), "]),\n",
-        "    failure: raw[", integer_to_list(FailureStart), ":",
-        integer_to_list(TotalBits), "] as hls_failure::Code,\n",
+        "    site: raw[",
+        integer_to_list(SiteStart),
+        ":",
+        integer_to_list(KeyStart),
+        "] as ReductionSite,\n",
+        "    key: raw[",
+        integer_to_list(KeyStart),
+        ":",
+        integer_to_list(RemainingStart),
+        "] as u32,\n",
+        "    remaining: raw[",
+        integer_to_list(RemainingStart),
+        ":",
+        integer_to_list(MemberStart),
+        "] as ReductionRemaining,\n",
+        "    seen: raw[",
+        integer_to_list(MemberStart),
+        ":",
+        integer_to_list(ExpectedStart),
+        "] as ReductionMembers,\n",
+        runtime_members(Spec, [
+            "    expected: raw[",
+            integer_to_list(ExpectedStart),
+            ":",
+            integer_to_list(AccumulatorStart),
+            "] as ReductionMembers,\n"
+        ]),
+        "    accumulator: ",
+        AccumulatorFunction,
+        "_from_bits(raw[",
+        integer_to_list(AccumulatorStart),
+        ":",
+        integer_to_list(FailureStart),
+        "]),\n",
+        "    failure: raw[",
+        integer_to_list(FailureStart),
+        ":",
+        integer_to_list(TotalBits),
+        "] as hls_failure::Code,\n",
         "  }\n",
         "}\n\n",
         "fn bits_from_reduction_state(\n",
-        "    state: ReductionState) -> bits[", integer_to_list(TotalBits),
+        "    state: ReductionState) -> bits[",
+        integer_to_list(TotalBits),
         "] {\n",
         "  state.failure ++\n",
-        "    bits_from_", AccumulatorFunction, "(state.accumulator) ++\n",
+        "    bits_from_",
+        AccumulatorFunction,
+        "(state.accumulator) ++\n",
         runtime_members(Spec, ["    state.expected ++\n"]),
-        "    (state.seen as bits[", integer_to_list(MemberBits), "]) ++\n",
+        "    (state.seen as bits[",
+        integer_to_list(MemberBits),
+        "]) ++\n",
         "    (state.remaining as bits[",
-        integer_to_list(RemainingBits), "]) ++\n",
+        integer_to_list(RemainingBits),
+        "]) ++\n",
         "    (state.key as bits[32]) ++\n",
-        "    (state.site as bits[", integer_to_list(SiteBits), "]) ++\n",
-        "    (state.status as bits[", integer_to_list(StatusBits), "])\n",
+        "    (state.site as bits[",
+        integer_to_list(SiteBits),
+        "]) ++\n",
+        "    (state.status as bits[",
+        integer_to_list(StatusBits),
+        "])\n",
         "}\n\n"
     ].
 
@@ -188,19 +256,29 @@ site_functions(Spec = #{sites := Sites}) ->
         "fn reduction_site_name(site: ReductionSite) -> ReductionName {\n",
         "  match site {\n",
         [
-            ["    ReductionSite::", site_label(Site), " => ",
-                "ReductionName::", xls_names:enum_member(maps:get(name, Site)), ",\n"]
-            || Site <- Sites
+            [
+                "    ReductionSite::",
+                site_label(Site),
+                " => ",
+                "ReductionName::",
+                xls_names:enum_member(maps:get(name, Site)),
+                ",\n"
+            ]
+         || Site <- Sites
         ],
         "  }\n",
         "}\n\n",
         "fn reduction_site_mode(site: ReductionSite) -> ReductionMode {\n",
         "  match site {\n",
         [
-            ["    ReductionSite::", site_label(Site), " => ",
+            [
+                "    ReductionSite::",
+                site_label(Site),
+                " => ",
                 mode_value(maps:get(mode, maps:get(population, Site))),
-                ",\n"]
-            || Site <- Sites
+                ",\n"
+            ]
+         || Site <- Sites
         ],
         "  }\n",
         "}\n\n",
@@ -208,11 +286,19 @@ site_functions(Spec = #{sites := Sites}) ->
         "    site: ReductionSite) -> ReductionRemaining {\n",
         "  match site {\n",
         [
-            ["    ReductionSite::", site_label(Site),
+            [
+                "    ReductionSite::",
+                site_label(Site),
                 " => ReductionRemaining:",
-                integer_to_list(maps:get(size,
-                    maps:get(population, Site))), ",\n"]
-            || Site <- Sites
+                integer_to_list(
+                    maps:get(
+                        size,
+                        maps:get(population, Site)
+                    )
+                ),
+                ",\n"
+            ]
+         || Site <- Sites
         ],
         "  }\n",
         "}\n\n",
@@ -230,21 +316,26 @@ site_functions(Spec = #{sites := Sites}) ->
 open_functions(Spec = #{accumulator := #{dslx_type := AccumulatorType}}) ->
     [
         "fn reduction_open_site(\n",
-        "    site: ReductionSite, key: u32, identity: ", AccumulatorType,
+        "    site: ReductionSite, key: u32, identity: ",
+        AccumulatorType,
         runtime_members(Spec, ", expected: ReductionMembers"),
         ") -> ReductionState {\n",
         runtime_members(Spec, [
             "  let population = unroll_for! (index, total): (u32, ReductionRemaining) in u32:0..u32:",
-            integer_to_list(xls_statem_reduction_ir:member_width(Spec)), " {\n",
+            integer_to_list(xls_statem_reduction_ir:member_width(Spec)),
+            " {\n",
             "    total + ((expected >> index) as u1 as ReductionRemaining)\n",
-            "  }(ReductionRemaining:0);\n"]),
+            "  }(ReductionRemaining:0);\n"
+        ]),
         "  ReductionState {\n",
         "    status: ReductionStatus::OPEN,\n",
         "    site,\n",
         "    key,\n",
         case xls_statem_reduction_ir:has_runtime_members(Spec) of
-            false -> "    remaining: reduction_site_population(site),\n";
-            true -> "    expected,\n"
+            false ->
+                "    remaining: reduction_site_population(site),\n";
+            true ->
+                "    expected,\n"
                 "    remaining: if reduction_site_mode(site) == ReductionMode::MEMBERS { population }\n"
                 "      else { reduction_site_population(site) },\n"
         end,
@@ -260,16 +351,19 @@ contribution_functions(#{
     sites := Sites
 }) ->
     Contributions = site_contributions(Sites),
-    Tags = lists:uniq([maps:get(tag, Contribution)
-        || {_Site, Contribution} <- Contributions]),
+    Tags = lists:uniq([
+        maps:get(tag, Contribution)
+     || {_Site, Contribution} <- Contributions
+    ]),
     [
         "fn reduction_contribution(\n",
-        "    frame: axis::Frame, phase: Phase, data: ", DataType,
+        "    frame: axis::Frame, phase: Phase, data: ",
+        DataType,
         ") -> ReductionContribution {\n",
         "  match frame.header.op as Tag {\n",
         [
             contribution_tag_arm(Tag, Contributions)
-            || Tag <- Tags
+         || Tag <- Tags
         ],
         "    _ => zero!<ReductionContribution>(),\n",
         "  }\n",
@@ -277,12 +371,17 @@ contribution_functions(#{
     ].
 
 contribution_tag_arm(Tag, Contributions) ->
-    Tagged = [{Site, Contribution}
-        || {Site, Contribution} <- Contributions,
-           maps:get(tag, Contribution) =:= Tag],
+    Tagged = [
+        {Site, Contribution}
+     || {Site, Contribution} <- Contributions,
+        maps:get(tag, Contribution) =:= Tag
+    ],
     [
-        "    Tag::", xls_names:enum_member(Tag), " => {\n",
-        "      let message = ", xls_names:record_codec(Tag),
+        "    Tag::",
+        xls_names:enum_member(Tag),
+        " => {\n",
+        "      let message = ",
+        xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         "      match phase {\n",
         [contribution_phase_arm(Contribution) || Contribution <- Tagged],
@@ -292,20 +391,29 @@ contribution_tag_arm(Tag, Contributions) ->
     ].
 
 %% Preserve the selected contribution's body until the enclosing module is rendered.
--spec contribution_phase_arm({xls_statem_reduction_ir:site(),
-    xls_statem_reduction_ir:contribution()}) -> xls_dslx:value().
-contribution_phase_arm({Site, #{
-    build := #{body := Body, result := Result}
-}}) ->
+-spec contribution_phase_arm({
+    xls_statem_reduction_ir:site(), xls_statem_reduction_ir:contribution()
+}) -> xls_dslx:value().
+contribution_phase_arm(
+    {Site, #{
+        build := #{body := Body, result := Result}
+    }}
+) ->
     [
-        "        Phase::", xls_names:enum_member(maps:get(phase, Site)), " => {\n",
+        "        Phase::",
+        xls_names:enum_member(maps:get(phase, Site)),
+        " => {\n",
         "          let built = {\n",
         xls_dslx:indent(Body, 12),
-        "            ", Result, "\n",
+        "            ",
+        Result,
+        "\n",
         "          };\n",
         "          ReductionContribution {\n",
         "            valid: built.0,\n",
-        "            site: ReductionSite::", site_label(Site), ",\n",
+        "            site: ReductionSite::",
+        site_label(Site),
+        ",\n",
         "            key: built.1,\n",
         "            member: built.2,\n",
         "            value: built.3,\n",
@@ -319,8 +427,12 @@ reducer_function(#{
 }) ->
     [
         "fn reduction_reduce(\n",
-        "    name: ReductionName, left: ", AccumulatorType,
-        ", right: ", AccumulatorType, ") -> (", AccumulatorType,
+        "    name: ReductionName, left: ",
+        AccumulatorType,
+        ", right: ",
+        AccumulatorType,
+        ") -> (",
+        AccumulatorType,
         ", hls_failure::Code) {\n",
         "  match name {\n",
         [reducer_arm(Reducer) || Reducer <- Reducers],
@@ -332,9 +444,13 @@ reducer_function(#{
 -spec reducer_arm(xls_statem_reduction_ir:reducer()) -> xls_dslx:value().
 reducer_arm(#{name := Name, body := Body, result := Result}) ->
     [
-        "    ReductionName::", xls_names:enum_member(Name), " => {\n",
+        "    ReductionName::",
+        xls_names:enum_member(Name),
+        " => {\n",
         xls_dslx:indent(Body, 6),
-        "      ", Result, "\n",
+        "      ",
+        Result,
+        "\n",
         "    },\n"
     ].
 
@@ -360,8 +476,10 @@ apply_function(Spec) ->
         "      ReductionMode::MEMBERS;\n",
         "    let unexpected = member_mode &&\n",
         case xls_statem_reduction_ir:has_runtime_members(Spec) of
-            false -> "      member_bit == zero!<ReductionMembers>();\n";
-            true -> "      (member_bit == zero!<ReductionMembers>() ||\n"
+            false ->
+                "      member_bit == zero!<ReductionMembers>();\n";
+            true ->
+                "      (member_bit == zero!<ReductionMembers>() ||\n"
                 "       (state.expected & member_bit) == zero!<ReductionMembers>());\n"
         end,
         "    let duplicate = member_mode &&\n",
@@ -405,14 +523,17 @@ apply_function(Spec) ->
 
 %% Dispatches only completed scalar folds and carries any declared continuation.
 -spec completion_function(map()) -> xls_dslx:value().
-completion_function(#{
-    data := #{dslx_type := DataType},
-    accumulator := #{dslx_type := AccumulatorType},
-    sites := Sites
-} = Spec) ->
+completion_function(
+    #{
+        data := #{dslx_type := DataType},
+        accumulator := #{dslx_type := AccumulatorType},
+        sites := Sites
+    } = Spec
+) ->
     [
         "fn reduction_dispatch_completion(\n",
-        "    state: ReductionState, phase: Phase, data: ", DataType,
+        "    state: ReductionState, phase: Phase, data: ",
+        DataType,
         ") -> ReductionDispatch {\n",
         "  if state.status != ReductionStatus::COMPLETE {\n",
         "    ReductionDispatch { reduction: state, phase, data,\n",
@@ -423,10 +544,14 @@ completion_function(#{
         "      dispatched: u1:1, ..zero!<ReductionDispatch>() }\n",
         "  } else {\n",
         "    let key = state.key;\n",
-        "    let accumulator: ", AccumulatorType,
+        "    let accumulator: ",
+        AccumulatorType,
         " = state.accumulator;\n",
         "    match (state.site, phase) {\n",
-        [completion_arm(Site#{completion_events => maps:get(continuations, Spec, []) =/= []}) || Site <- Sites],
+        [
+            completion_arm(Site#{completion_events => maps:get(continuations, Spec, []) =/= []})
+         || Site <- Sites
+        ],
         "      _ => ReductionDispatch {\n",
         "        reduction: zero!<ReductionState>(),\n",
         "        phase, data, directive: Directive::FAIL,\n",
@@ -441,20 +566,32 @@ completion_function(#{
 
 %% Each source completion owns its selected failure and optional next event.
 -spec completion_arm(map()) -> xls_dslx:value().
-completion_arm(Site = #{
-    phase := Phase,
-    completion := #{body := Body, result := Result}
-}) ->
+completion_arm(
+    Site = #{
+        phase := Phase,
+        completion := #{body := Body, result := Result}
+    }
+) ->
     [
-        "      (ReductionSite::", site_label(Site), ", Phase::",
-        xls_names:enum_member(Phase), ") => {\n",
+        "      (ReductionSite::",
+        site_label(Site),
+        ", Phase::",
+        xls_names:enum_member(Phase),
+        ") => {\n",
         "        let conclusion = {\n",
         xls_dslx:indent(Body, 10),
-        "          ", Result, "\n",
+        "          ",
+        Result,
+        "\n",
         "        };\n",
         "        ReductionDispatch {\n",
         "          reduction: zero!<ReductionState>(),\n",
-        "          next_event: ", case maps:get(completion_events, Site, false) of true -> "conclusion.5"; false -> "u8:0" end, ",\n",
+        "          next_event: ",
+        case maps:get(completion_events, Site, false) of
+            true -> "conclusion.5";
+            false -> "u8:0"
+        end,
+        ",\n",
         "          phase: conclusion.0,\n",
         "          data: conclusion.1,\n",
         "          directive: conclusion.2,\n",
@@ -469,29 +606,39 @@ completion_arm(Site = #{
 -spec site_contributions([map()]) -> [{map(), map()}].
 site_contributions(Sites) ->
     lists:append([
-        [{Site, Contribution}
-            || Contribution <- maps:get(contributions, Site)]
-        || Site <- Sites
+        [
+            {Site, Contribution}
+         || Contribution <- maps:get(contributions, Site)
+        ]
+     || Site <- Sites
     ]).
 
 member_arms(Sites, MemberBits) ->
     lists:append([
         member_site_arms(Site, MemberBits)
-        || Site <- Sites
+     || Site <- Sites
     ]).
 
-member_site_arms(Site = #{
-    population := #{mode := members, members := Members}
-}, MemberBits) ->
+member_site_arms(
+    Site = #{
+        population := #{mode := members, members := Members}
+    },
+    MemberBits
+) ->
     [
         [
-            "    (ReductionSite::", site_label(Site), ", u32:",
-            integer_to_list(Member), ") =>\n",
-            "      (uN[", integer_to_list(MemberBits),
-            "]:1 << u32:", integer_to_list(Index),
+            "    (ReductionSite::",
+            site_label(Site),
+            ", u32:",
+            integer_to_list(Member),
+            ") =>\n",
+            "      (uN[",
+            integer_to_list(MemberBits),
+            "]:1 << u32:",
+            integer_to_list(Index),
             ") as ReductionMembers,\n"
         ]
-        || {Index, Member} <- lists:enumerate(0, Members)
+     || {Index, Member} <- lists:enumerate(0, Members)
     ];
 member_site_arms(_Site, _MemberBits) ->
     [].
@@ -505,4 +652,7 @@ site_label(#{phase := Phase}) ->
 %% Static-only actors retain the original private-state fields and widths.
 -spec runtime_members(map(), xls_dslx:value()) -> xls_dslx:value().
 runtime_members(Spec, Text) ->
-    case xls_statem_reduction_ir:has_runtime_members(Spec) of true -> Text; false -> [] end.
+    case xls_statem_reduction_ir:has_runtime_members(Spec) of
+        true -> Text;
+        false -> []
+    end.

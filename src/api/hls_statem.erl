@@ -61,19 +61,19 @@ Callback exceptions, invalid results and overflow terminate the CPU adapter.
 Hardware latches failure until coordinated reset. Retained-call hardware also
 fails outstanding and subsequent calls. Timeouts and other OTP result forms
 are outside this restricted `gen_statem` state-functions vocabulary.
+
+The CPU controller delegates mailbox selection, reduction/gather accumulation and reply ownership to runtime helpers. hls_pack records the source interface; the XLS backend implements hardware execution separately.
 """.
 
 -behavior(gen_server).
 
+%% CPU actor lifecycle, messages and inspection.
 -export([start_link/3, connect/2, stop/1, cast/2, call/2, call/3, info/1, info/2]).
--export([
-    init/1,
-    handle_call/3,
-    handle_cast/2,
-    handle_info/2,
-    terminate/2,
-    code_change/3
-]).
+
+%% gen_server implementation callbacks.
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+
+%% Shared type contracts.
 -export_type([
     phase/0,
     output_port/0,
@@ -86,7 +86,9 @@ are outside this restricted `gen_statem` state-functions vocabulary.
     cast_action/0,
     entry_action/0,
     open_reduction_action/0,
-    open_gather_action/0, gather_contribution/0, gather_complete/0,
+    open_gather_action/0,
+    gather_contribution/0,
+    gather_complete/0,
     reduction_complete/0,
     reduction_population/0,
     reduction_operator/0,
@@ -96,7 +98,10 @@ are outside this restricted `gen_statem` state-functions vocabulary.
     internal_result/0,
     internal_result/1,
     internal_result/2,
-    next_event_action/0, reply_action/0, step_actions/0, call_result/1
+    next_event_action/0,
+    reply_action/0,
+    step_actions/0,
+    call_result/1
 ]).
 
 %%%
@@ -124,8 +129,8 @@ are outside this restricted `gen_statem` state-functions vocabulary.
     reduction_operator()
 }.
 -doc "Opens one indexed collection; zero membership completes after entry commits.".
--type open_gather_action() :: {open_gather, atom(), term(),
-    {members_mask, 1 .. ((1 bsl 8) - 1), non_neg_integer()}, term()}.
+-type open_gather_action() ::
+    {open_gather, atom(), term(), {members_mask, 1..((1 bsl 8) - 1), non_neg_integer()}, term()}.
 -doc "Supplies one selected numeric member without mutating callback data or phase.".
 -type gather_contribution() :: {gather, atom(), term(), non_neg_integer(), term()}.
 -doc "A complete fixed-capacity member-indexed view; the mask identifies active values.".
@@ -133,8 +138,8 @@ are outside this restricted `gen_statem` state-functions vocabulary.
 -doc "Entry effects, optionally preceded by one collection opening.".
 -type entry_action() :: cast_action() | open_reduction_action() | open_gather_action().
 -type contribution() ::
-    {contribute, Name :: atom(), Key :: term(), Value :: term()} |
-    {
+    {contribute, Name :: atom(), Key :: term(), Value :: term()}
+    | {
         contribute,
         Name :: atom(),
         Key :: term(),
@@ -165,9 +170,9 @@ are outside this restricted `gen_statem` state-functions vocabulary.
         NextPhase :: PhaseType,
         NextData :: DataType,
         Directive :: cast_directive()
-    } |
-    {repeat_phase, NextData :: DataType, consume} |
-    {PhaseType | repeat_phase, DataType, consume, step_actions()}.
+    }
+    | {repeat_phase, NextData :: DataType, consume}
+    | {PhaseType | repeat_phase, DataType, consume, step_actions()}.
 -type enter_result() :: enter_result(data()).
 -type enter_result(DataType) :: {
     NextData :: DataType,
@@ -181,30 +186,32 @@ are outside this restricted `gen_statem` state-functions vocabulary.
         NextPhase :: PhaseType,
         NextData :: DataType,
         Directive :: consume | fail
-    } |
-    {repeat_phase, NextData :: DataType, consume} |
-    {PhaseType | repeat_phase, DataType, consume, step_actions()}.
+    }
+    | {repeat_phase, NextData :: DataType, consume}
+    | {PhaseType | repeat_phase, DataType, consume, step_actions()}.
 -type callback_result() :: callback_result(data()).
 -type callback_result(DataType) ::
-    enter_result(DataType) |
-    cast_result(DataType) |
-    internal_result(DataType).
+    enter_result(DataType)
+    | cast_result(DataType)
+    | internal_result(DataType).
 %% CPU adapter mailbox bound and output-port routing.
 -type start_option() ::
-    {mailbox_capacity, 1 .. ((1 bsl 8) - 1)} |
-    {outputs, #{output_port() := pid()}}.
+    {mailbox_capacity, 1..((1 bsl 8) - 1)}
+    | {outputs, #{output_port() := pid()}}.
 
--callback init(term()) -> {
-    ok,
-    InitialPhase :: phase(),
-    InitialData :: data()
-}.
+-callback init(term()) ->
+    {
+        ok,
+        InitialPhase :: phase(),
+        InitialData :: data()
+    }.
 -doc "Handles entry, cast, declared call, or private internal events for one phase.".
--callback 'StateName'(
-    enter,
-    OldPhase :: phase(),
-    Data :: DataType
-) -> enter_result(DataType);
+-callback 'StateName'
+    (
+        enter,
+        OldPhase :: phase(),
+        Data :: DataType
+    ) -> enter_result(DataType);
     (cast, Message :: term(), Data :: DataType) -> cast_result(DataType);
     ({call, hls_gs:from()}, Message :: term(), Data :: DataType) -> call_result(DataType);
     (internal, reduction_complete() | gather_complete() | atom(), Data :: DataType) ->
@@ -297,14 +304,16 @@ info(PID, Timeout) ->
 init({Module, Arg, Capacity, Outputs}) ->
     {ok, Phase, Data} = Module:init(Arg),
     ok = validate_phase(Phase),
-    {Lifecycle, OutputMap} = case Outputs of
-        undefined -> {disconnected, #{}};
-        _ -> {connected, Outputs}
-    end,
-    {Calls, Book} = case hls_service_contract:from_module(Module) of
-        {ok, #{calls := C, pending_calls := N}} -> {C, hls_reply_book:new(N)};
-        _ -> {#{}, none}
-    end,
+    {Lifecycle, OutputMap} =
+        case Outputs of
+            undefined -> {disconnected, #{}};
+            _ -> {connected, Outputs}
+        end,
+    {Calls, Book} =
+        case hls_service_contract:from_module(Module) of
+            {ok, #{calls := C, pending_calls := N}} -> {C, hls_reply_book:new(N)};
+            _ -> {#{}, none}
+        end,
     Runtime0 = #runtime{
         module = Module,
         lifecycle = Lifecycle,
@@ -313,10 +322,12 @@ init({Module, Arg, Capacity, Outputs}) ->
         outputs = OutputMap,
         mailbox = hls_mailbox:new(Capacity),
         continuation_names = hls_continuation:names(Module),
-        calls = Calls, reply_book = Book
+        calls = Calls,
+        reply_book = Book
     },
     case Lifecycle of
-        disconnected -> {ok, Runtime0};
+        disconnected ->
+            {ok, Runtime0};
         connected ->
             case process_messages(enter_phase(Phase, Runtime0)) of
                 {ok, Started} -> {ok, Started};
@@ -327,8 +338,11 @@ init({Module, Arg, Capacity, Outputs}) ->
 -doc "Connects outputs or queues a declared call for phase-sensitive dispatch.".
 -spec handle_call(term(), gen_server:from(), #runtime{}) -> term().
 %% Deferred connections enter before dispatching any queued application input.
-handle_call({connect, Outputs}, _From,
-        Runtime0 = #runtime{lifecycle = disconnected, phase = Phase}) ->
+handle_call(
+    {connect, Outputs},
+    _From,
+    Runtime0 = #runtime{lifecycle = disconnected, phase = Phase}
+) ->
     Connected = Runtime0#runtime{
         lifecycle = connected,
         outputs = Outputs
@@ -336,8 +350,7 @@ handle_call({connect, Outputs}, _From,
     Runtime1 = enter_phase(Phase, Connected),
     case process_messages(Runtime1) of
         {ok, Runtime2} -> {reply, ok, Runtime2};
-        {stop, Reason, Runtime2} ->
-            {stop, Reason, {error, Reason}, Runtime2}
+        {stop, Reason, Runtime2} -> {stop, Reason, {error, Reason}, Runtime2}
     end;
 %% A second connection cannot replace a live output map.
 handle_call({connect, _Outputs}, _From, Runtime) ->
@@ -346,8 +359,13 @@ handle_call({connect, _Outputs}, _From, Runtime) ->
 handle_call(Request, _From, Runtime = #runtime{reply_book = none}) ->
     {stop, {unsupported_hls_statem_call, Request}, {error, unsupported_call}, Runtime};
 %% Calls occupy the same ordered input queue as casts; caller ownership begins at dispatch.
-handle_call(Request, From, Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}) ->
-    case is_tuple(Request) andalso tuple_size(Request) > 0 andalso maps:is_key(element(1, Request), Calls) of
+handle_call(
+    Request, From, Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}
+) ->
+    case
+        is_tuple(Request) andalso tuple_size(Request) > 0 andalso
+            maps:is_key(element(1, Request), Calls)
+    of
         true -> admit_and_process(Request, Runtime#runtime{call_messages = Messages#{Id => From}});
         false -> {reply, {error, unsupported_call}, Runtime}
     end.
@@ -392,10 +410,13 @@ admit_and_process(Message, Runtime0 = #runtime{lifecycle = connected}) ->
             {stop, {mailbox_full, Message}, Runtime0}
     end.
 
-enqueue(Message, Runtime = #runtime{
-    mailbox = Mailbox0,
-    next_message_id = MessageID
-}) ->
+enqueue(
+    Message,
+    Runtime = #runtime{
+        mailbox = Mailbox0,
+        next_message_id = MessageID
+    }
+) ->
     Generation = maps:get(generation, hls_mailbox:info(Mailbox0)),
     case hls_mailbox:reserve(Generation, self(), Mailbox0) of
         {error, full, _Mailbox} ->
@@ -419,10 +440,12 @@ process_messages(Runtime = #runtime{gather_completion = Completion}) when Comple
     process_internal(Completion, Runtime#runtime{gather_completion = none});
 process_messages(Runtime = #runtime{continuation = Name}) when Name =/= none ->
     process_internal(Name, Runtime#runtime{continuation = none});
-process_messages(Runtime = #runtime{
-    mailbox = Mailbox,
-    postponed = Postponed
-}) ->
+process_messages(
+    Runtime = #runtime{
+        mailbox = Mailbox,
+        postponed = Postponed
+    }
+) ->
     Eligible = fun({MessageID, _Message}) ->
         not maps:is_key(MessageID, Postponed)
     end,
@@ -458,18 +481,19 @@ process_message(
     BoundaryStatus = collection_boundary_status(
         Directive, Repeat, Phase, NextPhase, Runtime
     ),
-    ok = case IsCall andalso Directive =/= consume andalso Directive =/= fail of
-        true -> error({unsupported_hls_statem_call_directive, Directive}); false -> ok
-    end,
-    Replied = case BoundaryStatus =:= ok andalso Directive =/= fail of
-        true -> complete_reply(Reply, NextRuntime);
-        false -> NextRuntime
-    end,
+    ok =
+        case IsCall andalso Directive =/= consume andalso Directive =/= fail of
+            true -> error({unsupported_hls_statem_call_directive, Directive});
+            false -> ok
+        end,
+    Replied =
+        case BoundaryStatus =:= ok andalso Directive =/= fail of
+            true -> complete_reply(Reply, NextRuntime);
+            false -> NextRuntime
+        end,
     case {BoundaryStatus, Directive} of
         {{error, Reason, Status}, _} ->
-            {stop,
-                {Reason, Status, Message},
-                Runtime};
+            {stop, {Reason, Status, Message}, Runtime};
         {ok, fail} ->
             {stop, {hls_statem_failure, Message}, Replied};
         {ok, postpone} ->
@@ -495,7 +519,9 @@ process_message(
                 Replied
             );
         {ok, {gather, _Name, _Key, _Member, _Value} = Contribution} ->
-            process_contribution(Contribution, Selection, {MessageID, Message}, Phase, Data, Replied);
+            process_contribution(
+                Contribution, Selection, {MessageID, Message}, Phase, Data, Replied
+            );
         {ok, consume} ->
             Consumed = consume_message(
                 Selection,
@@ -511,10 +537,14 @@ process_message(
 %% An unfinished collection may accept unrelated work but cannot cross a phase boundary.
 -spec collection_boundary_status(cast_directive(), boolean(), phase(), phase(), #runtime{}) ->
     ok | {error, atom(), map()}.
-collection_boundary_status(fail, _Repeat, _Phase, _NextPhase, _Runtime) -> ok;
-collection_boundary_status({contribute, _, _, _}, _, _, _, _) -> ok;
-collection_boundary_status({contribute, _, _, _, _}, _, _, _, _) -> ok;
-collection_boundary_status({gather, _, _, _, _}, _, _, _, _) -> ok;
+collection_boundary_status(fail, _Repeat, _Phase, _NextPhase, _Runtime) ->
+    ok;
+collection_boundary_status({contribute, _, _, _}, _, _, _, _) ->
+    ok;
+collection_boundary_status({contribute, _, _, _, _}, _, _, _, _) ->
+    ok;
+collection_boundary_status({gather, _, _, _, _}, _, _, _, _) ->
+    ok;
 collection_boundary_status(_Directive, Repeat, Phase, NextPhase, Runtime) ->
     case Repeat orelse NextPhase =/= Phase of
         true -> active_collection_error(Runtime);
@@ -527,23 +557,30 @@ active_collection_error(#runtime{reduction = Reduction}) when Reduction =/= none
     {error, hls_statem_reduction_incomplete, hls_reduction:info(Reduction)};
 active_collection_error(#runtime{gather = Gather}) when Gather =/= none ->
     {error, hls_statem_gather_incomplete, hls_indexed_gather:info(Gather)};
-active_collection_error(_Runtime) -> ok.
+active_collection_error(_Runtime) ->
+    ok.
 
 %% Run a private event without removing any mailbox entry.
 -spec process_internal(term(), #runtime{}) ->
     {ok, #runtime{}} | {stop, term(), #runtime{}}.
-process_internal(Event, Runtime = #runtime{
-    module = Module,
-    phase = Phase,
-    data = Data
-}) ->
+process_internal(
+    Event,
+    Runtime = #runtime{
+        module = Module,
+        phase = Phase,
+        data = Data
+    }
+) ->
     RawResult = Module:Phase(internal, Event, Data),
     {Result, Continue, Reply} = event_result(RawResult, Runtime#runtime.continuation_names),
     ok = validate_completion_reply(Event, Reply),
     {NextPhase, NextData, Directive, Repeat} =
         internal_state_result(Result, Phase),
-    NextRuntime = Runtime#runtime{phase = NextPhase, data = NextData,
-        continuation = pending_continuation(Continue, Runtime#runtime.continuation)},
+    NextRuntime = Runtime#runtime{
+        phase = NextPhase,
+        data = NextData,
+        continuation = pending_continuation(Continue, Runtime#runtime.continuation)
+    },
     case collection_boundary_status(Directive, Repeat, Phase, NextPhase, Runtime) of
         ok -> ok;
         {error, Reason, Status} -> error({Reason, Status, Event})
@@ -563,7 +600,8 @@ validate_completion_reply({reduction_complete, _, _, _}, Reply) when Reply =/= n
     error(hls_statem_reduction_actions_unsupported);
 validate_completion_reply({gather_complete, _, _, _, _}, Reply) when Reply =/= none ->
     error(hls_statem_gather_actions_unsupported);
-validate_completion_reply(_, _) -> ok.
+validate_completion_reply(_, _) ->
+    ok.
 
 %% Empty entry completions precede an already pending named event without discarding it.
 -spec pending_continuation(none | atom(), none | atom()) -> none | atom().
@@ -572,8 +610,14 @@ pending_continuation(Continue, none) -> Continue;
 pending_continuation(_Continue, _Existing) -> error(hls_statem_continuation_already_pending).
 
 %% Collection directives leave actor data unchanged and consume only accepted members.
--spec process_contribution(contribution() | gather_contribution(), hls_mailbox:selection(),
-    {non_neg_integer(), term()}, phase(), data(), #runtime{}) ->
+-spec process_contribution(
+    contribution() | gather_contribution(),
+    hls_mailbox:selection(),
+    {non_neg_integer(), term()},
+    phase(),
+    data(),
+    #runtime{}
+) ->
     {ok, #runtime{}} | {stop, term(), #runtime{}}.
 process_contribution(
     Contribution,
@@ -587,7 +631,11 @@ process_contribution(
         postponed = Postponed
     }
 ) ->
-    Kind = case element(1, Contribution) of contribute -> reduction; gather -> gather end,
+    Kind =
+        case element(1, Contribution) of
+            contribute -> reduction;
+            gather -> gather
+        end,
     case offer_collection(Contribution, Runtime) of
         mismatch ->
             finish_transition(Phase, Runtime#runtime{
@@ -603,9 +651,7 @@ process_contribution(
                 set_collection(Kind, none, Consumed)
             );
         {error, Reason} ->
-            {stop,
-                {collection_failure(Kind), Reason, Message},
-                Runtime}
+            {stop, {collection_failure(Kind), Reason, Message}, Runtime}
     end;
 process_contribution(
     _Contribution,
@@ -620,7 +666,8 @@ process_contribution(
 %% Route indexed input without requiring or invoking a scalar reducer callback.
 -spec offer_collection(contribution() | gather_contribution(), #runtime{}) ->
     mismatch | {pending, term()} | {complete, term()} | {error, term()}.
-offer_collection({gather, _, _, _, _}, #runtime{gather = none}) -> mismatch;
+offer_collection({gather, _, _, _, _}, #runtime{gather = none}) ->
+    mismatch;
 offer_collection({gather, Name, Key, Member, Value}, #runtime{gather = Gather}) ->
     hls_indexed_gather:offer(Name, Key, Member, Value, Gather);
 offer_collection(Contribution, #runtime{module = Module, reduction = Reduction}) ->
@@ -659,11 +706,16 @@ apply_contribution(
     ).
 
 %% Retire input ownership together with its mailbox and postponement entries.
--spec consume_message(hls_mailbox:selection(), {non_neg_integer(), term()}, #runtime{}) -> #runtime{}.
-consume_message(Selection, Entry = {MessageID, _Message}, Runtime = #runtime{
-    mailbox = Mailbox,
-    postponed = Postponed
-}) ->
+-spec consume_message(hls_mailbox:selection(), {non_neg_integer(), term()}, #runtime{}) ->
+    #runtime{}.
+consume_message(
+    Selection,
+    Entry = {MessageID, _Message},
+    Runtime = #runtime{
+        mailbox = Mailbox,
+        postponed = Postponed
+    }
+) ->
     {ok, Entry, NextMailbox} = hls_mailbox:consume(Selection, Mailbox),
     Runtime#runtime{
         mailbox = NextMailbox,
@@ -672,27 +724,39 @@ consume_message(Selection, Entry = {MessageID, _Message}, Runtime = #runtime{
     }.
 
 %% A checked action list can complete one retained caller and insert one private event.
--spec event_result(term(), [atom()]) -> {term(), none | atom(), none | {reply, non_neg_integer(), term()}}.
+-spec event_result(term(), [atom()]) ->
+    {term(), none | atom(), none | {reply, non_neg_integer(), term()}}.
 event_result({Phase, Data, consume, Actions}, Names) ->
     {Reply, Continue} = hls_callback_actions:split(Actions, statem, Names),
     {{Phase, Data, consume}, Continue, Reply};
 event_result({_Phase, _Data, _Directive, Actions}, _Names) ->
     error({invalid_hls_statem_event_actions, Actions});
-event_result(Result, _Names) -> {Result, none, none}.
+event_result(Result, _Names) ->
+    {Result, none, none}.
 
 %% No reply book is allocated for actors which only consume casts.
 -spec complete_reply(none | {reply, non_neg_integer(), term()}, #runtime{}) -> #runtime{}.
-complete_reply(none, Runtime) -> Runtime;
+complete_reply(none, Runtime) ->
+    Runtime;
 complete_reply(Reply, Runtime = #runtime{reply_book = Book}) when Book =/= none ->
     Runtime#runtime{reply_book = hls_reply_book:complete(Reply, Book)};
-complete_reply(_Reply, _Runtime) -> error(hls_statem_calls_not_declared).
+complete_reply(_Reply, _Runtime) ->
+    error(hls_statem_calls_not_declared).
 
 %% Allocate only at dispatch so delayed connection and phase entry preserve arrival order.
--spec invoke_message(non_neg_integer(), term(), #runtime{}) -> {term(), none | hls_reply_book:book(), boolean()}.
-invoke_message(Id, Message, #runtime{module = Module, phase = Phase, data = Data,
-        calls = Calls, call_messages = Messages, reply_book = Book}) ->
+-spec invoke_message(non_neg_integer(), term(), #runtime{}) ->
+    {term(), none | hls_reply_book:book(), boolean()}.
+invoke_message(Id, Message, #runtime{
+    module = Module,
+    phase = Phase,
+    data = Data,
+    calls = Calls,
+    call_messages = Messages,
+    reply_book = Book
+}) ->
     case maps:find(Id, Messages) of
-        error -> {Module:Phase(cast, Message, Data), Book, false};
+        error ->
+            {Module:Phase(cast, Message, Data), Book, false};
         {ok, From} ->
             Tag = element(1, Message),
             case hls_reply_book:admit(Module:pack_tag(Tag), From, maps:get(Tag, Calls), Book) of
@@ -724,14 +788,15 @@ internal_state_result(Result, _Phase) ->
 %% A committed phase change enters atomically, then releases postponed inputs.
 -spec finish_transition(phase(), #runtime{}) -> {ok, #runtime{}} | {stop, term(), #runtime{}}.
 finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
-    Runtime1 = case Phase =/= PreviousPhase of
-        true ->
-            ok = require_idle_collection(Runtime0),
-            Entered = enter_phase(PreviousPhase, Runtime0),
-            Entered#runtime{postponed = #{}};
-        false ->
-            Runtime0
-    end,
+    Runtime1 =
+        case Phase =/= PreviousPhase of
+            true ->
+                ok = require_idle_collection(Runtime0),
+                Entered = enter_phase(PreviousPhase, Runtime0),
+                Entered#runtime{postponed = #{}};
+            false ->
+                Runtime0
+        end,
     process_messages(Runtime1).
 
 %% Explicit reentry repeats entry before retrying any previously postponed input.
@@ -747,20 +812,22 @@ finish_repeat(Phase, Runtime0) ->
 
 %% Validate every entry action before publishing casts or scheduling an empty completion.
 -spec enter_phase(phase(), #runtime{}) -> #runtime{}.
-enter_phase(OldPhase, Runtime = #runtime{
-    module = Module,
-    lifecycle = connected,
-    phase = Phase,
-    data = Data,
-    outputs = Outputs
-}) ->
+enter_phase(
+    OldPhase,
+    Runtime = #runtime{
+        module = Module,
+        lifecycle = connected,
+        phase = Phase,
+        data = Data,
+        outputs = Outputs
+    }
+) ->
     Result = Module:Phase(enter, OldPhase, Data),
     {NextData, Actions} = enter_result(Result),
     {Prepared, Casts} = prepare_entry_actions(Module, Actions, Outputs, Runtime),
     lists:foreach(
-        fun
-            ({cast, Port, Message}) ->
-                gen_server:cast(maps:get(Port, Outputs), Message)
+        fun({cast, Port, Message}) ->
+            gen_server:cast(maps:get(Port, Outputs), Message)
         end,
         Casts
     ),
@@ -771,42 +838,63 @@ enter_result(Result) -> error({bad_hls_statem_enter_result, Result}).
 
 %% Accept bounded state conclusions; indexed contributions use the same state-preserving rule.
 -spec validate_conclusion(term(), term()) -> ok.
-validate_conclusion(NextPhase, Directive)
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= reduce, NextPhase =/= terminate,
-             (Directive =:= consume orelse
-              Directive =:= postpone orelse
-              Directive =:= fail) ->
+validate_conclusion(NextPhase, Directive) when
+    is_atom(NextPhase),
+    NextPhase =/= repeat_phase,
+    NextPhase =/= reduce,
+    NextPhase =/= terminate,
+    (Directive =:= consume orelse
+        Directive =:= postpone orelse
+        Directive =:= fail)
+->
     ok;
-validate_conclusion(NextPhase, {contribute, Name, _Key, _Value})
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= reduce, NextPhase =/= terminate, is_atom(Name) ->
+validate_conclusion(NextPhase, {contribute, Name, _Key, _Value}) when
+    is_atom(NextPhase),
+    NextPhase =/= repeat_phase,
+    NextPhase =/= reduce,
+    NextPhase =/= terminate,
+    is_atom(Name)
+->
     ok;
 validate_conclusion(
     NextPhase,
     {contribute, Name, _Key, _Member, _Value}
-)
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= reduce, NextPhase =/= terminate, is_atom(Name) ->
+) when
+    is_atom(NextPhase),
+    NextPhase =/= repeat_phase,
+    NextPhase =/= reduce,
+    NextPhase =/= terminate,
+    is_atom(Name)
+->
     ok;
-validate_conclusion(NextPhase, {gather, Name, _Key, _Member, _Value})
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= reduce, NextPhase =/= terminate, is_atom(Name) ->
+validate_conclusion(NextPhase, {gather, Name, _Key, _Member, _Value}) when
+    is_atom(NextPhase),
+    NextPhase =/= repeat_phase,
+    NextPhase =/= reduce,
+    NextPhase =/= terminate,
+    is_atom(Name)
+->
     ok;
 validate_conclusion(NextPhase, Directive) ->
     error({bad_hls_statem_conclusion, NextPhase, Directive}).
 
-validate_internal_conclusion(NextPhase, Directive)
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= reduce, NextPhase =/= terminate,
-             (Directive =:= consume orelse Directive =:= fail) ->
+validate_internal_conclusion(NextPhase, Directive) when
+    is_atom(NextPhase),
+    NextPhase =/= repeat_phase,
+    NextPhase =/= reduce,
+    NextPhase =/= terminate,
+    (Directive =:= consume orelse Directive =:= fail)
+->
     ok;
 validate_internal_conclusion(NextPhase, Directive) ->
     error({bad_hls_statem_internal_conclusion, NextPhase, Directive}).
 
-validate_phase(Phase)
-        when is_atom(Phase), Phase =/= repeat_phase, Phase =/= reduce,
-             Phase =/= terminate ->
+validate_phase(Phase) when
+    is_atom(Phase),
+    Phase =/= repeat_phase,
+    Phase =/= reduce,
+    Phase =/= terminate
+->
     ok;
 validate_phase(Phase) ->
     error({bad_hls_statem_phase, Phase}).
@@ -814,27 +902,32 @@ validate_phase(Phase) ->
 %% Open at most one collection before any cast, then validate the complete effect batch.
 -spec prepare_entry_actions(module(), term(), map(), #runtime{}) -> {#runtime{}, list()}.
 prepare_entry_actions(Module, Actions, Outputs, Runtime) when is_list(Actions) ->
-    {Prepared, Casts} = case Actions of
-        [{open_reduction, Name, Key, Population, Operator} | Rest] ->
-            ok = require_idle_collection(Runtime),
-            case erlang:function_exported(Module, reduce, 3) of
-                true -> ok;
-                false -> error({missing_hls_statem_callback, reduce, 3})
-            end,
-            case hls_reduction:open(Name, Key, Population, Operator) of
-                {ok, Opened} -> {Runtime#runtime{reduction = Opened}, Rest};
-                {error, Reason} -> error({bad_hls_statem_open_reduction, Reason})
-            end;
-        [{open_gather, Name, Key, Population, Padding} | Rest] ->
-            ok = require_idle_collection(Runtime),
-            {open_gather(Name, Key, Population, Padding, Runtime), Rest};
-        _ -> {Runtime, Actions}
-    end,
-    lists:foreach(fun
-        ({open_reduction, _, _, _, _}) -> error(hls_statem_open_reduction_must_be_first);
-        ({open_gather, _, _, _, _}) -> error(hls_statem_open_gather_must_be_first);
-        (_) -> ok
-    end, Casts),
+    {Prepared, Casts} =
+        case Actions of
+            [{open_reduction, Name, Key, Population, Operator} | Rest] ->
+                ok = require_idle_collection(Runtime),
+                case erlang:function_exported(Module, reduce, 3) of
+                    true -> ok;
+                    false -> error({missing_hls_statem_callback, reduce, 3})
+                end,
+                case hls_reduction:open(Name, Key, Population, Operator) of
+                    {ok, Opened} -> {Runtime#runtime{reduction = Opened}, Rest};
+                    {error, Reason} -> error({bad_hls_statem_open_reduction, Reason})
+                end;
+            [{open_gather, Name, Key, Population, Padding} | Rest] ->
+                ok = require_idle_collection(Runtime),
+                {open_gather(Name, Key, Population, Padding, Runtime), Rest};
+            _ ->
+                {Runtime, Actions}
+        end,
+    lists:foreach(
+        fun
+            ({open_reduction, _, _, _, _}) -> error(hls_statem_open_reduction_must_be_first);
+            ({open_gather, _, _, _, _}) -> error(hls_statem_open_gather_must_be_first);
+            (_) -> ok
+        end,
+        Casts
+    ),
     ok = validate_casts(Casts, Outputs),
     {Prepared, Casts};
 prepare_entry_actions(_Module, Actions, _Outputs, _Runtime) ->
@@ -927,10 +1020,12 @@ start_options(Options) ->
     Capacity = proplists:get_value(mailbox_capacity, Options),
     Outputs = proplists:get_value(outputs, Options, undefined),
     ValidOutputs = Outputs =:= undefined orelse valid_outputs(Outputs),
-    case Known andalso
+    case
+        Known andalso
             is_integer(Capacity) andalso
             Capacity > 0 andalso Capacity =< 255 andalso
-            ValidOutputs of
+            ValidOutputs
+    of
         true -> {Capacity, Outputs};
         false -> error(badarg)
     end.

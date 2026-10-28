@@ -48,6 +48,8 @@ This cell still models one binary physical-error event per round. Applying
 decoder corrections is endpoint-local; the topology controller remains
 responsible for ordering all correction updates before admitting a final
 logical query.
+
+The shared callbacks and CPU helpers live in phenom_data_cell_impl.hrl. phi_noise_topology places this grid wrapper; phenom_line_data_cell selects the two-neighbor variant.
 """.
 
 %% Shared protocol implementation; the default has four spatial neighbors.

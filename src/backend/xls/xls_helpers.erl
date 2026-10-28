@@ -7,14 +7,21 @@
 %%%% failure kind through the same selected-outcome path used by case expressions.
 
 -module(xls_helpers).
--moduledoc false.
+-moduledoc "Prepares the helper graph reachable from hardware callbacks, resolving concrete signatures and diagnosing recursion before expression lowering. Actor/server lowerers consume rewritten roots and dependency-ordered helper fragments. Calls remain calls in DSLX; XLS owns inlining and algebraic optimization.".
 
--export([prepare/2, emit/3]).
+%% Resolve and normalize the reachable helper graph.
+-export([prepare/2]).
+%% Lower prepared helpers into deferred function definitions.
+-export([emit/3]).
 
 %% A reachable helper with concrete input/result types and its source clauses.
--type helper() :: #{name := string(), clauses := [erl_parse:abstract_clause(), ...],
-    arguments := [xls_literal_types:type()], argument_records := [none | {record | value, atom()}],
-    result := xls_literal_types:type()}.
+-type helper() :: #{
+    name := string(),
+    clauses := [erl_parse:abstract_clause(), ...],
+    arguments := [xls_literal_types:type()],
+    argument_records := [none | {record | value, atom()}],
+    result := xls_literal_types:type()
+}.
 
 -doc "Finds reachable local helpers, checks concrete signatures and recursion, and returns rewritten roots plus dependency-ordered helpers.".
 -spec prepare([hls_source:form()], [{atom(), arity()}]) ->
@@ -22,32 +29,62 @@
 prepare(Forms0, Roots) ->
     Selected = xls_hardware_source:select(Forms0, Roots),
     Module = hls_source:find_attribute(Selected, module),
-    WireForms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Selected)), Module)),
+    WireForms = xls_comparison:prepare(
+        localize(xls_binary_lower:prepare(hls_records:resolve(Selected)), Module)
+    ),
     Definitions = definitions(WireForms, undefined, #{}),
-    Context = #{definitions => Definitions, roots => Roots, forms => WireForms,
-        data => hls_actor_source:state(WireForms), tags => hls_records:wire_names(WireForms) -- [hls_actor_source:state(WireForms)]},
-    Calls = lists:append([local_calls(maps:get(clauses, maps:get(Root, Definitions)))
-        || Root <- Roots, maps:is_key(Root, Definitions)]),
+    Context = #{
+        definitions => Definitions,
+        roots => Roots,
+        forms => WireForms,
+        data => hls_actor_source:state(WireForms),
+        tags => hls_records:wire_names(WireForms) -- [hls_actor_source:state(WireForms)]
+    },
+    Calls = lists:append([
+        local_calls(maps:get(clauses, maps:get(Root, Definitions)))
+     || Root <- Roots, maps:is_key(Root, Definitions)
+    ]),
     Helpers = reachable(Calls, Context, #{}),
     UsedFunctions = Roots ++ maps:keys(Helpers),
     Relevant = [Form || Form <- WireForms, reachable_form(Form, UsedFunctions)],
     ValueRecords = hls_records:references(Relevant),
     Forms = hls_records:resolve(WireForms, ValueRecords),
     Wire = hls_records:wire_names(Forms),
-    Rewritten = [case Form of
-        {function, Line, Name, Arity, Clauses} ->
-            case lists:member({Name, Arity}, Roots) of
-                true -> {function, Line, Name, Arity,
-                    hls_records:values(xls_literal_types:clauses(rewrite(Clauses, Helpers), unknown, Forms), Wire)};
-                false -> Form
-            end;
-        _ -> Form
-    end || Form <- Forms],
-    Prepared = [Helper#{clauses := hls_records:values(xls_literal_types:clauses(
-            rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper), Forms), Wire)}
-        || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]],
-    Used = lists:usort((ValueRecords -- Wire) ++
-        hls_records:used(Rewritten ++ [maps:get(clauses, H) || H <- Prepared])),
+    Rewritten = [
+        case Form of
+            {function, Line, Name, Arity, Clauses} ->
+                case lists:member({Name, Arity}, Roots) of
+                    true ->
+                        {function, Line, Name, Arity,
+                            hls_records:values(
+                                xls_literal_types:clauses(
+                                    rewrite(Clauses, Helpers), unknown, Forms
+                                ),
+                                Wire
+                            )};
+                    false ->
+                        Form
+                end;
+            _ ->
+                Form
+        end
+     || Form <- Forms
+    ],
+    Prepared = [
+        Helper#{
+            clauses := hls_records:values(
+                xls_literal_types:clauses(
+                    rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper), Forms
+                ),
+                Wire
+            )
+        }
+     || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]
+    ],
+    Used = lists:usort(
+        (ValueRecords -- Wire) ++
+            hls_records:used(Rewritten ++ [maps:get(clauses, H) || H <- Prepared])
+    ),
     {Rewritten ++ [{attribute, 0, hls_value_records, Used}], Prepared}.
 
 %% Host-only functions and their records do not constrain hardware layouts.
@@ -57,9 +94,13 @@ reachable_form({attribute, _, spec, {Key, _}}, Keys) -> lists:member(Key, Keys);
 reachable_form(_, _) -> false.
 
 dependency_order(Helpers) ->
-    {_, Reversed} = lists:foldl(fun(Key, Acc) ->
-        visit(Key, [], Helpers, Acc)
-    end, {#{}, []}, lists:sort(maps:keys(Helpers))),
+    {_, Reversed} = lists:foldl(
+        fun(Key, Acc) ->
+            visit(Key, [], Helpers, Acc)
+        end,
+        {#{}, []},
+        lists:sort(maps:keys(Helpers))
+    ),
     lists:reverse(Reversed).
 
 visit(Key, _Path, _Helpers, {Done, _} = Acc) when is_map_key(Key, Done) -> Acc;
@@ -68,11 +109,18 @@ visit(Key, Path, Helpers, Acc) ->
         true -> error({recursive_xls_helpers, lists:reverse([Key | Path])});
         false -> ok
     end,
-    Dependencies = lists:usort([Callee || {Callee, _} <-
-        local_calls(maps:get(clauses, maps:get(Key, Helpers)))]),
-    {Done, Reversed} = lists:foldl(fun(Callee, Next) ->
-        visit(Callee, [Key | Path], Helpers, Next)
-    end, Acc, Dependencies),
+    Dependencies = lists:usort([
+        Callee
+     || {Callee, _} <-
+            local_calls(maps:get(clauses, maps:get(Key, Helpers)))
+    ]),
+    {Done, Reversed} = lists:foldl(
+        fun(Callee, Next) ->
+            visit(Callee, [Key | Path], Helpers, Next)
+        end,
+        Acc,
+        Dependencies
+    ),
     {Done#{Key => true}, [Key | Reversed]}.
 
 %% Qualified calls to this module name the same definition graph. Other
@@ -82,91 +130,141 @@ localize({call, Line, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}, Mo
 localize(Tuple, Module) when is_tuple(Tuple) ->
     list_to_tuple([localize(X, Module) || X <- tuple_to_list(Tuple)]);
 localize(List, Module) when is_list(List) -> [localize(X, Module) || X <- List];
-localize(Value, _Module) -> Value.
+localize(Value, _Module) ->
+    Value.
 
-definitions([], _File, Acc) -> Acc;
+definitions([], _File, Acc) ->
+    Acc;
 definitions([{attribute, _, file, {File, _}} | Rest], _File, Acc) ->
     definitions(Rest, File, Acc);
 definitions([{function, Line, Name, Arity, Clauses} | Rest], File, Acc) ->
-    definitions(Rest, File, Acc#{{Name, Arity} =>
-        #{file => File, line => Line, clauses => Clauses}});
-definitions([_ | Rest], File, Acc) -> definitions(Rest, File, Acc).
+    definitions(Rest, File, Acc#{
+        {Name, Arity} =>
+            #{file => File, line => Line, clauses => Clauses}
+    });
+definitions([_ | Rest], File, Acc) ->
+    definitions(Rest, File, Acc).
 
 local_calls({call, Line, {atom, _, Name}, Args}) ->
     [{{Name, length(Args)}, Line} | local_calls(Args)];
 local_calls(Tuple) when is_tuple(Tuple) -> local_calls(tuple_to_list(Tuple));
 local_calls(List) when is_list(List) -> lists:append([local_calls(X) || X <- List]);
-local_calls(_) -> [].
+local_calls(_) ->
+    [].
 
-reachable([], _Context, Seen) -> Seen;
+reachable([], _Context, Seen) ->
+    Seen;
 reachable([{Key, _CallLine} | Rest], Context, Seen) when is_map_key(Key, Seen) ->
     reachable(Rest, Context, Seen);
-reachable([{Key, CallLine} | Rest], Context = #{definitions := Definitions,
-        roots := Roots}, Seen) ->
+reachable(
+    [{Key, CallLine} | Rest],
+    Context = #{
+        definitions := Definitions,
+        roots := Roots
+    },
+    Seen
+) ->
     case lists:member(Key, Roots) of
         true -> error({xls_helper_calls_callback, CallLine, Key});
         false -> ok
     end,
-    Definition = case maps:find(Key, Definitions) of
-        {ok, Value} -> Value;
-        error -> error({undefined_xls_helper, CallLine, Key})
-    end,
+    Definition =
+        case maps:find(Key, Definitions) of
+            {ok, Value} -> Value;
+            error -> error({undefined_xls_helper, CallLine, Key})
+        end,
     Helper = prepare_helper(Key, Definition, Context),
     %% Mark before following edges: a cyclic definition graph is finite too.
-    reachable(local_calls(maps:get(clauses, Helper)) ++ Rest,
-        Context, Seen#{Key => Helper}).
+    reachable(
+        local_calls(maps:get(clauses, Helper)) ++ Rest,
+        Context,
+        Seen#{Key => Helper}
+    ).
 
 %% Resolve a reachable helper's one concrete signature and preserve its shape.
 -spec prepare_helper({atom(), arity()}, map(), map()) -> helper().
-prepare_helper(Key = {Name, Arity}, #{file := File, line := Line,
-        clauses := Clauses}, Context = #{forms := Forms}) ->
+prepare_helper(
+    Key = {Name, Arity},
+    #{
+        file := File,
+        line := Line,
+        clauses := Clauses
+    },
+    Context = #{forms := Forms}
+) ->
     Origin = {File, Line, Key},
     Specs = [Types || {attribute, _, spec, {K, Types}} <- Forms, K =:= Key],
-    {Args, Result} = case Specs of
-        [[{type, _, 'fun', [{type, _, product, A}, R]}]]
-                when length(A) =:= Arity -> {A, R};
-        [] -> error({missing_xls_helper_spec, Origin});
-        _ -> error({unsupported_xls_helper_spec, Origin})
-    end,
+    {Args, Result} =
+        case Specs of
+            [[{type, _, 'fun', [{type, _, product, A}, R]}]] when
+                length(A) =:= Arity
+            ->
+                {A, R};
+            [] ->
+                error({missing_xls_helper_spec, Origin});
+            _ ->
+                error({unsupported_xls_helper_spec, Origin})
+        end,
     Spelling = atom_to_list(Name),
     case re:run(Spelling, "^[A-Za-z_][A-Za-z0-9_]*$", [{capture, none}]) of
         match -> ok;
         nomatch -> error({unsupported_xls_helper_name, Origin})
     end,
-    #{name => "hls_local_" ++ Spelling ++ "__" ++ integer_to_list(Arity),
-        clauses => Clauses, arguments => [type(T, Context, Origin) || T <- Args],
+    #{
+        name => "hls_local_" ++ Spelling ++ "__" ++ integer_to_list(Arity),
+        clauses => Clauses,
+        arguments => [type(T, Context, Origin) || T <- Args],
         argument_records => [argument_record(T, Context) || T <- Args],
-        result => type(Result, Context, Origin)}.
+        result => type(Result, Context, Origin)
+    }.
 
 %% Keep tuple fields available to literal lowering; provider types are opaque.
 -spec type(erl_parse:abstract_type(), map(), term()) -> xls_literal_types:type().
-type({ann_type, _, [_Name, Type]}, Context, Origin) -> type(Type, Context, Origin);
-type({type, _, boolean, []}, _Context, _Origin) -> {provider, hls_bool:bool()};
+type({ann_type, _, [_Name, Type]}, Context, Origin) ->
+    type(Type, Context, Origin);
+type({type, _, boolean, []}, _Context, _Origin) ->
+    {provider, hls_bool:bool()};
 type({type, _, tuple, Fields}, Context, Origin) when is_list(Fields) ->
     {tuple, [type(T, Context, Origin) || T <- Fields]};
-type({type, _, record, [{atom, _, Name}]},
-        #{data := Data, tags := Tags, forms := Forms}, _Origin) ->
+type(
+    {type, _, record, [{atom, _, Name}]},
+    #{data := Data, tags := Tags, forms := Forms},
+    _Origin
+) ->
     Struct = xls_names:record_type(Name),
     case {Name =:= Data, lists:member(Name, Tags)} of
-        {true, _} -> {dslx, ["(Tag, ", Struct, ")"]};
-        {false, true} -> {dslx, ["(Tag, ", Struct, ", bits[",
-            integer_to_list(hls_records:width(hls_records:find(Forms, Name))),
-            "])"]};
+        {true, _} ->
+            {dslx, ["(Tag, ", Struct, ")"]};
+        {false, true} ->
+            {dslx, [
+                "(Tag, ",
+                Struct,
+                ", bits[",
+                integer_to_list(hls_records:width(hls_records:find(Forms, Name))),
+                "])"
+            ]};
         _ ->
             _ = hls_records:find(Forms, Name),
             {dslx, Struct}
     end;
-type({remote_type, _, [{atom, _, hls_lists}, {atom, _, list}, [Element, {integer, _, Count}]]},
-        Context, Origin) when Count > 0 ->
-    {dslx, [xls_literal_types:format(type(Element, Context, Origin)), "[", integer_to_list(Count), "]"]};
+type(
+    {remote_type, _, [{atom, _, hls_lists}, {atom, _, list}, [Element, {integer, _, Count}]]},
+    Context,
+    Origin
+) when Count > 0 ->
+    {dslx, [
+        xls_literal_types:format(type(Element, Context, Origin)), "[", integer_to_list(Count), "]"
+    ]};
 type({remote_type, _, _} = Type, _Context, Origin) ->
     try
         Descriptor = hls_type:descriptor(Type),
         _ = hls_type:print_type(Descriptor),
         {provider, Descriptor}
-    catch error:Reason -> error({unsupported_xls_helper_type, Origin, Type, Reason})
+    catch
+        error:Reason -> error({unsupported_xls_helper_type, Origin, Type, Reason})
     end;
-type(Type, _Context, Origin) -> error({unsupported_xls_helper_type, Origin, Type}).
+type(Type, _Context, Origin) ->
+    error({unsupported_xls_helper_type, Origin, Type}).
 
 %% Attach argument contracts before flattening can separate literals from uses.
 -spec rewrite(term(), #{{atom(), arity()} => helper()}) -> term().
@@ -174,11 +272,13 @@ rewrite({call, Line, {atom, _, Name}, Args}, Helpers) ->
     #{name := Emitted, arguments := Types} = maps:get({Name, length(Args)}, Helpers),
     {xls_helper_call, Line, Emitted, [
         {xls_expected, Line, Type, rewrite(Arg, Helpers)}
-        || {Arg, Type} <- lists:zip(Args, Types)]};
+     || {Arg, Type} <- lists:zip(Args, Types)
+    ]};
 rewrite(Tuple, Helpers) when is_tuple(Tuple) ->
     list_to_tuple([rewrite(X, Helpers) || X <- tuple_to_list(Tuple)]);
 rewrite(List, Helpers) when is_list(List) -> [rewrite(X, Helpers) || X <- List];
-rewrite(Value, _Helpers) -> Value.
+rewrite(Value, _Helpers) ->
+    Value.
 
 -doc "Builds dependency-ordered helper definitions with concrete signatures and structured selected failures.".
 -spec emit([helper()], atom(), map()) -> xls_dslx:value().
@@ -188,45 +288,90 @@ emit(Helpers, DataName, EnumAtoms) ->
 %% Keep the common irrefutable helper compact. Patterned or guarded clauses
 %% share callback selection, including function_clause versus body failures.
 -spec emit_helper(helper(), atom(), map()) -> xls_dslx:value().
-emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
-        arguments := Types, argument_records := Records, result := ResultType}, DataName, EnumAtoms) ->
+emit_helper(
+    #{
+        name := Name,
+        clauses := Clauses = [{clause, Line, _, _, _} | _],
+        arguments := Types,
+        argument_records := Records,
+        result := ResultType
+    },
+    DataName,
+    EnumAtoms
+) ->
     Type = xls_literal_types:format(ResultType),
     Arguments = ["argument_" ++ integer_to_list(I) || I <- lists:seq(1, length(Types))],
-    Body = case plain_head(Clauses) of
-        true ->
-            [Clause] = Clauses,
-            #{body := Computation, result := Result, failure := Failure} =
-                xls_clause_lower:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
-            [Computation, "(", Result, ", ", Failure, ")"];
-        false ->
-            Inputs = [case Record of
-                none -> xls_pattern_lower:value_argument(Argument);
-                {value, RecordName} -> xls_pattern_lower:record_argument(RecordName, Argument, Argument);
-                {record, RecordName} -> xls_pattern_lower:record_argument(
-                    RecordName, [Argument, ".1"], Argument)
-            end || {Argument, Record} <- lists:zip(Arguments, Records)],
-            Failed = fun(Code) -> ["(zero!<", Type, ">(), ", Code, ")"] end,
-            {Computation, Result} = xls_callback_lower:lower(Clauses, Inputs,
-                DataName, fun(Value) -> ["(", Value, ", hls_failure::NONE)"] end,
-                Failed(xls_failure_sites:at(function_clause, Line)), Failed, EnumAtoms),
-            [Computation, Result]
-    end,
-    ["fn ", Name, "(", lists:join(", ", [[A, ": ", xls_literal_types:format(T)]
-        || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
-        ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
-        xls_dslx:indent(Body, 2), "}\n\n"].
+    Body =
+        case plain_head(Clauses) of
+            true ->
+                [Clause] = Clauses,
+                #{body := Computation, result := Result, failure := Failure} =
+                    xls_clause_lower:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
+                [Computation, "(", Result, ", ", Failure, ")"];
+            false ->
+                Inputs = [
+                    case Record of
+                        none ->
+                            xls_pattern_lower:value_argument(Argument);
+                        {value, RecordName} ->
+                            xls_pattern_lower:record_argument(RecordName, Argument, Argument);
+                        {record, RecordName} ->
+                            xls_pattern_lower:record_argument(
+                                RecordName, [Argument, ".1"], Argument
+                            )
+                    end
+                 || {Argument, Record} <- lists:zip(Arguments, Records)
+                ],
+                Failed = fun(Code) -> ["(zero!<", Type, ">(), ", Code, ")"] end,
+                {Computation, Result} = xls_callback_lower:lower(
+                    Clauses,
+                    Inputs,
+                    DataName,
+                    fun(Value) -> ["(", Value, ", hls_failure::NONE)"] end,
+                    Failed(xls_failure_sites:at(function_clause, Line)),
+                    Failed,
+                    EnumAtoms
+                ),
+                [Computation, Result]
+        end,
+    [
+        "fn ",
+        Name,
+        "(",
+        lists:join(", ", [
+            [A, ": ", xls_literal_types:format(T)]
+         || {A, T} <- lists:zip(Arguments, Types)
+        ]),
+        ") -> (",
+        Type,
+        ", hls_failure::Code) {  // L",
+        integer_to_list(erl_anno:line(Line)),
+        "\n",
+        xls_dslx:indent(Body, 2),
+        "}\n\n"
+    ].
 
 plain_head([{clause, _, Parameters, [], _}]) ->
     Names = [N || {var, _, N} <- Parameters, N =/= '_'],
-    lists:all(fun({var, _, _}) -> true; (_) -> false end, Parameters)
-        andalso length(Names) =:= length(lists:usort(Names));
-plain_head(_) -> false.
+    lists:all(
+        fun
+            ({var, _, _}) -> true;
+            (_) -> false
+        end,
+        Parameters
+    ) andalso
+        length(Names) =:= length(lists:usort(Names));
+plain_head(_) ->
+    false.
 
 %% Internal helper records are structs; callback records retain their tagged ABI.
 -spec argument_record(erl_parse:abstract_type(), map()) -> none | {record | value, atom()}.
-argument_record({ann_type, _, [_Name, Type]}, Context) -> argument_record(Type, Context);
+argument_record({ann_type, _, [_Name, Type]}, Context) ->
+    argument_record(Type, Context);
 argument_record({type, _, record, [{atom, _, Name}]}, #{data := Data, tags := Tags}) ->
     case Name =:= Data orelse lists:member(Name, Tags) of
-        true -> {record, Name}; false -> {value, Name}
+        true -> {record, Name};
+        false -> {value, Name}
     end;
-argument_record(_, _) -> none.
+argument_record(_, _) ->
+    none.

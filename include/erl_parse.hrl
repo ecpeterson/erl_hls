@@ -56,7 +56,8 @@
 -record(record_field, {
     anno,
     name,
-    default  % NOTE: can also appear without this!
+    % NOTE: can also appear without this!
+    default
 }).
 
 %% record and record creation both share 'record'

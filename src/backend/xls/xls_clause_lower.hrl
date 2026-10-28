@@ -1,7 +1,9 @@
 %%%% xls_clause_lower.hrl
 %%%%
-%%%% Internal expression-lowering state shared by xls_clause_lower and the
-%%%% actor-specific callback lowerers.
+%%%% Internal source-evaluation state shared by xls_clause_lower and its
+%%%% callback, pattern and case collaborators. Renderable references and
+%%%% statements use xls_dslx; compile-time phantom values remain local. This is
+%%%% neither a persistent actor artifact nor the external XLS compiler IR.
 
 -record(clause_state, {
     anonymous_counter = 0 :: integer(),

@@ -45,19 +45,16 @@ incomplete messages when it fails without deleting messages which were already
 committed.
 """.
 
--export([
-    new/1,
-    new/2,
-    reset/1,
-    reserve/3,
-    cancel/2,
-    cancel_owner/2,
-    commit/3,
-    select/2,
-    consume/2,
-    info/1
-]).
+%% Mailbox incarnation lifecycle.
+-export([new/1, new/2, reset/1]).
 
+%% Capacity reservation and publication.
+-export([reserve/3, cancel/2, cancel_owner/2, commit/3]).
+
+%% Receive selection, consumption and inspection.
+-export([select/2, consume/2, info/1]).
+
+%% Shared type contracts.
 -export_type([
     mailbox/0,
     reservation/0,
@@ -110,11 +107,11 @@ committed.
     Received :: non_neg_integer()
 }.
 -type operation_error() ::
-    full |
-    already_committed |
-    invalid_reservation |
-    stale_selection |
-    stale_generation().
+    full
+    | already_committed
+    | invalid_reservation
+    | stale_selection
+    | stale_generation().
 
 -doc "Creates an empty mailbox for generation zero.".
 -spec new(pos_integer()) -> mailbox().
@@ -127,9 +124,12 @@ Creates an empty mailbox for an actor incarnation already identified by
 actor at the same fabric address after a reset or respawn.
 """.
 -spec new(pos_integer(), non_neg_integer()) -> mailbox().
-new(Capacity, Generation)
-        when is_integer(Capacity), Capacity > 0,
-             is_integer(Generation), Generation >= 0 ->
+new(Capacity, Generation) when
+    is_integer(Capacity),
+    Capacity > 0,
+    is_integer(Generation),
+    Generation >= 0
+->
     #mailbox{
         id = make_ref(),
         capacity = Capacity,
@@ -156,26 +156,25 @@ mailbox controller calls this before allowing an ingress to assemble or accept
 the message body.
 """.
 -spec reserve(non_neg_integer(), term(), mailbox()) ->
-    {ok, reservation(), mailbox()} |
-    {error, full | stale_generation(), mailbox()}.
-reserve(Generation, ReservationOwner, Mailbox = #mailbox{})
-        when is_integer(Generation), Generation >= 0 ->
+    {ok, reservation(), mailbox()}
+    | {error, full | stale_generation(), mailbox()}.
+reserve(Generation, ReservationOwner, Mailbox = #mailbox{}) when
+    is_integer(Generation), Generation >= 0
+->
     CurrentGeneration = Mailbox#mailbox.generation,
     case Generation of
         CurrentGeneration ->
             reserve_current(Mailbox, ReservationOwner);
         _ ->
-            {error,
-                {stale_generation, CurrentGeneration, Generation},
-                Mailbox}
+            {error, {stale_generation, CurrentGeneration, Generation}, Mailbox}
     end;
 reserve(_Generation, _ReservationOwner, #mailbox{}) ->
     error(badarg).
 
 -doc "Cancels a live reservation and releases its slot before commit.".
 -spec cancel(reservation(), mailbox()) ->
-    {ok, mailbox()} |
-    {error, invalid_reservation | stale_generation(), mailbox()}.
+    {ok, mailbox()}
+    | {error, invalid_reservation | stale_generation(), mailbox()}.
 cancel(Reservation = #reservation{}, Mailbox = #mailbox{}) ->
     case reservation_generation(Reservation, Mailbox) of
         ok ->
@@ -197,10 +196,13 @@ cancel_owner(ReservationOwner, Mailbox = #mailbox{}) ->
         fun
             (_SlotNumber, #slot{status = committed}) ->
                 true;
-            (_SlotNumber, #slot{
-                status = reserved,
-                reservation_owner = SlotOwner
-            }) ->
+            (
+                _SlotNumber,
+                #slot{
+                    status = reserved,
+                    reservation_owner = SlotOwner
+                }
+            ) ->
                 SlotOwner =/= ReservationOwner
         end,
         Slots
@@ -258,12 +260,8 @@ consume(_Selection, Mailbox = #mailbox{}) ->
 -spec info(mailbox()) -> map().
 info(Mailbox = #mailbox{}) ->
     Slots = maps:values(Mailbox#mailbox.slots),
-    Reserved = length([
-        reserved || #slot{status = reserved} <- Slots
-    ]),
-    Committed = length([
-        committed || #slot{status = committed} <- Slots
-    ]),
+    Reserved = length([reserved || #slot{status = reserved} <- Slots]),
+    Committed = length([committed || #slot{status = committed} <- Slots]),
     Occupied = Reserved + Committed,
     #{
         capacity => Mailbox#mailbox.capacity,
@@ -280,16 +278,20 @@ info(Mailbox = #mailbox{}) ->
 reserve_current(
     Mailbox = #mailbox{capacity = Capacity, slots = Slots},
     _ReservationOwner
-)
-        when map_size(Slots) >= Capacity ->
+) when
+    map_size(Slots) >= Capacity
+->
     {error, full, Mailbox};
-reserve_current(Mailbox = #mailbox{
-    id = MailboxId,
-    capacity = Capacity,
-    generation = Generation,
-    next_ticket = Ticket,
-    slots = Slots
-}, ReservationOwner) ->
+reserve_current(
+    Mailbox = #mailbox{
+        id = MailboxId,
+        capacity = Capacity,
+        generation = Generation,
+        next_ticket = Ticket,
+        slots = Slots
+    },
+    ReservationOwner
+) ->
     SlotNumber = first_free_slot(0, Capacity, Slots),
     Slot = #slot{
         status = reserved,
@@ -355,11 +357,13 @@ cancel_current(
     }
 ) ->
     case Slots of
-        #{SlotNumber := #slot{
-            status = reserved,
-            reservation_owner = ReservationOwner,
-            ticket = Ticket
-        }} ->
+        #{
+            SlotNumber := #slot{
+                status = reserved,
+                reservation_owner = ReservationOwner,
+                ticket = Ticket
+            }
+        } ->
             NewMailbox = Mailbox#mailbox{
                 slots = maps:remove(SlotNumber, Slots)
             },
@@ -382,11 +386,13 @@ commit_current(
     case Slots of
         #{SlotNumber := #slot{status = committed, ticket = Ticket}} ->
             {error, already_committed, Mailbox};
-        #{SlotNumber := #slot{
-            status = reserved,
-            reservation_owner = ReservationOwner,
-            ticket = Ticket
-        } = Slot} ->
+        #{
+            SlotNumber := #slot{
+                status = reserved,
+                reservation_owner = ReservationOwner,
+                ticket = Ticket
+            } = Slot
+        } ->
             CommittedSlot = Slot#slot{
                 status = committed,
                 arrival = Arrival,
@@ -405,7 +411,8 @@ commit_current(
 committed_by_arrival(#mailbox{slots = Slots}) ->
     lists:keysort(1, [
         {Arrival, SlotNumber, Slot}
-        || {SlotNumber, Slot = #slot{
+     || {SlotNumber,
+            Slot = #slot{
                 status = committed,
                 arrival = Arrival
             }} <- maps:to_list(Slots)
@@ -456,12 +463,14 @@ consume_current(
     }
 ) ->
     case Slots of
-        #{SlotNumber := #slot{
-            status = committed,
-            ticket = Ticket,
-            arrival = Arrival,
-            message = Message
-        }} ->
+        #{
+            SlotNumber := #slot{
+                status = committed,
+                ticket = Ticket,
+                arrival = Arrival,
+                message = Message
+            }
+        } ->
             NewMailbox = Mailbox#mailbox{
                 slots = maps:remove(SlotNumber, Slots)
             },

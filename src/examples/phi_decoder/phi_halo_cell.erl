@@ -109,6 +109,8 @@ its old value and receives `1/12` of each of its six spatial neighbors. The
 charge-free bulk layer receives the same coefficient from each neighbor; one
 of its two z-neighbors is the center plane and the other is its reflected bulk
 counterpart.
+
+The callbacks and CPU helper exports are defined in phi_halo_cell_impl.hrl. Grid topologies place this wrapper; phi_line_cell selects the two-neighbor geometry.
 """.
 
 %% Shared protocol implementation; the default has four spatial neighbors.

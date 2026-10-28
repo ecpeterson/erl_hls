@@ -1,23 +1,18 @@
 -module(hls_type).
--moduledoc "Typed host codecs and DSLX conversion through type-provider descriptors.".
+-moduledoc """
+Type-provider contract and descriptor operations used by actor source, generated host codecs and XLS lowering. Dispatches widths, normalization, packing and rendering to the named provider; the provider owns its encoding and arithmetic semantics.
+""".
+%% Application defaults and explicit type assertion.
+-export([zero/0, zero/1, as/2]).
+
+%% Descriptor analysis and host codecs.
 -export([
-    as/2,
-    descriptor/1,
-    dslx_codec/1,
-    dslx_from_bits/2,
-    dslx_to_bits/2,
-    normalize/2,
-    pack/2,
-    pack_exact/2,
-    print_type/1,
-    providers/1,
-    unpack/2,
-    transpile/3,
-    value_width/1,
-    width/1,
-    zero/0,
-    zero/1
+    descriptor/1, providers/1, width/1, value_width/1, normalize/2, pack/2, pack_exact/2, unpack/2
 ]).
+
+%% XLS lowering and wire-codec dispatch.
+-export([print_type/1, transpile/3, dslx_codec/1, dslx_from_bits/2, dslx_to_bits/2]).
+%% Shared type contracts.
 -export_type([descriptor/0, arg/0]).
 
 %%%
@@ -67,9 +62,12 @@ XLS expression. A `fallible` result renders `(value, failed: bool)`; the compile
 attaches the call's source location and propagates its registered failure kind.
 """.
 %% TODO: might need to supply clause state for anonymous variables
--callback transpile(FnName :: atom(), XLSArgs :: [xls_clause_lower:ir()], State :: xls_clause_lower:clause_state()) ->
-    xls_clause_lower:ir() | xls_clause_lower:clause_state() |
-    {fallible, atom(), xls_clause_lower:ir()}.
+-callback transpile(
+    FnName :: atom(), XLSArgs :: [xls_clause_lower:ir()], State :: xls_clause_lower:clause_state()
+) ->
+    xls_clause_lower:ir()
+    | xls_clause_lower:clause_state()
+    | {fallible, atom(), xls_clause_lower:ir()}.
 
 -doc """
 Declares the DSLX modules used by this provider's types and expressions.
@@ -92,9 +90,11 @@ Collections compose their element codecs, including padding within each
 element. Omission means ordinary bit casts; value_width/2 declares whether
 such casts add or remove padding. Padding must match the host codec policy.
 """.
--callback dslx_codec(atom(), [arg()]) -> bit_cast |
-    {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
-     fun((xls_clause_lower:printable()) -> xls_clause_lower:printable())}.
+-callback dslx_codec(atom(), [arg()]) ->
+    bit_cast
+    | {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), fun(
+        (xls_clause_lower:printable()) -> xls_clause_lower:printable()
+    )}.
 -optional_callbacks([dslx_imports/0, dslx_imports/1, dslx_codec/2]).
 
 -doc "Builds an empty Erlang instance of this type.".
@@ -127,10 +127,12 @@ providers(Type = #hls_type{}) -> lists:usort(provider_modules(Type)).
 -spec provider_modules(arg() | [arg()]) -> [module()].
 provider_modules(#hls_type{module = Module, args = Args}) ->
     [Module | provider_modules(Args)];
-provider_modules({_Field, Type}) -> provider_modules(Type);
+provider_modules({_Field, Type}) ->
+    provider_modules(Type);
 provider_modules(Args) when is_list(Args) ->
     lists:append([provider_modules(Arg) || Arg <- Args]);
-provider_modules(_Literal) -> [].
+provider_modules(_Literal) ->
+    [].
 
 -spec zero() -> no_return().
 -doc """
@@ -159,11 +161,14 @@ as(_Descriptor, Value) ->
     Value.
 
 -doc "Lowers a type ascription; rejects host-only normalization and exact-packing operations.".
--spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_clause_lower:ir().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir().
 transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
     ["(", Value, " as ", print_type(Descriptor), ")"];
-transpile(Operation, _Args, _State) when Operation =:= normalize;
-        Operation =:= pack_exact ->
+transpile(Operation, _Args, _State) when
+    Operation =:= normalize;
+    Operation =:= pack_exact
+->
     error({host_only_type_operation, Operation}).
 
 -spec width(descriptor()) -> integer().
@@ -194,7 +199,8 @@ pack(Value, Descriptor = #hls_type{module = Module, name = Name, args = Args}) -
         Packed when is_bitstring(Packed), bit_size(Packed) =:= Width -> Packed;
         Packed when is_bitstring(Packed) ->
             error({invalid_packed_width, Descriptor, Width, bit_size(Packed)});
-        _Invalid -> error({invalid_packed_value, Descriptor})
+        _Invalid ->
+            error({invalid_packed_value, Descriptor})
     end.
 
 -doc """
@@ -234,7 +240,11 @@ print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).
 
 -doc "Returns the provider's from-bits/to-bits renderers, or bit_cast for ordinary value types.".
--spec dslx_codec(descriptor()) -> bit_cast | {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), fun((xls_clause_lower:printable()) -> xls_clause_lower:printable())}.
+-spec dslx_codec(descriptor()) ->
+    bit_cast
+    | {fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), fun(
+        (xls_clause_lower:printable()) -> xls_clause_lower:printable()
+    )}.
 dslx_codec({hls_type, Module, Name, Args}) ->
     _ = code:ensure_loaded(Module),
     case erlang:function_exported(Module, dslx_codec, 2) of

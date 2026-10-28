@@ -1,5 +1,6 @@
 -module(xls_hardware_source).
--moduledoc "Selects the source needed by hardware callbacks before semantic validation. The original module remains the authority for BEAM compilation and source identity.".
+-moduledoc "Selects the local-function, record and type closure reachable from hardware callback roots before semantic validation. State-machine/server preparation and interface analysis use this source-only pass without invoking providers; the original module remains authoritative for BEAM compilation and source identity.".
+%% Select explicit callback roots or the complete state-machine callback surface.
 -export([select/2, statem/2]).
 
 %% Functions and local type aliases are identified by name and arity.
@@ -16,29 +17,41 @@ statem(Forms, Phases) ->
 -spec select([hls_source:form()], [key()]) -> [hls_source:form()].
 select(Forms, Roots) ->
     Module = hls_source:find_attribute(Forms, module),
-    Definitions = maps:from_list([{{Name, Arity}, Clauses}
-        || {function, _, Name, Arity, Clauses} <- Forms]),
+    Definitions = maps:from_list([
+        {{Name, Arity}, Clauses}
+     || {function, _, Name, Arity, Clauses} <- Forms
+    ]),
     Functions = functions(Roots, Definitions, Module, #{}),
     Selected = [F || F <- Forms, function_form(F, Functions)],
     Values = [F || F <- Selected, is_function_or_spec(F)],
-    Declarations = maps:from_list([{Key, F} || F <- Forms,
-        Key <- [declaration_key(F)], Key =/= none]),
+    Declarations = maps:from_list([
+        {Key, F}
+     || F <- Forms,
+        Key <- [declaration_key(F)],
+        Key =/= none
+    ]),
     Executable = [F || F <- Selected, declaration_key(F) =:= none],
-    Required = declarations([{record, N} || N <- hls_records:wire_names(Executable)] ++
-        references(Values), Declarations, #{}),
+    Required = declarations(
+        [{record, N} || N <- hls_records:wire_names(Executable)] ++
+            references(Values),
+        Declarations,
+        #{}
+    ),
     [F || F <- Selected, declaration_form(F, Required)].
 
 %% Resolve only known local definitions. Unknown calls remain in their caller
 %% for the existing undefined-helper or unsupported-expression diagnostic.
 -spec functions([key()], #{key() => term()}, atom(), #{key() => true}) -> #{key() => true}.
-functions([], _Definitions, _Module, Seen) -> Seen;
+functions([], _Definitions, _Module, Seen) ->
+    Seen;
 functions([Key | Rest], Definitions, Module, Seen) when is_map_key(Key, Seen) ->
     functions(Rest, Definitions, Module, Seen);
 functions([Key | Rest], Definitions, Module, Seen) ->
-    Calls = case maps:find(Key, Definitions) of
-        {ok, Clauses} -> calls(Clauses, Module);
-        error -> []
-    end,
+    Calls =
+        case maps:find(Key, Definitions) of
+            {ok, Clauses} -> calls(Clauses, Module);
+            error -> []
+        end,
     functions(Calls ++ Rest, Definitions, Module, Seen#{Key => true}).
 
 %% Qualified self calls and unqualified local definitions describe the same
@@ -50,7 +63,8 @@ calls({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}, Module) 
     [{Name, length(Args)} | calls(Args, Module)];
 calls(Tuple, Module) when is_tuple(Tuple) -> calls(tuple_to_list(Tuple), Module);
 calls(List, Module) when is_list(List) -> lists:append([calls(X, Module) || X <- List]);
-calls(_, _) -> [].
+calls(_, _) ->
+    [].
 
 %% Specifications belong to their retained functions; behaviour declarations
 %% describe host APIs and cannot contribute imports to an actor implementation.
@@ -68,10 +82,12 @@ is_function_or_spec(_) -> false.
 
 %% Both ordinary and opaque local aliases can lead to nested record types.
 -spec declaration_key(hls_source:form()) -> declaration() | none.
-declaration_key({attribute, _, record, {Name, _}}) -> {record, Name};
+declaration_key({attribute, _, record, {Name, _}}) ->
+    {record, Name};
 declaration_key({attribute, _, Kind, {Name, _, Vars}}) when Kind =:= type; Kind =:= opaque ->
     {type, {Name, length(Vars)}};
-declaration_key(_) -> none.
+declaration_key(_) ->
+    none.
 
 %% Preserve metadata such as compile flags, actor contracts and include/context
 %% markers; only unrelated record/type declarations are removed here.
@@ -83,16 +99,21 @@ declaration_form(Form, Required) ->
     end.
 
 %% Cycles terminate here but remain present for semantic layout/type checks.
--spec declarations([declaration()], #{declaration() => hls_source:form()},
-    #{declaration() => true}) -> #{declaration() => true}.
-declarations([], _Definitions, Seen) -> Seen;
+-spec declarations(
+    [declaration()],
+    #{declaration() => hls_source:form()},
+    #{declaration() => true}
+) -> #{declaration() => true}.
+declarations([], _Definitions, Seen) ->
+    Seen;
 declarations([Key | Rest], Definitions, Seen) when is_map_key(Key, Seen) ->
     declarations(Rest, Definitions, Seen);
 declarations([Key | Rest], Definitions, Seen) ->
-    Dependencies = case maps:find(Key, Definitions) of
-        {ok, Form} -> references(Form);
-        error -> []
-    end,
+    Dependencies =
+        case maps:find(Key, Definitions) of
+            {ok, Form} -> references(Form);
+            error -> []
+        end,
     declarations(Dependencies ++ Rest, Definitions, Seen#{Key => true}).
 
 %% Resolved record descriptors and raw Erlang record syntax use one record

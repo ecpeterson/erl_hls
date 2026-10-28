@@ -1,7 +1,20 @@
 -module(hls_codec).
--moduledoc false.
--export([checked_integer/3, pack_integer/3, wrap_integer/3, pack_float/2,
-    unpack_float16/1, unsigned/1, stream_bit_index/2, join/1, split/2, pad_to/2, align/2]).
+-moduledoc """
+Bitstream primitives shared by hls_type providers and runtime frame codecs. Owns integer/float normalization, stream-order conversion, splitting and padding; it has no record schema, actor selector or transport policy.
+""".
+%% Numeric normalization and stream ordering.
+-export([
+    checked_integer/3,
+    pack_integer/3,
+    wrap_integer/3,
+    pack_float/2,
+    unpack_float16/1,
+    unsigned/1,
+    stream_bit_index/2
+]).
+
+%% Bitstream composition and padding.
+-export([join/1, split/2, pad_to/2, align/2]).
 
 %% Scalar fields use Erlang's little-endian bit syntax. Aggregates concatenate
 %% those bitstrings directly; XLS performs the fixed wire permutation.
@@ -36,11 +49,20 @@ align(Packed, Unit) ->
 %% Values enter from untyped host messages. Width and signedness come from the
 %% type provider; packed widths must be positive.
 -spec checked_integer(term(), pos_integer(), signed | unsigned) -> integer().
-checked_integer(Value, Width, unsigned) when is_integer(Value),
-        Value >= 0, Value < (1 bsl Width) -> Value;
-checked_integer(Value, Width, signed) when is_integer(Value),
-        Value >= -(1 bsl (Width - 1)), Value < (1 bsl (Width - 1)) -> Value;
-checked_integer(_Value, _Width, _Signedness) -> error(badarg).
+checked_integer(Value, Width, unsigned) when
+    is_integer(Value),
+    Value >= 0,
+    Value < (1 bsl Width)
+->
+    Value;
+checked_integer(Value, Width, signed) when
+    is_integer(Value),
+    Value >= -(1 bsl (Width - 1)),
+    Value < (1 bsl (Width - 1))
+->
+    Value;
+checked_integer(_Value, _Width, _Signedness) ->
+    error(badarg).
 
 -spec pack_integer(term(), pos_integer(), signed | unsigned) -> bitstring().
 pack_integer(Value, Width, Signedness) ->
@@ -50,7 +72,8 @@ pack_integer(Value, Width, Signedness) ->
     <<Checked:Width/little-integer>>.
 
 -spec wrap_integer(integer(), pos_integer(), signed | unsigned) -> integer().
-wrap_integer(Value, Width, unsigned) -> Value band ((1 bsl Width) - 1);
+wrap_integer(Value, Width, unsigned) ->
+    Value band ((1 bsl Width) - 1);
 wrap_integer(Value, Width, signed) ->
     Sign = 1 bsl (Width - 1),
     ((Value + Sign) band ((1 bsl Width) - 1)) - Sign.
@@ -97,11 +120,18 @@ round_even(Value, Shift) ->
 -spec unpack_float16(binary()) -> {float(), binary()}.
 unpack_float16(<<Bits:16/little, Rest/binary>>) when Bits band 16#7c00 =/= 16#7c00 ->
     Fraction = Bits band 16#3ff,
-    Magnitude = case (Bits bsr 10) band 16#1f of
-        0 -> Fraction * 5.960464477539063e-8; % exactly 2^-24
-        Exponent ->
-            <<Normal:64/float>> = <<0:1, (Exponent + 1023 - 15):11, Fraction:10, 0:42>>,
-            Normal
-    end,
-    Value = case Bits bsr 15 of 0 -> Magnitude; 1 -> -Magnitude end,
+    Magnitude =
+        case (Bits bsr 10) band 16#1f of
+            % exactly 2^-24
+            0 ->
+                Fraction * 5.960464477539063e-8;
+            Exponent ->
+                <<Normal:64/float>> = <<0:1, (Exponent + 1023 - 15):11, Fraction:10, 0:42>>,
+                Normal
+        end,
+    Value =
+        case Bits bsr 15 of
+            0 -> Magnitude;
+            1 -> -Magnitude
+        end,
     {Value, Rest}.

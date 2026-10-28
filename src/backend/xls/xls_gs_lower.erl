@@ -4,9 +4,12 @@
 %%%% Callback lowering is shared by the immediate and retained-call server emitters.
 
 -module(xls_gs_lower).
--moduledoc false.
+-moduledoc "Lowers server initialization and ordered call/cast callback families for xls_gs_immediate and xls_gs_deferred. It adapts the server result contract to shared xls_init and xls_callback_lower fragments; the enclosing server renderer supplies service storage, channels and final failure allocation.".
 
--export([initial_state/2, callback_arms/2, callback_arms/3]).
+%% Lower the server's compile-time initializer.
+-export([initial_state/2]).
+%% Build call/cast dispatch fragments under the selected frame layout.
+-export([callback_arms/2, callback_arms/3]).
 
 -doc "Constructs the checked initializer while preserving source failure references.".
 -spec initial_state([hls_source:form()], atom()) -> xls_dslx:value().
@@ -26,8 +29,10 @@ callback_arms(Forms, StateName, Layout) ->
     CallGroups = hls_service_contract:groups(Forms, handle_call),
     CastGroups = hls_service_contract:groups(Forms, handle_cast),
     [
-        [callback_arm({call, maps:get(Tag, Replies)}, Group, StateName, Forms, Layout)
-            || Group = {Tag, _} <- CallGroups],
+        [
+            callback_arm({call, maps:get(Tag, Replies)}, Group, StateName, Forms, Layout)
+         || Group = {Tag, _} <- CallGroups
+        ],
         [callback_arm(cast, Group, StateName, Forms, Layout) || Group <- CastGroups],
         "\n_ => {\n",
         xls_dslx:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
@@ -35,8 +40,13 @@ callback_arms(Forms, StateName, Layout) ->
     ].
 
 %% Validate frame length before decoding and selecting this request tag's callback clauses.
--spec callback_arm(cast | {call, [atom(), ...]},
-    {atom(), [erl_parse:abstract_clause(), ...]}, atom(), [hls_source:form()], hls_frame_layout:layout()) -> xls_dslx:value().
+-spec callback_arm(
+    cast | {call, [atom(), ...]},
+    {atom(), [erl_parse:abstract_clause(), ...]},
+    atom(),
+    [hls_source:form()],
+    hls_frame_layout:layout()
+) -> xls_dslx:value().
 callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
     Arguments = [
         xls_pattern_lower:record_argument(
@@ -61,12 +71,16 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
         #{}
     ),
     [
-        "\nTag::", xls_names:enum_member(Tag), " => {\n",
+        "\nTag::",
+        xls_names:enum_member(Tag),
+        " => {\n",
         "  if frame.header.payload_words != u8:",
-        integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)), " {\n",
+        integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)),
+        " {\n",
         "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
         "  } else {\n",
-        "    let request = ", xls_names:record_codec(Tag),
+        "    let request = ",
+        xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         xls_dslx:indent(Body, 4),
         xls_dslx:indent(Result, 4),
@@ -76,18 +90,30 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
 
 %% Calls enforce their reply vocabulary; casts carry only the proposed state.
 -spec callbacks(cast | {call, [atom(), ...]}, atom()) ->
-    {fun((xls_dslx:value()) -> xls_dslx:value()), xls_dslx:value(),
-        fun((xls_dslx:value()) -> xls_dslx:value())}.
+    {fun((xls_dslx:value()) -> xls_dslx:value()), xls_dslx:value(), fun(
+        (xls_dslx:value()) -> xls_dslx:value()
+    )}.
 callbacks({call, Replies}, StateName) ->
     {
         fun(R) ->
-            ["if ", lists:join(" || ", [
-                [R, ".1.0 == Tag::", xls_names:enum_member(Tag)] || Tag <- Replies
-            ]), " {\n",
-            "  (axis::pack(", R, ".1.0 as u8, hls_bits::frame_payload(", R, ".1.2)), ", R, ".2)\n",
-            "} else {\n",
-            xls_dslx:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
-            "\n}"]
+            [
+                "if ",
+                lists:join(" || ", [
+                    [R, ".1.0 == Tag::", xls_names:enum_member(Tag)]
+                 || Tag <- Replies
+                ]),
+                " {\n",
+                "  (axis::pack(",
+                R,
+                ".1.0 as u8, hls_bits::frame_payload(",
+                R,
+                ".1.2)), ",
+                R,
+                ".2)\n",
+                "} else {\n",
+                xls_dslx:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
+                "\n}"
+            ]
         end,
         failure("ERROR_FUNCTION_CLAUSE", StateName),
         fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end
@@ -102,13 +128,26 @@ callbacks(cast, StateName) ->
 failure(Code, StateName) ->
     Struct = xls_names:record_type(StateName),
     [
-        "let s = zero!<", Struct, ">();\n",
-        "(axis::pack(Tag::ERROR as u8, ", Code, "), ",
-        "(Tag::", xls_names:enum_member(StateName), ", s))"
+        "let s = zero!<",
+        Struct,
+        ">();\n",
+        "(axis::pack(Tag::ERROR as u8, ",
+        Code,
+        "), ",
+        "(Tag::",
+        xls_names:enum_member(StateName),
+        ", s))"
     ].
 
 public_record_value(Tag, Raw) ->
     [
-        "(Tag::", xls_names:enum_member(Tag), ", ", Raw, ", bits_from_",
-        xls_names:record_codec(Tag), "(", Raw, "))"
+        "(Tag::",
+        xls_names:enum_member(Tag),
+        ", ",
+        Raw,
+        ", bits_from_",
+        xls_names:record_codec(Tag),
+        "(",
+        Raw,
+        "))"
     ].

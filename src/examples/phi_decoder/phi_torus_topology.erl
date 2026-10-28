@@ -20,10 +20,13 @@ tie-breaking seed. A family member is named `{phi, X, Y}` only by that instance
 constant or when a consumer resolves a particular coordinate. This example
 helper bounds each dimension at 50 because it materializes that startup list;
 the compact family and route forms do not have that bound.
+
+phi_torus_topology_dslx supplies the separate deployment profile and invokes the topology backend.
 """.
 
 -include("phi_protocol.hrl").
 
+%% Logical application topology.
 -export([topology/0, topology/2]).
 
 -define(MAX_WITNESS_DIMENSION, 50).
@@ -37,9 +40,12 @@ topology() ->
 
 -doc "Returns a compact `Width` by `Height` periodic phi family.".
 -spec topology(pos_integer(), pos_integer()) -> hls_topology:spec().
-topology(Width, Height)
-        when Width > 0, Width =< ?MAX_WITNESS_DIMENSION,
-             Height > 0, Height =< ?MAX_WITNESS_DIMENSION ->
+topology(Width, Height) when
+    Width > 0,
+    Width =< ?MAX_WITNESS_DIMENSION,
+    Height > 0,
+    Height =< ?MAX_WITNESS_DIMENSION
+->
     #{
         version => 1,
         actors => #{},
@@ -76,11 +82,13 @@ relation(Port, Offset) ->
 
 startup(Width, Height) ->
     [
-        {{phi, X, Y}, [#phi_config{
-            seed = seed(Height, X, Y)
-        }]}
-        || X <- lists:seq(0, Width - 1),
-           Y <- lists:seq(0, Height - 1)
+        {{phi, X, Y}, [
+            #phi_config{
+                seed = seed(Height, X, Y)
+            }
+        ]}
+     || X <- lists:seq(0, Width - 1),
+        Y <- lists:seq(0, Height - 1)
     ].
 
 seed(Height, X, Y) ->

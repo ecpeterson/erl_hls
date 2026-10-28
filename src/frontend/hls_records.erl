@@ -1,7 +1,12 @@
 -module(hls_records).
--moduledoc "Resolves actor record declarations and type-directed defaults. Field descriptors preserve Erlang declaration order and provider wire padding; hardware rendering belongs to the backend.".
--export([resolve/1, resolve/2, references/1, declarations/2, values/2, used/1, wire_names/1,
-    find/2, fields/1, width/1, field_name/1, validate_defaults/1, is_zero_default/1]).
+-moduledoc """
+Source record analysis used by hls_pack and XLS lowering. Resolves declarations, nested records and type-directed defaults through hls_source and hls_type. Field descriptors preserve Erlang declaration order and provider padding; hardware rendering belongs to the backend.
+""".
+%% Source declaration resolution and dependency queries.
+-export([resolve/1, resolve/2, references/1, declarations/2, used/1, wire_names/1, find/2]).
+
+%% Record fields, values and defaults.
+-export([values/2, fields/1, width/1, field_name/1, validate_defaults/1, is_zero_default/1]).
 
 -doc "Resolves wire layouts and explicit typed zeros, leaving unrelated host records alone.".
 -spec resolve([hls_source:form()]) -> [hls_source:form()].
@@ -10,29 +15,44 @@ resolve(Forms) -> resolve(Forms, []).
 -doc "Also resolves record values referenced by the reachable hardware function graph; rejects recursive or nested wire layouts.".
 -spec resolve([hls_source:form()], [atom()]) -> [hls_source:form()].
 resolve(Forms, Extra) ->
-    Zeros = [Type || {attribute, _, record, {_, Fields}} <- Forms,
-        Field = {typed_record_field, _, Type} <- Fields, typed_zero(Field)],
+    Zeros = [
+        Type
+     || {attribute, _, record, {_, Fields}} <- Forms,
+        Field = {typed_record_field, _, Type} <- Fields,
+        typed_zero(Field)
+    ],
     Roots = wire_names(Forms) ++ references(Zeros) ++ Extra,
     Names = reachable_names(Roots, Forms, #{}),
-    [case Form of
-        {attribute, L, record, {Name, Fields}} when is_map_key(Name, Names) ->
-            {attribute, L, record, {Name, [resolve_field(F, Forms, [Name]) || F <- Fields]}};
-        {attribute, L, record, {Name, Fields}} ->
-            {attribute, L, record, {Name, [case typed_zero(F) of
-                true -> resolve_field(F, Forms, [Name]); false -> F
-            end || F <- Fields]}};
-        _ -> Form
-    end || Form <- Forms].
+    [
+        case Form of
+            {attribute, L, record, {Name, Fields}} when is_map_key(Name, Names) ->
+                {attribute, L, record, {Name, [resolve_field(F, Forms, [Name]) || F <- Fields]}};
+            {attribute, L, record, {Name, Fields}} ->
+                {attribute, L, record,
+                    {Name, [
+                        case typed_zero(F) of
+                            true -> resolve_field(F, Forms, [Name]);
+                            false -> F
+                        end
+                     || F <- Fields
+                    ]}};
+            _ ->
+                Form
+        end
+     || Form <- Forms
+    ].
 
 %% A typed zero opts its field into HLS layout rules, even in a host-only record.
 -spec typed_zero(tuple()) -> boolean().
 typed_zero({typed_record_field, {record_field, _, _, Default}, _}) ->
     is_zero_default(Default);
-typed_zero(_) -> false.
+typed_zero(_) ->
+    false.
 
 %% Follow only layouts reached from hardware roots, without inspecting other record types.
 -spec reachable_names([atom()], [hls_source:form()], map()) -> map().
-reachable_names([], _Forms, Seen) -> Seen;
+reachable_names([], _Forms, Seen) ->
+    Seen;
 reachable_names([Name | Rest], Forms, Seen) when is_map_key(Name, Seen) ->
     reachable_names(Rest, Forms, Seen);
 reachable_names([Name | Rest], Forms, Seen) ->
@@ -45,17 +65,21 @@ references({record, _, Name, Fields}) when is_atom(Name) -> [Name | references(F
 references({record, _, Base, Name, Fields}) when is_atom(Name) ->
     [Name | references([Base, Fields])];
 references({record_field, _, Base, Name, _}) when is_atom(Name) -> [Name | references(Base)];
-references({type, _, record, [{atom, _, Name} | Fields]}) -> [Name | references(Fields)];
-references({hls_record_type, _, Descriptor}) -> nested_names(Descriptor);
+references({type, _, record, [{atom, _, Name} | Fields]}) ->
+    [Name | references(Fields)];
+references({hls_record_type, _, Descriptor}) ->
+    nested_names(Descriptor);
 references(Tuple) when is_tuple(Tuple) -> references(tuple_to_list(Tuple));
 references(List) when is_list(List) -> lists:usort(lists:append([references(X) || X <- List]));
-references(_) -> [].
+references(_) ->
+    [].
 
 %% Only field types change; source expressions and their annotations remain intact.
 -spec resolve_field(tuple(), [hls_source:form()], [atom()]) -> tuple().
 resolve_field({typed_record_field, Field, Type}, Forms, Stack) ->
     {typed_record_field, Field, resolve_type(Type, Forms, Stack)};
-resolve_field(Field, _Forms, _Stack) -> Field.
+resolve_field(Field, _Forms, _Stack) ->
+    Field.
 
 %% A resolved descriptor is self-contained, so downstream codecs need no source lookup.
 -spec resolve_type(term(), [hls_source:form()], [atom()]) -> term().
@@ -69,10 +93,11 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
         false -> ok
     end,
     {attribute, _, record, {Name, Fields}} = find(Forms, Name),
-    Descriptor = {hls_type, hls_record, Name, [
-        {field_name(Field),
-            hls_type:descriptor(resolve_type(Type, Forms, [Name | Stack]))}
-        || {typed_record_field, Field, Type} <- Fields]},
+    Descriptor =
+        {hls_type, hls_record, Name, [
+            {field_name(Field), hls_type:descriptor(resolve_type(Type, Forms, [Name | Stack]))}
+         || {typed_record_field, Field, Type} <- Fields
+        ]},
     case length(Fields) =:= length(element(4, Descriptor)) of
         true -> ok;
         false -> error({untyped_nested_hls_record, Name})
@@ -80,22 +105,28 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
     {hls_record_type, L, Descriptor};
 resolve_type({type, _, record, _} = Type, _Forms, _Stack) ->
     error({unsupported_hls_record_type, Type});
-resolve_type({hls_record_type, _, _} = Type, _Forms, _Stack) -> Type;
+resolve_type({hls_record_type, _, _} = Type, _Forms, _Stack) ->
+    Type;
 resolve_type(Tuple, Forms, Stack) when is_tuple(Tuple) ->
     list_to_tuple([resolve_type(X, Forms, Stack) || X <- tuple_to_list(Tuple)]);
 resolve_type(List, Forms, Stack) when is_list(List) ->
     [resolve_type(X, Forms, Stack) || X <- List];
-resolve_type(Value, _Forms, _Stack) -> Value.
+resolve_type(Value, _Forms, _Stack) ->
+    Value.
 
 -doc "Returns dependency-ordered declarations for wire records and reachable internal values.".
 -spec declarations([hls_source:form()], [atom()]) -> [hls_source:record_declaration()].
 declarations(Forms, Roots) ->
-    Extra = case hls_source:find_optional_attribute(Forms, hls_value_records) of
-        {ok, Names} -> Names;
-        none -> []
-    end,
-    {_, Reversed} = lists:foldl(fun(Name, Acc) -> visit(Name, Forms, Acc) end,
-        {#{}, []}, Roots ++ Extra),
+    Extra =
+        case hls_source:find_optional_attribute(Forms, hls_value_records) of
+            {ok, Names} -> Names;
+            none -> []
+        end,
+    {_, Reversed} = lists:foldl(
+        fun(Name, Acc) -> visit(Name, Forms, Acc) end,
+        {#{}, []},
+        Roots ++ Extra
+    ),
     lists:reverse(Reversed).
 
 %% Layout cycles were rejected during resolution; each declaration is emitted once.
@@ -104,8 +135,11 @@ visit(Name, _Forms, {Seen, _} = Acc) when is_map_key(Name, Seen) -> Acc;
 visit(Name, Forms, {Seen, Records}) ->
     Record = find(Forms, Name),
     Dependencies = nested_names(Record),
-    {Next, Ordered} = lists:foldl(fun(N, Acc) -> visit(N, Forms, Acc) end,
-        {Seen#{Name => true}, Records}, Dependencies),
+    {Next, Ordered} = lists:foldl(
+        fun(N, Acc) -> visit(N, Forms, Acc) end,
+        {Seen#{Name => true}, Records},
+        Dependencies
+    ),
     {Next, [Record | Ordered]}.
 
 %% Descriptor traversal includes records nested inside fixed-size collections.
@@ -126,12 +160,16 @@ values({record_field, L, Base, Name, Field}, Wire) when is_atom(Name) ->
 values(Tuple, Wire) when is_tuple(Tuple) ->
     list_to_tuple([values(X, Wire) || X <- tuple_to_list(Tuple)]);
 values(List, Wire) when is_list(List) -> [values(X, Wire) || X <- List];
-values(Value, _Wire) -> Value.
+values(Value, _Wire) ->
+    Value.
 
 %% Top-level callback records retain their established tagged representation.
 -spec representation(atom(), [atom()]) -> atom() | {value, atom()}.
 representation(Name, Wire) ->
-    case lists:member(Name, Wire) of true -> Name; false -> {value, Name} end.
+    case lists:member(Name, Wire) of
+        true -> Name;
+        false -> {value, Name}
+    end.
 
 -doc "Collects explicitly marked internal record values in prepared callback/helper syntax.".
 -spec used(term()) -> [atom()].
@@ -144,31 +182,47 @@ used(_) -> [].
 -spec wire_names([hls_source:form()]) -> [atom()].
 wire_names(Forms) ->
     Clauses = [Cs || {function, _, _, _, Cs} <- Forms],
-    lists:usort([hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)] ++ accumulator_names(Clauses)).
+    lists:usort(
+        [hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)] ++ accumulator_names(Clauses)
+    ).
 
 %% The literal function-body seed identifies the accumulator before reduction analysis runs.
 -spec accumulator_names(term()) -> [atom()].
-accumulator_names({tuple, _, [{atom, _, open_reduction}, _, _, _,
-        {tuple, _, [{atom, _, commutative_monoid}, {record, _, Name, _}]}]}) -> [Name];
+accumulator_names(
+    {tuple, _, [
+        {atom, _, open_reduction},
+        _,
+        _,
+        _,
+        {tuple, _, [{atom, _, commutative_monoid}, {record, _, Name, _}]}
+    ]}
+) ->
+    [Name];
 accumulator_names(Tuple) when is_tuple(Tuple) -> accumulator_names(tuple_to_list(Tuple));
-accumulator_names(List) when is_list(List) -> lists:usort(lists:append([accumulator_names(X) || X <- List]));
-accumulator_names(_) -> [].
-
+accumulator_names(List) when is_list(List) ->
+    lists:usort(lists:append([accumulator_names(X) || X <- List]));
+accumulator_names(_) ->
+    [].
 
 -doc "Returns the first named record declaration; raises when it is absent.".
 -spec find([hls_source:form()], atom()) -> hls_source:record_declaration().
 find(Forms, Name) ->
     {value, Record} = lists:search(
-        fun ({attribute, _, record, {RecordName, _}}) -> RecordName == Name;
+        fun
+            ({attribute, _, record, {RecordName, _}}) -> RecordName == Name;
             (_) -> false
-        end, Forms),
+        end,
+        Forms
+    ),
     Record.
 
 -doc "Returns typed fields in declaration order with resolved provider descriptors. Untyped fields are omitted; validate_defaults/1 rejects them at actor compilation boundaries.".
 -spec fields(hls_source:record_declaration()) -> hls_record:fields().
 fields({attribute, _, record, {_, Fields}}) ->
-    [{field_name(Field), hls_type:descriptor(Type)}
-        || {typed_record_field, Field, Type} <- Fields].
+    [
+        {field_name(Field), hls_type:descriptor(Type)}
+     || {typed_record_field, Field, Type} <- Fields
+    ].
 
 -doc "Sums serialized field widths, including provider padding and zero-width fields.".
 -spec width(hls_source:record_declaration()) -> non_neg_integer().
@@ -183,16 +237,20 @@ field_name({record_field, _, {atom, _, Name}, _}) -> Name.
 -doc "Requires a type and hls_type:zero() default on every translated record field. Reports missing or explicit defaults with their record, field and source line.".
 -spec validate_defaults(hls_source:record_declaration()) -> ok.
 validate_defaults({attribute, _, record, {RecordName, Fields}}) ->
-    lists:foreach(fun
-        ({typed_record_field, {record_field, Line, {atom, _, FieldName}, Default}, _}) ->
-            case is_zero_default(Default) of
-                true -> ok;
-                false -> error({invalid_hls_record_default, RecordName, FieldName, Line})
-            end;
-        ({typed_record_field, {record_field, Line, {atom, _, FieldName}}, _}) ->
-            error({missing_hls_record_default, RecordName, FieldName, Line});
-        (Field) -> error({untyped_xls_record_field, RecordName, Field})
-    end, Fields),
+    lists:foreach(
+        fun
+            ({typed_record_field, {record_field, Line, {atom, _, FieldName}, Default}, _}) ->
+                case is_zero_default(Default) of
+                    true -> ok;
+                    false -> error({invalid_hls_record_default, RecordName, FieldName, Line})
+                end;
+            ({typed_record_field, {record_field, Line, {atom, _, FieldName}}, _}) ->
+                error({missing_hls_record_default, RecordName, FieldName, Line});
+            (Field) ->
+                error({untyped_xls_record_field, RecordName, Field})
+        end,
+        Fields
+    ),
     ok.
 
 -doc "Recognizes the source hls_type:zero() marker before parse-transform expansion.".

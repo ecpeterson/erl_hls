@@ -31,11 +31,16 @@ realization queues the first cutoff before activating its actors.
 This coordinator remains an ordinary `gen_server`: it needs delayed replies,
 timer and monitor messages, and unsolicited streams, while `hls_gs` currently
 models transaction-correlated call and cast traffic intended for lowering.
+
+Payload encoding and event decoding belong to phi_memory_wire; phi_memory_experiment decides the next closeout commands.
 """.
 
 -behavior(gen_server).
 
+%% Host experiment lifecycle and completion.
 -export([start_link/3, stop/1, await/1]).
+
+%% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(FABRIC_RX, '$hls_fabric_frame').
@@ -72,8 +77,9 @@ stop(Pid) ->
 await(Pid) ->
     gen_server:call(Pid, await, infinity).
 
-init({Fabric, Options = #{distance := Distance}, Timeout})
-        when Timeout > 0 ->
+init({Fabric, Options = #{distance := Distance}, Timeout}) when
+    Timeout > 0
+->
     Boundary = phi_memory_boundary:contract(Distance),
     case register_routes(Fabric, Boundary) of
         ok ->
@@ -89,32 +95,43 @@ handle_call(await, _From, State = #state{result = Result}) ->
 handle_call(Request, _From, State) ->
     {reply, {error, {call, Request}}, State}.
 
-handle_cast({?FABRIC_RX, Receipt, Route, Header, Payload},
-        State = #state{result = running, events = Events}) ->
+handle_cast(
+    {?FABRIC_RX, Receipt, Route, Header, Payload},
+    State = #state{result = running, events = Events}
+) ->
     {noreply, advance(State#state{events = queue:in({Receipt, Route, Header, Payload}, Events)})};
 handle_cast({?FABRIC_RX, Receipt, _Route, _Header, _Payload}, State = #state{fabric = Fabric}) ->
     hls_fabric:ack(Fabric, Receipt),
     {noreply, State};
 handle_cast(_Message, State = #state{result = Result}) when Result =/= running ->
     {noreply, State};
-handle_cast(Message, State) -> {noreply, finish({error, {cast, Message}}, State)}.
+handle_cast(Message, State) ->
+    {noreply, finish({error, {cast, Message}}, State)}.
 
 handle_info(experiment_timeout, State = #state{result = running}) ->
     {noreply, finish({error, timeout}, State)};
-handle_info(experiment_timeout, State) -> {noreply, State};
-handle_info({'DOWN', Monitor, process, Fabric, Reason},
-        State = #state{result = running, fabric = Fabric, fabric_monitor = Monitor}) ->
+handle_info(experiment_timeout, State) ->
+    {noreply, State};
+handle_info(
+    {'DOWN', Monitor, process, Fabric, Reason},
+    State = #state{result = running, fabric = Fabric, fabric_monitor = Monitor}
+) ->
     {noreply, finish({error, {fabric_down, Reason}}, State)};
 handle_info(_Message, State = #state{result = Result}) when Result =/= running ->
     {noreply, State};
 handle_info(Message, State = #state{sending = Request}) when Request =/= none ->
     case gen_server:check_response(Message, Request) of
-        {reply, ok} -> {noreply, advance(State#state{sending = none})};
-        {reply, {error, Reason}} -> {noreply, finish({error, {send, Reason}}, State#state{sending = none})};
-        {error, {Reason, _Fabric}} -> {noreply, finish({error, {fabric_down, Reason}}, State#state{sending = none})};
-        no_reply -> {noreply, finish({error, {info, Message}}, State)}
+        {reply, ok} ->
+            {noreply, advance(State#state{sending = none})};
+        {reply, {error, Reason}} ->
+            {noreply, finish({error, {send, Reason}}, State#state{sending = none})};
+        {error, {Reason, _Fabric}} ->
+            {noreply, finish({error, {fabric_down, Reason}}, State#state{sending = none})};
+        no_reply ->
+            {noreply, finish({error, {info, Message}}, State)}
     end;
-handle_info(Message, State) -> {noreply, finish({error, {info, Message}}, State)}.
+handle_info(Message, State) ->
+    {noreply, finish({error, {info, Message}}, State)}.
 
 terminate(_Reason, #state{timer = Timer, fabric_monitor = Monitor, sending = Request}) ->
     erlang:cancel_timer(Timer),
@@ -127,39 +144,69 @@ start_experiment(Fabric, Options, Boundary, Timeout) ->
     {Experiment, Commands} = phi_memory_experiment:new(Options),
     Deadline = erlang:monotonic_time(millisecond) + Timeout,
     Timer = erlang:send_after(Timeout, self(), experiment_timeout),
-    {ok, advance(#state{fabric = Fabric, fabric_monitor = FabricMonitor,
-        boundary = Boundary, experiment = Experiment, timer = Timer,
-        deadline = Deadline, commands = Commands})}.
+    {ok,
+        advance(#state{
+            fabric = Fabric,
+            fabric_monitor = FabricMonitor,
+            boundary = Boundary,
+            experiment = Experiment,
+            timer = Timer,
+            deadline = Deadline,
+            commands = Commands
+        })}.
 
 %% Serialize command completion with experiment events, while always returning
 %% to the gen_server loop to service deadlines, monitors, and bounded receipts.
-advance(State = #state{result = running, sending = none, commands = [Command | Rest],
-        fabric = Fabric, boundary = Boundary, deadline = Deadline}) ->
+advance(
+    State = #state{
+        result = running,
+        sending = none,
+        commands = [Command | Rest],
+        fabric = Fabric,
+        boundary = Boundary,
+        deadline = Deadline
+    }
+) ->
     case phi_memory_wire:encode_command(Command, Boundary) of
         {ok, Route, Header, Payload} ->
             Request = hls_fabric:send_request(Fabric, Route, Header, Payload, {abs, Deadline}),
             State#state{commands = Rest, sending = Request};
-        {error, Reason} -> finish({error, {send, Reason}}, State)
+        {error, Reason} ->
+            finish({error, {send, Reason}}, State)
     end;
-advance(State = #state{result = running, sending = none, commands = [], events = Events,
-        fabric = Fabric, boundary = Boundary}) ->
+advance(
+    State = #state{
+        result = running,
+        sending = none,
+        commands = [],
+        events = Events,
+        fabric = Fabric,
+        boundary = Boundary
+    }
+) ->
     case queue:out(Events) of
-        {empty, _} -> State;
+        {empty, _} ->
+            State;
         {{value, {Receipt, Route, Header, Payload}}, Rest} ->
-            Next = case phi_memory_wire:decode_event(Route, Header, Payload, Boundary) of
-                {ok, Stream, Event} -> consume(Stream, Event, State#state{events = Rest});
-                {error, Reason} -> finish({error, {wire, Reason}}, State#state{events = Rest})
-            end,
+            Next =
+                case phi_memory_wire:decode_event(Route, Header, Payload, Boundary) of
+                    {ok, Stream, Event} -> consume(Stream, Event, State#state{events = Rest});
+                    {error, Reason} -> finish({error, {wire, Reason}}, State#state{events = Rest})
+                end,
             hls_fabric:ack(Fabric, Receipt),
             advance(Next)
     end;
-advance(State) -> State.
+advance(State) ->
+    State.
 
 consume(Stream, Event, State = #state{experiment = Experiment}) ->
     case phi_memory_experiment:event(Stream, Event, Experiment) of
-        {Updated, Commands} -> State#state{experiment = Updated, commands = Commands};
-        {done, Witness, Updated} -> finish({ok, Witness}, State#state{experiment = Updated});
-        {error, Reason, Updated} -> finish({error, {experiment, Reason}}, State#state{experiment = Updated})
+        {Updated, Commands} ->
+            State#state{experiment = Updated, commands = Commands};
+        {done, Witness, Updated} ->
+            finish({ok, Witness}, State#state{experiment = Updated});
+        {error, Reason, Updated} ->
+            finish({error, {experiment, Reason}}, State#state{experiment = Updated})
     end.
 
 register_routes(Fabric, Boundary) ->
@@ -174,13 +221,24 @@ register_routes(Fabric, Boundary) ->
         phi_memory_wire:event_routes(Boundary)
     ).
 
-finish(Result, State = #state{timer = Timer, waiters = Waiters, events = Events,
-        fabric = Fabric, sending = Request}) ->
+finish(
+    Result,
+    State = #state{
+        timer = Timer,
+        waiters = Waiters,
+        events = Events,
+        fabric = Fabric,
+        sending = Request
+    }
+) ->
     erlang:cancel_timer(Timer),
     abandon_send(Request),
     [hls_fabric:ack(Fabric, Receipt) || {Receipt, _, _, _} <- queue:to_list(Events)],
     lists:foreach(fun(From) -> gen_server:reply(From, Result) end, Waiters),
     State#state{result = Result, waiters = [], events = queue:new(), commands = [], sending = none}.
 
-abandon_send(none) -> ok;
-abandon_send(Request) -> gen_server:receive_response(Request, 0), ok.
+abandon_send(none) ->
+    ok;
+abandon_send(Request) ->
+    gen_server:receive_response(Request, 0),
+    ok.

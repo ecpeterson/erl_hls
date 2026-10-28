@@ -24,6 +24,7 @@ derivation rejects a multicast target whose recipient artifacts disagree on
 either fact, and an external whose possible producer artifacts disagree.
 """.
 
+%% Host and gateway boundary contract.
 -export([contract/1, version/0]).
 
 -define(VERSION, 1).
@@ -62,8 +63,8 @@ ingress({Id, {rectangle, Shape}, Targets}, Families) ->
         shape => Shape,
         targets => [
             target(Index, Target, Families)
-            || {Index, Target} <-
-                   lists:enumerate(0, lists:keysort(1, Targets))
+         || {Index, Target} <-
+                lists:enumerate(0, lists:keysort(1, Targets))
         ]
     }.
 
@@ -74,7 +75,7 @@ target(
 ) when Index < 4 ->
     Modules = lists:usort([
         maps:get(module, maps:get(Family, Families))
-        || {family, Family, _Embedding} <- Recipients
+     || {family, Family, _Embedding} <- Recipients
     ]),
     #{
         id => Target,
@@ -88,7 +89,7 @@ target(_Index, {Target, _Schemas, _Recipients}, _Families) ->
 outputs(Externals, Relations, Families) ->
     [
         output(output_endpoint(Id), External, Relations, Families)
-        || External = {Id, out, _Schemas} <- Externals
+     || External = {Id, out, _Schemas} <- Externals
     ].
 
 output_endpoint(data_measurements) -> 2;
@@ -113,9 +114,9 @@ output(
 producer_modules(External, Relations, Families) ->
     lists:usort([
         maps:get(module, maps:get(Source, Families))
-        || Relation <- Relations,
-           {Source, Recipients} <- [relation_recipients(Relation)],
-           lists:member({external, External}, Recipients)
+     || Relation <- Relations,
+        {Source, Recipients} <- [relation_recipients(Relation)],
+        lists:member({external, External}, Recipients)
     ]).
 
 %% This profile derives producers from the example's implicit-delivery relations.
@@ -126,8 +127,8 @@ relation_recipients({{Source, _Port}, Recipients}) ->
 validate_command_selectors(#{ingress := #{targets := Targets}}) ->
     Selectors = [
         {maps:get(selector, Schema), maps:get(name, Schema)}
-        || #{schemas := Schemas} <- Targets,
-           Schema <- Schemas
+     || #{schemas := Schemas} <- Targets,
+        Schema <- Schemas
     ],
     case length(Selectors) =:= length(lists:ukeysort(1, Selectors)) of
         true -> ok;

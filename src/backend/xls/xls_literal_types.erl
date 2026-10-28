@@ -1,8 +1,11 @@
 %%%% Preserve signature- and field-directed literal types before expression flattening.
 -module(xls_literal_types).
--moduledoc false.
+-moduledoc "Propagates expected helper and record types into source literals during xls_helpers preparation. It retains type-directed source annotations consumed by expression lowering; format/1 prints the resolved value type for generated helper signatures rather than inferring a type from emitted DSLX.".
 
--export([clauses/3, format/1]).
+%% Annotate literals in prepared source clauses.
+-export([clauses/3]).
+%% Render a resolved helper signature type.
+-export([format/1]).
 -export_type([type/0]).
 
 -doc "A concrete helper type, retaining tuple structure for literal context.".
@@ -24,10 +27,14 @@ format({tuple, Fields}) -> ["(", [[format(T), ", "] || T <- Fields], ")"].
 -spec clauses([erl_parse:abstract_clause()], expected(), [hls_source:form()]) ->
     [erl_parse:abstract_clause()].
 clauses(Clauses, Result, Forms) ->
-    Records = maps:from_list([{Name, maps:from_list([
-        {hls_records:field_name(Field), Type}
-        || {typed_record_field, Field, Type} <- Fields])}
-        || {attribute, _, record, {Name, Fields}} <- Forms]),
+    Records = maps:from_list([
+        {Name,
+            maps:from_list([
+                {hls_records:field_name(Field), Type}
+             || {typed_record_field, Field, Type} <- Fields
+            ])}
+     || {attribute, _, record, {Name, Fields}} <- Forms
+    ]),
     [Clause || Source <- Clauses, {Clause, _} <- [clause(Source, Result, #{}, Records)]].
 
 %% Each clause has its own scope; guards cannot export new bindings.
@@ -41,10 +48,14 @@ clause({clause, Line, Patterns, Guards, Body}, Result, After, Records) ->
 -spec sequence([erl_parse:abstract_expr()], expected(), requirements(), records()) ->
     {[erl_parse:abstract_expr()], requirements()}.
 sequence(Expressions, Result, After, Records) ->
-    {Typed, {_, Before}} = lists:mapfoldr(fun(Expression, {Expected, Needs}) ->
-        {Next, Previous} = expression(Expression, Expected, Needs, Records),
-        {Next, {unknown, Previous}}
-    end, {Result, After}, Expressions),
+    {Typed, {_, Before}} = lists:mapfoldr(
+        fun(Expression, {Expected, Needs}) ->
+            {Next, Previous} = expression(Expression, Expected, Needs, Records),
+            {Next, {unknown, Previous}}
+        end,
+        {Result, After},
+        Expressions
+    ),
     {Typed, Before}.
 
 %% Requirements guide literals only. XLS still checks every use of a value,
@@ -59,15 +70,22 @@ expression({integer, Line, Value}, Type, Needs, _Records) when Type =/= unknown 
     {literal(Line, Value, Type), Needs};
 expression({char, Line, Value}, Type, Needs, _Records) when Type =/= unknown ->
     {literal(Line, Value, Type), Needs};
-expression({op, Line, Sign, {integer, _, Value}}, Type, Needs, _Records)
-        when Type =/= unknown, (Sign =:= '+' orelse Sign =:= '-') ->
-    Signed = case Sign of '+' -> Value; '-' -> -Value end,
+expression({op, Line, Sign, {integer, _, Value}}, Type, Needs, _Records) when
+    Type =/= unknown, (Sign =:= '+' orelse Sign =:= '-')
+->
+    Signed =
+        case Sign of
+            '+' -> Value;
+            '-' -> -Value
+        end,
     {literal(Line, Signed, Type), Needs};
 expression({match, Line, Pattern, Value}, Expected, Needs, Records) ->
     Type = pattern_type(Pattern, Expected, Needs),
     {Typed, Before} = expression(Value, Type, Needs, Records),
     {{match, Line, Pattern, Typed}, Before};
-expression({tuple, Line, Values}, {tuple, Types}, Needs, Records) when length(Values) =:= length(Types) ->
+expression({tuple, Line, Values}, {tuple, Types}, Needs, Records) when
+    length(Values) =:= length(Types)
+->
     {Typed, Before} = arguments(Values, Types, Needs, Records),
     {{tuple, Line, Typed}, Before};
 expression({record, Line, Name, Fields}, _Expected, Needs, Records) ->
@@ -88,25 +106,34 @@ expression({'if', Line, Clauses}, Expected, Needs, Records) ->
     {Typed, Before} = branches(Clauses, Expected, Needs, Records),
     {{'if', Line, Typed}, Before};
 expression({op, Line, Op, Left, Right}, Expected, Needs, Records) ->
-    Types = case Op of
-        '+' -> [Expected, Expected]; '-' -> [Expected, Expected];
-        '*' -> [Expected, Expected]; 'div' -> [Expected, Expected];
-        'rem' -> [Expected, Expected]; 'band' -> [Expected, Expected];
-        'bor' -> [Expected, Expected]; 'bxor' -> [Expected, Expected];
-        'bsl' -> [Expected, unknown]; 'bsr' -> [Expected, unknown];
-        _ -> [unknown, unknown]
-    end,
+    Types =
+        case Op of
+            '+' -> [Expected, Expected];
+            '-' -> [Expected, Expected];
+            '*' -> [Expected, Expected];
+            'div' -> [Expected, Expected];
+            'rem' -> [Expected, Expected];
+            'band' -> [Expected, Expected];
+            'bor' -> [Expected, Expected];
+            'bxor' -> [Expected, Expected];
+            'bsl' -> [Expected, unknown];
+            'bsr' -> [Expected, unknown];
+            _ -> [unknown, unknown]
+        end,
     {Typed, Before} = arguments([Left, Right], Types, Needs, Records),
     [A, B] = Typed,
     {{op, Line, Op, A, B}, Before};
-expression({op, Line, Op, Value}, Expected, Needs, Records) when Op =:= '+'; Op =:= '-'; Op =:= 'bnot' ->
+expression({op, Line, Op, Value}, Expected, Needs, Records) when
+    Op =:= '+'; Op =:= '-'; Op =:= 'bnot'
+->
     {Typed, Before} = expression(Value, Expected, Needs, Records),
     {{op, Line, Op, Typed}, Before};
 expression(Tuple, _Expected, Needs, Records) when is_tuple(Tuple) ->
     {Typed, Before} = untyped(tuple_to_list(Tuple), Needs, Records),
     {list_to_tuple(Typed), Before};
 expression(List, _Expected, Needs, Records) when is_list(List) -> untyped(List, Needs, Records);
-expression(Value, _Expected, Needs, _Records) -> {Value, Needs}.
+expression(Value, _Expected, Needs, _Records) ->
+    {Value, Needs}.
 
 %% DSLX accepts some out-of-range signed literals as bit patterns. A helper
 %% or field contract requires the same value: wrapping must remain explicit.
@@ -114,9 +141,11 @@ expression(Value, _Expected, Needs, _Records) -> {Value, Needs}.
 literal(Line, Value, {provider, Type} = Context) ->
     try hls_type:pack_exact(Value, Type) of
         _Packed -> {xls_typed_integer, Line, format(Context), Value}
-    catch error:Reason -> error({xls_literal_type, Line, Value, Type, Reason})
+    catch
+        error:Reason -> error({xls_literal_type, Line, Value, Type, Reason})
     end;
-literal(Line, Value, _Type) -> {integer, Line, Value}.
+literal(Line, Value, _Type) ->
+    {integer, Line, Value}.
 
 %% A later use constrains an initializer, including selected tuple fields;
 %% unconstrained siblings keep their own inference rules.
@@ -126,14 +155,18 @@ pattern_type({var, _, Name}, Expected, Needs) ->
 pattern_type({match, _, Left, Right}, Expected, Needs) ->
     pattern_type(Left, pattern_type(Right, Expected, Needs), Needs);
 pattern_type({tuple, _, Fields}, Expected, Needs) ->
-    Defaults = case Expected of
-        {tuple, Defaults0} when length(Defaults0) =:= length(Fields) -> Defaults0;
-        _ -> lists:duplicate(length(Fields), unknown)
-    end,
-    Types = [pattern_type(Pattern, Default, Needs)
-        || {Pattern, Default} <- lists:zip(Fields, Defaults)],
+    Defaults =
+        case Expected of
+            {tuple, Defaults0} when length(Defaults0) =:= length(Fields) -> Defaults0;
+            _ -> lists:duplicate(length(Fields), unknown)
+        end,
+    Types = [
+        pattern_type(Pattern, Default, Needs)
+     || {Pattern, Default} <- lists:zip(Fields, Defaults)
+    ],
     {tuple, Types};
-pattern_type(_, Expected, _) -> Expected.
+pattern_type(_, Expected, _) ->
+    Expected.
 
 %% Branch-local requirements do not flow into sibling branches. Requirements
 %% on outer bindings meet before the subject; conflicting uses remain errors.
@@ -141,23 +174,33 @@ pattern_type(_, Expected, _) -> Expected.
     {[erl_parse:abstract_clause()], requirements()}.
 branches(Clauses, Expected, Needs, Records) ->
     Results = [clause(Clause, Expected, Needs, Records) || Clause <- Clauses],
-    {[Typed || {Typed, _} <- Results],
-        lists:foldl(fun({_, Before}, Acc) ->
-            maps:merge_with(fun(_Name, A, B) -> merge_type(B, A) end, Acc, Before)
-        end, Needs, Results)}.
+    {
+        [Typed || {Typed, _} <- Results],
+        lists:foldl(
+            fun({_, Before}, Acc) ->
+                maps:merge_with(fun(_Name, A, B) -> merge_type(B, A) end, Acc, Before)
+            end,
+            Needs,
+            Results
+        )
+    }.
 
 %% Arguments retain left-to-right evaluation; only the analysis runs backward.
 -spec arguments([erl_parse:abstract_expr()], [expected()], requirements(), records()) ->
     {[erl_parse:abstract_expr()], requirements()}.
 arguments(Values, Types, Needs, Records) ->
-    lists:mapfoldr(fun({Value, Type}, Acc) -> expression(Value, Type, Acc, Records) end,
-        Needs, lists:zip(Values, Types)).
+    lists:mapfoldr(
+        fun({Value, Type}, Acc) -> expression(Value, Type, Acc, Records) end,
+        Needs,
+        lists:zip(Values, Types)
+    ).
 
 %% Traverse other syntax for explicitly typed helper calls without assuming
 %% provider argument types, comparison widths, or static type parameters.
 -spec untyped([erl_parse:abstract_expr()], requirements(), records()) ->
     {[erl_parse:abstract_expr()], requirements()}.
-untyped(Values, Needs, Records) -> arguments(Values, lists:duplicate(length(Values), unknown), Needs, Records).
+untyped(Values, Needs, Records) ->
+    arguments(Values, lists:duplicate(length(Values), unknown), Needs, Records).
 
 %% Record syntax identifies the declaration even when the whole record has no
 %% expected type. Pattern fields are deliberately excluded by clause/match.
@@ -165,16 +208,22 @@ untyped(Values, Needs, Records) -> arguments(Values, lists:duplicate(length(Valu
     {[erl_parse:abstract_expr()], requirements()}.
 fields(Name, Fields, Needs, Records) ->
     Types = maps:get(Name, Records),
-    lists:mapfoldr(fun({record_field, Line, Field = {atom, _, Slot}, Value}, Acc) ->
-        Type = {provider, hls_type:descriptor(maps:get(Slot, Types))},
-        {Typed, Before} = expression(Value, Type, Acc, Records),
-        {{record_field, Line, Field, Typed}, Before}
-    end, Needs, Fields).
+    lists:mapfoldr(
+        fun({record_field, Line, Field = {atom, _, Slot}, Value}, Acc) ->
+            Type = {provider, hls_type:descriptor(maps:get(Slot, Types))},
+            {Typed, Before} = expression(Value, Type, Acc, Records),
+            {{record_field, Line, Field, Typed}, Before}
+        end,
+        Needs,
+        Fields
+    ).
 
 %% Separate consumers can constrain disjoint tuple fields. For incompatible
 %% concrete types, retain one requirement and let XLS reject the other use.
 -spec merge_type(expected(), expected()) -> expected().
-merge_type(unknown, Type) -> Type;
+merge_type(unknown, Type) ->
+    Type;
 merge_type({tuple, Left}, {tuple, Right}) when length(Left) =:= length(Right) ->
     {tuple, [merge_type(A, B) || {A, B} <- lists:zip(Left, Right)]};
-merge_type(Type, _Other) -> Type.
+merge_type(Type, _Other) ->
+    Type.

@@ -21,9 +21,13 @@ scheduler must deliver that event exactly once before opening another window.
 A reducer exception is an absorbing value: subsequent valid contributions
 still count, but do not call the reducer. The final contribution re-raises
 the first exception with its original stack, instead of returning completion.
+
+hls_statem owns this reference state and delivers its private completion event; the XLS backend implements the corresponding hardware accumulation separately.
 """.
 
+%% CPU reduction state transitions and progress.
 -export([open/4, contribute/5, contribute/6, info/1]).
+%% Shared type contracts.
 -export_type([
     reduction/0,
     population/0,
@@ -49,9 +53,9 @@ the first exception with its original stack, instead of returning completion.
 -opaque reduction() :: #reduction{}.
 -doc "A nonempty population; members_mask selects integer member indices by set bits.".
 -type population() ::
-    {count, 1..?MAX_PARTICIPANTS} |
-    {members, [term(), ...]} |
-    {members_mask, 1..?MAX_PARTICIPANTS, pos_integer()}.
+    {count, 1..?MAX_PARTICIPANTS}
+    | {members, [term(), ...]}
+    | {members_mask, 1..?MAX_PARTICIPANTS, pos_integer()}.
 -type monoid() :: {commutative_monoid, Identity :: term()}.
 -type completion_event() :: {
     reduction_complete,
@@ -61,15 +65,16 @@ the first exception with its original stack, instead of returning completion.
 }.
 -type open_error() :: invalid_name | invalid_population | invalid_monoid.
 -type contribution_error() ::
-    wrong_mode |
-    {duplicate_member, term()} |
-    {unexpected_member, term()}.
+    wrong_mode
+    | {duplicate_member, term()}
+    | {unexpected_member, term()}.
 
 -doc "Opens one nonempty bounded reduction.".
 -spec open(atom(), term(), population(), monoid()) ->
     {ok, reduction()} | {error, open_error()}.
-open(Name, Key, Population, {commutative_monoid, Identity})
-        when is_atom(Name) ->
+open(Name, Key, Population, {commutative_monoid, Identity}) when
+    is_atom(Name)
+->
     case normalize_population(Population) of
         {ok, Normalized, Expected, Count} ->
             {ok, #reduction{
@@ -97,10 +102,10 @@ definite population errors return `{error, Reason}`. Rejections do not mutate
 the opaque input reduction.
 """.
 -spec contribute(module(), term(), term(), term(), reduction()) ->
-    mismatch |
-    {pending, reduction()} |
-    {complete, completion_event()} |
-    {error, contribution_error()}.
+    mismatch
+    | {pending, reduction()}
+    | {complete, completion_event()}
+    | {error, contribution_error()}.
 contribute(
     Module,
     Name,
@@ -115,10 +120,10 @@ contribute(
 
 -doc "Offers one fixed-member contribution.".
 -spec contribute(module(), term(), term(), term(), term(), reduction()) ->
-    mismatch |
-    {pending, reduction()} |
-    {complete, completion_event()} |
-    {error, contribution_error()}.
+    mismatch
+    | {pending, reduction()}
+    | {complete, completion_event()}
+    | {error, contribution_error()}.
 contribute(
     Module,
     Name,
@@ -147,27 +152,35 @@ info(#reduction{
         population => Population,
         received => population_size(Population) - Remaining,
         remaining => Remaining,
-        failure => case Failure of
-            none -> none;
-            {Class, Reason, _Stack} -> #{class => Class, reason => Reason}
-        end
+        failure =>
+            case Failure of
+                none -> none;
+                {Class, Reason, _Stack} -> #{class => Class, reason => Reason}
+            end
     }.
 
 %% Runtime masks retain the ordinary exact-member semantics and diagnostics.
 -spec normalize_population(term()) ->
     {ok, {count, pos_integer()} | {members, [term()]}, map(), pos_integer()} | error.
-normalize_population({members_mask, Width, Mask})
-        when is_integer(Width), Width >= 1, Width =< ?MAX_PARTICIPANTS,
-             is_integer(Mask), Mask > 0, Mask bsr Width =:= 0 ->
+normalize_population({members_mask, Width, Mask}) when
+    is_integer(Width),
+    Width >= 1,
+    Width =< ?MAX_PARTICIPANTS,
+    is_integer(Mask),
+    Mask > 0,
+    Mask bsr Width =:= 0
+->
     Members = [Member || Member <- lists:seq(0, Width - 1), Mask band (1 bsl Member) =/= 0],
     normalize_population({members, Members});
-normalize_population({count, Count})
-        when is_integer(Count), Count >= 1, Count =< ?MAX_PARTICIPANTS ->
+normalize_population({count, Count}) when
+    is_integer(Count), Count >= 1, Count =< ?MAX_PARTICIPANTS
+->
     {ok, {count, Count}, #{}, Count};
-normalize_population({members, Members})
-        when is_list(Members),
-             length(Members) >= 1,
-             length(Members) =< ?MAX_PARTICIPANTS ->
+normalize_population({members, Members}) when
+    is_list(Members),
+    length(Members) >= 1,
+    length(Members) =< ?MAX_PARTICIPANTS
+->
     Expected = maps:from_list([{Member, true} || Member <- Members]),
     case map_size(Expected) =:= length(Members) of
         true -> {ok, {members, Members}, Expected, length(Members)};
@@ -186,20 +199,29 @@ contribute_count(_Module, _Value, #reduction{
     population = {members, _Members}
 }) ->
     {error, wrong_mode};
-contribute_count(Module, Value, Reduction = #reduction{
-    population = {count, _Count}
-}) ->
+contribute_count(
+    Module,
+    Value,
+    Reduction = #reduction{
+        population = {count, _Count}
+    }
+) ->
     accept(Module, Value, Reduction).
 
 contribute_member(_Module, _Member, _Value, #reduction{
     population = {count, _Count}
 }) ->
     {error, wrong_mode};
-contribute_member(Module, Member, Value, Reduction = #reduction{
-    population = {members, _Members},
-    expected = Expected,
-    seen = Seen
-}) ->
+contribute_member(
+    Module,
+    Member,
+    Value,
+    Reduction = #reduction{
+        population = {members, _Members},
+        expected = Expected,
+        seen = Seen
+    }
+) ->
     case {maps:is_key(Member, Expected), maps:is_key(Member, Seen)} of
         {false, _} ->
             {error, {unexpected_member, Member}};
@@ -213,13 +235,17 @@ contribute_member(Module, Member, Value, Reduction = #reduction{
             )
     end.
 
-accept(Module, Value, Reduction = #reduction{
-    name = Name,
-    key = Key,
-    remaining = Remaining,
-    accumulator = Accumulator,
-    failure = Failure0
-}) ->
+accept(
+    Module,
+    Value,
+    Reduction = #reduction{
+        name = Name,
+        key = Key,
+        remaining = Remaining,
+        accumulator = Accumulator,
+        failure = Failure0
+    }
+) ->
     {Combined, Failure} = combine(Module, Name, Accumulator, Value, Failure0),
     case {Remaining, Failure} of
         {1, none} ->

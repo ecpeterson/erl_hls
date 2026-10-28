@@ -3,8 +3,13 @@
 %%%% Lowers regular two-dimensional actor families into compact DSLX.
 
 -module(xls_topology_family_dslx).
--moduledoc "Compact DSLX wiring for regular families of dedicated actors.".
--export([artifact_requirements/2, emit/2, lower/2, lower/3, render/1]).
+-moduledoc "Prepares and renders compact regular families of dedicated actors for xls_topology_dslx and fabric topology composition. Preparation retains checked interfaces, startup frames and ingress wiring; render/1 consumes that graph without rereading actor source. Family loops stay compact rather than materializing every instance.".
+%% Convenience preparation and complete family emission.
+-export([artifact_requirements/2, emit/2]).
+%% Explicit preparation with fresh or retained actor interfaces.
+-export([lower/2, lower/3]).
+%% Render the already prepared family graph.
+-export([render/1]).
 
 -define(U16_MAX, 16#ffff).
 -define(U32_MAX, 16#ffffffff).
@@ -17,7 +22,12 @@ emit(Plan, Profile) ->
 -doc "Returns the actor-artifact specializations selected by a profile.".
 -spec artifact_requirements(
     hls_topology:plan(), xls_topology_dslx:profile()
-) -> #{module() := #{direct_actor_debug => boolean(), frame_payload_words => hls_frame_layout:words()}}.
+) ->
+    #{
+        module() := #{
+            direct_actor_debug => boolean(), frame_payload_words => hls_frame_layout:words()
+        }
+    }.
 artifact_requirements(Plan, Profile) ->
     maps:get(artifact_requirements, lower(Plan, Profile)).
 
@@ -26,17 +36,21 @@ artifact_requirements(Plan, Profile) ->
 %%%
 
 -doc "Resolves validated logical actors and routes into a renderable physical graph.".
--spec lower(map(),map()) -> map().
+-spec lower(map(), map()) -> map().
 lower(Plan, Profile0) ->
     Profile = xls_topology_profile:normalize(Profile0),
     Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile)),
     Interfaces = hls_actor_interface:from_modules(
-        [M || #{module := M} <- maps:get(families, Plan, [])], Layout),
+        [M || #{module := M} <- maps:get(families, Plan, [])], Layout
+    ),
     lower(Plan, Profile, Interfaces).
 
 -doc "Lowers regular families with a retained interface catalog from hls_actor_interface:from_modules/2. All family modules must be present and checked for the profile frame layout; sources and interfaces are not reloaded.".
--spec lower(hls_topology:plan(), xls_topology_dslx:profile(),
-    #{module() => hls_actor_interface:summary()}) -> map().
+-spec lower(
+    hls_topology:plan(),
+    xls_topology_dslx:profile(),
+    #{module() => hls_actor_interface:summary()}
+) -> map().
 lower(Plan, Profile, Interfaces) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
@@ -56,20 +70,19 @@ lower(Plan, Profile, Interfaces) ->
         maps:get(ingresses, Plan, []),
         #{actors => #{}, families => FamilyIndex}
     ),
-    Externals = annotate_externals(require_externals(
-        maps:get(externals, Plan, [])
-    )),
-    ExternalIndex = maps:from_list([
-        {maps:get(id, External), External} || External <- Externals
-    ]),
+    Externals = annotate_externals(
+        require_externals(
+            maps:get(externals, Plan, [])
+        )
+    ),
+    ExternalIndex = maps:from_list([{maps:get(id, External), External} || External <- Externals]),
     Relations = maps:get(route_relations, Plan, []),
     ok = validate_relations(Relations, FamilyIndex),
     ok = validate_route_selectors(Relations, FamilyIndex, ExternalIndex),
     LaneRelations = derive_lane_relations(Relations),
     case maps:get(lane_relations, Plan, '$missing') of
         LaneRelations -> ok;
-        CachedLanes -> error({inconsistent_dslx_family_plan_lanes,
-            LaneRelations, CachedLanes})
+        CachedLanes -> error({inconsistent_dslx_family_plan_lanes, LaneRelations, CachedLanes})
     end,
     Lanes = annotate_lanes(
         LaneRelations,
@@ -78,13 +91,16 @@ lower(Plan, Profile, Interfaces) ->
     ),
     Routes = annotate_routes(Relations, Lanes),
     Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
-    Families = [annotate_family_graph(
-        Family,
-        Routes,
-        Lanes,
-        Startup,
-        Ingresses
-    ) || Family <- Families1],
+    Families = [
+        annotate_family_graph(
+            Family,
+            Routes,
+            Lanes,
+            Startup,
+            Ingresses
+        )
+     || Family <- Families1
+    ],
     ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
     #{
@@ -92,8 +108,10 @@ lower(Plan, Profile, Interfaces) ->
         frame_layout => Layout,
         depth => Depth,
         direct_actor_debug => ActorDebug,
-        artifact_requirements => maps:from_list([{Module,
-            #{direct_actor_debug => ActorDebug, frame_payload_words => PayloadWords}} || #{module := Module} <- Families]),
+        artifact_requirements => maps:from_list([
+            {Module, #{direct_actor_debug => ActorDebug, frame_payload_words => PayloadWords}}
+         || #{module := Module} <- Families
+        ]),
         families => Families,
         width => Width,
         height => Height,
@@ -119,8 +137,7 @@ require_common_shape([First | Rest]) ->
         fun(Family) ->
             case require_two_dimensional_shape(Family) of
                 Shape -> ok;
-                Other -> error({incompatible_family_shape,
-                    maps:get(id, Family), Shape, Other})
+                Other -> error({incompatible_family_shape, maps:get(id, Family), Shape, Other})
             end
         end,
         Rest
@@ -133,20 +150,28 @@ require_two_dimensional_shape(Family = #{shape := [Width, Height]}) ->
 require_two_dimensional_shape(#{id := Id, shape := Shape}) ->
     error({unsupported_family_shape, Id, Shape}).
 
-validate_dimensions(_FamilyId, Width, Height)
-        when is_integer(Width), Width > 0, Width =< ?U32_MAX,
-             is_integer(Height), Height > 0, Height =< ?U32_MAX ->
+validate_dimensions(_FamilyId, Width, Height) when
+    is_integer(Width),
+    Width > 0,
+    Width =< ?U32_MAX,
+    is_integer(Height),
+    Height > 0,
+    Height =< ?U32_MAX
+->
     ok;
 validate_dimensions(FamilyId, Width, Height) ->
-    error({unsupported_dslx_family_dimensions,
-        FamilyId, [Width, Height], ?U32_MAX}).
+    error({unsupported_dslx_family_dimensions, FamilyId, [Width, Height], ?U32_MAX}).
 
 require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
 %% Use the same frame-bound catalog for every family instance.
--spec annotate_families([map()], burst | non_neg_integer(), hls_frame_layout:layout(),
-    #{module() => hls_actor_interface:summary()}) -> [map()].
+-spec annotate_families(
+    [map()],
+    burst | non_neg_integer(),
+    hls_frame_layout:layout(),
+    #{module() => hls_actor_interface:summary()}
+) -> [map()].
 annotate_families(Families, EgressDepth, Layout, Interfaces) ->
     [
         begin
@@ -155,13 +180,15 @@ annotate_families(Families, EgressDepth, Layout, Interfaces) ->
             Family#{
                 index => Index,
                 module_name => xls_topology_profile:identifier(
-                    Module, family_module),
+                    Module, family_module
+                ),
                 interface => Interface,
                 egress_depth => xls_topology_profile:egress_depth(
-                    EgressDepth, Interface)
+                    EgressDepth, Interface
+                )
             }
         end
-        || {Index, Family} <- lists:enumerate(0, Families)
+     || {Index, Family} <- lists:enumerate(0, Families)
     ].
 
 validate_relations(Relations, FamilyIndex) ->
@@ -173,8 +200,9 @@ validate_relations(Relations, FamilyIndex) ->
                     validate_relation_recipient(
                         Source, Recipient, FamilyIndex
                     );
-                #{delivery := queued, recipients := Recipients}
-                        when length(Recipients) =:= 2 ->
+                #{delivery := queued, recipients := Recipients} when
+                    length(Recipients) =:= 2
+                ->
                     validate_queued_recipients(
                         Source, Recipients, FamilyIndex
                     );
@@ -186,9 +214,10 @@ validate_relations(Relations, FamilyIndex) ->
     ).
 
 validate_relation_recipient(
-        _Source,
-        {family, DestinationId, {translate, [_DX, _DY], wrap}},
-        FamilyIndex) ->
+    _Source,
+    {family, DestinationId, {translate, [_DX, _DY], wrap}},
+    FamilyIndex
+) ->
     true = maps:is_key(DestinationId, FamilyIndex),
     ok;
 validate_relation_recipient(_Source, {external, _ExternalId}, _FamilyIndex) ->
@@ -238,41 +267,51 @@ derive_lane_relations(Relations) ->
             destination => Destination,
             source_ports => lists:sort(Ports)
         }
-        || {{SourceFamily, Destination}, Ports} <-
-               lists:sort(maps:to_list(LanePorts))
+     || {{SourceFamily, Destination}, Ports} <-
+            lists:sort(maps:to_list(LanePorts))
     ].
 
 annotate_externals(Externals) ->
     [
         begin
             case maps:get(direction, External) of
-                out -> ok;
-                Direction -> error({unsupported_dslx_family_external_direction,
-                    maps:get(id, External), Direction})
+                out ->
+                    ok;
+                Direction ->
+                    error(
+                        {unsupported_dslx_family_external_direction, maps:get(id, External),
+                            Direction}
+                    )
             end,
             External#{
                 index => Index,
-                output_name => [xls_topology_profile:identifier(
-                    maps:get(id, External),
-                    external_id
-                ), "_out"]
+                output_name => [
+                    xls_topology_profile:identifier(
+                        maps:get(id, External),
+                        external_id
+                    ),
+                    "_out"
+                ]
             }
         end
-        || {Index, External} <- lists:enumerate(0, Externals)
+     || {Index, External} <- lists:enumerate(0, Externals)
     ].
 
 annotate_lanes(Lanes, Shape, ExternalIndex) ->
     [
         annotate_lane(Index, Lane, Shape, ExternalIndex)
-        || {Index, Lane} <- lists:enumerate(0, Lanes)
+     || {Index, Lane} <- lists:enumerate(0, Lanes)
     ].
 
 annotate_lane(
-        Index,
-        Lane = #{destination :=
-            {family, DestinationId, {translate, [DX, DY], wrap}}},
-        [Width, Height],
-        _ExternalIndex) ->
+    Index,
+    Lane = #{
+        destination :=
+            {family, DestinationId, {translate, [DX, DY], wrap}}
+    },
+    [Width, Height],
+    _ExternalIndex
+) ->
     Stem = ["lane_", integer_to_list(Index)],
     Base = Lane#{index => Index, stem => Stem},
     Base#{
@@ -284,10 +323,11 @@ annotate_lane(
         ]
     };
 annotate_lane(
-        Index,
-        Lane = #{destination := {external, ExternalId}},
-        _Shape,
-        ExternalIndex) ->
+    Index,
+    Lane = #{destination := {external, ExternalId}},
+    _Shape,
+    ExternalIndex
+) ->
     Stem = ["lane_", integer_to_list(Index)],
     Base = Lane#{index => Index, stem => Stem},
     case maps:find(ExternalId, ExternalIndex) of
@@ -297,7 +337,8 @@ annotate_lane(
 annotate_lane(_Index, #{destination := Destination}, _Shape, _ExternalIndex) ->
     error({unsupported_destination, Destination}).
 
-inverse_shift(0, _Size) -> zero;
+inverse_shift(0, _Size) ->
+    zero;
 inverse_shift(Offset, _Size) when Offset > 0 ->
     {minus, Offset};
 inverse_shift(Offset, _Size) ->
@@ -306,15 +347,17 @@ inverse_shift(Offset, _Size) ->
 annotate_routes(Relations, Lanes) ->
     LaneIndex = maps:from_list([
         {{maps:get(source, Lane), maps:get(destination, Lane)}, Lane}
-        || Lane <- Lanes
+     || Lane <- Lanes
     ]),
     [
-        Relation#{lanes => [
-            maps:get({SourceFamily, Recipient}, LaneIndex)
-            || Recipient <- maps:get(recipients, Relation)
-        ]}
-        || Relation <- Relations,
-           {SourceFamily, _Port} <- [maps:get(source, Relation)]
+        Relation#{
+            lanes => [
+                maps:get({SourceFamily, Recipient}, LaneIndex)
+             || Recipient <- maps:get(recipients, Relation)
+            ]
+        }
+     || Relation <- Relations,
+        {SourceFamily, _Port} <- [maps:get(source, Relation)]
     ].
 
 annotate_family_graph(Family, Routes, Lanes, Startup, Ingresses) ->
@@ -322,19 +365,17 @@ annotate_family_graph(Family, Routes, Lanes, Startup, Ingresses) ->
     OutboundLanes = [Lane || Lane <- Lanes, maps:get(source, Lane) =:= Id],
     InboundLanes = [
         Lane
-        || Lane <- Lanes,
-           maps:get(kind, Lane) =:= family,
-           maps:get(destination_family, Lane) =:= Id
+     || Lane <- Lanes,
+        maps:get(kind, Lane) =:= family,
+        maps:get(destination_family, Lane) =:= Id
     ],
-    FamilyStartup = [
-        Item || Item <- Startup, maps:get(family, Item) =:= Id
-    ],
+    FamilyStartup = [Item || Item <- Startup, maps:get(family, Item) =:= Id],
     Family#{
         routes => [
             Route
-            || Route <- Routes,
-               {SourceFamily, _} <- [maps:get(source, Route)],
-               SourceFamily =:= Id
+         || Route <- Routes,
+            {SourceFamily, _} <- [maps:get(source, Route)],
+            SourceFamily =:= Id
         ],
         outbound_lanes => OutboundLanes,
         inbound_lanes => InboundLanes,
@@ -348,10 +389,10 @@ family_ingress_binding(#{id := FamilyId}, Ingresses) ->
             ingress => maps:get(id, Ingress),
             targets => ingress_family_targets(FamilyId, Ingress)
         }
-        || Ingress <- Ingresses,
-           Recipient = #{family := RecipientId} <-
-               maps:get(recipients, Ingress),
-           RecipientId =:= FamilyId
+     || Ingress <- Ingresses,
+        Recipient = #{family := RecipientId} <-
+            maps:get(recipients, Ingress),
+        RecipientId =:= FamilyId
     ],
     case Matches of
         [] -> none;
@@ -362,36 +403,39 @@ family_ingress_binding(#{id := FamilyId}, Ingresses) ->
 ingress_family_targets(FamilyId, #{targets := Targets}) ->
     [
         maps:get(id, Target)
-        || Target <- Targets,
-           lists:any(
-               fun(#{family := RecipientId}) ->
-                   RecipientId =:= FamilyId
-               end,
-               maps:get(recipients, Target)
-           )
+     || Target <- Targets,
+        lists:any(
+            fun(#{family := RecipientId}) ->
+                RecipientId =:= FamilyId
+            end,
+            maps:get(recipients, Target)
+        )
     ].
 
-family_startup(_Family, []) -> none;
+family_startup(_Family, []) ->
+    none;
 family_startup(Family, Items) ->
     Expected = maps:get(instance_count, Family),
     case length(Items) of
         Expected -> #{items => Items};
-        Count -> error({incomplete_family_startup,
-            maps:get(id, Family), Expected, Count})
+        Count -> error({incomplete_family_startup, maps:get(id, Family), Expected, Count})
     end.
 
 validate_lane_ports(Families) ->
     lists:foreach(
         fun(Family) ->
-            Ports = lists:usort(lists:append([
-                maps:get(source_ports, Lane)
-                || Lane <- maps:get(outbound_lanes, Family)
-            ])),
+            Ports = lists:usort(
+                lists:append([
+                    maps:get(source_ports, Lane)
+                 || Lane <- maps:get(outbound_lanes, Family)
+                ])
+            ),
             Outputs = lists:sort(maps:get(outputs, Family)),
             case lists:sort(Ports) of
-                Outputs -> ok;
-                Other -> error({inconsistent_family_lane_ports,
-                    maps:get(id, Family), Outputs, Other})
+                Outputs ->
+                    ok;
+                Other ->
+                    error({inconsistent_family_lane_ports, maps:get(id, Family), Outputs, Other})
             end
         end,
         Families
@@ -411,10 +455,12 @@ validate_external_lanes(Externals, Lanes) ->
 
 validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
     lists:foreach(
-        fun(#{
-            source := Source = {SourceId, Port},
-            recipients := Recipients
-        }) ->
+        fun(
+            #{
+                source := Source = {SourceId, Port},
+                recipients := Recipients
+            }
+        ) ->
             SourceInterface = maps:get(
                 interface,
                 maps:get(SourceId, FamilyIndex)
@@ -445,10 +491,13 @@ validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
                                     )
                                 ),
                                 case DestinationSelector of
-                                    SourceSelector -> ok;
-                                    _ -> error({unsupported_route_tag_remap,
-                                        Source, Recipient, Schema,
-                                        SourceSelector, DestinationSelector})
+                                    SourceSelector ->
+                                        ok;
+                                    _ ->
+                                        error(
+                                            {unsupported_route_tag_remap, Source, Recipient, Schema,
+                                                SourceSelector, DestinationSelector}
+                                        )
                                 end
                             end,
                             Schemas
@@ -465,20 +514,26 @@ validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
 
 validate_external_selectors(Relations, FamilyIndex) ->
     Bindings = lists:foldl(
-        fun(#{
-            source := Source = {SourceId, Port},
-            recipients := Recipients
-        }, Acc0) ->
+        fun(
+            #{
+                source := Source = {SourceId, Port},
+                recipients := Recipients
+            },
+            Acc0
+        ) ->
             #{interface := Interface} = maps:get(SourceId, FamilyIndex),
             Schemas = hls_actor_interface:output_schemas(Interface, Port),
             lists:foldl(
                 fun
                     ({external, ExternalId}, Acc) ->
-                        New = [external_binding(
-                            Source,
-                            Schema,
-                            Interface
-                        ) || Schema <- Schemas],
+                        New = [
+                            external_binding(
+                                Source,
+                                Schema,
+                                Interface
+                            )
+                         || Schema <- Schemas
+                        ],
                         maps:update_with(
                             ExternalId,
                             fun(Old) -> New ++ Old end,
@@ -509,25 +564,34 @@ external_binding(Source, Schema, Interface) ->
 
 validate_external_bindings(ExternalId, Bindings) ->
     _ = lists:foldl(
-        fun(#{
-            source := Source,
-            schema := Schema,
-            selector := Selector,
-            fields := Fields
-        }, {BySchema0, BySelector0}) ->
+        fun(
+            #{
+                source := Source,
+                schema := Schema,
+                selector := Selector,
+                fields := Fields
+            },
+            {BySchema0, BySelector0}
+        ) ->
             Encoding = {Selector, Fields, Source},
-            BySchema = case maps:find(Schema, BySchema0) of
-                error -> BySchema0#{Schema => Encoding};
-                {ok, {Selector, Fields, _}} -> BySchema0;
-                {ok, Existing} -> error({external_schema,
-                    ExternalId, Schema, Existing, Encoding})
-            end,
-            BySelector = case maps:find(Selector, BySelector0) of
-                error -> BySelector0#{Selector => Schema};
-                {ok, Schema} -> BySelector0;
-                {ok, ExistingSchema} -> error({external_selector,
-                    ExternalId, Selector, ExistingSchema, Schema})
-            end,
+            BySchema =
+                case maps:find(Schema, BySchema0) of
+                    error ->
+                        BySchema0#{Schema => Encoding};
+                    {ok, {Selector, Fields, _}} ->
+                        BySchema0;
+                    {ok, Existing} ->
+                        error({external_schema, ExternalId, Schema, Existing, Encoding})
+                end,
+            BySelector =
+                case maps:find(Selector, BySelector0) of
+                    error ->
+                        BySelector0#{Selector => Schema};
+                    {ok, Schema} ->
+                        BySelector0;
+                    {ok, ExistingSchema} ->
+                        error({external_selector, ExternalId, Selector, ExistingSchema, Schema})
+                end,
             {BySchema, BySelector}
         end,
         {#{}, #{}},
@@ -541,15 +605,15 @@ annotate_startup(Startup, _FamilyIndex) ->
     error({invalid_startup, Startup}).
 
 annotate_startup_item(
-        #{target := Target, delivery := cast, messages := [Message]},
-        FamilyIndex) ->
+    #{target := Target, delivery := cast, messages := [Message]},
+    FamilyIndex
+) ->
     [FamilyId | Coordinates] = tuple_to_list(Target),
     #{interface := Interface, module := Module} =
         maps:get(FamilyId, FamilyIndex),
     case hls_actor_interface:initial_effects(Interface) of
         [] -> ok;
-        Effects -> error({startup_target_has_initial_effects,
-            Target, Module, Effects})
+        Effects -> error({startup_target_has_initial_effects, Target, Module, Effects})
     end,
     Packed = pack_startup_message(Target, Module, Interface, Message),
     Packed#{
@@ -562,38 +626,50 @@ annotate_startup_item(Item, _FamilyIndex) ->
 
 %% Startup values use the selected actor layout after source-provider packing.
 -spec pack_startup_message(term(), module(), map(), term()) -> map().
-pack_startup_message(Target, Module, Interface, Message)
-        when is_tuple(Message), tuple_size(Message) > 0,
-             is_atom(element(1, Message)) ->
+pack_startup_message(Target, Module, Interface, Message) when
+    is_tuple(Message),
+    tuple_size(Message) > 0,
+    is_atom(element(1, Message))
+->
     TagName = element(1, Message),
     Schema = hls_actor_interface:schema(Interface, TagName),
-    {Tag, Payload} = case {Module:pack_tag(TagName), Module:pack(Message)} of
-        {PackedTag, PackedPayload}
-                when is_integer(PackedTag), PackedTag >= 0,
-                     PackedTag =< 255, is_bitstring(PackedPayload) ->
-            {PackedTag, hls_codec:align(PackedPayload, 32)};
-        Invalid -> error({invalid_packed_startup, Target, Invalid})
-    end,
+    {Tag, Payload} =
+        case {Module:pack_tag(TagName), Module:pack(Message)} of
+            {PackedTag, PackedPayload} when
+                is_integer(PackedTag),
+                PackedTag >= 0,
+                PackedTag =< 255,
+                is_bitstring(PackedPayload)
+            ->
+                {PackedTag, hls_codec:align(PackedPayload, 32)};
+            Invalid ->
+                error({invalid_packed_startup, Target, Invalid})
+        end,
     Width = bit_size(Payload),
-    case Width > 0 andalso Width rem 32 =:= 0 andalso
-            Width =< hls_frame_layout:payload_bits(maps:get(frame_layout, Interface)) of
-        true -> #{
-            tag => Tag,
-            payload => xls_nums:packed_unsigned_literal(Payload),
-            schema => TagName,
-            fields => startup_fields(
-                Target,
-                maps:get(fields, Schema),
-                tl(tuple_to_list(Message))
-            )
-        };
-        false -> error({unsupported_startup_payload, Target, Width})
+    case
+        Width > 0 andalso Width rem 32 =:= 0 andalso
+            Width =< hls_frame_layout:payload_bits(maps:get(frame_layout, Interface))
+    of
+        true ->
+            #{
+                tag => Tag,
+                payload => xls_nums:packed_unsigned_literal(Payload),
+                schema => TagName,
+                fields => startup_fields(
+                    Target,
+                    maps:get(fields, Schema),
+                    tl(tuple_to_list(Message))
+                )
+            };
+        false ->
+            error({unsupported_startup_payload, Target, Width})
     end;
 pack_startup_message(Target, _Module, _Interface, Message) ->
     error({invalid_startup_message, Target, Message}).
 
-startup_fields(_Target, Fields, Values)
-        when length(Fields) =:= length(Values) ->
+startup_fields(_Target, Fields, Values) when
+    length(Fields) =:= length(Values)
+->
     [Field#{value => Value} || {Field, Value} <- lists:zip(Fields, Values)];
 startup_fields(Target, Fields, Values) ->
     error({invalid_startup_fields, Target, length(Fields), length(Values)}).
@@ -620,11 +696,11 @@ render(Spec) ->
 -spec preamble(map()) -> iodata().
 preamble(Spec) ->
     Families = maps:get(families, Spec),
-    Modules = lists:usort([
-        maps:get(module_name, Family) || Family <- Families
-    ]),
+    Modules = lists:usort([maps:get(module_name, Family) || Family <- Families]),
     [
-        "// ", maps:get(name, Spec), ".x\n",
+        "// ",
+        maps:get(name, Spec),
+        ".x\n",
         "// Auto-generated by xls_topology_dslx from compact Erlang family ",
         "rules.\n",
         "// Manual changes will be overwritten.\n",
@@ -646,10 +722,14 @@ preamble(Spec) ->
         [["import ", Module, ";\n"] || Module <- Modules],
         "\n",
         hls_frame_layout:assert_dslx(maps:get(frame_layout, Spec)),
-        "const CHANNEL_DEPTH = u32:", integer_to_list(maps:get(depth, Spec)),
+        "const CHANNEL_DEPTH = u32:",
+        integer_to_list(maps:get(depth, Spec)),
         ";\n",
-        "const WIDTH = u32:", integer_to_list(maps:get(width, Spec)), ";\n",
-        "const HEIGHT = u32:", integer_to_list(maps:get(height, Spec)),
+        "const WIDTH = u32:",
+        integer_to_list(maps:get(width, Spec)),
+        ";\n",
+        "const HEIGHT = u32:",
+        integer_to_list(maps:get(height, Spec)),
         ";\n\n"
     ].
 
@@ -663,10 +743,12 @@ preamble_node_comment([_, _ | _]) ->
 startup_support(Families) ->
     [startup_function(Family) || Family <- Families].
 
-startup_function(#{startup := none}) -> [];
+startup_function(#{startup := none}) ->
+    [];
 startup_function(Family = #{startup := #{items := Items}}) ->
     [
-        "fn ", startup_function_name(Family),
+        "fn ",
+        startup_function_name(Family),
         "(x: u32, y: u32) -> axis::Frame {\n",
         "  match (x, y) {\n",
         [startup_arm(Item) || Item <- Items],
@@ -675,9 +757,17 @@ startup_function(Family = #{startup := #{items := Items}}) ->
     ].
 
 startup_arm(#{coordinates := [X, Y], tag := Tag, payload := Payload}) ->
-    ["    (u32:", integer_to_list(X), ", u32:", integer_to_list(Y),
-        ") => axis::pack(u8:", integer_to_list(Tag), ", ", Payload,
-        "),\n"].
+    [
+        "    (u32:",
+        integer_to_list(X),
+        ", u32:",
+        integer_to_list(Y),
+        ") => axis::pack(u8:",
+        integer_to_list(Tag),
+        ", ",
+        Payload,
+        "),\n"
+    ].
 
 family_routers(Spec) ->
     [family_router(Spec, Family) || Family <- maps:get(families, Spec)].
@@ -685,15 +775,25 @@ family_routers(Spec) ->
 family_router(Spec, Family) ->
     Module = maps:get(module_name, Family),
     Lanes = maps:get(outbound_lanes, Family),
-    Members = [["egress_in: chan<", Module, "::Egress> in"] |
-        [[lane_output(Lane), ": chan<axis::Frame> out"]
-            || Lane <- Lanes]],
+    Members = [
+        ["egress_in: chan<", Module, "::Egress> in"]
+        | [
+            [lane_output(Lane), ": chan<axis::Frame> out"]
+         || Lane <- Lanes
+        ]
+    ],
     Routes = maps:get(routes, Family),
     [
-        "proc ", router_name(Spec, Family), " {\n",
-        "  egress_in: chan<", Module, "::Egress> in;\n",
-        [["  ", lane_output(Lane), ": chan<axis::Frame> out;\n"]
-            || Lane <- Lanes],
+        "proc ",
+        router_name(Spec, Family),
+        " {\n",
+        "  egress_in: chan<",
+        Module,
+        "::Egress> in;\n",
+        [
+            ["  ", lane_output(Lane), ": chan<axis::Frame> out;\n"]
+         || Lane <- Lanes
+        ],
         "\n",
         config_signature(Members, 2),
         "    (egress_in",
@@ -704,9 +804,9 @@ family_router(Spec, Family) ->
         "    let (tok, egress) = recv(join(), egress_in);\n",
         [family_lane_selection(Module, Lane, Routes) || Lane <- Lanes],
         [family_lane_send(Lane) || Lane <- Lanes],
-        "    let _route_tok = ", join_tokens([
-            family_lane_token(Lane) || Lane <- Lanes
-        ]), ";\n",
+        "    let _route_tok = ",
+        join_tokens([family_lane_token(Lane) || Lane <- Lanes]),
+        ";\n",
         "    state\n  }\n}\n\n"
     ].
 
@@ -714,26 +814,41 @@ family_lane_selection(Module, Lane, Routes) ->
     LaneIndex = maps:get(index, Lane),
     Ports = [
         Port
-        || Route <- Routes,
-           lists:any(
-               fun(RouteLane) -> maps:get(index, RouteLane) =:= LaneIndex end,
-               maps:get(lanes, Route)
-           ),
-           {_FamilyId, Port} <- [maps:get(source, Route)]
+     || Route <- Routes,
+        lists:any(
+            fun(RouteLane) -> maps:get(index, RouteLane) =:= LaneIndex end,
+            maps:get(lanes, Route)
+        ),
+        {_FamilyId, Port} <- [maps:get(source, Route)]
     ],
     [
-        "    let ", family_lane_selected(Lane), " = match egress.port {\n",
-        [["      ", Module, "::OutputPort::", xls_names:enum_member(Port),
-            " => true,\n"] || Port <- Ports],
+        "    let ",
+        family_lane_selected(Lane),
+        " = match egress.port {\n",
+        [
+            [
+                "      ",
+                Module,
+                "::OutputPort::",
+                xls_names:enum_member(Port),
+                " => true,\n"
+            ]
+         || Port <- Ports
+        ],
         "      _ => false,\n",
         "    };\n"
     ].
 
 family_lane_send(Lane) ->
     [
-        "    let ", family_lane_token(Lane), " = send_if(\n",
-        "      tok, ", lane_output(Lane), ", ",
-        family_lane_selected(Lane), ", egress.frame);\n"
+        "    let ",
+        family_lane_token(Lane),
+        " = send_if(\n",
+        "      tok, ",
+        lane_output(Lane),
+        ", ",
+        family_lane_selected(Lane),
+        ", egress.frame);\n"
     ].
 
 family_lane_selected(Lane) ->
@@ -742,26 +857,34 @@ family_lane_selected(Lane) ->
 family_lane_token(Lane) ->
     [maps:get(stem, Lane), "_tok"].
 
-control_support(#{ingresses := []}) -> [];
+control_support(#{ingresses := []}) ->
+    [];
 control_support(Spec = #{ingresses := [Ingress]}) ->
     [
         control_target_enum(Ingress),
         spatial_ingress_router(Spec, Ingress),
-        [family_control(Family)
-            || Family <- maps:get(families, Spec),
-               maps:get(ingress, Family) =/= none]
+        [
+            family_control(Family)
+         || Family <- maps:get(families, Spec),
+            maps:get(ingress, Family) =/= none
+        ]
     ].
 
 control_target_enum(Ingress) -> xls_topology_ingress:target_enum(Ingress).
 
 spatial_ingress_router(Spec, Ingress = #{recipients := Recipients}) ->
     Members = [
-        [control_spatial_name(Family), ": chan<",
-            "hls_spatial_router::SpatialFrame> out"]
-        || Family <- controlled_families(Spec, Recipients)
+        [
+            control_spatial_name(Family),
+            ": chan<",
+            "hls_spatial_router::SpatialFrame> out"
+        ]
+     || Family <- controlled_families(Spec, Recipients)
     ],
-    Names = [control_spatial_name(Family)
-        || Family <- controlled_families(Spec, Recipients)],
+    Names = [
+        control_spatial_name(Family)
+     || Family <- controlled_families(Spec, Recipients)
+    ],
     [
         "// One ordered application stream enters the addressed router service.\n",
         "// Target and rectangle are selectors interpreted inside that service.\n",
@@ -770,8 +893,10 @@ spatial_ingress_router(Spec, Ingress = #{recipients := Recipients}) ->
         [["  ", Member, ";\n"] || Member <- Members],
         "\n",
         config_signature(
-            ["spatial_in: chan<hls_spatial_router::SpatialFrame> in" |
-                Members],
+            [
+                "spatial_in: chan<hls_spatial_router::SpatialFrame> in"
+                | Members
+            ],
             2
         ),
         "    (spatial_in",
@@ -791,8 +916,11 @@ spatial_ingress_router(Spec, Ingress = #{recipients := Recipients}) ->
 
 spatial_ingress_router_sends([Family], Ingress, _Index, PreviousToken) ->
     [
-        "    let _done = send_if(", PreviousToken, ", ",
-        control_spatial_name(Family), ", ",
+        "    let _done = send_if(",
+        PreviousToken,
+        ", ",
+        control_spatial_name(Family),
+        ", ",
         control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
             Ingress
@@ -802,8 +930,13 @@ spatial_ingress_router_sends([Family], Ingress, _Index, PreviousToken) ->
 spatial_ingress_router_sends([Family | Rest], Ingress, Index, PreviousToken) ->
     Token = ["tok_", integer_to_list(Index)],
     [
-        "    let ", Token, " = send_if(", PreviousToken, ", ",
-        control_spatial_name(Family), ", ",
+        "    let ",
+        Token,
+        " = send_if(",
+        PreviousToken,
+        ", ",
+        control_spatial_name(Family),
+        ", ",
         control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
             Ingress
@@ -815,18 +948,27 @@ spatial_ingress_router_sends([Family | Rest], Ingress, Index, PreviousToken) ->
 control_target_condition(TargetIds, Ingress) ->
     xls_topology_ingress:condition(TargetIds, Ingress, "packet").
 
-family_control(Family = #{ingress := #{
-    scale := [ScaleX, ScaleY],
-    offset := [OffsetX, OffsetY]
-}}) ->
+family_control(
+    Family = #{
+        ingress := #{
+            scale := [ScaleX, ScaleY],
+            offset := [OffsetX, OffsetY]
+        }
+    }
+) ->
     [
-        "proc ", control_name(Family), " {\n",
+        "proc ",
+        control_name(Family),
+        " {\n",
         "  spatial_in: chan<hls_spatial_router::SpatialFrame> in;\n",
         "  frame_out: chan<axis::Frame>[HEIGHT][WIDTH] out;\n\n",
-        config_signature([
-            "spatial_in: chan<hls_spatial_router::SpatialFrame> in",
-            "frame_out: chan<axis::Frame>[HEIGHT][WIDTH] out"
-        ], 2),
+        config_signature(
+            [
+                "spatial_in: chan<hls_spatial_router::SpatialFrame> in",
+                "frame_out: chan<axis::Frame>[HEIGHT][WIDTH] out"
+            ],
+            2
+        ),
         "    (spatial_in, frame_out)\n  }\n\n",
         "  init { () }\n\n",
         "  next(state: ()) {\n",
@@ -835,10 +977,16 @@ family_control(Family = #{ingress := #{
         "        (u32, token) in u32:0..WIDTH {\n",
         "      unroll_for! (y, y_tok):\n",
         "          (u32, token) in u32:0..HEIGHT {\n",
-        "        let address_x = (x * u32:", integer_to_list(ScaleX),
-        " + u32:", integer_to_list(OffsetX), ") as u16;\n",
-        "        let address_y = (y * u32:", integer_to_list(ScaleY),
-        " + u32:", integer_to_list(OffsetY), ") as u16;\n",
+        "        let address_x = (x * u32:",
+        integer_to_list(ScaleX),
+        " + u32:",
+        integer_to_list(OffsetX),
+        ") as u16;\n",
+        "        let address_y = (y * u32:",
+        integer_to_list(ScaleY),
+        " + u32:",
+        integer_to_list(OffsetY),
+        ") as u16;\n",
         "        send_if(\n",
         "          y_tok, frame_out[x][y],\n",
         "          hls_spatial_router::contains(\n",
@@ -854,8 +1002,11 @@ controlled_families(Spec, Recipients) ->
         [maps:get(family, Recipient) || Recipient <- Recipients],
         true
     ),
-    [Family || Family <- maps:get(families, Spec),
-        maps:is_key(maps:get(id, Family), RecipientIds)].
+    [
+        Family
+     || Family <- maps:get(families, Spec),
+        maps:is_key(maps:get(id, Family), RecipientIds)
+    ].
 
 family_ingresses(Spec) ->
     [family_ingress(Spec, Family) || Family <- maps:get(families, Spec)].
@@ -866,44 +1017,58 @@ family_ingress(Spec, Family = #{inbound_lanes := InboundLanes}) ->
         0 -> error(no_inbound_lanes);
         _ -> ok
     end,
-    InputNames = [incoming_name(Index)
-        || Index <- lists:seq(0, InputCount - 1)],
+    InputNames = [
+        incoming_name(Index)
+     || Index <- lists:seq(0, InputCount - 1)
+    ],
     CursorType = xls_nums:index_type(InputCount),
-    InputMembers = [
-        [Name, ": chan<axis::Frame> in"] || Name <- InputNames
-    ],
-    Members = InputMembers ++ [
-        "frame_out: chan<axis::Frame> out",
-        "admission_in: chan<u1> in"
-    ],
+    InputMembers = [[Name, ": chan<axis::Frame> in"] || Name <- InputNames],
+    Members =
+        InputMembers ++
+            [
+                "frame_out: chan<axis::Frame> out",
+                "admission_in: chan<u1> in"
+            ],
     MemberNames = InputNames ++ ["frame_out", "admission_in"],
     [
         "// Retains one mailbox credit while polling one input per ",
         "activation.\n",
-        "proc ", ingress_name(Spec, Family), node_parametrics(Family), " {\n",
+        "proc ",
+        ingress_name(Spec, Family),
+        node_parametrics(Family),
+        " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
         "\n",
         config_signature(Members, 2),
-        "    (", join_with(", ", MemberNames), ")\n  }\n\n",
+        "    (",
+        join_with(", ", MemberNames),
+        ")\n  }\n\n",
         ingress_init(Family, CursorType),
         ingress_next(Family, CursorType, InputCount),
         "}\n\n"
     ].
 
-control_input_count(#{ingress := none}) -> 0;
+control_input_count(#{ingress := none}) ->
+    0;
 control_input_count(#{
     ingress := #{scale := [_, _], offset := [_, _]}
-}) -> 1.
+}) ->
+    1.
 
 ingress_init(#{startup := none}, CursorType) ->
     ["  init { (", cursor_literal(CursorType, 0), ", u1:0) }\n\n"];
 ingress_init(#{startup := #{}}, CursorType) ->
-    ["  init { (", cursor_literal(CursorType, 0),
-        ", u1:0, u1:0) }\n\n"].
+    [
+        "  init { (",
+        cursor_literal(CursorType, 0),
+        ", u1:0, u1:0) }\n\n"
+    ].
 
 ingress_next(#{startup := none}, CursorType, InputCount) ->
     [
-        "  next(state: (", CursorType, ", u1)) {\n",
+        "  next(state: (",
+        CursorType,
+        ", u1)) {\n",
         "    if !state.1 {\n",
         ingress_credit_state(false),
         "    } else {\n",
@@ -913,12 +1078,15 @@ ingress_next(#{startup := none}, CursorType, InputCount) ->
     ];
 ingress_next(Family = #{startup := #{}}, CursorType, InputCount) ->
     [
-        "  next(state: (", CursorType, ", u1, u1)) {\n",
+        "  next(state: (",
+        CursorType,
+        ", u1, u1)) {\n",
         "    if !state.1 {\n",
         ingress_credit_state(true),
         "    } else if !state.2 {\n",
         "      let _tok = send(\n",
-        "        join(), frame_out, ", startup_function_name(Family),
+        "        join(), frame_out, ",
+        startup_function_name(Family),
         "(X, Y));\n",
         "      (state.0, u1:0, u1:1)\n",
         "    } else {\n",
@@ -930,7 +1098,9 @@ ingress_next(Family = #{startup := #{}}, CursorType, InputCount) ->
 ingress_credit_state(HasStartup) ->
     [
         "      let (_tok, _credit) = recv(join(), admission_in);\n",
-        "      (state.0, u1:1", ingress_started_state(HasStartup), ")\n"
+        "      (state.0, u1:1",
+        ingress_started_state(HasStartup),
+        ")\n"
     ].
 
 ingress_started_state(false) -> [];
@@ -941,37 +1111,65 @@ ingress_poll(CursorType, InputCount, HasStartup) ->
     [
         [ingress_receive(Index, CursorType) || Index <- Indexes],
         "      let received = ",
-        join_with(" || ", [valid_name(Index) || Index <- Indexes]), ";\n",
-        "      let frame = ", select_received_frame(Indexes), ";\n",
-        "      let _done = send_if(", token_name(InputCount - 1),
+        join_with(" || ", [valid_name(Index) || Index <- Indexes]),
+        ";\n",
+        "      let frame = ",
+        select_received_frame(Indexes),
+        ";\n",
+        "      let _done = send_if(",
+        token_name(InputCount - 1),
         ", frame_out, received, frame);\n",
         "      let next_cursor = if state.0 == ",
-        cursor_literal(CursorType, InputCount - 1), " {\n",
-        "        ", cursor_literal(CursorType, 0), "\n",
+        cursor_literal(CursorType, InputCount - 1),
+        " {\n",
+        "        ",
+        cursor_literal(CursorType, 0),
+        "\n",
         "      } else {\n",
-        "        state.0 + ", cursor_literal(CursorType, 1), "\n",
+        "        state.0 + ",
+        cursor_literal(CursorType, 1),
+        "\n",
         "      };\n",
-        "      (next_cursor, !received", ingress_started_state(HasStartup),
+        "      (next_cursor, !received",
+        ingress_started_state(HasStartup),
         ")\n"
     ].
 
 ingress_receive(Index, CursorType) ->
-    PreviousToken = case Index of
-        0 -> "join()";
-        _ -> token_name(Index - 1)
-    end,
+    PreviousToken =
+        case Index of
+            0 -> "join()";
+            _ -> token_name(Index - 1)
+        end,
     [
-        "      let (", token_name(Index), ", ", frame_name(Index), ", ",
-        valid_name(Index), ") = recv_if_non_blocking(\n",
-        "        ", PreviousToken, ", ", incoming_name(Index),
-        ", state.0 == ", cursor_literal(CursorType, Index),
+        "      let (",
+        token_name(Index),
+        ", ",
+        frame_name(Index),
+        ", ",
+        valid_name(Index),
+        ") = recv_if_non_blocking(\n",
+        "        ",
+        PreviousToken,
+        ", ",
+        incoming_name(Index),
+        ", state.0 == ",
+        cursor_literal(CursorType, Index),
         ", zero!<axis::Frame>());\n"
     ].
 
-select_received_frame([Index]) -> frame_name(Index);
+select_received_frame([Index]) ->
+    frame_name(Index);
 select_received_frame([Index | Rest]) ->
-    ["if ", valid_name(Index), " { ", frame_name(Index),
-        " } else { ", select_received_frame(Rest), " }"].
+    [
+        "if ",
+        valid_name(Index),
+        " { ",
+        frame_name(Index),
+        " } else { ",
+        select_received_frame(Rest),
+        " }"
+    ].
 
 cursor_literal(CursorType, Value) ->
     [CursorType, ":", integer_to_list(Value)].
@@ -987,16 +1185,32 @@ family_node(Spec, Family) ->
     InboundLanes = maps:get(inbound_lanes, Family),
     OutboundLanes = maps:get(outbound_lanes, Family),
     InputCount = length(InboundLanes) + control_input_count(Family),
-    Inputs = [[incoming_name(Index), ": chan<axis::Frame> in"]
-        || Index <- lists:seq(0, InputCount - 1)],
-    Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
-        || Lane <- OutboundLanes],
-    Debug = case xls_actor_observation:enabled(Spec) of
-        true -> [["actor_debug_out: chan<", maps:get(module_name, Family), "::ActorObservation> out"]];
-        false -> []
-    end,
+    Inputs = [
+        [incoming_name(Index), ": chan<axis::Frame> in"]
+     || Index <- lists:seq(0, InputCount - 1)
+    ],
+    Outputs = [
+        [lane_output(Lane), ": chan<axis::Frame> out"]
+     || Lane <- OutboundLanes
+    ],
+    Debug =
+        case xls_actor_observation:enabled(Spec) of
+            true ->
+                [
+                    [
+                        "actor_debug_out: chan<",
+                        maps:get(module_name, Family),
+                        "::ActorObservation> out"
+                    ]
+                ];
+            false ->
+                []
+        end,
     [
-        "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
+        "proc ",
+        node_name(Spec, Family),
+        node_parametrics(Family),
+        " {\n",
         config_signature(Inputs ++ Outputs ++ Debug, 2),
         node_body(Spec, Family, InputCount, OutboundLanes),
         "    ()\n  }\n\n",
@@ -1013,21 +1227,33 @@ node_body(Spec, Family, InputCount, OutboundLanes) ->
         "    let (actor_admit_p, actor_admit_c) =\n",
         "      chan<u1, CHANNEL_DEPTH>(\"actor_admit\");\n",
         "    let (actor_egress_p, actor_egress_c) =\n",
-        "      chan<", Module, "::Egress, u32:",
+        "      chan<",
+        Module,
+        "::Egress, u32:",
         integer_to_list(maps:get(egress_depth, Family)),
         ">(\"actor_egress\");\n",
-        "    spawn ", Module, "::Service(\n",
+        "    spawn ",
+        Module,
+        "::Service(\n",
         "      actor_req_c, actor_egress_p, actor_admit_p",
-        xls_actor_observation:spawn_argument(Spec, "actor_debug_out"), ");\n",
-        "    spawn ", router_name(Spec, Family), "(actor_egress_c",
+        xls_actor_observation:spawn_argument(Spec, "actor_debug_out"),
+        ");\n",
+        "    spawn ",
+        router_name(Spec, Family),
+        "(actor_egress_c",
         [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
         ");\n",
-        "    spawn ", ingress_name(Spec, Family),
-        ingress_specialization(Family), "(",
-        join_with(", ", [
-            incoming_name(Index)
-            || Index <- lists:seq(0, InputCount - 1)
-        ] ++ ["actor_req_p", "actor_admit_c"]),
+        "    spawn ",
+        ingress_name(Spec, Family),
+        ingress_specialization(Family),
+        "(",
+        join_with(
+            ", ",
+            [
+                incoming_name(Index)
+             || Index <- lists:seq(0, InputCount - 1)
+            ] ++ ["actor_req_p", "actor_admit_c"]
+        ),
         ");\n"
     ].
 
@@ -1036,19 +1262,24 @@ family_grid(Spec) ->
     Externals = maps:get(externals, Spec),
     IngressArguments = ingress_arguments(Spec),
     [
-        "proc ", grid_name(Spec),
+        "proc ",
+        grid_name(Spec),
         "<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {\n",
         config_signature(
             IngressArguments ++
-                [[OutputName, ": chan<axis::Frame> out"]
-                || #{output_name := OutputName} <- Externals] ++
+                [
+                    [OutputName, ": chan<axis::Frame> out"]
+                 || #{output_name := OutputName} <- Externals
+                ] ++
                 debug_arguments(Spec, "TORUS_WIDTH", "TORUS_HEIGHT"),
             2
         ),
         [lane_array(Lane) || Lane <- Lanes],
         control_channels(Spec),
-        [family_spawn(Spec, Family)
-            || Family <- maps:get(families, Spec)],
+        [
+            family_spawn(Spec, Family)
+         || Family <- maps:get(families, Spec)
+        ],
         control_spawns(Spec),
         [external_merge_spawn(External, Lanes) || External <- Externals],
         "    ()\n  }\n\n",
@@ -1057,44 +1288,69 @@ family_grid(Spec) ->
         "}\n\n"
     ].
 
-control_channels(#{ingresses := []}) -> [];
+control_channels(#{ingresses := []}) ->
+    [];
 control_channels(Spec = #{ingresses := [#{recipients := Recipients}]}) ->
     [
         begin
             SpatialStem = control_spatial_name(Family),
             ChannelStem = control_channel_name(Family),
             [
-                "    let (", SpatialStem, "_p, ", SpatialStem, "_c) =\n",
+                "    let (",
+                SpatialStem,
+                "_p, ",
+                SpatialStem,
+                "_c) =\n",
                 "      chan<hls_spatial_router::SpatialFrame, u32:0>(\"",
-                SpatialStem, "\");\n",
-                "    let (", ChannelStem, "_p, ", ChannelStem, "_c) =\n",
+                SpatialStem,
+                "\");\n",
+                "    let (",
+                ChannelStem,
+                "_p, ",
+                ChannelStem,
+                "_c) =\n",
                 "      chan<axis::Frame, u32:0>",
-                "[TORUS_HEIGHT][TORUS_WIDTH](\"", ChannelStem, "\");\n"
+                "[TORUS_HEIGHT][TORUS_WIDTH](\"",
+                ChannelStem,
+                "\");\n"
             ]
         end
-        || Family <- controlled_families(Spec, Recipients)
+     || Family <- controlled_families(Spec, Recipients)
     ].
 
-control_spawns(#{ingresses := []}) -> [];
+control_spawns(#{ingresses := []}) ->
+    [];
 control_spawns(Spec = #{ingresses := [Ingress = #{recipients := Recipients}]}) ->
     Families = controlled_families(Spec, Recipients),
     [
         [
-            ["    spawn ", control_name(Family), "(",
-                control_spatial_name(Family), "_c, ",
-                control_channel_name(Family), "_p);\n"]
-            || Family <- Families
+            [
+                "    spawn ",
+                control_name(Family),
+                "(",
+                control_spatial_name(Family),
+                "_c, ",
+                control_channel_name(Family),
+                "_p);\n"
+            ]
+         || Family <- Families
         ],
-        "    spawn SpatialIngressRouter(", maps:get(input_name, Ingress),
+        "    spawn SpatialIngressRouter(",
+        maps:get(input_name, Ingress),
         [[", ", control_spatial_name(Family), "_p"] || Family <- Families],
         ");\n"
     ].
 
-ingress_arguments(#{ingresses := []}) -> [];
+ingress_arguments(#{ingresses := []}) ->
+    [];
 ingress_arguments(#{ingresses := Ingresses}) ->
-    [[maps:get(input_name, Ingress),
-        ": chan<hls_spatial_router::SpatialFrame> in"]
-        || Ingress <- Ingresses].
+    [
+        [
+            maps:get(input_name, Ingress),
+            ": chan<hls_spatial_router::SpatialFrame> in"
+        ]
+     || Ingress <- Ingresses
+    ].
 
 lane_array(Lane) ->
     %% Codegen retains one registered output per router lane, so a nonzero FIFO
@@ -1102,9 +1358,15 @@ lane_array(Lane) ->
     %% is the outer x dimension in DSLX.
     Stem = maps:get(stem, Lane),
     [
-        "    let (", Stem, "_p, ", Stem, "_c) =\n",
+        "    let (",
+        Stem,
+        "_p, ",
+        Stem,
+        "_c) =\n",
         "      chan<axis::Frame, u32:0>",
-        "[TORUS_HEIGHT][TORUS_WIDTH](\"", Stem, "\");\n"
+        "[TORUS_HEIGHT][TORUS_WIDTH](\"",
+        Stem,
+        "\");\n"
     ].
 
 family_spawn(Spec, Family) ->
@@ -1112,15 +1374,18 @@ family_spawn(Spec, Family) ->
         family_comment(Spec, Family),
         "    unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {\n",
         "      unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {\n",
-        "        spawn ", node_name(Spec, Family),
-        node_specialization(Family), "(\n",
+        "        spawn ",
+        node_name(Spec, Family),
+        node_specialization(Family),
+        "(\n",
         node_spawn_arguments(Spec, Family),
         "        );\n",
         "      }(())\n",
         "    }(());\n"
     ].
 
-family_comment(#{families := [_]}, _Family) -> [];
+family_comment(#{families := [_]}, _Family) ->
+    [];
 family_comment(_Spec, Family) ->
     ["    // Family ", io_lib:format("~tp", [maps:get(id, Family)]), ".\n"].
 
@@ -1129,99 +1394,155 @@ node_spawn_arguments(Spec, Family) ->
     OutboundLanes = maps:get(outbound_lanes, Family),
     Arguments =
         [family_lane_consumer(Lane) || Lane <- InboundLanes] ++
-        control_consumer(Family) ++
-        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes] ++
-        case xls_actor_observation:enabled(Spec) of
-            true -> [[xls_actor_observation:family_name(maps:get(index, Family)), "[x][y]"]];
-            false -> []
-        end,
+            control_consumer(Family) ++
+            [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes] ++
+            case xls_actor_observation:enabled(Spec) of
+                true -> [[xls_actor_observation:family_name(maps:get(index, Family)), "[x][y]"]];
+                false -> []
+            end,
     [
         ["          ", Argument, separator(Index, length(Arguments)), "\n"]
-        || {Index, Argument} <- lists:enumerate(0, Arguments)
+     || {Index, Argument} <- lists:enumerate(0, Arguments)
     ].
 
-control_consumer(#{ingress := none}) -> [];
-control_consumer(Family = #{
-    ingress := #{scale := [_, _], offset := [_, _]}
-}) ->
+control_consumer(#{ingress := none}) ->
+    [];
+control_consumer(
+    Family = #{
+        ingress := #{scale := [_, _], offset := [_, _]}
+    }
+) ->
     [[control_channel_name(Family), "_c[x][y]"]].
 
 family_lane_consumer(Lane) ->
     [DX, DY] = maps:get(inverse_shift, Lane),
-    [maps:get(stem, Lane), "_c[", shifted_index("x", DX, "TORUS_WIDTH"),
-        "][", shifted_index("y", DY, "TORUS_HEIGHT"), "]"].
+    [
+        maps:get(stem, Lane),
+        "_c[",
+        shifted_index("x", DX, "TORUS_WIDTH"),
+        "][",
+        shifted_index("y", DY, "TORUS_HEIGHT"),
+        "]"
+    ].
 
-shifted_index(Axis, zero, _Size) -> Axis;
+shifted_index(Axis, zero, _Size) ->
+    Axis;
 shifted_index(Axis, {plus, Offset}, Size) ->
     ["(", Axis, " + u32:", integer_to_list(Offset), ") % ", Size];
 shifted_index(Axis, {minus, Offset}, Size) ->
-    ["(", Axis, " + ", Size, " - u32:", integer_to_list(Offset),
-        ") % ", Size].
+    [
+        "(",
+        Axis,
+        " + ",
+        Size,
+        " - u32:",
+        integer_to_list(Offset),
+        ") % ",
+        Size
+    ].
 
 external_merge_spawn(External, Lanes) ->
-    external_merge_spawn(External, external_lanes(External, Lanes),
-        maps:get(output_name, External)).
+    external_merge_spawn(
+        External,
+        external_lanes(External, Lanes),
+        maps:get(output_name, External)
+    ).
 
 external_merge_spawn(_External, [#{stem := Stem}], OutputName) ->
     [
         "    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(",
-        Stem, "_c, ", OutputName,
+        Stem,
+        "_c, ",
+        OutputName,
         ");\n"
     ];
 external_merge_spawn(External, Lanes = [_, _ | _], OutputName) ->
     Count = length(Lanes),
     CountLiteral = ["u32:", integer_to_list(Count)],
-    Stem = ["external_", integer_to_list(maps:get(index, External)),
-        "_lanes"],
+    Stem = [
+        "external_",
+        integer_to_list(maps:get(index, External)),
+        "_lanes"
+    ],
     [
-        "    let (", Stem, "_p, ", Stem, "_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>[", CountLiteral, "](",
-        "\"", Stem, "\");\n",
+        "    let (",
+        Stem,
+        "_p, ",
+        Stem,
+        "_c) =\n",
+        "      chan<axis::Frame, CHANNEL_DEPTH>[",
+        CountLiteral,
+        "](",
+        "\"",
+        Stem,
+        "\");\n",
         [
             [
                 "    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(",
-                maps:get(stem, Lane), "_c, ", Stem, "_p[u32:",
-                integer_to_list(Index), "]);\n"
+                maps:get(stem, Lane),
+                "_c, ",
+                Stem,
+                "_p[u32:",
+                integer_to_list(Index),
+                "]);\n"
             ]
-            || {Index, Lane} <- lists:enumerate(0, Lanes)
+         || {Index, Lane} <- lists:enumerate(0, Lanes)
         ],
-        "    spawn frame_transport::FrameArrayMux<", CountLiteral, ">(", Stem, "_c, ",
-        OutputName, ");\n"
+        "    spawn frame_transport::FrameArrayMux<",
+        CountLiteral,
+        ">(",
+        Stem,
+        "_c, ",
+        OutputName,
+        ");\n"
     ].
 
 external_lanes(#{id := Id}, Lanes) ->
     [
         Lane
-        || Lane = #{kind := external, external := #{id := ExternalId}} <-
-               Lanes,
-           ExternalId =:= Id
+     || Lane = #{kind := external, external := #{id := ExternalId}} <-
+            Lanes,
+        ExternalId =:= Id
     ].
 
 top_proc(Spec) ->
     Externals = maps:get(externals, Spec),
     Ingresses = maps:get(ingresses, Spec),
-    IngressMembers = [[InputName,
-        ": chan<hls_spatial_router::SpatialFrame> in"]
-        || #{input_name := InputName} <- Ingresses],
-    ExternalMembers = [[OutputName, ": chan<axis::Frame> out"]
-        || #{output_name := OutputName} <- Externals],
+    IngressMembers = [
+        [
+            InputName,
+            ": chan<hls_spatial_router::SpatialFrame> in"
+        ]
+     || #{input_name := InputName} <- Ingresses
+    ],
+    ExternalMembers = [
+        [OutputName, ": chan<axis::Frame> out"]
+     || #{output_name := OutputName} <- Externals
+    ],
     DebugMembers = debug_arguments(Spec, "WIDTH", "HEIGHT"),
-    Names = [InputName || #{input_name := InputName} <- Ingresses] ++
-        [OutputName || #{output_name := OutputName} <- Externals] ++ debug_names(Spec),
+    Names =
+        [InputName || #{input_name := InputName} <- Ingresses] ++
+            [OutputName || #{output_name := OutputName} <- Externals] ++ debug_names(Spec),
     ok = xls_actor_observation:validate_channels(Names),
     [
         "pub proc Top {\n",
-        [["  ", Member, ";\n"]
-            || Member <- IngressMembers ++ ExternalMembers ++ DebugMembers],
+        [
+            ["  ", Member, ";\n"]
+         || Member <- IngressMembers ++ ExternalMembers ++ DebugMembers
+        ],
         "\n",
         config_signature(
             IngressMembers ++ ExternalMembers ++ DebugMembers,
             2
         ),
-        "    spawn ", grid_name(Spec), "<WIDTH, HEIGHT>(",
+        "    spawn ",
+        grid_name(Spec),
+        "<WIDTH, HEIGHT>(",
         join_with(", ", Names),
         ");\n",
-        "    ", channel_tuple(Names), "\n",
+        "    ",
+        channel_tuple(Names),
+        "\n",
         "  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
@@ -1230,10 +1551,22 @@ top_proc(Spec) ->
 
 debug_arguments(Spec = #{families := Families}, Width, Height) ->
     case xls_actor_observation:enabled(Spec) of
-        false -> [];
-        true -> [[xls_actor_observation:family_name(Index), ": chan<", Module,
-            "::ActorObservation>[", Height, "][", Width, "] out"] ||
-            #{index := Index, module_name := Module} <- Families]
+        false ->
+            [];
+        true ->
+            [
+                [
+                    xls_actor_observation:family_name(Index),
+                    ": chan<",
+                    Module,
+                    "::ActorObservation>[",
+                    Height,
+                    "][",
+                    Width,
+                    "] out"
+                ]
+             || #{index := Index, module_name := Module} <- Families
+            ]
     end.
 
 debug_names(Spec = #{families := Families}) ->
@@ -1243,14 +1576,16 @@ debug_names(Spec = #{families := Families}) ->
     end.
 
 config_signature(Arguments, Indent) ->
-    Padding = lists:duplicate(Indent + 2, $ ),
+    Padding = lists:duplicate(Indent + 2, $\s),
     [
-        lists:duplicate(Indent, $ ), "config(\n",
+        lists:duplicate(Indent, $\s),
+        "config(\n",
         [
             [Padding, Argument, separator(Index, length(Arguments)), "\n"]
-            || {Index, Argument} <- lists:enumerate(0, Arguments)
+         || {Index, Argument} <- lists:enumerate(0, Arguments)
         ],
-        lists:duplicate(Indent, $ ), ") {\n"
+        lists:duplicate(Indent, $\s),
+        ") {\n"
     ].
 
 incoming_name(Index) -> ["incoming_", integer_to_list(Index)].
@@ -1287,8 +1622,7 @@ ingress_specialization(#{startup := none}) -> [];
 ingress_specialization(#{startup := #{}}) -> "<X, Y>".
 
 family_suffix(#{families := [_]}, _Family) -> [];
-family_suffix(#{families := [_, _ | _]}, #{index := Index}) ->
-    integer_to_list(Index).
+family_suffix(#{families := [_, _ | _]}, #{index := Index}) -> integer_to_list(Index).
 
 grid_name(#{families := [_]}) -> "FamilyTorus";
 grid_name(#{families := [_, _ | _]}) -> "FamilyGrid".
@@ -1301,12 +1635,10 @@ channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
 
 join_tokens([Token]) -> Token;
-join_tokens([First, Second | Rest]) ->
-    join_tokens([["join(", First, ", ", Second, ")"] | Rest]).
+join_tokens([First, Second | Rest]) -> join_tokens([["join(", First, ", ", Second, ")"] | Rest]).
 
 join_with(_Separator, []) -> [];
-join_with(Separator, [First | Rest]) ->
-    [First | [[Separator, Item] || Item <- Rest]].
+join_with(Separator, [First | Rest]) -> [First | [[Separator, Item] || Item <- Rest]].
 
 index_by_id(Items) ->
     maps:from_list([{maps:get(id, Item), Item} || Item <- Items]).

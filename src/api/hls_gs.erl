@@ -30,14 +30,33 @@ initialization and reset contract.
 Fabric calls have 255 transaction slots; casts use a reserved ID. Timeouts do
 not cancel device work. See `docs/host-transactions.md` for ownership, failure,
 inspection, and session recovery.
+
+hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book own CPU retained calls. Source preparation is separate in hls_pack and hls_service_contract.
 """.
 
+%% Adapter lifecycle.
 -export([start_link/2, start_link/3, stop/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_continue/2, handle_info/2, terminate/2, code_change/3]).
--export_type([from/0, call_result/1, async_result/1]).
+
+%% gen_server implementation callbacks.
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_continue/2,
+    handle_info/2,
+    terminate/2,
+    code_change/3
+]).
+
+%% Retained-caller type constructor and provider callbacks.
 -export([from/0, width/2, zero/2, pack/3, unpack/3, print_type/2]).
--export([generic_unpack/2]).
--export([encode_request/3, decode_reply/3]).
+
+%% Generated record and service-frame codecs.
+-export([generic_unpack/2, encode_request/3, decode_reply/3]).
+
+%% Shared type contracts.
+-export_type([from/0, call_result/1, async_result/1]).
+
 -behavior(gen_server).
 
 %%%
@@ -69,8 +88,10 @@ inspection, and session recovery.
 -type async_result(S) :: {noreply, S} | {noreply, S, {continue, atom()} | [action()]}.
 
 -doc "A call result: reply immediately or retain From; an optional continuation precedes later requests.".
--type call_result(S) :: async_result(S) | {reply, tuple(), S} |
-    {reply, tuple(), S, {continue, atom()}}.
+-type call_result(S) ::
+    async_result(S)
+    | {reply, tuple(), S}
+    | {reply, tuple(), S, {continue, atom()}}.
 
 -record(state, {
     module :: module(),
@@ -114,23 +135,33 @@ stop(PID) ->
 init({Module, Arg, Options}) ->
     case {transport(Options), Arg} of
         {cpu, _} ->
-            Contract = case hls_service_contract:from_module(Module) of
-                {ok, Value} -> Value;
-                none -> none
-            end,
-            Pending = case Contract of
-                #{pending_calls := _} -> hls_gs_deferred:new(Contract);
-                _ -> none
-            end,
-            {ok, #state{state = Module:init(Arg), module = Module, contract = Contract, pending = Pending}};
+            Contract =
+                case hls_service_contract:from_module(Module) of
+                    {ok, Value} -> Value;
+                    none -> none
+                end,
+            Pending =
+                case Contract of
+                    #{pending_calls := _} -> hls_gs_deferred:new(Contract);
+                    _ -> none
+                end,
+            {ok, #state{
+                state = Module:init(Arg), module = Module, contract = Contract, pending = Pending
+            }};
         {{fabric, Broker, LocalEndpoint, PeerEndpoint}, []} ->
             case hls_service_contract:from_module(Module) of
-                none -> {stop, {missing_hls_service_contract, Module}};
+                none ->
+                    {stop, {missing_hls_service_contract, Module}};
                 {ok, Contract} ->
                     case hls_fabric_client:new(Broker, LocalEndpoint, PeerEndpoint, ?CAST_TX_ID) of
-                        {ok, Client} -> {ok, #state{module = Module, fabric = Client,
-                            contract = Contract}};
-                        {error, Reason} -> {stop, Reason}
+                        {ok, Client} ->
+                            {ok, #state{
+                                module = Module,
+                                fabric = Client,
+                                contract = Contract
+                            }};
+                        {error, Reason} ->
+                            {stop, Reason}
                     end
             end;
         {{fabric, _Broker, _LocalEndpoint, _PeerEndpoint}, _} ->
@@ -184,7 +215,9 @@ handle_cast(
     {?FABRIC_RX, Receipt, Route, Header, Payload},
     GS = #state{fabric = Client}
 ) ->
-    Next = hls_fabric_client:receive_frame(Receipt, Route, Header, Payload, fun decode_reply/3, Client),
+    Next = hls_fabric_client:receive_frame(
+        Receipt, Route, Header, Payload, fun decode_reply/3, Client
+    ),
     {noreply, GS#state{fabric = Next}};
 %% Outgoing casts retain the dedicated non-call transaction ID.
 handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Contract}) ->
@@ -194,24 +227,29 @@ handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Co
     {noreply, GS#state{fabric = Next}}.
 
 -doc "Runs bounded internal work before selecting another mailbox request.".
--spec handle_continue(atom(), #state{}) -> {noreply, #state{}} | {noreply, #state{}, {continue, atom()}}.
+-spec handle_continue(atom(), #state{}) ->
+    {noreply, #state{}} | {noreply, #state{}, {continue, atom()}}.
 handle_continue(Name, GS) -> deferred(continue, Name, none, GS).
 
 %% gen_server continuations preserve callback ordering without recursive drains.
 -spec deferred(call | cast | continue, term(), term(), #state{}) ->
     {noreply, #state{}} | {noreply, #state{}, {continue, atom()}}.
 deferred(Kind, Message, From, GS = #state{module = Module, state = State, pending = Pending}) ->
-    {Next, Replies, Continue} = hls_gs_deferred:dispatch(Kind, Module, Message, From, State, Pending),
+    {Next, Replies, Continue} = hls_gs_deferred:dispatch(
+        Kind, Module, Message, From, State, Pending
+    ),
     Updated = GS#state{state = Next, pending = Replies},
     case Continue of
         none -> {noreply, Updated};
         {continue, Name} -> {noreply, Updated, {continue, Name}}
     end.
 
-handle_info(Message, GS = #state{fabric = Client})
-        when Client =/= none ->
+handle_info(Message, GS = #state{fabric = Client}) when
+    Client =/= none
+->
     {noreply, GS#state{fabric = hls_fabric_client:handle_info(Message, Client)}};
-handle_info(_Message, GS) -> {noreply, GS}.
+handle_info(_Message, GS) ->
+    {noreply, GS}.
 
 decode_reply(TagID, Payload, {Module, Replies}) ->
     %% Keep the allowed set with the slot, including abandoned calls. A known
@@ -228,33 +266,42 @@ decode_reply(TagID, Payload, {Module, Replies}) ->
 -doc "Encodes a hardware request without starting a proxy. The returned context is passed to decode_reply/3.".
 encode_request(Module, Kind, Message) ->
     {ok, Contract} = hls_service_contract:from_module(Module),
-    Replies = case Kind of
-        call ->
-            case call_replies(Message, Contract) of
-                invalid -> error({invalid_request, call, element(1, Message)});
-                Allowed -> Allowed
-            end;
-        cast -> ok = check_cast(Message, Contract), none
-    end,
+    Replies =
+        case Kind of
+            call ->
+                case call_replies(Message, Contract) of
+                    invalid -> error({invalid_request, call, element(1, Message)});
+                    Allowed -> Allowed
+                end;
+            cast ->
+                ok = check_cast(Message, Contract),
+                none
+        end,
     encode(Module, Message, Replies).
 
 encode(Module, Message, Replies) ->
-    {Module:pack_tag(element(1, Message)),
-        hls_codec:align(Module:pack(Message), 32), {Module, Replies}}.
+    {
+        Module:pack_tag(element(1, Message)),
+        hls_codec:align(Module:pack(Message), 32),
+        {Module, Replies}
+    }.
 
 call_replies(_Message, none) -> none;
-call_replies(Message, #{calls := Calls}) ->
-    maps:get(element(1, Message), Calls, invalid).
+call_replies(Message, #{calls := Calls}) -> maps:get(element(1, Message), Calls, invalid).
 
-check_reply(_Request, _Reply, none) -> ok;
+check_reply(_Request, _Reply, none) ->
+    ok;
 check_reply(Request, Reply, Replies) ->
-    case is_tuple(Reply) andalso tuple_size(Reply) > 0
-            andalso lists:member(element(1, Reply), Replies) of
+    case
+        is_tuple(Reply) andalso tuple_size(Reply) > 0 andalso
+            lists:member(element(1, Reply), Replies)
+    of
         true -> ok;
         false -> error({reply_contract, element(1, Request), Reply, Replies})
     end.
 
-check_cast(_Message, none) -> ok;
+check_cast(_Message, none) ->
+    ok;
 check_cast(Message, #{casts := Casts}) ->
     case lists:member(element(1, Message), Casts) of
         true -> ok;

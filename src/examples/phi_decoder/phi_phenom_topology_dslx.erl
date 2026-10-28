@@ -13,9 +13,15 @@ on one selector and layout. This profile contains only physical choices which
 are not actor facts. Actor actions leave through one source-ordered stream;
 the topology router assigns one queue to each source/recipient lane before
 different sources are arbitrated at a destination.
+
+Calls xls_topology_dslx with phi_phenom_topology and the local profile. External XLS tools compile the resulting source separately.
 """.
 
--export([profile/0, to_dslx/0]).
+%% Example deployment profile.
+-export([profile/0]).
+
+%% DSLX fixture generation.
+-export([to_dslx/0]).
 
 -doc "Returns the physical profile for the DSLX fixture.".
 -spec profile() -> xls_topology_dslx:profile().

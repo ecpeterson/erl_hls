@@ -40,15 +40,15 @@ source order. Callback data and bounded actor-local reduction state are describe
 
 This summary is internal compiler data, not a stable application protocol.
 
+hls_topology and topology backends acquire these summaries before planning. Source reanalysis delegates to xls_parse; consumers retain the resulting map for a planning pass.
 """.
 
+%% Interface acquisition and source freshness checks.
+-export([from_module/1, from_module/2, from_modules/1, from_modules/2]).
+
+%% Queries over retained interface summaries.
 -export([
-    dispatched_schemas/1,
-    dispatched_schemas/2,
-    from_module/1,
-    from_module/2,
-    from_modules/1,
-    from_modules/2,
+    dispatched_schemas/1, dispatched_schemas/2,
     initial_effects/1,
     max_entry_effects/1,
     output_schemas/2,
@@ -57,6 +57,7 @@ This summary is internal compiler data, not a stable application protocol.
     schema/2,
     state/1
 ]).
+%% Shared type contracts.
 -export_type([summary/0]).
 
 -type summary() :: map().
@@ -68,19 +69,20 @@ from_module(Module) when is_atom(Module) ->
         {module, Module} ->
             Attributes = Module:module_info(attributes),
             ok = validate_behavior(Module, Attributes),
-            case proplists:get_value(
-                hls_actor_interface,
-                Attributes,
-                '$missing'
-            ) of
+            case
+                proplists:get_value(
+                    hls_actor_interface,
+                    Attributes,
+                    '$missing'
+                )
+            of
                 [Summary] when is_map(Summary) ->
                     Validated = validate(Module, Summary),
                     verify_current_source(Module, Validated, Attributes);
                 '$missing' ->
                     error({missing_hls_actor_interface, Module});
                 Value ->
-                    error({invalid_hls_actor_interface_attribute,
-                        Module, Value})
+                    error({invalid_hls_actor_interface_attribute, Module, Value})
             end;
         {error, Reason} ->
             error({hls_actor_module_unavailable, Module, Reason})
@@ -91,30 +93,37 @@ from_module(Module) ->
 -spec from_modules([module()]) -> #{module() => summary()}.
 -doc "Reads each distinct module once for a planning pass; retains no global cache.".
 from_modules(Modules) ->
-    maps:from_list([{Module, from_module(Module)}
-        || Module <- lists:usort(Modules)]).
+    maps:from_list([
+        {Module, from_module(Module)}
+     || Module <- lists:usort(Modules)
+    ]).
 
 -doc "Loads the source-bound interface and checks every public schema against a selected ordinary-frame capacity. Embedded source summaries remain independent of physical placement.".
 -spec from_module(module(), hls_frame_layout:layout()) -> summary().
 from_module(Module, Layout) ->
     Summary = from_module(Module),
-    _ = [hls_frame_layout:check_payload(Layout, lists:sum([
-        hls_type:width(Type) || #{type := Type} <- Fields]))
-        || #{fields := Fields} <- maps:get(schemas, Summary)],
+    _ = [
+        hls_frame_layout:check_payload(
+            Layout, lists:sum([hls_type:width(Type) || #{type := Type} <- Fields])
+        )
+     || #{fields := Fields} <- maps:get(schemas, Summary)
+    ],
     Summary#{frame_layout => Layout}.
 
 -doc "Loads each distinct actor interface once and validates all schemas for the selected ordinary-frame layout.".
 -spec from_modules([module()], hls_frame_layout:layout()) -> #{module() => summary()}.
 from_modules(Modules, Layout) ->
-    maps:from_list([{Module, from_module(Module, Layout)}
-        || Module <- lists:usort(Modules)]).
+    maps:from_list([
+        {Module, from_module(Module, Layout)}
+     || Module <- lists:usort(Modules)
+    ]).
 
 -spec dispatched_schemas(summary()) -> [atom()].
 -doc "Returns schemas with at least one phase-specific cast dispatch.".
 dispatched_schemas(Summary) ->
     lists:usort([
         maps:get(schema, Dispatch)
-        || Dispatch <- maps:get(dispatches, Summary)
+     || Dispatch <- maps:get(dispatches, Summary)
     ]).
 
 -spec dispatched_schemas(summary(), atom()) -> [atom()].
@@ -122,8 +131,8 @@ dispatched_schemas(Summary) ->
 dispatched_schemas(Summary, Phase) ->
     lists:usort([
         maps:get(schema, Dispatch)
-        || Dispatch <- maps:get(dispatches, Summary),
-           maps:get(phase, Dispatch) =:= Phase
+     || Dispatch <- maps:get(dispatches, Summary),
+        maps:get(phase, Dispatch) =:= Phase
     ]).
 
 -spec output_schemas(summary(), atom()) -> [atom()].
@@ -131,8 +140,8 @@ dispatched_schemas(Summary, Phase) ->
 output_schemas(Summary, Port) ->
     lists:usort([
         maps:get(schema, Effect)
-        || Effect <- maps:get(entry_effects, Summary) ++ maps:get(reply_effects, Summary, []),
-           maps:get(port, Effect) =:= Port
+     || Effect <- maps:get(entry_effects, Summary) ++ maps:get(reply_effects, Summary, []),
+        maps:get(port, Effect) =:= Port
     ]).
 
 -spec initial_effects(summary()) -> [map()].
@@ -140,49 +149,57 @@ output_schemas(Summary, Port) ->
 initial_effects(Summary) ->
     case maps:get(initial_phase, Summary) of
         unknown ->
-            error({unknown_hls_actor_initial_phase,
-                maps:get(module, Summary)});
+            error({unknown_hls_actor_initial_phase, maps:get(module, Summary)});
         Phase ->
             [
                 Effect
-                || Effect <- maps:get(entry_effects, Summary),
-                   maps:get(phase, Effect) =:= Phase
+             || Effect <- maps:get(entry_effects, Summary),
+                maps:get(phase, Effect) =:= Phase
             ]
     end.
 
 -spec max_entry_effects(summary()) -> non_neg_integer().
 -doc "Returns the largest source-ordered effect list of any phase entry.".
 max_entry_effects(Summary) ->
-    lists:max([0 | [Order + 1
-        || #{order := Order} <- maps:get(entry_effects, Summary)]]).
+    lists:max([
+        0
+        | [
+            Order + 1
+         || #{order := Order} <- maps:get(entry_effects, Summary)
+        ]
+    ]).
 
 -spec schema(summary(), atom()) -> map().
 -doc "Looks up one public message schema by record name.".
 schema(Summary, Name) ->
-    case [
-        Item
-        || Item <- maps:get(schemas, Summary),
-           maps:get(name, Item) =:= Name
-    ] of
+    case
+        [
+            Item
+         || Item <- maps:get(schemas, Summary),
+            maps:get(name, Item) =:= Name
+        ]
+    of
         [Item] -> Item;
-        [] -> error({unknown_hls_actor_schema,
-            maps:get(module, Summary), Name})
+        [] -> error({unknown_hls_actor_schema, maps:get(module, Summary), Name})
     end.
 
 -spec state(summary()) -> map().
 -doc "Returns the callback-state record name, fields, and packed width.".
 state(Summary) ->
     State = maps:get(state, Summary),
-    State#{width => lists:sum([
-        hls_type:width(maps:get(type, Field))
-        || Field <- maps:get(fields, State)
-    ])}.
+    State#{
+        width => lists:sum([
+            hls_type:width(maps:get(type, Field))
+         || Field <- maps:get(fields, State)
+        ])
+    }.
 
 -spec reduction_storage_width(summary()) -> non_neg_integer().
 -doc "Returns the derived packed actor-local reduction width, or zero.".
 reduction_storage_width(Summary) ->
     case maps:get(reductions, Summary, none) of
-        none -> 0;
+        none ->
+            0;
         Reduction when is_map(Reduction) ->
             xls_statem_reduction_ir:interface_storage_width(Reduction);
         Reduction ->
@@ -193,46 +210,71 @@ reduction_storage_width(Summary) ->
 -spec gather_storage_width(summary()) -> non_neg_integer().
 gather_storage_width(Summary) ->
     case maps:get(gathers, Summary, none) of
-        none -> 0;
+        none ->
+            0;
         Gather = #{sites := [_ | _] = Sites} ->
             ok = require_unique(gather_site, [maps:get(id, S) || S <- Sites]),
             ok = require_unique(gather_phase, [maps:get(phase, S) || S <- Sites]),
             ok = lists:foreach(fun validate_gather_site/1, Sites),
             xls_statem_gather_codegen:storage_width(Gather);
-        Gather -> error({invalid_hls_actor_gather_interface, Gather})
+        Gather ->
+            error({invalid_hls_actor_gather_interface, Gather})
     end.
 
 %% Each gather owns a bounded numeric index space and an independently typed element.
 -spec validate_gather_site(map()) -> ok.
-validate_gather_site(#{id := Id, phase := Phase, name := Name, element := Element,
-        population := #{mode := members, size := Size, members := Members, runtime_mask := true},
-        contributions := [_ | _] = Contributions})
-        when is_integer(Id), Id >= 0, Id < 256, is_atom(Phase), is_atom(Name),
-             is_integer(Size), Size >= 1, Size =< 255 ->
+validate_gather_site(#{
+    id := Id,
+    phase := Phase,
+    name := Name,
+    element := Element,
+    population := #{mode := members, size := Size, members := Members, runtime_mask := true},
+    contributions := [_ | _] = Contributions
+}) when
+    is_integer(Id),
+    Id >= 0,
+    Id < 256,
+    is_atom(Phase),
+    is_atom(Name),
+    is_integer(Size),
+    Size >= 1,
+    Size =< 255
+->
     true = Members =:= lists:seq(0, Size - 1),
     true = lists:all(fun is_atom/1, Contributions),
     validate_state(Element);
-validate_gather_site(Site) -> error({invalid_hls_actor_gather_site, Site}).
+validate_gather_site(Site) ->
+    error({invalid_hls_actor_gather_site, Site}).
 
 %% Reject malformed stored summaries before topology planning allocates actor resources.
 -spec validate(module(), summary()) -> summary().
-validate(Module, Summary = #{
-    version := 3,
-    module := Module,
-    phases := Phases,
-    initial_phase := InitialPhase,
-    outputs := Outputs,
-    mailbox_capacity := Capacity,
-    state := State,
-    schemas := Schemas,
-    dispatches := Dispatches,
-    entry_effects := Effects,
-    failure_locations := Locations
-}) when is_list(Phases), is_list(Outputs),
-        is_integer(Capacity), Capacity > 0,
-        is_list(Schemas), is_list(Dispatches), is_list(Effects) ->
-    true = InitialPhase =:= unknown orelse
-        lists:member(InitialPhase, Phases),
+validate(
+    Module,
+    Summary = #{
+        version := 3,
+        module := Module,
+        phases := Phases,
+        initial_phase := InitialPhase,
+        outputs := Outputs,
+        mailbox_capacity := Capacity,
+        state := State,
+        schemas := Schemas,
+        dispatches := Dispatches,
+        entry_effects := Effects,
+        failure_locations := Locations
+    }
+) when
+    is_list(Phases),
+    is_list(Outputs),
+    is_integer(Capacity),
+    Capacity > 0,
+    is_list(Schemas),
+    is_list(Dispatches),
+    is_list(Effects)
+->
+    true =
+        InitialPhase =:= unknown orelse
+            lists:member(InitialPhase, Phases),
     ok = require_unique(interface_phase, Phases),
     ok = require_unique(interface_output, Outputs),
     ok = validate_state(State),
@@ -251,8 +293,14 @@ validate(Module, Summary = #{
         Dispatches
     ),
     ok = lists:foreach(
-        fun(#{schema := Schema, phase := Phase, port := Port,
-                order := Order}) ->
+        fun(
+            #{
+                schema := Schema,
+                phase := Phase,
+                port := Port,
+                order := Order
+            }
+        ) ->
             true = lists:member(Schema, SchemaNames),
             true = lists:member(Phase, Phases),
             true = lists:member(Port, Outputs),
@@ -266,8 +314,9 @@ validate(Module, #{version := Version}) when Version =/= 3 ->
 validate(Module, Summary) ->
     error({invalid_hls_actor_interface, Module, Summary}).
 
-validate_state(#{name := Name, fields := [_ | _] = Fields})
-        when is_atom(Name) ->
+validate_state(#{name := Name, fields := [_ | _] = Fields}) when
+    is_atom(Name)
+->
     true = lists:all(
         fun
             (#{name := FieldName, type := Type}) ->
@@ -284,7 +333,7 @@ validate_state(State) ->
 validate_behavior(Module, Attributes) ->
     Behaviors =
         proplists:get_all_values(behavior, Attributes) ++
-        proplists:get_all_values(behaviour, Attributes),
+            proplists:get_all_values(behaviour, Attributes),
     case lists:member(hls_statem, lists:append(Behaviors)) of
         true -> ok;
         false -> error({not_an_hls_statem_actor, Module})
@@ -297,19 +346,22 @@ verify_current_source(Module, Summary, Attributes) ->
             Source = filename(Source0),
             case filelib:is_regular(Source) of
                 true ->
-                    Context = case proplists:get_value(
-                            hls_source_context, Attributes) of
-                        [Captured] when is_map(Captured) -> Captured;
-                        _ -> error({missing_hls_source_context, Module})
-                    end,
+                    Context =
+                        case
+                            proplists:get_value(
+                                hls_source_context, Attributes
+                            )
+                        of
+                            [Captured] when is_map(Captured) -> Captured;
+                            _ -> error({missing_hls_source_context, Module})
+                        end,
                     Current = validate(
                         Module,
                         xls_parse:actor_interface(Source, Context)
                     ),
                     case Current =:= Summary of
                         true -> Summary;
-                        false -> error({stale_hls_actor_interface,
-                            Module, Source})
+                        false -> error({stale_hls_actor_interface, Module, Source})
                     end;
                 false ->
                     Summary

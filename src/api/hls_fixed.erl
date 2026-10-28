@@ -6,20 +6,30 @@ Signed, byte-aligned fixed-point values represented by scaled BEAM integers.
 conversion reject overflow; `saturate/2` explicitly clamps it and `wrap/2`
 wraps the raw scaled integer without changing its fractional scale. Rational
 conversion and integer division round to nearest, with ties away from zero.
+
+Used directly by actor code and by the phi_field example provider. hls_type dispatches its codecs; XLS lowering uses the provider callbacks and fixed-point support module.
 """.
 -behavior(hls_type).
--export([signed/2, from_integer/2, from_ratio/3, to_float/2, saturate/2,
-    round_ratio/2, wrap/2]).
--export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3,
-    dslx_imports/0]).
+%% Application constructors and arithmetic.
+-export([signed/2, from_integer/2, from_ratio/3, to_float/2, saturate/2, round_ratio/2, wrap/2]).
+
+%% hls_type provider callbacks.
+-export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3, dslx_imports/0]).
+
+%% Shared type contracts.
 -export_type([signed/2]).
 
 -type signed(_Width, _FractionBits) :: integer().
 
 -spec signed(pos_integer(), non_neg_integer()) -> hls_type:descriptor().
-signed(Width, FractionBits) when is_integer(Width), Width > 0,
-        Width rem 8 =:= 0, is_integer(FractionBits), FractionBits >= 0,
-        FractionBits < Width ->
+signed(Width, FractionBits) when
+    is_integer(Width),
+    Width > 0,
+    Width rem 8 =:= 0,
+    is_integer(FractionBits),
+    FractionBits >= 0,
+    FractionBits < Width
+->
     {hls_type, ?MODULE, signed, [Width, FractionBits]}.
 
 -spec from_integer(hls_type:descriptor(), integer()) -> integer().
@@ -29,7 +39,8 @@ from_integer({hls_type, ?MODULE, signed, [Width, FractionBits]}, Value) ->
 -spec from_ratio(hls_type:descriptor(), integer(), pos_integer()) -> integer().
 from_ratio({hls_type, ?MODULE, signed, [Width, FractionBits]}, Numerator, Denominator) ->
     hls_codec:checked_integer(
-        round_ratio(Numerator bsl FractionBits, Denominator), Width, signed).
+        round_ratio(Numerator bsl FractionBits, Denominator), Width, signed
+    ).
 
 -spec to_float(hls_type:descriptor(), integer()) -> float().
 to_float({hls_type, ?MODULE, signed, [_Width, FractionBits]}, Value) ->
@@ -73,20 +84,40 @@ print_type(signed, [Width, _FractionBits]) -> xls_nums:signed_type(Width).
 dslx_imports() -> [hls_fixed].
 
 -doc "Lowers fixed-point descriptors, wrapping, saturation and ratio rounding. Type parameters and ratio denominators must be static.".
--spec transpile(signed | wrap | saturate | round_ratio,
-    [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+-spec transpile(
+    signed | wrap | saturate | round_ratio,
+    [xls_clause_lower:ir()],
+    xls_clause_lower:clause_state()
+) ->
     xls_clause_lower:ir() | xls_clause_lower:clause_state().
-transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}},
-        {static, integer, Value}], _State) ->
+transpile(
+    wrap,
+    [
+        {phantom, type, Type = {hls_type, ?MODULE, signed, _}},
+        {static, integer, Value}
+    ],
+    _State
+) ->
     [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
 transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}}, Value], State) ->
     hls_type:transpile(as, [{phantom, type, Type}, Value], State);
 transpile(signed, [{static, integer, Width}, {static, integer, FractionBits}], State) ->
     xls_clause_lower:reference(State, {phantom, type, signed(Width, FractionBits)});
 transpile(saturate, [{phantom, type, Type}, Value], _State) ->
-    ["hls_fixed::saturate<u32:", integer_to_list(hls_type:width(Type)),
-        ">(", Value, ")"];
-transpile(round_ratio, [Numerator, {static, integer, Denominator}], _State)
-        when Denominator > 0, Denominator < (1 bsl 32) ->
-    ["hls_fixed::round_ratio<u32:", integer_to_list(Denominator),
-        ">(", Numerator, ")"].
+    [
+        "hls_fixed::saturate<u32:",
+        integer_to_list(hls_type:width(Type)),
+        ">(",
+        Value,
+        ")"
+    ];
+transpile(round_ratio, [Numerator, {static, integer, Denominator}], _State) when
+    Denominator > 0, Denominator < (1 bsl 32)
+->
+    [
+        "hls_fixed::round_ratio<u32:",
+        integer_to_list(Denominator),
+        ">(",
+        Numerator,
+        ")"
+    ].

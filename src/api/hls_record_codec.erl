@@ -1,6 +1,13 @@
 -module(hls_record_codec).
--moduledoc "Retained record layouts using current host type providers. Values are trusted local compiler outputs, independent of actor module loading and never accepted from the network.".
--export([bind/2, width/1, pack/2, unpack/2, check/1]).
+-moduledoc """
+Retained host record layouts used by build clients to bind schemas once and encode/decode later. Delegates to hls_record and the current hls_type providers without loading the actor module or rereading source. Descriptors are trusted local compiler outputs, never network inputs.
+""".
+%% Retained schema construction and validation.
+-export([bind/2, width/1, check/1]).
+
+%% Host record codecs.
+-export([pack/2, unpack/2]).
+%% Shared type contracts.
 -export_type([codec/0]).
 
 -doc "A serializable record name, ordered field descriptors and packed width. Provider code is dynamically dispatched; each retained descriptor names a stable encoding contract.".
@@ -44,8 +51,10 @@ check(#{name := Name, fields := Fields, width := Expected}) ->
 %% Only descriptor providers are required here; their helper calls use normal module dispatch.
 -spec check_providers(atom(), hls_record:fields()) -> ok.
 check_providers(Name, Fields) ->
-    lists:foreach(fun require_codec/1,
-        hls_type:providers({hls_type, hls_record, Name, Fields})).
+    lists:foreach(
+        fun require_codec/1,
+        hls_type:providers({hls_type, hls_record, Name, Fields})
+    ).
 
 %% Check exports after loading so an unloaded, available provider remains usable.
 -spec require_codec(module()) -> ok.
@@ -54,9 +63,12 @@ require_codec(Module) ->
         {module, Module} -> ok;
         {error, Reason} -> error({record_codec_provider_unavailable, Module, Reason})
     end,
-    lists:foreach(fun({Name, Arity}) ->
-        case erlang:function_exported(Module, Name, Arity) of
-            true -> ok;
-            false -> error({missing_record_codec_callback, Module, Name, Arity})
-        end
-    end, [{width, 2}, {pack, 3}, {unpack, 3}]).
+    lists:foreach(
+        fun({Name, Arity}) ->
+            case erlang:function_exported(Module, Name, Arity) of
+                true -> ok;
+                false -> error({missing_record_codec_callback, Module, Name, Arity})
+            end
+        end,
+        [{width, 2}, {pack, 3}, {unpack, 3}]
+    ).

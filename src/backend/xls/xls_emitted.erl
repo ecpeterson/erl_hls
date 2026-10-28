@@ -1,6 +1,11 @@
 -module(xls_emitted).
--moduledoc "Final DSLX bytes and the codebook allocated from their structured lowering. Digests detect accidental replacement across build boundaries; they are not signatures.".
--export([new/2, new/3, bytes/1, sites/1, sites/2, with_bytes/2]).
+-moduledoc "Finalizes an actor/server DSLX document with the failure codebook allocated from its structured references. Renderers create these artifacts and debug builders consume their sites; composition may preserve the codebook while replacing enclosing bytes. Digests detect accidental replacement across build boundaries, not authenticity or hardware equivalence.".
+%% Allocate references and render a complete module.
+-export([new/2, new/3]).
+%% Read bytes and optionally validate sites against source locations.
+-export([bytes/1, sites/1, sites/2]).
+%% Retain metadata when a backend wraps an existing artifact.
+-export([with_bytes/2]).
 -export_type([artifact/0]).
 
 -doc "A completed module with a consistency seal over both emitted bytes and allocated failure sites. Construct through new/2; use with_bytes/2 only for trusted composition which preserves failure semantics.".
@@ -14,8 +19,11 @@ new(Locations, Document) -> new(Locations, [], Document).
 -spec new([xls_failure_sites:location()], xls_dslx:value(), xls_dslx:value()) -> artifact().
 new(Locations, Preamble, Body) ->
     Sites = xls_failure_sites:allocate(Locations, [Preamble, Body]),
-    Bytes = iolist_to_binary([xls_dslx:render(Preamble), xls_failure_sites:declarations(Sites),
-        xls_dslx:render(Body)]),
+    Bytes = iolist_to_binary([
+        xls_dslx:render(Preamble),
+        xls_failure_sites:declarations(Sites),
+        xls_dslx:render(Body)
+    ]),
     seal(Bytes, Sites).
 
 -doc "Returns final DSLX bytes after checking their codebook consistency seal.".

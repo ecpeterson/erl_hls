@@ -55,6 +55,8 @@ not depend on cross-sender arrival order.
 The five-slot mailbox can retain four responses for the result being computed
 plus an early request for that result. A completed result lives in actor state,
 not in the paired phi actor's mailbox.
+
+The shared callbacks and CPU helpers live in phenom_syndrome_cell_impl.hrl. phi_noise_topology places this grid wrapper; phenom_line_syndrome_cell selects the two-neighbor variant.
 """.
 
 %% Shared protocol implementation; the default has four spatial neighbors.

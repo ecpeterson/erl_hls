@@ -37,19 +37,23 @@ quiet, empty status round arrives.
 The reducer assumes one lossless, non-restarting local fabric activation. It
 does not define retries, process generations, multi-FPGA multicast, or a PL-PS
 wire envelope. Reset or gateway failure must abort and restart the experiment.
+
+phi_memory_runner supplies decoded events from phi_memory_wire and executes the returned commands. This module only advances pure experiment state.
 """.
 
 -include("phi_protocol.hrl").
 
+%% Pure closeout state transitions.
 -export([new/1, event/3]).
+%% Shared type contracts.
 -export_type([stream/0, options/0, command/0, witness/0, state/0, result/0]).
 
 -define(U32_MASK, 16#ffffffff).
 
 -type stream() ::
-    x_decoder_events |
-    z_decoder_events |
-    data_measurements.
+    x_decoder_events
+    | z_decoder_events
+    | data_measurements.
 -type options() :: #{
     distance := pos_integer(),
     first_quiet_step := hls_nums:u32(),
@@ -71,13 +75,15 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 }.
 -type witness() :: #{
     closeout_step := hls_nums:u32(),
-    corrections := [{
-        x | z,
-        hls_nums:u32(),
-        hls_nums:u16(),
-        hls_nums:u16(),
-        hls_nums:u32()
-    }],
+    corrections := [
+        {
+            x | z,
+            hls_nums:u32(),
+            hls_nums:u16(),
+            hls_nums:u16(),
+            hls_nums:u32()
+        }
+    ],
     measurement := x | z,
     data_anticommutations := [
         {{hls_nums:u16(), hls_nums:u16()}, 0 | 1}
@@ -89,9 +95,9 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 }.
 -type state() :: map().
 -type result() ::
-    {state(), [command()]} |
-    {done, witness(), state()} |
-    {error, atom(), state()}.
+    {state(), [command()]}
+    | {done, witness(), state()}
+    | {error, atom(), state()}.
 
 -doc "Starts one closeout and returns its whole-fabric cutoff command.".
 -spec new(options()) -> {state(), [command()]}.
@@ -101,11 +107,16 @@ new(#{
     line_y := LineY,
     measurement := Measurement,
     request_id := RequestId
-}) when Distance > 0,
-        FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK,
-        LineY >= 0, LineY < 2 * Distance,
-        (Measurement =:= x orelse Measurement =:= z),
-        RequestId >= 0, RequestId =< ?U32_MASK ->
+}) when
+    Distance > 0,
+    FirstQuietStep >= 0,
+    FirstQuietStep =< ?U32_MASK,
+    LineY >= 0,
+    LineY < 2 * Distance,
+    (Measurement =:= x orelse Measurement =:= z),
+    RequestId >= 0,
+    RequestId =< ?U32_MASK
+->
     State = #{
         distance => Distance,
         cutoff_step => FirstQuietStep,
@@ -121,9 +132,11 @@ new(#{
         replies => #{}
     },
     Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
-    {State, [{control_router, noise, Rectangle, #noise_cutoff{
-        first_quiet_step = FirstQuietStep
-    }}]};
+    {State, [
+        {control_router, noise, Rectangle, #noise_cutoff{
+            first_quiet_step = FirstQuietStep
+        }}
+    ]};
 new(_Options) ->
     error(badarg).
 
@@ -138,20 +151,29 @@ event(data_measurements, Reply = #pauli_reply{}, State) ->
 event(_Stream, _Event, State) ->
     {error, event, State}.
 
-decoder_event(_Plane, _Event, State = #{phase := Phase})
-        when Phase =:= done; Phase =:= failed ->
+decoder_event(_Plane, _Event, State = #{phase := Phase}) when
+    Phase =:= done; Phase =:= failed
+->
     {State, []};
-decoder_event(Plane, Correction = #phi_correction{},
-        State = #{phase := draining}) ->
+decoder_event(
+    Plane,
+    Correction = #phi_correction{},
+    State = #{phase := draining}
+) ->
     correction(Plane, Correction, State);
-decoder_event(Plane, Status = #phi_status{},
-        State = #{phase := draining}) ->
+decoder_event(
+    Plane,
+    Status = #phi_status{},
+    State = #{phase := draining}
+) ->
     status(Plane, Status, State);
-decoder_event(_Plane, #phi_correction{}, State = #{phase := Phase})
-        when Phase =:= querying ->
+decoder_event(_Plane, #phi_correction{}, State = #{phase := Phase}) when
+    Phase =:= querying
+->
     {error, late_correction, State#{phase := failed}};
-decoder_event(_Plane, #phi_status{}, State = #{phase := Phase})
-        when Phase =:= querying ->
+decoder_event(_Plane, #phi_status{}, State = #{phase := Phase}) when
+    Phase =:= querying
+->
     {State, []};
 decoder_event(_Plane, _Event, State) ->
     {error, decoder_event, State}.
@@ -170,11 +192,16 @@ correction(
         seen_corrections := Seen,
         correction_log := CorrectionLog
     }
-) when X >= 0, X < Distance, Y >= 0, Y < Distance,
-        (Direction =:= ?PHI_NORTH_MASK orelse
-         Direction =:= ?PHI_EAST_MASK orelse
-         Direction =:= ?PHI_WEST_MASK orelse
-         Direction =:= ?PHI_SOUTH_MASK) ->
+) when
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < Distance,
+    (Direction =:= ?PHI_NORTH_MASK orelse
+        Direction =:= ?PHI_EAST_MASK orelse
+        Direction =:= ?PHI_WEST_MASK orelse
+        Direction =:= ?PHI_SOUTH_MASK)
+->
     Key = {Plane, Step, X, Y},
     case step_closed(Plane, Step, Closed) of
         true ->
@@ -188,15 +215,18 @@ correction(
                         phi_noise_topology:correction_update(
                             Plane, Correction, Distance
                         ),
-                    Command = {control_router, data,
-                        {DataX, DataY, DataX, DataY},
-                        #pauli_update{pauli = Pauli}},
+                    Command =
+                        {control_router, data, {DataX, DataY, DataX, DataY}, #pauli_update{
+                            pauli = Pauli
+                        }},
                     Logged = {Plane, Step, X, Y, Direction},
-                    {State#{
-                        seen_corrections := Seen#{Key => true},
-                        correction_log := [Logged | CorrectionLog]
-                    },
-                        [Command]}
+                    {
+                        State#{
+                            seen_corrections := Seen#{Key => true},
+                            correction_log := [Logged | CorrectionLog]
+                        },
+                        [Command]
+                    }
             end
     end;
 correction(_Plane, #phi_correction{}, State) ->
@@ -215,8 +245,13 @@ status(
         status_rounds := Rounds,
         closed_steps := Closed
     }
-) when X >= 0, X < Distance, Y >= 0, Y < Distance,
-        Flags < 4 ->
+) when
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < Distance,
+    Flags < 4
+->
     Present = Flags band ?PHENOM_PRESENT_MASK,
     Quiet = (Flags band ?PHENOM_QUIET_MASK) bsr 1,
     Key = {Plane, Step},
@@ -259,7 +294,10 @@ complete_status_round(
     }
 ) ->
     QuietAndEmpty = lists:all(
-        fun({0, 1}) -> true; (_) -> false end,
+        fun
+            ({0, 1}) -> true;
+            (_) -> false
+        end,
         maps:values(Round)
     ),
     RemainingRounds = maps:remove({Plane, Step}, Rounds),
@@ -270,10 +308,11 @@ complete_status_round(
         Seen
     ),
     PlaneZeroSteps = maps:get(Plane, ZeroSteps),
-    UpdatedPlaneZeroSteps = case QuietAndEmpty andalso Step >= CutoffStep of
-        true -> PlaneZeroSteps#{Step => true};
-        false -> PlaneZeroSteps
-    end,
+    UpdatedPlaneZeroSteps =
+        case QuietAndEmpty andalso Step >= CutoffStep of
+            true -> PlaneZeroSteps#{Step => true};
+            false -> PlaneZeroSteps
+        end,
     UpdatedZeroSteps = ZeroSteps#{Plane := UpdatedPlaneZeroSteps},
     ClosedState = State#{
         status_rounds := RemainingRounds,
@@ -283,15 +322,15 @@ complete_status_round(
     },
     maybe_query(prune_zero_steps(ClosedState)).
 
-maybe_query(State = #{
-    zero_steps := #{x := XSteps, z := ZSteps},
-    distance := Distance,
-    measurement := Measurement,
-    request_id := RequestId
-}) ->
-    Common = lists:sort([
-        Step || Step <- maps:keys(XSteps), maps:is_key(Step, ZSteps)
-    ]),
+maybe_query(
+    State = #{
+        zero_steps := #{x := XSteps, z := ZSteps},
+        distance := Distance,
+        measurement := Measurement,
+        request_id := RequestId
+    }
+) ->
+    Common = lists:sort([Step || Step <- maps:keys(XSteps), maps:is_key(Step, ZSteps)]),
     case Common of
         [] ->
             {State, []};
@@ -300,27 +339,31 @@ maybe_query(State = #{
                 request_id = RequestId,
                 measurement = Measurement
             },
-            Command = {control_router, data,
-                {0, 0, Distance - 1, 2 * Distance - 1}, Query},
+            Command = {control_router, data, {0, 0, Distance - 1, 2 * Distance - 1}, Query},
             {State#{phase := querying, closeout_step => Step}, [Command]}
     end.
 
-prune_zero_steps(State = #{
-    closed_steps := #{x := XClosed, z := ZClosed},
-    zero_steps := ZeroSteps
-}) ->
+prune_zero_steps(
+    State = #{
+        closed_steps := #{x := XClosed, z := ZClosed},
+        zero_steps := ZeroSteps
+    }
+) ->
     Floor = min(XClosed, ZClosed),
-    State#{zero_steps := maps:map(
-        fun(_Plane, Steps) ->
-            maps:filter(fun(Step, _Value) -> Step >= Floor end, Steps)
-        end,
-        ZeroSteps
-    )};
+    State#{
+        zero_steps := maps:map(
+            fun(_Plane, Steps) ->
+                maps:filter(fun(Step, _Value) -> Step >= Floor end, Steps)
+            end,
+            ZeroSteps
+        )
+    };
 prune_zero_steps(State) ->
     State.
 
-measurement_reply(_Reply, State = #{phase := Phase})
-        when Phase =:= draining; Phase =:= done; Phase =:= failed ->
+measurement_reply(_Reply, State = #{phase := Phase}) when
+    Phase =:= draining; Phase =:= done; Phase =:= failed
+->
     {State, []};
 measurement_reply(
     #pauli_reply{
@@ -335,8 +378,13 @@ measurement_reply(
         distance := Distance,
         replies := Replies
     }
-) when X >= 0, X < Distance, Y >= 0, Y < 2 * Distance,
-        Anticommutes < 2 ->
+) when
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < 2 * Distance,
+    Anticommutes < 2
+->
     case RequestId =:= ExpectedRequestId of
         false ->
             {State, []};

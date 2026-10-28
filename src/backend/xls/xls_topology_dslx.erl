@@ -1,6 +1,9 @@
 -module(xls_topology_dslx).
--moduledoc "Generates communicating dedicated actors from a normalized topology. Each actor owns register-backed state and a bounded mailbox; routes preserve per-source/recipient order under backpressure.".
--export([artifact_requirements/2, emit/2, from_module/2]).
+-moduledoc "Facade for dedicated-actor DSLX wiring from normalized hls_topology plans. It selects compact family rendering or materialized instance rendering and exposes their actor compilation requirements. Each actor owns register-backed state and a bounded mailbox; RAM sharing and placement belong to hls_fabric.".
+%% Determine required actor specializations before compiling modules.
+-export([artifact_requirements/2]).
+%% Render a normalized graph or normalize a topology module first.
+-export([emit/2, from_module/2]).
 -export_type([profile/0]).
 -doc "Dedicated topology name, channel capacity, egress capacity and optional observations.".
 -type profile() :: xls_topology_profile:profile().

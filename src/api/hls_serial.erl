@@ -10,11 +10,17 @@ Other violations of the separation bound cannot be detected from the residues.
 
 Use these functions explicitly: ordinary Erlang operators retain their usual
 integer semantics. This is not a total order for sorting arbitrary counters.
+
+Actor code calls the arithmetic directly on BEAM; hls_type and XLS lowering invoke the provider callbacks for representation and generated operations.
 """.
 -behavior(hls_type).
+%% Application constructor and serial arithmetic.
 -export([counter/1, wrap/2, add/3, difference/3, before/3]).
--export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3,
-    dslx_imports/0]).
+
+%% hls_type provider callbacks.
+-export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3, dslx_imports/0]).
+
+%% Shared type contracts.
 -export_type([counter/1]).
 
 -doc "A normalized W-bit counter; its width is supplied by the type descriptor.".
@@ -24,7 +30,8 @@ integer semantics. This is not a total order for sorting arbitrary counters.
 -spec counter(pos_integer()) -> hls_type:descriptor().
 counter(Width) when is_integer(Width), Width > 0 ->
     {hls_type, ?MODULE, counter, [Width]};
-counter(_) -> error(badarg).
+counter(_) ->
+    error(badarg).
 
 -doc "Normalizes an integer modulo the counter's range, including negative values.".
 -spec wrap(hls_type:descriptor(), integer()) -> non_neg_integer().
@@ -71,7 +78,8 @@ zero(counter, Args) ->
 pack(Value, counter, [Width]) when is_integer(Value) ->
     Normalized = wrap(counter(Width), Value),
     <<Normalized:Width/little-integer>>;
-pack(_, counter, _) -> error(badarg).
+pack(_, counter, _) ->
+    error(badarg).
 
 -doc "Decodes one normalized counter and returns the untouched trailing bitstring.".
 -spec unpack(bitstring(), counter, [pos_integer()]) -> {non_neg_integer(), bitstring()}.
@@ -90,15 +98,25 @@ dslx_imports() -> [hls_serial].
 
 -doc "Lowers counter construction and arithmetic, preserving half-range failures.".
 -spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
-    xls_clause_lower:ir() | xls_clause_lower:clause_state() | {fallible, badarg, xls_clause_lower:ir()}.
+    xls_clause_lower:ir()
+    | xls_clause_lower:clause_state()
+    | {fallible, badarg, xls_clause_lower:ir()}.
 transpile(counter, [{static, integer, Width}], State) ->
     xls_clause_lower:reference(State, {phantom, type, counter(Width)});
 transpile(wrap, [{phantom, type, Type}, Value], _State) ->
     operand(Type, Value);
-transpile(Operation, [{phantom, type, Type}, Left, Right], _State)
-        when Operation =:= add; Operation =:= difference; Operation =:= before ->
-    Call = ["hls_serial::", atom_to_list(Operation), "(",
-        operand(Type, Left), ", ", operand(Type, Right), ")"],
+transpile(Operation, [{phantom, type, Type}, Left, Right], _State) when
+    Operation =:= add; Operation =:= difference; Operation =:= before
+->
+    Call = [
+        "hls_serial::",
+        atom_to_list(Operation),
+        "(",
+        operand(Type, Left),
+        ", ",
+        operand(Type, Right),
+        ")"
+    ],
     case Operation of
         add -> Call;
         _ -> {fallible, badarg, Call}

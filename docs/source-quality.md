@@ -1,6 +1,8 @@
 # Source quality checks
 
-Use OTP 28.0.2 and rebar3 3.24.0:
+Use OTP 28.0.2 and rebar3 3.24.0. Production Erlang under `src/` and headers under `include/` use the pinned erlfmt project plugin (v1.8.0) with a 100-column limit. Run `rebar3 fmt` before review and `rebar3 fmt --check` to check the canonical form. Test and semantic fixture layout is outside that formatting scope.
+
+Run the source-contract and type checks as well:
 
 ```sh
 python3 tools/test_source_contracts.py
@@ -13,6 +15,8 @@ The contract check requires formal docs for exported Erlang functions, callbacks
 Handwritten DSLX under `priv/xls/` requires adjacent comments on functions, types and procs, including each proc's `config`, `init` and `next`. Comments describe bounds, validity flags, ordering and blocking where relevant. A module banner does not document every declaration. DSLX signatures already carry types; XLS checks them in the semantic regressions. This audit only locates declarations, ignoring expression bodies and literals; unsupported declaration forms fail the check. Constants, proc fields and generated DSLX are outside this comment audit.
 
 Unchanged omissions are reported, but do not block migration. New or changed declarations must meet every requirement. CI compares against the PR base (or the preceding commit on a branch push); locally the default is the merge base with `origin/main`. Use `--base REVISION` to choose another comparison, or `--strict PATH...` to require complete coverage of selected modules. `_build/source-contracts.json` records all remaining gaps locally; CI diagnostics have [size and retention limits](ci.md). There is no editable exception inventory.
+
+Erlang source moves retain inherited gaps only when one literal `-module` identity occurs exactly once in each revision's complete owned inventory. The declaration id, requirement and fingerprint must still match; body, spec and visibility changes remain subject to the audit. Clean files participate in duplicate detection, and duplicate or multiple module declarations always fail, including under a path-restricted check. Headers, DSLX and Erlang files without a resolved literal module identity remain path-bound; matching basenames grant no exemption. Parse failures always reject. Strict mode still requires zero gaps.
 
 CI cannot assess whether prose is useful or a spec is truthful. Review changed contracts against [STYLE.md](../STYLE.md); favor short behavioral descriptions over implementation narratives. Keep working notes in `yap/`.
 

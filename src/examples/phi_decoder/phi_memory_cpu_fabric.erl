@@ -21,13 +21,18 @@ fanout completion points. Ports from one actor with equal recipient sets share
 one forwarding process, preserving that actor's output order across aliases.
 An actor failure takes down this linked example-local process; this is not a
 supervised deployment.
+
+phi_memory_demo starts this CPU transport substitute; phi_memory_runner drives it through the same host call protocol as a device broker.
 """.
 
 -behavior(gen_server).
 
 -include("phi_protocol.hrl").
 
+%% CPU transport lifecycle and debug targets.
 -export([start_link/2, stop/1, debug_targets/1]).
+
+%% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(FABRIC_RX, '$hls_fabric_frame').
@@ -75,8 +80,10 @@ init({Distance, NoiseRate}) ->
     }}.
 
 handle_call(debug_targets, _From, State = #state{plan = Plan, actors = Actors}) ->
-    Processes = maps:from_list([{{family, Family, Coordinates}, Pid} ||
-        #{family := Family, coordinates := Coordinates, pid := Pid} <- maps:values(Actors)]),
+    Processes = maps:from_list([
+        {{family, Family, Coordinates}, Pid}
+     || #{family := Family, coordinates := Coordinates, pid := Pid} <- maps:values(Actors)
+    ]),
     {reply, hls_debug_catalog:cpu(Plan, Processes), State};
 handle_call(
     {register_route, Route, Owner},
@@ -86,10 +93,12 @@ handle_call(
     case {valid_route(Route), Routes} of
         {true, #{Route := #route_owner{pid = Owner}}} ->
             {reply, ok, State};
-        {true, #{Route := #route_owner{
-            pid = Existing,
-            monitor = OldMonitor
-        }}} ->
+        {true, #{
+            Route := #route_owner{
+                pid = Existing,
+                monitor = OldMonitor
+            }
+        }} ->
             case is_process_alive(Existing) of
                 true ->
                     {reply, {error, {route_in_use, Route, Existing}}, State};
@@ -192,17 +201,22 @@ start_family(
         fun({X, Y}, Actors) ->
             Id = {FamilyId, X, Y},
             {ok, Pid} = Module:start_link(),
-            Actors#{Id => #{
-                id => Id,
-                family => FamilyId,
-                coordinates => [X, Y],
-                module => Module,
-                pid => Pid
-            }}
+            Actors#{
+                Id => #{
+                    id => Id,
+                    family => FamilyId,
+                    coordinates => [X, Y],
+                    module => Module,
+                    pid => Pid
+                }
+            }
         end,
         Actors0,
-        [{X, Y} || X <- lists:seq(0, Width - 1),
-                   Y <- lists:seq(0, Height - 1)]
+        [
+            {X, Y}
+         || X <- lists:seq(0, Width - 1),
+            Y <- lists:seq(0, Height - 1)
+        ]
     );
 start_family(#{id := Id, shape := Shape}, _Actors) ->
     error({family, Id, Shape}).
@@ -230,8 +244,10 @@ actor_outputs(Routes, Actors, Forwarders0) ->
             #{source := {_SourceId, Port}, recipients := Recipients},
             {OutputAcc, Cache0, ForwarderAcc}
         ) ->
-            Targets = [resolve_target(Recipient, Actors)
-                || Recipient <- Recipients],
+            Targets = [
+                resolve_target(Recipient, Actors)
+             || Recipient <- Recipients
+            ],
             case Targets of
                 [{actor, Pid}] ->
                     {OutputAcc#{Port => Pid}, Cache0, ForwarderAcc};
@@ -311,13 +327,13 @@ deliver_command(
 ) ->
     [Ingress] = [
         Candidate
-        || Candidate = #{id := Id} <- maps:get(ingresses, Plan),
-           Id =:= IngressId
+     || Candidate = #{id := Id} <- maps:get(ingresses, Plan),
+        Id =:= IngressId
     ],
     [Target] = [
         Candidate
-        || Candidate = #{id := Id} <- maps:get(targets, Ingress),
-           Id =:= TargetId
+     || Candidate = #{id := Id} <- maps:get(targets, Ingress),
+        Id =:= TargetId
     ],
     lists:foreach(
         fun(Pid) -> hls_statem:cast(Pid, Message) end,
@@ -328,13 +344,13 @@ deliver_command(
 rectangle_recipients(Rectangle, #{recipients := Embeddings}, Actors) ->
     [
         Pid
-        || {_Id, #{
+     || {_Id, #{
             family := Family,
             coordinates := [X, Y],
             pid := Pid
         }} <- lists:sort(maps:to_list(Actors)),
-           Embedding <- Embeddings,
-           embedded(Family, X, Y, Embedding, Rectangle)
+        Embedding <- Embeddings,
+        embedded(Family, X, Y, Embedding, Rectangle)
     ].
 
 embedded(
@@ -357,8 +373,7 @@ forwarder(Owner, Targets) ->
             lists:foreach(
                 fun
                     ({actor, Pid}) -> hls_statem:cast(Pid, Message);
-                    ({external, Stream}) ->
-                        Owner ! {external_event, Stream, Message}
+                    ({external, Stream}) -> Owner ! {external_event, Stream, Message}
                 end,
                 Targets
             ),
