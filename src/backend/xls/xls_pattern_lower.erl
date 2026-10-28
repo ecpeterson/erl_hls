@@ -5,17 +5,14 @@
 %%%% representation bound to a whole Erlang variable.
 
 -module(xls_pattern_lower).
--moduledoc false.
+-moduledoc "Lowers callback-head and expression-match patterns for xls_callback_lower, xls_case_lower and xls_clause_lower. Pattern subjects retain both raw projections and whole Erlang-variable representations; ordered match predicates and bindings stay in the caller's clause state rather than becoming a separate syntax pass.".
 
 -include("xls_clause_lower.hrl").
 
--export([
-    lower/3,
-    match/3,
-    record_argument/3,
-    record_pattern_name/1,
-    value_argument/1
-]).
+%% Construct and classify the subjects supplied by actor lowerers.
+-export([record_argument/3, value_argument/1, record_pattern_name/1]).
+%% Lower head selection and expression matches.
+-export([lower/3, match/3]).
 -export_type([argument/0]).
 
 %% `raw` is the struct or primitive used for field access and comparisons.
@@ -29,8 +26,11 @@
 }.
 
 -doc "Creates a record subject whose raw fields and whole tagged value can differ.".
--spec record_argument(atom(), xls_clause_lower:printable(),
-    xls_clause_lower:printable()) -> argument().
+-spec record_argument(
+    atom(),
+    xls_clause_lower:printable(),
+    xls_clause_lower:printable()
+) -> argument().
 record_argument(Name, Raw, Value) ->
     #{record => Name, raw => Raw, value => Value}.
 
@@ -56,8 +56,9 @@ record_pattern_name(Pattern) ->
     [argument()],
     xls_clause_lower:clause_state()
 ) -> {xls_clause_lower:clause_state(), [xls_clause_lower:printable()]}.
-lower(Patterns, Arguments, State)
-        when length(Patterns) =:= length(Arguments) ->
+lower(Patterns, Arguments, State) when
+    length(Patterns) =:= length(Arguments)
+->
     Context0 = #{state => State, conditions => []},
     Context1 = lists:foldl(
         fun({Pattern, Argument}, Context) ->
@@ -71,20 +72,29 @@ lower(Patterns, Arguments, State)
         [Condition || {_Line, Condition} <- lists:reverse(maps:get(conditions, Context1))]
     };
 lower(Patterns, Arguments, _State) ->
-    error({bad_xls_pattern_arity,
-        pattern_line(Patterns), length(Patterns), length(Arguments)}).
+    error({bad_xls_pattern_arity, pattern_line(Patterns), length(Patterns), length(Arguments)}).
 
 %% Assignments use the same projections and equality predicates as clause
 %% heads, but a mismatch contributes a failure instead of selecting another arm.
 -doc "Lowers an assignment pattern, recording badmatch on mismatch and retaining the assigned value.".
--spec match(erl_parse:abstract_expr(), xls_clause_lower:printable(),
-    xls_clause_lower:clause_state()) -> xls_clause_lower:clause_state().
+-spec match(
+    erl_parse:abstract_expr(),
+    xls_clause_lower:printable(),
+    xls_clause_lower:clause_state()
+) -> xls_clause_lower:clause_state().
 match(Pattern, Value, State) ->
-    #{state := Bound, conditions := Conditions} = compile_pattern(Pattern,
-        value_argument(Value), #{state => State, conditions => []}),
-    Checked = lists:foldl(fun({Line, Condition}, Acc) ->
-        xls_clause_lower:add_match_failure(["!(", Condition, ")"], Line, Acc)
-    end, Bound, lists:reverse(Conditions)),
+    #{state := Bound, conditions := Conditions} = compile_pattern(
+        Pattern,
+        value_argument(Value),
+        #{state => State, conditions => []}
+    ),
+    Checked = lists:foldl(
+        fun({Line, Condition}, Acc) ->
+            xls_clause_lower:add_match_failure(["!(", Condition, ")"], Line, Acc)
+        end,
+        Bound,
+        lists:reverse(Conditions)
+    ),
     xls_clause_lower:reference(Checked, Value).
 
 %% Project supported patterns, checking tags only for callback record values.
@@ -98,27 +108,32 @@ compile_pattern({match, _Line, Left, Right}, Subject, Context0) ->
     compile_pattern(Right, Subject, Context1);
 compile_pattern({record, Line, {value, Name}, Fields}, Subject = #{record := _}, Context) ->
     compile_pattern({record, Line, Name, Fields}, Subject, Context);
-compile_pattern({record, Line, {value, Name}, Fields}, #{value := Value}, Context = #{state := State}) ->
+compile_pattern(
+    {record, Line, {value, Name}, Fields}, #{value := Value}, Context = #{state := State}
+) ->
     %% A projection or case subject has no nominal type in this lowerer. Let XLS
     %% check it before projecting fields, even when the pattern has no fields.
     Typed = xls_clause_lower:instr(State, xls_clause_lower:record_raw({value, Name}, Value)),
     Checked = xls_clause_lower:reference(Typed),
-    compile_pattern({record, Line, Name, Fields}, record_argument(Name, Checked, Checked),
-        Context#{state := Typed});
+    compile_pattern(
+        {record, Line, Name, Fields},
+        record_argument(Name, Checked, Checked),
+        Context#{state := Typed}
+    );
 compile_pattern({record, Line, Name, Fields}, Subject, Context0) ->
     case Subject of
         #{record := Name} ->
             lists:foldl(
-                fun({record_field, _FieldLine,
-                        {atom, _AtomLine, Field}, Pattern}, Context) ->
-                    Raw = [maps:get(raw, Subject), ".", atom_to_list(Field)],
-                    compile_pattern(
-                        Pattern,
-                        #{raw => Raw, value => Raw},
-                        Context
-                    );
-                   (Field, _Context) ->
-                    error({unsupported_xls_record_pattern_field, Line, Field})
+                fun
+                    ({record_field, _FieldLine, {atom, _AtomLine, Field}, Pattern}, Context) ->
+                        Raw = [maps:get(raw, Subject), ".", atom_to_list(Field)],
+                        compile_pattern(
+                            Pattern,
+                            #{raw => Raw, value => Raw},
+                            Context
+                        );
+                    (Field, _Context) ->
+                        error({unsupported_xls_record_pattern_field, Line, Field})
                 end,
                 Context0,
                 Fields
@@ -127,10 +142,20 @@ compile_pattern({record, Line, Name, Fields}, Subject, Context0) ->
             error({xls_record_pattern_type_mismatch, Line, Name, Actual});
         #{value := Value} ->
             %% Expression values retain the tag alongside the record struct.
-            Tagged = add_condition([Value, ".0 == Tag::",
-                xls_names:enum_member(Name)], Line, Context0),
-            compile_pattern({record, Line, Name, Fields},
-                record_argument(Name, [Value, ".1"], Value), Tagged)
+            Tagged = add_condition(
+                [
+                    Value,
+                    ".0 == Tag::",
+                    xls_names:enum_member(Name)
+                ],
+                Line,
+                Context0
+            ),
+            compile_pattern(
+                {record, Line, Name, Fields},
+                record_argument(Name, [Value, ".1"], Value),
+                Tagged
+            )
     end;
 compile_pattern({tuple, _Line, Patterns}, Subject, Context0) ->
     lists:foldl(
@@ -143,10 +168,14 @@ compile_pattern({tuple, _Line, Patterns}, Subject, Context0) ->
     );
 compile_pattern(Binary = {bin, _, _}, #{raw := Raw}, Context) ->
     {{Line, Predicate}, Parts} = xls_binary_lower:pattern(Binary, Raw),
-    lists:foldl(fun({Pattern, Projection, Mode}, Acc) ->
-        Matched = compile_pattern(Pattern, value_argument(Projection), Acc#{comparison => Mode}),
-        maps:remove(comparison, Matched)
-    end, add_condition(Predicate, Line, Context), Parts);
+    lists:foldl(
+        fun({Pattern, Projection, Mode}, Acc) ->
+            Matched = compile_pattern(Pattern, value_argument(Projection), Acc#{comparison => Mode}),
+            maps:remove(comparison, Matched)
+        end,
+        add_condition(Predicate, Line, Context),
+        Parts
+    );
 compile_pattern({integer, Line, Integer}, #{raw := Raw}, Context = #{comparison := integer}) ->
     add_condition(equality(Raw, xls_binary_lower:integer_literal(Integer), Context), Line, Context);
 compile_pattern({char, Line, Integer}, Subject, Context) ->
@@ -154,14 +183,18 @@ compile_pattern({char, Line, Integer}, Subject, Context) ->
 compile_pattern({integer, Line, Integer}, Subject, Context) ->
     add_condition(
         [maps:get(raw, Subject), " == ", integer_to_list(Integer)],
-        Line, Context
+        Line,
+        Context
     );
 compile_pattern({atom, Line, true}, Subject, Context) ->
     add_condition([maps:get(raw, Subject), " == bool:true"], Line, Context);
 compile_pattern({atom, Line, false}, Subject, Context) ->
     add_condition([maps:get(raw, Subject), " == bool:false"], Line, Context);
-compile_pattern({atom, Line, Atom}, Subject,
-        Context = #{state := #clause_state{enum_atoms = EnumAtoms}}) ->
+compile_pattern(
+    {atom, Line, Atom},
+    Subject,
+    Context = #{state := #clause_state{enum_atoms = EnumAtoms}}
+) ->
     Encoded = maps:get(
         Atom,
         EnumAtoms,
@@ -200,11 +233,21 @@ compile_list(Pattern, _Line, _Subject, _Offset, _Context) ->
     error({unsupported_xls_list_tail_pattern, Pattern}).
 
 %% A repeated variable adds an equality condition; a new name binds once in the clause.
--spec bind_or_compare(atom(), erl_anno:anno(), xls_clause_lower:printable(),
-    #{state := xls_clause_lower:clause_state(), conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
-        comparison => integer | bits}) ->
-    #{state := xls_clause_lower:clause_state(), conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
-        comparison => integer | bits}.
+-spec bind_or_compare(
+    atom(),
+    erl_anno:anno(),
+    xls_clause_lower:printable(),
+    #{
+        state := xls_clause_lower:clause_state(),
+        conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
+        comparison => integer | bits
+    }
+) ->
+    #{
+        state := xls_clause_lower:clause_state(),
+        conditions := [{erl_anno:anno(), xls_clause_lower:printable()}],
+        comparison => integer | bits
+    }.
 bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
     case xls_clause_lower:find_binding(Name, Line, State) of
         {ok, Bound} -> add_condition(equality(Bound, Value, Context), Line, Context);
@@ -213,7 +256,8 @@ bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
 
 equality(Left, Right, #{comparison := Mode}) ->
     ["hls_bits::same_", atom_to_list(Mode), "(", Left, ", ", Right, ")"];
-equality(Left, Right, _Context) -> [Left, " == ", Right].
+equality(Left, Right, _Context) ->
+    [Left, " == ", Right].
 
 add_condition(Condition, Line, Context = #{conditions := Conditions}) ->
     Context#{conditions := [{Line, Condition} | Conditions]}.

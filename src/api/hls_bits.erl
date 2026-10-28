@@ -4,10 +4,26 @@ Fixed-size bitstrings and explicit wire padding. bits(Width) carries a native
 Erlang bitstring in stream order. padded(Type, Width) reserves Width bits
 without changing the host value or XLS type. Packing appends zero padding
 bits; decoding ignores them. Collections preserve padding per element.
+
+Actor declarations construct these descriptors; hls_type dispatches their host codecs and XLS provider callbacks.
 """.
 -behavior(hls_type).
--export([bits/1, padded/2, width/2, value_width/2, zero/2, pack/3, unpack/3,
-    print_type/2, dslx_codec/2, dslx_imports/0, transpile/3]).
+%% Application type constructors.
+-export([bits/1, padded/2]).
+
+%% hls_type provider callbacks.
+-export([
+    width/2,
+    value_width/2,
+    zero/2,
+    pack/3,
+    unpack/3,
+    print_type/2,
+    dslx_codec/2,
+    dslx_imports/0,
+    transpile/3
+]).
+%% Shared type contracts.
 -export_type([bits/1, padded/2]).
 
 -type bits(_Width) :: bitstring().
@@ -39,7 +55,8 @@ pack(Value, bits, [Width]) ->
     end;
 pack(Value, padded, [Type, Width]) ->
     hls_codec:pad_to(hls_type:pack(Value, Type), Width).
-unpack(Packed, bits, [Width]) -> hls_codec:split(Packed, Width);
+unpack(Packed, bits, [Width]) ->
+    hls_codec:split(Packed, Width);
 unpack(Packed, padded, [Type, Width]) ->
     {Slot, Rest} = hls_codec:split(Packed, Width),
     {Value, _Padding} = hls_type:unpack(Slot, Type),
@@ -49,16 +66,36 @@ print_type(bits, [Width]) -> ["(bits[", integer_to_list(Width), "],)"];
 print_type(padded, [Type, _Width]) -> hls_type:print_type(Type).
 dslx_imports() -> [hls_bits].
 dslx_codec(bits, [_Width]) ->
-    {fun(Bits) -> ["(hls_bits::to_stream(", Bits, "),)"] end,
-     fun(Value) -> ["hls_bits::from_stream((", Value, ").0)"] end};
+    {fun(Bits) -> ["(hls_bits::to_stream(", Bits, "),)"] end, fun(Value) ->
+        ["hls_bits::from_stream((", Value, ").0)"]
+    end};
 dslx_codec(padded, [Type, Width]) ->
     SubWidth = hls_type:width(Type),
-    {fun(Bits) -> hls_type:dslx_from_bits(Type,
-        ["hls_bits::from_stream(hls_bits::to_stream(", Bits, ")[",
-            integer_to_list(Width - SubWidth), ":])"])
-     end,
-     fun(Value) -> ["hls_bits::pad<u32:", integer_to_list(SubWidth), ", u32:",
-        integer_to_list(Width), ">(", hls_type:dslx_to_bits(Type, Value), ")"] end}.
+    {
+        fun(Bits) ->
+            hls_type:dslx_from_bits(
+                Type,
+                [
+                    "hls_bits::from_stream(hls_bits::to_stream(",
+                    Bits,
+                    ")[",
+                    integer_to_list(Width - SubWidth),
+                    ":])"
+                ]
+            )
+        end,
+        fun(Value) ->
+            [
+                "hls_bits::pad<u32:",
+                integer_to_list(SubWidth),
+                ", u32:",
+                integer_to_list(Width),
+                ">(",
+                hls_type:dslx_to_bits(Type, Value),
+                ")"
+            ]
+        end
+    }.
 -doc "Creates compile-time bitstream and padded-type descriptors from static widths.".
 -spec transpile(bits | padded, [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
     xls_clause_lower:clause_state().

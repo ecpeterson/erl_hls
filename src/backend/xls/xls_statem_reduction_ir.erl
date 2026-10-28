@@ -6,13 +6,16 @@
 %%%% values belong to the containing entry outcome, not separate evaluators.
 
 -module(xls_statem_reduction_ir).
--moduledoc false.
+-moduledoc "Closed typed scalar-reduction description produced by xls_statem_reduction_lower and consumed by renderers, storage and observation planners. It retains deferred callback computations and structured failure origins, not Erlang source syntax; opening values belong to the containing entry outcome. This semantic/layout record is separate from xls_dslx target syntax.".
 
+%% Construct a checked reduction and expose its public interface.
+-export([new/4, interface/1]).
+%% Physical storage layouts and observation fields.
 -export([
-    new/4,
-    interface/1,
-    layout/1,
-    packed_layout/1,
+    layout/1, packed_layout/1, storage_width/1, interface_storage_width/1, observation_fields/1
+]).
+%% Bounded site, population and encoded-field dimensions.
+-export([
     site_count/1,
     max_population/1,
     max_member_count/1,
@@ -20,10 +23,7 @@
     site_width/1,
     remaining_width/1,
     member_width/1,
-    storage_width/1,
-    interface_storage_width/1,
-    has_runtime_members/1,
-    observation_fields/1
+    has_runtime_members/1
 ]).
 
 -export_type([
@@ -53,8 +53,13 @@
 }.
 -doc "A fixed population bound; runtime_mask restricts numeric member slots at each open.".
 -type population() ::
-    #{mode := count, size := 1 .. ((1 bsl 8) - 1)} |
-    #{mode := members, size := 1 .. ((1 bsl 8) - 1), members := [0 .. ((1 bsl 32) - 1)], runtime_mask => boolean()}.
+    #{mode := count, size := 1..((1 bsl 8) - 1)}
+    | #{
+        mode := members,
+        size := 1..((1 bsl 8) - 1),
+        members := [0..((1 bsl 32) - 1)],
+        runtime_mask => boolean()
+    }.
 -doc "A checked contribution; independent_lift omits the data pattern and requires a separately established or asserted exclusive protocol.".
 -type contribution() :: #{
     tag := atom(),
@@ -105,22 +110,25 @@ site_count(#{sites := Sites}) ->
     length(Sites).
 
 -doc "Returns the largest declared count or member-set capacity across reduction sites.".
--spec max_population(reduction()) -> 1 .. ((1 bsl 8) - 1).
+-spec max_population(reduction()) -> 1..((1 bsl 8) - 1).
 max_population(#{sites := Sites}) ->
     lists:max([
         maps:get(size, maps:get(population, Site))
-        || Site <- Sites
+     || Site <- Sites
     ]).
 
 -doc "Returns the largest member-set capacity, or zero when every site counts arrivals.".
--spec max_member_count(reduction()) -> 0 .. ((1 bsl 8) - 1).
+-spec max_member_count(reduction()) -> 0..((1 bsl 8) - 1).
 max_member_count(#{sites := Sites}) ->
-    lists:max([0 | [
-        maps:get(size, Population)
-        || Site <- Sites,
-           Population <- [maps:get(population, Site)],
-           maps:get(mode, Population) =:= members
-    ]]).
+    lists:max([
+        0
+        | [
+            maps:get(size, Population)
+         || Site <- Sites,
+            Population <- [maps:get(population, Site)],
+            maps:get(mode, Population) =:= members
+        ]
+    ]).
 
 -spec site_width(reduction()) -> pos_integer().
 site_width(Reduction) ->
@@ -141,24 +149,27 @@ type_width(#{fields := Fields}) ->
 -doc "Reports whether opening any site selects its member set from runtime actor data.".
 -spec has_runtime_members(reduction() | map()) -> boolean().
 has_runtime_members(#{sites := Sites}) ->
-    lists:any(fun(#{population := Population}) -> maps:get(runtime_mask, Population, false) end, Sites).
+    lists:any(
+        fun(#{population := Population}) -> maps:get(runtime_mask, Population, false) end, Sites
+    ).
 
 -spec storage_width(reduction()) -> pos_integer().
 storage_width(Reduction) ->
     maps:get(total_bits, layout(Reduction)).
 
 -doc "Returns bit widths for the private reduction state, including any runtime member mask.".
--spec layout(reduction()) -> #{
-    status_bits := 2,
-    site_bits := pos_integer(),
-    key_bits := 32,
-    remaining_bits := pos_integer(),
-    member_bits := pos_integer(),
-    accumulator_bits := non_neg_integer(),
-    failure_bits := 16,
-    expected_bits := non_neg_integer(),
-    total_bits := pos_integer()
-}.
+-spec layout(reduction()) ->
+    #{
+        status_bits := 2,
+        site_bits := pos_integer(),
+        key_bits := 32,
+        remaining_bits := pos_integer(),
+        member_bits := pos_integer(),
+        accumulator_bits := non_neg_integer(),
+        failure_bits := 16,
+        expected_bits := non_neg_integer(),
+        total_bits := pos_integer()
+    }.
 layout(Reduction = #{accumulator := Accumulator}) ->
     StatusBits = 2,
     KeyBits = 32,
@@ -166,9 +177,14 @@ layout(Reduction = #{accumulator := Accumulator}) ->
     SiteBits = site_width(Reduction),
     RemainingBits = remaining_width(Reduction),
     MemberBits = member_width(Reduction),
-    ExpectedBits = case has_runtime_members(Reduction) of true -> MemberBits; false -> 0 end,
-    Total = StatusBits + SiteBits + KeyBits + RemainingBits +
-        MemberBits + ExpectedBits + AccumulatorBits + 16,
+    ExpectedBits =
+        case has_runtime_members(Reduction) of
+            true -> MemberBits;
+            false -> 0
+        end,
+    Total =
+        StatusBits + SiteBits + KeyBits + RemainingBits +
+            MemberBits + ExpectedBits + AccumulatorBits + 16,
     #{
         status_bits => StatusBits,
         site_bits => SiteBits,
@@ -187,12 +203,23 @@ layout(Reduction = #{accumulator := Accumulator}) ->
 -spec packed_layout(reduction() | map()) -> map().
 packed_layout(Reduction) ->
     Sizes = layout(Reduction),
-    {_, Fields} = lists:foldl(fun({Name, Size}, {Offset, Acc}) ->
-        Width = maps:get(Size, Sizes),
-        {Offset + Width, Acc#{Name => #{offset => Offset, width => Width}}}
-    end, {0, #{}}, [{status, status_bits}, {site, site_bits}, {key, key_bits},
-        {remaining, remaining_bits}, {seen, member_bits}, {expected, expected_bits},
-        {accumulator, accumulator_bits}, {failure, failure_bits}]),
+    {_, Fields} = lists:foldl(
+        fun({Name, Size}, {Offset, Acc}) ->
+            Width = maps:get(Size, Sizes),
+            {Offset + Width, Acc#{Name => #{offset => Offset, width => Width}}}
+        end,
+        {0, #{}},
+        [
+            {status, status_bits},
+            {site, site_bits},
+            {key, key_bits},
+            {remaining, remaining_bits},
+            {seen, member_bits},
+            {expected, expected_bits},
+            {accumulator, accumulator_bits},
+            {failure, failure_bits}
+        ]
+    ),
     Fields.
 
 -spec interface(reduction()) -> map().
@@ -221,14 +248,22 @@ public_site(Site) ->
         name => maps:get(name, Site),
         population => maps:get(population, Site),
         opens_conditionally => maps:get(opens_conditionally, Site),
-        contributions => [maps:get(tag, Contribution)
-            || Contribution <- Contributions],
-        source_transportable => lists:all(fun(Contribution) ->
-            maps:get(source_transportable, Contribution)
-        end, Contributions),
-        source_capture_total => lists:all(fun(Contribution) ->
-            maps:get(source_capture_total, Contribution)
-        end, Contributions)
+        contributions => [
+            maps:get(tag, Contribution)
+         || Contribution <- Contributions
+        ],
+        source_transportable => lists:all(
+            fun(Contribution) ->
+                maps:get(source_transportable, Contribution)
+            end,
+            Contributions
+        ),
+        source_capture_total => lists:all(
+            fun(Contribution) ->
+                maps:get(source_capture_total, Contribution)
+            end,
+            Contributions
+        )
     }.
 
 validate_type_ref(_Context, #{
@@ -248,8 +283,7 @@ validate_sites(Sites) when is_list(Sites), Sites =/= [] ->
     ExpectedIDs = lists:seq(0, length(Sites) - 1),
     case IDs of
         ExpectedIDs -> ok;
-        _ -> error({invalid_hls_statem_reduction_site_ids,
-            ExpectedIDs, IDs})
+        _ -> error({invalid_hls_statem_reduction_site_ids, ExpectedIDs, IDs})
     end,
     Phases = [maps:get(phase, Site) || Site <- Sites],
     require_unique(reduction_phase, Phases),
@@ -264,8 +298,15 @@ validate_site(#{
     contributions := Contributions,
     completion := Completion,
     opens_conditionally := OpensConditionally
-}) when is_boolean(OpensConditionally), is_integer(ID), ID >= 0, is_atom(Phase), is_atom(Name),
-        is_list(Contributions), Contributions =/= [] ->
+}) when
+    is_boolean(OpensConditionally),
+    is_integer(ID),
+    ID >= 0,
+    is_atom(Phase),
+    is_atom(Name),
+    is_list(Contributions),
+    Contributions =/= []
+->
     ok = validate_population(Population),
     ok = validate_expression(completion, Completion),
     Tags = [maps:get(tag, Contribution) || Contribution <- Contributions],
@@ -275,41 +316,55 @@ validate_site(#{
 
 %% Runtime masks select the contiguous member indices described by their fixed bound.
 -spec validate_population(population()) -> ok.
-validate_population(#{mode := count, size := Size} = Population)
-        when is_integer(Size), Size >= 1, Size =< 255 ->
+validate_population(#{mode := count, size := Size} = Population) when
+    is_integer(Size), Size >= 1, Size =< 255
+->
     false = maps:get(runtime_mask, Population, false),
     ok;
-validate_population(#{mode := members, size := Size, members := Members} = Population)
-        when is_integer(Size), Size >= 1, Size =< 255, is_list(Members),
-             length(Members) =:= Size ->
-    RuntimeValid = case maps:get(runtime_mask, Population, false) of
-        false -> true; true -> Members =:= lists:seq(0, Size - 1); _ -> false
-    end,
-    case RuntimeValid andalso lists:all(fun is_u32/1, Members) andalso
-            length(Members) =:= length(lists:usort(Members)) of
+validate_population(#{mode := members, size := Size, members := Members} = Population) when
+    is_integer(Size),
+    Size >= 1,
+    Size =< 255,
+    is_list(Members),
+    length(Members) =:= Size
+->
+    RuntimeValid =
+        case maps:get(runtime_mask, Population, false) of
+            false -> true;
+            true -> Members =:= lists:seq(0, Size - 1);
+            _ -> false
+        end,
+    case
+        RuntimeValid andalso lists:all(fun is_u32/1, Members) andalso
+            length(Members) =:= length(lists:usort(Members))
+    of
         true -> ok;
         false -> error({invalid_hls_statem_reduction_members, Members})
     end.
 
 %% Candidate lifts are validated independently of permission to bypass actor predicates.
 -spec validate_contribution(contribution()) -> ok.
-validate_contribution(#{
-    tag := Tag,
-    build := Build,
-    source_transportable := true,
-    source_capture_total := SourceCaptureTotal,
-    transport := Transport
-} = Contribution) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+validate_contribution(
+    #{
+        tag := Tag,
+        build := Build,
+        source_transportable := true,
+        source_capture_total := SourceCaptureTotal,
+        transport := Transport
+    } = Contribution
+) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
     ok = validate_independent_lift(Contribution),
     ok = validate_expression(contribution, Build),
     validate_expression(transport_contribution, Transport);
-validate_contribution(#{
-    tag := Tag,
-    build := Build,
-    source_transportable := false,
-    source_capture_total := SourceCaptureTotal,
-    transport := none
-} = Contribution) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+validate_contribution(
+    #{
+        tag := Tag,
+        build := Build,
+        source_transportable := false,
+        source_capture_total := SourceCaptureTotal,
+        transport := none
+    } = Contribution
+) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
     ok = validate_independent_lift(Contribution),
     validate_expression(contribution, Build).
 
@@ -324,8 +379,10 @@ validate_independent_lift(Contribution) ->
 %% Validate the closed fragment without erasing source failures through rendering.
 -spec validate_expression(atom(), expression()) -> ok.
 validate_expression(_Context, #{body := Body, result := Result}) ->
-    try xls_dslx:validate([Body, Result])
-    catch error:_ -> error({invalid_hls_statem_reduction_expression, Body, Result})
+    try
+        xls_dslx:validate([Body, Result])
+    catch
+        error:_ -> error({invalid_hls_statem_reduction_expression, Body, Result})
     end.
 
 validate_reducers(Sites, Reducers) when is_list(Reducers) ->
@@ -339,8 +396,9 @@ validate_reducers(Sites, Reducers) when is_list(Reducers) ->
     lists:foreach(fun validate_reducer/1, Reducers),
     ok.
 
-validate_reducer(#{name := Name, body := Body, result := Result})
-        when is_atom(Name) ->
+validate_reducer(#{name := Name, body := Body, result := Result}) when
+    is_atom(Name)
+->
     validate_expression(reducer, #{body => Body, result => Result}).
 
 require_unique(Kind, Values) ->
@@ -367,11 +425,13 @@ observation_fields(Reduction) ->
     Base = [status, site, key, remaining, failure],
     Used = lists:sum([maps:get(width, maps:get(N, Layout)) || N <- Base]),
     case has_runtime_members(Reduction) of
-        false -> Base;
+        false ->
+            Base;
         true ->
             Width = member_width(Reduction),
-            if Used + 2 * Width =< 72 -> Base ++ [expected, seen];
-               Used + Width =< 72 -> Base ++ [expected];
-               true -> Base
+            if
+                Used + 2 * Width =< 72 -> Base ++ [expected, seen];
+                Used + Width =< 72 -> Base ++ [expected];
+                true -> Base
             end
     end.

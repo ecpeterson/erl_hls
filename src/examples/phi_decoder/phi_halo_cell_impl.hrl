@@ -2,28 +2,21 @@
 -include("phi_protocol.hrl").
 -include("phi_neighborhood.hrl").
 
+%% CPU lifecycle, input helpers and inspection.
 -export([
-    start_link/0,
-    start_link/1,
+    start_link/0, start_link/1,
     configure/2,
     connect/2,
     stop/1,
     offer_phi/3,
     offer_phi0/4,
     offer_anyon/3,
-    offer_measurement/3,
-    offer_measurement/5,
+    offer_measurement/3, offer_measurement/5,
     runtime_info/1
 ]).
--export([
-    configuring/3,
-    measuring/3,
-    gathering/3,
-    comparing/3,
-    flipping/3,
-    init/1,
-    reduce/3
-]).
+
+%% hls_statem phase, initialization and reduction callbacks.
+-export([configuring/3, measuring/3, gathering/3, comparing/3, flipping/3, init/1, reduce/3]).
 
 -define(MAILBOX_CAPACITY, (?NEIGHBOR_COUNT + 1)).
 %% The paper prescribes c = 10 log^2(L) field updates per anyon update. For
@@ -83,7 +76,8 @@
 -ifdef(PHI_REPETITION).
 %% Required connections for the two-neighbor protocol.
 -type neighbors() :: #{
-    east := pid(), west := pid(),
+    east := pid(),
+    west := pid(),
     syndrome := pid(),
     correction := pid(),
     status := pid()
@@ -91,7 +85,10 @@
 -else.
 %% Required connections for the four-neighbor protocol.
 -type neighbors() :: #{
-    north := pid(), east := pid(), west := pid(), south := pid(),
+    north := pid(),
+    east := pid(),
+    west := pid(),
+    south := pid(),
     syndrome := pid(),
     correction := pid(),
     status := pid()
@@ -165,10 +162,11 @@ offer_phi0(PID, Step, Source, Value) ->
 -doc "Offers one neighbor anyon update to a cell.".
 -spec offer_anyon(pid(), hls_nums:u32(), boolean()) -> ok.
 offer_anyon(PID, Step, Present) ->
-    PresentWord = case Present of
-        false -> 0;
-        true -> 1
-    end,
+    PresentWord =
+        case Present of
+            false -> 0;
+            true -> 1
+        end,
     hls_statem:cast(PID, #anyon_move{step = Step, present = PresentWord}).
 
 -doc "Offers the detection event for one decoder step.".
@@ -184,13 +182,17 @@ offer_measurement(PID, Step, Present) ->
     hls_nums:u16(),
     hls_nums:u16()
 ) -> ok.
-offer_measurement(PID, Step, Present, X, Y)
-        when X >= 0, X =< 16#ffff,
-             Y >= 0, Y =< 16#ffff ->
-    PresentWord = case Present of
-        false -> 0;
-        true -> 1
-    end,
+offer_measurement(PID, Step, Present, X, Y) when
+    X >= 0,
+    X =< 16#ffff,
+    Y >= 0,
+    Y =< 16#ffff
+->
+    PresentWord =
+        case Present of
+            false -> 0;
+            true -> 1
+        end,
     hls_statem:cast(PID, #phenom_anyon{
         step = Step,
         flags = PresentWord,
@@ -213,11 +215,17 @@ init([]) ->
     {ok, configuring, #cell{}}.
 
 -doc "Accepts one valid configuration before beginning the request-paced protocol.".
--spec configuring(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    (cast,
-        #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
-            #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
+-spec configuring
+    (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (
+        cast,
+        #phi_config{}
+        | #phi{}
+        | #phi0{}
+        | #anyon_move{}
+        | #phenom_anyon{},
+        #cell{}
+    ) -> hls_statem:cast_result(phase(), #cell{}).
 configuring(enter, _OldPhase, Cell) ->
     {Cell, []};
 configuring(
@@ -242,23 +250,31 @@ configuring(cast, #anyon_move{}, Cell) ->
     {configuring, Cell, fail}.
 
 -doc "Requests the current detection event and postpones early diffusion traffic.".
--spec measuring(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    (cast,
-        #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
-            #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
+-spec measuring
+    (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (
+        cast,
+        #phi_config{}
+        | #phi{}
+        | #phi0{}
+        | #anyon_move{}
+        | #phenom_anyon{},
+        #cell{}
+    ) -> hls_statem:cast_result(phase(), #cell{}).
 measuring(enter, _OldPhase, Cell) ->
-    Reports = case Cell#cell.status_valid =:= 1 of
-        true ->
-            Status = #phi_status{
-                step = (Cell#cell.step - 1) band ?U32_MASK,
-                x = Cell#cell.x,
-                y = Cell#cell.y,
-                flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
-            },
-            [{cast, status, Status}];
-        false -> []
-    end,
+    Reports =
+        case Cell#cell.status_valid =:= 1 of
+            true ->
+                Status = #phi_status{
+                    step = (Cell#cell.step - 1) band ?U32_MASK,
+                    x = Cell#cell.x,
+                    y = Cell#cell.y,
+                    flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
+                },
+                [{cast, status, Status}];
+            false ->
+                []
+        end,
     {Cell, Reports ++ [{cast, syndrome, #phenom_request{step = Cell#cell.step}}]};
 measuring(cast, #phi_config{}, Cell) ->
     {measuring, Cell, fail};
@@ -266,9 +282,13 @@ measuring(
     cast,
     #phenom_anyon{step = Step, flags = Flags, x = X, y = Y},
     Cell = #cell{step = Step}
-) when Flags < 4,
-       X >= 0, X =< 16#ffff,
-       Y >= 0, Y =< 16#ffff ->
+) when
+    Flags < 4,
+    X >= 0,
+    X =< 16#ffff,
+    Y >= 0,
+    Y =< 16#ffff
+->
     Present = Flags band ?PHENOM_PRESENT_MASK,
     Quiet = (Flags band ?PHENOM_QUIET_MASK) bsr 1,
     Updated = Cell#cell{
@@ -294,24 +314,32 @@ measuring(cast, #anyon_move{}, Cell) ->
     {measuring, Cell, fail}.
 
 -doc "Publishes this diffusion epoch and waits for every configured neighbor.".
--spec gathering(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    (cast,
-        #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
-            #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+-spec gathering
+    (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (
+        cast,
+        #phi_config{}
+        | #phi{}
+        | #phi0{}
+        | #anyon_move{}
+        | #phenom_anyon{},
+        #cell{}
+    ) -> hls_statem:cast_result(phase(), #cell{});
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 gathering(enter, _OldPhase, Cell) ->
     Epoch = Cell#cell.diffusion_epoch,
     Message = #phi{epoch = Epoch, values = Cell#cell.phi},
     {Cell, [
-        {open_reduction, diffusion, Cell#cell.diffusion_epoch,
-            {count, ?NEIGHBOR_COUNT},
-            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}} | ?NEIGHBOR_ACTIONS(
-        {cast, north, Message},
-        {cast, east, Message},
-        {cast, west, Message},
-        {cast, south, Message})]};
+        {open_reduction, diffusion, Cell#cell.diffusion_epoch, {count, ?NEIGHBOR_COUNT},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
+        | ?NEIGHBOR_ACTIONS(
+            {cast, north, Message},
+            {cast, east, Message},
+            {cast, west, Message},
+            {cast, south, Message}
+        )
+    ]};
 gathering(
     cast,
     #phi{epoch = Epoch, values = [Phi0, Phi1]},
@@ -324,8 +352,7 @@ gathering(
         }}};
 gathering(
     internal,
-    {reduction_complete, diffusion, Epoch,
-        #phi_fold{value0 = Sum0, value1 = Sum1}},
+    {reduction_complete, diffusion, Epoch, #phi_fold{value0 = Sum0, value1 = Sum1}},
     Cell = #cell{step = Step, diffusion_epoch = Epoch}
 ) ->
     NewPhi = phi_field:?FIELD_RELAX(Cell#cell.anyon, Cell#cell.phi, Sum0, Sum1),
@@ -335,10 +362,11 @@ gathering(
         phi = NewPhi
     },
     NextStepEpoch = ((Step + 1) * ?DIFFUSION_ROUNDS) band ?U32_MASK,
-    {NextPhase, NextCell} = case NextEpoch =:= NextStepEpoch of
-        false -> {repeat_phase, Updated};
-        true -> {comparing, Updated#cell{best_direction = ?NO_DIRECTION}}
-    end,
+    {NextPhase, NextCell} =
+        case NextEpoch =:= NextStepEpoch of
+            false -> {repeat_phase, Updated};
+            true -> {comparing, Updated#cell{best_direction = ?NO_DIRECTION}}
+        end,
     {NextPhase, NextCell, consume};
 gathering(
     cast,
@@ -368,11 +396,17 @@ gathering(cast, #phi_config{}, Cell) ->
     {gathering, Cell, fail}.
 
 -doc "Reduces neighbor field strengths to a movement direction while deferring later steps.".
--spec comparing(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    (cast,
-        #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
-            #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+-spec comparing
+    (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (
+        cast,
+        #phi_config{}
+        | #phi{}
+        | #phi0{}
+        | #anyon_move{}
+        | #phenom_anyon{},
+        #cell{}
+    ) -> hls_statem:cast_result(phase(), #cell{});
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
@@ -382,13 +416,15 @@ comparing(enter, _OldPhase, Cell) ->
         value = Phi0
     },
     {Cell, [
-        {open_reduction, comparison, Cell#cell.step,
-            {members, ?NEIGHBOR_MEMBERS},
-            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}} | ?NEIGHBOR_ACTIONS(
-        {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
-        {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
-        {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
-        {cast, south, Message#phi0{source = ?PHI_NORTH_MASK}})]};
+        {open_reduction, comparison, Cell#cell.step, {members, ?NEIGHBOR_MEMBERS},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
+        | ?NEIGHBOR_ACTIONS(
+            {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
+            {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
+            {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
+            {cast, south, Message#phi0{source = ?PHI_NORTH_MASK}}
+        )
+    ]};
 comparing(
     cast,
     #phi0{step = Step, source = Source, value = Value},
@@ -401,8 +437,7 @@ comparing(
         }}};
 comparing(
     internal,
-    {reduction_complete, comparison, Step,
-        #phi_fold{value1 = WinnerMask}},
+    {reduction_complete, comparison, Step, #phi_fold{value1 = WinnerMask}},
     Cell = #cell{step = Step}
 ) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
@@ -441,14 +476,17 @@ comparing(cast, #phi_config{}, Cell) ->
 -spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
 choose_direction(Mask, Random) ->
     case Mask of
-        ?PHI_EAST_MASK -> ?PHI_EAST_MASK;
-        ?PHI_WEST_MASK -> ?PHI_WEST_MASK;
+        ?PHI_EAST_MASK ->
+            ?PHI_EAST_MASK;
+        ?PHI_WEST_MASK ->
+            ?PHI_WEST_MASK;
         ?NEIGHBOR_MASK ->
             case Random band 16#40000000 of
                 0 -> ?PHI_EAST_MASK;
                 _ -> ?PHI_WEST_MASK
             end;
-        _ -> ?NO_DIRECTION
+        _ ->
+            ?NO_DIRECTION
     end.
 -else.
 %% Map the low 31 random bits to an ordinal among the winning edges. Multiply
@@ -461,8 +499,10 @@ choose_direction(Mask, Random) ->
     South = (Mask bsr 3) band 1,
     Count = North + East + West + South,
     Draw = hls_type:as(hls_nums:u64(), Random band 16#7fffffff),
-    Rank = hls_type:as(hls_nums:u32(),
-        (Draw * hls_type:as(hls_nums:u64(), Count)) bsr 31),
+    Rank = hls_type:as(
+        hls_nums:u32(),
+        (Draw * hls_type:as(hls_nums:u64(), Count)) bsr 31
+    ),
     if
         Count =:= 0 -> ?NO_DIRECTION;
         Rank < North -> ?PHI_NORTH_MASK;
@@ -474,28 +514,38 @@ choose_direction(Mask, Random) ->
 -endif.
 
 -doc "Chooses a correction and publishes directional moves, then collects neighbor arrivals.".
--spec flipping(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    (cast,
-        #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
-            #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+-spec flipping
+    (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (
+        cast,
+        #phi_config{}
+        | #phi{}
+        | #phi0{}
+        | #anyon_move{}
+        | #phenom_anyon{},
+        #cell{}
+    ) -> hls_statem:cast_result(phase(), #cell{});
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 flipping(enter, _OldPhase, Cell) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
     Absent = 0,
-    {Present, Corrections} = if
-        Cell#cell.anyon =:= 1,
-        Cell#cell.best_direction =/= ?NO_DIRECTION,
-        (NextRandom bsr 31) =:= 1 ->
-            {1, [{cast, correction, #phi_correction{
-                step = Cell#cell.step,
-                x = Cell#cell.x,
-                y = Cell#cell.y,
-                direction = Cell#cell.best_direction
-            }}]};
-        true -> {Absent, []}
-    end,
+    {Present, Corrections} =
+        if
+            Cell#cell.anyon =:= 1,
+            Cell#cell.best_direction =/= ?NO_DIRECTION,
+            (NextRandom bsr 31) =:= 1 ->
+                {1, [
+                    {cast, correction, #phi_correction{
+                        step = Cell#cell.step,
+                        x = Cell#cell.x,
+                        y = Cell#cell.y,
+                        direction = Cell#cell.best_direction
+                    }}
+                ]};
+            true ->
+                {Absent, []}
+        end,
     {_NorthPresent, EastPresent, WestPresent, _SouthPresent} =
         case Cell#cell.best_direction of
             ?PHI_NORTH_MASK -> {Present, Absent, Absent, Absent};
@@ -510,13 +560,15 @@ flipping(enter, _OldPhase, Cell) ->
         random_state = NextRandom
     },
     {Updated, [
-        {open_reduction, movement, Cell#cell.step,
-            {count, ?NEIGHBOR_COUNT},
-            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}} | ?NEIGHBOR_ACTIONS(
-        {cast, north, Message#anyon_move{present = _NorthPresent}},
-        {cast, east, Message#anyon_move{present = EastPresent}},
-        {cast, west, Message#anyon_move{present = WestPresent}},
-        {cast, south, Message#anyon_move{present = _SouthPresent}}) ++ Corrections]};
+        {open_reduction, movement, Cell#cell.step, {count, ?NEIGHBOR_COUNT},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
+        | ?NEIGHBOR_ACTIONS(
+            {cast, north, Message#anyon_move{present = _NorthPresent}},
+            {cast, east, Message#anyon_move{present = EastPresent}},
+            {cast, west, Message#anyon_move{present = WestPresent}},
+            {cast, south, Message#anyon_move{present = _SouthPresent}}
+        ) ++ Corrections
+    ]};
 flipping(
     cast,
     #phi{epoch = Epoch},
@@ -545,8 +597,7 @@ flipping(
         }}};
 flipping(
     internal,
-    {reduction_complete, movement, Step,
-        #phi_fold{value0 = IncomingParity, value1 = Invalid}},
+    {reduction_complete, movement, Step, #phi_fold{value0 = IncomingParity, value1 = Invalid}},
     Cell = #cell{step = Step}
 ) ->
     case Invalid =:= 0 of
@@ -558,8 +609,9 @@ flipping(
                 step = NextStep,
                 diffusion_epoch =
                     (NextStep * ?DIFFUSION_ROUNDS) band ?U32_MASK,
-                anyon = Cell#cell.anyon bxor
-                    hls_type:as(hls_nums:u32(), IncomingParity),
+                anyon =
+                    Cell#cell.anyon bxor
+                        hls_type:as(hls_nums:u32(), IncomingParity),
                 status_valid = 1
             },
             {measuring, Advanced, consume}
@@ -593,14 +645,15 @@ reduce(
     #phi_fold{value0 = RightValue, value1 = RightMask}
 ) ->
     Zero = hls_type:as(hls_nums:s64(), 0),
-    {BestValue, WinnerMask} = if
-        LeftMask =:= 0, RightMask =:= 0 -> {Zero, Zero};
-        LeftMask =:= 0 -> {RightValue, RightMask};
-        RightMask =:= 0 -> {LeftValue, LeftMask};
-        LeftValue > RightValue -> {LeftValue, LeftMask};
-        RightValue > LeftValue -> {RightValue, RightMask};
-        true -> {LeftValue, LeftMask bor RightMask}
-    end,
+    {BestValue, WinnerMask} =
+        if
+            LeftMask =:= 0, RightMask =:= 0 -> {Zero, Zero};
+            LeftMask =:= 0 -> {RightValue, RightMask};
+            RightMask =:= 0 -> {LeftValue, LeftMask};
+            LeftValue > RightValue -> {LeftValue, LeftMask};
+            RightValue > LeftValue -> {RightValue, RightMask};
+            true -> {LeftValue, LeftMask bor RightMask}
+        end,
     #phi_fold{value0 = BestValue, value1 = WinnerMask};
 reduce(
     movement,
@@ -615,13 +668,14 @@ reduce(
 %% Reject names absent from this specialization before admitting a CPU message.
 -spec source_mask(direction()) -> hls_nums:u32().
 source_mask(Direction) ->
-    Mask = case Direction of
-        north -> ?PHI_NORTH_MASK;
-        east -> ?PHI_EAST_MASK;
-        west -> ?PHI_WEST_MASK;
-        south -> ?PHI_SOUTH_MASK;
-        _ -> error(badarg)
-    end,
+    Mask =
+        case Direction of
+            north -> ?PHI_NORTH_MASK;
+            east -> ?PHI_EAST_MASK;
+            west -> ?PHI_WEST_MASK;
+            south -> ?PHI_SOUTH_MASK;
+            _ -> error(badarg)
+        end,
     case Mask band ?NEIGHBOR_MASK of
         Mask -> Mask;
         _ -> error(badarg)

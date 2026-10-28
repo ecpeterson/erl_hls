@@ -1,11 +1,20 @@
 -module(xls_phase_eval).
--moduledoc "Conservative successful-return interpreter for phase-field analysis. Unknown computations retain no value facts; unsupported syntax rejects the analysis.".
--export([context/1, unknown/0, record/2, call/3, clause/3, concrete/2]).
+-moduledoc "Successful-return abstract interpreter used by xls_phase_values to compute conservative phase-field domains. It evaluates prepared source callbacks, not generated DSLX; unknown computations retain no value facts and unsupported syntax rejects the analysis. Ordinary clause lowering remains the execution authority.".
+%% Prepare the source context and abstract input values.
+-export([context/1, unknown/0, record/2]).
+%% Evaluate callbacks/helpers and recover bounded concrete values.
+-export([call/3, clause/3, concrete/2]).
 -export_type([value/0, state/0]).
 
 -doc "Abstract immutable value; fresh unknown identities preserve aliases within one callback only.".
--type value() :: integer() | atom() | {nil} | {unknown, reference()} | {tuple, [value()]} |
-    {record, atom(), #{atom() => value()}} | {cons, value(), value()}.
+-type value() ::
+    integer()
+    | atom()
+    | {nil}
+    | {unknown, reference()}
+    | {tuple, [value()]}
+    | {record, atom(), #{atom() => value()}}
+    | {cons, value(), value()}.
 -doc "One successful path's variable bindings and equalities; absent equalities mean unconstrained values.".
 -type state() :: #{vars := #{atom() => value()}, equal := map()}.
 %% Read-only declarations and acyclic functions checked by ordinary lowering.
@@ -14,9 +23,13 @@
 -doc "Indexes resolved source after ordinary lowering has validated helpers and callback syntax.".
 -spec context([hls_source:form()]) -> context().
 context(Forms) ->
-    #{records => maps:from_list([{N, [field(F) || F <- Fs]}
-        || {attribute, _, record, {N, Fs}} <- Forms]),
-      functions => maps:from_list([{{N, A}, Cs} || {function, _, N, A, Cs} <- Forms])}.
+    #{
+        records => maps:from_list([
+            {N, [field(F) || F <- Fs]}
+         || {attribute, _, record, {N, Fs}} <- Forms
+        ]),
+        functions => maps:from_list([{{N, A}, Cs} || {function, _, N, A, Cs} <- Forms])
+    }.
 
 %% Retain initializers without evaluating arbitrary providers as compiler code.
 -spec field(term()) -> {atom(), term()}.
@@ -29,10 +42,13 @@ field({typed_record_field, F = {record_field, _, {atom, _, N}, Default}, Type}) 
             end;
         {true, {remote_type, _, [{atom, _, hls_bool}, {atom, _, bool}, []]}} ->
             {N, {atom, 0, false}};
-        _ -> field(F)
+        _ ->
+            field(F)
     end;
-field({record_field, _, {atom, _, N}, V}) -> {N, V};
-field({record_field, _, {atom, _, N}}) -> {N, {atom, 0, undefined}}.
+field({record_field, _, {atom, _, N}, V}) ->
+    {N, V};
+field({record_field, _, {atom, _, N}}) ->
+    {N, {atom, 0, undefined}}.
 
 -doc "Creates an unconstrained value distinct from every other evaluation.".
 -spec unknown() -> value().
@@ -59,23 +75,42 @@ fresh() -> #{vars => #{}, equal => #{}}.
 -doc "Resolves successful-path equalities recursively, keeping unresolved values explicitly unknown.".
 -spec concrete(value(), state()) -> value().
 concrete({unknown, Id} = U, S = #{equal := E}) ->
-    case maps:find(Id, E) of {ok, V} -> concrete(V, S); error -> U end;
-concrete({record, N, Fs}, S) -> {record, N, maps:map(fun(_, V) -> concrete(V, S) end, Fs)};
-concrete({tuple, Vs}, S) -> {tuple, [concrete(V, S) || V <- Vs]};
-concrete({cons, H, T}, S) -> {cons, concrete(H, S), concrete(T, S)};
-concrete(V, _) -> V.
+    case maps:find(Id, E) of
+        {ok, V} -> concrete(V, S);
+        error -> U
+    end;
+concrete({record, N, Fs}, S) ->
+    {record, N, maps:map(fun(_, V) -> concrete(V, S) end, Fs)};
+concrete({tuple, Vs}, S) ->
+    {tuple, [concrete(V, S) || V <- Vs]};
+concrete({cons, H, T}, S) ->
+    {cons, concrete(H, S), concrete(T, S)};
+concrete(V, _) ->
+    V.
 
 %% Including shadowed arms is conservative. Stop only at an unguarded arm
 %% whose patterns cannot further restrict the incoming abstract arguments.
 -spec clauses([term()], [value()], state(), context()) -> [{value(), state()}].
-clauses([], _, _, _) -> [];
+clauses([], _, _, _) ->
+    [];
 clauses([{clause, _, Ps, Gs, Body} | Rest], Args, S, C) ->
     Matched = patterns(Ps, Args, S, C),
     Results = lists:append([sequence(Body, T, C) || M <- Matched, T <- guards(Gs, M, C)]),
-    Covered = Gs =:= [] andalso lists:any(fun(M) ->
-        maps:get(equal, M) =:= maps:get(equal, S)
-    end, Matched),
-    bounded(Results ++ case Covered of true -> []; false -> clauses(Rest, Args, S, C) end).
+    Covered =
+        Gs =:= [] andalso
+            lists:any(
+                fun(M) ->
+                    maps:get(equal, M) =:= maps:get(equal, S)
+                end,
+                Matched
+            ),
+    bounded(
+        Results ++
+            case Covered of
+                true -> [];
+                false -> clauses(Rest, Args, S, C)
+            end
+    ).
 
 %% Keep resource exhaustion distinct from an empty (unreachable) result.
 -spec bounded([T]) -> [T].
@@ -84,44 +119,67 @@ bounded(_) -> throw({phase_analysis, path_limit}).
 
 %% Arguments and statements preserve source order and selected-path failures.
 -spec sequence([term()], state(), context()) -> [{value(), state()}].
-sequence([Last], S, C) -> eval(Last, S, C);
+sequence([Last], S, C) ->
+    eval(Last, S, C);
 sequence([First | Rest], S, C) ->
     bounded(lists:append([sequence(Rest, T, C) || {_, T} <- eval(First, S, C)])).
 
 %% Return product values while threading constraints from evaluated operands.
 -spec arguments([term()], state(), context()) -> [{[value()], state()}].
-arguments([], S, _) -> [{[], S}];
+arguments([], S, _) ->
+    [{[], S}];
 arguments([H | T], S, C) ->
-    bounded([{[V | Vs], End} || {V, Next} <- eval(H, S, C),
-        {Vs, End} <- arguments(T, Next, C)]).
+    bounded([
+        {[V | Vs], End}
+     || {V, Next} <- eval(H, S, C),
+        {Vs, End} <- arguments(T, Next, C)
+    ]).
 
 %% Unknown providers may fail or return any value. Including every return is
 %% safe for containment; none is granted purity, totality or elimination rights.
 -spec eval(term(), state(), context()) -> [{value(), state()}].
-eval({var, _, N}, S = #{vars := Vs}, _) -> [{maps:get(N, Vs), S}];
+eval({var, _, N}, S = #{vars := Vs}, _) ->
+    [{maps:get(N, Vs), S}];
 eval({Tag, _, V}, S, _) when Tag =:= integer; Tag =:= char; Tag =:= atom -> [{V, S}];
-eval({nil, _}, S, _) -> [{{nil}, S}];
-eval({tuple, _, Es}, S, C) -> [{{tuple, Vs}, T} || {Vs, T} <- arguments(Es, S, C)];
+eval({nil, _}, S, _) ->
+    [{{nil}, S}];
+eval({tuple, _, Es}, S, C) ->
+    [{{tuple, Vs}, T} || {Vs, T} <- arguments(Es, S, C)];
 eval({cons, _, H, T}, S, C) ->
     [{{cons, A, B}, U} || {[A, B], U} <- arguments([H, T], S, C)];
 eval({record, _, Name, Fs}, S, C = #{records := Rs}) ->
-    Defaults = [{record_field, 0, {atom, 0, F}, V} || {F, V} <- maps:get(Name, Rs),
-        not lists:member(F, [N || {record_field, _, {atom, _, N}, _} <- Fs])],
+    Defaults = [
+        {record_field, 0, {atom, 0, F}, V}
+     || {F, V} <- maps:get(Name, Rs),
+        not lists:member(F, [N || {record_field, _, {atom, _, N}, _} <- Fs])
+    ],
     fields(Defaults ++ Fs, record(Name, C), S, C);
 eval({record, _, Base, Name, Fs}, S, C) ->
-    bounded(lists:append([case concrete(V, T) of
-        {record, Name, _} = R -> fields(Fs, R, T, C);
-        {unknown, _} -> fields(Fs, record(Name, C), T, C);
-        _ -> [] end || {V, T} <- eval(Base, S, C)]));
+    bounded(
+        lists:append([
+            case concrete(V, T) of
+                {record, Name, _} = R -> fields(Fs, R, T, C);
+                {unknown, _} -> fields(Fs, record(Name, C), T, C);
+                _ -> []
+            end
+         || {V, T} <- eval(Base, S, C)
+        ])
+    );
 eval({record_field, _, Base, Name, {atom, _, F}}, S, C) ->
-    [{maps:get(F, Fs), U} || {V, T} <- eval(Base, S, C),
-        U <- equal(V, record(Name, C), T), {record, _Name, Fs} <- [concrete(V, U)]];
+    [
+        {maps:get(F, Fs), U}
+     || {V, T} <- eval(Base, S, C),
+        U <- equal(V, record(Name, C), T),
+        {record, _Name, Fs} <- [concrete(V, U)]
+    ];
 eval({match, _, P, E}, S, C) ->
     bounded([{V, T} || {V, Next} <- eval(E, S, C), T <- pattern(P, V, Next, C)]);
-eval({block, _, Es}, S, C) -> sequence(Es, S, C);
+eval({block, _, Es}, S, C) ->
+    sequence(Es, S, C);
 eval({'case', _, E, Cs}, S, C) ->
     bounded(lists:append([clauses(Cs, [V], T, C) || {V, T} <- eval(E, S, C)]));
-eval({'if', _, Cs}, S, C) -> clauses(Cs, [], S, C);
+eval({'if', _, Cs}, S, C) ->
+    clauses(Cs, [], S, C);
 eval({op, _, Op, A, B}, S, C) when Op =:= 'andalso'; Op =:= 'orelse' ->
     bounded(lists:append([short_circuit(Op, V, B, T, C) || {V, T} <- eval(A, S, C)]));
 eval({op, _, 'not', E}, S, C) ->
@@ -129,19 +187,33 @@ eval({op, _, 'not', E}, S, C) ->
 eval({op, _, Op, A, B}, S, C) when Op =:= '=:='; Op =:= '=/=' ->
     bounded(lists:append([comparison(Op, X, Y, T) || {[X, Y], T} <- arguments([A, B], S, C)]));
 eval({op, _, Op, A, B}, S, C) when Op =:= '<'; Op =:= '>'; Op =:= '=<'; Op =:= '>=' ->
-    [{V, T} || {[X, Y], T} <- arguments([A, B], S, C),
-        V <- ordered(Op, concrete(X, T), concrete(Y, T))];
-eval({op, _, _, E}, S, C) -> [{unknown(), T} || {_, T} <- eval(E, S, C)];
-eval({op, _, _, A, B}, S, C) -> [{unknown(), T} || {_, T} <- arguments([A, B], S, C)];
+    [
+        {V, T}
+     || {[X, Y], T} <- arguments([A, B], S, C),
+        V <- ordered(Op, concrete(X, T), concrete(Y, T))
+    ];
+eval({op, _, _, E}, S, C) ->
+    [{unknown(), T} || {_, T} <- eval(E, S, C)];
+eval({op, _, _, A, B}, S, C) ->
+    [{unknown(), T} || {_, T} <- arguments([A, B], S, C)];
 eval({call, _, {atom, _, Name}, Es}, S, C = #{functions := Fs}) ->
-    bounded(lists:append([begin
-        CallerVars = maps:get(vars, T),
-        [{V, End#{vars := CallerVars}} || {V, End} <-
-            clauses(maps:get({Name, length(Es)}, Fs), Vs, T#{vars := #{}}, C)]
-    end || {Vs, T} <- arguments(Es, S, C)]));
+    bounded(
+        lists:append([
+            begin
+                CallerVars = maps:get(vars, T),
+                [
+                    {V, End#{vars := CallerVars}}
+                 || {V, End} <-
+                        clauses(maps:get({Name, length(Es)}, Fs), Vs, T#{vars := #{}}, C)
+                ]
+            end
+         || {Vs, T} <- arguments(Es, S, C)
+        ])
+    );
 eval({call, _, {remote, _, _, _}, Es}, S, C) ->
     [{unknown(), T} || {_, T} <- arguments(Es, S, C)];
-eval(Other, _, _) -> throw({phase_analysis, {unsupported_expression, element(1, Other)}}).
+eval(Other, _, _) ->
+    throw({phase_analysis, {unsupported_expression, element(1, Other)}}).
 
 %% Arithmetic deliberately forgets its result: Erlang integers and scheduled
 %% fixed-width operations need a separate overflow-aware transfer function.
@@ -154,10 +226,11 @@ ordered(_, _, _) -> [true, false].
 -spec comparison(atom(), value(), value(), state()) -> [{boolean(), state()}].
 comparison(Op, X, Y, S) ->
     True = [{Op =:= '=:=', T} || T <- equal(X, Y, S)],
-    False = case concrete(X, S) =:= concrete(Y, S) of
-        true -> [];
-        false -> [{Op =:= '=/=', S}]
-    end,
+    False =
+        case concrete(X, S) =:= concrete(Y, S) of
+            true -> [];
+            false -> [{Op =:= '=/=', S}]
+        end,
     True ++ False.
 
 %% Short-circuit alternatives retain constraints established by their operand.
@@ -169,10 +242,15 @@ short_circuit(Op, A, B, S, C) ->
 
 %% Record updates preserve every field not explicitly replaced.
 -spec fields([term()], value(), state(), context()) -> [{value(), state()}].
-fields([], R, S, _) -> [{R, S}];
+fields([], R, S, _) ->
+    [{R, S}];
 fields([{record_field, _, {atom, _, F}, E} | Rest], {record, N, Fs}, S, C) ->
-    bounded(lists:append([fields(Rest, {record, N, Fs#{F := V}}, T, C)
-        || {V, T} <- eval(E, S, C)])).
+    bounded(
+        lists:append([
+            fields(Rest, {record, N, Fs#{F := V}}, T, C)
+         || {V, T} <- eval(E, S, C)
+        ])
+    ).
 
 %% Guard alternatives are a union; failed guard evaluations have no return.
 -spec guards([list()], state(), context()) -> [state()].
@@ -181,20 +259,28 @@ guards(Gs, S, C) -> bounded(lists:append([guard_sequence(G, S, C) || G <- Gs])).
 
 %% Every guard in one alternative must evaluate to true.
 -spec guard_sequence([term()], state(), context()) -> [state()].
-guard_sequence([], S, _) -> [S];
+guard_sequence([], S, _) ->
+    [S];
 guard_sequence([G | Rest], S, C) ->
-    bounded(lists:append([guard_sequence(Rest, T, C) || {V, Next} <- eval(G, S, C),
-        T <- equal(V, true, Next)])).
+    bounded(
+        lists:append([
+            guard_sequence(Rest, T, C)
+         || {V, Next} <- eval(G, S, C),
+            T <- equal(V, true, Next)
+        ])
+    ).
 
 %% Head matching binds variables left-to-right, including repeated variables.
 -spec patterns([term()], [value()], state(), context()) -> [state()].
-patterns([], [], S, _) -> [S];
+patterns([], [], S, _) ->
+    [S];
 patterns([P | Ps], [V | Vs], S, C) ->
     bounded(lists:append([patterns(Ps, Vs, T, C) || T <- pattern(P, V, S, C)])).
 
 %% Structural patterns materialize unknown values only on successful matches.
 -spec pattern(term(), value(), state(), context()) -> [state()].
-pattern({var, _, '_'}, _, S, _) -> [S];
+pattern({var, _, '_'}, _, S, _) ->
+    [S];
 pattern({var, _, N}, V, S = #{vars := Vars}, _) ->
     case maps:find(N, Vars) of
         {ok, Old} -> equal(V, Old, S);
@@ -202,19 +288,38 @@ pattern({var, _, N}, V, S = #{vars := Vars}, _) ->
     end;
 pattern({match, _, A, B}, V, S, C) ->
     bounded(lists:append([pattern(B, V, T, C) || T <- pattern(A, V, S, C)]));
-pattern({Tag, _, V}, Other, S, _) when Tag =:= integer; Tag =:= char; Tag =:= atom -> equal(V, Other, S);
-pattern({nil, _}, V, S, _) -> equal({nil}, V, S);
+pattern({Tag, _, V}, Other, S, _) when Tag =:= integer; Tag =:= char; Tag =:= atom ->
+    equal(V, Other, S);
+pattern({nil, _}, V, S, _) ->
+    equal({nil}, V, S);
 pattern({tuple, _, Ps}, V, S, C) ->
     Shape = {tuple, [unknown() || _ <- Ps]},
-    bounded(lists:append([begin {tuple, Vs} = concrete(V, T), patterns(Ps, Vs, T, C) end
-        || T <- equal(V, Shape, S)]));
+    bounded(
+        lists:append([
+            begin
+                {tuple, Vs} = concrete(V, T),
+                patterns(Ps, Vs, T, C)
+            end
+         || T <- equal(V, Shape, S)
+        ])
+    );
 pattern({record, _, Name, Fs}, V, S, C) ->
-    bounded(lists:append([begin
-        {record, Name, Fields} = concrete(V, T),
-        patterns([P || {record_field, _, _, P} <- Fs],
-            [maps:get(F, Fields) || {record_field, _, {atom, _, F}, _} <- Fs], T, C)
-    end || T <- equal(V, record(Name, C), S)]));
-pattern(Other, _, _, _) -> throw({phase_analysis, {unsupported_pattern, element(1, Other)}}).
+    bounded(
+        lists:append([
+            begin
+                {record, Name, Fields} = concrete(V, T),
+                patterns(
+                    [P || {record_field, _, _, P} <- Fs],
+                    [maps:get(F, Fields) || {record_field, _, {atom, _, F}, _} <- Fs],
+                    T,
+                    C
+                )
+            end
+         || T <- equal(V, record(Name, C), S)
+        ])
+    );
+pattern(Other, _, _, _) ->
+    throw({phase_analysis, {unsupported_pattern, element(1, Other)}}).
 
 %% Unification only adds positive facts; no equation may rewrite an established
 %% value or create cyclic unknown aliases.
@@ -233,14 +338,18 @@ unify(_, _, _) -> [].
 
 %% Thread field equalities rather than independently accepting each one.
 -spec equal_list([value()], [value()], state()) -> [state()].
-equal_list([], [], S) -> [S];
+equal_list([], [], S) ->
+    [S];
 equal_list([A | As], [B | Bs], S) ->
     bounded(lists:append([equal_list(As, Bs, T) || T <- equal(A, B, S)])).
 
 %% Cyclic record equations have no finite Erlang value. Reject those paths.
 -spec bind(reference(), value(), state(), map()) -> [state()].
 bind(Id, V, S, E) ->
-    case occurs(Id, V) of true -> []; false -> [S#{equal := E#{Id => V}}] end.
+    case occurs(Id, V) of
+        true -> [];
+        false -> [S#{equal := E#{Id => V}}]
+    end.
 
 %% Resolved abstract values are finite trees before inserting an equality.
 -spec occurs(reference(), term()) -> boolean().

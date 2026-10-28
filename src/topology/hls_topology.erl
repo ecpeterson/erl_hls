@@ -85,11 +85,12 @@ member. A dispatch is not a claim that every payload passes callback patterns
 and guards. Numeric tag compatibility remains a physical-backend concern.
 """.
 
--export([
-    from_module/1,
-    normalize/1,
-    routes_for_instance/3
-]).
+%% Logical topology loading and normalization.
+-export([from_module/1, normalize/1]).
+
+%% Normalized instance-route lookup.
+-export([routes_for_instance/3]).
+%% Shared type contracts.
 -export_type([plan/0, spec/0]).
 
 -type spec() :: map().
@@ -123,21 +124,22 @@ normalize(Spec) ->
 normalize_current(Spec) ->
     ok = validate_top_level(Spec),
     ActorPairs = normalize_actors(maps:get(actors, Spec)),
-    hls_topology_family:normalize(Spec, [M || {_Id, M} <- ActorPairs],
+    hls_topology_family:normalize(
+        Spec,
+        [M || {_Id, M} <- ActorPairs],
         fun(Current, FamilyIndex, Interfaces) ->
-            Actors = [actor_summary(Id, Module, maps:get(Module, Interfaces))
-                || {Id, Module} <- ActorPairs],
+            Actors = [
+                actor_summary(Id, Module, maps:get(Module, Interfaces))
+             || {Id, Module} <- ActorPairs
+            ],
             normalize_exact_sections(Current, FamilyIndex, Actors)
-        end).
+        end
+    ).
 
 normalize_exact_sections(Spec, FamilyIndex, Actors) ->
-    ActorIndex = maps:from_list([
-        {maps:get(id, Actor), Actor} || Actor <- Actors
-    ]),
+    ActorIndex = maps:from_list([{maps:get(id, Actor), Actor} || Actor <- Actors]),
     Externals = normalize_externals(maps:get(externals, Spec)),
-    ExternalIndex = maps:from_list([
-        {maps:get(id, External), External} || External <- Externals
-    ]),
+    ExternalIndex = maps:from_list([{maps:get(id, External), External} || External <- Externals]),
     Routes = normalize_routes(
         maps:get(routes, Spec),
         #{actors => ActorIndex, families => FamilyIndex},
@@ -183,15 +185,16 @@ validate_top_level(Spec) when is_map(Spec) ->
     Keys = maps:keys(Spec),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
-        {Missing, Unknown} ->
-            error({invalid_topology_keys, Missing, Unknown})
+        {Missing, Unknown} -> error({invalid_topology_keys, Missing, Unknown})
     end;
 validate_top_level(_Spec) ->
     error({invalid_topology, expected_map}).
 
 normalize_actors(Specs) when is_map(Specs) ->
-    lists:sort([normalize_actor_entry(Id, Module)
-        || {Id, Module} <- maps:to_list(Specs)]);
+    lists:sort([
+        normalize_actor_entry(Id, Module)
+     || {Id, Module} <- maps:to_list(Specs)
+    ]);
 normalize_actors(Specs) ->
     error({invalid_topology_field, actors, Specs}).
 
@@ -201,10 +204,21 @@ normalize_actor_entry(Id, Module) when is_atom(Module) ->
 normalize_actor_entry(Id, Module) ->
     error({invalid_actor_module, Id, Module}).
 
-actor_summary(Id, Module, Interface = #{outputs := Outputs,
-        mailbox_capacity := Capacity}) ->
-    #{id => Id, module => Module, outputs => Outputs,
-        mailbox_capacity => Capacity, interface => Interface}.
+actor_summary(
+    Id,
+    Module,
+    Interface = #{
+        outputs := Outputs,
+        mailbox_capacity := Capacity
+    }
+) ->
+    #{
+        id => Id,
+        module => Module,
+        outputs => Outputs,
+        mailbox_capacity => Capacity,
+        interface => Interface
+    }.
 
 normalize_externals(Specs) when is_list(Specs) ->
     Externals = [normalize_external(Spec) || Spec <- Specs],
@@ -233,15 +247,13 @@ normalize_external(Spec) ->
 %%%
 
 normalize_routes(Specs, Endpoints = #{actors := ActorIndex}, ExternalIndex) when is_list(Specs) ->
-    Routes = [
-        normalize_route(Spec, Endpoints, ExternalIndex) || Spec <- Specs
-    ],
+    Routes = [normalize_route(Spec, Endpoints, ExternalIndex) || Spec <- Specs],
     Sources = [maps:get(source, Route) || Route <- Routes],
     require_unique(duplicate_route_sources, Sources),
     Expected = lists:sort([
         {maps:get(id, Actor), Port}
-        || Actor <- maps:values(ActorIndex),
-           Port <- maps:get(outputs, Actor)
+     || Actor <- maps:values(ActorIndex),
+        Port <- maps:get(outputs, Actor)
     ]),
     case Expected -- lists:sort(Sources) of
         [] ->
@@ -255,15 +267,17 @@ normalize_routes(Specs, Endpoints = #{actors := ActorIndex}, ExternalIndex) when
                 ExternalIndex
             ),
             Sorted;
-        Missing -> error({unrouted_outputs, Missing})
+        Missing ->
+            error({unrouted_outputs, Missing})
     end;
 normalize_routes(Specs, _Endpoints, _ExternalIndex) ->
     error({invalid_topology_field, routes, Specs}).
 
 normalize_route({Source, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route, Source});
-normalize_route({Source, Recipients}, Endpoints, ExternalIndex)
-        when is_list(Recipients) ->
+normalize_route({Source, Recipients}, Endpoints, ExternalIndex) when
+    is_list(Recipients)
+->
     case Recipients of
         [_] ->
             normalize_route(
@@ -278,8 +292,9 @@ normalize_route({Source, Recipients}, Endpoints, ExternalIndex)
     end;
 normalize_route({Source, _Delivery, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route, Source});
-normalize_route({Source, Delivery, Recipients}, Endpoints, ExternalIndex)
-        when is_list(Recipients), length(Recipients) > 1 ->
+normalize_route({Source, Delivery, Recipients}, Endpoints, ExternalIndex) when
+    is_list(Recipients), length(Recipients) > 1
+->
     case lists:member(Delivery, [buffered, coupled, queued, best_effort]) of
         true ->
             normalize_route(
@@ -292,8 +307,9 @@ normalize_route({Source, Delivery, Recipients}, Endpoints, ExternalIndex)
         false ->
             error({invalid_fanout_delivery, Source, Delivery})
     end;
-normalize_route({Source, Delivery, Recipients}, _Endpoints, _ExternalIndex)
-        when is_list(Recipients) ->
+normalize_route({Source, Delivery, Recipients}, _Endpoints, _ExternalIndex) when
+    is_list(Recipients)
+->
     error({invalid_fanout, Source, Delivery, Recipients});
 normalize_route(Spec, _Endpoints, _ExternalIndex) ->
     error({invalid_route_spec, Spec}).
@@ -313,12 +329,11 @@ normalize_route(
             Endpoints,
             ExternalIndex
         )
-        || Recipient <- Recipients
+     || Recipient <- Recipients
     ],
     case duplicates(NormalRecipients) of
         [] -> ok;
-        Duplicates ->
-            error({duplicate_route_recipients, NormalSource, Duplicates})
+        Duplicates -> error({duplicate_route_recipients, NormalSource, Duplicates})
     end,
     #{
         source => NormalSource,
@@ -392,9 +407,11 @@ validate_route_recipient_interface(
     _ExternalIndex
 ) ->
     #{interface := DestinationInterface} = hls_topology_endpoint:actor(
-        ActorId, Endpoints, {route_recipient, Source}),
+        ActorId, Endpoints, {route_recipient, Source}
+    ),
     hls_topology_endpoint:validate_route(
-        Source, Recipient, SourceInterface, Emitted, DestinationInterface);
+        Source, Recipient, SourceInterface, Emitted, DestinationInterface
+    );
 validate_route_recipient_interface(
     Source,
     _SourceInterface,
@@ -418,8 +435,12 @@ derive_lanes(Routes) ->
             lists:foldl(
                 fun(Recipient, Acc) ->
                     Key = {SourceActor, Recipient},
-                    maps:update_with(Key, fun(Ports) -> [Port | Ports] end,
-                        [Port], Acc)
+                    maps:update_with(
+                        Key,
+                        fun(Ports) -> [Port | Ports] end,
+                        [Port],
+                        Acc
+                    )
                 end,
                 Acc0,
                 maps:get(recipients, Route)
@@ -434,8 +455,8 @@ derive_lanes(Routes) ->
             destination => Destination,
             source_ports => lists:sort(Ports)
         }
-        || {{SourceActor, Destination}, Ports} <-
-               lists:sort(maps:to_list(LanePorts))
+     || {{SourceActor, Destination}, Ports} <-
+            lists:sort(maps:to_list(LanePorts))
     ].
 
 %%%
@@ -445,7 +466,7 @@ derive_lanes(Routes) ->
 normalize_startup(Specs, ActorIndex, FamilyIndex) when is_list(Specs) ->
     Startup = [
         normalize_startup_item(Spec, ActorIndex, FamilyIndex)
-        || Spec <- Specs
+     || Spec <- Specs
     ],
     require_unique(
         duplicate_startup_targets,
@@ -455,8 +476,9 @@ normalize_startup(Specs, ActorIndex, FamilyIndex) when is_list(Specs) ->
 normalize_startup(Specs, _ActorIndex, _FamilyIndex) ->
     error({invalid_topology_field, startup, Specs}).
 
-normalize_startup_item({Target, Messages}, ActorIndex, FamilyIndex)
-        when is_list(Messages), Messages =/= [] ->
+normalize_startup_item({Target, Messages}, ActorIndex, FamilyIndex) when
+    is_list(Messages), Messages =/= []
+->
     Actor = require_startup_target(Target, ActorIndex, FamilyIndex),
     ok = validate_startup_schemas(Target, Messages, Actor),
     #{target => Target, delivery => cast, messages => Messages};
@@ -464,8 +486,11 @@ normalize_startup_item(Spec, _ActorIndex, _FamilyIndex) ->
     error({invalid_startup_spec, Spec}).
 
 require_startup_target(Target, ActorIndex, FamilyIndex) ->
-    hls_topology_endpoint:actor(Target,
-        #{actors => ActorIndex, families => FamilyIndex}, startup).
+    hls_topology_endpoint:actor(
+        Target,
+        #{actors => ActorIndex, families => FamilyIndex},
+        startup
+    ).
 
 validate_startup_schemas(ActorId, Messages, Actor) ->
     Interface = maps:get(interface, Actor),
@@ -475,20 +500,25 @@ validate_startup_schemas(ActorId, Messages, Actor) ->
     lists:foreach(
         fun({Index, Message}) ->
             case startup_schema(Message) of
-                none -> ok;
+                none ->
+                    ok;
                 {ok, Schema} ->
                     case lists:member(Schema, Dispatched) of
-                        true -> ok;
-                        false -> error({incompatible_startup_schema,
-                            ActorId, Index, Schema, Dispatched})
+                        true ->
+                            ok;
+                        false ->
+                            error({incompatible_startup_schema, ActorId, Index, Schema, Dispatched})
                     end
             end
         end,
         lists:enumerate(0, Messages)
     ).
 
-startup_schema(Message) when is_tuple(Message), tuple_size(Message) > 0,
-        is_atom(element(1, Message)) ->
+startup_schema(Message) when
+    is_tuple(Message),
+    tuple_size(Message) > 0,
+    is_atom(element(1, Message))
+->
     {ok, element(1, Message)};
 startup_schema(_Message) ->
     none.
@@ -535,15 +565,16 @@ live_value(Term) when is_pid(Term) -> pid;
 live_value(Term) when is_port(Term) -> port;
 live_value(Term) when is_reference(Term) -> reference;
 live_value(Term) when is_function(Term) -> function;
-live_value([Head | Tail]) -> first_live([Head, Tail]);
+live_value([Head | Tail]) ->
+    first_live([Head, Tail]);
 live_value(Term) when is_tuple(Term) -> first_live(tuple_to_list(Term));
 live_value(Term) when is_map(Term) ->
-    first_live(lists:append([
-        [Key, Value] || {Key, Value} <- maps:to_list(Term)
-    ]));
-live_value(_Term) -> none.
+    first_live(lists:append([[Key, Value] || {Key, Value} <- maps:to_list(Term)]));
+live_value(_Term) ->
+    none.
 
-first_live([]) -> none;
+first_live([]) ->
+    none;
 first_live([Term | Rest]) ->
     case live_value(Term) of
         none -> first_live(Rest);

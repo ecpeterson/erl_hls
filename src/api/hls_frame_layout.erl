@@ -1,37 +1,81 @@
 -module(hls_frame_layout).
--moduledoc "Canonical ordinary actor-frame schema and checked per-build payload capacity. Physical streams retain provider packing order; numeric frames use the existing little-endian stream conversion. Debug and bridge envelopes choose their own layouts.".
--export([new/1, default/0, payload_words/1, payload_bits/1, frame_bits/1,
-    word_bits/0, header_bits/0, header_fields/0, header_offset/1, descriptor/1,
-    check_payload/2, pack_header/1, unpack_header/1, pack/3, unpack/2,
-    pack_integer/3, unpack_integer/2, bounds/4, config_dslx/1, assert_dslx/1]).
+-moduledoc """
+Canonical ordinary actor-frame schema shared by source admission, generated support and host codecs. Build callers select a checked payload capacity; hls_compile uses config_dslx/1 to publish it. Physical streams retain provider packing order, while numeric frames use the existing little-endian conversion. Debug and bridge envelopes choose separate layouts.
+""".
+%% Layout construction and field queries.
+-export([
+    new/1,
+    default/0,
+    payload_words/1,
+    payload_bits/1,
+    frame_bits/1,
+    word_bits/0,
+    header_bits/0,
+    header_fields/0,
+    header_offset/1,
+    descriptor/1,
+    bounds/4
+]).
+
+%% Canonical host framing and capacity checks.
+-export([
+    check_payload/2,
+    pack_header/1,
+    unpack_header/1,
+    pack/3,
+    unpack/2,
+    pack_integer/3,
+    unpack_integer/2
+]).
+
+%% Generated support configuration.
+-export([config_dslx/1, assert_dslx/1]).
+%% Shared type contracts.
 -export_type([words/0, layout/0, descriptor/0, header/0, header_input/0]).
 
 -doc "Ordinary payload capacity in complete transport words; the header length is eight bits.".
--type words() :: 1 .. ((1 bsl 8) - 1).
+-type words() :: 1..((1 bsl 8) - 1).
 
 -doc "Checked ordinary-frame capacity. Construct with new/1 or default/0 and use accessors.".
 -opaque layout() :: #{payload_words := words()}.
 
 -doc "Serializable identity of a selected canonical actor-frame layout; widths include serialized padding.".
--type descriptor() :: #{name := canonical_actor_v1, header_bits := pos_integer(),
-    payload_words := words(), payload_bits := pos_integer(), frame_bits := pos_integer(),
-    parameterized := true}.
+-type descriptor() :: #{
+    name := canonical_actor_v1,
+    header_bits := pos_integer(),
+    payload_words := words(),
+    payload_bits := pos_integer(),
+    frame_bits := pos_integer(),
+    parameterized := true
+}.
 
 -doc "Canonical header fields in physical byte order. Payload length counts complete 32-bit words.".
--type header() :: #{payload_words := hls_nums:u8(), txid := hls_nums:u8(),
-    flags := hls_nums:u8(), op := hls_nums:u8()}.
+-type header() :: #{
+    payload_words := hls_nums:u8(),
+    txid := hls_nums:u8(),
+    flags := hls_nums:u8(),
+    op := hls_nums:u8()
+}.
 
 -doc "Header fields accepted by payload packing; any supplied payload length is replaced by the derived word count.".
--type header_input() :: #{op := hls_nums:u8(), txid := hls_nums:u8(),
-    flags := hls_nums:u8(), payload_words => hls_nums:u8()}.
+-type header_input() :: #{
+    op := hls_nums:u8(),
+    txid := hls_nums:u8(),
+    flags := hls_nums:u8(),
+    payload_words => hls_nums:u8()
+}.
 
 -doc "Validates a public capacity option; rejects nonintegers and capacities outside 1..255 words.".
 -spec new(term()) -> layout().
 new(Words) when is_integer(Words), Words >= 1, Words < (1 bsl 8) ->
     #{payload_words => Words};
-new(Words) -> hls_diagnostic:raise(frame_layout, invalid_frame_payload_words,
-    <<"Ordinary frame payload capacity must be an integer from 1 to 255 words">>,
-    #{option => frame_payload_words, value => Words, min => 1, max => 255}).
+new(Words) ->
+    hls_diagnostic:raise(
+        frame_layout,
+        invalid_frame_payload_words,
+        <<"Ordinary frame payload capacity must be an integer from 1 to 255 words">>,
+        #{option => frame_payload_words, value => Words, min => 1, max => 255}
+    ).
 
 -doc "Returns the established three-word ordinary actor capacity.".
 -spec default() -> layout().
@@ -74,9 +118,15 @@ header_offset(Name) ->
 
 -doc "Returns the selected layout's serializable profile without exposing its internal representation.".
 -spec descriptor(layout()) -> descriptor().
-descriptor(Layout) -> #{name => canonical_actor_v1, header_bits => header_bits(),
-    payload_words => payload_words(Layout), payload_bits => payload_bits(Layout),
-    frame_bits => frame_bits(Layout), parameterized => true}.
+descriptor(Layout) ->
+    #{
+        name => canonical_actor_v1,
+        header_bits => header_bits(),
+        payload_words => payload_words(Layout),
+        payload_bits => payload_bits(Layout),
+        frame_bits => frame_bits(Layout),
+        parameterized => true
+    }.
 
 -doc "Checks a serialized payload width and returns its rounded transport length. Empty payloads use zero words; over-capacity payloads fail before truncation.".
 -spec check_payload(layout(), non_neg_integer()) -> hls_nums:u8().
@@ -111,7 +161,8 @@ pack(Layout, Header, Payload) ->
 -doc "Decodes exactly one complete physical frame, validating the declared length against the selected capacity. Returns only the declared word-aligned payload; nonzero unused storage bits are rejected.".
 -spec unpack(layout(), binary()) -> {header(), binary()}.
 unpack(Layout, Packed) ->
-    Width = frame_bits(Layout), Width = bit_size(Packed),
+    Width = frame_bits(Layout),
+    Width = bit_size(Packed),
     HeaderBits = header_bits(),
     <<RawHeader:HeaderBits/bitstring, Payload/binary>> = Packed,
     Header = #{payload_words := Words} = unpack_header(RawHeader),
@@ -139,12 +190,14 @@ unpack_integer(Layout, Frame) ->
 -spec bounds(layout(), hls_nums:u8(), bitstring(), bitstring()) ->
     #{mask := non_neg_integer(), value := non_neg_integer()}.
 bounds(Layout, Op, MaskStream, ValueStream) ->
-    Width = bit_size(MaskStream), Width = bit_size(ValueStream),
+    Width = bit_size(MaskStream),
+    Width = bit_size(ValueStream),
     _ = check_payload(Layout, Width),
     Padding = payload_bits(Layout) - Width,
     MaskHeader = pack_header(#{payload_words => 255, txid => 255, flags => 255, op => 255}),
-    Mask = hls_codec:unsigned(<<MaskHeader/binary, MaskStream/bitstring,
-        ((1 bsl Padding) - 1):Padding>>),
+    Mask = hls_codec:unsigned(
+        <<MaskHeader/binary, MaskStream/bitstring, ((1 bsl Padding) - 1):Padding>>
+    ),
     Value = pack_integer(Layout, Op, ValueStream),
     #{mask => Mask, value => Value band Mask}.
 
@@ -152,37 +205,38 @@ bounds(Layout, Op, MaskStream, ValueStream) ->
 -spec config_dslx(layout()) -> iodata().
 config_dslx(Layout) ->
     Header = xls_struct_codec:layout(header_fields(), lsb),
-    ["// Generated by hls_frame_layout:config_dslx/1.
-",
-        "// Ordinary actor capacity; independent bridge/debug formats retain their own bounds.
-
-",
-        "pub const PAYLOAD_WORDS = u32:", integer_to_list(payload_words(Layout)), ";
-",
-        "pub const WORD_BITS = u32:", integer_to_list(word_bits()), ";
-",
-        "pub const HEADER_BITS = u32:", integer_to_list(header_bits()), ";
-",
-        "pub const PAYLOAD_BITS = PAYLOAD_WORDS * WORD_BITS;
-",
-        "pub const FRAME_BITS = HEADER_BITS + PAYLOAD_BITS;
-
-",
-        "// Canonical header in ascending numeric byte order.
-",
-        xls_struct_codec:declaration("Header", Header), "
-",
-        "// Decodes the complete canonical header word.
-",
-        xls_struct_codec:decoder("Header", "header_from_bits", Header), "
-",
-        "// Encodes fields without changing their numeric byte positions.
-",
-        xls_struct_codec:encoder("Header", "bits_from_header", Header)].
+    [
+        "// Generated by hls_frame_layout:config_dslx/1.\n",
+        "// Ordinary actor capacity; independent bridge/debug formats retain their own bounds.\n"
+        "\n",
+        "pub const PAYLOAD_WORDS = u32:",
+        integer_to_list(payload_words(Layout)),
+        ";\n",
+        "pub const WORD_BITS = u32:",
+        integer_to_list(word_bits()),
+        ";\n",
+        "pub const HEADER_BITS = u32:",
+        integer_to_list(header_bits()),
+        ";\n",
+        "pub const PAYLOAD_BITS = PAYLOAD_WORDS * WORD_BITS;\n",
+        "pub const FRAME_BITS = HEADER_BITS + PAYLOAD_BITS;\n"
+        "\n",
+        "// Canonical header in ascending numeric byte order.\n",
+        xls_struct_codec:declaration("Header", Header),
+        "\n",
+        "// Decodes the complete canonical header word.\n",
+        xls_struct_codec:decoder("Header", "header_from_bits", Header),
+        "\n",
+        "// Encodes fields without changing their numeric byte positions.\n",
+        xls_struct_codec:encoder("Header", "bits_from_header", Header)
+    ].
 
 -doc "Emits a module-level check that the imported axis support matches the artifact's selected layout.".
 -spec assert_dslx(layout()) -> iodata().
 assert_dslx(Layout) ->
-    ["const_assert!(axis::FRAME_BITS == u32:", integer_to_list(frame_bits(Layout)), ");
-
-"].
+    [
+        "const_assert!(axis::FRAME_BITS == u32:",
+        integer_to_list(frame_bits(Layout)),
+        ");\n"
+        "\n"
+    ].

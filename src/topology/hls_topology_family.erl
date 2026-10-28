@@ -20,6 +20,7 @@ stable logical services, not actor generations. Router acceptance is a bounded
 network handoff rather than an atomic multicast admission guarantee.
 """.
 
+%% Compact family normalization and route lookup.
 -export([normalize/3, routes_for_instance/3]).
 
 -spec normalize(map(), [module()], fun((map(), map(), map()) -> map())) -> map().
@@ -33,10 +34,14 @@ normalize(
     NormalizeExact
 ) ->
     Declarations = normalize_families(FamilySpecs),
-    Interfaces = hls_actor_interface:from_modules(ActorModules ++
-        [Module || #{module := Module} <- Declarations]),
-    Families = [family_summary(Family, maps:get(Module, Interfaces))
-        || Family = #{module := Module} <- Declarations],
+    Interfaces = hls_actor_interface:from_modules(
+        ActorModules ++
+            [Module || #{module := Module} <- Declarations]
+    ),
+    Families = [
+        family_summary(Family, maps:get(Module, Interfaces))
+     || Family = #{module := Module} <- Declarations
+    ],
     FamilyIndex = index_by_id(Families),
     ok = reject_family_namespace_collisions(Families),
     ok = reject_actor_family_collisions(
@@ -45,9 +50,12 @@ normalize(
     ),
     Exact = #{externals := Externals} = NormalizeExact(Spec, FamilyIndex, Interfaces),
     ExternalIndex = index_by_id(Externals),
-    ActorIndex = maps:map(fun(_Id, Module) ->
-        #{interface => maps:get(Module, Interfaces)}
-    end, ActorSpecs),
+    ActorIndex = maps:map(
+        fun(_Id, Module) ->
+            #{interface => maps:get(Module, Interfaces)}
+        end,
+        ActorSpecs
+    ),
     Relations = normalize_route_relations(
         RelationSpecs,
         #{actors => ActorIndex, families => FamilyIndex},
@@ -77,12 +85,12 @@ routes_for_instance(Plan, FamilyId, Coordinates) ->
             delivery => maps:get(delivery, Relation),
             recipients => [
                 resolve_recipient(Recipient, Coordinates, FamilyIndex)
-                || Recipient <- maps:get(recipients, Relation)
+             || Recipient <- maps:get(recipients, Relation)
             ]
         }
-        || Relation <- maps:get(route_relations, Plan),
-           {SourceFamilyId, Port} <- [maps:get(source, Relation)],
-           SourceFamilyId =:= FamilyId
+     || Relation <- maps:get(route_relations, Plan),
+        {SourceFamilyId, Port} <- [maps:get(source, Relation)],
+        SourceFamilyId =:= FamilyId
     ].
 
 %%%
@@ -103,8 +111,7 @@ normalize_family(Id, Spec) when is_map(Spec) ->
     Keys = maps:keys(Spec),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
-        {Missing, Unknown} ->
-            error({invalid_family_keys, Id, Missing, Unknown})
+        {Missing, Unknown} -> error({invalid_family_keys, Id, Missing, Unknown})
     end,
     Module = maps:get(module, Spec),
     Shape = maps:get(shape, Spec),
@@ -126,10 +133,18 @@ normalize_family(Id, Spec) when is_map(Spec) ->
 normalize_family(Id, Spec) ->
     error({invalid_family_spec, Id, Spec}).
 
-family_summary(Family, Interface = #{outputs := Outputs,
-        mailbox_capacity := Capacity}) ->
-    Family#{outputs => Outputs, mailbox_capacity => Capacity,
-        interface => Interface}.
+family_summary(
+    Family,
+    Interface = #{
+        outputs := Outputs,
+        mailbox_capacity := Capacity
+    }
+) ->
+    Family#{
+        outputs => Outputs,
+        mailbox_capacity => Capacity,
+        interface => Interface
+    }.
 
 %%%
 %%% Rectangle-addressed ingress
@@ -145,13 +160,14 @@ normalize_ingresses(Specs, Endpoints) when is_list(Specs) ->
 normalize_ingresses(Specs, _Endpoints) ->
     error({invalid_topology_field, ingresses, Specs}).
 
-normalize_ingress({Id, {rectangle, Shape}, TargetSpecs}, Endpoints)
-        when is_list(TargetSpecs), TargetSpecs =/= [] ->
+normalize_ingress({Id, {rectangle, Shape}, TargetSpecs}, Endpoints) when
+    is_list(TargetSpecs), TargetSpecs =/= []
+->
     ok = validate_id(Id),
     ok = validate_rectangle_shape(Id, Shape),
     Targets = [
         normalize_ingress_target(Target, Shape, Endpoints)
-        || Target <- TargetSpecs
+     || Target <- TargetSpecs
     ],
     require_unique(
         duplicate_ingress_targets,
@@ -171,8 +187,12 @@ normalize_ingress_target(
     {Id, Schemas, RecipientSpecs},
     Shape,
     Endpoints
-) when is_list(Schemas), Schemas =/= [],
-       is_list(RecipientSpecs), RecipientSpecs =/= [] ->
+) when
+    is_list(Schemas),
+    Schemas =/= [],
+    is_list(RecipientSpecs),
+    RecipientSpecs =/= []
+->
     ok = validate_id(Id),
     case lists:all(fun erlang:is_atom/1, Schemas) of
         true -> require_unique(duplicate_ingress_schemas, Schemas);
@@ -180,7 +200,7 @@ normalize_ingress_target(
     end,
     Recipients = [
         normalize_ingress_recipient(Recipient, Shape, Endpoints)
-        || Recipient <- RecipientSpecs
+     || Recipient <- RecipientSpecs
     ],
     require_unique(duplicate_ingress_recipients, Recipients),
     ok = validate_ingress_interfaces(Id, Schemas, Recipients, Endpoints),
@@ -200,100 +220,150 @@ normalize_ingress_recipient(
     Family = require_family(FamilyId, maps:get(families, Endpoints), ingress),
     FamilyShape = maps:get(shape, Family),
     case {FamilyShape, Scale, Offset, AddressShape} of
-        {[_, _], [ScaleX, ScaleY], [OffsetX, OffsetY], [LimitX, LimitY]}
-                when is_integer(ScaleX), ScaleX > 0,
-                     ScaleX =< LimitX,
-                     is_integer(ScaleY), ScaleY > 0,
-                     ScaleY =< LimitY,
-                     is_integer(OffsetX), OffsetX >= 0,
-                     is_integer(OffsetY), OffsetY >= 0 ->
+        {[_, _], [ScaleX, ScaleY], [OffsetX, OffsetY], [LimitX, LimitY]} when
+            is_integer(ScaleX),
+            ScaleX > 0,
+            ScaleX =< LimitX,
+            is_integer(ScaleY),
+            ScaleY > 0,
+            ScaleY =< LimitY,
+            is_integer(OffsetX),
+            OffsetX >= 0,
+            is_integer(OffsetY),
+            OffsetY >= 0
+        ->
             [FamilyWidth, FamilyHeight] = FamilyShape,
-            case OffsetX + ScaleX * (FamilyWidth - 1) < LimitX andalso
-                    OffsetY + ScaleY * (FamilyHeight - 1) < LimitY of
-                true -> #{
-                    family => FamilyId,
-                    scale => Scale,
-                    offset => Offset
-                };
-                false -> error({ingress_embedding, FamilyId,
-                    FamilyShape, Scale, Offset, AddressShape})
+            case
+                OffsetX + ScaleX * (FamilyWidth - 1) < LimitX andalso
+                    OffsetY + ScaleY * (FamilyHeight - 1) < LimitY
+            of
+                true ->
+                    #{
+                        family => FamilyId,
+                        scale => Scale,
+                        offset => Offset
+                    };
+                false ->
+                    error({ingress_embedding, FamilyId, FamilyShape, Scale, Offset, AddressShape})
             end;
-        _ -> error({ingress_embedding, FamilyId,
-            FamilyShape, Scale, Offset, AddressShape})
+        _ ->
+            error({ingress_embedding, FamilyId, FamilyShape, Scale, Offset, AddressShape})
     end;
 normalize_ingress_recipient({actor, ActorId, {at, Point}}, Shape, Endpoints) ->
     %% An exact actor is a point in the ingress address space, not a family.
     _ = hls_topology_endpoint:actor(ActorId, Endpoints#{families := #{}}, ingress),
     case {Point, Shape} of
-        {[X, Y], [Width, Height]} when is_integer(X), X >= 0, X < Width,
-                is_integer(Y), Y >= 0, Y < Height ->
+        {[X, Y], [Width, Height]} when
+            is_integer(X),
+            X >= 0,
+            X < Width,
+            is_integer(Y),
+            Y >= 0,
+            Y < Height
+        ->
             #{actor => ActorId, at => Point};
-        _ -> error({ingress_point, ActorId, Point, Shape})
+        _ ->
+            error({ingress_point, ActorId, Point, Shape})
     end;
 normalize_ingress_recipient(Recipient, _Shape, _Endpoints) ->
     error({invalid_ingress_recipient, Recipient}).
 
 validate_ingress_embeddings(IngressId, Targets) ->
-    Bindings = lists:foldl(fun(#{recipients := Recipients}, Acc) ->
-        lists:foldl(fun(Recipient, Inner) ->
-            {Key, Position} = ingress_binding(Recipient),
-            maps:update_with(Key, fun(Values) -> [Position | Values] end,
-                [Position], Inner)
-        end, Acc, Recipients)
-    end, #{}, Targets),
-    lists:foreach(fun({Key, Values}) ->
-        case lists:usort(Values) of
-            [_] -> ok;
-            Distinct -> error({ingress_embeddings, IngressId,
-                ingress_binding_id(Key), Distinct})
-        end
-    end, lists:sort(maps:to_list(Bindings))).
+    Bindings = lists:foldl(
+        fun(#{recipients := Recipients}, Acc) ->
+            lists:foldl(
+                fun(Recipient, Inner) ->
+                    {Key, Position} = ingress_binding(Recipient),
+                    maps:update_with(
+                        Key,
+                        fun(Values) -> [Position | Values] end,
+                        [Position],
+                        Inner
+                    )
+                end,
+                Acc,
+                Recipients
+            )
+        end,
+        #{},
+        Targets
+    ),
+    lists:foreach(
+        fun({Key, Values}) ->
+            case lists:usort(Values) of
+                [_] ->
+                    ok;
+                Distinct ->
+                    error({ingress_embeddings, IngressId, ingress_binding_id(Key), Distinct})
+            end
+        end,
+        lists:sort(maps:to_list(Bindings))
+    ).
 
 ingress_binding(#{family := Id, scale := Scale, offset := Offset}) ->
     {{family, Id}, {Scale, Offset}};
-ingress_binding(#{actor := Id, at := Point}) -> {{actor, Id}, Point}.
+ingress_binding(#{actor := Id, at := Point}) ->
+    {{actor, Id}, Point}.
 
 ingress_binding_id({family, Id}) -> Id;
 ingress_binding_id({actor, Id}) -> {actor, Id}.
 
-validate_rectangle_shape(_Id, [Width, Height])
-        when is_integer(Width), Width > 0,
-             is_integer(Height), Height > 0 ->
+validate_rectangle_shape(_Id, [Width, Height]) when
+    is_integer(Width),
+    Width > 0,
+    is_integer(Height),
+    Height > 0
+->
     ok;
 validate_rectangle_shape(Id, Shape) ->
     error({invalid_ingress_shape, Id, Shape}).
 
 validate_ingress_interfaces(TargetId, Schemas, Recipients, Endpoints) ->
-    Interfaces = [{ingress_binding_id(Key), ingress_interface(Recipient, Endpoints)}
-        || Recipient <- Recipients, {Key, _Position} <- [ingress_binding(Recipient)]],
-    lists:foreach(fun({Id, Interface}) ->
-        Missing = Schemas -- hls_actor_interface:dispatched_schemas(Interface),
-        case Missing of
-            [] -> ok;
-            _ -> error({ingress_schemas, TargetId, Id, Missing})
-        end
-    end, Interfaces),
-    lists:foreach(fun(Schema) ->
-        Layouts = lists:usort([maps:get(fields,
-            hls_actor_interface:schema(Interface, Schema)) || {_, Interface} <- Interfaces]),
-        case Layouts of
-            [_] -> ok;
-            _ -> error({ingress_layouts, TargetId, Schema, Layouts})
-        end
-    end, Schemas).
+    Interfaces = [
+        {ingress_binding_id(Key), ingress_interface(Recipient, Endpoints)}
+     || Recipient <- Recipients, {Key, _Position} <- [ingress_binding(Recipient)]
+    ],
+    lists:foreach(
+        fun({Id, Interface}) ->
+            Missing = Schemas -- hls_actor_interface:dispatched_schemas(Interface),
+            case Missing of
+                [] -> ok;
+                _ -> error({ingress_schemas, TargetId, Id, Missing})
+            end
+        end,
+        Interfaces
+    ),
+    lists:foreach(
+        fun(Schema) ->
+            Layouts = lists:usort([
+                maps:get(
+                    fields,
+                    hls_actor_interface:schema(Interface, Schema)
+                )
+             || {_, Interface} <- Interfaces
+            ]),
+            case Layouts of
+                [_] -> ok;
+                _ -> error({ingress_layouts, TargetId, Schema, Layouts})
+            end
+        end,
+        Schemas
+    ).
 
 ingress_interface(#{family := Id}, #{families := Families}) ->
-    #{interface := Interface} = maps:get(Id, Families), Interface;
+    #{interface := Interface} = maps:get(Id, Families),
+    Interface;
 ingress_interface(#{actor := Id}, #{actors := Actors}) ->
-    #{interface := Interface} = maps:get(Id, Actors), Interface.
+    #{interface := Interface} = maps:get(Id, Actors),
+    Interface.
 
 reject_family_namespace_collisions(Families) ->
     Collisions = lists:sort([
         {maps:get(id, Family), maps:get(id, Other)}
-        || Family <- Families,
-           Other <- Families,
-           Family =/= Other,
-           is_family_instance_id(maps:get(id, Other), Family)
+     || Family <- Families,
+        Other <- Families,
+        Family =/= Other,
+        is_family_instance_id(maps:get(id, Other), Family)
     ]),
     case Collisions of
         [] -> ok;
@@ -301,26 +371,29 @@ reject_family_namespace_collisions(Families) ->
     end.
 
 validate_shape(Id, Shape) when is_list(Shape), Shape =/= [] ->
-    case lists:all(
-        fun(Size) -> is_integer(Size) andalso Size > 0 end,
-        Shape
-    ) of
+    case
+        lists:all(
+            fun(Size) -> is_integer(Size) andalso Size > 0 end,
+            Shape
+        )
+    of
         true -> ok;
         false -> error({invalid_family_shape, Id, Shape})
     end;
 validate_shape(Id, Shape) ->
     error({invalid_family_shape, Id, Shape}).
 
-reject_actor_family_collisions(ActorSpecs, FamilyIndex)
-        when is_map(ActorSpecs) ->
+reject_actor_family_collisions(ActorSpecs, FamilyIndex) when
+    is_map(ActorSpecs)
+->
     Collisions = lists:sort([
         Id
-        || Id <- maps:keys(ActorSpecs),
-           maps:is_key(Id, FamilyIndex) orelse
-               lists:any(
-                   fun(Family) -> is_family_instance_id(Id, Family) end,
-                   maps:values(FamilyIndex)
-               )
+     || Id <- maps:keys(ActorSpecs),
+        maps:is_key(Id, FamilyIndex) orelse
+            lists:any(
+                fun(Family) -> is_family_instance_id(Id, Family) end,
+                maps:values(FamilyIndex)
+            )
     ]),
     case Collisions of
         [] -> ok;
@@ -341,18 +414,19 @@ is_family_instance_id(_Id, _Family) ->
 %%% Route relations
 %%%
 
-normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, ExternalIndex)
-        when is_list(Specs) ->
+normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, ExternalIndex) when
+    is_list(Specs)
+->
     Relations = [
         normalize_route_relation(Spec, Endpoints, ExternalIndex)
-        || Spec <- Specs
+     || Spec <- Specs
     ],
     Sources = [maps:get(source, Relation) || Relation <- Relations],
     require_unique(duplicate_route_relation_sources, Sources),
     Expected = lists:sort([
         {maps:get(id, Family), Port}
-        || Family <- maps:values(FamilyIndex),
-           Port <- maps:get(outputs, Family)
+     || Family <- maps:values(FamilyIndex),
+        Port <- maps:get(outputs, Family)
     ]),
     case Expected -- lists:sort(Sources) of
         [] ->
@@ -366,15 +440,17 @@ normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, Externa
                 ExternalIndex
             ),
             Sorted;
-        Missing -> error({unrouted_family_outputs, Missing})
+        Missing ->
+            error({unrouted_family_outputs, Missing})
     end;
 normalize_route_relations(Specs, _Endpoints, _ExternalIndex) ->
     error({invalid_topology_field, route_relations, Specs}).
 
 normalize_route_relation({Source, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route_relation, Source});
-normalize_route_relation({Source, Recipients}, Endpoints, ExternalIndex)
-        when is_list(Recipients) ->
+normalize_route_relation({Source, Recipients}, Endpoints, ExternalIndex) when
+    is_list(Recipients)
+->
     case Recipients of
         [_] ->
             normalize_route_relation(
@@ -437,17 +513,15 @@ normalize_route_relation(
             Endpoints,
             ExternalIndex
         )
-        || Recipient <- Recipients
+     || Recipient <- Recipients
     ],
     NormalRecipients = [
         canonical_recipient(Recipient, SourceShape)
-        || Recipient <- ValidatedRecipients
+     || Recipient <- ValidatedRecipients
     ],
     case duplicates(NormalRecipients) of
         [] -> ok;
-        Duplicates ->
-            error({duplicate_route_relation_recipients,
-                NormalSource, Duplicates})
+        Duplicates -> error({duplicate_route_relation_recipients, NormalSource, Duplicates})
     end,
     #{
         source => NormalSource,
@@ -478,16 +552,20 @@ normalize_recipient(
     ),
     DestinationShape = maps:get(shape, Destination),
     case DestinationShape =:= SourceShape of
-        true -> ok;
-        false -> error({incompatible_relation_shapes,
-            Source, DestinationId, SourceShape, DestinationShape})
+        true ->
+            ok;
+        false ->
+            error(
+                {incompatible_relation_shapes, Source, DestinationId, SourceShape, DestinationShape}
+            )
     end,
-    case is_list(Offset) andalso
+    case
+        is_list(Offset) andalso
             length(Offset) =:= length(SourceShape) andalso
-            lists:all(fun erlang:is_integer/1, Offset) of
+            lists:all(fun erlang:is_integer/1, Offset)
+    of
         true -> Recipient;
-        false -> error({invalid_relation_translation,
-            Source, Recipient, SourceShape})
+        false -> error({invalid_relation_translation, Source, Recipient, SourceShape})
     end;
 normalize_recipient(
     Recipient = {actor, ActorId},
@@ -496,8 +574,11 @@ normalize_recipient(
     #{actors := ActorIndex},
     _ExternalIndex
 ) ->
-    _ = hls_topology_endpoint:actor(ActorId,
-        #{actors => ActorIndex, families => #{}}, {route_relation_recipient, Source}),
+    _ = hls_topology_endpoint:actor(
+        ActorId,
+        #{actors => ActorIndex, families => #{}},
+        {route_relation_recipient, Source}
+    ),
     Recipient;
 normalize_recipient(
     Recipient = {external, ExternalId},
@@ -508,8 +589,7 @@ normalize_recipient(
 ) ->
     case maps:is_key(ExternalId, ExternalIndex) of
         true -> Recipient;
-        false -> error({unknown_external, ExternalId,
-            {route_relation_recipient, Source}})
+        false -> error({unknown_external, ExternalId, {route_relation_recipient, Source}})
     end;
 normalize_recipient(
     Recipient,
@@ -520,7 +600,9 @@ normalize_recipient(
 ) ->
     error({invalid_route_relation_recipient, Source, Recipient}).
 
-validate_relation_interfaces(Relations, #{families := FamilyIndex, actors := ActorIndex}, ExternalIndex) ->
+validate_relation_interfaces(
+    Relations, #{families := FamilyIndex, actors := ActorIndex}, ExternalIndex
+) ->
     lists:foreach(
         fun(Relation) ->
             Source = {FamilyId, Port} = maps:get(source, Relation),
@@ -548,8 +630,13 @@ validate_relation_interfaces(Relations, #{families := FamilyIndex, actors := Act
                         );
                     (Recipient = {actor, ActorId}) ->
                         #{interface := DestinationInterface} = maps:get(ActorId, ActorIndex),
-                        hls_topology_endpoint:validate_route(Source, Recipient,
-                            SourceInterface, Emitted, DestinationInterface);
+                        hls_topology_endpoint:validate_route(
+                            Source,
+                            Recipient,
+                            SourceInterface,
+                            Emitted,
+                            DestinationInterface
+                        );
                     (Recipient = {external, ExternalId}) ->
                         External = maps:get(ExternalId, ExternalIndex),
                         hls_topology_endpoint:require_schemas(
@@ -601,18 +688,21 @@ derive_lane_relations(Relations, FamilyIndex) ->
             destination => Destination,
             source_ports => lists:sort(Ports)
         }
-        || {{SourceFamilyId, Destination}, Ports} <-
-               lists:sort(maps:to_list(LanePorts))
+     || {{SourceFamilyId, Destination}, Ports} <-
+            lists:sort(maps:to_list(LanePorts))
     ].
 
 canonical_recipient(
     {family, DestinationId, {translate, Offset, wrap}},
     Shape
 ) ->
-    {family, DestinationId, {translate,
-        [canonical_offset(Value, Size)
-            || {Value, Size} <- lists:zip(Offset, Shape)],
-        wrap}};
+    {family, DestinationId,
+        {translate,
+            [
+                canonical_offset(Value, Size)
+             || {Value, Size} <- lists:zip(Offset, Shape)
+            ],
+            wrap}};
 canonical_recipient(Recipient = {actor, _ActorId}, _Shape) ->
     Recipient;
 canonical_recipient(Recipient = {external, _ExternalId}, _Shape) ->
@@ -626,7 +716,7 @@ resolve_recipient(
     Shape = maps:get(shape, maps:get(DestinationId, FamilyIndex)),
     Resolved = [
         positive_mod(Coordinate + Delta, Size)
-        || {Coordinate, Delta, Size} <- zip3(Coordinates, Offset, Shape)
+     || {Coordinate, Delta, Size} <- zip3(Coordinates, Offset, Shape)
     ],
     {actor, family_instance_id(DestinationId, Resolved)};
 resolve_recipient(Recipient = {actor, _ActorId}, _Coordinates, _FamilyIndex) ->
@@ -641,12 +731,12 @@ resolve_recipient(
 family_instance_id(FamilyId, Coordinates) ->
     list_to_tuple([FamilyId | Coordinates]).
 
-validate_coordinates(FamilyId, Coordinates, Shape)
-        when is_list(Coordinates), length(Coordinates) =:= length(Shape) ->
+validate_coordinates(FamilyId, Coordinates, Shape) when
+    is_list(Coordinates), length(Coordinates) =:= length(Shape)
+->
     case coordinates_in_shape(Coordinates, Shape) of
         true -> ok;
-        false -> error({invalid_family_coordinates,
-            FamilyId, Coordinates, Shape})
+        false -> error({invalid_family_coordinates, FamilyId, Coordinates, Shape})
     end;
 validate_coordinates(FamilyId, Coordinates, Shape) ->
     error({invalid_family_coordinates, FamilyId, Coordinates, Shape}).

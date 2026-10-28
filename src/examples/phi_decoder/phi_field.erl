@@ -14,12 +14,28 @@ and 36 bits respectively; the accumulator ABI remains s64.
 Saturation prevents a long-running uniform gauge mode from wrapping across
 the sign boundary. Each experiment must still validate its numerical range
 and decide whether gauge recentering is preferable.
+
+Used by the phi cell callbacks as an application arithmetic/type provider. XLS lowering imports the adjacent phi_field.x companion through dslx_imports/0.
 """.
 -behavior(hls_type).
--export([scalar/0, field/0, from_integer/1, from_ratio/2, to_float/1,
-    accumulate/2, relax/4, relax_center/4, relax_bulk/3, relax_line/4]).
--export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2,
-    dslx_imports/0]).
+%% Application constructors and field arithmetic.
+-export([
+    scalar/0,
+    field/0,
+    from_integer/1,
+    from_ratio/2,
+    to_float/1,
+    accumulate/2,
+    relax/4,
+    relax_center/4,
+    relax_bulk/3,
+    relax_line/4
+]).
+
+%% hls_type provider callbacks.
+-export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2, dslx_imports/0]).
+
+%% Shared type contracts.
 -export_type([scalar/0, field/0, accumulator/0]).
 
 -type scalar() :: hls_fixed:signed(32, 16).
@@ -53,8 +69,10 @@ relax(Anyon, [Phi0, Phi1], Sum0, Sum1) ->
 -spec relax_center(hls_nums:u32(), scalar(), scalar(), accumulator()) -> scalar().
 relax_center(Anyon, Phi0, Phi1, NeighborSum) ->
     Numerator = hls_vec:dot(hls_nums:s64(), [Phi0, Phi1], [6, 2]) + NeighborSum,
-    hls_fixed:saturate(component_type(scalar),
-        (Anyon bsl 16) + hls_fixed:round_ratio(Numerator, 12)).
+    hls_fixed:saturate(
+        component_type(scalar),
+        (Anyon bsl 16) + hls_fixed:round_ratio(Numerator, 12)
+    ).
 
 -spec relax_bulk(scalar(), scalar(), accumulator()) -> scalar().
 relax_bulk(Phi0, Phi1, NeighborSum) ->
@@ -66,9 +84,13 @@ relax_bulk(Phi0, Phi1, NeighborSum) ->
 relax_line(Anyon, [Phi0, Phi1], Sum0, Sum1) ->
     Center = 4 * Phi0 + 2 * Phi1 + Sum0,
     Bulk = Phi0 + 5 * Phi1 + Sum1,
-    [hls_fixed:saturate(component_type(scalar),
-        (Anyon bsl 16) + hls_fixed:round_ratio(Center, 8)),
-     hls_fixed:saturate(component_type(scalar), hls_fixed:round_ratio(Bulk, 8))].
+    [
+        hls_fixed:saturate(
+            component_type(scalar),
+            (Anyon bsl 16) + hls_fixed:round_ratio(Center, 8)
+        ),
+        hls_fixed:saturate(component_type(scalar), hls_fixed:round_ratio(Bulk, 8))
+    ].
 
 width(Type, []) -> hls_type:width(component_type(Type)).
 zero(Type, []) -> hls_type:zero(component_type(Type)).
@@ -79,7 +101,8 @@ print_type(field, []) -> "phi_field::Field".
 dslx_imports() -> [phi_field].
 
 -doc "Lowers field types and arithmetic calls to the matching static DSLX module.".
--spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) -> xls_clause_lower:ir().
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir().
 transpile(scalar, [], State) ->
     xls_clause_lower:reference(State, {phantom, type, scalar()});
 transpile(field, [], State) ->

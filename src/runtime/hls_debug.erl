@@ -12,14 +12,25 @@ always means native BEAM process information, including a proxy's own queue.
 
 A client owns 256 transaction slots. Timeouts do not cancel device work; see
 `docs/host-transactions.md` for admission, failure, and session recovery.
+
+Uses hls_debug_target to dispatch scoped observations and hls_fabric_client to own remote request/reply transactions.
 """.
 
 -behavior(gen_server).
 
+%% Remote client lifecycle and raw management query.
 -export([start_link/2, stop/1, query/4]).
+
+%% Management packet codecs.
 -export([encode_request/2, response/3]).
+
+%% Scoped current-state inspection.
 -export([info/2, info/3, inspect_waits/2]).
+
+%% Boundary event and counter collection.
 -export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
+
+%% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
@@ -79,11 +90,14 @@ get_trace(Target, Timeout) ->
     hls_debug_target:collect(Target, get_trace, Timeout).
 
 -doc "Sends a word-aligned management request and returns its raw reply payload.".
--spec query(pid(), 1 .. ((1 bsl 7) - 1), binary(), timeout()) ->
+-spec query(pid(), 1..((1 bsl 7) - 1), binary(), timeout()) ->
     {ok, binary()} | {error, term()}.
-query(Pid, Tag, Payload, Timeout)
-        when Tag > 0, Tag < 128, byte_size(Payload) rem 4 =:= 0,
-             byte_size(Payload) =< 1020 ->
+query(Pid, Tag, Payload, Timeout) when
+    Tag > 0,
+    Tag < 128,
+    byte_size(Payload) rem 4 =:= 0,
+    byte_size(Payload) =< 1020
+->
     gen_server:call(Pid, {query, Tag, Payload}, Timeout).
 
 init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
@@ -94,7 +108,6 @@ init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
 
 handle_call('$hls_fabric_info', _From, State = #state{fabric = Client}) ->
     {reply, hls_fabric_client:info(Client), State};
-
 handle_call(get_counters, From, State) ->
     request(?DEBUG_GET_COUNTERS, <<>>, decoded, From, State);
 handle_call(get_trace, From, State) ->
@@ -108,11 +121,17 @@ request(Tag, Payload, Decode, From, State = #state{fabric = Client, module = Mod
     {noreply, State#state{fabric = Next}}.
 
 -doc "Encodes a debug request without starting a proxy. The returned context is passed to response/3.".
-encode_request(Module, get_counters) -> {?DEBUG_GET_COUNTERS, <<>>, {?DEBUG_COUNTERS, decoded, Module}};
-encode_request(Module, get_trace) -> {?DEBUG_GET_TRACE, <<>>, {?DEBUG_TRACE, decoded, Module}};
-encode_request(Module, {query, Tag, Payload})
-        when Tag > 0, Tag < 128, is_binary(Payload), byte_size(Payload) rem 4 =:= 0,
-             byte_size(Payload) =< 1020 ->
+encode_request(Module, get_counters) ->
+    {?DEBUG_GET_COUNTERS, <<>>, {?DEBUG_COUNTERS, decoded, Module}};
+encode_request(Module, get_trace) ->
+    {?DEBUG_GET_TRACE, <<>>, {?DEBUG_TRACE, decoded, Module}};
+encode_request(Module, {query, Tag, Payload}) when
+    Tag > 0,
+    Tag < 128,
+    is_binary(Payload),
+    byte_size(Payload) rem 4 =:= 0,
+    byte_size(Payload) =< 1020
+->
     {Tag, Payload, {Tag bor 16#80, raw, Module}}.
 
 handle_cast({?FABRIC_RX, Receipt, Route, Header, Payload}, State = #state{fabric = Client}) ->
@@ -121,10 +140,12 @@ handle_cast({?FABRIC_RX, Receipt, Route, Header, Payload}, State = #state{fabric
 
 response(?DEBUG_ERROR, Payload, {_Expected, _Decode, Module}) ->
     {reply, decode_reply(?DEBUG_ERROR, Payload, Module)};
-response(Expected, Payload, {Expected, raw, _Module}) -> {reply, {ok, Payload}};
+response(Expected, Payload, {Expected, raw, _Module}) ->
+    {reply, {ok, Payload}};
 response(Expected, Payload, {Expected, decoded, Module}) ->
     {reply, decode_reply(Expected, Payload, Module)};
-response(_Tag, _Payload, _Context) -> ignore.
+response(_Tag, _Payload, _Context) ->
+    ignore.
 
 handle_info(Message, State = #state{fabric = Client}) ->
     {noreply, State#state{fabric = hls_fabric_client:handle_info(Message, Client)}}.
@@ -133,18 +154,22 @@ terminate(_Reason, _State) ->
     %% hls_fabric retires the return route even for exits bypassing terminate/2.
     ok.
 
-decode_reply(?DEBUG_COUNTERS, <<
-    5:32/little-unsigned-integer,
-    Cycles:32/little-unsigned-integer,
-    AppRxBeats:32/little-unsigned-integer,
-    AppRxFrames:32/little-unsigned-integer,
-    AppRxStalls:32/little-unsigned-integer,
-    AppTxBeats:32/little-unsigned-integer,
-    AppTxFrames:32/little-unsigned-integer,
-    AppTxStalls:32/little-unsigned-integer,
-    ObservationDrops:32/little-unsigned-integer,
-    Framing:32/little-unsigned-integer
->>, _Module) when Framing < 64 ->
+decode_reply(
+    ?DEBUG_COUNTERS,
+    <<
+        5:32/little-unsigned-integer,
+        Cycles:32/little-unsigned-integer,
+        AppRxBeats:32/little-unsigned-integer,
+        AppRxFrames:32/little-unsigned-integer,
+        AppRxStalls:32/little-unsigned-integer,
+        AppTxBeats:32/little-unsigned-integer,
+        AppTxFrames:32/little-unsigned-integer,
+        AppTxStalls:32/little-unsigned-integer,
+        ObservationDrops:32/little-unsigned-integer,
+        Framing:32/little-unsigned-integer
+    >>,
+    _Module
+) when Framing < 64 ->
     {ok, #{
         version => 5,
         observation_drops => ObservationDrops,
@@ -166,15 +191,17 @@ decode_reply(?DEBUG_ERROR, Payload, _Module) ->
 decode_reply(Tag, Payload, _Module) ->
     {error, {unexpected_reply, Tag, Payload}}.
 
-decode_trace_reply(<<
-    Version:32/little-unsigned-integer,
-    RecordWords:32/little-unsigned-integer,
-    Count:32/little-unsigned-integer,
-    Dropped:32/little-unsigned-integer,
-    ObservationDrops:32/little-unsigned-integer,
-    Framing:32/little-unsigned-integer,
-    Records/binary
->> = Payload) when Framing < 64 ->
+decode_trace_reply(
+    <<
+        Version:32/little-unsigned-integer,
+        RecordWords:32/little-unsigned-integer,
+        Count:32/little-unsigned-integer,
+        Dropped:32/little-unsigned-integer,
+        ObservationDrops:32/little-unsigned-integer,
+        Framing:32/little-unsigned-integer,
+        Records/binary
+    >> = Payload
+) when Framing < 64 ->
     Trace = #{
         version => Version,
         record_words => RecordWords,
@@ -189,35 +216,47 @@ decode_trace_reply(<<
         {?TRACE_VERSION, ?TRACE_RECORD_WORDS, ExpectedBytes} ->
             {ok, Trace#{events => decode_trace_events(Records, [])}};
         {?TRACE_VERSION, ?TRACE_RECORD_WORDS, Bytes} ->
-            {error, Trace#{reason => {
-                malformed_trace_records,
-                ExpectedBytes,
-                Bytes
-            }}};
+            {error, Trace#{
+                reason => {
+                    malformed_trace_records,
+                    ExpectedBytes,
+                    Bytes
+                }
+            }};
         _ ->
-            {error, Trace#{reason => {
-                unsupported_trace_schema,
-                Version,
-                RecordWords
-            }}}
+            {error, Trace#{
+                reason => {
+                    unsupported_trace_schema,
+                    Version,
+                    RecordWords
+                }
+            }}
     end;
 decode_trace_reply(Payload) ->
     {error, #{reason => malformed_trace_reply, raw => Payload}}.
 
 decode_trace_events(<<>>, Acc) ->
     lists:reverse(Acc);
-decode_trace_events(<<
-    Cycle:32/little-unsigned-integer,
-    Destination:16/little, Source:16/little,
-    Op:8,
-    TxID:8,
-    Flags:8,
-    KindCode:8,
-    Rest/binary
->>, Acc) ->
+decode_trace_events(
+    <<
+        Cycle:32/little-unsigned-integer,
+        Destination:16/little,
+        Source:16/little,
+        Op:8,
+        TxID:8,
+        Flags:8,
+        KindCode:8,
+        Rest/binary
+    >>,
+    Acc
+) ->
     Event = #{
         cycle => Cycle,
-        route => case Flags band 2 of 0 -> none; 2 -> {Source, Destination} end,
+        route =>
+            case Flags band 2 of
+                0 -> none;
+                2 -> {Source, Destination}
+            end,
         observation_gap => Flags band 4 =/= 0,
         kind => trace_kind(KindCode),
         kind_code => KindCode,
@@ -233,8 +272,12 @@ trace_kind(Code) -> {unknown, Code}.
 
 %% These states describe header recognition, not application execution.
 decode_framing(Word) ->
-    #{rx => frame_phase(Word band 3), tx => frame_phase((Word bsr 2) band 3),
-        rx_gap_pending => Word band 16 =/= 0, tx_gap_pending => Word band 32 =/= 0}.
+    #{
+        rx => frame_phase(Word band 3),
+        tx => frame_phase((Word bsr 2) band 3),
+        rx_gap_pending => Word band 16 =/= 0,
+        tx_gap_pending => Word band 32 =/= 0
+    }.
 
 frame_phase(0) -> boundary;
 frame_phase(1) -> header;

@@ -21,25 +21,24 @@ visualization-only announcement streams removed from this lossless boundary.
 Boundary version one is carried in the frame flags byte. Commands are ordered
 and at-most-once: transport failure aborts an experiment rather than retrying
 a possibly applied Pauli update.
+
+Called by phi_memory_runner and phi_memory_cpu_fabric. Derives endpoint/schema choices from phi_memory_boundary, independently of XLS generation.
 """.
 
 -include("phi_protocol.hrl").
 
--export([
-    version/0,
-    control_route/1,
-    event_routes/1,
-    encode_command/2,
-    decode_command/4,
-    encode_event/3,
-    decode_event/4
-]).
+%% Boundary version and routed endpoints.
+-export([version/0, control_route/1, event_routes/1]).
+
+%% Host command and event codecs.
+-export([encode_command/2, decode_command/4, encode_event/3, decode_event/4]).
+%% Shared type contracts.
 -export_type([route/0, header/0]).
 
 -define(U32_MAX, 16#ffffffff).
 
 %% Unsigned address carried in the fabric envelope.
--type endpoint() :: 0 .. ((1 bsl 16) - 1).
+-type endpoint() :: 0..((1 bsl 16) - 1).
 -type route() :: {endpoint(), endpoint()}.
 -type header() :: {
     Tag :: byte(),
@@ -65,17 +64,18 @@ control_route(Contract) ->
 event_routes(#{host_endpoint := Host, outputs := Outputs}) ->
     [
         {{Endpoint, Host}, Stream}
-        || #{endpoint := Endpoint, stream := Stream} <- Outputs
+     || #{endpoint := Endpoint, stream := Stream} <- Outputs
     ].
 
 -doc "Encodes one reducer command using the generated boundary contract.".
 -spec encode_command(phi_memory_experiment:command(), map()) ->
     {ok, route(), header(), binary()} | {error, atom()}.
 encode_command(
-    {control_router, data, Rectangle, Message = #pauli_query{
-        request_id = RequestId,
-        measurement = Measurement
-    }},
+    {control_router, data, Rectangle,
+        Message = #pauli_query{
+            request_id = RequestId,
+            measurement = Measurement
+        }},
     Contract
 ) when RequestId >= 0, RequestId =< ?U32_MAX ->
     case hls_pauli:is_pauli(Measurement) of
@@ -83,9 +83,10 @@ encode_command(
         false -> {error, message}
     end;
 encode_command(
-    {control_router, data, Rectangle, Message = #pauli_update{
-        pauli = Pauli
-    }},
+    {control_router, data, Rectangle,
+        Message = #pauli_update{
+            pauli = Pauli
+        }},
     Contract
 ) ->
     case hls_pauli:is_pauli(Pauli) of
@@ -93,9 +94,10 @@ encode_command(
         false -> {error, message}
     end;
 encode_command(
-    {control_router, noise, Rectangle, Message = #noise_cutoff{
-        first_quiet_step = Step
-    }},
+    {control_router, noise, Rectangle,
+        Message = #noise_cutoff{
+            first_quiet_step = Step
+        }},
     Contract
 ) when Step >= 0, Step =< ?U32_MAX ->
     encode(noise, Rectangle, Message, Contract);
@@ -105,8 +107,12 @@ encode_command(_Command, _Contract) ->
 -doc "Decodes one routed command using the generated boundary contract.".
 -spec decode_command(route(), header(), binary(), map()) ->
     {ok, phi_memory_experiment:command()} | {error, atom()}.
-decode_command(Route, {Tag, 0, Version}, Payload,
-        Contract = #{version := Version}) when is_binary(Payload) ->
+decode_command(
+    Route,
+    {Tag, 0, Version},
+    Payload,
+    Contract = #{version := Version}
+) when is_binary(Payload) ->
     ExpectedRoute = control_route(Contract),
     case Route of
         ExpectedRoute ->
@@ -120,19 +126,25 @@ decode_command(_Route, _Header, _Payload, _Contract) ->
 -doc "Encodes one validated FPGA event using its contract output route.".
 -spec encode_event(phi_memory_experiment:stream(), tuple(), map()) ->
     {ok, route(), header(), binary()} | {error, atom()}.
-encode_event(Stream, Event, Contract)
-        when is_tuple(Event), tuple_size(Event) > 0 ->
+encode_event(Stream, Event, Contract) when
+    is_tuple(Event), tuple_size(Event) > 0
+->
     Schema = element(1, Event),
     Distance = contract_distance(Contract),
-    case {
-        output_schema(Stream, Schema, Contract),
-        validate_event(Stream, Event, Distance)
-    } of
-        {{ok, #{endpoint := Endpoint}, #{
-            module := Module,
-            selector := Selector,
-            width := Width
-        }}, {ok, Stream, Event}} ->
+    case
+        {
+            output_schema(Stream, Schema, Contract),
+            validate_event(Stream, Event, Distance)
+        }
+    of
+        {
+            {ok, #{endpoint := Endpoint}, #{
+                module := Module,
+                selector := Selector,
+                width := Width
+            }},
+            {ok, Stream, Event}
+        } ->
             #{version := Version, host_endpoint := Host} = Contract,
             Payload = Module:pack(Event),
             Width = bit_size(Payload),
@@ -148,8 +160,9 @@ encode_event(_Stream, _Event, _Contract) ->
 -doc "Decodes and validates one routed FPGA event.".
 -spec decode_event(route(), header(), binary(), map()) ->
     {ok, phi_memory_experiment:stream(), tuple()} | {error, atom()}.
-decode_event(Route, {Tag, 0, Version}, Payload, Contract)
-        when is_binary(Payload) ->
+decode_event(Route, {Tag, 0, Version}, Payload, Contract) when
+    is_binary(Payload)
+->
     #{version := ExpectedVersion} = Contract,
     case Version of
         ExpectedVersion -> decode_route(Route, Tag, Payload, Contract);
@@ -169,14 +182,15 @@ encode(Target, Rectangle, Message, Contract) ->
         }
     } = Contract,
     Schema = element(1, Message),
-    case {
-        encode_rectangle(Rectangle, Shape),
-        command_schema(Target, Schema, Targets)
-    } of
+    case
+        {
+            encode_rectangle(Rectangle, Shape),
+            command_schema(Target, Schema, Targets)
+        }
+    of
         {{ok, Bounds}, {ok, #{module := Module, selector := Selector}}} ->
             Payload = Module:pack(Message),
-            {ok, {Host, Gateway}, {Selector, 0, Version},
-                <<Bounds/binary, Payload/binary>>};
+            {ok, {Host, Gateway}, {Selector, 0, Version}, <<Bounds/binary, Payload/binary>>};
         {{error, _Reason} = Error, _CommandSchema} ->
             Error;
         {_Rectangle, error} ->
@@ -184,20 +198,26 @@ encode(Target, Rectangle, Message, Contract) ->
     end.
 
 command_schema(Target, Schema, Targets) ->
-    case [
-        Descriptor
-        || #{id := Id, schemas := Schemas} <- Targets,
-           Id =:= Target,
-           Descriptor = #{name := Name} <- Schemas,
-           Name =:= Schema
-    ] of
+    case
+        [
+            Descriptor
+         || #{id := Id, schemas := Schemas} <- Targets,
+            Id =:= Target,
+            Descriptor = #{name := Name} <- Schemas,
+            Name =:= Schema
+        ]
+    of
         [Descriptor] -> {ok, Descriptor};
         [] -> error
     end.
 
-decode_command_payload(Tag, Payload, Contract = #{
-    ingress := #{shape := Shape, targets := Targets}
-}) ->
+decode_command_payload(
+    Tag,
+    Payload,
+    Contract = #{
+        ingress := #{shape := Shape, targets := Targets}
+    }
+) ->
     case command_schema_by_selector(Tag, Targets) of
         {ok, Target, #{name := Schema, module := Module, width := Width}} ->
             decode_command_message(
@@ -208,12 +228,14 @@ decode_command_payload(Tag, Payload, Contract = #{
     end.
 
 command_schema_by_selector(Selector, Targets) ->
-    case [
-        {Target, Descriptor}
-        || #{id := Target, schemas := Schemas} <- Targets,
-           Descriptor = #{selector := Candidate} <- Schemas,
-           Candidate =:= Selector
-    ] of
+    case
+        [
+            {Target, Descriptor}
+         || #{id := Target, schemas := Schemas} <- Targets,
+            Descriptor = #{selector := Candidate} <- Schemas,
+            Candidate =:= Selector
+        ]
+    of
         [{Target, Descriptor}] -> {ok, Target, Descriptor};
         [] -> error
     end.
@@ -227,10 +249,12 @@ decode_command_message(
     Shape,
     Contract
 ) when bit_size(ActorPayload) =:= Width ->
-    case {
-        decode_rectangle(Bounds, Shape),
-        command_payload_valid(Schema, ActorPayload)
-    } of
+    case
+        {
+            decode_rectangle(Bounds, Shape),
+            command_payload_valid(Schema, ActorPayload)
+        }
+    of
         {{ok, Rectangle}, true} ->
             {Message, <<>>} = Module:unpack(Schema, ActorPayload),
             Command = {control_router, Target, Rectangle, Message},
@@ -248,8 +272,10 @@ decode_command_message(
 ) ->
     {error, payload}.
 
-command_payload_valid(pauli_query,
-        <<_RequestId:32/little, Pauli:32/little>>) ->
+command_payload_valid(
+    pauli_query,
+    <<_RequestId:32/little, Pauli:32/little>>
+) ->
     Pauli =< 3;
 command_payload_valid(pauli_update, <<Pauli:32/little>>) ->
     Pauli =< 3;
@@ -274,39 +300,51 @@ decode_rectangle(
     end.
 
 output_schema(Stream, Schema, #{outputs := Outputs}) ->
-    case [
-        {Output, Descriptor}
-        || Output = #{stream := Candidate, schemas := Schemas} <- Outputs,
-           Candidate =:= Stream,
-           Descriptor = #{name := Name} <- Schemas,
-           Name =:= Schema
-    ] of
+    case
+        [
+            {Output, Descriptor}
+         || Output = #{stream := Candidate, schemas := Schemas} <- Outputs,
+            Candidate =:= Stream,
+            Descriptor = #{name := Name} <- Schemas,
+            Name =:= Schema
+        ]
+    of
         [{Output, Descriptor}] -> {ok, Output, Descriptor};
         [] -> {error, event}
     end.
 
-decode_route(Route, Tag, Payload, Contract = #{
-    host_endpoint := Host,
-    outputs := Outputs
-}) ->
+decode_route(
+    Route,
+    Tag,
+    Payload,
+    Contract = #{
+        host_endpoint := Host,
+        outputs := Outputs
+    }
+) ->
     Distance = contract_distance(Contract),
-    case [
-        Output
-        || Output = #{endpoint := Source} <- Outputs,
-           Route =:= {Source, Host}
-    ] of
+    case
+        [
+            Output
+         || Output = #{endpoint := Source} <- Outputs,
+            Route =:= {Source, Host}
+        ]
+    of
         [Output] -> decode_output(Output, Tag, Payload, Distance);
         [] -> {error, route}
     end.
 
 decode_output(#{stream := Stream, schemas := Schemas}, Tag, Payload, Distance) ->
-    case [
-        Schema
-        || Schema = #{selector := Selector} <- Schemas,
-           Selector =:= Tag
-    ] of
-        [#{name := Name, module := Module, width := Width}]
-                when bit_size(Payload) =:= Width ->
+    case
+        [
+            Schema
+         || Schema = #{selector := Selector} <- Schemas,
+            Selector =:= Tag
+        ]
+    of
+        [#{name := Name, module := Module, width := Width}] when
+            bit_size(Payload) =:= Width
+        ->
             {Record, <<>>} = Module:unpack(Name, Payload),
             validate_event(Stream, Record, Distance);
         [#{}] ->
@@ -315,10 +353,16 @@ decode_output(#{stream := Stream, schemas := Schemas}, Tag, Payload, Distance) -
             {error, selector}
     end.
 
-encode_rectangle({X0, Y0, X1, Y1}, [Width, Height])
-        when X0 >= 0, X0 =< X1, X1 < Width,
-             Y0 >= 0, Y0 =< Y1, Y1 < Height,
-             X1 =< 16#ffff, Y1 =< 16#ffff ->
+encode_rectangle({X0, Y0, X1, Y1}, [Width, Height]) when
+    X0 >= 0,
+    X0 =< X1,
+    X1 < Width,
+    Y0 >= 0,
+    Y0 =< Y1,
+    Y1 < Height,
+    X1 =< 16#ffff,
+    Y1 =< 16#ffff
+->
     {ok, <<
         X0:16/little-unsigned-integer,
         Y0:16/little-unsigned-integer,
@@ -338,27 +382,42 @@ validate_event(
     data_measurements,
     Reply = #pauli_reply{x = X, y = Y, anticommutes = Anticommutes},
     Distance
-) when X >= 0, X < Distance,
-        Y >= 0, Y < 2 * Distance,
-        Anticommutes < 2 ->
+) when
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < 2 * Distance,
+    Anticommutes < 2
+->
     {ok, data_measurements, Reply};
 validate_event(
     Stream,
     Correction = #phi_correction{x = X, y = Y, direction = Direction},
     Distance
-) when (Stream =:= x_decoder_events orelse Stream =:= z_decoder_events),
-        X >= 0, X < Distance, Y >= 0, Y < Distance,
-        (Direction =:= ?PHI_NORTH_MASK orelse
-         Direction =:= ?PHI_EAST_MASK orelse
-         Direction =:= ?PHI_WEST_MASK orelse
-         Direction =:= ?PHI_SOUTH_MASK) ->
+) when
+    (Stream =:= x_decoder_events orelse Stream =:= z_decoder_events),
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < Distance,
+    (Direction =:= ?PHI_NORTH_MASK orelse
+        Direction =:= ?PHI_EAST_MASK orelse
+        Direction =:= ?PHI_WEST_MASK orelse
+        Direction =:= ?PHI_SOUTH_MASK)
+->
     {ok, Stream, Correction};
 validate_event(
     Stream,
     Status = #phi_status{x = X, y = Y, flags = Flags},
     Distance
-) when (Stream =:= x_decoder_events orelse Stream =:= z_decoder_events),
-        X >= 0, X < Distance, Y >= 0, Y < Distance, Flags < 4 ->
+) when
+    (Stream =:= x_decoder_events orelse Stream =:= z_decoder_events),
+    X >= 0,
+    X < Distance,
+    Y >= 0,
+    Y < Distance,
+    Flags < 4
+->
     {ok, Stream, Status};
 validate_event(_Stream, _Record, _Distance) ->
     {error, event}.

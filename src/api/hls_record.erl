@@ -1,7 +1,11 @@
 -module(hls_record).
--moduledoc false.
+-moduledoc """
+Record type provider used by hls_type and hls_record_codec after hls_records resolves ordered field descriptors. Delegates each field to its own provider for host packing and DSLX conversion; it neither reads actor source nor assigns message selectors.
+""".
 
+%% hls_type record-provider callbacks.
 -export([zero/2, width/2, value_width/2, pack/3, unpack/3, print_type/2, dslx_codec/2]).
+%% Shared type contracts.
 -export_type([fields/0]).
 
 -doc "Ordered field names and concrete types of an internal record value.".
@@ -21,18 +25,29 @@ value_width(_Name, Fields) -> lists:sum([hls_type:value_width(T) || {_, T} <- Fi
 
 -doc "Packs exactly the declared record shape in field order, without its tag.".
 -spec pack(term(), atom(), fields()) -> bitstring().
-pack(Value, Name, Fields) when is_tuple(Value), tuple_size(Value) =:= length(Fields) + 1,
-        element(1, Value) =:= Name ->
-    list_to_bitstring([hls_type:pack(V, T) || {V, {_, T}} <-
-        lists:zip(tl(tuple_to_list(Value)), Fields)]);
-pack(Value, Name, _Fields) -> error({invalid_hls_record_value, Name, Value}).
+pack(Value, Name, Fields) when
+    is_tuple(Value),
+    tuple_size(Value) =:= length(Fields) + 1,
+    element(1, Value) =:= Name
+->
+    list_to_bitstring([
+        hls_type:pack(V, T)
+     || {V, {_, T}} <-
+            lists:zip(tl(tuple_to_list(Value)), Fields)
+    ]);
+pack(Value, Name, _Fields) ->
+    error({invalid_hls_record_value, Name, Value}).
 
 -doc "Decodes the declared fields and restores the Erlang record tag.".
 -spec unpack(bitstring(), atom(), fields()) -> {tuple(), bitstring()}.
 unpack(Bits, Name, Fields) ->
-    {Values, Rest} = lists:mapfoldl(fun({_, T}, Remaining) ->
-        hls_type:unpack(Remaining, T)
-    end, Bits, Fields),
+    {Values, Rest} = lists:mapfoldl(
+        fun({_, T}, Remaining) ->
+            hls_type:unpack(Remaining, T)
+        end,
+        Bits,
+        Fields
+    ),
     {list_to_tuple([Name | Values]), Rest}.
 
 -doc "Names the ordinary DSLX struct used for this record value.".
@@ -41,8 +56,11 @@ print_type(Name, _Fields) -> xls_names:record_type(Name).
 
 -doc "Uses the record's generated field-wise codecs, preserving nested padding.".
 -spec dslx_codec(atom(), fields()) ->
-    {fun((xls_clause_lower:printable()) -> iolist()), fun((xls_clause_lower:printable()) -> iolist())}.
+    {fun((xls_clause_lower:printable()) -> iolist()), fun(
+        (xls_clause_lower:printable()) -> iolist()
+    )}.
 dslx_codec(Name, _Fields) ->
     Codec = xls_names:record_codec(Name),
-    {fun(Bits) -> [Codec, "_from_bits(", Bits, ")"] end,
-     fun(Value) -> ["bits_from_", Codec, "(", Value, ")"] end}.
+    {fun(Bits) -> [Codec, "_from_bits(", Bits, ")"] end, fun(Value) ->
+        ["bits_from_", Codec, "(", Value, ")"]
+    end}.

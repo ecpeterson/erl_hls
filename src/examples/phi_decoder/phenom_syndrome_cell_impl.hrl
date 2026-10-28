@@ -2,18 +2,19 @@
 -include("phi_protocol.hrl").
 -include("phi_neighborhood.hrl").
 
+%% CPU lifecycle, input helpers and inspection.
 -export([
-    start_link/0,
-    start_link/1,
+    start_link/0, start_link/1,
     connect/2,
     stop/1,
-    configure/3,
-    configure/5,
+    configure/3, configure/5,
     noise_cutoff/2,
     offer_request/2,
     offer_data/4,
     runtime_info/1
 ]).
+
+%% hls_statem phase and initialization callbacks.
 -export([configuring/3, collecting/3, announcing/3, init/1]).
 
 -define(MAILBOX_CAPACITY, (?NEIGHBOR_COUNT + 1)).
@@ -57,13 +58,17 @@
 -ifdef(PHI_REPETITION).
 %% Required connections for the two-neighbor protocol.
 -type outputs() :: #{
-    east := pid(), west := pid(),
+    east := pid(),
+    west := pid(),
     phi := pid()
 }.
 -else.
 %% Required connections for the four-neighbor protocol.
 -type outputs() :: #{
-    north := pid(), east := pid(), west := pid(), south := pid(),
+    north := pid(),
+    east := pid(),
+    west := pid(),
+    south := pid(),
     phi := pid()
 }.
 -endif.
@@ -123,11 +128,16 @@ configure(PID, Seed, Threshold) ->
     hls_nums:u16(),
     hls_nums:u16()
 ) -> ok.
-configure(PID, Seed, Threshold, X, Y)
-        when Seed > 0, Seed =< ?U32_MASK,
-             Threshold >= 0, Threshold =< ?U32_MASK,
-             X >= 0, X =< ?U16_MASK,
-             Y >= 0, Y =< ?U16_MASK ->
+configure(PID, Seed, Threshold, X, Y) when
+    Seed > 0,
+    Seed =< ?U32_MASK,
+    Threshold >= 0,
+    Threshold =< ?U32_MASK,
+    X >= 0,
+    X =< ?U16_MASK,
+    Y >= 0,
+    Y =< ?U16_MASK
+->
     hls_statem:cast(PID, #phenom_config{
         seed = Seed,
         threshold = Threshold,
@@ -139,8 +149,9 @@ configure(_PID, _Seed, _Threshold, _X, _Y) ->
 
 -doc "Arms the first round which must inject no new measurement noise.".
 -spec noise_cutoff(pid(), hls_nums:u32()) -> ok.
-noise_cutoff(PID, FirstQuietStep)
-        when FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK ->
+noise_cutoff(PID, FirstQuietStep) when
+    FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK
+->
     hls_statem:cast(PID, #noise_cutoff{
         first_quiet_step = FirstQuietStep
     });
@@ -149,21 +160,24 @@ noise_cutoff(_PID, _FirstQuietStep) ->
 
 -doc "Releases one computed result and permits computation of the next.".
 -spec offer_request(pid(), hls_nums:u32()) -> ok.
-offer_request(PID, Step)
-        when Step >= 0, Step =< ?U32_MASK ->
+offer_request(PID, Step) when
+    Step >= 0, Step =< ?U32_MASK
+->
     hls_statem:cast(PID, #phenom_request{step = Step});
 offer_request(_PID, _Step) ->
     error(badarg).
 
 -doc "Offers one Boolean data event from a named neighboring edge.".
 -spec offer_data(pid(), hls_nums:u32(), direction(), boolean()) -> ok.
-offer_data(PID, Step, Source, Present)
-        when Step >= 0, Step =< ?U32_MASK ->
+offer_data(PID, Step, Source, Present) when
+    Step >= 0, Step =< ?U32_MASK
+->
     SourceMask = source_mask(Source),
-    PresentWord = case Present of
-        false -> 0;
-        true -> 1
-    end,
+    PresentWord =
+        case Present of
+            false -> 0;
+            true -> 1
+        end,
     hls_statem:cast(PID, #phenom_data{
         step = Step,
         source = SourceMask,
@@ -185,22 +199,33 @@ init([]) ->
     {ok, configuring, #syndrome{}}.
 
 -doc "Accepts one valid configuration before beginning the request-paced protocol.".
--spec configuring(enter, phase(), #syndrome{}) ->
-    hls_statem:enter_result(#syndrome{});
-    (cast,
-        #phenom_config{} | #phenom_request{} | #phenom_data{} |
-            #noise_cutoff{},
-        #syndrome{}) -> hls_statem:cast_result(phase(), #syndrome{}).
+-spec configuring
+    (enter, phase(), #syndrome{}) ->
+        hls_statem:enter_result(#syndrome{});
+    (
+        cast,
+        #phenom_config{}
+        | #phenom_request{}
+        | #phenom_data{}
+        | #noise_cutoff{},
+        #syndrome{}
+    ) -> hls_statem:cast_result(phase(), #syndrome{}).
 configuring(enter, _OldPhase, Syndrome) ->
     {Syndrome, []};
 configuring(
     cast,
     #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
     Syndrome
-) when Seed > 0, Seed =< ?U32_MASK,
-       Threshold >= 0, Threshold =< ?U32_MASK,
-       X >= 0, X =< ?U16_MASK,
-       Y >= 0, Y =< ?U16_MASK ->
+) when
+    Seed > 0,
+    Seed =< ?U32_MASK,
+    Threshold >= 0,
+    Threshold =< ?U32_MASK,
+    X >= 0,
+    X =< ?U16_MASK,
+    Y >= 0,
+    Y =< ?U16_MASK
+->
     Configured = Syndrome#syndrome{
         seen_sources = 0,
         data_parity = 0,
@@ -229,25 +254,34 @@ configuring(cast, #noise_cutoff{}, Syndrome) ->
     {configuring, Syndrome, fail}.
 
 -doc "Collects directional data and computes one detection event with measurement noise.".
--spec collecting(enter, phase(), #syndrome{}) ->
-    hls_statem:enter_result(#syndrome{});
-    (cast,
-        #phenom_config{} | #phenom_request{} | #phenom_data{} |
-            #noise_cutoff{},
-        #syndrome{}) -> hls_statem:cast_result(phase(), #syndrome{}).
+-spec collecting
+    (enter, phase(), #syndrome{}) ->
+        hls_statem:enter_result(#syndrome{});
+    (
+        cast,
+        #phenom_config{}
+        | #phenom_request{}
+        | #phenom_data{}
+        | #noise_cutoff{},
+        #syndrome{}
+    ) -> hls_statem:cast_result(phase(), #syndrome{}).
 collecting(enter, _OldPhase, Syndrome) ->
-    {NextStep, Announcements} = case Syndrome#syndrome.seen_sources of
-        ?NEIGHBOR_MASK ->
-            {(Syndrome#syndrome.step + 1) band ?U32_MASK,
-                [{cast, phi, #phenom_anyon{
-                    step = Syndrome#syndrome.step,
-                    flags = Syndrome#syndrome.announcement bor
-                        (Syndrome#syndrome.announcement_quiet bsl 1),
-                    x = Syndrome#syndrome.x,
-                    y = Syndrome#syndrome.y
-                }}]};
-        _ -> {Syndrome#syndrome.step, []}
-    end,
+    {NextStep, Announcements} =
+        case Syndrome#syndrome.seen_sources of
+            ?NEIGHBOR_MASK ->
+                {(Syndrome#syndrome.step + 1) band ?U32_MASK, [
+                    {cast, phi, #phenom_anyon{
+                        step = Syndrome#syndrome.step,
+                        flags =
+                            Syndrome#syndrome.announcement bor
+                                (Syndrome#syndrome.announcement_quiet bsl 1),
+                        x = Syndrome#syndrome.x,
+                        y = Syndrome#syndrome.y
+                    }}
+                ]};
+            _ ->
+                {Syndrome#syndrome.step, []}
+        end,
     Query = #phenom_query{step = NextStep},
     Cleared = Syndrome#syndrome{
         step = NextStep,
@@ -256,11 +290,14 @@ collecting(enter, _OldPhase, Syndrome) ->
         data_quiet = 1,
         announcement_quiet = 0
     },
-    {Cleared, Announcements ++ ?NEIGHBOR_ACTIONS(
-        {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
-        {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
-        {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
-        {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}})};
+    {Cleared,
+        Announcements ++
+            ?NEIGHBOR_ACTIONS(
+                {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
+                {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
+                {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
+                {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}}
+            )};
 collecting(cast, #phenom_config{}, Syndrome) ->
     {collecting, Syndrome, fail};
 collecting(
@@ -274,10 +311,12 @@ collecting(
         cutoff_armed = false
     }
 ) when FirstQuietStep >= Step ->
-    {collecting, Syndrome#syndrome{
-        cutoff_armed = true,
-        cutoff_step = FirstQuietStep
-    }, consume};
+    {collecting,
+        Syndrome#syndrome{
+            cutoff_armed = true,
+            cutoff_step = FirstQuietStep
+        },
+        consume};
 collecting(cast, #noise_cutoff{}, Syndrome) ->
     {collecting, Syndrome, fail};
 collecting(
@@ -299,9 +338,11 @@ collecting(
         random_state = RandomState,
         threshold = Threshold
     }
-) when ?SOURCE_VALID(Source),
-       Seen band Source =:= 0,
-       Flags < 4 ->
+) when
+    ?SOURCE_VALID(Source),
+    Seen band Source =:= 0,
+    Flags < 4
+->
     Present = Flags band ?PHENOM_PRESENT_MASK,
     Quiet = (Flags band ?PHENOM_QUIET_MASK) bsr 1,
     NewSeen = Seen bor Source,
@@ -312,48 +353,61 @@ collecting(
         data_parity = NewParity,
         data_quiet = NewDataQuiet
     },
-    {NextPhase, NextSyndrome} = case NewSeen =:= ?NEIGHBOR_MASK of
-        false -> {collecting, Collected};
-        true ->
-            CutoffApplies = Syndrome#syndrome.cutoff_armed andalso
-                Step >= Syndrome#syndrome.cutoff_step,
-            NoiseDisabled = Syndrome#syndrome.noise_disabled orelse
-                CutoffApplies,
-            {NextRandom, Measurement} = case NoiseDisabled of
-                true -> {RandomState, 0};
-                false ->
-                    Sample = hls_prng:xorshift32(RandomState),
-                    Hit = if
-                        Sample < Threshold -> 1;
-                        true -> 0
+    {NextPhase, NextSyndrome} =
+        case NewSeen =:= ?NEIGHBOR_MASK of
+            false ->
+                {collecting, Collected};
+            true ->
+                CutoffApplies =
+                    Syndrome#syndrome.cutoff_armed andalso
+                        Step >= Syndrome#syndrome.cutoff_step,
+                NoiseDisabled =
+                    Syndrome#syndrome.noise_disabled orelse
+                        CutoffApplies,
+                {NextRandom, Measurement} =
+                    case NoiseDisabled of
+                        true ->
+                            {RandomState, 0};
+                        false ->
+                            Sample = hls_prng:xorshift32(RandomState),
+                            Hit =
+                                if
+                                    Sample < Threshold -> 1;
+                                    true -> 0
+                                end,
+                            {Sample, Hit}
                     end,
-                    {Sample, Hit}
-            end,
-            Detection = NewParity bxor Measurement bxor PreviousMeasurement,
-            Complete = Collected#syndrome{
-                previous_measurement = Measurement,
-                announcement = Detection,
-                announcement_quiet = case NoiseDisabled of
-                    true -> NewDataQuiet;
-                    false -> 0
-                end,
-                random_state = NextRandom,
-                noise_disabled = NoiseDisabled,
-                cutoff_armed = Syndrome#syndrome.cutoff_armed andalso not CutoffApplies
-            },
-            {announcing, Complete}
-    end,
+                Detection = NewParity bxor Measurement bxor PreviousMeasurement,
+                Complete = Collected#syndrome{
+                    previous_measurement = Measurement,
+                    announcement = Detection,
+                    announcement_quiet =
+                        case NoiseDisabled of
+                            true -> NewDataQuiet;
+                            false -> 0
+                        end,
+                    random_state = NextRandom,
+                    noise_disabled = NoiseDisabled,
+                    cutoff_armed = Syndrome#syndrome.cutoff_armed andalso not CutoffApplies
+                },
+                {announcing, Complete}
+        end,
     {NextPhase, NextSyndrome, consume};
 collecting(cast, #phenom_data{}, Syndrome) ->
     {collecting, Syndrome, fail}.
 
 -doc "Retains a completed detection event until its matching phi request arrives.".
--spec announcing(enter, phase(), #syndrome{}) ->
-    hls_statem:enter_result(#syndrome{});
-    (cast,
-        #phenom_config{} | #phenom_request{} | #phenom_data{} |
-            #noise_cutoff{},
-        #syndrome{}) -> hls_statem:cast_result(phase(), #syndrome{}).
+-spec announcing
+    (enter, phase(), #syndrome{}) ->
+        hls_statem:enter_result(#syndrome{});
+    (
+        cast,
+        #phenom_config{}
+        | #phenom_request{}
+        | #phenom_data{}
+        | #noise_cutoff{},
+        #syndrome{}
+    ) -> hls_statem:cast_result(phase(), #syndrome{}).
 announcing(enter, _OldPhase, Syndrome) ->
     {Syndrome, []};
 announcing(cast, #phenom_config{}, Syndrome) ->
@@ -369,10 +423,12 @@ announcing(
         cutoff_armed = false
     }
 ) when FirstQuietStep > Step ->
-    {announcing, Syndrome#syndrome{
-        cutoff_armed = true,
-        cutoff_step = FirstQuietStep
-    }, consume};
+    {announcing,
+        Syndrome#syndrome{
+            cutoff_armed = true,
+            cutoff_step = FirstQuietStep
+        },
+        consume};
 announcing(cast, #noise_cutoff{}, Syndrome) ->
     {announcing, Syndrome, fail};
 announcing(
@@ -398,13 +454,14 @@ announcing(cast, #phenom_data{}, Syndrome) ->
 %% Reject names absent from this specialization before admitting a CPU message.
 -spec source_mask(direction()) -> hls_nums:u32().
 source_mask(Direction) ->
-    Mask = case Direction of
-        north -> ?PHI_NORTH_MASK;
-        east -> ?PHI_EAST_MASK;
-        west -> ?PHI_WEST_MASK;
-        south -> ?PHI_SOUTH_MASK;
-        _ -> error(badarg)
-    end,
+    Mask =
+        case Direction of
+            north -> ?PHI_NORTH_MASK;
+            east -> ?PHI_EAST_MASK;
+            west -> ?PHI_WEST_MASK;
+            south -> ?PHI_SOUTH_MASK;
+            _ -> error(badarg)
+        end,
     case Mask band ?NEIGHBOR_MASK of
         Mask -> Mask;
         _ -> error(badarg)

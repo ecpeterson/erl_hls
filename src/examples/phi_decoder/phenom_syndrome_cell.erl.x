@@ -47,18 +47,18 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L217 = u16:22; // phenom_syndrome_cell_impl.hrl:L217
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L225 = u16:38; // phenom_syndrome_cell_impl.hrl:L225
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L227 = u16:54; // phenom_syndrome_cell_impl.hrl:L227
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L229 = u16:70; // phenom_syndrome_cell_impl.hrl:L229
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L265 = u16:86; // phenom_syndrome_cell_impl.hrl:L265
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L282 = u16:102; // phenom_syndrome_cell_impl.hrl:L282
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L290 = u16:118; // phenom_syndrome_cell_impl.hrl:L290
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L348 = u16:134; // phenom_syndrome_cell_impl.hrl:L348
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L360 = u16:150; // phenom_syndrome_cell_impl.hrl:L360
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L377 = u16:166; // phenom_syndrome_cell_impl.hrl:L377
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L388 = u16:182; // phenom_syndrome_cell_impl.hrl:L388
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L396 = u16:198; // phenom_syndrome_cell_impl.hrl:L396
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L242 = u16:22; // phenom_syndrome_cell_impl.hrl:L242
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L250 = u16:38; // phenom_syndrome_cell_impl.hrl:L250
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L252 = u16:54; // phenom_syndrome_cell_impl.hrl:L252
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L254 = u16:70; // phenom_syndrome_cell_impl.hrl:L254
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L302 = u16:86; // phenom_syndrome_cell_impl.hrl:L302
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L321 = u16:102; // phenom_syndrome_cell_impl.hrl:L321
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L329 = u16:118; // phenom_syndrome_cell_impl.hrl:L329
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L397 = u16:134; // phenom_syndrome_cell_impl.hrl:L397
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L414 = u16:150; // phenom_syndrome_cell_impl.hrl:L414
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L433 = u16:166; // phenom_syndrome_cell_impl.hrl:L433
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L444 = u16:182; // phenom_syndrome_cell_impl.hrl:L444
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L452 = u16:198; // phenom_syndrome_cell_impl.hrl:L452
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -418,7 +418,7 @@ struct ActorDispatch {
   phase_boundary: u1,
 }
 
-fn initial_actor_state_outcome() -> (bool, ActorState) {  // L184
+fn initial_actor_state_outcome() -> (bool, ActorState) {  // L198
   let _0 = Syndrome {
     ..zero!<Syndrome>()
   };
@@ -852,7 +852,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L217);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L242);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -863,7 +863,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::COLLECTING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L265);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L302);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -873,7 +873,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::ANNOUNCING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L360);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L414);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -900,7 +900,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L225);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L250);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -922,7 +922,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L290);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L329);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -950,7 +950,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L388);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L444);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -973,7 +973,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L227);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L252);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1134,7 +1134,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L348);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L397);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1160,7 +1160,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L396);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L452);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1207,7 +1207,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L229);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L254);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1241,7 +1241,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L282);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L321);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1276,7 +1276,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L377);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_A25A996B_L433);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {

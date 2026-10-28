@@ -18,17 +18,18 @@ Icarus host for a direct comparison. The checked summary is deliberately
 small: it catches shared drift and establishes that the fixture exercises both
 measurement outcomes and decoder corrections without committing a long
 schedule trace. An X-basis comparison requires a separate reset and run.
+
+Uses phi_memory_cpu_fabric for the CPU path and phi_memory_runner for closeout. Regression and hardware harnesses reuse the fixture and summary contract.
 """.
 
--export([
-    fixture/0,
-    run_cpu/0,
-    run_cpu/1,
-    summary/1,
-    verify/1,
-    witness_envelope/1,
-    decode_witness_envelope/1
-]).
+%% Shared finite workload and CPU execution.
+-export([fixture/0, run_cpu/0, run_cpu/1]).
+
+%% Witness summary and verification.
+-export([summary/1, verify/1]).
+
+%% Witness packet codec.
+-export([witness_envelope/1, decode_witness_envelope/1]).
 
 -type fixture() :: #{
     distance := 3,
@@ -114,13 +115,14 @@ summary(#{
 -doc "Checks the full witness shape and the fixture's compact golden.".
 -spec verify({ok, phi_memory_experiment:witness()} | {error, term()}) ->
     ok | {error, term()}.
-verify({ok, Witness = #{
-    corrections := [_ | _],
-    data_anticommutations := DataAnticommutations
-}}) ->
-    Values = lists:usort([
-        Value || {_Coordinate, Value} <- DataAnticommutations
-    ]),
+verify(
+    {ok,
+        Witness = #{
+            corrections := [_ | _],
+            data_anticommutations := DataAnticommutations
+        }}
+) ->
+    Values = lists:usort([Value || {_Coordinate, Value} <- DataAnticommutations]),
     #{expected_summary := Expected} = fixture(),
     case {Values, summary(Witness)} of
         {[0, 1], Expected} -> ok;
@@ -145,9 +147,8 @@ witness_envelope(Result) ->
 
 -doc "Checks and extracts one staged CPU witness envelope.".
 -spec decode_witness_envelope(term()) ->
-    {ok, phi_memory_experiment:options(),
-        {ok, phi_memory_experiment:witness()}} |
-    {error, term()}.
+    {ok, phi_memory_experiment:options(), {ok, phi_memory_experiment:witness()}}
+    | {error, term()}.
 decode_witness_envelope(#{
     version := 1,
     fixture := CpuFixture = #{options := Options},

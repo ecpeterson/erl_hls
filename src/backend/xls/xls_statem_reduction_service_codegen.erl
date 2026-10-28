@@ -1,9 +1,21 @@
 -module(xls_statem_reduction_service_codegen).
--moduledoc false.
--export([machine_state_field/1, machine_state_copy_field/1, direct_after_failed/2, direct_dispatch_bindings/2, direct_effective_binding/1, direct_failed_binding/1, direct_reduction_field/1, direct_entry_bindings/1, direct_entry_reduction_field/1, direct_receive_gate/1]).
+-moduledoc "Integrates closed scalar reductions with actor execution: stored state, entry opening, receipt handling and completion. xls_actor_codegen and dedicated/fabric execution backends compose these fragments around xls_statem_reduction_codegen operations; source validation and reducer algebra are outside this module.".
+%% Stored reduction state shared by execution backends.
+-export([machine_state_field/1, machine_state_copy_field/1]).
+%% Entry and callback result fragments used by common actor assembly.
+-export([event_tail/2, entry_bindings/1]).
+%% Dedicated execution completion, dispatch and commit fragments.
+-export([
+    direct_after_failed/2, direct_after_failed/3,
+    direct_dispatch_bindings/2,
+    direct_effective_binding/1,
+    direct_failed_binding/1,
+    direct_reduction_field/1,
+    direct_entry_bindings/1,
+    direct_entry_reduction_field/1,
+    direct_receive_gate/1
+]).
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
-
--export([event_tail/2, entry_bindings/1, direct_after_failed/3]).
 
 %%%
 %%% Stored-state and scheduler declarations
@@ -44,15 +56,20 @@ direct_after_failed(_Reductions, Capacity, Spec) ->
         "      (completed.directive != Directive::CONSUME ||\n",
         "       completed.phase != machine.phase);\n",
         "    let effective = completed.dispatched && !invalid_repeat",
-        xls_statem_event_codegen:optional(Spec, " && !hls_failure::failed(completion_event_failure)"), ";\n",
+        xls_statem_event_codegen:optional(
+            Spec, " && !hls_failure::failed(completion_event_failure)"
+        ),
+        ";\n",
         "    let phase_boundary = effective &&\n",
         "      completed.directive != Directive::FAIL &&\n",
         "      (completed.phase != machine.phase ||\n",
         "       completed.repeat_phase);\n",
-        "    let failure = ", xls_statem_event_codegen:optional(Spec, "hls_failure::first("),
+        "    let failure = ",
+        xls_statem_event_codegen:optional(Spec, "hls_failure::first("),
         "hls_failure::completion(\n",
         "      completed.dispatched, invalid_repeat, completed.failure)",
-        xls_statem_event_codegen:optional(Spec, ", completion_event_failure)"), ";\n",
+        xls_statem_event_codegen:optional(Spec, ", completion_event_failure)"),
+        ";\n",
         "    let failed = hls_failure::failed(failure);\n",
         "    let reserve = !failed && !machine.admission_pending &&\n",
         "      machine.occupied < MAILBOX_CAPACITY;\n",
@@ -63,7 +80,9 @@ direct_after_failed(_Reductions, Capacity, Spec) ->
         "        else { machine.entered_from },\n",
         "      data: if effective { completed.data } else { machine.data },\n",
         "      reduction: completed.reduction,\n",
-        xls_statem_event_codegen:optional(Spec, "      next_event: if effective && !failed { completion_event } else { u8:0 },\n"),
+        xls_statem_event_codegen:optional(
+            Spec, "      next_event: if effective && !failed { completion_event } else { u8:0 },\n"
+        ),
         "      slots: if phase_boundary { ",
         direct_unblocked_slots(Capacity, "machine.slots"),
         " } else { machine.slots },\n",
@@ -91,7 +110,7 @@ direct_unblocked_slots(Capacity, Slots) ->
                 integer_to_list(Index),
                 "] }"
             ]
-            || Index <- lists:seq(0, Capacity - 1)
+         || Index <- lists:seq(0, Capacity - 1)
         ]),
         "]"
     ].
@@ -100,12 +119,21 @@ direct_unblocked_slots(Capacity, Slots) ->
 -spec direct_dispatch_bindings(reductions(), map()) -> iodata().
 direct_dispatch_bindings(none, Events) ->
     [
-        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure",
+        event_tail(Events, "next_event"),
+        ") =\n",
         "        if dispatchable {\n",
-        xls_statem_gather_codegen:ordinary_dispatch(Events, ["          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")"]), "\n",
+        xls_statem_gather_codegen:ordinary_dispatch(Events, [
+            "          dispatch(selected_frame, machine.phase, machine.data",
+            xls_statem_reply_codegen:optional(Events, ", call_from, call_error"),
+            ")"
+        ]),
+        "\n",
         "        } else {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE",
+        event_tail(Events, "u8:0"),
+        ")\n",
         "        };\n"
     ];
 direct_dispatch_bindings(_Reductions, Events) ->
@@ -123,20 +151,35 @@ direct_dispatch_bindings(_Reductions, Events) ->
         "        (reduction_applied.outcome == ReductionOutcome::PENDING ||\n",
         "         reduction_applied.outcome == ",
         "ReductionOutcome::COMPLETE);\n",
-        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure",
+        event_tail(Events, "next_event"),
+        ") =\n",
         "        if !dispatchable {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE",
+        event_tail(Events, "u8:0"),
+        ")\n",
         "        } else if !reduction_candidate {\n",
-        xls_statem_gather_codegen:ordinary_dispatch(Events, ["          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")"]), "\n",
+        xls_statem_gather_codegen:ordinary_dispatch(Events, [
+            "          dispatch(selected_frame, machine.phase, machine.data",
+            xls_statem_reply_codegen:optional(Events, ", call_from, call_error"),
+            ")"
+        ]),
+        "\n",
         "        } else if reduction_mismatch {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::POSTPONE, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
+        "Directive::POSTPONE, u1:0, hls_failure::NONE",
+        event_tail(Events, "u8:0"),
+        ")\n",
         "        } else if reduction_accepted {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE",
+        event_tail(Events, "u8:0"),
+        ")\n",
         "        } else {\n",
-        "          (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL", event_tail(Events, "u8:0"), ")\n",
+        "          (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL",
+        event_tail(Events, "u8:0"),
+        ")\n",
         "        };\n",
         "      let next_reduction = if reduction_accepted {\n",
         "        reduction_applied.state\n",
@@ -162,7 +205,10 @@ direct_effective_binding(_Reductions) ->
 direct_failed_binding(Reductions) ->
     [
         "      let failure = hls_failure::dispatch(invalid_input, invalid_repeat, ",
-        case Reductions of none -> "false"; _ -> "incomplete_boundary" end,
+        case Reductions of
+            none -> "false";
+            _ -> "incomplete_boundary"
+        end,
         ", effective, dispatch_failure);\n",
         "      let failed = hls_failure::failed(failure);\n"
     ].
@@ -221,8 +267,13 @@ join_with(Separator, [First | Rest]) ->
 -doc "Selects the reduction completion continuation after ordinary dispatch handling.".
 -spec event_tail(map(), iodata()) -> iodata().
 event_tail(Spec, Value) ->
-    [xls_statem_event_codegen:optional(Spec, [", ", Value]),
-     xls_statem_reply_codegen:optional(Spec, case Value of
-        "next_event" -> ", reply_from, reply_frame, reply_allowed";
-        "u8:0" -> ", u64:0, zero!<axis::Frame>(), true"
-     end)].
+    [
+        xls_statem_event_codegen:optional(Spec, [", ", Value]),
+        xls_statem_reply_codegen:optional(
+            Spec,
+            case Value of
+                "next_event" -> ", reply_from, reply_frame, reply_allowed";
+                "u8:0" -> ", u64:0, zero!<axis::Frame>(), true"
+            end
+        )
+    ].

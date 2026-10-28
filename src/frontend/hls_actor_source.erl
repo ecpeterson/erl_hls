@@ -1,5 +1,8 @@
 -module(hls_actor_source).
--moduledoc "Actor state and message declarations from preprocessed source. Source order determines wire tags; these queries do not lower callback bodies or emit hardware.".
+-moduledoc """
+Actor state and message declarations from preprocessed source. Used by hls_pack and the XLS actor frontends after hls_source preprocessing and hls_records resolution. Source order determines wire tags; these queries do not lower callback bodies or emit hardware.
+""".
+%% Actor declarations and frame admission.
 -export([state/1, tags/1, message_words/2, message_words/3]).
 
 %% The u8 wire tag reserves none, error and actor data before public messages.
@@ -16,8 +19,13 @@ state(Forms) ->
 %% Only the legacy direct record return type supplies an implicit actor data name.
 -spec inferred_state([hls_source:form()]) -> atom().
 inferred_state(Forms) ->
-    {attribute, _, spec, {{init, 1}, [{type, _, 'fun', [_,
-        {type, _, record, [{atom, _, Name}]}]}]}} = hls_source:find_spec(Forms, init, 1),
+    {attribute, _, spec,
+        {{init, 1}, [
+            {type, _, 'fun', [
+                _,
+                {type, _, record, [{atom, _, Name}]}
+            ]}
+        ]}} = hls_source:find_spec(Forms, init, 1),
     Name.
 
 -doc "Concatenates hls_tags blocks in source order. Rejects missing declarations, non-atom entries, duplicates and more than 253 public tags.".
@@ -25,10 +33,13 @@ inferred_state(Forms) ->
 tags(Forms) ->
     Fragments = [{Line, Value} || {attribute, Line, hls_tags, Value} <- Forms],
     case Fragments of
-        [] -> error({missing_hls_attribute, hls_tags});
+        [] ->
+            error({missing_hls_attribute, hls_tags});
         _ ->
-            Tags = lists:append([validate_tag_fragment(Line, Value)
-                || {Line, Value} <- Fragments]),
+            Tags = lists:append([
+                validate_tag_fragment(Line, Value)
+             || {Line, Value} <- Fragments
+            ]),
             case duplicate_tags(Tags, #{}, []) of
                 [] -> validate_tag_count(Tags);
                 Duplicates -> error({duplicate_hls_tags, Duplicates})
@@ -47,14 +58,20 @@ validate_tag_fragment(Line, Tags) when is_list(Tags) ->
         true -> Tags;
         false -> error({invalid_hls_tags, Line, Tags})
     end;
-validate_tag_fragment(Line, Value) -> error({invalid_hls_tags, Line, Value}).
+validate_tag_fragment(Line, Value) ->
+    error({invalid_hls_tags, Line, Value}).
 
 %% Keep each duplicate once, in the order in which its second occurrence appeared.
 -spec duplicate_tags([atom()], #{atom() => non_neg_integer()}, [atom()]) -> [atom()].
-duplicate_tags([], _Counts, Duplicates) -> lists:reverse(Duplicates);
+duplicate_tags([], _Counts, Duplicates) ->
+    lists:reverse(Duplicates);
 duplicate_tags([Tag | Rest], Counts, Duplicates) ->
     Count = maps:get(Tag, Counts, 0),
-    Next = case Count of 1 -> [Tag | Duplicates]; _ -> Duplicates end,
+    Next =
+        case Count of
+            1 -> [Tag | Duplicates];
+            _ -> Duplicates
+        end,
     duplicate_tags(Rest, Counts#{Tag => Count + 1}, Next).
 
 -doc "Returns a record's transport word count using the default ordinary frame capacity, including provider padding.".
@@ -68,16 +85,25 @@ message_words(Forms, Name, Layout) ->
     Width = hls_records:width(Record),
     Capacity = hls_frame_layout:payload_bits(Layout),
     case Width =< Capacity of
-        true -> hls_frame_layout:check_payload(Layout, Width);
-        false -> hls_diagnostic:raise(actor_source, message_too_wide,
-            <<"Actor message exceeds the selected transport payload limit">>,
-            (record_context(Forms, Name, #{}))#{record => Name, width => Width, max_width => Capacity})
+        true ->
+            hls_frame_layout:check_payload(Layout, Width);
+        false ->
+            hls_diagnostic:raise(
+                actor_source,
+                message_too_wide,
+                <<"Actor message exceeds the selected transport payload limit">>,
+                (record_context(Forms, Name, #{}))#{
+                    record => Name, width => Width, max_width => Capacity
+                }
+            )
     end.
 
 %% File attributes track include entry/return, so the record points to its actual declaration.
--spec record_context([hls_source:form()], atom(), hls_diagnostic:context()) -> hls_diagnostic:context().
+-spec record_context([hls_source:form()], atom(), hls_diagnostic:context()) ->
+    hls_diagnostic:context().
 record_context([{attribute, _, file, {File, _}} | Rest], Name, Context) ->
     record_context(Rest, Name, Context#{source => unicode:characters_to_binary(File)});
 record_context([{attribute, Anno, record, {Name, _}} | _], Name, Context) ->
     Context#{location => erl_anno:location(Anno)};
-record_context([_ | Rest], Name, Context) -> record_context(Rest, Name, Context).
+record_context([_ | Rest], Name, Context) ->
+    record_context(Rest, Name, Context).

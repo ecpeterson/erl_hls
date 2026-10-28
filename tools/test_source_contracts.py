@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 from unittest.mock import patch
 import tempfile
 import unittest
@@ -115,6 +116,143 @@ class SourceContractsTests(unittest.TestCase):
         self.assertEqual(CONTRACTS.regressions(prior, []), prior)
         malformed = self.audit('f() -> .')
         self.assertEqual(CONTRACTS.regressions(malformed, malformed), malformed)
+
+    def audit_files(self, sources: dict[str, str]) -> list[dict[str, object]]:
+        """Audit a complete inert inventory, including files with no contract gaps."""
+        with tempfile.TemporaryDirectory(dir=self.stage.name) as directory:
+            for name, source in sources.items():
+                path = Path(directory, name)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(source)
+            return CONTRACTS.findings(self.stage.name, sorted(sources), directory)
+
+    def test_module_move_retains_only_unchanged_debt(self) -> None:
+        """A unique module survives a path move; body, spec and visibility edits do not."""
+        source = '-module(example).\n-spec f() -> atom().\nf() -> ok.'
+        prior = self.audit_files({'old/example.erl': source})
+        moved = self.audit_files({'new/renamed_file.erl': source})
+        self.assertEqual(CONTRACTS.regressions(moved, prior), [])
+        for changed in [source.replace('-> ok.', '-> changed.'),
+                        source.replace('-> atom().', '-> ok.'),
+                        source.replace('-module(example).', '-module(other).')]:
+            with self.subTest(source=changed):
+                current = self.audit_files({'new/example.erl': changed})
+                self.assertEqual(CONTRACTS.regressions(current, prior), current)
+        # A formal doc satisfies either visibility, isolating the missing-spec debt.
+        private = '-module(example).\n-doc "Returns ok.".\nf() -> ok.'
+        prior = self.audit_files({'old/example.erl': private})
+        public = self.audit_files({'new/example.erl': private.replace(
+            '-module(example).', '-module(example).\n-export([f/0]).')})
+        self.assertEqual([g['rule'] for g in public], ['spec'])
+        self.assertEqual(CONTRACTS.regressions(public, prior), public)
+
+    def test_module_copies_are_ambiguous_even_when_documented(self) -> None:
+        """The whole inventory detects copies that a findings-only index would miss."""
+        missing = '-module(example).\nf() -> ok.'
+        clean = '-module(example).\n%% Returns ok.\n-spec f() -> ok.\nf() -> ok.'
+        prior = self.audit_files({'old/example.erl': missing})
+        for original, copied in [(missing, missing), (missing, clean), (clean, clean)]:
+            with self.subTest(original=original, copied=copied):
+                current = self.audit_files({'old/example.erl': original, 'copy/example.erl': copied})
+                ambiguity = [g for g in current if g['rule'] == 'module_identity']
+                self.assertEqual(len(ambiguity), 2)
+                self.assertTrue(all(g in CONTRACTS.regressions(current, prior) for g in ambiguity))
+                self.assertTrue(all(g in CONTRACTS.regressions(current, current) for g in ambiguity))
+        ambiguous_prior = self.audit_files({'a/example.erl': missing, 'b/example.erl': clean})
+        unique = self.audit_files({'new/example.erl': missing})
+        self.assertEqual(CONTRACTS.regressions(unique, ambiguous_prior), unique)
+
+    def test_conditional_module_identity_is_not_guessed(self) -> None:
+        """Multiple module declarations fail closed even when they spell the same name."""
+        source = '-ifdef(ONE).\n-module(example).\n-else.\n-module(example).\n-endif.'
+        gaps = self.audit_files({'example.erl': source})
+        self.assertEqual([g['rule'] for g in gaps], ['module_identity'])
+        self.assertEqual(CONTRACTS.regressions(gaps, gaps), gaps)
+
+    def test_module_move_preserves_conditional_declarations(self) -> None:
+        """Each conditional function keeps its own strict declaration fingerprint."""
+        source = '-module(example).\n-ifdef(ONE).\nf() -> one.\n-else.\nf() -> two.\n-endif.'
+        prior = self.audit_files({'old/example.erl': source})
+        current = self.audit_files({'new/example.erl': source})
+        self.assertEqual(CONTRACTS.regressions(current, prior), [])
+        changed = self.audit_files({'new/example.erl': source.replace('-> two.', '-> three.')})
+        self.assertEqual(len(CONTRACTS.regressions(changed, prior)), 2)
+
+    def test_headers_and_unidentified_files_remain_path_bound(self) -> None:
+        """Neither a common basename nor a header's module spelling grants move credit."""
+        for name, source in [('same.hrl', '-type value() :: atom().'),
+                             ('same.hrl', '-module(example).\n-type value() :: atom().'),
+                             ('same.erl', 'f() -> ok.')]:
+            with self.subTest(name=name, source=source):
+                prior = self.audit_files({'old/' + name: source})
+                moved = self.audit_files({'new/' + name: source})
+                self.assertTrue(moved)
+                self.assertEqual(CONTRACTS.regressions(moved, prior), moved)
+
+    def test_moved_parse_failures_are_never_inherited(self) -> None:
+        """A matching module and unchanged malformed source cannot waive a parse error."""
+        source = '-module(example).\nf() -> .'
+        prior = self.audit_files({'old/example.erl': source})
+        moved = self.audit_files({'new/example.erl': source})
+        self.assertIn('parse', [g['rule'] for g in moved])
+        self.assertEqual(CONTRACTS.regressions(moved, prior), moved)
+
+    def test_cli_move_and_narrowed_inventory(self) -> None:
+        """Resolve physical aliases without hiding distinct in-tree or external copies."""
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root = Path(directory)
+            (root / 'tools').mkdir()
+            (root / 'tools/source_contracts.erl').write_text(
+                (ROOT / 'tools/source_contracts.erl').read_text())
+            (root / 'source-contracts.json').write_text(json.dumps(
+                {'include': ['src/*.erl'], 'base_ref': 'HEAD'}))
+            original = root / 'src/old/example.erl'
+            original.parent.mkdir(parents=True)
+            original.write_text('-module(example).\nf() -> ok.')
+            for args in [('init', '-q'), ('add', '.'),
+                         ('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                          'commit', '-qm', 'baseline')]:
+                subprocess.run(['git', '-C', directory, *args], check=True)
+            moved = root / 'src/new/example.erl'
+            moved.parent.mkdir(parents=True)
+            original.rename(moved)
+            command = [sys.executable, str(ROOT / 'tools/check_source_contracts.py'),
+                       '--base', 'HEAD', '--report', 'report.json']
+            alias = root / 'source-alias'
+            alias.symlink_to(root / 'src', target_is_directory=True)
+            result = subprocess.run(command + [str(moved), str(alias / 'new/example.erl')],
+                                    cwd=directory, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads((root / 'report.json').read_text())
+            self.assertEqual(report['new'], [])
+            copy = root / 'src/copy/example.erl'
+            copy.parent.mkdir(parents=True)
+            copy.write_text('-module(example).\n%% Returns ok.\n-spec f() -> ok.\nf() -> ok.')
+            result = subprocess.run(command + ['./src/new/example.erl'], cwd=directory,
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            report = json.loads((root / 'report.json').read_text())
+            self.assertEqual({g['path'] for g in report['new'] if g['rule'] == 'module_identity'},
+                             {'src/new/example.erl', 'src/copy/example.erl'})
+            copy.unlink()
+            external = Path(outside, 'outside.erl')
+            external.write_text('-module(outside).\n%% Returns ok.\n-spec f() -> ok.\nf() -> ok.')
+            result = subprocess.run(command + [str(external)], cwd=directory,
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads((root / 'report.json').read_text())
+            self.assertEqual(report['new'], [])
+            external.write_text(external.read_text().replace('-module(outside).', '-module(example).'))
+            result = subprocess.run(command + [str(external)], cwd=directory,
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            report = json.loads((root / 'report.json').read_text())
+            ambiguous = {g['path'] for g in report['new'] if g['rule'] == 'module_identity'}
+            self.assertIn('src/new/example.erl', ambiguous)
+            self.assertEqual(len(ambiguous), 2)
+            external_path = (ambiguous - {'src/new/example.erl'}).pop()
+            self.assertFalse(Path(external_path).is_absolute())
+            self.assertEqual((root / external_path).resolve(), external.resolve())
 
     def test_scope_includes_root_modules(self) -> None:
         """Owned modules and headers are checked at every directory depth."""

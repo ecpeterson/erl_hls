@@ -24,4 +24,6 @@ After changing translation, regenerate and review the source-adjacent DSLX with 
 
 [Compiler differential tests](docs/compiler-differential.md) compare generated programs with BEAM and retain minimized failures. [Debug targets](docs/debug-targets.md) expose actor snapshots, physical queue state and stream counters/traces. [Timing profiles](docs/profiling.md) provide reusable SVG and Perfetto views, keeping causal dependencies distinct from observed resource ordering.
 
+For implementation entry points and module ownership, use the [source map](src/README.md).
+
 Contributions follow [STYLE.md](STYLE.md). Application contracts belong in `docs/`; development notes belong in `yap/`.

@@ -7,21 +7,19 @@ The Erlang representation uses the familiar atoms `i`, `x`, `y`, and `z`.
 The generated representation uses the fixed symplectic encoding `i = 00`,
 `x = 10`, `y = 11`, and `z = 01` in a `u32`. Multiplication discards
 global phase and is therefore bitwise XOR.
+
+This example-local hls_type provider is used by the phenom actors and memory wire codec; its callbacks keep generated and host encodings aligned.
 """.
 
 -behavior(hls_type).
 
--export([
-    pauli/0,
-    i/0,
-    x/0,
-    y/0,
-    z/0,
-    multiply/2,
-    anticommutes/2,
-    is_pauli/1
-]).
+%% Application constructor and Pauli operations.
+-export([pauli/0, i/0, x/0, y/0, z/0, multiply/2, anticommutes/2, is_pauli/1]).
+
+%% hls_type provider callbacks.
 -export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2]).
+
+%% Shared type contracts.
 -export_type([pauli/0]).
 
 -type pauli() :: i | x | y | z.
@@ -55,7 +53,7 @@ anticommutes(Left, Right) ->
     RightCode = encode(Right),
     SymplecticProduct =
         (((LeftCode bsr 1) band RightCode) bxor
-         (LeftCode band (RightCode bsr 1))) band 1,
+            (LeftCode band (RightCode bsr 1))) band 1,
     SymplecticProduct =:= 1.
 
 -doc "Returns whether a BEAM value is a Pauli letter.".
@@ -82,20 +80,36 @@ unpack(<<Code:32/little-unsigned-integer, Rest/binary>>, pauli, []) ->
 print_type(pauli, []) -> "u32".
 
 -doc "Lowers Pauli descriptors and operations using the shared two-bit symplectic encoding inside u32 values.".
--spec transpile(pauli | i | x | y | z | multiply | anticommutes | is_pauli,
-    [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+-spec transpile(
+    pauli | i | x | y | z | multiply | anticommutes | is_pauli,
+    [xls_clause_lower:ir()],
+    xls_clause_lower:clause_state()
+) ->
     xls_clause_lower:ir() | xls_clause_lower:clause_state().
 transpile(pauli, [], State) ->
     xls_clause_lower:reference(State, {phantom, type, pauli()});
-transpile(i, [], _State) -> "u32:0";
-transpile(x, [], _State) -> "u32:2";
-transpile(y, [], _State) -> "u32:3";
-transpile(z, [], _State) -> "u32:1";
+transpile(i, [], _State) ->
+    "u32:0";
+transpile(x, [], _State) ->
+    "u32:2";
+transpile(y, [], _State) ->
+    "u32:3";
+transpile(z, [], _State) ->
+    "u32:1";
 transpile(multiply, [Left, Right], _State) ->
     ["(", Left, " ^ ", Right, ")"];
 transpile(anticommutes, [Left, Right], _State) ->
-    ["((((", Left, " >> u32:1) & ", Right, ") ^ (", Left,
-        " & (", Right, " >> u32:1))) & u32:1) == u32:1"];
+    [
+        "((((",
+        Left,
+        " >> u32:1) & ",
+        Right,
+        ") ^ (",
+        Left,
+        " & (",
+        Right,
+        " >> u32:1))) & u32:1) == u32:1"
+    ];
 transpile(is_pauli, [Value], _State) ->
     ["(", Value, " <= u32:3)"].
 

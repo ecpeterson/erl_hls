@@ -4,11 +4,16 @@
 %%%-------------------------------------------------------------------
 
 -module(erl_hls_sup).
+-moduledoc """
+Top-level OTP supervisor started by erl_hls_app. The current child list is empty; compiler operations and runtime sessions are caller-owned rather than permanent application children.
+""".
 
 -behaviour(supervisor).
 
+%% Application bootstrap.
 -export([start_link/0]).
 
+%% supervisor callback.
 -export([init/1]).
 
 -define(SERVER, ?MODULE).

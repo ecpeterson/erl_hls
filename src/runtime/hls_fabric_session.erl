@@ -1,7 +1,12 @@
 -module(hls_fabric_session).
--moduledoc false.
+-moduledoc """
+Logical session process created by hls_fabric. Forwards client requests and acknowledgements to the owning device broker while preserving reply aliases; draining closes this session without claiming ownership of raw descriptors.
+""".
 -behavior(gen_server).
+%% Logical-session lifecycle.
 -export([start_link/1]).
+
+%% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
 %% This process owns a logical session, never raw descriptors. Forward the
@@ -27,11 +32,17 @@ handle_call(Request, From, State = #{device := Device}) ->
 handle_cast({ack, Owner, Receipt}, State = #{device := Device}) ->
     gen_server:cast(Device, {ack, Owner, Receipt}),
     {noreply, State};
-handle_cast({session_drained, Device}, State = #{device := Device, draining := From}) when From =/= none ->
+handle_cast({session_drained, Device}, State = #{device := Device, draining := From}) when
+    From =/= none
+->
     gen_server:reply(From, ok),
     {stop, normal, State};
-handle_cast(_Message, State) -> {noreply, State}.
+handle_cast(_Message, State) ->
+    {noreply, State}.
 
-handle_info({'DOWN', Monitor, process, Device, Reason}, State = #{device := Device, monitor := Monitor}) ->
+handle_info(
+    {'DOWN', Monitor, process, Device, Reason}, State = #{device := Device, monitor := Monitor}
+) ->
     {stop, {device_down, Reason}, State};
-handle_info(_Message, State) -> {noreply, State}.
+handle_info(_Message, State) ->
+    {noreply, State}.

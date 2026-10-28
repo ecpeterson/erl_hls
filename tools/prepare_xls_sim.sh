@@ -154,12 +154,12 @@ for source in \
     "$project_root/src/runtime/hls_fabric_io.erl" \
     "$project_root/src/api/hls_frame_layout.erl" \
     "$project_root/src/api/hls_record.erl" \
-    "$project_root/src/api/hls_diagnostic.erl" \
+    "$project_root/src/toolchain/hls_diagnostic.erl" \
     "$project_root/src/runtime/hls_fabric_lease.erl" \
     "$project_root/src/runtime/hls_fabric_session.erl" \
     "$project_root/src/runtime/hls_fabric_client.erl" \
     "$project_root/src/api/hls_gs.erl" \
-    "$project_root/src/api/hls_service_contract.erl" \
+    "$project_root/src/frontend/hls_service_contract.erl" \
     "$project_root/src/runtime/hls_debug.erl" \
     "$project_root/src/runtime/hls_debug_target.erl" \
     "$project_root/src/api/hls_lists.erl" \

@@ -4,14 +4,24 @@
 %%%%    + generate spontaneous messages, probably modeled as a timeout
 
 -module(regsvc).
--export([ping/2, get/2, set/4, bulk_get/3]).  % client interface
--export([start_link/0, stop/1]).  % server interface
--export([init/1, handle_call/2, handle_cast/2]).  % hls_gs callbacks
+-moduledoc """
+Register-service example of hls_gs calls, casts and bounded list replies. Client helpers address either the CPU adapter or an hls_gs fabric proxy; hls_pack supplies record codecs and the XLS backend lowers the same callbacks. The adjacent DSLX and RTL files support the example hardware fixture.
+""".
+%% Register-service client operations.
+-export([ping/2, get/2, set/4, bulk_get/3]).
+
+%% CPU adapter lifecycle.
+-export([start_link/0, stop/1]).
+
+%% hls_gs application callbacks.
+-export([init/1, handle_call/2, handle_cast/2]).
 
 -behavior(hls_gs).
--hls_tags([set, get, ping, bulk_get, ack, read, bulk_read]).  % public wire payloads
+% public wire payloads
+-hls_tags([set, get, ping, bulk_get, ack, read, bulk_read]).
 -hls_replies([{ping, [ack]}, {get, [read]}, {bulk_get, [bulk_read]}]).
--compile({parse_transform, hls_pack}).  % auto-defines un/pack
+% auto-defines un/pack
+-compile({parse_transform, hls_pack}).
 
 -define(REGISTER_COUNT, 16).
 -define(MAX_PAYLOAD, 3).
@@ -90,14 +100,16 @@ stop(PID) ->
 %%% gen_server behavior
 %%%
 
--spec init(any()) -> #state{}.  % obligatory type signature
+% obligatory type signature
+-spec init(any()) -> #state{}.
 init([]) ->
     #state{}.
 
 handle_cast(#set{mask = Mask}, State) when Mask =:= 0 ->
     {noreply, State};
-handle_cast(#set{register = Register, value = Value, mask = Mask}, State)
-        when Register < ?REGISTER_COUNT ->
+handle_cast(#set{register = Register, value = Value, mask = Mask}, State) when
+    Register < ?REGISTER_COUNT
+->
     OldValue = hls_lists:nth(Register + 1, State#state.registers),
     NewValue = (OldValue band bnot Mask) bor (Value band Mask),
     NewRegisters = hls_lists:set(Register + 1, State#state.registers, NewValue),
@@ -105,24 +117,29 @@ handle_cast(#set{register = Register, value = Value, mask = Mask}, State)
 
 handle_call(#ping{value = Value}, State) ->
     {reply, #ack{value = Value}, State};
-handle_call(#get{register = Register}, State)
-        when Register < ?REGISTER_COUNT ->
+handle_call(#get{register = Register}, State) when
+    Register < ?REGISTER_COUNT
+->
     Value = hls_lists:nth(Register + 1, State#state.registers),
     {reply, #read{value = Value}, State};
 handle_call(#bulk_get{count = 0}, State) ->
     {reply, #bulk_read{}, State};
-handle_call(#bulk_get{start = Start, count = Count}, State)
-        when Count > 0,
-             Count =< ?MAX_PAYLOAD,
-             Start =< ?REGISTER_COUNT - Count ->
+handle_call(#bulk_get{start = Start, count = Count}, State) when
+    Count > 0,
+    Count =< ?MAX_PAYLOAD,
+    Start =< ?REGISTER_COUNT - Count
+->
     Sublist = hls_lists:sublist(
         hls_lists:list(hls_nums:u32(), ?REGISTER_COUNT),
-        State#state.registers, Start + 1, Count
+        State#state.registers,
+        Start + 1,
+        Count
     ),
     Trim = hls_lists:array_slice(
         hls_lists:list(hls_nums:u32(), ?REGISTER_COUNT),
         Sublist,
-        1, ?MAX_PAYLOAD
+        1,
+        ?MAX_PAYLOAD
     ),
     {reply, #bulk_read{values = Trim}, State}.
 

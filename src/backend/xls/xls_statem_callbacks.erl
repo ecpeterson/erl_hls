@@ -5,26 +5,30 @@
 %%%% already use those fixed shapes and pass through unchanged.
 
 -module(xls_statem_callbacks).
--moduledoc false.
+-moduledoc "Classifies phase-function clauses for xls_statem_lower and xls_statem_plan, normalizing enter, cast, call and internal event heads. Bodies remain Erlang forms for result/entry normalization and expression lowering; this preparation step does not render or choose execution storage.".
 
+%% Normalize the complete declared phase callback surface.
 -export([prepare/2]).
 
 %% Normalized callback families have separate dispatch arguments.
 
 -type callback_kind() :: enter | cast | call | internal.
 
--doc "Classifies state-function clauses as enter, cast or internal and normalizes their event heads.".
--spec prepare([hls_source:form()], [atom()]) -> #{
-    enter := [erl_parse:abstract_clause()],
-    cast := [erl_parse:abstract_clause()],
-    call := [erl_parse:abstract_clause()],
-    internal := [erl_parse:abstract_clause()]
-}.
+-doc "Classifies state-function clauses as enter, cast, call or internal and normalizes their event heads.".
+-spec prepare([hls_source:form()], [atom()]) ->
+    #{
+        enter := [erl_parse:abstract_clause()],
+        cast := [erl_parse:abstract_clause()],
+        call := [erl_parse:abstract_clause()],
+        internal := [erl_parse:abstract_clause()]
+    }.
 prepare(Forms, Phases) ->
     Classified = lists:append([
-        [prepare_clause(Clause, Phase)
-            || Clause <- callback_clauses(Forms, Phase, 3)]
-        || Phase <- Phases
+        [
+            prepare_clause(Clause, Phase)
+         || Clause <- callback_clauses(Forms, Phase, 3)
+        ]
+     || Phase <- Phases
     ]),
     #{
         enter => [Clause || {enter, Clause} <- Classified],
@@ -36,9 +40,9 @@ prepare(Forms, Phases) ->
 callback_clauses(Forms, Name, Arity) ->
     Matches = [
         Clauses
-        || {function, _Line, FunctionName, FunctionArity, Clauses} <- Forms,
-           FunctionName =:= Name,
-           FunctionArity =:= Arity
+     || {function, _Line, FunctionName, FunctionArity, Clauses} <- Forms,
+        FunctionName =:= Name,
+        FunctionArity =:= Arity
     ],
     case Matches of
         [Clauses] -> Clauses;
@@ -53,20 +57,17 @@ prepare_clause(
     {clause, Line, [{atom, _EventLine, enter}, OldPhase, Data], Guards, Body},
     Phase
 ) ->
-    {enter, {clause, Line,
-        [OldPhase, {atom, Line, Phase}, Data], Guards, Body}};
+    {enter, {clause, Line, [OldPhase, {atom, Line, Phase}, Data], Guards, Body}};
 prepare_clause(
     {clause, Line, [{atom, _EventLine, cast}, Message, Data], Guards, Body},
     Phase
 ) ->
-    {cast, {clause, Line,
-        [Message, {atom, Line, Phase}, Data], Guards, Body}};
+    {cast, {clause, Line, [Message, {atom, Line, Phase}, Data], Guards, Body}};
 prepare_clause(
     {clause, Line, [{atom, _EventLine, internal}, Event, Data], Guards, Body},
     Phase
 ) ->
-    {internal, {clause, Line,
-        [Event, {atom, Line, Phase}, Data], Guards, Body}};
+    {internal, {clause, Line, [Event, {atom, Line, Phase}, Data], Guards, Body}};
 prepare_clause(
     {clause, Line, [{tuple, _, [{atom, _, call}, From]}, Message, Data], Guards, Body},
     Phase

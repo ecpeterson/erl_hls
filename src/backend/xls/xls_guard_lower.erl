@@ -4,8 +4,9 @@
 %%%% callback clause heads, `case` clauses, and `if` expressions.
 
 -module(xls_guard_lower).
--moduledoc false.
+-moduledoc "Prepares supported guard alternatives for xls_callback_lower and xls_case_lower. It returns normalized source predicates that those callers pass to xls_clause_lower for expression lowering; guard errors become false so selection falls through instead of committing a body failure.".
 
+%% Guard alternatives and predicate expressions used by selection lowerers.
 -export([condition/3, predicate/2]).
 
 -doc "Combines pattern predicates and guards; guard errors cause fallthrough.".
@@ -46,15 +47,15 @@ can_fail(Tuple) when is_tuple(Tuple) -> lists:any(fun can_fail/1, tuple_to_list(
 can_fail(_) -> false.
 
 alternatives([Only]) -> Only;
-alternatives([First | Rest]) ->
-    {op, expression_line(First), 'orelse', First, alternatives(Rest)}.
+alternatives([First | Rest]) -> {op, expression_line(First), 'orelse', First, alternatives(Rest)}.
 
 %% The numeric annotation retains the original side-effect-free operator.
 -spec validate_predicate(term()) -> ok.
 validate_predicate({xls_integer_compare, Line, Op, Left, Right}) ->
     validate_predicate({op, Line, Op, Left, Right});
-validate_predicate({atom, _Line, Atom})
-        when Atom =:= true; Atom =:= false ->
+validate_predicate({atom, _Line, Atom}) when
+    Atom =:= true; Atom =:= false
+->
     ok;
 validate_predicate({var, _Line, _Name}) ->
     ok;
@@ -62,8 +63,9 @@ validate_predicate({record_field, _Line, Object, _Record, _Field}) ->
     validate_value(Object);
 validate_predicate({op, _Line, 'not', Operand}) ->
     validate_predicate(Operand);
-validate_predicate({op, _Line, Operator, Left, Right})
-        when Operator =:= 'andalso'; Operator =:= 'orelse' ->
+validate_predicate({op, _Line, Operator, Left, Right}) when
+    Operator =:= 'andalso'; Operator =:= 'orelse'
+->
     ok = validate_predicate(Left),
     validate_predicate(Right);
 validate_predicate({op, Line, Operator, Left, Right}) ->
@@ -81,15 +83,17 @@ validate_predicate(Expression) ->
 -spec validate_value(term()) -> ok.
 validate_value({xls_integer_compare, Line, Op, Left, Right}) ->
     validate_value({op, Line, Op, Left, Right});
-validate_value({xls_bit_size, _, _, Value}) -> validate_value(Value);
+validate_value({xls_bit_size, _, _, Value}) ->
+    validate_value(Value);
 validate_value({var, _Line, _Name}) ->
     ok;
 validate_value({integer, _Line, _Integer}) ->
     ok;
 validate_value({op, _Line, Sign, {integer, _, _}}) when Sign =:= '-'; Sign =:= '+' ->
     ok;
-validate_value({atom, _Line, Atom})
-        when Atom =:= true; Atom =:= false ->
+validate_value({atom, _Line, Atom}) when
+    Atom =:= true; Atom =:= false
+->
     ok;
 validate_value({record_field, _Line, Object, _Record, _Field}) ->
     validate_value(Object);
@@ -97,13 +101,16 @@ validate_value({op, _Line, 'not', Operand}) ->
     validate_predicate(Operand);
 validate_value({op, _Line, 'bnot', Operand}) ->
     validate_value(Operand);
-validate_value({op, _Line, Operator, Left, Right})
-        when Operator =:= 'andalso'; Operator =:= 'orelse' ->
+validate_value({op, _Line, Operator, Left, Right}) when
+    Operator =:= 'andalso'; Operator =:= 'orelse'
+->
     ok = validate_predicate(Left),
     validate_predicate(Right);
 validate_value({op, Line, Operator, Left, Right}) ->
-    case lists:member(Operator, comparison_operators()) orelse
-            lists:member(Operator, arithmetic_operators()) of
+    case
+        lists:member(Operator, comparison_operators()) orelse
+            lists:member(Operator, arithmetic_operators())
+    of
         true ->
             ok = validate_value(Left),
             validate_value(Right);
@@ -116,8 +123,7 @@ validate_value(Expression) ->
 sequence([Expression]) ->
     Expression;
 sequence([Expression | Rest]) ->
-    {op, expression_line(Expression), 'andalso',
-        Expression, sequence(Rest)}.
+    {op, expression_line(Expression), 'andalso', Expression, sequence(Rest)}.
 
 conjunction([]) ->
     "bool:true";
@@ -134,8 +140,9 @@ join_with(Separator, [First | Rest]) ->
 unsupported_guard(Line, Reason) ->
     error({unsupported_xls_guard, Line, Reason}).
 
-expression_line(Expression)
-        when is_tuple(Expression), tuple_size(Expression) >= 2 ->
+expression_line(Expression) when
+    is_tuple(Expression), tuple_size(Expression) >= 2
+->
     element(2, Expression);
 expression_line(_Expression) ->
     undefined.

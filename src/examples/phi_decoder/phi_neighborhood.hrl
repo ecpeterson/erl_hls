@@ -19,6 +19,8 @@
 -define(NEIGHBOR_ACTIONS(North, East, West, South), [North, East, West, South]).
 -define(FIELD_RELAX, relax).
 -define(DATA_ERROR, y).
--define(SOURCE_VALID(Source), (Source =:= 1 orelse Source =:= 2 orelse
-    Source =:= 4 orelse Source =:= 8)).
+-define(SOURCE_VALID(Source),
+    (Source =:= 1 orelse Source =:= 2 orelse
+        Source =:= 4 orelse Source =:= 8)
+).
 -endif.

@@ -1,8 +1,10 @@
 %%%% Shared preparation of a resolved, instance-addressed topology graph.
 -module(xls_topology_graph).
--moduledoc false.
--export([lower/2, lower/3, lanes/1, check_lanes/3]).
-
+-moduledoc "Prepares instance-addressed wiring shared by dedicated topology rendering and fabric placement. A normalized profile and materialized logical graph become checked actor interfaces, startup frames and route lanes; the retained-interface entry point avoids source reacquisition. Rendering and scheduler policy belong to downstream consumers.".
+%% Resolve a materialized graph with fresh or retained interfaces.
+-export([lower/2, lower/3]).
+%% Inspect and validate explicit physical producer lanes.
+-export([lanes/1, check_lanes/3]).
 
 %% Profile is normalized by the caller. Family rules have already been
 %% expanded into exact actor IDs; public logical identities are retained by
@@ -15,24 +17,31 @@ lower(Plan = #{actors := Actors}, Profile) ->
     lower(Plan, Profile, Interfaces).
 
 -doc "Lowers a materialized graph with a retained interface catalog from hls_actor_interface:from_modules/2. The catalog must cover every actor and use the profile frame layout; no interface or source is reloaded.".
--spec lower(map(), xls_topology_profile:profile(), #{module() => hls_actor_interface:summary()}) -> map().
-lower(Plan = #{
+-spec lower(map(), xls_topology_profile:profile(), #{module() => hls_actor_interface:summary()}) ->
+    map().
+lower(
+    Plan = #{
         families := [],
         ingresses := [],
         route_relations := [],
         lane_relations := []
-    }, Profile, Interfaces) ->
-    #{name := Name, channel_depth := Depth,
-        actor_egress_depth := EgressDepth, direct_actor_debug := ActorDebug,
-        frame_payload_words := PayloadWords} =
+    },
+    Profile,
+    Interfaces
+) ->
+    #{
+        name := Name,
+        channel_depth := Depth,
+        actor_egress_depth := EgressDepth,
+        direct_actor_debug := ActorDebug,
+        frame_payload_words := PayloadWords
+    } =
         Profile,
     Layout = hls_frame_layout:new(PayloadWords),
     ok = validate_lanes(Plan),
     Actors = annotate_actors(maps:get(actors, Plan), EgressDepth, Layout, Interfaces),
     Externals = annotate_externals(maps:get(externals, Plan)),
-    ActorIndex = maps:from_list([
-        {maps:get(id, Actor), Actor} || Actor <- Actors
-    ]),
+    ActorIndex = maps:from_list([{maps:get(id, Actor), Actor} || Actor <- Actors]),
     ok = validate_route_selectors(maps:get(routes, Plan), ActorIndex),
     ok = validate_startup_quiescence(maps:get(startup, Plan), ActorIndex),
     Routes = physical_route_order(Actors, maps:get(routes, Plan)),
@@ -57,12 +66,14 @@ validate_lanes(Plan = #{routes := Routes}) ->
 check_lanes(Key, Routes, Plan) ->
     Expected = lanes(Routes),
     case maps:get(Key, Plan, '$missing') of
-        Expected -> ok;
+        Expected ->
+            ok;
         Cached ->
-            Error = case Key of
-                lanes -> inconsistent_dslx_plan_lanes;
-                lane_relations -> inconsistent_dslx_family_plan_lanes
-            end,
+            Error =
+                case Key of
+                    lanes -> inconsistent_dslx_plan_lanes;
+                    lane_relations -> inconsistent_dslx_family_plan_lanes
+                end,
             error({Error, Expected, Cached})
     end.
 
@@ -93,29 +104,37 @@ lanes(Routes) ->
             destination => Destination,
             source_ports => lists:sort(Ports)
         }
-        || {{Source, Destination}, Ports} <-
-               lists:sort(maps:to_list(LanePorts))
+     || {{Source, Destination}, Ports} <-
+            lists:sort(maps:to_list(LanePorts))
     ].
 
-
 %% Retained summaries must have been checked for this physical frame capacity.
--spec annotate_actors([map()], burst | non_neg_integer(), hls_frame_layout:layout(),
-    #{module() => hls_actor_interface:summary()}) -> [map()].
+-spec annotate_actors(
+    [map()],
+    burst | non_neg_integer(),
+    hls_frame_layout:layout(),
+    #{module() => hls_actor_interface:summary()}
+) -> [map()].
 annotate_actors(Actors, EgressDepth, Layout, Interfaces) ->
-    [begin
-        #{frame_layout := Layout} = maps:get(Module, Interfaces),
-        annotate_actor(Index, Actor, Interfaces, EgressDepth)
-    end || {Index, Actor = #{module := Module}} <- lists:enumerate(0, Actors)].
+    [
+        begin
+            #{frame_layout := Layout} = maps:get(Module, Interfaces),
+            annotate_actor(Index, Actor, Interfaces, EgressDepth)
+        end
+     || {Index, Actor = #{module := Module}} <- lists:enumerate(0, Actors)
+    ].
 
 annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     Module = maps:get(module, Actor),
     ModuleName = xls_topology_profile:identifier(
-        Module, {actor_module, maps:get(id, Actor)}),
+        Module, {actor_module, maps:get(id, Actor)}
+    ),
     Outputs = maps:get(outputs, Actor),
     lists:foreach(
         fun(Port) ->
             _ = xls_topology_profile:identifier(
-                Port, {actor_output, maps:get(id, Actor)})
+                Port, {actor_output, maps:get(id, Actor)}
+            )
         end,
         Outputs
     ),
@@ -131,8 +150,17 @@ annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     }.
 
 annotate_externals(Externals) ->
-    [External#{output_name => [xls_topology_profile:identifier(
-        maps:get(id, External), external_id), "_out"]} || External <- Externals].
+    [
+        External#{
+            output_name => [
+                xls_topology_profile:identifier(
+                    maps:get(id, External), external_id
+                ),
+                "_out"
+            ]
+        }
+     || External <- Externals
+    ].
 
 validate_route_selectors(Routes, ActorIndex) ->
     lists:foreach(
@@ -177,8 +205,13 @@ validate_route_selectors(Routes, ActorIndex) ->
     ),
     validate_external_selectors(Routes, ActorIndex).
 
-validate_route_selector(Source, Recipient, Schema,
-        SourceInterface, DestinationInterface) ->
+validate_route_selector(
+    Source,
+    Recipient,
+    Schema,
+    SourceInterface,
+    DestinationInterface
+) ->
     SourceSelector = maps:get(
         selector,
         hls_actor_interface:schema(SourceInterface, Schema)
@@ -188,10 +221,13 @@ validate_route_selector(Source, Recipient, Schema,
         hls_actor_interface:schema(DestinationInterface, Schema)
     ),
     case SourceSelector =:= DestinationSelector of
-        true -> ok;
-        false -> error({unsupported_dslx_route_tag_remap,
-            Source, Recipient, Schema,
-            SourceSelector, DestinationSelector})
+        true ->
+            ok;
+        false ->
+            error(
+                {unsupported_dslx_route_tag_remap, Source, Recipient, Schema, SourceSelector,
+                    DestinationSelector}
+            )
     end.
 
 validate_external_selectors(Routes, ActorIndex) ->
@@ -225,7 +261,7 @@ validate_external_selectors(Routes, ActorIndex) ->
                                     )
                                 )
                             }
-                            || Schema <- Schemas
+                         || Schema <- Schemas
                         ],
                         maps:update_with(
                             ExternalId,
@@ -256,21 +292,30 @@ validate_external_bindings(ExternalId, Bindings) ->
                 Fields,
                 maps:get(source, Binding)
             },
-            BySchema = case maps:find(Schema, BySchema0) of
-                error -> BySchema0#{Schema => Encoding};
-                {ok, {Selector, Fields, _ExistingSource}} ->
-                    BySchema0;
-                {ok, Existing} ->
-                    error({incompatible_dslx_external_schema_encoding,
-                        ExternalId, Schema, Existing, Encoding})
-            end,
-            BySelector = case maps:find(Selector, BySelector0) of
-                error -> BySelector0#{Selector => Schema};
-                {ok, Schema} -> BySelector0;
-                {ok, ExistingSchema} ->
-                    error({ambiguous_dslx_external_selector,
-                        ExternalId, Selector, ExistingSchema, Schema})
-            end,
+            BySchema =
+                case maps:find(Schema, BySchema0) of
+                    error ->
+                        BySchema0#{Schema => Encoding};
+                    {ok, {Selector, Fields, _ExistingSource}} ->
+                        BySchema0;
+                    {ok, Existing} ->
+                        error(
+                            {incompatible_dslx_external_schema_encoding, ExternalId, Schema,
+                                Existing, Encoding}
+                        )
+                end,
+            BySelector =
+                case maps:find(Selector, BySelector0) of
+                    error ->
+                        BySelector0#{Selector => Schema};
+                    {ok, Schema} ->
+                        BySelector0;
+                    {ok, ExistingSchema} ->
+                        error(
+                            {ambiguous_dslx_external_selector, ExternalId, Selector, ExistingSchema,
+                                Schema}
+                        )
+                end,
             {BySchema, BySelector}
         end,
         {#{}, #{}},
@@ -285,28 +330,34 @@ validate_startup_quiescence(Startup, ActorIndex) ->
             Actor = maps:get(Target, ActorIndex),
             Interface = maps:get(interface, Actor),
             case hls_actor_interface:initial_effects(Interface) of
-                [] -> ok;
-                Effects -> error({startup_target_has_initial_effects,
-                    Target, maps:get(module, Actor), Effects})
+                [] ->
+                    ok;
+                Effects ->
+                    error(
+                        {startup_target_has_initial_effects, Target, maps:get(module, Actor),
+                            Effects}
+                    )
             end
         end,
         Startup
     ).
 
 physical_route_order(Actors, Routes) ->
-    RouteIndex = maps:from_list([
-        {maps:get(source, Route), Route} || Route <- Routes
-    ]),
+    RouteIndex = maps:from_list([{maps:get(source, Route), Route} || Route <- Routes]),
     Ordered = lists:append([
-        [maps:get({maps:get(id, Actor), Port}, RouteIndex)
-            || Port <- maps:get(outputs, Actor)]
-        || Actor <- Actors
+        [
+            maps:get({maps:get(id, Actor), Port}, RouteIndex)
+         || Port <- maps:get(outputs, Actor)
+        ]
+     || Actor <- Actors
     ]),
     Ordered.
 
 pack_startup(Startup, ActorIndex) ->
-    [Item#{frames => pack_startup_messages(Target, Messages, ActorIndex)}
-        || Item = #{target := Target, messages := Messages} <- Startup].
+    [
+        Item#{frames => pack_startup_messages(Target, Messages, ActorIndex)}
+     || Item = #{target := Target, messages := Messages} <- Startup
+    ].
 
 %% Bind every startup pack to the destination actor's selected frame layout.
 -spec pack_startup_messages(term(), [term()], map()) -> [map()].
@@ -314,41 +365,51 @@ pack_startup_messages(Target, Messages, ActorIndex) ->
     Actor = maps:get(Target, ActorIndex),
     Module = maps:get(module, Actor),
     Layout = maps:get(frame_layout, maps:get(interface, Actor)),
-    [pack_startup_message(Target, Index, Module, Message, Layout)
-        || {Index, Message} <- lists:enumerate(0, Messages)].
+    [
+        pack_startup_message(Target, Index, Module, Message, Layout)
+     || {Index, Message} <- lists:enumerate(0, Messages)
+    ].
 
 %% Validate provider-packed startup values before emitting a fixed-capacity axis frame.
--spec pack_startup_message(term(), non_neg_integer(), module(), term(), hls_frame_layout:layout()) -> map().
-pack_startup_message(Target, Index, Module, Message, Layout)
-        when is_tuple(Message), tuple_size(Message) > 0,
-             is_atom(element(1, Message)) ->
+-spec pack_startup_message(term(), non_neg_integer(), module(), term(), hls_frame_layout:layout()) ->
+    map().
+pack_startup_message(Target, Index, Module, Message, Layout) when
+    is_tuple(Message),
+    tuple_size(Message) > 0,
+    is_atom(element(1, Message))
+->
     TagName = element(1, Message),
-    Packed = try {Module:pack_tag(TagName), Module:pack(Message)} of
-        Result -> Result
-    catch
-        Class:Reason ->
-            error({cannot_pack_startup_message,
-                Target, Index, Class, Reason})
-    end,
-    {Tag, Payload} = case Packed of
-        {PackedTag, PackedPayload}
-                when is_integer(PackedTag), PackedTag >= 0,
-                     PackedTag =< 255, is_bitstring(PackedPayload) ->
-            {PackedTag, hls_codec:align(PackedPayload, 32)};
-        {InvalidTag, InvalidPayload} ->
-            error({invalid_packed_startup_message,
-                Target, Index, InvalidTag, InvalidPayload})
-    end,
+    Packed =
+        try {Module:pack_tag(TagName), Module:pack(Message)} of
+            Result -> Result
+        catch
+            Class:Reason ->
+                error({cannot_pack_startup_message, Target, Index, Class, Reason})
+        end,
+    {Tag, Payload} =
+        case Packed of
+            {PackedTag, PackedPayload} when
+                is_integer(PackedTag),
+                PackedTag >= 0,
+                PackedTag =< 255,
+                is_bitstring(PackedPayload)
+            ->
+                {PackedTag, hls_codec:align(PackedPayload, 32)};
+            {InvalidTag, InvalidPayload} ->
+                error({invalid_packed_startup_message, Target, Index, InvalidTag, InvalidPayload})
+        end,
     Width = bit_size(Payload),
-    case Width > 0 andalso Width rem 32 =:= 0 andalso
-            Width =< hls_frame_layout:payload_bits(Layout) of
-        true -> #{
-            tag => Tag,
-            payload => xls_nums:packed_unsigned_literal(Payload)
-        };
-        false -> error({unsupported_startup_payload_width,
-            Target, Index, Width})
+    case
+        Width > 0 andalso Width rem 32 =:= 0 andalso
+            Width =< hls_frame_layout:payload_bits(Layout)
+    of
+        true ->
+            #{
+                tag => Tag,
+                payload => xls_nums:packed_unsigned_literal(Payload)
+            };
+        false ->
+            error({unsupported_startup_payload_width, Target, Index, Width})
     end;
 pack_startup_message(Target, Index, _Module, Message, _Layout) ->
     error({invalid_startup_message, Target, Index, Message}).
-

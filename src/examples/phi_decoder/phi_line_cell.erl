@@ -7,6 +7,8 @@ two participants; the mailbox retains one early barrier plus its release.
 The two stored field layers use the normalized line recurrence in phi_field.
 Configuration, measurements, correction/status ordering and twelve diffusion
 rounds follow phi_halo_cell. North/south are not output channels.
+
+Shares phi_halo_cell_impl.hrl with the grid wrapper; phi_repetition_topology selects this geometry for its decoder family.
 """.
 
 -define(PHI_REPETITION, true).

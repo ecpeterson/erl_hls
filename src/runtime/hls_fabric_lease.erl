@@ -1,11 +1,16 @@
 -module(hls_fabric_lease).
--moduledoc false.
+-moduledoc """
+Device-path ownership registry used by hls_fabric. Starts hls_fabric_io workers and releases a reservation only after explicit descriptor closure; a fail-closed copy survives a registry crash. Logical session management belongs to hls_fabric_session.
+""".
 -behavior(gen_server).
 
 %% Reservations outlive brokers and are released only by explicit raw-FD
 %% closure. Keep a fail-closed copy across an unexpected registry crash.
 -include_lib("kernel/include/file.hrl").
+%% Device reservation and confirmed closure.
 -export([open/3, closed/2, await/2]).
+
+%% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
 open(WritePath, ReadPath, Broker) ->
@@ -25,30 +30,38 @@ ensure_started() ->
     end.
 
 init([]) ->
-    Leases = maps:map(fun(_ID, Entry) -> Entry#{status => registry_restarted} end,
-        persistent_term:get(?MODULE, #{})),
+    Leases = maps:map(
+        fun(_ID, Entry) -> Entry#{status => registry_restarted} end,
+        persistent_term:get(?MODULE, #{})
+    ),
     {ok, #{leases => Leases, waiters => #{}}}.
 
 handle_call({open, WritePath, ReadPath, Broker}, _From, State) ->
     case {path_keys(WritePath), path_keys(ReadPath)} of
         {{ok, Write, WriteKeys}, {ok, Read, ReadKeys}} ->
             reserve(Write, Read, Broker, lists:usort(WriteKeys ++ ReadKeys), State);
-        {{error, _} = Error, _} -> {reply, Error, State};
-        {_, Error} -> {reply, Error, State}
+        {{error, _} = Error, _} ->
+            {reply, Error, State};
+        {_, Error} ->
+            {reply, Error, State}
     end;
-handle_call({await, Lease, Timeout}, From = {Caller, _}, State = #{leases := Leases, waiters := Waiters}) ->
+handle_call(
+    {await, Lease, Timeout}, From = {Caller, _}, State = #{leases := Leases, waiters := Waiters}
+) ->
     case Leases of
         #{Lease := #{status := Status}} when Status =/= open, Status =/= closing ->
             {reply, {error, {release_unconfirmed, Status}}, State};
         #{Lease := _} ->
             ID = make_ref(),
-            Timer = case Timeout of
-                infinity -> none;
-                _ -> erlang:start_timer(Timeout, self(), ID)
-            end,
+            Timer =
+                case Timeout of
+                    infinity -> none;
+                    _ -> erlang:start_timer(Timeout, self(), ID)
+                end,
             Waiter = {Lease, From, Timer, monitor(process, Caller)},
             {noreply, State#{waiters := Waiters#{ID => Waiter}}};
-        _ -> {reply, ok, State}
+        _ ->
+            {reply, ok, State}
     end.
 
 handle_cast({closed, Lease, Worker, Result}, State = #{leases := Leases}) ->
@@ -60,45 +73,74 @@ handle_cast({closed, Lease, Worker, Result}, State = #{leases := Leases}) ->
                     case map_size(Remaining) of
                         0 ->
                             demonitor(maps:get(monitor, Entry), [flush]),
-                            {noreply, notify(Lease, ok, save(State#{leases := maps:remove(Lease, Leases)}))};
-                        _ -> {noreply, save(State#{leases := Leases#{Lease := Entry#{workers := Remaining}}})}
+                            {noreply,
+                                notify(
+                                    Lease, ok, save(State#{leases := maps:remove(Lease, Leases)})
+                                )};
+                        _ ->
+                            {noreply,
+                                save(State#{
+                                    leases := Leases#{Lease := Entry#{workers := Remaining}}
+                                })}
                     end;
-                Error -> {noreply, quarantine(Lease, {close_failed, Worker, Error}, State)}
+                Error ->
+                    {noreply, quarantine(Lease, {close_failed, Worker, Error}, State)}
             end;
-        _ -> {noreply, State}
+        _ ->
+            {noreply, State}
     end.
 
 handle_info({'DOWN', Monitor, process, Pid, Reason}, State = #{leases := Leases}) ->
-    Next = maps:fold(fun(Lease, #{monitor := Ref, workers := Workers} = Entry, Acc) ->
-        case {Ref =:= Monitor, is_map_key(Pid, Workers)} of
-            {true, _} ->
-                [Worker ! stop || Worker <- maps:keys(Workers)],
-                #{leases := Current} = Acc,
-                Status = case maps:get(status, Entry) of open -> closing; Other -> Other end,
-                save(Acc#{leases := Current#{Lease := Entry#{status := Status}}});
-            {_, true} -> quarantine(Lease, {worker_down, Pid, Reason}, Acc);
-            _ -> Acc
-        end
-    end, State, Leases),
+    Next = maps:fold(
+        fun(Lease, #{monitor := Ref, workers := Workers} = Entry, Acc) ->
+            case {Ref =:= Monitor, is_map_key(Pid, Workers)} of
+                {true, _} ->
+                    [Worker ! stop || Worker <- maps:keys(Workers)],
+                    #{leases := Current} = Acc,
+                    Status =
+                        case maps:get(status, Entry) of
+                            open -> closing;
+                            Other -> Other
+                        end,
+                    save(Acc#{leases := Current#{Lease := Entry#{status := Status}}});
+                {_, true} ->
+                    quarantine(Lease, {worker_down, Pid, Reason}, Acc);
+                _ ->
+                    Acc
+            end
+        end,
+        State,
+        Leases
+    ),
     #{waiters := Waiters} = Next,
-    Live = maps:filter(fun(_ID, {_Lease, _From, Timer, Ref}) ->
-        case Ref =:= Monitor of
-            true -> cancel_timer(Timer), false;
-            false -> true
-        end
-    end, Waiters),
+    Live = maps:filter(
+        fun(_ID, {_Lease, _From, Timer, Ref}) ->
+            case Ref =:= Monitor of
+                true ->
+                    cancel_timer(Timer),
+                    false;
+                false ->
+                    true
+            end
+        end,
+        Waiters
+    ),
     {noreply, Next#{waiters := Live}};
 handle_info({timeout, Timer, ID}, State = #{waiters := Waiters}) ->
     case maps:take(ID, Waiters) of
         {{_Lease, _From, Timer, _Monitor} = Waiter, Rest} ->
             finish_waiter(Waiter, {error, timeout}),
             {noreply, State#{waiters := Rest}};
-        error -> {noreply, State}
+        error ->
+            {noreply, State}
     end.
 
 reserve(WritePath, ReadPath, Broker, Keys, State = #{leases := Leases}) ->
-    Conflicts = [Entry || #{keys := Existing} = Entry <- maps:values(Leases),
-        lists:any(fun(Key) -> lists:member(Key, Existing) end, Keys)],
+    Conflicts = [
+        Entry
+     || #{keys := Existing} = Entry <- maps:values(Leases),
+        lists:any(fun(Key) -> lists:member(Key, Existing) end, Keys)
+    ],
     case Conflicts of
         [#{owner := Owner, status := Status} | _] ->
             {reply, {error, {device_owned, Owner, Status}}, State};
@@ -108,10 +150,16 @@ reserve(WritePath, ReadPath, Broker, Keys, State = #{leases := Leases}) ->
             Writer = worker(writer, WritePath, Broker, Lease),
             Reader = worker(reader, ReadPath, Broker, Lease),
             Monitor = monitor(process, Broker),
-            Entry = #{owner => Broker, monitor => Monitor, keys => Keys,
-                workers => #{Writer => pending, Reader => pending}, status => open},
+            Entry = #{
+                owner => Broker,
+                monitor => Monitor,
+                keys => Keys,
+                workers => #{Writer => pending, Reader => pending},
+                status => open
+            },
             Next = save(State#{leases := Leases#{Lease => Entry}}),
-            Writer ! open, Reader ! open,
+            Writer ! open,
+            Reader ! open,
             {reply, {ok, Lease, Writer, Reader}, Next}
     end.
 
@@ -127,20 +175,31 @@ worker(Direction, Path, Broker, Lease) ->
     end),
     Pid.
 
-save(State = #{leases := Leases}) -> persistent_term:put(?MODULE, Leases), State.
+save(State = #{leases := Leases}) ->
+    persistent_term:put(?MODULE, Leases),
+    State.
 
 quarantine(Lease, Reason, State = #{leases := Leases}) ->
     Entry = maps:get(Lease, Leases),
-    notify(Lease, {error, {release_unconfirmed, Reason}},
-        save(State#{leases := Leases#{Lease := Entry#{status := Reason}}})).
+    notify(
+        Lease,
+        {error, {release_unconfirmed, Reason}},
+        save(State#{leases := Leases#{Lease := Entry#{status := Reason}}})
+    ).
 
 notify(Lease, Result, State = #{waiters := Waiters}) ->
-    Remaining = maps:filter(fun(_ID, {ID, _From, _Timer, _Monitor} = Waiter) ->
-        case ID =:= Lease of
-            true -> finish_waiter(Waiter, Result), false;
-            false -> true
-        end
-    end, Waiters),
+    Remaining = maps:filter(
+        fun(_ID, {ID, _From, _Timer, _Monitor} = Waiter) ->
+            case ID =:= Lease of
+                true ->
+                    finish_waiter(Waiter, Result),
+                    false;
+                false ->
+                    true
+            end
+        end,
+        Waiters
+    ),
     State#{waiters := Remaining}.
 
 finish_waiter({_Lease, From, Timer, Monitor}, Result) ->
@@ -148,8 +207,11 @@ finish_waiter({_Lease, From, Timer, Monitor}, Result) ->
     demonitor(Monitor, [flush]),
     gen_server:reply(From, Result).
 
-cancel_timer(none) -> ok;
-cancel_timer(Timer) -> erlang:cancel_timer(Timer), ok.
+cancel_timer(none) ->
+    ok;
+cancel_timer(Timer) ->
+    erlang:cancel_timer(Timer),
+    ok.
 
 path_keys(Path) ->
     %% Cover alternate spellings and existing symlink/hard-link aliases. A
@@ -161,7 +223,8 @@ path_keys(Path) ->
     case file:read_file_info(Absolute) of
         {ok, #file_info{major_device = Major, minor_device = Minor, inode = Inode}} ->
             {ok, Absolute, [{path, Name}, {inode, Major, Minor, Inode}]};
-        {error, Reason} -> {error, {endpoint, Absolute, Reason}}
+        {error, Reason} ->
+            {error, {endpoint, Absolute, Reason}}
     end.
 
 normalize([], Acc) -> lists:reverse(Acc);

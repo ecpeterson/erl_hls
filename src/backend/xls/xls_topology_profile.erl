@@ -3,9 +3,12 @@
 %%%% Physical option and naming policies shared by the topology backends.
 
 -module(xls_topology_profile).
--moduledoc false.
+-moduledoc "Validates physical options shared by dedicated topology preparation and rendering. It fixes naming, channel/egress capacities, observations and ordinary-frame capacity before xls_topology_graph or family preparation; logical actor identities and callback semantics remain in hls_topology and actor lowering.".
 
--export([normalize/1, identifier/2, egress_depth/2]).
+%% Normalize the physical generation contract.
+-export([normalize/1]).
+%% Resolve checked names and interface-dependent egress capacity.
+-export([identifier/2, egress_depth/2]).
 -export_type([profile/0]).
 
 -define(U32_MAX, 16#ffffffff).
@@ -31,11 +34,13 @@ normalize(Profile) when is_map(Profile) ->
     Allowed = Required ++ [direct_actor_debug, frame_payload_words],
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
-        {Missing, Unknown} ->
-            error({invalid_dslx_profile_keys, Missing, Unknown})
+        {Missing, Unknown} -> error({invalid_dslx_profile_keys, Missing, Unknown})
     end,
-    #{name := Name0, channel_depth := Depth,
-        actor_egress_depth := EgressDepth} = Profile,
+    #{
+        name := Name0,
+        channel_depth := Depth,
+        actor_egress_depth := EgressDepth
+    } = Profile,
     Name = identifier(Name0, topology_name),
     ok = validate_channel_depth(Depth),
     ok = validate_egress_depth(EgressDepth),
@@ -43,21 +48,30 @@ normalize(Profile) when is_map(Profile) ->
 normalize(Profile) ->
     error({invalid_dslx_profile, Profile}).
 
-validate_channel_depth(Depth)
-        when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
-validate_channel_depth(Depth) -> error({invalid_dslx_channel_depth, Depth}).
+validate_channel_depth(Depth) when
+    is_integer(Depth), Depth > 0, Depth =< ?U32_MAX
+->
+    ok;
+validate_channel_depth(Depth) ->
+    error({invalid_dslx_channel_depth, Depth}).
 
-validate_egress_depth(burst) -> ok;
-validate_egress_depth(Depth)
-        when is_integer(Depth), Depth >= 0, Depth =< ?U32_MAX -> ok;
-validate_egress_depth(Depth) -> error({egress_depth, Depth}).
+validate_egress_depth(burst) ->
+    ok;
+validate_egress_depth(Depth) when
+    is_integer(Depth), Depth >= 0, Depth =< ?U32_MAX
+->
+    ok;
+validate_egress_depth(Depth) ->
+    error({egress_depth, Depth}).
 
 %% Observation is independent of buffering and routing.
 -spec normalize_options(profile()) -> profile().
 normalize_options(Profile) ->
     Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile, 3)),
-    Profile#{direct_actor_debug => xls_actor_observation:enabled(Profile),
-        frame_payload_words => hls_frame_layout:payload_words(Layout)}.
+    Profile#{
+        direct_actor_debug => xls_actor_observation:enabled(Profile),
+        frame_payload_words => hls_frame_layout:payload_words(Layout)
+    }.
 
 %% The registered producer already holds one effect; burst reserves only the
 %% remaining capacity in the explicit egress FIFO. Literal depths pass through.
@@ -65,7 +79,8 @@ normalize_options(Profile) ->
     non_neg_integer().
 egress_depth(burst, Interface) ->
     max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
-egress_depth(Depth, _Interface) -> Depth.
+egress_depth(Depth, _Interface) ->
+    Depth.
 
 -doc "Validates a lowercase deployment identifier against the shared DSLX keyword set.".
 -spec identifier(atom() | string(), term()) -> string().
@@ -78,7 +93,8 @@ identifier(Name, Context) when is_list(Name) ->
                 true -> error({reserved_dslx_identifier, Context, Name});
                 false -> Name
             end;
-        nomatch -> error({invalid_dslx_identifier, Context, Name})
+        nomatch ->
+            error({invalid_dslx_identifier, Context, Name})
     end;
 identifier(Name, Context) ->
     error({invalid_dslx_identifier, Context, Name}).
@@ -98,5 +114,8 @@ reserved(Name, _) -> xls_names:keyword(Name) orelse lists:member(Name, ["spawn",
 %% An actor artifact with the same import name would replace that vocabulary.
 -spec reserved_module(string()) -> boolean().
 reserved_module(Name) ->
-    reserved(Name, topology_name) orelse lists:member(Name,
-        ["axis", "frame_transport", "arbitration", "hls_spatial_router"]).
+    reserved(Name, topology_name) orelse
+        lists:member(
+            Name,
+            ["axis", "frame_transport", "arbitration", "hls_spatial_router"]
+        ).

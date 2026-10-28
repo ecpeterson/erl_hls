@@ -76,10 +76,13 @@ physical noise model. The rate is encoded as the `u32` threshold used by each
 cell's Bernoulli comparison. Because this example materializes those
 configurations as an ordinary list, it accepts witness distances only up to
 50; that is not a bound in the compact family or route model.
+
+phi_noise_topology_dslx selects its dedicated hardware profile; phi_memory_boundary and the CPU example consume this logical geometry directly.
 """.
 
 -include("phi_protocol.hrl").
 
+%% Logical geometry and correction routing.
 -export([topology/0, topology/1, topology/2, correction_update/3]).
 
 -define(DEFAULT_DISTANCE, 3).
@@ -95,17 +98,21 @@ topology() ->
 
 -doc "Returns a compact periodic phi/noise topology of the given distance.".
 -spec topology(pos_integer()) -> hls_topology:spec().
-topology(Distance)
-        when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE ->
+topology(Distance) when
+    Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE
+->
     topology(Distance, ?EXERCISE_RATE);
 topology(_Distance) ->
     error(badarg).
 
 -doc "Returns a topology with an explicit `u32` phenomenological-noise rate.".
 -spec topology(pos_integer(), hls_nums:u32()) -> hls_topology:spec().
-topology(Distance, NoiseRate)
-        when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE,
-             NoiseRate >= 0, NoiseRate =< ?U32_MASK ->
+topology(Distance, NoiseRate) when
+    Distance > 0,
+    Distance =< ?MAX_WITNESS_DISTANCE,
+    NoiseRate >= 0,
+    NoiseRate =< ?U32_MASK
+->
     Shape = [Distance, Distance],
     #{
         version => 1,
@@ -159,8 +166,7 @@ correction_update(
         {z, ?PHI_WEST_MASK} ->
             {{X, 2 * Y + 1}, hls_pauli:x()};
         {z, ?PHI_SOUTH_MASK} ->
-            {{wrap(X + 1, Distance), wrap(2 * Y + 2, DataHeight)},
-                hls_pauli:x()};
+            {{wrap(X + 1, Distance), wrap(2 * Y + 2, DataHeight)}, hls_pauli:x()};
         _ ->
             error(badarg)
     end;
@@ -261,35 +267,41 @@ data_family_startup(
     NoiseRate
 ) ->
     [
-        {{Family, X, Y}, [#phenom_config{
-            seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = NoiseRate,
-            x = X,
-            y = 2 * Y + PhysicalYParity
-        }]}
-        || X <- lists:seq(0, Distance - 1),
-           Y <- lists:seq(0, Distance - 1)
+        {{Family, X, Y}, [
+            #phenom_config{
+                seed = seed(FamilyIndex, Distance, X, Y),
+                threshold = NoiseRate,
+                x = X,
+                y = 2 * Y + PhysicalYParity
+            }
+        ]}
+     || X <- lists:seq(0, Distance - 1),
+        Y <- lists:seq(0, Distance - 1)
     ].
 
 noise_family_startup(Family, FamilyIndex, Distance, NoiseRate) ->
     [
-        {{Family, X, Y}, [#phenom_config{
-            seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = NoiseRate,
-            x = X,
-            y = Y
-        }]}
-        || X <- lists:seq(0, Distance - 1),
-           Y <- lists:seq(0, Distance - 1)
+        {{Family, X, Y}, [
+            #phenom_config{
+                seed = seed(FamilyIndex, Distance, X, Y),
+                threshold = NoiseRate,
+                x = X,
+                y = Y
+            }
+        ]}
+     || X <- lists:seq(0, Distance - 1),
+        Y <- lists:seq(0, Distance - 1)
     ].
 
 phi_family_startup(Family, FamilyIndex, Distance) ->
     [
-        {{Family, X, Y}, [#phi_config{
-            seed = seed(FamilyIndex, Distance, X, Y)
-        }]}
-        || X <- lists:seq(0, Distance - 1),
-           Y <- lists:seq(0, Distance - 1)
+        {{Family, X, Y}, [
+            #phi_config{
+                seed = seed(FamilyIndex, Distance, X, Y)
+            }
+        ]}
+     || X <- lists:seq(0, Distance - 1),
+        Y <- lists:seq(0, Distance - 1)
     ].
 
 seed(FamilyIndex, Distance, X, Y) ->

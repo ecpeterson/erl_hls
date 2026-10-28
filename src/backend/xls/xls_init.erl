@@ -1,12 +1,19 @@
 -module(xls_init).
--moduledoc false.
+-moduledoc "Checks the single hardware init([]) callback and lowers it through xls_clause_lower for both server and state-machine backends. The emitted initializer retains failure references and requires its constant outcome to succeed during DSLX conversion; topology startup messages remain a separate stage.".
 
--export([clause/2, lower/4, emit/3]).
+%% Select and lower the sole source initializer.
+-export([clause/2, lower/4]).
+%% Render the checked constant initializer as a deferred fragment.
+-export([emit/3]).
 -export_type([lowered/0]).
 
 -doc "Initialization retains its selected failure references until module allocation.".
--type lowered() :: #{line := non_neg_integer(), body := xls_dslx:value(),
-    result := xls_dslx:value(), failed := xls_dslx:value()}.
+-type lowered() :: #{
+    line := non_neg_integer(),
+    body := xls_dslx:value(),
+    result := xls_dslx:value(),
+    failed := xls_dslx:value()
+}.
 
 -doc "Returns the sole init([]) clause; rejects guards, other heads and multiple initializers.".
 -spec clause([hls_source:form()], hls_gs | hls_statem) ->
@@ -16,7 +23,8 @@
 %% supplied separately by topology startup messages, before normal input traffic.
 clause(Forms, Behaviour) ->
     case hls_source:find_function(Forms, init, 1) of
-        [Clause = {clause, _Line, [{nil, _}], [], _Body}] -> Clause;
+        [Clause = {clause, _Line, [{nil, _}], [], _Body}] ->
+            Clause;
         [{clause, Line, Patterns, Guards, _Body}] ->
             error({unsupported_hls_init_head, Behaviour, Line, Patterns, Guards});
         Clauses ->
@@ -24,8 +32,12 @@ clause(Forms, Behaviour) ->
     end.
 
 -doc "Lowers initialization to its source line, statements, postprocessed value and failure expression.".
--spec lower(erl_parse:abstract_clause(), atom(),
-    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()), map()) -> lowered().
+-spec lower(
+    erl_parse:abstract_clause(),
+    atom(),
+    fun((xls_clause_lower:printable()) -> xls_clause_lower:printable()),
+    map()
+) -> lowered().
 lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
     #{body := Body, result := Result, failed := Failed} =
         xls_clause_lower:clause_outcome(Clause, [], DataName, EnumAtoms),
@@ -39,16 +51,37 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
 -doc "Emits an initializer that rejects failed matches during DSLX conversion.".
 %% Evaluate the outcome as a constant even if the caller runs after proc init().
 -spec emit(string(), string(), lowered()) -> xls_dslx:value().
-emit(Name, Type, #{line := Line, body := Body, result := Result,
-        failed := Failed}) ->
+emit(Name, Type, #{
+    line := Line,
+    body := Body,
+    result := Result,
+    failed := Failed
+}) ->
     Constant = string:uppercase(Name),
     [
-        "fn ", Name, "_outcome() -> (bool, ", Type, ") {  // L",
-        integer_to_list(Line), "\n",
+        "fn ",
+        Name,
+        "_outcome() -> (bool, ",
+        Type,
+        ") {  // L",
+        integer_to_list(Line),
+        "\n",
         xls_dslx:indent(Body, 2),
         xls_dslx:indent(["(", Failed, ", ", Result, ")"], 2),
         "}\n",
-        "const ", Constant, " = ", Name, "_outcome();\n",
-        "const_assert!(!", Constant, ".0);\n\n",
-        "fn ", Name, "() -> ", Type, " { ", Constant, ".1 }\n\n"
+        "const ",
+        Constant,
+        " = ",
+        Name,
+        "_outcome();\n",
+        "const_assert!(!",
+        Constant,
+        ".0);\n\n",
+        "fn ",
+        Name,
+        "() -> ",
+        Type,
+        " { ",
+        Constant,
+        ".1 }\n\n"
     ].

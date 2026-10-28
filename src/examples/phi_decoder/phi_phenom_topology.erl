@@ -15,10 +15,13 @@ generated fixture they become top-level DSLX output channels consumed by the
 RTL testbench. No current mechanism automatically forwards them through the
 PL-PS bridge or chooses an ERTS recipient; that requires an explicit deployment
 adapter which has not been built for the phi example.
+
+Consumed by phi_phenom_topology_dslx through hls_topology and xls_topology_dslx; application protocol records live in include/phi_protocol.hrl.
 """.
 
 -include("phi_protocol.hrl").
 
+%% Logical application topology.
 -export([topology/0]).
 
 -define(DATA_PRNG_SEED, 16#9e3779b9).
@@ -52,28 +55,34 @@ topology() ->
                 {{phi, status}, [{external, decoder_events}]}
             ] ++
             routes(syndrome, Directions, data) ++
-            [{{syndrome, phi}, queued, [
-                {actor, phi},
-                {external, announcement}
-            ]}] ++
+            [
+                {{syndrome, phi}, queued, [
+                    {actor, phi},
+                    {external, announcement}
+                ]}
+            ] ++
             routes(data, Directions, syndrome) ++
             [
                 {{data, measurement}, [{external, data_measurements}]}
             ],
         route_relations => [],
         startup => [
-            {data, [#phenom_config{
-                seed = ?DATA_PRNG_SEED,
-                threshold = ?HALF_THRESHOLD,
-                x = 0,
-                y = 0
-            }]},
-            {syndrome, [#phenom_config{
-                seed = ?SYNDROME_PRNG_SEED,
-                threshold = ?HALF_THRESHOLD,
-                x = 0,
-                y = 0
-            }]},
+            {data, [
+                #phenom_config{
+                    seed = ?DATA_PRNG_SEED,
+                    threshold = ?HALF_THRESHOLD,
+                    x = 0,
+                    y = 0
+                }
+            ]},
+            {syndrome, [
+                #phenom_config{
+                    seed = ?SYNDROME_PRNG_SEED,
+                    threshold = ?HALF_THRESHOLD,
+                    x = 0,
+                    y = 0
+                }
+            ]},
             {phi, [#phi_config{seed = ?PHI_PRNG_SEED}]}
         ]
     }.
@@ -81,5 +90,5 @@ topology() ->
 routes(Source, Ports, Destination) ->
     [
         {{Source, Port}, [{actor, Destination}]}
-        || Port <- Ports
+     || Port <- Ports
     ].

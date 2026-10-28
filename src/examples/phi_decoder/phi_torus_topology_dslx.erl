@@ -10,9 +10,15 @@ The semantic topology remains a family and seven route rules. The backend uses
 channel arrays and nested `unroll_for!` spawns, so this module does not choose
 or enumerate actor-instance names. The scalar syndrome-request and decoder-
 event boundaries are fair polling merges over the bounded family lanes.
+
+Calls xls_topology_dslx with phi_torus_topology and its local profile; source emission does not run XLS tools.
 """.
 
--export([profile/0, to_dslx/0]).
+%% Example deployment profile.
+-export([profile/0]).
+
+%% DSLX fixture generation.
+-export([to_dslx/0]).
 
 -doc "Returns the physical profile for the torus fixture.".
 -spec profile() -> xls_topology_dslx:profile().

@@ -1,16 +1,22 @@
 %%%% Source-only logical shapes used to prove bounded patterns total.
 -module(xls_type_shape).
--moduledoc false.
+-moduledoc "Resolves source-only record and array shapes for xls_pattern_totality without invoking loaded provider callbacks. It follows source aliases under the captured hls_source context; consumers must still check relied-on dimensions against provider-emitted DSLX types. Shape knowledge is not a hardware type definition.".
 
+%% Resolve only the record fields requested by pattern analysis.
 -export([records/2]).
 -export_type([shape/0]).
 
--type shape() :: unknown | {array, shape(), non_neg_integer()} |
-    {record, atom(), #{atom() => shape()}}.
+-type shape() ::
+    unknown
+    | {array, shape(), non_neg_integer()}
+    | {record, atom(), #{atom() => shape()}}.
 
 %% An include-expanded module and the exact source context used to read it.
--type source() :: #{path := file:filename(), context := hls_source:context(),
-    forms := [hls_source:form()]}.
+-type source() :: #{
+    path := file:filename(),
+    context := hls_source:context(),
+    forms := [hls_source:form()]
+}.
 %% Cache both successful reads and files whose module name is not the requested provider.
 -type cache() :: #{file:filename() => source() | unknown}.
 
@@ -20,44 +26,66 @@
 -doc "Resolves requested record-field shapes from source aliases. Returned dimensions still require validation against emitted DSLX types.".
 -spec records([hls_source:form()], #{atom() => [atom()]}) -> #{atom() => shape()}.
 records(Forms, Requests) ->
-    Context = case hls_source:find_optional_attribute(Forms, hls_source_context) of
-        {ok, Captured} -> Captured;
-        none -> hls_source:from_forms(Forms, [])
-    end,
+    Context =
+        case hls_source:find_optional_attribute(Forms, hls_source_context) of
+            {ok, Captured} -> Captured;
+            none -> hls_source:from_forms(Forms, [])
+        end,
     Source = #{path := SourcePath} = source(Forms, Context),
-    {Records, _Cache} = lists:mapfoldl(fun({Name, RequestedFields}, Cache) ->
-        {attribute, _, record, {Name, Fields}} = hls_records:find(Forms, Name),
-        {Shapes, Next} = lists:mapfoldl(fun({typed_record_field, Field, Type}, Acc) ->
-            FieldName = hls_records:field_name(Field),
-            {Shape, Updated} = case lists:member(FieldName, RequestedFields) of
-                true -> resolve(Type, #{}, Source, Acc, []);
-                false -> {unknown, Acc}
-            end,
-            {{FieldName, shape(Shape)}, Updated}
-        end, Cache, Fields),
-        {{Name, {record, Name, maps:from_list(Shapes)}}, Next}
-    end, #{SourcePath => Source}, lists:sort(maps:to_list(Requests))),
+    {Records, _Cache} = lists:mapfoldl(
+        fun({Name, RequestedFields}, Cache) ->
+            {attribute, _, record, {Name, Fields}} = hls_records:find(Forms, Name),
+            {Shapes, Next} = lists:mapfoldl(
+                fun({typed_record_field, Field, Type}, Acc) ->
+                    FieldName = hls_records:field_name(Field),
+                    {Shape, Updated} =
+                        case lists:member(FieldName, RequestedFields) of
+                            true -> resolve(Type, #{}, Source, Acc, []);
+                            false -> {unknown, Acc}
+                        end,
+                    {{FieldName, shape(Shape)}, Updated}
+                end,
+                Cache,
+                Fields
+            ),
+            {{Name, {record, Name, maps:from_list(Shapes)}}, Next}
+        end,
+        #{SourcePath => Source},
+        lists:sort(maps:to_list(Requests))
+    ),
     maps:from_list(Records).
 
 source(Forms, Context) ->
     #{directory := Directory, source_name := Filename} = Context,
-    #{forms => Forms, context => Context,
-        path => filename:absname(Filename, Directory)}.
+    #{
+        forms => Forms,
+        context => Context,
+        path => filename:absname(Filename, Directory)
+    }.
 
 resolve({var, _, Name}, Parameters, _Source, Cache, _Stack) ->
     {maps:get(Name, Parameters, unknown), Cache};
 resolve({integer, _, Value}, _Parameters, _Source, Cache, _Stack) ->
     {Value, Cache};
-resolve({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]},
-        Parameters, Source, Cache0, Stack) ->
+resolve(
+    {remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]},
+    Parameters,
+    Source,
+    Cache0,
+    Stack
+) ->
     {Values, Cache1} = arguments(Args, Parameters, Source, Cache0, Stack),
     case {Module, Name, Values} of
         {hls_lists, list, [Element, Count]} when is_integer(Count), Count >= 0 ->
             {{array, shape(Element), Count}, Cache1};
         {hls_vec, vector, [Element, Count]} when is_integer(Count), Count > 0 ->
             {{array, shape(Element), Count}, Cache1};
-        {Builtin, _, _} when Builtin =:= hls_lists; Builtin =:= hls_vec;
-                Builtin =:= hls_nums; Builtin =:= hls_fixed ->
+        {Builtin, _, _} when
+            Builtin =:= hls_lists;
+            Builtin =:= hls_vec;
+            Builtin =:= hls_nums;
+            Builtin =:= hls_fixed
+        ->
             {unknown, Cache1};
         _ ->
             case provider(Module, Source, Cache1) of
@@ -72,24 +100,39 @@ resolve(_Type, _Parameters, _Source, Cache, _Stack) ->
     {unknown, Cache}.
 
 arguments(Args, Parameters, Source, Cache, Stack) ->
-    lists:mapfoldl(fun(Arg, Acc) ->
-        resolve(Arg, Parameters, Source, Acc, Stack)
-    end, Cache, Args).
+    lists:mapfoldl(
+        fun(Arg, Acc) ->
+            resolve(Arg, Parameters, Source, Acc, Stack)
+        end,
+        Cache,
+        Args
+    ).
 
 alias(Name, Args, Source = #{path := Path, forms := Forms}, Cache, Stack) ->
     Key = {Path, Name, length(Args)},
     %% The key excludes arguments: expanding recursive aliases with growing
     %% arguments must terminate too. Recursive shapes remain conservative.
     case lists:member(Key, Stack) of
-        true -> {unknown, Cache};
+        true ->
+            {unknown, Cache};
         false ->
-            case [{Body, Vars} || {attribute, _, type, {N, Body, Vars}} <- Forms,
-                    N =:= Name, length(Vars) =:= length(Args)] of
+            case
+                [
+                    {Body, Vars}
+                 || {attribute, _, type, {N, Body, Vars}} <- Forms,
+                    N =:= Name,
+                    length(Vars) =:= length(Args)
+                ]
+            of
                 [{Body, Vars}] ->
-                    Parameters = maps:from_list(lists:zip(
-                        [Variable || {var, _, Variable} <- Vars], Args)),
+                    Parameters = maps:from_list(
+                        lists:zip(
+                            [Variable || {var, _, Variable} <- Vars], Args
+                        )
+                    ),
                     resolve(Body, Parameters, Source, Cache, [Key | Stack]);
-                _ -> {unknown, Cache}
+                _ ->
+                    {unknown, Cache}
             end
     end.
 
@@ -100,22 +143,29 @@ provider(Module, #{path := Path, context := Context}, Cache) ->
     %% Source-relative discovery has the same answer in a clean tree and with
     %% old BEAMs on the code path. Explicit include directories can also make
     %% shared type sources visible. No recursive project scan or global cache.
-    Candidates = [filename:join(Dir, atom_to_list(Module) ++ ".erl")
-        || Dir <- [filename:dirname(Path) |
-            [filename:absname(Include, Directory) || Include <- Includes]]],
+    Candidates = [
+        filename:join(Dir, atom_to_list(Module) ++ ".erl")
+     || Dir <- [
+            filename:dirname(Path)
+            | [filename:absname(Include, Directory) || Include <- Includes]
+        ]
+    ],
     case lists:search(fun filelib:is_regular/1, Candidates) of
-        false -> {unknown, Cache};
+        false ->
+            {unknown, Cache};
         {value, Filename} ->
             case maps:find(Filename, Cache) of
-                {ok, Provider} -> {Provider, Cache};
+                {ok, Provider} ->
+                    {Provider, Cache};
                 error ->
                     ProviderContext = (maps:remove(origins, Context))#{source_name := Filename},
                     Forms = hls_source:read(Filename, ProviderContext),
                     %% A file with another module name is not this alias.
-                    Provider = case hls_source:find_optional_attribute(Forms, module) of
-                        {ok, Module} -> source(Forms, ProviderContext);
-                        _ -> unknown
-                    end,
+                    Provider =
+                        case hls_source:find_optional_attribute(Forms, module) of
+                            {ok, Module} -> source(Forms, ProviderContext);
+                            _ -> unknown
+                        end,
                     {Provider, Cache#{Filename => Provider}}
             end
     end.

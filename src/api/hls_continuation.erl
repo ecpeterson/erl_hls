@@ -1,5 +1,8 @@
 -module(hls_continuation).
--moduledoc "Finite continuation names shared by server and state-machine callbacks.".
+-moduledoc """
+Finite continuation vocabulary shared by the CPU adapters and XLS callback lowering. Reads the declaration from a loaded actor or validates source-derived names, then checks individual internal events against that same bound.
+""".
+%% Declaration lookup and event validation.
 -export([names/1, validate/1, require/2]).
 
 -doc "Reads and validates the callback module's optional hls_continuations declaration.".
@@ -10,10 +13,17 @@ names(Module) ->
 -doc "Accepts at most 255 distinct atom names, excluding reserved absence and Boolean atoms.".
 -spec validate(term()) -> [atom()].
 validate(Names) ->
-    case is_list(Names) andalso length(Names) =< 255 andalso
-            lists:all(fun(Name) -> is_atom(Name) andalso
-                not lists:member(Name, [none, true, false]) end, Names) andalso
-            length(Names) =:= length(lists:usort(Names)) of
+    case
+        is_list(Names) andalso length(Names) =< 255 andalso
+            lists:all(
+                fun(Name) ->
+                    is_atom(Name) andalso
+                        not lists:member(Name, [none, true, false])
+                end,
+                Names
+            ) andalso
+            length(Names) =:= length(lists:usort(Names))
+    of
         true -> Names;
         false -> error({invalid_hls_continuations, Names})
     end.
