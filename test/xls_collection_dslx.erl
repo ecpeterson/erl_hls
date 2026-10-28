@@ -50,7 +50,7 @@ function(Sign, Width, Op) ->
     [io_lib:format("fn probe_~s(index: uN[~p], count: uN[~p], values: u24, value: u8) -> bits[~p] {\n",
         [Op, Width, Width, Bits+4]), xls_clause_lower:print(Body),
         "let code = ", xls_clause_lower:print(Failure), ";\n",
-        "let result = if code != hls_failure::NONE { zero!<", hls_type:print_type(OutType),
+        "let result = if code != hls_failure::NONE { zero!<", xls_type:print_type(OutType),
         ">() } else { ", xls_clause_lower:print(Result), " };\n",
         "(result as bits[", integer_to_list(Bits), "]) ++ (code as u4)\n}\n"].
 

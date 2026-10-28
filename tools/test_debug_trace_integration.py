@@ -44,7 +44,7 @@ def run(rtl, stage):
                 if sim.poll() is not None or time.monotonic() > deadline:
                     raise RuntimeError(f"No debug transport; see {stage / 'simulation.log'}")
                 time.sleep(0.01)
-            command = ["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/erl_hls/ebin"),
+            command = ["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/erl_hls/ebin"), str(ROOT / "_build/test/lib/hls_runtime/ebin"),
                        str(ROOT / "_build/test/lib/erl_hls/test"), "-eval",
                        'ok = hls_debug_trace_live:run(hd(init:get_plain_arguments())), halt(0).',
                        "-extra", str(stage)]

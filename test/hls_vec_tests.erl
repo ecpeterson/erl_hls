@@ -1,11 +1,13 @@
 -module(hls_vec_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Composed fixed-point vectors retain reversed wire order, exact shape and element bounds.
+-spec fixed_point_composition_and_wire_order_test() -> ok.
 fixed_point_composition_and_wire_order_test() ->
     Type = hls_vec:vector(hls_fixed:signed(16, 8), 3),
     ?assertEqual(48, hls_type:width(Type)),
     ?assertEqual([0, 0, 0], hls_type:zero(Type)),
-    ?assertEqual("s16[3]", lists:flatten(hls_type:print_type(Type))),
+    ?assertEqual("s16[3]", lists:flatten(xls_type:print_type(Type))),
     Values = [256, -128, 3],
     Bytes = <<3:16/signed-little, -128:16/signed-little, 256:16/signed-little>>,
     ?assertEqual(Bytes, hls_type:pack(Values, Type)),

@@ -50,7 +50,7 @@ artifact(Filename, Forms0, Layout) ->
 
 
         """,
-        hls_frame_layout:assert_dslx(Layout),
+        xls_frame_layout:assert(Layout),
         "pub enum Tag : u8 {\n",
         "  NONE = u8:0,\n",
         [

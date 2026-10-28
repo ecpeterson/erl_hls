@@ -1,6 +1,8 @@
 -module(xls_collection_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Empty host collections remain serializable while unsupported hardware shapes reject during lowering.
+-spec unsupported_shapes_fail_before_xls_test() -> ok.
 unsupported_shapes_fail_before_xls_test() ->
     lists:foreach(fun(Expression) ->
         ?assertError(empty_xls_collection, lower(Expression))
@@ -12,7 +14,7 @@ unsupported_shapes_fail_before_xls_test() ->
         lower("hls_lists:array_slice(hls_lists:list(hls_nums:u32(), 3), V, 1, Count)")),
     Empty = hls_lists:list(hls_nums:u8(), 0),
     ?assertEqual(<<>>, hls_type:pack([], Empty)),
-    ?assertError(empty_xls_collection, hls_type:print_type(Empty)).
+    ?assertError(empty_xls_collection, xls_type:print_type(Empty)).
 
 %% Lowers a collection expression with runtime values and count for focused failure assertions.
 -spec lower(string()) -> #{body := xls_clause_lower:printable(),

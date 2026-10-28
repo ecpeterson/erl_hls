@@ -118,7 +118,7 @@ configure_support(Output, Layout) ->
     end,
     Path = filename:join([Output, "support", "compiler", "xls", "lib", "frame_config.x"]),
     {ok, _} = file:read_file_info(Path),
-    ok = file:write_file(Path, hls_frame_layout:config_dslx(Layout)).
+    ok = file:write_file(Path, xls_frame_layout:config(Layout)).
 
 -doc "Compiler and caller-owned support trees with their emitted import directories, without writing files. Library sources are absolute; imports are bundle-relative.".
 -type support_layout() :: #{libraries := [hls_artifact_bundle:library()], imports := [binary()]}.

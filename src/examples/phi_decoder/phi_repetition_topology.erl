@@ -103,19 +103,11 @@ profile(N) ->
     _ = topology(N),
     #{name => phi_repetition_topology, channel_depth => 1, actor_egress_depth => burst}.
 
--doc "Returns the data coordinate and Z update for one decoder move.".
+-doc "Returns the periodic correction coordinate through phi_repetition_memory, which owns runtime closeout geometry. Rejects invalid corrections and line sizes with badarg.".
 -spec correction_update(#phi_correction{}, pos_integer()) ->
     {{non_neg_integer(), 0}, hls_pauli:pauli()}.
-correction_update(#phi_correction{x = X, y = 0, direction = Direction}, N) when
-    N >= 2, N =< 16#ffff, X >= 0, X < N
-->
-    case Direction of
-        ?PHI_EAST_MASK -> {{(X + 1) rem N, 0}, hls_pauli:z()};
-        ?PHI_WEST_MASK -> {{X, 0}, hls_pauli:z()};
-        _ -> error(badarg)
-    end;
-correction_update(_Correction, _N) ->
-    error(badarg).
+correction_update(Correction, N) ->
+    phi_repetition_memory:correction_update(Correction, N).
 
 %% Preserve labelled east/west edges even when their destination PIDs coincide.
 -spec relation(atom(), atom(), atom(), integer()) -> tuple().

@@ -320,7 +320,7 @@ statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
 statement_from_statement({call, Line, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
     {References, ArgState} = lower_arguments(Args, State),
-    case Module:transpile(FAtom, References, ArgState) of
+    case xls_type:transpile(Module, FAtom, References, ArgState) of
         X = #clause_state{} ->
             X;
         {fallible, Kind, Expression} ->

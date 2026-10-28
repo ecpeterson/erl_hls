@@ -20,7 +20,7 @@
 -doc "Prints a concrete helper type as DSLX.".
 -spec format(type()) -> iodata().
 format({dslx, Text}) -> Text;
-format({provider, Type}) -> hls_type:print_type(Type);
+format({provider, Type}) -> xls_type:print_type(Type);
 format({tuple, Fields}) -> ["(", [[format(T), ", "] || T <- Fields], ")"].
 
 -doc "Annotates integer literals from helper signatures and record fields through bindings, tuples and branches; does not cast existing values.".

@@ -71,7 +71,7 @@ class Case:
 
     def erl(self, expression: str, *arguments: str | Path, name: str = "fixtures") -> None:
         """Execute the original Erlang fixture/oracle writer with explicit arguments."""
-        self.command(name, ["erl", "-noshell", "-pa", self.root / "_build/test/lib/erl_hls/ebin",
+        self.command(name, ["erl", "-noshell", "-pa", self.root / "_build/test/lib/erl_hls/ebin", self.root / "_build/test/lib/hls_runtime/ebin",
             self.root / "_build/test/lib/erl_hls/test", "-eval", expression, "-extra", *(arguments or (self.stage,))], directories=(self.stage,))
 
     def fixture(self, name: str, placement: str | None = None) -> None:

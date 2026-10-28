@@ -72,6 +72,6 @@ Pass the normalized topology and a physical profile to `xls_topology_dslx:to_xls
 
 Messages follow source routers to recipient lanes. Independent lanes may transfer concurrently; senders targeting the same recipient arbitrate. Each actor's effects retain callback order, including aliased output ports. Queue depth controls buffering, not the application's deadlock behavior.
 
-Enable `direct_actor_debug` consistently in the profile and actor artifacts, then generate `xls_actor_debug:projection/3`. A wrapper forwards the observation ports described by `xls_actor_observation`. Bind the verified query session with `hls_debug_catalog:hardware/4`; logical actor identities are unchanged by RTL generation. See [topology queries](topology-debug.md).
+Enable `direct_actor_debug` consistently in the profile and actor artifacts, then generate `xls_actor_debug:projection/3`. A wrapper forwards the observation ports described by `xls_actor_observation`. Bind the verified query session with `xls_actor_debug:catalog/3`; logical actor identities are unchanged by RTL generation. See [topology queries](topology-debug.md).
 
 `tools/test_mixed_topology.sh XLS_ROOT` compares closed and externally commanded actor networks with their CPU results while stalling outputs and querying queues through the debug transport.

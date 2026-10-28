@@ -59,8 +59,8 @@ function(_Name, VT = {hls_type, hls_nums, Name, Args}, CT, Op) ->
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
     W = hls_type:value_width(VT), CW = hls_type:value_width(CT),
     #{body := Body, result := Result} = xls_clause_lower:clause_outcome(
-        Clause, [["(x as ", hls_type:print_type(VT), ")"],
-                 ["(y as ", hls_type:print_type(CT), ")"]], state, #{}),
+        Clause, [["(x as ", xls_type:print_type(VT), ")"],
+                 ["(y as ", xls_type:print_type(CT), ")"]], state, #{}),
     Function = case Op of 'bsl' -> "left"; 'bsr' -> "right" end,
     [io_lib:format("fn ~s(x: uN[~p], y: uN[~p]) -> uN[~p] {\n", [Function, W, CW, W]),
         xls_clause_lower:print(Body), "(", xls_clause_lower:print(Result), ") as uN[",

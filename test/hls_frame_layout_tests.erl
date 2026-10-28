@@ -128,4 +128,4 @@ retained_reply_layout_test() ->
 -spec default_config_test() -> ok.
 default_config_test() ->
     {ok, Default} = file:read_file("priv/xls/lib/frame_config.x"),
-    ?assertEqual(Default, iolist_to_binary(hls_frame_layout:config_dslx(hls_frame_layout:default()))).
+    ?assertEqual(Default, iolist_to_binary(xls_frame_layout:config(hls_frame_layout:default()))).

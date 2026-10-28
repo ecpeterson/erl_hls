@@ -275,7 +275,7 @@ preamble(#{
         end,
         [["import ", Module, ";\n"] || Module <- lists:usort([M || #{module_name := M} <- Actors])],
         "\n",
-        hls_frame_layout:assert_dslx(Layout),
+        xls_frame_layout:assert(Layout),
         "const CHANNEL_DEPTH = u32:",
         n(Depth),
         ";\n\n",

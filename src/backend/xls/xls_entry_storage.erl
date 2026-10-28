@@ -197,7 +197,7 @@ encode(#{stores := Stores}, Width) ->
             Actions = xls_dslx:field(xls_dslx:ref("evaluated"), 2),
             Message = xls_dslx:field(xls_dslx:field(Actions, Index), 1),
             Value = xls_dslx:field(Message, atom_to_list(Name)),
-            Raw = hls_type:dslx_to_bits(Type, Value),
+            Raw = xls_type:dslx_to_bits(Type, Value),
             case Store of
                 #{slices := Slices} ->
                     {Packed, _} = lists:foldl(
@@ -259,7 +259,7 @@ decode_field(#{type := Type, constant := Bits}) ->
                 <<Value:Width>> = Bits,
                 Value
         end,
-    hls_type:dslx_from_bits(Type, [
+    xls_type:dslx_from_bits(Type, [
         "hls_bits::from_stream(uN[",
         integer_to_list(Width),
         "]:",
@@ -275,9 +275,9 @@ decode_field(#{type := Type, known := #{value := Value}, slices := Slices} = Fie
         {Zero, maps:get(offset, Field, 0)},
         Slices
     ),
-    hls_type:dslx_from_bits(Type, ["(", Raw, ")"]);
+    xls_type:dslx_from_bits(Type, ["(", Raw, ")"]);
 decode_field(#{type := Type, offset := Offset}) ->
-    hls_type:dslx_from_bits(Type, [
+    xls_type:dslx_from_bits(Type, [
         "effects.payloads[",
         integer_to_list(Offset),
         ":",

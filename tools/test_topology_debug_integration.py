@@ -277,7 +277,7 @@ def run(args):
                 "erl",
                 "-noshell",
                 "-pa",
-                str(ROOT / "_build/test/lib/erl_hls/ebin"),
+                str(ROOT / "_build/test/lib/erl_hls/ebin"), str(ROOT / "_build/test/lib/hls_runtime/ebin"),
                 str(ROOT / "_build/test/lib/erl_hls/test"),
                 "-eval",
                 'case hls_topology_debug_live:run(hd(init:get_plain_arguments())) of ok -> halt(0); Error -> io:format("~p~n",[Error]), halt(1) end.',

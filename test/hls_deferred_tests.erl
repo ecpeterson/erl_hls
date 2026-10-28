@@ -89,7 +89,7 @@ declaration_bounds_test() ->
 %% A handle counter at its limit fails instead of silently reusing the first activation handle.
 -spec handle_exhaustion_test() -> ok.
 handle_exhaustion_test() ->
-    {ok, Contract} = hls_service_contract:from_module(hls_deferred_fixture),
+    {ok, Contract} = hls_service_schema:from_module(hls_deferred_fixture),
     Initial = #{book := Book} = hls_gs_deferred:new(Contract),
     Pending = Initial#{book := Book#{next := 1 bsl 56}},
     ?assertError(reply_handle_exhausted,

@@ -1,0 +1,9 @@
+# CPU execution and host runtime
+
+The application-facing CPU adapters are `hls_gs` and `hls_statem` in [api](../api/README.md). Here, `hls_mailbox`, `hls_reduction`, `hls_indexed_gather`, `hls_callback_actions`, `hls_gs_deferred` and `hls_reply_book` own their bounded reference state and reply bookkeeping. They are independent of hardware scheduling policy. `hls_codec` supplies shared bitstream primitives, and `hls_diagnostic` carries structured failures without a compiler dependency.
+
+For a device connection, `hls_fabric` is the routed-frame broker. `hls_fabric_lease` reserves device paths, `hls_fabric_io` owns raw descriptors, and `hls_fabric_session` drains one logical session. `hls_fabric_client` is embedded state used by server/debug proxies to retain request ownership across timeouts. A timed-out caller does not imply cancellation of device work. These processes are explicitly started by their clients; this library supplies no application supervisor.
+
+`hls_debug` dispatches scoped queries through `hls_debug_target`. `hls_debug_catalog:cpu/2` and `hardware/3` construct logical catalogs; `bind/3` checks a retained projection against a verified session's manifest resources. Source-bound projection validation belongs to the compiler's `xls_actor_debug`. `hls_actor_identity` gives emitted manifests and live lookups the same logical actor key. `hls_topology_debug` checks manifest/session identity and decodes observations, while `hls_topology_wait` explores candidate waits using an injected query function.
+
+Runtime code consumes concrete frame/schema/manifest contracts. Source reading, actor lowering and board programming are not runtime responsibilities. Current-state samples and boundary traces have different scopes; neither alone proves continuous blocking or application progress. See the [library boundary](../../README.md) and [compiler map](../../../../src/README.md) before introducing a dependency.

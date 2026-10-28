@@ -721,7 +721,7 @@ preamble(Spec) ->
         end,
         [["import ", Module, ";\n"] || Module <- Modules],
         "\n",
-        hls_frame_layout:assert_dslx(maps:get(frame_layout, Spec)),
+        xls_frame_layout:assert(maps:get(frame_layout, Spec)),
         "const CHANNEL_DEPTH = u32:",
         integer_to_list(maps:get(depth, Spec)),
         ";\n",

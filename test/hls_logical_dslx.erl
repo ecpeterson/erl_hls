@@ -7,6 +7,8 @@ write(Stage) ->
     ok = codecs(Stage),
     ok = transactions(Stage).
 
+%% Write codec and wire-permutation probes with independently computed host vectors.
+-spec codecs(file:filename_all()) -> ok.
 codecs(Stage) ->
     Scalars = [hls_bool:bool()] ++ [Type || Width <- [1, 3, 7, 9, 17, 33, 65, 127],
         Type <- [hls_nums:uN(Width), hls_nums:sN(Width)]],
@@ -23,9 +25,9 @@ codecs(Stage) ->
         Raw <- Values],
     Body = ["import hls_bits;\n\npub fn probe(raw: bits[128], kind: u8) -> bits[128] {\n match kind {\n",
         [io_lib:format("  u8:~B => { let decoded = ~s; (~s) as bits[128] },\n",
-            [Kind, hls_type:dslx_from_bits(Type, ["raw[0+:",
+            [Kind, xls_type:dslx_from_bits(Type, ["raw[0+:",
                 "bits[", integer_to_list(hls_type:width(Type)), "]]"]),
-             hls_type:dslx_to_bits(Type, "decoded")])
+             xls_type:dslx_to_bits(Type, "decoded")])
             || {Kind, Type} <- lists:enumerate(0, Types)],
         "  _ => bits[128]:0,\n }\n}\n",
         "pub fn wire_probe(raw: bits[128]) -> bits[128] {\n",

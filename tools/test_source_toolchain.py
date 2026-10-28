@@ -172,8 +172,8 @@ class SourceToolchainTests(unittest.TestCase):
             missing = subprocess.run([release/'bin/hlsc', 'emit', source, '--diagnostics', 'json'],
                                      env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(json.loads(missing.stderr)['code'], 'missing_option')
-            ebin, = release.glob('lib/erl_hls-*/ebin')
-            injected = ['erl', '+S', '1:1', '-noshell', '-pa', str(ebin), '-eval',
+            ebins = sorted(release.glob('lib/*/ebin'))
+            injected = ['erl', '+S', '1:1', '-noshell', '-pa', *map(str, ebins), '-eval',
                         'hls_cli:main("fixture", fun(_) -> error(unexpected_fixture) end).']
             unowned = subprocess.run(injected, env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(unowned.returncode, 1)

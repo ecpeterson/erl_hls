@@ -3,7 +3,9 @@
 %% Build and validate source-bound debug projections.
 -export([projection/2, projection/3, validate/2]).
 %% Compose banks and identities for external observation backends.
--export([actor_key/1, direct_bank/4, failures/1]).
+-export([direct_bank/4, failures/1]).
+%% Source-bound dedicated observation catalog construction.
+-export([catalog/3]).
 
 %% Source metadata accepted by the canonical JSON projection encoder.
 -type metadata() ::
@@ -102,7 +104,7 @@ direct_bank(
         phases => [atom_to_binary(P) || P <- Phases],
         actors => [
             #{
-                key => actor_key(Id),
+                key => hls_actor_identity:actor_key(Id),
                 slot => 0,
                 name => iolist_to_binary(io_lib:format("~p", [Id]))
             }
@@ -138,10 +140,6 @@ failures(Sites) ->
 -spec json_value(metadata()) -> json_term().
 json_value(Term) -> json:decode(iolist_to_binary(json:encode(Term))).
 
--doc "Encodes a logical actor identity deterministically for catalog lookup.".
--spec actor_key(term()) -> binary().
-actor_key(Id) -> digest(Id).
-
 %% Fingerprints a deterministic serialization of logical identity or build metadata.
 -spec digest(term()) -> binary().
 digest(Term) ->
@@ -153,3 +151,10 @@ digest(Term) ->
             )
         )
     ).
+
+-doc "Validates a dedicated actor projection against source, then binds its retained manifest resources to the logical runtime catalog.".
+-spec catalog(hls_topology:plan(), [{boundary, pid(), term()}], map()) -> map().
+catalog(Plan, Boundaries, Session = #{manifest := Manifest}) ->
+    Projection = maps:get(<<"actor_projection">>, Manifest, none),
+    ok = validate(Plan, Projection),
+    hls_debug_catalog:bind(hls_debug_catalog:hardware(Plan, #{}, Boundaries), Projection, Session).

@@ -55,7 +55,7 @@ def run(rtl: Path, stage: Path) -> None:
                     raise RuntimeError((stage / 'simulation.log').read_text())
                 time.sleep(0.02)
             with (stage / 'host.log').open('w') as host:
-                subprocess.run(['erl', '-noshell', '-pa', str(ROOT / '_build/test/lib/erl_hls/ebin'),
+                subprocess.run(['erl', '-noshell', '-pa', str(ROOT / '_build/test/lib/erl_hls/ebin'), str(ROOT / '_build/test/lib/hls_runtime/ebin'),
                                 str(ROOT / '_build/test/lib/erl_hls/test'), '-eval',
                                 'ok = hls_fabric_services_live:run(hd(init:get_plain_arguments())), halt().',
                                 '-extra', str(stage)], cwd=stage, stdout=host,

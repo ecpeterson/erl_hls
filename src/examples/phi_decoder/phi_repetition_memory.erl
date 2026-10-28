@@ -18,13 +18,16 @@ non-restarting local partition activation per role. It performs no retry;
 replaying a Pauli update would cancel it. Completion is a physical or
 simulation witness for the observed activation, not decoder threshold proof.
 
-Host partition runners consume these pure transitions and peer packets; this module does not construct hardware or open a connection.
+Host partition runners consume these pure transitions, periodic correction geometry and peer packets without loading topology planning; this module does not construct hardware or open a connection.
 """.
 
 -include("phi_protocol.hrl").
 
 %% Pure local and peer closeout transitions.
 -export([new/1, event/3, peer/2, progress/1, peer_role/1]).
+
+%% Periodic correction geometry shared with topology callers.
+-export([correction_update/2]).
 
 %% Ordered peer-channel codec.
 -export([encode_peer/1, decode_peer/1]).
@@ -109,6 +112,20 @@ Host partition runners consume these pure transitions and peer packets; this mod
     | {done, witness(), state(), [effect()]}
     | {error, atom(), state()}.
 
+-doc "Returns the data coordinate and Z update for one east/west decoder move on a periodic line of 2..65535 data qubits. Rejects off-line coordinates, unsupported directions and invalid line sizes with badarg.".
+-spec correction_update(#phi_correction{}, pos_integer()) ->
+    {{non_neg_integer(), 0}, hls_pauli:pauli()}.
+correction_update(#phi_correction{x = X, y = 0, direction = Direction}, N) when
+    N >= 2, N =< 16#ffff, X >= 0, X < N
+->
+    case Direction of
+        ?PHI_EAST_MASK -> {{(X + 1) rem N, 0}, hls_pauli:z()};
+        ?PHI_WEST_MASK -> {{X, 0}, hls_pauli:z()};
+        _ -> error(badarg)
+    end;
+correction_update(_Correction, _N) ->
+    error(badarg).
+
 -doc "Starts one partition closeout and returns its role-local cutoff command.".
 -spec new(options()) -> {state(), command()}.
 new(#{
@@ -184,7 +201,7 @@ peer(
     }
 ) ->
     Correction = #phi_correction{step = Step, x = X, y = 0, direction = Direction},
-    {{DataX, 0}, z} = phi_repetition_topology:correction_update(Correction, Size),
+    {{DataX, 0}, z} = correction_update(Correction, Size),
     true = (Apply =:= true) =:= lists:member(DataX, Coordinates),
     Entry = correction_observation(peer_role(Role), Correction, DataX, Apply),
     Updated = State#{corrections := [Entry | Corrections]},
@@ -348,7 +365,7 @@ correction(
         true ->
             {error, duplicate_correction, State};
         false ->
-            {{DataX, 0}, z} = phi_repetition_topology:correction_update(Correction, Size),
+            {{DataX, 0}, z} = correction_update(Correction, Size),
             Local = lists:member(DataX, Coordinates),
             Entry = correction_observation(Role, Correction, DataX, not Local),
             CommandEffects =

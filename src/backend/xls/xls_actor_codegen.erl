@@ -110,7 +110,7 @@ preamble(
             Imports
         ),
         "\n",
-        hls_frame_layout:assert_dslx(maps:get(frame_layout, Spec)),
+        xls_frame_layout:assert(maps:get(frame_layout, Spec)),
         "const MAILBOX_CAPACITY = u8:",
         integer_to_list(Capacity),
         ";\n",

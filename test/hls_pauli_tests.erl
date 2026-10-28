@@ -43,10 +43,12 @@ anticommutation_test() ->
     ]),
     ?assertEqual(Anticommuting, Actual).
 
+%% Check all Pauli encodings, trailing bytes and invalid host/wire values.
+-spec type_and_codec_test() -> ok.
 type_and_codec_test() ->
     Type = hls_pauli:pauli(),
     ?assertEqual(32, hls_type:width(Type)),
-    ?assertEqual("u32", hls_type:print_type(Type)),
+    ?assertEqual("u32", xls_type:print_type(Type)),
     ?assertEqual(i, hls_type:zero(Type)),
     Encodings = [{i, 0}, {x, 2}, {y, 3}, {z, 1}],
     lists:foreach(

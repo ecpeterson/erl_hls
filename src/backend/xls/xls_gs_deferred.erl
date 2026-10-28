@@ -42,7 +42,7 @@ artifact(Filename, Forms0, Layout) ->
             [axis, hls_bits, hls_failure, hls_server], xls_dslx_imports:from_forms(Forms)
         ),
         "\n",
-        hls_frame_layout:assert_dslx(Layout),
+        xls_frame_layout:assert(Layout),
         "pub enum Tag : u8 { NONE = 0,\n",
         [
             ["  ", xls_names:enum_member(Name), " = ", integer_to_list(I), ",\n"]

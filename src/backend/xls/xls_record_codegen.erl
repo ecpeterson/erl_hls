@@ -27,6 +27,6 @@ encoder(Record = {attribute, _, record, {Name, _}}) ->
     ).
 
 -doc "Derives a physical-stream layout for a checked source record, retaining declared field order, zero-width fields and provider padding.".
--spec layout(hls_source:record_declaration()) -> xls_struct_codec:layout().
+-spec layout(hls_source:record_declaration()) -> hls_field_layout:layout().
 layout(Record) ->
-    xls_struct_codec:layout(hls_records:fields(Record), stream).
+    hls_field_layout:layout(hls_records:fields(Record), stream).

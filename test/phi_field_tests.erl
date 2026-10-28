@@ -2,10 +2,12 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+%% The custom scalar provider retains its fixed-point scale and checked host conversions.
+-spec type_and_conversion_test() -> ok.
 type_and_conversion_test() ->
     Type = phi_field:scalar(),
     ?assertEqual(32, hls_type:width(Type)),
-    ?assertEqual("phi_field::Scalar", hls_type:print_type(Type)),
+    ?assertEqual("phi_field::Scalar", xls_type:print_type(Type)),
     ?assertEqual(0, hls_type:zero(Type)),
     ?assertEqual(65536, phi_field:from_integer(1)),
     ?assertEqual(-32768, phi_field:from_ratio(-1, 2)),
@@ -18,11 +20,13 @@ signed_wire_round_trip_test() ->
     ?assertEqual(<<16#f_edcba99:32/little-unsigned-integer>>, Packed),
     ?assertEqual({-16#1234567, <<>>}, hls_type:unpack(Packed, Type)).
 
+%% Custom composite codecs retain component order and the independently calculated recurrence.
+-spec composite_field_test() -> ok.
 composite_field_test() ->
     Type = phi_field:field(),
     ?assertEqual(64, hls_type:width(Type)),
     ?assertEqual([0, 0], hls_type:zero(Type)),
-    ?assertEqual("phi_field::Field", hls_type:print_type(Type)),
+    ?assertEqual("phi_field::Field", xls_type:print_type(Type)),
     Values = [65536, -32768],
     Packed = <<-32768:32/signed-little, 65536:32/signed-little>>,
     ?assertEqual(Packed, hls_type:pack(Values, Type)),

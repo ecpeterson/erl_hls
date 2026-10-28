@@ -33,12 +33,12 @@ progress(G = #{sites := [_ | _]}) ->
     }.
 
 -doc "Defines progress field types and their low-bit-first encoding. Generated gather enums and aliases, plus hls_failure, must be in scope when rendering codecs; none has an empty layout.".
--spec codec(none | map()) -> xls_struct_codec:layout().
+-spec codec(none | map()) -> hls_field_layout:layout().
 codec(none) ->
-    xls_struct_codec:layout([], lsb);
+    hls_field_layout:layout([], lsb);
 codec(G) ->
     Members = xls_named_bits:local('GatherMembers', capacity(G)),
-    xls_struct_codec:layout(
+    hls_field_layout:layout(
         [
             {status, xls_named_bits:local('GatherStatus', 2)},
             {site, xls_named_bits:local('GatherSite', 8)},

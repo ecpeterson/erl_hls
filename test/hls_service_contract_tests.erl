@@ -1,10 +1,12 @@
 -module(hls_service_contract_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Runtime attribute lookup returns the same request/reply contract as source preparation.
+-spec contract_test() -> ok.
 contract_test() ->
     Expected = #{calls => #{query => [small, large], read => [small]}, casts => [change]},
     ?assertEqual(Expected, hls_service_contract:from_forms(forms())),
-    ?assertEqual({ok, Expected}, hls_service_contract:from_module(hls_reply_fixture)).
+    ?assertEqual({ok, Expected}, hls_service_schema:from_module(hls_reply_fixture)).
 
 declarations_test_() ->
     [?_assertError(Reason, hls_service_contract:from_forms(replies(Declaration)))

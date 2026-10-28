@@ -1,11 +1,12 @@
 -module(xls_named_bits).
 -moduledoc "Internal hls_type provider for nominal DSLX bit types already declared by generated layouts such as gather progress. xls_struct_codec uses these descriptors for typed packing; host values are unsigned encoded integers and enum membership remains the declaring code's responsibility. Source-language calls to this provider are unsupported.".
 -behavior(hls_type).
+-behaviour(xls_type).
 %% Construct compiler-owned local or imported nominal descriptors.
 -export([local/2, qualified/3]).
 %% hls_type value layout and host codec callbacks.
 -export([width/2, zero/2, pack/3, unpack/3]).
-%% hls_type target spelling and rejection of source operations.
+%% Compiler target spelling and rejection of source operations.
 -export([print_type/2, transpile/3]).
 
 -doc "Describes a positive-width bit type already declared in the current generated module. Name must be a compiler-owned DSLX identifier, not an expression.".
@@ -37,7 +38,7 @@ pack(Value, Kind, Args) ->
 unpack(Packed, Kind, Args) ->
     hls_type:unpack(Packed, unsigned(Kind, Args)).
 
--doc "Renders the nominal DSLX name; the default hls_type bit-cast codec supplies conversions.".
+-doc "Renders the nominal DSLX name; the default xls_type bit-cast codec supplies conversions.".
 -spec print_type(local | qualified, [hls_type:arg()]) -> iodata().
 print_type(local, [Name, _Width]) -> atom_to_list(Name);
 print_type(qualified, [Module, Name, _Width]) -> [atom_to_list(Module), "::", atom_to_list(Name)].

@@ -4,6 +4,8 @@
 %% Exercise the actual Erlang expression lowering, then compare XLS results
 %% with the public BEAM conversion APIs. Arithmetic caveats live in the static
 %% DSLX test fragment rather than in generated Erlang string literals.
+-doc "Emits numeric wrapping probes and BEAM-derived expectations, including signed and oversized literals.".
+-spec to_dslx() -> iodata().
 to_dslx() ->
     Formats = [
         {"wrap_u8", "hls_nums:wrap(hls_nums:u8(), Value)", hls_nums:u8(),
@@ -31,7 +33,7 @@ to_dslx() ->
             "hls_fixed:wrap(hls_fixed:signed(8, 4), 128)", []),
         "#[test]\nfn wraps_match_beam() {\n",
         [io_lib:format("  assert_eq(~s(sN[128]:~p), ~s:~p);\n",
-            [Name, Value, hls_type:print_type(Type), Wrap(Value)])
+            [Name, Value, xls_type:print_type(Type), Wrap(Value)])
             || {Name, _Expression, Type, Wrap} <- Formats, Value <- Values],
         "  assert_eq(negative_literal(), u8:255);\n",
         "  assert_eq(large_literal(), s8:-127);\n",
@@ -46,8 +48,8 @@ function(Name, Parameters, Type, Arguments, Expression, References) ->
     {ok, Tokens, _} = erl_scan:string(lists:flatten(
         ["probe(", Arguments, ") -> ", Expression, "."])),
     {ok, {function, _, probe, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    Failure = ["fail!(\"unexpected_failure\", zero!<", hls_type:print_type(Type), ">())"],
+    Failure = ["fail!(\"unexpected_failure\", zero!<", xls_type:print_type(Type), ">())"],
     {Body, Result} = xls_clause_lower:branch_from_clause(Clause, References, state,
         fun(Reference) -> Reference end, Failure, #{}),
-    ["fn ", Name, "(", Parameters, ") -> ", hls_type:print_type(Type), " {\n",
+    ["fn ", Name, "(", Parameters, ") -> ", xls_type:print_type(Type), " {\n",
         xls_clause_lower:print([Body, Result]), "\n}\n"].

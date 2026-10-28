@@ -4,7 +4,7 @@
 %% Checks projection and catalog.
 -spec projection_and_catalog_test() -> 'ok'.
 projection_and_catalog_test() ->
-    {Plan, Specs} = hls_direct_debug_fixture:fixture(direct_reduction),
+    {Plan, _Specs} = hls_direct_debug_fixture:fixture(direct_reduction),
     Options = #{direct_actor_debug => true},
     Artifacts = hls_direct_debug_fixture:artifacts(direct_reduction, Options),
     Projection = #{<<"banks">> := [], <<"direct">> := Direct} =
@@ -15,7 +15,7 @@ projection_and_catalog_test() ->
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"direct-fixture">>},
     Session = #{manifest => Manifest, resources => list_to_tuple(Resources)},
-    Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
+    Catalog = xls_actor_debug:catalog(Plan, [], Session),
     lists:foreach(fun(Id) ->
         {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
         ?assertEqual({placement, #{kind => direct}}, hls_debug:info(Actor, placement)),
@@ -40,7 +40,7 @@ projection_and_catalog_test() ->
     lists:foreach(fun(BadResource) ->
         BadManifest = Manifest#{<<"resources">> := [BadResource | Rs]},
         ?assertError(actor_resources_mismatch,
-            hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := BadManifest}))
+            xls_actor_debug:catalog(Plan, [], Session#{manifest := BadManifest}))
     end, [R#{<<"slot">> := 1}, R#{<<"mailbox_kind">> := <<"shared">>},
         R#{<<"mailbox_capacity">> := 99}, maps:remove(<<"mailbox_kind">>, R)]).
 

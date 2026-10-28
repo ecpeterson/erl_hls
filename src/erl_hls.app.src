@@ -2,12 +2,12 @@
     {description, "Cross-platform environment for hardware applications."},
     {vsn, "0.0.1"},
     {registered, []},
-    {mod, {erl_hls_app, []}},
     {applications, [
         kernel,
         stdlib,
         compiler,
-        crypto
+        crypto,
+        hls_runtime
     ]},
     {env, []},
     {modules, []},
