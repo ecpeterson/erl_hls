@@ -68,7 +68,7 @@ An ingress is another ordered message source. Commands to the same recipient ret
 
 ## Hardware generation and observation
 
-Pass the normalized topology and a physical profile to `xls_topology_dslx:to_xls/2`. The profile selects the module name, channel depth and optional `direct_actor_debug`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc.
+Pass the normalized topology and a physical profile to `xls_topology_dslx:emit/2`. The profile selects the module name, channel depth and optional `direct_actor_debug`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc.
 
 Messages follow source routers to recipient lanes. Independent lanes may transfer concurrently; senders targeting the same recipient arbitrate. Each actor's effects retain callback order, including aliased output ports. Queue depth controls buffering, not the application's deadlock behavior.
 

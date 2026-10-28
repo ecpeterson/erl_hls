@@ -433,3 +433,16 @@ def state_updates(c: Case) -> None:
     c.command("state-census", [sys.executable, c.root / "tools/xls_ir_census.py",
         c.path("state_updates.opt.ir"), "--output", c.path("state_updates.census.json")],
         products=(c.path("state_updates.census.json"),))
+
+
+def telemetry(c: Case) -> None:
+    """Compile the shipped two-actor example bundle once and compare its stalled/reset RTL to BEAM."""
+    c.generate("telemetry_example_fixture")
+    rtl = c.path("compiled/telemetry.v")
+    c.command("telemetry-bundle", [sys.executable, c.root / "priv/tools/compile_source_build.py",
+        c.xls, c.path("bundle"), "--output", c.path("compiled"), "--cache", c.path("cache")],
+        products=(rtl,), timeout=900)
+    c.structure("telemetry", "telemetry_top", [rtl])
+    c.simulate("telemetry", "telemetry_example_tb", [bench(c, "telemetry_example_tb"), rtl],
+        flags=["-I", c.stage], arguments=["+vectors=" + str(c.stage)], timeout=60,
+        completion="PASS: telemetry CPU/RTL windows, malformed ingress, stalls and reset")

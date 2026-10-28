@@ -154,11 +154,26 @@ class DescriptionTests(unittest.TestCase):
         rows = json.loads(output.getvalue())
         inventory = load_inventory()
         self.assertEqual(set(inventory["cases"]), {row["case"] for row in rows})
-        self.assertEqual(28, len(rows))
+        self.assertEqual(29, len(rows))
         self.assertEqual(1, sum(step.get("name") == "beam-compile" for row in rows for step in row["steps"]))
         self.assertTrue(any(step["kind"] == "generated_rows" for row in rows for step in row["steps"]))
         for row in rows:
             self.assertEqual(ROOT / inventory["cases"][row["case"]]["default_stage"], Path(row["stage"]).parent)
+
+    def test_telemetry_compiles_the_shipped_bundle_once(self) -> None:
+        """The local example consumes its emitted schedule and bundle instead of regenerating actors."""
+        inventory = load_inventory()
+        self.assertIsNone(inventory["cases"]["telemetry"]["group"])
+        case = Case(ROOT, Path("/xls"), Path("/stage"))
+        regression_cases.telemetry(case)
+        commands = [step for step in case.steps if isinstance(step, Command)]
+        compile_step = next(step for step in commands if step.name == "telemetry-bundle")
+        self.assertIn(str(ROOT / "priv/tools/compile_source_build.py"), compile_step.argv)
+        self.assertIn("/stage/bundle", compile_step.argv)
+        self.assertEqual((Path("/stage/compiled/telemetry.v"),), compile_step.products)
+        self.assertFalse(any(step.name.endswith(("-convert", "-opt", "-codegen")) for step in commands))
+        simulation = next(step for step in commands if step.name == "telemetry-simulate")
+        self.assertEqual("PASS: telemetry CPU/RTL windows, malformed ingress, stalls and reset", simulation.completion)
 
     def test_empty_json_and_duplicate_selection(self) -> None:
         """An empty CI selection is a no-op; repeated names run once in requested order."""

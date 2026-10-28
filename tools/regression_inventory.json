@@ -229,6 +229,15 @@
         "test/rtl/statem_reply_topology_tb.sv"
       ]
     },
+    "telemetry": {
+      "group": null,
+      "default_stage": "_build/telemetry",
+      "dependencies": [
+        "test/telemetry_example_fixture.erl",
+        "test/telemetry_example_tests.erl",
+        "test/rtl/telemetry_example_tb.sv"
+      ]
+    },
     "type_shapes": {
       "group": "test",
       "default_stage": "_build/type-shapes",

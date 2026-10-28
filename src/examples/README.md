@@ -2,6 +2,7 @@
 
 These applications exercise the same [actor/type API](../../apps/hls_runtime/src/api/README.md), [source preparation](../frontend/README.md) and [XLS backend](../backend/README.md) available to clients. They remain in this repository as compiler and runtime fixtures; they are not generic compiler policies.
 
+- [telemetry](telemetry/README.md): a complete two-actor project with configuration, signed calibration, window statistics, a CPU host and a portable connected hardware build. Start here for project structure.
 - [regsvc](regsvc/README.md): server calls/casts, register updates and bounded list replies.
 - [packed_samples](packed_samples/README.md): sub-byte fields, bitstrings and signed codec behavior.
 
