@@ -164,7 +164,7 @@ layout_group(Group = #{members := Members0}, Interface) ->
     {Members, SlotCount} = assign_slots(Members0),
     EventStorage = maps:with([continuation_width, reply_storage_width], Interface),
     Gather = maps:get(gathers, Interface, none),
-    GatherWidth = xls_shared_gather_codegen:storage_width(Group#{gathers => Gather}),
+    GatherWidth = xls_gather_codegen:storage_width(Group#{gathers => Gather}),
     GatherStorage = case Gather of
         none -> #{};
         _ -> #{gathers => Gather, gather_storage_width => GatherWidth}

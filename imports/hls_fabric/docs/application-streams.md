@@ -35,7 +35,7 @@ Events return through the gateway and the same physical application connection. 
 ## Attach and use
 
 ```erlang
-Deployment = hls_partition_wire:deployment(Partition),
+Deployment = hls_partition_binding:deployment(Partition),
 {ok, Stream} = hls_partition_stream:start_link(Deployment, Brokers, #{}),
 {ok, DeviceCount} = hls_partition_stream:submit(Stream,
     {Ingress, Target, {X0, Y0, X1, Y1}, Record}),
@@ -69,7 +69,9 @@ Submit setup rectangles first, then `hls_partition_stream:submit(Stream, start)`
 | Component | Responsibility |
 | --- | --- |
 | `hls_partition_ingress` | Pure geometry validation and device selection. |
-| `hls_partition_wire` | Pure deployment bindings, packet codecs and generated wrapper; no process or I/O. |
+| `hls_partition_binding` | Build-time device endpoints and retained event schemas. |
+| `hls_partition_wire` | Runtime packet codecs and pre-session schema checks; no process or I/O. |
+| `xls_partition_application` | DSLX wrapper connecting the checked graph and framed gateway. |
 | `hls_partition_stream` | Stateful BEAM client: sessions, attachment, ordered bounded queues, timeouts and event delivery. |
 | `hls_partition_io.x` | Static hardware gateway: packet checks/assembly and fair event serialization. |
 | Generated `ControlRouter` | Local actor selection from the rectangle and target. |

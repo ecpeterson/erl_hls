@@ -1,6 +1,12 @@
 -module(hls_protocol_transport).
--moduledoc "Builds source-bound publication, sender-local capture hardware and standalone actor receivers from fresh compilation. Whole-application connections and progress admission remain separate.".
--export([prepare/1, bundle/1, control/1, descriptor/1, plan/1, plan/2, emit/1, write/2]).
+-moduledoc "Plans source-bound publication, capture links and actor receivers from one source snapshot, then coordinates their target renderers. Whole-application connections and progress admission remain separate.".
+
+%% Source preparation and physical placement retain one checked build.
+-export([prepare/1, plan/1, plan/2]).
+%% Read-only semantic and physical views.
+-export([bundle/1, control/1, descriptor/1]).
+%% Rendering and file output occur only after planning.
+-export([emit/1, write/2]).
 -export_type([program/0, build/0, bundle/0, descriptor/0, actor_descriptor/0]).
 
 -doc "One elaborated topology, its checked source snapshots and source inventory. Emission adds DSLX to module artifacts without changing these semantic bindings.".
@@ -242,7 +248,7 @@ transport_descriptor(#build{program = #program{capture = Capture, transactions =
 -spec emit_receiver(#receiver{}, #{module() => hls_local_actor:artifact()}) -> #emitted_actor{}.
 emit_receiver(#receiver{descriptor = Descriptor = #{module := Module}, source = Source, layout = Layout}, Modules) ->
     Owner = receiver_owner(Source, maps:get(Module, Modules)),
-    emit_actor(Descriptor, hls_protocol_inbox:attach(Owner, Layout)).
+    emit_actor(Descriptor, xls_protocol_inbox:attach(Owner, Layout)).
 
 %% Finalized metadata and sidecar files are bound to one exact artifact, without positional list joins.
 -spec emit_actor(actor_descriptor(), hls_local_actor:artifact()) -> #emitted_actor{}.
@@ -300,10 +306,5 @@ delivery(#{source := {Actor, Port}, delivery := Mode}) ->
 %% binds the file; only emission can bind its generated-byte identity.
 -spec receiver_owner(hls_local_actor:source(), hls_local_actor:artifact()) -> hls_local_actor:artifact().
 receiver_owner(Source = #{completion := #{mode := shared}}, _) -> hls_local_actor:render(Source);
-receiver_owner(#{owner_import := #{file := File}}, Owner = #{emitted := Emitted}) ->
-    Bytes = xls_emitted:bytes(Emitted),
-    Name = filename:basename(binary_to_list(File), ".x"),
-    {ok, Template} = file:read_file(filename:join(code:priv_dir(hls_fabric), "xls/templates/local_owner_import.x.in")),
-    Owner#{emitted := xls_emitted:with_bytes(Emitted,
-        xls_template:render(Template, [{<<"@@MODULE@@">>, Name}])),
-        owner_import => #{file => File, dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)}}.
+receiver_owner(#{owner_import := #{file := File}}, Owner) ->
+    xls_local_owner:import_owner(Owner, File).

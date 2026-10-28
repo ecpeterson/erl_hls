@@ -82,7 +82,7 @@ source_fragment_profile_specializes_only_the_phi_actor_test() ->
             phi_halo_cell => #{shared_service => aggregate_only, frame_payload_words => 3},
             phi_syndrome_replay_cell => #{shared_service => ordinary, frame_payload_words => 3}
         },
-        xls_shared_topology_dslx:artifact_requirements(
+        xls_fabric_topology_dslx:artifact_requirements(
             Plan,
             phi_decoder_profile_topology_dslx:profile()
         )
@@ -121,7 +121,7 @@ weak_component_effect_windows_follow_the_disconnected_planes_test() ->
     Profile = (phi_decoder_profile_topology_dslx:profile())#{
         effect_window_partition => weak_components
     },
-    Generated = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
+    Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
     ?assertEqual(2, count(Generated, <<
         "spawn effect_window::Arbiter<u32:4>"
     >>)),

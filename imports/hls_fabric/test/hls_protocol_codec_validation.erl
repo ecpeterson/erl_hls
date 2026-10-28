@@ -33,11 +33,11 @@ prepare_layouts(Stage) ->
 %% RTL and host codecs are checked against independent record packing and explicit physical header bytes.
 -spec write_case(file:filename(), string(), map(), module()) -> ok.
 write_case(Stage, Name, Channel = #{source_operation := Op, port := Tag}, SourceModule) ->
-    Codec = hls_protocol_codec:plan(Channel, Op),
+    Codec = hls_protocol_codec_plan:plan(Channel, Op),
     #{frame_layout := Layout, payload_bits := Bits, physical_width := Width, mask := Mask, value := Value} = Codec,
     FrameBits = hls_frame_layout:frame_bits(Layout),
     Module = "codec_" ++ Name,
-    ok = hls_protocol_codec:write(Codec, Module, filename:join(Stage, Module ++ ".x")),
+    ok = xls_protocol_codec:write(Codec, Module, filename:join(Stage, Module ++ ".x")),
     Payloads = case Bits of
         N when N =< 5 -> lists:seq(0, (1 bsl N) - 1);
         N -> [0, (1 bsl N) - 1 | [1 bsl I || I <- lists:seq(0, N - 1)]]

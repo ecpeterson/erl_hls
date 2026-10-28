@@ -125,7 +125,7 @@ profile_cli_test() ->
 source_config() -> #{sources => [{"unused.erl", []}], topology => {unused, topology, []}, actor_limit => 4}.
 
 %% A tiny scheduler placement needs no compiled topology for policy normalization.
--spec scheduler_placement() -> xls_shared_topology_profile:profile().
+-spec scheduler_placement() -> xls_fabric_topology_profile:profile().
 scheduler_placement() -> #{name => example, channel_depth => 1, actor_egress_depth => burst}.
 
 %% This literal deliberately records the sampled schedule's existing external interface.

@@ -1,7 +1,15 @@
--module(xls_shared_collection_codegen).
--moduledoc "Selects opportunistic admission capture or explicitly asserted exclusive epoch collection.".
--export([validate/2, requirements/3, helpers/1, state_fields/1, ticket_field/1,
-    ticket_value/1, loader_value/1, retire/1, retire_binding/1, admit/1, admission_guard/1, commit/1, resolve/1, selection/2, issue/1, capture/1, captured_field/1]).
+-module(xls_collection_codegen).
+-moduledoc "Physical reduction-collection fragments for scheduler admission and retirement. The scheduler actor compiler validates the policy; machine and scheduler renderers consume these fragments without changing callback semantics.".
+%% Scheduler compilation and placement requirements.
+-export([validate/2, requirements/3]).
+
+%% Machine state and accepted-work representations.
+-export([helpers/1, state_fields/1, ticket_field/1, ticket_value/1,
+    loader_value/1, captured_field/1]).
+
+%% Scheduler ownership transitions and collection arbitration.
+-export([retire/1, retire_binding/1, admit/1, admission_guard/1, commit/1,
+    resolve/1, selection/2, issue/1, capture/1]).
 
 -export_type([selection_bindings/0]).
 
@@ -86,10 +94,10 @@ helpers(Spec = #{message_names := Names, message_words := Words}) ->
     case enabled(Spec) of
         false -> [];
         true ->
-            Layout = xls_shared_machine_layout:from_spec(Spec),
-            #{offset := Start, width := Width} = xls_shared_machine_layout:field(Layout, reduction),
+            Layout = xls_machine_layout:from_spec(Spec),
+            #{offset := Start, width := Width} = xls_machine_layout:field(Layout, reduction),
             End = Start + Width,
-            HasTail = End < xls_shared_machine_layout:width(Layout),
+            HasTail = End < xls_machine_layout:width(Layout),
             ["// RAM retains the last executor result, not current collection progress.\n",
              "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState) -> MachineBits {\n  ",
              case HasTail of true -> ["raw[", integer_to_list(End), ":] ++ "]; false -> [] end,

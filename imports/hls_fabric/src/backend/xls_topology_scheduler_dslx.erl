@@ -692,7 +692,7 @@ scheduler_channels(Spec, Scheduler = #{
         Stem, "_startup\");\n",
         "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
         "      chan<", Module, "::ScheduledEffects, u32:",
-        integer_to_list(xls_shared_codegen:publication_depth()), ">(\"",
+        integer_to_list(xls_scheduler_codegen:publication_depth()), ">(\"",
         Stem, "_egress\");\n",
         xls_topology_source_fragment_dslx:scheduler_channels(
             Spec, Scheduler

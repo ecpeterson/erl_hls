@@ -9,11 +9,11 @@ prepare(Directory) ->
       capture := #{channels := Channels}, fabric := #{links := Links, boundaries := Boundaries}} = binary_to_term(Bytes),
     [{Module, #{program := Program}}] = maps:to_list(Modules),
     Spec = xls_actor_program:spec(Program),
-    ok = file:write_file(filename:join(Directory, "reference.x"), xls_shared_codegen:execution(Spec), [exclusive]),
+    ok = file:write_file(filename:join(Directory, "reference.x"), xls_activation_codegen:emit(Spec), [exclusive]),
     Pairs = [begin
         SlotRows = [begin
             [C] = [C0 || C0 <- Channels, maps:with([source,port,tag,destination], C0) =:= Identity],
-            Codec = hls_protocol_codec:plan(C, maps:get(source_operation,C)),
+            Codec = hls_protocol_codec_plan:plan(C, maps:get(source_operation,C)),
             maps:merge(#{index => Index, width => lists:nth(Index+1,Widths)}, Codec)
         end || #{index := Index, channel := Identity} <- Slots],
         (maps:with([index,slots,payload_bits], L))#{classes => SlotRows}

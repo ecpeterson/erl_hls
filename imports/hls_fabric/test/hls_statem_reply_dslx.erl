@@ -5,13 +5,13 @@
 -doc "Writes both designs and a wrapper using the production state/mailbox RAMs.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Events = xls_shared_parse:to_xls("test/hls_statem_event_fixture.erl"),
+    Events = xls_scheduler_actor:to_xls("test/hls_statem_event_fixture.erl"),
     {ok, EventTests} = file:read_file("test_data/xls_statem_event_semantics.inc.x"),
     ok = save(Stage, "statem_events.x", [Events, EventTests]),
-    Reduction = xls_shared_parse:to_xls("test/hls_statem_reduction_reply_fixture.erl"),
+    Reduction = xls_scheduler_actor:to_xls("test/hls_statem_reduction_reply_fixture.erl"),
     {ok, ReductionTests} = file:read_file("test_data/xls_statem_reduction_reply_semantics.inc.x"),
     ok = save(Stage, "statem_reduction_replies.x", [Reduction, ReductionTests]),
-    Actor = xls_shared_parse:to_xls("test/hls_statem_reply_fixture.erl"),
+    Actor = xls_scheduler_actor:to_xls("test/hls_statem_reply_fixture.erl"),
     ok = save(Stage, "hls_statem_reply_fixture.x", Actor),
     {ok, ReplyTests} = file:read_file("test_data/xls_statem_reply_semantics.inc.x"),
     ok = save(Stage, "statem_direct.x", [Actor, ReplyTests]),
@@ -24,7 +24,7 @@ write(Stage) ->
     Groups = #{cells => #{members => [{family, cells}], state_storage => block_ram, mailbox_storage => block_ram}},
     Profile = #{name => statem_shared, channel_depth => 1, actor_egress_depth => 0,
         scheduler_groups => Groups},
-    ok = save(Stage, "statem_shared.x", xls_shared_topology_dslx:emit(Plan, Profile)),
+    ok = save(Stage, "statem_shared.x", xls_fabric_topology_dslx:emit(Plan, Profile)),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
     Wrapper = ["module statem_shared_wrapper(input wire clk, reset,\n",
         " input wire [193:0] request, input wire request_valid, output wire request_ready,\n",

@@ -18,7 +18,7 @@ congruence() ->
     Deployment = #{devices => maps:from_list([{D, #{identity => <<D:256>>, host => D+1,
         control => 7, local => hls_partition:device(P, D)}} || D <- lists:seq(0, 17)])},
     Graphs = [iolist_to_binary(hls_partition_dslx:emit(P, D, #{name => tile_graph, channel_depth => 1, actor_egress_depth => burst})) || D <- lists:seq(0, 17)],
-    Tops = [iolist_to_binary(hls_partition_wire:wrapper(Deployment, D, tile_graph)) || D <- lists:seq(0, 17)],
+    Tops = [iolist_to_binary(xls_partition_application:emit(Deployment, D, tile_graph)) || D <- lists:seq(0, 17)],
     ?assertEqual(1, length(lists:usort(Graphs))),
     ?assertEqual(1, length(lists:usort(Tops))),
     Original = maps:from_list([{Id, Frames} || #{identity := Id, startup := Frames} <- maps:get(actors, Raw)]),

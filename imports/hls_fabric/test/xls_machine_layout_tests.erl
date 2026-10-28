@@ -1,4 +1,4 @@
--module(xls_shared_machine_layout_tests).
+-module(xls_machine_layout_tests).
 -moduledoc "Checks the physical actor-row ABI against small source-derived representations and finite DSLX witnesses.".
 -include_lib("eunit/include/eunit.hrl").
 -export([write/1]).
@@ -59,15 +59,15 @@ check(Name) ->
     Expected = maps:from_list([{F, #{offset => O, width => W}} || {F, O, W} <- expected(Name)]),
     #{offset := Tail, width := TailWidth} = maps:get(replies, Expected),
     Width = Tail + TailWidth,
-    Layout = xls_shared_machine_layout:from_spec(Spec),
-    ?assertEqual(Expected#{width => Width}, xls_shared_machine_layout:fields(Layout)),
+    Layout = xls_machine_layout:from_spec(Spec),
+    ?assertEqual(Expected#{width => Width}, xls_machine_layout:fields(Layout)),
     lists:foreach(fun({Field, Value}) ->
-        ?assertEqual(Value, xls_shared_machine_layout:field(Layout, Field))
+        ?assertEqual(Value, xls_machine_layout:field(Layout, Field))
     end, maps:to_list(Expected)),
     #{scheduler := Scheduler = #{groups := [Group]}, interfaces := Interfaces} =
-        xls_shared_topology_dslx:analysis(Generation),
-    ?assertEqual(xls_shared_machine_layout:fields(Layout),
-        xls_shared_machine_layout:fields(xls_shared_machine_layout:from_group(Group))),
+        xls_fabric_topology_dslx:analysis(Generation),
+    ?assertEqual(xls_machine_layout:fields(Layout),
+        xls_machine_layout:fields(xls_machine_layout:from_group(Group))),
     [Binding] = xls_scheduler_ram_v:bindings(Scheduler, hls_frame_layout:default(), Interfaces),
     ?assertEqual(Width, maps:get(state_width, Binding)),
     #{module := Module} = Group,
@@ -83,20 +83,20 @@ check(Name) ->
     ok.
 
 %% Use actual profile requirements, including source-validated per-slot state projection.
--spec prepare(atom()) -> {xls_shared_topology_dslx:plan(), map(), xls_emitted:artifact()}.
+-spec prepare(atom()) -> {xls_fabric_topology_dslx:plan(), map(), xls_emitted:artifact()}.
 prepare(Name) ->
     {Module, Inputs, Outputs} = fixture(Name),
     {Topology, Members, Policy} = topology(Name, Module, Inputs, Outputs),
     Groups = #{workers => maps:merge(#{members => Members,
         state_storage => block_ram, mailbox_storage => block_ram}, Policy)},
-    Generation = xls_shared_topology_dslx:plan(Topology,
+    Generation = xls_fabric_topology_dslx:plan(Topology,
         #{name => machine_layout_fixture, channel_depth => 1,
           actor_egress_depth => burst, scheduler_groups => Groups}),
-    Options = maps:get(Module, xls_shared_topology_dslx:artifact_requirements(Generation)),
+    Options = maps:get(Module, xls_fabric_topology_dslx:artifact_requirements(Generation)),
     [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
     Source = filename:join("test", atom_to_list(Module) ++ ".erl"),
     Spec = maps:merge(xls_parse:actor_artifact(Source, Context), Options),
-    {Generation, Spec, xls_shared_parse:to_artifact(Source, Options#{source_options => Context})}.
+    {Generation, Spec, xls_scheduler_actor:to_artifact(Source, Options#{source_options => Context})}.
 
 %% These source modules each fit in one small actor without decoder/application dependencies.
 -spec fixture(atom()) -> {module(), [atom()], [{atom(), [atom()]}]}.

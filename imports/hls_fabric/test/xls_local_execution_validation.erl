@@ -48,4 +48,4 @@ projection(Stage) ->
     ok = xls_state_projection:validate(Spec, Projection, hls_source:read(File, Context)),
     {ok, Checks} = file:read_file("test/local_projection_semantics.x.in"),
     file:write_file(filename:join(Stage, "projected.x"),
-        [xls_shared_codegen:execution(Spec#{state_projection => Projection}), Checks], [exclusive]).
+        [xls_activation_codegen:emit(Spec#{state_projection => Projection}), Checks], [exclusive]).

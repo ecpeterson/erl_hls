@@ -40,7 +40,7 @@ emit(Partition, Device, Options) ->
 %% Reject physical options that this backend cannot implement, including observation hooks.
 -spec profile(map()) -> map().
 profile(Options) ->
-    Profile = xls_shared_topology_profile:normalize(Options),
+    Profile = xls_fabric_topology_profile:normalize(Options),
     Unsupported = [Key || {Key, Default} <- [{scheduler_groups, #{}},
         {reduction_placements, #{}}, {mailbox_debug, false},
         {direct_actor_debug, false}, {effect_window_partition, global}],

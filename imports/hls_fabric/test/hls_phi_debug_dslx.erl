@@ -16,11 +16,11 @@ write(Stage, Enabled, Shards) ->
     {Plan, Profile} = fixture(Shards),
     Options = #{mailbox_debug => Enabled},
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_shared_parse:to_artifact(filename:join("src/examples/phi_decoder", atom_to_list(Module) ++ ".erl"),
+        xls_scheduler_actor:to_artifact(filename:join("src/examples/phi_decoder", atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, Options))
-    end, xls_shared_topology_dslx:artifact_requirements(Plan, Profile)),
+    end, xls_fabric_topology_dslx:artifact_requirements(Plan, Profile)),
     maps:foreach(fun(Module, Artifact) -> write_file(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)) end, Artifacts),
-    write_file(Stage, "phi_noise_topology.x", xls_shared_topology_dslx:emit(Plan, maps:merge(Profile, Options))),
+    write_file(Stage, "phi_noise_topology.x", xls_fabric_topology_dslx:emit(Plan, maps:merge(Profile, Options))),
     write_file(Stage, "phi_memory_gateway.x", phi_memory_gateway_dslx:to_dslx(3, {phi_shards, Shards}, Options)),
     write_file(Stage, "phi_memory_top.v", phi_memory_debug_top_v:application({phi_shards, Shards}, Options)),
     write_file(Stage, "actors.json", json:encode(xls_scheduler_debug:projection(Plan,

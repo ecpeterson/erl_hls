@@ -37,13 +37,13 @@ per-coordinate request, admission, or egress channel arrays.
 ]).
 
 -doc "Returns the physical profile shared by the review and smoke artifacts.".
--spec profile() -> xls_shared_topology_dslx:profile().
+-spec profile() -> xls_fabric_topology_dslx:profile().
 profile() ->
     profile(2).
 
 -doc "Returns a module-, family-, or phi-partitioned physical profile.".
 -spec profile(1 | 2 | {phi_shards, pos_integer()}) ->
-    xls_shared_topology_dslx:profile().
+    xls_fabric_topology_dslx:profile().
 profile(ShardCount) ->
     #{
         name => phi_noise_topology,
@@ -160,7 +160,7 @@ to_dslx() ->
 -spec to_dslx(pos_integer()) -> iolist().
 to_dslx(Distance) ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(Distance)),
-    xls_shared_topology_dslx:emit(Plan, profile()).
+    xls_fabric_topology_dslx:emit(Plan, profile()).
 
 -doc "Generates DSLX with an explicit `u32` phenomenological-noise rate.".
 -spec to_dslx(pos_integer(), hls_nums:u32()) -> iolist().
@@ -174,4 +174,4 @@ to_dslx(Distance, NoiseRate, ShardCount) ->
     Plan = hls_topology:normalize(
         phi_noise_topology:topology(Distance, NoiseRate)
     ),
-    xls_shared_topology_dslx:emit(Plan, profile(ShardCount)).
+    xls_fabric_topology_dslx:emit(Plan, profile(ShardCount)).

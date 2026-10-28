@@ -1,6 +1,11 @@
--module(xls_shared_parse).
--moduledoc "Builds shared actor services from the public compiler's validated callback artifact.".
--export([to_xls/1, to_xls/2, to_artifact/1, to_artifact/2]).
+-module(xls_scheduler_actor).
+-moduledoc "Compiles actor source for the channel-scheduler execution backend. Whole-network builders pass retained placement requirements; the compiler supplies checked callbacks and the scheduler renderer adds storage and execution ownership.".
+%% Emitted artifacts retain failure metadata for composition and inspection.
+-export([to_artifact/1, to_artifact/2]).
+
+%% Byte-only convenience for callers that do not retain metadata.
+-export([to_xls/1, to_xls/2]).
+
 -doc "Renders ordinary shared execution and its dedicated service from the same callbacks.".
 -spec to_xls(file:filename()) -> binary().
 to_xls(Filename) -> to_xls(Filename, #{}).
@@ -26,7 +31,7 @@ to_artifact(Filename, Options) ->
     try xls_parse:actor_artifact(Path, maps:get(source_options, Options, []), Layout) of
         Spec ->
             ok = validate_shared_service(Mode, maps:get(reductions, Spec)),
-            ok = xls_shared_collection_codegen:validate(Spec, Options),
+            ok = xls_collection_codegen:validate(Spec, Options),
             ok = xls_direct_collection_codegen:validate(Spec, Options),
             ok = xls_indexed_collection_codegen:validate(Spec, Options),
             Specialized = case maps:find(state_projection, Options) of
@@ -39,7 +44,7 @@ to_artifact(Filename, Options) ->
                     ok = xls_state_projection:validate(Spec, Projection, hls_source:read(Path, Context)),
                     Spec#{state_projection => Projection}
             end,
-            xls_shared_codegen:artifact(Specialized#{shared_service => Mode,
+            xls_scheduler_codegen:artifact(Specialized#{shared_service => Mode,
                 admission_reductions => maps:get(admission_reductions, Options, false),
                 gather_collection => maps:get(gather_collection, Options, false),
                 direct_collection => maps:get(direct_collection, Options, false),

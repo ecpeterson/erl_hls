@@ -31,7 +31,7 @@ family_only_partial_placement_uses_both_services_test() ->
             {{right, out}, [{external, values}]}]}),
     Specs = #{left => #{members => [{family, left}],
         state_storage => block_ram, mailbox_storage => block_ram}},
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Specs))),
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Specs))),
     ?assertEqual(1, count(Text, <<"::SharedService<">>)),
     ?assertEqual(6, count(Text, <<"::Service(">>)),
     ?assertEqual(nomatch, binary:match(Text, <<"family_0_debug_out">>)),
@@ -47,7 +47,7 @@ exact_only_scheduler_group_uses_same_backend_test() ->
         routes => [{{source, out}, [{actor, sink}]}, {{sink, out}, [{external, values}]}]}),
     Specs = #{source => #{members => [{actor, source}],
         state_storage => block_ram, mailbox_storage => block_ram}},
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Specs))),
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Specs))),
     ?assertEqual(1, count(Text, <<"::SharedService<">>)),
     ?assertEqual(1, count(Text, <<"::Service(">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"actor_0_debug_out">>)),
@@ -56,20 +56,20 @@ exact_only_scheduler_group_uses_same_backend_test() ->
     %% final group is removed; no unrelated profile keys need to disappear.
     SharedProfile = (profile(Specs))#{mailbox_debug := false},
     DirectProfile = SharedProfile#{scheduler_groups := #{}},
-    DirectText = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, DirectProfile)),
+    DirectText = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, DirectProfile)),
     ?assertEqual(0, count(DirectText, <<"::SharedService<">>)),
     ?assertEqual(2, count(DirectText, <<"::Service(">>)),
     ?assertNotEqual(nomatch, binary:match(DirectText, <<"actor_0_debug_out">>)),
     ?assertNotEqual(nomatch, binary:match(DirectText, <<"actor_1_debug_out">>)),
     ?assertEqual(#{hls_topology_source_fixture =>
         #{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true}},
-        xls_shared_topology_dslx:artifact_requirements(Plan, DirectProfile)).
+        xls_fabric_topology_dslx:artifact_requirements(Plan, DirectProfile)).
 
 %% Checks same artifact can supply both physical services.
 -spec same_artifact_can_supply_both_physical_services_test() -> 'ok'.
 same_artifact_can_supply_both_physical_services_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, profile(Specs)),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, profile(Specs)),
     ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true,
         mailbox_debug => true}, maps:get(hls_mixed_worker, Requirements)),
     ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, direct_actor_debug => true},
@@ -77,7 +77,7 @@ same_artifact_can_supply_both_physical_services_test() ->
     {Coalesced, Groups} = hls_mixed_topology_dslx:fixture(coalesced),
     ?assertEqual(#{frame_payload_words => 3, shared_service => ordinary, mailbox_debug => true},
         maps:get(hls_mixed_worker,
-            xls_shared_topology_dslx:artifact_requirements(Coalesced, profile(Groups)))).
+            xls_fabric_topology_dslx:artifact_requirements(Coalesced, profile(Groups)))).
 
 %% Checks shared destination slots and return credits are distinct.
 -spec shared_destination_slots_and_return_credits_are_distinct_test() -> 'ok'.
@@ -119,14 +119,14 @@ direct_feedback_paths_keep_one_window_test() ->
     Profile = (profile(Specs))#{effect_window_partition => weak_components},
     %% There is no immediate shared-to-shared route: both workers reply through
     %% the direct collector and source. Dropping those vertices splits them.
-    ?assertEqual(generated(two), iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile))).
+    ?assertEqual(generated(two), iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile))).
 
 %% Checks no shared actors need no window.
 -spec no_shared_actors_need_no_window_test() -> 'ok'.
 no_shared_actors_need_no_window_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(direct),
     Profile = (profile(Specs))#{effect_window_partition => weak_components},
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
     ?assertEqual(0, count(Text, <<"spawn effect_window::Arbiter">>)).
 
 %% Checks disconnected mixed components use local grant indices.
@@ -134,12 +134,12 @@ no_shared_actors_need_no_window_test() ->
 disconnected_mixed_components_use_local_grant_indices_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture({components, weak_components}),
     Profile = (profile(Specs))#{effect_window_partition => weak_components},
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
     ?assertEqual(2, count(Text, <<"spawn effect_window::Arbiter<u32:2>">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"domain 0: schedulers 0, 2.">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"domain 1: schedulers 1, 3.">>)),
     ?assertEqual(0, count(Text, <<"_request_p[u32:3]">>)),
-    Global = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Specs))),
+    Global = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Specs))),
     ?assertEqual(1, count(Global, <<"spawn effect_window::Arbiter<u32:4>">>)).
 
 %% Checks shared executor joins logically disconnected components.
@@ -149,7 +149,7 @@ shared_executor_joins_logically_disconnected_components_test() ->
     #{even := Even, even_peer := Peer} = Specs,
     Joined = (maps:remove(even_peer, Specs))#{even := Even#{members :=
         maps:get(members, Even) ++ maps:get(members, Peer)}},
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan,
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan,
         (profile(Joined))#{effect_window_partition => weak_components})),
     ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:3>">>)).
 
@@ -164,7 +164,7 @@ exact_only_components_ignore_external_sink_fan_in_test() ->
             {{b, out}, [{external, values}]}, {{c, out}, [{external, values}]}]}),
     Groups = maps:from_list([{Id, #{members => [{actor, Id}],
         state_storage => block_ram, mailbox_storage => block_ram}} || Id <- [a, b, c]]),
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan,
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan,
         (profile(Groups))#{effect_window_partition => weak_components})),
     ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:2>">>)),
     ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:1>">>)),
@@ -177,7 +177,7 @@ unsupported_physical_contracts_fail_explicitly_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     Profile = profile(Specs),
     ?assertError({unsupported_instance_section, reduction_placements},
-        xls_shared_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})).
+        xls_fabric_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})).
 
 %% Checks scheduled startup must fit reserved mailboxes.
 -spec scheduled_startup_must_fit_reserved_mailboxes_test() -> 'ok'.
@@ -190,7 +190,7 @@ scheduled_startup_must_fit_reserved_mailboxes_test() ->
         _ -> Item
     end || Item <- Startup],
     ?assertException(error, {scheduler_startup_capacity, {workers, 0, 0}, 20, _},
-        xls_shared_topology_dslx:emit(Plan#{startup := Changed}, profile(Specs))).
+        xls_fabric_topology_dslx:emit(Plan#{startup := Changed}, profile(Specs))).
 
 %% Checks stale connectivity caches are rejected before materializing.
 -spec stale_connectivity_caches_are_rejected_before_materializing_test() -> 'ok'.
@@ -203,7 +203,7 @@ stale_connectivity_caches_are_rejected_before_materializing_test() ->
             lane_relations -> inconsistent_dslx_family_plan_lanes
         end,
         ?assertError({Reason, Expected, []},
-            xls_shared_topology_dslx:emit(Plan#{Key := []}, profile(Specs)))
+            xls_fabric_topology_dslx:emit(Plan#{Key := []}, profile(Specs)))
     end, [lanes, lane_relations]).
 
 %% Checks physical options do not change semantic family size.
@@ -211,7 +211,7 @@ stale_connectivity_caches_are_rejected_before_materializing_test() ->
 physical_options_do_not_change_semantic_family_size_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     Before = term_to_binary(Plan),
-    _ = xls_shared_topology_dslx:emit(Plan, profile(Specs)),
+    _ = xls_fabric_topology_dslx:emit(Plan, profile(Specs)),
     ?assertEqual(Before, term_to_binary(Plan)),
     ?assertEqual(1, length(maps:get(families, Plan))),
     ?assertEqual(3, length(maps:get(actors, Plan))).
@@ -220,7 +220,7 @@ physical_options_do_not_change_semantic_family_size_test() ->
 -spec generated('coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {'components',term()} | {'ingress','coalesced' | 'direct' | 'one' | 'two' | {term(),term()}}}) -> binary().
 generated(Placement) ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(Placement),
-    iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Specs))).
+    iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Specs))).
 %% Selects bounded storage and observation settings for the test deployment.
 -spec profile(map()) -> map().
 profile(Specs) ->

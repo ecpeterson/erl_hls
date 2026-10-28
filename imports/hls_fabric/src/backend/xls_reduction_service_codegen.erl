@@ -1,7 +1,24 @@
--module(xls_shared_reduction_service_codegen).
--moduledoc false.
--export([shared_dispatch_effective_binding/3, shared_dispatch_failed_binding/3, shared_dispatch_dispatched_field/3, shared_entry_step/2, shared_machine_support/3]).
--export([shared_state_fields/2, shared_executor_request_field/2, shared_machine_support/2, shared_dispatch_bindings/3, shared_dispatch_effective_binding/2, shared_dispatch_failed_binding/2, shared_dispatch_reduction_field/2, shared_dispatch_dispatched_field/2, shared_entry_step/1, shared_executor_dispatch/2, shared_service_helpers/2, shared_retire_binding/2, shared_issue_bindings/2, shared_executor_request_value/2, shared_proc_field/2, shared_config_parameter/2, shared_config_endpoint/2, shared_capture/2, shared_capture_token/2, shared_state_source/2, shared_post_issue_state/2, shared_post_issue_state_name/2]).
+-module(xls_reduction_service_codegen).
+-moduledoc "Reduction completion and aggregate-delivery fragments for actor execution. The common machine renderer consumes dispatch helpers; the scheduler renderer consumes admission, capture and retirement helpers. Source reduction operations remain in the compiler.".
+%% Common machine completion and callback dispatch.
+-export([shared_machine_support/2, shared_machine_support/3,
+    shared_executor_dispatch/2, shared_dispatch_bindings/3,
+    shared_dispatch_effective_binding/2, shared_dispatch_effective_binding/3,
+    shared_dispatch_failed_binding/2, shared_dispatch_failed_binding/3,
+    shared_dispatch_reduction_field/2,
+    shared_dispatch_dispatched_field/2, shared_dispatch_dispatched_field/3,
+    shared_entry_step/1, shared_entry_step/2]).
+
+%% Scheduler state, request and channel declarations.
+-export([shared_state_fields/2, shared_executor_request_field/2,
+    shared_executor_request_value/2, shared_proc_field/2,
+    shared_config_parameter/2, shared_config_endpoint/2]).
+
+%% Scheduler aggregate admission and retirement.
+-export([shared_service_helpers/2, shared_retire_binding/2,
+    shared_issue_bindings/2, shared_capture/2, shared_capture_token/2,
+    shared_state_source/2, shared_post_issue_state/2, shared_post_issue_state_name/2]).
+
 %% Checked actor reduction declarations, or absence of reduction support.
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
 %% Ordinary frame delivery or precombined aggregate delivery.

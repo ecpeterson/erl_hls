@@ -53,7 +53,7 @@ with_activation(Stage, Options, Fun) ->
         {ok, Broker} = hls_fabric:start_link(Prefix ++ "_tx", Prefix ++ "_rx", #{rx_route_limit => 1}),
         {D, Broker}
     end || D <- [0, 1]]),
-    Deployment = hls_partition_wire:deployment(Partition),
+    Deployment = hls_partition_binding:deployment(Partition),
     Physical = maps:values(Brokers) ++ [B || #{fabric := B} <- Connections],
     Leases = [begin #{io := #{lease := L}} = hls_fabric:info(B), L end || B <- Physical],
     {ok, Application} = hls_partition_stream:start_link(Deployment, Brokers, Options),

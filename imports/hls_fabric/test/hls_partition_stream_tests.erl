@@ -37,13 +37,13 @@ gateway_payload_capacity_test() ->
     #{local := Local} = Binding = maps:get(a, Devices),
     AtCapacity = Deployment#{devices := Devices#{a := Binding#{local :=
         Local#{frame_layout := hls_frame_layout:new(8)}}}},
-    Text = iolist_to_binary(hls_partition_wire:wrapper(AtCapacity, a, test_graph)),
+    Text = iolist_to_binary(xls_partition_application:emit(AtCapacity, a, test_graph)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"spawn hls_partition_io::Boundary">>)),
     OverCapacity = Deployment#{devices := Devices#{a := Binding#{local :=
         Local#{frame_layout := hls_frame_layout:new(9)}}}},
     ?assertError({hls_diagnostic, #{stage := partition, code := gateway_payload_capacity,
         context := #{payload_words := 9, maximum := 8}}},
-        hls_partition_wire:wrapper(OverCapacity, a, test_graph)).
+        xls_partition_application:emit(OverCapacity, a, test_graph)).
 
 %% Route credits bound retained events; a timed-out receive leaves no abandoned interest.
 -spec credited_events_and_timeout_test() -> ok.
@@ -202,7 +202,7 @@ deployment() ->
         route_relations => [{{cells, Port}, [{external, reports}]} || Port <- [left, right, report]]},
     Partition = hls_partition:normalize(hls_topology:normalize(Spec),
         #{{family, cells, [0, 0]} => a, {family, cells, [1, 0]} => b}),
-    hls_partition_wire:deployment(Partition).
+    hls_partition_binding:deployment(Partition).
 
 %% Isolate device models and retire the tested stream before fixture cleanup.
 -spec with_connection(map(), fun((pid(), map()) -> term())) -> ok.

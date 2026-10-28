@@ -1,7 +1,7 @@
 %%%% Select a compact family or explicit-instance representation.
--module(xls_shared_topology_dslx).
+-module(xls_fabric_topology_dslx).
 -moduledoc """
-Generates a DSLX process graph from a normalized topology and physical profile.
+The fabric build facade prepares this generation plan from a normalized topology and physical profile. RAM binding, inspection and DSLX rendering consume the retained plan without repeating source or placement analysis.
 
 Exact and mixed graphs share one instance-based placement renderer. Each actor
 may retain its direct service or join a homogeneous shared executor; the same
@@ -22,10 +22,14 @@ path, counting the producer's required output register. Code generation must
 retain `--flop_outputs=true`. A literal nonnegative depth specifies XLS FIFO
 storage, so zero retains only that producer holding slot.
 """.
--export([plan/2, analysis/1, descriptor/1, artifact_requirements/1, artifact_requirements/2, emit/1, emit/2, from_module/2]).
+%% Retained whole-network generation and inspection.
+-export([plan/2, analysis/1, descriptor/1, artifact_requirements/1, emit/1]).
+
+%% One-shot conveniences over the same plan boundary.
+-export([artifact_requirements/2, emit/2, from_module/2]).
 -export_type([profile/0, plan/0, analysis/0, descriptor/0]).
 -doc "Physical generation options; logical actor identities and callback semantics remain separate.".
--type profile() :: xls_shared_topology_profile:profile().
+-type profile() :: xls_fabric_topology_profile:profile().
 
 %% Materialized lanes bind physical units; logical recipients retain the source topology identities.
 -type lane() :: #{index := non_neg_integer(), source := unit(), destination := unit(),
@@ -52,23 +56,23 @@ storage, so zero retains only that producer holding slot.
 -spec plan(hls_topology:plan(), profile()) -> plan().
 plan(Topology, Profile0) ->
     Profile = #{scheduler_groups := Specs, frame_payload_words := Words} =
-        xls_shared_topology_profile:normalize(Profile0),
+        xls_fabric_topology_profile:normalize(Profile0),
     Layout = hls_frame_layout:new(Words),
     Interfaces = hls_scheduler_plan:interfaces(Topology, Layout),
     Scheduler = hls_scheduler_plan:normalize(Topology, Specs, Layout, Interfaces),
     Analysis = #{topology => Topology, profile => Profile, scheduler => Scheduler,
         interfaces => Interfaces},
     case backend(Topology, Profile, Scheduler) of
-        xls_shared_topology_instance_dslx ->
-            Graph = xls_shared_topology_instance_dslx:lower(Topology, Profile, Scheduler, Interfaces),
+        xls_fabric_topology_instance_dslx ->
+            Graph = xls_fabric_topology_instance_dslx:lower(Topology, Profile, Scheduler, Interfaces),
             #plan{implementation = {materialized, Graph}, analysis = Analysis,
                 requirements = maps:get(artifact_requirements, Graph),
                 descriptor = #{representation => materialized, topology => Topology, profile => Profile,
                     lanes => [maps:with([index, source, destination, recipient], Lane)
                         || Lane <- maps:get(lanes, Graph)],
                     effect_window_domains => maps:get(effect_window_domains, Graph)}};
-        xls_shared_topology_family_dslx ->
-            case xls_shared_topology_family_dslx:lower(Topology, Profile, Scheduler, Interfaces) of
+        xls_fabric_topology_family_dslx ->
+            case xls_fabric_topology_family_dslx:lower(Topology, Profile, Scheduler, Interfaces) of
                 Graph = #{schedulers := [], artifact_requirements := Requirements} ->
                     #plan{implementation = {compact_direct, Graph}, analysis = Analysis,
                         requirements = Requirements,
@@ -96,7 +100,7 @@ from_module(Module, Profile) -> emit(hls_topology:from_module(Module), Profile).
 -doc "Renders a retained generation plan. The selected representation and ordered ownership decisions cannot change between inspection and rendering.".
 -spec emit(plan()) -> iodata().
 emit(#plan{implementation = {compact_shared, Prepared}}) -> xls_topology_scheduler_dslx:emit(Prepared);
-emit(#plan{implementation = {materialized, Graph}}) -> xls_shared_topology_instance_dslx:render(Graph);
+emit(#plan{implementation = {materialized, Graph}}) -> xls_fabric_topology_instance_dslx:render(Graph);
 emit(#plan{implementation = {compact_direct, Graph}}) -> xls_topology_family_dslx:render(Graph).
 
 -doc "Checks and renders a topology in one call. Call plan/2 followed by descriptor/1 and emit/1 when inspecting the same retained graph.".
@@ -113,11 +117,11 @@ artifact_requirements(Topology, Profile) -> artifact_requirements(plan(Topology,
 
 %% Artifact signatures and graph generation select a representation from the retained placement.
 -spec backend(hls_topology:plan(), profile(), hls_scheduler_plan:plan()) ->
-    xls_shared_topology_family_dslx | xls_shared_topology_instance_dslx.
-backend(#{actors := [_ | _], families := _}, _Profile, _Scheduler) -> xls_shared_topology_instance_dslx;
-backend(#{families := []}, _Profile, _Scheduler) -> xls_shared_topology_instance_dslx;
+    xls_fabric_topology_family_dslx | xls_fabric_topology_instance_dslx.
+backend(#{actors := [_ | _], families := _}, _Profile, _Scheduler) -> xls_fabric_topology_instance_dslx;
+backend(#{families := []}, _Profile, _Scheduler) -> xls_fabric_topology_instance_dslx;
 backend(#{actors := [], families := [_ | _]}, Profile, Scheduler) ->
-    case xls_shared_topology_instance_dslx:required(Profile, Scheduler) of
-        true -> xls_shared_topology_instance_dslx;
-        false -> xls_shared_topology_family_dslx
+    case xls_fabric_topology_instance_dslx:required(Profile, Scheduler) of
+        true -> xls_fabric_topology_instance_dslx;
+        false -> xls_fabric_topology_family_dslx
     end.

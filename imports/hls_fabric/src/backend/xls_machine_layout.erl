@@ -1,6 +1,10 @@
--module(xls_shared_machine_layout).
--moduledoc "The complete physical actor row shared by codecs, RAM bindings and passive inspection. Optional storage has zero-width fields at its ordered position.".
--export([new/1, from_spec/1, from_group/1, width/1, field/2, fields/1]).
+-module(xls_machine_layout).
+-moduledoc "The complete physical actor row consumed by machine codecs, scheduler RAM bindings, local owners and passive inspection. One typed layout supplies all widths and slices; optional storage has zero width at its ordered position.".
+%% Layout construction from checked source or scheduler ownership.
+-export([new/1, from_spec/1, from_group/1]).
+
+%% Retained layout queries for codecs and observation.
+-export([width/1, field/2, fields/1]).
 -export_type([widths/0, name/0, field/0, layout/0, descriptor/0]).
 
 -doc "Physical storage dimensions; data is required, and absent private facilities occupy zero bits.".
@@ -42,7 +46,7 @@ from_spec(Spec) ->
     end,
     new(#{data => xls_state_projection:width(Spec),
         reduction => xls_statem_reduction_codegen:private_width(maps:get(reductions, Spec, none)),
-        gather => xls_shared_gather_codegen:storage_width(Spec),
+        gather => xls_gather_codegen:storage_width(Spec),
         next_event => Event, replies => Replies}).
 
 -doc "Derives the same complete row from a normalized scheduler group's retained physical dimensions; no actor source or interface is loaded.".

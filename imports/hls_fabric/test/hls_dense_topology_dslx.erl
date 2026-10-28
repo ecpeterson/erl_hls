@@ -4,7 +4,7 @@
 -doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
-    write(Stage, "hls_dense_statem_fixture.x", xls_shared_parse:to_xls("test/hls_dense_statem_fixture.erl")),
+    write(Stage, "hls_dense_statem_fixture.x", xls_scheduler_actor:to_xls("test/hls_dense_statem_fixture.erl")),
     Messages = [{configure, false, 7, -256}, {configure, true, 3, 255}],
     Reports = [oracle(Message) || Message <- Messages],
     write(Stage, "dense_expected.svh", [begin
@@ -35,8 +35,8 @@ write(Stage) ->
     Groups = #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}},
     Base = #{channel_depth => 1, actor_egress_depth => burst},
-    write(Stage, "dense_direct.x", xls_shared_topology_dslx:emit(Direct, Base#{name => dense_direct})),
-    write(Stage, "dense_shared.x", xls_shared_topology_dslx:emit(Shared,
+    write(Stage, "dense_direct.x", xls_fabric_topology_dslx:emit(Direct, Base#{name => dense_direct})),
+    write(Stage, "dense_shared.x", xls_fabric_topology_dslx:emit(Shared,
         Base#{name => dense_shared, scheduler_groups => Groups})),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Shared, Groups)),
     {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),

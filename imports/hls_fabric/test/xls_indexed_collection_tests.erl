@@ -14,10 +14,10 @@ reserved_startup_test() ->
         mailbox_storage => block_ram, gather_collection => true},
     Profile = #{name => indexed_test, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => #{workers => Group}},
     ?assertError({reserved_gather_startup, sink},
-        xls_shared_topology_dslx:artifact_requirements(Plan, Profile)),
+        xls_fabric_topology_dslx:artifact_requirements(Plan, Profile)),
     ?assertMatch(#{Module := #{gather_collection := true}},
-        xls_shared_topology_dslx:artifact_requirements(Plan#{startup := []}, Profile)),
-    ?assertMatch(#{Module := _}, xls_shared_topology_dslx:artifact_requirements(
+        xls_fabric_topology_dslx:artifact_requirements(Plan#{startup := []}, Profile)),
+    ?assertMatch(#{Module := _}, xls_fabric_topology_dslx:artifact_requirements(
         Plan, Profile#{scheduler_groups := #{workers => Group#{gather_collection := false}}})).
 
 %% Only a sole reserved tag is made literal; multiple tags preserve the selected frame.

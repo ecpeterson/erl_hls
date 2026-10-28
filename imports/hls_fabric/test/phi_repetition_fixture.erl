@@ -8,10 +8,10 @@ write(Stage, N) ->
     Plan = hls_topology:normalize(phi_repetition_topology:topology(N)),
     Profile = #{scheduler_groups := Groups} = phi_shared_repetition_profile:profile(N),
     maps:foreach(fun(Module, Options) ->
-        Source = xls_shared_parse:to_xls("src/examples/phi_decoder/" ++ atom_to_list(Module) ++ ".erl", Options),
+        Source = xls_scheduler_actor:to_xls("src/examples/phi_decoder/" ++ atom_to_list(Module) ++ ".erl", Options),
         save(Stage, atom_to_list(Module) ++ ".x", Source)
-    end, xls_shared_topology_dslx:artifact_requirements(Plan, Profile)),
-    save(Stage, "phi_repetition_topology.x", xls_shared_topology_dslx:emit(Plan, Profile)),
+    end, xls_fabric_topology_dslx:artifact_requirements(Plan, Profile)),
+    save(Stage, "phi_repetition_topology.x", xls_fabric_topology_dslx:emit(Plan, Profile)),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
     save(Stage, "phi_repetition_top.v", [
         "module phi_repetition_top(input wire aclk, input wire aresetn,\n",

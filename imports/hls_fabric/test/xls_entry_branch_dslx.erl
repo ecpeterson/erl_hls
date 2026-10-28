@@ -24,7 +24,7 @@ oracle(Phase, Value) ->
 write(Stage) ->
     xls_entry_branch_fixture = xls_codegen_fixture:load("test_data/xls_entry_branch_fixture.erl"),
     {ok, Semantics} = file:read_file("test_data/xls_entry_branch_semantics.inc.x"),
-    Generated = xls_shared_parse:to_xls("test_data/xls_entry_branch_fixture.erl"),
+    Generated = xls_scheduler_actor:to_xls("test_data/xls_entry_branch_fixture.erl"),
     Cases = [{Shared, PhaseIndex, Phase, Value, Ready}
         || Shared <- [false, true],
            {PhaseIndex, Phase} <- lists:enumerate(0, phases()),

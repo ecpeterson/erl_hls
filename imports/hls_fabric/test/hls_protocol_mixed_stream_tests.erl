@@ -122,7 +122,7 @@ actor(Mode) ->
 -spec plan() -> map().
 plan() ->
     Module = hls_protocol_mixed_stream_actor,
-    Codec = hls_protocol_codec:plan(#{message_bits => 32, payload_bits => 32,
+    Codec = hls_protocol_codec_plan:plan(#{message_bits => 32, payload_bits => 32,
         fields => [#{type => {hls_type, hls_nums, uN, [32]}, message_bit_offset => 0, capture_bit_offset => 0}]},
         Module:pack_tag(total)),
     Record = hls_record_codec:bind(total, [{value, hls_nums:u32()}]),
@@ -151,7 +151,7 @@ control(Last, Value) -> {host, all, {0, 0, Last, 0}, {total, Value}}.
 -spec data(map(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> map().
 data(#{mixed := #{links := Links}}, Index, Sequence, Value) ->
     [Link] = [L || L = #{index := I} <- Links, I =:= Index],
-    {0, Frame} = hls_protocol_mixed:encode(Link, out, {total, Value}),
+    {0, Frame} = hls_protocol_mixed_codec:encode(Link, out, {total, Value}),
     packet(1, Index, Sequence, Frame).
 
 %% The common native event sequence covers both data and credits in this one session.

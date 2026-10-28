@@ -1,12 +1,12 @@
--module(xls_shared_event_codegen).
--moduledoc false.
+-module(xls_event_codegen).
+-moduledoc "Internal-event dispatch used by the common actor-machine renderer. Combines continuations, reduction and gather completion with ordinary mailbox dispatch; storage and actor selection remain with the execution owner.".
+%% Common machine dispatch rendering.
 -export([shared_dispatch/1]).
-
 
 -doc "Selects a named internal step before ordinary mailbox dispatch, after entry.".
 -spec shared_dispatch(map()) -> iodata().
 shared_dispatch(Spec = #{reductions := Reduction, shared_service := Mode}) ->
-    Ordinary = xls_shared_reduction_service_codegen:shared_executor_dispatch(Reduction, Mode),
+    Ordinary = xls_reduction_service_codegen:shared_executor_dispatch(Reduction, Mode),
     Selected = case maps:get(continuations, Spec, []) =/= [] orelse xls_statem_reply_codegen:enabled(Spec) of
         false -> Ordinary;
         true -> ["  let dispatched = ",
@@ -17,4 +17,4 @@ shared_dispatch(Spec = #{reductions := Reduction, shared_service := Mode}) ->
               "    dispatched\n  };\n"]
     end,
     xls_indexed_memory_codegen:dispatch(Spec,
-        xls_shared_gather_codegen:shared_dispatch(Spec, Selected)).
+        xls_gather_codegen:shared_dispatch(Spec, Selected)).

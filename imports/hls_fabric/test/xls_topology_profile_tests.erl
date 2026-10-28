@@ -26,7 +26,7 @@ common_profile_errors_test_() ->
             {egress_depth, 16#100000000}}
     ],
     [{atom_to_list(Kind), [
-        ?_assertError(Reason, xls_shared_topology_dslx:emit(Plan, Input))
+        ?_assertError(Reason, xls_fabric_topology_dslx:emit(Plan, Input))
         || {Input, Reason} <- Cases
     ]} || {Kind, Plan} <- plans()].
 
@@ -37,7 +37,7 @@ physical_option_errors_are_representation_independent_test_() ->
         {reduction_placements, [], {reduction_placements, []}},
         {direct_collections, [], {direct_collections, []}},
         {effect_window_partition, invalid, {effect_window_partition, invalid}}],
-    [?_assertError(Error, xls_shared_topology_dslx:emit(Plan, (profile())#{Key => Value}))
+    [?_assertError(Error, xls_fabric_topology_dslx:emit(Plan, (profile())#{Key => Value}))
         || {_Kind, Plan} <- plans(), {Key, Value, Error} <- Cases].
 
 %% Checks explicit physical defaults preserve output.
@@ -60,8 +60,8 @@ profile_error_precedes_stale_lane_error_test() ->
     {scalar, Scalar} = lists:keyfind(scalar, 1, plans()),
     Stale = Scalar#{lanes := stale},
     ?assertError({invalid_dslx_channel_depth, 0},
-        xls_shared_topology_dslx:emit(Stale, (profile())#{channel_depth := 0})),
-    try xls_shared_topology_dslx:emit(Stale, profile()) of
+        xls_fabric_topology_dslx:emit(Stale, (profile())#{channel_depth := 0})),
+    try xls_fabric_topology_dslx:emit(Stale, profile()) of
         _ -> ?assert(false)
     catch
         error:{inconsistent_dslx_plan_lanes, [_ | _], stale} -> ok
@@ -83,17 +83,17 @@ profile() ->
 %% Renders the selected fixture plan with its matching backend profile.
 -spec emit(term(),map()) -> binary().
 emit(Plan, Profile) ->
-    iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)).
+    iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)).
 
 %% Width bounds are checked before choosing either topology renderer.
 -spec parallel_delivery_bounds_test() -> ok.
 parallel_delivery_bounds_test() ->
     [begin
         ?assertError({effect_delivery_width, Width},
-            xls_shared_topology_profile:normalize((profile())#{effect_delivery_width => Width}))
+            xls_fabric_topology_profile:normalize((profile())#{effect_delivery_width => Width}))
     end || Width <- [0, 7, 1.5, automatic]],
     [begin
         ?assertEqual(Width, maps:get(effect_delivery_width,
-            xls_shared_topology_profile:normalize((profile())#{effect_delivery_width => Width})))
+            xls_fabric_topology_profile:normalize((profile())#{effect_delivery_width => Width})))
     end || Width <- [1, 2, 3, 6]],
     ok.

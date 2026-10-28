@@ -79,7 +79,7 @@ reusable_routing_test() ->
 %% One fully constant canonical frame suffices to test ownership without a fake compiler.
 -spec plan() -> map().
 plan() ->
-    C=#{slot=>0,codec=>hls_protocol_codec:plan(#{message_bits=>0,payload_bits=>0,fields=>[]},0)},
+    C=#{slot=>0,codec=>hls_protocol_codec_plan:plan(#{message_bits=>0,payload_bits=>0,fields=>[]},0)},
     L=#{index=>0,source_index=>0,destination_index=>1,classes=>[C]},
     #{actors=>2,limits=>#{crossings=>8},devices=>maps:from_list([{R,#{native_indices=>[R],links=>[L#{direction=>D}]}}
         ||{R,D}<-[{0,outgoing},{1,incoming}]])}.
@@ -167,7 +167,7 @@ deployment_failure_test() ->
 %% A three-node fanout uses ordinary constant codecs, not application arithmetic.
 -spec deployment() -> map().
 deployment() ->
-    C=#{slot=>0,codec=>hls_protocol_codec:plan(#{message_bits=>0,payload_bits=>0,fields=>[]},0)},
+    C=#{slot=>0,codec=>hls_protocol_codec_plan:plan(#{message_bits=>0,payload_bits=>0,fields=>[]},0)},
     Links=[#{index=>I,source_index=>0,destination_index=>I+1,classes=>[C]}||I<-[0,1]],
     Devices=maps:from_list([{R,#{native_indices=>[I],host=>H,service=>V,identity=><<I:256>>,externals=>[#{index=>0}],
         links=>[L#{direction=>case I of 0->outgoing;_->incoming end}||L=#{destination_index:=D}<-Links,I=:=0 orelse I=:=D]}}

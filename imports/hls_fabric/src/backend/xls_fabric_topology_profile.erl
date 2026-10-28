@@ -1,11 +1,16 @@
-%%%% xls_shared_topology_profile
+%%%% xls_fabric_topology_profile
 %%%%
 %%%% Physical option and naming policies shared by the topology backends.
 
--module(xls_shared_topology_profile).
--moduledoc false.
+-module(xls_fabric_topology_profile).
+-moduledoc "Physical placement and queue policy for the fabric topology compiler. The build facade and generation planner normalize this profile before choosing compact or materialized rendering; logical topology and actor semantics remain separate.".
 
--export([normalize/1, identifier/2, egress_depth/2]).
+%% Checked physical profile.
+-export([normalize/1]).
+
+%% Internal target naming and queue sizing.
+-export([identifier/2, egress_depth/2]).
+
 -export_type([profile/0]).
 
 -define(U32_MAX, ((1 bsl 32) - 1)).

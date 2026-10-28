@@ -264,7 +264,7 @@ inspect_and_write(Kind) ->
         renderer_targets() ++ source_targets()),
     ?assertEqual(#{}, maps:with(source_targets(), WriteCalls)),
     lists:foreach(fun(Target) -> ?assert(maps:get(Target, WriteCalls, 0) > 0) end,
-        [{xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2}, {xls_template, render, 2}]),
+        [{xls_activation_codegen, artifact, 1}, {xls_local_owner, ports, 2}, {xls_template, render, 2}]),
     ?assertEqual(Schedule, maps:get(units, Manifest)),
     {ok, Bytes} = file:read_file(filename:join(Directory, "source-build.json")),
     Disk = json:decode(Bytes),
@@ -366,7 +366,7 @@ assert_readable(Diagnostic = #{code := Code, message := Message}) ->
 
 %% Actual leaf renderers make early hardware generation observable independently of outer wrappers.
 -spec renderer_targets() -> [{module(), atom(), arity()}].
-renderer_targets() -> [{xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2},
+renderer_targets() -> [{xls_activation_codegen, artifact, 1}, {xls_local_owner, ports, 2},
     {xls_template, render, 2}, {xls_protocol_transport, emit, 1},
     {xls_protocol_network, emit, 3}, {xls_protocol_boundary, emit, 2}, {xls_protocol_bridge, emit, 3}].
 

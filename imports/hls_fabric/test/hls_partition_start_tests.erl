@@ -110,7 +110,7 @@ deployment() ->
         route_relations => [{{cells,Port},[{external,reports}]} || Port <- [left,right,report]]},
     Partition = hls_partition:normalize(hls_topology:normalize(Spec),
         #{{family,cells,[0,0]} => a,{family,cells,[1,0]} => b}),
-    D = #{devices := Devices} = hls_partition_wire:deployment(Partition),
+    D = #{devices := Devices} = hls_partition_binding:deployment(Partition),
     D#{devices := maps:map(fun(_,B) -> B#{activation => explicit_start} end,Devices)}.
 
 %% Reset ownership between model cases; real deployment reset covers hardware and transport.

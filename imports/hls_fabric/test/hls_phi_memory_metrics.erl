@@ -42,7 +42,7 @@ write(Stage, Scope, Closeout) ->
 -spec status_events(file:filename()) -> [map()].
 status_events(Stage) ->
     {ok, [Partition]} = file:consult(filename:join(Stage, "deployment.term")),
-    #{devices := Devices} = hls_partition_wire:deployment(Partition),
+    #{devices := Devices} = hls_partition_binding:deployment(Partition),
     {ok, Data} = file:read_file(filename:join(Stage, "progress.log")),
     Lines = [binary:split(Line, <<" ">>, [global]) || Line <- binary:split(Data, <<"\n">>, [global]), Line =/= <<>>],
     {Events, _Pending} = lists:foldl(fun(Line, Acc) -> beat(Line, Devices, Acc) end, {[], #{}}, Lines),

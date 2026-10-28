@@ -1,5 +1,6 @@
--module(xls_shared_names).
--moduledoc false.
+-module(xls_machine_names).
+-moduledoc "Generated actor-machine namespace validation. Activation and scheduler renderers call this before combining source declarations with execution support; identifiers are checked through the compiler naming API.".
+%% Internal rendering precondition.
 -export([validate/1]).
 
 -doc "Rejects actor declarations that collide with the shared backend's generated namespace.".

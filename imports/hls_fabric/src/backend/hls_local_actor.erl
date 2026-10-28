@@ -20,7 +20,7 @@
 %% Static and emitted interfaces share fields; the latter requires a generated-byte identity.
 -define(INTERFACE_FIELDS, completion := completion(), version := 1, stage := source_actor_and_owner,
     source := binary(), source_plan := #{atom() | binary() => inventory_value()},
-    machine_layout := xls_shared_machine_layout:descriptor(), continuation_bits := 0 | 8,
+    machine_layout := xls_machine_layout:descriptor(), continuation_bits := 0 | 8,
     machine_bits := pos_integer(), effect_payload_bits := pos_integer(), source_imports := [atom()],
     output_ports := [atom()], message_schemas := [atom()],
     completion_sites := [#{id := non_neg_integer(), phase := atom()}], phase_names := [atom()],
@@ -44,7 +44,7 @@
 -doc "Local scalar completion or a source-compatible shared group selected by the arithmetic planner.".
 -type completion() :: #{mode := local} | #{mode := shared, group := non_neg_integer()}.
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by hls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by xls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
 -type artifact() :: #{program := xls_actor_program:program(),
     emitted := xls_emitted:artifact(), source := file:filename(), context => hls_source:context(),
     inbox => hls_protocol_inbox:metadata(), completion => completion(), owner_import => owner_import()}.
@@ -75,9 +75,9 @@ prepare(Source, Options, FrameLayout) ->
 render(Source = #{program := Program}) ->
     Spec = xls_actor_program:spec(Program),
     Mode = maps:get(mode, maps:get(completion, Source, #{mode => local})),
-    Execution = xls_shared_codegen:execution_artifact(Spec),
+    Execution = xls_activation_codegen:artifact(Spec),
     Source#{emitted => xls_emitted:with_bytes(Execution,
-        iolist_to_binary([xls_emitted:bytes(Execution), hls_local_protocol:ports(Spec, Mode)]))}.
+        iolist_to_binary([xls_emitted:bytes(Execution), xls_local_owner:ports(Spec, Mode)]))}.
 
 -doc "Returns an existing artifact's DSLX, JSON provenance and selected frame_config.x beside the relative source filename, without recompilation or output I/O. The enclosing writer validates paths; multiple actors in one directory must share the same configuration.".
 -spec emit(artifact(), string()) -> hls_generated_files:files().
@@ -150,8 +150,8 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
     Spec = xls_actor_program:spec(Program),
     Plan = xls_actor_program:plan(Program),
     #{entries := Entries, gathers := Gathers} = Spec,
-    Layout = xls_shared_machine_layout:from_spec(Spec),
-    #{width := EventWidth} = xls_shared_machine_layout:field(Layout, next_event),
+    Layout = xls_machine_layout:from_spec(Spec),
+    #{width := EventWidth} = xls_machine_layout:field(Layout, next_event),
     PayloadWidth = lists:max([1 | [xls_entry_storage:width(Storage)
         || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts]]),
     FrameLayout = maps:get(frame_layout, Spec),
@@ -159,8 +159,8 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
     Base = #{frame_layout => FrameLayout, build_profile => Profile, codegen_flags => hls_build_profile:flags(Profile, sampled_clock),
         completion => maps:get(completion, Artifact, #{mode => local}), version => 1, stage => source_actor_and_owner, source => unicode:characters_to_binary(Source),
         source_plan => safe(xls_statem_plan:manifest(Plan)),
-        machine_layout => xls_shared_machine_layout:fields(Layout), continuation_bits => EventWidth,
-        machine_bits => xls_shared_machine_layout:width(Layout),
+        machine_layout => xls_machine_layout:fields(Layout), continuation_bits => EventWidth,
+        machine_bits => xls_machine_layout:width(Layout),
         effect_payload_bits => PayloadWidth,
         source_imports => maps:get(imports, Spec),
         output_ports => maps:get(output_names, Spec),

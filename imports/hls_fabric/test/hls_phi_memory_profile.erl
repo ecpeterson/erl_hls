@@ -9,7 +9,7 @@ run(Stage) ->
     {ok, [Partition]} = file:consult(filename:join(Stage, "deployment.term")),
     {ok, [Options]} = file:consult(filename:join(Stage, "config.term")),
     {ok, [Expected]} = file:consult(filename:join(Stage, "oracle.term")),
-    Deployment = #{devices := Devices} = hls_partition_wire:deployment(Partition),
+    Deployment = #{devices := Devices} = hls_partition_binding:deployment(Partition),
     {Experiment, [_Cutoff]} = phi_memory_experiment:new(Options),
     Debug = hls_phi_profile_debug:open(Stage),
     %% Both processes open in the same order; each request has exactly one reply.

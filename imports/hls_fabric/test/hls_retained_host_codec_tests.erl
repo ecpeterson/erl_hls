@@ -160,7 +160,7 @@ host_bindings() ->
     Scheduler = hls_node_topology:normalize(Topology, Groups, #{workers => 7}),
     Partition = hls_partition:normalize(Topology,
         #{{actor, left} => left, {actor, right} => right}),
-    Deployment = hls_partition_wire:deployment(Partition),
+    Deployment = hls_partition_binding:deployment(Partition),
     #{scheduler => Scheduler, partition => Partition, deployment => Deployment}.
 
 %% Missing retained metadata must fail validation before any session can be opened.
@@ -230,13 +230,13 @@ verify(Bindings = #{scheduler := Scheduler = #{actors := Actors}, partition := P
         {ok, Application} ->
             ?assertEqual(ok, hls_partition_wire:check(Application)),
             ?assertEqual([{board, {19, 7}, {2, 0, 0}, Control}], hls_partition_wire:command(Application, Command)),
-            ?assertEqual(Control, hls_protocol_application_binding:control(Application, Command)),
-            ?assertEqual({Control, [0, 1], Message}, hls_protocol_application_binding:delivery(Application, Command)),
-            ?assertException(error, _, hls_protocol_application_binding:control(Application,
+            ?assertEqual(Control, hls_protocol_application_codec:control(Application, Command)),
+            ?assertEqual({Control, [0, 1], Message}, hls_protocol_application_codec:delivery(Application, Command)),
+            ?assertException(error, _, hls_protocol_application_codec:control(Application,
                 {host, cells, {1, 0, 1, 0}, Message})),
             lists:foreach(fun(Binding) -> event_checks(Binding, Tag, Payload, Message, Padding) end,
                 maps:values(maps:get(devices, Application))),
-            ?assertEqual({reports, Message}, hls_protocol_application_binding:event(Application, board, 0, Frame))
+            ?assertEqual({reports, Message}, hls_protocol_application_codec:event(Application, board, 0, Frame))
     end,
     #{casts => Casts, partition => PartitionCommands, control => Control, frame => Frame}.
 

@@ -1,6 +1,10 @@
--module(hls_local_protocol).
--moduledoc "Splits collection receipts from source callbacks at the local actor boundary; includes the single-actor DSLX clock owner; mailbox selection remains external.".
+-module(xls_local_owner).
+-moduledoc "Renders receipt/action functions and the single-actor DSLX clock owner from a checked compiler artifact. Mailbox selection remains external; imported owners reuse their exact failure codebook.".
+
+%% Owner declarations appended to the ordinary source activation module.
 -export([ports/1, ports/2]).
+%% Receiver composition reuses an already rendered owner module.
+-export([import_owner/2]).
 
 -doc "Emits receipt, callback-action, entry/publication and clock-owner DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
 -spec ports(xls_actor_codegen:spec()) -> iodata().
@@ -15,18 +19,28 @@ ports(Spec = #{message_names := Names, message_words := Words,
     [template("local_protocol", [{<<"@@SCALAR@@">>, scalar(Reductions)},
         {<<"@@GATHER@@">>, gather(Gathers)}, {<<"@@TAG_OK@@">>, Tag}]),
      template("local_slow", [{<<"@@TAG_OK@@">>, Tag},
-        {<<"@@BINDINGS@@">>, xls_shared_reduction_service_codegen:shared_dispatch_bindings(none, ordinary, Spec)},
-        {<<"@@EFFECTIVE@@">>, xls_shared_reduction_service_codegen:shared_dispatch_effective_binding(Reductions, ordinary, Spec)},
-        {<<"@@FAILED@@">>, xls_shared_reduction_service_codegen:shared_dispatch_failed_binding(Reductions, ordinary, Spec)},
+        {<<"@@BINDINGS@@">>, xls_reduction_service_codegen:shared_dispatch_bindings(none, ordinary, Spec)},
+        {<<"@@EFFECTIVE@@">>, xls_reduction_service_codegen:shared_dispatch_effective_binding(Reductions, ordinary, Spec)},
+        {<<"@@FAILED@@">>, xls_reduction_service_codegen:shared_dispatch_failed_binding(Reductions, ordinary, Spec)},
         {<<"@@NEXT_EVENT@@">>, xls_statem_event_codegen:optional(Spec,
             "      next_event: if effective && !failed { next_event } else { u8:0 },")},
-        {<<"@@DISPATCHED@@">>, xls_shared_reduction_service_codegen:shared_dispatch_dispatched_field(Reductions, ordinary, Spec)},
+        {<<"@@DISPATCHED@@">>, xls_reduction_service_codegen:shared_dispatch_dispatched_field(Reductions, ordinary, Spec)},
         {<<"@@SELECTED@@">>, dispatch(Spec)}]),
      template("local_owner", [{<<"@@SHARED_INPUTS@@">>, shared(Mode, inputs)},
         {<<"@@LOCAL_COMPLETION@@">>, case Mode of local -> "true"; shared -> "false" end},
         {<<"@@SHARED_COMPLETION@@">>, shared(Mode, completion)},
         {<<"@@SHARED_FUNCTIONS@@">>, case Mode of local -> []; shared -> template("local_arithmetic",
             [{<<"@@NO_EVENT@@">>, xls_statem_event_codegen:optional(Spec, " && machine.next_event == u8:0")}]) end}])].
+
+-doc "Renders a receiver's import facade for an already emitted owner. File is the relative owner DSLX path from the same trusted transport build; its module basename and byte hash bind the import. Retains and rebinds the owner's checked failure codebook without source reads.".
+-spec import_owner(hls_local_actor:artifact(), binary()) -> hls_local_actor:artifact().
+import_owner(Owner = #{emitted := Emitted}, File) ->
+    Bytes = xls_emitted:bytes(Emitted),
+    Name = filename:basename(binary_to_list(File), ".x"),
+    Imported = template("local_owner_import", [{<<"@@MODULE@@">>, Name}]),
+    Owner#{emitted := xls_emitted:with_bytes(Emitted, Imported),
+        owner_import => #{file => File,
+            dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)}}.
 
 %% ActorState and source callback types are local to the generated module, so
 %% these fragments fill typed declaration slots rather than rewrite generated code.

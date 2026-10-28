@@ -84,11 +84,11 @@ write(Stage, Mode, Case, Limits, ReductionMode, Transport, Tile) ->
         false -> Reduced
     end,
     Requirements = hls_partition_reduction:requirements(Partition),
-    Deployment = hls_partition_wire:deployment(Partition),
+    Deployment = hls_partition_binding:deployment(Partition),
     Dependency = code:lib_dir(erl_hls),
     Artifacts = maps:from_list([begin
         Source = filename:join([Dependency, "src", "examples", "phi_decoder", atom_to_list(Module) ++ ".erl"]),
-        Artifact = xls_shared_parse:to_artifact(Source,
+        Artifact = xls_scheduler_actor:to_artifact(Source,
             (maps:get(Module, Requirements, #{shared_service => ordinary}))#{mailbox_debug => Mode =/= direct}),
         save(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)),
         {Module, Artifact}
@@ -106,14 +106,14 @@ write(Stage, Mode, Case, Limits, ReductionMode, Transport, Tile) ->
             false -> ok
         end,
         save(Stage, "phi_device_" ++ integer_to_list(Device) ++ ".x",
-            hls_partition_wire:wrapper(Deployment, Device, Module)),
+            xls_partition_application:emit(Deployment, Device, Module)),
         Bound = case Tile of
             true ->
                 Binding = maps:get(Device, maps:get(devices, Deployment)),
                 Constants = hls_partition_tile:constants(Local, Binding),
                 save(Stage, "phi_device_" ++ integer_to_list(Device) ++ "_config.json",
                     json:encode([#{name => N, width => W, value => integer_to_binary(V, 16)} || {N, W, V} <- Constants])),
-                same_source(Stage, "phi_tile.x", iolist_to_binary(hls_partition_wire:wrapper(Deployment, Device, Module))),
+                same_source(Stage, "phi_tile.x", iolist_to_binary(xls_partition_application:emit(Deployment, Device, Module))),
                 Local#{tile_constants => Constants};
             false -> Local
         end,

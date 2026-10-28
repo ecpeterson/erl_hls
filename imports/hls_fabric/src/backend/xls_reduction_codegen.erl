@@ -1,6 +1,11 @@
--module(xls_shared_reduction_codegen).
--moduledoc false.
--export([declarations/2, functions/2, transport_function/1, transport_function/2]).
+-module(xls_reduction_codegen).
+-moduledoc "Source-fragment aggregate DSLX used by scheduler actor and topology rendering. Consumes the compiler reduction IR; ordinary callback reduction semantics remain compiler-owned.".
+%% Aggregate declarations and actor-side application.
+-export([declarations/2, functions/2]).
+
+%% Producer-side contribution rendering.
+-export([transport_function/1, transport_function/2]).
+
 %% Validated actor rendering input; extra annotations belong to the selected execution backend.
 -type spec() :: none | xls_statem_reduction_ir:reduction().
 

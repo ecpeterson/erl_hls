@@ -16,12 +16,12 @@ between schedulers.  Their counters remain distinct from the decoder counters.
     to_dslx/0, to_dslx/1]).
 
 -doc "Returns the checked three-shard physical profile.".
--spec profile() -> xls_shared_topology_dslx:profile().
+-spec profile() -> xls_fabric_topology_dslx:profile().
 profile() ->
     profile(3).
 
 -doc "Returns a physical profile at a shard count or profile configuration.".
--spec profile(pos_integer() | map()) -> xls_shared_topology_dslx:profile().
+-spec profile(pos_integer() | map()) -> xls_fabric_topology_dslx:profile().
 profile(Options) ->
     Config = phi_decoder_profile:normalize(Options),
     #{
@@ -59,7 +59,7 @@ to_dslx() ->
 to_dslx(Options) ->
     Config = phi_decoder_profile:normalize(Options),
     Plan = hls_topology:normalize(phi_decoder_profile_topology:topology(Config)),
-    xls_shared_topology_dslx:emit(Plan, profile(Config)).
+    xls_fabric_topology_dslx:emit(Plan, profile(Config)).
 
 %% Assigns the selected profile's families to shared executor groups.
 -spec scheduler_groups(map()) -> map().

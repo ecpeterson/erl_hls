@@ -12,8 +12,8 @@ ordinary_shared_service_option_preserves_default_output_test() ->
     ],
     lists:foreach(fun(Source) ->
         ?assertEqual(
-            iolist_to_binary(xls_shared_parse:to_xls(Source)),
-            iolist_to_binary(xls_shared_parse:to_xls(
+            iolist_to_binary(xls_scheduler_actor:to_xls(Source)),
+            iolist_to_binary(xls_scheduler_actor:to_xls(
                 Source, #{shared_service => ordinary}))
         )
     end, Sources).
@@ -24,20 +24,20 @@ shared_service_options_are_exact_and_validated_test() ->
     Path = "src/examples/regsvc/regsvc.erl",
     ?assertError(
         {invalid_xls_shared_service, speculative},
-        xls_shared_parse:to_xls(Path, #{shared_service => speculative})
+        xls_scheduler_actor:to_xls(Path, #{shared_service => speculative})
     ),
     ?assertError(
         {invalid_xls_options, [extra]},
-        xls_shared_parse:to_xls(Path,
+        xls_scheduler_actor:to_xls(Path,
             #{shared_service => ordinary, extra => true})
     ),
     ?assertError(
         {invalid_xls_options, [shared_service_mode]},
-        xls_shared_parse:to_xls(Path, #{shared_service_mode => ordinary})
+        xls_scheduler_actor:to_xls(Path, #{shared_service_mode => ordinary})
     ),
     ?assertError(
         {unsupported_hls_gs_shared_service, aggregate_only},
-        xls_shared_parse:to_xls(Path, #{shared_service => aggregate_only})
+        xls_scheduler_actor:to_xls(Path, #{shared_service => aggregate_only})
     ).
 
 %% Checks aggregate only requires an actor reduction.
@@ -45,7 +45,7 @@ shared_service_options_are_exact_and_validated_test() ->
 aggregate_only_requires_an_actor_reduction_test() ->
     ?assertError(
         aggregate_only_requires_reductions,
-        xls_shared_parse:to_xls(
+        xls_scheduler_actor:to_xls(
             "test_data/hls_tags_statem_fixture.erl",
             #{shared_service => aggregate_only}
         )
@@ -55,8 +55,8 @@ aggregate_only_requires_an_actor_reduction_test() ->
 -spec aggregate_only_emits_only_the_transport_artifact_surface_test() -> 'ok'.
 aggregate_only_emits_only_the_transport_artifact_surface_test() ->
     Path = "test_data/hls_statem_reduction_lower_fixture.erl",
-    Ordinary = iolist_to_binary(xls_shared_parse:to_xls(Path)),
-    AggregateOnly = iolist_to_binary(xls_shared_parse:to_xls(
+    Ordinary = iolist_to_binary(xls_scheduler_actor:to_xls(Path)),
+    AggregateOnly = iolist_to_binary(xls_scheduler_actor:to_xls(
         Path, #{shared_service => aggregate_only})),
     ?assertEqual(nomatch,
         binary:match(Ordinary, <<"ReductionAggregateRequest">>)),
@@ -76,7 +76,7 @@ aggregate_only_emits_only_the_transport_artifact_surface_test() ->
 -spec aggregate_only_uses_one_pending_receptacle_per_actor_test() -> 'ok'.
 aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
     Path = "test_data/hls_statem_reduction_lower_fixture.erl",
-    AggregateOnly = iolist_to_binary(xls_shared_parse:to_xls(
+    AggregateOnly = iolist_to_binary(xls_scheduler_actor:to_xls(
         Path, #{shared_service => aggregate_only})),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
         <<"aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT]">>)),
@@ -138,7 +138,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
     >>,
     ok = file:write_file(Path, Source),
     try
-        XLS = iolist_to_binary(xls_shared_parse:to_xls(Path)),
+        XLS = iolist_to_binary(xls_scheduler_actor:to_xls(Path)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"import bram;">>)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"import mailbox;">>)),
         ?assertNotEqual(nomatch, binary:match(
@@ -357,7 +357,7 @@ actor_cursor_storage_is_bounded_in_each_service_mode_test() ->
         {"test/hls_indexed_adapter_fixture.erl", #{gather_collection => true}}
     ],
     lists:foreach(fun({Path, Options}) ->
-        Generated = iolist_to_binary(xls_shared_parse:to_xls(Path, Options)),
+        Generated = iolist_to_binary(xls_scheduler_actor:to_xls(Path, Options)),
         Selection = case maps:get(gather_collection, Options, false) of
             true -> [<<"state.cursor, prepare_valid, prepare_slot">>,
                 <<"indexed_prepare_mask(state)">>, <<"dispatch_c">>];

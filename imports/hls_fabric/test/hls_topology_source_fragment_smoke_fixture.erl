@@ -30,7 +30,7 @@ write(Stage) ->
 %% Translates the ordinary aggregate-receiving fixture actor.
 -spec actor() -> any().
 actor() ->
-    xls_shared_parse:to_xls(
+    xls_scheduler_actor:to_xls(
         "test/hls_topology_source_fragment_fixture.erl",
         #{shared_service => aggregate_only}
     ).
@@ -38,7 +38,7 @@ actor() ->
 %% Translates the fixture with the alternate reduction population.
 -spec population_actor() -> any().
 population_actor() ->
-    xls_shared_parse:to_xls(
+    xls_scheduler_actor:to_xls(
         "test/hls_reduction_plan_population_fixture.erl",
         #{shared_service => aggregate_only}
     ).
@@ -46,7 +46,7 @@ population_actor() ->
 %% Translates the contribution-producing fixture actor.
 -spec source_actor() -> any().
 source_actor() ->
-    xls_shared_parse:to_xls("test/hls_topology_source_fixture.erl").
+    xls_scheduler_actor:to_xls("test/hls_topology_source_fixture.erl").
 
 %% Builds the alternate-population reduction topology.
 -spec population_topology() -> any().
@@ -88,7 +88,7 @@ population_topology() ->
         },
         reduction_placements => #{reducer => source_fragments}
     },
-    xls_shared_topology_dslx:emit(Topology, Profile).
+    xls_fabric_topology_dslx:emit(Topology, Profile).
 
 %% Builds the fixture's logical actors, routes and startup messages.
 -spec topology('muxed' | 'sharded' | 'single') -> any().
@@ -148,7 +148,7 @@ emit(Name, Families, Groups) ->
             {Family, source_fragments} || Family <- Families
         ])
     },
-    xls_shared_topology_dslx:emit(Topology, Profile).
+    xls_fabric_topology_dslx:emit(Topology, Profile).
 
 %% Builds the reciprocal routes required by the fixture reduction.
 -spec relations('reducer' | 'reducer_a' | 'reducer_b') -> [{{'reducer','north' | 'report' | 'south'} | {'reducer_a','north' | 'report' | 'south'} | {'reducer_b','north' | 'report' | 'south'},[{term(),term()} | {term(),term(),term()},...]},...].

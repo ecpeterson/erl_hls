@@ -159,7 +159,7 @@ branching_suffix_does_not_invalidate_source_capture_test() ->
     ?assertEqual(3, hls_actor_interface:max_entry_effects(
         hls_actor_interface:from_module(Module))),
     %% Exercise both layout arms in the aggregate artifact's prefix renderer.
-    Generated = iolist_to_binary(xls_shared_parse:to_xls(
+    Generated = iolist_to_binary(xls_scheduler_actor:to_xls(
         "test/hls_reduction_plan_branch_fixture.erl", #{shared_service => aggregate_only})),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"match scheduled.effects.layout">>)).

@@ -19,7 +19,7 @@ connect(#{actors:=Actors},Pids,Handles)->
 -doc "Validates a source rectangle and returns its shared wire payload plus actual BEAM recipient indices. The central owner must admit the record to every listed actor before transmitting the command, preserving order with later start/control. No per-recipient record copies or implicit broadcast to excluded actors.".
 -spec controls(map(),hls_partition_wire:rectangle()) -> {binary(),[non_neg_integer()],tuple()}.
 controls(#{application:=Application,actors:=Actors},Command)->
-    {Payload,Recipients,Record}=hls_protocol_application_binding:delivery(Application,Command),
+    {Payload,Recipients,Record}=hls_protocol_application_codec:delivery(Application,Command),
     {Payload,[I||I<-Recipients,is_map_key(I,Actors)],Record}.
 
 -doc "Enumerates bound BEAM startup records in their original actor-local order. They must pass the same exclusive admission path as controls and native messages before connection/start.".
@@ -41,4 +41,4 @@ external(#{actors:=Actors,application:=#{devices:=#{board:=Binding=#{host:=Host,
 -doc "Decodes a canonical native external frame using the original shared application schema and physical port order. Rejects nonzero padding/flags or unknown ports. Logical source fields retain their admitted source meaning; no extra global chronology is introduced.".
 -spec native_event(map(),byte(),non_neg_integer()) -> {atom(),tuple()}.
 native_event(#{application:=Application},Index,Frame)->
-    hls_protocol_application_binding:event(Application,board,Index,Frame).
+    hls_protocol_application_codec:event(Application,board,Index,Frame).

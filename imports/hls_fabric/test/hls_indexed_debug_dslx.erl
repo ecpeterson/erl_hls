@@ -20,15 +20,15 @@ write(Stage) ->
     {Plan, Groups} = fixture(),
     Options = #{name => actor_debug, channel_depth => 1, actor_egress_depth => burst,
         scheduler_groups => Groups, mailbox_debug => true},
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, Options),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Options),
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_shared_parse:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"),
+        xls_scheduler_actor:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, #{mailbox_debug => true}))
     end, Requirements),
     maps:foreach(fun(Module, Actor) ->
         ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), xls_emitted:bytes(Actor))
     end, Artifacts),
-    ok = file:write_file(filename:join(Stage, "actor_debug.x"), xls_shared_topology_dslx:emit(Plan, Options)),
+    ok = file:write_file(filename:join(Stage, "actor_debug.x"), xls_fabric_topology_dslx:emit(Plan, Options)),
     Scheduler = #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Groups),
     [Binding] = Bindings = xls_scheduler_ram_v:bindings(Scheduler),
     %% The complete payload belongs only to the two masked physical rows and the transient loader request.

@@ -93,7 +93,7 @@ bridge_rejections_test() ->
 generated_library_test() ->
     Path = filename:join(code:priv_dir(hls_fabric), "xls/lib/protocol_envelope.x"),
     {ok, Source} = file:read_file(Path),
-    ?assertEqual(Source, iolist_to_binary(hls_protocol_envelope:emit())).
+    ?assertEqual(Source, iolist_to_binary(xls_protocol_envelope:emit())).
 
 %% Fields are deliberately distinct and include high bits in every non-policy-constrained word.
 -spec packet() -> map().

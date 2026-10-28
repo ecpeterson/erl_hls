@@ -6,7 +6,7 @@
 -spec aggregate_and_internal_share_completion_test() -> ok.
 aggregate_and_internal_share_completion_test() ->
     Dispatch = iolist_to_binary(
-        xls_shared_reduction_service_codegen:shared_executor_dispatch(
+        xls_reduction_service_codegen:shared_executor_dispatch(
             reduction, aggregate_only)),
     ?assertEqual(1, length(binary:matches(Dispatch, <<"shared_machine_complete(">>))),
     ?assertEqual(nomatch, binary:match(aggregate_only_support(),
@@ -17,7 +17,7 @@ aggregate_and_internal_share_completion_test() ->
 issue_uses_committed_metadata_test() ->
     lists:foreach(fun(Mode) ->
         Bindings = iolist_to_binary(
-            xls_shared_reduction_service_codegen:shared_issue_bindings(reduction, Mode)),
+            xls_reduction_service_codegen:shared_issue_bindings(reduction, Mode)),
         lists:foreach(fun(Forbidden) ->
             ?assertEqual(nomatch, binary:match(Bindings, Forbidden))
         end, [<<"retired">>, <<"incoming">>, <<"completion_blocked">>])
@@ -27,5 +27,5 @@ issue_uses_committed_metadata_test() ->
 -spec aggregate_only_support() -> binary().
 aggregate_only_support() ->
     iolist_to_binary(
-        xls_shared_reduction_service_codegen:shared_machine_support(
+        xls_reduction_service_codegen:shared_machine_support(
             reduction, aggregate_only)).

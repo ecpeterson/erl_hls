@@ -28,7 +28,7 @@ exact_only_ingress_uses_the_same_contract_test() ->
     Spec = spec([{actor, extra, {at, [5, 2]}}]),
     Plan = hls_topology:normalize(Spec#{families := #{}, route_relations := []}),
     lists:foreach(fun(Groups) ->
-        Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Groups))),
+        Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Groups))),
         ?assertNotEqual(nomatch, binary:match(Text, <<"spawn IngressRouter0">>)),
         ?assertNotEqual(nomatch, binary:match(Text,
             <<"contains(packet.rectangle, u16:5, u16:2)">>))
@@ -69,14 +69,14 @@ mixed_target_selector_mismatch_is_rejected_test() ->
             {actor, sink, {at, [1, 0]}}, {family, cells, {embed, [1, 1], [0, 0]}}]}]}]},
     Plan = hls_topology:normalize(Spec),
     ?assertException(error, {ingress_encoding, all, message, _},
-        xls_shared_topology_dslx:emit(Plan, profile(#{}))).
+        xls_fabric_topology_dslx:emit(Plan, profile(#{}))).
 
 %% Checks aliased targets have one lane per recipient.
 -spec aliased_targets_have_one_lane_per_recipient_test() -> 'ok'.
 aliased_targets_have_one_lane_per_recipient_test() ->
     lists:foreach(fun(Placement) ->
         {Plan, Groups} = hls_mixed_topology_dslx:fixture({ingress, Placement}),
-        Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, profile(Groups))),
+        Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, profile(Groups))),
         ?assertEqual(5, length(binary:matches(Text, <<"send_if(tok, lane_">>))),
         %% The boundary schema is shared by every target and placement.
         ?assertNotEqual(nomatch, binary:match(Text, <<"frame.header.payload_words == u8:1">>))

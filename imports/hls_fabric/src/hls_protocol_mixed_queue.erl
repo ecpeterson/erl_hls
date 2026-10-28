@@ -12,11 +12,11 @@
 %% The terminal counter value is retained but cannot reserve another event.
 -type sequence() :: 0 .. ((1 bsl 32) - 1).
 %% Queue operations need checked actor routing and the corresponding source/destination codec.
--type route() :: hls_protocol_mixed:link() |
+-type route() :: hls_protocol_mixed_schema:link() |
     #{index := link(), source_index := actor(), destination_index := actor(), direction := to_rtl,
-      source_module := module(), destination_module => module(), classes := [hls_protocol_mixed:codec_class()]} |
+      source_module := module(), destination_module => module(), classes := [hls_protocol_mixed_schema:class()]} |
     #{index := link(), source_index := actor(), destination_index := actor(), direction := to_beam,
-      source_module => module(), destination_module := module(), classes := [hls_protocol_mixed:codec_class()]}.
+      source_module => module(), destination_module := module(), classes := [hls_protocol_mixed_schema:class()]}.
 
 -doc "The emitted host attachment view: exact host actors, checked crossing codecs and native build identity. Session ownership and PID binding are established by new/4.".
 -type attachment() :: #{host_actors := [actor()], links := [route()], identity := binary()}.
@@ -66,7 +66,7 @@ offer(State = #state{live = true, queued = Count, limit = Limit, senders = Sende
     Source = maps:get(Sender, Senders),
     [Link = #{index := I}] = [Candidate || Candidate = #{source_index := S,
         destination_index := D, direction := to_rtl} <- maps:values(Links), S =:= Source, D =:= Target],
-    {Slot, Frame} = hls_protocol_mixed:encode(Link, Message),
+    {Slot, Frame} = hls_protocol_mixed_codec:encode(Link, Message),
     Queue = maps:get(I, Queues),
     {ok, State#state{queued = Count + 1, queues = Queues#{I := queue:in({Slot, Frame}, Queue)}}};
 offer(#state{live = true}, _, _, _) -> {error, busy}.
@@ -118,7 +118,7 @@ credit(State, Session, Event, Link, Slot) ->
 delivery(State, Session, Event, Link, Slot, Frame) ->
     Next = #state{links = Links, pids = Pids} = event(State, Session, Event),
     Route = #{direction := to_beam, destination_index := Target} = maps:get(Link, Links),
-    Message = hls_protocol_mixed:decode(Route, Slot, Frame),
+    Message = hls_protocol_mixed_codec:decode(Route, Slot, Frame),
     {maps:get(Target, Pids), Message, Next}.
 
 %% Output order protects credit grants from delayed duplicates as well as data replay.

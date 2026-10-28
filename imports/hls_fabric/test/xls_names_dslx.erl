@@ -8,14 +8,14 @@ write(Stage) ->
     Cases = [{A, B, expected(A, B)} || A <- Grid, B <- Grid],
     {ok, Semantics} = file:read_file("test_data/hls_names_semantics.inc.x"),
     ok = file:write_file(filename:join(Stage, "names.x"), [
-        xls_shared_parse:to_xls("test/xls_names_fixture.erl", #{shared_service => aggregate_only}),
+        xls_scheduler_actor:to_xls("test/xls_names_fixture.erl", #{shared_service => aggregate_only}),
         Semantics, "#[test]\nfn beam_reduction_and_codecs() {\n",
         [io_lib:format("assert_eq(probe(u32:~B, u32:~B), bits[104]:~B);\n", [A, B, E])
             || {A, B, E} <- Cases], "}\n"]),
     ok = file:write_file(filename:join(Stage, "names_tb.sv"), testbench(Cases)),
     %% Type-check both actor service modes and the hls_gs callback codec calls.
     ok = file:write_file(filename:join(Stage, "ordinary.x"),
-        xls_shared_parse:to_xls("test/xls_names_fixture.erl")),
+        xls_scheduler_actor:to_xls("test/xls_names_fixture.erl")),
     ok = file:write_file(filename:join(Stage, "gs.x"), gs()),
     ok.
 
@@ -41,7 +41,7 @@ expected(A, B) ->
 -spec gs() -> [any(),...].
 gs() ->
     {ok, Forms} = hls_source:parse_file("test/xls_names_gs_fixture.erl"),
-    [xls_shared_parse:to_xls("test/xls_names_gs_fixture.erl"),
+    [xls_scheduler_actor:to_xls("test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
         "  let state_record = (Tag::SERVER_DATA, ServerData { Value: value });\n",
         "  let frame = axis::pack(Tag::GET_VALUE as u8, u32:0);\n",

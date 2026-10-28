@@ -84,11 +84,11 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
                 #{effect_window_partition => ProfileEffectWindowPartition}),
         ArtifactRequirementMaps = [
             ProfileRequirements,
-            xls_shared_topology_dslx:artifact_requirements(
+            xls_fabric_topology_dslx:artifact_requirements(
                 PhiNoisePlan,
                 PhiNoisePhysical
             ),
-            xls_shared_topology_dslx:artifact_requirements(
+            xls_fabric_topology_dslx:artifact_requirements(
                 PhiNoiseSmokePlan,
                 PhiNoiseSmokePhysical
             )
@@ -109,19 +109,19 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         end,
         %% Shared staging must agree with the already prepared profile actors.
         [_ = SharedServiceFor(Module) || Module <- maps:keys(ProfileRequirements)],
-        PhenomData = xls_shared_parse:to_xls(
+        PhenomData = xls_scheduler_actor:to_xls(
             "src/examples/phi_decoder/phenom_data_cell.erl",
             #{shared_service => SharedServiceFor(phenom_data_cell)}
         ),
-        PhenomSyndrome = xls_shared_parse:to_xls(
+        PhenomSyndrome = xls_scheduler_actor:to_xls(
             "src/examples/phi_decoder/phenom_syndrome_cell.erl",
             #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
         ),
-        PhiNoiseTopology = xls_shared_topology_dslx:emit(
+        PhiNoiseTopology = xls_fabric_topology_dslx:emit(
             PhiNoisePlan,
             PhiNoisePhysical
         ),
-        PhiNoiseTopologySmoke = xls_shared_topology_dslx:emit(
+        PhiNoiseTopologySmoke = xls_fabric_topology_dslx:emit(
             PhiNoiseSmokePlan,
             PhiNoiseSmokePhysical
         ),

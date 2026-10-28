@@ -143,7 +143,7 @@ generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     ),
     lists:foreach(
         fun(Depth) ->
-            Generated = iolist_to_binary(xls_shared_topology_dslx:emit(
+            Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(
                 Plan,
                 Profile#{actor_egress_depth := Depth}
             )),
@@ -179,7 +179,7 @@ family_backend_rejects_partial_family_startup_test() ->
     [_First | Rest] = maps:get(startup, Plan),
     ?assertError(
         {incomplete_family_startup, data_even, 4, 3},
-        xls_shared_topology_dslx:emit(
+        xls_fabric_topology_dslx:emit(
             Plan#{startup := Rest},
             phi_shared_noise_topology_dslx:profile()
         )
@@ -194,7 +194,7 @@ family_backend_rejects_invalid_actor_egress_depth_test() ->
         fun(Value) ->
             ?assertError(
                 {egress_depth, Value},
-                xls_shared_topology_dslx:emit(
+                xls_fabric_topology_dslx:emit(
                     Plan,
                     Profile#{actor_egress_depth := Value}
                 )
@@ -210,7 +210,7 @@ family_backend_rejects_invalid_effect_window_partition_test() ->
     Profile = phi_shared_noise_topology_dslx:profile(),
     ?assertError(
         {effect_window_partition, strongly_connected_components},
-        xls_shared_topology_dslx:emit(
+        xls_fabric_topology_dslx:emit(
             Plan,
             Profile#{
                 effect_window_partition => strongly_connected_components
@@ -224,7 +224,7 @@ rectangle_ingress_accepts_the_full_u16_coordinate_extent_test() ->
     Plan0 = hls_topology:normalize(phi_noise_topology:topology(1)),
     [Ingress0] = maps:get(ingresses, Plan0),
     Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10000, 2]}]},
-    Generated = iolist_to_binary(xls_shared_topology_dslx:emit(
+    Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan,
         phi_shared_noise_topology_dslx:profile()
     )),
@@ -240,7 +240,7 @@ rectangle_ingress_rejects_an_extent_beyond_u16_coordinates_test() ->
     Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10001, 2]}]},
     ?assertError(
         {ingress_shape, [16#10001, 2], 16#10000},
-        xls_shared_topology_dslx:emit(
+        xls_fabric_topology_dslx:emit(
             Plan,
             phi_shared_noise_topology_dslx:profile()
         )

@@ -1,4 +1,4 @@
--module(xls_shared_names_tests).
+-module(xls_machine_names_tests).
 -include_lib("eunit/include/eunit.hrl").
 
 %% Backend-only generated names must fail before DSLX parsing, including imports
@@ -6,17 +6,17 @@
 -spec backend_namespace_test() -> ok.
 backend_namespace_test() ->
     Base = #{data_name => cell, message_names => [value], imports => [], reductions => none},
-    ok = xls_shared_names:validate(Base),
+    ok = xls_machine_names:validate(Base),
     lists:foreach(fun(Name) ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
-            xls_shared_names:validate(Base#{data_name := Name})),
+            xls_machine_names:validate(Base#{data_name := Name})),
         ?assertException(error, {xls_name_collision, module, _, _, _},
-            xls_shared_names:validate(Base#{reductions := #{accumulator => #{name => Name}}}))
+            xls_machine_names:validate(Base#{reductions := #{accumulator => #{name => Name}}}))
     end, ['SharedOperands', 'IndexedOwnedInput', 'PublicationPatch', 'SharedState', 'SharedExecutor', 'SharedLoader', 'SharedRequestStage', 'SharedDispatchTicket',
          'ReductionAggregate', 'MachineBits', 'MachineRow', 'CollectionControl', 'CollectionBank', 'CollectionInput', 'DirectCollectionGrant', 'IndexedContext', 'GatherRamReadReq']),
     lists:foreach(fun(Alias) ->
         ?assertException(error, {xls_name_collision, module, _, _, _},
-            xls_shared_names:validate(Base#{imports := [Alias]}))
+            xls_machine_names:validate(Base#{imports := [Alias]}))
     end, ['backend.machine_row_from_bits', 'backend.bits_from_machine_row', 'backend.indexed_prepare_mask', 'backend.indexed_prepared_finish',
           'backend.indexed_preparation_source', 'backend.indexed_prepared_in_flight',
           'backend.indexed_prepared_ticket', 'backend.indexed_owned_mask', 'backend.indexed_capture_result', 'backend.indexed_write_data', 'backend.indexed_capture_retirement',
@@ -38,4 +38,4 @@ gather_element_namespace_test() ->
     Base = #{data_name => cell, message_names => [], imports => [], reductions => none,
         gathers => #{sites => [#{element => #{name => 'IndexedLease'}}]}},
     ?assertException(error, {xls_name_collision, module, "IndexedLease", _, _},
-        xls_shared_names:validate(Base)).
+        xls_machine_names:validate(Base)).

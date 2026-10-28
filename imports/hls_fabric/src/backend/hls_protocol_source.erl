@@ -98,7 +98,7 @@ projection(Source,Destination,Port,Tag,Frame,#{frame_layout:=FrameLayout,channel
     %% Operation comes from the complete ordinary projection and must be constant.
     OpBits=lists:sublist(Frame,hls_frame_layout:header_offset(op)+1,8),true=lists:all(fun(B)->B=:=0 orelse B=:=1 end,OpBits),
     Op=hls_protocol_projection:evaluate(OpBits,0),
-    #{frame_positions:=Positions,mask:=Mask,value:=Value}=hls_protocol_codec:plan(C,Op,FrameLayout),
+    #{frame_positions:=Positions,mask:=Mask,value:=Value}=hls_protocol_codec_plan:plan(C,Op,FrameLayout),
     Requirements=lists:filtermap(fun(J)->
         Expected=(Value bsr J) band 1,Actual=lists:nth(J+1,Frame),
         case (Mask bsr J) band 1 of

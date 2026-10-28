@@ -63,18 +63,18 @@ projection_binds_mailbox_geometry_test() ->
 diagnostic_profile_is_explicit_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(mailbox),
     Profile = #{name => mailbox_fixture, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Specs},
-    Plain = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
-    ?assertEqual(Plain, iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile#{mailbox_debug => false}))),
+    Plain = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
+    ?assertEqual(Plain, iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile#{mailbox_debug => false}))),
     ?assertEqual(nomatch, binary:match(Plain, <<"mailbox_debug_out">>)),
-    Debug = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile#{mailbox_debug => true})),
+    Debug = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile#{mailbox_debug => true})),
     ?assertNotEqual(nomatch, binary:match(Debug, <<"mailbox_debug_out">>)),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, Profile#{mailbox_debug => true}),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Profile#{mailbox_debug => true}),
     ?assertMatch(#{hls_mailbox_debug_fixture := #{mailbox_debug := true}}, Requirements),
-    ?assertError({mailbox_debug, yes}, xls_shared_topology_dslx:emit(Plan, Profile#{mailbox_debug => yes})),
+    ?assertError({mailbox_debug, yes}, xls_fabric_topology_dslx:emit(Plan, Profile#{mailbox_debug => yes})),
     ?assertError(mailbox_debug_requires_shared_schedulers,
-        xls_shared_topology_dslx:emit(Plan, Profile#{scheduler_groups => #{}, mailbox_debug => true})),
+        xls_fabric_topology_dslx:emit(Plan, Profile#{scheduler_groups => #{}, mailbox_debug => true})),
     ?assertError(mailbox_debug_requires_hls_statem,
-        xls_shared_parse:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true})).
+        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true})).
 
 
 %% Checks direct reservations wire contract.

@@ -48,7 +48,7 @@ normalize(Plan = #{actors := Exact, families := Families, ingresses := _Ingresse
     Lanes = lanes(Routes, ActorIndex),
     #{version => 1, frame_layout => Layout, devices => Devices, actors => local_slots(Actors),
         routes => Routes, lanes => Lanes,
-        ingresses => hls_partition_ingress:lower(Plan, Actors, Interfaces),
+        ingresses => hls_partition_ingress_plan:lower(Plan, Actors, Interfaces),
         externals => [E#{index => I, port => "external_" ++ integer_to_list(I) ++ "_out"}
             || {I, E} <- lists:enumerate(0, Externals)]};
 normalize(_Plan, _Placement, _Layout) -> error(invalid_partition_input).
@@ -112,7 +112,7 @@ actor(A = #{identity := Id, module := Module}, Index, Placement, Interfaces, Hos
         {_, []} -> ok;
         {_, Effects} -> error({partition_startup_initial_effects, Id, Effects})
     end,
-    _ = xls_shared_topology_profile:identifier(Module, partition_actor),
+    _ = xls_fabric_topology_profile:identifier(Module, partition_actor),
     (maps:merge(A, maps:get(Module, HostCodecs)))#{index => Index, device => maps:get(Id, Placement),
         max_entry_effects => hls_actor_interface:max_entry_effects(Interface),
         startup => [pack_startup(Id, Module, Message, Layout) || Message <- Messages]}.

@@ -84,7 +84,7 @@ target_coordinates_and_projection_test() ->
         left => #{host => 2, control => 7, ingress => host},
         right => #{host => 3, control => 7, ingress => host}}},
     Command = {host, far, {3, 0, 3, 0}, {work, 42}},
-    {Bytes, [0], {work, 42}} = hls_protocol_application_binding:delivery(Application, Command),
+    {Bytes, [0], {work, 42}} = hls_protocol_application_codec:delivery(Application, Command),
     Tag = Module:pack_tag(work),
     ?assertEqual(<<3:16/little, 0:16/little, 3:16/little, 0:16/little,
         1:32/little, 1:8, 0:16, Tag:8, 42:32/little>>, Bytes),
@@ -92,9 +92,9 @@ target_coordinates_and_projection_test() ->
     ?assertEqual({Bytes, [0], {work, 42}}, hls_protocol_mixed_host:controls(
         #{application => Application, actors => #{0 => #{}}}, Command)),
     ?assertEqual([], hls_partition_ingress:commands(Partition, host, far, {0, 0, 0, 0}, {work, 42})),
-    ?assertException(error, _, hls_protocol_application_binding:delivery(Application,
+    ?assertException(error, _, hls_protocol_application_codec:delivery(Application,
         {host, far, {0, 0, 0, 0}, {work, 42}})),
-    {_, [0, 1], {work, 42}} = hls_protocol_application_binding:delivery(Application,
+    {_, [0, 1], {work, 42}} = hls_protocol_application_codec:delivery(Application,
         {host, near, {0, 0, 1, 0}, {work, 42}}),
     ?assertEqual([], hls_protocol_control:host_ingresses(none, Bound)).
 

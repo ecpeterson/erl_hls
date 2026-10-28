@@ -1,4 +1,4 @@
--module(xls_shared_collection_codegen_tests).
+-module(xls_collection_codegen_tests).
 -include_lib("eunit/include/eunit.hrl").
 
 %% Mailbox admission uses only its supplied reservation-filtered source in both policies.
@@ -48,7 +48,7 @@ exclusive_selection_preserves_independent_collector_source_test() ->
 %% Identifier words are literal bindings, including names formerly targeted by rewriting.
 -spec identifiers_are_rendered_without_textual_rebinding_test() -> ok.
 identifiers_are_rendered_without_textual_rebinding_test() ->
-    Text = iolist_to_binary(xls_shared_collection_codegen:selection(
+    Text = iolist_to_binary(xls_collection_codegen:selection(
         #{admission_reductions => exclusive_epoch},
         #{ordinary_state => "intent", collection_state => "state", ordinary_result => "state_intent"})),
     ?assertEqual(<<"\n        let state_intent = collection_select_ordinary(intent);\n"
@@ -57,6 +57,6 @@ identifiers_are_rendered_without_textual_rebinding_test() ->
 %% Distinct names reveal accidental sharing between reservation and collection sources.
 -spec selection(map()) -> binary().
 selection(Spec) ->
-    iolist_to_binary(xls_shared_collection_codegen:selection(Spec,
+    iolist_to_binary(xls_collection_codegen:selection(Spec,
         #{ordinary_state => "masked_state", collection_state => "collector_state",
             ordinary_result => "next_mail"})).

@@ -5,7 +5,7 @@
 
 -doc "Declared source modules, their trusted topology constructor, physical placement and optional channel schedule. Paths are relative to the caller. Every topology and actor module must be declared; no source is found through an implicit checkout search.".
 -type config() :: #{sources := [hls_source_config:source_file(), ...],
-    topology := hls_source_config:topology(), placement := xls_shared_topology_profile:profile(),
+    topology := hls_source_config:topology(), placement := xls_fabric_topology_profile:profile(),
     schedule => hls_build_profile:schedule_options(), dslx_path => [file:filename()],
     frame_payload_words => hls_frame_layout:words() }.
 
@@ -16,7 +16,7 @@
 %% A plan retains rendered bytes so publication never recompiles source or reloads modules.
 -record(plan, {config :: config(), profile :: hls_build_profile:profile(),
     sources :: [source_descriptor()], topology :: hls_topology:plan(),
-    scheduler :: hls_scheduler_plan:plan(), generation :: xls_shared_topology_dslx:plan(), requirements :: requirements(),
+    scheduler :: hls_scheduler_plan:plan(), generation :: xls_fabric_topology_dslx:plan(), requirements :: requirements(),
     bindings :: [map()], files :: hls_generated_files:files(),
     libraries :: [hls_artifact_bundle:library()], unit :: hls_artifact_bundle:unit(),
     cwd :: file:filename()}).
@@ -27,7 +27,7 @@
 -doc "Read-only backend profile, logical topology, checked scheduler placement, prepared generation graph, actor requirements and physical RAM interfaces. Descriptors are inspection data, not saved executable plans or hardware admission.".
 -type descriptor() :: #{backend := channel_scheduler, profile := hls_build_profile:profile(),
     topology := hls_topology:plan(), scheduler := hls_scheduler_plan:plan(),
-    generation := xls_shared_topology_dslx:descriptor(),
+    generation := xls_fabric_topology_dslx:descriptor(),
     sources := [source_descriptor()], requirements := requirements(), ram_bindings := [map()]}.
 
 -doc "The shared compiler bundle schema with scheduler backend policy serialized as tagged JSON values. Inputs bind every packaged file; units retain external schedules and RTL lists are indexed by role. Neither eligibility nor native timing is established.".
@@ -57,18 +57,18 @@ prepare(Config = #{sources := Sources, topology := Constructor, placement := Pla
     _ = hls_source_config:validate_source(maps:with([sources, topology, dslx_path], Config)),
     Layout = hls_frame_layout:new(maps:get(frame_payload_words, Config,
         maps:get(frame_payload_words, Placement0, 3))),
-    Placement = xls_shared_topology_profile:normalize(Placement0#{
+    Placement = xls_fabric_topology_profile:normalize(Placement0#{
         frame_payload_words => hls_frame_layout:payload_words(Layout)}),
     Profile = hls_build_profile:scheduler(Placement, maps:get(schedule, Config, #{}), Layout),
     #{libraries := Libraries, imports := Imports} = hls_build_support:layout(maps:get(dslx_path, Config, [])),
     Loaded = load_sources(Sources),
     Topology = topology(Constructor, Loaded),
-    Generation = xls_shared_topology_dslx:plan(Topology, Placement),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Generation),
+    Generation = xls_fabric_topology_dslx:plan(Topology, Placement),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Generation),
     ok = require_actors(maps:keys(Requirements), Loaded),
     ActorFiles = actors(Requirements, Loaded, Placement),
-    TopologyBytes = xls_shared_topology_dslx:emit(Generation),
-    #{scheduler := Scheduler, interfaces := Interfaces} = xls_shared_topology_dslx:analysis(Generation),
+    TopologyBytes = xls_fabric_topology_dslx:emit(Generation),
+    #{scheduler := Scheduler, interfaces := Interfaces} = xls_fabric_topology_dslx:analysis(Generation),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler, Layout, Interfaces),
     RamFlags = case iolist_to_binary(xls_scheduler_ram_v:configurations(Bindings)) of
         <<>> -> [];
@@ -103,7 +103,7 @@ config_keys(Config) ->
 descriptor(#plan{profile = Profile, sources = Sources, topology = Topology,
         scheduler = Scheduler, generation = Generation, requirements = Requirements, bindings = Bindings}) ->
     #{backend => channel_scheduler, profile => Profile, sources => Sources, topology => Topology,
-        scheduler => Scheduler, generation => xls_shared_topology_dslx:descriptor(Generation),
+        scheduler => Scheduler, generation => xls_fabric_topology_dslx:descriptor(Generation),
         requirements => Requirements, ram_bindings => Bindings}.
 
 -doc "Reports one retained planning view. Schedule contains the exact external compilation units, including RAM configurations. No view executes tools, creates output or resumes a serialized plan.".
@@ -187,7 +187,7 @@ require_actors(Required, Loaded) ->
     end.
 
 %% Captured preprocessing contexts bind includes and macros consistently with loaded actor interfaces.
--spec actors(requirements(), [{source_descriptor(), file:filename()}], xls_shared_topology_profile:profile()) -> hls_generated_files:files().
+-spec actors(requirements(), [{source_descriptor(), file:filename()}], xls_fabric_topology_profile:profile()) -> hls_generated_files:files().
 actors(Requirements, Loaded, Placement) ->
     Sources = maps:from_list([{Module, File} || {#{module := Module}, File} <- Loaded]),
     Observation = maps:with([mailbox_debug, direct_actor_debug, frame_payload_words], Placement),
@@ -198,7 +198,7 @@ actors(Requirements, Loaded, Placement) ->
             undefined -> hls_diagnostic:raise(source, missing_actor_source_context,
                 <<"Compile actors with their HLS transform and retain source metadata.">>, #{module => Module})
         end,
-        Artifact = xls_shared_parse:to_artifact(File, maps:merge(Requirement,
+        Artifact = xls_scheduler_actor:to_artifact(File, maps:merge(Requirement,
             Observation#{source_options => Context})),
         Bytes = xls_emitted:bytes(Artifact),
         Name = "actors/" ++ atom_to_list(Module) ++ ".x",
@@ -215,7 +215,7 @@ ram_files(Bindings) ->
       "ram/instances.vh" => xls_scheduler_ram_v:instances(Bindings, "clk")}.
 
 %% Only standalone RTL sources enter files.f; wrapper fragments must not be compiled independently.
--spec unit(xls_shared_topology_profile:profile(), [string()], [binary()], [map()]) -> hls_artifact_bundle:unit().
+-spec unit(xls_fabric_topology_profile:profile(), [string()], [binary()], [map()]) -> hls_artifact_bundle:unit().
 unit(#{name := Name}, Imports, Flags, Bindings) ->
     RamRtl = case Bindings of
         [] -> [];

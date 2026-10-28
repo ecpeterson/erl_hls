@@ -7,9 +7,9 @@
 -spec aggregate_only_requires_reductions_test() -> 'ok'.
 aggregate_only_requires_reductions_test() ->
     ?assertError(aggregate_only_requires_reductions,
-        xls_shared_reduction_codegen:declarations(none, aggregate_only)),
+        xls_reduction_codegen:declarations(none, aggregate_only)),
     ?assertError(aggregate_only_requires_reductions,
-        xls_shared_reduction_codegen:functions(none, aggregate_only)).
+        xls_reduction_codegen:functions(none, aggregate_only)).
 
 %% Checks aggregate only renders transport and complete apply.
 -spec aggregate_only_renders_transport_and_complete_apply_test() -> 'ok'.
@@ -20,8 +20,8 @@ aggregate_only_renders_transport_and_complete_apply_test() ->
         xls_statem_reduction_codegen:functions(Spec)
     ])),
     AggregateOnly = iolist_to_binary(xls_dslx:render([
-        xls_shared_reduction_codegen:declarations(Spec, aggregate_only),
-        xls_shared_reduction_codegen:functions(Spec, aggregate_only)
+        xls_reduction_codegen:declarations(Spec, aggregate_only),
+        xls_reduction_codegen:functions(Spec, aggregate_only)
     ])),
     ?assertEqual(nomatch,
         binary:match(Ordinary, <<"ReductionAggregate">>)),
@@ -63,7 +63,7 @@ aggregate_only_rejects_ambiguous_transport_tags_test() ->
     Spec = Spec0#{sites => [First, Second]},
     ?assertError(
         {aggregate_only_ambiguous_contribution_schemas, [count_value]},
-        xls_shared_reduction_codegen:functions(Spec, aggregate_only)
+        xls_reduction_codegen:functions(Spec, aggregate_only)
     ).
 
 %% Builds the minimal checked input required by the renderer under test.

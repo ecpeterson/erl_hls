@@ -14,13 +14,13 @@
 -doc "All static bridge interfaces, host bindings, budgets and role directories. Devices have no generated-byte identities or support-library hashes before emission.".
 -type descriptor() :: #{devices := #{hls_source_config:device() => hls_protocol_bridge:descriptor()},
     actors := pos_integer(), limits := hls_source_config:limits(),
-    application := hls_protocol_application_binding:application(), eligible := false,
+    application := hls_protocol_application_schema:application(), eligible := false,
     directories := #{hls_source_config:device() => string()}}.
 
 -doc "The emitted deployment, retaining checked host bindings and limits while each role gains its exact bridge identity and support hashes.".
 -type result() :: #{devices := #{hls_source_config:device() => hls_protocol_bridge:bridge()},
     actors := pos_integer(), limits := hls_source_config:limits(),
-    application := hls_protocol_application_binding:application(), eligible := false,
+    application := hls_protocol_application_schema:application(), eligible := false,
     directories := #{hls_source_config:device() => string()}}.
 
 -doc "Every numbered role bundle and the final deployment binding, before output I/O.".

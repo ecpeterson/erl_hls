@@ -61,14 +61,14 @@ packed_transport_binding_test_() -> {timeout, 60, fun packed_transport_binding/0
 packed_transport_binding() ->
     {Plan, Placement, _} = hls_phi_memory_fixture:fixture(board_memory),
     Original = hls_partition:normalize(Plan, Placement),
-    #{devices := BaseDevices} = hls_partition_wire:deployment(Original),
+    #{devices := BaseDevices} = hls_partition_binding:deployment(Original),
     lists:foreach(fun({Words, Credits, Compact}) ->
         Plain = #{words => Words, credits => Credits},
         Transport = case Compact of true -> Plain#{compact => true}; false -> Plain end,
         P = hls_partition_links:configure(Original, Transport),
         ?assertEqual(hls_partition_links:configure(Original, Plain),
             hls_partition_links:configure(Original, Plain#{compact => false})),
-        #{devices := Devices} = Deployment = hls_partition_wire:deployment(P),
+        #{devices := Devices} = Deployment = hls_partition_binding:deployment(P),
         lists:foreach(fun(Device) ->
             #{local := Local, identity := Identity} = maps:get(Device, Devices),
             ?assertEqual(Transport, maps:get(transport, Local)),
@@ -76,12 +76,12 @@ packed_transport_binding() ->
             Base = hls_partition:device(Original, Device),
             ?assertEqual(maps:get(lanes, Base), maps:get(lanes, Local)),
             ?assertEqual([34*Words], lists:usort([Width || {"_link_" ++ _, Width, _} <- hls_partition_links:ports(Local)])),
-            Text = iolist_to_binary(hls_partition_wire:wrapper(Deployment, Device, test_graph)),
+            Text = iolist_to_binary(xls_partition_application:emit(Deployment, Device, test_graph)),
             ?assertNotEqual(nomatch, binary:match(Text, <<"import hls_packed_link;">>)),
             ?assertEqual(nomatch, binary:match(Text, <<"import hls_credit_link;">>)),
             case Compact of
                 true ->
-                    #{devices := PlainDevices} = hls_partition_wire:deployment(
+                    #{devices := PlainDevices} = hls_partition_binding:deployment(
                         hls_partition_links:configure(Original, Plain)),
                     ?assertNotEqual(maps:get(identity, maps:get(Device, PlainDevices)), Identity),
                     ?assertNotEqual(nomatch, binary:match(Text, <<", true>(link_">>));

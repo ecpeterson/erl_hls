@@ -68,7 +68,7 @@ stop(Stream) -> gen_server:call(Stream, retire, infinity).
 -spec init(tuple()) -> {ok, state()}.
 init({Plan = #{actors := Actors, mixed := Mixed = #{identity := Identity, links := Links},
         binding := #{host := Host, control := Service}}, Broker, Pids, Session, Options, Client}) ->
-    ok = hls_protocol_mixed:check_codecs(Plan),
+    ok = hls_protocol_mixed_codec:check(Plan),
     #{admission_timeout := Timeout} = Config = maps:merge(#{admission_timeout => 1000}, Options),
     1 = map_size(Config),
     true = Timeout > 0,

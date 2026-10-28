@@ -3,9 +3,9 @@
 -export([projection/2, projection/3, projection/4, validate/3]).
 
 -doc "Builds the actor observation map from a retained generation plan and its matching actor artifacts. Uses that plan's observation options, scheduler and checked interfaces without reading sources or redoing placement.".
--spec projection(xls_shared_topology_dslx:plan(), #{module() => xls_emitted:artifact()}) -> map().
+-spec projection(xls_fabric_topology_dslx:plan(), #{module() => xls_emitted:artifact()}) -> map().
 projection(Prepared, Artifacts) ->
-    Analysis = #{profile := Options} = xls_shared_topology_dslx:analysis(Prepared),
+    Analysis = #{profile := Options} = xls_fabric_topology_dslx:analysis(Prepared),
     build(Analysis, Options, fun(Module, Locations) ->
         xls_emitted:sites(maps:get(Module, Artifacts), Locations)
     end).
@@ -70,7 +70,7 @@ prepare(Topology, Specs, Options) ->
 %% Combine only observed modules' codebooks with the retained physical ownership.
 -spec build(#{topology := hls_topology:plan(), scheduler := hls_scheduler_plan:plan(),
     interfaces := #{module() => hls_actor_interface:summary()},
-    profile => xls_shared_topology_profile:profile()}, map(),
+    profile => xls_fabric_topology_profile:profile()}, map(),
     fun((module(), [xls_failure_sites:location()]) -> [map()])) -> map().
 build(#{topology := Plan, scheduler := Scheduler = #{groups := Groups},
         interfaces := Catalog}, Options, Codebook) ->
@@ -127,13 +127,13 @@ with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
 -spec bank(non_neg_integer(), map(), map(), map(), [map()]) -> map().
 bank(Index, #{module := Module, slot_count := Slots, state_storage := block_ram} = Group,
         Interface = #{phases := Phases}, Placements, Sites) ->
-    Layout = xls_shared_machine_layout:from_group(Group),
-    Fields = maps:with([phase, enter_pending, failure], xls_shared_machine_layout:fields(Layout)),
+    Layout = xls_machine_layout:from_group(Group),
+    Fields = maps:with([phase, enter_pending, failure], xls_machine_layout:fields(Layout)),
     Entries = lists:keysort(1, [{Slot, #{key => xls_actor_debug:actor_key(Id), slot => Slot,
         name => iolist_to_binary(io_lib:format("~p", [Id]))}} ||
         {Id, #{index := I, slot := Slot}} <- maps:to_list(Placements), I =:= Index]),
     Bank = #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
-        slots => Slots, width => xls_shared_machine_layout:width(Layout), fields => Fields,
+        slots => Slots, width => xls_machine_layout:width(Layout), fields => Fields,
         failures => xls_actor_debug:failures(Sites),
         module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]},
     Observed = case maps:find(state_projection, Group) of
@@ -166,10 +166,10 @@ bank(Index, _Group, _Interface, _Placements, _Codebook) ->
     error({debug_requires_state_ram, Index}).
 
 %% Adds reduction progress fields without exposing accumulator payloads.
--spec with_reduction(none | map(), xls_shared_machine_layout:layout(), map()) -> map().
+-spec with_reduction(none | map(), xls_machine_layout:layout(), map()) -> map().
 with_reduction(none, _Layout, Bank) -> Bank;
 with_reduction(Reduction = #{sites := Sites}, MachineLayout, Bank) ->
-    #{offset := Start} = xls_shared_machine_layout:field(MachineLayout, reduction),
+    #{offset := Start} = xls_machine_layout:field(MachineLayout, reduction),
     Layout = xls_statem_reduction_ir:packed_layout(Reduction),
     Names = xls_statem_reduction_ir:observation_fields(Reduction),
     {Width, Fields} = lists:foldl(fun(Name, {Offset, Acc}) ->

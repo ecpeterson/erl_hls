@@ -1,13 +1,20 @@
 %%%% A materialized topology graph with independent placement decisions.
--module(xls_shared_topology_instance_dslx).
--moduledoc false.
--export([required/2, lower/2, lower/4, render/1, message_inputs/2]).
+-module(xls_fabric_topology_instance_dslx).
+-moduledoc "Plans and renders materialized fabric topology for mixed or irregular placement. The generation facade retains this explicit graph; direct and RAM-scheduled actors share checked physical lanes and source interfaces.".
+%% Internal representation selection and graph preparation.
+-export([required/2, lower/4]).
+
+%% Retained graph rendering.
+-export([render/1]).
+
+%% Convenience planning and lane inspection.
+-export([lower/2, message_inputs/2]).
 
 %% The compact renderer preserves generated loops for wholly direct or wholly
 %% shared families. An explicit graph is materialized: route size
 %% follows deployed instances, while actor artifacts remain shared.
 -doc "Selects explicit-instance generation from a normalized profile and its retained scheduler. It performs no source reads or placement analysis.".
--spec required(xls_shared_topology_profile:profile(), hls_scheduler_plan:plan()) -> boolean().
+-spec required(xls_fabric_topology_profile:profile(), hls_scheduler_plan:plan()) -> boolean().
 required(#{direct_collections := Collections, effect_delivery_width := Width},
         #{groups := Groups, direct_members := Direct}) ->
     Width > 1 orelse map_size(Collections) > 0 orelse (Groups =/= [] andalso Direct =/= []) orelse
@@ -31,17 +38,17 @@ message_inputs(Plan, Profile) ->
             Kind =:= scheduler orelse Kind =:= direct].
 
 -doc "Prepares interfaces and placement once, then lowers an explicit graph. Use lower/4 when those inputs already belong to a common generation plan.".
--spec lower(hls_topology:plan(), xls_shared_topology_profile:profile()) -> map().
+-spec lower(hls_topology:plan(), xls_fabric_topology_profile:profile()) -> map().
 lower(Plan, Profile0) ->
     Profile = #{scheduler_groups := Specs, frame_payload_words := Words} =
-        xls_shared_topology_profile:normalize(Profile0),
+        xls_fabric_topology_profile:normalize(Profile0),
     Layout = hls_frame_layout:new(Words),
     Interfaces = hls_scheduler_plan:interfaces(Plan, Layout),
     Scheduler = hls_scheduler_plan:normalize(Plan, Specs, Layout, Interfaces),
     lower(Plan, Profile, Scheduler, Interfaces).
 
 -doc "Resolves physical lanes, startup, collections and ownership from one checked profile, scheduler and selected-layout interface catalog. It does not reread source or repeat placement.".
--spec lower(hls_topology:plan(), xls_shared_topology_profile:profile(),
+-spec lower(hls_topology:plan(), xls_fabric_topology_profile:profile(),
     hls_scheduler_plan:plan(), #{module() => hls_actor_interface:summary()}) -> map().
 lower(Plan, Profile = #{effect_window_partition := WindowPartition,
         reduction_placements := Reductions, direct_actor_debug := ActorDebug,
@@ -96,7 +103,7 @@ lower(Plan, Profile = #{effect_window_partition := WindowPartition,
         [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Ingresses],
     Requirements = hls_topology_constants:requirements(Groups0,
         maps:from_list([{Module, #{shared_service => ordinary}} || #{module := Module} <- Actors])),
-    Collected = xls_shared_collection_codegen:requirements(Groups0, Direct1, Requirements),
+    Collected = xls_collection_codegen:requirements(Groups0, Direct1, Requirements),
     Specialized = lists:foldl(fun(#{module := M, direct_collection := Mode}, Acc) ->
         case Mode of false -> Acc; _ -> Acc#{M := (maps:get(M, Acc))#{direct_collection => Mode}} end
     end, Collected, Direct1),
@@ -241,7 +248,7 @@ scheduler(I, Group = #{id := Id, state_storage := block_ram,
     Module = maps:get(module, Group),
     Group#{kind => scheduler, index => I, unit => {scheduler, I},
         stem => ["scheduler_", n(I)],
-        module_name => xls_shared_topology_profile:identifier(Module, {scheduler, Id}),
+        module_name => xls_fabric_topology_profile:identifier(Module, {scheduler, Id}),
         actors => Members, startup => [{Slot, Frame} ||
             #{slot := Slot, startup := Frames} <- Members, Frame <- Frames]};
 scheduler(_, #{id := Id, state_storage := State, mailbox_storage := Mailbox}, _) ->
@@ -555,7 +562,7 @@ unit_channels(#{kind := scheduler, stem := Stem, module_name := Module, inbound 
         length(Inbound) + 1, "CHANNEL_DEPTH"),
         channel([Stem, "_startup"], [Module, "::ScheduledRequest"], none, "CHANNEL_DEPTH"),
         channel([Stem, "_egress"], [Module, "::ScheduledEffects"], none,
-            ["u32:", n(xls_shared_codegen:publication_depth())])].
+            ["u32:", n(xls_scheduler_codegen:publication_depth())])].
 
 %% Declares a channel with its representation and bounded queue depth.
 -spec channel([any(),...],[any(),...],'none' | non_neg_integer(),[string() | 65 | 67 | 68 | 69 | 72 | 76 | 78 | 80 | 84 | 95,...]) -> iodata().
@@ -655,7 +662,7 @@ external_spawns(#{externals := Externals, lanes := Lanes}) ->
 
 %% Creates a stable generated prefix for an external output.
 -spec external_stem(atom() | string()) -> iodata().
-external_stem(Id) -> [xls_shared_topology_profile:identifier(Id, external_id), "_lanes"].
+external_stem(Id) -> [xls_fabric_topology_profile:identifier(Id, external_id), "_lanes"].
 %% Returns a zero-based position and fails when the expected item is absent.
 -spec index_of(term(),[any()]) -> non_neg_integer().
 index_of(Value, List) -> length(lists:takewhile(fun(V) -> V =/= Value end, List)).

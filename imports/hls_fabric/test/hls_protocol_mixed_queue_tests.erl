@@ -36,7 +36,7 @@ run(Path) ->
         #{index:=RI,destination_index:=Target,classes:=[#{slot:=RS,codec:=Codec}|_]}=Reverse,
         Frame=maps:get(value,Codec),
         {Destination,Message,Q10}=hls_protocol_mixed_queue:delivery(Q9,123,3,RI,RS,Frame),
-        Destination=maps:get(Target,Pids),Message=hls_protocol_mixed:decode(Reverse,RS,Frame),
+        Destination=maps:get(Target,Pids),Message=hls_protocol_mixed_codec:decode(Reverse,RS,Frame),
         rejected(fun()->hls_protocol_mixed_queue:delivery(Q10,123,3,RI,RS,Frame) end),
         Dead=hls_protocol_mixed_queue:invalidate(Q10),
         #{live:=false,queued:=0,available_credits:=0}=hls_protocol_mixed_queue:info(Dead),
@@ -47,7 +47,7 @@ run(Path) ->
 %% Form a canonical finite record from each actual source-bound class, without inventing message schemas.
 -spec message(map()) -> {non_neg_integer(),byte(),non_neg_integer(),tuple()}.
 message(L=#{index:=I,destination_index:=Target,classes:=[#{slot:=Slot,codec:=#{value:=Frame}}|_]}) ->
-    {I,Slot,Target,hls_protocol_mixed:decode(L,Slot,Frame)}.
+    {I,Slot,Target,hls_protocol_mixed_codec:decode(L,Slot,Frame)}.
 
 %% Accept only an actual rejection, not a successful return with a different state.
 -spec rejected(fun(() -> term())) -> ok.
@@ -97,7 +97,7 @@ codec_error_propagation_test() ->
 attachment() ->
     Record = hls_record_codec:bind(sample, [{value, hls_nums:u8()}]),
     Classes = [begin
-        Codec = hls_protocol_codec:plan(#{message_bits => 8, payload_bits => 0,
+        Codec = hls_protocol_codec_plan:plan(#{message_bits => 8, payload_bits => 0,
             fields => [#{type => hls_nums:u8(), message_bit_offset => 0, constant => <<Value:8>>}]}, 17),
         #{slot => Slot, port => Port, tag => sample, codec => Codec, message_bits => 8,
             source_record => Record, destination_record => Record}

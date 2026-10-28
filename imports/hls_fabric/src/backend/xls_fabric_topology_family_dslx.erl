@@ -1,9 +1,10 @@
--module(xls_shared_topology_family_dslx).
--moduledoc "Adds shared placement to the common regular-family routing graph.".
+-module(xls_fabric_topology_family_dslx).
+-moduledoc "Prepares compact family topology for the fabric execution compiler. Reuses the compiler family graph and adds checked scheduler placement; the generation facade retains either the direct graph or a scheduler plan for rendering.".
+%% Internal compact-family planning.
 -export([lower/4]).
 
 -doc "Checks family placement and reductions using one normalized profile, scheduler and selected-layout interface catalog. Retains compiler family annotations without rereading source; compact shared ownership is completed by xls_topology_scheduler_plan.".
--spec lower(hls_topology:plan(), xls_shared_topology_profile:profile(),
+-spec lower(hls_topology:plan(), xls_fabric_topology_profile:profile(),
     hls_scheduler_plan:plan(), #{module() => hls_actor_interface:summary()}) -> map().
 lower(Plan, Profile = #{reduction_placements := Placements,
         effect_window_partition := WindowPartition, mailbox_debug := MailboxDebug},
@@ -51,7 +52,7 @@ annotate_scheduler(Index, Group = #{
     Group#{
         index => Index,
         stem => ["scheduler_", integer_to_list(Index)],
-        module_name => xls_shared_topology_profile:identifier(
+        module_name => xls_fabric_topology_profile:identifier(
             maps:get(module, Group), scheduler_module)
     };
 annotate_scheduler(_Index, #{

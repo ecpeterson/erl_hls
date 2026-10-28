@@ -59,30 +59,30 @@ host_binding() ->
 -spec destination_selector_test() -> ok.
 destination_selector_test() ->
     M=hls_protocol_network_fixture,Op=17,?assertNotEqual(Op,M:pack_tag(value)),
-    C=hls_protocol_codec:plan(#{message_bits=>32,payload_bits=>32,
+    C=hls_protocol_codec_plan:plan(#{message_bits=>32,payload_bits=>32,
         fields=>[#{type=>{hls_type,hls_nums,uN,[32]},message_bit_offset=>0,capture_bit_offset=>0}]},Op),
     Record=hls_record_codec:bind(value,[{value,hls_nums:u32()}]),
     L=#{source_module=>M,destination_module=>M,
         classes=>[#{slot=>2,port=>early,tag=>value,codec=>C,message_bits=>32,
             source_record=>Record,destination_record=>Record}]},
-    {2,Frame}=hls_protocol_mixed:encode(L,early,{value,16#12345678}),
+    {2,Frame}=hls_protocol_mixed_codec:encode(L,early,{value,16#12345678}),
     ?assertEqual(Op,(Frame bsr 24) band 255),
-    ?assertEqual({value,16#12345678},hls_protocol_mixed:decode(L,2,Frame)),
-    ?assertError({badmatch,{error,invalid_frame}},hls_protocol_mixed:decode(L,2,Frame bxor (1 bsl 8))).
+    ?assertEqual({value,16#12345678},hls_protocol_mixed_codec:decode(L,2,Frame)),
+    ?assertError({badmatch,{error,invalid_frame}},hls_protocol_mixed_codec:decode(L,2,Frame bxor (1 bsl 8))).
 
 %% A constant-only source class cannot transmit a different value even when its payload width is zero.
 -spec omitted_constant_test() -> ok.
 omitted_constant_test() ->
     M=hls_protocol_network_fixture,
-    C=hls_protocol_codec:plan(#{message_bits=>8,payload_bits=>0,
+    C=hls_protocol_codec_plan:plan(#{message_bits=>8,payload_bits=>0,
         fields=>[#{type=>{hls_type,hls_nums,uN,[8]},message_bit_offset=>0,constant=><<7>>}]},M:pack_tag(go)),
     Record=hls_record_codec:bind(go,[{key,hls_nums:u8()}]),
     L=#{source_module=>M,destination_module=>M,
         classes=>[#{slot=>0,port=>open,tag=>go,codec=>C,message_bits=>8,
             source_record=>Record,destination_record=>Record}]},
-    {0,Frame}=hls_protocol_mixed:encode(L,open,{go,7}),
-    ?assertEqual({go,7},hls_protocol_mixed:decode(L,0,Frame)),
-    ?assertError({badmatch,{error,invalid_frame}},hls_protocol_mixed:encode(L,open,{go,8})).
+    {0,Frame}=hls_protocol_mixed_codec:encode(L,open,{go,7}),
+    ?assertEqual({go,7},hls_protocol_mixed_codec:decode(L,0,Frame)),
+    ?assertError({badmatch,{error,invalid_frame}},hls_protocol_mixed_codec:encode(L,open,{go,8})).
 
 %% A retained mixed descriptor carries its record schema through an actor-module reload.
 -spec retained_actor_codecs_test() -> ok.
@@ -94,9 +94,9 @@ retained_actor_codecs_test() ->
     Plan = hls_protocol_mixed:descriptor(hls_protocol_mixed:plan(Config)),
     #{mixed := #{links := Links}} = Plan,
     [Link] = [L || L = #{source_index := 1, destination_index := 2} <- Links],
-    {Slot, Frame} = hls_protocol_mixed:encode(Link, {value, 19}),
+    {Slot, Frame} = hls_protocol_mixed_codec:encode(Link, {value, 19}),
     [Reverse] = [L || L = #{source_index := 2, destination_index := 1} <- Links],
-    {ReverseSlot, ReverseFrame} = hls_protocol_mixed:encode(Reverse, {total, 9}),
+    {ReverseSlot, ReverseFrame} = hls_protocol_mixed_codec:encode(Reverse, {total, 9}),
     Command = {host, all, {1, 0, 1, 0}, {total, 12}},
     Control = hls_protocol_mixed_host:controls(Plan, Command),
     Event = hls_protocol_mixed_host:external(Plan, 1, right, {value, 23}),
@@ -105,11 +105,11 @@ retained_actor_codecs_test() ->
     try
         reload_codec_trap(Module),
         Retained = binary_to_term(term_to_binary(Plan)),
-        ?assertEqual(ok, hls_protocol_mixed:check_codecs(Retained)),
-        ?assertEqual({Slot, Frame}, hls_protocol_mixed:encode(Link, {value, 19})),
-        ?assertEqual({Slot, Frame}, hls_protocol_mixed:encode(Link, early, {value, 19})),
-        ?assertEqual({value, 19}, hls_protocol_mixed:decode(Link, Slot, Frame)),
-        ?assertEqual({total, 9}, hls_protocol_mixed:decode(Reverse, ReverseSlot, ReverseFrame)),
+        ?assertEqual(ok, hls_protocol_mixed_codec:check(Retained)),
+        ?assertEqual({Slot, Frame}, hls_protocol_mixed_codec:encode(Link, {value, 19})),
+        ?assertEqual({Slot, Frame}, hls_protocol_mixed_codec:encode(Link, early, {value, 19})),
+        ?assertEqual({value, 19}, hls_protocol_mixed_codec:decode(Link, Slot, Frame)),
+        ?assertEqual({total, 9}, hls_protocol_mixed_codec:decode(Reverse, ReverseSlot, ReverseFrame)),
         ?assertEqual(Control, hls_protocol_mixed_host:controls(Retained, Command)),
         ?assertEqual(Event, hls_protocol_mixed_host:external(Retained, 1, right, {value, 23})),
         ?assertException(error, _, hls_protocol_mixed_host:external(Retained, 1, right, {go, 7}))

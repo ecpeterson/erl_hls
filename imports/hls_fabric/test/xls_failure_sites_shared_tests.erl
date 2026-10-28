@@ -9,7 +9,7 @@ specializations_use_their_own_artifact_codebook_test() ->
     {ok, Forms} = hls_source:parse_file(File),
     {_, Locations} = xls_failure_sites:prepare(Forms),
     lists:foreach(fun(Mode) ->
-        Artifact = xls_shared_parse:to_artifact(File, #{shared_service => Mode}),
+        Artifact = xls_scheduler_actor:to_artifact(File, #{shared_service => Mode}),
         ?assertMatch([_ | _], xls_emitted:sites(Artifact, Locations))
     end, [ordinary, aggregate_only]).
 

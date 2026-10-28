@@ -381,7 +381,7 @@ trace_renderers(Build) -> trace_calls(Build, renderer_targets()).
 %% Trace leaf renderers as well as composition wrappers, so moving generation into planning is observable.
 -spec renderer_targets() -> [{module(), atom(), arity()}].
 renderer_targets() -> composition_targets() ++ [
-    {xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2},
+    {xls_activation_codegen, artifact, 1}, {xls_local_owner, ports, 2},
     {xls_template, render, 2}, {xls_protocol_transport, emit, 1}].
 
 %% Existing complete-renderer controls retain exact composition multiplicities.
@@ -414,7 +414,7 @@ assert_emissions(Expected, Calls) ->
 -spec assert_early_emissions(map()) -> ok.
 assert_early_emissions(Calls) ->
     lists:foreach(fun(Target) -> ?assert(maps:get(Target, Calls, 0) > 0) end,
-        [{xls_shared_codegen, execution_artifact, 1}, {hls_local_protocol, ports, 2},
+        [{xls_activation_codegen, artifact, 1}, {xls_local_owner, ports, 2},
          {xls_template, render, 2}]).
 
 %% A private trace session observes only this caller and waits for all call events before returning.

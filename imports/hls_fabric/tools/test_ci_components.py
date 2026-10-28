@@ -72,7 +72,7 @@ def main() -> None:
     # Tiny actor rows cover every optional storage feature without another application build.
     rows = args.stage / 'machine-rows'
     command('machine-rows-generate', ['erl', '-noshell', '-eval',
-        'ok=xls_shared_machine_layout_tests:write(hd(init:get_plain_arguments())),halt().',
+        'ok=xls_machine_layout_tests:write(hd(init:get_plain_arguments())),halt().',
         '-extra', rows], env=erlang_environment('test'))
     for name in ['ordinary', 'events', 'reduction_replies', 'gather', 'gather_external',
                  'projected', 'projected_empty']:

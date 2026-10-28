@@ -55,5 +55,5 @@ classes(#{destination_index:=D,pair:=#{slots:=Slots}},#{topology:=#{actors:=Acto
     [begin
         [Channel]=[Ch||Ch<-Channels,maps:with([source,destination,port,tag],Ch)=:=C],
         [Op]=[O||{O,T}<-lists:enumerate(3,Names),T=:=maps:get(tag,C)],
-        #{slot=>I,channel=>C,codec=>hls_protocol_codec:plan(Channel,Op,FrameLayout)}
+        #{slot=>I,channel=>C,codec=>hls_protocol_codec_plan:plan(Channel,Op,FrameLayout)}
     end||#{index:=I,channel:=C}<-Slots].

@@ -1,4 +1,4 @@
--module(xls_shared_reduction_lower_tests).
+-module(xls_scheduler_reduction_lower_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -231,8 +231,8 @@ guarded_contribution_fallback_is_not_total_source_capture_test() ->
     %% dispatch and both ordinary entry points still render identically.
     ?assertMatch([{{count_value, counting}, [_]}], Ordinary),
         ?assertEqual(
-        iolist_to_binary(xls_shared_parse:to_xls(?FIXTURE)),
-        iolist_to_binary(xls_shared_parse:to_xls(?FIXTURE, #{shared_service => ordinary}))
+        iolist_to_binary(xls_scheduler_actor:to_xls(?FIXTURE)),
+        iolist_to_binary(xls_scheduler_actor:to_xls(?FIXTURE, #{shared_service => ordinary}))
     ),
     %% The generic aggregate helper may still represent the guard miss as an
     %% invalid contribution.  Only whole-schema source capture is forbidden.
@@ -420,7 +420,7 @@ analyze(Path) ->
 %% Translates the fixture with the selected shared-service options.
 -spec lower(file:filename(), map()) -> iodata().
 lower(Path, Options) ->
-    xls_shared_parse:to_xls(Path, Options).
+    xls_scheduler_actor:to_xls(Path, Options).
 
 %% Constructs the source context needed by a lowering witness.
 -spec context(file:filename()) -> {[hls_source:form()], map()}.

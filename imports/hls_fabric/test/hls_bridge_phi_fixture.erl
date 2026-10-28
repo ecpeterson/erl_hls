@@ -49,7 +49,7 @@ write(Stage) ->
     lists:foreach(fun(Module) ->
         Source = filename:join([Dependency, "src", "examples", "phi_decoder",
             atom_to_list(Module) ++ ".erl"]),
-        Artifact = xls_shared_parse:to_xls(Source),
+        Artifact = xls_scheduler_actor:to_xls(Source),
         write(Stage, atom_to_list(Module) ++ ".x", Artifact)
     end, [phi_halo_cell, phi_syndrome_replay_cell]),
     Devices = [begin

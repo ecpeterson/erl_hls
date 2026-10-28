@@ -20,7 +20,7 @@ statem_oracle(Offset) ->
 write(Stage) ->
     lists:foreach(fun({Kind, Module}) ->
         Path = "test/" ++ atom_to_list(Module) ++ ".erl",
-        X = xls_shared_parse:to_xls(Path),
+        X = xls_scheduler_actor:to_xls(Path),
         write(Stage, atom_to_list(Module) ++ ".x", X),
         write(Stage, "init_" ++ atom_to_list(Kind) ++ ".x",
             [X, semantics(Kind)]),
@@ -43,7 +43,7 @@ write(Stage) ->
             _ = code:purge(Module)
         end,
         write(Stage, "bad_" ++ atom_to_list(Kind) ++ ".x",
-            [xls_shared_parse:to_xls(BadPath), semantics(Kind)])
+            [xls_scheduler_actor:to_xls(BadPath), semantics(Kind)])
     end, [{gs, xls_init_gs_fixture}, {statem, xls_init_statem_fixture}]),
     %% Reload the compiled fixture after the failing-oracle variants.
     {module, xls_init_statem_fixture} = code:load_file(xls_init_statem_fixture),
@@ -55,8 +55,8 @@ write(Stage) ->
     Base = #{name => init_direct, channel_depth => 1, actor_egress_depth => burst},
     Groups = #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}},
-    write(Stage, "init_direct.x", xls_shared_topology_dslx:emit(Plan, Base)),
-    write(Stage, "init_shared.x", xls_shared_topology_dslx:emit(Plan,
+    write(Stage, "init_direct.x", xls_fabric_topology_dslx:emit(Plan, Base)),
+    write(Stage, "init_shared.x", xls_fabric_topology_dslx:emit(Plan,
         Base#{name => init_shared, scheduler_groups => Groups})),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
     {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),

@@ -29,7 +29,7 @@ def main() -> None:
     stage.mkdir(parents=True, exist_ok=True)
     run(['rebar3', 'as', 'test', 'compile'], stage, 'compile.log')
     run(['erl', '-noshell', '-pa', *map(str, erlang_paths("test")),
-         '-eval', 'io:put_chars(xls_shared_parse:to_xls('
+         '-eval', 'io:put_chars(xls_scheduler_actor:to_xls('
          '"test_data/hls_statem_reduction_lower_fixture.erl", '
          '#{shared_service => aggregate_only})), halt().'], stage, 'generated.x')
     generated = (stage / 'generated.x').read_text()

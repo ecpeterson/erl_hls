@@ -87,7 +87,7 @@ Fixed-vector patterns can use [source-derived shape evidence](https://github.com
 
 ## Source-fragment hardware realization
 
-Use the selected profile and the matching `aggregate_only` artifacts from `xls_shared_topology_dslx:artifact_requirements/2`. Groups sharing a compiled module cannot mix ordinary and aggregate-only instances. Public messages and CPU behavior are unchanged; aggregates use private delivery and consume no ordinary mailbox credit.
+Use the selected profile and the matching `aggregate_only` artifacts from `xls_fabric_topology_dslx:artifact_requirements/2`. Groups sharing a compiled module cannot mix ordinary and aggregate-only instances. Public messages and CPU behavior are unchanged; aggregates use private delivery and consume no ordinary mailbox credit.
 
 The offload remains bounded and backpressured. It delivers only after the destination has opened its window, preserves later ordinary effects, and fails closed on malformed aggregates. Partial offloaded progress is not visible in the recipient's snapshot. Storage, arbitration and qualification details belong in the [maintainer reference](../../yap/compiler-import/actor-reductions.md).
 

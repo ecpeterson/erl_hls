@@ -29,11 +29,11 @@
 %% No tool is inspected or launched while resolving a source profile.
 -type tools() :: #{provider := xls, identity := external_compilation}.
 
--doc "A resolved hardware policy. Source placements retain checked configuration shape; the owning source planner still validates graph ownership and capabilities. Scheduler placement is normalized by xls_shared_topology_profile. Tool identity is intentionally deferred to external compilation, which records actual executable and library hashes.".
+-doc "A resolved hardware policy. Source placements retain checked configuration shape; the owning source planner still validates graph ownership and capabilities. Scheduler placement is normalized by xls_fabric_topology_profile. Tool identity is intentionally deferred to external compilation, which records actual executable and library hashes.".
 -type profile() ::
     #{backend := source_protocol, placement := source_placement(), frame_abi := frame_abi(),
       schedules := #{sampled_clock := schedule(), gateway => schedule()}, tools := tools()} |
-    #{backend := channel_scheduler, placement := xls_shared_topology_profile:profile() | prepared_source, frame_abi := frame_abi(),
+    #{backend := channel_scheduler, placement := xls_fabric_topology_profile:profile() | prepared_source, frame_abi := frame_abi(),
       schedules := #{channel := schedule()}, tools := tools(),
       postprocess => #{completion_storage := registers | lutram}}.
 
@@ -67,14 +67,14 @@ owner() -> owner(hls_frame_layout:default()).
 owner(Layout) -> profile(source_protocol, #{kind => local_owner}, #{sampled_clock => sampled_clock()}, Layout).
 
 -doc "Normalizes scheduler placement and requested XLS scheduling options. Rejects unknown options, noninteger counts or delays, and malformed delay-model names. Result delay reserves scheduler budget at result sends; it changes neither requested pipeline depth nor physical time by itself.".
--spec scheduler(xls_shared_topology_profile:profile(), schedule_options()) -> profile().
+-spec scheduler(xls_fabric_topology_profile:profile(), schedule_options()) -> profile().
 scheduler(Placement, Options) -> scheduler(Placement, Options,
     hls_frame_layout:new(maps:get(frame_payload_words, Placement, 3))).
 
 -doc "Normalizes scheduler policy with a checked ordinary-frame layout; every emitted actor and mailbox must use this ABI.".
--spec scheduler(xls_shared_topology_profile:profile(), schedule_options(), hls_frame_layout:layout()) -> profile().
+-spec scheduler(xls_fabric_topology_profile:profile(), schedule_options(), hls_frame_layout:layout()) -> profile().
 scheduler(Placement, Options, Layout) ->
-    profile(channel_scheduler, xls_shared_topology_profile:normalize(Placement#{
+    profile(channel_scheduler, xls_fabric_topology_profile:normalize(Placement#{
         frame_payload_words => hls_frame_layout:payload_words(Layout)}),
         #{channel => channel_schedule(Options)}, Layout).
 
@@ -128,13 +128,13 @@ protocol_defaults(Kind, Placement) ->
     maps:merge(#{activation => Activation, inspection => none}, Placement).
 
 %% Profiles carry no executable identity until an external build has inspected real tools.
--spec profile(source_protocol | channel_scheduler, source_placement() | xls_shared_topology_profile:profile() | prepared_source,
+-spec profile(source_protocol | channel_scheduler, source_placement() | xls_fabric_topology_profile:profile() | prepared_source,
     #{sampled_clock => schedule(), gateway => schedule(), channel => schedule()}) -> profile().
 profile(Backend, Placement, Schedules) ->
     profile(Backend, Placement, Schedules, hls_frame_layout:default()).
 
 %% Layout descriptors are derived from the compiler authority rather than copied ABI literals.
--spec profile(source_protocol | channel_scheduler, source_placement() | xls_shared_topology_profile:profile() | prepared_source,
+-spec profile(source_protocol | channel_scheduler, source_placement() | xls_fabric_topology_profile:profile() | prepared_source,
     #{sampled_clock => schedule(), gateway => schedule(), channel => schedule()}, hls_frame_layout:layout()) -> profile().
 profile(Backend, Placement, Schedules, Layout) ->
     #{backend => Backend, placement => Placement,

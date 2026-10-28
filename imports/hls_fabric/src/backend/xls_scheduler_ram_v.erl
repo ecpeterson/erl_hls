@@ -81,8 +81,8 @@ assets(Bindings) ->
 %% Derive physical row widths including optional actor-private state.
 -spec binding(non_neg_integer(), map(), hls_frame_layout:layout(), hls_scheduler_plan:interfaces()) -> map().
 binding(Index, Group, Layout, Interfaces) ->
-    MachineLayout = xls_shared_machine_layout:from_group(Group),
-    StateWidth = xls_shared_machine_layout:width(MachineLayout),
+    MachineLayout = xls_machine_layout:from_group(Group),
+    StateWidth = xls_machine_layout:width(MachineLayout),
     SlotCount = maps:get(slot_count, Group),
     MailboxCapacity = maps:get(mailbox_capacity, Group),
     Interface = maps:get(maps:get(module, Group, none), Interfaces, #{}),

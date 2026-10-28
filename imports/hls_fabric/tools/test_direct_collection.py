@@ -178,7 +178,7 @@ def main() -> None:
     stage, xls = args.stage, args.xls
     stage.mkdir(parents=True, exist_ok=False)
     expression = '''[Source, Target] = init:get_plain_arguments(),
-      Body = xls_shared_parse:to_xls(Source, #{direct_collection => exclusive_epoch, direct_actor_debug => true}),
+      Body = xls_scheduler_actor:to_xls(Source, #{direct_collection => exclusive_epoch, direct_actor_debug => true}),
       ok = file:write_file(Target, Body), halt().'''
     execute(['erl', '-noshell', '-pa', *erlang_paths("test"), '-eval', expression, '-extra',
              str(ROOT/'test/hls_projection_reduction_fixture.erl'), str(stage/'collector.x')], stage, 'generate')

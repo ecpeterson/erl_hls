@@ -14,20 +14,20 @@ emit(ProfileOptions, Options) ->
     Config = #{planes := Planes} = phi_decoder_profile:normalize(ProfileOptions),
     Topology = hls_topology:normalize(phi_decoder_profile_topology:topology(Config)),
     Profile = maps:merge(phi_decoder_profile_topology_dslx:profile(Config), Options),
-    Generation = xls_shared_topology_dslx:plan(Topology, Profile),
+    Generation = xls_fabric_topology_dslx:plan(Topology, Profile),
     #{scheduler := Scheduler, interfaces := Interfaces,
-        profile := #{frame_payload_words := Words}} = xls_shared_topology_dslx:analysis(Generation),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Generation),
+        profile := #{frame_payload_words := Words}} = xls_fabric_topology_dslx:analysis(Generation),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Generation),
     ActorOptions = maps:with([mailbox_debug, direct_actor_debug], Options),
     Artifacts = maps:map(fun(Module, Requirement) ->
         Source = filename:join("src/examples/phi_decoder", atom_to_list(Module) ++ ".erl"),
-        xls_shared_parse:to_artifact(Source, maps:merge(Requirement, ActorOptions))
+        xls_scheduler_actor:to_artifact(Source, maps:merge(Requirement, ActorOptions))
     end, Requirements),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler, hls_frame_layout:new(Words), Interfaces),
     ActorFiles = maps:from_list([{atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)}
         || {Module, Artifact} <- maps:to_list(Artifacts)]),
     Inputs = hls_generated_files:merge([ActorFiles, #{
-        "phi_decoder_profile_topology.x" => xls_shared_topology_dslx:emit(Generation),
+        "phi_decoder_profile_topology.x" => xls_fabric_topology_dslx:emit(Generation),
         "phi_decoder_profile_top.v" => phi_decoder_profile_top_v:emit(Planes, Scheduler, Bindings, Options),
         "phi_decoder_profile.json" => json:encode(phi_decoder_profile:manifest(Config)),
         "phi_decoder_profile.build-profile.json" => json:encode(

@@ -1,8 +1,13 @@
--module(xls_shared_gather_codegen).
--moduledoc "Shared indexed-gather state codecs and transient completion injection.".
--export([enabled/1, progress_width/1, storage_width/1,
-    decode/2, encode/2, helpers/1,
-    shared_dispatch/2, state_fields/1, selection_helpers/1, issue_bindings/1, retire/1]).
+-module(xls_gather_codegen).
+-moduledoc "Gather storage and completion fragments used by the machine layout and execution renderers. Ordinary owners retain the full gather; scheduler collection can retain progress while payloads live in a separate bank.".
+%% Physical row layout and codec fragments.
+-export([enabled/1, progress_width/1, storage_width/1, decode/2, encode/2]).
+
+%% Common machine completion and dispatch.
+-export([helpers/1, shared_dispatch/2]).
+
+%% Scheduler collection ownership.
+-export([state_fields/1, selection_helpers/1, issue_bindings/1, retire/1]).
 
 -doc "Reports whether the checked actor specification declares any indexed gather.".
 -spec enabled(map()) -> boolean().
@@ -177,7 +182,7 @@ selection_helpers(Spec) ->
 -spec issue_bindings(map()) -> iodata().
 issue_bindings(Spec) ->
     case enabled(Spec) of
-        false -> xls_shared_reduction_service_codegen:shared_issue_bindings(
+        false -> xls_reduction_service_codegen:shared_issue_bindings(
             maps:get(reductions, Spec, none), maps:get(shared_service, Spec, ordinary));
         true -> [
             issue_selection(Spec),

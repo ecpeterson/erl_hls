@@ -58,7 +58,7 @@ Depth-zero bypass FIFOs are wires. Empty bypass transfers may occupy no storage;
 
 ## Shared-actor snapshots
 
-Create `actors.json` with `xls_scheduler_debug:projection/3` from the same normalized topology, scheduler specification and emitted actor artifacts used for codegen. Retain the values returned by `xls_shared_parse:to_artifact/2` and write `xls_emitted:bytes/1` to the DSLX files; the projection consumes the retained codebooks, not reread DSLX text. Pass it as `--actor-projection actors.json`; use `--actor-root PATH` when the scheduler RAM shell is nested below the selected top. The exporter checks bank layouts, accepted-write boundaries, identities, codebooks and clock compatibility. Shared projections require block-RAM actor state.
+Create `actors.json` with `xls_scheduler_debug:projection/3` from the same normalized topology, scheduler specification and emitted actor artifacts used for codegen. Retain the values returned by `xls_scheduler_actor:to_artifact/2` and write `xls_emitted:bytes/1` to the DSLX files; the projection consumes the retained codebooks, not reread DSLX text. Pass it as `--actor-projection actors.json`; use `--actor-root PATH` when the scheduler RAM shell is nested below the selected top. The exporter checks bank layouts, accepted-write boundaries, identities, codebooks and clock compatibility. Shared projections require block-RAM actor state.
 
 A snapshot contains the latest committed phase, entry-pending flag, failure code and optional reduction metadata. It updates on accepted state-RAM writes, without consuming another application RAM port. Before the first write after reset, `initialized` is false and state fields are `undefined`.
 

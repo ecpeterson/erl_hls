@@ -1,83 +1,24 @@
 -module(hls_protocol_application_binding).
--moduledoc "Source-checked host codecs shared by single-device gateways and framed deployments. Descriptors are trusted local compiler outputs, never network terms.".
--export([bind/4, control/2, delivery/2, event/4]).
--export_type([application/0, application/1, partition/0, actor/0, binding/0,
-    gateway/0, attached_gateway/0, event/0]).
+-moduledoc "Build-time source checks and derivation of retained application schemas. This boundary compares fresh compiler programs with loaded actor interfaces; host sessions use hls_protocol_application_codec without either input.".
 
--doc "One globally indexed actor and its checked device owner, retaining the source module's output and mailbox declarations.".
--type actor() :: #{id := hls_protocol_topology:id(), module := module(), outputs := [atom()],
-    mailbox_capacity := pos_integer(), identity := {actor, hls_protocol_topology:id()},
-    index := non_neg_integer(), device := hls_source_config:device(),
-    schemas := hls_host_codec:catalog(), output_schemas := #{atom() => [atom()]}}.
-
-%% Each ingress binding adds a two-dimensional point and its accepted target identifiers.
--type recipient() :: #{id := hls_protocol_topology:id(), module := module(), outputs := [atom()],
-    mailbox_capacity := pos_integer(), identity := {actor, hls_protocol_topology:id()},
-    index := non_neg_integer(), device := hls_source_config:device(),
-    point := [non_neg_integer()], targets := [hls_protocol_topology:id()],
-    schemas := hls_host_codec:catalog(), output_schemas := #{atom() => [atom()]}}.
-%% Wire selection indexes targets independently of actor and transport endpoint identities.
--type target() :: #{id := hls_protocol_topology:id(), selector := non_neg_integer(), schemas := [atom()]}.
-%% A rectangle's checked source recipients retain global coordinates through native placement.
--type ingress() :: #{frame_layout := hls_frame_layout:layout(), id := hls_protocol_topology:id(), shape := [pos_integer()],
-    targets := [target()], bindings := [recipient()]}.
-%% Source ports use the shared partition actor identity while logical recipient IDs stay unchanged.
--type route() :: #{source := {{actor, hls_protocol_topology:id()}, atom()},
-    recipients := [hls_protocol_topology:destination()],
-    delivery := direct | coupled | buffered | queued | best_effort}.
-
--doc "The checked host view of source actors, routes and rectangle ingress. It contains no sessions, queues or emitted hardware identities.".
--type partition() :: #{frame_layout := hls_frame_layout:layout(), actors := [actor()], routes := [route()], ingresses := [ingress()]}.
-
-%% Events share the retained compiler record codec used by command admission.
--type event_schema() :: hls_host_codec:schema().
-
--doc "One external stream and its unambiguous ordinary-message selectors, checked against all local producer codecs.".
--type event() :: #{id := hls_protocol_topology:id(), port := string(), schemas := #{byte() => event_schema()}}.
-
--doc "Static source-checked host endpoints and event codecs for one device, before a gateway adapter or attachment identity is added.".
--type binding() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
-    ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
-    frame_layout := hls_frame_layout:layout(), activation := explicit_start}.
+%% Binding derivation owns source validation; runtime descriptor types have their own authority.
+-export([bind/4]).
+-export_type([gateway/0, attached_gateway/0]).
 
 -doc "A whole-application host binding with its checked framed control adapter; emitted attachment identity is still absent.".
--type gateway() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
-    ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
+-type gateway() :: #{host := hls_protocol_application_schema:endpoint(), control := hls_protocol_application_schema:endpoint(),
+    ingress := hls_protocol_application_schema:id(), events := #{hls_protocol_application_schema:endpoint() => hls_protocol_application_schema:event()},
     frame_layout := hls_frame_layout:layout(), activation := explicit_start, control_adapter := hls_protocol_control:hardware()}.
 
 -doc "The emitted whole-application binding, with the exact hardware attachment identity required by the stream client.".
--type attached_gateway() :: #{host := hls_source_config:endpoint(), control := hls_source_config:endpoint(),
-    ingress := hls_protocol_topology:id(), events := #{hls_source_config:endpoint() => event()},
+-type attached_gateway() :: #{host := hls_protocol_application_schema:endpoint(), control := hls_protocol_application_schema:endpoint(),
+    ingress := hls_protocol_application_schema:id(), events := #{hls_protocol_application_schema:endpoint() => hls_protocol_application_schema:event()},
     frame_layout := hls_frame_layout:layout(), activation := explicit_start, control_adapter := hls_protocol_control:hardware(), identity := binary()}.
-
--doc "Source partition and device bindings, parameterized only by the owning build stage's concrete endpoint binding.".
--type application(Binding) :: #{partition := partition(), devices := #{hls_source_config:device() => Binding}}.
-
--doc "The static host application returned by bind/4, before any device hardware is emitted.".
--type application() :: application(binding()).
-
-%% Ordinary application bindings and the whole-gateway stage wrappers share these consumers.
--type checked_application() :: application(binding() | gateway() | attached_gateway()) |
-    hls_protocol_application:descriptor() | hls_protocol_application:result().
-%% Standalone selection needs coordinates, codecs and indices, without the full actor inventory.
--type selection_recipient() :: #{module := module(), index := non_neg_integer(),
-    device := hls_source_config:device(), point := [non_neg_integer()],
-    targets := [hls_protocol_topology:id()], schemas := hls_host_codec:catalog(),
-    id => hls_protocol_topology:id()}.
-%% The independent selector accepts a checked ingress without the surrounding topology graph.
--type selection_ingress() :: #{id := hls_protocol_topology:id(), shape := [pos_integer()],
-    targets := [target()], bindings := [selection_recipient()]}.
-%% Device addresses are optional for selection itself and used by the shared wire-command caller.
--type selection_application() :: #{partition := #{ingresses := [selection_ingress()]},
-    devices => #{hls_source_config:device() => #{host := hls_source_config:endpoint(),
-        control := hls_source_config:endpoint(), ingress := hls_protocol_topology:id()}}}.
-%% Full generated bindings and the standalone selector have distinct, concrete input shapes.
--type control_view() :: checked_application() | selection_application().
 
 -doc "Checks loaded codecs against fresh source records and binds every actor to exactly one supplied device. Control is the unchanged whole plan from that same source build, never a native projection. Hosts supply positive 16-bit addresses. External schemas include only that device's actual producers. Returns typed control and event bindings; transport identities and admission remain the caller's responsibility.".
 -spec bind(hls_protocol_transport:bundle(), none | hls_protocol_control:plan(),
     #{hls_protocol_topology:id() => hls_source_config:device()},
-    #{hls_source_config:device() => hls_source_config:endpoint()}) -> application().
+    #{hls_source_config:device() => hls_source_config:endpoint()}) -> hls_protocol_application_schema:application().
 bind(#{frame_layout := Layout, topology := Topology = #{actors := Actors, routes := Routes, externals := Externals},
         modules := Modules}, Control, Owners, Hosts) ->
     ok = check_ownership(Actors, Owners, Hosts),
@@ -89,7 +30,7 @@ bind(#{frame_layout := Layout, topology := Topology = #{actors := Actors, routes
     Ports = [E#{port => "external_" ++ integer_to_list(I)} || {I, E} <- lists:enumerate(0, Externals)],
     Partition = #{frame_layout => Layout, actors => Bound, routes => PortRoutes, ingresses => Ingresses},
     Devices = maps:map(fun(Device, Host) ->
-        Raw = hls_partition_wire:binding(Partition, Device, Host,
+        Raw = hls_partition_binding:binding(Partition, Device, Host,
             #{ingresses => Ingresses, externals => Ports}),
         (maps:remove(identity, Raw))#{frame_layout => Layout, activation => explicit_start}
     end, Hosts),
@@ -115,7 +56,7 @@ checked_interfaces(Modules) ->
 %% Global source order defines indices independently of role names and sparse native placement.
 -spec bind_actors([hls_protocol_topology:actor()],
     #{hls_protocol_topology:id() => hls_source_config:device()},
-    #{module() => hls_actor_interface:summary()}) -> [actor()].
+    #{module() => hls_actor_interface:summary()}) -> [hls_protocol_application_schema:actor()].
 bind_actors(Actors, Owners, Interfaces) ->
     Codecs = maps:map(fun(_, Interface) ->
         #{schemas => hls_host_codec:schemas(Interface),
@@ -123,29 +64,6 @@ bind_actors(Actors, Owners, Interfaces) ->
     end, Interfaces),
     [(maps:merge(A, maps:get(Module, Codecs)))#{identity => {actor, Id},
         index => I, device => maps:get(Id, Owners)} || {I, A = #{id := Id, module := Module}} <- lists:enumerate(0, Actors)].
-
--doc "Encodes a typed rectangle using the checked source schemas. All selected devices must share the same command bytes. The relay broadcasts those global bounds; each native sparse mask discards unowned targets. An empty selection or malformed command is rejected before queue admission.".
--spec control(control_view(), hls_partition_wire:rectangle()) -> binary().
-control(Application, Command) ->
-    {Payload, _, _} = delivery(Application, Command),
-    Payload.
-
--doc "Returns one checked command payload, its exact global actor indices and the original record. Uses the shared partition selector for schema packing and geometry; host owners filter these indices by actual local ownership. Rejects empty selection before queue admission. No transport or actor delivery occurs here.".
--spec delivery(control_view(), hls_partition_wire:rectangle()) -> {binary(), [non_neg_integer()], tuple()}.
-delivery(#{partition := Partition}, {Ingress, Target, Bounds, Record}) ->
-    #{packet := Packet, recipients := Recipients = [_ | _]} =
-        hls_partition_ingress:select(Partition, Ingress, Target, Bounds, Record),
-    {hls_partition_wire:control_payload(Packet), [maps:get(index, Actor) || Actor <- Recipients], Record}.
-
--doc "Decodes a canonical external frame at the emitted global endpoint index, using only the emitting device's producer schemas. Rejects unknown selectors, wrong word counts and noncanonical padding. This is codec validation, not application-semantic validation.".
--spec event(checked_application(), hls_source_config:device(), byte(), non_neg_integer()) ->
-    {hls_protocol_topology:id(), tuple()}.
-event(#{devices := Devices}, Device, Index, Frame) ->
-    Binding = #{host := Host, events := Events, frame_layout := Layout} = maps:get(Device, Devices),
-    Port = "external_" ++ integer_to_list(Index),
-    [Endpoint] = [E || {E, #{port := P}} <- maps:to_list(Events), P =:= Port],
-    {#{op := Tag, txid := 0, flags := 0}, Payload} = hls_frame_layout:unpack_integer(Layout, Frame),
-    hls_partition_wire:event(Binding, {Endpoint, Host}, {Tag, 0, 0}, Payload).
 
 %% Field names/order, types, selectors and packed width must match fresh compiler records.
 -spec check_codec(module(), hls_local_actor:source() | hls_local_actor:artifact(), hls_actor_interface:summary()) -> ok.

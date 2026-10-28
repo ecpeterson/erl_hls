@@ -7,7 +7,7 @@
 partially_scheduled_ingress_retains_direct_observation_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(mailbox),
     Partial = maps:with([producer], Specs),
-    Text = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, (profile(rectangle))#{
+    Text = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, (profile(rectangle))#{
         scheduler_groups => Partial, direct_actor_debug => true})),
     ?assertNotEqual(nomatch, binary:match(Text, <<"spawn IngressRouter0">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"family_0_debug_out">>)),

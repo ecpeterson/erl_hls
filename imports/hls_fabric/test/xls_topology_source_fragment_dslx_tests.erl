@@ -7,17 +7,17 @@
 source_fragment_profile_is_deterministic_and_opt_in_test() ->
     Plan = hls_topology:normalize(closed_topology()),
     Base = profile(single_groups()),
-    Ordinary = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Base)),
-    ExplicitOrdinary = iolist_to_binary(xls_shared_topology_dslx:emit(
+    Ordinary = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Base)),
+    ExplicitOrdinary = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan, Base#{reduction_placements => #{}}
     )),
     SelectedProfile = Base#{
         reduction_placements => #{reducer => source_fragments}
     },
-    First = iolist_to_binary(xls_shared_topology_dslx:emit(
+    First = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan, SelectedProfile
     )),
-    Second = iolist_to_binary(xls_shared_topology_dslx:emit(
+    Second = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan, SelectedProfile
     )),
     ?assertEqual(Ordinary, ExplicitOrdinary),
@@ -38,7 +38,7 @@ artifact_requirements_follow_the_selected_profile_test() ->
             },
             hls_topology_source_fixture => #{frame_payload_words => 3, shared_service => ordinary}
         },
-        xls_shared_topology_dslx:artifact_requirements(Plan, Base)
+        xls_fabric_topology_dslx:artifact_requirements(Plan, Base)
     ),
     ?assertEqual(
         #{
@@ -47,7 +47,7 @@ artifact_requirements_follow_the_selected_profile_test() ->
             },
             hls_topology_source_fixture => #{frame_payload_words => 3, shared_service => ordinary}
         },
-        xls_shared_topology_dslx:artifact_requirements(
+        xls_fabric_topology_dslx:artifact_requirements(
             Plan,
             Base#{reduction_placements => #{reducer => source_fragments}}
         )
@@ -181,7 +181,7 @@ one_plane_spans_all_selected_family_shards_test() ->
         ]),
         source => group([{family, source}])
     },
-    Generated = iolist_to_binary(xls_shared_topology_dslx:emit(
+    Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan,
         (profile(Groups))#{
             reduction_placements => #{reducer => source_fragments}
@@ -218,7 +218,7 @@ source_fragment_plane_is_one_effect_window_hyperedge_test() ->
         ]),
         source => group([{family, source}])
     },
-    Generated = iolist_to_binary(xls_shared_topology_dslx:emit(
+    Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(
         Plan,
         (profile(Groups))#{
             effect_window_partition => weak_components,
@@ -251,7 +251,7 @@ multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() ->
             reducer_b => source_fragments
         }
     },
-    Generated = iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)),
+    Generated = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
     %% Only the shared final handoff adds capacity; mux input storage is unchanged.
     ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:1>">>)),
     ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:0>[u32:2]">>)),
@@ -279,7 +279,7 @@ family_profile_rejects_a_non_map_reduction_placement_test() ->
     Plan = hls_topology:normalize(closed_topology()),
     ?assertError(
         {reduction_placements, [reducer]},
-        xls_shared_topology_dslx:emit(
+        xls_fabric_topology_dslx:emit(
             Plan,
             (profile(single_groups()))#{
                 reduction_placements => [reducer]
@@ -294,7 +294,7 @@ selected() ->
     Profile = (profile(single_groups()))#{
         reduction_placements => #{reducer => source_fragments}
     },
-    iolist_to_binary(xls_shared_topology_dslx:emit(Plan, Profile)).
+    iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)).
 
 %% Selects bounded storage and observation settings for the test deployment.
 -spec profile(map()) -> map().

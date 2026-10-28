@@ -1,9 +1,18 @@
--module(xls_shared_codegen).
--moduledoc false.
--export([publication_depth/0, emit/1, artifact/1, execution/1, execution_artifact/1]).
--define(REDUCTION_SERVICE, xls_shared_reduction_service_codegen).
+-module(xls_scheduler_codegen).
+-moduledoc """
+RAM-backed actor scheduler services around the common activation functions.
+
+Owns publication capacity, dispatch tickets, row loading, RAM commands, admission
+and retirement. Actor semantics and state codecs come from xls_machine_codegen;
+source-protocol owners instead enter through xls_activation_codegen.
+""".
+%% Complete scheduler-owned actor modules and their failure codebooks.
+-export([emit/1, artifact/1]).
+%% Queue capacity shared with topology wiring.
+-export([publication_depth/0]).
+-define(REDUCTION_SERVICE, xls_reduction_service_codegen).
 %% Checked actor artifact augmented with private physical options.
--type spec() :: map().
+-type spec() :: xls_actor_codegen:spec().
 
 -doc "Returns the shared publication FIFO capacity; service and router each retain an additional command slot.".
 -spec publication_depth() -> pos_integer().
@@ -16,85 +25,31 @@ emit(Spec) -> xls_emitted:bytes(artifact(Spec)).
 -doc "Renders one specialized shared actor and retains its allocated failure codebook beside the exact module bytes.".
 -spec artifact(spec()) -> xls_emitted:artifact().
 artifact(Spec) ->
-    ok = xls_shared_names:validate(Spec),
+    ok = xls_machine_names:validate(Spec),
     Reductions = maps:get(reductions, Spec, none),
     Mode = maps:get(shared_service, Spec, ordinary),
     xls_actor_codegen:artifact(xls_exclusive_collection_codegen:actor_spec(Spec), [bram, mailbox, scheduler, arbitration, std, direct_mailbox_observation] ++ xls_scheduler_observation:imports(Spec) ++ xls_indexed_collection_codegen:imports(Spec),
-        [xls_shared_reduction_codegen:declarations(Reductions, Mode),
+        [xls_reduction_codegen:declarations(Reductions, Mode),
          xls_exclusive_collection_codegen:declarations(Spec),
          xls_indexed_collection_codegen:declarations(Spec),
-         machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
-         xls_shared_collection_codegen:helpers(Spec), xls_indexed_collection_codegen:helpers(Spec), xls_collection_observation:declarations(Spec),
+         machine_declarations(Spec), xls_state_projection:functions(Spec), xls_machine_codegen:codec(Spec), machine_access(),
+         xls_collection_codegen:helpers(Spec), xls_indexed_collection_codegen:helpers(Spec), xls_collection_observation:declarations(Spec),
          "fn initial_shared_machine() -> ActorState { initial_actor_state() }\n\n",
-         xls_shared_reduction_codegen:functions(Reductions, Mode),
-         xls_shared_gather_codegen:helpers(Spec),
-         command_helpers(), xls_shared_gather_codegen:selection_helpers(Spec),
-         scheduled_effect_function(Spec), xls_publication_codegen:helpers(Spec), shared_machine_step_function(Spec),
-         shared_executor(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
--doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies and physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization.".
--spec execution(xls_actor_codegen:spec()) -> binary().
-execution(Closed) -> xls_emitted:bytes(execution_artifact(Closed)).
-
--doc "Renders checked ordinary activation semantics and retains its emitted failure codebook. Rejects collisions with generated backend names. The same closed-artifact and ownership constraints as execution/1 apply; enclosing protocol composition must preserve this metadata.".
--spec execution_artifact(xls_actor_codegen:spec()) -> xls_emitted:artifact().
-execution_artifact(Closed) ->
-    case maps:keys(Closed) -- [source, failure_locations, imports, capacity, phases, frame_layout,
-            message_names, message_words, output_names, max_entry_effects,
-            data_name, data_width, record_declarations, helper_functions, init,
-            entries, casts, continuations, retained_calls, internal_steps,
-            reductions, gathers, state_projection] of
-        [] -> ok;
-        Unknown -> error({local_execution_requires_closed_artifact, Unknown})
-    end,
-    Spec = Closed#{shared_service => ordinary},
-    case maps:get(retained_calls, Spec) of
-        none -> ok;
-        _ -> error(local_execution_retained_calls_unsupported)
-    end,
-    case maps:find(state_projection, Spec) of
-        {ok, #{rows := Rows}} ->
-            case lists:usort([I || #{instance := I} <- Rows]) of
-                [0] -> ok;
-                _ -> error(local_execution_requires_instance_zero)
-            end;
-        error -> ok
-    end,
-    ok = xls_shared_names:validate(Spec),
-    xls_actor_codegen:artifact(Spec, [bram, mailbox, scheduler, arbitration, std],
-        [machine_declarations(Spec), xls_state_projection:functions(Spec), machine_codec(Spec),
-         xls_shared_gather_codegen:helpers(Spec),
-         shared_machine_step_function(Spec), shared_executor(Spec),
-         execution_ports(Spec)]).
-
-%% Fill the ordinary activation API without selecting application-specific callbacks or storage.
--spec execution_ports(spec()) -> iodata().
-execution_ports(Spec = #{reductions := Reduction, continuations := Events}) ->
-    ReductionPending = case Reduction of none -> []; _ ->
-        " || machine.reduction.status == ReductionStatus::COMPLETE" end,
-    Pending = ["machine.enter_pending", case Events of [] -> []; _ -> " || machine.next_event != u8:0" end,
-        case maps:get(gathers, Spec, none) of none -> []; _ ->
-            " || machine.gather.progress.status == GatherStatus::COMPLETE" end, ReductionPending],
-    {Decode, Execute} = case maps:is_key(state_projection, Spec) of
-        true -> {"machine_from_bits<u32:0>(raw, slot)", "shared_execute<u32:0>(request)"};
-        false -> {"machine_from_bits(raw)", "shared_execute(request)"}
-    end,
-    Internal = case Reduction of none -> []; _ ->
-        "internal: !machine.enter_pending && machine.reduction.status == ReductionStatus::COMPLETE," end,
-    Path = filename:join(code:priv_dir(hls_fabric), "xls/templates/local_execution.x.in"),
-    {ok, Template} = file:read_file(Path),
-    xls_template:render(Template, [{<<"@@DECODE@@">>, Decode}, {<<"@@EXECUTE@@">>, Execute},
-        {<<"@@PENDING@@">>, Pending}, {<<"@@INTERNAL@@">>, Internal}]).
-
+         xls_reduction_codegen:functions(Reductions, Mode),
+         xls_gather_codegen:helpers(Spec),
+         command_helpers(), xls_gather_codegen:selection_helpers(Spec),
+         scheduled_effect_function(Spec), xls_publication_codegen:helpers(Spec), xls_machine_codegen:step(Spec),
+         xls_machine_codegen:execute(Spec), executor_proc(Spec), shared_loader(Spec), shared_service(Spec), xls_statem_codegen:body(Spec), xls_direct_collection_codegen:body(Spec)]).
 %% Defines accepted-work tickets, RAM row types and scheduler-owned metadata.
 -spec machine_declarations(spec()) -> iodata().
 machine_declarations(#{capacity := Capacity} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
-    MachineBits = xls_shared_machine_layout:width(xls_shared_machine_layout:from_spec(Spec)),
+    MachineBits = xls_machine_layout:width(xls_machine_layout:from_spec(Spec)),
     [
         "// One router slot is reserved for the existing borrowed lookahead credit.\n",
         "const PUBLICATION_CAPACITY = u2:", integer_to_list(publication_depth() + 1), ";\n",
-        "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
+        xls_machine_codegen:state_type(Spec),
         "pub type MachineRamReadReq = bram::ReadReq;\n",
         "pub type MachineRamReadResp = bram::ReadResp<u32:",
         integer_to_list(MachineBits), ">;\n",
@@ -110,48 +65,15 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "  slot: u32,\n",
         "  effects: EntryEffects,\n",
         "}\n\n",
-        "struct SharedStep {\n",
-        "  machine: ActorState,\n",
-        "  effects: EntryEffects,\n",
-        "  effects_valid: u1,\n",
-        "  dispatched: u1,\n",
-        "  directive: Directive,\n",
-        "  phase_boundary: u1,\n",
-        "  egress_blocked: u1,\n",
-        "}\n\n",
+        xls_machine_codegen:step_type(),
         "// Immutable selection; actor ownership and result storage are already reserved.\n",
         "struct SharedDispatchTicket {\n",
         "  slot: u32,\n  received: u1,\n  mailbox_index: u8,\n  order_index: u8,\n",
         ?REDUCTION_SERVICE:shared_executor_request_field(Reductions, SharedService),
-        xls_shared_collection_codegen:ticket_field(Spec),
+        xls_collection_codegen:ticket_field(Spec),
         xls_indexed_collection_codegen:ticket_field(Spec),
         "}\n\n",
-        "pub struct SharedExecutorRequest {\n",
-        xls_indexed_memory_codegen:request_fields(Spec),
-        "  slot: u32,\n",
-        "  machine: MachineBits,\n",
-        "  frame: axis::Frame,\n",
-        ?REDUCTION_SERVICE:shared_executor_request_field(
-            Reductions, SharedService
-        ),
-        "  received: u1,\n",
-        "  mailbox_index: u8,\n",
-        "  order_index: u8,\n",
-        "  egress_ready: u1,\n",
-        "}\n\n",
-        "pub struct SharedExecutorResult {\n",
-        "  slot: u32,\n",
-        "  machine: MachineBits,\n",
-        "  effects: EntryEffects,\n",
-        "  effects_valid: u1,\n",
-        "  dispatched: u1,\n",
-        "  directive: Directive,\n",
-        "  phase_boundary: u1,\n",
-        "  egress_blocked: u1,\n",
-        "  received: u1,\n",
-        "  mailbox_index: u8,\n",
-        "  order_index: u8,\n",
-        "}\n\n",
+        xls_machine_codegen:executor_types(Spec),
         "enum SharedPhase : u3 {\n",
         "  BOOT = u3:0,\n",
         "  STARTUP = u3:1,\n",
@@ -166,8 +88,8 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "  phase: SharedPhase,\n",
         "  in_flight: u1[ACTOR_COUNT],\n",
         ?REDUCTION_SERVICE:shared_state_fields(Reductions, SharedService),
-        xls_shared_collection_codegen:state_fields(Spec),
-        xls_shared_gather_codegen:state_fields(Spec),
+        xls_collection_codegen:state_fields(Spec),
+        xls_gather_codegen:state_fields(Spec),
         xls_indexed_collection_codegen:state_fields(Spec),
         xls_indexed_memory_codegen:optional(Spec, "  gather_write_pending: bool,\n"),
         "  completed_valid: u1,\n",
@@ -201,59 +123,16 @@ machine_declarations(#{capacity := Capacity} = Spec) ->
         "}\n\n"
     ].
 
-%% The generic codec owns every offset; semantic conversion retains slot/phase context.
--spec machine_codec(spec()) -> iodata().
-machine_codec(Spec) ->
-    Layout = #{fields := Fields} = xls_shared_machine_layout:from_spec(Spec),
+%% RAM wrappers adapt the common row codec to the scheduler's explicit memory ports.
+-spec machine_access() -> iodata().
+machine_access() ->
     [
-        xls_struct_codec:declaration("MachineRow", Layout), "\n",
-        xls_struct_codec:decoder("MachineRow", "machine_row_from_bits", Layout), "\n",
-        xls_struct_codec:encoder("MachineRow", "bits_from_machine_row", Layout), "\n",
-        "fn machine_from_bits", xls_state_projection:parameter(Spec), "(raw: MachineBits",
-        case maps:is_key(state_projection, Spec) of true -> ", slot: u32"; false -> "" end,
-        ") -> ActorState {\n",
-        "  let row = machine_row_from_bits(raw);\n",
-        "  ActorState {\n",
-        [["    ", atom_to_list(Name), ": ", machine_value(Spec, Name,
-            hls_type:dslx_to_bits(Type, ["row.", atom_to_list(Name)])), ",\n"] ||
-            #{name := Name, type := Type, width := Width} <- Fields,
-            Name =:= data orelse Width > 0],
-        "  }\n}\n\n",
-        "fn bits_from_machine(machine: ActorState) -> MachineBits {\n",
-        "  bits_from_machine_row(MachineRow {\n",
-        [["    ", atom_to_list(Name), ": ", hls_type:dslx_from_bits(Type,
-            case Width of
-                0 -> "zero!<bits[0]>()";
-                _ -> machine_bits(Spec, Name)
-            end), ",\n"] || #{name := Name, type := Type, width := Width} <- Fields],
-        "  })\n}\n\n",
         "fn machine_read(slot: u32) -> MachineRamReadReq {\n",
         "  bram::read(slot)\n}\n\n",
         "fn machine_write(\n",
         "    slot: u32, machine: ActorState) -> MachineRamWriteReq {\n",
         "  bram::write(slot, bits_from_machine(machine))\n}\n\n"
     ].
-
-%% Row data reconstruction alone needs instance, slot and decoded phase context.
--spec machine_value(spec(), xls_shared_machine_layout:name(), iodata()) -> iodata().
-machine_value(_Spec, Name, Raw) when Name =:= phase; Name =:= entered_from ->
-    [Raw, " as Phase"];
-machine_value(Spec, data, Raw) ->
-    xls_state_projection:decode(Spec, Raw, "slot", "row.phase as Phase");
-machine_value(_Spec, reduction, Raw) -> ["reduction_state_from_bits(", Raw, ")"];
-machine_value(Spec, gather, Raw) -> xls_shared_gather_codegen:decode(Spec, Raw);
-machine_value(_Spec, replies, Raw) -> ["hls_reply::from_bits<REPLY_CAPACITY>(", Raw, ")"];
-machine_value(_Spec, _Name, Raw) -> Raw.
-
-%% Feature codecs convert semantic values; the row schema determines their placement.
--spec machine_bits(spec(), xls_shared_machine_layout:name()) -> iodata().
-machine_bits(Spec, data) -> xls_state_projection:encode(Spec, "machine.data");
-machine_bits(_Spec, reduction) -> "bits_from_reduction_state(machine.reduction)";
-machine_bits(Spec, gather) -> xls_shared_gather_codegen:encode(Spec, "machine.gather");
-machine_bits(_Spec, replies) -> "hls_reply::to_bits(machine.replies)";
-machine_bits(_Spec, Name) when Name =:= phase; Name =:= entered_from ->
-    ["machine.", atom_to_list(Name), " as bits[8]"];
-machine_bits(_Spec, Name) -> ["machine.", atom_to_list(Name)].
 
 %% Tags an ordered effect batch with its owning actor slot.
 -spec scheduled_effect_function(map()) -> iodata().
@@ -299,118 +178,10 @@ scheduled_reduction_prefix_arm(#{population := #{size := Size}},
     ["    u8:", integer_to_list(Layout), " => (", Valid, ", u8:",
         integer_to_list(Size), ", count == u8:", integer_to_list(Size), "),\n"].
 
-%% Evaluates mailbox and entry callbacks for scheduler-owned state.
--spec shared_machine_step_function(spec()) -> iodata().
-shared_machine_step_function(#{
-    message_names := MessageNames,
-    message_words := MessageWords
-} = Spec) ->
-    Reductions = maps:get(reductions, Spec, none),
-    SharedService = maps:get(shared_service, Spec, ordinary),
-    [
-        ?REDUCTION_SERVICE:shared_machine_support(
-            Reductions, SharedService, Spec
-        ),
-        "fn shared_machine_dispatch(\n",
-        "    machine: ActorState, frame: axis::Frame, received: u1)\n",
-        "    -> ActorDispatch {\n",
-        "  if hls_failure::failed(machine.failure) {\n",
-        "    ActorDispatch { machine, ..zero!<ActorDispatch>() }\n",
-        "  } else if machine.enter_pending || !received {\n",
-        "    ActorDispatch { machine, ..zero!<ActorDispatch>() }\n",
-        "  } else {\n",
-        "    let tag_ok = ",
-        xls_actor_codegen:input_tag_ok(Spec, MessageNames, MessageWords), ";\n",
-        xls_statem_reply_codegen:admit(Spec, "frame", "tag_ok"),
-        ?REDUCTION_SERVICE:shared_dispatch_bindings(
-            Reductions, SharedService, Spec
-        ),
-        "    let invalid_repeat = ", xls_statem_reply_codegen:optional(Spec, "(tag_ok && is_call(frame.header.op) && directive == Directive::POSTPONE) || "), "tag_ok && repeat_phase &&\n",
-        "      (directive != Directive::CONSUME ||\n",
-        "       next_phase != machine.phase);\n",
-        ?REDUCTION_SERVICE:shared_dispatch_effective_binding(
-            Reductions, SharedService, Spec
-        ),
-        "    let phase_changed = effective && next_phase != machine.phase;\n",
-        "    let phase_boundary = phase_changed ||\n",
-        "      (effective && repeat_phase);\n",
-        ?REDUCTION_SERVICE:shared_dispatch_failed_binding(
-            Reductions, SharedService, Spec
-        ),
-        xls_statem_reply_codegen:finish(Spec, "frame"),
-        xls_actor_codegen:reply_failure_binding(Spec),
-        "    let next_machine = ActorState {\n",
-        "      phase: if effective", xls_statem_reply_codegen:optional(Spec, " && !contract_fault"), " { next_phase } else { machine.phase },\n",
-        "      entered_from: if phase_boundary {\n",
-        "        machine.phase\n",
-        "      } else { machine.entered_from },\n",
-        "      data: if effective", xls_statem_reply_codegen:optional(Spec, " && !contract_fault"), " { next_data } else { machine.data },\n",
-        xls_statem_reply_codegen:optional(Spec, "      replies: reply_book,\n"),
-        xls_statem_event_codegen:optional(Spec, "      next_event: if effective && !failed { next_event } else { u8:0 },\n"),
-        ?REDUCTION_SERVICE:shared_dispatch_reduction_field(
-            Reductions, SharedService
-        ),
-        "      enter_pending: effective && phase_boundary && !failed,\n",
-        "      failure,\n",
-        "      ..machine\n",
-        "    };\n",
-        "    ActorDispatch {\n",
-        "      machine: next_machine,\n",
-        xls_statem_reply_codegen:optional(Spec, "      reply: response, reply_valid: response_valid,\n"),
-        case xls_statem_reply_codegen:enabled(Spec) of
-            true -> "      dispatched: failed || effective,\n      directive: if failed { Directive::CONSUME } else { directive },\n";
-            false -> [?REDUCTION_SERVICE:shared_dispatch_dispatched_field(Reductions, SharedService, Spec), "      directive,\n"]
-        end,
-        "      phase_boundary,\n",
-        "      ..zero!<ActorDispatch>()\n",
-        "    }\n",
-        "  }\n",
-        "}\n\n",
-        "fn shared_machine_enter(machine: ActorState, egress_ready: u1)\n",
-        "    -> SharedStep {\n",
-        "  if hls_failure::failed(machine.failure) || !machine.enter_pending {\n",
-        "    SharedStep { machine, ..zero!<SharedStep>() }\n",
-        "  } else {\n",
-        ?REDUCTION_SERVICE:shared_entry_step(Reductions, Spec),
-        "  }\n",
-        "}\n\n"
-    ].
-
-%% A shared scheduler owns mailbox ordering and actor state. This stateless
-%% boundary contains only the actor-specific work, allowing XLS to pipeline
-%% several distinct actor activations without putting either RAM in the
-%% recurrence.
-%% Returns one atomic activation outcome to the shared scheduler.
--spec shared_executor(spec()) -> iodata().
-shared_executor(Spec) ->
-    ["pub fn shared_execute", xls_state_projection:parameter(Spec), """
-    (request: SharedExecutorRequest) ->
-        SharedExecutorResult {
-    """,
-      "  let machine = ", decode_machine(Spec, "request.machine", "request.slot"), ";\n",
-      "\n",
-      xls_shared_event_codegen:shared_dispatch(Spec),
-      xls_statem_reply_codegen:optional(Spec, ["  let dispatched = if dispatched.reply_valid && !request.egress_ready {\n",
-          "    ActorDispatch { machine, ..zero!<ActorDispatch>() }\n  } else { dispatched };\n"]),
-    """
-    """, "  let entered = ", shared_reply_effect(Spec), "shared_machine_enter(\n",
-        "    dispatched.machine, request.egress_ready)", xls_statem_reply_codegen:optional(Spec, " }"), ";\n", """
-      SharedExecutorResult {
-        slot: request.slot,
-        machine: bits_from_machine(entered.machine),
-        effects: entered.effects,
-        effects_valid: entered.effects_valid,
-        dispatched: dispatched.dispatched,
-        directive: dispatched.directive,
-        phase_boundary: dispatched.phase_boundary,
-        egress_blocked: entered.egress_blocked,
-        received: request.received,
-        mailbox_index: request.mailbox_index,
-        order_index: request.order_index,
-      }
-    }
-
-    """, "pub proc SharedExecutor", xls_state_projection:parameter(Spec), """
+%% The channel wrapper evaluates already-reserved work; the RAM service owns issue and retirement.
+-spec executor_proc(spec()) -> iodata().
+executor_proc(Spec) ->
+    ["pub proc SharedExecutor", xls_state_projection:parameter(Spec), """
      {
       request_in: chan<SharedExecutorRequest> in;
       result_out: chan<SharedExecutorResult> out;
@@ -438,12 +209,6 @@ shared_executor(Spec) ->
 
     """].
 
-%% Both executor and retirement decode from the same physical layout and actor identity.
--spec decode_machine(spec(), iodata(), iodata()) -> iodata().
-decode_machine(Spec, Raw, Slot) ->
-    ["machine_from_bits", xls_state_projection:argument(Spec), "(", Raw,
-        case maps:is_key(state_projection, Spec) of true -> [", ", Slot]; false -> "" end, ")"].
-
 %% The loader has its own advance condition and owns no writable actor state.
 -spec shared_loader(spec()) -> binary().
 shared_loader(Spec) ->
@@ -458,7 +223,7 @@ shared_loader(Spec) ->
         || Field <- Fields]),
     xls_template:render(Template, [
         {<<"@@REDUCTION_FIELDS@@">>, Copy},
-        {<<"@@MACHINE_BITS@@">>, xls_shared_collection_codegen:loader_value(Spec)} |
+        {<<"@@MACHINE_BITS@@">>, xls_collection_codegen:loader_value(Spec)} |
         xls_indexed_memory_codegen:loader_bindings(Spec)]).
 
 %% The RAM owner keeps its owner phases in DSLX; bindings specialize only feature hooks.
@@ -529,7 +294,7 @@ service_capture(Spec, Reductions, SharedService) ->
             xls_scheduler_observation:sample(Spec),
             xls_collection_observation:sample(Spec)]},
         {<<"@@CAPTURE_INPUTS@@">>, [
-            xls_shared_collection_codegen:capture(Spec),
+            xls_collection_codegen:capture(Spec),
             ?REDUCTION_SERVICE:shared_capture(Reductions, SharedService)]},
         {<<"@@BOOT_TOKEN@@">>, ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService)},
         {<<"@@STARTUP_TOKEN@@">>, ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService)},
@@ -555,17 +320,17 @@ service_retirement(Spec, Reductions, SharedService) ->
                 "hls_reply::first(stepped.machine.replies.slots, true).0)")]},
         {<<"@@INDEXED_RETIREMENT_READY@@">>, xls_indexed_memory_codegen:optional(Spec,
             "          state.indexed_retirement_valid &&\n")},
-        {<<"@@DECODE_RESULT@@">>, decode_machine(Spec, "result.machine", "result.slot")},
+        {<<"@@DECODE_RESULT@@">>, xls_machine_codegen:decode(Spec, "result.machine", "result.slot")},
         {<<"@@RESOLVE_RESULT@@">>, [
-            xls_shared_collection_codegen:resolve(Spec),
+            xls_collection_codegen:resolve(Spec),
             xls_indexed_collection_codegen:resolve(Spec)]},
-        {<<"@@CAPTURED_FIELDS@@">>, xls_shared_collection_codegen:captured_field(Spec)},
+        {<<"@@CAPTURED_FIELDS@@">>, xls_collection_codegen:captured_field(Spec)},
         {<<"@@CREDITED_SOURCE@@">>, ?REDUCTION_SERVICE:shared_state_source(Reductions, SharedService)},
         {<<"@@RETIRE_METADATA@@">>, [
             ?REDUCTION_SERVICE:shared_retire_binding(Reductions,
-                xls_shared_collection_codegen:retire_binding(Spec)),
-            xls_shared_collection_codegen:retire(Spec),
-            xls_shared_gather_codegen:retire(Spec),
+                xls_collection_codegen:retire_binding(Spec)),
+            xls_collection_codegen:retire(Spec),
+            xls_gather_codegen:retire(Spec),
             xls_indexed_collection_codegen:retire(Spec)]}
     ].
 
@@ -575,16 +340,16 @@ service_retirement(Spec, Reductions, SharedService) ->
 -spec service_admission(spec(), none | map(), ordinary | aggregate_only) -> service_bindings().
 service_admission(Spec, Reductions, SharedService) ->
     [
-        {<<"@@SELECT_ACTOR@@">>, xls_shared_gather_codegen:issue_bindings(Spec)},
+        {<<"@@SELECT_ACTOR@@">>, xls_gather_codegen:issue_bindings(Spec)},
         {<<"@@SELECT_ADMISSION@@">>, [
             ordinary_selection(Spec),
-            xls_shared_collection_codegen:admit(Spec),
+            xls_collection_codegen:admit(Spec),
             xls_indexed_collection_codegen:admit(Spec)]},
-        {<<"@@COLLECTED_GUARD@@">>, xls_shared_collection_codegen:admission_guard(Spec)},
+        {<<"@@COLLECTED_GUARD@@">>, xls_collection_codegen:admission_guard(Spec)},
         {<<"@@ADMIT_AND_ISSUE@@">>, [
-            xls_shared_collection_codegen:commit(Spec),
+            xls_collection_codegen:commit(Spec),
             xls_indexed_collection_codegen:commit(Spec),
-            xls_shared_collection_codegen:issue(Spec),
+            xls_collection_codegen:issue(Spec),
             xls_indexed_collection_codegen:issue(Spec),
             ?REDUCTION_SERVICE:shared_post_issue_state(Reductions, SharedService)]},
         {<<"@@ISSUE_OWNERSHIP@@">>, issue_ownership(Spec)},
@@ -592,7 +357,7 @@ service_admission(Spec, Reductions, SharedService) ->
             ?REDUCTION_SERVICE:shared_post_issue_state_name(Reductions, SharedService)},
         {<<"@@TICKET_FIELDS@@">>, [
             ?REDUCTION_SERVICE:shared_executor_request_value(Reductions, SharedService),
-            xls_shared_collection_codegen:ticket_value(Spec),
+            xls_collection_codegen:ticket_value(Spec),
             xls_indexed_collection_codegen:ticket_value(Spec)]}
     ].
 
@@ -622,14 +387,6 @@ service_memory(Spec) ->
             "          write_gather_value: indexed_transport_contribution(state.indexed_input.frame).value,\n")},
         {<<"@@GATHER_MEMORY_TOKEN@@">>, xls_indexed_memory_codegen:optional(Spec, ", gather_write_tok")}
     ].
-
-%% A reply precedes phase entry; that entry remains pending for the next activation.
--spec shared_reply_effect(map()) -> iodata().
-shared_reply_effect(Spec) -> case xls_statem_reply_codegen:enabled(Spec) of
-    false -> [];
-    true -> ["if dispatched.reply_valid { SharedStep { machine: dispatched.machine, effects: ",
-        xls_statem_reply_codegen:effect(Spec), ", effects_valid: true, ..zero!<SharedStep>() } } else { "]
-end.
 
 %% Retained physical writes own visibility until sent; read tickets then join acknowledgments.
 -spec command_helpers() -> iodata().
@@ -663,7 +420,7 @@ command_helpers() ->
 %% Grant an ordinary mailbox cell before applying the retained intent at a later edge.
 -spec ordinary_selection(spec()) -> iodata().
 ordinary_selection(Spec) ->
-    Selected = xls_shared_collection_codegen:selection(Spec, #{
+    Selected = xls_collection_codegen:selection(Spec, #{
         ordinary_state => "admission_snapshot", collection_state => "state",
         ordinary_result => "next_intent"}),
     Source = case maps:get(gather_collection, Spec, false) of

@@ -12,7 +12,7 @@ write(Stage) ->
         Grid = [0, 1, 16#7fffffff, 16#ffffffff],
         Cases = [{[A, B, C, D], expected(A, B, C, D)}
             || A <- Grid, B <- Grid, C <- Grid, D <- Grid],
-        Generated = xls_shared_parse:to_xls(Actor, #{shared_service => aggregate_only}),
+        Generated = xls_scheduler_actor:to_xls(Actor, #{shared_service => aggregate_only}),
         ok = file:write_file(filename:join(Stage, "shape.x"),
             [Generated, Semantics, tests(Cases)]),
         ok = file:write_file(filename:join(Stage, "shape_tb.sv"), testbench(Cases)),
@@ -20,7 +20,7 @@ write(Stage) ->
         %% emits one. Type-dependent routing must fail before RTL generation.
         ok = xls_type_shape_fixture:load(Provider, [{d, 'WIRE_COUNT', 1}]),
         ok = file:write_file(filename:join(Stage, "shape_mismatch.x"),
-            xls_shared_parse:to_xls(Actor, #{shared_service => aggregate_only}))
+            xls_scheduler_actor:to_xls(Actor, #{shared_service => aggregate_only}))
     end).
 
 %% Checks source-derived dimensions in nested logical types.

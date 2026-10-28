@@ -5,7 +5,7 @@
 -doc "Requires one member-based site with message-only contribution expressions; protocol exclusivity remains an unchecked assertion.".
 -spec validate(map()) -> ok.
 validate(#{sites := [#{population := #{mode := members}}]} = Reduction) ->
-    _ = xls_shared_reduction_codegen:transport_function(Reduction, exclusive_epoch),
+    _ = xls_reduction_codegen:transport_function(Reduction, exclusive_epoch),
     logger:warning("exclusive_epoch asserts exclusive message ownership, a commutative monoid, and no interleaved keys while collection is incomplete; these protocol properties are not compile-time checked"),
     ok;
 validate(_) -> error(exclusive_epoch_requires_one_member_site).
@@ -41,15 +41,15 @@ actor_spec(Spec) ->
 -doc "Generates checked early folding and merges callback opens with current collection progress.".
 -spec helpers(map()) -> xls_dslx:value().
 helpers(Spec = #{reductions := R}) ->
-    Layout = xls_shared_machine_layout:from_spec(Spec),
-    #{offset := Start, width := Width} = xls_shared_machine_layout:field(Layout, reduction),
-    #{offset := Failure} = xls_shared_machine_layout:field(Layout, failure),
+    Layout = xls_machine_layout:from_spec(Spec),
+    #{offset := Start, width := Width} = xls_machine_layout:field(Layout, reduction),
+    #{offset := Failure} = xls_machine_layout:field(Layout, failure),
     End = Start + Width,
     {ok, Template} = file:read_file(filename:join([code:priv_dir(hls_fabric), "xls", "templates", "exclusive_collection.x"])),
     [core(Spec), selected_input(R),
      "// Dispatch sees only an opened collection; early input remains scheduler-owned.\n",
      "fn collection_machine_bits(raw: MachineBits, reduction: ReductionState, failure: hls_failure::Code) -> MachineBits {\n  ",
-     case End < xls_shared_machine_layout:width(Layout) of
+     case End < xls_machine_layout:width(Layout) of
          false -> []; true -> ["raw[", integer_to_list(End), ":] ++ "] end,
      "(if reduction.status == ReductionStatus::IDLE { raw[", integer_to_list(Start), ":", integer_to_list(End), "] } else { bits_from_reduction_state(reduction) }) ++ hls_failure::first(raw[", integer_to_list(Failure), ":", integer_to_list(Start), "] as hls_failure::Code, failure) ++ raw[0:", integer_to_list(Failure), "]\n}\n\n",
      Template].
@@ -78,7 +78,7 @@ core(Spec = #{reductions := R, message_names := Names, message_words := Words}) 
      "// Exactly one contribution per member; epochs cannot interleave before completion.\n",
      "// These protocol assertions are not compile-time verified.\n",
      "const COLLECTION_MEMBER_COUNT = u32:", integer_to_list(Size), ";\n\n",
-     xls_shared_reduction_codegen:transport_function(R, exclusive_epoch),
+     xls_reduction_codegen:transport_function(R, exclusive_epoch),
      "// Classify ownership before payload validation; malformed reserved frames fail.\n",
      "fn collection_reserved(frame: axis::Frame) -> bool {\n  ",
      lists:join(" || ", [["frame.header.op == Tag::", xls_names:enum_member(T), " as u8"] || T <- Tags]), "\n}\n\n",

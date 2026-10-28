@@ -20,7 +20,7 @@ fragment_population="$test_stage/hls_topology_source_fragment_population.x"
 ERL_HLS_REDUCTION_TEST_X="$generated" erl \
     -noshell \
     -eval '
-        X = xls_shared_parse:to_xls(
+        X = xls_scheduler_actor:to_xls(
             "test_data/hls_statem_reduction_lower_fixture.erl"
         ),
         ok = file:write_file(os:getenv("ERL_HLS_REDUCTION_TEST_X"), X),
@@ -30,7 +30,7 @@ ERL_HLS_REDUCTION_TEST_X="$generated" erl \
 ERL_HLS_REDUCTION_TEST_X="$aggregate_generated" erl \
     -noshell \
     -eval '
-        X = xls_shared_parse:to_xls(
+        X = xls_scheduler_actor:to_xls(
             "test_data/hls_statem_reduction_lower_fixture.erl",
             #{shared_service => aggregate_only}
         ),
@@ -61,7 +61,7 @@ cat "$project_root/test_data/hls_topology_source_fragment_population_semantics.i
 ERL_HLS_REDUCTION_STAGE="$test_stage" erl -noshell \
     -eval '
         lists:foreach(fun({Suffix, Options}) ->
-            X = xls_shared_parse:to_xls("test/hls_reduction_failure_fixture.erl", Options),
+            X = xls_scheduler_actor:to_xls("test/hls_reduction_failure_fixture.erl", Options),
             ok = file:write_file(filename:join(os:getenv("ERL_HLS_REDUCTION_STAGE"),
                 "failure_" ++ Suffix ++ ".x"), X)
         end, [{"ordinary", #{}}, {"aggregate", #{shared_service => aggregate_only}}]),
@@ -74,7 +74,7 @@ ERL_HLS_REDUCTION_STAGE="$test_stage" erl -noshell \
         true = Refutable =/= Source,
         HeadSource = filename:join(os:getenv("ERL_HLS_REDUCTION_STAGE"), "failure_head.erl"),
         ok = file:write_file(HeadSource, Refutable),
-        ok = file:write_file(filename:rootname(HeadSource) ++ ".x", xls_shared_parse:to_xls(HeadSource)),
+        ok = file:write_file(filename:rootname(HeadSource) ++ ".x", xls_scheduler_actor:to_xls(HeadSource)),
         halt().'
 for mode in ordinary aggregate; do
     failure_generated="$test_stage/failure_$mode.x"

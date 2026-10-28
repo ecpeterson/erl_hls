@@ -11,11 +11,11 @@ closed_state_projection_test() ->
     ?assertEqual([0, 1], [S || #{slot := S} <- maps:get(rows, P)]),
     [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
     ?assertEqual(40, maps:get(state_width, Binding)),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projection_fixture, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Groups}),
     Options = maps:get(hls_projection_fixture, Requirements),
     Source = source(),
-    Artifact = xls_shared_parse:to_artifact(Source, Options),
+    Artifact = xls_scheduler_actor:to_artifact(Source, Options),
     Text = xls_emitted:bytes(Artifact),
     ?assertNotEqual(nomatch, binary:match(Text, <<"pub type MachineBits = bits[40]">>)),
     Debug = xls_scheduler_debug:projection(Plan, Groups, #{hls_projection_fixture => Artifact}),
@@ -42,12 +42,12 @@ selected_frame_capacity_test() ->
     #{groups := [#{state_projection := Projection, physical_data_width := 1}]} =
         hls_scheduler_plan:normalize(Plan, Groups, Layout),
     ?assertEqual([id], maps:get(constants, Projection)),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => wide_projection, channel_depth => 1, actor_egress_depth => burst,
           scheduler_groups => Groups, frame_payload_words => 4}),
     Options = maps:get(Module, Requirements),
     ?assertEqual(4, maps:get(frame_payload_words, Options)),
-    Artifact = xls_shared_parse:to_artifact("test/hls_projection_wide_fixture.erl", Options),
+    Artifact = xls_scheduler_actor:to_artifact("test/hls_projection_wide_fixture.erl", Options),
     Text = xls_emitted:bytes(Artifact),
     ?assertNotEqual(nomatch, binary:match(iolist_to_binary(Text),
         <<"const_assert!(axis::FRAME_BITS == u32:160)">>)),
@@ -61,9 +61,9 @@ selected_frame_capacity_test() ->
 all_constant_state_test() ->
     Plan = (plan(false))#{startup := []}, Groups = groups(),
     #{groups := [#{physical_data_width := 0}]} = hls_scheduler_plan:normalize(Plan, Groups),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projection_fixture, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Groups}),
-    Text = xls_shared_parse:to_xls(source(), maps:get(hls_projection_fixture, Requirements)),
+    Text = xls_scheduler_actor:to_xls(source(), maps:get(hls_projection_fixture, Requirements)),
     Check = "\n#[test]\nfn empty_data_roundtrip() {\n"
         "  let initial = initial_shared_machine();\n"
         "  assert_eq(machine_from_bits<u32:0>(bits_from_machine(initial), u32:1), initial);\n}\n",
@@ -90,9 +90,9 @@ partial_module_opt_in_retains_full_state_test() ->
 debug_configuration_is_bank_scoped_test() ->
     #{workers := G} = groups(), Plan = plan(false),
     Specs = #{first => G#{members := [{actor, a}]}, second => G#{members := [{actor, b}]}},
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projection_fixture, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Specs}),
-    Artifact = xls_shared_parse:to_artifact(source(), maps:get(hls_projection_fixture, Requirements)),
+    Artifact = xls_scheduler_actor:to_artifact(source(), maps:get(hls_projection_fixture, Requirements)),
     #{<<"banks">> := Banks} = xls_scheduler_debug:projection(Plan, Specs, #{hls_projection_fixture => Artifact}),
     lists:foreach(fun(#{<<"index">> := I, <<"state_projection">> := #{<<"rows">> := Rows}}) ->
         ?assertMatch([#{<<"instance">> := I, <<"slot">> := 0}], Rows)
@@ -111,7 +111,7 @@ projection_source_identity_test() ->
 -spec unsupported_protocol_test() -> ok.
 unsupported_protocol_test() ->
     ?assertError(state_projection_requires_hls_statem,
-        xls_shared_parse:to_xls("src/examples/regsvc/regsvc.erl", #{state_projection => #{}})),
+        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{state_projection => #{}})),
     ?assertError(state_projection_protocol,
         xls_state_projection:validate(#{retained_calls => #{}}, #{}, [])).
 
@@ -165,9 +165,9 @@ reduction_projection_test() ->
     #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Specs),
     #{state_projection := Projection} = Group,
     ?assertNot(lists:member(value, maps:get(constants, Projection))),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan,
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projected_reduction, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Specs}),
-    Artifact = xls_shared_parse:to_artifact("test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
+    Artifact = xls_scheduler_actor:to_artifact("test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
     Text = xls_emitted:bytes(Artifact),
     #{<<"banks">> := [Bank]} = xls_scheduler_debug:projection(Plan, Specs, #{Module => Artifact}),
     ?assert(maps:is_key(<<"reduction">>, Bank)),
@@ -184,8 +184,8 @@ reduction_projection_test() ->
 -spec runtime_membership_requires_ordinary_service_test() -> ok.
 runtime_membership_requires_ordinary_service_test() ->
     #{reductions := Reduction} = xls_parse:actor_artifact("test/hls_projection_reduction_fixture.erl", []),
-    ?assertEqual([], xls_shared_reduction_codegen:declarations(Reduction, ordinary)),
+    ?assertEqual([], xls_reduction_codegen:declarations(Reduction, ordinary)),
     ?assertError(aggregate_only_runtime_membership,
-        xls_shared_reduction_codegen:declarations(Reduction, aggregate_only)),
+        xls_reduction_codegen:declarations(Reduction, aggregate_only)),
     ?assertError(aggregate_only_runtime_membership,
-        xls_shared_reduction_codegen:functions(Reduction, aggregate_only)).
+        xls_reduction_codegen:functions(Reduction, aggregate_only)).

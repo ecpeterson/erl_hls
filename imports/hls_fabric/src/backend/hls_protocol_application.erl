@@ -5,19 +5,19 @@
 
 %% The boundary owns source/layout checks; host bindings are validated against that same build.
 -record(plan, {boundary :: hls_protocol_boundary:plan(),
-    application :: hls_protocol_application_binding:application(hls_protocol_application_binding:gateway()),
+    application :: hls_protocol_application_schema:application(hls_protocol_application_binding:gateway()),
     device :: hls_source_config:device()}).
 
 -doc "A complete checked application composition, retained unchanged with compatible provider type and encoding contracts. Emission adds generated-byte identities; this is not a saved-plan input or device admission.".
 -opaque plan() :: #plan{}.
 
 -doc "Source-checked host bindings and the static external boundary. Device attachment identities and the emitted inspection catalog are absent until emission.".
--type descriptor() :: #{partition := hls_protocol_application_binding:partition(),
+-type descriptor() :: #{partition := hls_protocol_application_schema:partition(),
     devices := #{hls_source_config:device() => hls_protocol_application_binding:gateway()},
     source_boundary := hls_protocol_boundary:descriptor(), eligible := false}.
 
 -doc "Final application deployment with emitted boundary evidence and a hardware identity for its checked gateway.".
--type result() :: #{partition := hls_protocol_application_binding:partition(),
+-type result() :: #{partition := hls_protocol_application_schema:partition(),
     devices := #{hls_source_config:device() => hls_protocol_application_binding:attached_gateway()},
     source_boundary := hls_protocol_boundary:manifest(), eligible := false}.
 
@@ -83,7 +83,7 @@ emit(Config) -> emit(plan(Config)).
 %% Validate host codecs and external numbering against the checked interface before rendering.
 -spec bind(hls_protocol_transport:descriptor(), hls_protocol_boundary:descriptor(),
     hls_source_config:device(), hls_source_config:endpoint(), hls_protocol_control:hardware()) ->
-    hls_protocol_application_binding:application(hls_protocol_application_binding:gateway()).
+    hls_protocol_application_schema:application(hls_protocol_application_binding:gateway()).
 bind(#{whole_control := Control, bundle := Bundle = #{topology := #{actors := Actors, externals := Externals}}},
         Boundary = #{activation := explicit_start, externals := Outputs}, Device, Host, Hardware) ->
     ok = hls_protocol_control:check_boundary(Hardware, Boundary),
@@ -95,7 +95,7 @@ bind(#{whole_control := Control, bundle := Bundle = #{topology := #{actors := Ac
     Application#{devices := #{Device => Binding#{control_adapter => Hardware}}}.
 
 %% Identity covers the emitted boundary and exact source files after all bindings are checked.
--spec deployment(hls_protocol_application_binding:application(hls_protocol_application_binding:gateway()),
+-spec deployment(hls_protocol_application_schema:application(hls_protocol_application_binding:gateway()),
     hls_protocol_transport:descriptor(), hls_protocol_boundary:manifest(),
     hls_generated_files:files(), hls_source_config:device()) -> result().
 deployment(Application = #{devices := Devices}, Transport, Boundary, Files, Device) ->

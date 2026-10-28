@@ -328,12 +328,12 @@ occupied(_)->1.
 %% Raw and typed modes have distinct command boundaries; neither silently accepts the other's data.
 -spec control(raw|map(),term()) -> binary().
 control(raw,{control,Payload})->_=hls_protocol_bridge_wire:command(1,Payload),Payload;
-control(Application,Command) when is_map(Application)->hls_protocol_application_binding:control(Application,Command).
+control(Application,Command) when is_map(Application)->hls_protocol_application_codec:control(Application,Command).
 
 %% Decode before returning to the sole caller; no additional event buffering is introduced.
 -spec reply(raw|map(),term(),term()) -> tuple().
 reply(raw,Id,Record)->{ok,Id,Record};
 reply(_,application,{started})->{ok,application,application,{started}};
 reply(Application,{Device,Index},Frame)->
-    {External,Record}=hls_protocol_application_binding:event(Application,Device,Index,Frame),
+    {External,Record}=hls_protocol_application_codec:event(Application,Device,Index,Frame),
     {ok,Device,External,Record}.

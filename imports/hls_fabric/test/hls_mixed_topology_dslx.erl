@@ -78,14 +78,14 @@ write(Placement, Stage) ->
     Profile = maps:merge(#{name => mixed_topology, channel_depth => 1,
         actor_egress_depth => 0, scheduler_groups => Specs,
         effect_window_partition => window_policy(Placement)}, Options),
-    Requirements = xls_shared_topology_dslx:artifact_requirements(Plan, Profile),
+    Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Profile),
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_shared_parse:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
+        xls_scheduler_actor:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
     end, Requirements),
     maps:foreach(fun(Module, Artifact) ->
         ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), xls_emitted:bytes(Artifact))
     end, Artifacts),
-    ok = file:write_file(filename:join(Stage, "mixed_topology.x"), xls_shared_topology_dslx:emit(Plan, Profile)),
+    ok = file:write_file(filename:join(Stage, "mixed_topology.x"), xls_fabric_topology_dslx:emit(Plan, Profile)),
     ok = file:write_file(filename:join(Stage, "actors.json"),
         json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts, Options))),
     Scheduler = hls_scheduler_plan:normalize(Plan, Specs),

@@ -25,7 +25,7 @@ write(Plan, Directory) ->
 -doc "Returns named crossing codec files from the checked partition plan, with no output I/O. Names retain global link and class indices; duplicate filenames are rejected.".
 -spec emit(map()) -> hls_generated_files:files().
 emit(Plan) ->
-    hls_generated_files:merge([#{codec_name(I, K) ++ ".x" => hls_protocol_codec:emit(Codec, "convert")}
+    hls_generated_files:merge([#{codec_name(I, K) ++ ".x" => xls_protocol_codec:emit(Codec, "convert")}
         || #{index := I, classes := Classes} <- maps:get(crossings, Plan, []),
            #{slot := K, codec := Codec} <- Classes]).
 

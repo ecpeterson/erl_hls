@@ -10,7 +10,7 @@ projection_and_codec_layouts_test() ->
         Effect = #{tag => message, fields => [#{type => type(3), constant => <<5:3>>},
             #{type => type(13), offset => 0}, #{type => type(1), constant => <<1:1>>}]},
         Projection = hls_protocol_projection:frame(Effect, [message], Layout),
-        Codec = hls_protocol_codec:plan(#{message_bits => 17, payload_bits => 13,
+        Codec = hls_protocol_codec_plan:plan(#{message_bits => 17, payload_bits => 13,
             fields => [#{type => type(3), message_bit_offset => 0, constant => <<5:3>>},
                 #{type => type(13), message_bit_offset => 3, capture_bit_offset => 0},
                 #{type => type(1), message_bit_offset => 16, constant => <<1:1>>}]}, 3, Layout),
@@ -32,7 +32,7 @@ projection_and_codec_layouts_test() ->
 -spec wider_payload_roundtrip_test() -> ok.
 wider_payload_roundtrip_test() ->
     Layout = hls_frame_layout:new(4),
-    Codec = hls_protocol_codec:plan(#{message_bits => 113, payload_bits => 113,
+    Codec = hls_protocol_codec_plan:plan(#{message_bits => 113, payload_bits => 113,
         fields => [#{type => type(113), message_bit_offset => 0, capture_bit_offset => 0}]}, 7, Layout),
     Value = (1 bsl 112)+17,
     Payload = hls_type:pack_exact(Value, type(113)),
@@ -42,13 +42,13 @@ wider_payload_roundtrip_test() ->
     ?assertEqual(Frame, hls_protocol_projection:evaluate(Projection, Value)),
     {ok, Compact} = hls_protocol_codec:encode(Codec, Frame),
     ?assertEqual(Frame, hls_protocol_codec:decode(Codec, Compact)),
-    ?assertMatch({_,_}, binary:match(iolist_to_binary(hls_protocol_codec:emit(Codec,"convert")), <<"bits[160]">>)).
+    ?assertMatch({_,_}, binary:match(iolist_to_binary(xls_protocol_codec:emit(Codec,"convert")), <<"bits[160]">>)).
 
 %% Explicit codec layouts cannot disagree with a source channel's retained capacity.
 -spec mismatched_codec_layout_test() -> ok.
 mismatched_codec_layout_test() ->
     Channel = #{frame_layout => hls_frame_layout:new(1), message_bits => 0, payload_bits => 0, fields => []},
-    ?assertException(error, {badmatch,_}, hls_protocol_codec:plan(Channel, 3, hls_frame_layout:new(2))).
+    ?assertException(error, {badmatch,_}, hls_protocol_codec_plan:plan(Channel, 3, hls_frame_layout:new(2))).
 
 %% Startup and host domains derive from the same compiler program even after its file is removed.
 -spec startup_and_domain_layout_test() -> ok.
@@ -100,7 +100,7 @@ scheduler_artifact_layout_test() ->
         Profile = #{name => frame_layout_fixture, channel_depth => 1, actor_egress_depth => burst,
             frame_payload_words => 1, scheduler_groups => #{workers => #{
                 members => [{Kind,left},{Kind,right}], state_storage => block_ram,mailbox_storage => block_ram}}},
-        Requirements = xls_shared_topology_dslx:artifact_requirements(Topology,Profile),
+        Requirements = xls_fabric_topology_dslx:artifact_requirements(Topology,Profile),
         ?assertMatch(#{hls_topology_source_fixture := #{frame_payload_words := 1}},Requirements)
     end,[{Exact,actor},{Family,family}]).
 
