@@ -1497,7 +1497,7 @@ bind_typed_pattern(_Pattern, _Type, _Origin, Bindings) ->
     Bindings.
 
 %% Provenance survives destructuring even when a provider keeps its component
-%% types opaque (for example phi_field). Such a projection can contribute a
+%% types opaque (including custom scalar providers). Such a projection can contribute a
 %% value, but cannot qualify as a u32 key without a known element descriptor.
 list_pattern_types({hls_type, Module, Name, [Element, Size]}) when
     Module =:= hls_lists, Name =:= list;

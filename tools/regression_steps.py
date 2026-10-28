@@ -25,6 +25,7 @@ class Command:
     timeout: float = 300
     nonempty: bool = False
     rejection: str | None = None
+    completion: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,12 +122,12 @@ class Case:
             self.path(name + "-check"), *sources])
 
     def simulate(self, name: str, top: str, sources: list[Path], *, flags: list | None = None,
-                 arguments: list | None = None, timeout: float = 300) -> None:
-        """Compile and run the original Verilog testbench, retaining simulation stdout."""
+                 arguments: list | None = None, timeout: float = 300, completion: str | None = None) -> None:
+        """Compile and run a testbench, optionally requiring its completion witness in stdout."""
         self.command(name + "-iverilog", ["iverilog", "-g2012", *(flags or []), "-s", top,
             "-o", self.path(name + ".vvp"), *sources], products=(self.path(name + ".vvp"),))
         self.command(name + "-simulate", ["vvp", self.path(name + ".vvp"), *(arguments or [])],
-            stdout=self.path(name + ".sim.log"), timeout=timeout)
+            stdout=self.path(name + ".sim.log"), timeout=timeout, completion=completion)
 
     def python(self, name: str, script: str, *arguments: str | Path, timeout: float = 600) -> None:
         """Invoke an existing specialized semantic/formal harness without duplicating it."""

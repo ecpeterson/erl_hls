@@ -17,7 +17,7 @@ prepare_reply(Cell, RequestId, Measurement) ->
     }.
 ```
 
-`phenom_data_cell` uses this helper from its three query-handling phases. Each caller separately chooses the protocol transition and continuation phase.
+Each caller separately chooses its state-machine transition and continuation phase.
 
 ## Types and supported bodies
 

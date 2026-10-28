@@ -171,8 +171,8 @@ runtime_declarations_remain_reserved_test() ->
         end || [Name] <- Matches, not lists:member(Name, RecordTypes)]
     end || {Path, Kind, Options} <- [
         {"src/examples/regsvc/regsvc.erl", hls_gs, #{}},
-        {"src/examples/phi_decoder/phenom_data_cell.erl", hls_statem, #{direct_actor_debug => true}},
-        {"src/examples/phi_decoder/phi_halo_cell.erl", hls_statem, #{direct_actor_debug => true}}
+        {"test/hls_data_cell_fixture.erl", hls_statem, #{direct_actor_debug => true}},
+        {"test_data/hls_statem_reduction_lower_fixture.erl", hls_statem, #{direct_actor_debug => true}}
     ]].
 
 forms(Tags) ->

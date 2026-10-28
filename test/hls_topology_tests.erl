@@ -2,10 +2,12 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-phi_phenom_topology_normalizes_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
+%% Checks hls routing topology fixture normalizes.
+-spec hls_routing_topology_fixture_normalizes_test() -> ok.
+hls_routing_topology_fixture_normalizes_test() ->
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
     ?assertEqual(
-        [data, phi, syndrome],
+        [data, grid, query],
         [maps:get(id, Actor) || Actor <- maps:get(actors, Plan)]
     ),
     ?assertEqual(17, length(maps:get(routes, Plan))),
@@ -14,44 +16,44 @@ phi_phenom_topology_normalizes_test() ->
             #{
                 id => announcement,
                 direction => out,
-                schemas => [phenom_anyon]
+                schemas => [report]
             },
             #{
                 id => data_measurements,
                 direction => out,
-                schemas => [pauli_reply]
+                schemas => [measurement]
             },
             #{
-                id => decoder_events,
+                id => result_events,
                 direction => out,
-                schemas => [phi_correction, phi_status]
+                schemas => [result, status]
             }
         ],
         maps:get(externals, Plan)
     ),
     ?assertEqual(
         #{
-            source => {syndrome, phi},
+            source => {query, grid},
             delivery => queued,
-            recipients => [{actor, phi}, {external, announcement}]
+            recipients => [{actor, grid}, {external, announcement}]
         },
-        route(Plan, {syndrome, phi})
+        route(Plan, {query, grid})
     ),
     ?assertEqual(
         #{
-            source => {phi, correction},
+            source => {grid, result},
             delivery => direct,
-            recipients => [{external, decoder_events}]
+            recipients => [{external, result_events}]
         },
-        route(Plan, {phi, correction})
+        route(Plan, {grid, result})
     ),
     ?assertEqual(
         #{
-            source => {phi, status},
+            source => {grid, status},
             delivery => direct,
-            recipients => [{external, decoder_events}]
+            recipients => [{external, result_events}]
         },
-        route(Plan, {phi, status})
+        route(Plan, {grid, status})
     ),
     ?assertEqual(
         #{
@@ -62,12 +64,14 @@ phi_phenom_topology_normalizes_test() ->
         route(Plan, {data, measurement})
     ),
     ?assertEqual(
-        [data, phi, syndrome],
+        [data, grid, query],
         [maps:get(target, Item) || Item <- maps:get(startup, Plan)]
     ).
 
+%% Checks all outputs and aliased lanes are explicit.
+-spec all_outputs_and_aliased_lanes_are_explicit_test() -> ok.
 all_outputs_and_aliased_lanes_are_explicit_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
     Outputs = lists:sort([
         {maps:get(id, Actor), Port}
         || Actor <- maps:get(actors, Plan),
@@ -79,15 +83,17 @@ all_outputs_and_aliased_lanes_are_explicit_test() ->
     ),
     ?assertEqual(
         #{
-            source => phi,
-            destination => {actor, phi},
+            source => grid,
+            destination => {actor, grid},
             source_ports => [east, north, south, west]
         },
-        lane(Plan, phi, {actor, phi})
+        lane(Plan, grid, {actor, grid})
     ).
 
+%% Checks unordered sections normalize identically.
+-spec unordered_sections_normalize_identically_test() -> ok.
 unordered_sections_normalize_identically_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Reordered = Spec#{
         externals := lists:reverse(maps:get(externals, Spec)),
         routes := lists:reverse(maps:get(routes, Spec)),
@@ -98,8 +104,10 @@ unordered_sections_normalize_identically_test() ->
         hls_topology:normalize(Reordered)
     ).
 
+%% Checks startup order is local to each actor.
+-spec startup_order_is_local_to_each_actor_test() -> ok.
 startup_order_is_local_to_each_actor_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Forward = hls_topology:normalize(Spec#{
         startup := [{data, [first, second]}]
     }),
@@ -108,8 +116,10 @@ startup_order_is_local_to_each_actor_test() ->
     }),
     ?assertNotEqual(maps:get(startup, Forward), maps:get(startup, Reverse)).
 
+%% Checks actor dictionary is required.
+-spec actor_dictionary_is_required_test() -> ok.
 actor_dictionary_is_required_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Actors = maps:get(actors, Spec),
     ActorList = maps:to_list(Actors),
     ?assertError(
@@ -117,16 +127,18 @@ actor_dictionary_is_required_test() ->
         hls_topology:normalize(Spec#{actors := ActorList})
     ).
 
+%% Checks invalid actor ids are rejected.
+-spec invalid_actor_ids_are_rejected_test() -> ok.
 invalid_actor_ids_are_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Actors = maps:get(actors, Spec),
-    PhiModule = maps:get(phi, Actors),
+    GridModule = maps:get(grid, Actors),
     lists:foreach(
         fun({InvalidId, InvalidPart}) ->
             InvalidActors = maps:put(
                 InvalidId,
-                PhiModule,
-                maps:remove(phi, Actors)
+                GridModule,
+                maps:remove(grid, Actors)
             ),
             ?assertError(
                 {invalid_topology_id, InvalidPart},
@@ -136,64 +148,72 @@ invalid_actor_ids_are_rejected_test() ->
         [
             {1.0, 1.0},
             {{}, {}},
-            {{phi, -1}, -1},
-            {{phi, 1.0}, 1.0}
+            {{grid, -1}, -1},
+            {{grid, 1.0}, 1.0}
         ]
     ).
 
+%% Checks invalid actor module is rejected.
+-spec invalid_actor_module_is_rejected_test() -> ok.
 invalid_actor_module_is_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Actors = maps:get(actors, Spec),
     ?assertError(
-        {invalid_actor_module, phi, 42},
-        hls_topology:normalize(Spec#{actors := Actors#{phi := 42}})
+        {invalid_actor_module, grid, 42},
+        hls_topology:normalize(Spec#{actors := Actors#{grid := 42}})
     ).
 
+%% Checks indexed tuple actor ids normalize and emit without mangling.
+-spec indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() -> ok.
 indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() ->
-    Id = {phi, 17, {tile, 2, 3}},
-    Spec = rename_actor_id(phi_phenom_topology:topology(), phi, Id),
+    Id = {grid, 17, {tile, 2, 3}},
+    Spec = rename_actor_id(hls_routing_topology_fixture:topology(), grid, Id),
     Plan = hls_topology:normalize(Spec),
     ?assert(lists:member(Id, [maps:get(id, Actor)
         || Actor <- maps:get(actors, Plan)])),
-    Profile = (phi_phenom_topology_dslx:profile())#{
-        name := indexed_phi_topology
+    Profile = (hls_routing_topology_fixture:profile())#{
+        name := indexed_grid_topology
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "Actor {phi,17,{tile,2,3}} uses phi_halo_cell"
+        "Actor {grid,17,{tile,2,3}} uses hls_grid_cell_fixture"
     >>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
-        <<"spawn phi_halo_cell::Service(">>
+        <<"spawn hls_grid_cell_fixture::Service(">>
     )).
 
+%% Checks route sources are checked and total.
+-spec route_sources_are_checked_and_total_test() -> ok.
 route_sources_are_checked_and_total_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     [First | Rest] = maps:get(routes, Spec),
     ?assertError(
-        {unknown_actor_output, phi, up},
+        {unknown_actor_output, grid, up},
         hls_topology:normalize(Spec#{
-            routes := [{{phi, up}, [{actor, phi}]} | Rest]
+            routes := [{{grid, up}, [{actor, grid}]} | Rest]
         })
     ),
     ?assertError(
-        {unrouted_outputs, [{phi, north}]},
+        {unrouted_outputs, [{grid, north}]},
         hls_topology:normalize(Spec#{routes := Rest})
     ),
     ?assertError(
-        {duplicate_route_sources, [{phi, north}]},
+        {duplicate_route_sources, [{grid, north}]},
         hls_topology:normalize(Spec#{routes := [First, First | Rest]})
     ).
 
+%% Checks route recipients are checked and unique.
+-spec route_recipients_are_checked_and_unique_test() -> ok.
 route_recipients_are_checked_and_unique_test() ->
-    Spec = phi_phenom_topology:topology(),
-    Source = {syndrome, phi},
+    Spec = hls_routing_topology_fixture:topology(),
+    Source = {query, grid},
     ?assertError(
         {unknown_actor, missing, {route_recipient, Source}},
         hls_topology:normalize(replace_route(
             Spec,
             Source,
-            {Source, buffered, [{actor, missing}, {actor, phi}]}
+            {Source, buffered, [{actor, missing}, {actor, grid}]}
         ))
     ),
     ?assertError(
@@ -201,23 +221,25 @@ route_recipients_are_checked_and_unique_test() ->
         hls_topology:normalize(replace_route(Spec, Source, {Source, []}))
     ),
     ?assertError(
-        {duplicate_route_recipients, Source, [{actor, phi}]},
+        {duplicate_route_recipients, Source, [{actor, grid}]},
         hls_topology:normalize(replace_route(
             Spec,
             Source,
-            {Source, buffered, [{actor, phi}, {actor, phi}]}
+            {Source, buffered, [{actor, grid}, {actor, grid}]}
         ))
     ).
 
+%% Checks fanout delivery is explicit.
+-spec fanout_delivery_is_explicit_test() -> ok.
 fanout_delivery_is_explicit_test() ->
-    Spec = phi_phenom_topology:topology(),
-    Source = {syndrome, phi},
+    Spec = hls_routing_topology_fixture:topology(),
+    Source = {query, grid},
     ?assertError(
         {fanout_delivery_required, Source},
         hls_topology:normalize(replace_route(
             Spec,
             Source,
-            {Source, [{actor, phi}, {external, announcement}]}
+            {Source, [{actor, grid}, {external, announcement}]}
         ))
     ),
     ?assertError(
@@ -226,14 +248,16 @@ fanout_delivery_is_explicit_test() ->
             Spec,
             Source,
             {Source, accidental, [
-                {actor, phi},
+                {actor, grid},
                 {external, announcement}
             ]}
         ))
     ).
 
+%% Checks startup targets are known and unique.
+-spec startup_targets_are_known_and_unique_test() -> ok.
 startup_targets_are_known_and_unique_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     ?assertError(
         {unknown_actor, missing, startup},
         hls_topology:normalize(Spec#{startup := [{missing, [config]}]})
@@ -246,8 +270,10 @@ startup_targets_are_known_and_unique_test() ->
         ]})
     ).
 
+%% Checks live runtime identity is rejected.
+-spec live_runtime_identity_is_rejected_test() -> ok.
 live_runtime_identity_is_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     ?assertError(
         {live_topology_value, pid},
         hls_topology:normalize(Spec#{startup := [{data, [self()]}]})
@@ -257,28 +283,31 @@ live_runtime_identity_is_rejected_test() ->
         hls_topology:normalize(Spec#{startup := [{data, [make_ref()]}]})
     ).
 
+%% Checks actor output abi order is preserved.
+-spec actor_output_abi_order_is_preserved_test() -> ok.
 actor_output_abi_order_is_preserved_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Phi = hd([
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Grid = hd([
         Actor
         || Actor <- maps:get(actors, Plan),
-           maps:get(id, Actor) =:= phi
+           maps:get(id, Actor) =:= grid
     ]),
     ?assertEqual(
-        [north, east, west, south, syndrome, correction, status],
-        maps:get(outputs, Phi)
+        [north, east, west, south, query, result, status],
+        maps:get(outputs, Grid)
     ).
 
+%% Checks incompatible actor route schema is rejected.
+-spec incompatible_actor_route_schema_is_rejected_test() -> ok.
 incompatible_actor_route_schema_is_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
-    Source = {phi, syndrome},
+    Spec = hls_routing_topology_fixture:topology(),
+    Source = {grid, query},
     ?assertError(
         {incompatible_route_schemas,
             Source,
             {actor, data},
-            [phenom_request],
-            [noise_cutoff, pauli_query, pauli_update,
-                phenom_config, phenom_query]},
+            [request],
+            [config, query]},
         hls_topology:normalize(replace_route(
             Spec,
             Source,
@@ -286,6 +315,8 @@ incompatible_actor_route_schema_is_rejected_test() ->
         ))
     ).
 
+%% Checks incompatible actor route layout is rejected.
+-spec incompatible_actor_route_layout_is_rejected_test() -> ok.
 incompatible_actor_route_layout_is_rejected_test() ->
     SourceFields = [#{
         name => value,
@@ -305,45 +336,50 @@ incompatible_actor_route_layout_is_rejected_test() ->
         hls_topology:normalize(layout_fixture_topology())
     ).
 
+%% Checks incompatible external route schema is rejected.
+-spec incompatible_external_route_schema_is_rejected_test() -> ok.
 incompatible_external_route_schema_is_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     ?assertError(
         {incompatible_route_schemas,
-            {syndrome, phi},
+            {query, grid},
             {external, announcement},
-            [phenom_anyon],
-            [phi]},
+            [report],
+            [sample]},
         hls_topology:normalize(Spec#{
             externals := [
-                {announcement, out, [phi]},
-                {data_measurements, out, [pauli_reply]},
-                {decoder_events, out, [phi_correction, phi_status]}
+                {announcement, out, [sample]},
+                {data_measurements, out, [measurement]},
+                {result_events, out, [result, status]}
             ]
         })
     ).
 
+%% Checks incompatible startup schema is rejected.
+-spec incompatible_startup_schema_is_rejected_test() -> ok.
 incompatible_startup_schema_is_rejected_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     ?assertError(
         {incompatible_startup_schema,
             data,
             0,
-            phenom_request,
-            [noise_cutoff, pauli_query, pauli_update,
-                phenom_config, phenom_query]},
+            request,
+            [config, query]},
         hls_topology:normalize(Spec#{
-            startup := [{data, [{phenom_request, 0}]}]
+            startup := [{data, [{request, 0}]}]
         })
     ).
 
+%% Checks generated topology is deterministic.
+-spec generated_topology_is_deterministic_test() -> ok.
 generated_topology_is_deterministic_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Reordered = Spec#{
         externals := lists:reverse(maps:get(externals, Spec)),
         routes := lists:reverse(maps:get(routes, Spec)),
         startup := lists:reverse(maps:get(startup, Spec))
     },
-    Profile = phi_phenom_topology_dslx:profile(),
+    Profile = hls_routing_topology_fixture:profile(),
     Forward = iolist_to_binary(xls_topology_dslx:emit(
         hls_topology:normalize(Spec),
         Profile
@@ -354,11 +390,13 @@ generated_topology_is_deterministic_test() ->
     )),
     ?assertEqual(Forward, Reverse),
     ?assertEqual(Forward, iolist_to_binary(
-        phi_phenom_topology_dslx:to_dslx()
+        hls_routing_topology_fixture:to_dslx()
     )).
 
+%% Checks generated topology has expected physical shape.
+-spec generated_topology_has_expected_physical_shape_test() -> ok.
 generated_topology_has_expected_physical_shape_test() ->
-    Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
+    Generated = iolist_to_binary(hls_routing_topology_fixture:to_dslx()),
     ?assertEqual(3, count(Generated, <<"::Service(">>)),
     ?assertEqual(3, count(Generated, <<"proc ActorIngress">>)),
     ?assertEqual(3, count(Generated, <<"spawn ActorIngress">>)),
@@ -366,23 +404,25 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertEqual(3, count(Generated, <<"spawn ActorRouter">>)),
     ?assertEqual(1, count(Generated, <<"::Egress, u32:3>">>)),
     ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
-    %% All four aliased source ports select one ordered send to syndrome.
+    %% All four aliased source ports select one ordered send to query.
     ?assertEqual(1, count(Generated, <<
-        "effect.port == phenom_data_cell::OutputPort::NORTH || "
-        "effect.port == phenom_data_cell::OutputPort::EAST || "
-        "effect.port == phenom_data_cell::OutputPort::WEST || "
-        "effect.port == phenom_data_cell::OutputPort::SOUTH"
+        "effect.port == hls_data_cell_fixture::OutputPort::NORTH || "
+        "effect.port == hls_data_cell_fixture::OutputPort::EAST || "
+        "effect.port == hls_data_cell_fixture::OutputPort::WEST || "
+        "effect.port == hls_data_cell_fixture::OutputPort::SOUTH"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"uN[96]:0x00000000800000009E3779B9">>)),
+        <<"uN[96]:0x000000000000000400000001">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"uN[96]:0x000000008000000085EBCA6B">>)),
+        <<"uN[96]:0x000000000000000400000002">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"axis::pack(u8:12, u32:0x6D2B79F5)">>)).
+        <<"axis::pack(u8:12, u32:0x00000003)">>)).
 
+%% Checks generated topology uses explicit actor egress depth.
+-spec generated_topology_uses_explicit_actor_egress_depth_test() -> ok.
 generated_topology_uses_explicit_actor_egress_depth_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Profile = phi_phenom_topology_dslx:profile(),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Profile = hls_routing_topology_fixture:profile(),
     lists:foreach(
         fun(Depth) ->
             Generated = iolist_to_binary(xls_topology_dslx:emit(
@@ -397,17 +437,19 @@ generated_topology_uses_explicit_actor_egress_depth_test() ->
         [0, 1]
     ).
 
+%% Checks generated startup preserves per actor message order.
+-spec generated_startup_preserves_per_actor_message_order_test() -> ok.
 generated_startup_preserves_per_actor_message_order_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Plan = hls_topology:normalize(Spec#{startup := [
         {data, [
-            {phenom_config, 1, 2, 3, 4},
-            {phenom_config, 5, 6, 7, 8}
+            {config, 1, 2, 3, 4},
+            {config, 5, 6, 7, 8}
         ]}
     ]}),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
         Plan,
-        phi_phenom_topology_dslx:profile()
+        hls_routing_topology_fixture:profile()
     )),
     {First, _} = binary:match(
         Generated,
@@ -423,8 +465,10 @@ generated_startup_preserves_per_actor_message_order_test() ->
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"} else if state.2 < u32:2 {">>)).
 
+%% Checks generated startup and routed receive both require admission.
+-spec generated_startup_and_routed_receive_both_require_admission_test() -> ok.
 generated_startup_and_routed_receive_both_require_admission_test() ->
-    Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
+    Generated = iolist_to_binary(hls_routing_topology_fixture:to_dslx()),
     [_Preamble | Procs] = binary:split(Generated, <<"proc ActorIngress">>, [global]),
     ?assertEqual(3, length(Procs)),
     lists:foreach(fun(Proc) ->
@@ -435,8 +479,10 @@ generated_startup_and_routed_receive_both_require_admission_test() ->
         ?assert(Startup < Routed)
     end, Procs).
 
+%% Checks dslx backend rejects unpacked startup data.
+-spec dslx_backend_rejects_unpacked_startup_data_test() -> ok.
 dslx_backend_rejects_unpacked_startup_data_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Plan = hls_topology:normalize(Spec#{startup := [
         {data, [not_a_record]}
     ]}),
@@ -444,30 +490,27 @@ dslx_backend_rejects_unpacked_startup_data_test() ->
         {invalid_startup_message, data, 0, not_a_record},
         xls_topology_dslx:emit(
             Plan,
-            phi_phenom_topology_dslx:profile()
+            hls_routing_topology_fixture:profile()
         )
     ).
 
+%% Checks dslx backend rejects out of range startup fields.
+-spec dslx_backend_rejects_out_of_range_startup_fields_test() -> ok.
 dslx_backend_rejects_out_of_range_startup_fields_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     lists:foreach(fun(Message) ->
         Plan = hls_topology:normalize(Spec#{startup := [{data, [Message]}]}),
         ?assertError({cannot_pack_startup_message, data, 0, error, badarg},
-            xls_topology_dslx:emit(Plan, phi_phenom_topology_dslx:profile()))
-    end, [{phenom_config, -1, 0, 0, 0},
-        {phenom_config, 0, 1 bsl 32, 0, 0},
-        {phenom_config, 0, 0, 65536, 0}]).
+            xls_topology_dslx:emit(Plan, hls_routing_topology_fixture:profile()))
+    end, [{config, -1, 0, 0, 0},
+        {config, 0, 1 bsl 32, 0, 0},
+        {config, 0, 0, 65536, 0}]).
 
-generated_topology_matches_checked_in_artifact_test() ->
-    {ok, Expected} = file:read_file(
-        "src/examples/phi_decoder/phi_phenom_topology.x"
-    ),
-    Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
-    ?assertEqual(Expected, Generated).
-
+%% Checks dslx backend rejects removed alias escape hatch.
+-spec dslx_backend_rejects_removed_alias_escape_hatch_test() -> ok.
 dslx_backend_rejects_removed_alias_escape_hatch_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Profile = phi_phenom_topology_dslx:profile(),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Profile = hls_routing_topology_fixture:profile(),
     ?assertError(
         {invalid_dslx_profile_keys, [], [aliased_port_order]},
         xls_topology_dslx:emit(
@@ -476,9 +519,11 @@ dslx_backend_rejects_removed_alias_escape_hatch_test() ->
         )
     ).
 
+%% Checks dslx backend rejects channel depth wider than u32.
+-spec dslx_backend_rejects_channel_depth_wider_than_u32_test() -> ok.
 dslx_backend_rejects_channel_depth_wider_than_u32_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Profile = phi_phenom_topology_dslx:profile(),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Profile = hls_routing_topology_fixture:profile(),
     ?assertError(
         {invalid_dslx_channel_depth, 16#100000000},
         xls_topology_dslx:emit(
@@ -487,9 +532,11 @@ dslx_backend_rejects_channel_depth_wider_than_u32_test() ->
         )
     ).
 
+%% Checks dslx backend rejects invalid actor egress depth.
+-spec dslx_backend_rejects_invalid_actor_egress_depth_test() -> ok.
 dslx_backend_rejects_invalid_actor_egress_depth_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Profile = phi_phenom_topology_dslx:profile(),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Profile = hls_routing_topology_fixture:profile(),
     lists:foreach(
         fun(Value) ->
             ?assertError(
@@ -503,6 +550,8 @@ dslx_backend_rejects_invalid_actor_egress_depth_test() ->
         [-1, 16#100000000, auto]
     ).
 
+%% Checks dslx backend rejects unimplemented route tag remap.
+-spec dslx_backend_rejects_unimplemented_route_tag_remap_test() -> ok.
 dslx_backend_rejects_unimplemented_route_tag_remap_test() ->
     Plan = hls_topology:normalize(reordered_fixture_topology()),
     ?assertError(
@@ -515,6 +564,8 @@ dslx_backend_rejects_unimplemented_route_tag_remap_test() ->
         xls_topology_dslx:emit(Plan, fixture_profile(selector_fixture))
     ).
 
+%% Checks dslx backend rejects incoherent external schema encoding.
+-spec dslx_backend_rejects_incoherent_external_schema_encoding_test() -> ok.
 dslx_backend_rejects_incoherent_external_schema_encoding_test() ->
     Plan = hls_topology:normalize(external_encoding_fixture_topology()),
     try xls_topology_dslx:emit(
@@ -527,6 +578,8 @@ dslx_backend_rejects_incoherent_external_schema_encoding_test() ->
                 shared, message, _Existing, _New} -> ok
     end.
 
+%% Checks dslx backend rejects ambiguous external selector.
+-spec dslx_backend_rejects_ambiguous_external_selector_test() -> ok.
 dslx_backend_rejects_ambiguous_external_selector_test() ->
     Plan = hls_topology:normalize(external_selector_fixture_topology()),
     try xls_topology_dslx:emit(
@@ -539,43 +592,49 @@ dslx_backend_rejects_ambiguous_external_selector_test() ->
                 shared, 3, _ExistingSchema, _NewSchema} -> ok
     end.
 
+%% Checks dslx backend accepts nonaliased graph.
+-spec dslx_backend_accepts_nonaliased_graph_test() -> ok.
 dslx_backend_accepts_nonaliased_graph_test() ->
-    Plan = hls_topology:normalize(nonaliased_phi_pair()),
-    Profile = (phi_phenom_topology_dslx:profile())#{
-        name := nonaliased_phi_pair
+    Plan = hls_topology:normalize(nonaliased_grid_pair()),
+    Profile = (hls_routing_topology_fixture:profile())#{
+        name := nonaliased_grid_pair
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
-    ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
+    ?assertEqual(1, count(Generated, <<"spawn hls_grid_cell_fixture::Service(">>)),
     ?assertEqual(
         1,
-        count(Generated, <<"spawn phenom_syndrome_cell::Service(">>)
+        count(Generated, <<"spawn hls_query_cell_fixture::Service(">>)
     ),
     ?assertEqual(
         nomatch,
         binary:match(Generated, <<"Aliased-port lanes permitted">>)
     ).
 
+%% Checks dslx backend rejects stale cached lanes.
+-spec dslx_backend_rejects_stale_cached_lanes_test() -> ok.
 dslx_backend_rejects_stale_cached_lanes_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
     [First | Rest] = maps:get(routes, Plan),
-    Changed = First#{recipients := [{actor, phi}]},
+    Changed = First#{recipients := [{actor, grid}]},
     try xls_topology_dslx:emit(
         Plan#{routes := [Changed | Rest]},
-        phi_phenom_topology_dslx:profile()
+        hls_routing_topology_fixture:profile()
     ) of
         _ -> ?assert(false)
     catch
         error:{inconsistent_dslx_plan_lanes, _Realized, _Cached} -> ok
     end.
 
+%% Checks dslx backend supports aliased external lane.
+-spec dslx_backend_supports_aliased_external_lane_test() -> ok.
 dslx_backend_supports_aliased_external_lane_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Routes = [
         case Route of
-            {{phi, north}, _} ->
-                {{phi, north}, [{external, announcement}]};
-            {{phi, east}, _} ->
-                {{phi, east}, [{external, announcement}]};
+            {{grid, north}, _} ->
+                {{grid, north}, [{external, announcement}]};
+            {{grid, east}, _} ->
+                {{grid, east}, [{external, announcement}]};
             _ -> Route
         end
         || Route <- maps:get(routes, Spec)
@@ -583,28 +642,30 @@ dslx_backend_supports_aliased_external_lane_test() ->
     Plan = hls_topology:normalize(Spec#{
         externals := [
             {announcement, out, [
-                anyon_move,
-                phi,
-                phi0,
-                phenom_anyon
+                move,
+                sample,
+                delta,
+                report
             ]},
-            {data_measurements, out, [pauli_reply]},
-            {decoder_events, out, [phi_correction, phi_status]}
+            {data_measurements, out, [measurement]},
+            {result_events, out, [result, status]}
         ],
         routes := Routes
     }),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
         Plan,
-        phi_phenom_topology_dslx:profile()
+        hls_routing_topology_fixture:profile()
     )),
     ?assertEqual(
         [east, north],
-        maps:get(source_ports, lane(Plan, phi, {external, announcement}))
+        maps:get(source_ports, lane(Plan, grid, {external, announcement}))
     ),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"proc ActorRouter">>)).
 
+%% Checks dslx backend requires identifier external names.
+-spec dslx_backend_requires_identifier_external_names_test() -> ok.
 dslx_backend_requires_identifier_external_names_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     ExternalId = {announcement, 0},
     Routes = [
         case Route of
@@ -622,9 +683,9 @@ dslx_backend_requires_identifier_external_names_test() ->
     ],
     Plan = hls_topology:normalize(Spec#{
         externals := [
-            {ExternalId, out, [phenom_anyon]},
-            {data_measurements, out, [pauli_reply]},
-            {decoder_events, out, [phi_correction, phi_status]}
+            {ExternalId, out, [report]},
+            {data_measurements, out, [measurement]},
+            {result_events, out, [result, status]}
         ],
         routes := Routes
     }),
@@ -632,10 +693,12 @@ dslx_backend_requires_identifier_external_names_test() ->
         {invalid_dslx_identifier, external_id, ExternalId},
         xls_topology_dslx:emit(
             Plan,
-            phi_phenom_topology_dslx:profile()
+            hls_routing_topology_fixture:profile()
         )
     ).
 
+%% Checks dslx backend rejects startup target with initial effects.
+-spec dslx_backend_rejects_startup_target_with_initial_effects_test() -> ok.
 dslx_backend_rejects_startup_target_with_initial_effects_test() ->
     Plan = hls_topology:normalize(#{
         version => 1,
@@ -658,13 +721,15 @@ dslx_backend_rejects_startup_target_with_initial_effects_test() ->
             ?assertMatch([_ | _], Effects)
     end.
 
+%% Checks dslx backend supports startup only actor.
+-spec dslx_backend_supports_startup_only_actor_test() -> ok.
 dslx_backend_supports_startup_only_actor_test() ->
-    Spec = phi_phenom_topology:topology(),
+    Spec = hls_routing_topology_fixture:topology(),
     Actors = maps:get(actors, Spec),
     Directions = [north, east, west, south],
     Routes = [
         case Route of
-            {Source = {syndrome, Port}, _Recipients} ->
+            {Source = {query, Port}, _Recipients} ->
                 case lists:member(Port, Directions) of
                     true -> {Source, [{actor, data2}]};
                     false -> Route
@@ -674,7 +739,7 @@ dslx_backend_supports_startup_only_actor_test() ->
         || Route <- maps:get(routes, Spec)
     ],
     Data2Routes = [
-        {{data2, Port}, [{actor, syndrome}]}
+        {{data2, Port}, [{actor, query}]}
         || Port <- Directions
     ] ++ [
         {{data2, measurement}, [{external, data_measurements}]}
@@ -684,19 +749,21 @@ dslx_backend_supports_startup_only_actor_test() ->
         || {data, Messages} <- maps:get(startup, Spec)
     ],
     Plan = hls_topology:normalize(Spec#{
-        actors := Actors#{data2 => phenom_data_cell},
+        actors := Actors#{data2 => hls_data_cell_fixture},
         routes := Routes ++ Data2Routes,
         startup := maps:get(startup, Spec) ++ [{data2, DataStartup}]
     }),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
-        Plan, phi_phenom_topology_dslx:profile())),
+        Plan, hls_routing_topology_fixture:profile())),
     ?assertEqual(4, count(Generated, <<"::Service(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"spawn ActorIngress0(actor_0_req_p, actor_0_admit_c)">>)).
 
+%% Checks dslx backend rejects unimplemented coupled fanout.
+-spec dslx_backend_rejects_unimplemented_coupled_fanout_test() -> ok.
 dslx_backend_rejects_unimplemented_coupled_fanout_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Source = {syndrome, phi},
+    Plan = hls_topology:from_module(hls_routing_topology_fixture),
+    Source = {query, grid},
     Routes = [
         case Route of
             #{source := Source} -> Route#{delivery := coupled};
@@ -708,15 +775,17 @@ dslx_backend_rejects_unimplemented_coupled_fanout_test() ->
         {unsupported_dslx_route_delivery, Source, coupled, 2},
         xls_topology_dslx:emit(
             Plan#{routes := Routes},
-            phi_phenom_topology_dslx:profile()
+            hls_routing_topology_fixture:profile()
         )
     ).
 
+%% Checks dslx backend rejects other unimplemented fanout modes.
+-spec dslx_backend_rejects_other_unimplemented_fanout_modes_test_() -> [term()].
 dslx_backend_rejects_other_unimplemented_fanout_modes_test_() ->
     [
         {atom_to_list(Delivery), fun() ->
-            Plan = hls_topology:from_module(phi_phenom_topology),
-            Source = {syndrome, phi},
+            Plan = hls_topology:from_module(hls_routing_topology_fixture),
+            Source = {query, grid},
             Routes = [
                 case Route of
                     #{source := Source} -> Route#{delivery := Delivery};
@@ -728,13 +797,15 @@ dslx_backend_rejects_other_unimplemented_fanout_modes_test_() ->
                 {unsupported_dslx_route_delivery, Source, Delivery, 2},
                 xls_topology_dslx:emit(
                     Plan#{routes := Routes},
-                    phi_phenom_topology_dslx:profile()
+                    hls_routing_topology_fixture:profile()
                 )
             )
         end}
         || Delivery <- [buffered, best_effort]
     ].
 
+%% Finds the one normalized route selected by source or output port.
+-spec route(map() | [map()], term()) -> map().
 route(Plan, Source) ->
     hd([
         Route
@@ -742,6 +813,8 @@ route(Plan, Source) ->
            maps:get(source, Route) =:= Source
     ]).
 
+%% Finds the normalized source/destination lane.
+-spec lane(map(), term(), term()) -> map().
 lane(Plan, Source, Destination) ->
     hd([
         Lane
@@ -750,6 +823,8 @@ lane(Plan, Source, Destination) ->
            maps:get(destination, Lane) =:= Destination
     ]).
 
+%% Replaces one raw route while preserving unrelated routes.
+-spec replace_route(map(), term(), tuple()) -> map().
 replace_route(Spec, Source, Replacement) ->
     Spec#{routes := [
         case Route of
@@ -760,13 +835,15 @@ replace_route(Spec, Source, Replacement) ->
         || Route <- maps:get(routes, Spec)
     ]}.
 
-nonaliased_phi_pair() ->
+%% Builds the minimal topology needed by this validation scenario.
+-spec nonaliased_grid_pair() -> hls_topology:spec().
+nonaliased_grid_pair() ->
     Directions = [north, east, west, south],
-    PhiExternalIds = #{
-        north => phi_north,
-        east => phi_east,
-        west => phi_west,
-        south => phi_south
+    GridExternalIds = #{
+        north => grid_north,
+        east => grid_east,
+        west => grid_west,
+        south => grid_south
     },
     QueryExternalIds = #{
         north => query_north,
@@ -774,47 +851,47 @@ nonaliased_phi_pair() ->
         west => query_west,
         south => query_south
     },
-    PhiExternals = [
-        {maps:get(Port, PhiExternalIds), out, [anyon_move, phi, phi0]}
+    GridExternals = [
+        {maps:get(Port, GridExternalIds), out, [delta, move, sample]}
         || Port <- Directions
     ],
     QueryExternals = [
-        {maps:get(Port, QueryExternalIds), out, [phenom_query]}
+        {maps:get(Port, QueryExternalIds), out, [query]}
         || Port <- Directions
     ],
     #{
         version => 1,
         ingresses => [],
         actors => #{
-            phi => phi_halo_cell,
-            syndrome => phenom_syndrome_cell
+            grid => hls_grid_cell_fixture,
+            query => hls_query_cell_fixture
         },
         families => #{},
         externals =>
-            PhiExternals ++ QueryExternals ++
+            GridExternals ++ QueryExternals ++
             [
-                {decoder_events, out, [phi_correction, phi_status]},
-                {announcement, out, [phenom_anyon]}
+                {result_events, out, [result, status]},
+                {announcement, out, [report]}
             ],
         routes =>
             [
-                {{phi, Port}, [{external, maps:get(Port, PhiExternalIds)}]}
+                {{grid, Port}, [{external, maps:get(Port, GridExternalIds)}]}
                 || Port <- Directions
             ] ++
             [
-                {{phi, syndrome}, [{actor, syndrome}]},
-                {{phi, correction}, [{external, decoder_events}]},
-                {{phi, status}, [{external, decoder_events}]}
+                {{grid, query}, [{actor, query}]},
+                {{grid, result}, [{external, result_events}]},
+                {{grid, status}, [{external, result_events}]}
             ] ++
             [
-                {{syndrome, Port}, [
+                {{query, Port}, [
                     {external, maps:get(Port, QueryExternalIds)}
                 ]}
                 || Port <- Directions
             ] ++
             [
-                {{syndrome, phi}, queued, [
-                    {actor, phi},
+                {{query, grid}, queued, [
+                    {actor, grid},
                     {external, announcement}
                 ]}
             ],
@@ -822,6 +899,8 @@ nonaliased_phi_pair() ->
         startup => []
     }.
 
+%% Builds the minimal topology needed by this validation scenario.
+-spec layout_fixture_topology() -> hls_topology:spec().
 layout_fixture_topology() ->
     #{
         version => 1,
@@ -840,6 +919,8 @@ layout_fixture_topology() ->
         startup => []
     }.
 
+%% Builds the minimal topology needed by this validation scenario.
+-spec reordered_fixture_topology() -> hls_topology:spec().
 reordered_fixture_topology() ->
     #{
         version => 1,
@@ -862,6 +943,8 @@ reordered_fixture_topology() ->
         startup => []
     }.
 
+%% Builds the minimal topology needed by this validation scenario.
+-spec external_encoding_fixture_topology() -> hls_topology:spec().
 external_encoding_fixture_topology() ->
     #{
         version => 1,
@@ -884,6 +967,8 @@ external_encoding_fixture_topology() ->
         startup => []
     }.
 
+%% Builds the minimal topology needed by this validation scenario.
+-spec external_selector_fixture_topology() -> hls_topology:spec().
 external_selector_fixture_topology() ->
     #{
         version => 1,
@@ -906,6 +991,8 @@ external_selector_fixture_topology() ->
         startup => []
     }.
 
+%% Selects the explicit queue policy for a structural witness.
+-spec fixture_profile(atom()) -> xls_topology_dslx:profile().
 fixture_profile(Name) ->
     #{
         name => Name,
@@ -913,6 +1000,8 @@ fixture_profile(Name) ->
         actor_egress_depth => burst
     }.
 
+%% Renames an exact actor and each of its references.
+-spec rename_actor_id(map(), term(), term()) -> map().
 rename_actor_id(Spec, OldId, NewId) ->
     Actors0 = maps:get(actors, Spec),
     {Module, Actors1} = maps:take(OldId, Actors0),
@@ -926,6 +1015,8 @@ rename_actor_id(Spec, OldId, NewId) ->
         ]
     }.
 
+%% Renames source and recipient actor identities in one route.
+-spec rename_route_actor(tuple(), term(), term()) -> tuple().
 rename_route_actor({Source, Recipients}, OldId, NewId) ->
     {rename_source(Source, OldId, NewId),
         [rename_recipient(Recipient, OldId, NewId)
@@ -935,15 +1026,23 @@ rename_route_actor({Source, Delivery, Recipients}, OldId, NewId) ->
         [rename_recipient(Recipient, OldId, NewId)
             || Recipient <- Recipients]}.
 
+%% Renames only the actor component of a route source.
+-spec rename_source(tuple(), term(), term()) -> tuple().
 rename_source({Id, Port}, OldId, NewId) ->
     {rename_id(Id, OldId, NewId), Port}.
 
+%% Renames an actor recipient while retaining external boundaries.
+-spec rename_recipient(tuple(), term(), term()) -> tuple().
 rename_recipient({actor, Id}, OldId, NewId) ->
     {actor, rename_id(Id, OldId, NewId)};
 rename_recipient(Recipient = {external, _Id}, _OldId, _NewId) ->
     Recipient.
 
+%% Substitutes one exact identity and leaves other terms intact.
+-spec rename_id(term(), term(), term()) -> term().
 rename_id(OldId, OldId, NewId) -> NewId;
 rename_id(Id, _OldId, _NewId) -> Id.
 
+%% Counts exact generated fragments for structural assertions.
+-spec count(binary(), binary()) -> non_neg_integer().
 count(Binary, Pattern) -> length(binary:matches(Binary, Pattern)).

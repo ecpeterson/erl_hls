@@ -175,6 +175,13 @@
         "test_data/hls_statem_reduction_semantics.inc.x"
       ]
     },
+    "selection_equivalence": {
+      "group": "test",
+      "default_stage": "_build/selection_equivalence",
+      "dependencies": [
+        "test_data/xls_selection.x"
+      ]
+    },
     "serial": {
       "group": "test",
       "default_stage": "_build/serial",
@@ -198,6 +205,14 @@
         "test/hls_source_dslx.erl"
       ]
     },
+    "state_updates": {
+      "group": "test",
+      "default_stage": "_build/state_updates",
+      "dependencies": [
+        "test/rtl/xls_state_updates_tb.sv",
+        "test_data/xls_state_updates.x"
+      ]
+    },
     "statem_gathers": {
       "group": "test",
       "default_stage": "_build/statem-gathers",
@@ -212,6 +227,15 @@
         "test/hls_statem_reply_dslx.erl",
         "test/rtl/statem_reply_direct_tb.sv",
         "test/rtl/statem_reply_topology_tb.sv"
+      ]
+    },
+    "telemetry": {
+      "group": null,
+      "default_stage": "_build/telemetry",
+      "dependencies": [
+        "test/telemetry_example_fixture.erl",
+        "test/telemetry_example_tests.erl",
+        "test/rtl/telemetry_example_tb.sv"
       ]
     },
     "type_shapes": {

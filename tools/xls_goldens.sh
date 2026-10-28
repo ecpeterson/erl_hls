@@ -18,21 +18,9 @@ esac
 # checked by simulation; its text and hashes are not golden artifacts.
 generated=(
     regsvc.x
-    phi_halo_cell.x
-    phenom_data_cell.x
-    phenom_syndrome_cell.x
-    phi_phenom_topology.x
-    phi_torus_topology.x
-    phi_noise_topology.x
 )
 goldens=(
     src/examples/regsvc/regsvc.erl.x
-    src/examples/phi_decoder/phi_halo_cell.erl.x
-    src/examples/phi_decoder/phenom_data_cell.erl.x
-    src/examples/phi_decoder/phenom_syndrome_cell.erl.x
-    src/examples/phi_decoder/phi_phenom_topology.x
-    src/examples/phi_decoder/phi_torus_topology.x
-    src/examples/phi_decoder/phi_noise_topology.x
 )
 missing=false
 for index in "${!generated[@]}"; do

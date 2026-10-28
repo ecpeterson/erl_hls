@@ -2,178 +2,41 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-phi_interface_records_protocol_facts_test() ->
-    Interface = hls_actor_interface:from_module(phi_halo_cell),
+%% Interface inference retains source effect order and each port's schema union.
+-spec source_interface_records_protocol_facts_test() -> ok.
+source_interface_records_protocol_facts_test() ->
+    Interface = hls_actor_interface:from_module(hls_grid_cell_fixture),
     ?assertEqual(configuring, maps:get(initial_phase, Interface)),
     ?assertEqual(5, hls_actor_interface:max_entry_effects(Interface)),
-    ?assertEqual(
-        [anyon_move, phi, phi0],
-        hls_actor_interface:output_schemas(Interface, north)
-    ),
-    ?assertEqual(
-        [phenom_request],
-        hls_actor_interface:output_schemas(Interface, syndrome)
-    ),
-    ?assertEqual(
-        [phi_correction],
-        hls_actor_interface:output_schemas(Interface, correction)
-    ),
-    ?assertEqual(
-        [anyon_move, phenom_anyon, phi, phi0, phi_config],
-        hls_actor_interface:dispatched_schemas(Interface)
-    ),
+    ?assertEqual([delta, move, sample], hls_actor_interface:output_schemas(Interface, north)),
+    ?assertEqual([request], hls_actor_interface:output_schemas(Interface, query)),
+    ?assertEqual([result], hls_actor_interface:output_schemas(Interface, result)),
+    ?assertEqual([delta, move, report, sample, seed],
+        hls_actor_interface:dispatched_schemas(Interface)),
     ?assertEqual([], hls_actor_interface:initial_effects(Interface)),
-    Gathering = [
-        Effect
-        || Effect <- maps:get(entry_effects, Interface),
-           maps:get(phase, Effect) =:= gathering
-    ],
-    ?assertEqual(
-        [
-            {0, north, phi},
-            {1, east, phi},
-            {2, west, phi},
-            {3, south, phi}
-        ],
-        [
-            {maps:get(order, Effect),
-                maps:get(port, Effect),
-                maps:get(schema, Effect)}
-            || Effect <- Gathering
-        ]
-    ),
-    Flipping = [
-        Effect
-        || Effect <- maps:get(entry_effects, Interface),
-           maps:get(phase, Effect) =:= flipping
-    ],
-    ?assertEqual(
-        [
-            {0, north, anyon_move},
-            {1, east, anyon_move},
-            {2, west, anyon_move},
-            {3, south, anyon_move},
-            {4, correction, phi_correction}
-        ],
-        [
-            {maps:get(order, Effect),
-                maps:get(port, Effect),
-                maps:get(schema, Effect)}
-            || Effect <- Flipping
-        ]
-    ),
-    [CorrectionEffect] = [
-        Effect
-        || Effect <- Flipping,
-           maps:get(port, Effect) =:= correction
-    ],
-    ?assert(maps:get(conditional, CorrectionEffect)),
-    ?assertEqual(
-        [{step, u32}, {flags, u32}, {x, u16}, {y, u16}],
-        schema_fields(Interface, phenom_anyon)
-    ),
-    ?assertEqual(
-        [{step, u32}, {x, u16}, {y, u16}, {direction, u32}],
-        schema_fields(Interface, phi_correction)
-    ),
-    ?assertEqual(
-        [{seed, u32}],
-        schema_fields(Interface, phi_config)
-    ),
-    ?assertEqual(
-        11,
-        maps:get(selector, hls_actor_interface:schema(
-            Interface,
-            phi_correction
-        ))
-    ),
-    ?assertEqual(
-        12,
-        maps:get(selector, hls_actor_interface:schema(
-            Interface,
-            phi_config
-        ))
-    ),
-    #{name := cell, fields := StateFields, width := 320} =
-        hls_actor_interface:state(Interface),
-    ?assertEqual(
-        [step, diffusion_epoch, phi, best_direction, anyon, random_state,
-            x, y, noise_quiet, status_valid],
-        [maps:get(name, Field) || Field <- StateFields]
-    ),
-    ?assertEqual(187,
-        hls_actor_interface:reduction_storage_width(Interface)),
-    #{sites := ReductionSites} = maps:get(reductions, Interface),
-    ?assertEqual(
-        [
-            {diffusion, count, 4, true},
-            {comparison, members, 4, true},
-            {movement, count, 4, true}
-        ],
-        [
-            {maps:get(name, Site),
-                maps:get(mode, maps:get(population, Site)),
-                maps:get(size, maps:get(population, Site)),
-                maps:get(source_capture_total, Site)}
-            || Site <- ReductionSites
-        ]
-    ).
+    Effects = [E || E = #{phase := sampling} <- maps:get(entry_effects, Interface)],
+    ?assertEqual([{0, north, sample}, {1, east, sample}, {2, west, sample},
+        {3, south, sample}, {4, query, request}],
+        [{maps:get(order, E), maps:get(port, E), maps:get(schema, E)} || E <- Effects]),
+    ?assertEqual([{step, u32}, {flags, u32}, {x, u16}, {y, u16}], schema_fields(Interface, report)),
+    ?assertEqual([{seed, u32}], schema_fields(Interface, seed)),
+    ?assertEqual(32, schema_width(Interface, seed)),
+    ?assertEqual(96, schema_width(Interface, result)).
 
-phenomenological_interfaces_are_distinct_test() ->
-    Data = hls_actor_interface:from_module(phenom_data_cell),
-    Syndrome = hls_actor_interface:from_module(phenom_syndrome_cell),
-    ?assertEqual(4, hls_actor_interface:max_entry_effects(Data)),
-    ?assertEqual(5, hls_actor_interface:max_entry_effects(Syndrome)),
-    ?assertEqual(
-        [noise_cutoff, pauli_query, pauli_update,
-            phenom_config, phenom_query],
-        hls_actor_interface:dispatched_schemas(Data)
-    ),
-    ?assertEqual(
-        [phenom_data],
-        hls_actor_interface:output_schemas(Data, east)
-    ),
-    ?assertEqual(
-        [pauli_reply],
-        hls_actor_interface:output_schemas(Data, measurement)
-    ),
-    ?assertEqual(
-        [noise_cutoff, phenom_config, phenom_data, phenom_request],
-        hls_actor_interface:dispatched_schemas(Syndrome)
-    ),
-    ?assertEqual(
-        [phenom_query],
-        hls_actor_interface:output_schemas(Syndrome, south)
-    ),
-    ?assertEqual(
-        [phenom_anyon],
-        hls_actor_interface:output_schemas(Syndrome, phi)
-    ),
-    ?assertEqual(
-        [{seed, u32}, {threshold, u32}, {x, u16}, {y, u16}],
-        schema_fields(Syndrome, phenom_config)
-    ),
-    ?assertEqual(
-        [{step, u32}, {flags, u32}, {x, u16}, {y, u16}],
-        schema_fields(Syndrome, phenom_anyon)
-    ),
-    ?assertEqual(
-        [{request_id, u32}, {measurement, pauli}],
-        schema_fields(Data, pauli_query)
-    ),
-    ?assertEqual(
-        [{request_id, u32}, {x, u16}, {y, u16}, {anticommutes, u32}],
-        schema_fields(Data, pauli_reply)
-    ),
-    ?assertMatch(
-        #{name := data_cell, width := 354},
-        hls_actor_interface:state(Data)
-    ),
-    ?assertMatch(
-        #{name := syndrome, width := 354},
-        hls_actor_interface:state(Syndrome)
-    ).
+%% Distinct receiver contracts remain distinct even when their shared tags agree.
+-spec receiver_interfaces_are_distinct_test() -> ok.
+receiver_interfaces_are_distinct_test() ->
+    Data = hls_actor_interface:from_module(hls_data_cell_fixture),
+    Query = hls_actor_interface:from_module(hls_query_cell_fixture),
+    ?assertEqual([config, query], hls_actor_interface:dispatched_schemas(Data)),
+    ?assertEqual([reply], hls_actor_interface:output_schemas(Data, north)),
+    ?assertEqual([config, reply, request], hls_actor_interface:dispatched_schemas(Query)),
+    ?assertEqual([query], hls_actor_interface:output_schemas(Query, north)),
+    ?assertEqual([report], hls_actor_interface:output_schemas(Query, grid)),
+    ?assertEqual(schema_fields(Data, config), schema_fields(Query, config)).
 
+%% Checks source and compiled interfaces agree.
+-spec source_and_compiled_interfaces_agree_test_() -> [term()].
 source_and_compiled_interfaces_agree_test_() ->
     [
         {atom_to_list(Module), fun() ->
@@ -183,13 +46,14 @@ source_and_compiled_interfaces_agree_test_() ->
             )
         end}
         || {Module, Path} <- [
-            {phi_halo_cell, "src/examples/phi_decoder/phi_halo_cell.erl"},
-            {phenom_data_cell, "src/examples/phi_decoder/phenom_data_cell.erl"},
-            {phenom_syndrome_cell,
-                "src/examples/phi_decoder/phenom_syndrome_cell.erl"}
+            {hls_grid_cell_fixture, "test/hls_grid_cell_fixture.erl"},
+            {hls_data_cell_fixture, "test/hls_data_cell_fixture.erl"},
+            {hls_query_cell_fixture, "test/hls_query_cell_fixture.erl"}
         ]
     ].
 
+%% Checks repeated tag blocks keep selector order.
+-spec repeated_tag_blocks_keep_selector_order_test() -> ok.
 repeated_tag_blocks_keep_selector_order_test() ->
     Interface = xls_parse:actor_interface(
         "test_data/hls_tags_statem_fixture.erl"
@@ -207,6 +71,8 @@ repeated_tag_blocks_keep_selector_order_test() ->
         hls_actor_interface:output_schemas(Interface, out)
     ).
 
+%% Checks hls gs interface inference is deferred.
+-spec hls_gs_interface_inference_is_deferred_test() -> ok.
 hls_gs_interface_inference_is_deferred_test() ->
     Path = "src/examples/regsvc/regsvc.erl",
     ?assertError(
@@ -214,6 +80,8 @@ hls_gs_interface_inference_is_deferred_test() ->
         xls_parse:actor_interface(Path)
     ).
 
+%% Checks unsupported interface inference does not narrow cpu compilation.
+-spec unsupported_interface_inference_does_not_narrow_cpu_compilation_test() -> ok.
 unsupported_interface_inference_does_not_narrow_cpu_compilation_test() ->
     Module = hls_statem_dynamic_actions_fixture,
     ?assertEqual({module, Module}, code:ensure_loaded(Module)),
@@ -241,6 +109,8 @@ reduction_interface_survives_parse_transform_test() ->
         _ = code:purge(Module)
     end.
 
+%% Reads ordered field names and integer provider constructors.
+-spec schema_fields(hls_actor_interface:summary(), atom()) -> [{atom(), atom()}].
 schema_fields(Interface, Name) ->
     [
         {maps:get(name, Field), element(3, maps:get(type, Field))}
@@ -250,6 +120,8 @@ schema_fields(Interface, Name) ->
         )
     ].
 
+%% Checks stale embedded interface is rejected.
+-spec stale_embedded_interface_is_rejected_test() -> ok.
 stale_embedded_interface_is_rejected_test() ->
     Module = hls_actor_stale_fixture,
     Path = filename:join("_build", atom_to_list(Module) ++ ".erl"),
@@ -270,6 +142,8 @@ stale_embedded_interface_is_rejected_test() ->
         ok = file:delete(Path)
     end.
 
+%% Constructs two source revisions differing only in the message word width.
+-spec interface_fixture_source(module(), atom()) -> binary().
 interface_fixture_source(Module, Width) ->
     iolist_to_binary(io_lib:format(
         "-module(~p).~n"
@@ -294,3 +168,9 @@ interface_fixture_source(Module, Width) ->
         "  {waiting, Cell#cell{value = Value}, consume}.~n",
         [Module, Width, Width]
     )).
+
+%% Uses the shared record codec to measure the ordered interface fields.
+-spec schema_width(hls_actor_interface:summary(), atom()) -> non_neg_integer().
+schema_width(Interface, Name) ->
+    #{fields := Fields} = hls_actor_interface:schema(Interface, Name),
+    hls_record:width(Name, [{Field, Type} || #{name := Field, type := Type} <- Fields]).

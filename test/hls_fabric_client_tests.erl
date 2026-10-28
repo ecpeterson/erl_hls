@@ -1,9 +1,11 @@
 -module(hls_fabric_client_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Checks explicit endpoints.
+-spec explicit_endpoints_test_() -> [term()].
 explicit_endpoints_test_() ->
     [{atom_to_list(Kind), fun() ->
-        {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+        {ok, Fabric} = hls_fabric_test_wire:start_link(),
         Clients = [begin
             {ok, Client} = case Kind of
                 application -> hls_gs:start_link(regsvc, [], [{fabric, Fabric, Local, 42}]);
@@ -14,12 +16,12 @@ explicit_endpoints_test_() ->
         try
             Requests = [{Local, async(fun() -> call(Kind, Client, Local, infinity) end)}
                 || {Local, Client} <- Clients],
-            Frames = phi_memory_fabric_fixture:await_sends(Fabric, 2, 1000),
+            Frames = hls_fabric_test_wire:await_sends(Fabric, 2, 1000),
             ?assertEqual([1, 65535], lists:sort([Local || {{Local, 42}, _, _} <- Frames])),
             %% Both clients start at transaction zero; return routes disambiguate them.
             [begin
                 ?assertEqual(0, Tx),
-                ok = phi_memory_fabric_fixture:deliver(Fabric, {42, Local},
+                ok = hls_fabric_test_wire:deliver(Fabric, {42, Local},
                     {reply_tag(Kind), Tx, 0}, Payload)
             end || {{Local, 42}, {_, Tx, _}, Payload} <- lists:reverse(Frames)],
             [expect(Ref, success(Kind, Local)) || {Local, Ref} <- Requests],
@@ -31,6 +33,8 @@ explicit_endpoints_test_() ->
         end
     end} || Kind <- [application, debug]].
 
+%% Checks ownership.
+-spec ownership_test_() -> [term()].
 ownership_test_() ->
     [{atom_to_list(Kind), {timeout, 30, fun() ->
         with_client(Kind, fun(Client, Fabric) ->
@@ -40,27 +44,29 @@ ownership_test_() ->
         end)
     end}} || Kind <- [application, debug]].
 
+%% Checks saturation under controlled broker completion.
+-spec saturation(application | debug, pid(), pid()) -> ok.
 saturation(Kind, Client, Fabric) ->
     Capacity = capacity(Kind),
     %% More than two complete ID cycles, with out-of-order completion. Values
     %% identify owners independently of wire IDs, exposing overwrite/misreply.
     lists:foreach(fun(Round) ->
-        Base = length(phi_memory_fabric_fixture:sends(Fabric)),
+        Base = length(hls_fabric_test_wire:sends(Fabric)),
         Requests = [{I, async(fun() -> call(Kind, Client, Round * 1000 + I, infinity) end)}
             || I <- lists:seq(1, Capacity)],
-        All = phi_memory_fabric_fixture:await_sends(Fabric, Base + Capacity, 5000),
+        All = hls_fabric_test_wire:await_sends(Fabric, Base + Capacity, 5000),
         Frames = lists:nthtail(Base, All),
         ?assertEqual(lists:seq(0, Capacity - 1), lists:sort([Tx || {_, {_, Tx, _}, _} <- Frames])),
         ?assertMatch(#{pending := Capacity, available := 0}, hls_fabric:client_info(Client)),
         ?assertEqual({error, transaction_limit}, call(Kind, Client, 99999, 1000)),
-        ?assertEqual(All, phi_memory_fabric_fixture:sends(Fabric)),
+        ?assertEqual(All, hls_fabric_test_wire:sends(Fabric)),
         case Kind of
             application ->
                 %% Successful casts are silent, but a failed one may reply.
                 %% Neither consumes a call slot, even with all slots occupied.
                 [gen_server:cast(Client, {set, 0, V, 0}) || V <- lists:seq(1, 300)],
                 ?assertMatch(#{pending := Capacity}, hls_fabric:client_info(Client)),
-                AfterCasts = phi_memory_fabric_fixture:await_sends(Fabric, length(All) + 300, 5000),
+                AfterCasts = hls_fabric_test_wire:await_sends(Fabric, length(All) + 300, 5000),
                 Casts = lists:nthtail(length(All), AfterCasts),
                 ?assertEqual(300, length(Casts)),
                 ?assert(lists:all(fun({_, {_, Tx, _}, _}) -> Tx =:= 255 end, Casts)),
@@ -77,6 +83,8 @@ saturation(Kind, Client, Fabric) ->
             synced_info(Client, Fabric))
     end, lists:seq(1, 3)).
 
+%% Checks reply validation under controlled broker completion.
+-spec reply_validation(application | debug, pid(), pid()) -> ok.
 reply_validation(Kind, Client, Fabric) ->
     {Ref, Frame = {_, {_, Tx, _}, _}} = send_one(Kind, Client, Fabric, 44, infinity),
     Ignored = maps:get(ignored_replies, hls_fabric:client_info(Client)),
@@ -104,6 +112,8 @@ reply_validation(Kind, Client, Fabric) ->
         debug -> expect(ErrorRef, {error, #{reason => {debug_error, 1}, raw => <<1:32/little>>}})
     end.
 
+%% Checks timeout and death under controlled broker completion.
+-spec timeout_and_death(application | debug, pid(), pid()) -> ok.
 timeout_and_death(Kind, Client, Fabric) ->
     %% gen_server:call timeout deactivates its reply alias but does not notify
     %% the proxy or cancel device work. Keep that caller alive to test this.
@@ -115,10 +125,10 @@ timeout_and_death(Kind, Client, Fabric) ->
     await_info(Client, fun(#{abandoned := N}) -> N =:= 1 end),
     %% Exhaust everything else: neither timeout nor death authorizes reuse.
     Capacity = capacity(Kind),
-    Base = length(phi_memory_fabric_fixture:sends(Fabric)),
+    Base = length(hls_fabric_test_wire:sends(Fabric)),
     Refs = [{V, async(fun() -> call(Kind, Client, V, infinity) end)}
         || V <- lists:seq(100, 100 + Capacity - 3)],
-    All = phi_memory_fabric_fixture:await_sends(Fabric, Base + Capacity - 2, 5000),
+    All = hls_fabric_test_wire:await_sends(Fabric, Base + Capacity - 2, 5000),
     LiveFrames = lists:nthtail(Base, All),
     ?assertEqual({error, transaction_limit}, call(Kind, Client, 999, 1000)),
     case Kind of
@@ -146,6 +156,8 @@ timeout_and_death(Kind, Client, Fabric) ->
     [expect(Ref, success(Kind, V)) || {V, Ref} <- Refs],
     ?assertMatch(#{pending := 0, abandoned := 0, available := Capacity}, synced_info(Client, Fabric)).
 
+%% Checks broker death.
+-spec broker_death_test_() -> [term()].
 broker_death_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
         {A, _} = send_one(Kind, Client, Fabric, 1, infinity),
@@ -159,33 +171,39 @@ broker_death_test_() ->
         ?assertEqual({error, {transport_down, killed}}, call(Kind, Client, 3, 1000))
     end) end} || Kind <- [application, debug]].
 
+%% Checks send failure.
+-spec send_failure_test_() -> [term()].
 send_failure_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
         {First, _} = send_one(Kind, Client, Fabric, 1, infinity),
-        phi_memory_fabric_fixture:fail_next_send(Fabric, eio),
+        hls_fabric_test_wire:fail_next_send(Fabric, eio),
         Expected = {error, {transport_down, {send_failed, eio}}},
         ?assertEqual(Expected, call(Kind, Client, 2, 1000)),
         expect(First, Expected),
         %% The fixture remains alive to check that failure closes this client
         %% independently of whether the broker sends a subsequent DOWN.
         ?assertEqual(Expected, call(Kind, Client, 3, 1000)),
-        ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric))),
+        ?assertEqual(1, length(hls_fabric_test_wire:sends(Fabric))),
         ?assertMatch(#{pending := 0, available := 0, status := {down, _}},
             hls_fabric:client_info(Client))
     end) end} || Kind <- [application, debug]].
 
+%% Checks initial send failure.
+-spec initial_send_failure_test_() -> [term()].
 initial_send_failure_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
-        phi_memory_fabric_fixture:fail_next_send(Fabric, eio),
+        hls_fabric_test_wire:fail_next_send(Fabric, eio),
         ?assertEqual({error, {transport_down, {send_failed, eio}}}, call(Kind, Client, 1, 1000)),
         ?assertMatch(#{pending := 0, available := 0, status := {down, _}},
             hls_fabric:client_info(Client))
     end) end} || Kind <- [application, debug]].
 
+%% Checks broker dies during send.
+-spec broker_dies_during_send_test_() -> [term()].
 broker_dies_during_send_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
         {First, _} = send_one(Kind, Client, Fabric, 1, infinity),
-        phi_memory_fabric_fixture:hold_next_send(Fabric),
+        hls_fabric_test_wire:hold_next_send(Fabric),
         {Sending, _} = send_one(Kind, Client, Fabric, 2, infinity),
         unlink(Fabric),
         exit(Fabric, kill),
@@ -197,10 +215,12 @@ broker_dies_during_send_test_() ->
             hls_fabric:client_info(Client))
     end) end} || Kind <- [application, debug]].
 
+%% Checks not sent preserves other ownership.
+-spec not_sent_preserves_other_ownership_test_() -> [term()].
 not_sent_preserves_other_ownership_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
         {First, Frame} = send_one(Kind, Client, Fabric, 1, infinity),
-        phi_memory_fabric_fixture:fail_next_send(Fabric, {not_sent, tx_limit}),
+        hls_fabric_test_wire:fail_next_send(Fabric, {not_sent, tx_limit}),
         ?assertEqual({error, {not_sent, tx_limit}}, call(Kind, Client, 2, 1000)),
         ?assertMatch(#{status := up, pending := 1, rejected_requests := 1}, hls_fabric:client_info(Client)),
         {Next, NextFrame} = send_one(Kind, Client, Fabric, 3, infinity),
@@ -211,46 +231,54 @@ not_sent_preserves_other_ownership_test_() ->
         ?assertMatch(#{status := up, pending := 0}, hls_fabric:client_info(Client))
     end) end} || Kind <- [application, debug]].
 
+%% Checks reply before write completion.
+-spec reply_before_write_completion_test_() -> [term()].
 reply_before_write_completion_test_() ->
     [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
-        phi_memory_fabric_fixture:hold_next_send(Fabric),
+        hls_fabric_test_wire:hold_next_send(Fabric),
         {First, Frame} = send_one(Kind, Client, Fabric, 1, infinity),
         reply(Kind, Fabric, Frame),
         expect(First, success(Kind, 1)),
         ?assertMatch(#{status := up, pending := 0, transmitting := 1}, hls_fabric:client_info(Client)),
         {Next, NextFrame} = send_one(Kind, Client, Fabric, 2, infinity),
-        phi_memory_fabric_fixture:release_sends(Fabric),
+        hls_fabric_test_wire:release_sends(Fabric),
         reply(Kind, Fabric, NextFrame),
         expect(Next, success(Kind, 2)),
         ?assertMatch(#{status := up, pending := 0, transmitting := 0}, synced_info(Client, Fabric))
     end) end} || Kind <- [application, debug]].
 
+%% Checks cast overload is observable.
+-spec cast_overload_is_observable_test() -> ok.
 cast_overload_is_observable_test() ->
     with_client(application, fun(Client, Fabric) ->
-        phi_memory_fabric_fixture:hold_sends(Fabric),
+        hls_fabric_test_wire:hold_sends(Fabric),
         {First, _} = send_one(application, Client, Fabric, 1, infinity),
         #{transmit_capacity := Capacity} = hls_fabric:client_info(Client),
         [gen_server:cast(Client, {set, 0, I, 0}) || I <- lists:seq(1, Capacity)],
         expect(First, {error, {transport_down, {cast_not_sent, tx_limit}}}),
         ?assertMatch(#{status := {down, {cast_not_sent, tx_limit}}, pending := 0, transmitting := 0},
             hls_fabric:client_info(Client)),
-        ?assertEqual(Capacity, length(phi_memory_fabric_fixture:await_sends(Fabric, Capacity, 1000))),
+        ?assertEqual(Capacity, length(hls_fabric_test_wire:await_sends(Fabric, Capacity, 1000))),
         gen_server:cast(Client, {set, 0, 999, 0}),
         ?assertMatch(#{status := {down, _}}, hls_fabric:client_info(Client)),
-        ?assertEqual(Capacity, length(phi_memory_fabric_fixture:sends(Fabric)))
+        ?assertEqual(Capacity, length(hls_fabric_test_wire:sends(Fabric)))
     end).
 
+%% Checks cpu info.
+-spec cpu_info_test() -> ok.
 cpu_info_test() ->
     {ok, Client} = regsvc:start_link(),
     try ?assertEqual(none, hls_fabric:client_info(Client))
     after hls_gs:stop(Client) end.
 
+%% Checks per request reply sets.
+-spec per_request_reply_sets_test() -> ok.
 per_request_reply_sets_test() ->
     with_client({application, hls_reply_fixture}, fun(Client, Fabric) ->
         Read = async(fun() -> gen_server:call(Client, {read, 0}) end),
-        [{_, {_, ReadTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+        [{_, {_, ReadTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
         Query = async(fun() -> gen_server:call(Client, {query, 1, 23}) end),
-        [_, {_, {_, QueryTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 2, 1000),
+        [_, {_, {_, QueryTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 2, 1000),
         Tag = fun hls_reply_fixture:pack_tag/1,
         %% A record allowed for one live request is not allowed for another.
         %% All of these carry owned IDs and correct routes/flags.
@@ -268,27 +296,29 @@ per_request_reply_sets_test() ->
             gen_server:call(Client, {change, 99})),
         ?assertEqual({error, {invalid_request, call, wrong}},
             gen_server:call(Client, {wrong, 99})),
-        ?assertEqual(2, length(phi_memory_fabric_fixture:sends(Fabric))),
+        ?assertEqual(2, length(hls_fabric_test_wire:sends(Fabric))),
         deliver(Fabric, Tag(large), QueryTx, <<23:32/little, 7:32/little>>),
         expect(Query, {large, 23, 7}),
         ?assertMatch(#{pending := 1}, synced_info(Client, Fabric)),
         deliver(Fabric, Tag(small), ReadTx, <<7:32/little>>),
         expect(Read, {small, 7}),
         Error = async(fun() -> gen_server:call(Client, {query, 2, 99}) end),
-        [_, _, {_, {_, ErrorTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 3, 1000),
+        [_, _, {_, {_, ErrorTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 3, 1000),
         deliver(Fabric, Tag(error), ErrorTx, <<15:32/little>>),
         expect(Error, {error, {remote_error, reply_contract}}),
         Small = async(fun() -> gen_server:call(Client, {query, 0, 101}) end),
-        [_, _, _, {_, {_, SmallTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 4, 1000),
+        [_, _, _, {_, {_, SmallTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 4, 1000),
         deliver(Fabric, Tag(small), SmallTx, <<101:32/little>>),
         expect(Small, {small, 101}),
         ?assertMatch(#{pending := 0, ignored_replies := 9}, synced_info(Client, Fabric))
     end).
 
+%% Checks dense application payload.
+-spec dense_application_payload_test() -> ok.
 dense_application_payload_test() ->
     with_client({application, hls_logical_fixture}, fun(Client, Fabric) ->
         Ref = async(fun() -> gen_server:call(Client, {step, true, 7, -129}) end),
-        [{_, {_, Tx, _}, Payload}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+        [{_, {_, Tx, _}, Payload}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
         ?assertEqual(<<1:1, 7:3, -129:9/little, 0:19>>, Payload),
         Tag = hls_logical_fixture:pack_tag(result),
         %% Only the final word's trailing padding is ignored, not missing or extra words.
@@ -299,8 +329,10 @@ dense_application_payload_test() ->
         ?assertMatch(#{pending := 0}, synced_info(Client, Fabric))
     end).
 
+%% Owns a test client and its broker for one scenario.
+-spec with_client(application | debug | {application, module()}, fun((pid(), pid()) -> T)) -> T.
 with_client(Kind, Run) ->
-    {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+    {ok, Fabric} = hls_fabric_test_wire:start_link(),
     {ok, Client} = case Kind of
         application -> hls_gs:start_link(regsvc, [], [{fabric, Fabric, 1}]);
         {application, Module} -> hls_gs:start_link(Module, [], [{fabric, Fabric, 1}]);
@@ -323,8 +355,10 @@ reply_tag(debug) -> 16#81.
 error_tag(application) -> regsvc:pack_tag(error);
 error_tag(debug) -> 16#ff.
 reply(Kind, Fabric, {_, {_, Tx, _}, Payload}) -> deliver(Fabric, reply_tag(Kind), Tx, Payload).
+%% Delivers a synthetic frame through the broker-owned return route.
+-spec deliver(pid(), byte(), byte(), binary()) -> ok.
 deliver(Fabric, Tag, Tx, Payload) ->
-    ok = phi_memory_fabric_fixture:deliver(Fabric, {1, 0}, {Tag, Tx, 0}, Payload).
+    ok = hls_fabric_test_wire:deliver(Fabric, {1, 0}, {Tag, Tx, 0}, Payload).
 
 async(Fun) ->
     Parent = self(),
@@ -337,16 +371,20 @@ async(Fun) ->
 expect(Ref, Expected) ->
     receive {result, Ref, Actual} -> Ref ! finish, ?assertEqual(Expected, Actual)
     after 5000 -> error({missing_reply, Ref}) end.
+%% Starts one asynchronous query and retains its accepted frame.
+-spec send_one(application | debug, pid(), pid(), non_neg_integer(), timeout()) -> {pid(), tuple()}.
 send_one(Kind, Client, Fabric, Value, Timeout) ->
-    Count = length(phi_memory_fabric_fixture:sends(Fabric)),
+    Count = length(hls_fabric_test_wire:sends(Fabric)),
     Ref = async(fun() -> call(Kind, Client, Value, Timeout) end),
-    Frames = phi_memory_fabric_fixture:await_sends(Fabric, Count + 1, 5000),
+    Frames = hls_fabric_test_wire:await_sends(Fabric, Count + 1, 5000),
     {Ref, lists:last(Frames)}.
 
 %% Messages from different senders need an explicit barrier. The fabric sends
 %% this call after its preceding reply casts, so observing it orders the probe.
+%% Uses the broker as a barrier before reading prior reply effects.
+-spec synced_info(pid(), pid()) -> map().
 synced_info(_Client, Fabric) ->
-    phi_memory_fabric_fixture:client_info(Fabric, {1, 0}).
+    hls_fabric_test_wire:client_info(Fabric, {1, 0}).
 
 await_info(Client, Predicate) -> await_info(Client, Predicate, 1000).
 await_info(Client, Predicate, 0) -> error({client_status_timeout, Predicate, hls_fabric:client_info(Client)});

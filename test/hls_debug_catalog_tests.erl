@@ -1,20 +1,27 @@
 -module(hls_debug_catalog_tests).
 -include_lib("eunit/include/eunit.hrl").
 
-phi_cpu_targets_retain_logical_identity_test() ->
-    {ok, Fabric} = phi_memory_cpu_fabric:start_link(3, 0),
+%% A single family member retains logical identity independently of its process address.
+-spec cpu_targets_retain_logical_identity_test() -> ok.
+cpu_targets_retain_logical_identity_test() ->
+    Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(1, 1)),
+    {ok, Pid} = hls_statem:start_link(hls_grid_cell_fixture, [],
+        [{mailbox_capacity, 1}, {outputs, #{}}]),
+    Identity = {family, grid, [0, 0]},
     try
-        Catalog = phi_memory_cpu_fabric:debug_targets(Fabric),
-        ?assertEqual(54, length(hls_debug_catalog:actors(Catalog))),
-        {ok, Target} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
-        ?assertEqual([{identity, {family, phi_x, [0, 0]}}, {lifecycle, disconnected}],
+        Catalog = hls_debug_catalog:cpu(Plan, #{Identity => Pid}),
+        ?assertEqual([Identity], hls_debug_catalog:actors(Catalog)),
+        {ok, Target} = hls_debug_catalog:actor(Catalog, Identity),
+        ?assertEqual([{identity, Identity}, {lifecycle, connected}],
             hls_debug:info(Target, [identity, lifecycle])),
-        {placement, #{kind := process, pid := Pid}} = hls_debug:info(Target, placement),
+        ?assertEqual({placement, #{kind => process, pid => Pid}}, hls_debug:info(Target, placement)),
         #{mailbox := #{committed := Count}} = hls_statem:info(Pid),
         ?assertEqual({message_queue_len, Count}, hls_debug:info(Target, message_queue_len)),
-        ?assertMatch({error, {unknown_actor, _}}, hls_debug_catalog:actor(Catalog, {family, phi_x, [9, 9]}))
-    after phi_memory_cpu_fabric:stop(Fabric) end.
+        ?assertMatch({error, {unknown_actor, _}}, hls_debug_catalog:actor(Catalog, {family, grid, [9, 9]}))
+    after gen_server:stop(Pid) end.
 
+%% Checks exact actor placement and binding validation.
+-spec exact_actor_placement_and_binding_validation_test() -> ok.
 exact_actor_placement_and_binding_validation_test() ->
     Plan = hls_topology:from_module(ordered_egress_topology),
     Catalog = hls_debug_catalog:hardware(Plan, #{}, []),

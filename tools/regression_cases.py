@@ -1,6 +1,8 @@
 """Feature cases expressed through shared steps; semantic fixtures and oracles stay in Erlang."""
 from pathlib import Path
+import json
 import os
+import sys
 from regression_steps import Case, Copy, FileText, Rows, pipeline
 
 SCHEDULES = ((1, 1), (2, 1), (3, 2))
@@ -401,3 +403,46 @@ def mixed_topology(c: Case) -> None:
                 "--actor-projection", child.path("actors.json"), "--actor-test", actor_test,
                 child.path(name + ".v"), child.path("mixed_topology_wrapper.v"))
         c.steps.extend(child.steps)
+
+
+def selection_equivalence(c: Case) -> None:
+    """Compare indexed/direct/early selectors for all input bits at both retained fan-ins."""
+    c.steps.append(Copy(c.root / "test_data", "xls_selection.x", c.stage))
+    for width in (19, 22):
+        for form in ("indexed", "direct", "early"):
+            name = f"{form}{width}"
+            c.convert(name, name, "xls_selection.x")
+            c.codegen(name, module=name)
+        for form in ("direct", "early"):
+            left, right = f"indexed{width}", f"{form}{width}"
+            c.yosys(f"equivalence-{right}",
+                f'read_verilog {json.dumps(str(c.path(left + ".v")))} {json.dumps(str(c.path(right + ".v")))}; '
+                f'miter -equiv -flatten {left} {right} miter; prep -top miter; '
+                'sat -verify -prove trigger 0 -show-inputs -show-outputs')
+
+
+def state_updates(c: Case) -> None:
+    """Check 8,192 addressed-state replies with stalls/reset; retain a diagnostic IR census."""
+    c.steps.append(Copy(c.root / "test_data", "xls_state_updates.x", c.stage))
+    c.steps.append(Copy(c.root / "test/rtl", "xls_state_updates_tb.sv", c.stage))
+    c.convert("state_updates", "Rows", "xls_state_updates.x")
+    c.codegen("state_updates", module="state_updates", flags=pipeline(2))
+    c.simulate("state_updates", "xls_state_updates_tb",
+        [c.path("xls_state_updates_tb.sv"), c.path("state_updates.v")],
+        timeout=120, completion="PASS: 8192 replies")
+    c.command("state-census", [sys.executable, c.root / "tools/xls_ir_census.py",
+        c.path("state_updates.opt.ir"), "--output", c.path("state_updates.census.json")],
+        products=(c.path("state_updates.census.json"),))
+
+
+def telemetry(c: Case) -> None:
+    """Compile the shipped two-actor example bundle once and compare its stalled/reset RTL to BEAM."""
+    c.generate("telemetry_example_fixture")
+    rtl = c.path("compiled/telemetry.v")
+    c.command("telemetry-bundle", [sys.executable, c.root / "priv/tools/compile_source_build.py",
+        c.xls, c.path("bundle"), "--output", c.path("compiled"), "--cache", c.path("cache")],
+        products=(rtl,), timeout=900)
+    c.structure("telemetry", "telemetry_top", [rtl])
+    c.simulate("telemetry", "telemetry_example_tb", [bench(c, "telemetry_example_tb"), rtl],
+        flags=["-I", c.stage], arguments=["+vectors=" + str(c.stage)], timeout=60,
+        completion="PASS: telemetry CPU/RTL windows, malformed ingress, stalls and reset")

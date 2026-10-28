@@ -7,7 +7,7 @@ conversion reject overflow; `saturate/2` explicitly clamps it and `wrap/2`
 wraps the raw scaled integer without changing its fractional scale. Rational
 conversion and integer division round to nearest, with ties away from zero.
 
-Used directly by actor code and by the phi_field example provider. hls_type dispatches its host codecs; xls_type selects the compiler companion and fixed-point support module.
+Used directly by actor code and by custom application providers. hls_type dispatches its host codecs; xls_type selects the compiler companion and fixed-point support module.
 """.
 -behavior(hls_type).
 %% Application constructors and arithmetic.

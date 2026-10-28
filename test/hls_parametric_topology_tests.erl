@@ -1,61 +1,67 @@
 -module(hls_parametric_topology_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--include("phi_protocol.hrl").
+-include("hls_routing_fixture.hrl").
 
-phi_torus_normalizes_without_expanded_actor_instances_test() ->
-    Plan = hls_topology:from_module(phi_torus_topology),
+%% Checks grid torus normalizes without expanded actor instances.
+-spec grid_torus_normalizes_without_expanded_actor_instances_test() -> ok.
+grid_torus_normalizes_without_expanded_actor_instances_test() ->
+    Plan = hls_topology:from_module(hls_grid_topology_fixture),
     ?assertEqual(1, maps:get(version, Plan)),
     ?assertEqual([], maps:get(actors, Plan)),
     ?assertEqual([], maps:get(routes, Plan)),
     Startup = maps:get(startup, Plan),
     ?assertEqual(6, length(Startup)),
     ?assertEqual(
-        [{phi, X, Y} || X <- lists:seq(0, 1), Y <- lists:seq(0, 2)],
+        [{grid, X, Y} || X <- lists:seq(0, 1), Y <- lists:seq(0, 2)],
         [maps:get(target, Item) || Item <- Startup]
     ),
     Seeds = [
-        Config#phi_config.seed
-        || #{messages := [Config = #phi_config{}]} <- Startup
+        Config#seed.seed
+        || #{messages := [Config = #seed{}]} <- Startup
     ],
     ?assertEqual(6, length(lists:usort(Seeds))),
     ?assert(lists:all(fun(Seed) -> Seed =/= 0 end, Seeds)),
     ?assertEqual(7, length(maps:get(route_relations, Plan))),
     [Family] = maps:get(families, Plan),
-    ?assertEqual(phi, maps:get(id, Family)),
-    ?assertEqual(phi_halo_cell, maps:get(module, Family)),
+    ?assertEqual(grid, maps:get(id, Family)),
+    ?assertEqual(hls_grid_cell_fixture, maps:get(module, Family)),
     ?assertEqual([2, 3], maps:get(shape, Family)),
     ?assertEqual(6, maps:get(instance_count, Family)),
     ?assertEqual(
-        [north, east, west, south, syndrome, correction, status],
+        [north, east, west, south, query, result, status],
         maps:get(outputs, Family)
     ),
     ?assertEqual(
         [
             #{
-                id => decoder_events,
+                id => request_events,
                 direction => out,
-                schemas => [phi_correction, phi_status]
+                schemas => [request]
             },
             #{
-                id => syndrome_requests,
+                id => result_events,
                 direction => out,
-                schemas => [phenom_request]
+                schemas => [result, status]
             }
         ],
         maps:get(externals, Plan)
     ).
 
+%% Checks topology normalizer rejects obsolete version.
+-spec topology_normalizer_rejects_obsolete_version_test() -> ok.
 topology_normalizer_rejects_obsolete_version_test() ->
-    Spec = phi_torus_topology:topology(),
+    Spec = hls_grid_topology_fixture:topology(),
     ?assertError(
         {unsupported_version, 0},
         hls_topology:normalize(Spec#{version := 0})
     ).
 
+%% Checks family size does not expand routes but does enumerate v0 startup.
+-spec family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() -> ok.
 family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
-    Small = hls_topology:normalize(phi_torus_topology:topology(5, 5)),
-    Large = hls_topology:normalize(phi_torus_topology:topology(50, 50)),
+    Small = hls_topology:normalize(hls_grid_topology_fixture:topology(5, 5)),
+    Large = hls_topology:normalize(hls_grid_topology_fixture:topology(50, 50)),
     ?assertEqual([], maps:get(actors, Small)),
     ?assertEqual([], maps:get(actors, Large)),
     ?assertEqual([], maps:get(routes, Small)),
@@ -77,80 +83,86 @@ family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
     ?assertEqual(25, length(maps:get(startup, Small))),
     ?assertEqual(2500, length(maps:get(startup, Large))).
 
+%% Checks wrapped routes resolve one boundary member.
+-spec wrapped_routes_resolve_one_boundary_member_test() -> ok.
 wrapped_routes_resolve_one_boundary_member_test() ->
-    Plan = hls_topology:normalize(phi_torus_topology:topology(5, 4)),
-    Routes = hls_topology:routes_for_instance(Plan, phi, [0, 0]),
+    Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(5, 4)),
+    Routes = hls_topology:routes_for_instance(Plan, grid, [0, 0]),
     ?assertEqual(7, length(Routes)),
     ?assertEqual(
-        [{actor, {phi, 0, 3}}],
+        [{actor, {grid, 0, 3}}],
         maps:get(recipients, route(Routes, north))
     ),
     ?assertEqual(
-        [{actor, {phi, 1, 0}}],
+        [{actor, {grid, 1, 0}}],
         maps:get(recipients, route(Routes, east))
     ),
     ?assertEqual(
-        [{actor, {phi, 4, 0}}],
+        [{actor, {grid, 4, 0}}],
         maps:get(recipients, route(Routes, west))
     ),
     ?assertEqual(
-        [{actor, {phi, 0, 1}}],
+        [{actor, {grid, 0, 1}}],
         maps:get(recipients, route(Routes, south))
     ),
     ?assertEqual(
-        [{external, syndrome_requests}],
-        maps:get(recipients, route(Routes, syndrome))
+        [{external, request_events}],
+        maps:get(recipients, route(Routes, query))
     ),
     ?assertEqual(
-        [{external, decoder_events}],
-        maps:get(recipients, route(Routes, correction))
+        [{external, result_events}],
+        maps:get(recipients, route(Routes, result))
     ),
     ?assertEqual(
-        [{external, decoder_events}],
+        [{external, result_events}],
         maps:get(recipients, route(Routes, status))
     ),
     ?assert(lists:all(
         fun(Route) ->
-            {{phi, 0, 0}, _Port} = maps:get(source, Route),
+            {{grid, 0, 0}, _Port} = maps:get(source, Route),
             maps:get(delivery, Route) =:= direct
         end,
         Routes
     )).
 
+%% Checks two by two torus exposes opposite port aliases.
+-spec two_by_two_torus_exposes_opposite_port_aliases_test() -> ok.
 two_by_two_torus_exposes_opposite_port_aliases_test() ->
-    Plan = hls_topology:normalize(phi_torus_topology:topology(2, 2)),
+    Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(2, 2)),
     ?assertEqual(4, length(maps:get(lane_relations, Plan))),
     ?assertEqual(
         [north, south],
         maps:get(source_ports, lane_relation(
             Plan,
-            {family, phi, {translate, [0, 1], wrap}}
+            {family, grid, {translate, [0, 1], wrap}}
         ))
     ),
     ?assertEqual(
         [east, west],
         maps:get(source_ports, lane_relation(
             Plan,
-            {family, phi, {translate, [1, 0], wrap}}
+            {family, grid, {translate, [1, 0], wrap}}
         ))
     ),
     ?assertEqual(
-        [syndrome],
+        [query],
         maps:get(source_ports, lane_relation(
             Plan,
-            {external, syndrome_requests}
+            {external, request_events}
         ))
     ),
     ?assertEqual(
-        [correction, status],
+        [result, status],
         maps:get(source_ports, lane_relation(
             Plan,
-            {external, decoder_events}
+            {external, result_events}
         ))
     ).
 
+%% Checks three by three torus has distinct cardinal lanes.
+-spec three_by_three_torus_has_distinct_cardinal_lanes_test() -> ok.
 three_by_three_torus_has_distinct_cardinal_lanes_test() ->
-    Plan = hls_topology:normalize(phi_torus_topology:topology(3, 3)),
+    Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(3, 3)),
     ?assertEqual(6, length(maps:get(lane_relations, Plan))),
     lists:foreach(
         fun({Destination, Ports}) ->
@@ -160,17 +172,19 @@ three_by_three_torus_has_distinct_cardinal_lanes_test() ->
             )
         end,
         [
-            {{family, phi, {translate, [0, -1], wrap}}, [north]},
-            {{family, phi, {translate, [1, 0], wrap}}, [east]},
-            {{family, phi, {translate, [-1, 0], wrap}}, [west]},
-            {{family, phi, {translate, [0, 1], wrap}}, [south]},
-            {{external, syndrome_requests}, [syndrome]},
-            {{external, decoder_events}, [correction, status]}
+            {{family, grid, {translate, [0, -1], wrap}}, [north]},
+            {{family, grid, {translate, [1, 0], wrap}}, [east]},
+            {{family, grid, {translate, [-1, 0], wrap}}, [west]},
+            {{family, grid, {translate, [0, 1], wrap}}, [south]},
+            {{external, request_events}, [query]},
+            {{external, result_events}, [result, status]}
         ]
     ).
 
+%% Checks route relation order is canonical.
+-spec route_relation_order_is_canonical_test() -> ok.
 route_relation_order_is_canonical_test() ->
-    Spec = phi_torus_topology:topology(3, 4),
+    Spec = hls_grid_topology_fixture:topology(3, 4),
     Reordered = Spec#{
         route_relations := lists:reverse(maps:get(route_relations, Spec))
     },
@@ -179,82 +193,92 @@ route_relation_order_is_canonical_test() ->
         hls_topology:normalize(Reordered)
     ).
 
+%% Checks wrapped translation is canonical.
+-spec wrapped_translation_is_canonical_test() -> ok.
 wrapped_translation_is_canonical_test() ->
-    Spec = phi_torus_topology:topology(3, 4),
-    North = {phi, north},
+    Spec = hls_grid_topology_fixture:topology(3, 4),
+    North = {grid, north},
     Positive = replace_relation(
         Spec,
         North,
-        {North, [{family, phi, {translate, [0, 3], wrap}}]}
+        {North, [{family, grid, {translate, [0, 3], wrap}}]}
     ),
     ?assertEqual(
         hls_topology:normalize(Spec),
         hls_topology:normalize(Positive)
     ).
 
+%% Checks family outputs are total and unique.
+-spec family_outputs_are_total_and_unique_test() -> ok.
 family_outputs_are_total_and_unique_test() ->
-    Spec = phi_torus_topology:topology(),
+    Spec = hls_grid_topology_fixture:topology(),
     [First | Rest] = maps:get(route_relations, Spec),
     ?assertError(
-        {unrouted_family_outputs, [{phi, north}]},
+        {unrouted_family_outputs, [{grid, north}]},
         hls_topology:normalize(Spec#{route_relations := Rest})
     ),
     ?assertError(
-        {duplicate_route_relation_sources, [{phi, north}]},
+        {duplicate_route_relation_sources, [{grid, north}]},
         hls_topology:normalize(Spec#{
             route_relations := [First, First | Rest]
         })
     ).
 
+%% Checks family shape and translation are bounded.
+-spec family_shape_and_translation_are_bounded_test() -> ok.
 family_shape_and_translation_are_bounded_test() ->
-    Spec0 = phi_torus_topology:topology(),
+    Spec0 = hls_grid_topology_fixture:topology(),
     Families0 = maps:get(families, Spec0),
     ?assertError(
-        {invalid_family_shape, phi, [0, 2]},
+        {invalid_family_shape, grid, [0, 2]},
         hls_topology:normalize(Spec0#{
-            families := Families0#{phi := #{
-                module => phi_halo_cell,
+            families := Families0#{grid := #{
+                module => hls_grid_cell_fixture,
                 shape => [0, 2]
             }},
             startup := []
         })
     ),
     Spec = Spec0,
-    Source = {phi, north},
+    Source = {grid, north},
     Invalid = replace_relation(
         Spec,
         Source,
-        {Source, [{family, phi, {translate, [-1], wrap}}]}
+        {Source, [{family, grid, {translate, [-1], wrap}}]}
     ),
     ?assertError(
         {invalid_relation_translation,
             Source,
-            {family, phi, {translate, [-1], wrap}},
+            {family, grid, {translate, [-1], wrap}},
             [2, 3]},
         hls_topology:normalize(Invalid)
     ).
 
+%% Checks equivalent wrapped fanout recipients are rejected.
+-spec equivalent_wrapped_fanout_recipients_are_rejected_test() -> ok.
 equivalent_wrapped_fanout_recipients_are_rejected_test() ->
-    Spec = phi_torus_topology:topology(2, 2),
-    Source = {phi, north},
+    Spec = hls_grid_topology_fixture:topology(2, 2),
+    Source = {grid, north},
     Duplicate = replace_relation(
         Spec,
         Source,
         {Source, coupled, [
-            {family, phi, {translate, [0, -1], wrap}},
-            {family, phi, {translate, [0, 1], wrap}}
+            {family, grid, {translate, [0, -1], wrap}},
+            {family, grid, {translate, [0, 1], wrap}}
         ]}
     ),
     ?assertError(
         {duplicate_route_relation_recipients,
             Source,
-            [{family, phi, {translate, [0, 1], wrap}}]},
+            [{family, grid, {translate, [0, 1], wrap}}]},
         hls_topology:normalize(Duplicate)
     ).
 
+%% Checks relation endpoints are checked.
+-spec relation_endpoints_are_checked_test() -> ok.
 relation_endpoints_are_checked_test() ->
-    Spec = phi_torus_topology:topology(),
-    North = {phi, north},
+    Spec = hls_grid_topology_fixture:topology(),
+    North = {grid, north},
     ?assertError(
         {unknown_family, missing, {route_relation_recipient, North}},
         hls_topology:normalize(replace_relation(
@@ -264,23 +288,25 @@ relation_endpoints_are_checked_test() ->
                 {translate, [0, -1], wrap}}]}
         ))
     ),
-    Syndrome = {phi, syndrome},
+    Query = {grid, query},
     ?assertError(
         {unknown_external, missing,
-            {route_relation_recipient, Syndrome}},
+            {route_relation_recipient, Query}},
         hls_topology:normalize(replace_relation(
             Spec,
-            Syndrome,
-            {Syndrome, [{external, missing}]}
+            Query,
+            {Query, [{external, missing}]}
         ))
     ).
 
+%% Checks family relation interfaces are checked once per rule.
+-spec family_relation_interfaces_are_checked_once_per_rule_test() -> ok.
 family_relation_interfaces_are_checked_once_per_rule_test() ->
-    Spec = phi_torus_topology:topology(50, 50),
+    Spec = hls_grid_topology_fixture:topology(50, 50),
     MalformedExternals = [
         case External of
-            {syndrome_requests, out, _Schemas} ->
-                {syndrome_requests, out, [phi]};
+            {request_events, out, _Schemas} ->
+                {request_events, out, [sample]};
             _ ->
                 External
         end
@@ -288,53 +314,61 @@ family_relation_interfaces_are_checked_once_per_rule_test() ->
     ],
     ?assertError(
         {incompatible_route_schemas,
-            {phi, syndrome},
-            {external, syndrome_requests},
-            [phenom_request],
-            [phi]},
+            {grid, query},
+            {external, request_events},
+            [request],
+            [sample]},
         hls_topology:normalize(Spec#{
             externals := MalformedExternals
         })
     ).
 
+%% Checks family and exact actor names cannot collide.
+-spec family_and_exact_actor_names_cannot_collide_test() -> ok.
 family_and_exact_actor_names_cannot_collide_test() ->
-    Spec = phi_torus_topology:topology(),
+    Spec = hls_grid_topology_fixture:topology(),
     ?assertError(
-        {actor_family_id_collisions, [phi]},
+        {actor_family_id_collisions, [grid]},
         hls_topology:normalize(Spec#{
-            actors := #{phi => phi_halo_cell}
+            actors := #{grid => hls_grid_cell_fixture}
         })
     ),
     ?assertError(
-        {actor_family_id_collisions, [{phi, 0, 0}]},
+        {actor_family_id_collisions, [{grid, 0, 0}]},
         hls_topology:normalize(Spec#{
-            actors := #{{phi, 0, 0} => phi_halo_cell}
+            actors := #{{grid, 0, 0} => hls_grid_cell_fixture}
         })
     ).
 
+%% Checks family names cannot overlap an instance namespace.
+-spec family_names_cannot_overlap_an_instance_namespace_test() -> ok.
 family_names_cannot_overlap_an_instance_namespace_test() ->
-    Spec = phi_torus_topology:topology(),
+    Spec = hls_grid_topology_fixture:topology(),
     ?assertError(
-        {family_namespace_collisions, [{phi, {phi, 0, 0}}]},
+        {family_namespace_collisions, [{grid, {grid, 0, 0}}]},
         hls_topology:normalize(Spec#{
             families := #{
-                phi => #{module => phi_halo_cell, shape => [2, 2]},
-                {phi, 0, 0} => #{module => phi_halo_cell, shape => [1, 1]}
+                grid => #{module => hls_grid_cell_fixture, shape => [2, 2]},
+                {grid, 0, 0} => #{module => hls_grid_cell_fixture, shape => [1, 1]}
             }
         })
     ).
 
+%% Checks instance route coordinates are checked.
+-spec instance_route_coordinates_are_checked_test() -> ok.
 instance_route_coordinates_are_checked_test() ->
-    Plan = hls_topology:from_module(phi_torus_topology),
+    Plan = hls_topology:from_module(hls_grid_topology_fixture),
     ?assertError(
-        {invalid_family_coordinates, phi, [2, 0], [2, 3]},
-        hls_topology:routes_for_instance(Plan, phi, [2, 0])
+        {invalid_family_coordinates, grid, [2, 0], [2, 3]},
+        hls_topology:routes_for_instance(Plan, grid, [2, 0])
     ),
     ?assertError(
-        {invalid_family_coordinates, phi, [0], [2, 3]},
-        hls_topology:routes_for_instance(Plan, phi, [0])
+        {invalid_family_coordinates, grid, [0], [2, 3]},
+        hls_topology:routes_for_instance(Plan, grid, [0])
     ).
 
+%% Finds the one normalized route selected by source or output port.
+-spec route(map() | [map()], term()) -> map().
 route(Routes, Port) ->
     hd([
         Route
@@ -342,14 +376,18 @@ route(Routes, Port) ->
            SourcePort =:= Port
     ]).
 
+%% Finds a compact family lane by its destination relation.
+-spec lane_relation(map(), term()) -> map().
 lane_relation(Plan, Destination) ->
     hd([
         Lane
-        || Lane = #{source := phi, destination := LaneDestination} <-
+        || Lane = #{source := grid, destination := LaneDestination} <-
                maps:get(lane_relations, Plan),
            LaneDestination =:= Destination
     ]).
 
+%% Replaces one family relation in the raw topology.
+-spec replace_relation(map(), term(), tuple()) -> map().
 replace_relation(Spec, Source, Replacement) ->
     Spec#{route_relations := [
         case Relation of
