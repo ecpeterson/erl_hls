@@ -51,7 +51,7 @@ def main() -> None:
     for path in sources:
         shutil.copy(path, stage)
     tracked = sources + [ROOT / "test/rtl/partition_peers_tb.sv", Path(__file__),
-        ROOT / "apps/hls_lowering/src/backend/xls/hls_partition_links.erl", ROOT / "test/hls_partition_link_fixture.erl"]
+        ROOT / "apps/hls_lowering/src/backend/xls/partition/hls_partition_links.erl", ROOT / "test/hls_partition_link_fixture.erl"]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [Path(shutil.which(args.yosys) or args.yosys).resolve()]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]

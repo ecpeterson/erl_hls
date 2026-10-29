@@ -30,7 +30,7 @@ A group may also contain `{actor, Id}`, including an exact actor alongside a fam
 
 ## Shared RAM owner
 
-The [shared-service template](../../apps/hls_lowering/priv/xls/templates/shared_service.x.in) contains the RAM owner's initialization and RUN sequence. [`xls_scheduler_codegen`](../../apps/hls_lowering/src/backend/xls/xls_scheduler_codegen.erl) supplies feature bindings grouped by ports, capture, retirement, admission and memory commands; shared-artifact validation remains in `xls_scheduler_actor`.
+The [shared-service template](../../apps/hls_lowering/priv/xls/templates/shared_service.x.in) contains the RAM owner's initialization and RUN sequence. [`xls_scheduler_codegen`](../../apps/hls_lowering/src/backend/xls/scheduler/xls_scheduler_codegen.erl) supplies feature bindings grouped by ports, capture, retirement, admission and memory commands; shared-artifact validation remains in `xls_scheduler_actor`.
 
 Within RUN, the owner merges captured inputs with credits from previously registered requests, retires a held executor result, applies the previous admission intent to the retired metadata, and reserves dispatch. Ordinary admission selects from a snapshot that excludes its existing reservation. Exclusive collection selects independently from the original ownership snapshot; opportunistic collection uses the ordinary intent. Incoming executor results cannot bypass the completion register, and new captures cannot enter current selection. Dispatch joins prior RAM write acknowledgments. Physical writes and publication send registered commands while the current decisions populate the next commands. These are steps within the existing owner transition, not additional pipeline stages.
 
