@@ -99,6 +99,16 @@ records(Mode, X) ->
             {_, Small} = Pair,
             Cell = #cell{value = Wide, sample = Small},
             hls_type:as(hls_nums:s32(), Cell#cell.value) +
+                hls_type:as(hls_nums:s32(), Cell#cell.sample);
+        28 ->
+            %% One untyped alias supplies independent exact helper arguments.
+            Value = 1,
+            byte_value(Value) + wide_value(Value);
+        29 ->
+            %% Record fields likewise consume their own width, not the alias's first use.
+            Value = 1,
+            Cell = #cell{value = Value, sample = Value},
+            hls_type:as(hls_nums:s32(), Cell#cell.value) +
                 hls_type:as(hls_nums:s32(), Cell#cell.sample)
     end.
 

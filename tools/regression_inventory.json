@@ -112,6 +112,7 @@
       "default_stage": "_build/integer-arithmetic",
       "dependencies": [
         "test/rtl/xls_integer_tb.sv",
+        "test/rtl/xls_static_integer_tb.sv",
         "test/xls_integer_dslx.erl"
       ]
     },

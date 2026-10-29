@@ -254,6 +254,18 @@ bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
         error -> Context#{state := xls_clause_lower:bind(Name, Line, Value, State)}
     end.
 
+%% Retained source integers keep an independent signed width when matched
+%% against a runtime value; contextual DSLX literals could reinterpret them.
+-spec equality(xls_clause_lower:printable(), xls_clause_lower:printable(), map()) ->
+    xls_clause_lower:printable().
+equality({static, integer, Left}, {static, integer, Right}, _Context) ->
+    xls_dslx:call("hls_bits::same_integer", [
+        xls_binary_lower:integer_literal(Left), xls_binary_lower:integer_literal(Right)
+    ]);
+equality({static, integer, Left}, Right, _Context) ->
+    xls_dslx:call("hls_bits::same_integer", [xls_binary_lower:integer_literal(Left), Right]);
+equality(Left, {static, integer, Right}, _Context) ->
+    xls_dslx:call("hls_bits::same_integer", [Left, xls_binary_lower:integer_literal(Right)]);
 equality(Left, Right, #{comparison := Mode}) ->
     ["hls_bits::same_", atom_to_list(Mode), "(", Left, ", ", Right, ")"];
 equality(Left, Right, _Context) ->

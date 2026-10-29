@@ -89,8 +89,8 @@ validate_value({var, _Line, _Name}) ->
     ok;
 validate_value({integer, _Line, _Integer}) ->
     ok;
-validate_value({op, _Line, Sign, {integer, _, _}}) when Sign =:= '-'; Sign =:= '+' ->
-    ok;
+validate_value({op, _Line, Sign, Operand}) when Sign =:= '-'; Sign =:= '+' ->
+    validate_value(Operand);
 validate_value({atom, _Line, Atom}) when
     Atom =:= true; Atom =:= false
 ->
@@ -125,10 +125,13 @@ sequence([Expression]) ->
 sequence([Expression | Rest]) ->
     {op, expression_line(Expression), 'andalso', Expression, sequence(Rest)}.
 
+%% Pattern predicates are already target fragments. Keep a fragment container
+%% even for a single structured node, rather than treating it as source AST.
+-spec conjunction([xls_clause_lower:printable()]) -> xls_clause_lower:printable().
 conjunction([]) ->
     "bool:true";
 conjunction([Only]) ->
-    Only;
+    [Only];
 conjunction(Expressions) ->
     ["(", join_with(" && ", Expressions), ")"].
 

@@ -450,8 +450,8 @@ expression_nodes(_) -> [].
 unused_general_case_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
-        "0 -> Choice = 1, Choice; "
-        "_ -> Choice = 2, Choice end.",
+        "0 -> Choice = Value + 1, Choice; "
+        "_ -> Choice = Value + 2, Choice end.",
         ["value"]
     ),
     ?assertEqual(2, length(binary:matches(XLS, <<"let v_Choice_1">>))),
