@@ -96,9 +96,8 @@ calibrate(#raw{sequence = Sequence, value = Value}, Gain, Offset) ->
     Scaled =
         hls_type:as(hls_nums:s32(), Value) * hls_type:as(hls_nums:s32(), Gain) +
             hls_type:as(hls_nums:s32(), Offset),
-    Magnitude = hls_type:as(hls_nums:s32(), 1 bsl 15),
-    Minimum = hls_type:as(hls_nums:s32(), 0) - Magnitude,
-    Maximum = Magnitude - hls_type:as(hls_nums:s32(), 1),
+    Minimum = hls_type:as(hls_nums:s32(), -(1 bsl 15)),
+    Maximum = hls_type:as(hls_nums:s32(), (1 bsl 15) - 1),
     if
         Scaled < Minimum ->
             #reading{

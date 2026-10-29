@@ -35,7 +35,11 @@ clauses(Clauses, Result, Forms) ->
             ])}
      || {attribute, _, record, {Name, Fields}} <- Forms
     ]),
-    [Clause || Source <- Clauses, {Clause, _} <- [clause(Source, Result, #{}, Records)]].
+    [
+        Clause
+     || Source <- xls_static_integer:clauses(Clauses),
+        {Clause, _} <- [clause(Source, Result, #{}, Records)]
+    ].
 
 %% Each clause has its own scope; guards cannot export new bindings.
 -spec clause(erl_parse:abstract_clause(), expected(), requirements(), records()) ->

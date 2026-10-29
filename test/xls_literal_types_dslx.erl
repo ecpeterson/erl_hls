@@ -2,11 +2,11 @@
 -moduledoc false.
 -export([write/1]).
 
--doc "Writes BEAM-derived literal-context interpreter/RTL vectors and type-error witnesses.".
+-doc "Writes BEAM-derived literal-context interpreter/RTL vectors, including untyped aliases reused at distinct exact widths, and rejections for already typed mismatches.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, Forms} = epp:parse_file("test/xls_literal_fixture.erl", [], []),
-    Cases = [{Mode, X} || Mode <- lists:seq(0, 27), X <- [0, 1, 2, 7, 8, 127, 255]],
+    Cases = [{Mode, X} || Mode <- lists:seq(0, 29), X <- [0, 1, 2, 7, 8, 127, 255]],
     Expected = [{M, X, expected(M, X)} || {M, X} <- Cases],
     ok = file:write_file(filename:join(Stage, "literal_context.x"), [
         program(Forms, "run", ["mode", "x"], "mode: u8, x: u8"),
@@ -51,7 +51,8 @@ program(Forms0, Name, Args, Signature) ->
         xls_clause_lower:print([Body, "if ", Failed, " { u33:0x100000000 } else { (",
             Value, " as u32) as u33 }\n"]), "}\n"].
 
-%% Constraints cannot silently narrow existing values, including bound literals.
+%% Exact consumers cannot silently narrow an already typed value. An untyped
+%% constant alias may instead be represented independently at each consumer.
 -spec rejections(file:filename()) -> ok.
 rejections(Stage) ->
     lists:foreach(fun({Kind, Source}) ->
@@ -60,7 +61,7 @@ rejections(Stage) ->
         ok = file:write_file(filename:join(Stage, Kind ++ ".x"),
             program(Forms, "root", ["x"], "x: u32"))
     end, [
-        {"literal_conflicting_uses", ["root(_) -> A = 1, narrow(A), wide(A).",
+        {"literal_conflicting_uses", ["root(_) -> A = hls_type:as(hls_nums:u32(), 1), narrow(A), wide(A).",
             "-spec narrow(hls_nums:u8()) -> hls_nums:u8().", "narrow(X) -> X.",
             "-spec wide(hls_nums:u32()) -> hls_nums:u32().", "wide(X) -> X."]},
         {"literal_existing_value", ["root(X) -> narrow(X).",
@@ -70,7 +71,7 @@ rejections(Stage) ->
             "root(X) -> Cell = #cell{value = X}, Cell#cell.value."]},
         {"literal_record_conflicting_uses", [
             "-record(cell, {small = hls_type:zero() :: hls_nums:u8(), large = hls_type:zero() :: hls_nums:u32()}).",
-            "root(_) -> Value = 1, Cell = #cell{small = Value, large = Value}, Cell#cell.large."]}
+            "root(_) -> Value = hls_type:as(hls_nums:u32(), 1), Cell = #cell{small = Value, large = Value}, Cell#cell.large."]}
     ]).
 
 %% Parse synthetic declarations without depending on generated BEAM metadata.

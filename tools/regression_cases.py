@@ -93,7 +93,7 @@ def names(c: Case) -> None:
 
 
 def integer_arithmetic(c: Case) -> None:
-    """Compare signed and unsigned arithmetic at all original widths against BEAM vectors."""
+    """Compare all original arithmetic widths and static-expression/failure semantics against BEAM."""
     c.generate("xls_integer_dslx")
     for width in (1, 3, 8, 9, 16, 32, 64):
         for sign in ("u", "s"):
@@ -101,6 +101,14 @@ def integer_arithmetic(c: Case) -> None:
             vector_case(c, name, "integer_probe", "xls_integer_tb", [f"-DINTEGER_WIDTH={width}",
                 FileText(c.path(name + ".count"), "-DINTEGER_COUNT="),
                 '-DINTEGER_VECTORS="' + str(c.path(name + ".mem")) + '"'])
+    c.interpret("static_integer.x")
+    c.convert("static_integer", "probe")
+    c.codegen("static_integer", module="static_integer_probe")
+    c.simulate("static_integer", "xls_static_integer_tb",
+        [bench(c, "xls_static_integer_tb"), c.path("static_integer.v")],
+        flags=[FileText(c.path("static_integer.count"), "-DSTATIC_INTEGER_COUNT="),
+            '-DSTATIC_INTEGER_VECTORS="' + str(c.path("static_integer.mem")) + '"'],
+        completion="PASS: static integer BEAM/optimized-RTL expressions and failure flags")
 
 
 def integer_shifts(c: Case) -> None:

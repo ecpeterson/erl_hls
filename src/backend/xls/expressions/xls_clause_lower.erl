@@ -233,13 +233,7 @@ statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) -
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
-    Evaluated = instr(ArgState, op(Op, References)),
-    case {Op, References} of
-        {Division, [_Left, Right]} when Division =:= 'div'; Division =:= 'rem' ->
-            division_failure(Right, Line, Evaluated);
-        _ ->
-            Evaluated
-    end;
+    lower_operator(Op, References, Line, ArgState);
 statement_from_statement({xls_bit_size, _, Name, Value}, State) ->
     Evaluated = statement_from_statement(Value, State),
     Size = ["hls_bits::length(", reference(Evaluated), ")"],
@@ -361,12 +355,43 @@ lower_arguments(Args, State) ->
         Args
     ).
 
+%% Only untyped source integers use ERTS arithmetic. Provider results and
+%% signature-directed values keep their existing XLS operand widths.
+-spec lower_operator(atom(), [ir()], erl_anno:anno(), clause_state()) -> clause_state().
+lower_operator(Op, References, Line, State) ->
+    Integers = [N || {static, integer, N} <- References],
+    Result =
+        case length(Integers) =:= length(References) of
+            true -> xls_static_integer:operation(Op, Integers);
+            false -> error
+        end,
+    case Result of
+        {ok, Value} -> reference(State, {static, integer, Value});
+        error -> lower_runtime_operator(Op, References, Line, State)
+    end.
+
+%% A statically zero divisor has no successful result. Keep a harmless value
+%% and the existing failure carrier, including any earlier selected failure.
+-spec lower_runtime_operator(atom(), [ir()], erl_anno:anno(), clause_state()) -> clause_state().
+lower_runtime_operator(Op, [_Left, {static, integer, 0}], Line, State) when
+    Op =:= 'div'; Op =:= 'rem'
+->
+    division_failure({static, integer, 0}, Line, reference(State, {static, integer, 0}));
+lower_runtime_operator(Op, References, Line, State) ->
+    Evaluated = instr(State, op(Op, References)),
+    case {Op, References} of
+        {Division, [_Left, Right]} when Division =:= 'div'; Division =:= 'rem' ->
+            division_failure(Right, Line, Evaluated);
+        _ ->
+            Evaluated
+    end.
+
 %% Shift operands have independent types: the result keeps the value's width,
 %% while a signed count can reverse direction. Even literal counts use the
 %% helper: DSLX rejects a primitive constexpr shift beyond the operand width.
 -spec lower_shift('bsl' | 'bsr', ir(), ir(), erl_anno:anno(), clause_state()) -> clause_state().
-lower_shift(Op, {static, integer, Value}, {static, integer, Count}, _Line, State) ->
-    reference(State, {static, integer, erlang:Op(Value, Count)});
+lower_shift(Op, {static, integer, Value}, {static, integer, Count}, Line, State) ->
+    lower_operator(Op, [{static, integer, Value}, {static, integer, Count}], Line, State);
 lower_shift(_Op, {static, integer, _}, _Count, Line, _State) ->
     error({untyped_shift_value, Line, {use, hls_type, as, 2}});
 lower_shift(Op, Value, {static, integer, Count}, Line, State) ->
@@ -481,7 +506,21 @@ find_binding(Name, Line, #clause_state{bindings = Bindings, unsafe_bindings = Un
 
 -doc "Binds a fresh variable or checks equality with its existing value, recording a match failure on mismatch.".
 -spec bind(atom(), erl_anno:anno(), printable(), clause_state()) -> clause_state().
+bind(Name, Line, Value = {static, integer, _}, State) ->
+    case find_binding(Name, Line, State) of
+        error ->
+            reference(
+                State#clause_state{bindings = (State#clause_state.bindings)#{Name => Value}}, Value
+            );
+        {ok, _} ->
+            bind_named(Name, Line, Value, State)
+    end;
 bind(Name, Line, Value, State) ->
+    bind_named(Name, Line, Value, State).
+
+%% Materialize runtime values once; repeated bindings retain their match check.
+-spec bind_named(atom(), erl_anno:anno(), printable(), clause_state()) -> clause_state().
+bind_named(Name, Line, Value, State) ->
     Previous = find_binding(Name, Line, State),
     {Emitted, Named} = uniquify(State, Name),
     Bound = instr(Named, Emitted, Value),
@@ -579,6 +618,8 @@ instr(ClauseState, Place, Expr) ->
 
 -spec op(Op :: atom(), Args :: [printable()]) -> printable().
 -doc "Lowers source operators to shared DSLX expressions or existing provider leaves; numeric comparisons are classified separately.".
+op('+', [Value]) -> Value;
+op('-', [Value]) -> xls_dslx:unary('-', Value);
 op('+', [Left, Right]) -> xls_dslx:binary('+', Left, Right);
 op('-', [Left, Right]) -> xls_dslx:binary('-', Left, Right);
 op('*', [Left, Right]) -> [Left, " * ", Right];

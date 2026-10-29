@@ -89,52 +89,12 @@ segment({bin_element, Line, Value, Size, Types}) ->
             unsupported(Line, Reason)
     end.
 
+%% Segment capacities require a nonnegative static integer, before hardware typing.
+-spec constant_size(erl_parse:abstract_expr(), erl_anno:location()) -> non_neg_integer().
 constant_size(Expr, Line) ->
-    case constant(Expr) of
+    case xls_static_integer:eval(Expr) of
         {ok, Width} when Width >= 0 -> Width;
         _ -> unsupported(Line, {nonconstant_or_negative_size, Expr})
-    end.
-
-constant({integer, _, N}) ->
-    {ok, N};
-constant({char, _, N}) ->
-    {ok, N};
-constant({op, _, Op, A}) when Op =:= '+'; Op =:= '-'; Op =:= 'bnot' ->
-    calculate(Op, [constant(A)]);
-constant({op, _, Op, A, B}) when
-    Op =:= '+';
-    Op =:= '-';
-    Op =:= '*';
-    Op =:= 'div';
-    Op =:= 'rem';
-    Op =:= 'bsl';
-    Op =:= 'bsr';
-    Op =:= 'band';
-    Op =:= 'bor';
-    Op =:= 'bxor'
-->
-    calculate(Op, [constant(A), constant(B)]);
-constant(_) ->
-    error.
-
-calculate(Op, Args) ->
-    case
-        lists:all(
-            fun
-                ({ok, _}) -> true;
-                (_) -> false
-            end,
-            Args
-        )
-    of
-        true ->
-            try
-                {ok, apply(erlang, Op, [N || {ok, N} <- Args])}
-            catch
-                error:badarith -> error
-            end;
-        false ->
-            error
     end.
 
 -doc "Lowers fixed-width binary construction, preserving evaluation order and recording payload failures.".
@@ -304,8 +264,10 @@ pattern_segments(
     {Parts, End, Tail} = pattern_segments(Rest, Value, Offset + Width),
     {[{constant_expression(Pattern), Projection, Mode} | Parts], End, Tail}.
 
+%% Preserve successful integer folding for binary values and patterns.
+-spec constant_expression(erl_parse:abstract_expr()) -> erl_parse:abstract_expr().
 constant_expression(Expr) ->
-    case constant(Expr) of
+    case xls_static_integer:eval(Expr) of
         {ok, N} -> {integer, element(2, Expr), N};
         error -> Expr
     end.
