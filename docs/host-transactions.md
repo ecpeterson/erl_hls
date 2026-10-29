@@ -1,5 +1,7 @@
 # Host transaction ownership
 
+`hls_gs`, `hls_debug` and the low-level `hls_fabric` device broker in this document belong to the compiler repository's `hls_runtime` library. The broker module is distinct from the downstream `hls_fabric` application, which composes these services with placement and deployment interfaces.
+
 An `hls_gs` hardware proxy and an `hls_debug` client each own one return route and a bounded set of outstanding transactions. The CPU `hls_gs` adapter invokes callbacks directly and checks their declared reply kinds. See [service reply contracts](service-contracts.md) for the shared CPU, hardware, and host contract.
 
 ## Admission and completion
@@ -59,7 +61,7 @@ The reader performs one permitted frame read at a time. The broker can retain on
 
 Owner death retires its routes, releases their outstanding receipts, and discards a buffered frame for a retired route so other routes can progress. Unknown and retired routes are drained without delivery. There is no receive timer which silently drops an owned frame to restore credit.
 
-The limits bound admitted transport state and broker-to-owner deliveries, not arbitrary messages other processes send directly to BEAM mailboxes. Producers must still control their calls and casts. The example-local CPU fabric implements the same receipt/send interface but remains a functional actor model with unbounded internal Erlang mailboxes; it does not emulate physical backpressure.
+The limits bound admitted transport state and broker-to-owner deliveries, not arbitrary messages other processes send directly to BEAM mailboxes. Producers must still control their calls and casts. The Phi application's CPU fabric implements the same receipt/send interface but remains a functional actor model with unbounded internal Erlang mailboxes; it does not emulate physical backpressure.
 
 ## Logical sessions and route lifetime
 

@@ -77,7 +77,7 @@ Thus `message_queue_len + reserved + free_slots = mailbox_capacity`. Free zero d
 
 ## Reduction observations
 
-`hls_debug:info(Actor, reduction)` returns `undefined` before initialization, `idle`, or a map containing status, opening phase/name/key, population, received/remaining counts and pending failure. It identifies neither the missing fixed members nor the accumulator.
+`hls_debug:info(Actor, reduction)` returns `undefined` before initialization, `idle`, or a map containing status, opening phase/name/key, population, received/remaining counts and pending failure. When the bounded observation contains a membership mask, it also identifies arrived and missing fixed members. Wider masks retain the remaining count and mark unavailable population membership and received count explicitly. The accumulator remains private.
 
 A failed fold drains its remaining valid contributions before releasing terminal actor failure. A complete failed window can remain visible after the actor stops. Queries do not consume, cancel or release it. See [reduction semantics](actor-reductions.md).
 

@@ -8,7 +8,7 @@ Start at `toolchain/hls_compile_cli.erl` for the command path, `toolchain/hls_co
 | [backend](backend/README.md) | XLS lowering, generated artifacts and physical representations | `xls_parse`, `xls_actor_program`, `xls_topology_dslx` |
 | [topology](topology/README.md) | Logical graph normalization and route compatibility | `hls_topology` |
 | [toolchain](toolchain/README.md) | CLI and portable source bundles | `hls_compile`, `hls_artifact_bundle` |
-| [examples](examples/README.md) | Compileable application fixtures and their host drivers | `regsvc`, `packed_samples`; full applications live in hls_fabric |
+| [examples](examples/README.md) | Compileable application fixtures and their host drivers | `regsvc`, `packed_samples`, connected `telemetry`; decoder applications live in hls_fabric |
 | [runtime API](../apps/hls_runtime/src/api/README.md) | Actor behaviours, type providers and shared frame vocabulary | `hls_gs`, `hls_statem`, `hls_type`, `hls_frame_layout` |
 | [runtime implementation](../apps/hls_runtime/src/runtime/README.md) | CPU reference state, device sessions and host inspection | `hls_fabric`, `hls_debug` |
 
@@ -18,4 +18,4 @@ The application dependency is `erl_hls → hls_runtime → OTP`. Neither library
 
 Built-in type lowering lives behind `xls_type` and the `xls_provider_*` compiler companions. Host providers expose widths, defaults and codecs through `hls_type`. Shared layout facts belong to `hls_field_layout`/`hls_frame_layout`; DSLX rendering belongs to `xls_struct_codec`/`xls_frame_layout`. See [provider extensions](../docs/type-providers.md) before adding another cross-boundary callback.
 
-Shared application declarations are under `include/`; shipped DSLX/RTL support is under `priv/`. Board programming and downstream multi-tenant placement are outside this compiler API. Production formatting and source contracts are described in [source-quality](../docs/source-quality.md). Tests live under `test/`; source-adjacent generated fixtures under `examples/` are reviewed outputs, not implementation modules to edit by hand.
+Shared application declarations are under `include/`; shipped DSLX/RTL support is under `priv/`. Board programming and downstream multi-tenant placement are outside this compiler API. Production formatting and source contracts are described in [source-quality](../docs/source-quality.md). Tests live under `test/`; source-adjacent generated fixtures under `src/examples/` are reviewed outputs, not implementation modules to edit by hand.

@@ -2,7 +2,7 @@
 
 Compile bounded Erlang actors into hardware through XLS, and communicate with them from native Erlang through simulation or an FPGA.
 
-Actors use `hls_gs` or `hls_statem` callbacks, typed records and bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events, reductions and [indexed gathers](docs/indexed-gathers.md). Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
+Actors use `hls_gs` server or `hls_statem` state-machine callbacks and typed records; state machines declare bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events, reductions and [indexed gathers](docs/indexed-gathers.md). Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
 
 Start with the [documentation guide](docs/README.md), [register-service example](src/examples/regsvc/regsvc.erl), or [connected telemetry project](src/examples/telemetry/README.md).
 
@@ -26,9 +26,9 @@ python3 tools/check_source_contracts.py
 rebar3 dialyzer
 ```
 
-After changing translation, regenerate and review the source-adjacent DSLX with `tools/xls_goldens.sh update STAGE` after preparing `STAGE`. This requires Erlang, not XLS. Generated source comparisons check reproducibility; hardware behavior has separate RTL tests.
+After changing translation, prepare a fresh stage with `tools/prepare_xls_sim.sh STAGE`, then use `tools/xls_goldens.sh check STAGE` to compare the checked register-service DSLX. Use `update` instead of `check` only after reviewing an intended change. This requires Erlang, not XLS. Other fixture and project writers regenerate their sources in their own tests. Generated source comparisons check reproducibility; hardware behavior has separate RTL tests.
 
-`tools/prepare_xls_sim.sh STAGE` prepares a portable hardware test bundle. `tools/remote_xls_sim.sh STAGE XLS_ROOT` converts it and runs Icarus/VPI tests. `tools/run_xls_sim.sh` dispatches to the configured Linux host; override `ERL_HLS_REMOTE_HOST`, `ERL_HLS_REMOTE_ROOT` and `ERL_HLS_REMOTE_XLS` for another machine. [Incremental compilation](docs/incremental-xls-builds.md) also supports native XLS.
+`tools/prepare_xls_sim.sh STAGE` prepares a portable hardware test bundle. `tools/remote_xls_sim.sh STAGE XLS_ROOT` converts it and runs Icarus/VPI tests. `tools/run_xls_sim.sh STAGE` dispatches to the configured Linux host; override `ERL_HLS_REMOTE_HOST`, `ERL_HLS_REMOTE_ROOT` and `ERL_HLS_REMOTE_XLS` for another machine. [Incremental compilation](docs/incremental-xls-builds.md) also supports native XLS.
 
 [Compiler differential tests](docs/compiler-differential.md) compare generated programs with BEAM and retain minimized failures. [Debug targets](docs/debug-targets.md) expose actor snapshots, physical queue state and stream counters/traces. [Timing profiles](docs/profiling.md) provide reusable SVG and Perfetto views, keeping causal dependencies distinct from observed resource ordering.
 
