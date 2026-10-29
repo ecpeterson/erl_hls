@@ -21,7 +21,7 @@ Here `anyon` is zero or one in field units. Rounding ties go away from zero; res
 
 ## Running and measuring
 
-The line and grid actors share their callbacks, specialized at compile time. `phi_repetition_topology:profile(N)` places each of the three families behind one shared RAM scheduler and uses source-fragment reductions for phi. Changing N changes actor population without replicating executors. The existing two-dimensional examples retain four neighbors and their original recurrence.
+The line and grid actors share their callbacks, specialized at compile time. `phi_shared_repetition_profile:profile(N)` places each of the three families behind one shared RAM scheduler and uses source-fragment reductions for phi. The logical application's `phi_repetition_topology:profile(N)` instead describes dedicated actors. Changing N changes actor population without replicating executors. The existing two-dimensional examples retain four neighbors and their original recurrence.
 
 With rebar3, OTP 28, Icarus and an XLS tool directory:
 

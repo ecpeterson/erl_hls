@@ -47,6 +47,6 @@ Either FCLK0 reset or GP0 interface reset asserts the probe reset immediately; r
 
 ## Evidence and limits
 
-CI exercises byte masks, address/data ordering, captured IDs, simultaneous reads/writes, response stalls, invalid accesses, rejected bursts and reset during pending transactions, both before and after register-block synthesis. Host tests inject lost/duplicated writes, stopped counters and restoration failure, including counter wrap.
+The explicit platform regression exercises byte masks, address/data ordering, captured IDs, simultaneous reads/writes, response stalls, invalid accesses, rejected bursts and reset during pending transactions, both before and after register-block synthesis. Host tests inject lost/duplicated writes, stopped counters and restoration failure, including counter wrap. These probe and native-synthesis runs are outside the current reduced CI suite.
 
 The [recorded native run](../artifacts.md#historical-reports) (`experiments/07-openxc7/zynq-ps-probe-result.json`) on 2026-09-20 retained one PS7 and one BUFG, placed 281 LUT BELs and 168 flip-flops, and recovered all 16,950 non-ECC configuration set bits from the assembled bitstream. It used one placement, with no BRAM or DSP. The reported 138.20 MHz estimate against a 100 MHz target is **not clock qualification**: PS boundary timing and physical operation remain unverified. The target does not program FCLK0's frequency.

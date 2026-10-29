@@ -20,7 +20,7 @@ Disconnecting a peer retires its return routes and pending host requests. It lea
 
 ## Addressed cast envelope
 
-The outer routed frame uses the scheduler group's physical destination endpoint and the connection's allocated source endpoint. Its inner header contains the generated actor selector, transaction ID 255 and flags 1. Flags identify the addressed-cast envelope. Payload word zero is the normalized scheduler-local slot, encoded as a little-endian `u32`; subsequent words are the ordinary generated record encoding, aligned with `hls_codec:align/2`. The current actor `axis::Frame` ABI permits 96 record payload bits; the extra slot word is removed before mailbox admission.
+The outer routed frame uses the scheduler group's physical destination endpoint and the connection's allocated source endpoint. Its inner header contains the generated actor selector, transaction ID 255 and flags 1. Flags identify the addressed-cast envelope. Payload word zero is the normalized scheduler-local slot, encoded as a little-endian `u32`; subsequent words are the ordinary generated record encoding, aligned with `hls_codec:align/2`. This scheduled-PID gateway currently accepts at most 96 record payload bits; `hls_node_topology` checks that bound. The extra slot word is removed before mailbox admission. This gateway limit is separate from the configurable ordinary frame capacity used by other build paths.
 
 The fixture gateway validates endpoint, slot, selector, flags, transaction ID, word count and the actual end of the frame. Rejected frames drain through their final beat and never become actor input. The gateway supplies ordinary scheduler admission, preserving the generated mailbox/reservation machinery. It does not allocate reply contexts for casts.
 

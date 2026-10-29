@@ -11,7 +11,7 @@ RAM placement retains independent actor outboxes and local credit returns under 
 | `shared` | Six, one per family | 3 / 6 |
 | `coalesced` | Three, one per actor module | 6 / 12 |
 
-`coalesced` shares data-even/data-odd, syndrome-X/syndrome-Z and phi-X/phi-Z executors. It preserves all 54 actors, both planes, routes, coordinates, startup messages, mailboxes and per-actor output reservations. The twelve-actor cap is a fixture choice; the planner accepts another bound. CI compares this placement with the direct reference, exercising RAM requests, shared scheduling and actor debug observations alongside the application/link paths.
+`coalesced` shares data-even/data-odd, syndrome-X/syndrome-Z and phi-X/phi-Z executors. It preserves all 54 actors, both planes, routes, coordinates, startup messages, mailboxes and per-actor output reservations. The twelve-actor cap is a fixture choice; the planner accepts another bound. The retained direct/coalesced experiments compare these placements, exercising RAM requests, shared scheduling and actor debug observations alongside the application/link paths. Current [CI coverage](ci.md) selects only the noisy D2 coalesced integration with ordinary reductions.
 
 The direct reference remains the default (`--placement direct`). Compare the complete witnesses before interpreting a resource or throughput difference; an area reduction is not permission to omit application work.
 
@@ -79,7 +79,7 @@ python3 apps/hls_phi/tools/test_phi_memory.py "$XLS_ROOT" --placement coalesced 
 python3 apps/hls_phi/tools/profile_phi_memory.py _build/board-memory --stage _build/board-profile --clock-halves 4 4
 ```
 
-Use `board_quiet` in a fresh build for the zero-noise control. D3 remains the default; CI checks complete D3 and noisy board-sized witnesses. Both compare with independently scheduled BEAM actors.
+Use `board_quiet` in a fresh build for the zero-noise control. D3 remains this driver's default. CI explicitly selects `board_memory`, coalesced placement and ordinary reductions; the larger D3 and zero-noise controls are optional experiments. Each selected run compares with independently scheduled BEAM actors.
 
 At d=2, each phi cell's north/south neighbors coincide, as do east/west. The decoder selects among tied maxima using its seeded pseudorandom stream, independently of arrival order, then applies its separate move coin. The [board-geometry audit](artifacts.md#historical-reports) (`experiments/results/phi-board-geometry-2026-09-22.md`) records directional traffic; the [arbitration comparison](artifacts.md#historical-reports) (`experiments/results/phi-ready-arbitration-2026-09-22.md`) measures the current complete workload.
 
@@ -105,7 +105,7 @@ The default simulation runs all eighteen device clocks at nominal 125 MHz with d
 
 All corrections, closeout and 72 final data measurements must match fresh independent BEAM execution. The host reducer consumes zero simulated time, as in the two-board service profile. Every link has separate accepted/blocked accounting and payload/credit counts. The cycle trace covers all boards’ existing FIFO and committed actor projections; public queries cross-check selected resources on every board. `--devices` limits the rendered timeline, not the simulated population or captured data.
 
-CI retains direct and shared ordinary D3 witnesses, shared offloaded D3, and noisy offloaded D2. A focused collector probe checks opening order, aliased lookahead, delayed contributors, output stalls and full-population failure. A small four-peer RTL regression checks reused wire IDs, exact frame delivery and independent progress while one peer is blocked. The eighteen-board run is an explicit experiment rather than a per-PR CI requirement.
+The former CI matrix retained direct/shared ordinary D3, shared offloaded D3 and noisy offloaded D2 witnesses. Those drivers remain explicit experiments; current CI runs only noisy D2 with coalesced storage and ordinary reductions. A focused collector probe checks opening order, aliased lookahead, delayed contributors, output stalls and full-population failure. A small four-peer RTL regression checks reused wire IDs, exact frame delivery and independent progress while one peer is blocked. The eighteen-board run is an explicit experiment outside the manual CI suite.
 
 `apps/hls_phi/tools/measure_phi_mesh.py BUILD --stage OUTPUT --yosys YOSYS` synthesizes one representative complete device, including its query interface. It retains raw primitive counts and source/tool hashes. Unlike the two-device area helper, it excludes external clock-crossing FIFOs; compare results only within the same scope. The default is one matched naming seed, which does not estimate mapping variance. No placement or physical clock qualification is performed.
 

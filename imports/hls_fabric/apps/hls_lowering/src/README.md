@@ -8,7 +8,7 @@
 | [planning](planning/README.md) | Checked topology, placement, source facts and physical layouts | Live sessions or final source rendering |
 | [backend/xls](backend/xls/README.md) | DSLX lowering and hardware composition facades | Host queues or packet decoding |
 | [backend/sv](backend/sv/README.md) | Verilog adapters for compiled blocks and external memories | Erlang source semantics |
-| [examples](examples/README.md) | Concrete applications and build/profiling adapters | Generic compiler or transport policy |
+| [examples](examples/README.md) | The tiny counter build walkthrough | Generic compiler or transport policy |
 
 Start with `hls_build:plan/1` or the `hls-fabric` CLI. Keep retained compiler artifacts and checked plans through composition; `emit` returns data and `write` publishes files. Optional external tools consume the emitted bundle. Planning is deliberately not backend-neutral: retained facts may include XLS source, graph lowering and physical RAM layouts.
 

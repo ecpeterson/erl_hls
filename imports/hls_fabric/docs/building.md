@@ -102,7 +102,7 @@ Its placement, inspection and shared-arithmetic bounds are documented in [source
 
 Both backend configurations accept `frame_payload_words => N` (`1..255`, default `3`). This is a build choice, not an application message-field width. The compiler-owned layout checks that all declared messages and startup values fit, and it determines ordinary frame ports, mailbox rows, projections and host codecs. Profiles and source bundles record the selected ABI; the bundled `frame_config.x` supplies the matching `axis::FrameN` alias to every hardware unit. Do not combine units or host plans from different frame layouts. The scheduler also accepts this field in its low-level placement profile; an explicit top-level value takes precedence.
 
-Debug replies, SHA-256 identities, compact capture payloads and fixed bridge/rectangle envelopes remain independent. Framed adapters check their own envelope limits and zero padding before converting to the selected native frame. The legacy partition application gateway accepts at most eight ordinary payload words for events; its rectangle commands retain their separate three-word limit. Narrowing the ordinary capacity reduces canonical storage and interfaces; constant-eliding compact captures may already be narrower and need not shrink further. This is a representation choice, not a physical area or throughput claim.
+Debug replies, SHA-256 identities, compact capture payloads and fixed bridge/rectangle envelopes remain independent. Source-protocol application, bridge, deployment and mixed builders currently accept only one to three native payload words because their rectangle and crossing envelopes remain fixed. Framed adapters check their envelope limits and zero padding before converting to the selected native frame. The legacy partition application gateway accepts at most eight ordinary payload words for events; its rectangle commands retain their separate three-word limit. Narrowing the ordinary capacity reduces canonical storage and interfaces; constant-eliding compact captures may already be narrower and need not shrink further. This is a representation choice, not a physical area or throughput claim.
 
 ## Inspecting a build
 
@@ -240,9 +240,9 @@ External Python drivers select a compiler when invoked, using their declared reb
 
 Compiler helpers live in the compiler's `erl_hls_tools` package. Fabric loads them in a namespace specific to the selected checkout, so two compilers can be used in one Python process without sharing helper modules. Importing the compiler package or production modules in `tools/` does not select a compiler or change `sys.path` or the environment. Shared build, artifact and finite-witness support is independent of test entry points; tests and experiment drivers call that support.
 
-## Complete decoder example
+## Optional scheduled Snowflake experiment
 
-Install Icarus Verilog (`iverilog` and `vvp`) on `PATH`. Provide an XLS bundle containing `ir_converter_main`, `opt_main`, `codegen_main`, `interpreter_main` and `xls/dslx/stdlib`:
+The ordinary application and its source-protocol build are documented in [hls_snowflake](../apps/hls_snowflake/README.md). The following larger scheduler experiment retains specialized source transformations, profiling and replay; it is not the routine Snowflake CI integration. Install Icarus Verilog (`iverilog` and `vvp`) on `PATH`. Provide an XLS bundle containing `ir_converter_main`, `opt_main`, `codegen_main`, `interpreter_main` and `xls/dslx/stdlib`:
 
 ```sh
 python3 experiments/snowflake/actors/build.py --xls /path/to/xls --profile

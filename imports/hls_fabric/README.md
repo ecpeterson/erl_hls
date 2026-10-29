@@ -86,7 +86,7 @@ The TE0715 experiment now carries an [N=6 repetition application](platforms/xc7/
 
 ## Application and platform ownership
 
-Complete decoder examples live in [hls_phi](apps/hls_phi/README.md) and [hls_snowflake](apps/hls_snowflake/README.md). `rebar3 release -n hls_examples` packages their optional build tooling. [XC7 platform support](platforms/xc7/README.md) owns board constraints, drivers and installation. [Retained experiments](experiments/README.md) document which architecture alternatives remain separate from maintained applications.
+Complete decoder examples live in [hls_phi](apps/hls_phi/README.md) and [hls_snowflake](apps/hls_snowflake/README.md). The [Phi walkthrough](docs/execution/phi-walkthrough.md) follows a six-site source-protocol build through planning, XLS and host-relayed runtime attachment. `rebar3 release -n hls_examples` packages their optional build tooling. [XC7 platform support](platforms/xc7/README.md) owns board constraints, drivers and installation. [Retained experiments](experiments/README.md) document which architecture alternatives remain separate from maintained applications.
 
 ## Validation
 

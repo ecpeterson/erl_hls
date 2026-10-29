@@ -9,4 +9,4 @@
 
 `hls_generated_files` composes emitted file sets and writes only at an explicit publication boundary. `hls_build_support` combines compiler and fabric support libraries, while compiler-owned `hls_artifact_bundle` freezes the portable manifest. The independent external driver consumes that bundle; source emission does not run XLS, simulate hardware or program a board.
 
-Put source semantics in [planning](../planning/README.md) or [backend](../backend/README.md), runtime sessions in [hls_fabric](../../../../src/runtime/README.md), and application presets in [examples](../examples/README.md). Keep this layer responsible for commands, checked build selection, inspection and packaging.
+Put source semantics in [planning](../planning/README.md) or [backend](../backend/README.md), runtime sessions in [hls_fabric](../../../../src/runtime/README.md), and the tiny counter walkthrough in [examples](../examples/README.md) and decoder presets in [their application packages](../../../../apps/README.md). Keep this layer responsible for commands, checked build selection, inspection and packaging.

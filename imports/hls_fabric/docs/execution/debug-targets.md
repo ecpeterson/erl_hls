@@ -51,7 +51,7 @@ An idle window returns `idle`. An active one includes `status`, opening `phase`,
 
 ```erlang
 Plan = hls_topology:from_module(phi_noise_topology),
-Profile = phi_noise_topology_dslx:profile(),
+Profile = phi_shared_noise_topology_dslx:profile(),
 Boundary = {boundary, DebugClient, {phi_memory_gateway, host_stream}},
 Catalog = hls_shared_debug_catalog:hardware(
     Plan, maps:get(scheduler_groups, Profile), [Boundary]),

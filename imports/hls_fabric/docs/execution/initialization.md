@@ -44,11 +44,12 @@ Reset must cover the actor's surrounding topology and transport control. An inte
 
 Run `bash tools/test_initialization.sh XLS_ROOT [STAGE]` for the regression. It compares public BEAM replies with DSLX/JIT values and generated RTL at two schedules per fixture: one/two stages for direct services, two/three for shared RAM-backed services. The RTL tests cover nonzero state, zero defaults, a nonfirst initial phase, silent initial-entry updates, per-instance topology startup, mutations, output stalls, reset during RAM initialization, and reset after a reply becomes pending. The shared fixture uses production RAMs without a reset input. Negative fixtures require a supported failing initializer to be rejected by both BEAM and XLS.
 
-CI also blocks the shared fixture's output and queries FIFO depths through the production debug endpoint. It checks that wait inspection reaches the external sink and observes recovery after release, while instrumentation preserves application outputs cycle by cycle:
+The optional debug integration check also blocks the shared fixture's output and queries FIFO depths through the production debug endpoint. It checks that wait inspection reaches the external sink and observes recovery after release, while instrumentation preserves application outputs cycle by cycle:
 
 ```sh
+source tools/backend_env.sh test
 python3 tools/test_topology_debug_integration.py \
   --top init_shared_wrapper --stage _build/initialization/debug \
   _build/initialization/init_shared_2.v \
-  _build/initialization/init_shared_wrapper.v priv/rtl/hls_1r1w_ram.v
+  _build/initialization/init_shared_wrapper.v "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"
 ```

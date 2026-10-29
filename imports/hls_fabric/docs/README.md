@@ -1,6 +1,6 @@
 # Documentation
 
-Begin with [building the backend](building.md); keep retained measurements in the [external artifact archive](artifacts.md).
+Begin with [building the backend](building.md). The [Phi source-to-runtime walkthrough](execution/phi-walkthrough.md) follows one concrete application through the compiler, placement, generated artifacts and live attachment. Keep retained measurements in the [external artifact archive](artifacts.md).
 
 - [Actor execution](execution/README.md): shared placement, compiler boundary and observations.
 - [Indexed collections](indexed-collections.md): typed member snapshots, storage ownership and placement assertions.

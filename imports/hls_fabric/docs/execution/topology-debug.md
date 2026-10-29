@@ -6,11 +6,12 @@ Start with the [common inspection API](debug-targets.md). Use physical queues to
 
 ## Generate a diagnostic build
 
-Run `tools/topology_debug.py` on the application's generated RTL and RAM shell. For the D3 profile:
+Use the selected compiler's `tools/topology_debug.py` on the application's generated RTL and RAM shell. For the D3 profile, resolve the same dependency and compiled profile first:
 
 ```sh
+source tools/backend_env.sh test
 compiled=$(cd "$stage/compiled" && pwd -P)
-python3 tools/topology_debug.py \
+python3 "$erl_hls_root/tools/topology_debug.py" \
   --top phi_decoder_profile_top --clock aclk \
   --reset aresetn --reset-active-low \
   --stage "$stage/topology-debug" \
@@ -20,7 +21,7 @@ python3 tools/topology_debug.py \
 
 Supply Yosys on `PATH` or through `--yosys`. All observed channels must share the selected clock; crossings are rejected. Clock/reset defaults are `clk` and active-high `reset`. Preserve the application's actual reset polarity.
 
-Compile `instrumented.v`, `debug_top.v` and `priv/rtl/debug/{hls_debug_frame_rx,hls_debug_route,hls_topology_debug}.v`, selecting `hls_debug_application` as top. Actor projections also require `hls_actor_snapshot.v`. The wrapper preserves application ports and adds `s_dbg_*`/`m_dbg_*`. Reserved-port collisions require connecting the inner query service to an existing router instead.
+Compile `instrumented.v`, `debug_top.v` and the selected compiler dependency's `priv/rtl/debug/{hls_debug_frame_rx,hls_debug_route,hls_topology_debug}.v`, selecting `hls_debug_application` as top. Actor projections also require that directory's `hls_actor_snapshot.v`. Resolve this dependency through the [build context](../building.md#experiment-and-diagnostic-drivers); these assets are not under the fabric checkout's `priv/`. The wrapper preserves application ports and adds `s_dbg_*`/`m_dbg_*`. Reserved-port collisions require connecting the inner query service to an existing router instead.
 
 Keep `manifest.json` with the **exact bitstream**. Its embedded fingerprint covers resource wiring and source hashes. Resource IDs and hierarchy names are build-local; logical actor identities come from a verified catalog. A projection and width-compatible RTL alone do not prove semantic correspondence.
 
@@ -39,8 +40,8 @@ ok = hls_topology_debug:write_wait_report(Session, [ResourceId], #{}, "wait.json
 `open/2` verifies the manifest fingerprint and catalog counts. Replies identify the resource, observation cycle and value; invalid IDs, codes or occupancies are rejected. Queries time out after ten seconds. After timeout or reset, establish a fresh transport session and catalog.
 
 ```sh
-python3 tools/topology_debug_report.py manifest.json --find scheduler_0
-python3 tools/topology_debug_report.py manifest.json wait.json
+python3 "$erl_hls_root/tools/topology_debug_report.py" manifest.json --find scheduler_0
+python3 "$erl_hls_root/tools/topology_debug_report.py" manifest.json wait.json
 ```
 
 The walker follows blocked channels to consumers and FIFO pop boundaries, probes possible outgoing dependencies, and rechecks visited resources. Its budget reserves rechecks and reports truncation. Reports distinguish external sinks, ambiguous connections, changes and repeatedly blocked cycles.
@@ -58,7 +59,7 @@ Depth-zero bypass FIFOs are wires. Empty bypass transfers may occupy no storage;
 
 ## Shared-actor snapshots
 
-Create `actors.json` with `xls_scheduler_debug:projection/3` from the same normalized topology, scheduler specification and emitted actor artifacts used for codegen. Retain the values returned by `xls_scheduler_actor:to_artifact/2` and write `xls_emitted:bytes/1` to the DSLX files; the projection consumes the retained codebooks, not reread DSLX text. Pass it as `--actor-projection actors.json`; use `--actor-root PATH` when the scheduler RAM shell is nested below the selected top. The exporter checks bank layouts, accepted-write boundaries, identities, codebooks and clock compatibility. Shared projections require block-RAM actor state.
+Create `actors.json` with `xls_scheduler_debug:projection(Generation, Artifacts)` from the retained `xls_fabric_topology_dslx` generation plan and emitted actor artifacts used for codegen. The `/3` and `/4` convenience APIs prepare the same information from a topology and scheduler specification when no generation plan is retained. Retain the values returned by `xls_scheduler_actor:to_artifact/2` and write `xls_emitted:bytes/1` to the DSLX files; the projection consumes the retained codebooks, not reread DSLX text. Pass it as `--actor-projection actors.json`; use `--actor-root PATH` when the scheduler RAM shell is nested below the selected top. The exporter checks bank layouts, accepted-write boundaries, identities, codebooks and clock compatibility. Shared projections require block-RAM actor state.
 
 A snapshot contains the latest committed phase, entry-pending flag, failure code and optional reduction metadata. It updates on accepted state-RAM writes, without consuming another application RAM port. Before the first write after reset, `initialized` is false and state fields are `undefined`.
 
@@ -129,7 +130,7 @@ Boundary monitoring also requires `hls_debug_monitor.v`, `hls_debug_tap.v`, `hls
 ```sh
 python3 apps/hls_phi/tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
 python3 apps/hls_phi/tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
-python3 tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
+python3 "$erl_hls_root/tools/check_debug_memories.py" _build/phi-debug/debug --map-xc7
 python3 apps/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
   --yosys "$YOSYS" --seeds 2 --jobs 1
 ```
