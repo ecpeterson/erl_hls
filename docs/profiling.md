@@ -2,6 +2,8 @@
 
 A timing profile is a saved, application-independent graph of work, counters and dependencies. Collect once, then render or query it without rerunning simulation. Keep the recording, clock origins, source/tool digests and validation results beside it; a plot alone is not reproducible evidence.
 
+For cycle-native event/version histories and physical associations, use the separate [hls_spacetime contract](https://github.com/ecpeterson/hls_spacetime/blob/main/docs/contract.md). It can represent execution before a physical clock period is established. This renderer does not accept it as a nanosecond timing profile; conversion requires evidenced time units and duration semantics.
+
 `tools/hls_profile.py` validates and renders an existing capture; it does not start simulation, instrument VPI or collect ERTS messages. A workload-specific adapter produces schema 1 JSON with `unit: "ns"`:
 
 - `tracks`: unique `id`, `name`, optional `group`.
