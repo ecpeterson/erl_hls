@@ -1,0 +1,62 @@
+# Spacetime visualization campaign
+
+2026-11-06. Status: S1–S4 complete. The [physical correspondence result](spacetime-physical-1.md) joins the unchanged saved live/reset graphs to the exact native implementation: 21,756 primitives, full connectivity and two checked timing sidecars; 6,108 stored bits have qualified finite correspondence. Every event has explicit complete, partial or unmapped resource coverage. The 5 ns setup target failed; no execution frequency is claimed. S5 is next. The user opened `hls_spacetime`; generic validation, import and rendering now live here independently of compiler builds.
+
+## Objective and first milestone
+
+Make one complete application step inspectable as data and work moving through a physical FPGA across multiple clocks. Stack copies of the device downward in time, with computation and communication within each clock layer and storage connecting layers. The eventual optimization objective is step period subject to device fit; the first objective is a trustworthy, useful picture of one execution.
+
+The first end-to-end milestone is a small, deterministic, single-device, single-clock repetition-code step on the source-protocol backend. A reader must be able to select its completion, choose an actor activation, and follow its contributors through actual placed resources, register holds and evidenced waits. A separate small RAM fixture covers memory behavior if the application implementation contains no BRAM. Tasks S1–S6 deliver this milestone; S7–S8 complete routing detail, initial metrics and a maintained workflow.
+
+## Interpretation and ownership
+
+- Use common device tile coordinates for space and clock intervals for time. Tile coordinates are not micrometres; endpoint connections are not routed wire geometry. Keep cycle timestamps, static timing annotations and any later timing-simulation timestamps distinct.
+- Separate required data/state/message dependencies, observed control/resource ordering, and electrical switching. Color initially denotes semantic ownership or data lineage. Shared hardware can serve different tasks over time; joins may have multiple contributors. Unknown attribution stays visible.
+- Identity comes from accepted transactions and state versions, not payload equality or signal transitions. Holds preserve a version; committed writes create events even when the value is unchanged. Initial state, carry-in, pending work and reset retirement require explicit treatment.
+- Installed area counts unique physical resources, not their appearances on multiple time layers. For a single-clock measured interval, elapsed time is clocks × clock period; do not add routed combinational delay again. A clock-limiting path can constrain the interval even when it is outside the selected activation's ancestry.
+- Reuse the [compiler timing-profile contract](https://github.com/ecpeterson/erl_hls/blob/main/docs/profiling.md) and extend it or attach a companion physical catalogue where appropriate. Keep generic cycle identity/provenance support in hls_spacetime, backend/resource observation bindings in hls_fabric's lowering packages, and workload inputs/step definitions in the application. Vendor extraction belongs at the external-tool boundary; rendering can use a separate browser viewer. Do not create a second Phi-specific analysis framework.
+- Repository boundary: `hls_spacetime` owns generic validation, native import, reconstruction and rendering. It consumes saved execution and physical files without rebuilding an application. Backend tap generation and interpretation remain in `hls_lowering`; application inputs remain in their owning packages. The existing compiler nanosecond profiler remains separate.
+- Start with passive simulator observation. Do not add synthesized trace hardware, blanket preservation attributes or placement constraints to make observation convenient. Record any necessary simulator visibility changes and validate the correspondence to the measured implementation.
+- Bound captures and exports before running them. Retain compact results, identities, reproduction inputs and selected baselines; apply the existing seven-day policy to completed bulky raw outputs. A frozen manifest is provenance, not an indefinite retention exception.
+
+## Ordered tasks
+
+- [x] **S1 — Select and register the first executable case.** [N2 source-protocol repetition](spacetime-case-1.md): six actors, 14 links, explicit source/tool identities and bounds; source emission and finite BEAM reference passed. Select step 4, retain full reset-to-readout ancestry, and measure public all-coordinate step spacing. No matching physical checkpoint; cycle-exact replay remains a capture requirement.
+
+- [x] **S2 — Define the execution and physical correspondence contracts.** [Typed Erlang companion and synthetic example](spacetime-contracts.md): cycle/version identities, explicit coverage/loss, storage/reset histories, separate dependency categories and build-bound physical mappings. All 43 contract tests and existing profile compatibility checks passed; real capture and physical evidence remain separate.
+
+- [x] **S3 — Capture continuous events from the direct backend.** [Passive N2 capture](spacetime-capture-1.md): 581 taps, 2,369 clocks, 16,321 interpreted events; finite BEAM outputs and public completion boundaries agree. Exact replay, ordinary-build public noninterference, stalls, equal writes, postponement, pending-head reset and the real RTL RAM fixture pass. Unknown numerical/publication ancestry remains explicit; no physical evidence yet.
+
+- [x] **S4 — Export and join physical placement, connectivity and timing.** [Completed native catalogue and finite join](spacetime-physical-1.md): 21,756 primitives, 23,292 canonical nets, 115,797 pin connections and complete fast/slow SDF with checked reported endpoints. Both saved graphs reproduce exactly; 24 fully mapped words, 27 partial words and 30 unmapped logic resources remain explicit. All 16,321 live/19,172 reset events carry coverage. Unknown numerical/publication ancestry and omitted timing remain unknown; connectivity is schematic until S7.
+
+- [ ] **S5 — Render the first complete step.**
+  - Build the stacked-chip view with downward time, adjustable layer spacing, rotation, a movable clock window and faint installed-resource context. Begin with a readable window, then navigate the full selected step without duplicating the complete device model per clock.
+  - Support actor/activation/phase filters, backward and forward dependency selection, shared-resource ownership, storage lifetimes and expansion from resource groups to placed cells. Distinguish holds, known waits, unknown intervals and pending work.
+  - Synchronize a flat chip view and timeline with selection in the stack. Show an event's producer, consumer, source identity, storage history and evidence. Mark endpoint connections as schematic until actual route geometry is available.
+  - Completion: reopen the saved capture without simulation; select step completion and follow a contributor through computation, a register hold and consumption. Follow a BRAM write-to-read lifetime in the memory fixture.
+
+- [ ] **S6 — Validate the end-to-end picture.**
+  - Reconcile displayed step boundaries and dependencies with independently decoded public observations and the finite application witness. Check equal values, backpressure, postponed messages, slot/address reuse, capture boundaries and reset incarnations.
+  - Check cross-layer edges against storage operations and selected physical bindings, including folded/replicated objects. Display unknown roots and incomplete mappings; do not silently fill them with guessed edges or task colors.
+  - Confirm that the selected example actually traverses supported computation/message contributors as well as storage lifetimes; continuous chronology alone does not close the attribution obligations recorded at S3.
+  - Completion: a reproducible first-milestone bundle, documented inspection procedure and focused regressions. Label simulation as a witness; any formal checks state their property, domain, assumptions, horizon and trust boundary according to [formal contracts](https://github.com/ecpeterson/erl_hls/blob/main/docs/formal-contracts.md).
+
+- [ ] **S7 — Add routed geometry and initial spacetime metrics.**
+  - Export and render actual routing for selected connections, retaining the distinction between routed geometry, routed delay and endpoint distance. Extend detail only where it supports inspection; disclose unavailable route segments.
+  - Report observed completion chains, storage residence, evidenced input/resource waits, shared-compute reuse and separately identified clock-limiting physical paths. Retain tied alternatives and unassigned time. Count installed resource capacity once and show spatial resource pressure separately from temporal activity.
+  - Reconcile elapsed intervals with cycles × clock period without double-counting delays. Exercise a changed/stalled fixture to confirm the views and counts respond correctly; describe observed differences without claiming predicted speedup or a complete critical path from incomplete dependencies.
+  - Completion: each displayed metric has a definition, evidence scope and focused check, and the viewer can show both a selected completion chain and the physical constraints on its clock.
+
+- [ ] **S8 — Finish the maintained workflow and close the campaign.**
+  - Make observation-plan identity stable across Erlang external-term decoding/re-encoding. Retain exact original artifact hashes; do not treat incidental map serialization order as semantic identity. Include a fresh-process reconstruction regression.
+  - Provide documented capture, extract, join, validate and view entry points with explicit inputs/outputs, units, budgets and diagnostics. Keep compiler/build policy in the native toolchain and vendor/simulator/rendering integrations at their natural boundaries.
+  - Document supported backend/primitive coverage, opaque cases, capture limits and how to add another workload. Verify the workflow from the documented inputs without depending on an old scratch directory. Keep tests localized; avoid multiplying full decoder integration runs.
+  - Completion: the chosen step and memory fixture can be captured, joined, inspected and measured through the maintained workflow. Retain the compact demonstration and reproducibility records, apply artifact retention, and record the campaign verdict with remaining limitations.
+
+## Follow-ons outside the initial campaign
+
+Multi-device and multi-clock views, live hardware trace acquisition, exhaustive electrical switching/glitch animation, general value-sensitive gate causality, automatic rescheduling or speedup prediction, and architecture changes suggested by the picture are separate work. Timing simulation within a clock can be added when a concrete inspection question needs it; it is not a prerequisite for the initial cycle-layer view.
+
+## Maintaining this plan
+
+Keep this file authoritative across the participating repositories. Work in dependency order, reuse completed evidence, and record substantive scope changes here. Check off a task only when its completion criterion is met; replace its child detail with a concise outcome or durable evidence link. The next task is S5. All S4 native jobs and finite replays are closed, verified, collected and reviewed; do not poll, recollect or relaunch them. The exact results and original cutoff are recorded in [the physical continuation](spacetime-physical-1.md). S3's finite simulation witnesses establish neither a physical period nor complete numerical ancestry.
