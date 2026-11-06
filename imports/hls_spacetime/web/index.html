@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HLS Spacetime · saved execution explorer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="brand-mark">▱<br />▱<br />▱</span>
+        <div>
+          <strong>HLS Spacetime</strong><span>Saved execution explorer</span>
+        </div>
+      </div>
+      <div class="capture-controls">
+        <label
+          >Capture
+          <select id="capture">
+            <option value="">Choose a saved capture</option>
+          </select></label
+        ><label class="file-button"
+          >Open file<input
+            id="file"
+            type="file"
+            accept=".json,application/json" /></label
+        ><button id="help-button" aria-expanded="false">How to read</button>
+      </div>
+    </header>
+    <section id="help" hidden>
+      <strong>Space across a layer. Clocks down the stack.</strong>
+      <p>
+        Dots are recorded operations, grouped at the centre of their associated
+        placed cells. Lines follow recorded value dependencies or storage
+        residence. They are schematic connections, not routed wires or
+        electrical switching. Drag the stack to rotate it. Select a dot or
+        timeline tick, then follow its inputs or consumers. Use the flat chip to
+        inspect the cells behind a resource.
+      </p>
+      <p>
+        Grey rails contain resources without placement. A dashed residence shows
+        a version persisting between a write and read, inferred only within
+        complete write coverage. Unknown ancestry and partial mappings stay
+        explicit. A public completion annotation does not create a dependency on
+        a nearby operation.
+      </p>
+    </section>
+    <div id="notice" role="status">
+      Open a prepared saved capture, or prepare the retained example with the
+      command in README.
+    </div>
+    <main>
+      <section class="workspace">
+        <div class="summary">
+          <div>
+            <span class="eyebrow">SELECTED INTERVAL</span>
+            <h1 id="title">One step, across space and time</h1>
+            <p id="subtitle">
+              Inspect recorded work without rebuilding the application.
+            </p>
+          </div>
+          <div id="metrics"></div>
+        </div>
+        <div class="filters">
+          <label
+            >Actor<select id="actor">
+              <option value="">All actors</option>
+            </select></label
+          >
+          <label
+            >Activation<select id="activation">
+              <option value="">All activations</option>
+            </select></label
+          >
+          <label
+            >Operation<select id="operation">
+              <option value="">All operations</option>
+            </select></label
+          >
+          <label
+            >Task<select id="task">
+              <option value="">All tasks</option>
+            </select></label
+          >
+          <button id="clear-filters">Clear filters</button>
+        </div>
+        <label class="examples-label"
+          >Start with an example<select id="example">
+            <option value="">Choose a recorded example</option>
+          </select></label
+        >
+        <div class="view-grid">
+          <section class="panel stack-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Clock stack</h2>
+                <span id="space-unit"
+                  >Device tile coordinates · time flows down</span
+                >
+              </div>
+              <button id="reset-camera">Reset view</button>
+            </div>
+            <div class="canvas-wrap">
+              <canvas
+                id="stack"
+                aria-label="Interactive chip stack. Use the event list for keyboard selection."
+                tabindex="0"
+              ></canvas>
+              <div class="axis-hint">CLOCKS ↓<span>Drag to rotate</span></div>
+              <div id="tooltip" hidden></div>
+            </div>
+            <div class="stack-controls">
+              <label
+                >Layer spacing<input
+                  id="spacing"
+                  type="range"
+                  min="2"
+                  max="20"
+                  step="1"
+                  value="8" /></label
+              ><label
+                ><input id="context" type="checkbox" checked /> Installed
+                context</label
+              ><label
+                ><input id="residence" type="checkbox" checked /> Storage
+                residence</label
+              ><span class="legend"
+                ><i></i> selected <i class="unknown"></i> unknown /
+                unmapped</span
+              >
+            </div>
+          </section>
+          <section class="panel flat-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Chip & resources</h2>
+                <span id="flat-subtitle"
+                  >Unique installed cells, counted once</span
+                >
+              </div>
+            </div>
+            <canvas
+              id="flat"
+              aria-label="Flat device view of installed and selected resources"
+              tabindex="0"
+            ></canvas>
+            <div id="resource-summary">
+              Select an operation to inspect its resource bindings.
+            </div>
+            <label class="resource-picker"
+              >Resource<select id="resource">
+                <option value="">Select a resource</option>
+              </select></label
+            >
+            <details id="cell-details">
+              <summary>
+                Placed cell details <span id="cell-count"></span>
+              </summary>
+              <div id="cells" class="cell-list"></div>
+            </details>
+          </section>
+        </div>
+        <section class="panel timeline-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Execution timeline</h2>
+              <span id="timeline-label">Recorded clock cycles</span>
+            </div>
+            <div class="window-actions">
+              <button id="previous" aria-label="Previous clock window">←</button
+              ><button id="step">Selected step</button
+              ><button id="completion">Completion record</button
+              ><button id="all">Whole capture</button
+              ><button id="next" aria-label="Next clock window">→</button>
+            </div>
+          </div>
+          <canvas
+            id="timeline"
+            aria-label="Timeline. Click to move the window around a clock."
+            tabindex="0"
+          ></canvas>
+          <div class="window-inputs">
+            <label>First clock<input id="first" type="number" min="0" /></label
+            ><label
+              >Window<input
+                id="window"
+                type="number"
+                min="1"
+                max="1000"
+                value="24" /></label
+            ><input
+              id="position"
+              type="range"
+              min="0"
+              value="0"
+              aria-label="Window first clock"
+            /><span id="window-label"></span>
+          </div>
+        </section>
+        <section class="panel events-panel">
+          <div class="panel-heading">
+            <h2>Operations in view</h2>
+            <span id="event-count"></span>
+          </div>
+          <div id="events" class="event-list" tabindex="0"></div>
+        </section>
+      </section>
+      <aside>
+        <section class="panel selection-panel">
+          <div class="panel-heading">
+            <h2>Evidence inspector</h2>
+            <span id="selected-kind">No selection</span>
+          </div>
+
+          <div id="selection">
+            <p class="empty">
+              Select an operation in the stack or choose an example to follow a
+              stored value.
+            </p>
+          </div>
+          <div class="dependency-controls">
+            <button id="backward">← Inputs</button
+            ><button id="forward">Consumers →</button
+            ><button id="clear-trace">Clear path</button>
+          </div>
+          <div id="trace-summary"></div>
+          <div id="neighbors"></div>
+        </section>
+        <section class="panel evidence-panel">
+          <div class="panel-heading"><h2>Capture scope</h2></div>
+          <div id="scope">
+            <p>
+              Saved observations establish a finite witness, not all-input
+              equivalence.
+            </p>
+          </div>
+          <details>
+            <summary>Source identities</summary>
+            <pre id="identities"></pre>
+          </details>
+        </section>
+      </aside>
+    </main>
+    <footer>
+      <span>HLS Spacetime / S5</span
+      ><span>Cycle observations · qualified placement · explicit unknowns</span>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
