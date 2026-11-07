@@ -615,3 +615,56 @@ test("capture-extension command options compose with later precedence", () => {
     { captureExtension: "last", baseProjection: "base.json", output: "out" },
   );
 });
+
+/** A later ancestry refinement must not duplicate navigation or erase the earlier native provenance. */
+test("successive extensions retain provenance and replace the completion shortcut", () => {
+  const input = fixture();
+  const first = apply(input);
+  const bundle = structuredClone(first.bundle);
+  bundle.build.observation = identity("d");
+  const review = {
+    ...input.review,
+    base_build: first.bundle.build,
+    extended_build: bundle.build,
+    original_trace_sha256: input.review.extended_trace_sha256,
+    extended_trace_sha256: identity("e"),
+  };
+  assert.throws(
+    () =>
+      applyCaptureExtension(first, bundle, input.summary, {
+        ...review,
+        original_trace_sha256: identity("f"),
+      }),
+    /Extension preceding trace\/simulator mismatch/,
+  );
+  assert.throws(
+    () =>
+      applyCaptureExtension(first, bundle, input.summary, {
+        ...review,
+        original_simulator_sha256: identity("f"),
+        extended_simulator_sha256: identity("f"),
+      }),
+    /Extension preceding trace\/simulator mismatch/,
+  );
+  const second = applyCaptureExtension(first, bundle, input.summary, review);
+  assert.equal(second.title, first.title);
+  const previous = second.provenance.capture_extension.previous_extension;
+  assert.deepEqual(previous, first.provenance.capture_extension);
+  assert.deepEqual(previous.review, input.review);
+  assert.deepEqual(previous.original_scope, input.base.scope);
+  assert.deepEqual(previous.original_coverage, input.base.coverage ?? null);
+  assert.equal(previous.previous_extension, null);
+  assert.equal(
+    second.examples.filter((x) => x.id === "completion-ancestry").length,
+    1,
+  );
+  assert.deepEqual(
+    second.catalogue.correspondence_origin.previous_correspondence,
+    first.catalogue.correspondence_origin,
+  );
+  assert.equal(
+    second.catalogue.correspondence_origin.previous_correspondence.build
+      .observation,
+    identity("3"),
+  );
+});

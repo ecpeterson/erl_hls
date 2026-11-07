@@ -418,6 +418,15 @@ export function applyCaptureExtension(base, bundle, summary, review) {
     ) && review.original_simulator_sha256 === review.extended_simulator_sha256,
     "Extension changed source, RTL or simulator",
   );
+  const precedingReview = base.provenance?.capture_extension?.review;
+  if (precedingReview) {
+    check(
+      review.original_trace_sha256 === precedingReview.extended_trace_sha256 &&
+        review.original_simulator_sha256 ===
+          precedingReview.extended_simulator_sha256,
+      "Extension preceding trace/simulator mismatch",
+    );
+  }
   check(
     sameBuild(base.catalogue.build, base.bundle.build) &&
       base.catalogue.checkpoint === review.checkpoint_sha256,
@@ -469,6 +478,7 @@ export function applyCaptureExtension(base, bundle, summary, review) {
   );
   const origin = {
     build: base.bundle.build,
+    previous_correspondence: base.catalogue.correspondence_origin ?? null,
     checkpoint: base.catalogue.checkpoint,
     base_projection_sha256: review.base_projection_sha256,
     original_trace_sha256: review.original_trace_sha256,
@@ -484,7 +494,9 @@ export function applyCaptureExtension(base, bundle, summary, review) {
   );
   const document = {
     ...base,
-    title: `${base.title} · transfer ancestry`,
+    title: base.title.endsWith(" · transfer ancestry")
+      ? base.title
+      : `${base.title} · transfer ancestry`,
     bundle: { ...bundle, physical: null },
     catalogue: {
       ...base.catalogue,
@@ -494,7 +506,8 @@ export function applyCaptureExtension(base, bundle, summary, review) {
     annotations,
     examples: [
       ...(base.examples ?? []).filter(
-        (example) => example.id !== "completion-context",
+        (example) =>
+          !["completion-context", "completion-ancestry"].includes(example.id),
       ),
       ...(selected.graph_events?.length
         ? [
@@ -536,6 +549,7 @@ export function applyCaptureExtension(base, bundle, summary, review) {
       ...base.provenance,
       capture_extension: {
         review,
+        previous_extension: base.provenance?.capture_extension ?? null,
         original_coverage: base.coverage ?? null,
         original_scope: base.scope,
         physical_reuse: origin,
@@ -548,7 +562,7 @@ export function applyCaptureExtension(base, bundle, summary, review) {
       "Physical correspondence and static timing are reused with explicit original-build provenance, not remeasured or upgraded to native equivalence.",
       "Unresolved operands and unmatched publication/arrival ancestry remain explicit roots; new stream resources have no placement attribution.",
       "Reviewed graph refinements change only this interpretation; the original archived graph and native measurement remain unchanged.",
-      "Original limitations remain in provenance.capture_extension.original_scope with their original capture context.",
+      "Each extension retains its preceding scope and review in provenance.capture_extension; previous_extension preserves the earlier capture contexts.",
     ],
   };
   if (base.nativePaths) {
