@@ -666,7 +666,7 @@ function storagePoints(segment) {
   return save(points);
 }
 /** Draw observed load bridges and same-version residence, never a dependency
- * from an overwritten word to the next word. Counts disclose drawing bounds. */
+ * from an overwritten word to the next word. The selected window controls cost. */
 function drawResidence(ctx, project) {
   state.storageHits = [];
   if (!$("residence").checked) {
@@ -675,14 +675,13 @@ function drawResidence(ctx, project) {
   }
   const segments = visibleStorage();
   const selected = new Set(selectedLifetimes().map((life) => life.version));
-  // Show selected details first if the explicit graphics budget is reached.
+  // Draw selected details last so surrounding history cannot cover them.
   const emphasized = (segment) =>
     selected.has(segment.version) || segment.resource === state.resource;
   const ordered = [...segments].sort(
-    (a, b) => Number(emphasized(b)) - Number(emphasized(a)),
+    (a, b) => Number(emphasized(a)) - Number(emphasized(b)),
   );
   let drawn = 0,
-    omitted = 0,
     loads = 0,
     holds = 0,
     cells = new Set();
@@ -690,10 +689,6 @@ function drawResidence(ctx, project) {
     if (segment.kind === "write") loads++;
     else holds++;
     for (const point of storagePoints(segment)) {
-      if (drawn >= 20000) {
-        omitted++;
-        continue;
-      }
       const active = emphasized(segment),
         uncertain =
           segment.lifetime.continuity !== "within_declared_capture_scope";
@@ -741,9 +736,7 @@ function drawResidence(ctx, project) {
       : "Recorded uses only · ") +
     `${words} words · ${loads} load bridges · ${holds} residence spans` +
     (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
-    (omitted
-      ? ` · ${omitted} strokes omitted (20,000-stroke limit; narrow the window)`
-      : "") +
+    ` · ${drawn.toLocaleString()} strokes` +
     (state.window === 1
       ? " · show at least two clocks for cross-cycle links"
       : "");
@@ -753,8 +746,7 @@ function drawTrace(ctx, project) {
   state.traceNote = "";
   if (!state.trace) return;
   let aggregates = 0,
-    drawn = 0,
-    omitted = 0;
+    drawn = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const edge of state.trace.edges) {
     const from = state.model.events.get(edge.source),
@@ -774,10 +766,6 @@ function drawTrace(ctx, project) {
       : connection.pairs;
     if (aggregate) aggregates++;
     for (const [source, target] of pairs) {
-      if (drawn >= 4000) {
-        omitted++;
-        continue;
-      }
       const a = project(source, Math.max(state.first, from.cycle));
       const b = project(
         target,
@@ -815,7 +803,7 @@ function drawTrace(ctx, project) {
     }
   }
   ctx.globalAlpha = 1;
-  state.traceNote = `${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}${omitted ? ` · ${omitted} dependency strokes omitted (4,000 limit)` : ""}`;
+  state.traceNote = ` · ${drawn.toLocaleString()} dependency strokes${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}`;
 }
 /** Report native path details separately from cycle evidence and use attribution. */
 function renderNativePath() {
@@ -832,7 +820,7 @@ function renderNativePath() {
     : "";
 }
 
-/** Draw the chip stack using a bounded window and shared geometry. */
+/** Draw every access in the user-selected window using shared geometry. */
 function drawStack() {
   const { ctx, w, h } = canvasContext("stack");
   if (!state.model) return;
@@ -863,11 +851,10 @@ function drawStack() {
   const seeds = new Set(selectionEvents().map((event) => event.id));
   const events = visibleEvents().sort(
     (a, b) =>
-      Number(seeds.has(b.id) || pathIds.has(b.id)) -
-      Number(seeds.has(a.id) || pathIds.has(a.id)),
+      Number(seeds.has(a.id) || pathIds.has(a.id)) -
+      Number(seeds.has(b.id) || pathIds.has(b.id)),
   );
-  let drawn = 0,
-    omitted = 0;
+  let drawn = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const event of events) {
     const selected = seeds.has(event.id),
@@ -875,10 +862,6 @@ function drawStack() {
     const geometry = expanded ? accessGeometry(event) : null;
     const points = geometry?.points ?? [eventPoint(event)];
     for (const point of points) {
-      if (drawn >= 20000) {
-        omitted++;
-        continue;
-      }
       const p = project(point, event.cycle);
       ctx.globalAlpha =
         state.trace && !onPath
@@ -911,9 +894,10 @@ function drawStack() {
   $("access-summary").textContent = !state.model.catalogue
     ? "Logical layout · native access placement unmeasured"
     : expanded
-      ? `Accesses at native tiles · hollow = word context, read-bit subset unknown${omitted ? ` · ${omitted} glyphs omitted (20,000 limit; narrow window)` : ""}`
+      ? "Accesses at native tiles · hollow = word context, read-bit subset unknown"
       : "Compact aggregate symbols · centers are not computation locations";
-  $("access-summary").textContent += state.traceNote;
+  $("access-summary").textContent +=
+    ` · ${drawn.toLocaleString()} access glyphs` + state.traceNote;
   drawNativePath(ctx, project);
   ctx.globalAlpha = 1;
   const p = project({ x: 1.4, y: 0 }, state.first);
