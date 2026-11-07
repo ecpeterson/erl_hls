@@ -961,3 +961,7 @@ body.scene-focus {
   color: var(--muted);
   margin: 4px 0;
 }
+
+.outside-timing {
+  background: #526471;
+}

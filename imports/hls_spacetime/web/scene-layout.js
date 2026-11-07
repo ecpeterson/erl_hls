@@ -55,6 +55,7 @@ export function occupiedBins(marks, size = 0.025) {
         computationUnknown: false,
         delayNs: null,
         timingUnknown: false,
+        timingApplicable: false,
       });
     const bin = bins.get(key),
       known =
@@ -70,8 +71,11 @@ export function occupiedBins(marks, size = 0.025) {
     )
       bin.computations.add(mark.computationKey);
     else bin.computationUnknown = true;
-    if (known) bin.delayNs = Math.max(bin.delayNs ?? 0, mark.delayNs);
-    if (!known || mark.timingUnknown) bin.timingUnknown = true;
+    if (mark.timingApplicable !== false) {
+      bin.timingApplicable = true;
+      if (known) bin.delayNs = Math.max(bin.delayNs ?? 0, mark.delayNs);
+      if (!known || mark.timingUnknown) bin.timingUnknown = true;
+    }
   }
   return [...bins.values()].map(
     ({ roles, computations, computationUnknown, ...bin }) => ({

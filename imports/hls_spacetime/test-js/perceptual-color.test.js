@@ -7,6 +7,7 @@ import {
   DIRECTION_SOURCE_COLOR,
   FUNCTION_COLORS,
   UNKNOWN_COLOR,
+  OUTSIDE_TIMING_COLOR,
   computationColor,
   directionColor,
   sceneColor,
@@ -54,11 +55,13 @@ test("unknown timing is never rendered as a zero-delay sample", () => {
     assert.equal(
       sceneColor({ mode: "timing", delayNs, maxDelayNs: 10 }),
       UNKNOWN_COLOR,
+      OUTSIDE_TIMING_COLOR,
     );
   }
   assert.notEqual(
     sceneColor({ mode: "timing", delayNs: 0, maxDelayNs: 0 }),
     UNKNOWN_COLOR,
+    OUTSIDE_TIMING_COLOR,
   );
   assert.equal(sceneColor({ mode: "timing", delayNs: 3 }), UNKNOWN_COLOR);
 });
@@ -149,6 +152,7 @@ test("computation modes preserve categorical identity and unknown timing", () =>
   assert.equal(
     sceneColor({ ...hybrid, computationKey: null, delayNs: 10 }),
     UNKNOWN_COLOR,
+    OUTSIDE_TIMING_COLOR,
   );
   let previous = 0;
   for (let step = 0; step <= 100; step++) {
@@ -182,4 +186,26 @@ test("known shared computations use neutral gray without claiming an identity", 
       sceneColor({ ...hybrid, delayNs, computationKey: "ignored/when/shared" }),
     );
   }
+});
+
+test("outside-scope timing is distinct from unknown and zero without changing categorical styles", () => {
+  for (const mode of ["timing", "computation-timing"]) {
+    assert.equal(
+      sceneColor({ mode, timingApplicable: false }),
+      OUTSIDE_TIMING_COLOR,
+    );
+    assert.notEqual(sceneColor({ mode, maxDelayNs: 1 }), OUTSIDE_TIMING_COLOR);
+    assert.notEqual(
+      sceneColor({ mode, computationKey: "a", delayNs: 0, maxDelayNs: 1 }),
+      OUTSIDE_TIMING_COLOR,
+    );
+  }
+  assert.equal(
+    sceneColor({
+      mode: "computation",
+      computationKey: "a",
+      timingApplicable: false,
+    }),
+    computationColor("a"),
+  );
 });

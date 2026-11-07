@@ -1,8 +1,9 @@
-/** Function, computation, direction and perceptually ordered static-delay colors.
+/** Function, computation, direction and perceptually ordered static-path-delay colors.
  * Delays are supplied by the caller; this module never infers timing or activity.
  * Selection belongs to a separate outline/halo, not this color mapping.
  */
 export const UNKNOWN_COLOR = "#81738f";
+export const OUTSIDE_TIMING_COLOR = "#526471";
 export const FUNCTION_COLORS = Object.freeze({
   data: "#65dac7",
   enable: "#f1bb6c",
@@ -164,7 +165,7 @@ export function timingColor(delayNs, maxDelayNs) {
   );
 }
 
-/** Map supplied function, computation identity or static cone delay to opaque
+/** Map supplied function, computation identity or complete-path delay to opaque
  * CSS color. Hybrid mode retains a computation hue and uses timing lightness.
  * Explicitly shared computation ownership uses neutral gray, never a fake key.
  * Use the same maxDelayNs across the capture, not each window or selection.
@@ -176,8 +177,11 @@ export function sceneColor({
   maxDelayNs = null,
   computationKey = null,
   computationShared = false,
+  timingApplicable = true,
 } = {}) {
   if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
+  if ((mode === "timing" || mode === "computation-timing") && !timingApplicable)
+    return OUTSIDE_TIMING_COLOR;
   if (mode === "timing") return timingColor(delayNs, maxDelayNs);
   if (mode === "computation")
     return computationShared

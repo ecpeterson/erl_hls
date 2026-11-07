@@ -179,18 +179,20 @@ export function prepareRenderData(model, computationData) {
   const coneFor = (cone) => {
     if (coneIndex.has(cone.id)) return coneIndex.get(cone.id);
     const ids = new Set(),
-      routeIds = [];
+      routeIds = [],
+      cellIds = new Map();
     for (const c of cone.cellIndices) {
       const point = cellPoint(c);
-      if (point)
-        ids.add(
-          add(`cell/${c}`, {
-            type: "cells",
-            point,
-            boundary: index.cells[c].boundary,
-            sourceCell: c,
-          }),
-        );
+      if (point) {
+        const id = add(`cell/${c}`, {
+          type: "cells",
+          point,
+          boundary: index.cells[c].boundary,
+          sourceCell: c,
+        });
+        ids.add(id);
+        cellIds.set(c, id);
+      }
     }
     for (const arc of cone.arcIndices)
       if (index.arcs[arc].kind === "net") {
@@ -198,9 +200,51 @@ export function prepareRenderData(model, computationData) {
         routeIds.push(r);
         for (const id of routes[r].primitives) ids.add(id);
       }
+    const primitiveIds = [...ids];
+    const positions = new Map(primitiveIds.map((id, i) => [id, i]));
+    const primitivePathDelays = {
+      registered: primitiveIds.map(() => "not_applicable"),
+      static: primitiveIds.map(() => "not_applicable"),
+    };
+    // Geometry can represent several graph arcs. Its color carries the worst
+    // complete through-path, retaining any applicable unknown contributor.
+    const contribute = (primitive, arcPosition) => {
+      const position = positions.get(primitive);
+      check(position !== undefined, "path geometry outside cone");
+      for (const scope of ["registered", "static"]) {
+        const cost = cone.pathDelays[scope][arcPosition];
+        const previous = primitivePathDelays[scope][position];
+        primitivePathDelays[scope][position] =
+          previous === null || cost === null
+            ? null
+            : cost === "not_applicable"
+              ? previous
+              : previous === "not_applicable"
+                ? cost
+                : Math.max(previous, cost);
+      }
+    };
+    cone.arcIndices.forEach((arcId, arcPosition) => {
+      const arc = index.arcs[arcId];
+      for (const cell of new Set([
+        index.pins[arc.from].cell,
+        index.pins[arc.to].cell,
+      ])) {
+        if (cellIds.has(cell)) contribute(cellIds.get(cell), arcPosition);
+      }
+      if (arc.kind === "net") {
+        for (const id of routes[routeIndex.get(arcId)].primitives)
+          contribute(id, arcPosition);
+      }
+    });
     const id = cones.length;
     coneIndex.set(cone.id, id);
-    cones.push({ ...cone, primitives: [...ids], routes: routeIds });
+    cones.push({
+      ...cone,
+      primitives: primitiveIds,
+      routes: routeIds,
+      primitivePathDelays,
+    });
     return id;
   };
   for (const event of model.events.values())
@@ -233,22 +277,27 @@ export function prepareRenderData(model, computationData) {
     for (const pip of net.pips) include(pip);
     for (const node of net.nodes) for (const wire of node.wires) include(wire);
   }
-  const max = (key) =>
+  const max = (scope) =>
     cones.reduce(
-      (m, c) => (c[key] === null ? m : Math.max(m ?? 0, c[key])),
+      (maximum, cone) =>
+        cone.primitivePathDelays[scope].reduce(
+          (value, cost) =>
+            typeof cost === "number" ? Math.max(value ?? 0, cost) : value,
+          maximum,
+        ),
       null,
     );
   const data = {
     format: "spacetime-prepared-render",
     schema: 1,
-    algorithm: 1,
+    algorithm: 2,
     build: index.attachment.build,
     nativeBuild: index.attachment.nativeBuild,
     checkpoint: index.attachment.checkpoint,
     bounds,
     maxDelays: {
-      registered: max("registeredDelayNs"),
-      static: max("staticDelayNs"),
+      registered: max("registered"),
+      static: max("static"),
     },
     coverage: index.attachment.coverage,
     sourceCounts: {
@@ -261,7 +310,7 @@ export function prepareRenderData(model, computationData) {
       routeNets: computationData.routeNets.length,
     },
     scope:
-      "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF cone bounds are not arc delay, switching, STA slack or an execution period.",
+      "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF colors bound complete source-to-sink paths through each primitive; they are not incremental arc delay, switching, STA slack or an execution period.",
     operations: [...index.operations.values()].map((op) => ({
       event: op.event,
       applicability: op.applicability,
@@ -398,7 +447,7 @@ export async function prepareRender({ input, output, capture }) {
   const manifest = {
     format: "spacetime-render-manifest",
     schema: 1,
-    algorithm: 1,
+    algorithm: 2,
     view: { bytes: viewBytes.length, sha256: hash(viewBytes) },
     source: sourceDescriptor,
     parts: published.parts,

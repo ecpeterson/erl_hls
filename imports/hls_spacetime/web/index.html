@@ -81,18 +81,20 @@
         X-ray view.
       </p>
       <p>
-        Static cone delay uses a fixed capture-wide color scale for the selected
-        timing scope. A shared mark carries the maximum contributing known cone
-        bound; if any contributing cone lacks timing in that scope, its color
-        remains unknown. This is neither the mark's individual delay nor path
-        slack or dynamic criticality. Register Q → D/control excludes external
-        and constant launches, clock-to-Q and setup. Whole-cone timing includes
-        all source boundaries. Both preserve the full selected cone and use
-        conservative SDF bounds. Actor, task and operation filters select work;
-        function and delay filters select its circuits. The prepared viewer
-        loads rendering indexes; the original native graph and records remain
-        separately retained, hash-bound evidence. They need not all be loaded
-        into the browser to render the scene.
+        Delay emphasis uses a fixed capture-wide color scale for the selected
+        timing scope. A segment carries the longest complete source-to-sink path
+        through it. Shared geometry takes the maximum applicable path bound; an
+        untimed through-path makes it unknown. Geometry outside the timing scope
+        is neutral. The minimum-delay filter still uses whole-cone bounds. This
+        is neither the mark's individual delay nor path slack or dynamic
+        criticality. Register Q → D/control excludes external and constant
+        launches, clock-to-Q and setup. Whole-cone timing includes all source
+        boundaries. Both preserve the full selected cone and use conservative
+        SDF bounds. Actor, task and operation filters select work; function and
+        delay filters select its circuits. The prepared viewer loads rendering
+        indexes; the original native graph and records remain separately
+        retained, hash-bound evidence. They need not all be loaded into the
+        browser to render the scene.
       </p>
       <p>
         Native timing path adds an independent pink static STA overlay selected
@@ -289,9 +291,10 @@
                 <span id="timing-min">0 ns</span
                 ><i id="timing-ramp" class="timing-ramp"></i
                 ><span id="timing-max">Unknown</span
+                ><span><i class="outside-timing"></i>Outside scope</span
                 ><span class="legend-note"
-                  >Maximum contributing cone bound; untimed contributors stay
-                  unknown</span
+                  >Longest source → sink path through each segment; unknowns
+                  stay distinct</span
                 >
               </div>
               <span><i class="role-unknown"></i>Unknown</span>

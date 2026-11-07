@@ -198,7 +198,7 @@ test("offline preparation preserves every occurrence and shares static cones/geo
   assert.deepEqual(preparedComputationLayers(prepared, ["read"]), []);
 });
 
-test("paint retains raw coordinates, shared roles and mixed known/unknown cone timing", () => {
+test("paint retains raw coordinates and combines roles without treating outside paths as unknown", () => {
   const { model, attachment, routeNets } = fixture();
   const prepared = createPreparedComputations(
     model,
@@ -213,11 +213,12 @@ test("paint retains raw coordinates, shared roles and mixed known/unknown cone t
   assert.equal(sink.computationShared, false);
   assert.deepEqual(paint.computations, ["word"]);
   assert.equal("roles" in sink, false);
-  assert.equal(sink.registeredDelayNs, 1);
-  assert.equal(sink.staticDelayNs, 1);
-  assert.equal(sink.registeredTimingUnknown, true);
-  assert.equal(sink.staticTimingUnknown, false);
-  assert.equal(sink.timingUnknown, true);
+  assert.equal(sink.registeredPathDelayNs, 1);
+  assert.equal(sink.staticPathDelayNs, 1);
+  assert.equal(sink.registeredPathTimingUnknown, false);
+  assert.equal(sink.staticPathTimingUnknown, false);
+  assert.equal(sink.registeredPathApplicable, true);
+  assert.equal(sink.staticPathApplicable, true);
   assert.equal(paint.pips.length, 1);
   assert.equal(paint.dispositions.resolved, 1);
   assert.equal(paint.dispositions.unavailable, 4);
@@ -226,8 +227,9 @@ test("paint retains raw coordinates, shared roles and mixed known/unknown cone t
     roles: ["enable"],
   });
   const unknown = preparedCircuitPaint(prepared, enable).cells[0];
-  assert.equal(unknown.registeredDelayNs, null);
-  assert.equal(unknown.registeredTimingUnknown, true);
+  assert.equal(unknown.registeredPathDelayNs, null);
+  assert.equal(unknown.registeredPathTimingUnknown, false);
+  assert.equal(unknown.registeredPathApplicable, false);
   assert.equal(unknown.computationKey, "word");
   const [nextClock] = preparedComputationLayers(prepared, ["w2"]);
   assert.equal(preparedCircuitPaint(prepared, nextClock), paint);
@@ -237,6 +239,20 @@ test("missing coverage, stale identities and invented references reject", () => 
   const { model, attachment, routeNets } = fixture();
   const original = prepareRenderData(model, { attachment, routeNets });
   for (const mutate of [
+    (d) => (d.algorithm = 1),
+    (d) => (d.algorithm = 3),
+    (d) => (d.schema = 2),
+    (d) => delete d.cones[0].pathDelays,
+    (d) => d.cones[0].pathDelays.registered.pop(),
+    (d) => d.cones[0].pathDelays.static.push(0),
+    (d) => (d.cones[0].pathDelays.registered[0] = -1),
+    (d) => (d.cones[0].pathDelays.static[0] = "not_applicable"),
+    (d) => (d.cones[0].pathDelays.registered[0] = "unknown"),
+    (d) => delete d.cones[0].primitivePathDelays,
+    (d) => d.cones[0].primitivePathDelays.registered.pop(),
+    (d) => (d.cones[0].primitivePathDelays.registered[0] = NaN),
+    (d) => (d.cones[0].primitivePathDelays.static[0] = Infinity),
+    (d) => delete d.cones[0].primitivePathDelays.static[0],
     (d) => d.operations.pop(),
     (d) => d.writes.pop(),
     (d) => (d.writes[0].coverage.unknownBits = 0),
@@ -402,4 +418,117 @@ test("unknown cone membership dominates a known owner in either traversal order"
     assert.equal(unknownSink.computationUnknown, true);
     assert.deepEqual(paint.computations, ["word"]);
   }
+});
+
+test("short and long reconvergent branches retain their own complete path cost", () => {
+  const { model, attachment, routeNets } = fixture();
+  const index = createPreparedComputations(
+    model,
+    prepareRenderData(model, { attachment, routeNets }),
+  );
+  const [layer] = preparedComputationLayers(index, ["w0"], { roles: ["data"] });
+  const paint = preparedCircuitPaint(index, layer);
+  const paths = paint.segments
+    .filter((row) => row.sourceNet === 0)
+    .map((row) => row.registeredPathDelayNs)
+    .sort((a, b) => a - b);
+  assert.equal(paths.length, 2);
+  assert(Math.abs(paths[0] - 0.8) < 1e-12);
+  assert(Math.abs(paths[1] - 1) < 1e-12);
+  assert.equal(paint.pips[0].registeredPathDelayNs, 1);
+  assert.equal(index.maxDelays.registered, 1);
+  assert.equal(layer.cones[0].registeredDelayNs, 1);
+});
+
+/** Synthetic aligned costs isolate aggregation from the source graph algorithm:
+ * all three cones touch the sink, but their eligibility is deliberately distinct. */
+function paintCostFixture(costs) {
+  const { model, attachment, routeNets } = fixture();
+  const data = prepareRenderData(model, { attachment, routeNets });
+  const sinkId = data.primitives.find(
+    (primitive) => primitive.type === "cells" && primitive.sourceCell === 2,
+  ).id;
+  for (const cone of data.cones) {
+    const position = cone.primitives.indexOf(sinkId);
+    assert(position >= 0);
+    for (const scope of ["registered", "static"])
+      cone.primitivePathDelays[scope][position] = costs[cone.role];
+  }
+  return createPreparedComputations(model, data);
+}
+
+test("shared geometry keeps the maximum path cost and distinguishes unknown from inapplicable", () => {
+  const index = paintCostFixture({
+    data: 0.4,
+    enable: 0.8,
+    reset: "not_applicable",
+  });
+  const sink = (roles) => {
+    const [layer] = preparedComputationLayers(index, ["w0"], { roles });
+    return preparedCircuitPaint(index, layer).cells.find(
+      (row) => row.sourceCell === 2,
+    );
+  };
+  const shared = sink(["data", "enable", "reset"]);
+  for (const scope of ["registered", "static"]) {
+    assert.equal(shared[`${scope}PathDelayNs`], 0.8);
+    assert.equal(shared[`${scope}PathTimingUnknown`], false);
+    assert.equal(shared[`${scope}PathApplicable`], true);
+    const outside = sink(["reset"]);
+    assert.equal(outside[`${scope}PathDelayNs`], null);
+    assert.equal(outside[`${scope}PathTimingUnknown`], false);
+    assert.equal(outside[`${scope}PathApplicable`], false);
+  }
+  const unknownIndex = paintCostFixture({
+    data: 0.8,
+    enable: "not_applicable",
+    reset: null,
+  });
+  for (const [roles, expectedDelay, expectedUnknown] of [
+    [["data", "enable"], 0.8, false],
+    [["data", "reset"], 0.8, true],
+    [["reset"], null, true],
+  ]) {
+    const [layer] = preparedComputationLayers(unknownIndex, ["w0"], { roles });
+    const row = preparedCircuitPaint(unknownIndex, layer).cells.find(
+      (item) => item.sourceCell === 2,
+    );
+    for (const scope of ["registered", "static"]) {
+      assert.equal(row[`${scope}PathDelayNs`], expectedDelay);
+      assert.equal(row[`${scope}PathTimingUnknown`], expectedUnknown);
+      assert.equal(row[`${scope}PathApplicable`], true);
+    }
+  }
+});
+
+test("global color bounds use finite primitive path costs even when cone bounds are unknown", () => {
+  const { model, attachment, routeNets } = fixture();
+  const data = prepareRenderData(model, { attachment, routeNets });
+  for (const cone of data.cones) {
+    cone.registeredDelayNs = null;
+    cone.staticDelayNs = null;
+    for (const scope of ["registered", "static"])
+      cone.primitivePathDelays[scope].fill("not_applicable");
+  }
+  data.cones[0].primitivePathDelays.registered[0] = 0.25;
+  data.cones[0].primitivePathDelays.static[0] = 0.5;
+  data.maxDelays = { registered: 0.25, static: 0.5 };
+  const index = createPreparedComputations(model, data);
+  assert.deepEqual(index.maxDelays, { registered: 0.25, static: 0.5 });
+  const [filtered] = preparedComputationLayers(index, ["w0"], {
+    includeUnknownTiming: false,
+  });
+  assert.equal(filtered.cones.length, 0);
+  data.maxDelays.registered = null;
+  assert.throws(
+    () => createPreparedComputations(model, data),
+    /global timing summary mismatch/,
+  );
+  data.cones[0].primitivePathDelays.registered[0] = null;
+  data.cones[0].primitivePathDelays.static[0] = "not_applicable";
+  data.maxDelays = { registered: null, static: null };
+  assert.deepEqual(
+    createPreparedComputations(model, data).maxDelays,
+    data.maxDelays,
+  );
 });

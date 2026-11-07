@@ -121,3 +121,22 @@ test("overview colors preserve shared and unknown computation memberships", () =
     assert.deepEqual(occupiedBins(marks), occupiedBins([...marks].reverse()));
   }
 });
+
+test("overview keeps outside-scope geometry neutral without poisoning timed paths", () => {
+  const outside = {
+    position: [0, 0, 0],
+    delayNs: null,
+    timingApplicable: false,
+  };
+  const known = { position: [0.001, 0, 0], delayNs: 2, timingApplicable: true };
+  const [only] = occupiedBins([outside]);
+  assert.equal(only.timingApplicable, false);
+  assert.equal(only.timingUnknown, false);
+  const [mixed] = occupiedBins([outside, known]);
+  assert.equal(mixed.timingApplicable, true);
+  assert.equal(mixed.timingUnknown, false);
+  assert.equal(mixed.delayNs, 2);
+  const [unknown] = occupiedBins([outside, { ...known, delayNs: null }]);
+  assert.equal(unknown.timingApplicable, true);
+  assert.equal(unknown.timingUnknown, true);
+});

@@ -21,6 +21,19 @@ function count(value) {
 function finite(value) {
   return value === null || (Number.isFinite(value) && value >= 0);
 }
+/** Costs align with their source rows; null is eligible but unknown, whereas
+ * not_applicable excludes a primitive or registered-launch arc from that scope. */
+function pathCosts(values, length, allowOutside, name) {
+  check(
+    Array.isArray(values) &&
+      values.length === length &&
+      Array.from(values).every(
+        (value) =>
+          finite(value) || (allowOutside && value === "not_applicable"),
+      ),
+    `invalid ${name} path costs`,
+  );
+}
 function point(value) {
   return (
     value &&
@@ -56,7 +69,7 @@ export function createPreparedComputations(model, data) {
   check(
     data.format === "spacetime-prepared-render" &&
       data.schema === 1 &&
-      data.algorithm === 1,
+      data.algorithm === 2,
     "unsupported format",
   );
   check(
@@ -144,6 +157,18 @@ export function createPreparedComputations(model, data) {
       "routes",
     ])
       unique(cone[key], `cone ${key}`);
+    for (const [table, length] of [
+      ["pathDelays", cone.arcIndices.length],
+      ["primitivePathDelays", cone.primitives.length],
+    ]) {
+      pathCosts(cone[table]?.registered, length, true, `${table} registered`);
+      pathCosts(
+        cone[table]?.static,
+        length,
+        table === "primitivePathDelays",
+        `${table} static`,
+      );
+    }
     for (const id of cone.primitives) ref(id, primitives, "primitive");
     const arcSet = new Set(cone.arcIndices),
       geometry = new Set(cone.primitives);
@@ -230,14 +255,16 @@ export function createPreparedComputations(model, data) {
       "write applicability mismatch",
     );
   }
-  const maxima = (key) =>
-    cones.reduce(
-      (max, cone) => (cone[key] === null ? max : Math.max(max ?? 0, cone[key])),
-      null,
-    );
+  const maxima = (scope) => {
+    let maximum = null;
+    for (const cone of cones)
+      for (const value of cone.primitivePathDelays[scope])
+        if (typeof value === "number") maximum = Math.max(maximum ?? 0, value);
+    return maximum;
+  };
   const maxDelays = {
-    registered: maxima("registeredDelayNs"),
-    static: maxima("staticDelayNs"),
+    registered: maxima("registered"),
+    static: maxima("static"),
   };
   check(
     data.maxDelays?.registered === maxDelays.registered &&
@@ -378,8 +405,9 @@ function paintMemberships(index, layer) {
 }
 
 /** Union shared raw tile geometry only; camera/normalization remain renderer work.
- * A primitive's color bound is the maximum contributing cone bound, not its own
- * delay. Mixed known/unknown contributors retain explicit flags in both scopes.
+ * A primitive's color cost is the maximum eligible path through that primitive
+ * across contributing cones. Unknown eligible paths remain flagged; paths outside
+ * a timing scope do not contribute. Whole-cone bounds are used only by filters.
  * Missing destination membership dominates known owners of a shared primitive. */
 export function preparedCircuitPaint(index, layer) {
   const membershipRows = paintMemberships(index, layer);
@@ -391,7 +419,7 @@ export function preparedCircuitPaint(index, layer) {
   for (const cone of layer.cones) {
     const members = memberships.get(cone.id);
     for (const id of cone.routes) routeIds.add(id);
-    for (const id of cone.primitives) {
+    for (const [primitiveIndex, id] of cone.primitives.entries()) {
       if (!chosen.has(id))
         chosen.set(id, {
           ...index.primitives[id],
@@ -399,10 +427,12 @@ export function preparedCircuitPaint(index, layer) {
           computationKey: null,
           computationShared: false,
           computationUnknown: false,
-          registeredDelayNs: null,
-          staticDelayNs: null,
-          registeredTimingUnknown: false,
-          staticTimingUnknown: false,
+          registeredPathDelayNs: null,
+          staticPathDelayNs: null,
+          registeredPathTimingUnknown: false,
+          staticPathTimingUnknown: false,
+          registeredPathApplicable: false,
+          staticPathApplicable: false,
         });
       const row = chosen.get(id);
       row.roles.add(cone.role);
@@ -421,12 +451,15 @@ export function preparedCircuitPaint(index, layer) {
           row.computationKey = members[0];
         }
       }
-      for (const [value, unknown] of [
-        ["registeredDelayNs", "registeredTimingUnknown"],
-        ["staticDelayNs", "staticTimingUnknown"],
-      ]) {
-        if (cone[value] === null) row[unknown] = true;
-        else row[value] = Math.max(row[value] ?? 0, cone[value]);
+      for (const scope of ["registered", "static"]) {
+        const cost = cone.primitivePathDelays[scope][primitiveIndex];
+        if (cost === "not_applicable") continue;
+        row[`${scope}PathApplicable`] = true;
+        if (cost === null) row[`${scope}PathTimingUnknown`] = true;
+        else {
+          const value = `${scope}PathDelayNs`;
+          row[value] = Math.max(row[value] ?? 0, cost);
+        }
       }
     }
   }
@@ -448,7 +481,6 @@ export function preparedCircuitPaint(index, layer) {
   for (const row of chosen.values()) {
     row.role = row.roles.size === 1 ? [...row.roles][0] : "mixed";
     delete row.roles;
-    row.timingUnknown = row.registeredTimingUnknown || row.staticTimingUnknown;
     result[row.type].push(row);
   }
   return cachePaint(index.paints, key, result);

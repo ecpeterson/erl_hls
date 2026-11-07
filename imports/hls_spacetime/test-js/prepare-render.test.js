@@ -11,11 +11,12 @@ import { loadPreparedRender } from "../web/prepared-loader.js";
 import {
   createPreparedComputations,
   preparedComputationLayers,
+  preparedCircuitPaint,
 } from "../web/prepared-computations.js";
 import { createModel } from "../web/model.js";
 
 /** A single real-shaped FF write exercises file publication and loader closure. */
-async function sourceFixture(t) {
+async function sourceFixture(t, fork = false) {
   const root = await mkdtemp(join(tmpdir(), "spacetime-render-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const input = join(root, "source"),
@@ -58,6 +59,11 @@ async function sourceFixture(t) {
     bindings = [
       { resource: "word", bits: [{ bit: 0, status: "supported", q: 0, d: 1 }] },
     ];
+  if (fork)
+    cells.push(
+      { id: "slow-ff", kind: "FDRE", boundary: "sequential" },
+      { id: "join", kind: "LUT2", boundary: "combinational" },
+    );
   const view = {
     format: "spacetime-view",
     schema: 1,
@@ -96,7 +102,7 @@ async function sourceFixture(t) {
     catalogue: {
       build,
       checkpoint,
-      cells: [{ ...cells[0], x: 10, y: 20 }],
+      cells: cells.map((cell, i) => ({ ...cell, x: 10 + i * 10, y: 20 })),
       bindings: [{ resource: "word", bits: [] }],
     },
   };
@@ -142,6 +148,31 @@ async function sourceFixture(t) {
       },
     ],
   };
+  if (fork) {
+    tables.pins = [
+      { id: "ff/Q", cell: 0, pin: "Q", direction: "OUT", net: 0 },
+      { id: "ff/D", cell: 0, pin: "D", direction: "IN", net: 2 },
+      { id: "slow-ff/Q", cell: 1, pin: "Q", direction: "OUT", net: 1 },
+      { id: "join/I0", cell: 2, pin: "I0", direction: "IN", net: 0 },
+      { id: "join/I1", cell: 2, pin: "I1", direction: "IN", net: 1 },
+      { id: "join/O", cell: 2, pin: "O", direction: "OUT", net: 2 },
+    ];
+    tables.nets = [{ id: "short" }, { id: "long" }, { id: "shared" }];
+    tables.arcs = [
+      { id: "short-in", kind: "net", from: 0, to: 3, net: 0, ns: 1 },
+      { id: "long-in", kind: "net", from: 2, to: 4, net: 1, ns: 3 },
+      { id: "short-logic", kind: "logic", from: 3, to: 5, cell: 2, ns: 2 },
+      { id: "long-logic", kind: "logic", from: 4, to: 5, cell: 2, ns: 4 },
+      { id: "shared-out", kind: "net", from: 5, to: 1, net: 2, ns: 1 },
+    ].map(({ ns, ...arc }) => ({
+      ...arc,
+      timing: { fast: [{ maxPs: ns * 1000 }], slow: [{ maxPs: ns * 1000 }] },
+    }));
+    tables.routeNets = tables.nets.map(({ id }) => ({
+      ...tables.routeNets[0],
+      id,
+    }));
+  }
   const parts = [];
   for (const [table, rows] of Object.entries(tables)) {
     const p = await save(`computations/${table}.json`, rows);
@@ -234,4 +265,35 @@ test("changed source bytes reject before publication; scalar CLI values use last
     parseArguments(["--input", "old", "--input", "new", "--output", "fresh"]),
     { input: "new", output: "fresh" },
   );
+});
+
+test("publication carries complete branch costs into shared geometry without dropping any primitives", async (t) => {
+  const f = await sourceFixture(t, true);
+  await prepareRender(f);
+  const entry = JSON.parse(await readFile(join(f.output, "index.json")))
+    .examples[0];
+  const data = await loadPreparedRender({
+    entry: entry.render,
+    view: f.recording,
+    source: entry.computations,
+    baseUrl: pathToFileURL(f.output + "/").href,
+    fetcher: async (url) => new Response(await readFile(fileURLToPath(url))),
+  });
+  const index = createPreparedComputations(createModel(f.view), data);
+  const layer = preparedComputationLayers(index, ["w"])[0];
+  const paint = preparedCircuitPaint(index, layer);
+  assert.equal(layer.cones[0].registeredDelayNs, 8);
+  assert.deepEqual(index.maxDelays, { registered: 8, static: 8 });
+  assert.equal(paint.segments.length, 3);
+  for (const row of paint.segments) {
+    const expected = row.sourceNet === 0 ? 4 : 8;
+    assert.equal(row.registeredPathDelayNs, expected);
+    assert.equal(row.staticPathDelayNs, expected);
+    assert.equal(row.registeredPathTimingUnknown, false);
+  }
+  assert.equal(
+    paint.cells.find((row) => row.sourceCell === 2).registeredPathDelayNs,
+    8,
+  );
+  assert.equal(paint.cells.length, 3);
 });

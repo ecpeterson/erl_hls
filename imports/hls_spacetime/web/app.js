@@ -965,7 +965,7 @@ function renderCircuitSummary(layers) {
     Object.entries(dispositions)
       .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
       .join(" · ") +
-    ". Structural fan-in includes unsensitized alternatives. Colors follow the selected legend. Delay is a conservative SDF bound in the selected scope, not STA slack or an execution period.";
+    ". Structural fan-in includes unsensitized alternatives. Colors follow the selected legend. Timing color bounds complete source-to-sink paths through the geometry; the filter uses whole-cone bounds. Neither is STA slack or an execution period.";
 }
 
 /** Native routing is a tile footprint, not a metal-track layout. Solid markers
@@ -1301,7 +1301,13 @@ function buildStackScene() {
   renderCircuitSummary(layers);
   const metric = $("circuit-timing").value;
   const delayKey =
-    metric === "registered_launch" ? "registeredDelayNs" : "staticDelayNs";
+    metric === "registered_launch"
+      ? "registeredPathDelayNs"
+      : "staticPathDelayNs";
+  const applicableKey =
+    metric === "registered_launch"
+      ? "registeredPathApplicable"
+      : "staticPathApplicable";
   const maximum =
     state.computations?.maxDelays?.[
       metric === "registered_launch" ? "registered" : "static"
@@ -1353,8 +1359,8 @@ function buildStackScene() {
     if (mode === "direction") return "#627780";
     const delayNs = row[
       metric === "registered_launch"
-        ? "registeredTimingUnknown"
-        : "staticTimingUnknown"
+        ? "registeredPathTimingUnknown"
+        : "staticPathTimingUnknown"
     ]
       ? null
       : (row[delayKey] ?? row.delayNs ?? null);
@@ -1362,6 +1368,7 @@ function buildStackScene() {
       row.role,
       row.computationKey,
       row.computationShared,
+      row[applicableKey],
       delayNs,
     ]);
     if (!palette.has(key))
@@ -1373,6 +1380,7 @@ function buildStackScene() {
           computationKey: row.computationKey,
           computationShared: row.computationShared,
           delayNs,
+          timingApplicable: row[applicableKey],
           maxDelayNs: maximum,
         }),
       );
@@ -1416,11 +1424,12 @@ function buildStackScene() {
       computationKey: row.computationKey,
       computationShared: row.computationShared,
       delayNs: row[delayKey] ?? null,
+      timingApplicable: row[applicableKey] !== false,
       timingUnknown: Boolean(
         row[
           metric === "registered_launch"
-            ? "registeredTimingUnknown"
-            : "staticTimingUnknown"
+            ? "registeredPathTimingUnknown"
+            : "staticPathTimingUnknown"
         ],
       ),
       size: row.boundary === "sequential" ? 0.006 : 0.0035,
@@ -1432,9 +1441,10 @@ function buildStackScene() {
             color: shade({
               ...row,
               [delayKey]: row.timingUnknown ? null : row.delayNs,
+              [applicableKey]: row.timingApplicable,
               [metric === "registered_launch"
-                ? "registeredTimingUnknown"
-                : "staticTimingUnknown"]: row.timingUnknown,
+                ? "registeredPathTimingUnknown"
+                : "staticPathTimingUnknown"]: row.timingUnknown,
             }),
           }))
         : marks;

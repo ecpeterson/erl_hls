@@ -72,7 +72,7 @@ export async function loadPreparedRender({
   check(
     manifest.format === "spacetime-render-manifest" &&
       manifest.schema === 1 &&
-      manifest.algorithm === 1,
+      manifest.algorithm === 2,
     "unsupported manifest",
   );
   check(
@@ -148,7 +148,7 @@ export async function loadPreparedRender({
     ...manifest.render,
     format: "spacetime-prepared-render",
     schema: 1,
-    algorithm: 1,
+    algorithm: 2,
     source: manifest.source,
     view: manifest.view,
     ...tables,

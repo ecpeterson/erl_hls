@@ -434,6 +434,94 @@ function registeredBound(
   };
 }
 
+/** Merge alternative path prefixes/suffixes without losing an untimed path.
+ * A finite alternative cannot establish the maximum while another is unknown. */
+function mergeDistance(distances, pin, distance) {
+  const previous = distances.get(pin);
+  if (!previous) distances.set(pin, distance);
+  else {
+    previous.unknown ||= distance.unknown;
+    if (distance.known !== null)
+      previous.known = Math.max(previous.known ?? 0, distance.known);
+  }
+}
+
+/** Extend one reachable prefix/suffix; an absent annotation is not zero delay. */
+function extendDistance(distance, delay) {
+  const total =
+    distance.known !== null && delay !== null ? distance.known + delay : null;
+  const known = Number.isFinite(total) ? total : null;
+  return {
+    known,
+    unknown: distance.unknown || delay === null || known === null,
+  };
+}
+
+/** Longest complete eligible path through each arc, in the supplied arc order.
+ * Forward/backward DAG passes are linear in this cone, without enumerating paths.
+ * Prefix/suffix unknowns affect only arcs whose through-path can include them.
+ * Values use the same conservative SDF envelope as the existing cone bounds;
+ * they omit endpoint timing checks, clock effects and sensitization. */
+function pathDelays(
+  index,
+  roots,
+  frontiers,
+  outgoing,
+  order,
+  arcIndices,
+  cyclic,
+  unsupported,
+) {
+  if (cyclic || unsupported)
+    return {
+      registered: arcIndices.map(() => null),
+      static: arcIndices.map(() => null),
+    };
+  const suffix = new Map(
+    roots.map((pin) => [pin, { known: 0, unknown: false }]),
+  );
+  for (let i = order.length - 1; i >= 0; i--) {
+    const pin = order[i];
+    for (const arcIndex of outgoing.get(pin) ?? []) {
+      const tail = suffix.get(index.arcs[arcIndex].to);
+      if (tail)
+        mergeDistance(
+          suffix,
+          pin,
+          extendDistance(tail, index.delays[arcIndex]),
+        );
+    }
+  }
+  const costs = (registered) => {
+    const prefix = new Map(
+      frontiers
+        .filter((item) => !registered || item.kind === "sequential")
+        .map((item) => [item.pin, { known: 0, unknown: false }]),
+    );
+    for (const pin of order) {
+      const head = prefix.get(pin);
+      if (!head) continue;
+      for (const arcIndex of outgoing.get(pin) ?? [])
+        mergeDistance(
+          prefix,
+          index.arcs[arcIndex].to,
+          extendDistance(head, index.delays[arcIndex]),
+        );
+    }
+    return arcIndices.map((arcIndex) => {
+      const arc = index.arcs[arcIndex],
+        delay = index.delays[arcIndex];
+      const head = prefix.get(arc.from),
+        tail = suffix.get(arc.to);
+      if (!head || !tail) return registered ? "not_applicable" : null;
+      if (head.unknown || tail.unknown || delay === null) return null;
+      const cost = head.known + delay + tail.known;
+      return Number.isFinite(cost) ? cost : null;
+    });
+  };
+  return { registered: costs(true), static: costs(false) };
+}
+
 /** Build a backward graph cone once, then compute a conservative longest static
  * data delay with Kahn's algorithm. Reconvergence shares nodes, never paths.
  * Unsupported frontiers, cycles or any untimed required arc leave delay unknown. */
@@ -502,12 +590,23 @@ function cone(index, roots, role) {
     cyclic,
     unsupported,
   );
+  const arcIndices = [...arcSet];
   const result = {
     id: key,
     rootPins,
     role,
     pinIndices: [...pinSet],
-    arcIndices: [...arcSet],
+    arcIndices,
+    pathDelays: pathDelays(
+      index,
+      rootPins,
+      frontiers,
+      outgoing,
+      ready,
+      arcIndices,
+      cyclic,
+      unsupported,
+    ),
     frontiers,
     cellIndices: [
       ...new Set(
