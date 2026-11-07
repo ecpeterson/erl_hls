@@ -663,3 +663,30 @@ footer {
   max-height: 155px;
   overflow: auto;
 }
+
+.storage-summary {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: #9db4c1;
+  font-size: 11px;
+}
+.storage-history {
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+}
+.storage-history button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 4px 0;
+}
+
+.legend .load {
+  background: #67b9cc;
+}
+.legend .hold {
+  background: #7797a8;
+  border-radius: 0;
+  height: 2px;
+}

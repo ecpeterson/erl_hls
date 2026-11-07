@@ -8,6 +8,8 @@ import {
   resourcePlacement,
   resourcesForEvent,
   eventDetails,
+  storageSegments,
+  storageLifetimes,
 } from "./model.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
@@ -32,6 +34,9 @@ const state = {
   spacing: 8,
   hits: [],
   flatHits: [],
+  storageHits: [],
+  storageCache: null,
+  storagePointCache: new Map(),
   pointCache: new Map(),
   resourceCache: new Map(),
   actors: [],
@@ -91,6 +96,8 @@ async function loadDocument(
   state.focusVersion = null;
   state.pointCache.clear();
   state.resourceCache.clear();
+  state.storageCache = null;
+  state.storagePointCache.clear();
   state.actors = [...new Set(model.orderedEvents.map((e) => e.actor))].sort();
   options("actor", state.actors, "All actors");
   options(
@@ -401,33 +408,159 @@ function selectedLifetimes() {
   for (const id of ids)
     for (const life of eventDetails(state.model, id).lifetimes)
       found.set(life.version, life);
-  return [...found.values()].slice(0, 8);
+  return [...found.values()];
 }
 
-/** Storage edges preserve version identity, masked writes and reset boundaries. */
-function drawResidence(ctx, project) {
-  if (!$("residence").checked) return;
-  const lives = selectedLifetimes();
-  for (const life of lives) {
-    if (
-      life.endCycle <= state.first ||
-      life.firstCycle >= state.first + state.window
-    )
-      continue;
-    const base = resourcePoint(life.resource),
-      point = {
-        ...base,
-        y: base.y + (!state.model.catalogue ? life.address * 0.6 : 0),
-      },
-      first = Math.max(state.first, life.firstCycle),
-      last = Math.min(state.first + state.window - 1, life.endCycle - 1);
-    const a = project(point, first),
-      b = project(point, last);
-    line(ctx, a, b, "#f1bb6c", 3, true);
-    ctx.fillStyle = "#f1bb6c";
-    ctx.font = "10px ui-monospace,monospace";
-    ctx.fillText(`${life.version} · residence`, b.x + 8, (a.y + b.y) / 2);
+/** Query window histories independently of selection. Selection only emphasizes
+ * evidence; it does not create cross-clock data or assign a word to an actor. */
+function visibleStorage() {
+  const options = {
+    firstCycle: state.first,
+    endCycle: state.first + state.window,
+    ...filters(),
+  };
+  const key = JSON.stringify(options);
+  if (state.storageCache?.key !== key)
+    state.storageCache = {
+      key,
+      segments: storageSegments(state.model, options),
+    };
+  return state.storageCache.segments;
+}
+/** Place unknown bits on their own labelled rail even for partly placed words. */
+function unknownStoragePoint(resource) {
+  const ids = [...state.model.resources.keys()],
+    i = ids.indexOf(resource);
+  return {
+    x: 1.3,
+    y: -1 + (2 * i) / Math.max(1, ids.length - 1),
+    physical: false,
+  };
+}
+/** Expand only an explicitly chosen word into qualified native cell positions.
+ * Folded bits sharing a cell draw once. Unknown/candidate bits never acquire
+ * positions merely because a neighbouring bit has a binding. */
+function storagePoints(segment) {
+  const expand =
+    $("expand-storage").checked && state.resource === segment.resource;
+  const key = JSON.stringify([segment.resource, segment.address, expand]);
+  if (state.storagePointCache.has(key)) return state.storagePointCache.get(key);
+  const save = (points) => {
+    state.storagePointCache.set(key, points);
+    return points;
+  };
+  const model = state.model,
+    placement = resourcePlacement(model, segment.resource);
+  const b = model.geometryBounds;
+  if (!model.catalogue) {
+    const base = resourcePoint(segment.resource);
+    return save([
+      { ...base, y: base.y + segment.address * 0.6, kind: "logical" },
+    ]);
   }
+  const placed = placement.cells.filter(
+    (c) => Number.isFinite(c.x) && Number.isFinite(c.y),
+  );
+  const points =
+    expand && b
+      ? placed.map((c) => ({
+          x: ((c.x - b.minX) / (b.maxX - b.minX || 1) - 0.5) * 2,
+          y: ((c.y - b.minY) / (b.maxY - b.minY || 1) - 0.5) * 2,
+          physical: true,
+          kind: "cell",
+          cell: c.id,
+        }))
+      : placed.length
+        ? [{ ...resourcePoint(segment.resource), kind: "group" }]
+        : [];
+  if (
+    !placed.length ||
+    placement.unknownBits ||
+    placement.candidateCells.length ||
+    placed.length < placement.cells.length
+  )
+    points.push({ ...unknownStoragePoint(segment.resource), kind: "unknown" });
+  return save(points);
+}
+/** Draw observed load bridges and same-version residence, never a dependency
+ * from an overwritten word to the next word. Counts disclose drawing bounds. */
+function drawResidence(ctx, project) {
+  state.storageHits = [];
+  if (!$("residence").checked) {
+    $("storage-summary").textContent = "Cross-cycle storage hidden";
+    return;
+  }
+  const segments = visibleStorage();
+  const selected = new Set(selectedLifetimes().map((life) => life.version));
+  // Show selected details first if the explicit graphics budget is reached.
+  const emphasized = (segment) =>
+    selected.has(segment.version) || segment.resource === state.resource;
+  const ordered = [...segments].sort(
+    (a, b) => Number(emphasized(b)) - Number(emphasized(a)),
+  );
+  let drawn = 0,
+    omitted = 0,
+    loads = 0,
+    holds = 0,
+    cells = new Set();
+  for (const segment of ordered) {
+    if (segment.kind === "write") loads++;
+    else holds++;
+    for (const point of storagePoints(segment)) {
+      if (drawn >= 20000) {
+        omitted++;
+        continue;
+      }
+      const active = emphasized(segment),
+        uncertain =
+          segment.lifetime.continuity !== "within_declared_capture_scope";
+      const a = project(point, segment.visibleFromCycle),
+        b = project(point, segment.visibleToCycle);
+      const stroke =
+        point.kind === "unknown" || uncertain
+          ? "#8c99a4"
+          : active
+            ? "#f7d684"
+            : segment.kind === "write"
+              ? "#67b9cc"
+              : "#7797a8";
+      ctx.globalAlpha = active ? 0.9 : point.kind === "cell" ? 0.32 : 0.48;
+      line(
+        ctx,
+        a,
+        b,
+        stroke,
+        active && point.kind !== "cell"
+          ? 2.3
+          : segment.kind === "write"
+            ? 1.5
+            : 1,
+        segment.kind === "hold" || uncertain || point.kind === "unknown",
+      );
+      // A square marks Q at the next sample, even for a single-cycle value.
+      if (segment.kind === "write" && !segment.afterWindow) {
+        ctx.fillStyle = stroke;
+        ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+      }
+      ctx.fillStyle = stroke;
+      if (segment.beforeWindow) ctx.fillRect(a.x - 3, a.y - 1, 6, 2);
+      if (segment.afterWindow) ctx.fillRect(b.x - 3, b.y - 1, 6, 2);
+      state.storageHits.push({ a, b, segment, point });
+      if (point.cell) cells.add(point.cell);
+      drawn++;
+    }
+  }
+  ctx.globalAlpha = 1;
+  const words = new Set(segments.map((s) => `${s.resource}/${s.address}`)).size;
+  $("storage-summary").textContent =
+    `${words} words · ${loads} load bridges · ${holds} residence spans` +
+    (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
+    (omitted
+      ? ` · ${omitted} strokes omitted (20,000-stroke limit; narrow the window)`
+      : "") +
+    (state.window === 1
+      ? " · show at least two clocks for cross-cycle links"
+      : "");
 }
 /** Render graph edges only; off-window endpoints are clipped and labelled. */
 function drawTrace(ctx, project) {
@@ -473,9 +606,22 @@ function drawStack() {
     layer(ctx, project, c, 0.3);
   if ((state.window - 1) % interval)
     layer(ctx, project, state.first + state.window - 1, 0.3);
+  for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
+    if (
+      epoch.first_cycle < state.first ||
+      epoch.first_cycle >= state.first + state.window
+    )
+      continue;
+    const a = project({ x: -1, y: -1 }, epoch.first_cycle);
+    const b = project({ x: 1, y: -1 }, epoch.first_cycle);
+    line(ctx, a, b, "#ea8b94", 2);
+    ctx.fillStyle = "#ea8b94";
+    ctx.font = "10px system-ui";
+    ctx.fillText(`Reset · ${epoch.id}`, a.x + 6, a.y - 6);
+  }
   installedContext(ctx, project);
-  drawTrace(ctx, project);
   drawResidence(ctx, project);
+  drawTrace(ctx, project);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   for (const event of visibleEvents()) {
@@ -668,6 +814,19 @@ function selectEvent(id, move = true) {
     state.first = event.cycle - Math.floor(state.window / 2);
   render();
 }
+/** Select a stored version, including roots with no fabricated producer event. */
+function selectStorage(version, cell = null) {
+  const life = state.model.lifetimes.get(version);
+  if (!life) return;
+  state.selected = life.producer;
+  state.trace = null;
+  state.annotation = null;
+  state.focusVersion = version;
+  state.resource = life.resource;
+  state.cell = cell;
+  $("resource").value = life.resource;
+  render();
+}
 /** Inspect an annotation without inventing a graph node or causal endpoint. */
 function selectAnnotation(annotation) {
   state.selected = null;
@@ -713,6 +872,21 @@ function renderInspector() {
       "Choose a recorded residence example to inspect supported dependencies.";
     return;
   }
+  if (!state.selected && state.focusVersion) {
+    const life = state.model.lifetimes.get(state.focusVersion);
+    $("selected-kind").textContent = "Stored root";
+    $("selection").innerHTML =
+      `<h3>${esc(life.version)}</h3><p>${esc(life.resource)} [${life.address}]</p><p>${esc(life.origin)} root, available C${life.firstCycle}–C${life.endCycle - 1}. No producer before this recording/incarnation is implied.</p><p>${esc(life.continuity)} · ${life.pending.length} pending or retired read request(s).</p><p>${esc(life.evidence)}</p>`;
+    $("neighbors").innerHTML = life.requests
+      .map(
+        (id) =>
+          `<button data-event="${esc(id)}">Read at C${state.model.events.get(id).cycle}</button>`,
+      )
+      .join("");
+    $("trace-summary").textContent =
+      "Storage residence is separate from numerical ancestry.";
+    return;
+  }
   if (!state.selected) {
     $("selected-kind").textContent = "No selection";
     $("selection").innerHTML =
@@ -732,9 +906,15 @@ function renderInspector() {
         (v) =>
           `<p class="evidence-note">${esc(v.id)}: ${esc(v.origin)} root. ${esc(v.evidence)}</p>`,
       )
+      .join("")}${lifetimes
+      .slice(0, 12)
+      .map(
+        (life) =>
+          `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`,
+      )
       .join(
         "",
-      )}${lifetimes.map((life) => `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`).join("")}`;
+      )}${lifetimes.length > 12 ? `<p>${lifetimes.length - 12} more histories on this path; select a resource or version for detail.</p>` : ""}`;
   $("neighbors").innerHTML = neighborButtons(d);
   $("trace-summary").innerHTML = state.trace
     ? `${state.trace.events.length} connected operations · ${state.trace.roots.length} root stops${state.trace.truncated ? " · traversal capped at 1,000 operations" : ""}${state.trace.roots
@@ -765,6 +945,27 @@ function renderResource() {
           `<p><b>${esc(p.resource)}</b><br>${esc(p.coverage.status.replaceAll("_", " "))}<br>${p.supportedBits} supported bits · ${p.unknownBits} unknown bits · ${p.cells.length} associated cells</p><p>${esc(p.binding?.evidence ?? p.coverage.reason ?? "No measured physical binding.")}</p>${(p.binding?.generated ?? []).map((id) => `<p class="muted">${esc(state.model.catalogue?.generated?.find((g) => g.id === id)?.source ?? id)}</p>`).join("")}`,
       )
       .join("") || "Select an operation to inspect its resource bindings.";
+  const histories = state.resource
+    ? storageLifetimes(state.model, {
+        resource: state.resource,
+        firstCycle: state.first,
+        endCycle: state.first + state.window,
+      })
+    : [];
+  $("storage-history").innerHTML = histories.length
+    ? `<p>${histories.length} versions of this resource intersect the window.</p>` +
+      histories
+        .slice(0, 80)
+        .map(
+          (life) =>
+            `<button data-version="${esc(life.version)}">${esc(life.version)} · C${life.firstCycle}–C${life.endCycle - 1} · ${life.writeCycle === null ? esc(life.origin) : `write C${life.writeCycle}`}</button>`,
+        )
+        .join("") +
+      (histories.length > 80
+        ? "<p>First 80 listed; narrow the clock window to inspect the rest.</p>"
+        : "")
+    : "Select a storage resource to inspect its versions.";
+  $("expand-storage").disabled = !state.resource || !state.model.catalogue;
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
     cells
@@ -819,6 +1020,28 @@ function nearest(hits, x, y, limit = 12) {
     if (d <= dist) {
       dist = d;
       best = hit;
+    }
+  }
+  return best;
+}
+/** Nearest rendered storage span, independently of dense same-clock dots. */
+function nearestStorage(x, y) {
+  let best = null,
+    distance = 25;
+  for (const hit of state.storageHits) {
+    const dx = hit.b.x - hit.a.x,
+      dy = hit.b.y - hit.a.y;
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((x - hit.a.x) * dx + (y - hit.a.y) * dy) / (dx * dx + dy * dy || 1),
+      ),
+    );
+    const d = (x - hit.a.x - t * dx) ** 2 + (y - hit.a.y - t * dy) ** 2;
+    if (d <= distance) {
+      best = hit;
+      distance = d;
     }
   }
   return best;
@@ -931,6 +1154,7 @@ function bindControls() {
   };
   $("context").onchange = repaint;
   $("residence").onchange = repaint;
+  $("expand-storage").onchange = repaint;
   $("reset-camera").onclick = () => {
     state.yaw = -0.6;
     state.tilt = 0.5;
@@ -971,6 +1195,7 @@ function bindControls() {
   };
   $("resource").onchange = () => {
     state.resource = $("resource").value || null;
+    state.cell = null;
     renderResource();
     repaint();
   };
@@ -989,6 +1214,8 @@ function bindControls() {
   document.addEventListener("click", (e) => {
     const target = e.target.closest("[data-event]");
     if (target) selectEvent(target.dataset.event);
+    const version = e.target.closest("[data-version]");
+    if (version) selectStorage(version.dataset.version);
     const cell = e.target.closest("[data-cell]");
     if (cell) {
       state.cell = cell.dataset.cell;
@@ -1015,11 +1242,13 @@ function bindControls() {
       state.tilt = Math.max(0.12, Math.min(1, drag.tilt + dy * 0.003));
       repaint();
     } else {
-      const hit = nearest(state.hits, p.x, p.y);
-      $("tooltip").hidden = !hit;
-      if (hit) {
-        $("tooltip").textContent =
-          `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`;
+      const hit = nearest(state.hits, p.x, p.y, 5);
+      const storage = hit ? null : nearestStorage(p.x, p.y);
+      $("tooltip").hidden = !hit && !storage;
+      if (hit || storage) {
+        $("tooltip").textContent = hit
+          ? `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`
+          : `${storage.segment.kind === "write" ? "Load" : "Residence"} C${storage.segment.fromCycle}→C${storage.segment.toCycle} · ${storage.segment.version} · ${storage.point.cell ?? storage.segment.resource}`;
         $("tooltip").style.left =
           `${Math.min(p.x + 12, stack.clientWidth - 220)}px`;
         $("tooltip").style.top = `${p.y + 14}px`;
@@ -1029,8 +1258,11 @@ function bindControls() {
   stack.onpointerup = (e) => {
     const p = pointer(e);
     if (drag && !drag.moved) {
-      const hit = nearest(state.hits, p.x, p.y);
+      const hit = nearest(state.hits, p.x, p.y, 5);
+      const storage = hit ? null : nearestStorage(p.x, p.y);
       if (hit) selectEvent(hit.event.id, false);
+      else if (storage)
+        selectStorage(storage.segment.version, storage.point.cell ?? null);
     }
     drag = null;
   };

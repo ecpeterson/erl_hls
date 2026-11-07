@@ -1,6 +1,6 @@
 # Inspecting a saved capture
 
-The S5 viewer reads `spacetime-view` JSON projections. A projection retains the complete event/version graph and unique placed-cell/binding tables, plus independently recorded public annotations, evidence scope and content identities. It omits the large native property/net/SDF tables from browser memory; those remain in the source archive. A projection is a browsing index, not a replacement evidence archive or a new measurement.
+The viewer reads `spacetime-view` JSON projections. A projection retains the complete event/version graph and unique placed-cell/binding tables, plus independently recorded public annotations, evidence scope and content identities. It omits the large native property/net/SDF tables from browser memory; those remain in the source archive. A projection is a browsing index, not a replacement evidence archive or a new measurement.
 
 ## Prepare and open
 
@@ -23,11 +23,15 @@ The loopback server serves only `web/`, accepts no uploads, and uses port 4173 b
 - The **clock stack** places operations at the centre of their explicitly associated placed cells. Time runs downward. Drag to rotate; arrow keys rotate the focused canvas; adjust layer spacing and move the clock window. A resource without established placement appears on the labelled unknown rail. The memory fixture uses logical resource/address lanes throughout.
 - **Actor, activation, operation and task** filters use recorded fields. Operation is the available phase/action vocabulary, not a newly inferred computation stage. Activation choices come from the current actor/window. Clears and window navigation never discard the underlying graph.
 - **Inputs** and **Consumers** traverse only recorded value, read-request and required-control dependencies. Root versions stop traversal. The traversal cap is explicit. Same-clock chronology, public completion, placement, equal payloads and wire connectivity create no extra causal edges. Resource-order relations remain distinct and are not included in the default causal traversal.
-- **Storage residence** keeps the same version through clocks between a write and its replacement/reset boundary. A write at C becomes available at C+1. A read-first response can retain an older version after the address has been overwritten. Dashed residence is persistence within declared observation coverage, not an explanation of why work waited. Incomplete capture continuity is labelled uncertain. Explicit hold counts, pending reads and reset retirement remain in the inspector.
+- **Storage links** are visible for every matching word in the clock window, even with no selection. Solid links join a write at C to its new Q at C+1; a square marks that next sample. Dashed spans retain the same version between samples. An equal-valued write is still a new version. Replacement, reset and capture boundaries stop the span; a final write without a following Q sample gets no invented cross-cycle link. Residence is not an attributed wait. Incomplete captures remain visibly uncertain.
 - The **flat chip** draws installed primitives once and highlights the selected resource. Expand cell details or select a highlighted cell for native identity, kind, site, BEL and tile coordinates. The storage resource shows supported and unknown bits separately. Partial word correspondence does not establish the complete circuit footprint of an actor operation.
 - The **timeline** retains the whole recording while the stack shows a movable window. Public completion boundaries and reset incarnations are separate markers. “Selected step” opens all 99 clocks of the saved live example; “Completion record” selects its public annotation without creating a graph endpoint.
 
 The operation list provides keyboard-selectable alternatives to overlapping canvas dots. The inspector identifies producer/consumer versions, activation, storage history and source evidence. Context dots are reused from one physical table; appearances across time do not multiply installed area. Colors identify recorded semantic actors/resources, not exclusive physical ownership or gate switching. Connections are schematic until S7 supplies actual routing geometry.
+
+Select a storage link or use **Resource → Storage versions in view** to inspect its version, producer and consumers. Selecting a resource emphasizes all its visible versions. **Expand selected word into cells** draws its qualified cells at their device tile positions; shared/folded cell identities draw once per word version. Partial, candidate and unplaced portions remain on the unknown rail. Cell expansion associates simulated storage with qualified native value locations; it does not establish native write-enable activity, electrical switching or exclusive task ownership.
+
+The stack groups words by default to stay legible. Actor/activation/operation/task filters select storage through explicit associated events, including consumers outside the clock window, without assigning those actors to every stored bit. Background storage stays neutral. At most 20,000 storage strokes are drawn; any omission is counted beneath the stack. The complete graph stays in memory. Narrow the window or select a resource for detail. Clipping marks preserve off-window boundaries, and a one-clock view has no pair of samples to connect.
 
 ## What the first example supports
 
@@ -40,6 +44,17 @@ Start with **Register residence: C1852 → C1866**. A committed write creates `v
 Switch to **RTL memory witness** for masked/equal writes, read-first collision, delayed response and reset retirement. This is a finite witness of the supplied RAM primitive and fixture; it has no native BRAM placement.
 
 The native measurement failed its 5 ns target. No alternate execution clock period has been established. The viewer reports cycles and does not turn the 8.997 ns static constraint-equivalent value into a measured frequency or step time.
+
+## Check storage against the recording
+
+```sh
+node scripts/check-storage-view.mjs web/data/live-1.json
+node scripts/check-storage-view.mjs web/data/memory.json
+```
+
+This independently advances each recorded word through every clock, then compares that replay with the viewer's compressed load/hold intervals. It checks pre-edge reads, full and masked writes, delayed responses, reset roots and final writes. The JSON report binds the exact input SHA-256 and reports qualified logical edge counts only for complete declared write coverage. Missing coverage remains unqualified; contradictory transfers reject. This is a check of the saved access history and its visualization, not another simulation, a native write-enable proof or a recovery of missing numerical ancestry.
+
+Inputs are bounded to 64 MiB and one million adjacent-clock/word comparisons. `--max-comparisons COUNT` may lower the comparison budget; repeated limits use the last value. Exceeding the limit rejects rather than silently sampling. Normal unit tests use small synthetic histories; these optional saved-case checks require only the prepared files.
 
 ## Local checks
 

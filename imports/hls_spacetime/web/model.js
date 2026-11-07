@@ -104,6 +104,8 @@ export function createModel(document) {
       validCycle(capture.first_cycle) &&
       validCycle(capture.end_cycle) &&
       capture.first_cycle < capture.end_cycle &&
+      typeof capture.complete === "boolean" &&
+      Array.isArray(capture.observers) &&
       Array.isArray(capture.incarnations),
     "Invalid capture bounds",
   );
@@ -116,6 +118,17 @@ export function createModel(document) {
         epoch.end_cycle <= capture.end_cycle &&
         epoch.first_cycle < epoch.end_cycle,
       `Invalid incarnation bounds: ${epoch?.id}`,
+    );
+  }
+  const observers = index(capture.observers, "observer");
+  for (const observer of observers.values()) {
+    requireValue(
+      Array.isArray(observer.gaps),
+      `Invalid observer gaps: ${observer.id}`,
+    );
+    requireValue(
+      !capture.complete || observer.gaps.length === 0,
+      `Complete capture declares observer loss: ${observer.id}`,
     );
   }
   const events = index(bundle.events, "event");
@@ -195,6 +208,10 @@ export function createModel(document) {
     requireValue(
       Array.isArray(event.inputs) && Array.isArray(event.outputs),
       `Invalid event version lists: ${event.id}`,
+    );
+    requireValue(
+      observers.has(event.observer),
+      `Missing event observer: ${event.observer}`,
     );
     for (const resource of resourcesForEvent(event))
       requireValue(resources.has(resource), `Missing resource: ${resource}`);
@@ -443,6 +460,118 @@ export function storageLifetimes(
       beforeWindow: life.firstCycle < firstCycle,
       afterWindow: life.endCycle > endCycle,
     }));
+}
+
+/** Select a lifetime through explicit recorded event fields, not an inferred
+ * owner. Producers and actual consumers/accesses may be outside the display
+ * window; selecting their context does not assign their actor to the storage. */
+function lifetimeMatchesEvents(model, lifetime, options) {
+  const fields = ["actor", "activation", "operation", "task"].filter(
+    (key) => options[key],
+  );
+  if (!fields.length) return true;
+  const ids = new Set([
+    ...(lifetime.producer ? [lifetime.producer] : []),
+    ...(model.consumers.get(lifetime.version) ?? []),
+    ...lifetime.requests,
+    ...lifetime.responses,
+    ...lifetime.holds,
+  ]);
+  return [...ids].some((id) => {
+    const event = model.events.get(id);
+    return event && fields.every((key) => event[key] === options[key]);
+  });
+}
+
+/** Return grouped storage connections between captured pre-edge samples.
+ * A write at C connects to its new word at C+1; retaining that word connects
+ * its first available sample to its final available sample. Single-sample
+ * words still have a write connection. Root words have no invented write.
+ *
+ * The requested window is half-open [firstCycle, endCycle). Segment from/to
+ * fields are inclusive sample endpoints; visibleFromCycle/visibleToCycle clip
+ * them to [firstCycle, endCycle-1]. Zero-length intersections are omitted.
+ * At most two intervals are returned per stored version, never one per clock.
+ * A version's lifetime remains attached for off-window history, uncertain
+ * capture coverage and pending reads. These intervals add no causal edges.
+ *
+ * Optional resource/version(s)/incarnation selectors restrict storage identity.
+ * Actor/activation/operation/task selectors match explicit associated events,
+ * including off-window consumers; they never imply exclusive storage ownership.
+ */
+export function storageSegments(model, options = {}) {
+  const {
+    firstCycle = model.bundle.capture.first_cycle,
+    endCycle = model.bundle.capture.end_cycle,
+    resource,
+    version,
+    versions,
+    incarnation,
+  } = options;
+  requireValue(
+    validCycle(firstCycle) && validCycle(endCycle) && firstCycle < endCycle,
+    "Invalid storage display window",
+  );
+  const selectedVersions = versions === undefined ? null : new Set(versions);
+  const segments = [];
+  const appendSegment = (kind, lifetime, fromCycle, toCycle) => {
+    const visibleFromCycle = Math.max(firstCycle, fromCycle);
+    const visibleToCycle = Math.min(endCycle - 1, toCycle);
+    if (visibleFromCycle >= visibleToCycle) return;
+    segments.push({
+      kind,
+      version: lifetime.version,
+      resource: lifetime.resource,
+      address: lifetime.address,
+      incarnation: lifetime.incarnation,
+      fromCycle,
+      toCycle,
+      visibleFromCycle,
+      visibleToCycle,
+      beforeWindow: fromCycle < firstCycle,
+      afterWindow: toCycle >= endCycle,
+      lifetime,
+    });
+  };
+  for (const lifetime of model.lifetimes.values()) {
+    if (
+      (resource && lifetime.resource !== resource) ||
+      (version && lifetime.version !== version) ||
+      (selectedVersions && !selectedVersions.has(lifetime.version)) ||
+      (incarnation && lifetime.incarnation !== incarnation) ||
+      !lifetimeMatchesEvents(model, lifetime, options)
+    )
+      continue;
+    const epoch = model.epochs.get(lifetime.incarnation);
+    requireValue(
+      lifetime.firstCycle >= epoch.first_cycle &&
+        lifetime.firstCycle <= lifetime.endCycle &&
+        lifetime.endCycle <= epoch.end_cycle,
+      `Storage residence crosses reset or runs backward: ${lifetime.version}`,
+    );
+    if (lifetime.producer) {
+      const producer = model.events.get(lifetime.producer);
+      requireValue(
+        producer.incarnation === lifetime.incarnation &&
+          producer.access?.kind === "write" &&
+          producer.access.after_version === lifetime.version &&
+          producer.access.resource === lifetime.resource &&
+          producer.access.address === lifetime.address,
+        `Stored version has no matching write: ${lifetime.version}`,
+      );
+      // The last recorded D/enable has no following Q sample. Neither a reset
+      // nor the capture boundary supplies that missing transfer observation.
+      if (lifetime.firstCycle < epoch.end_cycle)
+        appendSegment(
+          "write",
+          lifetime,
+          lifetime.writeCycle,
+          lifetime.firstCycle,
+        );
+    }
+    appendSegment("hold", lifetime, lifetime.firstCycle, lifetime.endCycle - 1);
+  }
+  return segments;
 }
 
 /** Return supported cell positions and separate unresolved candidates. Bitwise

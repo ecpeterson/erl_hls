@@ -39,11 +39,15 @@
         inspect the cells behind a resource.
       </p>
       <p>
-        Grey rails contain resources without placement. A dashed residence shows
-        a version persisting between a write and read, inferred only within
-        complete write coverage. Unknown ancestry and partial mappings stay
-        explicit. A public completion annotation does not create a dependency on
-        a nearby operation.
+        Solid storage links join a write at C to Q at C+1; squares mark the new
+        sample. Dashed links retain the same version between samples. Grey rails
+        contain unknown or unplaced bits. Storage is grouped by word until you
+        select a resource and expand its supported cells. Residence is
+        established only within the declared complete write coverage. Unknown
+        ancestry and partial mappings stay explicit. Expanded cells show
+        qualified stored-value locations; simulated loads do not establish the
+        native cells’ write enables or task occupancy. A public completion
+        annotation does not create a dependency on a nearby operation.
       </p>
     </section>
     <div id="notice" role="status">
@@ -124,12 +128,21 @@
                 context</label
               ><label
                 ><input id="residence" type="checkbox" checked /> Storage
-                residence</label
+                links</label
+              ><label
+                ><input id="expand-storage" type="checkbox" disabled /> Expand
+                selected word into cells</label
               ><span class="legend"
-                ><i></i> selected <i class="unknown"></i> unknown /
+                ><i class="load"></i> load C→C+1 <i class="hold"></i> residence
+                <i></i> selected <i class="unknown"></i> unknown /
                 unmapped</span
               >
             </div>
+            <p
+              id="storage-summary"
+              class="storage-summary"
+              aria-live="polite"
+            ></p>
           </section>
           <section class="panel flat-panel">
             <div class="panel-heading">
@@ -153,6 +166,10 @@
                 <option value="">Select a resource</option>
               </select></label
             >
+            <details>
+              <summary>Storage versions in view</summary>
+              <div id="storage-history" class="storage-history"></div>
+            </details>
             <details id="cell-details">
               <summary>
                 Placed cell details <span id="cell-count"></span>
@@ -243,7 +260,7 @@
       </aside>
     </main>
     <footer>
-      <span>HLS Spacetime / S5</span
+      <span>HLS Spacetime / storage history</span
       ><span>Cycle observations · qualified placement · explicit unknowns</span>
     </footer>
     <script type="module" src="app.js"></script>

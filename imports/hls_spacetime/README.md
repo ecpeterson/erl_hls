@@ -2,7 +2,7 @@
 
 Inspect saved FPGA execution as work spread over placed circuitry and clock cycles. The standalone Erlang library validates event/version histories, reads bounded simulator traces, and imports physical catalogues and timing sidecars. It starts no processes and depends only on OTP. Backend observation adapters stay with their producers; application stimuli stay with their applications.
 
-The browser viewer consumes saved JSON without running the compiler, simulator or Vivado. It shows a rotatable clock stack, a synchronized flat chip and timeline, exact recorded dependencies, storage residence and explicit mapping/ancestry gaps. It does not infer routed geometry or a physical execution period.
+The browser viewer consumes saved JSON without running the compiler, simulator or Vivado. It shows a rotatable clock stack, a synchronized flat chip and timeline, exact recorded dependencies, visible register load/hold connections and explicit mapping/ancestry gaps. Selected storage words can expand into their supported physical cells. It does not infer routed geometry or a physical execution period.
 
 ## Local viewer
 
