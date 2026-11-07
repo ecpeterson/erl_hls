@@ -5,6 +5,18 @@ Offline command boundary for the standalone spacetime library. Capture adapters 
 %% Escript callback and testable command dispatcher.
 -export([main/1, run/1]).
 
+-define(MAX_JSON_BYTES, 256 * 1024 * 1024).
+
+%% One fresh SDF arc sidecar is content-bound without changing the source timing evidence.
+-type sdf_summary() :: #{
+    file := binary(),
+    bytes := non_neg_integer(),
+    sha256 := binary(),
+    arcs := non_neg_integer(),
+    issues := non_neg_integer(),
+    source := hls_spacetime_sdf:source()
+}.
+
 -doc "Runs the offline command, prints a JSON summary, and exits nonzero with a concise diagnostic on failure. Use --help for the explicit input/output contract.".
 -spec main([string()]) -> ok | no_return().
 main(Arguments) ->
@@ -17,8 +29,9 @@ main(Arguments) ->
             halt(1)
     end.
 
--doc "Dispatches validate BUNDLE.etf; import EXPORT IDENTITY.term OUTPUT; or join BUNDLE.etf CATALOGUE.etf CLAIMS.etf OUTPUT. All inputs are trusted local files. Outputs require new directories. Import identity is one Erlang map containing build and checkpoint; join independently validates all references and supplied claims. Returns a summary or raises the underlying contract/file error.".
--spec run([string()]) -> help | hls_spacetime:summary() | hls_spacetime_physical:summary().
+-doc "Dispatches validate BUNDLE.etf; import EXPORT IDENTITY.term OUTPUT; join BUNDLE.etf CATALOGUE.etf CLAIMS.etf OUTPUT; or sdf-arcs INPUT SHA256 fast|slow FRESH_JSON. All inputs are trusted local files. Import/join outputs require new directories; sdf-arcs writes one exclusive file, at most 256 MiB including its trailing newline. Import identity is one Erlang map containing build and checkpoint; join independently validates all references and supplied claims. Returns a summary or raises the underlying contract/file error.".
+-spec run([string()]) ->
+    help | hls_spacetime:summary() | hls_spacetime_physical:summary() | sdf_summary().
 run(["--help"]) ->
     help;
 run(["validate", Path]) ->
@@ -33,8 +46,43 @@ run(["join", BundlePath, CataloguePath, ClaimsPath, Output]) ->
     Claims = hls_spacetime_artifact:read(ClaimsPath),
     Joined = hls_spacetime_import:attach(Bundle, Catalogue, Claims),
     hls_spacetime_artifact:write_bundle(Joined, Output);
+run(["sdf-arcs", Input, Digest, CornerName, Output]) ->
+    sdf_arcs(Input, Digest, corner(CornerName), Output);
 run(_) ->
     error({usage, usage()}).
+
+%% Fixed vocabulary prevents input strings from creating atoms in the command process.
+-spec corner(string()) -> fast | slow.
+corner("fast") -> fast;
+corner("slow") -> slow;
+corner(Value) -> error({spacetime_cli, {sdf_corner, Value}}).
+
+%% The complete encoded output is bounded before exclusive creation; failures never overwrite evidence.
+-spec sdf_arcs(file:filename(), string(), fast | slow, file:filename()) -> sdf_summary().
+sdf_arcs(Input, Digest, Corner, Output) ->
+    Parsed = hls_spacetime_sdf:read(Input, #{
+        sha256 => list_to_binary(Digest), corner => Corner, mode => sta
+    }),
+    Projection = hls_spacetime_sdf_arcs:project(Parsed),
+    Data = [json:encode(Projection), $\n],
+    Size = iolist_size(Data),
+    case Size =< ?MAX_JSON_BYTES of
+        true -> ok;
+        false -> error({spacetime_cli, {sdf_json_limit, Size, ?MAX_JSON_BYTES}})
+    end,
+    Sha256 = binary:encode_hex(crypto:hash(sha256, Data), lowercase),
+    case file:write_file(Output, Data, [exclusive]) of
+        ok -> ok;
+        {error, Reason} -> error({spacetime_cli, {write, Output, Reason}})
+    end,
+    #{
+        file => unicode:characters_to_binary(Output),
+        bytes => Size,
+        sha256 => Sha256,
+        arcs => length(maps:get(arcs, Projection)),
+        issues => length(maps:get(issues, Projection)),
+        source => maps:get(source, Projection)
+    }.
 
 %% Positional file arguments avoid shell interpolation and implicit project discovery.
 -spec usage() -> binary().
@@ -43,6 +91,8 @@ usage() ->
         "spacetime validate BUNDLE.etf\n"
         "spacetime import EXPORT_DIRECTORY IDENTITY.term FRESH_OUTPUT\n"
         "spacetime join BUNDLE.etf CATALOGUE.etf CLAIMS.etf FRESH_OUTPUT\n"
-        "Trusted raw ETF only (256 MiB each); no compressed ETF. Import identity: #{build => #{source => <<...>>, rtl => <<...>>, observation => <<...>>}, checkpoint => <<SHA256>>}.\n"
+        "spacetime sdf-arcs INPUT.sdf SHA256 fast|slow FRESH_JSON\n"
+        "SDF input/output are bounded at 256 MiB; SHA256 binds the exact raw input. The output file must not exist.\n"
+        "Bundle/catalogue/claim inputs use trusted raw ETF (256 MiB each), not compressed ETF. Import identity: #{build => #{source => <<...>>, rtl => <<...>>, observation => <<...>>}, checkpoint => <<SHA256>>}.\n"
         "Native extraction, producer claim qualification and simulation are separate commands; this command never infers physical correspondence.\n"
     >>.

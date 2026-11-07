@@ -5,7 +5,7 @@
 %% Offline native-sidecar boundary; never invokes a vendor tool.
 -export([read/2, validate/1, describe/1, validate_description/1]).
 %% Serialized forms contain only maps, lists, binaries and fixed enum atoms.
--export_type([options/0, form/0, parsed/0, description/0]).
+-export_type([options/0, source/0, timescale/0, form/0, parsed/0, description/0]).
 
 -define(MAX_BYTES, 268435456).
 -define(MAX_NODES, 8000000).
@@ -20,17 +20,20 @@
 
 %% Cell forms occur once; metadata strips surrounding quotes only, retaining SDF name escapes.
 -type cell() :: #{celltype := binary(), instance := binary(), form := form()}.
-%% The magnitude is an exact decimal spelling; this reader performs no physical-unit conversion.
+-doc "Exact source-file receipt from the bounded SDF reader. The declared process corner is distinct from each delay value's min/typ/max slots; mode records STA extraction.".
+-type source() :: #{
+    sha256 := binary(),
+    bytes := non_neg_integer(),
+    corner := fast | slow,
+    mode := sta
+}.
+
+-doc "The magnitude retains its exact positive decimal spelling and explicit unit. The reader checks this shape without converting physical units.".
 -type timescale() :: #{magnitude := binary(), unit := fs | ps | ns | us | ms | s}.
 
 -doc "A digest-bound SDF document with preserved headers and one full form per cell. Empty instance denotes the top cell. Metadata retains SDF escape spelling and does not assert native-catalogue identity. Counts include the DELAYFILE root/head; unknown forms are retained without interpretation.".
 -type parsed() :: #{
-    source := #{
-        sha256 := binary(),
-        bytes := non_neg_integer(),
-        corner := fast | slow,
-        mode := sta
-    },
+    source := source(),
     headers := [form()],
     timescale := timescale(),
     cells := [cell()],
@@ -40,12 +43,7 @@
 -doc "Compact reference to a separately retained complete SDF sidecar. The population digest hashes sorted [instance,celltype] JSON rows with SDF escape spelling preserved; it is not a native-catalogue correspondence proof. An importer may attach its relative filename as file. Reopen the sidecar to inspect its full forms.".
 -type description() :: #{
     file => binary(),
-    source := #{
-        sha256 := binary(),
-        bytes := non_neg_integer(),
-        corner := fast | slow,
-        mode := sta
-    },
+    source := source(),
     timescale := timescale(),
     counts := #{cells := non_neg_integer(), nodes := pos_integer()},
     instance_population_sha256 := binary()

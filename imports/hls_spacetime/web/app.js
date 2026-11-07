@@ -15,6 +15,16 @@ import {
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
+import { loadComputations } from "./computation-loader.js";
+import {
+  createComputations,
+  computationLayers,
+  computationConnection,
+} from "./computation-routes.js";
+import {
+  computationSelection,
+  computationWindowUnion,
+} from "./computation-view.js";
 import { windowMetrics } from "./metrics.js";
 import { layoutLabels } from "./labels.js";
 import { spatialPoints, spatialPairs } from "./visibility.js";
@@ -51,6 +61,10 @@ const state = {
   nativePaths: [],
   nativePath: null,
   nativeRoutes: new Map(),
+  computations: null,
+  circuitCache: null,
+  circuitPaintCache: new Map(),
+  loadController: null,
   traceNote: "",
   resourceCache: new Map(),
   actors: [],
@@ -97,10 +111,16 @@ function color(event) {
 async function loadDocument(
   text,
   integrity = "File supplied locally; source evidence not revalidated",
+  computationData = null,
 ) {
   if (text.length > 128 * 1024 * 1024)
     throw Error("Viewer projection exceeds the 128 MiB limit");
   const model = createModel(JSON.parse(text));
+  const computations = createComputations(
+    model,
+    computationData?.attachment,
+    computationData?.routeNets,
+  );
   const paths = nativePaths(model);
   const routes = nativeRoutes(model);
   const routeIndex = new Map(
@@ -128,9 +148,32 @@ async function loadDocument(
         bounds.maxY = Math.max(bounds.maxY, object.y);
       }
     }
+    for (const net of computationData?.routeNets ?? []) {
+      for (const object of net.pips ?? []) extendBounds(bounds, object);
+      for (const node of net.nodes ?? [])
+        for (const wire of node.wires ?? []) extendBounds(bounds, wire);
+    }
     model.geometryBounds = bounds;
   }
   state.nativeRoutes = routeIndex;
+  state.computations = computations;
+  state.circuitCache = null;
+  state.circuitPaintCache.clear();
+  for (const id of [
+    "computation-circuits",
+    "circuit-role",
+    "circuit-timing",
+    "circuit-delay",
+    "circuit-unknown",
+    "circuit-selected",
+  ])
+    $(id).disabled = !computations;
+  $("computation-circuits").checked = Boolean(computations);
+  $("circuit-role").value = "";
+  $("circuit-timing").value = "registered_launch";
+  $("circuit-delay").value = "0";
+  $("circuit-unknown").checked = true;
+  $("circuit-selected").checked = false;
   state.model = model;
   state.selected = null;
   state.trace = null;
@@ -200,7 +243,7 @@ async function loadDocument(
     2,
   );
   $("scope").innerHTML =
-    `<p><b>${esc(model.bundle.evidence)}</b> · ${model.bundle.capture.complete ? "complete within declared observer scope" : "incomplete capture"}</p><p>${esc(integrity)}</p><p>Connections are schematic; this view reports clocks only.</p><details><summary>Reported evidence scope</summary>${(model.document.scope ?? []).map((value) => `<p>${esc(value)}</p>`).join("")}</details><details><summary>Observer coverage</summary>${model.bundle.capture.observers.map((observer) => `<p>${esc(observer.id)}: ${esc(observer.scope)}</p>`).join("")}</details>`;
+    `<p><b>${esc(model.bundle.evidence)}</b> · ${model.bundle.capture.complete ? "complete within declared observer scope" : "incomplete capture"}</p><p>${esc(integrity)}</p><p>The time axis reports clocks. Native wire/PIP locations have schematic spans between them; logical connections remain schematic.</p><details><summary>Reported evidence scope</summary>${(model.document.scope ?? []).map((value) => `<p>${esc(value)}</p>`).join("")}</details><details><summary>Observer coverage</summary>${model.bundle.capture.observers.map((observer) => `<p>${esc(observer.id)}: ${esc(observer.scope)}</p>`).join("")}</details>`;
   const measurement = model.document.measurement;
   const failed = measurement?.target_met === false;
   notice(
@@ -513,6 +556,287 @@ function accessGeometry(event) {
 function mappedOnly() {
   return Boolean(state.model.catalogue) && !$("show-unmapped").checked;
 }
+/** Extend chip space with measured wire/PIP coordinates, never inferred paths. */
+function extendBounds(bounds, object) {
+  if (!Number.isFinite(object.x) || !Number.isFinite(object.y)) return;
+  bounds.minX = Math.min(bounds.minX, object.x);
+  bounds.maxX = Math.max(bounds.maxX, object.x);
+  bounds.minY = Math.min(bounds.minY, object.y);
+  bounds.maxY = Math.max(bounds.maxY, object.y);
+}
+
+/** Cache the visible clock-layer unions independently of the camera. All graph
+ * rows remain retained when functionality or static-delay filters hide geometry. */
+function circuitLayers() {
+  if (!state.computations || !$("computation-circuits").checked) return [];
+  const selectedOnly = $("circuit-selected").checked;
+  const key = JSON.stringify([
+    state.first,
+    state.window,
+    filters(),
+    selectedOnly,
+    selectedOnly ? selectionEvents().map((e) => e.id) : null,
+    $("circuit-role").value,
+    $("circuit-timing").value,
+    $("circuit-delay").value,
+    $("circuit-unknown").checked,
+  ]);
+  if (state.circuitCache?.key === key) return state.circuitCache.layers;
+  const supplied = selectedOnly
+    ? computationSelection(
+        selectionEvents(),
+        eventsInWindow(state.model, filters()),
+      )
+    : visibleEvents();
+  const generated = computationLayers(state.computations, supplied, {
+    roles: $("circuit-role").value
+      ? [$("circuit-role").value]
+      : ["data", "enable", "reset"],
+    minimumDelayNs: Number($("circuit-delay").value),
+    timingMetric: $("circuit-timing").value,
+    includeUnknownTiming: $("circuit-unknown").checked,
+  });
+  const layers = generated.filter(
+    (layer) =>
+      layer.cycle >= state.first && layer.cycle < state.first + state.window,
+  );
+  for (const layer of layers) layer.paint = circuitPaint(layer);
+  state.circuitCache = {
+    key,
+    layers,
+    flatPaint: circuitPaint(computationWindowUnion(layers)),
+    selectionState: !selectedOnly
+      ? null
+      : !supplied.length
+        ? "no_selection"
+        : !generated.length
+          ? "no_associated_writes"
+          : !layers.length
+            ? "outside_window"
+            : null,
+  };
+  return layers;
+}
+
+/** Deduplicate shared circuitry per clock, keeping full occurrence/cone records.
+ * Wire coordinates are unordered tile memberships. Only native PIP order gives
+ * connectivity spans; the inter-PIP spans and pin/site links are schematic. */
+function circuitPaint(layer) {
+  const key = layer.cones
+    .map((cone) => cone.id)
+    .sort()
+    .join("|");
+  if (state.circuitPaintCache.has(key)) return state.circuitPaintCache.get(key);
+  const index = state.computations,
+    tiles = new Map(),
+    pips = new Map(),
+    segments = new Map(),
+    cells = new Map();
+  const rolesByArc = new Map();
+  const point = (cellIndex) => {
+    const cell = state.model.cells.get(index.cells[cellIndex]?.id);
+    return cell && Number.isFinite(cell.x) && Number.isFinite(cell.y)
+      ? cellPoint(cell)
+      : null;
+  };
+  const add = (map, id, item, roles) => {
+    if (!map.has(id)) map.set(id, { ...item, roles: new Set() });
+    for (const role of roles) map.get(id).roles.add(role);
+  };
+  for (const cone of layer.cones) {
+    for (const arc of cone.arcIndices) {
+      if (!rolesByArc.has(arc)) rolesByArc.set(arc, new Set());
+      rolesByArc.get(arc).add(cone.role);
+    }
+    for (const c of cone.cellIndices) {
+      const p = point(c);
+      if (p)
+        add(cells, c, { point: p, boundary: index.cells[c].boundary }, [
+          cone.role,
+        ]);
+    }
+  }
+  const dispositions = {};
+  const segment = (key, from, to, roles, kind) => {
+    if (from && to) add(segments, key, { from, to, kind }, roles);
+  };
+  for (const a of layer.arcs) {
+    const arc = index.arcs[a],
+      roles = rolesByArc.get(a),
+      from = point(index.pins[arc.from].cell),
+      to = point(index.pins[arc.to].cell);
+    if (arc.kind === "logic") continue;
+    const route = computationConnection(index, a);
+    dispositions[route.disposition] =
+      (dispositions[route.disposition] ?? 0) + 1;
+    for (const node of route.nodes)
+      for (const wire of node.wires)
+        if (Number.isFinite(wire.x) && Number.isFinite(wire.y))
+          add(
+            tiles,
+            `${arc.net}/${wire.x}/${wire.y}`,
+            { point: cellPoint(wire) },
+            roles,
+          );
+    const switches = route.pips.map((pip) => {
+      if (!Number.isFinite(pip.x) || !Number.isFinite(pip.y)) return null;
+      const p = cellPoint(pip);
+      add(pips, `${arc.net}/${pip.id}`, { point: p }, roles);
+      return p;
+    });
+    if (!route.nodes.length) {
+      segment(`unresolved/${a}`, from, to, roles, "unresolved");
+      continue;
+    }
+    const ends = [from, ...switches, to];
+    const identities = [
+      `pin/${arc.from}`,
+      ...route.pips.map((pip) => pip.id),
+      `pin/${arc.to}`,
+    ];
+    for (let i = 1; i < ends.length; i++)
+      segment(
+        `${arc.net}/${identities[i - 1]}/${identities[i]}`,
+        ends[i - 1],
+        ends[i],
+        roles,
+        i === 1 || i === ends.length - 1 ? "site" : "node",
+      );
+  }
+  const result = {
+    tiles: [...tiles.values()],
+    pips: [...pips.values()],
+    cells: [...cells.values()],
+    segments: [...segments.values()],
+    dispositions,
+  };
+  for (const rows of [result.tiles, result.pips, result.cells, result.segments])
+    for (const row of rows)
+      row.role = row.roles.size === 1 ? [...row.roles][0] : "mixed";
+  if (state.circuitPaintCache.size >= 256) state.circuitPaintCache.clear();
+  state.circuitPaintCache.set(key, result);
+  return result;
+}
+
+/** Horizontal native circuits are associated with recorded writes at that clock.
+ * They are structural fan-in, including mux alternatives, not observed switching. */
+function drawComputations(ctx, project, flat = false) {
+  const layers = circuitLayers();
+  const rendered =
+    flat && layers.length
+      ? [{ cycle: 0, paint: state.circuitCache.flatPaint }]
+      : layers;
+  const palette = {
+    data: "#67d7c3",
+    enable: "#efb96a",
+    reset: "#bb9df0",
+    mixed: "#dce5ea",
+  };
+  for (const layer of rendered) {
+    const paint = layer.paint;
+    ctx.globalAlpha = 0.5;
+    for (const stroke of paint.segments) {
+      if (stroke.kind === "unresolved" && mappedOnly()) continue;
+      line(
+        ctx,
+        project(stroke.from, layer.cycle),
+        project(stroke.to, layer.cycle),
+        stroke.kind === "unresolved" ? "#84909c" : palette[stroke.role],
+        0.7,
+        true,
+      );
+    }
+    ctx.globalAlpha = 0.55;
+    for (const mark of paint.tiles) {
+      const p = project(mark.point, layer.cycle);
+      ctx.fillStyle = palette[mark.role];
+      ctx.fillRect(p.x - 0.6, p.y - 0.6, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 0.8;
+    for (const mark of paint.pips) {
+      const p = project(mark.point, layer.cycle);
+      ctx.fillStyle = palette[mark.role];
+      ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+    }
+    for (const mark of paint.cells) {
+      const p = project(mark.point, layer.cycle);
+      ctx.strokeStyle = palette[mark.role];
+      if (mark.boundary === "sequential") {
+        ctx.fillStyle = palette[mark.role];
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      } else if (mark.boundary === "constant") {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else ctx.strokeRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+  return layers;
+}
+
+/** Separate retained write/mapping counts from displayed cone/route counts. */
+function renderCircuitSummary(layers) {
+  const node = $("circuit-summary");
+  if (!state.computations) {
+    node.textContent =
+      "Computation routing attachment unavailable for this recording.";
+    return;
+  }
+  if (!$("computation-circuits").checked) {
+    node.textContent =
+      "Computation circuits hidden; complete native graph retained.";
+    return;
+  }
+  const selectionMessages = {
+    no_selection:
+      "Select a recorded write or one of its explicit producers to show its circuits.",
+    no_associated_writes:
+      "The selection has no associated recorded write. Circuit overlays belong to writes and their explicit producers.",
+    outside_window:
+      "The selected writes lie outside the displayed clock window.",
+  };
+  const selectionMessage =
+    selectionMessages[state.circuitCache?.selectionState];
+  if (selectionMessage) {
+    node.textContent = `${selectionMessage} The complete recording and native graph remain loaded.`;
+    return;
+  }
+  let writes = 0,
+    arcs = 0,
+    unknown = 0,
+    untimed = 0,
+    noLaunch = 0,
+    filtered = 0,
+    pips = 0;
+  const dispositions = {};
+  for (const layer of layers) {
+    writes += layer.operations.length;
+    arcs += layer.arcs.length;
+    unknown += layer.coverage.unknownBits;
+    for (const cone of layer.cones) {
+      if (layer.timingMetric === "registered_launch") {
+        if (cone.registeredTiming.status === "not_applicable") noLaunch++;
+        else if (cone.registeredDelayNs === null) untimed++;
+      } else if (cone.staticDelayNs === null) untimed++;
+    }
+    filtered += layer.coverage.filteredCones;
+    pips += layer.paint.pips.length;
+    for (const [key, value] of Object.entries(layer.paint.dispositions))
+      dispositions[key] = (dispositions[key] ?? 0) + value;
+  }
+  const launchSummary =
+    $("circuit-timing").value === "registered_launch"
+      ? ` · ${noLaunch} displayed cones without a registered launch`
+      : "";
+  node.textContent =
+    `${writes.toLocaleString()} recorded writes · ${arcs.toLocaleString()} native arcs summed across ${layers.length} clocks · ${pips.toLocaleString()} PIP locations summed across clocks · ${unknown.toLocaleString()} unmapped target-bit occurrences · ${untimed} displayed cones with unknown timing${launchSummary} · ${filtered} filtered write-cone occurrences. ` +
+    Object.entries(dispositions)
+      .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
+      .join(" · ") +
+    ". Teal: data; amber: enable; purple: reset; white: shared roles. Structural fan-in includes unsensitized alternatives. Delay is a conservative SDF bound in the selected scope, not STA slack or an execution period.";
+}
+
 /** Native routing is a tile footprint, not a metal-track layout. Solid markers
  * are actual selected-node wire tiles and PIP locations. Dotted node spans show
  * electrical connectivity between PIPs; site/logic geometry remains schematic.
@@ -1002,6 +1326,7 @@ function drawStack() {
     labels.add(`Reset · ${epoch.id}`, a.x + 6, a.y - 6, 90);
   }
   installedContext(ctx, project);
+  renderCircuitSummary(drawComputations(ctx, project));
   drawResidence(ctx, project);
   drawTrace(ctx, project, labels);
   state.hits = [];
@@ -1134,6 +1459,12 @@ function drawFlat() {
       ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
       if (active) state.flatHits.push({ ...p, cell });
     }
+    const projectCircuit = (point) => {
+      const x = (point.x / 2 + 0.5) * (b.maxX - b.minX) + b.minX;
+      const y = (point.y / 2 + 0.5) * (b.maxY - b.minY) + b.minY;
+      return { x: ox + (x - b.minX) * scale, y: h - oy - (y - b.minY) * scale };
+    };
+    drawComputations(ctx, projectCircuit, true);
     if (state.nativePath)
       drawNativePath(
         ctx,
@@ -1584,11 +1915,14 @@ function bindControls() {
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
     const sequence = ++state.loadSequence;
+    state.loadController?.abort();
+    state.loadController = new AbortController();
+    const signal = state.loadController.signal;
     const url = $("capture").value;
     setBusy(true);
     try {
       notice("Reading saved capture…");
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       if (!response.ok)
         throw Error(`Capture fetch failed (${response.status})`);
       const bytes = await response.arrayBuffer();
@@ -1604,10 +1938,20 @@ function bindControls() {
         .join("");
       if (digest !== expected.sha256)
         throw Error("Projection digest does not match the local index");
+      const computationData = await loadComputations({
+        entry: expected.computations,
+        signal,
+        view: { bytes: bytes.byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+        progress: (message) => {
+          if (sequence === state.loadSequence) notice(message);
+        },
+      });
       if (sequence !== state.loadSequence) return;
       await loadDocument(
         new TextDecoder("utf-8", { fatal: true }).decode(bytes),
         "Projection bytes verified against local index; original evidence was verified when this projection was prepared.",
+        computationData,
       );
     } catch (e) {
       if (sequence === state.loadSequence) notice(e.message, true);
@@ -1617,6 +1961,8 @@ function bindControls() {
   };
   $("file").onchange = async () => {
     const sequence = ++state.loadSequence;
+    state.loadController?.abort();
+    state.loadController = null;
     const file = $("file").files[0];
     if (!file) return;
     try {
@@ -1672,6 +2018,19 @@ function bindControls() {
       );
     }
     render();
+  };
+  for (const id of [
+    "computation-circuits",
+    "circuit-role",
+    "circuit-timing",
+    "circuit-unknown",
+    "circuit-selected",
+  ])
+    $(id).onchange = repaint;
+  $("circuit-delay").onchange = () => {
+    const value = Number($("circuit-delay").value);
+    if (!Number.isFinite(value) || value < 0) $("circuit-delay").value = "0";
+    repaint();
   };
   $("context").onchange = repaint;
   $("show-unmapped").onchange = repaint;

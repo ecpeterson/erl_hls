@@ -76,6 +76,73 @@ fresh_process_schema_test() ->
     ok = completed(Port, []),
     ok = file:del_dir_r(Root).
 
+%% The maintained command preserves SDF conditions and returns an exact new-file receipt.
+-spec sdf_arcs_workflow_test() -> ok.
+sdf_arcs_workflow_test() ->
+    Root = fresh(),
+    Input = filename:join(Root, "input.sdf"),
+    Output = filename:join(Root, "arcs.json"),
+    {Bytes, Digest} = sdf_fixture(),
+    ok = file:write_file(Input, Bytes),
+    try
+        Summary = hls_spacetime_cli:run(["sdf-arcs", Input, Digest, "slow", Output]),
+        {ok, Json} = file:read_file(Output),
+        ?assertEqual(byte_size(Json), maps:get(bytes, Summary)),
+        ?assertEqual(binary:encode_hex(crypto:hash(sha256, Json), lowercase), maps:get(sha256, Summary)),
+        ?assertEqual(1, maps:get(arcs, Summary)),
+        ?assertEqual(1, maps:get(issues, Summary)),
+        ?assertMatch(#{corner := slow, mode := sta}, maps:get(source, Summary)),
+        #{<<"arcs">> := [Arc], <<"issues">> := [_]} = json:decode(Json),
+        ?assertEqual(4, maps:get(<<"max_ps">>, Arc)),
+        ?assertEqual(1, length(maps:get(<<"guards">>, Arc))),
+        ?assertError({spacetime_cli, {write, Output, eexist}},
+            hls_spacetime_cli:run(["sdf-arcs", Input, Digest, "slow", Output])),
+        ?assertEqual({ok, Json}, file:read_file(Output))
+    after file:del_dir_r(Root) end.
+
+%% Invalid source identity/corner must not leave even an empty output artifact.
+-spec sdf_arcs_rejection_test() -> ok.
+sdf_arcs_rejection_test() ->
+    Root = fresh(),
+    Input = filename:join(Root, "input.sdf"),
+    Output = filename:join(Root, "arcs.json"),
+    {Bytes, Digest} = sdf_fixture(),
+    ok = file:write_file(Input, Bytes),
+    try
+        ?assertError({spacetime_sdf, digest_mismatch},
+            hls_spacetime_cli:run(["sdf-arcs", Input, lists:duplicate(64, $0), "fast", Output])),
+        ?assertError({spacetime_cli, {sdf_corner, "typical"}},
+            hls_spacetime_cli:run(["sdf-arcs", Input, Digest, "typical", Output])),
+        ?assertEqual(false, filelib:is_file(Output))
+    after file:del_dir_r(Root) end.
+
+%% A clean VM loads the reader/projector through the same dispatcher without prior schema setup.
+-spec sdf_arcs_fresh_process_test() -> ok.
+sdf_arcs_fresh_process_test() ->
+    Root = fresh(),
+    Input = filename:join(Root, "input.sdf"),
+    Output = filename:join(Root, "arcs.json"),
+    {Bytes, Digest} = sdf_fixture(),
+    ok = file:write_file(Input, Bytes),
+    Ebin = filename:dirname(code:which(hls_spacetime_cli)),
+    Erl = filename:join([code:root_dir(), "bin", "erl"]),
+    try
+        Port = open_port({spawn_executable, Erl}, [exit_status, binary, stderr_to_stdout,
+            {args, ["+S", "1:1", "-noshell", "-pa", Ebin, "-eval",
+                "_ = hls_spacetime_cli:run(init:get_plain_arguments()), halt().",
+                "-extra", "sdf-arcs", Input, Digest, "fast", Output]}]),
+        ok = completed(Port, []),
+        {ok, Json} = file:read_file(Output),
+        ?assertMatch(#{<<"source">> := #{<<"corner">> := <<"fast">>}, <<"arcs">> := [_]}, json:decode(Json))
+    after file:del_dir_r(Root) end.
+
+%% Invented delays exercise the CLI contract; they are not native measurements.
+-spec sdf_fixture() -> {binary(), string()}.
+sdf_fixture() ->
+    Bytes = <<"(DELAYFILE (TIMESCALE 1ps) (CELL (CELLTYPE \"LUT1\") (INSTANCE lut) (DELAY (ABSOLUTE (COND EN == 1 (IOPATH I0 O (1:2:3) (2:3:4)))) (UNFAMILIAR x))))">>,
+    Digest = binary_to_list(binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)),
+    {Bytes, Digest}.
+
 %% Retain child diagnostics in the failing assertion; never wait indefinitely.
 -spec completed(port(), [binary()]) -> ok.
 completed(Port, Output) ->

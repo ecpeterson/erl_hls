@@ -59,3 +59,7 @@ node scripts/attach-routes.mjs --view /path/to/view/recording.json --selection /
 ```
 
 Use the viewer’s **Open file** on that result. Selection, report, checkpoint and route identities are checked again; unrelated fanout stays out of a selected source-to-sink branch. The route attachment does not reinterpret the execution graph. The exporter fixture and route-selection tests qualify orchestration locally; they do not substitute for native evidence.
+
+## Complete recorded-computation routing
+
+The [complete computation-routing workflow](computation-routing.md) retains the native graph and routes for recorded write associations, independently of the sampled STA reports above. Its exporter accepts the complete canonical-net/endpoint demand, reuses closed native records, and requires a final whole-population manifest. The original selected-route exporter remains available for bounded static-report comparisons.

@@ -95,7 +95,10 @@ function origins(detail, current, checkpoint) {
 /** Bound aggregate graph records and traversal work, not just each individual net. */
 function spend(budget, kind, count = 1) {
   budget[kind] = (budget[kind] ?? 0) + count;
-  requireValue(budget[kind] <= LIMITS[kind], `${kind} limit exceeded`);
+  requireValue(
+    budget[kind] <= (budget.limits ?? LIMITS)[kind],
+    `${kind} limit exceeded`,
+  );
 }
 
 /** A tile has one native grid coordinate everywhere; unavailable locations stay null. */
@@ -582,6 +585,69 @@ function branch(graph, sourcePin, targetPin, budget) {
       ...selected.result.gaps.filter((gap) => gap.kind !== "intrasite"),
     ],
   };
+}
+
+/** Index complete canonical-net routing independently of sampled timing paths.
+ * Callers own byte/hash/build validation and declare aggregate work ceilings.
+ * Every supplied net is validated; exceeded ceilings reject, never truncate. */
+export function createNativeRouting(rows, limits = LIMITS) {
+  requireValue(Array.isArray(rows), "missing canonical routing table");
+  const budget = { limits: { ...LIMITS, ...limits } },
+    tiles = new Map(),
+    nets = new Map();
+  spend(budget, "nets", rows.length);
+  for (const row of rows) {
+    requireValue(!nets.has(row.id), "duplicate canonical net");
+    nets.set(row.id, netGraph(row, budget, tiles));
+  }
+  return { nets, tiles, budget, cache: new Map() };
+}
+
+/** Reuse one exact native connection across any number of cones or clocks.
+ * An omitted net or endpoint remains an explicit gap; no nearest-name match or
+ * synthetic path is substituted. Returned geometry shares native table rows.
+ * Work bounds apply to each uncached connection, never to navigation history. */
+export function nativeConnection(index, net, sourcePin, targetPin) {
+  const key = JSON.stringify([net, sourcePin, targetPin]);
+  if (index.cache.has(key)) return index.cache.get(key);
+  const graph = index.nets.get(net);
+  let result;
+  if (!graph || !graph.pins.has(sourcePin) || !graph.pins.has(targetPin)) {
+    result = {
+      disposition: "unavailable",
+      nodes: [],
+      pips: [],
+      gaps: [
+        {
+          kind: "route",
+          reason: !graph
+            ? "Canonical net routing was not supplied"
+            : "Native endpoint attachment was not supplied",
+        },
+      ],
+      excludedNodes: graph?.nodes.size ?? 0,
+      excludedPips: graph?.pips.size ?? 0,
+      geometry: "native_wire_tiles_and_pip_locations",
+    };
+  } else if (
+    [sourcePin, targetPin].some(
+      (pin) => graph.pins.get(pin).status === "unavailable",
+    )
+  ) {
+    result = unresolved(
+      graph,
+      "unavailable",
+      "Native endpoint route-node correspondence is unavailable",
+      [
+        pinGap(graph.pins.get(sourcePin), "source"),
+        pinGap(graph.pins.get(targetPin), "target"),
+      ],
+    );
+  } else
+    result = branch(graph, sourcePin, targetPin, { ...index.budget, work: 0 });
+  const connection = { canonicalNet: net, sourcePin, targetPin, ...result };
+  index.cache.set(key, connection);
+  return connection;
 }
 
 /** Return canonical per-static-path-arc route records, with ordered native nodes
