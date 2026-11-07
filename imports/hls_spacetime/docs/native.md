@@ -24,3 +24,42 @@ Joined = hls_spacetime_import:attach(Bundle, Catalogue, Claims).
 
 `attach/3` validates the result and preserves the execution events, versions and dependency graph. It adds explicit `unmapped` dispositions for every resource omitted from `Claims`; this empty example therefore asserts no physical correspondence. A caller supplies reviewed generated-object descriptions and bindings only after independent qualification. Structural output-pin checks constrain a per-bit claim but do not prove it. Keep names-only candidates ambiguous, retain unknown execution roots and identify the evidence supporting any promoted association. `native.whole_rtl` remains `null` when the exporter has no separate input-closure identity; that missing field must not be treated as verification of the synthesis inputs.
 
+## Selected routed topology
+
+`priv/tools/export_routes.tcl` exports only the physical nets named by selected arcs in an already retained timing report. Call `::hls_spacetime_routes::run CHECKPOINT OUTPUT SELECTION LIMITS` in a fresh guarded Vivado process. `SELECTION` contains `build`, `checkpoint_sha256`, `report_sha256`, `selection_sha256`, and a flat `paths` list of dictionaries with `path_id`, `arc_index`, `report_net`, `canonical_net`, `source_pin` and `target_pin`. The caller verifies the report and selection bytes; the exporter verifies the checkpoint hash before and after extraction, exact native names, canonical aliases and pin-to-net membership. It does not query new timing paths or search for alternative routing.
+
+Limits may tighten the ceilings of 600 seconds, two million records, 256 MiB, 1,000 unique nets, 50 saved paths and 10,000 selected net arcs. The outer guard covers blocking native queries. Report-net lookup, physical-net extraction and selected endpoint mapping are deduplicated. Only `routes.json` accompanied by a matching `complete.json` hash is complete evidence; `incomplete.json` and any partial JSON are diagnostic prefixes.
+
+The JSON sidecar contains the selected path arcs and per-net nodes, PIPs, wire-to-tile memberships and exact logical-pin/BEL-pin/site-pin/node attachments. Positions use native `GRID_POINT_X`/`GRID_POINT_Y` in `tile_grid` units. A [NODE](https://docs.amd.com/r/2024.2-English/ug912-vivado-properties/NODE?contentId=BWKRuaRu~A4KLc4lmqsj8A) can span many tiles, so its wires are an unordered membership set, never a guessed polyline. [TILE properties](https://docs.amd.com/r/2024.2-English/ug912-vivado-properties/TILE?contentId=iYtqnVe31pL5pda0wJwp7w) provide grid positions; these are not metal centreline coordinates or physical distances.
+
+Used PIPs come from `get_pips -of_objects NET`; their [uphill/downhill nodes](https://docs.amd.com/r/2024.2-English/ug835-vivado-tcl-commands/get_nodes?contentId=rno4Qbk33fsLHGp9kfCaUg) must belong to that net's native node population. `IS_DIRECTIONAL` distinguishes directional from bidirectional resources; a bidirectional resource does not establish its chosen flow direction. [Logical pins map to site pins](https://docs.amd.com/r/2024.2-English/ug835-vivado-tcl-commands/get_site_pins?contentId=2liE0c7WY0h_xBydVjnziA) through native objects, including any mapped BEL pins. Missing or ambiguous mappings remain explicit. Site-internal switches and geometry are not reconstructed: `intrasite` is a gap, not a zero-length connection. These static routes do not establish switching activity, dynamic sensitization or an execution dependency.
+
+The small orchestration fixture runs with `tclsh test/native/export_routes_tests.tcl FRESH_OUTPUT_DIRECTORY`. It mocks native queries and checks fanout retention, multi-tile node membership, unresolved attachments, identity rejection and completion markers. Passing it does not qualify the Vivado APIs; a real export must separately inspect resolved, ambiguous and missing populations.
+
+## Maintained route-selection workflow
+
+Start with a fresh generic projection that includes a digest-bound timing report, and retain its full joined bundle (the compact view intentionally omits canonical nets and pins):
+
+```sh
+node scripts/select-routes.mjs --view /path/to/view/recording.json --bundle /path/to/joined/bundle.json --output /path/to/fresh-selection
+```
+
+The command checks build/checkpoint identities, selected cell positions, report provenance, exact canonical aliases and both endpoint pin memberships. It emits bounded `selection.json`, escaped `selection.tcl`, a portable `run.tcl`, and a complete hash manifest. It selects the existing saved paths; it never searches for new timing paths. The full bundle and projection must refer to the same observation build. Historical observation-plan extensions need their explicit separately reviewed rebinding; this command does not infer it.
+
+Run the emitted driver with explicit checkpoint/exporter/output arguments under the established serial native process guard:
+
+```sh
+vivado -mode batch -source /path/to/fresh-selection/run.tcl -tclargs /path/to/routed.dcp /path/to/hls_spacetime/priv/tools/export_routes.tcl /path/to/fresh-route-export
+```
+
+Verify terminal status, owned process-group termination and every collected hash once. Require `complete.json` and its matching route JSON hash; preserve failures without relaunching implementation. Attach the completed, verified sidecar to the exact selected projection:
+
+```sh
+node scripts/attach-routes.mjs --view /path/to/view/recording.json --selection /path/to/fresh-selection/selection.json --routes /path/to/fresh-route-export/routes.json --out /path/to/new-routed-view.json
+```
+
+Use the viewer’s **Open file** on that result. Selection, report, checkpoint and route identities are checked again; unrelated fanout stays out of a selected source-to-sink branch. The route attachment does not reinterpret the execution graph. The exporter fixture and route-selection tests qualify orchestration locally; they do not substitute for native evidence.
+
+## Complete recorded-computation routing
+
+The [complete computation-routing workflow](computation-routing.md) retains the native graph and routes for recorded write associations, independently of the sampled STA reports above. Its exporter accepts the complete canonical-net/endpoint demand, reuses closed native records, and requires a final whole-population manifest. The original selected-route exporter remains available for bounded static-report comparisons.

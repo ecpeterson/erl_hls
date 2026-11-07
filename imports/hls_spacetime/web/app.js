@@ -14,7 +14,20 @@ import {
 } from "./model.js";
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
+import { nativeRoutes } from "./native-routes.js";
+import { loadComputations } from "./computation-loader.js";
+import {
+  createComputations,
+  computationLayers,
+  computationConnection,
+} from "./computation-routes.js";
+import {
+  computationSelection,
+  computationWindowUnion,
+} from "./computation-view.js";
 import { windowMetrics } from "./metrics.js";
+import { layoutLabels } from "./labels.js";
+import { spatialPoints, spatialPairs } from "./visibility.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
   "#67d7c3",
@@ -47,6 +60,11 @@ const state = {
   footprintCache: new Map(),
   nativePaths: [],
   nativePath: null,
+  nativeRoutes: new Map(),
+  computations: null,
+  circuitCache: null,
+  circuitPaintCache: new Map(),
+  loadController: null,
   traceNote: "",
   resourceCache: new Map(),
   actors: [],
@@ -93,11 +111,69 @@ function color(event) {
 async function loadDocument(
   text,
   integrity = "File supplied locally; source evidence not revalidated",
+  computationData = null,
 ) {
   if (text.length > 128 * 1024 * 1024)
     throw Error("Viewer projection exceeds the 128 MiB limit");
   const model = createModel(JSON.parse(text));
+  const computations = createComputations(
+    model,
+    computationData?.attachment,
+    computationData?.routeNets,
+  );
   const paths = nativePaths(model);
+  const routes = nativeRoutes(model);
+  const routeIndex = new Map(
+    routes.map((route) => [`${route.pathId}/${route.arcIndex}`, route]),
+  );
+  // Include routing excursions; a route can leave the placed-cell bounding box.
+  if (model.geometryBounds) {
+    const bounds = { ...model.geometryBounds };
+    const seen = new Set();
+    for (const route of routes) {
+      for (const object of [
+        ...route.pips,
+        ...route.nodes.flatMap((node) => node.wires),
+      ]) {
+        if (
+          seen.has(object.id) ||
+          !Number.isFinite(object.x) ||
+          !Number.isFinite(object.y)
+        )
+          continue;
+        seen.add(object.id);
+        bounds.minX = Math.min(bounds.minX, object.x);
+        bounds.maxX = Math.max(bounds.maxX, object.x);
+        bounds.minY = Math.min(bounds.minY, object.y);
+        bounds.maxY = Math.max(bounds.maxY, object.y);
+      }
+    }
+    for (const net of computationData?.routeNets ?? []) {
+      for (const object of net.pips ?? []) extendBounds(bounds, object);
+      for (const node of net.nodes ?? [])
+        for (const wire of node.wires ?? []) extendBounds(bounds, wire);
+    }
+    model.geometryBounds = bounds;
+  }
+  state.nativeRoutes = routeIndex;
+  state.computations = computations;
+  state.circuitCache = null;
+  state.circuitPaintCache.clear();
+  for (const id of [
+    "computation-circuits",
+    "circuit-role",
+    "circuit-timing",
+    "circuit-delay",
+    "circuit-unknown",
+    "circuit-selected",
+  ])
+    $(id).disabled = !computations;
+  $("computation-circuits").checked = Boolean(computations);
+  $("circuit-role").value = "";
+  $("circuit-timing").value = "registered_launch";
+  $("circuit-delay").value = "0";
+  $("circuit-unknown").checked = true;
+  $("circuit-selected").checked = false;
   state.model = model;
   state.selected = null;
   state.trace = null;
@@ -167,7 +243,7 @@ async function loadDocument(
     2,
   );
   $("scope").innerHTML =
-    `<p><b>${esc(model.bundle.evidence)}</b> · ${model.bundle.capture.complete ? "complete within declared observer scope" : "incomplete capture"}</p><p>${esc(integrity)}</p><p>Connections are schematic; this view reports clocks only.</p><details><summary>Reported evidence scope</summary>${(model.document.scope ?? []).map((value) => `<p>${esc(value)}</p>`).join("")}</details><details><summary>Observer coverage</summary>${model.bundle.capture.observers.map((observer) => `<p>${esc(observer.id)}: ${esc(observer.scope)}</p>`).join("")}</details>`;
+    `<p><b>${esc(model.bundle.evidence)}</b> · ${model.bundle.capture.complete ? "complete within declared observer scope" : "incomplete capture"}</p><p>${esc(integrity)}</p><p>The time axis reports clocks. Native wire/PIP locations have schematic spans between them; logical connections remain schematic.</p><details><summary>Reported evidence scope</summary>${(model.document.scope ?? []).map((value) => `<p>${esc(value)}</p>`).join("")}</details><details><summary>Observer coverage</summary>${model.bundle.capture.observers.map((observer) => `<p>${esc(observer.id)}: ${esc(observer.scope)}</p>`).join("")}</details>`;
   const measurement = model.document.measurement;
   const failed = measurement?.target_met === false;
   notice(
@@ -277,6 +353,10 @@ function renderMetrics() {
     endCycle: state.first + state.window,
     ...filters(),
     usedOnly: !$("full-storage").checked,
+    whatIfPeriodNs:
+      $("what-if-period").value === ""
+        ? null
+        : Number($("what-if-period").value),
     waitOperations:
       (state.model.document.metric_hints ?? state.model.bundle.metric_hints)
         ?.wait_operations ?? [],
@@ -286,6 +366,20 @@ function renderMetrics() {
     state.metricsCache = { key, value: windowMetrics(state.model, options) };
   const metrics = state.metricsCache.value;
   const { storage, waits, installed } = metrics;
+  const { spatial, activity, timing } = metrics;
+  $("spatial-summary").textContent =
+    spatial?.status === "tile_grid"
+      ? `${spatial.binSizeTiles} × ${spatial.binSizeTiles} tile bins · peak ${spatial.peakBinCells.toLocaleString()} installed cells · ${spatial.occupiedBins} occupied bins · ${spatial.unplacedCells} unplaced. Blue shading counts unique installed cells; it is not capacity utilization or clock activity.`
+      : "Installed-cell concentration unavailable: no qualified tile coordinates.";
+  $("activity-summary").textContent =
+    `${activity.eventSamples.toLocaleString()} recorded operations on ${activity.clocksWithEvents.toLocaleString()} clocks in view · peak ${activity.peakEventsPerClock} operations per clock. Counts follow filters; they are not electrical switching or proof that other clocks were idle.`;
+  $("timing-summary").textContent =
+    (timing.reason === "failed_target_is_not_execution_period"
+      ? "Physical elapsed time unknown: the native target failed timing. "
+      : "Physical elapsed time unknown: no qualified execution period. ") +
+    (timing.whatIf
+      ? `Hypothetical only: ${timing.whatIf.elapsedClocks} clocks × ${timing.whatIf.periodNs} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns. Static path delays are not added again.`
+      : "Enter a period for an explicitly hypothetical clocks × period calculation.");
   $("metrics").innerHTML =
     `<div><strong>${metrics.interval.elapsedClocks.toLocaleString()}</strong><span>clocks in view</span></div><div><strong>${storage.totalWordClocks.toLocaleString()}</strong><span>logical word-clocks</span></div><div><strong>${installed ? installed.cells.toLocaleString() : "—"}</strong><span>unique installed cells</span></div>`;
   let detail = $("metrics-detail");
@@ -457,10 +551,297 @@ function accessGeometry(event) {
   state.footprintCache.set(key, geometry);
   return geometry;
 }
-/** A static STA path is shown on one comparison layer, never inserted into the
- * execution graph. Straight connections join actual placed path cells; they
- * are not the wire trajectory or evidence of a sensitized execution path. */
-function drawNativePath(ctx, project, flat = false) {
+/** Hide only geometry without native coordinates. Logical-only captures retain
+ * their lanes; this display preference never filters graph records or metrics. */
+function mappedOnly() {
+  return Boolean(state.model.catalogue) && !$("show-unmapped").checked;
+}
+/** Extend chip space with measured wire/PIP coordinates, never inferred paths. */
+function extendBounds(bounds, object) {
+  if (!Number.isFinite(object.x) || !Number.isFinite(object.y)) return;
+  bounds.minX = Math.min(bounds.minX, object.x);
+  bounds.maxX = Math.max(bounds.maxX, object.x);
+  bounds.minY = Math.min(bounds.minY, object.y);
+  bounds.maxY = Math.max(bounds.maxY, object.y);
+}
+
+/** Cache the visible clock-layer unions independently of the camera. All graph
+ * rows remain retained when functionality or static-delay filters hide geometry. */
+function circuitLayers() {
+  if (!state.computations || !$("computation-circuits").checked) return [];
+  const selectedOnly = $("circuit-selected").checked;
+  const key = JSON.stringify([
+    state.first,
+    state.window,
+    filters(),
+    selectedOnly,
+    selectedOnly ? selectionEvents().map((e) => e.id) : null,
+    $("circuit-role").value,
+    $("circuit-timing").value,
+    $("circuit-delay").value,
+    $("circuit-unknown").checked,
+  ]);
+  if (state.circuitCache?.key === key) return state.circuitCache.layers;
+  const supplied = selectedOnly
+    ? computationSelection(
+        selectionEvents(),
+        eventsInWindow(state.model, filters()),
+      )
+    : visibleEvents();
+  const generated = computationLayers(state.computations, supplied, {
+    roles: $("circuit-role").value
+      ? [$("circuit-role").value]
+      : ["data", "enable", "reset"],
+    minimumDelayNs: Number($("circuit-delay").value),
+    timingMetric: $("circuit-timing").value,
+    includeUnknownTiming: $("circuit-unknown").checked,
+  });
+  const layers = generated.filter(
+    (layer) =>
+      layer.cycle >= state.first && layer.cycle < state.first + state.window,
+  );
+  for (const layer of layers) layer.paint = circuitPaint(layer);
+  state.circuitCache = {
+    key,
+    layers,
+    flatPaint: circuitPaint(computationWindowUnion(layers)),
+    selectionState: !selectedOnly
+      ? null
+      : !supplied.length
+        ? "no_selection"
+        : !generated.length
+          ? "no_associated_writes"
+          : !layers.length
+            ? "outside_window"
+            : null,
+  };
+  return layers;
+}
+
+/** Deduplicate shared circuitry per clock, keeping full occurrence/cone records.
+ * Wire coordinates are unordered tile memberships. Only native PIP order gives
+ * connectivity spans; the inter-PIP spans and pin/site links are schematic. */
+function circuitPaint(layer) {
+  const key = layer.cones
+    .map((cone) => cone.id)
+    .sort()
+    .join("|");
+  if (state.circuitPaintCache.has(key)) return state.circuitPaintCache.get(key);
+  const index = state.computations,
+    tiles = new Map(),
+    pips = new Map(),
+    segments = new Map(),
+    cells = new Map();
+  const rolesByArc = new Map();
+  const point = (cellIndex) => {
+    const cell = state.model.cells.get(index.cells[cellIndex]?.id);
+    return cell && Number.isFinite(cell.x) && Number.isFinite(cell.y)
+      ? cellPoint(cell)
+      : null;
+  };
+  const add = (map, id, item, roles) => {
+    if (!map.has(id)) map.set(id, { ...item, roles: new Set() });
+    for (const role of roles) map.get(id).roles.add(role);
+  };
+  for (const cone of layer.cones) {
+    for (const arc of cone.arcIndices) {
+      if (!rolesByArc.has(arc)) rolesByArc.set(arc, new Set());
+      rolesByArc.get(arc).add(cone.role);
+    }
+    for (const c of cone.cellIndices) {
+      const p = point(c);
+      if (p)
+        add(cells, c, { point: p, boundary: index.cells[c].boundary }, [
+          cone.role,
+        ]);
+    }
+  }
+  const dispositions = {};
+  const segment = (key, from, to, roles, kind) => {
+    if (from && to) add(segments, key, { from, to, kind }, roles);
+  };
+  for (const a of layer.arcs) {
+    const arc = index.arcs[a],
+      roles = rolesByArc.get(a),
+      from = point(index.pins[arc.from].cell),
+      to = point(index.pins[arc.to].cell);
+    if (arc.kind === "logic") continue;
+    const route = computationConnection(index, a);
+    dispositions[route.disposition] =
+      (dispositions[route.disposition] ?? 0) + 1;
+    for (const node of route.nodes)
+      for (const wire of node.wires)
+        if (Number.isFinite(wire.x) && Number.isFinite(wire.y))
+          add(
+            tiles,
+            `${arc.net}/${wire.x}/${wire.y}`,
+            { point: cellPoint(wire) },
+            roles,
+          );
+    const switches = route.pips.map((pip) => {
+      if (!Number.isFinite(pip.x) || !Number.isFinite(pip.y)) return null;
+      const p = cellPoint(pip);
+      add(pips, `${arc.net}/${pip.id}`, { point: p }, roles);
+      return p;
+    });
+    if (!route.nodes.length) {
+      segment(`unresolved/${a}`, from, to, roles, "unresolved");
+      continue;
+    }
+    const ends = [from, ...switches, to];
+    const identities = [
+      `pin/${arc.from}`,
+      ...route.pips.map((pip) => pip.id),
+      `pin/${arc.to}`,
+    ];
+    for (let i = 1; i < ends.length; i++)
+      segment(
+        `${arc.net}/${identities[i - 1]}/${identities[i]}`,
+        ends[i - 1],
+        ends[i],
+        roles,
+        i === 1 || i === ends.length - 1 ? "site" : "node",
+      );
+  }
+  const result = {
+    tiles: [...tiles.values()],
+    pips: [...pips.values()],
+    cells: [...cells.values()],
+    segments: [...segments.values()],
+    dispositions,
+  };
+  for (const rows of [result.tiles, result.pips, result.cells, result.segments])
+    for (const row of rows)
+      row.role = row.roles.size === 1 ? [...row.roles][0] : "mixed";
+  if (state.circuitPaintCache.size >= 256) state.circuitPaintCache.clear();
+  state.circuitPaintCache.set(key, result);
+  return result;
+}
+
+/** Horizontal native circuits are associated with recorded writes at that clock.
+ * They are structural fan-in, including mux alternatives, not observed switching. */
+function drawComputations(ctx, project, flat = false) {
+  const layers = circuitLayers();
+  const rendered =
+    flat && layers.length
+      ? [{ cycle: 0, paint: state.circuitCache.flatPaint }]
+      : layers;
+  const palette = {
+    data: "#67d7c3",
+    enable: "#efb96a",
+    reset: "#bb9df0",
+    mixed: "#dce5ea",
+  };
+  for (const layer of rendered) {
+    const paint = layer.paint;
+    ctx.globalAlpha = 0.5;
+    for (const stroke of paint.segments) {
+      if (stroke.kind === "unresolved" && mappedOnly()) continue;
+      line(
+        ctx,
+        project(stroke.from, layer.cycle),
+        project(stroke.to, layer.cycle),
+        stroke.kind === "unresolved" ? "#84909c" : palette[stroke.role],
+        0.7,
+        true,
+      );
+    }
+    ctx.globalAlpha = 0.55;
+    for (const mark of paint.tiles) {
+      const p = project(mark.point, layer.cycle);
+      ctx.fillStyle = palette[mark.role];
+      ctx.fillRect(p.x - 0.6, p.y - 0.6, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 0.8;
+    for (const mark of paint.pips) {
+      const p = project(mark.point, layer.cycle);
+      ctx.fillStyle = palette[mark.role];
+      ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+    }
+    for (const mark of paint.cells) {
+      const p = project(mark.point, layer.cycle);
+      ctx.strokeStyle = palette[mark.role];
+      if (mark.boundary === "sequential") {
+        ctx.fillStyle = palette[mark.role];
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      } else if (mark.boundary === "constant") {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else ctx.strokeRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+  return layers;
+}
+
+/** Separate retained write/mapping counts from displayed cone/route counts. */
+function renderCircuitSummary(layers) {
+  const node = $("circuit-summary");
+  if (!state.computations) {
+    node.textContent =
+      "Computation routing attachment unavailable for this recording.";
+    return;
+  }
+  if (!$("computation-circuits").checked) {
+    node.textContent =
+      "Computation circuits hidden; complete native graph retained.";
+    return;
+  }
+  const selectionMessages = {
+    no_selection:
+      "Select a recorded write or one of its explicit producers to show its circuits.",
+    no_associated_writes:
+      "The selection has no associated recorded write. Circuit overlays belong to writes and their explicit producers.",
+    outside_window:
+      "The selected writes lie outside the displayed clock window.",
+  };
+  const selectionMessage =
+    selectionMessages[state.circuitCache?.selectionState];
+  if (selectionMessage) {
+    node.textContent = `${selectionMessage} The complete recording and native graph remain loaded.`;
+    return;
+  }
+  let writes = 0,
+    arcs = 0,
+    unknown = 0,
+    untimed = 0,
+    noLaunch = 0,
+    filtered = 0,
+    pips = 0;
+  const dispositions = {};
+  for (const layer of layers) {
+    writes += layer.operations.length;
+    arcs += layer.arcs.length;
+    unknown += layer.coverage.unknownBits;
+    for (const cone of layer.cones) {
+      if (layer.timingMetric === "registered_launch") {
+        if (cone.registeredTiming.status === "not_applicable") noLaunch++;
+        else if (cone.registeredDelayNs === null) untimed++;
+      } else if (cone.staticDelayNs === null) untimed++;
+    }
+    filtered += layer.coverage.filteredCones;
+    pips += layer.paint.pips.length;
+    for (const [key, value] of Object.entries(layer.paint.dispositions))
+      dispositions[key] = (dispositions[key] ?? 0) + value;
+  }
+  const launchSummary =
+    $("circuit-timing").value === "registered_launch"
+      ? ` · ${noLaunch} displayed cones without a registered launch`
+      : "";
+  node.textContent =
+    `${writes.toLocaleString()} recorded writes · ${arcs.toLocaleString()} native arcs summed across ${layers.length} clocks · ${pips.toLocaleString()} PIP locations summed across clocks · ${unknown.toLocaleString()} unmapped target-bit occurrences · ${untimed} displayed cones with unknown timing${launchSummary} · ${filtered} filtered write-cone occurrences. ` +
+    Object.entries(dispositions)
+      .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
+      .join(" · ") +
+    ". Teal: data; amber: enable; purple: reset; white: shared roles. Structural fan-in includes unsensitized alternatives. Delay is a conservative SDF bound in the selected scope, not STA slack or an execution period.";
+}
+
+/** Native routing is a tile footprint, not a metal-track layout. Solid markers
+ * are actual selected-node wire tiles and PIP locations. Dotted node spans show
+ * electrical connectivity between PIPs; site/logic geometry remains schematic.
+ * The whole overlay is static and never adds execution dependencies. */
+function drawNativePath(ctx, project, flat = false, labels = null) {
   const path = state.nativePath;
   if (!path) return;
   const cycle = Math.max(
@@ -470,25 +851,71 @@ function drawNativePath(ctx, project, flat = false) {
       state.model.events.get(state.selected)?.cycle ?? state.first,
     ),
   );
-  const points = path.steps.map((step) =>
-    project(cellPoint(state.model.cells.get(step.cell)), cycle),
+  const point = (object) => project(cellPoint(object), cycle);
+  const pins = path.steps.map((step) =>
+    point(state.model.cells.get(step.cell)),
   );
   ctx.globalAlpha = 0.95;
-  for (let i = 1; i < points.length; i++)
-    line(ctx, points[i - 1], points[i], "#ef88d1", 2.2);
-  for (const p of points) {
+  for (let i = 0; i < path.arcs.length; i++) {
+    const arc = path.arcs[i],
+      route = state.nativeRoutes.get(`${path.id}/${i}`);
+    const from = pins[i],
+      to = pins[i + 1];
+    if (arc.kind === "logic") {
+      line(ctx, from, to, "#ef88d1", 2, true);
+      continue;
+    }
+    if (!route?.nodes.length) {
+      line(ctx, from, to, "#d7ab77", 1.5, true);
+      continue;
+    }
+    // A node's wires form an unordered electrical union. Do not sort them into
+    // a fictitious trajectory; draw each measured tile membership separately.
+    const tiles = new Set();
+    for (const node of route.nodes)
+      for (const wire of node.wires) {
+        const id = `${wire.x}/${wire.y}`;
+        if (
+          !Number.isFinite(wire.x) ||
+          !Number.isFinite(wire.y) ||
+          tiles.has(id)
+        )
+          continue;
+        tiles.add(id);
+        const p = point(wire);
+        ctx.fillStyle = "#b9adff";
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      }
+    const switches = route.pips.map((pip) =>
+      Number.isFinite(pip.x) && Number.isFinite(pip.y) ? point(pip) : null,
+    );
+    const ends = [from, ...switches, to];
+    for (let j = 1; j < ends.length; j++) {
+      if (!ends[j - 1] || !ends[j]) continue;
+      line(
+        ctx,
+        ends[j - 1],
+        ends[j],
+        j === 1 || j === ends.length - 1 ? "#d7ab77" : "#a99ce8",
+        1.4,
+        true,
+      );
+    }
+    for (const p of switches) {
+      if (!p) continue;
+      ctx.fillStyle = "#f4cf78";
+      ctx.fillRect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
+    }
+  }
+  for (const p of pins) {
     ctx.fillStyle = "#ef88d1";
     ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
   }
-  if (points.length) {
-    ctx.font = "10px ui-monospace,monospace";
-    ctx.fillStyle = "#ffd3f2";
-    ctx.fillText(
-      flat ? path.id : `${path.id} static · not cycle-attributed`,
-      points[0].x + 6,
-      points[0].y - 9,
-    );
-  }
+  ctx.font = "10px ui-monospace,monospace";
+  ctx.fillStyle = "#ffd3f2";
+  const text = flat ? path.id : `${path.id} static · not cycle-attributed`;
+  if (labels) labels.add(text, pins[0].x + 6, pins[0].y - 9, 80);
+  else ctx.fillText(text, pins[0].x + 6, pins[0].y - 9);
   ctx.globalAlpha = 1;
 }
 
@@ -537,8 +964,38 @@ function line(ctx, a, b, stroke, width = 1, dashed = false) {
   ctx.stroke();
   ctx.setLineDash([]);
 }
+/** Queue canvas labels in CSS pixels, then paint a non-overlapping subset.
+ * Axis labels win over optional edge labels; exact details stay in the inspector. */
+function canvasLabels(ctx, width, height) {
+  const candidates = [];
+  return {
+    add(text, x, baseline, priority = 0, key = text) {
+      const size = parseFloat(ctx.font) || 10;
+      candidates.push({
+        text,
+        x,
+        y: baseline - size,
+        width: ctx.measureText(text).width,
+        height: size + 2,
+        baseline,
+        priority,
+        key,
+        font: ctx.font,
+        color: ctx.fillStyle,
+      });
+    },
+    draw() {
+      ctx.globalAlpha = 1;
+      for (const label of layoutLabels(candidates, { width, height })) {
+        ctx.font = label.font;
+        ctx.fillStyle = label.color;
+        ctx.fillText(label.text, label.x, label.baseline);
+      }
+    },
+  };
+}
 /** Draw one footprint outline with no cloned geometry arrays. */
-function layer(ctx, project, cycle, alpha) {
+function layer(ctx, project, cycle, alpha, labels) {
   const corners = [
     { x: -1, y: -1 },
     { x: 1, y: -1 },
@@ -556,7 +1013,7 @@ function layer(ctx, project, cycle, alpha) {
   const a = project({ x: -1.07, y: -1.1 }, cycle);
   ctx.fillStyle = "#718b99";
   ctx.font = "9px ui-monospace,monospace";
-  ctx.fillText(`C${cycle}`, a.x - 30, a.y);
+  labels.add(`C${cycle}`, a.x - 30, a.y, 100);
 }
 /** Reuse the unique cell table for faint context at the first layer. */
 function installedContext(ctx, project) {
@@ -666,7 +1123,7 @@ function storagePoints(segment) {
   return save(points);
 }
 /** Draw observed load bridges and same-version residence, never a dependency
- * from an overwritten word to the next word. Counts disclose drawing bounds. */
+ * from an overwritten word to the next word. The selected window controls cost. */
 function drawResidence(ctx, project) {
   state.storageHits = [];
   if (!$("residence").checked) {
@@ -675,25 +1132,20 @@ function drawResidence(ctx, project) {
   }
   const segments = visibleStorage();
   const selected = new Set(selectedLifetimes().map((life) => life.version));
-  // Show selected details first if the explicit graphics budget is reached.
+  // Draw selected details last so surrounding history cannot cover them.
   const emphasized = (segment) =>
     selected.has(segment.version) || segment.resource === state.resource;
   const ordered = [...segments].sort(
-    (a, b) => Number(emphasized(b)) - Number(emphasized(a)),
+    (a, b) => Number(emphasized(a)) - Number(emphasized(b)),
   );
   let drawn = 0,
-    omitted = 0,
     loads = 0,
     holds = 0,
     cells = new Set();
   for (const segment of ordered) {
     if (segment.kind === "write") loads++;
     else holds++;
-    for (const point of storagePoints(segment)) {
-      if (drawn >= 20000) {
-        omitted++;
-        continue;
-      }
+    for (const point of spatialPoints(storagePoints(segment), mappedOnly())) {
       const active = emphasized(segment),
         uncertain =
           segment.lifetime.continuity !== "within_declared_capture_scope";
@@ -741,20 +1193,17 @@ function drawResidence(ctx, project) {
       : "Recorded uses only · ") +
     `${words} words · ${loads} load bridges · ${holds} residence spans` +
     (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
-    (omitted
-      ? ` · ${omitted} strokes omitted (20,000-stroke limit; narrow the window)`
-      : "") +
+    ` · ${drawn.toLocaleString()} strokes` +
     (state.window === 1
       ? " · show at least two clocks for cross-cycle links"
       : "");
 }
 /** Render graph edges only; off-window endpoints are clipped and labelled. */
-function drawTrace(ctx, project) {
+function drawTrace(ctx, project, labels) {
   state.traceNote = "";
   if (!state.trace) return;
   let aggregates = 0,
-    drawn = 0,
-    omitted = 0;
+    drawn = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const edge of state.trace.edges) {
     const from = state.model.events.get(edge.source),
@@ -763,21 +1212,24 @@ function drawTrace(ctx, project) {
       continue;
     const outside =
       from.cycle < state.first || to.cycle >= state.first + state.window;
-    const sources = expanded ? accessGeometry(from).points : [eventPoint(from)];
-    const targets = expanded ? accessGeometry(to).points : [eventPoint(to)];
+    const sources =
+      expanded || mappedOnly()
+        ? accessGeometry(from).points
+        : [eventPoint(from)];
+    const targets =
+      expanded || mappedOnly() ? accessGeometry(to).points : [eventPoint(to)];
     const connection = expanded
       ? accessConnections(from, to, sources, targets)
       : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
     const { aggregate } = connection;
-    const pairs = aggregate
-      ? [[eventPoint(from), eventPoint(to)]]
-      : connection.pairs;
-    if (aggregate) aggregates++;
+    const pairs = spatialPairs(
+      aggregate ? [[eventPoint(from), eventPoint(to)]] : connection.pairs,
+      sources,
+      targets,
+      mappedOnly(),
+    );
+    if (aggregate && pairs.length) aggregates++;
     for (const [source, target] of pairs) {
-      if (drawn >= 4000) {
-        omitted++;
-        continue;
-      }
       const a = project(source, Math.max(state.first, from.cycle));
       const b = project(
         target,
@@ -792,56 +1244,74 @@ function drawTrace(ctx, project) {
         1,
         outside,
       );
-      if (aggregate) {
-        ctx.globalAlpha = 1;
-        ctx.font = "9px ui-monospace,monospace";
-        ctx.fillStyle = "#f7d684";
-        ctx.fillText(
-          "word dependency",
-          (a.x + b.x) / 2 + 4,
-          (a.y + b.y) / 2 - 4,
-        );
-      }
       if (outside) {
         ctx.font = "9px ui-monospace,monospace";
         ctx.fillStyle = "#f7d684";
-        ctx.fillText(
-          from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
-          a.x + 5,
-          a.y - 4,
-        );
+        if (from.cycle < state.first)
+          labels.add(`← C${from.cycle}`, a.x + 5, a.y - 4, 10);
+        if (to.cycle >= state.first + state.window)
+          labels.add(`C${to.cycle} →`, b.x + 5, b.y - 4, 10);
       }
       drawn++;
     }
   }
   ctx.globalAlpha = 1;
-  state.traceNote = `${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}${omitted ? ` · ${omitted} dependency strokes omitted (4,000 limit)` : ""}`;
+  state.traceNote = ` · ${drawn.toLocaleString()} dependency strokes${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}`;
 }
-/** Report native path details separately from cycle evidence and use attribution. */
+/** Static timing, routed topology coverage and missing geometry are separate
+ * from recorded use. Per-arc rows disclose gaps instead of drawing fanout trees. */
 function renderNativePath() {
   const path = state.nativePath;
+  const routes = path
+    ? path.arcs.flatMap((arc, i) => {
+        const route = state.nativeRoutes.get(`${path.id}/${i}`);
+        return route ? [route] : [];
+      })
+    : [];
+  const resolved = routes.filter(
+    (route) => route.disposition === "resolved",
+  ).length;
+  const partial = routes.filter(
+    (route) => route.disposition === "partial",
+  ).length;
   $("native-path-summary").textContent = path
-    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. Lines join placed cells, not route bends.`
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. ` +
+      (routes.length
+        ? `${resolved} resolved + ${partial} partial of ${path.arcs.filter((arc) => arc.kind === "net").length} net arcs have branch geometry; partial endpoints retain unknown alternatives. Violet marks native wire tiles; gold marks routing switches. Dotted spans show node connectivity or missing site geometry, not exact metal bends.`
+        : "No routing geometry supplied; dotted segments join placed cells only.")
     : state.nativePaths.length
-      ? "Optional pink overlay: actual placed logic sequence from saved static timing. It is not attributed to this clock's execution."
-      : state.model.catalogue
-        ? "No native timing-path detail supplied. Prepare the example again to include saved paths."
-        : "Native timing and placement are unmeasured for this logical capture.";
+      ? "Select a saved static path to inspect its ordered combinational logic and routing, independently of this clock's execution."
+      : "Native timing-path detail is unavailable for this capture.";
   $("native-path-steps").innerHTML = path
-    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps.map((s) => `<li>${esc(s.pin)}${s.incrementNs === null ? "" : ` · +${s.incrementNs} ns`}</li>`).join("")}</ol>`
+    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps
+        .map((step, i) => {
+          const route = state.nativeRoutes.get(`${path.id}/${i}`);
+          const arc = path.arcs[i];
+          const detail = route
+            ? `${route.disposition} · ${route.pips.length} PIPs · ${route.nodes.length} routed nodes · ${route.excludedPips} PIPs not displayed; gaps: ${route.gaps.map((gap) => (typeof gap === "string" ? gap : JSON.stringify(gap))).join(", ")}`
+            : arc?.kind === "logic"
+              ? "cell logic arc; internal geometry unavailable"
+              : arc
+                ? "wire geometry unavailable"
+                : "endpoint";
+          return `<li>${esc(step.pin)}${step.incrementNs === null ? "" : ` · +${step.incrementNs} ns`}<br><span class="muted">${esc(detail)}</span></li>`;
+        })
+        .join("")}</ol>`
     : "";
 }
 
-/** Draw the chip stack using a bounded window and shared geometry. */
+/** Draw every access in the user-selected window using shared geometry. */
 function drawStack() {
   const { ctx, w, h } = canvasContext("stack");
   if (!state.model) return;
   const project = projector(w, h),
+    labels = canvasLabels(ctx, w, h),
     interval = Math.max(1, Math.ceil(state.window / 12));
+  $("show-unmapped").disabled = !state.model.catalogue;
   for (let c = state.first; c < state.first + state.window; c += interval)
-    layer(ctx, project, c, 0.3);
+    layer(ctx, project, c, 0.3, labels);
   if ((state.window - 1) % interval)
-    layer(ctx, project, state.first + state.window - 1, 0.3);
+    layer(ctx, project, state.first + state.window - 1, 0.3, labels);
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
     if (
       epoch.first_cycle < state.first ||
@@ -853,32 +1323,34 @@ function drawStack() {
     line(ctx, a, b, "#ea8b94", 2);
     ctx.fillStyle = "#ea8b94";
     ctx.font = "10px system-ui";
-    ctx.fillText(`Reset · ${epoch.id}`, a.x + 6, a.y - 6);
+    labels.add(`Reset · ${epoch.id}`, a.x + 6, a.y - 6, 90);
   }
   installedContext(ctx, project);
+  renderCircuitSummary(drawComputations(ctx, project));
   drawResidence(ctx, project);
-  drawTrace(ctx, project);
+  drawTrace(ctx, project, labels);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const seeds = new Set(selectionEvents().map((event) => event.id));
   const events = visibleEvents().sort(
     (a, b) =>
-      Number(seeds.has(b.id) || pathIds.has(b.id)) -
-      Number(seeds.has(a.id) || pathIds.has(a.id)),
+      Number(seeds.has(a.id) || pathIds.has(a.id)) -
+      Number(seeds.has(b.id) || pathIds.has(b.id)),
   );
-  let drawn = 0,
-    omitted = 0;
+  let drawn = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const event of events) {
     const selected = seeds.has(event.id),
       onPath = pathIds.has(event.id);
-    const geometry = expanded ? accessGeometry(event) : null;
-    const points = geometry?.points ?? [eventPoint(event)];
+    const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
+    // A compact word centroid does not locate an access selecting unknown bits.
+    if (mappedOnly() && !geometry.points.some((point) => point.physical))
+      continue;
+    const points = spatialPoints(
+      expanded ? geometry.points : [eventPoint(event)],
+      mappedOnly(),
+    );
     for (const point of points) {
-      if (drawn >= 20000) {
-        omitted++;
-        continue;
-      }
       const p = project(point, event.cycle);
       ctx.globalAlpha =
         state.trace && !onPath
@@ -911,27 +1383,34 @@ function drawStack() {
   $("access-summary").textContent = !state.model.catalogue
     ? "Logical layout · native access placement unmeasured"
     : expanded
-      ? `Accesses at native tiles · hollow = word context, read-bit subset unknown${omitted ? ` · ${omitted} glyphs omitted (20,000 limit; narrow window)` : ""}`
+      ? "Accesses at native tiles · hollow = word context, read-bit subset unknown"
       : "Compact aggregate symbols · centers are not computation locations";
-  $("access-summary").textContent += state.traceNote;
-  drawNativePath(ctx, project);
+  $("access-summary").textContent +=
+    ` · ${drawn.toLocaleString()} access glyphs` + state.traceNote;
+  $("access-summary").textContent += mappedOnly()
+    ? " · unmapped geometry hidden; records and totals retained"
+    : "";
+  drawNativePath(ctx, project, false, labels);
   ctx.globalAlpha = 1;
   const p = project({ x: 1.4, y: 0 }, state.first);
   ctx.fillStyle = "#91a7b3";
   ctx.font = "10px system-ui";
-  ctx.fillText(
-    state.model.catalogue ? "UNMAPPED / UNKNOWN" : "LOGICAL LAYOUT",
-    p.x - 50,
-    p.y - 23,
-  );
+  if (!mappedOnly())
+    labels.add(
+      state.model.catalogue ? "UNMAPPED / UNKNOWN" : "LOGICAL LAYOUT",
+      p.x - 50,
+      p.y - 23,
+      60,
+    );
   if (state.annotation) {
     const cycle = state.annotation.cycle;
     if (cycle >= state.first && cycle < state.first + state.window) {
       const p = project({ x: -1.2, y: 1 }, cycle);
       ctx.fillStyle = "#f1bb6c";
-      ctx.fillText(`Public completion · C${cycle}`, p.x, p.y + 16);
+      labels.add(`Public completion · C${cycle}`, p.x, p.y + 16, 90);
     }
   }
+  labels.draw();
 }
 /** Flat chip projection retains installed population, rather than layer copies. */
 function drawFlat() {
@@ -953,6 +1432,20 @@ function drawFlat() {
       ),
       ox = (w - (b.maxX - b.minX) * scale) / 2,
       oy = (h - (b.maxY - b.minY) * scale) / 2;
+    const spatial = state.metricsCache?.value.spatial;
+    if ($("spatial-density").checked && spatial?.status === "tile_grid") {
+      for (const bin of spatial.bins) {
+        const x = ox + (bin.x - b.minX) * scale;
+        const y = h - oy - (bin.y + spatial.binSizeTiles - b.minY) * scale;
+        ctx.fillStyle = `rgba(90, 150, 220, ${0.08 + (0.32 * bin.installedCells) / spatial.peakBinCells})`;
+        ctx.fillRect(
+          x,
+          y,
+          spatial.binSizeTiles * scale,
+          spatial.binSizeTiles * scale,
+        );
+      }
+    }
     for (const cell of model.cells.values()) {
       if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
       const p = {
@@ -966,6 +1459,12 @@ function drawFlat() {
       ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
       if (active) state.flatHits.push({ ...p, cell });
     }
+    const projectCircuit = (point) => {
+      const x = (point.x / 2 + 0.5) * (b.maxX - b.minX) + b.minX;
+      const y = (point.y / 2 + 0.5) * (b.maxY - b.minY) + b.minY;
+      return { x: ox + (x - b.minX) * scale, y: h - oy - (y - b.minY) * scale };
+    };
+    drawComputations(ctx, projectCircuit, true);
     if (state.nativePath)
       drawNativePath(
         ctx,
@@ -1292,7 +1791,7 @@ function renderResource() {
     : "Select a storage resource to inspect its versions.";
   $("expand-storage").disabled = !state.resource || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
-    ? `${cells.length} associated native cells highlighted · no logic cone or routes`
+    ? `${cells.length} associated native storage cells highlighted`
     : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
@@ -1416,11 +1915,14 @@ function bindControls() {
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
     const sequence = ++state.loadSequence;
+    state.loadController?.abort();
+    state.loadController = new AbortController();
+    const signal = state.loadController.signal;
     const url = $("capture").value;
     setBusy(true);
     try {
       notice("Reading saved capture…");
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       if (!response.ok)
         throw Error(`Capture fetch failed (${response.status})`);
       const bytes = await response.arrayBuffer();
@@ -1436,10 +1938,20 @@ function bindControls() {
         .join("");
       if (digest !== expected.sha256)
         throw Error("Projection digest does not match the local index");
+      const computationData = await loadComputations({
+        entry: expected.computations,
+        signal,
+        view: { bytes: bytes.byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+        progress: (message) => {
+          if (sequence === state.loadSequence) notice(message);
+        },
+      });
       if (sequence !== state.loadSequence) return;
       await loadDocument(
         new TextDecoder("utf-8", { fatal: true }).decode(bytes),
         "Projection bytes verified against local index; original evidence was verified when this projection was prepared.",
+        computationData,
       );
     } catch (e) {
       if (sequence === state.loadSequence) notice(e.message, true);
@@ -1449,6 +1961,8 @@ function bindControls() {
   };
   $("file").onchange = async () => {
     const sequence = ++state.loadSequence;
+    state.loadController?.abort();
+    state.loadController = null;
     const file = $("file").files[0];
     if (!file) return;
     try {
@@ -1487,7 +2001,39 @@ function bindControls() {
     state.spacing = Number($("spacing").value);
     repaint();
   };
+  $("spatial-density").onchange = repaint;
+  $("what-if-period").onchange = () => {
+    const input = $("what-if-period");
+    const period = Number(input.value);
+    if (
+      input.value !== "" &&
+      (!Number.isFinite(period) ||
+        period <= 0 ||
+        period * state.window > Number.MAX_SAFE_INTEGER)
+    ) {
+      input.value = "";
+      notice(
+        "A hypothetical period must be positive and within the numeric range.",
+        true,
+      );
+    }
+    render();
+  };
+  for (const id of [
+    "computation-circuits",
+    "circuit-role",
+    "circuit-timing",
+    "circuit-unknown",
+    "circuit-selected",
+  ])
+    $(id).onchange = repaint;
+  $("circuit-delay").onchange = () => {
+    const value = Number($("circuit-delay").value);
+    if (!Number.isFinite(value) || value < 0) $("circuit-delay").value = "0";
+    repaint();
+  };
   $("context").onchange = repaint;
+  $("show-unmapped").onchange = repaint;
   $("residence").onchange = repaint;
   $("full-storage").onchange = render;
   $("access-footprints").onchange = repaint;

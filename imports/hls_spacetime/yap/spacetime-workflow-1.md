@@ -1,0 +1,43 @@
+# S8 workflow and mapping investigation
+
+2026-11-07 UTC. S8 is complete within the explicitly supported observer, primitive and native-correspondence scope. The maintained workflow has producer-owned preparation/capture/finite binding qualification, standalone import/join/validation, generic saved-bundle projection and selected-route control generation. Display cleanup is separate. The working evidence directory is `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/workflow-1`; no EC2 job or old native/capture job was rerun for S8.
+
+## Maintained boundaries
+
+`hls_fabric`’s optional `hls_spacetime_observer` packages the passive simulator harness and exact input snapshot. `prepare` emits a deterministic observation plan, taps, installed support files and explicit external build command. `capture` interprets a saved recording and writes validated generic ETF/JSON plus backend sidecars. `qualify` checks explicit native candidates and independently reviewed finite comparisons before emitting generic physical claims. The default full observer rejects missing semantic controls. An explicit storage-only scope retains unsupported diagnostics and records only enabled-register history; it does not claim messages, publications, selected dependencies or completion ancestry.
+
+`hls_spacetime`’s built command imports native evidence, joins reviewed claims and validates raw ETF bundles. `prepare-view.mjs` takes arbitrary validated bundle JSON and optional navigation metadata. It checks an independent timing identity before attaching a saved timing report. `select-routes.mjs` resolves those saved arcs using the complete canonical-net/pin catalogue and emits portable escaped controls. `attach-routes.mjs` attaches completed native topology to the exact selected view. The server accepts an explicit saved-data directory. None of these product entry points searches old campaign directories or repeats implementation.
+
+The [workflow guide](../docs/workflow.md) is the user-facing command/ownership reference. Localized synthetic cases qualify interchange, identity rejection and orchestration. Actual finite simulator witnesses remain distinct from native measurements and all-input proofs.
+
+## What remains unmapped in the main recording
+
+The unchanged main view contains 7,637 writes, 21,035 read requests and their 21,035 results. No read/write targets an entirely unlocated storage word. There are 5,408 fully located and 2,229 partially located writes; 12,828 fully located and 6,400 partially located exact-mask reads. Another 1,807 semantic snapshot reads retain unknown consumed subsets. A read result refers to its request; it does not imply a second physical access. The separate RAM example intentionally has no native catalogue.
+
+The physical association remains 6,108 of 8,466 encoded bits, with 2,358 unknown. Thirty-three unmapped logical resources are six actors, 24 slots and three streams; these are abstractions, not absent register banks. The original mapper considered wide enabled words and exact base FDRE names. Inspecting the retained complete aliases and functional netlist found no additional direct identities for the missing bits, so repeating that query would not improve coverage.
+
+A bounded conservative analysis of the retained optimized IR starts at all 206 explicit state initializers, propagates through 7,247 scalar nodes, and joins hold with every next-value alternative. Predicates and update priority are ignored; external inputs and unsupported operations remain unknown. The fixed point identifies 2,006 of the 2,358 missing encoded bits as source-zero invariants. It leaves 352 source-unknown bits. Eight implementation fixtures cover small-width transfer rules and parser/coverage negatives. This diagnostic assumes the retained scalar IR semantics and initialization; it does not prove source-to-native equivalence or native elimination.
+
+Only 394 of the missing bits occur in exact read masks: 388 are within those source-zero invariants. The six remaining bits are `____state_154[8:10]` and `____state_155[8:10]`, the low three bits of `entered_from` in a machine word and its saved copy. Neither the original state aliases nor a `row_entered_from` native alias survives. Resolving their physical disposition needs relational sequential correspondence through optimization, or an independently qualified alternative native output association. All physical bindings remain unchanged; no source constant becomes an invented FF, GND location or zero-length wire.
+
+The 1,807 snapshot reads are 1,450 receiver-admission snapshots and 357 publication snapshots. Source-level whole-payload copying does not establish that every optimized encoded bit is operationally consumed. Their masks stay unknown; nearby numerical masks cannot be borrowed. A regression preserves this distinction from exact selected reads.
+
+## Evidence and retention
+
+`mapping-inventory-1.json` retains per-resource/event coverage. `mapping-investigation-1/` contains the exact compressed IR/RTL/candidate closure, explicit-input diagnostic, eight fixtures, per-word masks and review: about 570 KiB. The original main view identity is `ba6a73c7ae41d3c748d8858614e4f5696ef08547c30a048e58dd2c90a9e972fb`; S8 does not rewrite it.
+
+The original routed result remains 21,756 primitives with 6,108 finite-qualified stored bits. Its 5 ns setup target failed, and physical execution period remains unknown. S8 adds no new native timing or geometry claim. Retain compact reproduction inputs, manifests, reports and failure diagnostics; review disposable binaries/log bulk on 2026-11-14 under the seven-day policy. Prior completed native and decoder evidence remains frozen and is not recollected.
+
+## Qualification
+
+The standalone consumer passes 145 EUnit and 136 JavaScript tests, Dialyzer, formatting and a 16-file source-contract audit with zero findings. The new RAM path records 17 clocks, 40 events and 15 versions, including six writes, seven requests, five responses and two reset-retired requests. Its standalone command validation, generic view preparation and independent storage audit pass.
+
+A fresh ordinary four-actor source-protocol build and XLS compilation exercised the packaged Verilator recorder with 24 public frames checked by the ordinary BEAM host. Its explicit storage-only recording has 138 writes, 293 versions, 17 words and 5,441 retained clocks. Full semantic observation correctly rejected 20 optimized-away control aliases; that failure is retained rather than bypassed. Standalone validation, projection, storage audit and browser loading pass; the temporary loopback server and tab were closed, with no console errors or warnings.
+
+The main example’s full preparation was separately reconstructed from verified source/compiled input archives copied into a fresh directory. All 592 taps were recovered with zero unsupported controls. The decoded plan equals the retained interpretation exactly, including deterministic observation digest `9b742f61c85b7061b1a9c1e2b5f5c9ee539a5f152328ec6cba0ae138750c4fd6`. No old trace interpretation, decoder simulation or native report collection was repeated.
+
+The producer passes 17 focused workflow/capture tests, 14 physical-qualification tests, the read-scope regression, 30 source-auditor tests, observer Dialyzer, formatting and application-boundary checks. The whole-tree contract audit retains 289 inherited gaps and introduces zero; the six new modules/tests pass strict checks with zero gaps. Failed qualification attempts remain recorded: bootstrap/profile setup, explicit full-scope rejection for the tiny optimized fixture, test expectation corrections and the standalone escript entry-point fix. Successful captures were reused after orchestration fixes.
+
+The campaign’s initial workflow is complete. Remaining native optimization correspondence, unsupported backends/primitives, full gate causality and a qualified physical period are explicit limits. Visual readability is the next separate task; S8 does not silently close these evidence gaps.
+
+The fresh main/tiny-application reproduction closures were losslessly archived after checking every member (including the simulator FIFO types): 18,647,824 raw bytes → 2,301,261 packed, and 49,535,656 raw → 22,792,645 packed. Redundant unpacked copies were removed; captures, prepared views, reviews and failure logs stay directly readable. `reproduction-manifest.json` beside each archive binds its contents. Extract that archive in its own directory to restore the explicit reproduction paths; this does not require an old campaign scratch directory.

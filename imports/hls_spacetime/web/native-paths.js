@@ -68,6 +68,40 @@ export function nativePaths(model) {
       );
     }
     fail(
+      Array.isArray(path.arcs) && path.arcs.length === path.steps.length - 1,
+      "ordered arc count disagrees with data pins",
+    );
+    let logicArcs = 0;
+    for (const [index, arc] of path.arcs.entries()) {
+      const source = path.steps[index],
+        target = path.steps[index + 1];
+      fail(
+        ["net", "logic"].includes(arc.kind) &&
+          arc.source === source.pin &&
+          arc.target === target.pin &&
+          Number.isFinite(arc.delayNs) &&
+          arc.delayNs >= 0 &&
+          Number.isFinite(arc.arrivalNs),
+        "invalid ordered timing arc",
+      );
+      if (arc.kind === "logic") {
+        logicArcs++;
+        fail(source.cell === target.cell, "logic arc crosses native cells");
+      } else {
+        fail(
+          typeof arc.net === "string" &&
+            arc.net.length > 0 &&
+            Number.isSafeInteger(arc.fanout) &&
+            arc.fanout >= 0,
+          "invalid timing net arc",
+        );
+      }
+    }
+    fail(
+      logicArcs === path.logicLevels,
+      "logic arcs disagree with logic levels",
+    );
+    fail(
       typeof path.source === "string" &&
         path.source.slice(0, path.source.lastIndexOf("/")) ===
           path.steps[0].cell &&

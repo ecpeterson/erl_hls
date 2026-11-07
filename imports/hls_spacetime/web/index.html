@@ -38,8 +38,13 @@
         context. Cells sharing a tile share a glyph. These marks do not show
         native switching or the logic computing a value. Turning off Distributed
         accesses restores aggregate symbols, whose centres are not computation
-        locations. Drag the stack to rotate it. Select an operation or timeline
-        tick, then follow its inputs or consumers.
+        locations. Uncheck Show unmapped participants to hide unknown-location
+        glyphs, storage spans and their connecting lines; mapped parts of
+        partial words remain visible. The event list, inspector and counts
+        retain the complete evidence. Logical-only captures keep their lanes.
+        Repeated off-window clock labels are shown once when space permits, with
+        the clock axis taking priority. Drag the stack to rotate it. Select an
+        operation or timeline tick, then follow its inputs or consumers.
       </p>
       <p>
         Solid storage links join a write at C to Q at C+1; squares mark the new
@@ -55,6 +60,26 @@
         cells do not establish native write enables or exclusive task occupancy.
         The register example has 409 mapped bits and 128 unknown bits; its exact
         consumed read subset remains unknown.
+      </p>
+      <p>
+        Computation circuits draws the native combinational fan-in of recorded
+        writes at their clocks, tracing back to register outputs, constants and
+        explicit boundary gaps. Teal is data, amber is enable logic, purple is
+        reset logic and white is shared circuitry. Squares locate native cells
+        and routing switches; small points mark measured wire tiles. Dotted
+        spans indicate electrical connectivity, not a measured metal trajectory.
+        All mux alternatives remain structural context: these are not observed
+        switching paths. Actor, task and operation filters select recorded work;
+        the function and static-delay controls select its circuits. Unknown
+        timing stays visible unless explicitly excluded. The default timing
+        scope bounds paths from register Q to D/control inputs; it excludes
+        external and constant launches, clock-to-Q and setup. Whole-cone timing
+        includes all source boundaries. Both choices keep the full cone visible
+        and report a conservative SDF bound, not path slack or dynamic
+        criticality. Circuits belong to recorded writes and their explicit
+        producers; other selected events may have no associated circuit. The
+        complete native graph remains loaded regardless of the window or
+        filters.
       </p>
       <p>
         Native timing path adds an independent pink static STA overlay to the
@@ -144,6 +169,9 @@
                 ><input id="context" type="checkbox" checked /> Installed
                 context</label
               ><label
+                ><input id="show-unmapped" type="checkbox" checked /> Show
+                unmapped participants</label
+              ><label
                 ><input id="residence" type="checkbox" checked /> Storage
                 links</label
               ><label
@@ -161,6 +189,52 @@
                 unmapped</span
               >
             </div>
+            <div class="stack-controls">
+              <label
+                ><input id="computation-circuits" type="checkbox" disabled />
+                Computation circuits</label
+              >
+              <label
+                >Function<select id="circuit-role" disabled>
+                  <option value="">Data + enables + resets</option>
+                  <option value="data">Data</option>
+                  <option value="enable">Enables</option>
+                  <option value="reset">Resets</option>
+                </select></label
+              >
+              <label
+                >Timing scope<select id="circuit-timing" disabled>
+                  <option value="registered_launch">
+                    Register Q → D/control
+                  </option>
+                  <option value="whole_cone">
+                    Whole cone, including ports
+                  </option>
+                </select></label
+              >
+              <label
+                >Minimum static cone delay (ns)<input
+                  id="circuit-delay"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="0"
+                  disabled
+              /></label>
+              <label
+                ><input id="circuit-unknown" type="checkbox" checked disabled />
+                Include cones without timing</label
+              >
+              <label
+                ><input id="circuit-selected" type="checkbox" disabled />
+                Selected write or producer only</label
+              >
+            </div>
+            <p
+              id="circuit-summary"
+              class="storage-summary"
+              aria-live="polite"
+            ></p>
             <p
               id="storage-summary"
               class="storage-summary"
@@ -186,6 +260,11 @@
               aria-label="Flat device view of installed and selected resources"
               tabindex="0"
             ></canvas>
+            <label
+              ><input id="spatial-density" type="checkbox" checked />
+              Installed-cell concentration</label
+            >
+            <p id="spatial-summary" class="storage-summary"></p>
             <p class="muted">
               Gold marks the selected resource’s associated cells, which may be
               spread across the chip. This is storage placement, not the circuit
@@ -240,6 +319,16 @@
             aria-label="Timeline. Click to move the window around a clock."
             tabindex="0"
           ></canvas>
+          <p id="activity-summary" class="storage-summary"></p>
+          <label
+            >Hypothetical clock period (ns; optional)<input
+              id="what-if-period"
+              type="number"
+              min="0.001"
+              step="any"
+              placeholder="Unspecified"
+          /></label>
+          <p id="timing-summary" class="storage-summary"></p>
           <div class="window-inputs">
             <label>First clock<input id="first" type="number" min="0" /></label
             ><label

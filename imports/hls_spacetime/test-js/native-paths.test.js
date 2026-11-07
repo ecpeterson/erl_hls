@@ -29,6 +29,17 @@ function fixture() {
             logicDelayNs: 1,
             routeDelayNs: 6,
             logicLevels: 0,
+            arcs: [
+              {
+                kind: "net",
+                source: "ff0/Q",
+                target: "ff1/D",
+                net: "n",
+                fanout: 1,
+                delayNs: 6,
+                arrivalNs: 6.1,
+              },
+            ],
             steps: [
               { cell: "ff0", pin: "ff0/Q", incrementNs: 0.1, arrivalNs: 0.1 },
               { cell: "ff1", pin: "ff1/D", incrementNs: null, arrivalNs: null },
@@ -57,6 +68,23 @@ test("foreign builds, checkpoints, unknown coordinates and endpoint mismatches r
     (m) => (m.document.nativePaths.paths[0].steps[1].pin = "other/D"),
     (m) => (m.document.nativePaths.paths[0].dataDelayNs = NaN),
     (m) => (m.document.nativePaths.wireGeometry = true),
+  ]) {
+    const model = fixture();
+    corrupt(model);
+    assert.throws(() => nativePaths(model));
+  }
+});
+
+test("static arc gaps, reordered endpoints and fabricated cross-cell logic reject without route data", () => {
+  for (const corrupt of [
+    (m) => (m.document.nativePaths.paths[0].arcs = []),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].source = "ff0/C"),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].target = "ff0/Q"),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].kind = "logic"),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].net = ""),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].fanout = -1),
+    (m) => (m.document.nativePaths.paths[0].arcs[0].delayNs = NaN),
+    (m) => (m.document.nativePaths.paths[0].logicLevels = 1),
   ]) {
     const model = fixture();
     corrupt(model);

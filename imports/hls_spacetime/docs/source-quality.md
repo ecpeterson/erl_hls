@@ -23,3 +23,5 @@ mkdir /tmp/spacetime-trace-results
 ```
 
 Run substantial checks serially under the project's 6 GiB local process-group guard. Retain diagnostics outside Git; `_build/` is disposable. [The RAM witness](memory-witness.md) requires explicit testbench and primitive paths and is excluded from normal tests.
+
+The optional native-export hash transport has a small local subprocess/Tcl fixture suite: `python3 test/native/route_hash_worker_tests.py`. It checks hash freshness, bounded input/output paths and fail-closed pipe behavior without Vivado.
