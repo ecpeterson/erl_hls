@@ -186,6 +186,11 @@
               aria-label="Flat device view of installed and selected resources"
               tabindex="0"
             ></canvas>
+            <label
+              ><input id="spatial-density" type="checkbox" checked />
+              Installed-cell concentration</label
+            >
+            <p id="spatial-summary" class="storage-summary"></p>
             <p class="muted">
               Gold marks the selected resource’s associated cells, which may be
               spread across the chip. This is storage placement, not the circuit
@@ -240,6 +245,16 @@
             aria-label="Timeline. Click to move the window around a clock."
             tabindex="0"
           ></canvas>
+          <p id="activity-summary" class="storage-summary"></p>
+          <label
+            >Hypothetical clock period (ns; optional)<input
+              id="what-if-period"
+              type="number"
+              min="0.001"
+              step="any"
+              placeholder="Unspecified"
+          /></label>
+          <p id="timing-summary" class="storage-summary"></p>
           <div class="window-inputs">
             <label>First clock<input id="first" type="number" min="0" /></label
             ><label

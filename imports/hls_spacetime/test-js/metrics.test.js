@@ -194,6 +194,7 @@ function fixture({ stalled = false, physical = true, complete = true } = {}) {
           catalogue: {
             build,
             checkpoint: "synthetic-dcp",
+            coordinate_unit: "tile_grid",
             cells: [
               { id: "ff", kind: "FDRE", x: 1, y: 2 },
               { id: "lut", kind: "LUT6", x: 90, y: 30 },
@@ -331,4 +332,185 @@ test("invalid windows, bounds, classifications and unknown selections reject", (
     { selectedEvent: "absent" },
   ])
     assert.throws(() => windowMetrics(model, options));
+});
+
+/** Distribution counts physical identities once even when logical words alias. */
+test("tile bins separate installed concentration from windowed operation samples", () => {
+  const model = createModel(fixture());
+  const all = windowMetrics(model);
+  assert.deepEqual(all.spatial, {
+    status: "tile_grid",
+    coordinateUnit: "tile_grid",
+    binSizeTiles: 16,
+    cells: 3,
+    placedCells: 2,
+    unplacedCells: 1,
+    unknownKindCells: 0,
+    occupiedTiles: 2,
+    occupiedBins: 2,
+    peakBinCells: 1,
+    bins: [
+      { x: 0, y: 0, installedCells: 1, byKind: { FDRE: 1 } },
+      { x: 80, y: 16, installedCells: 1, byKind: { LUT6: 1 } },
+    ],
+    scope: "unique_installed_cells_not_capacity_or_switching",
+  });
+  const empty = windowMetrics(model, { firstCycle: 9, endCycle: 10 });
+  assert.deepEqual(empty.spatial, all.spatial);
+  assert.equal(empty.activity.eventSamples, 0);
+  assert.equal(empty.activity.clocksWithEvents, 0);
+  assert.equal(empty.activity.peakEventsPerClock, 0);
+  const reader = windowMetrics(model, { actor: "reader" });
+  assert.deepEqual(reader.spatial, all.spatial);
+  assert.deepEqual(reader.activity.byClock, [{ cycle: 6, eventSamples: 2 }]);
+  assert.equal(reader.activity.peakEventsPerClock, 2);
+  assert.deepEqual(reader.activity.byOperation, { read: 1, result: 1 });
+});
+
+/** Moving an installed cell changes distribution without inventing activity. */
+test("changed placement and unknown metadata remain explicit in spatial metrics", () => {
+  const document = fixture();
+  document.catalogue.cells[1].x = 4;
+  document.catalogue.cells[1].y = 6;
+  document.catalogue.cells[2].kind = null;
+  const changed = windowMetrics(createModel(document));
+  assert.equal(changed.spatial.cells, 3);
+  assert.equal(changed.spatial.occupiedBins, 1);
+  assert.equal(changed.spatial.occupiedTiles, 2);
+  assert.equal(changed.spatial.peakBinCells, 2);
+  assert.equal(changed.spatial.unplacedCells, 1);
+  assert.equal(changed.spatial.unknownKindCells, 1);
+  assert.deepEqual(changed.spatial.bins[0].byKind, { FDRE: 1, LUT6: 1 });
+  assert.deepEqual(
+    changed.activity,
+    windowMetrics(createModel(fixture())).activity,
+  );
+  delete document.catalogue.coordinate_unit;
+  const unknown = windowMetrics(createModel(document)).spatial;
+  assert.equal(unknown.status, "unknown_coordinate_unit");
+  assert.equal(unknown.occupiedBins, null);
+  assert.equal(unknown.peakBinCells, null);
+  assert.deepEqual(unknown.bins, []);
+  assert.equal(
+    windowMetrics(createModel(fixture({ physical: false }))).spatial,
+    null,
+  );
+});
+
+/** Explicit stalls change observed timing and concurrency, never installed area. */
+test("stalled recording changes temporal samples independently of installed bins", () => {
+  const normal = windowMetrics(createModel(fixture()), {
+    firstCycle: 2,
+    endCycle: 6,
+  });
+  const stalled = windowMetrics(createModel(fixture({ stalled: true })), {
+    firstCycle: 2,
+    endCycle: 8,
+  });
+  assert.deepEqual(normal.spatial, stalled.spatial);
+  assert.equal(normal.activity.eventSamples, 3);
+  assert.equal(normal.activity.clocksWithEvents, 3);
+  assert.equal(normal.activity.peakEventsPerClock, 1);
+  assert.equal(stalled.activity.eventSamples, 8);
+  assert.equal(stalled.activity.clocksWithEvents, 5);
+  assert.equal(stalled.activity.peakEventsPerClock, 3);
+  assert.equal(stalled.activity.byOperation.entry_wait, 3);
+  assert.equal(
+    stalled.activity.scope,
+    "recorded_operations_not_electrical_activity_or_idle_time",
+  );
+});
+
+test("spatial bin widths and qualified tile coordinates reject invalid arithmetic", () => {
+  const model = createModel(fixture());
+  for (const tileBinSize of [0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(() => windowMetrics(model, { tileBinSize }), /tile bin size/);
+  const smaller = windowMetrics(model, { tileBinSize: 2 }).spatial;
+  assert.deepEqual(
+    smaller.bins.map(({ x, y }) => [x, y]),
+    [
+      [0, 2],
+      [90, 30],
+    ],
+  );
+  const invalid = fixture();
+  invalid.catalogue.cells[0].x = 0.5;
+  assert.throws(() => windowMetrics(createModel(invalid)), /tile X coordinate/);
+});
+
+/** The same clocks may be explored at an assumed period, never promoted to measured time. */
+test("failed target and static delays remain distinct from hypothetical elapsed time", () => {
+  const document = fixture();
+  document.measurement = {
+    target_met: false,
+    target_period_ns: 5,
+    constraint_equivalent_period_ns: 8.997,
+    worst_data_delay_ns: 8.808,
+  };
+  const model = createModel(document);
+  const unknown = windowMetrics(model);
+  assert.equal(unknown.timing.execution, null);
+  assert.equal(unknown.timing.whatIf, null);
+  assert.equal(unknown.timing.reason, "failed_target_is_not_execution_period");
+  const assumed = windowMetrics(model, { whatIfPeriodNs: 5, usedOnly: false });
+  assert.equal(assumed.interval.elapsedClocks, 12);
+  assert.equal(assumed.storage.totalWordClocks, 20);
+  assert.deepEqual(assumed.timing.whatIf, {
+    periodNs: 5,
+    elapsedClocks: 12,
+    elapsedNs: 60,
+    scope: "hypothetical_clock_period_not_execution_measurement",
+  });
+  assert.equal(assumed.timing.execution, null);
+  assert.equal(
+    assumed.timing.scope,
+    "elapsed_clocks_times_period_without_adding_static_path_delay",
+  );
+  document.measurement.target_met = true;
+  assert.equal(
+    windowMetrics(createModel(document)).timing.reason,
+    "no_qualified_execution_period",
+  );
+  assert.equal(windowMetrics(createModel(document)).timing.execution, null);
+});
+
+/** A longer observed interval changes assumed time once; waits and storage do not add again. */
+test("stalled interval scales hypothetical time without adding waits or storage", () => {
+  const normal = windowMetrics(createModel(fixture()), {
+    firstCycle: 2,
+    endCycle: 6,
+    whatIfPeriodNs: 2.5,
+    waitOperations: ["entry_wait"],
+  });
+  const stalled = windowMetrics(createModel(fixture({ stalled: true })), {
+    firstCycle: 2,
+    endCycle: 8,
+    whatIfPeriodNs: 2.5,
+    waitOperations: ["entry_wait"],
+  });
+  assert.equal(normal.timing.whatIf.elapsedNs, 10);
+  assert.equal(stalled.timing.whatIf.elapsedNs, 15);
+  assert.equal(stalled.waits.clockSamples, 2);
+  assert.equal(stalled.timing.execution, null);
+  assert.deepEqual(normal.spatial, stalled.spatial);
+});
+
+test("hypothetical periods and elapsed products reject nonfinite or excessive values", () => {
+  const model = createModel(fixture());
+  for (const whatIfPeriodNs of [
+    0,
+    -1,
+    "5",
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])
+    assert.throws(
+      () => windowMetrics(model, { whatIfPeriodNs }),
+      /hypothetical clock period/,
+    );
+  assert.throws(
+    () => windowMetrics(model, { whatIfPeriodNs: Number.MAX_SAFE_INTEGER }),
+    /hypothetical elapsed time/,
+  );
 });

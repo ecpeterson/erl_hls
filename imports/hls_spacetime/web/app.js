@@ -14,6 +14,7 @@ import {
 } from "./model.js";
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
+import { nativeRoutes } from "./native-routes.js";
 import { windowMetrics } from "./metrics.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
@@ -47,6 +48,7 @@ const state = {
   footprintCache: new Map(),
   nativePaths: [],
   nativePath: null,
+  nativeRoutes: new Map(),
   traceNote: "",
   resourceCache: new Map(),
   actors: [],
@@ -98,6 +100,35 @@ async function loadDocument(
     throw Error("Viewer projection exceeds the 128 MiB limit");
   const model = createModel(JSON.parse(text));
   const paths = nativePaths(model);
+  const routes = nativeRoutes(model);
+  const routeIndex = new Map(
+    routes.map((route) => [`${route.pathId}/${route.arcIndex}`, route]),
+  );
+  // Include routing excursions; a route can leave the placed-cell bounding box.
+  if (model.geometryBounds) {
+    const bounds = { ...model.geometryBounds };
+    const seen = new Set();
+    for (const route of routes) {
+      for (const object of [
+        ...route.pips,
+        ...route.nodes.flatMap((node) => node.wires),
+      ]) {
+        if (
+          seen.has(object.id) ||
+          !Number.isFinite(object.x) ||
+          !Number.isFinite(object.y)
+        )
+          continue;
+        seen.add(object.id);
+        bounds.minX = Math.min(bounds.minX, object.x);
+        bounds.maxX = Math.max(bounds.maxX, object.x);
+        bounds.minY = Math.min(bounds.minY, object.y);
+        bounds.maxY = Math.max(bounds.maxY, object.y);
+      }
+    }
+    model.geometryBounds = bounds;
+  }
+  state.nativeRoutes = routeIndex;
   state.model = model;
   state.selected = null;
   state.trace = null;
@@ -277,6 +308,10 @@ function renderMetrics() {
     endCycle: state.first + state.window,
     ...filters(),
     usedOnly: !$("full-storage").checked,
+    whatIfPeriodNs:
+      $("what-if-period").value === ""
+        ? null
+        : Number($("what-if-period").value),
     waitOperations:
       (state.model.document.metric_hints ?? state.model.bundle.metric_hints)
         ?.wait_operations ?? [],
@@ -286,6 +321,20 @@ function renderMetrics() {
     state.metricsCache = { key, value: windowMetrics(state.model, options) };
   const metrics = state.metricsCache.value;
   const { storage, waits, installed } = metrics;
+  const { spatial, activity, timing } = metrics;
+  $("spatial-summary").textContent =
+    spatial?.status === "tile_grid"
+      ? `${spatial.binSizeTiles} × ${spatial.binSizeTiles} tile bins · peak ${spatial.peakBinCells.toLocaleString()} installed cells · ${spatial.occupiedBins} occupied bins · ${spatial.unplacedCells} unplaced. Blue shading counts unique installed cells; it is not capacity utilization or clock activity.`
+      : "Installed-cell concentration unavailable: no qualified tile coordinates.";
+  $("activity-summary").textContent =
+    `${activity.eventSamples.toLocaleString()} recorded operations on ${activity.clocksWithEvents.toLocaleString()} clocks in view · peak ${activity.peakEventsPerClock} operations per clock. Counts follow filters; they are not electrical switching or proof that other clocks were idle.`;
+  $("timing-summary").textContent =
+    (timing.reason === "failed_target_is_not_execution_period"
+      ? "Physical elapsed time unknown: the native target failed timing. "
+      : "Physical elapsed time unknown: no qualified execution period. ") +
+    (timing.whatIf
+      ? `Hypothetical only: ${timing.whatIf.elapsedClocks} clocks × ${timing.whatIf.periodNs} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns. Static path delays are not added again.`
+      : "Enter a period for an explicitly hypothetical clocks × period calculation.");
   $("metrics").innerHTML =
     `<div><strong>${metrics.interval.elapsedClocks.toLocaleString()}</strong><span>clocks in view</span></div><div><strong>${storage.totalWordClocks.toLocaleString()}</strong><span>logical word-clocks</span></div><div><strong>${installed ? installed.cells.toLocaleString() : "—"}</strong><span>unique installed cells</span></div>`;
   let detail = $("metrics-detail");
@@ -457,9 +506,10 @@ function accessGeometry(event) {
   state.footprintCache.set(key, geometry);
   return geometry;
 }
-/** A static STA path is shown on one comparison layer, never inserted into the
- * execution graph. Straight connections join actual placed path cells; they
- * are not the wire trajectory or evidence of a sensitized execution path. */
+/** Native routing is a tile footprint, not a metal-track layout. Solid markers
+ * are actual selected-node wire tiles and PIP locations. Dotted node spans show
+ * electrical connectivity between PIPs; site/logic geometry remains schematic.
+ * The whole overlay is static and never adds execution dependencies. */
 function drawNativePath(ctx, project, flat = false) {
   const path = state.nativePath;
   if (!path) return;
@@ -470,25 +520,73 @@ function drawNativePath(ctx, project, flat = false) {
       state.model.events.get(state.selected)?.cycle ?? state.first,
     ),
   );
-  const points = path.steps.map((step) =>
-    project(cellPoint(state.model.cells.get(step.cell)), cycle),
+  const point = (object) => project(cellPoint(object), cycle);
+  const pins = path.steps.map((step) =>
+    point(state.model.cells.get(step.cell)),
   );
   ctx.globalAlpha = 0.95;
-  for (let i = 1; i < points.length; i++)
-    line(ctx, points[i - 1], points[i], "#ef88d1", 2.2);
-  for (const p of points) {
+  for (let i = 0; i < path.arcs.length; i++) {
+    const arc = path.arcs[i],
+      route = state.nativeRoutes.get(`${path.id}/${i}`);
+    const from = pins[i],
+      to = pins[i + 1];
+    if (arc.kind === "logic") {
+      line(ctx, from, to, "#ef88d1", 2, true);
+      continue;
+    }
+    if (!route?.nodes.length) {
+      line(ctx, from, to, "#d7ab77", 1.5, true);
+      continue;
+    }
+    // A node's wires form an unordered electrical union. Do not sort them into
+    // a fictitious trajectory; draw each measured tile membership separately.
+    const tiles = new Set();
+    for (const node of route.nodes)
+      for (const wire of node.wires) {
+        const id = `${wire.x}/${wire.y}`;
+        if (
+          !Number.isFinite(wire.x) ||
+          !Number.isFinite(wire.y) ||
+          tiles.has(id)
+        )
+          continue;
+        tiles.add(id);
+        const p = point(wire);
+        ctx.fillStyle = "#b9adff";
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      }
+    const switches = route.pips.map((pip) =>
+      Number.isFinite(pip.x) && Number.isFinite(pip.y) ? point(pip) : null,
+    );
+    const ends = [from, ...switches, to];
+    for (let j = 1; j < ends.length; j++) {
+      if (!ends[j - 1] || !ends[j]) continue;
+      line(
+        ctx,
+        ends[j - 1],
+        ends[j],
+        j === 1 || j === ends.length - 1 ? "#d7ab77" : "#a99ce8",
+        1.4,
+        true,
+      );
+    }
+    for (const p of switches) {
+      if (!p) continue;
+      ctx.fillStyle = "#f4cf78";
+      ctx.fillRect(p.x - 1.8, p.y - 1.8, 3.6, 3.6);
+    }
+  }
+  for (const p of pins) {
     ctx.fillStyle = "#ef88d1";
     ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
   }
-  if (points.length) {
-    ctx.font = "10px ui-monospace,monospace";
-    ctx.fillStyle = "#ffd3f2";
-    ctx.fillText(
-      flat ? path.id : `${path.id} static · not cycle-attributed`,
-      points[0].x + 6,
-      points[0].y - 9,
-    );
-  }
+  ctx.font = "10px ui-monospace,monospace";
+  ctx.fillStyle = "#ffd3f2";
+  ctx.fillText(
+    flat ? path.id : `${path.id} static · not cycle-attributed`,
+    pins[0].x + 6,
+    pins[0].y - 9,
+  );
   ctx.globalAlpha = 1;
 }
 
@@ -805,18 +903,45 @@ function drawTrace(ctx, project) {
   ctx.globalAlpha = 1;
   state.traceNote = ` · ${drawn.toLocaleString()} dependency strokes${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}`;
 }
-/** Report native path details separately from cycle evidence and use attribution. */
+/** Static timing, routed topology coverage and missing geometry are separate
+ * from recorded use. Per-arc rows disclose gaps instead of drawing fanout trees. */
 function renderNativePath() {
   const path = state.nativePath;
+  const routes = path
+    ? path.arcs.flatMap((arc, i) => {
+        const route = state.nativeRoutes.get(`${path.id}/${i}`);
+        return route ? [route] : [];
+      })
+    : [];
+  const resolved = routes.filter(
+    (route) => route.disposition === "resolved",
+  ).length;
+  const partial = routes.filter(
+    (route) => route.disposition === "partial",
+  ).length;
   $("native-path-summary").textContent = path
-    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. Lines join placed cells, not route bends.`
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. ` +
+      (routes.length
+        ? `${resolved} resolved + ${partial} partial of ${path.arcs.filter((arc) => arc.kind === "net").length} net arcs have branch geometry; partial endpoints retain unknown alternatives. Violet marks native wire tiles; gold marks routing switches. Dotted spans show node connectivity or missing site geometry, not exact metal bends.`
+        : "No routing geometry supplied; dotted segments join placed cells only.")
     : state.nativePaths.length
-      ? "Optional pink overlay: actual placed logic sequence from saved static timing. It is not attributed to this clock's execution."
-      : state.model.catalogue
-        ? "No native timing-path detail supplied. Prepare the example again to include saved paths."
-        : "Native timing and placement are unmeasured for this logical capture.";
+      ? "Select a saved static path to inspect its ordered combinational logic and routing, independently of this clock's execution."
+      : "Native timing-path detail is unavailable for this capture.";
   $("native-path-steps").innerHTML = path
-    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps.map((s) => `<li>${esc(s.pin)}${s.incrementNs === null ? "" : ` · +${s.incrementNs} ns`}</li>`).join("")}</ol>`
+    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps
+        .map((step, i) => {
+          const route = state.nativeRoutes.get(`${path.id}/${i}`);
+          const arc = path.arcs[i];
+          const detail = route
+            ? `${route.disposition} · ${route.pips.length} PIPs · ${route.nodes.length} routed nodes · ${route.excludedPips} PIPs not displayed; gaps: ${route.gaps.map((gap) => (typeof gap === "string" ? gap : JSON.stringify(gap))).join(", ")}`
+            : arc?.kind === "logic"
+              ? "cell logic arc; internal geometry unavailable"
+              : arc
+                ? "wire geometry unavailable"
+                : "endpoint";
+          return `<li>${esc(step.pin)}${step.incrementNs === null ? "" : ` · +${step.incrementNs} ns`}<br><span class="muted">${esc(detail)}</span></li>`;
+        })
+        .join("")}</ol>`
     : "";
 }
 
@@ -937,6 +1062,20 @@ function drawFlat() {
       ),
       ox = (w - (b.maxX - b.minX) * scale) / 2,
       oy = (h - (b.maxY - b.minY) * scale) / 2;
+    const spatial = state.metricsCache?.value.spatial;
+    if ($("spatial-density").checked && spatial?.status === "tile_grid") {
+      for (const bin of spatial.bins) {
+        const x = ox + (bin.x - b.minX) * scale;
+        const y = h - oy - (bin.y + spatial.binSizeTiles - b.minY) * scale;
+        ctx.fillStyle = `rgba(90, 150, 220, ${0.08 + (0.32 * bin.installedCells) / spatial.peakBinCells})`;
+        ctx.fillRect(
+          x,
+          y,
+          spatial.binSizeTiles * scale,
+          spatial.binSizeTiles * scale,
+        );
+      }
+    }
     for (const cell of model.cells.values()) {
       if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
       const p = {
@@ -1276,7 +1415,7 @@ function renderResource() {
     : "Select a storage resource to inspect its versions.";
   $("expand-storage").disabled = !state.resource || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
-    ? `${cells.length} associated native cells highlighted · no logic cone or routes`
+    ? `${cells.length} associated native storage cells highlighted`
     : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
@@ -1470,6 +1609,24 @@ function bindControls() {
   $("spacing").oninput = () => {
     state.spacing = Number($("spacing").value);
     repaint();
+  };
+  $("spatial-density").onchange = repaint;
+  $("what-if-period").onchange = () => {
+    const input = $("what-if-period");
+    const period = Number(input.value);
+    if (
+      input.value !== "" &&
+      (!Number.isFinite(period) ||
+        period <= 0 ||
+        period * state.window > Number.MAX_SAFE_INTEGER)
+    ) {
+      input.value = "";
+      notice(
+        "A hypothetical period must be positive and within the numeric range.",
+        true,
+      );
+    }
+    render();
   };
   $("context").onchange = repaint;
   $("residence").onchange = repaint;
