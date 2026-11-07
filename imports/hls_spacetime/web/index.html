@@ -31,19 +31,40 @@
     <section id="help" hidden>
       <strong>Space across a layer. Clocks down the stack.</strong>
       <p>
-        Dots are recorded operations, grouped at the centre of their associated
-        placed cells. Lines follow recorded value dependencies or storage
-        residence. They are schematic connections, not routed wires or
-        electrical switching. Drag the stack to rotate it. Select a dot or
-        timeline tick, then follow its inputs or consumers. Use the flat chip to
-        inspect the cells behind a resource.
+        Distributed accesses are shown at their associated native tile positions
+        by default. Filled write glyphs select known logical write-mask bits;
+        hollow read glyphs show whole-word context because the consumed read-bit
+        subset is unknown. Writes without bit identities also remain hollow
+        context. Cells sharing a tile share a glyph. These marks do not show
+        native switching or the logic computing a value. Turning off Distributed
+        accesses restores aggregate symbols, whose centres are not computation
+        locations. Drag the stack to rotate it. Select an operation or timeline
+        tick, then follow its inputs or consumers.
       </p>
       <p>
-        Grey rails contain resources without placement. A dashed residence shows
-        a version persisting between a write and read, inferred only within
-        complete write coverage. Unknown ancestry and partial mappings stay
-        explicit. A public completion annotation does not create a dependency on
-        a nearby operation.
+        Solid storage links join a write at C to Q at C+1; squares mark the new
+        sample. Dashed links retain the same version between samples. By
+        default, only versions with recorded uses are drawn, ending at their
+        last use; a hold or delayed read response does not extend source-word
+        use. Enable Full storage history to see all residence. Hidden does not
+        mean proven dead: unobserved consumers may exist. Selecting a word
+        expands its qualified cells by default; turn off Expand selected word
+        into cells to group them. Other words remain grouped. Grey rails contain
+        unknown or unplaced portions; their off-chip position is a layout
+        convention. Residence depends on the declared write coverage. Expanded
+        cells do not establish native write enables or exclusive task occupancy.
+        The register example has 409 mapped bits and 128 unknown bits; its exact
+        consumed read subset remains unknown.
+      </p>
+      <p>
+        Native timing path adds an independent pink static STA overlay to the
+        stack and flat chip. Its ordered pins and delays come from a saved
+        report bound to the same build and checkpoint. Path max/0 passes through
+        42 native cells and 40 logic levels: 8.808 ns data delay, comprising
+        4.075 ns logic and 4.733 ns routing. Lines join placed cells, not actual
+        wire trajectories. The comparison layer does not establish activity or
+        sensitization on that clock, or a dependency on the selected operation.
+        Public completion annotations likewise create no execution edges.
       </p>
     </section>
     <div id="notice" role="status">
@@ -124,12 +145,32 @@
                 context</label
               ><label
                 ><input id="residence" type="checkbox" checked /> Storage
-                residence</label
+                links</label
+              ><label
+                ><input id="full-storage" type="checkbox" /> Full storage
+                history</label
+              ><label
+                ><input id="access-footprints" type="checkbox" checked />
+                Distributed accesses</label
+              ><label
+                ><input id="expand-storage" type="checkbox" checked disabled />
+                Expand selected word into cells</label
               ><span class="legend"
-                ><i></i> selected <i class="unknown"></i> unknown /
+                ><i class="load"></i> load C→C+1 <i class="hold"></i> residence
+                <i></i> selected <i class="unknown"></i> unknown /
                 unmapped</span
               >
             </div>
+            <p
+              id="storage-summary"
+              class="storage-summary"
+              aria-live="polite"
+            ></p>
+            <p
+              id="access-summary"
+              class="storage-summary"
+              aria-live="polite"
+            ></p>
           </section>
           <section class="panel flat-panel">
             <div class="panel-heading">
@@ -145,6 +186,11 @@
               aria-label="Flat device view of installed and selected resources"
               tabindex="0"
             ></canvas>
+            <p class="muted">
+              Gold marks the selected resource’s associated cells, which may be
+              spread across the chip. This is storage placement, not the circuit
+              computing its next value or the wires connecting it.
+            </p>
             <div id="resource-summary">
               Select an operation to inspect its resource bindings.
             </div>
@@ -153,6 +199,20 @@
                 <option value="">Select a resource</option>
               </select></label
             >
+            <details>
+              <summary>Storage versions in view</summary>
+              <div id="storage-history" class="storage-history"></div>
+            </details>
+            <label class="resource-picker"
+              >Native timing path<select id="native-path">
+                <option value="">No static path overlay</option>
+              </select></label
+            >
+            <p id="native-path-summary" class="storage-summary"></p>
+            <details>
+              <summary>Ordered path pins</summary>
+              <div id="native-path-steps" class="native-path-steps"></div>
+            </details>
             <details id="cell-details">
               <summary>
                 Placed cell details <span id="cell-count"></span>
@@ -213,6 +273,7 @@
             <span id="selected-kind">No selection</span>
           </div>
 
+          <p id="access-detail" class="storage-summary"></p>
           <div id="selection">
             <p class="empty">
               Select an operation in the stack or choose an example to follow a
@@ -243,7 +304,7 @@
       </aside>
     </main>
     <footer>
-      <span>HLS Spacetime / S5</span
+      <span>HLS Spacetime / storage history</span
       ><span>Cycle observations · qualified placement · explicit unknowns</span>
     </footer>
     <script type="module" src="app.js"></script>

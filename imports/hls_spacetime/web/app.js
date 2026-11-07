@@ -8,7 +8,11 @@ import {
   resourcePlacement,
   resourcesForEvent,
   eventDetails,
+  storageSegments,
+  storageLifetimes,
 } from "./model.js";
+import { eventFootprint, accessConnections } from "./footprint.js";
+import { nativePaths } from "./native-paths.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
   "#67d7c3",
@@ -32,7 +36,14 @@ const state = {
   spacing: 8,
   hits: [],
   flatHits: [],
+  storageHits: [],
+  storageCache: null,
+  storagePointCache: new Map(),
   pointCache: new Map(),
+  footprintCache: new Map(),
+  nativePaths: [],
+  nativePath: null,
+  traceNote: "",
   resourceCache: new Map(),
   actors: [],
   resource: null,
@@ -82,6 +93,7 @@ async function loadDocument(
   if (text.length > 128 * 1024 * 1024)
     throw Error("Viewer projection exceeds the 128 MiB limit");
   const model = createModel(JSON.parse(text));
+  const paths = nativePaths(model);
   state.model = model;
   state.selected = null;
   state.trace = null;
@@ -91,6 +103,20 @@ async function loadDocument(
   state.focusVersion = null;
   state.pointCache.clear();
   state.resourceCache.clear();
+  state.storageCache = null;
+  state.storagePointCache.clear();
+  state.footprintCache.clear();
+  state.nativePaths = paths;
+  state.nativePath = null;
+  $("native-path").replaceChildren(new Option("No static path overlay", ""));
+  for (const path of state.nativePaths)
+    $("native-path").add(
+      new Option(
+        `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
+        path.id,
+      ),
+    );
+  $("native-path").disabled = !state.nativePaths.length;
   state.actors = [...new Set(model.orderedEvents.map((e) => e.actor))].sort();
   options("actor", state.actors, "All actors");
   options(
@@ -147,6 +173,7 @@ async function loadDocument(
         : "Saved physical capture loaded. Execution time is shown in clocks.",
     failed,
   );
+  renderNativePath();
   render();
 }
 /** Recorded selected-step bounds; public annotations stay outside the event graph. */
@@ -279,6 +306,8 @@ function resourcePoint(id) {
 }
 /** Position an operation at the centroid of its explicit resource groups only. */
 function eventPoint(event) {
+  if (event.access?.kind === "read_result" && state.model.catalogue)
+    return unknownStoragePoint(event.access.resource);
   if (state.pointCache.has(event.id)) return state.pointCache.get(event.id);
   const ids = resourcesForEvent(event),
     points = ids.map(resourcePoint);
@@ -303,6 +332,90 @@ function eventPoint(event) {
   state.pointCache.set(event.id, point);
   return point;
 }
+/** Normalize measured tile coordinates without moving any point to a centroid. */
+function cellPoint(cell) {
+  const b = state.model.geometryBounds;
+  return {
+    x: ((cell.x - b.minX) / (b.maxX - b.minX || 1) - 0.5) * 2,
+    y: ((cell.y - b.minY) / (b.maxY - b.minY || 1) - 0.5) * 2,
+    physical: true,
+  };
+}
+/** Native cells sharing a tile overlap at this scale; retain their identities
+ * while drawing one glyph per occupied tile. Unknown bits keep their own rail. */
+function accessGeometry(event) {
+  const key = event.access
+    ? JSON.stringify([
+        event.access.resource,
+        event.access.kind,
+        event.access.mask ?? null,
+      ])
+    : event.id;
+  if (state.footprintCache.has(key)) return state.footprintCache.get(key);
+  const footprint = eventFootprint(state.model, event.id);
+  const tiles = new Map();
+  for (const cell of footprint.cells) {
+    const key = `${cell.x}/${cell.y}`;
+    if (!tiles.has(key)) tiles.set(key, { ...cellPoint(cell), cells: [] });
+    tiles.get(key).cells.push(cell.id);
+  }
+  const points = [...tiles.values()];
+  if (
+    footprint.resource &&
+    (footprint.unknownBits ||
+      footprint.unplacedCells.length ||
+      footprint.candidateCells.length)
+  )
+    points.push({ ...unknownStoragePoint(footprint.resource), cells: [] });
+  if (!points.length) {
+    // The response's copy/consumer logic is not located at the source FF.
+    const resource = footprint.resource;
+    points.push(
+      resource && state.model.catalogue
+        ? { ...unknownStoragePoint(resource), cells: [] }
+        : eventPoint(event),
+    );
+  }
+  const geometry = { footprint, points };
+  if (state.footprintCache.size >= 512) state.footprintCache.clear();
+  state.footprintCache.set(key, geometry);
+  return geometry;
+}
+/** A static STA path is shown on one comparison layer, never inserted into the
+ * execution graph. Straight connections join actual placed path cells; they
+ * are not the wire trajectory or evidence of a sensitized execution path. */
+function drawNativePath(ctx, project, flat = false) {
+  const path = state.nativePath;
+  if (!path) return;
+  const cycle = Math.max(
+    state.first,
+    Math.min(
+      state.first + state.window - 1,
+      state.model.events.get(state.selected)?.cycle ?? state.first,
+    ),
+  );
+  const points = path.steps.map((step) =>
+    project(cellPoint(state.model.cells.get(step.cell)), cycle),
+  );
+  ctx.globalAlpha = 0.95;
+  for (let i = 1; i < points.length; i++)
+    line(ctx, points[i - 1], points[i], "#ef88d1", 2.2);
+  for (const p of points) {
+    ctx.fillStyle = "#ef88d1";
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
+  if (points.length) {
+    ctx.font = "10px ui-monospace,monospace";
+    ctx.fillStyle = "#ffd3f2";
+    ctx.fillText(
+      flat ? path.id : `${path.id} static · not cycle-attributed`,
+      points[0].x + 6,
+      points[0].y - 9,
+    );
+  }
+  ctx.globalAlpha = 1;
+}
+
 /** Backing-store sizing follows CSS pixels while preserving sharp high-DPI text. */
 function canvasContext(id) {
   const canvas = $(id),
@@ -401,37 +514,172 @@ function selectedLifetimes() {
   for (const id of ids)
     for (const life of eventDetails(state.model, id).lifetimes)
       found.set(life.version, life);
-  return [...found.values()].slice(0, 8);
+  return [...found.values()];
 }
 
-/** Storage edges preserve version identity, masked writes and reset boundaries. */
-function drawResidence(ctx, project) {
-  if (!$("residence").checked) return;
-  const lives = selectedLifetimes();
-  for (const life of lives) {
-    if (
-      life.endCycle <= state.first ||
-      life.firstCycle >= state.first + state.window
-    )
-      continue;
-    const base = resourcePoint(life.resource),
-      point = {
-        ...base,
-        y: base.y + (!state.model.catalogue ? life.address * 0.6 : 0),
-      },
-      first = Math.max(state.first, life.firstCycle),
-      last = Math.min(state.first + state.window - 1, life.endCycle - 1);
-    const a = project(point, first),
-      b = project(point, last);
-    line(ctx, a, b, "#f1bb6c", 3, true);
-    ctx.fillStyle = "#f1bb6c";
-    ctx.font = "10px ui-monospace,monospace";
-    ctx.fillText(`${life.version} · residence`, b.x + 8, (a.y + b.y) / 2);
+/** Query window histories independently of selection. Selection only emphasizes
+ * evidence; it does not create cross-clock data or assign a word to an actor. */
+function visibleStorage() {
+  const options = {
+    firstCycle: state.first,
+    endCycle: state.first + state.window,
+    ...filters(),
+    usedOnly: !$("full-storage").checked,
+  };
+  const key = JSON.stringify(options);
+  if (state.storageCache?.key !== key)
+    state.storageCache = {
+      key,
+      segments: storageSegments(state.model, options),
+    };
+  return state.storageCache.segments;
+}
+/** Place unknown bits on their own labelled rail even for partly placed words. */
+function unknownStoragePoint(resource) {
+  const ids = [...state.model.resources.keys()],
+    i = ids.indexOf(resource);
+  return {
+    x: 1.3,
+    y: -1 + (2 * i) / Math.max(1, ids.length - 1),
+    physical: false,
+  };
+}
+/** Expand only an explicitly chosen word into qualified native cell positions.
+ * Folded bits sharing a cell draw once. Unknown/candidate bits never acquire
+ * positions merely because a neighbouring bit has a binding. */
+function storagePoints(segment) {
+  const expand =
+    $("expand-storage").checked && state.resource === segment.resource;
+  const key = JSON.stringify([segment.resource, segment.address, expand]);
+  if (state.storagePointCache.has(key)) return state.storagePointCache.get(key);
+  const save = (points) => {
+    state.storagePointCache.set(key, points);
+    return points;
+  };
+  const model = state.model,
+    placement = resourcePlacement(model, segment.resource);
+  const b = model.geometryBounds;
+  if (!model.catalogue) {
+    const base = resourcePoint(segment.resource);
+    return save([
+      { ...base, y: base.y + segment.address * 0.6, kind: "logical" },
+    ]);
   }
+  const placed = placement.cells.filter(
+    (c) => Number.isFinite(c.x) && Number.isFinite(c.y),
+  );
+  const points =
+    expand && b
+      ? placed.map((c) => ({
+          x: ((c.x - b.minX) / (b.maxX - b.minX || 1) - 0.5) * 2,
+          y: ((c.y - b.minY) / (b.maxY - b.minY || 1) - 0.5) * 2,
+          physical: true,
+          kind: "cell",
+          cell: c.id,
+        }))
+      : placed.length
+        ? [{ ...resourcePoint(segment.resource), kind: "group" }]
+        : [];
+  if (
+    !placed.length ||
+    placement.unknownBits ||
+    placement.candidateCells.length ||
+    placed.length < placement.cells.length
+  )
+    points.push({ ...unknownStoragePoint(segment.resource), kind: "unknown" });
+  return save(points);
+}
+/** Draw observed load bridges and same-version residence, never a dependency
+ * from an overwritten word to the next word. Counts disclose drawing bounds. */
+function drawResidence(ctx, project) {
+  state.storageHits = [];
+  if (!$("residence").checked) {
+    $("storage-summary").textContent = "Cross-cycle storage hidden";
+    return;
+  }
+  const segments = visibleStorage();
+  const selected = new Set(selectedLifetimes().map((life) => life.version));
+  // Show selected details first if the explicit graphics budget is reached.
+  const emphasized = (segment) =>
+    selected.has(segment.version) || segment.resource === state.resource;
+  const ordered = [...segments].sort(
+    (a, b) => Number(emphasized(b)) - Number(emphasized(a)),
+  );
+  let drawn = 0,
+    omitted = 0,
+    loads = 0,
+    holds = 0,
+    cells = new Set();
+  for (const segment of ordered) {
+    if (segment.kind === "write") loads++;
+    else holds++;
+    for (const point of storagePoints(segment)) {
+      if (drawn >= 20000) {
+        omitted++;
+        continue;
+      }
+      const active = emphasized(segment),
+        uncertain =
+          segment.lifetime.continuity !== "within_declared_capture_scope";
+      const a = project(point, segment.visibleFromCycle),
+        b = project(point, segment.visibleToCycle);
+      const stroke =
+        point.kind === "unknown" || uncertain
+          ? "#8c99a4"
+          : active
+            ? "#f7d684"
+            : segment.kind === "write"
+              ? "#67b9cc"
+              : "#7797a8";
+      ctx.globalAlpha = active ? 0.9 : point.kind === "cell" ? 0.32 : 0.48;
+      line(
+        ctx,
+        a,
+        b,
+        stroke,
+        active && point.kind !== "cell"
+          ? 2.3
+          : segment.kind === "write"
+            ? 1.5
+            : 1,
+        segment.kind === "hold" || uncertain || point.kind === "unknown",
+      );
+      // A square marks Q at the next sample, even for a single-cycle value.
+      if (segment.kind === "write" && !segment.afterWindow) {
+        ctx.fillStyle = stroke;
+        ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+      }
+      ctx.fillStyle = stroke;
+      if (segment.beforeWindow) ctx.fillRect(a.x - 3, a.y - 1, 6, 2);
+      if (segment.afterWindow) ctx.fillRect(b.x - 3, b.y - 1, 6, 2);
+      state.storageHits.push({ a, b, segment, point });
+      if (point.cell) cells.add(point.cell);
+      drawn++;
+    }
+  }
+  ctx.globalAlpha = 1;
+  const words = new Set(segments.map((s) => `${s.resource}/${s.address}`)).size;
+  $("storage-summary").textContent =
+    ($("full-storage").checked
+      ? "Full storage history · "
+      : "Recorded uses only · ") +
+    `${words} words · ${loads} load bridges · ${holds} residence spans` +
+    (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
+    (omitted
+      ? ` · ${omitted} strokes omitted (20,000-stroke limit; narrow the window)`
+      : "") +
+    (state.window === 1
+      ? " · show at least two clocks for cross-cycle links"
+      : "");
 }
 /** Render graph edges only; off-window endpoints are clipped and labelled. */
 function drawTrace(ctx, project) {
+  state.traceNote = "";
   if (!state.trace) return;
+  let aggregates = 0,
+    drawn = 0,
+    omitted = 0;
+  const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const edge of state.trace.edges) {
     const from = state.model.events.get(edge.source),
       to = state.model.events.get(edge.target);
@@ -439,30 +687,75 @@ function drawTrace(ctx, project) {
       continue;
     const outside =
       from.cycle < state.first || to.cycle >= state.first + state.window;
-    const a = project(eventPoint(from), Math.max(state.first, from.cycle)),
-      b = project(
-        eventPoint(to),
+    const sources = expanded ? accessGeometry(from).points : [eventPoint(from)];
+    const targets = expanded ? accessGeometry(to).points : [eventPoint(to)];
+    const connection = expanded
+      ? accessConnections(from, to, sources, targets)
+      : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
+    const { aggregate } = connection;
+    const pairs = aggregate
+      ? [[eventPoint(from), eventPoint(to)]]
+      : connection.pairs;
+    if (aggregate) aggregates++;
+    for (const [source, target] of pairs) {
+      if (drawn >= 4000) {
+        omitted++;
+        continue;
+      }
+      const a = project(source, Math.max(state.first, from.cycle));
+      const b = project(
+        target,
         Math.min(state.first + state.window - 1, to.cycle),
       );
-    line(
-      ctx,
-      a,
-      b,
-      edge.kind === "resource_order" ? "#a8a0cc" : "#f7d684",
-      1.5,
-      outside,
-    );
-    if (outside) {
-      ctx.font = "9px ui-monospace,monospace";
-      ctx.fillStyle = "#f7d684";
-      ctx.fillText(
-        from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
-        a.x + 5,
-        a.y - 4,
+      ctx.globalAlpha = pairs.length > 1 ? 0.25 : 0.85;
+      line(
+        ctx,
+        a,
+        b,
+        edge.kind === "resource_order" ? "#a8a0cc" : "#f7d684",
+        1,
+        outside,
       );
+      if (aggregate) {
+        ctx.globalAlpha = 1;
+        ctx.font = "9px ui-monospace,monospace";
+        ctx.fillStyle = "#f7d684";
+        ctx.fillText(
+          "word dependency",
+          (a.x + b.x) / 2 + 4,
+          (a.y + b.y) / 2 - 4,
+        );
+      }
+      if (outside) {
+        ctx.font = "9px ui-monospace,monospace";
+        ctx.fillStyle = "#f7d684";
+        ctx.fillText(
+          from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
+          a.x + 5,
+          a.y - 4,
+        );
+      }
+      drawn++;
     }
   }
+  ctx.globalAlpha = 1;
+  state.traceNote = `${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}${omitted ? ` · ${omitted} dependency strokes omitted (4,000 limit)` : ""}`;
 }
+/** Report native path details separately from cycle evidence and use attribution. */
+function renderNativePath() {
+  const path = state.nativePath;
+  $("native-path-summary").textContent = path
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. Lines join placed cells, not route bends.`
+    : state.nativePaths.length
+      ? "Optional pink overlay: actual placed logic sequence from saved static timing. It is not attributed to this clock's execution."
+      : state.model.catalogue
+        ? "No native timing-path detail supplied. Prepare the example again to include saved paths."
+        : "Native timing and placement are unmeasured for this logical capture.";
+  $("native-path-steps").innerHTML = path
+    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps.map((s) => `<li>${esc(s.pin)}${s.incrementNs === null ? "" : ` · +${s.incrementNs} ns`}</li>`).join("")}</ol>`
+    : "";
+}
+
 /** Draw the chip stack using a bounded window and shared geometry. */
 function drawStack() {
   const { ctx, w, h } = canvasContext("stack");
@@ -473,41 +766,78 @@ function drawStack() {
     layer(ctx, project, c, 0.3);
   if ((state.window - 1) % interval)
     layer(ctx, project, state.first + state.window - 1, 0.3);
+  for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
+    if (
+      epoch.first_cycle < state.first ||
+      epoch.first_cycle >= state.first + state.window
+    )
+      continue;
+    const a = project({ x: -1, y: -1 }, epoch.first_cycle);
+    const b = project({ x: 1, y: -1 }, epoch.first_cycle);
+    line(ctx, a, b, "#ea8b94", 2);
+    ctx.fillStyle = "#ea8b94";
+    ctx.font = "10px system-ui";
+    ctx.fillText(`Reset · ${epoch.id}`, a.x + 6, a.y - 6);
+  }
   installedContext(ctx, project);
-  drawTrace(ctx, project);
   drawResidence(ctx, project);
+  drawTrace(ctx, project);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
-  for (const event of visibleEvents()) {
-    const point = eventPoint(event),
-      p = project(point, event.cycle),
-      selected = event.id === state.selected,
+  const events = visibleEvents().sort(
+    (a, b) =>
+      Number(b.id === state.selected || pathIds.has(b.id)) -
+      Number(a.id === state.selected || pathIds.has(a.id)),
+  );
+  let drawn = 0,
+    omitted = 0;
+  const expanded = $("access-footprints").checked && state.model.catalogue;
+  for (const event of events) {
+    const selected = event.id === state.selected,
       onPath = pathIds.has(event.id);
-    ctx.globalAlpha =
-      state.trace && !onPath
-        ? 0.16
-        : point.physical || !state.model.catalogue
-          ? 0.8
-          : 0.45;
-    ctx.fillStyle = selected
-      ? "#fff0ac"
-      : onPath
-        ? "#f7d684"
-        : point.physical || !state.model.catalogue
-          ? color(event)
-          : "#8c99a4";
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, selected ? 5 : onPath ? 3.5 : 2, 0, Math.PI * 2);
-    ctx.fill();
-    if (selected) {
-      ctx.strokeStyle = "#fff5c5";
-      ctx.lineWidth = 1.5;
+    const geometry = expanded ? accessGeometry(event) : null;
+    const points = geometry?.points ?? [eventPoint(event)];
+    for (const point of points) {
+      if (drawn >= 20000) {
+        omitted++;
+        continue;
+      }
+      const p = project(point, event.cycle);
+      ctx.globalAlpha =
+        state.trace && !onPath
+          ? 0.14
+          : point.physical || !state.model.catalogue
+            ? 0.8
+            : 0.45;
+      const stroke = selected
+        ? "#fff0ac"
+        : onPath
+          ? "#f7d684"
+          : point.physical || !state.model.catalogue
+            ? color(event)
+            : "#8c99a4";
+      ctx.fillStyle = ctx.strokeStyle = stroke;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(p.x, p.y, selected ? 3.5 : onPath ? 2.4 : 1.5, 0, Math.PI * 2);
+      if (geometry?.footprint.mode === "word_context" && point.physical)
+        ctx.stroke();
+      else ctx.fill();
+      if (selected && points.length === 1) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      state.hits.push({ ...p, event });
+      drawn++;
     }
-    state.hits.push({ ...p, event });
   }
+  $("access-summary").textContent = !state.model.catalogue
+    ? "Logical layout · native access placement unmeasured"
+    : expanded
+      ? `Accesses at native tiles · hollow = word context, read-bit subset unknown${omitted ? ` · ${omitted} glyphs omitted (20,000 limit; narrow window)` : ""}`
+      : "Compact aggregate symbols · centers are not computation locations";
+  $("access-summary").textContent += state.traceNote;
+  drawNativePath(ctx, project);
   ctx.globalAlpha = 1;
   const p = project({ x: 1.4, y: 0 }, state.first);
   ctx.fillStyle = "#91a7b3";
@@ -559,6 +889,19 @@ function drawFlat() {
       ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
       if (active) state.flatHits.push({ ...p, cell });
     }
+    if (state.nativePath)
+      drawNativePath(
+        ctx,
+        (point) => {
+          const x = (point.x / 2 + 0.5) * (b.maxX - b.minX) + b.minX;
+          const y = (point.y / 2 + 0.5) * (b.maxY - b.minY) + b.minY;
+          return {
+            x: ox + (x - b.minX) * scale,
+            y: h - oy - (y - b.minY) * scale,
+          };
+        },
+        true,
+      );
   } else {
     let row = 0;
     for (const resource of model.resources.values()) {
@@ -659,13 +1002,27 @@ function selectEvent(id, move = true) {
   state.cell = null;
   state.focusVersion = null;
   const event = state.model.events.get(id);
-  state.resource = resourcesForEvent(event)[0] ?? null;
+  state.resource =
+    event.access?.resource ?? resourcesForEvent(event)[0] ?? null;
   $("resource").value = state.resource ?? "";
   if (
     move &&
     (event.cycle < state.first || event.cycle >= state.first + state.window)
   )
     state.first = event.cycle - Math.floor(state.window / 2);
+  render();
+}
+/** Select a stored version, including roots with no fabricated producer event. */
+function selectStorage(version, cell = null) {
+  const life = state.model.lifetimes.get(version);
+  if (!life) return;
+  state.selected = life.producer;
+  state.trace = null;
+  state.annotation = null;
+  state.focusVersion = version;
+  state.resource = life.resource;
+  state.cell = cell;
+  $("resource").value = life.resource;
   render();
 }
 /** Inspect an annotation without inventing a graph node or causal endpoint. */
@@ -702,6 +1059,15 @@ function neighborButtons(details) {
 }
 /** Explain producer/consumer identities, residence and evidence without inferred causes. */
 function renderInspector() {
+  const fp = state.selected
+    ? eventFootprint(state.model, state.selected)
+    : null;
+  $("access-detail").textContent = fp
+    ? fp.reason +
+      (fp.cells.length
+        ? ` ${fp.cells.length} placed native cells; ${fp.unknownBits} unresolved bits.`
+        : "")
+    : "Select an access to inspect its bit-selection scope.";
   $("backward").disabled = !state.selected;
   $("forward").disabled = !state.selected;
   if (state.annotation) {
@@ -711,6 +1077,21 @@ function renderInspector() {
     $("neighbors").innerHTML = "";
     $("trace-summary").textContent =
       "Choose a recorded residence example to inspect supported dependencies.";
+    return;
+  }
+  if (!state.selected && state.focusVersion) {
+    const life = state.model.lifetimes.get(state.focusVersion);
+    $("selected-kind").textContent = "Stored root";
+    $("selection").innerHTML =
+      `<h3>${esc(life.version)}</h3><p>${esc(life.resource)} [${life.address}]</p><p>${esc(life.origin)} root, available C${life.firstCycle}–C${life.endCycle - 1}. No producer before this recording/incarnation is implied.</p><p>${esc(life.continuity)} · ${life.pending.length} pending or retired read request(s).</p><p>${esc(life.evidence)}</p>`;
+    $("neighbors").innerHTML = life.requests
+      .map(
+        (id) =>
+          `<button data-event="${esc(id)}">Read at C${state.model.events.get(id).cycle}</button>`,
+      )
+      .join("");
+    $("trace-summary").textContent =
+      "Storage residence is separate from numerical ancestry.";
     return;
   }
   if (!state.selected) {
@@ -732,9 +1113,15 @@ function renderInspector() {
         (v) =>
           `<p class="evidence-note">${esc(v.id)}: ${esc(v.origin)} root. ${esc(v.evidence)}</p>`,
       )
+      .join("")}${lifetimes
+      .slice(0, 12)
+      .map(
+        (life) =>
+          `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. ${life.lastUseCycle === null ? "No recorded use; hidden from the default storage view." : `Last recorded use at C${life.lastUseCycle}; the default view stops there.`} Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`,
+      )
       .join(
         "",
-      )}${lifetimes.map((life) => `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`).join("")}`;
+      )}${lifetimes.length > 12 ? `<p>${lifetimes.length - 12} more histories on this path; select a resource or version for detail.</p>` : ""}`;
   $("neighbors").innerHTML = neighborButtons(d);
   $("trace-summary").innerHTML = state.trace
     ? `${state.trace.events.length} connected operations · ${state.trace.roots.length} root stops${state.trace.truncated ? " · traversal capped at 1,000 operations" : ""}${state.trace.roots
@@ -765,6 +1152,30 @@ function renderResource() {
           `<p><b>${esc(p.resource)}</b><br>${esc(p.coverage.status.replaceAll("_", " "))}<br>${p.supportedBits} supported bits · ${p.unknownBits} unknown bits · ${p.cells.length} associated cells</p><p>${esc(p.binding?.evidence ?? p.coverage.reason ?? "No measured physical binding.")}</p>${(p.binding?.generated ?? []).map((id) => `<p class="muted">${esc(state.model.catalogue?.generated?.find((g) => g.id === id)?.source ?? id)}</p>`).join("")}`,
       )
       .join("") || "Select an operation to inspect its resource bindings.";
+  const histories = state.resource
+    ? storageLifetimes(state.model, {
+        resource: state.resource,
+        firstCycle: state.first,
+        endCycle: state.first + state.window,
+      })
+    : [];
+  $("storage-history").innerHTML = histories.length
+    ? `<p>${histories.length} versions of this resource intersect the window. Full histories remain inspectable even when their strands are hidden.</p>` +
+      histories
+        .slice(0, 80)
+        .map(
+          (life) =>
+            `<button data-version="${esc(life.version)}">${esc(life.version)} · C${life.firstCycle}–C${life.endCycle - 1} · ${life.writeCycle === null ? esc(life.origin) : `write C${life.writeCycle}`} · ${life.lastUseCycle === null ? "no recorded use" : `last use C${life.lastUseCycle}`}</button>`,
+        )
+        .join("") +
+      (histories.length > 80
+        ? "<p>First 80 listed; narrow the clock window to inspect the rest.</p>"
+        : "")
+    : "Select a storage resource to inspect its versions.";
+  $("expand-storage").disabled = !state.resource || !state.model.catalogue;
+  $("flat-subtitle").textContent = cells.length
+    ? `${cells.length} associated native cells highlighted · no logic cone or routes`
+    : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
     cells
@@ -819,6 +1230,28 @@ function nearest(hits, x, y, limit = 12) {
     if (d <= dist) {
       dist = d;
       best = hit;
+    }
+  }
+  return best;
+}
+/** Nearest rendered storage span, independently of dense same-clock dots. */
+function nearestStorage(x, y) {
+  let best = null,
+    distance = 25;
+  for (const hit of state.storageHits) {
+    const dx = hit.b.x - hit.a.x,
+      dy = hit.b.y - hit.a.y;
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((x - hit.a.x) * dx + (y - hit.a.y) * dy) / (dx * dx + dy * dy || 1),
+      ),
+    );
+    const d = (x - hit.a.x - t * dx) ** 2 + (y - hit.a.y - t * dy) ** 2;
+    if (d <= distance) {
+      best = hit;
+      distance = d;
     }
   }
   return best;
@@ -905,6 +1338,23 @@ function bindControls() {
   for (const key of ["actor", "activation", "operation", "task"])
     $(key).onchange = () => {
       if (key === "actor") updateActivations();
+      // Filter across the capture: off-window ancestry remains selectable.
+      if (
+        state.selected &&
+        !eventsInWindow(state.model, filters()).some(
+          (event) => event.id === state.selected,
+        )
+      ) {
+        state.selected = null;
+        state.trace = null;
+        state.annotation = null;
+        state.focusVersion = null;
+        state.resource = null;
+        state.cell = null;
+        state.traceNote = "";
+        $("resource").value = "";
+        $("example").value = "";
+      }
       render();
     };
   $("clear-filters").onclick = () => {
@@ -931,6 +1381,15 @@ function bindControls() {
   };
   $("context").onchange = repaint;
   $("residence").onchange = repaint;
+  $("full-storage").onchange = render;
+  $("access-footprints").onchange = repaint;
+  $("native-path").onchange = () => {
+    state.nativePath =
+      state.nativePaths.find((p) => p.id === $("native-path").value) ?? null;
+    renderNativePath();
+    repaint();
+  };
+  $("expand-storage").onchange = repaint;
   $("reset-camera").onclick = () => {
     state.yaw = -0.6;
     state.tilt = 0.5;
@@ -971,6 +1430,7 @@ function bindControls() {
   };
   $("resource").onchange = () => {
     state.resource = $("resource").value || null;
+    state.cell = null;
     renderResource();
     repaint();
   };
@@ -989,6 +1449,8 @@ function bindControls() {
   document.addEventListener("click", (e) => {
     const target = e.target.closest("[data-event]");
     if (target) selectEvent(target.dataset.event);
+    const version = e.target.closest("[data-version]");
+    if (version) selectStorage(version.dataset.version);
     const cell = e.target.closest("[data-cell]");
     if (cell) {
       state.cell = cell.dataset.cell;
@@ -1015,11 +1477,13 @@ function bindControls() {
       state.tilt = Math.max(0.12, Math.min(1, drag.tilt + dy * 0.003));
       repaint();
     } else {
-      const hit = nearest(state.hits, p.x, p.y);
-      $("tooltip").hidden = !hit;
-      if (hit) {
-        $("tooltip").textContent =
-          `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`;
+      const hit = nearest(state.hits, p.x, p.y, 5);
+      const storage = hit ? null : nearestStorage(p.x, p.y);
+      $("tooltip").hidden = !hit && !storage;
+      if (hit || storage) {
+        $("tooltip").textContent = hit
+          ? `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`
+          : `${storage.segment.kind === "write" ? "Load" : "Residence"} C${storage.segment.fromCycle}→C${storage.segment.toCycle} · ${storage.segment.version} · ${storage.point.cell ?? storage.segment.resource}`;
         $("tooltip").style.left =
           `${Math.min(p.x + 12, stack.clientWidth - 220)}px`;
         $("tooltip").style.top = `${p.y + 14}px`;
@@ -1029,8 +1493,11 @@ function bindControls() {
   stack.onpointerup = (e) => {
     const p = pointer(e);
     if (drag && !drag.moved) {
-      const hit = nearest(state.hits, p.x, p.y);
+      const hit = nearest(state.hits, p.x, p.y, 5);
+      const storage = hit ? null : nearestStorage(p.x, p.y);
       if (hit) selectEvent(hit.event.id, false);
+      else if (storage)
+        selectStorage(storage.segment.version, storage.point.cell ?? null);
     }
     drag = null;
   };

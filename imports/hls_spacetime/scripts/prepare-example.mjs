@@ -7,6 +7,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve, join, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { parseTimingPaths } from "./timing-paths.mjs";
 
 const MAX_PACKED_BYTES = 32 * 1024 * 1024;
 const MAX_RAW_BYTES = 256 * 1024 * 1024;
@@ -76,9 +77,9 @@ export async function openArchive(directory, name) {
   };
 }
 
-/** Verify a requested compressed/plain JSON file against its retained manifest
+/** Verify a requested compressed/plain file against its retained manifest
  * before bounded decompression. Record both packed and decoded identities. */
-export async function readVerifiedJson(archive, name, expectedRawSha) {
+export async function readVerifiedBytes(archive, name, expectedRawSha) {
   const entry = archive.files.get(name);
   check(entry, `Unmanifested source: ${archive.name}/${name}`);
   const path = resolve(archive.root, name),
@@ -109,7 +110,11 @@ export async function readVerifiedJson(archive, name, expectedRawSha) {
     raw_bytes: raw.length,
     raw_sha256: rawSha,
   });
-  return JSON.parse(raw);
+  return raw;
+}
+/** Decode JSON only after the underlying saved bytes pass their identity gate. */
+export async function readVerifiedJson(archive, name, expectedRawSha) {
+  return JSON.parse(await readVerifiedBytes(archive, name, expectedRawSha));
 }
 
 /** Separate complete execution records from a compact physical presentation.
@@ -394,6 +399,19 @@ export async function prepareExamples({
     examples: liveExamples(),
     coverage: pick(coverage, ["resource_associations", "counts", "scope"]),
     measurement: physicalReview.measurement,
+    nativePaths: {
+      build: joined.build,
+      checkpoint: joined.physical.checkpoint,
+      scope: "static_timing",
+      wireGeometry: false,
+      report: "catalogue/timing-max.rpt.gz",
+      paths: parseTimingPaths(
+        (
+          await readVerifiedBytes(physical, "catalogue/timing-max.rpt.gz")
+        ).toString("utf8"),
+        { cells: joined.physical.cells },
+      ),
+    },
     scope: [
       joinReview.scope,
       ...captureReview.limitations,
@@ -413,7 +431,7 @@ export async function prepareExamples({
       "Requested source files matched retained manifest bytes and SHA-256; manifests are trusted local inventories, not signatures",
     omitted_detail: {
       physical:
-        "Cell scalar properties, canonical nets and native timing remain in joined/live-1.json.gz",
+        "Cell scalar properties, canonical nets and timing beyond the sampled setup paths remain in joined/live-1.json.gz",
       sdf: physical.manifest.joined_sdf_sidecars,
     },
   };

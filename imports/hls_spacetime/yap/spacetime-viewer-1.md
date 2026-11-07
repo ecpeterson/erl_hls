@@ -4,7 +4,7 @@
 
 ## Ownership
 
-The seven generic Erlang validators/readers, exporter, protocol-stream trace dialect/header/tests, synthetic fixtures and authoritative campaign notes now live in `hls_spacetime`. The compiler retains its actual RAM primitive/testbench and a pointer to the offline library. Fabric owns an optional nested observation project, its source-protocol recorder shell, and the Phi application fixture. Normal fabric builds and deployed-runtime releases have no private spacetime dependency. New captures use deterministic observation-plan ETF identity; frozen old identities remain unchanged.
+The seven generic Erlang validators/readers, exporter, protocol-stream trace dialect/header/tests, synthetic fixtures and authoritative campaign notes now live in `hls_spacetime`. The compiler retains its actual RAM primitive/testbench and a pointer to the offline library. Fabric owns the optional `apps/hls_spacetime_protocol` OTP application (selected by its root `spacetime` profile), its source-protocol recorder shell, and the Phi application fixture. Normal fabric builds and deployed-runtime releases have no private spacetime dependency. New captures use deterministic observation-plan ETF identity; frozen old identities remain unchanged.
 
 ## Saved inputs and projection
 
