@@ -33,6 +33,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
     reset => reinitialize | retained | unknown
 }.
 %% Access-specific fields are checked against the storage resource and its current version.
+%% read_mask identifies operationally consumed bits; absence means an unknown subset.
 -type access() :: #{
     kind := write | hold | read_request | read_result,
     resource := id(),
@@ -41,6 +42,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
     before => id(),
     after_version => id(),
     mask => pos_integer(),
+    read_mask => pos_integer(),
     version => id(),
     request => id()
 }.
@@ -185,16 +187,18 @@ validate_bundle(#{
 validate_bundle(_) ->
     fail(format).
 
--doc "Validates then produces JSON iodata. Caller owns file creation/retention. Atom field/enum names become strings; write masks become hexadecimal strings to retain wide values in browser consumers. No term-to-atom decoder is involved.".
+-doc "Validates then produces JSON iodata. Caller owns file creation/retention. Atom field/enum names become strings; write/read masks become hexadecimal strings to retain wide values in browser consumers. No term-to-atom decoder is involved.".
 -spec encode(bundle()) -> iodata().
 encode(Bundle = #{events := Events}) ->
     _ = validate(Bundle),
     json:encode(Bundle#{events := [wire_event(E) || E <- Events]}).
 
-%% Hardware write masks routinely exceed the exact integer range of JSON browser numbers.
+%% Hardware masks routinely exceed the exact integer range of JSON browser numbers.
 -spec wire_event(event()) -> map().
 wire_event(#{access := #{kind := write, mask := Mask} = Access} = Event) ->
     Event#{access := Access#{mask := <<"0x", (integer_to_binary(Mask, 16))/binary>>}};
+wire_event(#{access := #{read_mask := Mask} = Access} = Event) ->
+    Event#{access := Access#{read_mask := <<"0x", (integer_to_binary(Mask, 16))/binary>>}};
 wire_event(Event) ->
     Event.
 

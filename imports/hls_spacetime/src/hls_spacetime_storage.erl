@@ -165,6 +165,7 @@ check_ports(Events, Resources) ->
                         is_integer(Address) andalso Address >= 0 andalso Address < Depth,
                         {storage_address, Id}
                     ),
+                    ok = check_read_mask(Access, R, Id),
                     Direction = maps:get(Port, Ports, absent),
                     require(port_allows(Kind, Direction), {storage_port_access, Id}),
                     case Kind of
@@ -187,6 +188,17 @@ check_ports(Events, Resources) ->
         #{},
         Events
     ),
+    ok.
+
+%% A read subset is optional evidence; present masks must be nonempty and fit the word.
+-spec check_read_mask(map(), hls_spacetime:resource(), binary()) -> ok.
+check_read_mask(#{read_mask := Mask, kind := Kind}, #{width := Width}, Id) ->
+    require(
+        (Kind =:= read_request orelse Kind =:= read_result) andalso
+            is_integer(Mask) andalso Mask > 0 andalso Mask < (1 bsl Width),
+        {storage_read_mask, Id}
+    );
+check_read_mask(_, _, _) ->
     ok.
 
 %% A hold observes a valid port; requests and writes obey its declared direction.
@@ -303,7 +315,7 @@ validate_result(
             port := Port,
             request := Request,
             version := Version
-        }
+        } = Access
     },
     Requests,
     Responses,
@@ -315,8 +327,13 @@ validate_result(
         {ok, #{
             cycle := Requested,
             incarnation := Inc,
-            access := #{resource := Resource, address := Address, port := Port, version := Version}
+            access := #{resource := Resource, address := Address, port := Port, version := Version} =
+                RequestedAccess
         }} ->
+            require(
+                maps:find(read_mask, Access) =:= maps:find(read_mask, RequestedAccess),
+                {storage_read_mask_mismatch, Id}
+            ),
             #{read_latency := Latency} = maps:get(Resource, Resources),
             require(Cycle =:= Requested + Latency, {storage_read_latency, Id});
         _ ->

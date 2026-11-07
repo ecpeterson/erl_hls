@@ -262,3 +262,26 @@ test("a one-ended dependency fans across context without allocating all pairs", 
     ],
   });
 });
+
+test("selected read bits retain only their actual supported locations", () => {
+  const model = fixture();
+  model.events.get("read").access.read_mask = "0xC";
+  const footprint = eventFootprint(model, "read");
+  assert.equal(footprint.mode, "read_bits");
+  assert.equal(footprint.selectedBits, 2);
+  assert.equal(footprint.unknownBits, 1);
+  assert.deepEqual(
+    footprint.cells.map((c) => [c.id, c.bits]),
+    [["far", [2]]],
+  );
+  assert.equal(footprint.cells[0].accessed, true);
+  assert.match(footprint.reason, /not sensitized gate activity/);
+});
+
+test("selected reads reject malformed or empty masks", () => {
+  for (const mask of ["0x0", "0x100", "0x01", 3]) {
+    const model = fixture();
+    model.events.get("read").access.read_mask = mask;
+    assert.throws(() => eventFootprint(model, "read"), /mask/);
+  }
+});

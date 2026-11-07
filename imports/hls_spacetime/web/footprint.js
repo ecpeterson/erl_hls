@@ -5,9 +5,9 @@ import { resourcePlacement } from "./model.js";
 
 /** Decode a canonical, unsigned hexadecimal mask without rounding wide words.
  * Leading zeroes/lowercase digits and set bits above the declared width reject. */
-function writeMask(text, width) {
+function accessMask(text, width) {
   if (typeof text !== "string" || !/^0x(?:0|[1-9A-F][0-9A-F]*)$/.test(text))
-    throw Error("Write footprint requires a canonical hexadecimal mask");
+    throw Error("Access footprint requires a canonical hexadecimal mask");
   const digits = text.slice(2);
   const significant =
     text === "0x0"
@@ -16,7 +16,7 @@ function writeMask(text, width) {
         Math.floor(Math.log2(parseInt(digits[0], 16))) +
         1;
   if (significant > width)
-    throw Error("Write footprint mask exceeds word width");
+    throw Error("Access footprint mask exceeds word width");
   const population = [...digits].reduce(
     (count, digit) =>
       count +
@@ -43,13 +43,13 @@ function spatialBounds(cells) {
 }
 
 /** Return placed storage cells associated with one recorded access. Writes use
- * the exact logical bit mask where bit bindings exist. Reads provide only whole
- * word context: the capture does not identify the consumed read subset. A
+ * the exact logical bit mask where bit bindings exist. Reads use an explicit
+ * producer-supplied read mask, otherwise provide only whole-word context. A
  * whole-cell binding without bit identities also remains contextual, even for
  * writes. Folded bits share one cell entry with all selected logical bit IDs.
  *
  * cells/unplacedCells hold native records plus bits/accessed/contextual flags;
- * accessed means selected by a logical write mask, never native enable/activity.
+ * accessed means selected by a logical access mask, never native enable/activity.
  * unknownBits counts considered bits lacking a supported cell identity;
  * unplacedBits separately counts supported bits without a finite coordinate.
  * candidateCells are unresolved whole-word candidates, not selected access bits.
@@ -88,19 +88,29 @@ export function eventFootprint(model, eventId) {
   if (!Number.isSafeInteger(width) || width <= 0)
     throw Error("Invalid footprint word width");
   const write = access.kind === "write";
-  const mask = write ? writeMask(access.mask, width) : null;
-  const consideredBits = write ? mask.population : width;
+  const selectedRead =
+    access.kind === "read_request" && access.read_mask !== undefined;
+  const mask =
+    write || selectedRead
+      ? accessMask(write ? access.mask : access.read_mask, width)
+      : null;
+  if (selectedRead && !mask.population)
+    throw Error("Read footprint mask is empty");
+  const known = mask !== null;
+  const consideredBits = known ? mask.population : width;
   Object.assign(result, {
-    mode: write ? "write_bits" : "word_context",
-    bitSelectionKnown: write,
+    mode: write ? "write_bits" : selectedRead ? "read_bits" : "word_context",
+    bitSelectionKnown: known,
     consideredBits,
-    selectedBits: write ? consideredBits : null,
+    selectedBits: known ? consideredBits : null,
     unknownBits: consideredBits,
     reason: write
       ? "Logical write-mask bits at qualified stored-value locations; native enable and switching are not established."
-      : access.kind === "hold"
-        ? "Whole-word storage context; a hold is not a computation or read."
-        : "Whole-word storage context; the consumed read-bit subset is unknown.",
+      : selectedRead
+        ? "Recorded selected operational read bits at qualified stored-value locations; not sensitized gate activity."
+        : access.kind === "hold"
+          ? "Whole-word storage context; a hold is not a computation or read."
+          : "Whole-word storage context; the consumed read-bit subset is unknown.",
   });
   if (!consideredBits) return result;
   const bindingBits = placement.binding?.bits ?? [];
@@ -126,20 +136,20 @@ export function eventFootprint(model, eventId) {
       )
         throw Error(`Invalid or duplicate footprint bit: ${binding.bit}`);
       seen.add(binding.bit);
-      if (write && !((mask.value >> BigInt(binding.bit)) & 1n)) continue;
+      if (known && !((mask.value >> BigInt(binding.bit)) & 1n)) continue;
       if (binding.status !== "supported") continue;
       const cell = model.cells.get(binding.cell);
       if (!cell) continue;
       result.unknownBits--;
       if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y))
         result.unplacedBits++;
-      add(cell, binding.bit, write);
+      add(cell, binding.bit, known);
     }
   } else {
     for (const cell of placement.cells) add(cell, null, false);
     result.mode = "word_context";
-    result.reason = write
-      ? "Logical write mask is known, but the cell binding has no bit identities; only whole-word context is available."
+    result.reason = known
+      ? "Logical access mask is known, but the cell binding has no bit identities; only whole-word context is available."
       : result.reason;
   }
   for (const cell of chosen.values()) {

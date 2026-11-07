@@ -4,10 +4,19 @@
  * starts compilation, simulation, Vivado or a producer-validator rerun. */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { resolve, join, relative, isAbsolute } from "node:path";
+import {
+  resolve,
+  join,
+  relative,
+  isAbsolute,
+  basename,
+  dirname,
+} from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { parseTimingPaths } from "./timing-paths.mjs";
+import { createModel } from "../web/model.js";
 
 const MAX_PACKED_BYTES = 32 * 1024 * 1024;
 const MAX_RAW_BYTES = 256 * 1024 * 1024;
@@ -164,27 +173,413 @@ export function projectBundle(bundle) {
   return { bundle: { ...bundle, physical: null }, catalogue };
 }
 
-/** Retain raw public records as independent context with no graph linkage. */
+/** Public records remain contextual unless their producer supplies explicit
+ * graph anchors. createModel validates those anchors before a view is written. */
 function publicAnnotations(publicData) {
   return {
     public: publicData.events.map((row, i) => ({
       id: `public/${i}`,
       ...row,
       label: `${row.stream}: ${JSON.stringify(row.event)}`,
-      dependency_endpoint: false,
+      dependency_endpoint: row.graph_events !== undefined,
       scope:
-        "Independently decoded public observation; no graph contributor attribution supplied",
+        row.graph_events === undefined
+          ? "Independently decoded public observation; no graph contributor attribution supplied"
+          : "Explicit accepted-transfer contributors; annotation introduces no graph event or edge",
     })),
     boundaries: publicData.boundaries.map((row, i) => ({
       id: `boundary/${i}`,
       ...row,
-      dependency_endpoint: false,
+      dependency_endpoint: row.graph_events !== undefined,
       scope:
-        "All-coordinate public completion boundary; not an execution-graph event",
+        row.graph_events === undefined
+          ? "All-coordinate public completion boundary; not an execution-graph event"
+          : "Completion selects recorded accepted-transfer contributors; no synthetic completion edge",
     })),
     input_stalls: publicData.input_stalls,
     output_stalls: publicData.output_stalls,
   };
+}
+
+/** Canonical keys compare relation records independently of JSON field order. */
+function recordKey(value) {
+  if (Array.isArray(value)) return `[${value.map(recordKey).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${recordKey(value[key])}`)
+      .join(",")}}`;
+  return JSON.stringify(value);
+}
+
+/** Digest one JSON graph record with recursively sorted object keys, preserved
+ * array order and UTF-8 JSON bytes. Review producers use this same encoding for
+ * each before/after inventory entry; ordinary file hashes still bind raw bytes. */
+export function graphRecordSha256(record) {
+  check(
+    record && typeof record === "object" && !Array.isArray(record),
+    "Invalid graph refinement record",
+  );
+  return sha256(Buffer.from(recordKey(record)));
+}
+
+/** Remove only the explicitly refinable interpretation fields for comparison.
+ * Every other recorded field, including future schema additions, stays fixed. */
+function immutableFields(record, refinable) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !refinable.includes(key)),
+  );
+}
+
+/** A reviewed event may gain dependencies and evidence, never lose old links or
+ * change observation identity, clock, actor context or storage-access metadata. */
+function checkEventRefinement(before, after) {
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["inputs", "outputs", "evidence"]),
+      immutableFields(after, ["inputs", "outputs", "evidence"]),
+    ),
+    `Changed immutable event fields: ${before.id}`,
+  );
+  check(
+    ["inputs", "outputs"].every(
+      (field) =>
+        Array.isArray(after[field]) &&
+        before[field].every((id) => after[field].includes(id)),
+    ),
+    `Removed original event dependencies: ${before.id}`,
+  );
+  check(
+    typeof after.evidence === "string" && after.evidence.trim().length > 0,
+    `Missing event refinement evidence: ${before.id}`,
+  );
+}
+
+/** Only a nonstorage unknown root can acquire a recorded producer. Encoded
+ * storage versions and initial/reset origins cannot be reinterpreted this way. */
+function checkVersionRefinement(before, after, events) {
+  check(
+    before.producer === "root" &&
+      before.origin === "unknown" &&
+      before.storage === null &&
+      after.storage === null &&
+      after.origin === "event" &&
+      after.producer !== "root",
+    `Invalid unknown-root refinement: ${before.id}`,
+  );
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["producer", "origin", "evidence"]),
+      immutableFields(after, ["producer", "origin", "evidence"]),
+    ),
+    `Changed immutable version fields: ${before.id}`,
+  );
+  const producer = events.get(after.producer);
+  check(
+    producer && producer.incarnation === before.incarnation,
+    `Missing or cross-reset refinement producer: ${before.id}`,
+  );
+  check(
+    typeof after.evidence === "string" && after.evidence.trim().length > 0,
+    `Missing root refinement evidence: ${before.id}`,
+  );
+}
+
+/** Extra logical read lanes describe newly observed operands, not extra RAM
+ * ports or circuits. Existing ports and every physical storage property stay fixed. */
+function checkResourceRefinement(before, after) {
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["ports"]),
+      immutableFields(after, ["ports"]),
+    ),
+    `Changed immutable resource fields: ${before.id}`,
+  );
+  check(
+    before.ports &&
+      after.ports &&
+      typeof before.ports === "object" &&
+      typeof after.ports === "object" &&
+      !Array.isArray(before.ports) &&
+      !Array.isArray(after.ports) &&
+      Object.entries(before.ports).every(
+        ([port, kind]) =>
+          Object.hasOwn(after.ports, port) && after.ports[port] === kind,
+      ) &&
+      Object.entries(after.ports).every(
+        ([port, kind]) =>
+          Object.hasOwn(before.ports, port) ||
+          (port.length > 0 && kind === "read"),
+      ),
+    `Invalid observation read-lane refinement: ${before.id}`,
+  );
+}
+
+/** New captures may add records or supply an explicitly reviewed interpretation
+ * of existing nonstorage ancestry. The inventory must match every changed row
+ * exactly; physical storage properties, existing ports and old relations stay
+ * immutable. Added resource read lanes identify observed operands only. */
+function checkPreservedGraph(original, extended, refinements = []) {
+  check(Array.isArray(refinements), "Invalid graph refinement inventory");
+  const pending = new Map();
+  for (const entry of refinements) {
+    check(
+      entry &&
+        ["events", "versions", "resources"].includes(entry.table) &&
+        typeof entry.id === "string" &&
+        entry.id.length > 0 &&
+        /^[a-f0-9]{64}$/.test(entry.before_sha256 ?? "") &&
+        /^[a-f0-9]{64}$/.test(entry.after_sha256 ?? ""),
+      "Invalid graph refinement inventory entry",
+    );
+    const key = `${entry.table}/${entry.id}`;
+    check(!pending.has(key), `Duplicate graph refinement: ${key}`);
+    pending.set(key, entry);
+  }
+  check(Array.isArray(extended.events), "Missing extended events");
+  const events = new Map(extended.events.map((row) => [row.id, row]));
+  for (const table of ["events", "versions", "resources"]) {
+    check(Array.isArray(extended[table]), `Missing extended ${table}`);
+    const rows = new Map(extended[table].map((row) => [row.id, row]));
+    for (const before of original[table]) {
+      const after = rows.get(before.id);
+      if (isDeepStrictEqual(before, after)) continue;
+      const key = `${table}/${before.id}`,
+        entry = pending.get(key);
+      check(after && entry, `Unreviewed original graph change: ${key}`);
+      check(
+        graphRecordSha256(before) === entry.before_sha256 &&
+          graphRecordSha256(after) === entry.after_sha256,
+        `Graph refinement digest mismatch: ${key}`,
+      );
+      if (table === "events") checkEventRefinement(before, after);
+      else if (table === "versions")
+        checkVersionRefinement(before, after, events);
+      else checkResourceRefinement(before, after);
+      pending.delete(key);
+    }
+  }
+  check(
+    pending.size === 0,
+    `Unused graph refinements: ${[...pending.keys()].join(", ")}`,
+  );
+  const relations = new Map();
+  for (const row of extended.relations ?? []) {
+    const key = recordKey(row);
+    relations.set(key, (relations.get(key) ?? 0) + 1);
+  }
+  for (const row of original.relations) {
+    const key = recordKey(row),
+      count = relations.get(key) ?? 0;
+    check(count > 0, "Changed original relation");
+    relations.set(key, count - 1);
+  }
+}
+
+/** Reuse a qualified physical presentation for an explicitly reviewed capture
+ * extension. The loader checks exact file bytes; this pure operation checks the
+ * review's identity/bounds contract, immutable physical records and exact
+ * inventory of allowed ancestry refinements in the new interpretation. The
+ * review is a trusted local evidence inventory, not an equivalence proof.
+ * Physical correspondence and static timing retain their original provenance;
+ * new stream resources get no guessed mapping or inherited event coverage. */
+export function applyCaptureExtension(base, bundle, summary, review) {
+  check(
+    base?.format === "spacetime-view" && base.schema === 1 && base.catalogue,
+    "Capture extension requires a qualified physical base projection",
+  );
+  check(
+    review?.format === "spacetime-capture-extension-review" &&
+      review.schema === 1,
+    "Unsupported capture extension review",
+  );
+  for (const name of [
+    "base_projection_sha256",
+    "original_trace_sha256",
+    "extended_trace_sha256",
+    "bundle_sha256",
+    "public_sha256",
+    "original_simulator_sha256",
+    "extended_simulator_sha256",
+    "checkpoint_sha256",
+  ])
+    check(
+      /^[a-f0-9]{64}$/.test(review[name] ?? ""),
+      `Missing extension identity: ${name}`,
+    );
+  check(
+    sameBuild(base.bundle.build, review.base_build) &&
+      sameBuild(bundle.build, review.extended_build),
+    "Extension review/build mismatch",
+  );
+  check(
+    ["source", "rtl"].every(
+      (key) => base.bundle.build[key] === bundle.build[key],
+    ) && review.original_simulator_sha256 === review.extended_simulator_sha256,
+    "Extension changed source, RTL or simulator",
+  );
+  const precedingReview = base.provenance?.capture_extension?.review;
+  if (precedingReview) {
+    check(
+      review.original_trace_sha256 === precedingReview.extended_trace_sha256 &&
+        review.original_simulator_sha256 ===
+          precedingReview.extended_simulator_sha256,
+      "Extension preceding trace/simulator mismatch",
+    );
+  }
+  check(
+    sameBuild(base.catalogue.build, base.bundle.build) &&
+      base.catalogue.checkpoint === review.checkpoint_sha256,
+    "Extension physical origin mismatch",
+  );
+  check(
+    !bundle.physical,
+    "Extension bundle must not supply replacement physical evidence",
+  );
+  const originalCapture = base.bundle.capture,
+    capture = bundle.capture;
+  check(
+    capture?.complete === true &&
+      originalCapture.complete === true &&
+      capture.first_cycle === originalCapture.first_cycle &&
+      capture.end_cycle === originalCapture.end_cycle &&
+      isDeepStrictEqual(capture.incarnations, originalCapture.incarnations),
+    "Extension capture bounds/reset incarnations changed",
+  );
+  const comparison = review.comparison;
+  check(
+    comparison?.old_taps_equal === true &&
+      comparison.public_fields_equal === true &&
+      Number.isSafeInteger(comparison.original_taps) &&
+      comparison.original_taps > 0 &&
+      comparison.first_cycle === capture.first_cycle &&
+      comparison.end_cycle === capture.end_cycle &&
+      comparison.compared_cycles === capture.end_cycle - capture.first_cycle,
+    "Extension lacks complete original-tap/public-field equality review",
+  );
+  checkPreservedGraph(base.bundle, bundle, review.graph_refinements);
+  check(
+    Array.isArray(summary?.events) && Array.isArray(summary.boundaries),
+    "Missing extended public observations",
+  );
+  const annotations = publicAnnotations(summary);
+  const selected = annotations.boundaries.find(
+    (row) =>
+      row.step === base.selection.step &&
+      row.cycle === base.selection.completionCycle,
+  );
+  check(selected, "Extended selected completion boundary missing");
+  const waitOperations = review.wait_operations ?? [];
+  check(
+    Array.isArray(waitOperations) &&
+      waitOperations.length <= 1 &&
+      waitOperations.every((name) => name === "entry_wait"),
+    "Unqualified wait-operation classification",
+  );
+  const origin = {
+    build: base.bundle.build,
+    previous_correspondence: base.catalogue.correspondence_origin ?? null,
+    checkpoint: base.catalogue.checkpoint,
+    base_projection_sha256: review.base_projection_sha256,
+    original_trace_sha256: review.original_trace_sha256,
+    extended_trace_sha256: review.extended_trace_sha256,
+    simulator_sha256: review.original_simulator_sha256,
+    comparison,
+    scope:
+      "Retained finite physical correspondence/static timing; same RTL and simulator, all original taps equal. No new native run or dynamic gate attribution.",
+  };
+  const originalResources = new Set(base.bundle.resources.map((row) => row.id));
+  const addedResources = bundle.resources.filter(
+    (row) => !originalResources.has(row.id),
+  );
+  const document = {
+    ...base,
+    title: base.title.endsWith(" · transfer ancestry")
+      ? base.title
+      : `${base.title} · transfer ancestry`,
+    bundle: { ...bundle, physical: null },
+    catalogue: {
+      ...base.catalogue,
+      build: bundle.build,
+      correspondence_origin: origin,
+    },
+    annotations,
+    examples: [
+      ...(base.examples ?? []).filter(
+        (example) =>
+          !["completion-context", "completion-ancestry"].includes(example.id),
+      ),
+      ...(selected.graph_events?.length
+        ? [
+            {
+              id: "completion-ancestry",
+              label: `Completion C${selected.cycle}: accepted-transfer ancestry`,
+              event: selected.graph_events.at(-1),
+              events: selected.graph_events,
+              annotation: selected,
+              boundary: selected.id,
+              firstCycle: base.selection.firstCycle,
+              endCycle: base.selection.endCycle,
+              scope:
+                "Explicit accepted public-word contributors; unresolved upstream operands remain roots.",
+            },
+          ]
+        : []),
+    ],
+    coverage: {
+      resource_associations: [
+        ...(base.coverage?.resource_associations ?? []),
+        ...addedResources.map((row) => ({
+          resource: row.id,
+          status: "unmapped",
+          reason:
+            "New observation resource; no physical correspondence was produced",
+        })),
+      ],
+      scope:
+        "Original resource correspondence retained after complete tap comparison; added resources explicitly unmapped. Original event coverage counts do not describe this extended graph.",
+    },
+    metric_hints: {
+      wait_operations: waitOperations,
+      scope:
+        "entry_wait is the producer's sampled registered selected-action egress_blocked condition; gaps are not waits.",
+    },
+    measurement_origin: origin,
+    provenance: {
+      ...base.provenance,
+      capture_extension: {
+        review,
+        previous_extension: base.provenance?.capture_extension ?? null,
+        original_coverage: base.coverage ?? null,
+        original_scope: base.scope,
+        physical_reuse: origin,
+        integrity:
+          "Caller must verify exact base and extension file hashes; review inventories are trusted local evidence, not signatures.",
+      },
+    },
+    scope: [
+      "Fresh finite observation extension: accepted boundary and public-word lineage; original sampled taps and public fields match at every captured cycle.",
+      "Physical correspondence and static timing are reused with explicit original-build provenance, not remeasured or upgraded to native equivalence.",
+      "Unresolved operands and unmatched publication/arrival ancestry remain explicit roots; new stream resources have no placement attribution.",
+      "Reviewed graph refinements change only this interpretation; the original archived graph and native measurement remain unchanged.",
+      "Each extension retains its preceding scope and review in provenance.capture_extension; previous_extension preserves the earlier capture contexts.",
+    ],
+  };
+  if (base.nativePaths) {
+    check(
+      sameBuild(base.nativePaths.build, base.bundle.build) &&
+        base.nativePaths.checkpoint === base.catalogue.checkpoint,
+      "Extension native timing origin mismatch",
+    );
+    document.nativePaths = {
+      ...base.nativePaths,
+      build: bundle.build,
+      correspondence_origin: origin,
+    };
+  }
+  createModel(document);
+  checkExamples(document);
+  return document;
 }
 
 /** Curated navigation targets point into existing evidence. They introduce no
@@ -328,7 +723,21 @@ export async function prepareExamples({
   physicalArchive,
   captureArchive,
   output,
+  captureExtension,
+  baseProjection,
 }) {
+  if (captureExtension) {
+    check(
+      !physicalArchive && !captureArchive,
+      "Extension uses a base projection, not old archives",
+    );
+    return prepareCaptureExtension({
+      captureExtension,
+      baseProjection,
+      output,
+    });
+  }
+  check(!baseProjection, "A base projection requires --capture-extension");
   check(
     physicalArchive && captureArchive && output,
     "Both archive paths and an output directory are required",
@@ -482,12 +891,119 @@ export async function prepareExamples({
   };
 }
 
+/** Read the new capture inventory and a qualified browser projection only.
+ * Preserve the sibling example files after their existing index hashes match;
+ * no old native archive, full report reader or simulation is revisited. */
+export async function prepareCaptureExtension({
+  captureExtension,
+  baseProjection,
+  output,
+}) {
+  check(
+    captureExtension && baseProjection && output,
+    "Capture extension, base projection and output directory are required",
+  );
+  const archive = await openArchive(captureExtension, "capture-extension");
+  const review = await readVerifiedJson(archive, "review.json");
+  const baseBytes = await boundedRead(resolve(baseProjection), MAX_RAW_BYTES);
+  check(
+    sha256(baseBytes) === review.base_projection_sha256,
+    "Base projection hash mismatch",
+  );
+  const bundleNames = ["bundle.json", "bundle.json.gz"].filter((name) =>
+    archive.files.has(name),
+  );
+  check(
+    bundleNames.length === 1,
+    "Extension manifest must contain exactly one bundle.json[.gz]",
+  );
+  const bundle = await readVerifiedJson(
+    archive,
+    bundleNames[0],
+    review.bundle_sha256,
+  );
+  const summary = await readVerifiedJson(
+    archive,
+    "public.json",
+    review.public_sha256,
+  );
+  const base = JSON.parse(baseBytes);
+  const document = applyCaptureExtension(base, bundle, summary, review);
+  document.provenance.archives = [
+    ...(document.provenance.archives ?? []),
+    {
+      name: archive.name,
+      manifest_sha256: archive.manifest_sha256,
+    },
+  ];
+  document.provenance.sources = [
+    ...(document.provenance.sources ?? []),
+    ...archive.sources,
+  ];
+  document.provenance.capture_extension.integrity =
+    "Base exact SHA-256 and all extension manifest lengths/digests verified before parsing; inventories are trusted local evidence, not signatures.";
+  const root = dirname(resolve(baseProjection)),
+    baseName = basename(baseProjection);
+  const index = JSON.parse(
+    await boundedRead(join(root, "index.json"), 1024 * 1024),
+  );
+  check(
+    index.format === "spacetime-view-index" &&
+      index.schema === 1 &&
+      Array.isArray(index.examples),
+    "Unsupported base example index",
+  );
+  const names = new Set(),
+    siblings = [];
+  for (const entry of index.examples) {
+    check(
+      typeof entry.file === "string" &&
+        basename(entry.file) === entry.file &&
+        ![".", ".."].includes(entry.file) &&
+        !names.has(entry.file),
+      "Unsafe/duplicate base example entry",
+    );
+    names.add(entry.file);
+    const bytes =
+      entry.file === baseName
+        ? baseBytes
+        : await boundedRead(join(root, entry.file), MAX_RAW_BYTES);
+    check(
+      bytes.length === entry.bytes && sha256(bytes) === entry.sha256,
+      `Base example index mismatch: ${entry.file}`,
+    );
+    if (entry.file !== baseName) siblings.push({ entry, bytes });
+  }
+  check(names.has(baseName), "Base projection missing from example index");
+  await mkdir(resolve(output), { recursive: true });
+  const updated = await writeDocument(output, baseName, document);
+  for (const { entry, bytes } of siblings)
+    await writeFile(join(output, entry.file), bytes);
+  const examples = index.examples.map((entry) =>
+    entry.file === baseName ? updated : entry,
+  );
+  await writeFile(
+    join(output, "index.json"),
+    JSON.stringify({ ...index, examples }, null, 2),
+  );
+  return {
+    examples,
+    events: bundle.events.length,
+    versions: bundle.versions.length,
+    addedResources: bundle.resources.length - base.bundle.resources.length,
+    scope:
+      "Saved fresh capture projection; old physical/native evidence reused only under the recorded full original-tap equality contract",
+  };
+}
+
 /** Later repeated options win, matching ordinary compiler-command composition. */
 export function parseArguments(args) {
   const names = {
     "--physical-archive": "physicalArchive",
     "--capture-archive": "captureArchive",
     "--output": "output",
+    "--capture-extension": "captureExtension",
+    "--base-projection": "baseProjection",
   };
   const options = {};
   for (let i = 0; i < args.length; i++) {
@@ -509,7 +1025,8 @@ if (
     const options = parseArguments(process.argv.slice(2));
     if (options.help)
       console.log(
-        "node scripts/prepare-example.mjs --physical-archive DIR --capture-archive DIR --output web/data",
+        "node scripts/prepare-example.mjs --physical-archive DIR --capture-archive DIR --output web/data\n" +
+          "node scripts/prepare-example.mjs --capture-extension DIR --base-projection FILE --output web/data",
       );
     else console.log(JSON.stringify(await prepareExamples(options), null, 2));
   } catch (error) {

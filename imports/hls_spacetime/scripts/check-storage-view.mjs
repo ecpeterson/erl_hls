@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createModel, storageSegments } from "../web/model.js";
 
-const MAX_BYTES = 64 * 1024 * 1024;
+const MAX_BYTES = 128 * 1024 * 1024;
 const DEFAULT_COMPARISONS = 1_000_000;
 
 /** Contradictions reject; missing continuity coverage is reported separately. */
@@ -396,10 +396,10 @@ async function main(args) {
     info = await stat(path);
   check(
     info.isFile() && info.size <= MAX_BYTES,
-    "Projection exceeds 64 MiB or is not a regular file",
+    "Projection exceeds 128 MiB or is not a regular file",
   );
   const bytes = await readFile(path);
-  check(bytes.length <= MAX_BYTES, "Projection exceeds 64 MiB");
+  check(bytes.length <= MAX_BYTES, "Projection exceeds 128 MiB");
   const report = {
     input_sha256: createHash("sha256").update(bytes).digest("hex"),
     ...auditStorageView(JSON.parse(bytes), {

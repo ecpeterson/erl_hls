@@ -3,6 +3,7 @@
 import {
   createModel,
   eventsInWindow,
+  annotationEvents,
   traceDependencies,
   eventPlacement,
   resourcePlacement,
@@ -13,6 +14,7 @@ import {
 } from "./model.js";
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
+import { windowMetrics } from "./metrics.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
   "#67d7c3",
@@ -28,6 +30,7 @@ const state = {
   model: null,
   selected: null,
   trace: null,
+  traceDirection: "backward",
   annotation: null,
   first: 0,
   window: 24,
@@ -38,6 +41,7 @@ const state = {
   flatHits: [],
   storageHits: [],
   storageCache: null,
+  metricsCache: null,
   storagePointCache: new Map(),
   pointCache: new Map(),
   footprintCache: new Map(),
@@ -104,6 +108,7 @@ async function loadDocument(
   state.pointCache.clear();
   state.resourceCache.clear();
   state.storageCache = null;
+  state.metricsCache = null;
   state.storagePointCache.clear();
   state.footprintCache.clear();
   state.nativePaths = paths;
@@ -176,7 +181,7 @@ async function loadDocument(
   renderNativePath();
   render();
 }
-/** Recorded selected-step bounds; public annotations stay outside the event graph. */
+/** Recorded step bounds; annotation anchors reference existing graph events only. */
 function selectedBounds() {
   const d = state.model.document,
     s = d.selection ?? {},
@@ -245,9 +250,9 @@ function render() {
   if (!state.model) return;
   normalizeWindow();
   updateActivations();
-  const b = selectedBounds();
-  $("metrics").innerHTML =
-    `<div><strong>${b.endCycle - b.firstCycle}</strong><span>clocks in selection</span></div><div><strong>${state.model.resources.size}</strong><span>logical resources</span></div><div><strong>${state.model.catalogue ? state.model.cells.size.toLocaleString() : "—"}</strong><span>installed primitives</span></div>`;
+  clearFilteredSelection();
+  renderMetrics();
+  const seeds = new Set(selectionEvents().map((event) => event.id));
   const events = visibleEvents();
   $("event-count").textContent =
     `${events.length.toLocaleString()} operations · first 250 listed`;
@@ -256,13 +261,83 @@ function render() {
       .slice(0, 250)
       .map(
         (e) =>
-          `<button class="event-row ${e.id === state.selected ? "active" : ""}" data-event="${esc(e.id)}"><span>C${e.cycle}</span><span style="color:${color(e)}">${esc(e.actor)}</span><span>${esc(e.operation)}</span><span class="id">${esc(e.id)}</span></button>`,
+          `<button class="event-row ${seeds.has(e.id) ? "active" : ""}" data-event="${esc(e.id)}"><span>C${e.cycle}</span><span style="color:${color(e)}">${esc(e.actor)}</span><span>${esc(e.operation)}</span><span class="id">${esc(e.id)}</span></button>`,
       )
       .join("") ||
     '<p class="empty">No operations match these filters and clocks.</p>';
   renderInspector();
   renderResource();
   repaint();
+}
+/** Current-window clocks and overlapping logical storage work use different units.
+ * Waits require the producer's explicit per-clock operation classification. */
+function renderMetrics() {
+  const options = {
+    firstCycle: state.first,
+    endCycle: state.first + state.window,
+    ...filters(),
+    usedOnly: !$("full-storage").checked,
+    waitOperations:
+      (state.model.document.metric_hints ?? state.model.bundle.metric_hints)
+        ?.wait_operations ?? [],
+  };
+  const key = JSON.stringify(options);
+  if (state.metricsCache?.key !== key)
+    state.metricsCache = { key, value: windowMetrics(state.model, options) };
+  const metrics = state.metricsCache.value;
+  const { storage, waits, installed } = metrics;
+  $("metrics").innerHTML =
+    `<div><strong>${metrics.interval.elapsedClocks.toLocaleString()}</strong><span>clocks in view</span></div><div><strong>${storage.totalWordClocks.toLocaleString()}</strong><span>logical word-clocks</span></div><div><strong>${installed ? installed.cells.toLocaleString() : "—"}</strong><span>unique installed cells</span></div>`;
+  let detail = $("metrics-detail");
+  if (!detail) {
+    detail = document.createElement("p");
+    detail.id = "metrics-detail";
+    detail.className = "storage-summary";
+    $("metrics").closest(".summary").after(detail);
+  }
+  const waitText =
+    waits.status === "unclassified"
+      ? "Waits: unclassified in this capture."
+      : `Wait observations: ${waits.eventSamples.toLocaleString()} on ${waits.clockSamples.toLocaleString()} clocks (${waits.operations.join(", ")}).`;
+  detail.textContent =
+    `${storage.loadWordClocks.toLocaleString()} load + ${storage.holdWordClocks.toLocaleString()} hold word-clocks · ${storage.policy === "recorded_uses" ? "recorded uses" : "full history"}. ` +
+    "Concurrent words add; this is storage residence, not elapsed time. " +
+    waitText +
+    (metrics.coverage.completeWithinObserverScope
+      ? " Counts cover the declared observer scope only."
+      : " Incomplete capture: counts cover recorded evidence only.");
+}
+/** Resolve selection seeds without creating an event for an application annotation. */
+function selectionEvents() {
+  if (state.selected) return [state.model.events.get(state.selected)];
+  return state.annotation
+    ? annotationEvents(state.model, state.annotation)
+    : [];
+}
+/** Semantic filters clear excluded selections across the full capture, not the window. */
+function clearFilteredSelection() {
+  const seeds = selectionEvents();
+  if (!seeds.length) return;
+  const matching = new Set(
+    eventsInWindow(state.model, filters()).map((event) => event.id),
+  );
+  if (seeds.some((event) => matching.has(event.id))) return;
+  state.selected = null;
+  state.trace = null;
+  state.annotation = null;
+  state.focusVersion = null;
+  state.resource = null;
+  state.cell = null;
+  state.traceNote = "";
+  $("resource").value = "";
+  $("example").value = "";
+}
+/** Shared contributors are visited once when following several completion endpoints. */
+function traceSelection(direction) {
+  const seeds = selectionEvents().map((event) => event.id);
+  if (!seeds.length) return;
+  state.trace = traceDependencies(state.model, seeds, { direction });
+  state.traceDirection = direction;
 }
 /** One half-open window for all synchronized views. */
 function visibleEvents() {
@@ -349,6 +424,7 @@ function accessGeometry(event) {
         event.access.resource,
         event.access.kind,
         event.access.mask ?? null,
+        event.access.read_mask ?? null,
       ])
     : event.id;
   if (state.footprintCache.has(key)) return state.footprintCache.get(key);
@@ -510,7 +586,7 @@ function selectedLifetimes() {
   }
   const ids =
     state.trace?.events.map((e) => e.id) ??
-    (state.selected ? [state.selected] : []);
+    selectionEvents().map((event) => event.id);
   for (const id of ids)
     for (const life of eventDetails(state.model, id).lifetimes)
       found.set(life.version, life);
@@ -784,16 +860,17 @@ function drawStack() {
   drawTrace(ctx, project);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
+  const seeds = new Set(selectionEvents().map((event) => event.id));
   const events = visibleEvents().sort(
     (a, b) =>
-      Number(b.id === state.selected || pathIds.has(b.id)) -
-      Number(a.id === state.selected || pathIds.has(a.id)),
+      Number(seeds.has(b.id) || pathIds.has(b.id)) -
+      Number(seeds.has(a.id) || pathIds.has(a.id)),
   );
   let drawn = 0,
     omitted = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const event of events) {
-    const selected = event.id === state.selected,
+    const selected = seeds.has(event.id),
       onPath = pathIds.has(event.id);
     const geometry = expanded ? accessGeometry(event) : null;
     const points = geometry?.points ?? [eventPoint(event)];
@@ -933,7 +1010,9 @@ function drawTimeline() {
     x(state.first + state.window) - x(state.first),
     h - 26,
   );
-  const selected = state.selected ? model.events.get(state.selected) : null;
+  const selected = state.selected
+    ? model.events.get(state.selected)
+    : state.annotation;
   const selectedActor = $("actor").value;
   for (const event of model.orderedEvents) {
     if (selectedActor && event.actor !== selectedActor) continue;
@@ -1025,11 +1104,20 @@ function selectStorage(version, cell = null) {
   $("resource").value = life.resource;
   render();
 }
-/** Inspect an annotation without inventing a graph node or causal endpoint. */
+/** Follow explicitly bound contributors while leaving unanchored observations as context. */
 function selectAnnotation(annotation) {
+  const anchors = annotationEvents(state.model, annotation);
+  if (anchors.length > 1000) {
+    notice(
+      "This viewer can follow at most 1,000 completion contributors at once.",
+      true,
+    );
+    return;
+  }
   state.selected = null;
   state.trace = null;
   state.annotation = annotation;
+  traceSelection("backward");
   state.resource = null;
   state.cell = null;
   state.focusVersion = null;
@@ -1068,15 +1156,25 @@ function renderInspector() {
         ? ` ${fp.cells.length} placed native cells; ${fp.unknownBits} unresolved bits.`
         : "")
     : "Select an access to inspect its bit-selection scope.";
-  $("backward").disabled = !state.selected;
-  $("forward").disabled = !state.selected;
+  const seeds = selectionEvents();
+  $("backward").disabled = !seeds.length;
+  $("forward").disabled = !seeds.length;
   if (state.annotation) {
     $("selected-kind").textContent = "Public annotation";
     $("selection").innerHTML =
-      `<h3>Completion · C${state.annotation.cycle}</h3><span class="pill unknown">Ancestry unavailable</span><p class="evidence-note">This application-level completion is not a captured graph event. No edge connects it to the operations on the same clock.</p><pre class="muted">${esc(JSON.stringify(state.annotation, null, 2))}</pre>`;
-    $("neighbors").innerHTML = "";
-    $("trace-summary").textContent =
-      "Choose a recorded residence example to inspect supported dependencies.";
+      `<h3>Completion · C${state.annotation.cycle}</h3>` +
+      (seeds.length
+        ? `<span class="pill">${seeds.length} recorded contributors</span><p class="evidence-note">Inputs follows every bound endpoint. Only recorded dependencies are shown; numerical and control ancestry may remain partial.</p><dl><dt>Incarnation</dt><dd>${esc(state.annotation.graph_incarnation)}</dd><dt>Contributors</dt><dd>${seeds.map((event) => `${esc(event.id)} · C${event.cycle}`).join("<br>")}</dd></dl>`
+        : '<span class="pill unknown">Ancestry unavailable</span><p class="evidence-note">No recorded endpoint is bound to this observation. Sharing its clock creates no dependency.</p>') +
+      `<details><summary>Public record</summary><pre class="muted">${esc(JSON.stringify(state.annotation, null, 2))}</pre></details>`;
+    $("neighbors").innerHTML = seeds
+      .slice(0, 80)
+      .map(
+        (event) =>
+          `<button data-event="${esc(event.id)}"><span class="muted">Contributing endpoint</span><br>C${event.cycle} · ${esc(event.operation)} · ${esc(event.actor)}<br>${esc(event.id)}</button>`,
+      )
+      .join("");
+    renderTraceSummary();
     return;
   }
   if (!state.selected && state.focusVersion) {
@@ -1107,7 +1205,7 @@ function renderInspector() {
   $("selected-kind").textContent = `C${e.cycle}`;
   const lifetimes = selectedLifetimes();
   $("selection").innerHTML =
-    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${d.inputs
+    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}${e.access.read_mask ? `<dt>Selected read bits</dt><dd>${esc(e.access.read_mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${d.inputs
       .filter((v) => v.producer === "root")
       .map(
         (v) =>
@@ -1123,15 +1221,35 @@ function renderInspector() {
         "",
       )}${lifetimes.length > 12 ? `<p>${lifetimes.length - 12} more histories on this path; select a resource or version for detail.</p>` : ""}`;
   $("neighbors").innerHTML = neighborButtons(d);
-  $("trace-summary").innerHTML = state.trace
-    ? `${state.trace.events.length} connected operations · ${state.trace.roots.length} root stops${state.trace.truncated ? " · traversal capped at 1,000 operations" : ""}${state.trace.roots
-        .slice(0, 8)
-        .map(
-          (r) =>
-            `<p class="evidence-note">${esc(r.version.id)} · ${esc(r.version.origin)} root: ${esc(r.version.evidence)}</p>`,
-        )
-        .join("")}`
-    : "Follow inputs or consumers. Chronological neighbours are not dependencies.";
+  renderTraceSummary();
+}
+/** Explain bounded traversal and its explicit roots without claiming full causal coverage. */
+function renderTraceSummary() {
+  if (!state.trace) {
+    $("trace-summary").textContent = selectionEvents().length
+      ? "Follow inputs or consumers. Chronological neighbours are not dependencies."
+      : "No recorded dependency endpoints supplied.";
+    return;
+  }
+  const roots = [
+    ...new Map(
+      state.trace.roots.map(({ version }) => [version.id, version]),
+    ).values(),
+  ];
+  $("trace-summary").innerHTML =
+    `${state.traceDirection === "backward" ? "Inputs" : "Consumers"}: ${state.trace.events.length} recorded operations · ${state.trace.edges.length} dependencies · ${roots.length} root versions` +
+    (state.trace.truncated ? " · traversal capped at 1,000 operations" : "") +
+    '<p class="evidence-note">Partial recorded ancestry, not a complete computation or critical path.</p>' +
+    roots
+      .slice(0, 8)
+      .map(
+        (version) =>
+          `<p>${esc(version.id)} · ${esc(version.origin)} root: ${esc(version.evidence)}</p>`,
+      )
+      .join("") +
+    (roots.length > 8
+      ? `<p>${roots.length - 8} more root versions stop this traversal.</p>`
+      : "");
 }
 /** Expose complete per-resource coverage and a bounded expandable cell listing. */
 function renderResource() {
@@ -1193,18 +1311,26 @@ function renderResource() {
 function chooseExample(index) {
   const example = state.model.document.examples?.[index];
   if (!example) return;
+  ["actor", "activation", "operation", "task"].forEach(
+    (key) => ($(key).value = ""),
+  );
+  updateActivations();
+  if (example.annotation || example.graph_events) {
+    selectAnnotation(example.annotation ?? example);
+    if (example.firstCycle !== undefined) state.first = example.firstCycle;
+    if (example.endCycle !== undefined)
+      state.window = example.endCycle - state.first;
+    render();
+    return;
+  }
   const id =
     example.event ??
     example.eventId ??
     example.events?.at(-1) ??
     example.consumer;
   if (id && state.model.events.has(id)) {
-    ["actor", "activation", "operation", "task"].forEach(
-      (k) => ($(k).value = ""),
-    );
-    updateActivations();
     selectEvent(id);
-    state.trace = traceDependencies(state.model, id, { direction: "backward" });
+    traceSelection("backward");
     state.focusVersion = example.version ?? null;
     const life = state.model.lifetimes.get(state.focusVersion);
     if (life) {
@@ -1218,7 +1344,6 @@ function chooseExample(index) {
     );
     render();
   } else if (Number.isFinite(example.cycle)) selectAnnotation(example);
-  else if (example.annotation) selectAnnotation(example.annotation);
   else notice("This example has no selectable recorded event.", true);
 }
 /** Canvas hit test returns the nearest visible operation; a tie remains selectable in the list. */
@@ -1338,23 +1463,6 @@ function bindControls() {
   for (const key of ["actor", "activation", "operation", "task"])
     $(key).onchange = () => {
       if (key === "actor") updateActivations();
-      // Filter across the capture: off-window ancestry remains selectable.
-      if (
-        state.selected &&
-        !eventsInWindow(state.model, filters()).some(
-          (event) => event.id === state.selected,
-        )
-      ) {
-        state.selected = null;
-        state.trace = null;
-        state.annotation = null;
-        state.focusVersion = null;
-        state.resource = null;
-        state.cell = null;
-        state.traceNote = "";
-        $("resource").value = "";
-        $("example").value = "";
-      }
       render();
     };
   $("clear-filters").onclick = () => {
@@ -1436,10 +1544,7 @@ function bindControls() {
   };
   for (const direction of ["backward", "forward"])
     $(direction).onclick = () => {
-      if (!state.selected) return;
-      state.trace = traceDependencies(state.model, state.selected, {
-        direction,
-      });
+      traceSelection(direction);
       render();
     };
   $("clear-trace").onclick = () => {
