@@ -15,7 +15,7 @@
     meaning := binary(),
     evidence := binary()
 }.
--doc "Build-bound passive taps, physical register update expressions and explicit unsupported semantic requests. Register expressions are generated Verilog, not commands or a portable IR.".
+-doc "Build-bound passive taps, physical register update expressions, checked gateway routes and explicit unsupported semantic requests. Register expressions are generated Verilog, not commands or a portable IR.".
 -type plan() :: #{
     schema := 1,
     signals := [signal()],
@@ -23,10 +23,13 @@
     registers := [map()],
     state := [map()],
     unsupported := [map()],
-    inputs := map()
+    inputs := map(),
+    stream => xls_protocol_spacetime_stream:plan(),
+    publication => xls_protocol_spacetime_publication:plan(),
+    dependencies => xls_protocol_spacetime_dependencies:plan()
 }.
 
--doc "Reads the frozen source bundle, raw/optimized XLS IR and exact boundary RTL. Requires the generated single-stage source-protocol boundary interface. Missing/ambiguous required controls are retained as unsupported; malformed declarations or state structure reject. No filename suffix is accepted as semantic evidence by itself.".
+-doc "Reads the frozen source bundle, raw/optimized XLS IR and exact boundary RTL. Requires the generated single-stage source-protocol boundary interface. Missing/ambiguous required controls are retained as unsupported; malformed declarations, state structure or retained gateway wiring reject. No filename suffix is accepted as semantic evidence by itself.".
 -spec plan(file:filename(), file:filename(), file:filename(), file:filename()) -> plan().
 plan(Source, RawFile, OptFile, RtlFile) ->
     SourceBuild = read(filename:join(Source, "source-build.json")),
@@ -58,12 +61,16 @@ plan(Source, RawFile, OptFile, RtlFile) ->
         declared_signal(<<"p0_stage_done">>, <<"stage_advance">>, Declarations),
         declared_signal(<<"input_reset">>, <<"reset">>, Declarations)
     ],
-    Signals = unique_signals(RegisterSignals ++ ControlSignals ++ Controls),
+    Stream = xls_protocol_spacetime_stream:plan(SourceFiles),
+    Signals = unique_signals(
+        RegisterSignals ++ ControlSignals ++ Controls ++ maps:get(signals, Stream)
+    ),
     Leaves = state_leaves(Raw),
-    #{
+    Base = #{
         schema => 1,
         signals => Signals,
         actors => [maps:remove(signals, A) || A <- Actors],
+        stream => Stream,
         registers => Registers,
         state => [
             state_leaf(I, Path, W, Registers)
@@ -76,6 +83,17 @@ plan(Source, RawFile, OptFile, RtlFile) ->
             rtl => digest(Rtl),
             source_build => digest(SourceBuild)
         }
+    },
+    Publication = xls_protocol_spacetime_publication:plan(SourceFiles, Base),
+    Dependencies = xls_protocol_spacetime_dependencies:plan(Opt, Rtl, Registers),
+    Base#{
+        publication => Publication,
+        dependencies => Dependencies,
+        signals := extend_signals(
+            Signals,
+            maps:get(signals, Publication, []) ++
+                xls_protocol_spacetime_dependencies:signals(Dependencies)
+        )
     }.
 
 -doc "Hashes the complete observation plan using deterministic Erlang external-term encoding. Equal plans keep this identity across construction order, persistence and fresh processes on the pinned OTP toolchain. Keep exact file hashes separately; a plan identity is not the hash of an arbitrary ETF serialization and is not a cross-OTP encoding promise.".
@@ -305,6 +323,24 @@ unique_signals(Signals) ->
         fun(A, B) -> maps:get(id, A) < maps:get(id, B) end,
         maps:values(maps:from_list([{maps:get(id, S), S} || S <- Signals]))
     ).
+
+%% An added observer may reuse a tap only with the same native path and width.
+%% Keep original metadata and identities stable for exact old-tap comparison.
+-spec extend_signals([signal()], [signal()]) -> [signal()].
+extend_signals(Original, Added) ->
+    Indexed = maps:from_list([{maps:get(id, S), S} || S <- Original]),
+    Merged = lists:foldl(
+        fun(S = #{id := Id, path := Path, width := Width}, A) ->
+            case maps:find(Id, A) of
+                {ok, #{path := Path, width := Width}} -> A;
+                {ok, Other} -> error({spacetime_extension_tap, Id, Other, S});
+                error -> A#{Id => S}
+            end
+        end,
+        Indexed,
+        Added
+    ),
+    lists:sort(fun(A, B) -> maps:get(id, A) < maps:get(id, B) end, maps:values(Merged)).
 
 %% Parse only the generated top proc's original tuple-of-bits state type.
 -spec state_leaves(binary()) -> [{[non_neg_integer()], non_neg_integer()}].

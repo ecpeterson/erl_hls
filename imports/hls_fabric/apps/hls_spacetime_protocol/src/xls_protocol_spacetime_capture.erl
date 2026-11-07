@@ -1,8 +1,17 @@
 -module(xls_protocol_spacetime_capture).
--moduledoc "Converts passive source-protocol samples into cycle events and encoded register histories. The tap planner owns signal meaning; this adapter records handshakes and actual enables, qualifies adjacent register transfers, and leaves unresolved numerical ancestry as explicit roots. It does not interpret narrowed values using source bit offsets.".
+-moduledoc "Converts passive source-protocol samples into cycle events and encoded register histories. The tap planner owns signal meaning; this adapter records handshakes and actual enables, qualifies adjacent register transfers, then joins publication ownership and selected scalar operands. Unsupported numerical ancestry stays explicit. It does not interpret narrowed values using source bit offsets.".
 
 %% Offline capture conversion; file ownership remains with the caller.
--export([bundle/3]).
+-export([capture/3, bundle/3]).
+-export_type([capture/0]).
+
+-doc "Generic event graph and separate stream, publication and scalar-operand evidence from one exact capture.".
+-type capture() :: #{
+    bundle := hls_spacetime:bundle(),
+    stream := xls_protocol_spacetime_stream:observation(),
+    publication => xls_protocol_spacetime_publication:observation(),
+    ancestry => xls_protocol_spacetime_ancestry:observation()
+}.
 
 %% Lists are accumulated backwards; current storage is immutable within a sampled edge.
 -record(state, {
@@ -27,10 +36,17 @@
     warm = false :: boolean()
 }).
 
--doc "Builds a validated simulation-witness artifact from the native tap plan, a complete or explicitly incomplete bounded trace, and exact build identities. Records all enabled writes to retained data registers of at least 16 bits, semantic receiver/publication events, and link ownership transitions. Checks each adjacent nonreset Q/D/enable transfer. The final enabled edge lacks a following Q sample; numerical fan-in and unobserved control lineage remain unknown roots.".
+-doc "Returns only the validated generic graph from capture/3. Stream dependency events remain in the graph; backend frame identities and pending/reset diagnostics are available separately through capture/3.".
 -spec bundle(xls_protocol_spacetime:plan(), hls_spacetime_trace:trace(), hls_spacetime:build()) ->
     hls_spacetime:bundle().
-bundle(Plan = #{signals := Signals, registers := Registers, state := Leaves}, Trace, Build) ->
+bundle(Plan, Trace, Build) ->
+    #{bundle := Bundle} = capture(Plan, Trace, Build),
+    Bundle.
+
+-doc "Builds a validated simulation-witness graph plus separate backend evidence sidecars from the native tap plan, a complete or explicitly incomplete bounded trace, and exact build identities. Records enabled writes to retained data registers of at least 16 bits, semantic receiver/publication events, link ownership transitions and observed stream transfers. Checks each adjacent nonreset Q/D/enable transfer. Selected scalar values are checked against observed D; publication occurrence identities follow checked ownership controls. The final enabled edge lacks a following Q sample. Unsupported expressions and unrepresented controls remain unknown roots. Plans without stream taps produce an empty stream sidecar with an explicit unobserved scope.".
+-spec capture(xls_protocol_spacetime:plan(), hls_spacetime_trace:trace(), hls_spacetime:build()) ->
+    capture().
+capture(Plan = #{signals := Signals, registers := Registers, state := Leaves}, Trace, Build) ->
     [] = maps:get(unsupported, Plan),
     ok = check_build(Plan, Build),
     ok = check_taps(Signals, maps:get(signals, Trace)),
@@ -91,8 +107,46 @@ bundle(Plan = #{signals := Signals, registers := Registers, state := Leaves}, Tr
         activity => [],
         physical => null
     },
-    _ = hls_spacetime:validate(Result),
-    Result.
+    Observed =
+        #{bundle := Joined} =
+        case maps:find(stream, Plan) of
+            {ok, Stream} ->
+                xls_protocol_spacetime_stream:attach(Stream, Trace, Result);
+            error ->
+                #{
+                    bundle => Result,
+                    stream => #{
+                        schema => 1,
+                        frames => [],
+                        pending => [],
+                        partial => null,
+                        retired => [],
+                        evidence => <<"Stream observations absent from this tap plan">>
+                    }
+                }
+        end,
+    WithPublication =
+        case maps:find(publication, Plan) of
+            {ok, Publication} ->
+                #{bundle := Published, publication := PublicationEvidence} =
+                    xls_protocol_spacetime_publication:attach(Publication, Trace, Joined),
+                Observed#{bundle := Published, publication => PublicationEvidence};
+            error ->
+                Observed
+        end,
+    FinalCapture =
+        case maps:is_key(dependencies, Plan) of
+            true ->
+                #{bundle := Computed, ancestry := Ancestry} =
+                    xls_protocol_spacetime_ancestry:attach(
+                        Plan, Trace, maps:get(bundle, WithPublication)
+                    ),
+                WithPublication#{bundle := Computed, ancestry => Ancestry};
+            false ->
+                WithPublication
+        end,
+    _ = hls_spacetime:validate(maps:get(bundle, FinalCapture)),
+    FinalCapture.
 
 %% Exact source, RTL and native observation-plan digests jointly identify this interpretation.
 -spec check_build(xls_protocol_spacetime:plan(), hls_spacetime:build()) -> ok.

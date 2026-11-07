@@ -44,6 +44,15 @@ exact_binding_rejections_test() ->
         })
     ).
 
+%% Register-only plans retain a generic graph and disclose the absence of stream observation.
+-spec capture_envelope_without_stream_test() -> ok.
+capture_envelope_without_stream_test() ->
+    {Plan, Trace, Build} = fixture([[0, 0, 1, 0, 7, 0]]),
+    #{bundle := Bundle, stream := Stream} = xls_protocol_spacetime_capture:capture(Plan, Trace, Build),
+    ?assertMatch(#{schema := 1, frames := [], pending := [], partial := null, retired := []}, Stream),
+    ?assertNot(maps:is_key(stream, Bundle)),
+    ?assertEqual(Bundle, xls_protocol_spacetime_capture:bundle(Plan, Trace, Build)).
+
 %% Narrowed owner codes cannot be interpreted as the original free/full/leased values.
 -spec narrowed_owner_encoding_test() -> ok.
 narrowed_owner_encoding_test() ->
