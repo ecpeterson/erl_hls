@@ -36,3 +36,26 @@ Used PIPs come from `get_pips -of_objects NET`; their [uphill/downhill nodes](ht
 
 The small orchestration fixture runs with `tclsh test/native/export_routes_tests.tcl FRESH_OUTPUT_DIRECTORY`. It mocks native queries and checks fanout retention, multi-tile node membership, unresolved attachments, identity rejection and completion markers. Passing it does not qualify the Vivado APIs; a real export must separately inspect resolved, ambiguous and missing populations.
 
+## Maintained route-selection workflow
+
+Start with a fresh generic projection that includes a digest-bound timing report, and retain its full joined bundle (the compact view intentionally omits canonical nets and pins):
+
+```sh
+node scripts/select-routes.mjs --view /path/to/view/recording.json --bundle /path/to/joined/bundle.json --output /path/to/fresh-selection
+```
+
+The command checks build/checkpoint identities, selected cell positions, report provenance, exact canonical aliases and both endpoint pin memberships. It emits bounded `selection.json`, escaped `selection.tcl`, a portable `run.tcl`, and a complete hash manifest. It selects the existing saved paths; it never searches for new timing paths. The full bundle and projection must refer to the same observation build. Historical observation-plan extensions need their explicit separately reviewed rebinding; this command does not infer it.
+
+Run the emitted driver with explicit checkpoint/exporter/output arguments under the established serial native process guard:
+
+```sh
+vivado -mode batch -source /path/to/fresh-selection/run.tcl -tclargs /path/to/routed.dcp /path/to/hls_spacetime/priv/tools/export_routes.tcl /path/to/fresh-route-export
+```
+
+Verify terminal status, owned process-group termination and every collected hash once. Require `complete.json` and its matching route JSON hash; preserve failures without relaunching implementation. Attach the completed, verified sidecar to the exact selected projection:
+
+```sh
+node scripts/attach-routes.mjs --view /path/to/view/recording.json --selection /path/to/fresh-selection/selection.json --routes /path/to/fresh-route-export/routes.json --out /path/to/new-routed-view.json
+```
+
+Use the viewer’s **Open file** on that result. Selection, report, checkpoint and route identities are checked again; unrelated fanout stays out of a selected source-to-sink branch. The route attachment does not reinterpret the execution graph. The exporter fixture and route-selection tests qualify orchestration locally; they do not substitute for native evidence.
