@@ -271,6 +271,15 @@ export function createModel(document) {
       model.lifetimes.set(version.id, makeLifetime(model, version));
     }
   }
+  for (const name of ["public", "boundaries"]) {
+    const annotations = document.annotations?.[name];
+    requireValue(
+      annotations === undefined || Array.isArray(annotations),
+      `Invalid ${name} annotations`,
+    );
+    for (const annotation of annotations ?? [])
+      annotationEvents(model, annotation);
+  }
   const placed = [...cells.values()].filter(
     (cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y),
   );
@@ -285,6 +294,59 @@ export function createModel(document) {
       { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
     );
   return model;
+}
+
+/** Resolve explicitly attributed contributors without creating an event or edge.
+ * Unanchored observations remain context. Anchors must all belong to the named
+ * reset incarnation, with the last accepted contributor at the annotation cycle.
+ * Reject partial metadata instead of silently turning malformed anchors into
+ * context. The same check protects document loading and direct callers. */
+export function annotationEvents(model, annotation) {
+  requireValue(
+    annotation && typeof annotation === "object" && !Array.isArray(annotation),
+    "Invalid annotation",
+  );
+  const label = annotation.id ?? "unnamed";
+  if (annotation.graph_events === undefined) {
+    requireValue(
+      annotation.graph_incarnation === undefined &&
+        (annotation.dependency_endpoint === undefined ||
+          annotation.dependency_endpoint === false),
+      `Incomplete annotation anchors: ${label}`,
+    );
+    return [];
+  }
+  const ids = annotation.graph_events;
+  requireValue(
+    Array.isArray(ids) && ids.length > 0 && new Set(ids).size === ids.length,
+    `Invalid or duplicate annotation anchors: ${label}`,
+  );
+  requireValue(
+    annotation.dependency_endpoint === true &&
+      typeof annotation.graph_incarnation === "string" &&
+      model.epochs.has(annotation.graph_incarnation) &&
+      validCycle(annotation.cycle),
+    `Invalid annotation endpoint metadata: ${label}`,
+  );
+  const events = ids.map((id) => {
+    const event = model.events.get(id);
+    requireValue(event, `Unknown annotation event: ${label} -> ${id}`);
+    requireValue(
+      event.incarnation === annotation.graph_incarnation,
+      `Annotation crosses reset: ${label} -> ${id}`,
+    );
+    requireValue(
+      event.cycle <= annotation.cycle,
+      `Annotation contributor is in the future: ${label} -> ${id}`,
+    );
+    return event;
+  });
+  requireValue(
+    events.reduce((last, event) => Math.max(last, event.cycle), -1) ===
+      annotation.cycle,
+    `Annotation cycle is not its final contributor: ${label}`,
+  );
+  return events;
 }
 
 /** Index each access by the selected/replaced version once. A resource can
@@ -408,15 +470,20 @@ export function eventsInWindow(model, options = {}) {
   );
 }
 
-/** Traverse recorded dependencies without adding serial-observer or replacement
- * edges. Roots stop traversal; resource order is separately opt-in. Returns
- * event objects, event-to-event edges and {version, consumer} root stops. */
+/** Traverse recorded dependencies from one ID or a nonempty array of IDs.
+ * Duplicate seeds and shared ancestry are visited once under one maxEvents
+ * budget; reject seeds that alone exceed it. Roots stop traversal, and resource
+ * order is separately opt-in. Returns event objects, event-to-event edges and
+ * {version, consumer} root stops, adding no observation or replacement edges. */
 export function traceDependencies(
   model,
   eventId,
   { direction = "backward", includeOrder = false, maxEvents = 1000 } = {},
 ) {
-  requireValue(model.events.has(eventId), `Unknown event: ${eventId}`);
+  const seeds = [...new Set(Array.isArray(eventId) ? eventId : [eventId])];
+  requireValue(seeds.length > 0, "Empty traversal seeds");
+  for (const id of seeds)
+    requireValue(model.events.has(id), `Unknown event: ${id}`);
   requireValue(
     ["backward", "forward"].includes(direction),
     `Unknown direction: ${direction}`,
@@ -425,8 +492,9 @@ export function traceDependencies(
     Number.isSafeInteger(maxEvents) && maxEvents > 0,
     "Invalid traversal bound",
   );
-  const visited = new Set([eventId]),
-    queue = [eventId],
+  requireValue(seeds.length <= maxEvents, "Traversal seeds exceed event bound");
+  const visited = new Set(seeds),
+    queue = [...seeds],
     edges = [],
     roots = [];
   let truncated = false;
@@ -713,6 +781,6 @@ export function eventDetails(model, eventId) {
       (annotation) => annotation.cycle === event.cycle,
     ),
     annotationScope:
-      "Same-clock context only; public observations are not dependency endpoints",
+      "Same-clock matches are not dependency endpoints; only explicit graph_events identify contributors",
   };
 }
