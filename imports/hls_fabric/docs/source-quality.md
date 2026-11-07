@@ -25,6 +25,8 @@ Handwritten DSLX under `apps/hls_lowering/priv/xls/` uses the same declaration-c
 
 Six map-type field-fragment macros are formatted manually, with a per-form `erlfmt:ignore` comment: the formatter cannot parse their partial type syntax. Their surrounding modules remain formatted, and compilation, Dialyzer and the contract audit still check the definitions.
 
+The optional [spacetime observation application](../apps/hls_spacetime_protocol/README.md) is selected by the root `spacetime` profile: run `rebar3 as spacetime compile`, `rebar3 as spacetime eunit --dir=apps/hls_spacetime_protocol/test` and `rebar3 as spacetime dialyzer`. Ordinary builds exclude it and its private offline-tool dependency. The repository-wide formatter and source-contract audit include its owned Erlang declarations without selecting the profile.
+
 ## Package boundaries
 
 `python3 tools/check_application_boundaries.py` additionally rejects direct calls, remote types and declared dependencies from the compiler, lowering and runtime libraries into `hls_phi` or `hls_snowflake`. Example packages may depend on the libraries; the reverse direction is an ownership error. The report is `_build/application-boundaries.json`.

@@ -5,3 +5,5 @@
 Network, boundary, application, bridge, deployment and mixed builders compose larger bundles from the retained transport plan. Their `xls_protocol_*` helpers render compact codecs, links, ingress, arithmetic groups and wrappers; associated pins use the [Verilog adapters](../../sv/README.md). These are related composition stages within one backend, not separate packages or interchangeable execution modes.
 
 Preserve emitted failure codebooks when composing actors. Planning and emission do not attach host sessions; runtime clients consume the resulting descriptors separately.
+
+The optional [observation application](../../../../../hls_spacetime_protocol/README.md) binds passive simulator taps to an exact emitted build; its capture adapter produces cycle events for offline consumers. See [passive capture](../../../../../../docs/spacetime-capture.md). These diagnostic observers generate no synthesized trace hardware and make no physical timing claim.
