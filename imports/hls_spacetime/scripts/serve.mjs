@@ -11,6 +11,18 @@ const types = {
   ".json": "application/json",
 };
 
+/** Honor explicit encoding rejection; prepared gzip is an optional transport. */
+function acceptsGzip(header) {
+  const encodings = new Map(
+    header.split(",").map((entry) => {
+      const [name, ...parameters] = entry.trim().toLowerCase().split(";");
+      const q = parameters.find((p) => p.trim().startsWith("q="));
+      return [name, q === undefined ? 1 : Number(q.trim().slice(2))];
+    }),
+  );
+  return (encodings.get("gzip") ?? encodings.get("*") ?? 0) > 0;
+}
+
 /** Serve assets from the repository and saved data from an explicit trusted
  * directory. Request paths cannot escape either selected root. */
 export function createViewerServer(dataDirectory = resolve(webRoot, "data")) {
@@ -28,13 +40,43 @@ export function createViewerServer(dataDirectory = resolve(webRoot, "data")) {
       const target = (await stat(path)).isDirectory()
         ? resolve(path, "index.html")
         : path;
-      const body = await readFile(target);
-      res.writeHead(200, {
+      const original = await stat(target, { bigint: true });
+      let source = target,
+        metadata = original,
+        encoding = null;
+      if (acceptsGzip(req.headers["accept-encoding"] ?? "")) {
+        try {
+          const compressed = await stat(`${target}.gz`, { bigint: true });
+          if (compressed.isFile() && compressed.mtimeNs >= original.mtimeNs) {
+            source = `${target}.gz`;
+            metadata = compressed;
+            encoding = "gzip";
+          }
+        } catch {
+          /* Prepared compression is optional; the raw asset stays valid. */
+        }
+      }
+      // Revalidate mutable paths cheaply. Browser-side content hashes remain the
+      // integrity authority; this weak validator is only an HTTP cache hint.
+      const etag = `W/"${metadata.ino}-${metadata.size}-${metadata.mtimeNs}-${metadata.ctimeNs}-${encoding ?? "raw"}"`;
+      const headers = {
         "Content-Type": types[extname(target)] || "application/octet-stream",
-        "Cache-Control": "no-store",
+        "Cache-Control": "private, no-cache",
+        Vary: "Accept-Encoding",
+        ETag: etag,
         "X-Content-Type-Options": "nosniff",
+        ...(encoding ? { "Content-Encoding": encoding } : {}),
+      };
+      if (req.headers["if-none-match"] === etag) {
+        res.writeHead(304, headers);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        ...headers,
+        "Content-Length": String(metadata.size),
       });
-      res.end(body);
+      res.end(req.method === "HEAD" ? undefined : await readFile(source));
     } catch {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");

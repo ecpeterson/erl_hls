@@ -26,7 +26,7 @@ header {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--line);
-  padding: 19px 28px;
+  padding: 12px 20px;
   gap: 24px;
 }
 .brand {
@@ -131,11 +131,11 @@ input[type="checkbox"] {
 }
 main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
-  max-width: 1800px;
+  max-width: none;
   margin: auto;
-  padding: 25px 28px;
+  padding: 18px 20px;
 }
 .workspace {
   min-width: 0;
@@ -145,7 +145,7 @@ main {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  margin-bottom: 17px;
+  margin-bottom: 12px;
 }
 .eyebrow {
   font-size: 10px;
@@ -200,7 +200,7 @@ p {
 }
 .view-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28%;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 .panel {
@@ -228,16 +228,30 @@ h2 {
 }
 .canvas-wrap {
   position: relative;
-  min-height: 480px;
+  height: clamp(520px, 68vh, 1000px);
+  min-height: 520px;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 50% 35%, #17232c, #0c1319 78%);
+}
+#scene3d,
+#stack {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#scene3d {
+  z-index: 0;
+  pointer-events: none;
 }
 #stack {
-  width: 100%;
-  height: 480px;
-  display: block;
+  z-index: 1;
   touch-action: none;
 }
 .axis-hint {
   position: absolute;
+  z-index: 2;
   left: 16px;
   top: 16px;
   color: var(--teal);
@@ -532,7 +546,7 @@ footer {
   font-size: 11px;
   border-radius: 4px;
   max-width: 220px;
-  z-index: 2;
+  z-index: 3;
 }
 .empty {
   color: var(--muted);
@@ -544,105 +558,6 @@ footer {
 .count {
   font-variant-numeric: tabular-nums;
 }
-@media (min-width: 1500px) {
-  #stack,
-  .canvas-wrap {
-    height: 560px;
-  }
-  .canvas-wrap {
-    min-height: 560px;
-  }
-}
-@media (max-width: 1100px) {
-  main {
-    grid-template-columns: minmax(0, 1fr) 285px;
-    padding: 18px;
-  }
-  .view-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .flat-panel {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-  }
-  .flat-panel .panel-heading {
-    grid-column: 1/-1;
-  }
-  .flat-panel canvas {
-    grid-row: 2/5;
-    height: 210px !important;
-  }
-  .flat-panel .resource-picker {
-    padding-top: 8px;
-  }
-  .flat-panel details {
-    border: 0;
-  }
-  .summary {
-    display: block;
-  }
-  #metrics {
-    margin-top: 12px;
-    gap: 26px;
-  }
-  #metrics strong {
-    font-size: 20px;
-  }
-}
-@media (max-width: 760px) {
-  header {
-    padding: 15px;
-    align-items: start;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .capture-controls {
-    flex-wrap: wrap;
-    width: 100%;
-  }
-  .capture-controls select {
-    max-width: 220px;
-  }
-  main {
-    display: block;
-    padding: 14px;
-  }
-  aside {
-    margin-top: 14px;
-  }
-  .canvas-wrap {
-    min-height: 390px;
-  }
-  #stack {
-    height: 390px;
-  }
-  .filters label {
-    min-width: 40%;
-    max-width: none;
-  }
-  .window-inputs {
-    flex-wrap: wrap;
-  }
-  .window-inputs input[type="range"] {
-    min-width: 50%;
-  }
-  .event-row {
-    grid-template-columns: 50px 65px 1fr 60px;
-  }
-  .legend {
-    display: none;
-  }
-  #notice {
-    padding: 9px 15px;
-  }
-  footer {
-    padding: 14px;
-  }
-  .summary h1 {
-    font-size: 23px;
-  }
-}
-
 #selection pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -697,4 +612,327 @@ footer {
   overflow-wrap: anywhere;
   max-height: 240px;
   overflow: auto;
+}
+
+/* The scene owns the default width; evidence is an explicit second pane. */
+[hidden] {
+  display: none !important;
+}
+main.inspector-open {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+}
+#evidence-inspector {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button[aria-pressed="true"] {
+  background: #29453e;
+  border-color: #71bbaa;
+  color: #e8fff6;
+}
+.scene-actions,
+.camera-toolbar,
+.scene-display-controls,
+.control-group,
+.color-legend,
+.color-legend > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.camera-toolbar,
+.scene-display-controls {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.camera-toolbar button {
+  padding: 5px 9px;
+}
+.control-group {
+  gap: 3px;
+}
+.camera-toolbar label,
+.scene-display-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.camera-toolbar select,
+.scene-display-controls select {
+  font-size: 12px;
+  padding: 5px 7px;
+}
+.camera-help {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+}
+.color-legend {
+  min-height: 30px;
+  padding: 5px 14px;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.color-legend > div {
+  gap: 13px;
+}
+.color-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.color-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.role-data {
+  background: #65dac7;
+}
+.role-enable {
+  background: #f1bb6c;
+}
+.role-reset {
+  background: #b6a1e8;
+}
+.role-shared {
+  background: #d2dfe5;
+}
+.role-unknown {
+  background: #81738f;
+}
+.color-legend .timing-ramp {
+  width: 130px;
+  height: 7px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4d77aa, #ad96a7, #ffb6a5);
+}
+.legend-note {
+  opacity: 0.9;
+}
+.scene-options,
+.render-notes {
+  padding: 0;
+}
+.scene-options > summary,
+.render-notes > summary {
+  padding: 10px 14px;
+}
+.render-notes[open] > summary {
+  padding-bottom: 8px;
+}
+.scene-options .stack-controls {
+  background: #141f26;
+}
+.scene-options input[type="number"] {
+  width: 72px;
+}
+.window-inputs {
+  margin: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+.load-details {
+  padding: 5px 20px;
+  border: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+#load-metrics {
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  margin: 7px 0;
+}
+.flat-panel {
+  padding: 0;
+}
+.flat-panel > summary {
+  list-style: none;
+}
+.flat-panel > summary::-webkit-details-marker {
+  display: none;
+}
+.flat-panel > summary::before {
+  content: "▸";
+  color: var(--teal);
+  transition: transform 120ms ease;
+}
+.flat-panel[open] > summary::before {
+  transform: rotate(90deg);
+}
+.flat-panel > summary .panel-title {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.flat-content {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1fr);
+  padding: 12px 0;
+  gap: 4px 16px;
+}
+.flat-content > :not(canvas) {
+  grid-column: 2;
+}
+.flat-content > canvas {
+  grid-column: 1;
+  grid-row: 1 / span 14;
+  height: min(45vh, 430px) !important;
+  min-height: 260px;
+}
+.flat-content > label:not(.resource-picker),
+.flat-content > .muted {
+  padding: 0 13px;
+}
+
+/* Focus mode keeps controls and an optional inspector above the enlarged scene. */
+body.scene-focus {
+  overflow: hidden;
+}
+.scene-focus > header,
+.scene-focus > #notice,
+.scene-focus > #load-details,
+.scene-focus > footer,
+.scene-focus .workspace > :not(.view-grid),
+.scene-focus .view-grid > :not(#scene-panel) {
+  display: none;
+}
+.scene-focus main {
+  padding: 0;
+}
+.scene-focus #scene-panel {
+  position: fixed;
+  inset: 10px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.scene-focus #scene-panel > :not(.canvas-wrap) {
+  flex-shrink: 0;
+}
+.scene-focus .canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.scene-focus .scene-options[open],
+.scene-focus .render-notes[open] {
+  max-height: 28dvh;
+  overflow: auto;
+}
+.scene-focus #evidence-inspector {
+  position: fixed;
+  z-index: 60;
+  top: 70px;
+  right: 22px;
+  bottom: 22px;
+  width: min(360px, calc(100vw - 44px));
+  max-height: none;
+  background: var(--bg);
+  border-radius: 8px;
+  box-shadow: 0 18px 50px #0009;
+}
+@media (max-width: 1100px) {
+  main.inspector-open {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .camera-help {
+    display: none;
+  }
+  .summary {
+    align-items: start;
+  }
+  #metrics {
+    gap: 14px;
+  }
+  #metrics strong {
+    font-size: 20px;
+  }
+}
+@media (max-width: 850px) {
+  header {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  main,
+  main.inspector-open {
+    display: block;
+    padding: 14px;
+  }
+  #evidence-inspector {
+    position: static;
+    margin-top: 14px;
+    max-height: none;
+  }
+  .canvas-wrap {
+    height: 64vh;
+    min-height: 430px;
+  }
+  .summary {
+    display: block;
+  }
+  #metrics {
+    margin-top: 10px;
+  }
+  .summary h1 {
+    font-size: 22px;
+  }
+  .panel-heading {
+    flex-wrap: wrap;
+  }
+  .filters label {
+    min-width: 40%;
+    max-width: none;
+  }
+  .window-inputs {
+    flex-wrap: wrap;
+  }
+  .window-inputs input[type="range"] {
+    min-width: 50%;
+  }
+  .flat-content {
+    display: block;
+  }
+  .flat-content > canvas {
+    height: 300px !important;
+  }
+  .event-row {
+    grid-template-columns: 50px 65px minmax(100px, 1fr) 60px;
+  }
+  #notice {
+    padding: 8px 14px;
+  }
+  .capture-controls {
+    flex-wrap: wrap;
+  }
+  .capture-controls select {
+    max-width: min(290px, 65vw);
+  }
+  .scene-focus #scene-panel {
+    inset: 0;
+    border-radius: 0;
+  }
+  .scene-focus #evidence-inspector {
+    position: fixed;
+    margin: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flat-panel > summary::before {
+    transition: none;
+  }
 }

@@ -39,7 +39,7 @@ The first end-to-end milestone is a small, deterministic, single-device, single-
 
 ## Follow-ons outside the initial campaign
 
-The user explicitly deferred visual cleanup until routed geometry and the initial S7 metrics are present. Revisit density and layout using that complete dataset, preserving explicit omissions, unknown roots, route resolution and access-bit scope; this is a distinct display task, not a prerequisite for adding the remaining evidence.
+The first [display/readability pass](spacetime-display-2.md) now uses real depth-tested geometry, camera controls, optional inspector/flat panels, explicit detail levels and perceptual static-delay colors. Prepared shared geometry and workers reduce the browser payload while retaining complete event/write coverage and original source identity. Dense-window scene construction and structural overlap remain measured display limits; further iteration can address them without repeating native extraction or weakening evidence boundaries.
 
 Multi-device and multi-clock views, live hardware trace acquisition, exhaustive electrical switching/glitch animation, general value-sensitive gate causality, automatic rescheduling or speedup prediction, and architecture changes suggested by the picture are separate work. Timing simulation within a clock can be added when a concrete inspection question needs it; it is not a prerequisite for the initial cycle-layer view.
 

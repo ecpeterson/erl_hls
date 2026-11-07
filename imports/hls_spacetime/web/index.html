@@ -29,74 +29,89 @@
       </div>
     </header>
     <section id="help" hidden>
-      <strong>Space across a layer. Clocks down the stack.</strong>
+      <strong
+        >Space across each chip layer. Clock cycles along the stack.</strong
+      >
       <p>
-        Distributed accesses are shown at their associated native tile positions
-        by default. Filled write glyphs select known logical write-mask bits;
-        hollow read glyphs show whole-word context because the consumed read-bit
-        subset is unknown. Writes without bit identities also remain hollow
-        context. Cells sharing a tile share a glyph. These marks do not show
-        native switching or the logic computing a value. Turning off Distributed
-        accesses restores aggregate symbols, whose centres are not computation
-        locations. Uncheck Show unmapped participants to hide unknown-location
-        glyphs, storage spans and their connecting lines; mapped parts of
-        partial words remain visible. The event list, inspector and counts
-        retain the complete evidence. Logical-only captures keep their lanes.
-        Repeated off-window clock labels are shown once when space permits, with
-        the clock axis taking priority. Drag the stack to rotate it. Select an
-        operation or timeline tick, then follow its inputs or consumers.
+        This is a 3D scene: orbit changes the viewing direction, pan moves the
+        view, and zoom changes its scale. Layer spacing separates clock cycles
+        without changing their meaning. Opaque objects can hide others behind
+        them; rotate the scene or change the clock window to see what is
+        occluded. Top, Side and 3D restore useful camera directions. Expand
+        scene gives the drawing the full window. The evidence inspector and flat
+        chip panel are optional. Select a recorded operation, then follow its
+        inputs or consumers.
       </p>
       <p>
-        Solid storage links join a write at C to Q at C+1; squares mark the new
-        sample. Dashed links retain the same version between samples. By
-        default, only versions with recorded uses are drawn, ending at their
-        last use; a hold or delayed read response does not extend source-word
-        use. Enable Full storage history to see all residence. Hidden does not
-        mean proven dead: unobserved consumers may exist. Selecting a word
-        expands its qualified cells by default; turn off Expand selected word
-        into cells to group them. Other words remain grouped. Grey rails contain
-        unknown or unplaced portions; their off-chip position is a layout
-        convention. Residence depends on the declared write coverage. Expanded
-        cells do not establish native write enables or exclusive task occupancy.
-        The register example has 409 mapped bits and 128 unknown bits; its exact
-        consumed read subset remains unknown.
+        Solid cubes mark recorded access positions, not known electrical
+        switching. Distributed accesses follow associated native tile positions;
+        cells sharing a tile can share a mark. Where a write mask identifies
+        bits, the positions follow those selected bits. Read marks may represent
+        whole-word context because the consumed bit subset is unknown: their
+        solid shape does not mean the subset is known. Inspect the access mask
+        and binding details for that distinction. Turning off Distributed
+        accesses groups positions; a group centre is not the location of its
+        computation. Show unmapped participants adds unknown-location context;
+        its position outside the chip is a layout convention. Display filters do
+        not remove operations or their evidence from the recording.
       </p>
       <p>
-        Computation circuits draws the native combinational fan-in of recorded
-        writes at their clocks, tracing back to register outputs, constants and
-        explicit boundary gaps. Teal is data, amber is enable logic, purple is
-        reset logic and white is shared circuitry. Squares locate native cells
-        and routing switches; small points mark measured wire tiles. Dotted
-        spans indicate electrical connectivity, not a measured metal trajectory.
-        All mux alternatives remain structural context: these are not observed
-        switching paths. Actor, task and operation filters select recorded work;
-        the function and static-delay controls select its circuits. Unknown
-        timing stays visible unless explicitly excluded. The default timing
-        scope bounds paths from register Q to D/control inputs; it excludes
-        external and constant launches, clock-to-Q and setup. Whole-cone timing
-        includes all source boundaries. Both choices keep the full cone visible
-        and report a conservative SDF bound, not path slack or dynamic
-        criticality. Circuits belong to recorded writes and their explicit
-        producers; other selected events may have no associated circuit. The
-        complete native graph remains loaded regardless of the window or
-        filters.
+        Thicker storage links join a write at C to its Q sample at C+1. Thinner
+        links show residence of the same version between samples; both are
+        opaque in the 3D view. By default, only versions with recorded uses are
+        drawn, ending at their last use. A hold or delayed response does not
+        extend source-word use. Full storage history includes other residence.
+        Hidden does not mean proven dead: unobserved consumers may exist.
+        Selecting a word expands its qualified cells by default; the expansion
+        control can group them again. Residence depends on the declared write
+        coverage and does not establish native enables or exclusive occupancy.
+        All glyph sizes and link thicknesses aid legibility; they are not
+        physical cell dimensions or metal widths.
       </p>
       <p>
-        Native timing path adds an independent pink static STA overlay to the
-        stack and flat chip. Its ordered pins and delays come from a saved
-        report bound to the same build and checkpoint. Path max/0 passes through
-        42 native cells and 40 logic levels: 8.808 ns data delay, comprising
-        4.075 ns logic and 4.733 ns routing. Lines join placed cells, not actual
-        wire trajectories. The comparison layer does not establish activity or
-        sensitization on that clock, or a dependency on the selected operation.
-        Public completion annotations likewise create no execution edges.
+        Computation circuits show the native combinational fan-in of recorded
+        writes at their clocks, back to register outputs, constants and explicit
+        boundary gaps. Function colors distinguish data, enables, resets and
+        shared circuitry. Occupied tiles retains the spatial footprint; Wire
+        routes adds retained electrical connections; Routes + switches also
+        marks routing switches. Native wire tiles and PIP order locate the
+        connection, but the drawn spans do not claim a measured metal
+        trajectory. Mux alternatives remain structural context, not observed
+        switching paths. Dim context uses muted colors, not transparency or an
+        X-ray view.
+      </p>
+      <p>
+        Static cone delay uses a fixed capture-wide color scale for the selected
+        timing scope. A shared mark carries the maximum contributing known cone
+        bound; if any contributing cone lacks timing in that scope, its color
+        remains unknown. This is neither the mark's individual delay nor path
+        slack or dynamic criticality. Register Q → D/control excludes external
+        and constant launches, clock-to-Q and setup. Whole-cone timing includes
+        all source boundaries. Both preserve the full selected cone and use
+        conservative SDF bounds. Actor, task and operation filters select work;
+        function and delay filters select its circuits. The prepared viewer
+        loads rendering indexes; the original native graph and records remain
+        separately retained, hash-bound evidence. They need not all be loaded
+        into the browser to render the scene.
+      </p>
+      <p>
+        Native timing path adds an independent pink static STA overlay selected
+        in Chip & resources. Its ordered pins and delays come from a saved
+        report bound to the same build and checkpoint. It does not establish
+        activity or sensitization on a displayed clock, or a dependency on the
+        selected operation. Public completion annotations likewise add no
+        execution edges.
       </p>
     </section>
     <div id="notice" role="status">
       Open a prepared saved capture, or prepare the retained example with the
       command in README.
     </div>
-    <main>
+    <details id="load-details" class="load-details">
+      <summary>Loading details</summary>
+      <p id="load-metrics">No capture loaded.</p>
+    </details>
+    <main id="explorer">
       <section class="workspace">
         <div class="summary">
           <div>
@@ -137,168 +152,307 @@
           </select></label
         >
         <div class="view-grid">
-          <section class="panel stack-panel">
+          <section id="scene-panel" class="panel stack-panel">
             <div class="panel-heading">
               <div>
-                <h2>Clock stack</h2>
+                <h2>Spacetime scene</h2>
                 <span id="space-unit"
                   >Device tile coordinates · time flows down</span
                 >
               </div>
-              <button id="reset-camera">Reset view</button>
+              <div class="scene-actions">
+                <button
+                  id="toggle-inspector"
+                  aria-controls="evidence-inspector"
+                  aria-expanded="false"
+                >
+                  Evidence inspector
+                </button>
+                <button
+                  id="scene-focus"
+                  aria-pressed="false"
+                  title="Give the scene the full window"
+                >
+                  Expand scene
+                </button>
+              </div>
             </div>
-            <div class="canvas-wrap">
-              <canvas
-                id="stack"
-                aria-label="Interactive chip stack. Use the event list for keyboard selection."
-                tabindex="0"
-              ></canvas>
-              <div class="axis-hint">CLOCKS ↓<span>Drag to rotate</span></div>
-              <div id="tooltip" hidden></div>
-            </div>
-            <div class="stack-controls">
+            <div class="camera-toolbar" aria-label="Scene camera">
+              <div
+                class="control-group"
+                role="group"
+                aria-label="Camera direction"
+              >
+                <button
+                  id="camera-isometric"
+                  aria-pressed="true"
+                  title="Isometric view"
+                >
+                  3D
+                </button>
+                <button
+                  id="camera-top"
+                  aria-pressed="false"
+                  title="Look straight at the chip layers"
+                >
+                  Top
+                </button>
+                <button
+                  id="camera-side"
+                  aria-pressed="false"
+                  title="See the separation between clock layers"
+                >
+                  Side
+                </button>
+              </div>
               <label
-                >Layer spacing<input
-                  id="spacing"
-                  type="range"
-                  min="2"
-                  max="20"
-                  step="1"
-                  value="8" /></label
-              ><label
-                ><input id="context" type="checkbox" checked /> Installed
-                context</label
-              ><label
-                ><input id="show-unmapped" type="checkbox" checked /> Show
-                unmapped participants</label
-              ><label
-                ><input id="residence" type="checkbox" checked /> Storage
-                links</label
-              ><label
-                ><input id="full-storage" type="checkbox" /> Full storage
-                history</label
-              ><label
-                ><input id="access-footprints" type="checkbox" checked />
-                Distributed accesses</label
-              ><label
-                ><input id="expand-storage" type="checkbox" checked disabled />
-                Expand selected word into cells</label
-              ><span class="legend"
-                ><i class="load"></i> load C→C+1 <i class="hold"></i> residence
-                <i></i> selected <i class="unknown"></i> unknown /
-                unmapped</span
+                >Drag<select id="camera-mode">
+                  <option value="orbit">Orbit</option>
+                  <option value="pan">Pan</option>
+                </select></label
+              >
+              <div class="control-group" role="group" aria-label="Camera zoom">
+                <button id="zoom-out" aria-label="Zoom out">−</button>
+                <button id="zoom-in" aria-label="Zoom in">+</button>
+              </div>
+              <button
+                id="fit-selection"
+                title="Frame the selected work"
+                disabled
+              >
+                Fit selection
+              </button>
+              <button id="reset-camera" title="Frame the visible clock window">
+                Reset view
+              </button>
+              <span class="camera-help"
+                >Drag to orbit · Shift-drag to pan · Scroll to zoom</span
               >
             </div>
-            <div class="stack-controls">
+            <div class="scene-display-controls">
               <label
                 ><input id="computation-circuits" type="checkbox" disabled />
                 Computation circuits</label
               >
               <label
-                >Function<select id="circuit-role" disabled>
-                  <option value="">Data + enables + resets</option>
-                  <option value="data">Data</option>
-                  <option value="enable">Enables</option>
-                  <option value="reset">Resets</option>
+                >Color<select id="color-mode">
+                  <option value="role">Function</option>
+                  <option value="timing">Static cone delay</option>
                 </select></label
               >
               <label
-                >Timing scope<select id="circuit-timing" disabled>
-                  <option value="registered_launch">
-                    Register Q → D/control
-                  </option>
-                  <option value="whole_cone">
-                    Whole cone, including ports
-                  </option>
+                >Detail<select id="detail-level">
+                  <option value="overview">Occupied tiles</option>
+                  <option value="routes" selected>Wire routes</option>
+                  <option value="switches">Routes + switches</option>
                 </select></label
               >
               <label
-                >Minimum static cone delay (ns)<input
-                  id="circuit-delay"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="0"
-                  disabled
-              /></label>
-              <label
-                ><input id="circuit-unknown" type="checkbox" checked disabled />
-                Include cones without timing</label
-              >
-              <label
-                ><input id="circuit-selected" type="checkbox" disabled />
-                Selected write or producer only</label
+                ><input id="ghost-context" type="checkbox" /> Dim context</label
               >
             </div>
-            <p
-              id="circuit-summary"
-              class="storage-summary"
-              aria-live="polite"
-            ></p>
-            <p
-              id="storage-summary"
-              class="storage-summary"
-              aria-live="polite"
-            ></p>
-            <p
-              id="access-summary"
-              class="storage-summary"
-              aria-live="polite"
-            ></p>
-          </section>
-          <section class="panel flat-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>Chip & resources</h2>
-                <span id="flat-subtitle"
-                  >Unique installed cells, counted once</span
+            <div id="color-legend" class="color-legend" aria-live="polite">
+              <div id="role-legend">
+                <span><i class="role-data"></i>Data</span
+                ><span><i class="role-enable"></i>Enable</span
+                ><span><i class="role-reset"></i>Reset</span
+                ><span><i class="role-shared"></i>Shared</span>
+              </div>
+              <div id="timing-legend" hidden>
+                <span id="timing-min">0 ns</span><i class="timing-ramp"></i
+                ><span id="timing-max">Unknown</span
+                ><span class="legend-note"
+                  >Maximum contributing cone bound; untimed contributors stay
+                  unknown</span
                 >
               </div>
+              <span><i class="role-unknown"></i>Unknown</span>
             </div>
-            <canvas
-              id="flat"
-              aria-label="Flat device view of installed and selected resources"
-              tabindex="0"
-            ></canvas>
-            <label
-              ><input id="spatial-density" type="checkbox" checked />
-              Installed-cell concentration</label
-            >
-            <p id="spatial-summary" class="storage-summary"></p>
-            <p class="muted">
-              Gold marks the selected resource’s associated cells, which may be
-              spread across the chip. This is storage placement, not the circuit
-              computing its next value or the wires connecting it.
-            </p>
-            <div id="resource-summary">
-              Select an operation to inspect its resource bindings.
+            <div class="window-inputs">
+              <label
+                >First clock<input id="first" type="number" min="0" /></label
+              ><label
+                >Window<input
+                  id="window"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="24" /></label
+              ><input
+                id="position"
+                type="range"
+                min="0"
+                value="0"
+                aria-label="Window first clock"
+              /><span id="window-label"></span>
             </div>
-            <label class="resource-picker"
-              >Resource<select id="resource">
-                <option value="">Select a resource</option>
-              </select></label
-            >
-            <details>
-              <summary>Storage versions in view</summary>
-              <div id="storage-history" class="storage-history"></div>
+            <div id="scene-frame" class="canvas-wrap">
+              <canvas id="scene3d" aria-hidden="true"></canvas>
+              <canvas
+                id="stack"
+                aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
+                tabindex="0"
+              ></canvas>
+              <div class="axis-hint">
+                CLOCK AXIS<span>Presets restore time orientation</span>
+              </div>
+              <div id="tooltip" hidden></div>
+            </div>
+            <details id="scene-options" class="scene-options">
+              <summary>Layers, storage & timing filters</summary>
+              <div class="stack-controls">
+                <label
+                  >Layer spacing<input
+                    id="spacing"
+                    type="range"
+                    min="2"
+                    max="20"
+                    step="1"
+                    value="8" /></label
+                ><label
+                  ><input id="context" type="checkbox" /> Installed
+                  context</label
+                ><label
+                  ><input id="show-unmapped" type="checkbox" /> Show unmapped
+                  participants</label
+                ><label
+                  ><input id="residence" type="checkbox" checked /> Storage
+                  links</label
+                ><label
+                  ><input id="full-storage" type="checkbox" /> Full storage
+                  history</label
+                ><label
+                  ><input id="access-footprints" type="checkbox" checked />
+                  Distributed accesses</label
+                ><label
+                  ><input
+                    id="expand-storage"
+                    type="checkbox"
+                    checked
+                    disabled
+                  />
+                  Expand selected word into cells</label
+                ><span class="legend"
+                  ><i class="load"></i> load C→C+1
+                  <i class="hold"></i> residence <i></i> selected
+                  <i class="unknown"></i> unknown / unmapped</span
+                >
+              </div>
+              <div class="stack-controls">
+                <label
+                  >Function<select id="circuit-role" disabled>
+                    <option value="">Data + enables + resets</option>
+                    <option value="data">Data</option>
+                    <option value="enable">Enables</option>
+                    <option value="reset">Resets</option>
+                  </select></label
+                >
+                <label
+                  >Timing scope<select id="circuit-timing" disabled>
+                    <option value="registered_launch">
+                      Register Q → D/control
+                    </option>
+                    <option value="whole_cone">
+                      Whole cone, including ports
+                    </option>
+                  </select></label
+                >
+                <label
+                  >Minimum static cone delay (ns)<input
+                    id="circuit-delay"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value="0"
+                    disabled
+                /></label>
+                <label
+                  ><input
+                    id="circuit-unknown"
+                    type="checkbox"
+                    checked
+                    disabled
+                  />
+                  Include cones without timing</label
+                >
+                <label
+                  ><input id="circuit-selected" type="checkbox" disabled />
+                  Selected write or producer only</label
+                >
+              </div>
             </details>
-            <label class="resource-picker"
-              >Native timing path<select id="native-path">
-                <option value="">No static path overlay</option>
-              </select></label
-            >
-            <p id="native-path-summary" class="storage-summary"></p>
-            <details>
-              <summary>Ordered path pins</summary>
-              <div id="native-path-steps" class="native-path-steps"></div>
-            </details>
-            <details id="cell-details">
-              <summary>
-                Placed cell details <span id="cell-count"></span>
-              </summary>
-              <div id="cells" class="cell-list"></div>
+            <details class="render-notes">
+              <summary>Coverage notes</summary>
+              <p
+                id="circuit-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
+              <p
+                id="storage-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
+              <p
+                id="access-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
             </details>
           </section>
+          <details id="flat-panel" class="panel flat-panel">
+            <summary class="panel-heading">
+              <span class="panel-title">Chip & resources</span>
+              <span id="flat-subtitle"
+                >Unique installed cells, counted once</span
+              >
+            </summary>
+            <div class="flat-content">
+              <canvas
+                id="flat"
+                aria-label="Flat device view of installed and selected resources"
+                tabindex="0"
+              ></canvas>
+              <label
+                ><input id="spatial-density" type="checkbox" checked />
+                Installed-cell concentration</label
+              >
+              <p id="spatial-summary" class="storage-summary"></p>
+              <p class="muted">
+                Gold marks the selected resource’s associated cells, which may
+                be spread across the chip. This is storage placement, not the
+                circuit computing its next value or the wires connecting it.
+              </p>
+              <div id="resource-summary">
+                Select an operation to inspect its resource bindings.
+              </div>
+              <label class="resource-picker"
+                >Resource<select id="resource">
+                  <option value="">Select a resource</option>
+                </select></label
+              >
+              <details>
+                <summary>Storage versions in view</summary>
+                <div id="storage-history" class="storage-history"></div>
+              </details>
+              <label class="resource-picker"
+                >Native timing path<select id="native-path">
+                  <option value="">No static path overlay</option>
+                </select></label
+              >
+              <p id="native-path-summary" class="storage-summary"></p>
+              <details>
+                <summary>Ordered path pins</summary>
+                <div id="native-path-steps" class="native-path-steps"></div>
+              </details>
+              <details id="cell-details">
+                <summary>
+                  Placed cell details <span id="cell-count"></span>
+                </summary>
+                <div id="cells" class="cell-list"></div>
+              </details>
+            </div>
+          </details>
         </div>
         <section class="panel timeline-panel">
           <div class="panel-heading">
@@ -329,23 +483,6 @@
               placeholder="Unspecified"
           /></label>
           <p id="timing-summary" class="storage-summary"></p>
-          <div class="window-inputs">
-            <label>First clock<input id="first" type="number" min="0" /></label
-            ><label
-              >Window<input
-                id="window"
-                type="number"
-                min="1"
-                max="1000"
-                value="24" /></label
-            ><input
-              id="position"
-              type="range"
-              min="0"
-              value="0"
-              aria-label="Window first clock"
-            /><span id="window-label"></span>
-          </div>
         </section>
         <section class="panel events-panel">
           <div class="panel-heading">
@@ -355,7 +492,7 @@
           <div id="events" class="event-list" tabindex="0"></div>
         </section>
       </section>
-      <aside>
+      <aside id="evidence-inspector" aria-label="Evidence inspector" hidden>
         <section class="panel selection-panel">
           <div class="panel-heading">
             <h2>Evidence inspector</h2>
