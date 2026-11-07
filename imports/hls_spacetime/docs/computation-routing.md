@@ -57,6 +57,23 @@ node scripts/attach-computations.mjs \
 npm start -- --data /path/to/fresh-computation-view
 ```
 
-Assembly verifies every descriptor, canonical net and endpoint against the complete graph. It copies the exact recording and writes a manifest/index last. Shared JSON array parts are at most 32 MiB each and 512 MiB total. The browser verifies these parts before promoting the attachment; the time window and filters never trim its retained population.
+Assembly verifies every descriptor, canonical net and endpoint against the complete graph. It copies the exact recording and writes a manifest/index last. Shared JSON array parts are at most 32 MiB each and 512 MiB total. This complete source publication remains the evidence authority; the time window and filters never trim its retained population.
+
+## Prepare rendering indexes
+
+Compile the complete publication into a fresh rendering directory before opening a large capture:
+
+```sh
+node scripts/prepare-render.mjs \
+  --input /path/to/fresh-computation-view \
+  --output /path/to/fresh-render-view
+npm start -- --data /path/to/fresh-render-view
+```
+
+If the input index contains several computation captures, add `--capture RECORDING_FILE`, using that entry's relative `file` value. The command requires one selected capture, verifies its recording and complete source graph, and derives reusable cone, event and spatial-geometry indexes. It does not rerun capture, native extraction or timing. It retains the exact recording, native manifest and every source part, using hard links where possible and exclusive copies across filesystems; treat both directories as immutable evidence. It writes the new index last and refuses to overwrite an existing output directory.
+
+The derivative is bounded to 32 MiB per part and 256 MiB total. Its manifest binds the exact recording and complete source descriptor, with lengths, hashes and table counts. Precompressed siblings reduce transfer size; verification still covers the decoded original bytes. No geometry is sampled to satisfy a bound. An oversized or incomplete input fails explicitly.
+
+The browser parses and indexes the recording in a worker, makes that recording interactive, then loads and validates the prepared circuit parts in a worker. It does not fetch the full retained source tables in this mode. A publication without a derivative still uses the complete-graph loader. **Loading details** separates recording transfer/verification, parsing, indexing and first-frame timings from circuit loading; these browser measurements are distinct from offline preparation time. Camera motion reuses uploaded geometry rather than traversing the source graph again.
 
 See [the viewer guide](viewer.md#complete-computation-circuits) for circuit colors, functionality and static-delay filters, and the distinction between measured routing locations, schematic spans, timing dependencies and dynamic sensitization. No routed delay in this workflow establishes a physical execution period.

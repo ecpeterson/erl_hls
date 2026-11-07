@@ -1,7 +1,6 @@
 /** Local rendering of saved cycle evidence. All ancestry comes from model.js;
  * screen positions and same-clock annotations never create graph edges. */
 import {
-  createModel,
   eventsInWindow,
   annotationEvents,
   traceDependencies,
@@ -16,6 +15,17 @@ import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
 import { loadComputations } from "./computation-loader.js";
+import { loadRecording } from "./recording-loader.js";
+import { loadPreparedRenderWorker } from "./prepared-loader.js";
+import {
+  createPreparedComputations,
+  preparedComputationLayers,
+  preparedCircuitPaint,
+} from "./prepared-computations.js";
+import { createScene3D } from "./scene3d.js";
+import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
+import { sceneColor } from "./perceptual-color.js";
+import { cachePaint } from "./paint-cache.js";
 import {
   createComputations,
   computationLayers,
@@ -47,8 +57,15 @@ const state = {
   annotation: null,
   first: 0,
   window: 24,
-  yaw: -0.6,
-  tilt: 0.5,
+  scene: null,
+  sceneContent: null,
+  sceneDirty: true,
+  sceneError: null,
+  hitsDirty: true,
+  frameFull: false,
+  autoFit: true,
+  eventCache: null,
+  loadTimings: {},
   spacing: 8,
   hits: [],
   flatHits: [],
@@ -86,8 +103,11 @@ const esc = (value) =>
   );
 /** Render plain diagnostic messages without exposing executable markup. */
 function notice(message, warning = false) {
-  $("notice").textContent = message;
-  $("notice").classList.toggle("warning", warning);
+  $("notice").textContent =
+    state.sceneError && message !== state.sceneError
+      ? `${message} ${state.sceneError}`
+      : message;
+  $("notice").classList.toggle("warning", warning || Boolean(state.sceneError));
 }
 /** Build options with preserved selection when a related filter changes. */
 function options(id, values, title, previous = "") {
@@ -109,18 +129,17 @@ function color(event) {
 }
 /** Bound and load a JSON projection; no executable or Erlang-term input is accepted. */
 async function loadDocument(
-  text,
+  model,
   integrity = "File supplied locally; source evidence not revalidated",
   computationData = null,
 ) {
-  if (text.length > 128 * 1024 * 1024)
-    throw Error("Viewer projection exceeds the 128 MiB limit");
-  const model = createModel(JSON.parse(text));
-  const computations = createComputations(
-    model,
-    computationData?.attachment,
-    computationData?.routeNets,
-  );
+  const computations = computationData?.prepared
+    ? createPreparedComputations(model, computationData.prepared)
+    : createComputations(
+        model,
+        computationData?.attachment,
+        computationData?.routeNets,
+      );
   const paths = nativePaths(model);
   const routes = nativeRoutes(model);
   const routeIndex = new Map(
@@ -175,6 +194,8 @@ async function loadDocument(
   $("circuit-unknown").checked = true;
   $("circuit-selected").checked = false;
   state.model = model;
+  state.autoFit = true;
+  state.eventCache = null;
   state.selected = null;
   state.trace = null;
   state.annotation = null;
@@ -257,6 +278,52 @@ async function loadDocument(
   renderNativePath();
   render();
 }
+/** Install complete prepared geometry after the recording is already interactive.
+ * Native source evidence remains retained at manifest references, not in UI memory. */
+function installComputationData(data) {
+  state.computations = data.prepared
+    ? createPreparedComputations(state.model, data.prepared)
+    : createComputations(state.model, data.attachment, data.routeNets);
+  if (state.computations.bounds)
+    state.model.geometryBounds = state.computations.bounds;
+  else
+    for (const net of data.routeNets ?? []) {
+      for (const pip of net.pips ?? [])
+        extendBounds(state.model.geometryBounds, pip);
+      for (const node of net.nodes ?? [])
+        for (const wire of node.wires ?? [])
+          extendBounds(state.model.geometryBounds, wire);
+    }
+  for (const key of [
+    "pointCache",
+    "resourceCache",
+    "footprintCache",
+    "storagePointCache",
+    "circuitPaintCache",
+  ])
+    state[key].clear();
+  state.circuitCache = null;
+  for (const id of [
+    "computation-circuits",
+    "circuit-role",
+    "circuit-timing",
+    "circuit-delay",
+    "circuit-unknown",
+    "circuit-selected",
+  ])
+    $(id).disabled = false;
+  $("computation-circuits").checked = true;
+  state.autoFit = true;
+  render();
+}
+
+/** Small visible timings distinguish preparation from browser work. */
+function showLoadTimings() {
+  $("load-metrics").textContent = Object.entries(state.loadTimings)
+    .map(([key, value]) => `${key}: ${(value / 1000).toFixed(2)} s`)
+    .join(" · ");
+}
+
 /** Recorded step bounds; annotation anchors reference existing graph events only. */
 function selectedBounds() {
   const d = state.model.document,
@@ -314,11 +381,36 @@ function normalizeWindow() {
     `C${state.first}–${state.first + state.window - 1}`;
 }
 /** Queue one canvas repaint for related inputs or pointer movement. */
-function repaint() {
+function repaint(cameraOnly = false) {
+  if (!cameraOnly) {
+    state.sceneDirty = true;
+    state.frameFull = true;
+  }
   if (!state.frame)
     state.frame = requestAnimationFrame(() => {
       state.frame = 0;
-      drawAll();
+      const full = state.frameFull;
+      state.frameFull = false;
+      try {
+        drawStack();
+      } catch (error) {
+        state.sceneError = `${error.message} Narrow the clock window or choose Occupied tiles; no geometry prefix was rendered.`;
+        state.sceneDirty = false;
+        state.sceneContent = null;
+        state.hits = [];
+        state.storageHits = [];
+        state.scene?.setScene({});
+        state.scene?.render({
+          width: $("stack").clientWidth,
+          height: $("stack").clientHeight,
+          pixelRatio: window.devicePixelRatio || 1,
+        });
+        notice(state.sceneError, true);
+      }
+      if (full) {
+        if ($("flat-panel").open) drawFlat();
+        drawTimeline();
+      }
     });
 }
 /** Synchronize controls, visible event list and selected evidence. */
@@ -330,6 +422,8 @@ function render() {
   renderMetrics();
   const seeds = new Set(selectionEvents().map((event) => event.id));
   const events = visibleEvents();
+  $("fit-selection").disabled =
+    !seeds.size && !state.resource && !state.focusVersion;
   $("event-count").textContent =
     `${events.length.toLocaleString()} operations · first 250 listed`;
   $("events").innerHTML =
@@ -435,11 +529,15 @@ function traceSelection(direction) {
 }
 /** One half-open window for all synchronized views. */
 function visibleEvents() {
-  return eventsInWindow(state.model, {
+  const opts = {
     firstCycle: state.first,
     endCycle: state.first + state.window,
     ...filters(),
-  });
+  };
+  const key = JSON.stringify(opts);
+  if (state.eventCache?.key !== key)
+    state.eventCache = { key, events: eventsInWindow(state.model, opts) };
+  return state.eventCache.events;
 }
 /** Cache logical-resource layout. Unknown placement occupies a labelled rail. */
 function resourcePoint(id) {
@@ -588,7 +686,9 @@ function circuitLayers() {
         eventsInWindow(state.model, filters()),
       )
     : visibleEvents();
-  const generated = computationLayers(state.computations, supplied, {
+  const generated = (
+    state.computations.prepared ? preparedComputationLayers : computationLayers
+  )(state.computations, supplied, {
     roles: $("circuit-role").value
       ? [$("circuit-role").value]
       : ["data", "enable", "reset"],
@@ -627,6 +727,28 @@ function circuitPaint(layer) {
     .sort()
     .join("|");
   if (state.circuitPaintCache.has(key)) return state.circuitPaintCache.get(key);
+  if (state.computations.prepared) {
+    const paint = preparedCircuitPaint(state.computations, layer);
+    const normalized = {
+      ...paint,
+      segments: paint.segments.map((row) => ({
+        ...row,
+        from: cellPoint(row.from),
+        to: cellPoint(row.to),
+      })),
+      tiles: paint.tiles.map((row) => ({
+        ...row,
+        point: cellPoint(row.point),
+      })),
+      pips: paint.pips.map((row) => ({ ...row, point: cellPoint(row.point) })),
+      cells: paint.cells.map((row) => ({
+        ...row,
+        point: cellPoint(row.point),
+      })),
+    };
+    cachePaint(state.circuitPaintCache, key, normalized);
+    return normalized;
+  }
   const index = state.computations,
     tiles = new Map(),
     pips = new Map(),
@@ -713,8 +835,7 @@ function circuitPaint(layer) {
   for (const rows of [result.tiles, result.pips, result.cells, result.segments])
     for (const row of rows)
       row.role = row.roles.size === 1 ? [...row.roles][0] : "mixed";
-  if (state.circuitPaintCache.size >= 256) state.circuitPaintCache.clear();
-  state.circuitPaintCache.set(key, result);
+  cachePaint(state.circuitPaintCache, key, result);
   return result;
 }
 
@@ -785,7 +906,7 @@ function renderCircuitSummary(layers) {
   }
   if (!$("computation-circuits").checked) {
     node.textContent =
-      "Computation circuits hidden; complete native graph retained.";
+      "Computation circuits hidden; complete evidence retained.";
     return;
   }
   const selectionMessages = {
@@ -799,7 +920,7 @@ function renderCircuitSummary(layers) {
   const selectionMessage =
     selectionMessages[state.circuitCache?.selectionState];
   if (selectionMessage) {
-    node.textContent = `${selectionMessage} The complete recording and native graph remain loaded.`;
+    node.textContent = `${selectionMessage} The complete recording remains loaded; full native evidence is retained.`;
     return;
   }
   let writes = 0,
@@ -834,7 +955,7 @@ function renderCircuitSummary(layers) {
     Object.entries(dispositions)
       .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
       .join(" · ") +
-    ". Teal: data; amber: enable; purple: reset; white: shared roles. Structural fan-in includes unsensitized alternatives. Delay is a conservative SDF bound in the selected scope, not STA slack or an execution period.";
+    ". Structural fan-in includes unsensitized alternatives. Colors follow the selected legend. Delay is a conservative SDF bound in the selected scope, not STA slack or an execution period.";
 }
 
 /** Native routing is a tile footprint, not a metal-track layout. Solid markers
@@ -936,23 +1057,6 @@ function canvasContext(id) {
   ctx.clearRect(0, 0, rect.width, rect.height);
   return { canvas, ctx, w: rect.width, h: rect.height };
 }
-/** Orthographic camera. Space rotates independently of downward clock layers. */
-function projector(w, h) {
-  const depth = Math.min(
-    h * 0.7,
-    Math.max(50, (state.window - 1) * state.spacing),
-  );
-  const scale = Math.min(w * 0.23, (h - depth) * 0.8 + 50, 130),
-    cosine = Math.cos(state.yaw),
-    sine = Math.sin(state.yaw);
-  return (point, cycle) => ({
-    x: w * 0.44 + (point.x * cosine - point.y * sine) * scale,
-    y:
-      (h - depth) / 2 +
-      (point.x * sine + point.y * cosine) * scale * state.tilt +
-      ((cycle - state.first) * depth) / Math.max(1, state.window - 1),
-  });
-}
 /** A schematic segment. Dashed lines signify residence or off-window clipping. */
 function line(ctx, a, b, stroke, width = 1, dashed = false) {
   ctx.beginPath();
@@ -995,44 +1099,6 @@ function canvasLabels(ctx, width, height) {
   };
 }
 /** Draw one footprint outline with no cloned geometry arrays. */
-function layer(ctx, project, cycle, alpha, labels) {
-  const corners = [
-    { x: -1, y: -1 },
-    { x: 1, y: -1 },
-    { x: 1, y: 1 },
-    { x: -1, y: 1 },
-  ].map((p) => project(p, cycle));
-  ctx.beginPath();
-  corners.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-  ctx.closePath();
-  ctx.fillStyle = `rgba(38,66,79,${alpha * 0.3})`;
-  ctx.fill();
-  ctx.strokeStyle = `rgba(112,150,167,${alpha})`;
-  ctx.lineWidth = 0.7;
-  ctx.stroke();
-  const a = project({ x: -1.07, y: -1.1 }, cycle);
-  ctx.fillStyle = "#718b99";
-  ctx.font = "9px ui-monospace,monospace";
-  labels.add(`C${cycle}`, a.x - 30, a.y, 100);
-}
-/** Reuse the unique cell table for faint context at the first layer. */
-function installedContext(ctx, project) {
-  if (!$("context").checked || !state.model.catalogue) return;
-  const b = state.model.geometryBounds;
-  if (!b) return;
-  ctx.fillStyle = "#506d7a55";
-  for (const cell of state.model.cells.values()) {
-    if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
-    const p = project(
-      {
-        x: ((cell.x - b.minX) / (b.maxX - b.minX || 1) - 0.5) * 2,
-        y: ((cell.y - b.minY) / (b.maxY - b.minY || 1) - 0.5) * 2,
-      },
-      state.first,
-    );
-    ctx.fillRect(p.x, p.y, 1, 1);
-  }
-}
 /** Residence can belong to a selected input chain, not only its final consumer.
  * The example's explicit version is preferred; this never adds an ancestry edge. */
 function selectedLifetimes() {
@@ -1122,142 +1188,6 @@ function storagePoints(segment) {
     points.push({ ...unknownStoragePoint(segment.resource), kind: "unknown" });
   return save(points);
 }
-/** Draw observed load bridges and same-version residence, never a dependency
- * from an overwritten word to the next word. The selected window controls cost. */
-function drawResidence(ctx, project) {
-  state.storageHits = [];
-  if (!$("residence").checked) {
-    $("storage-summary").textContent = "Cross-cycle storage hidden";
-    return;
-  }
-  const segments = visibleStorage();
-  const selected = new Set(selectedLifetimes().map((life) => life.version));
-  // Draw selected details last so surrounding history cannot cover them.
-  const emphasized = (segment) =>
-    selected.has(segment.version) || segment.resource === state.resource;
-  const ordered = [...segments].sort(
-    (a, b) => Number(emphasized(a)) - Number(emphasized(b)),
-  );
-  let drawn = 0,
-    loads = 0,
-    holds = 0,
-    cells = new Set();
-  for (const segment of ordered) {
-    if (segment.kind === "write") loads++;
-    else holds++;
-    for (const point of spatialPoints(storagePoints(segment), mappedOnly())) {
-      const active = emphasized(segment),
-        uncertain =
-          segment.lifetime.continuity !== "within_declared_capture_scope";
-      const a = project(point, segment.visibleFromCycle),
-        b = project(point, segment.visibleToCycle);
-      const stroke =
-        point.kind === "unknown" || uncertain
-          ? "#8c99a4"
-          : active
-            ? "#f7d684"
-            : segment.kind === "write"
-              ? "#67b9cc"
-              : "#7797a8";
-      ctx.globalAlpha = active ? 0.9 : point.kind === "cell" ? 0.32 : 0.48;
-      line(
-        ctx,
-        a,
-        b,
-        stroke,
-        active && point.kind !== "cell"
-          ? 2.3
-          : segment.kind === "write"
-            ? 1.5
-            : 1,
-        segment.kind === "hold" || uncertain || point.kind === "unknown",
-      );
-      // A square marks Q at the next sample, even for a single-cycle value.
-      if (segment.kind === "write" && !segment.afterWindow) {
-        ctx.fillStyle = stroke;
-        ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
-      }
-      ctx.fillStyle = stroke;
-      if (segment.beforeWindow) ctx.fillRect(a.x - 3, a.y - 1, 6, 2);
-      if (segment.afterWindow) ctx.fillRect(b.x - 3, b.y - 1, 6, 2);
-      state.storageHits.push({ a, b, segment, point });
-      if (point.cell) cells.add(point.cell);
-      drawn++;
-    }
-  }
-  ctx.globalAlpha = 1;
-  const words = new Set(segments.map((s) => `${s.resource}/${s.address}`)).size;
-  $("storage-summary").textContent =
-    ($("full-storage").checked
-      ? "Full storage history · "
-      : "Recorded uses only · ") +
-    `${words} words · ${loads} load bridges · ${holds} residence spans` +
-    (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
-    ` · ${drawn.toLocaleString()} strokes` +
-    (state.window === 1
-      ? " · show at least two clocks for cross-cycle links"
-      : "");
-}
-/** Render graph edges only; off-window endpoints are clipped and labelled. */
-function drawTrace(ctx, project, labels) {
-  state.traceNote = "";
-  if (!state.trace) return;
-  let aggregates = 0,
-    drawn = 0;
-  const expanded = $("access-footprints").checked && state.model.catalogue;
-  for (const edge of state.trace.edges) {
-    const from = state.model.events.get(edge.source),
-      to = state.model.events.get(edge.target);
-    if (from.cycle >= state.first + state.window || to.cycle < state.first)
-      continue;
-    const outside =
-      from.cycle < state.first || to.cycle >= state.first + state.window;
-    const sources =
-      expanded || mappedOnly()
-        ? accessGeometry(from).points
-        : [eventPoint(from)];
-    const targets =
-      expanded || mappedOnly() ? accessGeometry(to).points : [eventPoint(to)];
-    const connection = expanded
-      ? accessConnections(from, to, sources, targets)
-      : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
-    const { aggregate } = connection;
-    const pairs = spatialPairs(
-      aggregate ? [[eventPoint(from), eventPoint(to)]] : connection.pairs,
-      sources,
-      targets,
-      mappedOnly(),
-    );
-    if (aggregate && pairs.length) aggregates++;
-    for (const [source, target] of pairs) {
-      const a = project(source, Math.max(state.first, from.cycle));
-      const b = project(
-        target,
-        Math.min(state.first + state.window - 1, to.cycle),
-      );
-      ctx.globalAlpha = pairs.length > 1 ? 0.25 : 0.85;
-      line(
-        ctx,
-        a,
-        b,
-        edge.kind === "resource_order" ? "#a8a0cc" : "#f7d684",
-        1,
-        outside,
-      );
-      if (outside) {
-        ctx.font = "9px ui-monospace,monospace";
-        ctx.fillStyle = "#f7d684";
-        if (from.cycle < state.first)
-          labels.add(`← C${from.cycle}`, a.x + 5, a.y - 4, 10);
-        if (to.cycle >= state.first + state.window)
-          labels.add(`C${to.cycle} →`, b.x + 5, b.y - 4, 10);
-      }
-      drawn++;
-    }
-  }
-  ctx.globalAlpha = 1;
-  state.traceNote = ` · ${drawn.toLocaleString()} dependency strokes${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}`;
-}
 /** Static timing, routed topology coverage and missing geometry are separate
  * from recorded use. Per-arc rows disclose gaps instead of drawing fanout trees. */
 function renderNativePath() {
@@ -1300,117 +1230,406 @@ function renderNativePath() {
     : "";
 }
 
-/** Draw every access in the user-selected window using shared geometry. */
-function drawStack() {
-  const { ctx, w, h } = canvasContext("stack");
-  if (!state.model) return;
-  const project = projector(w, h),
-    labels = canvasLabels(ctx, w, h),
-    interval = Math.max(1, Math.ceil(state.window / 12));
-  $("show-unmapped").disabled = !state.model.catalogue;
-  for (let c = state.first; c < state.first + state.window; c += interval)
-    layer(ctx, project, c, 0.3, labels);
-  if ((state.window - 1) % interval)
-    layer(ctx, project, state.first + state.window - 1, 0.3, labels);
+/** Assemble world geometry only when data or visibility changes. Camera motion
+ * reuses the GPU buffers and does not redo graph queries, filtering or unions. */
+function buildStackScene() {
+  const result = {
+    segments: [],
+    markers: [],
+    surfaces: [],
+    events: [],
+    storage: [],
+    labels: [],
+    focus: [],
+    selection: [],
+  };
+  const world = (p, c) =>
+    clockPoint(p, c, state.first, state.window, state.spacing);
+  const segment = (a, b, color, radius = 0.002, kind = "route") =>
+    result.segments.push({ from: a, to: b, color, radius, kind });
+  const marker = (position, color, size = 0.006) =>
+    result.markers.push({ position, color, size });
+  const interval = Math.max(1, Math.ceil(state.window / 8));
+  for (let c = state.first; c < state.first + state.window; c += interval) {
+    const corners = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ].map(([x, y]) => world({ x, y }, c));
+    for (let i = 0; i < 4; i++)
+      segment(corners[i], corners[(i + 1) % 4], "#2d4855", 0.0009, "frame");
+    result.labels.push({
+      text: `C${c}`,
+      position: world({ x: -1.04, y: -1.04 }, c),
+      alternatives: corners,
+    });
+  }
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
     if (
       epoch.first_cycle < state.first ||
       epoch.first_cycle >= state.first + state.window
     )
       continue;
-    const a = project({ x: -1, y: -1 }, epoch.first_cycle);
-    const b = project({ x: 1, y: -1 }, epoch.first_cycle);
-    line(ctx, a, b, "#ea8b94", 2);
-    ctx.fillStyle = "#ea8b94";
-    ctx.font = "10px system-ui";
-    labels.add(`Reset · ${epoch.id}`, a.x + 6, a.y - 6, 90);
+    const a = world({ x: -1, y: -1 }, epoch.first_cycle),
+      b = world({ x: 1, y: -1 }, epoch.first_cycle);
+    segment(a, b, "#ea8b94", 0.004, "reset");
+    result.labels.push({ text: `Reset · ${epoch.id}`, position: a });
   }
-  installedContext(ctx, project);
-  renderCircuitSummary(drawComputations(ctx, project));
-  drawResidence(ctx, project);
-  drawTrace(ctx, project, labels);
-  state.hits = [];
+  if ($("context").checked)
+    for (const cell of state.model.cells.values()) {
+      if (Number.isFinite(cell.x) && Number.isFinite(cell.y))
+        marker(world(cellPoint(cell), state.first), "#344c59", 0.004);
+    }
+  const layers = circuitLayers();
+  renderCircuitSummary(layers);
+  const metric = $("circuit-timing").value;
+  const delayKey =
+    metric === "registered_launch" ? "registeredDelayNs" : "staticDelayNs";
+  const maximum =
+    state.computations?.maxDelays?.[
+      metric === "registered_launch" ? "registered" : "static"
+    ] ?? null;
+  const timingOption = $("color-mode").querySelector('option[value="timing"]');
+  timingOption.disabled = !state.computations?.prepared;
+  timingOption.textContent = state.computations?.prepared
+    ? "Static delay"
+    : "Static delay (prepare render data first)";
+  if (timingOption.disabled) $("color-mode").value = "role";
+  const mode = $("color-mode").value;
+  $("role-legend").hidden = mode !== "role";
+  $("timing-legend").hidden = mode !== "timing";
+  $("timing-min").textContent = "0 ns";
+  $("timing-max").textContent =
+    maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
+  const detail = $("detail-level").value;
+  const dim = $("ghost-context").checked;
+  for (const layer of layers) {
+    const paint = layer.paint;
+    const shade = (row) =>
+      sceneColor({
+        role: row.role,
+        mode,
+        delayNs: row[
+          metric === "registered_launch"
+            ? "registeredTimingUnknown"
+            : "staticTimingUnknown"
+        ]
+          ? null
+          : (row[delayKey] ?? null),
+        maxDelayNs: maximum,
+      });
+    const markRows =
+      detail === "switches"
+        ? [...paint.cells, ...paint.pips, ...paint.tiles]
+        : paint.cells;
+    if (detail !== "overview")
+      for (const row of paint.segments) {
+        if (row.kind === "unresolved" && mappedOnly()) continue;
+        const a = world(row.from, layer.cycle),
+          b = world(row.to, layer.cycle);
+        segment(
+          a,
+          b,
+          row.kind === "unresolved" ? "#788495" : shade(row),
+          0.0017,
+          row.kind,
+        );
+        result.focus.push(a, b);
+      }
+    const marks = (
+      detail === "overview" ? [...paint.tiles, ...paint.cells] : markRows
+    ).map((row) => ({
+      position: world(row.point, layer.cycle),
+      color: shade(row),
+      role: row.role,
+      delayNs: row[delayKey] ?? null,
+      timingUnknown: Boolean(
+        row[
+          metric === "registered_launch"
+            ? "registeredTimingUnknown"
+            : "staticTimingUnknown"
+        ],
+      ),
+      size: row.boundary === "sequential" ? 0.006 : 0.0035,
+    }));
+    const displayed =
+      detail === "overview"
+        ? occupiedBins(marks).map((row) => ({
+            ...row,
+            color: sceneColor({
+              role: row.role,
+              mode,
+              delayNs: row.timingUnknown ? null : row.delayNs,
+              maxDelayNs: maximum,
+            }),
+          }))
+        : marks;
+    for (const row of displayed) {
+      result.markers.push(row);
+      result.focus.push(row.position);
+    }
+  }
+  const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
+  const storage = $("residence").checked ? visibleStorage() : [];
+  let loads = 0,
+    holds = 0;
+  for (const item of storage) {
+    item.kind === "write" ? loads++ : holds++;
+    for (const p of spatialPoints(storagePoints(item), mappedOnly())) {
+      const active =
+        activeVersions.has(item.version) || item.resource === state.resource;
+      const a = world(p, item.visibleFromCycle),
+        b = world(p, item.visibleToCycle);
+      const color =
+        p.kind === "unknown"
+          ? "#8c99a4"
+          : active
+            ? "#f7d684"
+            : dim
+              ? "#455962"
+              : item.kind === "write"
+                ? "#86c5dc"
+                : "#789eae";
+      segment(
+        a,
+        b,
+        color,
+        active ? 0.004 : item.kind === "write" ? 0.0028 : 0.0018,
+        "storage",
+      );
+      if (item.kind === "write" && !item.afterWindow)
+        marker(b, color, active ? 0.012 : 0.007);
+      result.storage.push({ from: a, to: b, segment: item, point: p });
+      result.focus.push(a, b);
+      if (active) result.selection.push(a, b);
+    }
+  }
+  $("storage-summary").textContent =
+    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.storage.length.toLocaleString()} spatial links. Thick links load a value; thin links retain it.`;
+  const seeds = new Set(selectionEvents().map((e) => e.id));
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
-  const seeds = new Set(selectionEvents().map((event) => event.id));
-  const events = visibleEvents().sort(
-    (a, b) =>
-      Number(seeds.has(a.id) || pathIds.has(a.id)) -
-      Number(seeds.has(b.id) || pathIds.has(b.id)),
-  );
-  let drawn = 0;
   const expanded = $("access-footprints").checked && state.model.catalogue;
-  for (const event of events) {
-    const selected = seeds.has(event.id),
-      onPath = pathIds.has(event.id);
+  let glyphs = 0;
+  for (const event of visibleEvents()) {
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
-    // A compact word centroid does not locate an access selecting unknown bits.
-    if (mappedOnly() && !geometry.points.some((point) => point.physical))
-      continue;
-    const points = spatialPoints(
+    if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
+    for (const point of spatialPoints(
       expanded ? geometry.points : [eventPoint(event)],
       mappedOnly(),
-    );
-    for (const point of points) {
-      const p = project(point, event.cycle);
-      ctx.globalAlpha =
-        state.trace && !onPath
-          ? 0.14
-          : point.physical || !state.model.catalogue
-            ? 0.8
-            : 0.45;
-      const stroke = selected
-        ? "#fff0ac"
-        : onPath
-          ? "#f7d684"
-          : point.physical || !state.model.catalogue
-            ? color(event)
-            : "#8c99a4";
-      ctx.fillStyle = ctx.strokeStyle = stroke;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, selected ? 3.5 : onPath ? 2.4 : 1.5, 0, Math.PI * 2);
-      if (geometry?.footprint.mode === "word_context" && point.physical)
-        ctx.stroke();
-      else ctx.fill();
-      if (selected && points.length === 1) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      state.hits.push({ ...p, event });
-      drawn++;
+    )) {
+      const position = world(point, event.cycle),
+        active = seeds.has(event.id),
+        onPath = pathIds.has(event.id);
+      marker(
+        position,
+        active
+          ? "#fff0ac"
+          : onPath
+            ? "#edba63"
+            : dim
+              ? "#536b77"
+              : color(event),
+        active ? 0.014 : onPath ? 0.009 : 0.004,
+      );
+      result.events.push({ position, event });
+      result.focus.push(position);
+      if (active) result.selection.push(position);
+      glyphs++;
     }
   }
-  $("access-summary").textContent = !state.model.catalogue
-    ? "Logical layout · native access placement unmeasured"
-    : expanded
-      ? "Accesses at native tiles · hollow = word context, read-bit subset unknown"
-      : "Compact aggregate symbols · centers are not computation locations";
-  $("access-summary").textContent +=
-    ` · ${drawn.toLocaleString()} access glyphs` + state.traceNote;
-  $("access-summary").textContent += mappedOnly()
-    ? " · unmapped geometry hidden; records and totals retained"
-    : "";
-  drawNativePath(ctx, project, false, labels);
-  ctx.globalAlpha = 1;
-  const p = project({ x: 1.4, y: 0 }, state.first);
-  ctx.fillStyle = "#91a7b3";
-  ctx.font = "10px system-ui";
-  if (!mappedOnly())
-    labels.add(
-      state.model.catalogue ? "UNMAPPED / UNKNOWN" : "LOGICAL LAYOUT",
-      p.x - 50,
-      p.y - 23,
-      60,
+  let traces = 0;
+  for (const edge of state.trace?.edges ?? []) {
+    const from = state.model.events.get(edge.source),
+      to = state.model.events.get(edge.target);
+    if (from.cycle >= state.first + state.window || to.cycle < state.first)
+      continue;
+    const sources =
+      expanded || mappedOnly()
+        ? accessGeometry(from).points
+        : [eventPoint(from)];
+    const targets =
+      expanded || mappedOnly() ? accessGeometry(to).points : [eventPoint(to)];
+    const connection = expanded
+      ? accessConnections(from, to, sources, targets)
+      : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
+    const pairs = spatialPairs(
+      connection.aggregate
+        ? [[eventPoint(from), eventPoint(to)]]
+        : connection.pairs,
+      sources,
+      targets,
+      mappedOnly(),
     );
-  if (state.annotation) {
-    const cycle = state.annotation.cycle;
-    if (cycle >= state.first && cycle < state.first + state.window) {
-      const p = project({ x: -1.2, y: 1 }, cycle);
-      ctx.fillStyle = "#f1bb6c";
-      labels.add(`Public completion · C${cycle}`, p.x, p.y + 16, 90);
+    for (const [source, target] of pairs) {
+      segment(
+        world(source, Math.max(state.first, from.cycle)),
+        world(target, Math.min(state.first + state.window - 1, to.cycle)),
+        "#f7d684",
+        0.003,
+        "dependency",
+      );
+      result.focus.push(
+        world(source, Math.max(state.first, from.cycle)),
+        world(target, Math.min(state.first + state.window - 1, to.cycle)),
+      );
+      traces++;
     }
+  }
+  if (state.nativePath) {
+    const cycle = Math.max(
+      state.first,
+      Math.min(
+        state.first + state.window - 1,
+        state.model.events.get(state.selected)?.cycle ?? state.first,
+      ),
+    );
+    for (let i = 0; i < state.nativePath.arcs.length; i++) {
+      const a = world(
+        cellPoint(state.model.cells.get(state.nativePath.steps[i].cell)),
+        cycle,
+      );
+      const b = world(
+        cellPoint(state.model.cells.get(state.nativePath.steps[i + 1].cell)),
+        cycle,
+      );
+      const route = state.nativeRoutes.get(`${state.nativePath.id}/${i}`);
+      const positions = [
+        a,
+        ...(route?.pips ?? []).map((p) =>
+          Number.isFinite(p.x) && Number.isFinite(p.y)
+            ? world(cellPoint(p), cycle)
+            : null,
+        ),
+        b,
+      ];
+      for (let j = 1; j < positions.length; j++)
+        if (positions[j - 1] && positions[j]) {
+          segment(positions[j - 1], positions[j], "#ee91d5", 0.004, "static");
+          result.focus.push(positions[j - 1], positions[j]);
+        }
+    }
+  }
+  $("access-summary").textContent =
+    `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? "occupied-bin overview (aggregated, not native geometry)" : detail === "routes" ? "route spans and cells; switch markers hidden" : "route spans, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
+  if (
+    state.computations &&
+    $("computation-circuits").checked &&
+    selectionEvents().length
+  ) {
+    const selectedLayers = (
+      state.computations.prepared
+        ? preparedComputationLayers
+        : computationLayers
+    )(
+      state.computations,
+      computationSelection(
+        selectionEvents(),
+        eventsInWindow(state.model, filters()),
+      ),
+      {
+        roles: $("circuit-role").value
+          ? [$("circuit-role").value]
+          : ["data", "enable", "reset"],
+        minimumDelayNs: Number($("circuit-delay").value),
+        timingMetric: metric,
+        includeUnknownTiming: $("circuit-unknown").checked,
+      },
+    );
+    for (const layer of selectedLayers) {
+      if (
+        layer.cycle < state.first ||
+        layer.cycle >= state.first + state.window
+      )
+        continue;
+      const paint = circuitPaint(layer);
+      for (const row of paint.segments)
+        if (row.kind !== "unresolved" || !mappedOnly())
+          result.selection.push(
+            world(row.from, layer.cycle),
+            world(row.to, layer.cycle),
+          );
+      for (const row of paint.cells)
+        result.selection.push(world(row.point, layer.cycle));
+    }
+  }
+  result.bounds = sceneBounds(result.focus);
+  result.selectionBounds = sceneBounds(
+    result.selection.length ? result.selection : result.focus,
+  );
+  return result;
+}
+
+/** Paint opaque depth-tested geometry, with sparse labels on the interaction
+ * overlay. Projected hit candidates keep their depth and reject clipped points. */
+function drawStack() {
+  const { ctx, w, h } = canvasContext("stack");
+  if (!state.model || (state.sceneError && !state.sceneDirty)) return;
+  if (state.sceneDirty) state.sceneError = null;
+  if (!state.scene) {
+    state.scene = createScene3D($("scene3d"), {
+      onUnsupported: (message) => {
+        state.sceneError = message;
+        notice(message, true);
+      },
+      onContextLost: (message) => {
+        state.sceneError = message;
+        notice(message, true);
+      },
+      onContextRestored: () => {
+        state.sceneError = null;
+        notice("3D context restored; saved evidence is unchanged.");
+        repaint(true);
+      },
+    });
+    if (!state.scene) return;
+  }
+  if (state.sceneDirty || !state.sceneContent) {
+    const started = performance.now();
+    state.sceneContent = buildStackScene();
+    state.scene.setScene(state.sceneContent);
+    state.sceneDirty = false;
+    if (state.autoFit) {
+      state.scene.fit(state.sceneContent.bounds);
+      state.autoFit = false;
+    }
+    state.loadTimings["Latest scene preparation"] = performance.now() - started;
+    showLoadTimings();
+  }
+  state.scene.render({
+    width: w,
+    height: h,
+    pixelRatio: window.devicePixelRatio || 1,
+    shading: $("color-mode").value !== "timing",
+  });
+  const project = (point) => state.scene.project(point);
+  const labels = canvasLabels(ctx, w, h);
+  ctx.font = "11px ui-monospace,monospace";
+  ctx.fillStyle = "#a5bdc8";
+  for (const label of state.sceneContent.labels) {
+    const candidates = (label.alternatives ?? [label.position])
+      .map(project)
+      .filter((p) => p.visible);
+    const p = candidates.sort((a, b) => a.x - b.x)[0];
+    if (p) labels.add(label.text, Math.max(4, p.x - 44), p.y - 6, 100);
   }
   labels.draw();
+  state.hitsDirty = true;
+}
+/** Picking is deferred until the pointer settles; dragging only updates the GPU
+ * camera and sparse labels. Frontmost equal-distance candidates win. */
+function ensureSceneHits() {
+  if (!state.hitsDirty || !state.sceneContent || !state.scene) return;
+  const project = (point) => state.scene.project(point);
+  state.hits = state.sceneContent.events
+    .map((row) => ({ ...project(row.position), event: row.event }))
+    .filter((p) => p.visible)
+    .sort((a, b) => b.depth - a.depth);
+  state.storageHits = state.sceneContent.storage.flatMap((row) => {
+    const points = state.scene.projectSegment(row.from, row.to);
+    return points ? [{ ...row, a: points[0], b: points[1] }] : [];
+  });
+  state.hitsDirty = false;
 }
 /** Flat chip projection retains installed population, rather than layer copies. */
 function drawFlat() {
@@ -1564,12 +1783,6 @@ function drawTimeline() {
   }
   $("timeline-label").textContent =
     `${c.end_cycle - c.first_cycle} clocks retained · ${model.bundle.capture.incarnations.length} incarnation(s)`;
-}
-/** Paint synchronized canvases after data and layout changes. */
-function drawAll() {
-  drawStack();
-  drawFlat();
-  drawTimeline();
 }
 /** Choose a recorded event, retaining ancestry outside the current window. */
 function selectEvent(id, move = true) {
@@ -1851,7 +2064,11 @@ function nearest(hits, x, y, limit = 12) {
     dist = limit * limit;
   for (const hit of hits) {
     const d = (hit.x - x) ** 2 + (hit.y - y) ** 2;
-    if (d <= dist) {
+    if (
+      d < dist - 1e-6 ||
+      (Math.abs(d - dist) <= 1e-6 &&
+        (hit.depth ?? 0) <= (best?.depth ?? Infinity))
+    ) {
       dist = d;
       best = hit;
     }
@@ -1861,7 +2078,8 @@ function nearest(hits, x, y, limit = 12) {
 /** Nearest rendered storage span, independently of dense same-clock dots. */
 function nearestStorage(x, y) {
   let best = null,
-    distance = 25;
+    distance = 25,
+    bestDepth = Infinity;
   for (const hit of state.storageHits) {
     const dx = hit.b.x - hit.a.x,
       dy = hit.b.y - hit.a.y;
@@ -1873,9 +2091,15 @@ function nearestStorage(x, y) {
       ),
     );
     const d = (x - hit.a.x - t * dx) ** 2 + (y - hit.a.y - t * dy) ** 2;
-    if (d <= distance) {
+    const depth =
+      (hit.a.depth ?? 0) + t * ((hit.b.depth ?? 0) - (hit.a.depth ?? 0));
+    if (
+      d < distance - 1e-6 ||
+      (Math.abs(d - distance) <= 1e-6 && depth < bestDepth)
+    ) {
       best = hit;
       distance = d;
+      bestDepth = depth;
     }
   }
   return best;
@@ -1917,19 +2141,22 @@ function bindControls() {
     const sequence = ++state.loadSequence;
     state.loadController?.abort();
     state.loadController = new AbortController();
-    const signal = state.loadController.signal;
-    const url = $("capture").value;
+    const signal = state.loadController.signal,
+      url = $("capture").value,
+      started = performance.now();
+    state.loadTimings = {};
     setBusy(true);
     try {
       notice("Reading saved capture…");
       const response = await fetch(url, { signal });
       if (!response.ok)
         throw Error(`Capture fetch failed (${response.status})`);
-      const bytes = await response.arrayBuffer();
-      if (bytes.byteLength > 128 * 1024 * 1024)
+      const bytes = await response.arrayBuffer(),
+        byteLength = bytes.byteLength;
+      if (byteLength > 128 * 1024 * 1024)
         throw Error("Projection exceeds 128 MiB");
       const expected = state.index.get(url);
-      if (!expected || bytes.byteLength !== expected.bytes)
+      if (!expected || byteLength !== expected.bytes)
         throw Error("Projection length does not match the local index");
       const digest = [
         ...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
@@ -1938,23 +2165,66 @@ function bindControls() {
         .join("");
       if (digest !== expected.sha256)
         throw Error("Projection digest does not match the local index");
-      const computationData = await loadComputations({
-        entry: expected.computations,
-        signal,
-        view: { bytes: bytes.byteLength, sha256: digest },
-        baseUrl: new URL("data/", window.location.href).href,
-        progress: (message) => {
-          if (sequence === state.loadSequence) notice(message);
-        },
-      });
+      state.loadTimings["Recording fetch and verification"] =
+        performance.now() - started;
+      notice("Preparing the recording in a background worker…");
+      const decoded = await loadRecording(bytes, { signal });
       if (sequence !== state.loadSequence) return;
+      state.loadTimings["Recording JSON parse"] = decoded.timings.parseMs;
+      state.loadTimings["Recording index"] = decoded.timings.indexMs;
       await loadDocument(
-        new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-        "Projection bytes verified against local index; original evidence was verified when this projection was prepared.",
-        computationData,
+        decoded.model,
+        "Projection bytes verified against the local index; source evidence was verified during preparation.",
       );
-    } catch (e) {
-      if (sequence === state.loadSequence) notice(e.message, true);
+      if (state.model.document.examples?.length) {
+        $("example").value = "0";
+        chooseExample(0);
+      }
+      setBusy(false);
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
+      if (sequence !== state.loadSequence) return;
+      state.loadTimings["First recording frame"] = performance.now() - started;
+      showLoadTimings();
+      if (expected.render || expected.computations) {
+        notice(
+          "Recording is interactive. Loading its complete circuit geometry…",
+        );
+        const routeStarted = performance.now();
+        const options = {
+          entry: expected.render ?? expected.computations,
+          source: expected.computations,
+          signal,
+          view: { bytes: byteLength, sha256: digest },
+          baseUrl: new URL("data/", window.location.href).href,
+          progress: (message) => {
+            if (sequence === state.loadSequence)
+              notice(`Recording is interactive. ${message}`);
+          },
+        };
+        const data = expected.render
+          ? { prepared: await loadPreparedRenderWorker(options) }
+          : await loadComputations(options);
+        if (sequence !== state.loadSequence) return;
+        installComputationData(data);
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+        if (sequence !== state.loadSequence) return;
+        state.loadTimings["Circuit load through first frame"] =
+          performance.now() - routeStarted;
+        state.loadTimings["Complete initial view"] =
+          performance.now() - started;
+        showLoadTimings();
+        notice(
+          expected.render
+            ? "Prepared circuitry loaded. Complete source evidence is retained; displayed timing remains a static bound."
+            : "Complete native routing loaded. Preparing a render index will make subsequent loads cheaper.",
+        );
+      }
+    } catch (error) {
+      if (sequence === state.loadSequence) notice(error.message, true);
     } finally {
       if (sequence === state.loadSequence) setBusy(false);
     }
@@ -1962,16 +2232,21 @@ function bindControls() {
   $("file").onchange = async () => {
     const sequence = ++state.loadSequence;
     state.loadController?.abort();
-    state.loadController = null;
+    state.loadController = new AbortController();
     const file = $("file").files[0];
     if (!file) return;
+    setBusy(true);
     try {
       if (file.size > 128 * 1024 * 1024) throw Error("File exceeds 128 MiB");
-      const text = await file.text();
+      const decoded = await loadRecording(await file.arrayBuffer(), {
+        signal: state.loadController.signal,
+      });
       if (sequence !== state.loadSequence) return;
-      await loadDocument(text);
-    } catch (e) {
-      notice(e.message, true);
+      await loadDocument(decoded.model);
+    } catch (error) {
+      if (sequence === state.loadSequence) notice(error.message, true);
+    } finally {
+      if (sequence === state.loadSequence) setBusy(false);
     }
   };
   for (const key of ["actor", "activation", "operation", "task"])
@@ -2001,7 +2276,7 @@ function bindControls() {
     state.spacing = Number($("spacing").value);
     repaint();
   };
-  $("spatial-density").onchange = repaint;
+  $("spatial-density").onchange = () => repaint();
   $("what-if-period").onchange = () => {
     const input = $("what-if-period");
     const period = Number(input.value);
@@ -2026,28 +2301,33 @@ function bindControls() {
     "circuit-unknown",
     "circuit-selected",
   ])
-    $(id).onchange = repaint;
+    $(id).onchange = () => repaint();
   $("circuit-delay").onchange = () => {
     const value = Number($("circuit-delay").value);
     if (!Number.isFinite(value) || value < 0) $("circuit-delay").value = "0";
     repaint();
   };
-  $("context").onchange = repaint;
-  $("show-unmapped").onchange = repaint;
-  $("residence").onchange = repaint;
+  $("context").onchange = () => repaint();
+  $("show-unmapped").onchange = () => repaint();
+  $("residence").onchange = () => repaint();
   $("full-storage").onchange = render;
-  $("access-footprints").onchange = repaint;
+  $("access-footprints").onchange = () => repaint();
   $("native-path").onchange = () => {
     state.nativePath =
       state.nativePaths.find((p) => p.id === $("native-path").value) ?? null;
     renderNativePath();
     repaint();
   };
-  $("expand-storage").onchange = repaint;
+  $("expand-storage").onchange = () => repaint();
   $("reset-camera").onclick = () => {
-    state.yaw = -0.6;
-    state.tilt = 0.5;
-    repaint();
+    state.scene?.preset("isometric");
+    for (const button of ["camera-top", "camera-side", "camera-isometric"])
+      $(button).setAttribute(
+        "aria-pressed",
+        String(button === "camera-isometric"),
+      );
+    if (state.sceneContent) state.scene?.fit(state.sceneContent.bounds);
+    repaint(true);
   };
   $("previous").onclick = () => {
     state.first -= state.window;
@@ -2084,6 +2364,8 @@ function bindControls() {
   };
   $("resource").onchange = () => {
     state.resource = $("resource").value || null;
+    $("fit-selection").disabled =
+      !state.resource && !state.selected && !state.focusVersion;
     state.cell = null;
     renderResource();
     repaint();
@@ -2115,7 +2397,12 @@ function bindControls() {
   const stack = $("stack");
   let drag = null;
   stack.onpointerdown = (e) => {
-    drag = { ...pointer(e), yaw: state.yaw, tilt: state.tilt, moved: false };
+    drag = {
+      ...pointer(e),
+      moved: false,
+      distance: 0,
+      pan: e.shiftKey || e.button === 1 || $("camera-mode").value === "pan",
+    };
     stack.setPointerCapture(e.pointerId);
   };
   stack.onpointermove = (e) => {
@@ -2123,11 +2410,15 @@ function bindControls() {
     if (drag) {
       const dx = p.x - drag.x,
         dy = p.y - drag.y;
-      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-      state.yaw = drag.yaw + dx * 0.008;
-      state.tilt = Math.max(0.12, Math.min(1, drag.tilt + dy * 0.003));
-      repaint();
+      drag.distance += Math.abs(dx) + Math.abs(dy);
+      if (drag.distance > 4) drag.moved = true;
+      if (drag.pan) state.scene?.pan(dx, dy);
+      else state.scene?.orbit(dx * 0.008, dy * 0.008);
+      drag.x = p.x;
+      drag.y = p.y;
+      repaint(true);
     } else {
+      ensureSceneHits();
       const hit = nearest(state.hits, p.x, p.y, 5);
       const storage = hit ? null : nearestStorage(p.x, p.y);
       $("tooltip").hidden = !hit && !storage;
@@ -2144,6 +2435,7 @@ function bindControls() {
   stack.onpointerup = (e) => {
     const p = pointer(e);
     if (drag && !drag.moved) {
+      ensureSceneHits();
       const hit = nearest(state.hits, p.x, p.y, 5);
       const storage = hit ? null : nearestStorage(p.x, p.y);
       if (hit) selectEvent(hit.event.id, false);
@@ -2152,15 +2444,28 @@ function bindControls() {
     }
     drag = null;
   };
+  stack.onwheel = (e) => {
+    e.preventDefault();
+    state.scene?.zoom(Math.exp(-e.deltaY * 0.0015));
+    repaint(true);
+  };
+  stack.oncontextmenu = (e) => e.preventDefault();
   stack.onpointercancel = () => (drag = null);
   stack.onpointerleave = () => {
     $("tooltip").hidden = true;
   };
   stack.onkeydown = (e) => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      state.yaw += e.key === "ArrowRight" ? 0.1 : -0.1;
-      repaint();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+      const x = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      const y = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+      if (e.shiftKey) state.scene?.pan(x * 20, y * 20);
+      else state.scene?.orbit(x * 0.1, y * 0.1);
       e.preventDefault();
+      repaint(true);
+    } else if (["+", "=", "-"].includes(e.key)) {
+      state.scene?.zoom(e.key === "-" ? 1 / 1.2 : 1.2);
+      e.preventDefault();
+      repaint(true);
     }
   };
   $("flat").onclick = (e) => {
@@ -2187,7 +2492,49 @@ function bindControls() {
       ) - Math.floor(state.window / 2);
     render();
   };
-  new ResizeObserver(repaint).observe(document.querySelector(".workspace"));
+  $("toggle-inspector").onclick = () => {
+    const open = $("evidence-inspector").hidden;
+    $("evidence-inspector").hidden = !open;
+    $("explorer").classList.toggle("inspector-open", open);
+    $("toggle-inspector").setAttribute("aria-expanded", String(open));
+    repaint();
+  };
+  $("scene-focus").onclick = () => {
+    const open = document.body.classList.toggle("scene-focus");
+    $("scene-focus").setAttribute("aria-pressed", String(open));
+    repaint();
+  };
+  $("flat-panel").ontoggle = () => repaint();
+  for (const [id, preset] of [
+    ["camera-top", "chip"],
+    ["camera-side", "xz"],
+    ["camera-isometric", "isometric"],
+  ])
+    $(id).onclick = () => {
+      state.scene?.preset(preset);
+      if (state.sceneContent) state.scene?.fit(state.sceneContent.bounds);
+      for (const button of ["camera-top", "camera-side", "camera-isometric"])
+        $(button).setAttribute("aria-pressed", String(button === id));
+      repaint(true);
+    };
+  $("zoom-in").onclick = () => {
+    state.scene?.zoom(1.3);
+    repaint(true);
+  };
+  $("zoom-out").onclick = () => {
+    state.scene?.zoom(1 / 1.3);
+    repaint(true);
+  };
+  $("fit-selection").onclick = () => {
+    if (state.sceneContent)
+      state.scene?.fit(state.sceneContent.selectionBounds);
+    repaint(true);
+  };
+  for (const id of ["color-mode", "detail-level", "ghost-context"])
+    $(id).onchange = () => repaint();
+  new ResizeObserver(() => repaint()).observe(
+    document.querySelector(".workspace"),
+  );
 }
 /** Saved examples are optional; a missing local index leaves file-open usable. */
 async function initialize() {
@@ -2215,10 +2562,6 @@ async function initialize() {
     if (entries.length) {
       $("capture").selectedIndex = 1;
       await $("capture").onchange();
-      if (state.model?.document.examples?.length) {
-        $("example").value = "0";
-        chooseExample(0);
-      }
     }
   } catch (e) {
     notice(
