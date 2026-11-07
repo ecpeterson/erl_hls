@@ -11,6 +11,8 @@ import {
   storageSegments,
   storageLifetimes,
 } from "./model.js";
+import { eventFootprint, accessConnections } from "./footprint.js";
+import { nativePaths } from "./native-paths.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
   "#67d7c3",
@@ -38,6 +40,10 @@ const state = {
   storageCache: null,
   storagePointCache: new Map(),
   pointCache: new Map(),
+  footprintCache: new Map(),
+  nativePaths: [],
+  nativePath: null,
+  traceNote: "",
   resourceCache: new Map(),
   actors: [],
   resource: null,
@@ -87,6 +93,7 @@ async function loadDocument(
   if (text.length > 128 * 1024 * 1024)
     throw Error("Viewer projection exceeds the 128 MiB limit");
   const model = createModel(JSON.parse(text));
+  const paths = nativePaths(model);
   state.model = model;
   state.selected = null;
   state.trace = null;
@@ -98,6 +105,18 @@ async function loadDocument(
   state.resourceCache.clear();
   state.storageCache = null;
   state.storagePointCache.clear();
+  state.footprintCache.clear();
+  state.nativePaths = paths;
+  state.nativePath = null;
+  $("native-path").replaceChildren(new Option("No static path overlay", ""));
+  for (const path of state.nativePaths)
+    $("native-path").add(
+      new Option(
+        `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
+        path.id,
+      ),
+    );
+  $("native-path").disabled = !state.nativePaths.length;
   state.actors = [...new Set(model.orderedEvents.map((e) => e.actor))].sort();
   options("actor", state.actors, "All actors");
   options(
@@ -154,6 +173,7 @@ async function loadDocument(
         : "Saved physical capture loaded. Execution time is shown in clocks.",
     failed,
   );
+  renderNativePath();
   render();
 }
 /** Recorded selected-step bounds; public annotations stay outside the event graph. */
@@ -286,6 +306,8 @@ function resourcePoint(id) {
 }
 /** Position an operation at the centroid of its explicit resource groups only. */
 function eventPoint(event) {
+  if (event.access?.kind === "read_result" && state.model.catalogue)
+    return unknownStoragePoint(event.access.resource);
   if (state.pointCache.has(event.id)) return state.pointCache.get(event.id);
   const ids = resourcesForEvent(event),
     points = ids.map(resourcePoint);
@@ -310,6 +332,90 @@ function eventPoint(event) {
   state.pointCache.set(event.id, point);
   return point;
 }
+/** Normalize measured tile coordinates without moving any point to a centroid. */
+function cellPoint(cell) {
+  const b = state.model.geometryBounds;
+  return {
+    x: ((cell.x - b.minX) / (b.maxX - b.minX || 1) - 0.5) * 2,
+    y: ((cell.y - b.minY) / (b.maxY - b.minY || 1) - 0.5) * 2,
+    physical: true,
+  };
+}
+/** Native cells sharing a tile overlap at this scale; retain their identities
+ * while drawing one glyph per occupied tile. Unknown bits keep their own rail. */
+function accessGeometry(event) {
+  const key = event.access
+    ? JSON.stringify([
+        event.access.resource,
+        event.access.kind,
+        event.access.mask ?? null,
+      ])
+    : event.id;
+  if (state.footprintCache.has(key)) return state.footprintCache.get(key);
+  const footprint = eventFootprint(state.model, event.id);
+  const tiles = new Map();
+  for (const cell of footprint.cells) {
+    const key = `${cell.x}/${cell.y}`;
+    if (!tiles.has(key)) tiles.set(key, { ...cellPoint(cell), cells: [] });
+    tiles.get(key).cells.push(cell.id);
+  }
+  const points = [...tiles.values()];
+  if (
+    footprint.resource &&
+    (footprint.unknownBits ||
+      footprint.unplacedCells.length ||
+      footprint.candidateCells.length)
+  )
+    points.push({ ...unknownStoragePoint(footprint.resource), cells: [] });
+  if (!points.length) {
+    // The response's copy/consumer logic is not located at the source FF.
+    const resource = footprint.resource;
+    points.push(
+      resource && state.model.catalogue
+        ? { ...unknownStoragePoint(resource), cells: [] }
+        : eventPoint(event),
+    );
+  }
+  const geometry = { footprint, points };
+  if (state.footprintCache.size >= 512) state.footprintCache.clear();
+  state.footprintCache.set(key, geometry);
+  return geometry;
+}
+/** A static STA path is shown on one comparison layer, never inserted into the
+ * execution graph. Straight connections join actual placed path cells; they
+ * are not the wire trajectory or evidence of a sensitized execution path. */
+function drawNativePath(ctx, project, flat = false) {
+  const path = state.nativePath;
+  if (!path) return;
+  const cycle = Math.max(
+    state.first,
+    Math.min(
+      state.first + state.window - 1,
+      state.model.events.get(state.selected)?.cycle ?? state.first,
+    ),
+  );
+  const points = path.steps.map((step) =>
+    project(cellPoint(state.model.cells.get(step.cell)), cycle),
+  );
+  ctx.globalAlpha = 0.95;
+  for (let i = 1; i < points.length; i++)
+    line(ctx, points[i - 1], points[i], "#ef88d1", 2.2);
+  for (const p of points) {
+    ctx.fillStyle = "#ef88d1";
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
+  if (points.length) {
+    ctx.font = "10px ui-monospace,monospace";
+    ctx.fillStyle = "#ffd3f2";
+    ctx.fillText(
+      flat ? path.id : `${path.id} static · not cycle-attributed`,
+      points[0].x + 6,
+      points[0].y - 9,
+    );
+  }
+  ctx.globalAlpha = 1;
+}
+
 /** Backing-store sizing follows CSS pixels while preserving sharp high-DPI text. */
 function canvasContext(id) {
   const canvas = $(id),
@@ -568,7 +674,12 @@ function drawResidence(ctx, project) {
 }
 /** Render graph edges only; off-window endpoints are clipped and labelled. */
 function drawTrace(ctx, project) {
+  state.traceNote = "";
   if (!state.trace) return;
+  let aggregates = 0,
+    drawn = 0,
+    omitted = 0;
+  const expanded = $("access-footprints").checked && state.model.catalogue;
   for (const edge of state.trace.edges) {
     const from = state.model.events.get(edge.source),
       to = state.model.events.get(edge.target);
@@ -576,30 +687,75 @@ function drawTrace(ctx, project) {
       continue;
     const outside =
       from.cycle < state.first || to.cycle >= state.first + state.window;
-    const a = project(eventPoint(from), Math.max(state.first, from.cycle)),
-      b = project(
-        eventPoint(to),
+    const sources = expanded ? accessGeometry(from).points : [eventPoint(from)];
+    const targets = expanded ? accessGeometry(to).points : [eventPoint(to)];
+    const connection = expanded
+      ? accessConnections(from, to, sources, targets)
+      : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
+    const { aggregate } = connection;
+    const pairs = aggregate
+      ? [[eventPoint(from), eventPoint(to)]]
+      : connection.pairs;
+    if (aggregate) aggregates++;
+    for (const [source, target] of pairs) {
+      if (drawn >= 4000) {
+        omitted++;
+        continue;
+      }
+      const a = project(source, Math.max(state.first, from.cycle));
+      const b = project(
+        target,
         Math.min(state.first + state.window - 1, to.cycle),
       );
-    line(
-      ctx,
-      a,
-      b,
-      edge.kind === "resource_order" ? "#a8a0cc" : "#f7d684",
-      1.5,
-      outside,
-    );
-    if (outside) {
-      ctx.font = "9px ui-monospace,monospace";
-      ctx.fillStyle = "#f7d684";
-      ctx.fillText(
-        from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
-        a.x + 5,
-        a.y - 4,
+      ctx.globalAlpha = pairs.length > 1 ? 0.25 : 0.85;
+      line(
+        ctx,
+        a,
+        b,
+        edge.kind === "resource_order" ? "#a8a0cc" : "#f7d684",
+        1,
+        outside,
       );
+      if (aggregate) {
+        ctx.globalAlpha = 1;
+        ctx.font = "9px ui-monospace,monospace";
+        ctx.fillStyle = "#f7d684";
+        ctx.fillText(
+          "word dependency",
+          (a.x + b.x) / 2 + 4,
+          (a.y + b.y) / 2 - 4,
+        );
+      }
+      if (outside) {
+        ctx.font = "9px ui-monospace,monospace";
+        ctx.fillStyle = "#f7d684";
+        ctx.fillText(
+          from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
+          a.x + 5,
+          a.y - 4,
+        );
+      }
+      drawn++;
     }
   }
+  ctx.globalAlpha = 1;
+  state.traceNote = `${aggregates ? ` · ${aggregates} aggregate links (bit pairing unknown)` : ""}${omitted ? ` · ${omitted} dependency strokes omitted (4,000 limit)` : ""}`;
 }
+/** Report native path details separately from cycle evidence and use attribution. */
+function renderNativePath() {
+  const path = state.nativePath;
+  $("native-path-summary").textContent = path
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. Lines join placed cells, not route bends.`
+    : state.nativePaths.length
+      ? "Optional pink overlay: actual placed logic sequence from saved static timing. It is not attributed to this clock's execution."
+      : state.model.catalogue
+        ? "No native timing-path detail supplied. Prepare the example again to include saved paths."
+        : "Native timing and placement are unmeasured for this logical capture.";
+  $("native-path-steps").innerHTML = path
+    ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps.map((s) => `<li>${esc(s.pin)}${s.incrementNs === null ? "" : ` · +${s.incrementNs} ns`}</li>`).join("")}</ol>`
+    : "";
+}
+
 /** Draw the chip stack using a bounded window and shared geometry. */
 function drawStack() {
   const { ctx, w, h } = canvasContext("stack");
@@ -628,36 +784,60 @@ function drawStack() {
   drawTrace(ctx, project);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
-  for (const event of visibleEvents()) {
-    const point = eventPoint(event),
-      p = project(point, event.cycle),
-      selected = event.id === state.selected,
+  const events = visibleEvents().sort(
+    (a, b) =>
+      Number(b.id === state.selected || pathIds.has(b.id)) -
+      Number(a.id === state.selected || pathIds.has(a.id)),
+  );
+  let drawn = 0,
+    omitted = 0;
+  const expanded = $("access-footprints").checked && state.model.catalogue;
+  for (const event of events) {
+    const selected = event.id === state.selected,
       onPath = pathIds.has(event.id);
-    ctx.globalAlpha =
-      state.trace && !onPath
-        ? 0.16
-        : point.physical || !state.model.catalogue
-          ? 0.8
-          : 0.45;
-    ctx.fillStyle = selected
-      ? "#fff0ac"
-      : onPath
-        ? "#f7d684"
-        : point.physical || !state.model.catalogue
-          ? color(event)
-          : "#8c99a4";
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, selected ? 5 : onPath ? 3.5 : 2, 0, Math.PI * 2);
-    ctx.fill();
-    if (selected) {
-      ctx.strokeStyle = "#fff5c5";
-      ctx.lineWidth = 1.5;
+    const geometry = expanded ? accessGeometry(event) : null;
+    const points = geometry?.points ?? [eventPoint(event)];
+    for (const point of points) {
+      if (drawn >= 20000) {
+        omitted++;
+        continue;
+      }
+      const p = project(point, event.cycle);
+      ctx.globalAlpha =
+        state.trace && !onPath
+          ? 0.14
+          : point.physical || !state.model.catalogue
+            ? 0.8
+            : 0.45;
+      const stroke = selected
+        ? "#fff0ac"
+        : onPath
+          ? "#f7d684"
+          : point.physical || !state.model.catalogue
+            ? color(event)
+            : "#8c99a4";
+      ctx.fillStyle = ctx.strokeStyle = stroke;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(p.x, p.y, selected ? 3.5 : onPath ? 2.4 : 1.5, 0, Math.PI * 2);
+      if (geometry?.footprint.mode === "word_context" && point.physical)
+        ctx.stroke();
+      else ctx.fill();
+      if (selected && points.length === 1) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      state.hits.push({ ...p, event });
+      drawn++;
     }
-    state.hits.push({ ...p, event });
   }
+  $("access-summary").textContent = !state.model.catalogue
+    ? "Logical layout · native access placement unmeasured"
+    : expanded
+      ? `Accesses at native tiles · hollow = word context, read-bit subset unknown${omitted ? ` · ${omitted} glyphs omitted (20,000 limit; narrow window)` : ""}`
+      : "Compact aggregate symbols · centers are not computation locations";
+  $("access-summary").textContent += state.traceNote;
+  drawNativePath(ctx, project);
   ctx.globalAlpha = 1;
   const p = project({ x: 1.4, y: 0 }, state.first);
   ctx.fillStyle = "#91a7b3";
@@ -709,6 +889,19 @@ function drawFlat() {
       ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
       if (active) state.flatHits.push({ ...p, cell });
     }
+    if (state.nativePath)
+      drawNativePath(
+        ctx,
+        (point) => {
+          const x = (point.x / 2 + 0.5) * (b.maxX - b.minX) + b.minX;
+          const y = (point.y / 2 + 0.5) * (b.maxY - b.minY) + b.minY;
+          return {
+            x: ox + (x - b.minX) * scale,
+            y: h - oy - (y - b.minY) * scale,
+          };
+        },
+        true,
+      );
   } else {
     let row = 0;
     for (const resource of model.resources.values()) {
@@ -809,7 +1002,8 @@ function selectEvent(id, move = true) {
   state.cell = null;
   state.focusVersion = null;
   const event = state.model.events.get(id);
-  state.resource = resourcesForEvent(event)[0] ?? null;
+  state.resource =
+    event.access?.resource ?? resourcesForEvent(event)[0] ?? null;
   $("resource").value = state.resource ?? "";
   if (
     move &&
@@ -865,6 +1059,15 @@ function neighborButtons(details) {
 }
 /** Explain producer/consumer identities, residence and evidence without inferred causes. */
 function renderInspector() {
+  const fp = state.selected
+    ? eventFootprint(state.model, state.selected)
+    : null;
+  $("access-detail").textContent = fp
+    ? fp.reason +
+      (fp.cells.length
+        ? ` ${fp.cells.length} placed native cells; ${fp.unknownBits} unresolved bits.`
+        : "")
+    : "Select an access to inspect its bit-selection scope.";
   $("backward").disabled = !state.selected;
   $("forward").disabled = !state.selected;
   if (state.annotation) {
@@ -1162,6 +1365,13 @@ function bindControls() {
   $("context").onchange = repaint;
   $("residence").onchange = repaint;
   $("full-storage").onchange = render;
+  $("access-footprints").onchange = repaint;
+  $("native-path").onchange = () => {
+    state.nativePath =
+      state.nativePaths.find((p) => p.id === $("native-path").value) ?? null;
+    renderNativePath();
+    repaint();
+  };
   $("expand-storage").onchange = repaint;
   $("reset-camera").onclick = () => {
     state.yaw = -0.6;

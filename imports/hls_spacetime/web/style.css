@@ -690,3 +690,11 @@ footer {
   border-radius: 0;
   height: 2px;
 }
+
+.native-path-steps {
+  padding: 0 12px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+}
