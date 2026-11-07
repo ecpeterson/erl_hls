@@ -677,7 +677,7 @@ button[aria-pressed="true"] {
   color: var(--muted);
 }
 .color-legend {
-  min-height: 30px;
+  min-height: 50px;
   padding: 5px 14px;
   gap: 16px;
   font-size: 10px;
@@ -935,4 +935,29 @@ body.scene-focus {
   .flat-panel > summary::before {
     transition: none;
   }
+}
+
+/* Color-study keys stay compact; the complete identity key is optional. */
+.computation-colors {
+  position: relative;
+}
+.computation-colors summary {
+  cursor: pointer;
+  color: var(--ink);
+}
+.computation-colors[open] {
+  max-width: 100%;
+}
+#computation-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 0;
+  max-height: 120px;
+  overflow: auto;
+}
+.computation-colors p {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 4px 0;
 }

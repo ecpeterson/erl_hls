@@ -24,7 +24,14 @@ import {
 } from "./prepared-computations.js";
 import { createScene3D } from "./scene3d.js";
 import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
-import { sceneColor } from "./perceptual-color.js";
+import {
+  sceneColor,
+  computationColor,
+  timingColor,
+  COMPUTATION_SHARED_COLOR,
+  DIRECTION_SOURCE_COLOR,
+  DIRECTION_SINK_COLOR,
+} from "./perceptual-color.js";
 import { cachePaint } from "./paint-cache.js";
 import {
   createComputations,
@@ -722,13 +729,11 @@ function circuitLayers() {
  * Wire coordinates are unordered tile memberships. Only native PIP order gives
  * connectivity spans; the inter-PIP spans and pin/site links are schematic. */
 function circuitPaint(layer) {
-  const key = layer.cones
-    .map((cone) => cone.id)
-    .sort()
-    .join("|");
-  if (state.circuitPaintCache.has(key)) return state.circuitPaintCache.get(key);
   if (state.computations.prepared) {
     const paint = preparedCircuitPaint(state.computations, layer);
+    const key = paint.cacheKey;
+    if (state.circuitPaintCache.has(key))
+      return state.circuitPaintCache.get(key);
     const normalized = {
       ...paint,
       segments: paint.segments.map((row) => ({
@@ -749,6 +754,11 @@ function circuitPaint(layer) {
     cachePaint(state.circuitPaintCache, key, normalized);
     return normalized;
   }
+  const key = layer.cones
+    .map((cone) => cone.id)
+    .sort()
+    .join("|");
+  if (state.circuitPaintCache.has(key)) return state.circuitPaintCache.get(key);
   const index = state.computations,
     tiles = new Map(),
     pips = new Map(),
@@ -1245,8 +1255,14 @@ function buildStackScene() {
   };
   const world = (p, c) =>
     clockPoint(p, c, state.first, state.window, state.spacing);
-  const segment = (a, b, color, radius = 0.002, kind = "route") =>
-    result.segments.push({ from: a, to: b, color, radius, kind });
+  const segment = (
+    a,
+    b,
+    color,
+    radius = 0.002,
+    kind = "route",
+    colorEnd = color,
+  ) => result.segments.push({ from: a, to: b, color, colorEnd, radius, kind });
   const marker = (position, color, size = 0.006) =>
     result.markers.push({ position, color, size });
   const interval = Math.max(1, Math.ceil(state.window / 8));
@@ -1290,35 +1306,80 @@ function buildStackScene() {
     state.computations?.maxDelays?.[
       metric === "registered_launch" ? "registered" : "static"
     ] ?? null;
-  const timingOption = $("color-mode").querySelector('option[value="timing"]');
-  timingOption.disabled = !state.computations?.prepared;
-  timingOption.textContent = state.computations?.prepared
-    ? "Static delay"
-    : "Static delay (prepare render data first)";
-  if (timingOption.disabled) $("color-mode").value = "role";
+  for (const value of ["timing", "computation", "computation-timing"]) {
+    const option = $("color-mode").querySelector(`option[value="${value}"]`);
+    option.disabled = !state.computations?.prepared;
+    option.title = option.disabled
+      ? "Prepare rendering data to enable this color style"
+      : "";
+  }
+  if ($("color-mode").selectedOptions[0].disabled)
+    $("color-mode").value = "role";
   const mode = $("color-mode").value;
+  const membershipMode =
+    mode === "computation" || mode === "computation-timing";
+  const scalarMode = mode === "timing" || mode === "computation-timing";
   $("role-legend").hidden = mode !== "role";
-  $("timing-legend").hidden = mode !== "timing";
+  $("timing-legend").hidden = !scalarMode;
+  $("computation-legend").hidden = !membershipMode;
+  $("direction-legend").hidden = mode !== "direction";
   $("timing-min").textContent = "0 ns";
   $("timing-max").textContent =
     maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
+  $("timing-ramp").style.background =
+    mode === "computation-timing"
+      ? `linear-gradient(90deg, ${sceneColor({ mode, computationShared: true, delayNs: 0, maxDelayNs: 1 })}, ${sceneColor({ mode, computationShared: true, delayNs: 1, maxDelayNs: 1 })})`
+      : `linear-gradient(90deg, ${timingColor(0, 1)}, ${timingColor(0.5, 1)}, ${timingColor(1, 1)})`;
+  $("direction-ramp").style.background =
+    `linear-gradient(90deg, ${DIRECTION_SOURCE_COLOR}, ${DIRECTION_SINK_COLOR})`;
+  const destinations = [
+    ...new Set(layers.flatMap((layer) => layer.paint.computations ?? [])),
+  ].sort();
+  document.querySelector(".computation-shared").style.background =
+    COMPUTATION_SHARED_COLOR;
+  $("computation-count").textContent =
+    `${destinations.length} destination computations`;
+  $("computation-key").innerHTML = destinations
+    .map(
+      (key) =>
+        `<span title="${esc(key)}"><i style="background:${computationColor(key)}"></i>${esc(key)}</span>`,
+    )
+    .join("");
   const detail = $("detail-level").value;
   const dim = $("ghost-context").checked;
+  // A small style cache avoids repeating perceptual color conversion per primitive.
+  const palette = new Map();
+  const shade = (row) => {
+    if (mode === "direction") return "#627780";
+    const delayNs = row[
+      metric === "registered_launch"
+        ? "registeredTimingUnknown"
+        : "staticTimingUnknown"
+    ]
+      ? null
+      : (row[delayKey] ?? row.delayNs ?? null);
+    const key = JSON.stringify([
+      row.role,
+      row.computationKey,
+      row.computationShared,
+      delayNs,
+    ]);
+    if (!palette.has(key))
+      palette.set(
+        key,
+        sceneColor({
+          role: row.role,
+          mode,
+          computationKey: row.computationKey,
+          computationShared: row.computationShared,
+          delayNs,
+          maxDelayNs: maximum,
+        }),
+      );
+    return palette.get(key);
+  };
   for (const layer of layers) {
     const paint = layer.paint;
-    const shade = (row) =>
-      sceneColor({
-        role: row.role,
-        mode,
-        delayNs: row[
-          metric === "registered_launch"
-            ? "registeredTimingUnknown"
-            : "staticTimingUnknown"
-        ]
-          ? null
-          : (row[delayKey] ?? null),
-        maxDelayNs: maximum,
-      });
     const markRows =
       detail === "switches"
         ? [...paint.cells, ...paint.pips, ...paint.tiles]
@@ -1331,9 +1392,18 @@ function buildStackScene() {
         segment(
           a,
           b,
-          row.kind === "unresolved" ? "#788495" : shade(row),
+          row.kind === "unresolved"
+            ? "#788495"
+            : mode === "direction"
+              ? DIRECTION_SOURCE_COLOR
+              : shade(row),
           0.0017,
           row.kind,
+          row.kind === "unresolved"
+            ? "#788495"
+            : mode === "direction"
+              ? DIRECTION_SINK_COLOR
+              : shade(row),
         );
         result.focus.push(a, b);
       }
@@ -1343,6 +1413,8 @@ function buildStackScene() {
       position: world(row.point, layer.cycle),
       color: shade(row),
       role: row.role,
+      computationKey: row.computationKey,
+      computationShared: row.computationShared,
       delayNs: row[delayKey] ?? null,
       timingUnknown: Boolean(
         row[
@@ -1357,11 +1429,12 @@ function buildStackScene() {
       detail === "overview"
         ? occupiedBins(marks).map((row) => ({
             ...row,
-            color: sceneColor({
-              role: row.role,
-              mode,
-              delayNs: row.timingUnknown ? null : row.delayNs,
-              maxDelayNs: maximum,
+            color: shade({
+              ...row,
+              [delayKey]: row.timingUnknown ? null : row.delayNs,
+              [metric === "registered_launch"
+                ? "registeredTimingUnknown"
+                : "staticTimingUnknown"]: row.timingUnknown,
             }),
           }))
         : marks;
@@ -1382,24 +1455,32 @@ function buildStackScene() {
       const a = world(p, item.visibleFromCycle),
         b = world(p, item.visibleToCycle);
       const color =
-        p.kind === "unknown"
-          ? "#8c99a4"
-          : active
-            ? "#f7d684"
-            : dim
-              ? "#455962"
-              : item.kind === "write"
-                ? "#86c5dc"
-                : "#789eae";
+        mode === "direction"
+          ? DIRECTION_SOURCE_COLOR
+          : membershipMode
+            ? computationColor(item.resource)
+            : scalarMode
+              ? "#526471"
+              : p.kind === "unknown"
+                ? "#8c99a4"
+                : active
+                  ? "#f7d684"
+                  : dim
+                    ? "#455962"
+                    : item.kind === "write"
+                      ? "#86c5dc"
+                      : "#789eae";
+      const endColor = mode === "direction" ? DIRECTION_SINK_COLOR : color;
       segment(
         a,
         b,
         color,
         active ? 0.004 : item.kind === "write" ? 0.0028 : 0.0018,
         "storage",
+        endColor,
       );
       if (item.kind === "write" && !item.afterWindow)
-        marker(b, color, active ? 0.012 : 0.007);
+        marker(b, active ? "#f3f5ed" : endColor, active ? 0.012 : 0.007);
       result.storage.push({ from: a, to: b, segment: item, point: p });
       result.focus.push(a, b);
       if (active) result.selection.push(a, b);
@@ -1421,15 +1502,19 @@ function buildStackScene() {
       const position = world(point, event.cycle),
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
+      const resources = resourcesForEvent(event);
+      const accessColor = membershipMode
+        ? resources.length === 1
+          ? computationColor(resources[0])
+          : resources.length > 1
+            ? COMPUTATION_SHARED_COLOR
+            : "#627780"
+        : mode === "direction" || scalarMode
+          ? "#627780"
+          : color(event);
       marker(
         position,
-        active
-          ? "#fff0ac"
-          : onPath
-            ? "#edba63"
-            : dim
-              ? "#536b77"
-              : color(event),
+        active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
         active ? 0.014 : onPath ? 0.009 : 0.004,
       );
       result.events.push({ position, event });
@@ -1465,9 +1550,10 @@ function buildStackScene() {
       segment(
         world(source, Math.max(state.first, from.cycle)),
         world(target, Math.min(state.first + state.window - 1, to.cycle)),
-        "#f7d684",
+        mode === "direction" ? DIRECTION_SOURCE_COLOR : "#d8dedc",
         0.003,
         "dependency",
+        mode === "direction" ? DIRECTION_SINK_COLOR : "#d8dedc",
       );
       result.focus.push(
         world(source, Math.max(state.first, from.cycle)),
@@ -1600,7 +1686,7 @@ function drawStack() {
     width: w,
     height: h,
     pixelRatio: window.devicePixelRatio || 1,
-    shading: $("color-mode").value !== "timing",
+    shading: ["role", "computation"].includes($("color-mode").value),
   });
   const project = (point) => state.scene.project(point);
   const labels = canvasLabels(ctx, w, h);

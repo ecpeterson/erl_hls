@@ -235,9 +235,14 @@
                 Computation circuits</label
               >
               <label
-                >Color<select id="color-mode">
-                  <option value="role">Function</option>
-                  <option value="timing">Static cone delay</option>
+                >Color style<select id="color-mode">
+                  <option value="role">Data / enable / reset</option>
+                  <option value="computation">Sub-computation</option>
+                  <option value="direction">Flow direction</option>
+                  <option value="timing">Delay emphasis</option>
+                  <option value="computation-timing">
+                    Computation + delay
+                  </option>
                 </select></label
               >
               <label
@@ -258,8 +263,31 @@
                 ><span><i class="role-reset"></i>Reset</span
                 ><span><i class="role-shared"></i>Shared</span>
               </div>
+              <div id="computation-legend" hidden>
+                <span id="computation-count"></span
+                ><span><i class="computation-shared"></i>Shared circuitry</span>
+                <details class="computation-colors">
+                  <summary>Color key</summary>
+                  <div id="computation-key"></div>
+                  <p>
+                    Hue follows the destination register across clocks. Colors
+                    are hints, not unique identifiers. Untimed storage keeps its
+                    categorical hue.
+                  </p>
+                </details>
+              </div>
+              <div id="direction-legend" hidden>
+                <span>Source / earlier</span
+                ><i id="direction-ramp" class="timing-ramp"></i
+                ><span>Sink / later →</span
+                ><span class="legend-note"
+                  >Each pipe restarts the ramp · points / unresolved routes stay
+                  neutral · connectivity, not switching</span
+                >
+              </div>
               <div id="timing-legend" hidden>
-                <span id="timing-min">0 ns</span><i class="timing-ramp"></i
+                <span id="timing-min">0 ns</span
+                ><i id="timing-ramp" class="timing-ramp"></i
                 ><span id="timing-max">Unknown</span
                 ><span class="legend-note"
                   >Maximum contributing cone bound; untimed contributors stay

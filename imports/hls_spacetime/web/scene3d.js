@@ -13,7 +13,7 @@ import {
 /** Opaque, depth-tested geometry for a chip/time scene. A segment is an actual
  * four-sided prism, not a screen-space line. Geometry uploads are independent of
  * camera motion; instances share one indexed cube mesh and one draw call. */
-const STRIDE = 11;
+const STRIDE = 14;
 const MAX_BUFFER_BYTES = 256 * 1024 * 1024;
 const DEFAULT_COLOR = "#67d7c3";
 
@@ -73,7 +73,9 @@ function normal(a, b, c) {
 }
 
 /** Pack an immutable scene without clipping, sampling or retaining per-camera
- * copies. Zero-length segments/degenerate triangles are counted and omitted.
+ * copies. Segment color/colorEnd tint the source/destination of one prism;
+ * omitted colorEnd keeps a uniform color. Markers always use one color.
+ * Zero-length segments/degenerate triangles are counted and omitted.
  * Memory overflow rejects the whole upload; it never silently drops a prefix. */
 export function packScene(scene) {
   requireValue(scene && typeof scene === "object", "missing scene");
@@ -118,18 +120,20 @@ export function packScene(scene) {
       bounds.max[i] = Math.max(bounds.max[i], p[i] + radius);
     }
   };
-  const instance = (from, to, tint, radius, shape) => {
+  const instance = (from, to, tint, endTint, radius, shape) => {
     instances.set(from, offset);
     instances.set(to, offset + 3);
     instances.set(tint, offset + 6);
     instances[offset + 9] = radius;
     instances[offset + 10] = shape;
+    instances.set(endTint, offset + 11);
     offset += STRIDE;
   };
   for (const item of segments) {
     const from = point(item.from),
       to = point(item.to),
       tint = color(item.color),
+      endTint = item.colorEnd === undefined ? tint : color(item.colorEnd),
       radius = positive(item.radius ?? 0.002, "segment radius");
     if (from.every((v, i) => v === to[i])) {
       counts.zeroSegments++;
@@ -139,7 +143,7 @@ export function packScene(scene) {
       from.some((v, i) => Math.fround(v) !== Math.fround(to[i])),
       "segment collapses at GPU precision; normalize world coordinates",
     );
-    instance(from, to, tint, radius, 0);
+    instance(from, to, tint, endTint, radius, 0);
     extend(from, radius);
     extend(to, radius);
     counts.segments++;
@@ -148,7 +152,7 @@ export function packScene(scene) {
     const p = point(item.position),
       tint = color(item.color),
       radius = positive(item.size ?? 0.012, "marker size") / 2;
-    instance(p, p, tint, radius, 1);
+    instance(p, p, tint, tint, radius, 1);
     extend(p, radius);
     counts.markers++;
   }
@@ -194,6 +198,7 @@ layout(location=3) in vec3 aEnd;
 layout(location=4) in vec3 aColor;
 layout(location=5) in float aRadius;
 layout(location=6) in float aShape;
+layout(location=7) in vec3 aColorEnd;
 uniform mat4 uMatrix;
 out vec3 vColor;
 out vec3 vNormal;
@@ -213,7 +218,8 @@ void main() {
       + other * (aPosition.y * aRadius) + forward * (aPosition.z * extent * 0.5);
     vNormal = side * aNormal.x + other * aNormal.y + forward * aNormal.z;
   }
-  vColor = aColor;
+  vColor = aShape > 0.5 ? aColor
+    : mix(aColor, aColorEnd, (aPosition.z + 1.0) * 0.5);
   gl_Position = uMatrix * vec4(world, 1);
 }`;
 const SURFACE_VERTEX = `#version 300 es
@@ -392,6 +398,7 @@ function resources(gl) {
       [4, 3, 6],
       [5, 1, 9],
       [6, 1, 10],
+      [7, 3, 11],
     ])
       attribute(location, size, STRIDE * 4, offset * 4, 1);
     const surfaceVao = vao(),

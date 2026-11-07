@@ -31,7 +31,8 @@ export function sceneBounds(points) {
 }
 
 /** Overview retains occupied grid bins, including separated islands and clocks.
- * Colors are assigned after aggregation: a bin unions function roles and keeps
+ * Colors are assigned after aggregation: a bin unions function roles and destinations,
+ * preserves unknown destination contributors, and keeps
  * the largest finite supplied delay plus an independent unknown-contributor flag.
  * Its center/count is a display aggregate, never a native cell or wire position. */
 export function occupiedBins(marks, size = 0.025) {
@@ -49,6 +50,9 @@ export function occupiedBins(marks, size = 0.025) {
         size: size * 0.8,
         count: 0,
         roles: new Set(),
+        computations: new Set(),
+        computationShared: false,
+        computationUnknown: false,
         delayNs: null,
         timingUnknown: false,
       });
@@ -59,11 +63,26 @@ export function occupiedBins(marks, size = 0.025) {
         mark.delayNs >= 0;
     bin.count++;
     bin.roles.add(typeof mark.role === "string" ? mark.role : null);
+    if (mark.computationShared) bin.computationShared = true;
+    else if (
+      typeof mark.computationKey === "string" &&
+      mark.computationKey.length
+    )
+      bin.computations.add(mark.computationKey);
+    else bin.computationUnknown = true;
     if (known) bin.delayNs = Math.max(bin.delayNs ?? 0, mark.delayNs);
     if (!known || mark.timingUnknown) bin.timingUnknown = true;
   }
-  return [...bins.values()].map(({ roles, ...bin }) => ({
-    ...bin,
-    role: roles.size === 1 ? [...roles][0] : "mixed",
-  }));
+  return [...bins.values()].map(
+    ({ roles, computations, computationUnknown, ...bin }) => ({
+      ...bin,
+      computationKey:
+        !computationUnknown && !bin.computationShared && computations.size === 1
+          ? [...computations][0]
+          : null,
+      computationShared:
+        !computationUnknown && (bin.computationShared || computations.size > 1),
+      role: roles.size === 1 ? [...roles][0] : "mixed",
+    }),
+  );
 }

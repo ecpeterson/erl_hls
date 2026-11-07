@@ -209,6 +209,10 @@ test("paint retains raw coordinates, shared roles and mixed known/unknown cone t
   const sink = paint.cells.find((c) => c.sourceCell === 2);
   assert.deepEqual(sink.point, { x: 30, y: 40, physical: true });
   assert.equal(sink.role, "mixed");
+  assert.equal(sink.computationKey, "word");
+  assert.equal(sink.computationShared, false);
+  assert.deepEqual(paint.computations, ["word"]);
+  assert.equal("roles" in sink, false);
   assert.equal(sink.registeredDelayNs, 1);
   assert.equal(sink.staticDelayNs, 1);
   assert.equal(sink.registeredTimingUnknown, true);
@@ -224,6 +228,9 @@ test("paint retains raw coordinates, shared roles and mixed known/unknown cone t
   const unknown = preparedCircuitPaint(prepared, enable).cells[0];
   assert.equal(unknown.registeredDelayNs, null);
   assert.equal(unknown.registeredTimingUnknown, true);
+  assert.equal(unknown.computationKey, "word");
+  const [nextClock] = preparedComputationLayers(prepared, ["w2"]);
+  assert.equal(preparedCircuitPaint(prepared, nextClock), paint);
 });
 
 test("missing coverage, stale identities and invented references reject", () => {
@@ -264,4 +271,135 @@ test("missing coverage, stale identities and invented references reject", () => 
     () => prepareRenderData(model, { attachment, routeNets }),
     /routing must be complete/,
   );
+});
+
+/** A second logical destination may alias existing native roots, or have its own
+ * FF while sharing upstream logic. Neither case assigns shared logic one owner. */
+function secondDestination(separateCell) {
+  const f = fixture();
+  const { model, attachment } = f;
+  model.resources.set("second", { id: "second", width: 2 });
+  model.events.get("w1").access.resource = "second";
+  attachment.operations.find((op) => op.event === "w1").targets[0].resource =
+    "second";
+  const binding = structuredClone(attachment.bindings[0]);
+  binding.resource = "second";
+  if (separateCell) {
+    const cell = { id: "second-sink", kind: "FDRE", boundary: "sequential" };
+    attachment.cells.push(cell);
+    model.cells.set(cell.id, { ...cell, x: 50, y: 50 });
+    model.geometryBounds.maxX = 50;
+    attachment.pins.push(
+      { id: "second-sink/D", cell: 4, pin: "D", direction: "IN", net: 1 },
+      { id: "second-sink/Q", cell: 4, pin: "Q", direction: "OUT", net: 3 },
+    );
+    attachment.arcs.push({
+      ...structuredClone(attachment.arcs.find((arc) => arc.id === "n1")),
+      id: "second-sink-input",
+      to: 9,
+    });
+    binding.bits[0] = { bit: 0, status: "supported", d: 9, q: 10 };
+  }
+  attachment.bindings.push(binding);
+  return createPreparedComputations(
+    model,
+    prepareRenderData(model, {
+      attachment,
+      routeNets: f.routeNets,
+    }),
+  );
+}
+
+test("two distinct destination registers retain exclusive sinks and shared upstream membership", () => {
+  const index = secondDestination(true);
+  const [layer] = preparedComputationLayers(index, ["w0", "w1"]);
+  const paint = preparedCircuitPaint(index, layer);
+  const source = paint.cells.find((row) => row.sourceCell === 0);
+  assert.equal(source.computationKey, null);
+  assert.equal(source.computationShared, true);
+  assert.equal(
+    paint.cells.find((row) => row.sourceCell === 2).computationKey,
+    "word",
+  );
+  assert.equal(
+    paint.cells.find((row) => row.sourceCell === 4).computationKey,
+    "second",
+  );
+  assert.deepEqual(paint.computations, ["second", "word"]);
+});
+
+test("aliased roots have selection-specific membership and cannot reuse wrong cached colors", () => {
+  const index = secondDestination(false);
+  const selected = (ids) => preparedComputationLayers(index, ids)[0];
+  const firstLayer = selected(["w0"]),
+    secondLayer = selected(["w1"]);
+  assert.deepEqual(
+    firstLayer.cones.map((c) => c.id),
+    secondLayer.cones.map((c) => c.id),
+  );
+  const first = preparedCircuitPaint(index, firstLayer);
+  const second = preparedCircuitPaint(index, secondLayer);
+  assert.notEqual(first.cacheKey, second.cacheKey);
+  assert.notEqual(first, second);
+  assert(
+    first.cells.every(
+      (row) => row.computationKey === "word" && !row.computationShared,
+    ),
+  );
+  assert(
+    second.cells.every(
+      (row) => row.computationKey === "second" && !row.computationShared,
+    ),
+  );
+  const shared = preparedCircuitPaint(index, selected(["w0", "w1"]));
+  assert(
+    shared.cells.every(
+      (row) => row.computationKey === null && row.computationShared,
+    ),
+  );
+  assert.deepEqual(shared.computations, ["second", "word"]);
+  assert.equal(preparedCircuitPaint(index, selected(["w1", "w0"])), shared);
+  assert.equal(preparedCircuitPaint(index, selected(["w0"])), first);
+  assert.deepEqual(first.computations, ["word"]);
+});
+
+test("geometry without displayed write associations leaves destination membership unknown", () => {
+  const index = secondDestination(false);
+  const [layer] = preparedComputationLayers(index, ["w0"]);
+  const associated = preparedCircuitPaint(index, layer);
+  const { operations, ...geometryOnly } = layer;
+  const unassociated = preparedCircuitPaint(index, geometryOnly);
+  assert.notEqual(associated.cacheKey, unassociated.cacheKey);
+  assert.deepEqual(unassociated.computations, []);
+  assert(
+    unassociated.cells.every(
+      (row) => row.computationKey === null && !row.computationShared,
+    ),
+  );
+});
+
+test("unknown cone membership dominates a known owner in either traversal order", () => {
+  for (const reverse of [false, true]) {
+    const index = secondDestination(true);
+    const [layer] = preparedComputationLayers(index, ["w0", "w1"]);
+    const paint = preparedCircuitPaint(index, {
+      ...layer,
+      operations: layer.operations.filter(
+        (operation) => operation.event === "w0",
+      ),
+      cones: reverse ? [...layer.cones].reverse() : layer.cones,
+    });
+    const sharedSource = paint.cells.find((row) => row.sourceCell === 0);
+    assert.equal(sharedSource.computationKey, null);
+    assert.equal(sharedSource.computationShared, false);
+    assert.equal(sharedSource.computationUnknown, true);
+    const knownSink = paint.cells.find((row) => row.sourceCell === 2);
+    assert.equal(knownSink.computationKey, "word");
+    assert.equal(knownSink.computationUnknown, false);
+    const unknownSink = paint.cells.find((row) => row.sourceCell === 4);
+    assert.equal(unknownSink.computationKey, null);
+    assert.equal(unknownSink.computationShared, false);
+    assert.equal(unknownSink.computationUnknown, true);
+    assert.deepEqual(paint.computations, ["word"]);
+  }
 });

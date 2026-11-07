@@ -28,10 +28,10 @@ test("scene packing retains every finite prism/marker, reports degeneracy and us
     zeroSegments: 1,
     degenerateTriangles: 0,
   });
-  assert.equal(packed.instances.length, 22);
+  assert.equal(packed.instances.length, 28);
   assert.equal(packed.surfaces.length, 54);
   assert.equal(packed.instances[10], 0);
-  assert.equal(packed.instances[21], 1);
+  assert.equal(packed.instances[24], 1);
   assert.deepEqual(packed.bounds, {
     min: [-0.2, -0.2, -0.1],
     max: [1.1, 1, 2.2],
@@ -40,12 +40,34 @@ test("scene packing retains every finite prism/marker, reports degeneracy and us
   assert(Math.abs(packed.instances[7] - 136 / 255) < 1e-7);
 });
 
+test("endpoint tinting preserves one instance per segment and leaves markers uniform", () => {
+  const packed = packScene({
+    segments: [
+      { from: [0, 0, 0], to: [0, 0, 2], color: "#f00", colorEnd: "#00f" },
+      { from: [0, 0, 2], to: [1, 0, 2], color: "#0f0" },
+    ],
+    markers: [{ position: [0, 0, 0], color: "#ff0", colorEnd: "#00f" }],
+  });
+  const instances = [...packed.instances];
+  assert.equal(packed.counts.segments, 2);
+  assert.equal(packed.counts.markers, 1);
+  assert.equal(instances.length, 42);
+  assert.deepEqual(instances.slice(6, 9), [1, 0, 0]);
+  assert.deepEqual(instances.slice(11, 14), [0, 0, 1]);
+  assert.deepEqual(instances.slice(20, 23), [0, 1, 0]);
+  assert.deepEqual(instances.slice(25, 28), [0, 1, 0]);
+  assert.deepEqual(instances.slice(34, 37), [1, 1, 0]);
+  assert.deepEqual(instances.slice(39, 42), [1, 1, 0]);
+});
+
 test("malformed or imprecise geometry rejects rather than silently uploading NaNs", () => {
   for (const segment of [
     { from: [NaN, 0, 0], to: [1, 0, 0] },
     { from: [0, 0, 0], to: [Infinity, 0, 0] },
     { from: [0, 0, 0], to: [1, 0, 0], radius: -1 },
     { from: [0, 0, 0], to: [1, 0, 0], color: [1, 0, 0, 0.5] },
+    { from: [0, 0, 0], to: [1, 0, 0], colorEnd: [NaN, 0, 1] },
+    { from: [0, 0, 0], to: [1, 0, 0], colorEnd: [1, 0, 0, 0.5] },
     { from: [1e10, 0, 0], to: [1e10 + 1, 0, 0] },
   ])
     assert.throws(() => packScene({ segments: [segment] }), /3D scene/);
@@ -128,6 +150,35 @@ test("camera-only frames reuse uploads and retain a depth-tested instanced draw"
   assert.equal(canvas.width, 800); // Second frame uses the default DPR=1 in Node.
   renderer.dispose();
   assert.throws(() => renderer.render(), /disposed/);
+});
+
+test("endpoint colors reach the instanced GPU attribute without splitting geometry", () => {
+  const { canvas, calls } = mockCanvas(),
+    renderer = createScene3D(canvas);
+  renderer.setScene({
+    segments: [
+      { from: [0, 0, 0], to: [1, 2, 3], color: "#f00", colorEnd: "#00f" },
+    ],
+    markers: [{ position: [1, 2, 3], color: "#00f" }],
+  });
+  renderer.render();
+  assert.deepEqual(
+    calls.filter(
+      ([name, location]) => name === "vertexAttribPointer" && location === 7,
+    ),
+    [["vertexAttribPointer", 7, 3, "FLOAT", false, 56, 44]],
+  );
+  assert(
+    calls.some(
+      ([name, location, divisor]) =>
+        name === "vertexAttribDivisor" && location === 7 && divisor === 1,
+    ),
+  );
+  assert.deepEqual(
+    calls.filter(([name]) => name === "drawElementsInstanced"),
+    [["drawElementsInstanced", "TRIANGLES", 36, "UNSIGNED_SHORT", 0, 2]],
+  );
+  renderer.dispose();
 });
 
 test("unsupported contexts are explicit and context restoration reuploads the retained scene", () => {

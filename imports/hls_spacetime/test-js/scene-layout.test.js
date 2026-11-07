@@ -104,3 +104,20 @@ test("overview retains unknown contributors alongside a known maximum, including
   assert.equal(unannotated.delayNs, null);
   assert.equal(unannotated.timingUnknown, true);
 });
+
+test("overview colors preserve shared and unknown computation memberships", () => {
+  const a = { position: [0, 0, 0], computationKey: "state/a" };
+  for (const [b, expectedKey, expectedShared] of [
+    [{ computationKey: "state/a" }, "state/a", false],
+    [{ computationKey: "state/b" }, null, true],
+    [{ computationKey: null, computationShared: true }, null, true],
+    [{ computationKey: null }, null, false],
+    [{}, null, false],
+  ]) {
+    const marks = [a, { position: [0.001, 0, 0], ...b }];
+    const [bin] = occupiedBins(marks);
+    assert.equal(bin.computationKey, expectedKey);
+    assert.equal(bin.computationShared, expectedShared);
+    assert.deepEqual(occupiedBins(marks), occupiedBins([...marks].reverse()));
+  }
+});

@@ -11,10 +11,16 @@ export function computationSelection(seeds, matchingEvents) {
  * shared data/enable/reset geometry can retain all of its roles. */
 export function computationWindowUnion(layers) {
   const cones = new Map(),
-    arcs = new Set();
+    arcs = new Set(),
+    operations = new Map();
   for (const layer of layers) {
     for (const cone of layer.cones) cones.set(cone.id, cone);
     for (const arc of layer.arcs) arcs.add(arc);
+    for (const op of layer.operations ?? []) operations.set(op.event, op);
   }
-  return { cones: [...cones.values()], arcs: [...arcs] };
+  return {
+    cones: [...cones.values()],
+    arcs: [...arcs],
+    operations: [...operations.values()],
+  };
 }

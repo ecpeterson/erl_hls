@@ -356,24 +356,49 @@ export function preparedComputationLayers(
     }));
 }
 
+/** A cone can feed several logical destinations, including aliased words. Only
+ * displayed writes contribute memberships, and only their selected cones count. */
+function paintMemberships(index, layer) {
+  const memberships = new Map(layer.cones.map((cone) => [cone.id, new Set()]));
+  for (const operation of layer.operations ?? []) {
+    const write = index.writes.get(operation.event);
+    const event = index.model.events.get(operation.event);
+    check(
+      write && typeof event?.access?.resource === "string",
+      "missing paint destination",
+    );
+    for (const coneId of write.cones) {
+      const members = memberships.get(index.cones[coneId].id);
+      if (members) members.add(event.access.resource);
+    }
+  }
+  return [...memberships]
+    .map(([id, members]) => [id, [...members].sort()])
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
 /** Union shared raw tile geometry only; camera/normalization remain renderer work.
  * A primitive's color bound is the maximum contributing cone bound, not its own
- * delay. Mixed known/unknown contributors retain explicit flags in both scopes. */
+ * delay. Mixed known/unknown contributors retain explicit flags in both scopes.
+ * Missing destination membership dominates known owners of a shared primitive. */
 export function preparedCircuitPaint(index, layer) {
-  const key = layer.cones
-    .map((c) => c.id)
-    .sort()
-    .join("|");
+  const membershipRows = paintMemberships(index, layer);
+  const key = JSON.stringify(membershipRows);
   if (index.paints.has(key)) return index.paints.get(key);
+  const memberships = new Map(membershipRows);
   const chosen = new Map(),
     routeIds = new Set();
   for (const cone of layer.cones) {
+    const members = memberships.get(cone.id);
     for (const id of cone.routes) routeIds.add(id);
     for (const id of cone.primitives) {
       if (!chosen.has(id))
         chosen.set(id, {
           ...index.primitives[id],
           roles: new Set(),
+          computationKey: null,
+          computationShared: false,
+          computationUnknown: false,
           registeredDelayNs: null,
           staticDelayNs: null,
           registeredTimingUnknown: false,
@@ -381,6 +406,21 @@ export function preparedCircuitPaint(index, layer) {
         });
       const row = chosen.get(id);
       row.roles.add(cone.role);
+      if (members.length === 0) {
+        row.computationUnknown = true;
+        row.computationKey = null;
+        row.computationShared = false;
+      } else if (!row.computationUnknown) {
+        if (
+          members.length > 1 ||
+          (row.computationKey !== null && row.computationKey !== members[0])
+        ) {
+          row.computationKey = null;
+          row.computationShared = true;
+        } else if (!row.computationShared) {
+          row.computationKey = members[0];
+        }
+      }
       for (const [value, unknown] of [
         ["registeredDelayNs", "registeredTimingUnknown"],
         ["staticDelayNs", "staticTimingUnknown"],
@@ -391,6 +431,10 @@ export function preparedCircuitPaint(index, layer) {
     }
   }
   const result = {
+    cacheKey: key,
+    computations: [
+      ...new Set(membershipRows.flatMap(([, members]) => members)),
+    ].sort(),
     tiles: [],
     pips: [],
     cells: [],

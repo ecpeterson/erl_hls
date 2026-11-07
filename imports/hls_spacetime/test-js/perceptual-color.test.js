@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  COMPUTATION_COLORS,
+  COMPUTATION_SHARED_COLOR,
+  DIRECTION_SINK_COLOR,
+  DIRECTION_SOURCE_COLOR,
   FUNCTION_COLORS,
   UNKNOWN_COLOR,
+  computationColor,
+  directionColor,
   sceneColor,
+  timingColor,
   timingExtent,
 } from "../web/perceptual-color.js";
 
@@ -83,4 +90,96 @@ test("one fixed domain gives stable colors across display windows", () => {
     sceneColor({ mode: "timing", delayNs: 20, maxDelayNs: 10 }),
     sceneColor({ mode: "timing", delayNs: 10, maxDelayNs: 10 }),
   );
+});
+
+test("computation categories are stable and approximately equal in lightness", () => {
+  assert.equal(new Set(COMPUTATION_COLORS).size, 12);
+  for (const color of COMPUTATION_COLORS) {
+    assert.ok(Math.abs(lightness(color) - 0.73) < 0.003);
+    assert.notEqual(color, UNKNOWN_COLOR);
+  }
+  const keys = ["actor/1:compute", "actor/2:publish", "φ/update", 0, 45];
+  const original = keys.map(computationColor);
+  assert.deepEqual(
+    [...keys].reverse().map(computationColor).reverse(),
+    original,
+  );
+  assert.ok(original.every((color) => COMPUTATION_COLORS.includes(color)));
+  for (const key of [null, undefined, "", NaN, 0.5, {}, []]) {
+    assert.equal(computationColor(key), UNKNOWN_COLOR);
+  }
+});
+
+test("direction has fixed source/sink endpoints and ordered lightness", () => {
+  assert.equal(directionColor(0), DIRECTION_SOURCE_COLOR);
+  assert.equal(directionColor(1), DIRECTION_SINK_COLOR);
+  assert.equal(directionColor(-2), DIRECTION_SOURCE_COLOR);
+  assert.equal(directionColor(2), DIRECTION_SINK_COLOR);
+  assert.ok(lightness(DIRECTION_SOURCE_COLOR) < 0.51);
+  assert.ok(lightness(DIRECTION_SINK_COLOR) > 0.87);
+  let previous = 0;
+  for (let step = 0; step <= 100; step++) {
+    const current = lightness(directionColor(step / 100));
+    assert.ok(current >= previous - 0.0015);
+    previous = current;
+  }
+  for (const value of [null, undefined, NaN, Infinity]) {
+    assert.equal(directionColor(value), UNKNOWN_COLOR);
+  }
+});
+
+test("timing separates dim low-delay and bright high-delay circuitry", () => {
+  assert.ok(lightness(timingColor(0, 10)) < 0.41);
+  assert.ok(lightness(timingColor(10, 10)) > 0.89);
+  assert.equal(
+    timingColor(3, 10),
+    sceneColor({ mode: "timing", delayNs: 3, maxDelayNs: 10 }),
+  );
+});
+
+test("computation modes preserve categorical identity and unknown timing", () => {
+  const options = { mode: "computation", computationKey: "actor/1:update" };
+  assert.equal(sceneColor(options), computationColor(options.computationKey));
+  assert.equal(
+    sceneColor({ ...options, delayNs: 10, maxDelayNs: 10 }),
+    sceneColor(options),
+  );
+  const hybrid = { ...options, mode: "computation-timing", maxDelayNs: 10 };
+  assert.equal(sceneColor(hybrid), UNKNOWN_COLOR);
+  assert.equal(
+    sceneColor({ ...hybrid, computationKey: null, delayNs: 10 }),
+    UNKNOWN_COLOR,
+  );
+  let previous = 0;
+  for (let step = 0; step <= 100; step++) {
+    const current = lightness(sceneColor({ ...hybrid, delayNs: step / 10 }));
+    assert.ok(current >= previous - 0.0015);
+    previous = current;
+  }
+  assert.ok(previous > 0.89);
+  assert.throws(() => sceneColor({ mode: "invented" }), RangeError);
+});
+
+test("known shared computations use neutral gray without claiming an identity", () => {
+  assert.equal(
+    sceneColor({ mode: "computation", computationShared: true }),
+    COMPUTATION_SHARED_COLOR,
+  );
+  assert.notEqual(COMPUTATION_SHARED_COLOR, UNKNOWN_COLOR);
+  assert.equal(sceneColor({ mode: "computation" }), UNKNOWN_COLOR);
+  const hybrid = {
+    mode: "computation-timing",
+    computationShared: true,
+    maxDelayNs: 10,
+  };
+  assert.equal(sceneColor(hybrid), UNKNOWN_COLOR);
+  for (const delayNs of [0, 5, 10]) {
+    const color = sceneColor({ ...hybrid, delayNs });
+    assert.equal(color.slice(1, 3), color.slice(3, 5));
+    assert.equal(color.slice(3, 5), color.slice(5, 7));
+    assert.equal(
+      color,
+      sceneColor({ ...hybrid, delayNs, computationKey: "ignored/when/shared" }),
+    );
+  }
 });
