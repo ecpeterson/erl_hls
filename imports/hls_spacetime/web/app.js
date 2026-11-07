@@ -16,6 +16,8 @@ import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
 import { windowMetrics } from "./metrics.js";
+import { layoutLabels } from "./labels.js";
+import { spatialPoints, spatialPairs } from "./visibility.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
   "#67d7c3",
@@ -506,11 +508,16 @@ function accessGeometry(event) {
   state.footprintCache.set(key, geometry);
   return geometry;
 }
+/** Hide only geometry without native coordinates. Logical-only captures retain
+ * their lanes; this display preference never filters graph records or metrics. */
+function mappedOnly() {
+  return Boolean(state.model.catalogue) && !$("show-unmapped").checked;
+}
 /** Native routing is a tile footprint, not a metal-track layout. Solid markers
  * are actual selected-node wire tiles and PIP locations. Dotted node spans show
  * electrical connectivity between PIPs; site/logic geometry remains schematic.
  * The whole overlay is static and never adds execution dependencies. */
-function drawNativePath(ctx, project, flat = false) {
+function drawNativePath(ctx, project, flat = false, labels = null) {
   const path = state.nativePath;
   if (!path) return;
   const cycle = Math.max(
@@ -582,11 +589,9 @@ function drawNativePath(ctx, project, flat = false) {
   }
   ctx.font = "10px ui-monospace,monospace";
   ctx.fillStyle = "#ffd3f2";
-  ctx.fillText(
-    flat ? path.id : `${path.id} static · not cycle-attributed`,
-    pins[0].x + 6,
-    pins[0].y - 9,
-  );
+  const text = flat ? path.id : `${path.id} static · not cycle-attributed`;
+  if (labels) labels.add(text, pins[0].x + 6, pins[0].y - 9, 80);
+  else ctx.fillText(text, pins[0].x + 6, pins[0].y - 9);
   ctx.globalAlpha = 1;
 }
 
@@ -635,8 +640,38 @@ function line(ctx, a, b, stroke, width = 1, dashed = false) {
   ctx.stroke();
   ctx.setLineDash([]);
 }
+/** Queue canvas labels in CSS pixels, then paint a non-overlapping subset.
+ * Axis labels win over optional edge labels; exact details stay in the inspector. */
+function canvasLabels(ctx, width, height) {
+  const candidates = [];
+  return {
+    add(text, x, baseline, priority = 0, key = text) {
+      const size = parseFloat(ctx.font) || 10;
+      candidates.push({
+        text,
+        x,
+        y: baseline - size,
+        width: ctx.measureText(text).width,
+        height: size + 2,
+        baseline,
+        priority,
+        key,
+        font: ctx.font,
+        color: ctx.fillStyle,
+      });
+    },
+    draw() {
+      ctx.globalAlpha = 1;
+      for (const label of layoutLabels(candidates, { width, height })) {
+        ctx.font = label.font;
+        ctx.fillStyle = label.color;
+        ctx.fillText(label.text, label.x, label.baseline);
+      }
+    },
+  };
+}
 /** Draw one footprint outline with no cloned geometry arrays. */
-function layer(ctx, project, cycle, alpha) {
+function layer(ctx, project, cycle, alpha, labels) {
   const corners = [
     { x: -1, y: -1 },
     { x: 1, y: -1 },
@@ -654,7 +689,7 @@ function layer(ctx, project, cycle, alpha) {
   const a = project({ x: -1.07, y: -1.1 }, cycle);
   ctx.fillStyle = "#718b99";
   ctx.font = "9px ui-monospace,monospace";
-  ctx.fillText(`C${cycle}`, a.x - 30, a.y);
+  labels.add(`C${cycle}`, a.x - 30, a.y, 100);
 }
 /** Reuse the unique cell table for faint context at the first layer. */
 function installedContext(ctx, project) {
@@ -786,7 +821,7 @@ function drawResidence(ctx, project) {
   for (const segment of ordered) {
     if (segment.kind === "write") loads++;
     else holds++;
-    for (const point of storagePoints(segment)) {
+    for (const point of spatialPoints(storagePoints(segment), mappedOnly())) {
       const active = emphasized(segment),
         uncertain =
           segment.lifetime.continuity !== "within_declared_capture_scope";
@@ -840,7 +875,7 @@ function drawResidence(ctx, project) {
       : "");
 }
 /** Render graph edges only; off-window endpoints are clipped and labelled. */
-function drawTrace(ctx, project) {
+function drawTrace(ctx, project, labels) {
   state.traceNote = "";
   if (!state.trace) return;
   let aggregates = 0,
@@ -853,16 +888,23 @@ function drawTrace(ctx, project) {
       continue;
     const outside =
       from.cycle < state.first || to.cycle >= state.first + state.window;
-    const sources = expanded ? accessGeometry(from).points : [eventPoint(from)];
-    const targets = expanded ? accessGeometry(to).points : [eventPoint(to)];
+    const sources =
+      expanded || mappedOnly()
+        ? accessGeometry(from).points
+        : [eventPoint(from)];
+    const targets =
+      expanded || mappedOnly() ? accessGeometry(to).points : [eventPoint(to)];
     const connection = expanded
       ? accessConnections(from, to, sources, targets)
       : { aggregate: false, pairs: [[eventPoint(from), eventPoint(to)]] };
     const { aggregate } = connection;
-    const pairs = aggregate
-      ? [[eventPoint(from), eventPoint(to)]]
-      : connection.pairs;
-    if (aggregate) aggregates++;
+    const pairs = spatialPairs(
+      aggregate ? [[eventPoint(from), eventPoint(to)]] : connection.pairs,
+      sources,
+      targets,
+      mappedOnly(),
+    );
+    if (aggregate && pairs.length) aggregates++;
     for (const [source, target] of pairs) {
       const a = project(source, Math.max(state.first, from.cycle));
       const b = project(
@@ -878,24 +920,13 @@ function drawTrace(ctx, project) {
         1,
         outside,
       );
-      if (aggregate) {
-        ctx.globalAlpha = 1;
-        ctx.font = "9px ui-monospace,monospace";
-        ctx.fillStyle = "#f7d684";
-        ctx.fillText(
-          "word dependency",
-          (a.x + b.x) / 2 + 4,
-          (a.y + b.y) / 2 - 4,
-        );
-      }
       if (outside) {
         ctx.font = "9px ui-monospace,monospace";
         ctx.fillStyle = "#f7d684";
-        ctx.fillText(
-          from.cycle < state.first ? `← C${from.cycle}` : `C${to.cycle} →`,
-          a.x + 5,
-          a.y - 4,
-        );
+        if (from.cycle < state.first)
+          labels.add(`← C${from.cycle}`, a.x + 5, a.y - 4, 10);
+        if (to.cycle >= state.first + state.window)
+          labels.add(`C${to.cycle} →`, b.x + 5, b.y - 4, 10);
       }
       drawn++;
     }
@@ -950,11 +981,13 @@ function drawStack() {
   const { ctx, w, h } = canvasContext("stack");
   if (!state.model) return;
   const project = projector(w, h),
+    labels = canvasLabels(ctx, w, h),
     interval = Math.max(1, Math.ceil(state.window / 12));
+  $("show-unmapped").disabled = !state.model.catalogue;
   for (let c = state.first; c < state.first + state.window; c += interval)
-    layer(ctx, project, c, 0.3);
+    layer(ctx, project, c, 0.3, labels);
   if ((state.window - 1) % interval)
-    layer(ctx, project, state.first + state.window - 1, 0.3);
+    layer(ctx, project, state.first + state.window - 1, 0.3, labels);
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
     if (
       epoch.first_cycle < state.first ||
@@ -966,11 +999,11 @@ function drawStack() {
     line(ctx, a, b, "#ea8b94", 2);
     ctx.fillStyle = "#ea8b94";
     ctx.font = "10px system-ui";
-    ctx.fillText(`Reset · ${epoch.id}`, a.x + 6, a.y - 6);
+    labels.add(`Reset · ${epoch.id}`, a.x + 6, a.y - 6, 90);
   }
   installedContext(ctx, project);
   drawResidence(ctx, project);
-  drawTrace(ctx, project);
+  drawTrace(ctx, project, labels);
   state.hits = [];
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const seeds = new Set(selectionEvents().map((event) => event.id));
@@ -984,8 +1017,14 @@ function drawStack() {
   for (const event of events) {
     const selected = seeds.has(event.id),
       onPath = pathIds.has(event.id);
-    const geometry = expanded ? accessGeometry(event) : null;
-    const points = geometry?.points ?? [eventPoint(event)];
+    const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
+    // A compact word centroid does not locate an access selecting unknown bits.
+    if (mappedOnly() && !geometry.points.some((point) => point.physical))
+      continue;
+    const points = spatialPoints(
+      expanded ? geometry.points : [eventPoint(event)],
+      mappedOnly(),
+    );
     for (const point of points) {
       const p = project(point, event.cycle);
       ctx.globalAlpha =
@@ -1023,24 +1062,30 @@ function drawStack() {
       : "Compact aggregate symbols · centers are not computation locations";
   $("access-summary").textContent +=
     ` · ${drawn.toLocaleString()} access glyphs` + state.traceNote;
-  drawNativePath(ctx, project);
+  $("access-summary").textContent += mappedOnly()
+    ? " · unmapped geometry hidden; records and totals retained"
+    : "";
+  drawNativePath(ctx, project, false, labels);
   ctx.globalAlpha = 1;
   const p = project({ x: 1.4, y: 0 }, state.first);
   ctx.fillStyle = "#91a7b3";
   ctx.font = "10px system-ui";
-  ctx.fillText(
-    state.model.catalogue ? "UNMAPPED / UNKNOWN" : "LOGICAL LAYOUT",
-    p.x - 50,
-    p.y - 23,
-  );
+  if (!mappedOnly())
+    labels.add(
+      state.model.catalogue ? "UNMAPPED / UNKNOWN" : "LOGICAL LAYOUT",
+      p.x - 50,
+      p.y - 23,
+      60,
+    );
   if (state.annotation) {
     const cycle = state.annotation.cycle;
     if (cycle >= state.first && cycle < state.first + state.window) {
       const p = project({ x: -1.2, y: 1 }, cycle);
       ctx.fillStyle = "#f1bb6c";
-      ctx.fillText(`Public completion · C${cycle}`, p.x, p.y + 16);
+      labels.add(`Public completion · C${cycle}`, p.x, p.y + 16, 90);
     }
   }
+  labels.draw();
 }
 /** Flat chip projection retains installed population, rather than layer copies. */
 function drawFlat() {
@@ -1629,6 +1674,7 @@ function bindControls() {
     render();
   };
   $("context").onchange = repaint;
+  $("show-unmapped").onchange = repaint;
   $("residence").onchange = repaint;
   $("full-storage").onchange = render;
   $("access-footprints").onchange = repaint;

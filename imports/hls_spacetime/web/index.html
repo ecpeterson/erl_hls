@@ -38,8 +38,13 @@
         context. Cells sharing a tile share a glyph. These marks do not show
         native switching or the logic computing a value. Turning off Distributed
         accesses restores aggregate symbols, whose centres are not computation
-        locations. Drag the stack to rotate it. Select an operation or timeline
-        tick, then follow its inputs or consumers.
+        locations. Uncheck Show unmapped participants to hide unknown-location
+        glyphs, storage spans and their connecting lines; mapped parts of
+        partial words remain visible. The event list, inspector and counts
+        retain the complete evidence. Logical-only captures keep their lanes.
+        Repeated off-window clock labels are shown once when space permits, with
+        the clock axis taking priority. Drag the stack to rotate it. Select an
+        operation or timeline tick, then follow its inputs or consumers.
       </p>
       <p>
         Solid storage links join a write at C to Q at C+1; squares mark the new
@@ -143,6 +148,9 @@
               ><label
                 ><input id="context" type="checkbox" checked /> Installed
                 context</label
+              ><label
+                ><input id="show-unmapped" type="checkbox" checked /> Show
+                unmapped participants</label
               ><label
                 ><input id="residence" type="checkbox" checked /> Storage
                 links</label
