@@ -74,8 +74,7 @@ capture(Plan = #{signals := Signals, registers := Registers, state := Leaves}, T
     Incarnations = lists:reverse([
         epoch(Final#state.incarnation, Final#state.first, End) | Final#state.incarnations
     ]),
-    Scope =
-        <<"All sampled enabled writes to retained RTL data registers >=16 bits; receiver accept/head_done/take/postpone/phase and publication controls; link ownership transitions. Encoded register operands only; unresolved computation inputs are explicit unknown roots. No sensitized gate ancestry. Adjacent Q/D/enable transfers checked; final enabled edge has no following Q sample.">>,
+    Scope = capture_scope(Plan),
     Result = #{
         format => spacetime,
         schema => 1,
@@ -147,6 +146,13 @@ capture(Plan = #{signals := Signals, registers := Registers, state := Leaves}, T
         end,
     _ = hls_spacetime:validate(maps:get(bundle, FinalCapture)),
     FinalCapture.
+
+%% Storage-only selection makes its intentionally absent semantic observations explicit.
+-spec capture_scope(xls_protocol_spacetime:plan()) -> binary().
+capture_scope(#{observation_scope := storage}) ->
+    <<"Storage-only recording: enabled writes to retained RTL data registers >=16 bits and adjacent Q/D/enable checks. No actor, publication, stream or selected-operand attribution. D producers remain unknown; unavailable controls are retained in the preparation. Final enabled edge has no following Q sample.">>;
+capture_scope(_) ->
+    <<"All sampled enabled writes to retained RTL data registers >=16 bits; receiver accept/head_done/take/postpone/phase and publication controls; link ownership transitions. Encoded register operands only; unresolved computation inputs are explicit unknown roots. No sensitized gate ancestry. Adjacent Q/D/enable transfers checked; final enabled edge has no following Q sample.">>.
 
 %% Exact source, RTL and native observation-plan digests jointly identify this interpretation.
 -spec check_build(xls_protocol_spacetime:plan(), hls_spacetime:build()) -> ok.

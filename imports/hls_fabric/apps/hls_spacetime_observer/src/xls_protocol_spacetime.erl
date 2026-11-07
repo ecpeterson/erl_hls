@@ -24,6 +24,8 @@
     state := [map()],
     unsupported := [map()],
     inputs := map(),
+    observation_scope => storage,
+    unavailable_semantics => map(),
     stream => xls_protocol_spacetime_stream:plan(),
     publication => xls_protocol_spacetime_publication:plan(),
     dependencies => xls_protocol_spacetime_dependencies:plan()

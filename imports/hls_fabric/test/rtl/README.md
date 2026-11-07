@@ -9,4 +9,6 @@ This directory owns handwritten testbench compositions, finite scoreboards and h
 
 Phi-specific benches and VPI diagnostics live in [hls_phi/test/rtl](../../apps/hls_phi/test/rtl/README.md). Pins, clocks, Linux drivers and board acceptance belong to [platforms/xc7](../../platforms/xc7/README.md). Each driver defines its finite workload, timeout and rejecting controls; simulation results do not establish physical timing or unrestricted correctness.
 
-`protocol_spacetime_sim.cpp.in` records/replays bounded pre-edge public traffic and read-only taps using `hls_spacetime`'s recording header. That standalone repository owns the recording dialect and transport rejection tests; semantic interpretation belongs to the optional lowering adapter. See [capture instructions](../../docs/spacetime-capture.md).
+The optional observer’s packaged `priv/simulator/protocol_spacetime_sim.cpp.in` records/replays bounded pre-edge public traffic and read-only taps using `hls_spacetime`'s recording header. That standalone repository owns the recording dialect and transport rejection tests; semantic interpretation belongs to the optional lowering adapter. See [capture instructions](../../docs/spacetime-capture.md).
+
+`framed_fifo_stream.h` links to the lowering library’s installed `priv/simulator` header. Tests and the optional observer share one transport implementation.

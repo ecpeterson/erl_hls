@@ -34,30 +34,42 @@ Publication and scalar attribution produce a new interpretation bundle. They do 
 
 ## Build the optional adapter
 
-The adapter is an OTP library application under `apps/hls_spacetime_protocol`, selected by the root `spacetime` rebar3 profile. Ordinary builds and releases exclude it and its private dependency. From the repository root, use OTP 28.0.2 and rebar3; access to the private `ecpeterson/hls_spacetime` repository is required only for this profile:
+The adapter is an OTP library application under `apps/hls_spacetime_observer`, selected by the root `spacetime` rebar3 profile. Ordinary builds and releases exclude it and its private dependency. From the repository root, use OTP 28.0.2 and rebar3; access to the private `ecpeterson/hls_spacetime` repository is required only for this profile:
 
 ```sh
 rebar3 as spacetime compile
-rebar3 as spacetime eunit --dir=apps/hls_spacetime_protocol/test
+rebar3 as spacetime eunit --dir=apps/hls_spacetime_observer/test
 ```
 
-When converting a capture, add `_build/spacetime/lib/hls_spacetime_protocol/ebin` and `_build/spacetime/lib/hls_spacetime/ebin` to the Erlang code path. The application-specific live stimulus still uses the ordinary fabric build. Generic artifact validation, physical import and visualization live in [hls_spacetime](https://github.com/ecpeterson/hls_spacetime), without a compiler dependency.
+When converting a capture, add `_build/spacetime/lib/hls_spacetime_observer/ebin` and `_build/spacetime/lib/hls_spacetime/ebin` to the Erlang code path. The application-specific live stimulus still uses the ordinary fabric build. Generic artifact validation, physical import and visualization live in [hls_spacetime](https://github.com/ecpeterson/hls_spacetime), without a compiler dependency.
 
-## Prepare and capture
+## Prepare, record and interpret
 
-Retain the source build, raw and optimized boundary IR, exact generated RTL and external tool identities. Do not regenerate them merely to inspect a saved execution. In a compiler/lowering Erlang environment:
+Compile the optional profile once, then use `bin/hls-spacetime-observer`. This command publishes or interprets files; it never runs the compiler, simulator or application host. Supply the ordinary source build, its raw/optimized boundary IR, exact boundary RTL and compiled `files.f` directory in one trusted Erlang configuration:
 
 ```erlang
-Plan = xls_protocol_spacetime:plan(SourceDirectory, RawIR, OptimizedIR, BoundaryRTL),
-ok = file:write_file(TapFile, xls_protocol_spacetime:tsv(Plan)),
-ok = file:write_file(PlanFile, term_to_binary(Plan, [deterministic])).
+#{source => "/absolute/source-build",
+  raw_ir => "/absolute/raw.ir",
+  optimized_ir => "/absolute/optimized.ir",
+  boundary_rtl => "/absolute/compiled/boundary/core.v",
+  compiled => "/absolute/compiled"}.
 ```
 
-Use `xls_protocol_spacetime:observation_digest/1` for the semantic observation identity. It uses deterministic external-term encoding on the pinned OTP toolchain, so an equal plan has the same digest after decoding or map reconstruction. Retain the exact file hash separately; do not rebind an archived capture to a newly computed digest. Plan files are trusted local Erlang terms; do not accept arbitrary uploaded terms as configuration. `tsv/1` returns data and the caller owns writes. Source and RTL hashes in `Plan.inputs` describe the exact observation scope. Retain the whole application's RTL closure and simulator build command alongside it, including the gateway.
+The default scope is `full`: missing semantic controls reject. Add `scope => storage` explicitly when requesting only enabled register writes and Q/D/enable checks. This scope removes actor, ownership, publication, scalar-ancestry and stream attribution; the preparation and capture manifests retain the original unsupported-control diagnostics. It is useful when XLS has erased semantic aliases in a small workload. No missing control is replaced with zero, and every D producer remains unknown.
 
-Use `test/rtl/protocol_spacetime_sim.cpp.in` with the source build's ordinary Verilator file list. Replace `@@SOURCE_FAULTS@@` with the OR of the emitted ingress, actor failure and actor fault pins, as in the ordinary application harness. Include both fabric's `test/rtl` and the standalone library's `priv/include` directories, enable `--vpi`, and use `--public-flat-rw` for tap visibility. The public interface and host framed FIFO adapter are unchanged. No VPI writes or synthesis preservation attributes are used.
+Paths resolve from the invoking directory. Source preparation and XLS compilation use the ordinary build toolchain; the observer does not choose its backend or schedule. Keep those original build artifacts and tool identities. Run from the fabric checkout with OTP 28.0.2 and rebar3 on `PATH`:
 
-The executable accepts:
+```sh
+rebar3 as spacetime compile
+bin/hls-spacetime-observer prepare observer.config /absolute/fresh-observer
+sh /absolute/fresh-observer/build-simulator.sh /absolute/path/to/verilator
+```
+
+Apply the project's serial 6 GiB process-group guard to external compilation and recording. Preparation derives fault aggregation from the checked application actor population, renders the packaged harness and copies its RTL/header closure. Mechanical RTL files whose names occur in the source manifest must match those emitted bytes. XLS-generated RTL is retained with exact file hashes; the external compiler and its input closure remain the trust boundary, not an all-input equivalence claim. It emits deterministic `observation.etf`, `taps.tsv`, raw/optimized IR, `source-build.json`, `build-simulator.sh` and a final `manifest.json` with exact file sizes and SHA256 digests. The script compiles one worker with `--vpi --public-flat-rw`; it refuses an existing `obj_dir`. Preparation accepts at most 512 RTL paths and 256 MiB total copied inputs. No old `_build/spacetime-*` directory is required.
+
+`xls_protocol_spacetime_workflow:prepare/1` and `write/2` expose the same stages as library calls. `prepare/1` accepts this config map or a filename containing one map; `write/2` writes a fresh directory. Retained paths are diagnostic provenance; the prepared simulator inputs and plan are self-contained. The optional observer's `priv/simulator` owns its harness; the ordinary lowering library's `priv/simulator` owns the shared framed FIFO helper; `hls_spacetime` owns the trace header.
+
+The executable accepts these modes. Create each fresh output directory first:
 
 ```text
 simulation live FRESH_DIRECTORY TAPS
@@ -65,31 +77,43 @@ simulation replay CAPTURE FRESH_DIRECTORY TAPS
 simulation drive INPUT_CAPTURE FRESH_DIRECTORY TAPS
 ```
 
-Create each output directory first. `live` exposes `app_tx`/`app_rx` FIFOs for the ordinary host session; the application owns the finite stimulus and oracle. `replay` drives every recorded input/ready offer and compares every public field and selected tap on every clock, including inactive data. `drive` deliberately applies inputs without comparing outputs, so altered-stimulus experiments must qualify the new output and then replay it. All modes write fresh `capture.tsv` files. `TAPS=-` records public fields only; an ordinary build without `--public-flat-rw` can replay against these fields to check observation noninterference.
+For example:
 
-The fixed protocol-stream recording dialect is owned by [hls_spacetime](https://github.com/ecpeterson/hls_spacetime); see [spacetime-trace-format.md](spacetime-trace-format.md) for its capture-side boundary. The runner caps time at 120 seconds; the transport caps four million cycles, one million records and 256 MiB decoded bytes. Apply a process-group memory limit and retain compressed results under an explicit archive budget. A missing or incomplete footer never establishes a complete capture.
-
-## Convert a saved capture
-
-```erlang
-Trace = hls_spacetime_trace:read(CaptureFile),
-#{inputs := #{source_build := SourceHash, rtl := RtlHash}} = Plan,
-Build = #{source => SourceHash, rtl => RtlHash,
-          observation => xls_protocol_spacetime:observation_digest(Plan)},
-Capture = #{bundle := Bundle, stream := Stream,
-            publication := Publication, ancestry := Ancestry} =
-    xls_protocol_spacetime_capture:capture(Plan, Trace, Build),
-ok = file:write_file(OutputFile, hls_spacetime:encode(Bundle)),
-ok = file:write_file(StreamFile, json:encode(Stream)),
-ok = file:write_file(PublicationFile, json:encode(Publication)),
-ok = file:write_file(AncestryFile, json:encode(Ancestry)).
+```sh
+mkdir /absolute/fresh-recording
+/absolute/fresh-observer/obj_dir/simulation live \
+  /absolute/fresh-recording /absolute/fresh-observer/taps.tsv
 ```
 
-`bundle/3` is a convenience wrapper returning only the generic graph. Use `capture/3` when retaining stream identities, publication joins, scalar operand evidence or binding application annotations with `phi_spacetime_fixture:bind_summary/2`. The graph includes the supported dependencies in either case; backend interpretation metadata stays in the separate sidecars. The example uses a current `plan/4` result. For a trusted historical plan without publication/dependency sections, the corresponding `publication`/`ancestry` keys are absent; plans without stream taps produce an empty stream sidecar with an explicit unobserved scope. Preserve historical identities rather than substituting a new plan silently.
+While `live` is running, invoke the application's ordinary host session against that directory's `app_tx`/`app_rx` FIFOs. The application owns finite stimulus, completion interpretation and any numerical oracle. The observer has no Phi/Snowflake selection. `replay` drives every recorded input/ready offer and compares every public field and selected tap on every clock, including inactive data. `drive` applies offered inputs without comparing outputs; qualify its new outputs before using them as a witness. `TAPS=-` records public fields only. No VPI writes or synthesized preservation attributes are added.
 
-Physical correspondence is absent until a separately qualified exact-checkpoint catalogue is attached. Logical resources, simulated cycles and tuple names imply neither placement nor a clock period. Phi's finite step/readout interpretation is in `apps/hls_phi/test/phi_spacetime_fixture.erl`; it is not part of this lowering adapter.
+The fixed [recording dialect](spacetime-trace-format.md) uses pre-edge samples and cycle indices, not nanoseconds. The simulator caps elapsed time at 120 seconds; the transport caps four million cycles, one million sample records and 256 MiB decoded data. Missing handles, width mismatches, malformed records and unknown VPI values reject. Missing/incomplete footers never establish complete capture. The external runner and application host must finish and close their resources before archiving; process cleanup and tool identity recording remain the caller's responsibility.
 
-Run `rebar3 as spacetime eunit --dir=apps/hls_spacetime_protocol/test` from the repository root for localized binding, register-transfer, publication ownership, selected scalar operands, same-edge/reset attribution and fresh-process plan-identity checks. The standalone library owns the C++ transport rejection tests, generic artifact/reader tests and memory recording conversion. The compiler owns the actual RAM primitive and its RTL witness. A full decoder run is needed to qualify a new observer ABI, not for each parser change.
+Convert the saved recording without reopening the compiler sources:
+
+```sh
+bin/hls-spacetime-observer capture /absolute/fresh-observer \
+  /absolute/fresh-recording/capture.tsv /absolute/fresh-capture
+```
+
+The library equivalent is `xls_protocol_spacetime_workflow:write_capture(PreparedDirectory, TraceFile, OutputDirectory)`. It verifies the preparation's exact plan hash and build identity, reads the bounded trace, runs `xls_protocol_spacetime_capture:capture/3`, and validates the graph. The fresh output contains `bundle.json`, deterministic uncompressed `bundle.etf`, `summary.json`, available `stream.json`/`publication.json`/`ancestry.json` sidecars, and a final manifest binding all outputs and inputs. Total output is capped at 256 MiB; the plan is capped at 16 MiB. Failed writes leave an incomplete directory without a final manifest. Existing directories are never replaced. Explicitly incomplete traces remain labelled incomplete even when conversion itself succeeds.
+
+Prepared ETF files are trusted local producer artifacts; do not pass arbitrary downloaded terms to this command. The file hash and deterministic `observation_digest/1` have separate roles. New plans use deterministic external-term identity on the pinned OTP toolchain. Historical captures retain their original identities; never rebind them silently to a new plan.
+
+The graph is application independent. Phi's finite completion/readout adapter remains `phi_spacetime_fixture:summary/2` and `bind_summary/2` under `apps/hls_phi/test`; it joins actual public route/incarnation/occurrence identities. Other workloads supply their own optional annotations rather than modifying the observer. Unrepresented controls and unsupported expressions remain unknown roots; complete file coverage does not imply complete causal ancestry.
+
+Physical correspondence is absent until an independently qualified exact-checkpoint catalogue and claims are attached through the standalone library. The optional producer command qualifies explicit register candidates against independently reviewed finite replay summaries:
+
+```sh
+bin/hls-spacetime-observer qualify CATALOGUE.etf BUNDLE.etf \
+  CANDIDATES.etf WITNESS.etf /absolute/fresh-claims
+```
+
+`xls_protocol_spacetime_physical` documents the candidate and witness types. Inputs are trusted uncompressed local terms; native catalogue and bundle schemas are checked first. The command checks exact build/checkpoint/declared netlist and probe identities, every nonempty comparison case, masks, zero mismatches/unknown samples, and actual output-pin/canonical-parent-net membership. It writes `claims.etf`, qualification detail and a byte/hash manifest; the standalone `spacetime join` command consumes those claims. Candidate discovery, native replay and authenticity of the supplied comparison summary remain independent producer responsibilities. Names-only candidates never become supported, and missing bits remain unknown.
+
+Use its maintained validate/join/view workflow on `bundle.etf`/`bundle.json`; there is no requirement for the historical S3/S4 archive layout. Logical cycles and register names imply neither placement nor an execution period. The optional [RAM witness](https://github.com/ecpeterson/hls_spacetime/blob/main/docs/memory-witness.md) supplies its own small recording with explicit RTL paths and no native placement.
+
+Run `rebar3 as spacetime eunit --dir=apps/hls_spacetime_observer/test` for localized plan/binding/transfer/reset, file-integrity, publication and operand checks. Synthetic producer tests check serialization and fresh output behavior; they do not establish simulator noninterference or a generated observer ABI. A localized generated source-protocol fixture can qualify a new packaging path without repeating a full decoder run. Qualify changed observer semantics separately, preserving prior identities and evidence.
 
 ## Inspect the retained S3/S4 case
 
