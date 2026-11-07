@@ -8,7 +8,7 @@ The old viewer showed only selected versions and omitted the write-at-C to Q-at-
 
 The default view groups storage by logical word. An explicitly selected word can expand to supported cell locations; folded cell identities draw once, while unknown bits/candidates/unplaced cells retain an unknown-rail representation. These are simulated logical transitions at finite-witness value locations, not native FF CE observations, electrical switching or exclusive task occupancy. The stack reports any omission at its 20,000-stroke bound. It keeps the complete graph and uses interval groups rather than one allocation per cell per clock.
 
-The selected C1775–C1873 step shows 463 load bridges and 271 residence spans across 51 register words. The C1852–C1866 example exposes 409 qualified cells and 128 unresolved bits for `register/____state_154`. The separate RAM example retains read-first response identity after replacement and breaks storage at reset incarnations, even when contents survive.
+With Full storage history enabled, the selected C1775–C1873 step shows 463 load bridges and 271 residence spans across 51 register words. The C1852–C1866 example exposes 409 qualified cells and 128 unresolved bits for `register/____state_154`. The separate RAM example retains read-first response identity after replacement and breaks storage at reset incarnations, even when contents survive.
 
 ## Independent check and local qualification
 
@@ -21,6 +21,14 @@ The selected C1775–C1873 step shows 463 load bridges and 271 residence spans a
 - Browser inspection covers grouped storage with no selected event, the 99-clock selection, actor filtering, 409-cell expansion, resource/version selection, the read-first response and reset/carry-in root. No browser errors were reported.
 
 Compact reports, guard outcomes and the implementation patch are retained under the external `spacetime-2026-11-06/view-storage-1` archive. All checked local groups exited and are gone, without a guard trigger. Existing projection/source identities remain unchanged. Retention review is due 2026-11-13.
+
+## Review revision — focus on recorded uses
+
+The default picture now omits versions with no recorded consumer and ends storage at its last recorded use. The selected 99-clock interval consequently shows 167 loads and 35 residence spans across 37 words. **Full storage history** restores the original 463/271 spans across 51 words; inspectors and the dependency graph retain the full evidence regardless of the display setting. Missing use is not a dead-state proof, since the observer scope does not cover every possible consumer.
+
+Reads at replacement, explicit preserved-value inputs to masked writes and off-window uses remain visible. Holds do not count as consumption; delayed read responses use the copy selected at the request rather than extending source storage. Same-clock write-first forwarding has no storage bridge unless there is a later use. The flat-chip text now identifies its highlight as associated native storage cells and distinguishes the unknown rail from external circuitry.
+
+Eight new regressions cover these boundaries. The combined local evidence is 47 passing JavaScript tests: 46 passed before review, then all 20 storage tests passed after adding the write-first case and making the hold-only overwrite fixture use a full mask. Both guarded checks exited zero with no guard or remaining process. Formatting, syntax and diff checks pass. Browser inspection confirms toggling full history, the 99-clock interval, 409-cell expansion, footprint labels and no console errors. The unchanged Erlang/library qualification above is reused. The saved live/memory data are unchanged; no raw replay, native run or Actions job was repeated. Compact revision records live in `spacetime-2026-11-06/view-storage-use-1`, with retention review due 2026-11-14.
 
 ## Next executable target
 

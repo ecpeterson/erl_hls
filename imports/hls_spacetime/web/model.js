@@ -310,6 +310,26 @@ function recordStorageUse(model, event) {
   uses[bucket].push(event);
 }
 
+/** Identify recorded uses of the stored value. A hold merely observes residence;
+ * a response uses the copy latched by its request, not the source word again.
+ * Other explicit inputs (including preserved bits of a masked write) count.
+ * Absence here means no recorded use, never proof of dead hardware state. */
+function storageUseEvents(model, version, requests) {
+  const ids = new Set([
+    ...(model.consumers.get(version) ?? []),
+    ...requests.map((event) => event.id),
+  ]);
+  return [...ids]
+    .map((id) => model.events.get(id))
+    .filter(
+      (event) =>
+        !(
+          event.access?.version === version &&
+          ["hold", "read_result"].includes(event.access.kind)
+        ),
+    );
+}
+
 /** Derive one word's pre-edge residence. A write at C is available at C+1;
  * the old version is still readable at its replacement edge under read-first.
  * Requests may outlive replacement, so responses are retained separately. */
@@ -328,6 +348,7 @@ function makeLifetime(model, version) {
     `Multiple replacements of stored version: ${version.id}`,
   );
   const replacement = replacements[0];
+  const uses = storageUseEvents(model, version.id, requests);
   const returned = new Set(responses.map((event) => event.access.request));
   const resource = model.resources.get(version.storage.resource);
   const pending = requests
@@ -358,6 +379,11 @@ function makeLifetime(model, version) {
     responses: responses.map((event) => event.id),
     holds: holds.map((event) => event.id),
     pending,
+    uses: uses.map((event) => event.id),
+    lastUseCycle: uses.reduce(
+      (last, event) => Math.max(last ?? 0, event.cycle),
+      null,
+    ),
     continuity: model.bundle.capture.complete
       ? "within_declared_capture_scope"
       : "uncertain_capture",
@@ -498,6 +524,10 @@ function lifetimeMatchesEvents(model, lifetime, options) {
  * Optional resource/version(s)/incarnation selectors restrict storage identity.
  * Actor/activation/operation/task selectors match explicit associated events,
  * including off-window consumers; they never imply exclusive storage ownership.
+ * With usedOnly, omit versions with no recorded use and end residence at the
+ * last use, even outside the window. Holds and delayed read responses do not
+ * extend it. The full lifetime and graph remain unchanged; omitted versions
+ * are not proven dead, especially where capture/consumer coverage is partial.
  */
 export function storageSegments(model, options = {}) {
   const {
@@ -507,6 +537,7 @@ export function storageSegments(model, options = {}) {
     version,
     versions,
     incarnation,
+    usedOnly = false,
   } = options;
   requireValue(
     validCycle(firstCycle) && validCycle(endCycle) && firstCycle < endCycle,
@@ -535,6 +566,7 @@ export function storageSegments(model, options = {}) {
   };
   for (const lifetime of model.lifetimes.values()) {
     if (
+      (usedOnly && lifetime.lastUseCycle === null) ||
       (resource && lifetime.resource !== resource) ||
       (version && lifetime.version !== version) ||
       (selectedVersions && !selectedVersions.has(lifetime.version)) ||
@@ -561,7 +593,12 @@ export function storageSegments(model, options = {}) {
       );
       // The last recorded D/enable has no following Q sample. Neither a reset
       // nor the capture boundary supplies that missing transfer observation.
-      if (lifetime.firstCycle < epoch.end_cycle)
+      // A write-first read at C can consume the new value before Q at C+1;
+      // if there is no later use, its dependency needs no storage bridge.
+      if (
+        lifetime.firstCycle < epoch.end_cycle &&
+        (!usedOnly || lifetime.lastUseCycle >= lifetime.firstCycle)
+      )
         appendSegment(
           "write",
           lifetime,
@@ -569,7 +606,10 @@ export function storageSegments(model, options = {}) {
           lifetime.firstCycle,
         );
     }
-    appendSegment("hold", lifetime, lifetime.firstCycle, lifetime.endCycle - 1);
+    const lastSample = usedOnly
+      ? Math.min(lifetime.endCycle - 1, lifetime.lastUseCycle)
+      : lifetime.endCycle - 1;
+    appendSegment("hold", lifetime, lifetime.firstCycle, lastSample);
   }
   return segments;
 }

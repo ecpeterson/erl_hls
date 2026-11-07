@@ -453,3 +453,156 @@ test("declared observer loss cannot masquerade as complete storage continuity", 
   document.bundle.capture.observers = [];
   assert.throws(() => createModel(document), /Missing event observer/);
 });
+
+test("used-only storage omits unread loads and trims residence to the last use", () => {
+  const model = createModel(fixture());
+  const full = endpoints(storageSegments(model));
+  assert.deepEqual(endpoints(storageSegments(model, { usedOnly: true })), [
+    ["hold", "carry", 8, 9],
+    ["write", "two", 2, 3],
+    ["hold", "two", 3, 4],
+    ["write", "three", 4, 5],
+    ["hold", "three", 5, 7],
+  ]);
+  assert.equal(model.lifetimes.get("one").lastUseCycle, null);
+  assert.equal(model.lifetimes.get("carry").endCycle, 12);
+  assert.deepEqual(endpoints(storageSegments(model)), full);
+});
+
+test("hold-only versions do not count as used; masked writes retain actual old-value inputs", () => {
+  const document = fixture();
+  document.bundle.events = document.bundle.events.filter(
+    (event) => !["read", "response"].includes(event.id),
+  );
+  document.bundle.versions = document.bundle.versions.filter(
+    (version) => version.id !== "result",
+  );
+  const options = { version: "two", usedOnly: true };
+  assert.deepEqual(endpoints(storageSegments(createModel(document), options)), [
+    ["write", "two", 2, 3],
+    ["hold", "two", 3, 4],
+  ]);
+  document.bundle.events.find((event) => event.id === "masked-write").inputs =
+    [];
+  document.bundle.events.find(
+    (event) => event.id === "masked-write",
+  ).access.mask = "0xFF";
+  const model = createModel(document);
+  assert.equal(model.lifetimes.get("two").holds.length, 1);
+  assert.equal(model.lifetimes.get("two").replacement, "masked-write");
+  assert.deepEqual(storageSegments(model, options), []);
+});
+
+test("read-first use at replacement survives; delayed response does not extend residence", () => {
+  const model = createModel(fixture());
+  const life = model.lifetimes.get("two");
+  assert.deepEqual(life.uses, ["read", "masked-write"]);
+  assert.equal(life.lastUseCycle, 4);
+  assert.equal(model.events.get(life.responses[0]).cycle, 6);
+  assert.equal(
+    storageSegments(model, { version: "two", usedOnly: true }).at(-1).toCycle,
+    4,
+  );
+  assert.ok(
+    traceDependencies(model, "response").events.some((e) => e.id === "read"),
+  );
+});
+
+test("use outside the window preserves earlier storage without restoring the unused tail", () => {
+  const model = createModel(fixture());
+  const options = {
+    version: "three",
+    usedOnly: true,
+    firstCycle: 5,
+    endCycle: 7,
+  };
+  const [segment] = storageSegments(model, options);
+  assert.equal(segment.toCycle, 7);
+  assert.equal(segment.visibleToCycle, 6);
+  assert.equal(segment.afterWindow, true);
+  assert.deepEqual(
+    storageSegments(model, {
+      version: "carry",
+      usedOnly: true,
+      firstCycle: 10,
+      endCycle: 12,
+    }),
+    [],
+  );
+});
+
+test("reset-retired requests still count as recorded use; roots gain no invented load", () => {
+  const model = createModel(fixture());
+  assert.equal(model.lifetimes.get("three").pending[0].status, "reset_retired");
+  const segments = storageSegments(model, { usedOnly: true });
+  assert.equal(
+    segments.find((s) => s.version === "three" && s.kind === "hold").toCycle,
+    7,
+  );
+  assert.deepEqual(
+    segments.filter((s) => s.version === "carry").map((s) => s.kind),
+    ["hold"],
+  );
+  assert.ok(segments.every((s) => s.version !== "last"));
+});
+
+test("hold/response exclusion applies only to the referenced stored version", () => {
+  const document = fixture();
+  document.bundle.resources.push({
+    ...document.bundle.resources[0],
+    id: "control",
+  });
+  document.bundle.versions.push({
+    ...document.bundle.versions[0],
+    id: "control-root",
+    storage: { resource: "control", address: 0 },
+  });
+  for (const event of document.bundle.events)
+    if (["hold", "response"].includes(event.id))
+      event.inputs.push("control-root");
+  const model = createModel(document);
+  assert.deepEqual(model.lifetimes.get("control-root").uses, [
+    "hold",
+    "response",
+  ]);
+  assert.deepEqual(
+    endpoints(
+      storageSegments(model, { version: "control-root", usedOnly: true }),
+    ),
+    [["hold", "control-root", 0, 6]],
+  );
+});
+
+test("incomplete capture stays uncertain in used-only view and full history remains available", () => {
+  const document = fixture();
+  document.bundle.capture.complete = false;
+  const model = createModel(document);
+  const focused = storageSegments(model, { usedOnly: true });
+  assert.ok(
+    focused.every((s) => s.lifetime.continuity === "uncertain_capture"),
+  );
+  assert.ok(storageSegments(model).some((s) => s.version === "one"));
+  assert.ok(focused.every((s) => s.version !== "one"));
+});
+
+test("write-first forwarding before the next Q sample does not invent storage use", () => {
+  const document = fixture();
+  document.bundle.resources[0].collision = "write_first";
+  document.bundle.events.find((e) => e.id === "read").cycle = 2;
+  document.bundle.events.find((e) => e.id === "response").cycle = 4;
+  const replacement = document.bundle.events.find(
+    (e) => e.id === "masked-write",
+  );
+  replacement.inputs = [];
+  replacement.access.mask = "0xFF";
+  const model = createModel(document);
+  assert.equal(model.lifetimes.get("two").lastUseCycle, 2);
+  assert.deepEqual(
+    storageSegments(model, { version: "two", usedOnly: true }),
+    [],
+  );
+  assert.equal(storageSegments(model, { version: "two" }).length, 2);
+  assert.ok(
+    traceDependencies(model, "read").events.some((e) => e.id === "equal-write"),
+  );
+});

@@ -418,6 +418,7 @@ function visibleStorage() {
     firstCycle: state.first,
     endCycle: state.first + state.window,
     ...filters(),
+    usedOnly: !$("full-storage").checked,
   };
   const key = JSON.stringify(options);
   if (state.storageCache?.key !== key)
@@ -553,6 +554,9 @@ function drawResidence(ctx, project) {
   ctx.globalAlpha = 1;
   const words = new Set(segments.map((s) => `${s.resource}/${s.address}`)).size;
   $("storage-summary").textContent =
+    ($("full-storage").checked
+      ? "Full storage history · "
+      : "Recorded uses only · ") +
     `${words} words · ${loads} load bridges · ${holds} residence spans` +
     (cells.size ? ` · ${cells.size} expanded cells` : " · grouped by word") +
     (omitted
@@ -910,7 +914,7 @@ function renderInspector() {
       .slice(0, 12)
       .map(
         (life) =>
-          `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`,
+          `<details open><summary>${esc(life.version)} · storage history</summary><p>${life.firstCycle < life.endCycle ? `Available C${life.firstCycle} to C${life.endCycle - 1}.` : `Availability begins at C${life.firstCycle}, beyond the captured interval.`} ${life.origin === "event" ? "Written by " + esc(life.producer) + "." : esc(life.origin) + " root."}</p><p>${life.holds.length} explicit holds; ${life.requests.length} reads. ${life.lastUseCycle === null ? "No recorded use; hidden from the default storage view." : `Last recorded use at C${life.lastUseCycle}; the default view stops there.`} Persistence between observed operations is residence within the declared capture scope, not an attributed wait.</p>${life.pending.map((p) => `<p class="annotation">${esc(p.status)}: request ${esc(p.event)}, due C${p.dueCycle}</p>`).join("")}<p class="muted">${esc(life.continuity)}</p></details>`,
       )
       .join(
         "",
@@ -953,12 +957,12 @@ function renderResource() {
       })
     : [];
   $("storage-history").innerHTML = histories.length
-    ? `<p>${histories.length} versions of this resource intersect the window.</p>` +
+    ? `<p>${histories.length} versions of this resource intersect the window. Full histories remain inspectable even when their strands are hidden.</p>` +
       histories
         .slice(0, 80)
         .map(
           (life) =>
-            `<button data-version="${esc(life.version)}">${esc(life.version)} · C${life.firstCycle}–C${life.endCycle - 1} · ${life.writeCycle === null ? esc(life.origin) : `write C${life.writeCycle}`}</button>`,
+            `<button data-version="${esc(life.version)}">${esc(life.version)} · C${life.firstCycle}–C${life.endCycle - 1} · ${life.writeCycle === null ? esc(life.origin) : `write C${life.writeCycle}`} · ${life.lastUseCycle === null ? "no recorded use" : `last use C${life.lastUseCycle}`}</button>`,
         )
         .join("") +
       (histories.length > 80
@@ -966,6 +970,9 @@ function renderResource() {
         : "")
     : "Select a storage resource to inspect its versions.";
   $("expand-storage").disabled = !state.resource || !state.model.catalogue;
+  $("flat-subtitle").textContent = cells.length
+    ? `${cells.length} associated native cells highlighted · no logic cone or routes`
+    : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
     cells
@@ -1154,6 +1161,7 @@ function bindControls() {
   };
   $("context").onchange = repaint;
   $("residence").onchange = repaint;
+  $("full-storage").onchange = render;
   $("expand-storage").onchange = repaint;
   $("reset-camera").onclick = () => {
     state.yaw = -0.6;

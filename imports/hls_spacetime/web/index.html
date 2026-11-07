@@ -40,14 +40,20 @@
       </p>
       <p>
         Solid storage links join a write at C to Q at C+1; squares mark the new
-        sample. Dashed links retain the same version between samples. Grey rails
-        contain unknown or unplaced bits. Storage is grouped by word until you
-        select a resource and expand its supported cells. Residence is
-        established only within the declared complete write coverage. Unknown
-        ancestry and partial mappings stay explicit. Expanded cells show
-        qualified stored-value locations; simulated loads do not establish the
-        native cells’ write enables or task occupancy. A public completion
-        annotation does not create a dependency on a nearby operation.
+        sample. Dashed links retain the same version between samples. By
+        default, only versions with recorded uses are drawn, ending at their
+        last use; a hold or delayed read response does not count as a new use.
+        Enable Full storage history to see all residence, including versions
+        with no recorded use. Hidden does not mean proven dead: unobserved
+        consumers may exist. Grey rails contain unknown or unplaced bits; their
+        off-chip position is only a layout convention. Storage is grouped by
+        word until you select a resource and expand its supported cells.
+        Residence is established only within the declared complete write
+        coverage. Unknown ancestry and partial mappings stay explicit. Expanded
+        cells show qualified stored-value locations; simulated loads do not
+        establish the native cells’ write enables or task occupancy. A public
+        completion annotation does not create a dependency on a nearby
+        operation.
       </p>
     </section>
     <div id="notice" role="status">
@@ -130,6 +136,9 @@
                 ><input id="residence" type="checkbox" checked /> Storage
                 links</label
               ><label
+                ><input id="full-storage" type="checkbox" /> Full storage
+                history</label
+              ><label
                 ><input id="expand-storage" type="checkbox" disabled /> Expand
                 selected word into cells</label
               ><span class="legend"
@@ -158,6 +167,11 @@
               aria-label="Flat device view of installed and selected resources"
               tabindex="0"
             ></canvas>
+            <p class="muted">
+              Gold marks the selected resource’s associated cells, which may be
+              spread across the chip. This is storage placement, not the circuit
+              computing its next value or the wires connecting it.
+            </p>
             <div id="resource-summary">
               Select an operation to inspect its resource bindings.
             </div>
