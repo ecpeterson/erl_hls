@@ -1,0 +1,13 @@
+{
+  "name": "hls-spacetime-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test test-js/*.test.js",
+    "prepare-example": "node scripts/prepare-example.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
