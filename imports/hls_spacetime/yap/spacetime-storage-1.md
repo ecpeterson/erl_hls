@@ -42,6 +42,10 @@ Local qualification covers 66 distinct JavaScript tests: the 63-test suite passe
 
 Compact records are retained in `spacetime-2026-11-06/view-spatial-1`, with retention review due 2026-11-14. The campaign now explicitly requires structured-IR read-bit provenance plus checked runtime selectors before claiming the subset consumed by a read. Saved static slices alone cannot supply that evidence. Exact route geometry remains S7 work; completion/publication and numerical ancestry remain S6 work.
 
+## Filter-selection correction
+
+Changing actor, activation, operation or task now clears an excluded event and its trace, selected storage/cell and inspector state. Matching filters preserve selection. The comparison uses the whole capture so clock-window navigation does not discard off-window ancestry; independent static timing overlays are retained. Browser regression checks cover actor exclusion with a populated trace and 409-cell highlight, matching actor/operation filters, operation exclusion, and retaining C1853 selection while viewing C1837–C1851. No browser errors were reported. Syntax, formatting and diff checks pass; the unchanged model/library qualifications above are reused.
+
 ## Next executable target
 
 The current recording includes public outputs but lacks the gateway input handshakes. Add passive top-level `event0_data/valid/ready` and `event1_data/valid/ready` taps, bound to the exact application RTL closure. Assign accepted transfers identities by endpoint and ordinal, then join decoded public frames by declared route and per-endpoint FIFO order; payload comparison only validates that join. Reset must retire partial queues, and missing, reordered or unmatched frames must reject. Preregister one bounded new capture/replay; reuse the completed native implementation.

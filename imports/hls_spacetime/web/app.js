@@ -1338,6 +1338,23 @@ function bindControls() {
   for (const key of ["actor", "activation", "operation", "task"])
     $(key).onchange = () => {
       if (key === "actor") updateActivations();
+      // Filter across the capture: off-window ancestry remains selectable.
+      if (
+        state.selected &&
+        !eventsInWindow(state.model, filters()).some(
+          (event) => event.id === state.selected,
+        )
+      ) {
+        state.selected = null;
+        state.trace = null;
+        state.annotation = null;
+        state.focusVersion = null;
+        state.resource = null;
+        state.cell = null;
+        state.traceNote = "";
+        $("resource").value = "";
+        $("example").value = "";
+      }
       render();
     };
   $("clear-filters").onclick = () => {
