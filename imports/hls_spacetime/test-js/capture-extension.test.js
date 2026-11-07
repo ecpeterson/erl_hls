@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   applyCaptureExtension,
+  graphRecordSha256,
   parseArguments,
   prepareCaptureExtension,
 } from "../scripts/prepare-example.mjs";
@@ -341,6 +342,261 @@ test("extension preparation verifies files and preserves the unrelated memory ex
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** Keep the archived interpretation intact while the new bundle resolves one
+ * unknown nonstorage operand and adds a second explicitly recorded dependency. */
+function refinementFixture() {
+  const input = fixture();
+  const unknown = {
+    id: "unknown",
+    producer: "root",
+    origin: "unknown",
+    storage: null,
+    incarnation: "epoch",
+    evidence: "Unresolved operand",
+  };
+  for (const graph of [input.base.bundle, input.bundle]) {
+    graph.events[0].inputs = ["unknown"];
+    graph.events[0].sequence = 1;
+    graph.events[0].evidence = "Original actor observation";
+    graph.versions.push(structuredClone(unknown));
+  }
+  input.bundle.events[1].sequence = 3;
+  input.bundle.events.push({
+    id: "producer",
+    cycle: 0,
+    sequence: 0,
+    observer: "o",
+    incarnation: "epoch",
+    inputs: [],
+    outputs: ["unknown"],
+    evidence: "Observed operand result",
+  });
+  input.bundle.versions.push({
+    id: "additional",
+    producer: "root",
+    origin: "unknown",
+    storage: null,
+    incarnation: "epoch",
+    evidence: "Additional unresolved operand",
+  });
+  const refined = input.bundle.versions.find((row) => row.id === "unknown");
+  Object.assign(refined, {
+    producer: "producer",
+    origin: "event",
+    evidence: "Exact observed result identity in this capture",
+  });
+  input.bundle.events[0].inputs.push("additional");
+  input.bundle.events[0].evidence = "Observed operand results supplied";
+  return input;
+}
+
+/** Inventory the exact synthetic records, independently of the allowed-change
+ * checks. A correct digest never authorizes a forbidden kind of mutation. */
+function inventory(
+  input,
+  entries = [
+    ["events", "old"],
+    ["versions", "unknown"],
+  ],
+) {
+  input.review.graph_refinements = entries.map(([table, id]) => ({
+    table,
+    id,
+    before_sha256: graphRecordSha256(
+      input.base.bundle[table].find((row) => row.id === id),
+    ),
+    after_sha256: graphRecordSha256(
+      input.bundle[table].find((row) => row.id === id),
+    ),
+  }));
+  return input;
+}
+
+test("graph record digests sort nested keys while preserving array order", () => {
+  assert.equal(
+    graphRecordSha256({ z: true, a: { y: [2, 1], x: 1 } }),
+    digest('{"a":{"x":1,"y":[2,1]},"z":true}'),
+  );
+  assert.notEqual(
+    graphRecordSha256({ a: [1, 2] }),
+    graphRecordSha256({ a: [2, 1] }),
+  );
+});
+
+test("reviewed ancestry refinement changes only the new interpretation", () => {
+  const input = inventory(refinementFixture()),
+    before = structuredClone(input);
+  const document = apply(input);
+  assert.deepEqual(input, before);
+  assert.equal(
+    input.base.bundle.versions.find((row) => row.id === "unknown").producer,
+    "root",
+  );
+  assert.equal(
+    document.bundle.versions.find((row) => row.id === "unknown").producer,
+    "producer",
+  );
+  assert.deepEqual(
+    document.provenance.capture_extension.review.graph_refinements,
+    input.review.graph_refinements,
+  );
+  assert.deepEqual(document.catalogue.bindings, input.base.catalogue.bindings);
+  assert.deepEqual(document.measurement, input.base.measurement);
+  assert.equal(createModel(document).incoming.get("old")[0].source, "producer");
+});
+
+test("refinement inventory rejects wrong hashes, unlisted changes, duplicates and unused rows", () => {
+  for (const field of ["before_sha256", "after_sha256"]) {
+    const input = inventory(refinementFixture());
+    input.review.graph_refinements[0][field] = identity("d");
+    assert.throws(() => apply(input), /digest mismatch/);
+  }
+  const unlisted = inventory(refinementFixture(), [["versions", "unknown"]]);
+  assert.throws(() => apply(unlisted), /Unreviewed original graph change/);
+  const absent = refinementFixture();
+  assert.throws(() => apply(absent), /Unreviewed original graph change/);
+  const duplicate = inventory(refinementFixture());
+  duplicate.review.graph_refinements.push({
+    ...duplicate.review.graph_refinements[0],
+  });
+  assert.throws(() => apply(duplicate), /Duplicate graph refinement/);
+  const unused = inventory(refinementFixture(), [
+    ["events", "old"],
+    ["versions", "unknown"],
+    ["versions", "value"],
+  ]);
+  assert.throws(() => apply(unused), /Unused graph refinements/);
+});
+
+test("correct digests cannot authorize immutable event changes or dependency deletion", () => {
+  const changes = [
+    (event) => {
+      event.cycle = 2;
+    },
+    (event) => {
+      event.actor = "different-actor";
+    },
+    (event) => {
+      event.resources = ["stream/reply"];
+    },
+    (event) => {
+      event.access = {
+        kind: "read_result",
+        resource: "register/R",
+        address: 0,
+      };
+    },
+    (event) => {
+      event.inputs = ["additional"];
+    },
+    (event) => {
+      event.outputs = [];
+    },
+    (event) => {
+      event.evidence = "";
+    },
+  ];
+  for (const change of changes) {
+    const input = refinementFixture();
+    change(input.bundle.events[0]);
+    inventory(input);
+    assert.throws(
+      () => apply(input),
+      /immutable event|Removed original event|refinement evidence/,
+    );
+  }
+});
+
+test("root refinement rejects stored words, changed bit metadata and unsupported origins", () => {
+  const changes = [
+    (before, after) => {
+      before.storage = after.storage = { resource: "register/R", address: 0 };
+    },
+    (_before, after) => {
+      after.storage = { resource: "register/R", address: 0 };
+    },
+    (before, after) => {
+      before.width = 8;
+      after.width = 9;
+    },
+    (before) => {
+      before.origin = "carry_in";
+    },
+    (_before, after) => {
+      after.incarnation = "different-reset";
+    },
+    (_before, after) => {
+      after.evidence = "";
+    },
+  ];
+  for (const change of changes) {
+    const input = refinementFixture();
+    change(
+      input.base.bundle.versions.find((row) => row.id === "unknown"),
+      input.bundle.versions.find((row) => row.id === "unknown"),
+    );
+    inventory(input);
+    assert.throws(
+      () => apply(input),
+      /unknown-root|immutable version|refinement evidence/,
+    );
+  }
+});
+
+test("resolved producers still obey reset and dependency time checks", () => {
+  const future = inventory(refinementFixture());
+  future.bundle.events.find((row) => row.id === "producer").cycle = 2;
+  assert.throws(() => apply(future), /runs backward/);
+  const crossReset = inventory(refinementFixture());
+  crossReset.bundle.events.find((row) => row.id === "producer").incarnation =
+    "other-reset";
+  assert.throws(() => apply(crossReset), /cross-reset refinement producer/);
+  const absent = inventory(refinementFixture());
+  absent.bundle.events = absent.bundle.events.filter(
+    (row) => row.id !== "producer",
+  );
+  assert.throws(() => apply(absent), /refinement producer/);
+});
+
+test("reviewed resource refinement permits only additional observation read lanes", () => {
+  const input = fixture();
+  input.base.bundle.resources[0].ports = { existing: "read", w: "write" };
+  input.bundle.resources[0].ports = {
+    existing: "read",
+    w: "write",
+    operand: "read",
+  };
+  inventory(input, [["resources", "register/R"]]);
+  const document = apply(input);
+  assert.equal(document.bundle.resources[0].ports.operand, "read");
+  assert.deepEqual(document.catalogue.bindings, input.base.catalogue.bindings);
+  for (const mutate of [
+    (resource) => {
+      resource.ports.w = "read";
+    },
+    (resource) => {
+      resource.ports.extra = "write";
+    },
+    (resource) => {
+      delete resource.ports.existing;
+    },
+    (resource) => {
+      resource.width = 9;
+    },
+    (resource) => {
+      resource.evidence = "rewritten storage evidence";
+    },
+  ]) {
+    const changed = structuredClone(input);
+    mutate(changed.bundle.resources[0]);
+    inventory(changed, [["resources", "register/R"]]);
+    assert.throws(
+      () => apply(changed),
+      /read-lane refinement|immutable resource/,
+    );
   }
 });
 

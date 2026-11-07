@@ -212,18 +212,157 @@ function recordKey(value) {
   return JSON.stringify(value);
 }
 
-/** An observation extension may add graph records, but cannot rewrite the
- * qualified graph or change the resource definitions behind retained mappings. */
-function checkPreservedGraph(original, extended) {
+/** Digest one JSON graph record with recursively sorted object keys, preserved
+ * array order and UTF-8 JSON bytes. Review producers use this same encoding for
+ * each before/after inventory entry; ordinary file hashes still bind raw bytes. */
+export function graphRecordSha256(record) {
+  check(
+    record && typeof record === "object" && !Array.isArray(record),
+    "Invalid graph refinement record",
+  );
+  return sha256(Buffer.from(recordKey(record)));
+}
+
+/** Remove only the explicitly refinable interpretation fields for comparison.
+ * Every other recorded field, including future schema additions, stays fixed. */
+function immutableFields(record, refinable) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !refinable.includes(key)),
+  );
+}
+
+/** A reviewed event may gain dependencies and evidence, never lose old links or
+ * change observation identity, clock, actor context or storage-access metadata. */
+function checkEventRefinement(before, after) {
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["inputs", "outputs", "evidence"]),
+      immutableFields(after, ["inputs", "outputs", "evidence"]),
+    ),
+    `Changed immutable event fields: ${before.id}`,
+  );
+  check(
+    ["inputs", "outputs"].every(
+      (field) =>
+        Array.isArray(after[field]) &&
+        before[field].every((id) => after[field].includes(id)),
+    ),
+    `Removed original event dependencies: ${before.id}`,
+  );
+  check(
+    typeof after.evidence === "string" && after.evidence.trim().length > 0,
+    `Missing event refinement evidence: ${before.id}`,
+  );
+}
+
+/** Only a nonstorage unknown root can acquire a recorded producer. Encoded
+ * storage versions and initial/reset origins cannot be reinterpreted this way. */
+function checkVersionRefinement(before, after, events) {
+  check(
+    before.producer === "root" &&
+      before.origin === "unknown" &&
+      before.storage === null &&
+      after.storage === null &&
+      after.origin === "event" &&
+      after.producer !== "root",
+    `Invalid unknown-root refinement: ${before.id}`,
+  );
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["producer", "origin", "evidence"]),
+      immutableFields(after, ["producer", "origin", "evidence"]),
+    ),
+    `Changed immutable version fields: ${before.id}`,
+  );
+  const producer = events.get(after.producer);
+  check(
+    producer && producer.incarnation === before.incarnation,
+    `Missing or cross-reset refinement producer: ${before.id}`,
+  );
+  check(
+    typeof after.evidence === "string" && after.evidence.trim().length > 0,
+    `Missing root refinement evidence: ${before.id}`,
+  );
+}
+
+/** Extra logical read lanes describe newly observed operands, not extra RAM
+ * ports or circuits. Existing ports and every physical storage property stay fixed. */
+function checkResourceRefinement(before, after) {
+  check(
+    isDeepStrictEqual(
+      immutableFields(before, ["ports"]),
+      immutableFields(after, ["ports"]),
+    ),
+    `Changed immutable resource fields: ${before.id}`,
+  );
+  check(
+    before.ports &&
+      after.ports &&
+      typeof before.ports === "object" &&
+      typeof after.ports === "object" &&
+      !Array.isArray(before.ports) &&
+      !Array.isArray(after.ports) &&
+      Object.entries(before.ports).every(
+        ([port, kind]) =>
+          Object.hasOwn(after.ports, port) && after.ports[port] === kind,
+      ) &&
+      Object.entries(after.ports).every(
+        ([port, kind]) =>
+          Object.hasOwn(before.ports, port) ||
+          (port.length > 0 && kind === "read"),
+      ),
+    `Invalid observation read-lane refinement: ${before.id}`,
+  );
+}
+
+/** New captures may add records or supply an explicitly reviewed interpretation
+ * of existing nonstorage ancestry. The inventory must match every changed row
+ * exactly; physical storage properties, existing ports and old relations stay
+ * immutable. Added resource read lanes identify observed operands only. */
+function checkPreservedGraph(original, extended, refinements = []) {
+  check(Array.isArray(refinements), "Invalid graph refinement inventory");
+  const pending = new Map();
+  for (const entry of refinements) {
+    check(
+      entry &&
+        ["events", "versions", "resources"].includes(entry.table) &&
+        typeof entry.id === "string" &&
+        entry.id.length > 0 &&
+        /^[a-f0-9]{64}$/.test(entry.before_sha256 ?? "") &&
+        /^[a-f0-9]{64}$/.test(entry.after_sha256 ?? ""),
+      "Invalid graph refinement inventory entry",
+    );
+    const key = `${entry.table}/${entry.id}`;
+    check(!pending.has(key), `Duplicate graph refinement: ${key}`);
+    pending.set(key, entry);
+  }
+  check(Array.isArray(extended.events), "Missing extended events");
+  const events = new Map(extended.events.map((row) => [row.id, row]));
   for (const table of ["events", "versions", "resources"]) {
     check(Array.isArray(extended[table]), `Missing extended ${table}`);
     const rows = new Map(extended[table].map((row) => [row.id, row]));
-    for (const row of original[table])
+    for (const before of original[table]) {
+      const after = rows.get(before.id);
+      if (isDeepStrictEqual(before, after)) continue;
+      const key = `${table}/${before.id}`,
+        entry = pending.get(key);
+      check(after && entry, `Unreviewed original graph change: ${key}`);
       check(
-        isDeepStrictEqual(row, rows.get(row.id)),
-        `Changed original ${table}: ${row.id}`,
+        graphRecordSha256(before) === entry.before_sha256 &&
+          graphRecordSha256(after) === entry.after_sha256,
+        `Graph refinement digest mismatch: ${key}`,
       );
+      if (table === "events") checkEventRefinement(before, after);
+      else if (table === "versions")
+        checkVersionRefinement(before, after, events);
+      else checkResourceRefinement(before, after);
+      pending.delete(key);
+    }
   }
+  check(
+    pending.size === 0,
+    `Unused graph refinements: ${[...pending.keys()].join(", ")}`,
+  );
   const relations = new Map();
   for (const row of extended.relations ?? []) {
     const key = recordKey(row);
@@ -239,7 +378,8 @@ function checkPreservedGraph(original, extended) {
 
 /** Reuse a qualified physical presentation for an explicitly reviewed capture
  * extension. The loader checks exact file bytes; this pure operation checks the
- * review's identity/bounds contract and unchanged original graph records. The
+ * review's identity/bounds contract, immutable physical records and exact
+ * inventory of allowed ancestry refinements in the new interpretation. The
  * review is a trusted local evidence inventory, not an equivalence proof.
  * Physical correspondence and static timing retain their original provenance;
  * new stream resources get no guessed mapping or inherited event coverage. */
@@ -308,7 +448,7 @@ export function applyCaptureExtension(base, bundle, summary, review) {
       comparison.compared_cycles === capture.end_cycle - capture.first_cycle,
     "Extension lacks complete original-tap/public-field equality review",
   );
-  checkPreservedGraph(base.bundle, bundle);
+  checkPreservedGraph(base.bundle, bundle, review.graph_refinements);
   check(
     Array.isArray(summary?.events) && Array.isArray(summary.boundaries),
     "Missing extended public observations",
@@ -406,7 +546,8 @@ export function applyCaptureExtension(base, bundle, summary, review) {
     scope: [
       "Fresh finite observation extension: accepted boundary and public-word lineage; original sampled taps and public fields match at every captured cycle.",
       "Physical correspondence and static timing are reused with explicit original-build provenance, not remeasured or upgraded to native equivalence.",
-      "Numerical D operands and unmatched publication/arrival ancestry remain explicit roots; new stream resources have no placement attribution.",
+      "Unresolved operands and unmatched publication/arrival ancestry remain explicit roots; new stream resources have no placement attribution.",
+      "Reviewed graph refinements change only this interpretation; the original archived graph and native measurement remain unchanged.",
       "Original limitations remain in provenance.capture_extension.original_scope with their original capture context.",
     ],
   };

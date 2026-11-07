@@ -317,3 +317,28 @@ relation(B, R) -> B#{relations := [R | maps:get(relations, B)]}.
 %% One declared missing interior sequence, with exclusive upper bound.
 -spec gap() -> #{first_sequence := 2, next_sequence := 3, reason := binary()}.
 gap() -> #{first_sequence => 2, next_sequence => 3, reason => <<"Explicitly dropped record">>}.
+
+%% Read subsets survive encoding exactly and remain attached to the accepted request.
+-spec selected_read_mask_test() -> ok.
+selected_read_mask_test() ->
+    Mask = 1 bsl 100,
+    B0 = resource((fixture())#{physical := null}, <<"memory">>, fun(R) -> R#{width := 128} end),
+    B1 = access(B0, <<"e4">>, fun(A) -> A#{read_mask => Mask} end),
+    B2 = access(B1, <<"e6">>, fun(A) -> A#{read_mask => Mask} end),
+    #{<<"events">> := Events} = json:decode(iolist_to_binary(hls_spacetime:encode(B2))),
+    [Encoded] = [M || #{<<"id">> := <<"e4">>, <<"access">> := #{<<"read_mask">> := M}} <- Events],
+    ?assertEqual(<<"0x10000000000000000000000000">>, Encoded).
+
+%% Empty/out-of-width masks, changed responses and use on nonreads reject.
+-spec invalid_read_masks_test() -> ok.
+invalid_read_masks_test() ->
+    lists:foreach(fun(Mask) ->
+        B = access(fixture(), <<"e4">>, fun(A) -> A#{read_mask => Mask} end),
+        ?assertException(error, {spacetime, {storage_read_mask, <<"e4">>}}, hls_spacetime:validate(B))
+    end, [0, -1, 256, 1.5]),
+    Request = access(fixture(), <<"e4">>, fun(A) -> A#{read_mask => 3} end),
+    lists:foreach(fun(B) ->
+        ?assertException(error, {spacetime, {storage_read_mask_mismatch, <<"e6">>}}, hls_spacetime:validate(B))
+    end, [Request, access(Request, <<"e6">>, fun(A) -> A#{read_mask => 1} end)]),
+    Write = access(fixture(), <<"e1">>, fun(A) -> A#{read_mask => 1} end),
+    ?assertException(error, {spacetime, {storage_read_mask, <<"e1">>}}, hls_spacetime:validate(Write)).
