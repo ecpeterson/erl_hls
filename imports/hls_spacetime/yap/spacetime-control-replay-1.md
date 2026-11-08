@@ -14,16 +14,16 @@ The source rules explain the selected step without a fitted offset. A ten-clock 
 
 ## Retained comparison
 
-| Completion | Baseline clocks | Pipelined clocks | Model error |
-| --- | ---: | ---: | ---: |
-| Step 4 interval | 99 | 106 | 0 |
-| Step 5 interval | 99 | 122 | 0 |
-| Step 6 interval | 110 | 106 | 0 |
-| Step 7 interval | 92 | 113 | 0 |
-| Step 8 interval | 98 | 115 | 0 |
-| Step 9 interval | 95 | 112 | 0 |
-| Steps 4–8 together | 498 | 562 | 0 |
-| Entire replay suffix | 593 | 674 | 0 |
+| Completion           | Baseline clocks | Pipelined clocks | Model error |
+| -------------------- | --------------: | ---------------: | ----------: |
+| Step 4 interval      |              99 |              106 |           0 |
+| Step 5 interval      |              99 |              122 |           0 |
+| Step 6 interval      |             110 |              106 |           0 |
+| Step 7 interval      |              92 |              113 |           0 |
+| Step 8 interval      |              98 |              115 |           0 |
+| Step 9 interval      |              95 |              112 |           0 |
+| Steps 4–8 together   |             498 |              562 |           0 |
+| Entire replay suffix |             593 |              674 |           0 |
 
 The model matches all 90 output-word acceptances and 36 input-word acceptances in the suffix, including payload, last-word flag and exact clock, for both baseline and candidate. All 18 remaining public frames match. Readout completion is C2306 at baseline and C2367 with the pipeline, also reproduced. Public frame identity is joined by logical sender and occurrence, not forced global ordering.
 
@@ -48,3 +48,7 @@ Usage and model interfaces are documented in [latency scenarios](../docs/latency
 ## Local qualification
 
 All 513 JavaScript tests and 155 Erlang tests pass, together with JavaScript/Erlang formatting, Dialyzer and the 18-file source-contract audit with zero findings. Checks ran serially under the 6 GiB guard; both owned process groups are gone. The first Erlang attempt hit an existing cross-VM temporary-directory collision: its test helper used VM-local `unique_integer/1` under a fixed `/tmp` prefix. Atomic creation with random suffixes fixes that collision while preserving old witnesses; the failed attempt remains retained. Only the failed/unrun checks were repeated. No remote CI was invoked.
+
+## Prospective rebalance witness
+
+The [existing-boundary numerical rebalance](spacetime-numerical-rebalance-witness-1.md) now passes a new RTL witness against the zero-extra-latency schedule frozen before implementation: 99, 498 and 593 clocks, with exact public timing, committed state and observable controls. Numerical private storage contains partial arithmetic, so comparison reconstructs its logical action and does not equate the raw representation with a finished result. This prospectively validates preservation of the existing control schedule; it does not test an unseen workload or predict a new physical period.
