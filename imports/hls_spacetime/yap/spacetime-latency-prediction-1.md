@@ -41,3 +41,7 @@ Source and capture hashes identify the evidence; source-obligation assertions an
 All 459 JavaScript tests and 155 Erlang tests pass, with formatting, Dialyzer and the 18-file source audit clean. The full guarded check took 6.14 seconds, peak process-group RSS 353 MB, exit zero with no guard or remaining processes. The saved CLI report verifies the exact profile/recording and reproduces the two numerical scenarios; no native or application job was run.
 
 Browser checks verify loading the reviewed profile, changing action scope, immediate stale-result invalidation while editing inputs, one- and two-clock interventions, and period sensitivity. Two numerical clocks give 119 clocks under gap preservation, making an assumed 8.5 ns candidate 2.17% slower than an assumed 10 ns baseline. Phi2 alone retains 64 mapped targets above 8.5 ns in Phi3. The delivered panel is left on both numerical actors, one extra clock, illustrative periods 10/8.5 ns. Screenshot and DOM evidence are retained with the case.
+
+## RTL calibration follow-up
+
+The user-authorized [numerical pipeline witness](spacetime-numerical-pipeline-witness-1.md) now measures 106 clocks against the unchanged 99/109 scenarios. Arithmetic result/commit recurrence matches for all 20 remaining diffusion computations; changed output-ready alignment defeats exact public completion prediction. The longer step-4-through-8 interval grows 498→562 clocks. The experiment qualifies finite behavior and source staging, not physical improvement.
