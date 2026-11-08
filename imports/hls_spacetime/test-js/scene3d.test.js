@@ -28,24 +28,47 @@ test("scene packing retains every finite prism/marker, reports degeneracy and us
     zeroSegments: 1,
     degenerateTriangles: 0,
   });
-  assert.equal(packed.instances.length, 22);
+  assert.equal(packed.instances.length, 30);
   assert.equal(packed.surfaces.length, 54);
   assert.equal(packed.instances[10], 0);
-  assert.equal(packed.instances[21], 1);
+  assert.equal(packed.instances[25], 1);
   assert.deepEqual(packed.bounds, {
-    min: [-0.2, -0.2, -0.1],
-    max: [1.1, 1, 2.2],
+    min: [-0.2, -0.2, -0.1 * Math.SQRT2],
+    max: [1 + 0.1 * Math.SQRT2, 1, 2.2],
   });
   assert.equal(packed.instances[6], 1);
   assert(Math.abs(packed.instances[7] - 136 / 255) < 1e-7);
 });
 
+test("endpoint tinting preserves one instance per segment and leaves markers uniform", () => {
+  const packed = packScene({
+    segments: [
+      { from: [0, 0, 0], to: [0, 0, 2], color: "#f00", colorEnd: "#00f" },
+      { from: [0, 0, 2], to: [1, 0, 2], color: "#0f0" },
+    ],
+    markers: [{ position: [0, 0, 0], color: "#ff0", colorEnd: "#00f" }],
+  });
+  const instances = [...packed.instances];
+  assert.equal(packed.counts.segments, 2);
+  assert.equal(packed.counts.markers, 1);
+  assert.equal(instances.length, 45);
+  assert.deepEqual(instances.slice(6, 9), [1, 0, 0]);
+  assert.deepEqual(instances.slice(11, 14), [0, 0, 1]);
+  assert.deepEqual(instances.slice(21, 24), [0, 1, 0]);
+  assert.deepEqual(instances.slice(26, 29), [0, 1, 0]);
+  assert.deepEqual(instances.slice(36, 39), [1, 1, 0]);
+  assert.deepEqual(instances.slice(41, 44), [1, 1, 0]);
+});
+
 test("malformed or imprecise geometry rejects rather than silently uploading NaNs", () => {
   for (const segment of [
+    { from: [0, 0, 0], to: [1, 0, 0], dash: -1 },
     { from: [NaN, 0, 0], to: [1, 0, 0] },
     { from: [0, 0, 0], to: [Infinity, 0, 0] },
     { from: [0, 0, 0], to: [1, 0, 0], radius: -1 },
     { from: [0, 0, 0], to: [1, 0, 0], color: [1, 0, 0, 0.5] },
+    { from: [0, 0, 0], to: [1, 0, 0], colorEnd: [NaN, 0, 1] },
+    { from: [0, 0, 0], to: [1, 0, 0], colorEnd: [1, 0, 0, 0.5] },
     { from: [1e10, 0, 0], to: [1e10 + 1, 0, 0] },
   ])
     assert.throws(() => packScene({ segments: [segment] }), /3D scene/);
@@ -130,6 +153,35 @@ test("camera-only frames reuse uploads and retain a depth-tested instanced draw"
   assert.throws(() => renderer.render(), /disposed/);
 });
 
+test("endpoint colors reach the instanced GPU attribute without splitting geometry", () => {
+  const { canvas, calls } = mockCanvas(),
+    renderer = createScene3D(canvas);
+  renderer.setScene({
+    segments: [
+      { from: [0, 0, 0], to: [1, 2, 3], color: "#f00", colorEnd: "#00f" },
+    ],
+    markers: [{ position: [1, 2, 3], color: "#00f" }],
+  });
+  renderer.render();
+  assert.deepEqual(
+    calls.filter(
+      ([name, location]) => name === "vertexAttribPointer" && location === 7,
+    ),
+    [["vertexAttribPointer", 7, 3, "FLOAT", false, 60, 44]],
+  );
+  assert(
+    calls.some(
+      ([name, location, divisor]) =>
+        name === "vertexAttribDivisor" && location === 7 && divisor === 1,
+    ),
+  );
+  assert.deepEqual(
+    calls.filter(([name]) => name === "drawElementsInstanced"),
+    [["drawElementsInstanced", "TRIANGLES", 36, "UNSIGNED_SHORT", 0, 2]],
+  );
+  renderer.dispose();
+});
+
 test("unsupported contexts are explicit and context restoration reuploads the retained scene", () => {
   const notices = [];
   assert.equal(
@@ -159,4 +211,42 @@ test("unsupported contexts are explicit and context restoration reuploads the re
   assert.equal(renderer.render(), true);
   renderer.dispose();
   assert.equal(listeners.size, 0);
+});
+
+test("schematic dashes retain gradient endpoints without subdividing native spans", () => {
+  const packed = packScene({
+    segments: [
+      {
+        from: [0, 0, 0],
+        to: [1, 1, 0],
+        color: "#f00",
+        colorEnd: "#00f",
+        dash: 0.02,
+      },
+    ],
+  });
+  assert.equal(packed.counts.segments, 1);
+  assert(Math.abs(packed.instances[14] - 0.02) < 1e-8);
+  assert.deepEqual([...packed.instances.slice(6, 9)], [1, 0, 0]);
+  assert.deepEqual([...packed.instances.slice(11, 14)], [0, 0, 1]);
+  const { canvas, calls } = mockCanvas(),
+    renderer = createScene3D(canvas);
+  renderer.setScene({
+    segments: [{ from: [0, 0, 0], to: [1, 1, 0], dash: 0.02 }],
+  });
+  renderer.render();
+  assert(
+    calls.some(([name, state]) => name === "depthFunc" && state === "LESS"),
+  );
+  assert(
+    calls.some(
+      ([name, location, count, type, norm, stride, offset]) =>
+        name === "vertexAttribPointer" &&
+        location === 8 &&
+        count === 1 &&
+        stride === 60 &&
+        offset === 56,
+    ),
+  );
+  renderer.dispose();
 });

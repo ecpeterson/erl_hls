@@ -409,3 +409,345 @@ test("registered paths share reconvergent arcs across writes and keep the longes
     /invalid display filter/,
   );
 });
+
+/** Exhaustive oracle only for these tiny acyclic fixtures. Enumerating the few
+ * complete paths independently checks both reconvergence and per-arc scope. */
+function enumeratePathCosts(index, cone, registered) {
+  const costs = new Map(cone.arcIndices.map((id) => [id, []]));
+  const roots = new Set(cone.rootPins),
+    outgoing = new Map();
+  for (const id of cone.arcIndices) {
+    const arc = index.arcs[id];
+    if (!outgoing.has(arc.from)) outgoing.set(arc.from, []);
+    outgoing.get(arc.from).push(id);
+  }
+  const walk = (pin, path, cost) => {
+    if (roots.has(pin)) {
+      for (const id of path) costs.get(id).push(cost);
+      return;
+    }
+    assert(
+      path.length <= cone.arcIndices.length,
+      "oracle requires an acyclic fixture",
+    );
+    for (const id of outgoing.get(pin) ?? []) {
+      const delay = index.delays[id];
+      walk(
+        index.arcs[id].to,
+        [...path, id],
+        cost === null || delay === null ? null : cost + delay,
+      );
+    }
+  };
+  for (const source of cone.frontiers)
+    if (!registered || source.kind === "sequential") walk(source.pin, [], 0);
+  return cone.arcIndices.map((id) => {
+    const values = costs.get(id);
+    if (!values.length) return registered ? "not_applicable" : null;
+    return values.includes(null) ? null : Math.max(...values);
+  });
+}
+
+function assertCosts(actual, expected) {
+  assert.equal(actual.length, expected.length);
+  actual.forEach((value, i) => {
+    if (typeof expected[i] === "number") {
+      assert.equal(typeof value, "number");
+      assert(
+        Math.abs(value - expected[i]) < 1e-12,
+        `${value} != ${expected[i]}`,
+      );
+    } else assert.equal(value, expected[i]);
+  });
+}
+
+function namedCosts(index, cone, scope = "registered") {
+  return Object.fromEntries(
+    cone.arcIndices.map((id, i) => [
+      index.arcs[id].id,
+      cone.pathDelays[scope][i],
+    ]),
+  );
+}
+
+/** The second selected FF shares the LUT output but has its own incoming arc. */
+function addSecondRoot(model, attachment) {
+  const cell = { id: "second", kind: "FDRE", boundary: "sequential" };
+  attachment.cells.push(cell);
+  model.cells.set(cell.id, cell);
+  attachment.pins.push(
+    { id: "second/D", cell: 4, pin: "D", direction: "IN", net: 1 },
+    { id: "second/Q", cell: 4, pin: "Q", direction: "OUT", net: 3 },
+  );
+  attachment.bindings[0].bits[1] = { bit: 1, status: "supported", d: 9, q: 10 };
+  attachment.arcs.push({
+    id: "second-root",
+    kind: "net",
+    from: 3,
+    to: 9,
+    net: 1,
+    timing: { fast: [{ maxPs: 700 }], slow: [{ maxPs: 1400 }] },
+  });
+}
+
+test("complete path costs distinguish reconvergent branches while preserving cone bounds", () => {
+  const { model, attachment } = fixture(),
+    index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+  const cone = layer.cones[0],
+    costs = namedCosts(index, cone);
+  assertCosts(
+    [costs.n0a, costs.logic0, costs.n0b, costs.logic1, costs.n1],
+    [0.8, 0.8, 1, 1, 1],
+  );
+  assert.equal(cone.registeredDelayNs, 1);
+  assert.equal(cone.staticDelayNs, 1);
+  for (const scope of ["registered", "static"])
+    assertCosts(
+      cone.pathDelays[scope],
+      enumeratePathCosts(index, cone, scope === "registered"),
+    );
+});
+
+test("unknown timing affects only complete through-paths that can encounter it", () => {
+  for (const missing of [0, 1, 2, 3, 4]) {
+    const { model, attachment } = fixture();
+    attachment.arcs[missing].timing.slow[0].maxPs = null;
+    const index = createComputations(model, attachment);
+    const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+    const cone = layer.cones[0],
+      costs = namedCosts(index, cone);
+    assert.equal(cone.registeredDelayNs, null);
+    assert.equal(costs.n1, null);
+    if ([0, 2].includes(missing))
+      assertCosts([costs.n0b, costs.logic1], [1, 1]);
+    if ([1, 3].includes(missing))
+      assertCosts([costs.n0a, costs.logic0], [0.8, 0.8]);
+    for (const scope of ["registered", "static"])
+      assertCosts(
+        cone.pathDelays[scope],
+        enumeratePathCosts(index, cone, scope === "registered"),
+      );
+  }
+});
+
+test("multi-root suffix costs use the longest selected destination and localize unknown branches", () => {
+  for (const missingSecond of [false, true]) {
+    const { model, attachment } = fixture();
+    addSecondRoot(model, attachment);
+    if (missingSecond) attachment.arcs.at(-1).timing.fast = [];
+    const index = createComputations(model, attachment);
+    const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+    const cone = layer.cones[0],
+      costs = namedCosts(index, cone);
+    assert.equal(cone.rootPins.length, 2);
+    assertCosts([costs.n1], [1]);
+    if (missingSecond) {
+      assert.equal(costs.n0a, null);
+      assert.equal(costs.n0b, null);
+      assert.equal(costs["second-root"], null);
+      assert.equal(cone.registeredDelayNs, null);
+    } else {
+      assertCosts([costs.n0a, costs.n0b, costs["second-root"]], [1.8, 2, 2]);
+      assert.equal(cone.registeredDelayNs, 2);
+    }
+    for (const scope of ["registered", "static"])
+      assertCosts(
+        cone.pathDelays[scope],
+        enumeratePathCosts(index, cone, scope === "registered"),
+      );
+  }
+});
+
+test("registered per-arc eligibility excludes constant and external alternatives without zeroing them", () => {
+  const { model, attachment } = fixture();
+  addUntimedAlternative(attachment, "external");
+  addUntimedAlternative(attachment, "constant");
+  const index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"]);
+  for (const cone of layer.cones) {
+    for (const scope of ["registered", "static"])
+      assertCosts(
+        cone.pathDelays[scope],
+        enumeratePathCosts(index, cone, scope === "registered"),
+      );
+  }
+  const data = layer.cones.find((cone) => cone.role === "data");
+  const registered = namedCosts(index, data),
+    whole = namedCosts(index, data, "static");
+  for (const kind of ["external", "constant"]) {
+    assert.equal(registered[`alternative-net-${kind}`], "not_applicable");
+    assert.equal(registered[`alternative-logic-${kind}`], "not_applicable");
+    assert.equal(whole[`alternative-net-${kind}`], null);
+  }
+  assert.equal(registered.n1, 1);
+  assert.equal(whole.n1, null);
+  assertCosts([whole.n0a, whole.n0b], [0.8, 1]);
+  for (const cone of layer.cones.filter((cone) => cone.role !== "data"))
+    assert(
+      cone.pathDelays.registered.every((value) => value === "not_applicable"),
+    );
+});
+
+test("unsupported frontiers and cycles keep all per-arc costs indeterminate", () => {
+  for (const mode of ["unsupported", "cycle"]) {
+    const { model, attachment } = fixture();
+    if (mode === "unsupported") attachment.cells[0].boundary = "unsupported";
+    else {
+      attachment.pins.push({
+        id: "lut/cycle",
+        cell: 1,
+        pin: "cycle",
+        direction: "IN",
+        net: 1,
+      });
+      attachment.arcs.push(
+        {
+          id: "cycle-net",
+          kind: "net",
+          from: 3,
+          to: 9,
+          net: 1,
+          timing: attachment.arcs[0].timing,
+        },
+        {
+          id: "cycle-logic",
+          kind: "logic",
+          from: 9,
+          to: 3,
+          timing: attachment.arcs[2].timing,
+        },
+      );
+    }
+    const index = createComputations(model, attachment);
+    const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+    const cone = layer.cones[0];
+    assert.equal(cone.pathDelays.registered.length, cone.arcIndices.length);
+    assert(cone.pathDelays.registered.every((value) => value === null));
+    assert(cone.pathDelays.static.every((value) => value === null));
+    assert.equal(cone.pinArrivals.registered.length, cone.pinIndices.length);
+    assert(cone.pinArrivals.registered.every((value) => value === null));
+    assert(cone.pinArrivals.static.every((value) => value === null));
+  }
+});
+
+/** Independently enumerate prefixes in the tiny fixtures. A reconvergent pin
+ * sees every incoming path, including unknown ones; suffixes are irrelevant. */
+function enumeratePinArrivals(index, cone, registered) {
+  const values = new Map(cone.pinIndices.map((pin) => [pin, []]));
+  const outgoing = new Map();
+  for (const id of cone.arcIndices) {
+    const arc = index.arcs[id];
+    if (!outgoing.has(arc.from)) outgoing.set(arc.from, []);
+    outgoing.get(arc.from).push(id);
+  }
+  const walk = (pin, value, depth) => {
+    assert(
+      depth <= cone.arcIndices.length,
+      "prefix oracle requires an acyclic fixture",
+    );
+    values.get(pin).push(value);
+    for (const id of outgoing.get(pin) ?? []) {
+      const delay = index.delays[id];
+      walk(
+        index.arcs[id].to,
+        value === null || delay === null ? null : value + delay,
+        depth + 1,
+      );
+    }
+  };
+  for (const source of cone.frontiers)
+    if (!registered || source.kind === "sequential") walk(source.pin, 0, 0);
+  return cone.pinIndices.map((pin) => {
+    const arrivals = values.get(pin);
+    if (!arrivals.length) return "not_applicable";
+    return arrivals.includes(null) ? null : Math.max(...arrivals);
+  });
+}
+
+function namedArrivals(index, cone, scope = "registered") {
+  return Object.fromEntries(
+    cone.pinIndices.map((pin, i) => [
+      index.pins[pin].id,
+      cone.pinArrivals[scope][i],
+    ]),
+  );
+}
+
+function assertTimingOracles(index, cone) {
+  for (const scope of ["registered", "static"]) {
+    assertCosts(
+      cone.pinArrivals[scope],
+      enumeratePinArrivals(index, cone, scope === "registered"),
+    );
+    assertCosts(
+      cone.pathDelays[scope],
+      enumeratePathCosts(index, cone, scope === "registered"),
+    );
+  }
+}
+
+test("pin arrivals use the latest reconvergent prefix and preserve through-path costs", () => {
+  const { model, attachment } = fixture();
+  addSecondRoot(model, attachment);
+  const index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+  const cone = layer.cones[0],
+    arrivals = namedArrivals(index, cone);
+  assertCosts(
+    [
+      arrivals["source/Q"],
+      arrivals["lut/I0"],
+      arrivals["lut/I1"],
+      arrivals["lut/O"],
+      arrivals["sink/D"],
+      arrivals["second/D"],
+    ],
+    [0, 0.1, 0.1, 0.6, 1, 2],
+  );
+  assertTimingOracles(index, cone);
+});
+
+test("unknown prefixes poison downstream arrivals but missing suffixes do not", () => {
+  for (const missing of [0, 1, 2, 3, 4]) {
+    const { model, attachment } = fixture();
+    attachment.arcs[missing].timing.slow[0].maxPs = null;
+    const index = createComputations(model, attachment);
+    const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+    const cone = layer.cones[0],
+      arrivals = namedArrivals(index, cone);
+    assert.equal(arrivals["source/Q"], 0);
+    assert.equal(arrivals["sink/D"], null);
+    assertCosts([arrivals[missing === 0 ? "lut/I1" : "lut/I0"]], [0.1]);
+    if (missing === 4) assertCosts([arrivals["lut/O"]], [0.6]);
+    else assert.equal(arrivals["lut/O"], null);
+    assertTimingOracles(index, cone);
+  }
+});
+
+test("registered pin arrivals keep external and constant-only prefixes outside scope", () => {
+  const { model, attachment } = fixture();
+  addUntimedAlternative(attachment, "external");
+  addUntimedAlternative(attachment, "constant");
+  const index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"]);
+  const cone = layer.cones.find((row) => row.role === "data");
+  const registered = namedArrivals(index, cone),
+    whole = namedArrivals(index, cone, "static");
+  for (const source of ["external-input", "constant/P"]) {
+    assert.equal(registered[source], "not_applicable");
+    assert.equal(whole[source], 0);
+  }
+  for (const input of ["lut/external", "lut/constant"]) {
+    assert.equal(registered[input], "not_applicable");
+    assert.equal(whole[input], null);
+  }
+  assertCosts([registered["lut/O"], registered["sink/D"]], [0.6, 1]);
+  assert.equal(whole["lut/O"], null);
+  assert.equal(whole["sink/D"], null);
+  for (const row of layer.cones) assertTimingOracles(index, row);
+  for (const row of layer.cones.filter((row) => row.role !== "data"))
+    assert(
+      row.pinArrivals.registered.every((value) => value === "not_applicable"),
+    );
+});

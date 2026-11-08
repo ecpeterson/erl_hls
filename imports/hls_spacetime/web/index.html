@@ -56,17 +56,17 @@
         not remove operations or their evidence from the recording.
       </p>
       <p>
-        Thicker storage links join a write at C to its Q sample at C+1. Thinner
-        links show residence of the same version between samples; both are
-        opaque in the 3D view. By default, only versions with recorded uses are
-        drawn, ending at their last use. A hold or delayed response does not
-        extend source-word use. Full storage history includes other residence.
-        Hidden does not mean proven dead: unobserved consumers may exist.
-        Selecting a word expands its qualified cells by default; the expansion
-        control can group them again. Residence depends on the declared write
-        coverage and does not establish native enables or exclusive occupancy.
-        All glyph sizes and link thicknesses aid legibility; they are not
-        physical cell dimensions or metal widths.
+        In Clock planes view, thicker storage links join a write at C to its Q
+        sample at C+1. Thinner links show residence of the same version between
+        samples; both are opaque in the 3D view. By default, only versions with
+        recorded uses are drawn, ending at their last use. A hold or delayed
+        response does not extend source-word use. Full storage history includes
+        other residence. Hidden does not mean proven dead: unobserved consumers
+        may exist. Selecting a word expands its qualified cells by default; the
+        expansion control can group them again. Residence depends on the
+        declared write coverage and does not establish native enables or
+        exclusive occupancy. All glyph sizes and link thicknesses aid
+        legibility; they are not physical cell dimensions or metal widths.
       </p>
       <p>
         Computation circuits show the native combinational fan-in of recorded
@@ -81,18 +81,34 @@
         X-ray view.
       </p>
       <p>
-        Static cone delay uses a fixed capture-wide color scale for the selected
-        timing scope. A shared mark carries the maximum contributing known cone
-        bound; if any contributing cone lacks timing in that scope, its color
-        remains unknown. This is neither the mark's individual delay nor path
-        slack or dynamic criticality. Register Q → D/control excludes external
-        and constant launches, clock-to-Q and setup. Whole-cone timing includes
-        all source boundaries. Both preserve the full selected cone and use
-        conservative SDF bounds. Actor, task and operation filters select work;
-        function and delay filters select its circuits. The prepared viewer
-        loads rendering indexes; the original native graph and records remain
-        separately retained, hash-bound evidence. They need not all be loaded
-        into the browser to render the scene.
+        Within-clock arrival places old Q sampled at C on the launch reference
+        plane, combinational pins at their latest static arrival, and write C at
+        the next Q/capture plane C+1. The common Display budget starts at a
+        hypothetical 10 ns; it is not a measured clock period. Late arrivals
+        extend beyond that boundary. Gray links distinguish input-readiness and
+        ready-to-capture gaps from recorded storage; red marks budget overruns.
+        Unknown arrival has a separate labelled shelf, not a zero-delay height.
+        Heights between measured pin endpoints are interpolated along schematic
+        routing chords. These are timing bounds, not a switching trace.
+        Computation + urgency keeps destination hue and brightens complete paths
+        within the chosen distance of the capture-wide longest path. It is not
+        STA slack or a congestion measurement.
+      </p>
+      <p>
+        Delay emphasis uses a fixed capture-wide color scale for the selected
+        timing scope. A segment carries the longest complete source-to-sink path
+        through it. Shared geometry takes the maximum applicable path bound; an
+        untimed through-path makes it unknown. Geometry outside the timing scope
+        is neutral. The minimum-delay filter still uses whole-cone bounds. This
+        is neither the mark's individual delay nor path slack or dynamic
+        criticality. Register Q → D/control excludes external and constant
+        launches, clock-to-Q and setup. Whole-cone timing includes all source
+        boundaries. Both preserve the full selected cone and use conservative
+        SDF bounds. Actor, task and operation filters select work; function and
+        delay filters select its circuits. The prepared viewer loads rendering
+        indexes; the original native graph and records remain separately
+        retained, hash-bound evidence. They need not all be loaded into the
+        browser to render the scene.
       </p>
       <p>
         Native timing path adds an independent pink static STA overlay selected
@@ -235,16 +251,28 @@
                 Computation circuits</label
               >
               <label
-                >Color<select id="color-mode">
-                  <option value="role">Function</option>
-                  <option value="timing">Static cone delay</option>
+                >Time layout<select id="time-layout" disabled>
+                  <option value="flat">Clock planes</option>
+                  <option value="arrival">Within-clock arrival</option>
+                </select></label
+              >
+              <label
+                >Color style<select id="color-mode">
+                  <option value="criticality">Computation + urgency</option>
+                  <option value="role" selected>Data / enable / reset</option>
+                  <option value="computation">Sub-computation</option>
+                  <option value="direction">Flow direction</option>
+                  <option value="timing">Delay emphasis</option>
+                  <option value="computation-timing">
+                    Computation + delay
+                  </option>
                 </select></label
               >
               <label
                 >Detail<select id="detail-level">
                   <option value="overview">Occupied tiles</option>
-                  <option value="routes" selected>Wire routes</option>
-                  <option value="switches">Routes + switches</option>
+                  <option value="routes" selected>Routing connectivity</option>
+                  <option value="switches">Connectivity + switches</option>
                 </select></label
               >
               <label
@@ -258,12 +286,52 @@
                 ><span><i class="role-reset"></i>Reset</span
                 ><span><i class="role-shared"></i>Shared</span>
               </div>
-              <div id="timing-legend" hidden>
-                <span id="timing-min">0 ns</span><i class="timing-ramp"></i
-                ><span id="timing-max">Unknown</span
+              <div id="computation-legend" hidden>
+                <span id="computation-count"></span
+                ><span><i class="computation-shared"></i>Shared circuitry</span>
+                <details class="computation-colors">
+                  <summary>Color key</summary>
+                  <div id="computation-key"></div>
+                  <p>
+                    Hue follows the destination register across clocks. Colors
+                    are hints, not unique identifiers. Untimed storage keeps its
+                    categorical hue.
+                  </p>
+                </details>
+              </div>
+              <p class="legend-note">
+                Dashed links join known routing locations; bends and track
+                offsets are unavailable. Coincident spans are combined, not
+                electrically connected.
+              </p>
+              <div id="urgency-legend" hidden>
+                <span id="urgency-summary"></span>
+              </div>
+              <div id="arrival-legend" hidden>
+                <span
+                  >Height: latest static arrival · gray: reconvergence /
+                  ready-to-capture interval · red: budget overrun · unknowns on
+                  a separate shelf</span
+                >
+              </div>
+              <div id="direction-legend" hidden>
+                <span>Source / earlier</span
+                ><i id="direction-ramp" class="timing-ramp"></i
+                ><span>Sink / later →</span
                 ><span class="legend-note"
-                  >Maximum contributing cone bound; untimed contributors stay
-                  unknown</span
+                  >Each displayed span restarts the ramp · conflicting
+                  directions / unknown routes stay neutral · connectivity, not
+                  switching</span
+                >
+              </div>
+              <div id="timing-legend" hidden>
+                <span id="timing-min">0 ns</span
+                ><i id="timing-ramp" class="timing-ramp"></i
+                ><span id="timing-max">Unknown</span
+                ><span><i class="outside-timing"></i>Outside scope</span
+                ><span class="legend-note"
+                  >Longest source → sink path through each segment; uniform
+                  color means equal path cost, not zero added delay</span
                 >
               </div>
               <span><i class="role-unknown"></i>Unknown</span>
@@ -302,11 +370,31 @@
               <summary>Layers, storage & timing filters</summary>
               <div class="stack-controls">
                 <label
+                  >Display budget (ns)<input
+                    id="arrival-budget"
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value="10"
+                    required
+                    title="Hypothetical common Q-to-D budget; not a measured clock period"
+                /></label>
+                <label
+                  >Highlight within (ns)<input
+                    id="urgency-window"
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value="1"
+                    required
+                    title="Distance below the capture-wide longest structural path"
+                /></label>
+                <label
                   >Layer spacing<input
                     id="spacing"
                     type="range"
                     min="2"
-                    max="20"
+                    max="80"
                     step="1"
                     value="8" /></label
                 ><label
@@ -380,6 +468,17 @@
                   Selected write or producer only</label
                 >
               </div>
+            </details>
+            <details id="arrival-details" class="render-notes" hidden>
+              <summary>Arrival and local-delay details</summary>
+              <p id="arrival-summary"></p>
+              <p>
+                Lowest relative margins first; local net delay covers the
+                complete connection, not individual PIP spans. Readiness gaps
+                are not extra wire delay. These bounds exclude clock-to-Q,
+                setup, skew and timing exceptions.
+              </p>
+              <div id="arrival-table"></div>
             </details>
             <details class="render-notes">
               <summary>Coverage notes</summary>

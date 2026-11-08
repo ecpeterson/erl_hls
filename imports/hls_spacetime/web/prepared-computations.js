@@ -21,6 +21,19 @@ function count(value) {
 function finite(value) {
   return value === null || (Number.isFinite(value) && value >= 0);
 }
+/** Costs align with their source rows; null is eligible but unknown, whereas
+ * not_applicable excludes a primitive or registered-launch arc from that scope. */
+function pathCosts(values, length, allowOutside, name) {
+  check(
+    Array.isArray(values) &&
+      values.length === length &&
+      Array.from(values).every(
+        (value) =>
+          finite(value) || (allowOutside && value === "not_applicable"),
+      ),
+    `invalid ${name} path costs`,
+  );
+}
 function point(value) {
   return (
     value &&
@@ -56,7 +69,7 @@ export function createPreparedComputations(model, data) {
   check(
     data.format === "spacetime-prepared-render" &&
       data.schema === 1 &&
-      data.algorithm === 1,
+      data.algorithm === 3,
     "unsupported format",
   );
   check(
@@ -67,9 +80,25 @@ export function createPreparedComputations(model, data) {
       ),
     "build/checkpoint mismatch",
   );
-  for (const key of ["operations", "writes", "cones", "routes", "primitives"])
+  for (const key of [
+    "operations",
+    "writes",
+    "cones",
+    "routes",
+    "primitives",
+    "pinGeometry",
+    "arcGeometry",
+  ])
     check(Array.isArray(data[key]), `missing ${key} table`);
-  const { operations, writes, cones, routes, primitives } = data;
+  const {
+    operations,
+    writes,
+    cones,
+    routes,
+    primitives,
+    pinGeometry,
+    arcGeometry,
+  } = data;
   const counts = data.sourceCounts;
   check(
     counts &&
@@ -81,6 +110,31 @@ export function createPreparedComputations(model, data) {
       counts.routeNets === counts.nets,
     "invalid source population counts",
   );
+  check(
+    pinGeometry.length === counts.pins && arcGeometry.length === counts.arcs,
+    "incomplete pin/arc geometry population",
+  );
+  for (const row of pinGeometry)
+    check(
+      Array.isArray(row) &&
+        row.length === 3 &&
+        (row[0] === null || (count(row[0]) && row[0] < counts.cells)) &&
+        ((row[1] === null && row[2] === null) ||
+          (Number.isFinite(row[1]) && Number.isFinite(row[2]))),
+      "invalid pin geometry",
+    );
+  for (const row of arcGeometry)
+    check(
+      Array.isArray(row) &&
+        row.length === 4 &&
+        count(row[0]) &&
+        row[0] < counts.pins &&
+        count(row[1]) &&
+        row[1] < counts.pins &&
+        (row[2] === 0 || row[2] === 1) &&
+        finite(row[3]),
+      "invalid arc geometry",
+    );
   const primitiveIds = new Set();
   for (const row of primitives) {
     check(
@@ -144,6 +198,25 @@ export function createPreparedComputations(model, data) {
       "routes",
     ])
       unique(cone[key], `cone ${key}`);
+    for (const [table, length] of [
+      ["pathDelays", cone.arcIndices.length],
+      ["primitivePathDelays", cone.primitives.length],
+    ]) {
+      pathCosts(cone[table]?.registered, length, true, `${table} registered`);
+      pathCosts(
+        cone[table]?.static,
+        length,
+        table === "primitivePathDelays",
+        `${table} static`,
+      );
+    }
+    for (const scope of ["registered", "static"])
+      pathCosts(
+        cone.pinArrivals?.[scope],
+        cone.pinIndices.length,
+        true,
+        `pinArrivals ${scope}`,
+      );
     for (const id of cone.primitives) ref(id, primitives, "primitive");
     const arcSet = new Set(cone.arcIndices),
       geometry = new Set(cone.primitives);
@@ -230,14 +303,16 @@ export function createPreparedComputations(model, data) {
       "write applicability mismatch",
     );
   }
-  const maxima = (key) =>
-    cones.reduce(
-      (max, cone) => (cone[key] === null ? max : Math.max(max ?? 0, cone[key])),
-      null,
-    );
+  const maxima = (scope) => {
+    let maximum = null;
+    for (const cone of cones)
+      for (const value of cone.primitivePathDelays[scope])
+        if (typeof value === "number") maximum = Math.max(maximum ?? 0, value);
+    return maximum;
+  };
   const maxDelays = {
-    registered: maxima("registeredDelayNs"),
-    static: maxima("staticDelayNs"),
+    registered: maxima("registered"),
+    static: maxima("static"),
   };
   check(
     data.maxDelays?.registered === maxDelays.registered &&
@@ -262,6 +337,8 @@ export function createPreparedComputations(model, data) {
     cones,
     routes,
     primitives,
+    pinGeometry,
+    arcGeometry,
     bounds: data.bounds,
     maxDelays,
     paints: new Map(),
@@ -356,41 +433,91 @@ export function preparedComputationLayers(
     }));
 }
 
+/** A cone can feed several logical destinations, including aliased words. Only
+ * displayed writes contribute memberships, and only their selected cones count. */
+function paintMemberships(index, layer) {
+  const memberships = new Map(layer.cones.map((cone) => [cone.id, new Set()]));
+  for (const operation of layer.operations ?? []) {
+    const write = index.writes.get(operation.event);
+    const event = index.model.events.get(operation.event);
+    check(
+      write && typeof event?.access?.resource === "string",
+      "missing paint destination",
+    );
+    for (const coneId of write.cones) {
+      const members = memberships.get(index.cones[coneId].id);
+      if (members) members.add(event.access.resource);
+    }
+  }
+  return [...memberships]
+    .map(([id, members]) => [id, [...members].sort()])
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
 /** Union shared raw tile geometry only; camera/normalization remain renderer work.
- * A primitive's color bound is the maximum contributing cone bound, not its own
- * delay. Mixed known/unknown contributors retain explicit flags in both scopes. */
+ * A primitive's color cost is the maximum eligible path through that primitive
+ * across contributing cones. Unknown eligible paths remain flagged; paths outside
+ * a timing scope do not contribute. Whole-cone bounds are used only by filters.
+ * Missing destination membership dominates known owners of a shared primitive. */
 export function preparedCircuitPaint(index, layer) {
-  const key = layer.cones
-    .map((c) => c.id)
-    .sort()
-    .join("|");
+  const membershipRows = paintMemberships(index, layer);
+  const key = JSON.stringify(membershipRows);
   if (index.paints.has(key)) return index.paints.get(key);
+  const memberships = new Map(membershipRows);
   const chosen = new Map(),
     routeIds = new Set();
   for (const cone of layer.cones) {
+    const members = memberships.get(cone.id);
     for (const id of cone.routes) routeIds.add(id);
-    for (const id of cone.primitives) {
+    for (const [primitiveIndex, id] of cone.primitives.entries()) {
       if (!chosen.has(id))
         chosen.set(id, {
           ...index.primitives[id],
           roles: new Set(),
-          registeredDelayNs: null,
-          staticDelayNs: null,
-          registeredTimingUnknown: false,
-          staticTimingUnknown: false,
+          computationKey: null,
+          computationShared: false,
+          computationUnknown: false,
+          registeredPathDelayNs: null,
+          staticPathDelayNs: null,
+          registeredPathTimingUnknown: false,
+          staticPathTimingUnknown: false,
+          registeredPathApplicable: false,
+          staticPathApplicable: false,
         });
       const row = chosen.get(id);
       row.roles.add(cone.role);
-      for (const [value, unknown] of [
-        ["registeredDelayNs", "registeredTimingUnknown"],
-        ["staticDelayNs", "staticTimingUnknown"],
-      ]) {
-        if (cone[value] === null) row[unknown] = true;
-        else row[value] = Math.max(row[value] ?? 0, cone[value]);
+      if (members.length === 0) {
+        row.computationUnknown = true;
+        row.computationKey = null;
+        row.computationShared = false;
+      } else if (!row.computationUnknown) {
+        if (
+          members.length > 1 ||
+          (row.computationKey !== null && row.computationKey !== members[0])
+        ) {
+          row.computationKey = null;
+          row.computationShared = true;
+        } else if (!row.computationShared) {
+          row.computationKey = members[0];
+        }
+      }
+      for (const scope of ["registered", "static"]) {
+        const cost = cone.primitivePathDelays[scope][primitiveIndex];
+        if (cost === "not_applicable") continue;
+        row[`${scope}PathApplicable`] = true;
+        if (cost === null) row[`${scope}PathTimingUnknown`] = true;
+        else {
+          const value = `${scope}PathDelayNs`;
+          row[value] = Math.max(row[value] ?? 0, cost);
+        }
       }
     }
   }
   const result = {
+    cacheKey: key,
+    computations: [
+      ...new Set(membershipRows.flatMap(([, members]) => members)),
+    ].sort(),
     tiles: [],
     pips: [],
     cells: [],
@@ -404,7 +531,6 @@ export function preparedCircuitPaint(index, layer) {
   for (const row of chosen.values()) {
     row.role = row.roles.size === 1 ? [...row.roles][0] : "mixed";
     delete row.roles;
-    row.timingUnknown = row.registeredTimingUnknown || row.staticTimingUnknown;
     result[row.type].push(row);
   }
   return cachePaint(index.paints, key, result);

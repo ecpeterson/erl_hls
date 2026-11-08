@@ -1,8 +1,9 @@
-/** Fixed function colors and a perceptually ordered static-delay scale.
+/** Function, computation, direction and perceptually ordered static-path-delay colors.
  * Delays are supplied by the caller; this module never infers timing or activity.
  * Selection belongs to a separate outline/halo, not this color mapping.
  */
 export const UNKNOWN_COLOR = "#81738f";
+export const OUTSIDE_TIMING_COLOR = "#526471";
 export const FUNCTION_COLORS = Object.freeze({
   data: "#65dac7",
   enable: "#f1bb6c",
@@ -75,29 +76,146 @@ function hexColor(lightness, a, b) {
   return `#${rgb.map(encode).join("")}`;
 }
 
-/** Map supplied function or static cone delay to an opaque CSS color.
- * Unknown delays or absent domains get their own color; zero is a known delay.
- * Use the same maxDelayNs across the capture, not each visible window/selection.
+// Constant Oklab lightness keeps categorical hue from suggesting a rank. The
+// small palette deliberately permits collisions: color is not a unique identity.
+const COMPUTATION_HUES = Object.freeze([
+  15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345,
+]);
+const computationHue = (lightness, index) => {
+  const radians = (COMPUTATION_HUES[index] * Math.PI) / 180;
+  return hexColor(
+    lightness,
+    0.13 * Math.cos(radians),
+    0.13 * Math.sin(radians),
+  );
+};
+export const COMPUTATION_COLORS = Object.freeze(
+  COMPUTATION_HUES.map((_, index) => computationHue(0.73, index)),
+);
+export const COMPUTATION_SHARED_COLOR = hexColor(0.8, 0, 0);
+
+/** Stable FNV-1a over JavaScript string code units; key type is part of identity.
+ * Missing/invalid keys are unknown rather than silently joining one category.
+ */
+function computationIndex(key) {
+  const value =
+    typeof key === "string" && key.length
+      ? `text:${key}`
+      : Number.isSafeInteger(key)
+        ? `number:${key}`
+        : null;
+  if (value === null) return null;
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  }
+  return (hash >>> 0) % COMPUTATION_HUES.length;
+}
+
+/** Stable categorical hue, independent of display order, filters and timing.
+ * Supply a nonempty semantic key or safe integer; twelve colors may be shared.
+ */
+export function computationColor(key) {
+  const index = computationIndex(key);
+  return index === null ? UNKNOWN_COLOR : COMPUTATION_COLORS[index];
+}
+
+/** Clamp a supplied scalar coordinate; unknown values do not become zero. */
+function fraction(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : null;
+}
+
+/** A zero-only capture has one known low endpoint; overscale values saturate. */
+function delayFraction(delayNs, maxDelayNs) {
+  if (!knownDelay(delayNs) || !knownDelay(maxDelayNs)) return null;
+  return maxDelayNs === 0
+    ? delayNs === 0
+      ? 0
+      : 1
+    : Math.min(1, delayNs / maxDelayNs);
+}
+
+/** Direction means a caller-supplied source-to-sink coordinate, not timing or
+ * observed activity. Dark cool sources lead to bright warm sinks.
+ */
+export function directionColor(position) {
+  const value = fraction(position);
+  if (value === null) return UNKNOWN_COLOR;
+  return hexColor(
+    0.5 + 0.38 * value,
+    -0.035 + 0.065 * value,
+    -0.11 + 0.23 * value,
+  );
+}
+export const DIRECTION_SOURCE_COLOR = directionColor(0);
+export const DIRECTION_SINK_COLOR = directionColor(1);
+
+/** Dim low-delay circuitry and brighten high-delay circuitry on one fixed
+ * capture-wide scale. Unknown timing and an absent domain remain distinct.
+ */
+export function timingColor(delayNs, maxDelayNs) {
+  const value = delayFraction(delayNs, maxDelayNs);
+  if (value === null) return UNKNOWN_COLOR;
+  return hexColor(
+    0.4 + 0.5 * value,
+    0.025 + 0.005 * value,
+    -0.085 + 0.215 * value,
+  );
+}
+
+/** Map supplied function, computation identity or complete-path delay to opaque
+ * CSS color. Hybrid mode retains a computation hue and uses timing lightness.
+ * Explicitly shared computation ownership uses neutral gray, never a fake key.
+ * Use the same maxDelayNs across the capture, not each window or selection.
  */
 export function sceneColor({
   role = "data",
   mode = "role",
   delayNs = null,
   maxDelayNs = null,
+  computationKey = null,
+  computationShared = false,
+  timingApplicable = true,
+  marginWindowNs = 1,
 } = {}) {
   if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
-  if (mode !== "timing")
-    throw new RangeError(`Unknown scene color mode: ${mode}`);
-  if (!knownDelay(delayNs) || !knownDelay(maxDelayNs)) return UNKNOWN_COLOR;
-  const fraction =
-    maxDelayNs === 0
-      ? delayNs === 0
-        ? 0
-        : 1
-      : Math.min(1, delayNs / maxDelayNs);
-  return hexColor(
-    0.56 + 0.28 * fraction,
-    -0.025 + 0.115 * fraction,
-    -0.09 + 0.15 * fraction,
-  );
+  if (
+    ["timing", "computation-timing", "criticality"].includes(mode) &&
+    !timingApplicable
+  )
+    return OUTSIDE_TIMING_COLOR;
+  if (mode === "timing") return timingColor(delayNs, maxDelayNs);
+  if (mode === "computation")
+    return computationShared
+      ? COMPUTATION_SHARED_COLOR
+      : computationColor(computationKey);
+  if (mode === "criticality") {
+    if (!(Number.isFinite(marginWindowNs) && marginWindowNs > 0))
+      throw new RangeError("Criticality window must be positive");
+    const index = computationIndex(computationKey);
+    if (
+      !knownDelay(delayNs) ||
+      !knownDelay(maxDelayNs) ||
+      (!computationShared && index === null)
+    )
+      return UNKNOWN_COLOR;
+    const margin = Math.max(0, maxDelayNs - delayNs);
+    const lightness = 0.28 + 0.62 * Math.max(0, 1 - margin / marginWindowNs);
+    return computationShared
+      ? hexColor(lightness, 0, 0)
+      : computationHue(lightness, index);
+  }
+  if (mode === "computation-timing") {
+    const index = computationIndex(computationKey);
+    const value = delayFraction(delayNs, maxDelayNs);
+    if (value === null || (!computationShared && index === null))
+      return UNKNOWN_COLOR;
+    const lightness = 0.4 + 0.5 * value;
+    return computationShared
+      ? hexColor(lightness, 0, 0)
+      : computationHue(lightness, index);
+  }
+  throw new RangeError(`Unknown scene color mode: ${mode}`);
 }

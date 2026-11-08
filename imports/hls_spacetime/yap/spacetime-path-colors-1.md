@@ -1,0 +1,21 @@
+# Complete-path timing colors
+
+This replaces the cone-wide coloring from `spacetime-color-studies-1.md`. Each eligible graph arc carries the longest complete source-to-selected-sink structural path through it: longest prefix plus arc delay plus longest suffix. Forward/backward passes over the qualified DAG avoid path enumeration. The selected scope determines eligible launches; registered scope starts at native Q pins. Data, enable and reset cones remain separate.
+
+Unknown prefixes/suffixes propagate only through affected paths. An arc outside every eligible registered path is `not_applicable`, distinct from unknown or zero. Unsupported connectivity or cycles fail conservatively. SDF costs retain the existing envelope over supplied corners/conditional delay entries; they do not apply clock-to-Q, setup/recovery checks, clock skew, timing exceptions or sensitization. These colors are structural path-cost estimates, not STA slack or a qualified clock period.
+
+Preparation maps arc costs to their routed geometry, and maps incident arc costs to cell markers. Shared geometry takes the maximum contributing applicable cost; an eligible unknown contributor keeps that geometry unknown. Outside-scope geometry is neutral and does not poison a timed contributor. Occupied-tile aggregation preserves the same distinction. The existing minimum-delay filter still selects whole cones using their original bounds. The color scale remains capture-wide.
+
+## Validation and saved capture
+
+Algorithm 2 requires fresh rendering tables; old derivatives are rejected rather than relabeled. Source publications retained by algorithm 1 already contain the necessary full graph and SDF, so no native job or simulation was rerun.
+
+Local qualification covered 242 JavaScript tests, including an independent exhaustive oracle for small reconvergent graphs, upstream/downstream missing delays, multiple roots, external/constant eligibility, and a complete publication-to-renderer fixture with 4 ns and 8 ns branches plus an 8 ns shared tail. The first pass had 241 successes and one synthetic fixture with the wrong arc-kind spelling (`cell` instead of `logic`); correcting that fixture and rerunning its three publication tests passed. The remaining Erlang formatting, 155 tests, Dialyzer and source audit (18 files, zero findings) passed. Logs are retained under `hls_artifacts/runs/spacetime-2026-11-07/path-colors-1/qualification-{1,2}/`.
+
+The guarded full-data preparation completed in 23.57 seconds, 2,935,406,592 bytes peak group RSS, no guard violation, and no remaining group members. The source and recording identities are unchanged. All 61,764 operations, 7,637 writes, 153 cones, 75,541 route branches and 867,569 primitives remain. Operations, writes, routes and primitive tables are byte-identical to the earlier derivative; every original cone field is identical. Only timing annotations and derivative metadata changed.
+
+The new rendering tables total 105,259,789 decoded bytes and 14,962,465 gzip bytes (about 2.12 MB extra gzip versus the earlier derivative), within the existing retention/loader bounds. The main local index now points at `prepared-path-colors-1/render/manifest.json`, 3,262 bytes, SHA-256 `e4050388f903a79a91838de76291cfbf6a13eeb358b4c0e4c80e4da5ec3236db`. The global registered-path maximum remains 8.8635 ns; it is not a validated period.
+
+Across 1,401,246 known primitive-to-cone registered-path associations, 1,370,052 now have a smaller cost than their old blanket cone bound, 31,194 retain it, and another 6,204 associations are outside the registered timing scope. Median path/cone ratio among timed associations is 0.6576. These are per-cone geometry associations, not unique cells or counts of dynamically sensitized paths. Full publication integrity and statistics are retained in `path-colors-1/publication-review-1.json`.
+
+Browser verification loaded the new derivative and checked C1852–1854 in delay, hybrid, route and occupied-tile modes, plus both timing scopes, without console errors. Coverage stayed at 22 recorded writes, 115,470 arc occurrences and 223,881 PIP-location occurrences across those three clocks. On the observed load, the first recording frame appeared in 1.68 seconds and the complete initial view in 11.41 seconds; these are one local browser observation, not a benchmark.

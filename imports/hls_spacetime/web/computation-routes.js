@@ -434,6 +434,113 @@ function registeredBound(
   };
 }
 
+/** Merge alternative path prefixes/suffixes without losing an untimed path.
+ * A finite alternative cannot establish the maximum while another is unknown. */
+function mergeDistance(distances, pin, distance) {
+  const previous = distances.get(pin);
+  if (!previous) distances.set(pin, distance);
+  else {
+    previous.unknown ||= distance.unknown;
+    if (distance.known !== null)
+      previous.known = Math.max(previous.known ?? 0, distance.known);
+  }
+}
+
+/** Extend one reachable prefix/suffix; an absent annotation is not zero delay. */
+function extendDistance(distance, delay) {
+  const total =
+    distance.known !== null && delay !== null ? distance.known + delay : null;
+  const known = Number.isFinite(total) ? total : null;
+  return {
+    known,
+    unknown: distance.unknown || delay === null || known === null,
+  };
+}
+
+/** Longest eligible prefixes at pins and complete through-path costs at arcs.
+ * Arrays follow the supplied pin/arc orders. Forward/backward DAG passes are
+ * linear in this cone, without enumerating paths.
+ * Prefix/suffix unknowns affect only arcs whose through-path can include them.
+ * Values use the same conservative SDF envelope as the existing cone bounds;
+ * they omit endpoint timing checks, clock effects and sensitization. */
+function pathTiming(
+  index,
+  roots,
+  frontiers,
+  outgoing,
+  order,
+  arcIndices,
+  pinIndices,
+  cyclic,
+  unsupported,
+) {
+  if (cyclic || unsupported)
+    return {
+      pathDelays: {
+        registered: arcIndices.map(() => null),
+        static: arcIndices.map(() => null),
+      },
+      pinArrivals: {
+        registered: pinIndices.map(() => null),
+        static: pinIndices.map(() => null),
+      },
+    };
+  const suffix = new Map(
+    roots.map((pin) => [pin, { known: 0, unknown: false }]),
+  );
+  for (let i = order.length - 1; i >= 0; i--) {
+    const pin = order[i];
+    for (const arcIndex of outgoing.get(pin) ?? []) {
+      const tail = suffix.get(index.arcs[arcIndex].to);
+      if (tail)
+        mergeDistance(
+          suffix,
+          pin,
+          extendDistance(tail, index.delays[arcIndex]),
+        );
+    }
+  }
+  const costs = (registered) => {
+    const prefix = new Map(
+      frontiers
+        .filter((item) => !registered || item.kind === "sequential")
+        .map((item) => [item.pin, { known: 0, unknown: false }]),
+    );
+    for (const pin of order) {
+      const head = prefix.get(pin);
+      if (!head) continue;
+      for (const arcIndex of outgoing.get(pin) ?? [])
+        mergeDistance(
+          prefix,
+          index.arcs[arcIndex].to,
+          extendDistance(head, index.delays[arcIndex]),
+        );
+    }
+    const paths = arcIndices.map((arcIndex) => {
+      const arc = index.arcs[arcIndex],
+        delay = index.delays[arcIndex];
+      const head = prefix.get(arc.from),
+        tail = suffix.get(arc.to);
+      if (!head || !tail) return registered ? "not_applicable" : null;
+      if (head.unknown || tail.unknown || delay === null) return null;
+      const cost = head.known + delay + tail.known;
+      return Number.isFinite(cost) ? cost : null;
+    });
+    const arrivals = pinIndices.map((pin) => {
+      const head = prefix.get(pin);
+      if (!head) return "not_applicable";
+      return head.unknown ? null : head.known;
+    });
+    return { paths, arrivals };
+  };
+  const registered = costs(true),
+    whole = costs(false);
+  return {
+    pathDelays: { registered: registered.paths, static: whole.paths },
+    pinArrivals: { registered: registered.arrivals, static: whole.arrivals },
+  };
+}
+
 /** Build a backward graph cone once, then compute a conservative longest static
  * data delay with Kahn's algorithm. Reconvergence shares nodes, never paths.
  * Unsupported frontiers, cycles or any untimed required arc leave delay unknown. */
@@ -502,12 +609,26 @@ function cone(index, roots, role) {
     cyclic,
     unsupported,
   );
+  const arcIndices = [...arcSet],
+    pinIndices = [...pinSet];
+  const timing = pathTiming(
+    index,
+    rootPins,
+    frontiers,
+    outgoing,
+    ready,
+    arcIndices,
+    pinIndices,
+    cyclic,
+    unsupported,
+  );
   const result = {
     id: key,
     rootPins,
     role,
-    pinIndices: [...pinSet],
-    arcIndices: [...arcSet],
+    pinIndices,
+    arcIndices,
+    ...timing,
     frontiers,
     cellIndices: [
       ...new Set(
