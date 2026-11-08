@@ -250,8 +250,8 @@
               <label
                 >Detail<select id="detail-level">
                   <option value="overview">Occupied tiles</option>
-                  <option value="routes" selected>Wire routes</option>
-                  <option value="switches">Routes + switches</option>
+                  <option value="routes" selected>Routing connectivity</option>
+                  <option value="switches">Connectivity + switches</option>
                 </select></label
               >
               <label
@@ -278,13 +278,19 @@
                   </p>
                 </details>
               </div>
+              <p class="legend-note">
+                Dashed links join known routing locations; bends and track
+                offsets are unavailable. Coincident spans are combined, not
+                electrically connected.
+              </p>
               <div id="direction-legend" hidden>
                 <span>Source / earlier</span
                 ><i id="direction-ramp" class="timing-ramp"></i
                 ><span>Sink / later →</span
                 ><span class="legend-note"
-                  >Each pipe restarts the ramp · points / unresolved routes stay
-                  neutral · connectivity, not switching</span
+                  >Each displayed span restarts the ramp · conflicting
+                  directions / unknown routes stay neutral · connectivity, not
+                  switching</span
                 >
               </div>
               <div id="timing-legend" hidden>
@@ -293,8 +299,8 @@
                 ><span id="timing-max">Unknown</span
                 ><span><i class="outside-timing"></i>Outside scope</span
                 ><span class="legend-note"
-                  >Longest source → sink path through each segment; unknowns
-                  stay distinct</span
+                  >Longest source → sink path through each segment; uniform
+                  color means equal path cost, not zero added delay</span
                 >
               </div>
               <span><i class="role-unknown"></i>Unknown</span>

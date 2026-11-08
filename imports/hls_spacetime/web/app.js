@@ -22,6 +22,8 @@ import {
   preparedComputationLayers,
   preparedCircuitPaint,
 } from "./prepared-computations.js";
+import { circuitDisplay } from "./circuit-display.js";
+import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
 import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
 import {
@@ -1262,9 +1264,19 @@ function buildStackScene() {
     radius = 0.002,
     kind = "route",
     colorEnd = color,
-  ) => result.segments.push({ from: a, to: b, color, colorEnd, radius, kind });
-  const marker = (position, color, size = 0.006) =>
-    result.markers.push({ position, color, size });
+    dash = 0,
+  ) =>
+    result.segments.push({
+      from: a,
+      to: b,
+      color,
+      colorEnd,
+      radius,
+      kind,
+      dash,
+    });
+  const marker = (position, color, size = 0.006, priority = 0) =>
+    result.markers.push({ position, color, size, priority });
   const interval = Math.max(1, Math.ceil(state.window / 8));
   for (let c = state.first; c < state.first + state.window; c += interval) {
     const corners = [
@@ -1295,7 +1307,7 @@ function buildStackScene() {
   if ($("context").checked)
     for (const cell of state.model.cells.values()) {
       if (Number.isFinite(cell.x) && Number.isFinite(cell.y))
-        marker(world(cellPoint(cell), state.first), "#344c59", 0.004);
+        marker(world(cellPoint(cell), state.first), "#344c59", 0.004, -1);
     }
   const layers = circuitLayers();
   renderCircuitSummary(layers);
@@ -1387,7 +1399,9 @@ function buildStackScene() {
     return palette.get(key);
   };
   for (const layer of layers) {
-    const paint = layer.paint;
+    const paint = circuitDisplay(layer.paint, {
+      includeUnresolved: !mappedOnly(),
+    });
     const markRows =
       detail === "switches"
         ? [...paint.cells, ...paint.pips, ...paint.tiles]
@@ -1400,18 +1414,21 @@ function buildStackScene() {
         segment(
           a,
           b,
-          row.kind === "unresolved"
+          (row.kind === "unresolved" || row.directionUnknown) &&
+            mode === "direction"
             ? "#788495"
             : mode === "direction"
               ? DIRECTION_SOURCE_COLOR
               : shade(row),
           0.0017,
           row.kind,
-          row.kind === "unresolved"
+          (row.kind === "unresolved" || row.directionUnknown) &&
+            mode === "direction"
             ? "#788495"
             : mode === "direction"
               ? DIRECTION_SINK_COLOR
               : shade(row),
+          0.018,
         );
         result.focus.push(a, b);
       }
@@ -1490,7 +1507,12 @@ function buildStackScene() {
         endColor,
       );
       if (item.kind === "write" && !item.afterWindow)
-        marker(b, active ? "#f3f5ed" : endColor, active ? 0.012 : 0.007);
+        marker(
+          b,
+          active ? "#f3f5ed" : endColor,
+          active ? 0.012 : 0.007,
+          active ? 3 : 1,
+        );
       result.storage.push({ from: a, to: b, segment: item, point: p });
       result.focus.push(a, b);
       if (active) result.selection.push(a, b);
@@ -1526,6 +1548,7 @@ function buildStackScene() {
         position,
         active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
         active ? 0.014 : onPath ? 0.009 : 0.004,
+        active ? 3 : onPath ? 2 : 1,
       );
       result.events.push({ position, event });
       result.focus.push(position);
@@ -1564,6 +1587,7 @@ function buildStackScene() {
         0.003,
         "dependency",
         mode === "direction" ? DIRECTION_SINK_COLOR : "#d8dedc",
+        0.018,
       );
       result.focus.push(
         world(source, Math.max(state.first, from.cycle)),
@@ -1601,13 +1625,21 @@ function buildStackScene() {
       ];
       for (let j = 1; j < positions.length; j++)
         if (positions[j - 1] && positions[j]) {
-          segment(positions[j - 1], positions[j], "#ee91d5", 0.004, "static");
+          segment(
+            positions[j - 1],
+            positions[j],
+            "#ee91d5",
+            0.004,
+            "static",
+            "#ee91d5",
+            0.018,
+          );
           result.focus.push(positions[j - 1], positions[j]);
         }
     }
   }
   $("access-summary").textContent =
-    `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? "occupied-bin overview (aggregated, not native geometry)" : detail === "routes" ? "route spans and cells; switch markers hidden" : "route spans, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
+    `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? "occupied-bin overview (aggregated, not native geometry)" : detail === "routes" ? "schematic routing links and cells; switch markers hidden" : "schematic links, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
   if (
     state.computations &&
     $("computation-circuits").checked &&
@@ -1653,7 +1685,7 @@ function buildStackScene() {
   result.selectionBounds = sceneBounds(
     result.selection.length ? result.selection : result.focus,
   );
-  return result;
+  return overlayDisplay(result);
 }
 
 /** Paint opaque depth-tested geometry, with sparse labels on the interaction

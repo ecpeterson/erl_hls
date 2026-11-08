@@ -11,9 +11,9 @@ import {
 } from "./camera3d.js";
 
 /** Opaque, depth-tested geometry for a chip/time scene. A segment is an actual
- * four-sided prism, not a screen-space line. Geometry uploads are independent of
+ * four-sided diamond prism, not a screen-space line. Geometry uploads are independent of
  * camera motion; instances share one indexed cube mesh and one draw call. */
-const STRIDE = 14;
+const STRIDE = 15;
 const MAX_BUFFER_BYTES = 256 * 1024 * 1024;
 const DEFAULT_COLOR = "#67d7c3";
 
@@ -74,7 +74,8 @@ function normal(a, b, c) {
 
 /** Pack an immutable scene without clipping, sampling or retaining per-camera
  * copies. Segment color/colorEnd tint the source/destination of one prism;
- * omitted colorEnd keeps a uniform color. Markers always use one color.
+ * omitted colorEnd keeps a uniform color. Dash spacing is in world units and
+ * marks schematic connectivity without splitting instances. Markers use one color.
  * Zero-length segments/degenerate triangles are counted and omitted.
  * Memory overflow rejects the whole upload; it never silently drops a prefix. */
 export function packScene(scene) {
@@ -120,13 +121,14 @@ export function packScene(scene) {
       bounds.max[i] = Math.max(bounds.max[i], p[i] + radius);
     }
   };
-  const instance = (from, to, tint, endTint, radius, shape) => {
+  const instance = (from, to, tint, endTint, radius, shape, dash = 0) => {
     instances.set(from, offset);
     instances.set(to, offset + 3);
     instances.set(tint, offset + 6);
     instances[offset + 9] = radius;
     instances[offset + 10] = shape;
     instances.set(endTint, offset + 11);
+    instances[offset + 14] = dash;
     offset += STRIDE;
   };
   for (const item of segments) {
@@ -134,7 +136,9 @@ export function packScene(scene) {
       to = point(item.to),
       tint = color(item.color),
       endTint = item.colorEnd === undefined ? tint : color(item.colorEnd),
-      radius = positive(item.radius ?? 0.002, "segment radius");
+      radius = positive(item.radius ?? 0.002, "segment radius"),
+      dash = item.dash ?? 0;
+    requireValue(Number.isFinite(dash) && dash >= 0, "invalid dash spacing");
     if (from.every((v, i) => v === to[i])) {
       counts.zeroSegments++;
       continue;
@@ -143,9 +147,9 @@ export function packScene(scene) {
       from.some((v, i) => Math.fround(v) !== Math.fround(to[i])),
       "segment collapses at GPU precision; normalize world coordinates",
     );
-    instance(from, to, tint, endTint, radius, 0);
-    extend(from, radius);
-    extend(to, radius);
+    instance(from, to, tint, endTint, radius, 0, dash);
+    extend(from, radius * Math.SQRT2);
+    extend(to, radius * Math.SQRT2);
     counts.segments++;
   }
   for (const item of markers) {
@@ -199,11 +203,16 @@ layout(location=4) in vec3 aColor;
 layout(location=5) in float aRadius;
 layout(location=6) in float aShape;
 layout(location=7) in vec3 aColorEnd;
+layout(location=8) in float aDash;
 uniform mat4 uMatrix;
 out vec3 vColor;
 out vec3 vNormal;
+out float vAlong;
+flat out float vDash;
 void main() {
   vec3 world;
+  vAlong = 0.0;
+  vDash = aDash;
   if (aShape > 0.5) {
     world = aStart + aPosition * aRadius;
     vNormal = aNormal;
@@ -214,9 +223,14 @@ void main() {
     vec3 reference = abs(forward.z) < 0.9 ? vec3(0,0,1) : vec3(0,1,0);
     vec3 side = normalize(cross(forward, reference));
     vec3 other = cross(forward, side);
-    world = (aStart + aEnd) * 0.5 + side * (aPosition.x * aRadius)
-      + other * (aPosition.y * aRadius) + forward * (aPosition.z * extent * 0.5);
-    vNormal = side * aNormal.x + other * aNormal.y + forward * aNormal.z;
+    // A diamond section avoids coplanar roofs where same-clock spans cross.
+    // No height/track offset is invented to break depth ties.
+    vec2 section = vec2(aPosition.x - aPosition.y, aPosition.x + aPosition.y) * 0.70710678;
+    vec2 sectionNormal = vec2(aNormal.x - aNormal.y, aNormal.x + aNormal.y) * 0.70710678;
+    world = (aStart + aEnd) * 0.5 + side * (section.x * aRadius)
+      + other * (section.y * aRadius) + forward * (aPosition.z * extent * 0.5);
+    vNormal = side * sectionNormal.x + other * sectionNormal.y + forward * aNormal.z;
+    vAlong = (aPosition.z + 1.0) * extent * 0.5;
   }
   vColor = aShape > 0.5 ? aColor
     : mix(aColor, aColorEnd, (aPosition.z + 1.0) * 0.5);
@@ -230,14 +244,19 @@ layout(location=2) in vec3 aColor;
 uniform mat4 uMatrix;
 out vec3 vColor;
 out vec3 vNormal;
-void main() { vColor = aColor; vNormal = aNormal; gl_Position = uMatrix * vec4(aPosition, 1); }`;
+out float vAlong;
+flat out float vDash;
+void main() { vColor = aColor; vNormal = aNormal; vAlong = 0.0; vDash = 0.0; gl_Position = uMatrix * vec4(aPosition, 1); }`;
 const FRAGMENT = `#version 300 es
 precision highp float;
 in vec3 vColor;
 in vec3 vNormal;
+in float vAlong;
+flat in float vDash;
 uniform float uShading;
 out vec4 outColor;
 void main() {
+  if (vDash > 0.0 && mod(vAlong, vDash) > vDash * 0.65) discard;
   float light = 0.76 + 0.24 * abs(dot(normalize(vNormal), normalize(vec3(0.4,0.7,-0.6))));
   outColor = vec4(vColor * mix(1.0, light, uShading), 1);
 }`;
@@ -399,6 +418,7 @@ function resources(gl) {
       [5, 1, 9],
       [6, 1, 10],
       [7, 3, 11],
+      [8, 1, 14],
     ])
       attribute(location, size, STRIDE * 4, offset * 4, 1);
     const surfaceVao = vao(),
@@ -587,7 +607,7 @@ export function createScene3D(
       gl.viewport(0, 0, pixelsWide, pixelsHigh);
       gl.disable(gl.BLEND);
       gl.enable(gl.DEPTH_TEST);
-      gl.depthFunc(gl.LEQUAL);
+      gl.depthFunc(gl.LESS);
       gl.depthMask(true);
       gl.clearDepth(1);
       gl.clearColor(...clear, 1);
