@@ -48,10 +48,10 @@ test("fresh portable derivative keeps exact recording/full source and loads with
     },
   });
   assert(requested.every((url) => url.includes("/render/")));
-  assert.equal(data.algorithm, 3);
+  assert.equal(data.algorithm, 4);
   assert.deepEqual(data.pinGeometry, [
-    [0, 10, 20],
-    [0, 10, 20],
+    [0, 10, 20, "ff/Q"],
+    [0, 10, 20, "ff/D"],
   ]);
   assert.deepEqual(data.arcGeometry, [[0, 1, 0, 0.02]]);
   for (const scope of ["registered", "static"])
@@ -71,7 +71,7 @@ test("fresh portable derivative keeps exact recording/full source and loads with
   const renderManifest = JSON.parse(
     await readFile(join(f.output, entry.render.file)),
   );
-  assert.equal(renderManifest.algorithm, 3);
+  assert.equal(renderManifest.algorithm, 4);
   assert.equal(renderManifest.totals.pinGeometry, 2);
   assert.equal(renderManifest.totals.arcGeometry, 1);
   for (const table of ["pinGeometry", "arcGeometry"])
@@ -119,14 +119,14 @@ test("publication carries complete branch costs into shared geometry without dro
   const layer = preparedComputationLayers(index, ["w"])[0];
   const paint = preparedCircuitPaint(index, layer);
   assert.equal(layer.cones[0].registeredDelayNs, 8);
-  assert.equal(data.algorithm, 3);
+  assert.equal(data.algorithm, 4);
   assert.deepEqual(index.pinGeometry, [
-    [0, 10, 20],
-    [0, 10, 20],
-    [1, 20, 20],
-    [2, 30, 20],
-    [2, 30, 20],
-    [2, 30, 20],
+    [0, 10, 20, "ff/Q"],
+    [0, 10, 20, "ff/D"],
+    [1, 20, 20, "slow-ff/Q"],
+    [2, 30, 20, "join/I0"],
+    [2, 30, 20, "join/I1"],
+    [2, 30, 20, "join/O"],
   ]);
   assert.deepEqual(index.arcGeometry, [
     [0, 3, 0, 1],

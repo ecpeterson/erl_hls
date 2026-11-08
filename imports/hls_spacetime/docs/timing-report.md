@@ -22,6 +22,14 @@ Equal maxima use deterministic native-identifier tie-breaking. The report states
 
 Unknown competing timing, unsupported frontiers and cycles retain their reasons and yield no purported maximum chain. Registered scope can instead be not applicable when no sequential-output path reaches the target. `maximumKnownPathNs` is the maximum among known selected cones: it does not bound unknown cones, unmapped bits, unselected writes or the complete implemented design. An incomplete capture and its observer gaps remain attached to the report.
 
+## Explore individual sinks in the viewer
+
+The offline report chooses a representative maximum across each cone's target pins. The viewer's [sink inspector](viewer.md#inspect-paths-to-a-sink) instead lists each visible role/native-pin pair and can explain that sink alone. It uses algorithm-4 rendering data with exact native pin names, shared arc costs and cached per-pin arrivals. Re-prepare older derivatives from their retained complete sources; this adds no native measurement.
+
+A sink with known arrival can be inspected even when a sibling sink has missing timing; unsupported frontiers and cycles retain conservative rejection. Unknown applicable contributors to the same listed sink remain unknown. **Gap ns** compares a known sink with the slowest known visible sink; it is a severity difference, not STA slack. The representative chain's logic/net strip adds only its ordered local costs. Ties are disclosed rather than enumerated, and the near-longest view shows an arc corridor, not a sum of parallel paths or a claim that every recombination meets its margin.
+
+The strip's categorical logic/net hues identify local contributions; **Logic / net + urgency** in 3D combines those categories with complete-path urgency against a fixed capture-wide maximum. Neither a large net fraction nor a bright net proves congestion. Clicking an arc links its exact native endpoints to available geometry; missing route detail does not invalidate independently known endpoint delay. These interactive views preserve the interpretation below.
+
 ## What the numbers establish
 
 Each arc cost is the largest supplied fast/slow, transition and conditional delay annotation. Adding those independent maxima gives an envelope over the represented structural graph. Its maximizing chain need not be jointly sensitizable or match a single corner's STA path. Recorded write membership establishes an association with that circuitry; it does not prove that every arc switched on that execution.

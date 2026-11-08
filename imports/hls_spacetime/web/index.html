@@ -259,6 +259,7 @@
               <label
                 >Color style<select id="color-mode">
                   <option value="criticality">Computation + urgency</option>
+                  <option value="delay-kind">Logic / net + urgency</option>
                   <option value="role" selected>Data / enable / reset</option>
                   <option value="computation">Sub-computation</option>
                   <option value="direction">Flow direction</option>
@@ -295,7 +296,7 @@
                   <p>
                     Hue follows the destination register across clocks. Colors
                     are hints, not unique identifiers. Untimed storage keeps its
-                    categorical hue.
+                    categorical hue outside timing modes.
                   </p>
                 </details>
               </div>
@@ -304,6 +305,14 @@
                 offsets are unavailable. Coincident spans are combined, not
                 electrically connected.
               </p>
+              <div id="delay-kind-legend" hidden>
+                <span><i class="sink-logic"></i>Logic delay</span
+                ><span><i class="sink-net"></i>Net delay</span
+                ><span
+                  >Brightness: near-longest paths · gray: shared categories /
+                  untimed storage</span
+                >
+              </div>
               <div id="urgency-legend" hidden>
                 <span id="urgency-summary"></span>
               </div>
@@ -354,17 +363,88 @@
                 aria-label="Window first clock"
               /><span id="window-label"></span>
             </div>
-            <div id="scene-frame" class="canvas-wrap">
-              <canvas id="scene3d" aria-hidden="true"></canvas>
-              <canvas
-                id="stack"
-                aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
-                tabindex="0"
-              ></canvas>
-              <div class="axis-hint">
-                CLOCK AXIS<span>Presets restore time orientation</span>
+            <div class="path-workbench">
+              <div id="scene-frame" class="canvas-wrap">
+                <canvas id="scene3d" aria-hidden="true"></canvas>
+                <canvas
+                  id="stack"
+                  aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
+                  tabindex="0"
+                ></canvas>
+                <div class="axis-hint">
+                  CLOCK AXIS<span>Presets restore time orientation</span>
+                </div>
+                <div id="tooltip" hidden></div>
               </div>
-              <div id="tooltip" hidden></div>
+              <details id="sink-panel" class="render-notes" open hidden>
+                <summary>Paths to sinks · logic / net delay</summary>
+                <div class="sink-controls">
+                  <label
+                    >Path view<select id="sink-mode">
+                      <option value="all">All circuitry</option>
+                      <option value="per-sink">
+                        Longest path to every sink
+                      </option>
+                      <option value="selected">
+                        Selected sink: longest path
+                      </option>
+                      <option value="near">
+                        Selected sink: near-longest paths
+                      </option>
+                    </select></label
+                  >
+                  <label
+                    >Near-longest margin (ns)<input
+                      id="sink-margin"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value="0.5"
+                      required
+                      disabled
+                  /></label>
+                </div>
+                <p id="sink-selection" class="sink-selection"></p>
+                <p id="sink-path-summary"></p>
+                <div class="sink-kind-legend">
+                  <span><i class="sink-logic"></i>Logic</span
+                  ><span><i class="sink-net"></i>Net / transmission</span
+                  ><span
+                    >Strip widths show each arc's local delay; parallel paths
+                    are not added.</span
+                  >
+                </div>
+                <div
+                  id="sink-strip"
+                  class="sink-strip"
+                  aria-label="Ordered source-to-sink delay contributions"
+                ></div>
+                <p
+                  id="sink-arc-detail"
+                  class="sink-arc-detail"
+                  aria-live="polite"
+                ></p>
+                <details>
+                  <summary>All ordered arcs, including zero-delay arcs</summary>
+                  <div id="sink-steps" class="sink-steps"></div>
+                </details>
+                <details open class="sink-ranking">
+                  <summary>Ranked sinks</summary>
+                  <label
+                    >Find sink<input
+                      id="sink-search"
+                      type="search"
+                      placeholder="Pin, register or role"
+                  /></label>
+                  <p id="sink-population"></p>
+                  <div id="sink-list" class="sink-list"></div>
+                  <div class="sink-paging">
+                    <button type="button" id="sink-prev">Previous</button
+                    ><span id="sink-page"></span
+                    ><button type="button" id="sink-next">Next</button>
+                  </div>
+                </details>
+              </details>
             </div>
             <details id="scene-options" class="scene-options">
               <summary>Layers, storage & timing filters</summary>

@@ -38,6 +38,7 @@ export function arrivalScene(
     shade,
     mode = "criticality",
     detail = "routes",
+    activeArc = null,
   } = {},
 ) {
   arrivalCoordinate(cycle, 0, budgetNs);
@@ -97,21 +98,29 @@ export function arrivalScene(
     if (detail === "overview" || !located(row.from) || !located(row.to))
       continue;
     const readiness = row.kind === "readiness";
+    const active =
+      !readiness && activeArc !== null && row.arcIds?.includes(activeArc);
     const directional =
-      mode === "direction" && !unknown && !readiness && !row.directionUnknown;
-    const color = unknown
-      ? UNKNOWN_COLOR
-      : readiness
-        ? READY_COLOR
-        : mode === "direction"
-          ? OUTSIDE_TIMING_COLOR
-          : shade(row);
+      mode === "direction" &&
+      !active &&
+      !unknown &&
+      !readiness &&
+      !row.directionUnknown;
+    const color = active
+      ? "#fff2bc"
+      : unknown
+        ? UNKNOWN_COLOR
+        : readiness
+          ? READY_COLOR
+          : mode === "direction"
+            ? OUTSIDE_TIMING_COLOR
+            : shade(row);
     span(
       position(row.from),
       position(row.to),
       directional ? DIRECTION_SOURCE_COLOR : color,
       directional ? DIRECTION_SINK_COLOR : color,
-      readiness ? 0.0008 : 0.0017,
+      active ? 0.0032 : readiness ? 0.0008 : 0.0017,
       unknown
         ? "arrival-unknown"
         : readiness
@@ -128,14 +137,17 @@ export function arrivalScene(
     const unknown = arrival === null;
     if (unknown) result.summary.unknownMarks++;
     if (!located(row.point)) continue;
+    const active = activeArc !== null && row.arcIds?.includes(activeArc);
     mark(
       position(row.point, arrival),
-      unknown
-        ? UNKNOWN_COLOR
-        : mode === "direction"
-          ? OUTSIDE_TIMING_COLOR
-          : shade(row),
-      0.004,
+      active
+        ? "#fff2bc"
+        : unknown
+          ? UNKNOWN_COLOR
+          : mode === "direction"
+            ? OUTSIDE_TIMING_COLOR
+            : shade(row),
+      active ? 0.006 : 0.004,
       unknown ? "arrival-unknown-pin" : "arrival-pin",
     );
   }

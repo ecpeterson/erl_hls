@@ -23,6 +23,7 @@ import {
   preparedCircuitPaint,
 } from "./prepared-computations.js";
 import { circuitDisplay } from "./circuit-display.js";
+import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
 import { eventCoordinate } from "./arrival-layout.js";
@@ -104,6 +105,8 @@ const state = {
   index: new Map(),
   loadSequence: 0,
 };
+const sinkInspector = createSinkInspector(() => repaint());
+
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
   String(value ?? "").replace(
@@ -1416,9 +1419,11 @@ function buildStackScene() {
     "computation",
     "computation-timing",
     "criticality",
+    "delay-kind",
   ]) {
     const option = $("color-mode").querySelector(`option[value="${value}"]`);
-    option.disabled = !state.computations?.prepared;
+    option.disabled =
+      !state.computations?.prepared || (value === "delay-kind" && !arrival);
     option.title = option.disabled
       ? "Prepare rendering data to enable this color style"
       : "";
@@ -1431,11 +1436,18 @@ function buildStackScene() {
     mode === "computation-timing" ||
     mode === "criticality";
   const scalarMode = mode === "timing" || mode === "computation-timing";
+  const neutralTiming =
+    scalarMode || mode === "criticality" || mode === "delay-kind";
+  sinkInspector.update(state.computations, layers, {
+    enabled: arrival,
+    scope: metric === "registered_launch" ? "registered" : "static",
+  });
+  $("delay-kind-legend").hidden = mode !== "delay-kind";
   $("role-legend").hidden = mode !== "role";
   $("arrival-legend").hidden = !arrival;
   $("arrival-budget").disabled = !arrival;
-  $("urgency-window").disabled = mode !== "criticality";
-  $("urgency-legend").hidden = mode !== "criticality";
+  $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
+  $("urgency-legend").hidden = !["criticality", "delay-kind"].includes(mode);
   $("urgency-summary").textContent =
     `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
   $("timing-legend").hidden = !scalarMode;
@@ -1484,6 +1496,7 @@ function buildStackScene() {
       : (row[delayKey] ?? row.delayNs ?? null);
     const key = JSON.stringify([
       row.role,
+      row.delayKind,
       row.computationKey,
       row.computationShared,
       row[applicableKey],
@@ -1494,6 +1507,7 @@ function buildStackScene() {
         key,
         sceneColor({
           role: row.role,
+          kind: row.delayKind,
           mode,
           computationKey: row.computationKey,
           computationShared: row.computationShared,
@@ -1512,6 +1526,7 @@ function buildStackScene() {
       const circuit = arrivalCircuit(state.computations, layer, {
         scope: metric === "registered_launch" ? "registered" : "static",
         includeUnresolved: !mappedOnly(),
+        selection: sinkInspector.selection,
       });
       const scene = arrivalScene(circuit, {
         cycle: layer.cycle,
@@ -1530,7 +1545,10 @@ function buildStackScene() {
           }),
         mode,
         detail,
+        activeArc: sinkInspector.activeArc,
       });
+      if (sinkInspector.focused)
+        result.selection = result.selection.concat(scene.focus);
       // Concatenation avoids argument limits on complete native populations.
       result.segments = result.segments.concat(scene.segments);
       result.markers = result.markers.concat(scene.markers);
@@ -1617,7 +1635,8 @@ function buildStackScene() {
   }
   renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
-  const storage = $("residence").checked ? visibleStorage() : [];
+  const storage =
+    $("residence").checked && !sinkInspector.focused ? visibleStorage() : [];
   let loads = 0,
     holds = 0;
   for (const item of storage) {
@@ -1633,10 +1652,12 @@ function buildStackScene() {
       const color =
         mode === "direction"
           ? DIRECTION_SOURCE_COLOR
-          : membershipMode
-            ? computationColor(item.resource)
-            : scalarMode
-              ? "#526471"
+          : neutralTiming
+            ? active
+              ? "#aebec6"
+              : "#526471"
+            : membershipMode
+              ? computationColor(item.resource)
               : p.kind === "unknown"
                 ? "#8c99a4"
                 : active
@@ -1673,7 +1694,7 @@ function buildStackScene() {
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
   let glyphs = 0;
-  for (const event of visibleEvents()) {
+  for (const event of sinkInspector.focused ? [] : visibleEvents()) {
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
     if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
     for (const point of spatialPoints(
@@ -1687,15 +1708,17 @@ function buildStackScene() {
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
       const resources = resourcesForEvent(event);
-      const accessColor = membershipMode
-        ? resources.length === 1
-          ? computationColor(resources[0])
-          : resources.length > 1
-            ? COMPUTATION_SHARED_COLOR
-            : "#627780"
-        : mode === "direction" || scalarMode
-          ? "#627780"
-          : color(event);
+      const accessColor = neutralTiming
+        ? "#627780"
+        : membershipMode
+          ? resources.length === 1
+            ? computationColor(resources[0])
+            : resources.length > 1
+              ? COMPUTATION_SHARED_COLOR
+              : "#627780"
+          : mode === "direction" || scalarMode
+            ? "#627780"
+            : color(event);
       marker(
         position,
         active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
@@ -1709,7 +1732,7 @@ function buildStackScene() {
     }
   }
   let traces = 0;
-  for (const edge of state.trace?.edges ?? []) {
+  for (const edge of sinkInspector.focused ? [] : (state.trace?.edges ?? [])) {
     const from = state.model.events.get(edge.source),
       to = state.model.events.get(edge.target);
     if (from.cycle >= state.first + state.window || to.cycle < state.first)
@@ -1766,7 +1789,7 @@ function buildStackScene() {
       traces++;
     }
   }
-  if (state.nativePath) {
+  if (state.nativePath && !sinkInspector.focused) {
     const cycle = Math.max(
       state.first,
       Math.min(
@@ -1813,7 +1836,8 @@ function buildStackScene() {
   if (
     state.computations &&
     $("computation-circuits").checked &&
-    selectionEvents().length
+    selectionEvents().length &&
+    !sinkInspector.focused
   ) {
     const selectedLayers = (
       state.computations.prepared
@@ -1871,6 +1895,9 @@ function buildStackScene() {
         result.selection.push(world(row.point, layer.cycle));
     }
   }
+  $("fit-selection").disabled = sinkInspector.focused
+    ? result.selection.length === 0
+    : !selectionEvents().length && !state.resource && !state.focusVersion;
   result.bounds = sceneBounds(result.focus);
   result.selectionBounds = sceneBounds(
     result.selection.length ? result.selection : result.focus,
@@ -2865,9 +2892,9 @@ function bindControls() {
       if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
       repaint();
     };
-  new ResizeObserver(() => repaint()).observe(
-    document.querySelector(".workspace"),
-  );
+  const resize = new ResizeObserver(() => repaint());
+  resize.observe(document.querySelector(".workspace"));
+  resize.observe($("scene-frame"));
 }
 /** Saved examples are optional; a missing local index leaves file-open usable. */
 async function initialize() {

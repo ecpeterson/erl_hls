@@ -241,18 +241,24 @@ test("missing coverage, stale identities and invented references reject", () => 
   for (const mutate of [
     (d) => (d.algorithm = 1),
     (d) => (d.algorithm = 2),
-    (d) => (d.algorithm = 4),
+    (d) => (d.algorithm = 3),
+    (d) => (d.algorithm = 5),
     (d) => (d.schema = 2),
     (d) => delete d.pinGeometry,
     (d) => delete d.arcGeometry,
     (d) => d.pinGeometry.pop(),
     (d) => d.arcGeometry.pop(),
-    (d) => (d.pinGeometry[0] = [d.sourceCounts.cells, 1, 2]),
-    (d) => (d.pinGeometry[0] = [-1, 1, 2]),
-    (d) => (d.pinGeometry[0] = [null, null, 2]),
-    (d) => (d.pinGeometry[0] = [0, NaN, 2]),
-    (d) => (d.pinGeometry[0] = [0, 1, Infinity]),
+    (d) => (d.pinGeometry[0] = [d.sourceCounts.cells, 1, 2, "source/Q"]),
+    (d) => (d.pinGeometry[0] = [-1, 1, 2, "source/Q"]),
+    (d) => (d.pinGeometry[0] = [null, null, 2, "source/Q"]),
+    (d) => (d.pinGeometry[0] = [0, NaN, 2, "source/Q"]),
+    (d) => (d.pinGeometry[0] = [0, 1, Infinity, "source/Q"]),
     (d) => (d.pinGeometry[0] = [0, 1, 2, 3]),
+    (d) => (d.pinGeometry[0] = [0, 1, 2]),
+    (d) => (d.pinGeometry[0] = [0, 1, 2, "source/Q", "extra"]),
+    (d) => (d.pinGeometry[0][3] = ""),
+    (d) => (d.pinGeometry[0][3] = null),
+    (d) => (d.pinGeometry[0][3] = d.pinGeometry[1][3]),
     (d) => (d.arcGeometry[0] = [d.sourceCounts.pins, 1, 0, 1]),
     (d) => (d.arcGeometry[0] = [0, d.sourceCounts.pins, 0, 1]),
     (d) => (d.arcGeometry[0] = [0, 1, 2, 1]),
@@ -562,10 +568,14 @@ test("pin/arc geometry and aligned arrivals retain known, unknown and outside va
   const { model, attachment, routeNets } = fixture();
   const data = prepareRenderData(model, { attachment, routeNets });
   assert.equal(data.pinGeometry.length, attachment.pins.length);
+  assert.deepEqual(
+    data.pinGeometry.map((row) => row[3]),
+    attachment.pins.map((pin) => pin.id),
+  );
   assert.equal(data.arcGeometry.length, attachment.arcs.length);
-  data.pinGeometry[0] = [null, null, null];
-  data.pinGeometry[1] = [1, null, null];
-  data.pinGeometry[2] = [null, -1.25, 2.5];
+  data.pinGeometry[0] = [null, null, null, "source/Q"];
+  data.pinGeometry[1] = [1, null, null, "lut/I0"];
+  data.pinGeometry[2] = [null, -1.25, 2.5, "lut/I1"];
   data.arcGeometry[0] = [0, 1, 0, null];
   data.arcGeometry[1] = [0, 2, 1, 0];
   const arrivals = data.cones[0].pinArrivals;

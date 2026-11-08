@@ -77,11 +77,63 @@ function memberships(index, layer) {
     .sort(([left], [right]) => left.localeCompare(right));
 }
 
+/** The cache describes the exact selected closure, not a caller-provided key.
+ * Known cones outside the current layer are harmless; their geometry stays hidden. */
+function selectedClosure(index, selection) {
+  if (selection === null) return { choices: null, rows: null };
+  check(selection instanceof Map, "selection must be a Map or null");
+  const cones = new Map(index.cones.map((cone) => [cone.id, cone])),
+    choices = new Map(),
+    rows = [];
+  for (const [id, choice] of selection) {
+    const cone = cones.get(id);
+    check(
+      cone && choice?.arcIds instanceof Set && choice?.rootPins instanceof Set,
+      "invalid selected cone",
+    );
+    const allowedArcs = new Set(cone.arcIndices),
+      allowedRoots = new Set(cone.rootPins);
+    const arcIds = [...choice.arcIds].sort((a, b) => a - b),
+      rootPins = [...choice.rootPins].sort((a, b) => a - b);
+    check(
+      arcIds.every((arc) => allowedArcs.has(arc)) &&
+        rootPins.every((pin) => allowedRoots.has(pin)),
+      "selection outside cone",
+    );
+    check(
+      choice.pathCosts === undefined || choice.pathCosts instanceof Map,
+      "selected path costs must be a Map",
+    );
+    const costs =
+      choice.pathCosts === undefined
+        ? null
+        : [...choice.pathCosts].sort(([a], [b]) => a - b);
+    if (costs)
+      check(
+        costs.every(
+          ([arc, value]) =>
+            choice.arcIds.has(arc) &&
+            (numeric(value) || value === null || value === "not_applicable"),
+        ),
+        "invalid selected path cost",
+      );
+    choices.set(id, {
+      arcIds: new Set(arcIds),
+      rootPins: new Set(rootPins),
+      pathCosts: costs === null ? null : new Map(costs),
+    });
+    rows.push([id, arcIds, rootPins, costs]);
+  }
+  rows.sort(([left], [right]) => left.localeCompare(right));
+  return { choices, rows };
+}
+
 /** Metadata unions retain exact contributing graph IDs. A known alternative
  * never fills an unknown timing or destination contribution. */
 function contribution(target, source) {
   for (const key of ["arcIds", "pinIds", "coneIds", "roles", "resources"])
     for (const value of source[key] ?? []) target[key].add(value);
+  if (source.delayKind) target.delayKinds.add(source.delayKind);
   target.computationUnknown ||= source.computationUnknown;
   target.timingUnknown ||= source.timingUnknown;
   if (numeric(source.pathDelayNs))
@@ -99,6 +151,7 @@ function aggregate(row, source) {
     roles: new Set(),
     resources: new Set(),
     localDelays: new Set(),
+    delayKinds: new Set(),
     computationUnknown: false,
     timingUnknown: false,
     pathDelayNs: null,
@@ -108,8 +161,16 @@ function aggregate(row, source) {
   return result;
 }
 function finished(row) {
-  const { roles, resources, localDelays, arcIds, pinIds, coneIds, ...result } =
-    row;
+  const {
+    roles,
+    resources,
+    localDelays,
+    delayKinds,
+    arcIds,
+    pinIds,
+    coneIds,
+    ...result
+  } = row;
   const owners = [...resources].sort();
   return {
     ...result,
@@ -122,6 +183,12 @@ function finished(row) {
     pinIds: [...pinIds].sort((a, b) => a - b),
     coneIds: [...coneIds].sort(),
     localDelayNs: localDelays.size === 1 ? [...localDelays][0] : null,
+    delayKind:
+      delayKinds.size === 1
+        ? [...delayKinds][0]
+        : delayKinds.size > 1
+          ? "mixed"
+          : null,
   };
 }
 
@@ -143,6 +210,8 @@ function addSegment(rows, row, source) {
     const previous = rows.get(key);
     previous.directionUnknown ||=
       previous.direction !== forward || row.directionUnknown;
+    for (const key of ["geometryKind", "interpolation"])
+      if (previous[key] !== row[key]) previous[key] = "mixed";
     contribution(previous, source);
   }
 }
@@ -196,11 +265,13 @@ function remember(cache, key, result) {
  * edge. Unknown arrival geometry has null times. Outside-scope arcs retain detail
  * rows but produce no propagation. Missing coordinates are counted, never filled.
  * Roots expose pin/role/destination/cone identities; the caller joins current write
- * events and sampling edges. No actual capture time is inferred here. */
+ * events and sampling edges. Optional selection filters before aggregation; its
+ * path-cost overrides never change local delays or cached pin arrivals.
+ * No actual capture time is inferred here. */
 export function arrivalCircuit(
   index,
   layer,
-  { scope = "registered", includeUnresolved = true } = {},
+  { scope = "registered", includeUnresolved = true, selection = null } = {},
 ) {
   check(
     index &&
@@ -212,10 +283,20 @@ export function arrivalCircuit(
     SCOPES.has(scope) && typeof includeUnresolved === "boolean",
     "invalid display scope",
   );
-  const membershipRows = memberships(index, layer),
+  const closure = selectedClosure(index, selection),
+    selectedCones =
+      closure.choices === null
+        ? layer.cones
+        : layer.cones.filter((cone) => closure.choices.has(cone.id));
+  const membershipRows = memberships(index, { ...layer, cones: selectedCones }),
     owners = new Map(membershipRows);
   const cache = stateFor(index),
-    key = JSON.stringify([scope, includeUnresolved, membershipRows]);
+    key = JSON.stringify([
+      scope,
+      includeUnresolved,
+      membershipRows,
+      closure.rows,
+    ]);
   if (cache.results.has(key)) return cache.results.get(key);
   const segments = new Map(),
     marks = new Map(),
@@ -236,7 +317,17 @@ export function arrivalCircuit(
     summary.inputSegments++;
     addSegment(segments, row, source);
   };
-  for (const cone of layer.cones) {
+  for (const cone of selectedCones) {
+    const choice = closure.choices?.get(cone.id),
+      selectedRoots = choice?.rootPins ?? new Set(cone.rootPins),
+      touchedPins = choice ? new Set(selectedRoots) : null;
+    if (choice)
+      for (const arcId of choice.arcIds) {
+        const arc = index.arcGeometry[arcId];
+        check(arc?.length === 4, "invalid selected arc geometry");
+        touchedPins.add(arc[0]);
+        touchedPins.add(arc[1]);
+      }
     const resources = owners.get(cone.id),
       pinArrivals = cone.pinArrivals?.[scope],
       costs = cone.pathDelays?.[scope];
@@ -255,6 +346,7 @@ export function arrivalCircuit(
       computationUnknown: resources.length === 0,
     };
     for (const pin of cone.pinIndices) {
+      if (touchedPins && !touchedPins.has(pin)) continue;
       const value = arrivals.get(pin);
       addMark(marks, pin, xy(index, pin), value, {
         ...base,
@@ -262,7 +354,7 @@ export function arrivalCircuit(
         timingUnknown: value === null,
       });
     }
-    for (const pin of cone.rootPins) {
+    for (const pin of selectedRoots) {
       const point = xy(index, pin),
         value = arrivals.get(pin),
         status = arrivalStatus(value);
@@ -285,6 +377,7 @@ export function arrivalCircuit(
       else contribution(roots.get(rootKey), source);
     }
     cone.arcIndices.forEach((arcId, position) => {
+      if (choice && !choice.arcIds.has(arcId)) return;
       summary.arcContributions++;
       const arc = index.arcGeometry[arcId];
       check(
@@ -296,7 +389,9 @@ export function arrivalCircuit(
         to = xy(index, toPin);
       const head = arrivals.get(fromPin),
         tail = arrivals.get(toPin),
-        cost = costs[position];
+        cost = choice?.pathCosts?.has(arcId)
+          ? choice.pathCosts.get(arcId)
+          : costs[position];
       const outside = cost === "not_applicable" || head === "not_applicable";
       const via =
         numeric(head) && numeric(delay) && Number.isFinite(head + delay)
@@ -314,6 +409,7 @@ export function arrivalCircuit(
         arcIds: [arcId],
         pinIds: [fromPin, toPin],
         localDelayNs: delay,
+        delayKind: type === 0 ? "net" : "logic",
         pathDelayNs: numeric(cost) ? cost : null,
         timingUnknown: !outside && cost === null,
       };
@@ -347,7 +443,7 @@ export function arrivalCircuit(
           ...source,
           pinIds: [pin],
         });
-        if (cone.rootPins.includes(pin)) {
+        if (selectedRoots.has(pin)) {
           const rootKey = JSON.stringify([pin, cone.role, arrivals.get(pin)]);
           contribution(roots.get(rootKey), source);
         }

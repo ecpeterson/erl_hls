@@ -155,3 +155,26 @@ test("empty circuits still validate budget and exact capture equality creates no
   assert.equal(result.segments.length, 0);
   assert.equal(result.markers[0].position[2], 5);
 });
+
+test("arc focus overrides direction shading but never turns readiness into delay", () => {
+  const circuit = {
+    segments: [
+      { from: p(0, 0, 0), to: p(10, 20, 3), kind: "propagation", arcIds: [4] },
+      { from: p(10, 20, 3), to: p(10, 20, 5), kind: "readiness", arcIds: [4] },
+    ],
+    marks: [
+      { ...mark(3), arcIds: [4] },
+      { ...mark(0), arcIds: [5] },
+    ],
+  };
+  const result = arrivalScene(circuit, {
+    ...options,
+    mode: "direction",
+    activeArc: 4,
+  });
+  assert.equal(result.segments[0].color, "#fff2bc");
+  assert.equal(result.segments[0].colorEnd, "#fff2bc");
+  assert.notEqual(result.segments[1].color, "#fff2bc");
+  assert.equal(result.markers[0].color, "#fff2bc");
+  assert.ok(result.markers[0].size > result.markers[1].size);
+});
