@@ -153,9 +153,14 @@ completed(Port, Output) ->
     after 10000 -> port_close(Port), error(child_timeout)
     end.
 
-%% Independent invocations never overwrite an earlier witness directory.
+%% VM-local unique integers repeat across test runs. Allocate atomically with
+%% a fresh random suffix, preserving earlier witness directories on collision.
 -spec fresh() -> file:filename().
 fresh() ->
-    Path = filename:join("/tmp", "spacetime-artifact-" ++ integer_to_list(erlang:unique_integer([positive]))),
-    ok = file:make_dir(Path),
-    Path.
+    Suffix = binary_to_list(binary:encode_hex(crypto:strong_rand_bytes(12), lowercase)),
+    Path = filename:join("/tmp", "spacetime-artifact-" ++ Suffix),
+    case file:make_dir(Path) of
+        ok -> Path;
+        {error, eexist} -> fresh();
+        {error, Reason} -> error({temporary_directory, Path, Reason})
+    end.

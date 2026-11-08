@@ -46,3 +46,7 @@ The short selected interval also hides ongoing cost: from the same C1774 boundar
 ## Retained reproduction
 
 Artifacts: `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-08/numerical-pipeline-witness-1/`. `preregistration.json` and `preregistered-event-schedule-2.json` preserve the predictions. `reproduction.tar.gz` and `candidate.patch` retain the complete isolated source/RTL, harness and analysis tooling. `witness-1/` retains the new capture and per-frame timing; `comparison-1.json`, `closure-1.json` and `final-review.json` preserve the distinct comparison scopes. All 174 original compiled files remain hash-identical. The original capture, physical database and reviewed prediction profile remain separate inputs.
+
+## Control-model follow-up
+
+The [clocked replay](spacetime-control-replay-1.md) now reproduces the selected 106 clocks, every later public completion and the longer 562-clock interval from baseline-only work/control inputs. The original 99/109 predictions and this experiment remain unchanged. This is retrospective control-model validation; no new RTL simulation or physical-period measurement was run.

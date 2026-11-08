@@ -48,3 +48,28 @@ For offline use, `scripts/predict-latency.mjs` accepts `--recording FILE --profi
 ## Validation
 
 Small synthetic fixtures compare the solver with an independent clock-by-clock oracle and cover repeated feedback, gap absorption, reconvergence, simultaneous outputs, old-version reads, exact memory latency, port broadcasts, reset, capture tail and wrong recording bindings. Tests distinguish the full physical population from filtered display layers and retain unrelated timing constraints. These are checks of the model, not validation of a proposed pipeline implementation.
+
+## Clocked control replay
+
+The gap-based panel above remains a sensitivity calculation. For a source-reviewed control profile, `scripts/replay-control.mjs` predicts clocks by advancing explicit owners, queues and handshakes instead. It does not use historical internal event clocks as scheduling floors. The current adapter covers the finite, failure-free, post-attachment source-protocol case; it is not an interpreter for arbitrary generated RTL.
+
+```sh
+node scripts/replay-control.mjs --profile control-profile.json \
+  --output new-prediction.json --actors 2,3 --extra-latency 1
+```
+
+The result includes the zero-intervention baseline and changed schedule, individual operation/transfer clocks, accepted input/output words, completion targets and unresolved waits. `--targets ID,ID` selects explicit future public frames; `--end-cycle N` bounds replay. Repeated scalar options use the last value, and output creation is exclusive. No implementation-period assumption is required or inferred. Profiles are bounded JSON data, never executable plugins.
+
+The source profile supplies fixed operation results and branch decisions, the identities of input messages and effect deliveries, exact carry-in ownership, and the host's stimulus policy. The model recomputes:
+
+- Private-result latency and the separate commit edge, with one outstanding action per actor.
+- Outbox admission and independent per-recipient publication, retaining an occupied buffer until its old contents are accepted.
+- Sender-local capture ownership, consumption, registered credit return, per-sender ordering, round-robin selection and postponement until a phase boundary.
+- Held endpoint grants, the gateway's one-stream-per-idle-clock polling, packet serialization and absolute ready windows.
+- Causal host feedback from accepted public frames, including original exogenous word floors and multi-frame readout fences.
+
+All components observe the same old state before committing an edge. A credit released now cannot be spent now; a captured message becomes visible next edge. An actor's actual selected message must match the fixed work script. A different message order is rejected, not delayed until the expected message appears. Reset, missing work, unresolved branches and incomplete effects stop the prediction with explicit diagnostics. The supported entry checkpoint has an idle, attached transmitter and no pending management/start transaction; a profile must not erase an in-flight packet to satisfy that restriction.
+
+`clocked-owner.js`, `clocked-resources.js`, `clocked-transport.js` and `clocked-host.js` contain the isolated transition rules; `control-replay.js` connects them. Producer interpretation and capture comparisons remain separate from this scheduling engine. Source hashes establish input identity, not correctness of the interpretation. In particular, narrowed machine values remain opaque; the profile must justify any control decisions derived from them.
+
+The retained numerical-pipeline comparison now reproduces both the 99-clock baseline and 106-clock changed step, followed by every observed completion through step 9 and readout. The five-step interval is 498→562 clocks, also reproduced. These are retrospective checks against known captures, with fixed work and source-reviewed controls; a new workload or a change that alters values, branches, scheduling policy or physical timing requires new qualification. The original 99/109 gap scenarios remain retained. See [the control-replay record](../yap/spacetime-control-replay-1.md) for exact coverage and limitations.
