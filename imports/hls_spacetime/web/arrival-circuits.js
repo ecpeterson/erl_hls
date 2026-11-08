@@ -77,11 +77,63 @@ function memberships(index, layer) {
     .sort(([left], [right]) => left.localeCompare(right));
 }
 
+/** The cache describes the exact selected closure, not a caller-provided key.
+ * Known cones outside the current layer are harmless; their geometry stays hidden. */
+function selectedClosure(index, selection) {
+  if (selection === null) return { choices: null, rows: null };
+  check(selection instanceof Map, "selection must be a Map or null");
+  const cones = new Map(index.cones.map((cone) => [cone.id, cone])),
+    choices = new Map(),
+    rows = [];
+  for (const [id, choice] of selection) {
+    const cone = cones.get(id);
+    check(
+      cone && choice?.arcIds instanceof Set && choice?.rootPins instanceof Set,
+      "invalid selected cone",
+    );
+    const allowedArcs = new Set(cone.arcIndices),
+      allowedRoots = new Set(cone.rootPins);
+    const arcIds = [...choice.arcIds].sort((a, b) => a - b),
+      rootPins = [...choice.rootPins].sort((a, b) => a - b);
+    check(
+      arcIds.every((arc) => allowedArcs.has(arc)) &&
+        rootPins.every((pin) => allowedRoots.has(pin)),
+      "selection outside cone",
+    );
+    check(
+      choice.pathCosts === undefined || choice.pathCosts instanceof Map,
+      "selected path costs must be a Map",
+    );
+    const costs =
+      choice.pathCosts === undefined
+        ? null
+        : [...choice.pathCosts].sort(([a], [b]) => a - b);
+    if (costs)
+      check(
+        costs.every(
+          ([arc, value]) =>
+            choice.arcIds.has(arc) &&
+            (numeric(value) || value === null || value === "not_applicable"),
+        ),
+        "invalid selected path cost",
+      );
+    choices.set(id, {
+      arcIds: new Set(arcIds),
+      rootPins: new Set(rootPins),
+      pathCosts: costs === null ? null : new Map(costs),
+    });
+    rows.push([id, arcIds, rootPins, costs]);
+  }
+  rows.sort(([left], [right]) => left.localeCompare(right));
+  return { choices, rows };
+}
+
 /** Metadata unions retain exact contributing graph IDs. A known alternative
  * never fills an unknown timing or destination contribution. */
 function contribution(target, source) {
   for (const key of ["arcIds", "pinIds", "coneIds", "roles", "resources"])
     for (const value of source[key] ?? []) target[key].add(value);
+  if (source.delayKind) target.delayKinds.add(source.delayKind);
   target.computationUnknown ||= source.computationUnknown;
   target.timingUnknown ||= source.timingUnknown;
   if (numeric(source.pathDelayNs))
@@ -99,6 +151,7 @@ function aggregate(row, source) {
     roles: new Set(),
     resources: new Set(),
     localDelays: new Set(),
+    delayKinds: new Set(),
     computationUnknown: false,
     timingUnknown: false,
     pathDelayNs: null,
@@ -108,8 +161,16 @@ function aggregate(row, source) {
   return result;
 }
 function finished(row) {
-  const { roles, resources, localDelays, arcIds, pinIds, coneIds, ...result } =
-    row;
+  const {
+    roles,
+    resources,
+    localDelays,
+    delayKinds,
+    arcIds,
+    pinIds,
+    coneIds,
+    ...result
+  } = row;
   const owners = [...resources].sort();
   return {
     ...result,
@@ -122,6 +183,12 @@ function finished(row) {
     pinIds: [...pinIds].sort((a, b) => a - b),
     coneIds: [...coneIds].sort(),
     localDelayNs: localDelays.size === 1 ? [...localDelays][0] : null,
+    delayKind:
+      delayKinds.size === 1
+        ? [...delayKinds][0]
+        : delayKinds.size > 1
+          ? "mixed"
+          : null,
   };
 }
 
@@ -143,6 +210,9 @@ function addSegment(rows, row, source) {
     const previous = rows.get(key);
     previous.directionUnknown ||=
       previous.direction !== forward || row.directionUnknown;
+    previous.schematic ||= row.schematic;
+    for (const key of ["geometryKind", "interpolation"])
+      if (previous[key] !== row[key]) previous[key] = "mixed";
     contribution(previous, source);
   }
 }
@@ -196,11 +266,21 @@ function remember(cache, key, result) {
  * edge. Unknown arrival geometry has null times. Outside-scope arcs retain detail
  * rows but produce no propagation. Missing coordinates are counted, never filled.
  * Roots expose pin/role/destination/cone identities; the caller joins current write
- * events and sampling edges. No actual capture time is inferred here. */
+ * events and sampling edges. Optional selection filters before aggregation; its
+ * path-cost overrides never change local delays or cached pin arrivals.
+ * bridgeKnownGeometry may replace incomplete net geometry with one explicitly
+ * schematic chord between located native pins with known endpoint/local timing.
+ * It neither qualifies the route nor changes its retained gap diagnostics.
+ * No actual capture time is inferred here. */
 export function arrivalCircuit(
   index,
   layer,
-  { scope = "registered", includeUnresolved = true } = {},
+  {
+    scope = "registered",
+    includeUnresolved = true,
+    selection = null,
+    bridgeKnownGeometry = false,
+  } = {},
 ) {
   check(
     index &&
@@ -209,13 +289,26 @@ export function arrivalCircuit(
     "missing geometry tables",
   );
   check(
-    SCOPES.has(scope) && typeof includeUnresolved === "boolean",
+    SCOPES.has(scope) &&
+      typeof includeUnresolved === "boolean" &&
+      typeof bridgeKnownGeometry === "boolean",
     "invalid display scope",
   );
-  const membershipRows = memberships(index, layer),
+  const closure = selectedClosure(index, selection),
+    selectedCones =
+      closure.choices === null
+        ? layer.cones
+        : layer.cones.filter((cone) => closure.choices.has(cone.id));
+  const membershipRows = memberships(index, { ...layer, cones: selectedCones }),
     owners = new Map(membershipRows);
   const cache = stateFor(index),
-    key = JSON.stringify([scope, includeUnresolved, membershipRows]);
+    key = JSON.stringify([
+      scope,
+      includeUnresolved,
+      bridgeKnownGeometry,
+      membershipRows,
+      closure.rows,
+    ]);
   if (cache.results.has(key)) return cache.results.get(key);
   const segments = new Map(),
     marks = new Map(),
@@ -231,12 +324,23 @@ export function arrivalCircuit(
   };
   const unavailable = new Set(),
     unlocated = new Set(),
-    incomplete = new Set();
+    incomplete = new Set(),
+    schematic = new Set();
   const emit = (row, source) => {
     summary.inputSegments++;
     addSegment(segments, row, source);
   };
-  for (const cone of layer.cones) {
+  for (const cone of selectedCones) {
+    const choice = closure.choices?.get(cone.id),
+      selectedRoots = choice?.rootPins ?? new Set(cone.rootPins),
+      touchedPins = choice ? new Set(selectedRoots) : null;
+    if (choice)
+      for (const arcId of choice.arcIds) {
+        const arc = index.arcGeometry[arcId];
+        check(arc?.length === 4, "invalid selected arc geometry");
+        touchedPins.add(arc[0]);
+        touchedPins.add(arc[1]);
+      }
     const resources = owners.get(cone.id),
       pinArrivals = cone.pinArrivals?.[scope],
       costs = cone.pathDelays?.[scope];
@@ -255,6 +359,7 @@ export function arrivalCircuit(
       computationUnknown: resources.length === 0,
     };
     for (const pin of cone.pinIndices) {
+      if (touchedPins && !touchedPins.has(pin)) continue;
       const value = arrivals.get(pin);
       addMark(marks, pin, xy(index, pin), value, {
         ...base,
@@ -262,7 +367,7 @@ export function arrivalCircuit(
         timingUnknown: value === null,
       });
     }
-    for (const pin of cone.rootPins) {
+    for (const pin of selectedRoots) {
       const point = xy(index, pin),
         value = arrivals.get(pin),
         status = arrivalStatus(value);
@@ -285,6 +390,7 @@ export function arrivalCircuit(
       else contribution(roots.get(rootKey), source);
     }
     cone.arcIndices.forEach((arcId, position) => {
+      if (choice && !choice.arcIds.has(arcId)) return;
       summary.arcContributions++;
       const arc = index.arcGeometry[arcId];
       check(
@@ -296,7 +402,9 @@ export function arrivalCircuit(
         to = xy(index, toPin);
       const head = arrivals.get(fromPin),
         tail = arrivals.get(toPin),
-        cost = costs[position];
+        cost = choice?.pathCosts?.has(arcId)
+          ? choice.pathCosts.get(arcId)
+          : costs[position];
       const outside = cost === "not_applicable" || head === "not_applicable";
       const via =
         numeric(head) && numeric(delay) && Number.isFinite(head + delay)
@@ -314,6 +422,7 @@ export function arrivalCircuit(
         arcIds: [arcId],
         pinIds: [fromPin, toPin],
         localDelayNs: delay,
+        delayKind: type === 0 ? "net" : "logic",
         pathDelayNs: numeric(cost) ? cost : null,
         timingUnknown: !outside && cost === null,
       };
@@ -329,6 +438,8 @@ export function arrivalCircuit(
         delayNs: delay,
         located: Boolean(from && to),
         arrivalUnknown: !outside && (!known || !numeric(tail)),
+        geometryIncomplete: false,
+        schematic: false,
       };
       if (!details.has(arcId)) details.set(arcId, aggregate(detail, source));
       else {
@@ -347,7 +458,7 @@ export function arrivalCircuit(
           ...source,
           pinIds: [pin],
         });
-        if (cone.rootPins.includes(pin)) {
+        if (selectedRoots.has(pin)) {
           const rootKey = JSON.stringify([pin, cone.role, arrivals.get(pin)]);
           contribution(roots.get(rootKey), source);
         }
@@ -372,44 +483,74 @@ export function arrivalCircuit(
           geometry.every((row) => row.kind === "unresolved"))
       )
         unavailable.add(arcId);
-      // Visibility must not redistribute delay: fractions use the complete
-      // retained branch, including unresolved chords that may be hidden.
-      const lengths = geometry.map((row) =>
-        Math.hypot(row.to.x - row.from.x, row.to.y - row.from.y),
+      const bridge = Boolean(
+        bridgeKnownGeometry &&
+          type === 0 &&
+          !completeGeometry &&
+          known &&
+          numeric(tail) &&
+          from &&
+          to,
       );
-      const total = lengths.reduce((sum, length) => sum + length, 0);
-      let traversed = 0;
-      geometry.forEach((row, i) => {
-        const start = total ? traversed / total : i / geometry.length;
-        traversed += lengths[i];
-        const end = total ? traversed / total : (i + 1) / geometry.length;
-        if (!includeUnresolved && row.kind === "unresolved") {
-          summary.filteredSegments++;
-          return;
-        }
-        const located = known && completeGeometry && row.kind !== "unresolved";
+      const retainedDetail = details.get(arcId);
+      retainedDetail.geometryIncomplete ||= !completeGeometry;
+      retainedDetail.schematic ||= bridge;
+      if (bridge) {
+        schematic.add(arcId);
         emit(
           {
-            from: at(row.from, located ? head + delay * start : null),
-            to: at(row.to, located ? head + delay * end : null),
-            kind: located ? "propagation" : "unknown",
-            status: located
-              ? "known"
-              : row.kind === "unresolved"
-                ? "unresolved_geometry"
-                : !completeGeometry
-                  ? "incomplete_geometry"
-                  : "unknown_arrival",
-            directionUnknown: row.kind === "unresolved",
-            geometryKind: row.kind,
-            interpolation:
-              type === 1
-                ? "native_logic_arc_endpoints"
-                : "display_chord_length_fraction",
+            from: at(from, head),
+            to: at(to, via),
+            kind: "propagation",
+            schematic: true,
+            status: "known",
+            geometryKind: "endpoint_bridge",
+            interpolation: "schematic_endpoint_chord",
+            directionUnknown: false,
           },
           source,
         );
-      });
+      } else {
+        // Visibility must not redistribute delay: fractions use the complete
+        // retained branch, including unresolved chords that may be hidden.
+        const lengths = geometry.map((row) =>
+          Math.hypot(row.to.x - row.from.x, row.to.y - row.from.y),
+        );
+        const total = lengths.reduce((sum, length) => sum + length, 0);
+        let traversed = 0;
+        geometry.forEach((row, i) => {
+          const start = total ? traversed / total : i / geometry.length;
+          traversed += lengths[i];
+          const end = total ? traversed / total : (i + 1) / geometry.length;
+          if (!includeUnresolved && row.kind === "unresolved") {
+            summary.filteredSegments++;
+            return;
+          }
+          const located =
+            known && completeGeometry && row.kind !== "unresolved";
+          emit(
+            {
+              from: at(row.from, located ? head + delay * start : null),
+              to: at(row.to, located ? head + delay * end : null),
+              kind: located ? "propagation" : "unknown",
+              status: located
+                ? "known"
+                : row.kind === "unresolved"
+                  ? "unresolved_geometry"
+                  : !completeGeometry
+                    ? "incomplete_geometry"
+                    : "unknown_arrival",
+              directionUnknown: row.kind === "unresolved",
+              geometryKind: row.kind,
+              interpolation:
+                type === 1
+                  ? "native_logic_arc_endpoints"
+                  : "display_chord_length_fraction",
+            },
+            source,
+          );
+        });
+      }
       if (known && numeric(tail) && tail > via && !sameValue(tail, via) && to)
         emit(
           {
@@ -440,6 +581,7 @@ export function arrivalCircuit(
     unlocatedArcs: unlocated.size,
     geometryUnavailableArcs: unavailable.size,
     geometryIncompleteArcs: incomplete.size,
+    schematicArcs: schematic.size,
     mergedSegments: summary.inputSegments - segmentRows.length,
     propagationSegments: segmentRows.filter((row) => row.kind === "propagation")
       .length,

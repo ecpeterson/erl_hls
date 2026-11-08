@@ -34,7 +34,7 @@ function fixture() {
       table === "primitives"
         ? [[0, 0, 1, 2, 0]]
         : table === "pinGeometry"
-          ? [[0, 1, 2]]
+          ? [[0, 1, 2, "cell/Q"]]
           : table === "arcGeometry"
             ? [[0, 0, 0, 0.5]]
             : [{ id: table }],
@@ -47,7 +47,7 @@ function fixture() {
   const manifest = {
     format: "spacetime-render-manifest",
     schema: 1,
-    algorithm: 3,
+    algorithm: 4,
     view,
     source: {
       file: "computations/manifest.json",
@@ -77,8 +77,8 @@ test("render loading checks all derivative parts without fetching full native so
   const f = fixture(),
     result = await loadPreparedRenderWorker(f.options());
   assert.equal(result.operations[0].id, "operations");
-  assert.equal(result.algorithm, 3);
-  assert.deepEqual(result.pinGeometry, [[0, 1, 2]]);
+  assert.equal(result.algorithm, 4);
+  assert.deepEqual(result.pinGeometry, [[0, 1, 2, "cell/Q"]]);
   assert.deepEqual(result.arcGeometry, [[0, 0, 0, 0.5]]);
   assert.equal(result.source.sha256, "b".repeat(64));
   assert.equal(f.requested.length, 8);
@@ -89,7 +89,8 @@ test("stale recording, changed bytes, paths and incomplete inventories reject", 
   for (const mutate of [
     (f) => (f.manifest.algorithm = 1),
     (f) => (f.manifest.algorithm = 2),
-    (f) => (f.manifest.algorithm = 4),
+    (f) => (f.manifest.algorithm = 3),
+    (f) => (f.manifest.algorithm = 5),
     (f) => (f.manifest.schema = 2),
     (f) => (f.manifest.view = { ...f.view, bytes: 23 }),
     (f) => (f.manifest.parts[0].file = "../elsewhere.json"),

@@ -298,7 +298,7 @@ export function prepareRenderData(model, computationData) {
   const data = {
     format: "spacetime-prepared-render",
     schema: 1,
-    algorithm: 3,
+    algorithm: 4,
     build: index.attachment.build,
     nativeBuild: index.attachment.nativeBuild,
     checkpoint: index.attachment.checkpoint,
@@ -331,9 +331,10 @@ export function prepareRenderData(model, computationData) {
     primitives,
     // Compact native pin/arc correspondence supports a timing layout without
     // cloning the full source graph into each cone or inventing pin positions.
+    // Exact pin names occur once, alongside their native graph index.
     pinGeometry: index.pins.map((pin) => {
       const point = cellPoint(pin.cell);
-      return [pin.cell, point?.x ?? null, point?.y ?? null];
+      return [pin.cell, point?.x ?? null, point?.y ?? null, pin.id];
     }),
     arcGeometry: index.arcs.map((arc, i) => [
       arc.from,
@@ -467,7 +468,7 @@ export async function prepareRender({ input, output, capture }) {
   const manifest = {
     format: "spacetime-render-manifest",
     schema: 1,
-    algorithm: 3,
+    algorithm: 4,
     view: { bytes: viewBytes.length, sha256: hash(viewBytes) },
     source: sourceDescriptor,
     parts: published.parts,

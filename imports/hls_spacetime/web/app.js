@@ -23,8 +23,10 @@ import {
   preparedCircuitPaint,
 } from "./prepared-computations.js";
 import { circuitDisplay } from "./circuit-display.js";
+import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
+import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { eventCoordinate } from "./arrival-layout.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
@@ -104,6 +106,8 @@ const state = {
   index: new Map(),
   loadSequence: 0,
 };
+const sinkInspector = createSinkInspector(() => repaint());
+
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
   String(value ?? "").replace(
@@ -1289,6 +1293,8 @@ function renderArrivalDetails(circuits, maximum, summaries) {
               : Math.max(old.pathDelayNs, row.pathDelayNs);
         old.timingUnknown ||= row.timingUnknown;
         old.arrivalUnknown ||= row.arrivalUnknown;
+        old.schematic ||= row.schematic;
+        old.geometryIncomplete ||= row.geometryIncomplete;
         for (const field of ["arrivalFromNs", "arrivalViaNs", "arrivalToNs"])
           if (old[field] !== row[field]) {
             old[field] = null;
@@ -1308,14 +1314,15 @@ function renderArrivalDetails(circuits, maximum, summaries) {
         ? "outside scope"
         : "unknown";
   const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
+  sinkInspector.updateGeometry(circuits);
   $("arrival-summary").textContent =
-    `${arcs.size.toLocaleString()} distinct visible arcs · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
   $("arrival-table").innerHTML =
-    `<table><thead><tr><th>Native arc / pins</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
+    `<table><thead><tr><th>Native arc / pins</th><th>Geometry</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
       .slice(0, 40)
       .map(
         (row) =>
-          `<tr><td>${esc(row.arc)}: ${esc(row.fromPin)} → ${esc(row.toPin)}</td><td>${format(row.delayNs)}</td><td>${row.timingUnknown ? "unknown" : format(row.pathDelayNs)}</td><td>${format(!row.timingUnknown && row.pathDelayNs !== null && maximum !== null ? maximum - row.pathDelayNs : null)}</td><td>${format(row.arrivalFromNs)} → ${format(row.arrivalViaNs)} → ${format(row.arrivalToNs)}</td></tr>`,
+          `<tr><td>${esc(row.arc)}: ${esc(row.fromPin)} → ${esc(row.toPin)}</td><td>${row.schematic ? "schematic endpoint connection" : row.geometryIncomplete ? "incomplete" : row.located ? "retained endpoints / connectivity" : "unlocated"}</td><td>${format(row.delayNs)}</td><td>${row.timingUnknown ? "unknown" : format(row.pathDelayNs)}</td><td>${format(!row.timingUnknown && row.pathDelayNs !== null && maximum !== null ? maximum - row.pathDelayNs : null)}</td><td>${format(row.arrivalFromNs)} → ${format(row.arrivalViaNs)} → ${format(row.arrivalToNs)}</td></tr>`,
       )
       .join("")}</tbody></table>`;
 }
@@ -1416,9 +1423,11 @@ function buildStackScene() {
     "computation",
     "computation-timing",
     "criticality",
+    "delay-kind",
   ]) {
     const option = $("color-mode").querySelector(`option[value="${value}"]`);
-    option.disabled = !state.computations?.prepared;
+    option.disabled =
+      !state.computations?.prepared || (value === "delay-kind" && !arrival);
     option.title = option.disabled
       ? "Prepare rendering data to enable this color style"
       : "";
@@ -1431,16 +1440,33 @@ function buildStackScene() {
     mode === "computation-timing" ||
     mode === "criticality";
   const scalarMode = mode === "timing" || mode === "computation-timing";
-  $("role-legend").hidden = mode !== "role";
+  const neutralTiming =
+    scalarMode || mode === "criticality" || mode === "delay-kind";
+  sinkInspector.update(state.computations, layers, {
+    enabled: arrival,
+    scope: metric === "registered_launch" ? "registered" : "static",
+  });
+  const explorer = sinkInspector.explorer;
+  const cutMode = explorer.mode === "cut";
+  $("color-mode").disabled = cutMode;
+  $("analysis-legend").hidden = !["neighborhood", "cut"].includes(
+    explorer.mode,
+  );
+  $("analysis-legend").textContent = cutMode
+    ? "Candidate cut: amber before, blue after, gold crossing bits. Original arrival geometry; no new hardware or timing measurement."
+    : "Neighborhood: representative paths to similarly timed nearby sinks; installed logic on a separate reference plane. Driver spokes show connectivity, not routed wires or activity.";
+  $("delay-kind-legend").hidden = cutMode || mode !== "delay-kind";
+  $("role-legend").hidden = cutMode || mode !== "role";
   $("arrival-legend").hidden = !arrival;
   $("arrival-budget").disabled = !arrival;
-  $("urgency-window").disabled = mode !== "criticality";
-  $("urgency-legend").hidden = mode !== "criticality";
+  $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
+  $("urgency-legend").hidden =
+    cutMode || !["criticality", "delay-kind"].includes(mode);
   $("urgency-summary").textContent =
     `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
-  $("timing-legend").hidden = !scalarMode;
-  $("computation-legend").hidden = !membershipMode;
-  $("direction-legend").hidden = mode !== "direction";
+  $("timing-legend").hidden = cutMode || !scalarMode;
+  $("computation-legend").hidden = cutMode || !membershipMode;
+  $("direction-legend").hidden = cutMode || mode !== "direction";
   $("timing-min").textContent = "0 ns";
   $("timing-max").textContent =
     maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
@@ -1484,6 +1510,7 @@ function buildStackScene() {
       : (row[delayKey] ?? row.delayNs ?? null);
     const key = JSON.stringify([
       row.role,
+      row.delayKind,
       row.computationKey,
       row.computationShared,
       row[applicableKey],
@@ -1494,6 +1521,7 @@ function buildStackScene() {
         key,
         sceneColor({
           role: row.role,
+          kind: row.delayKind,
           mode,
           computationKey: row.computationKey,
           computationShared: row.computationShared,
@@ -1512,6 +1540,8 @@ function buildStackScene() {
       const circuit = arrivalCircuit(state.computations, layer, {
         scope: metric === "registered_launch" ? "registered" : "static",
         includeUnresolved: !mappedOnly(),
+        bridgeKnownGeometry: true,
+        selection: sinkInspector.selection,
       });
       const scene = arrivalScene(circuit, {
         cycle: layer.cycle,
@@ -1520,26 +1550,45 @@ function buildStackScene() {
         point: cellPoint,
         world,
         shade: (row) =>
-          shade({
-            ...row,
-            [delayKey]: row.timingUnknown ? null : row.pathDelayNs,
-            [applicableKey]: row.status !== "not_applicable",
-            [metric === "registered_launch"
-              ? "registeredPathTimingUnknown"
-              : "staticPathTimingUnknown"]: row.timingUnknown,
-          }),
-        mode,
+          explorer.shade(
+            row,
+            shade({
+              ...row,
+              [delayKey]: row.timingUnknown ? null : row.pathDelayNs,
+              [applicableKey]: row.status !== "not_applicable",
+              [metric === "registered_launch"
+                ? "registeredPathTimingUnknown"
+                : "staticPathTimingUnknown"]: row.timingUnknown,
+            }),
+          ),
+        mode: cutMode ? "cut" : mode,
         detail,
+        activeArc: sinkInspector.activeArc,
       });
+      if (sinkInspector.focused)
+        result.selection = result.selection.concat(scene.focus);
       // Concatenation avoids argument limits on complete native populations.
       result.segments = result.segments.concat(scene.segments);
       result.markers = result.markers.concat(scene.markers);
       result.focus = result.focus.concat(scene.focus);
+      if (explorer.cut?.status === "known" && circuit.summary.arcs) {
+        const boundary = cutScene(explorer.cut, {
+          cycle: layer.cycle,
+          budgetNs: Number($("arrival-budget").value),
+          point: cellPoint,
+          world,
+          selectedPin: explorer.cutPin,
+        });
+        result.markers = result.markers.concat(boundary.markers);
+        result.labels = result.labels.concat(boundary.labels);
+        result.focus = result.focus.concat(boundary.focus);
+        result.selection = result.selection.concat(boundary.focus);
+      }
       arrivalCircuits.push(circuit);
       arrivalSummaries.push(scene.summary);
       if (scene.summary.unknownSegments || scene.summary.unknownMarks)
         result.labels.push({
-          text: `C${layer.cycle}: unknown arrival shelf`,
+          text: `C${layer.cycle}: unresolved timing / route geometry`,
           position: world({ x: -1.04, y: -1.04 }, layer.cycle - 0.18),
         });
       continue;
@@ -1615,9 +1664,33 @@ function buildStackScene() {
       result.focus.push(row.position);
     }
   }
+  if (explorer.neighborhood?.region) {
+    const familyCycles = explorer.neighborhood.members.flatMap(
+      (row) => row.cycles,
+    );
+    const referenceCycle = familyCycles.reduce(
+      (first, cycle) => Math.min(first, cycle),
+      Infinity,
+    );
+    const contextCycle =
+      (Number.isFinite(referenceCycle) ? referenceCycle : state.first) - 0.25;
+    const context = neighborhoodScene(explorer.neighborhood, {
+      cycle: contextCycle,
+      point: cellPoint,
+      world,
+      driverPin: explorer.driverPin,
+      showContext: explorer.showContext,
+    });
+    result.segments = result.segments.concat(context.segments);
+    result.markers = result.markers.concat(context.markers);
+    result.labels = result.labels.concat(context.labels);
+    result.focus = result.focus.concat(context.focus);
+    result.selection = result.selection.concat(context.focus);
+  }
   renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
-  const storage = $("residence").checked ? visibleStorage() : [];
+  const storage =
+    $("residence").checked && !sinkInspector.focused ? visibleStorage() : [];
   let loads = 0,
     holds = 0;
   for (const item of storage) {
@@ -1633,10 +1706,12 @@ function buildStackScene() {
       const color =
         mode === "direction"
           ? DIRECTION_SOURCE_COLOR
-          : membershipMode
-            ? computationColor(item.resource)
-            : scalarMode
-              ? "#526471"
+          : neutralTiming
+            ? active
+              ? "#aebec6"
+              : "#526471"
+            : membershipMode
+              ? computationColor(item.resource)
               : p.kind === "unknown"
                 ? "#8c99a4"
                 : active
@@ -1673,7 +1748,7 @@ function buildStackScene() {
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
   let glyphs = 0;
-  for (const event of visibleEvents()) {
+  for (const event of sinkInspector.focused ? [] : visibleEvents()) {
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
     if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
     for (const point of spatialPoints(
@@ -1687,15 +1762,17 @@ function buildStackScene() {
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
       const resources = resourcesForEvent(event);
-      const accessColor = membershipMode
-        ? resources.length === 1
-          ? computationColor(resources[0])
-          : resources.length > 1
-            ? COMPUTATION_SHARED_COLOR
-            : "#627780"
-        : mode === "direction" || scalarMode
-          ? "#627780"
-          : color(event);
+      const accessColor = neutralTiming
+        ? "#627780"
+        : membershipMode
+          ? resources.length === 1
+            ? computationColor(resources[0])
+            : resources.length > 1
+              ? COMPUTATION_SHARED_COLOR
+              : "#627780"
+          : mode === "direction" || scalarMode
+            ? "#627780"
+            : color(event);
       marker(
         position,
         active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
@@ -1709,7 +1786,7 @@ function buildStackScene() {
     }
   }
   let traces = 0;
-  for (const edge of state.trace?.edges ?? []) {
+  for (const edge of sinkInspector.focused ? [] : (state.trace?.edges ?? [])) {
     const from = state.model.events.get(edge.source),
       to = state.model.events.get(edge.target);
     if (from.cycle >= state.first + state.window || to.cycle < state.first)
@@ -1766,7 +1843,7 @@ function buildStackScene() {
       traces++;
     }
   }
-  if (state.nativePath) {
+  if (state.nativePath && !sinkInspector.focused) {
     const cycle = Math.max(
       state.first,
       Math.min(
@@ -1813,7 +1890,8 @@ function buildStackScene() {
   if (
     state.computations &&
     $("computation-circuits").checked &&
-    selectionEvents().length
+    selectionEvents().length &&
+    !sinkInspector.focused
   ) {
     const selectedLayers = (
       state.computations.prepared
@@ -1845,6 +1923,7 @@ function buildStackScene() {
           arrivalCircuit(state.computations, layer, {
             scope: metric === "registered_launch" ? "registered" : "static",
             includeUnresolved: !mappedOnly(),
+            bridgeKnownGeometry: true,
           }),
           {
             cycle: layer.cycle,
@@ -1871,6 +1950,9 @@ function buildStackScene() {
         result.selection.push(world(row.point, layer.cycle));
     }
   }
+  $("fit-selection").disabled = sinkInspector.focused
+    ? result.selection.length === 0
+    : !selectionEvents().length && !state.resource && !state.focusVersion;
   result.bounds = sceneBounds(result.focus);
   result.selectionBounds = sceneBounds(
     result.selection.length ? result.selection : result.focus,
@@ -2865,9 +2947,9 @@ function bindControls() {
       if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
       repaint();
     };
-  new ResizeObserver(() => repaint()).observe(
-    document.querySelector(".workspace"),
-  );
+  const resize = new ResizeObserver(() => repaint());
+  resize.observe(document.querySelector(".workspace"));
+  resize.observe($("scene-frame"));
 }
 /** Saved examples are optional; a missing local index leaves file-open usable. */
 async function initialize() {

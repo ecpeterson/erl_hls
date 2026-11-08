@@ -820,7 +820,7 @@ body.scene-focus {
   display: flex;
   flex-direction: column;
 }
-.scene-focus #scene-panel > :not(.canvas-wrap) {
+.scene-focus #scene-panel > :not(.path-workbench) {
   flex-shrink: 0;
 }
 .scene-focus .canvas-wrap {
@@ -988,4 +988,221 @@ body.scene-focus {
   max-width: 60rem;
   color: #b7c8d2;
   font-size: 0.75rem;
+}
+
+/* Sink accounting is a compact companion to the scene. Only the table pages;
+   exact zero-delay arcs remain available in the full ordered list. */
+.sink-controls,
+.sink-paging,
+.sink-kind-legend,
+#delay-kind-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.sink-controls label {
+  display: grid;
+  gap: 4px;
+}
+.sink-controls input[type="number"] {
+  width: 100px;
+}
+.sink-list {
+  overflow: auto;
+  max-height: 330px;
+}
+.sink-list table {
+  width: 100%;
+}
+.sink-list td,
+.sink-list th {
+  padding: 3px 7px;
+  text-align: left;
+}
+.sink-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.sink-selected {
+  background: #23404e;
+}
+.sink-paging {
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.sink-selection,
+.sink-arc-detail {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.sink-strip {
+  display: flex;
+  height: 27px;
+  width: 100%;
+  margin: 8px 0;
+  background: #132833;
+}
+.sink-strip-part {
+  display: block;
+  flex: none;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+.sink-strip-part:hover,
+.sink-strip-part:focus-visible,
+.sink-strip-part.active {
+  outline: 2px solid #f6f6e8;
+  outline-offset: -2px;
+  z-index: 1;
+}
+.sink-kind-legend i,
+#delay-kind-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+.sink-steps {
+  max-height: 300px;
+  overflow: auto;
+}
+.sink-steps button {
+  text-align: left;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+/* Keep the selected path explanation beside its geometry on desktop. */
+.path-workbench {
+  min-width: 0;
+}
+#sink-panel p {
+  margin: 8px 0;
+  font-size: 11px;
+}
+#sink-panel .sink-ranking {
+  margin-top: 12px;
+}
+#sink-panel .sink-list {
+  max-height: 205px;
+}
+.scene-focus .path-workbench {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.scene-focus .path-workbench > .canvas-wrap {
+  height: 100%;
+  min-height: 260px;
+}
+@media (min-width: 1000px) {
+  .path-workbench:has(#sink-panel[open]:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: stretch;
+  }
+  .path-workbench:has(#sink-panel[open]) > #sink-panel {
+    min-width: 0;
+    margin: 0;
+    border-left: 1px solid var(--line);
+    max-height: clamp(520px, 68vh, 1000px);
+    overflow: auto;
+  }
+  .scene-focus .path-workbench:has(#sink-panel[open]) > #sink-panel {
+    max-height: none;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  #sink-panel .sink-controls label {
+    flex: 1 1 100%;
+  }
+  #sink-panel .sink-controls input,
+  #sink-panel .sink-controls select {
+    width: 100%;
+  }
+}
+
+/* Analysis panels retain complete populations; only table pages are bounded. */
+#path-neighborhood,
+#path-cut {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+#path-neighborhood[hidden],
+#path-cut[hidden] {
+  display: none;
+}
+#path-neighborhood label,
+#path-cut label {
+  display: block;
+  margin: 8px 0;
+}
+#family-driver,
+#cut-threshold {
+  width: 100%;
+}
+.analysis-list {
+  overflow: auto;
+  max-height: 250px;
+}
+.analysis-list table {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.analysis-list td,
+.analysis-list th {
+  padding: 5px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.analysis-key {
+  color: #c5d2d8;
+}
+.cut-bars div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin: 6px 0;
+}
+.cut-bars i {
+  display: block;
+  min-width: 1px;
+  height: 9px;
+  flex-shrink: 1;
+}
+.cut-bars b {
+  white-space: nowrap;
+  font-weight: normal;
+}
+.cut-bars span {
+  min-width: 42px;
+}
+
+.analysis-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.analysis-controls input {
+  width: 100%;
+}
+#path-neighborhood label.analysis-toggle,
+#path-cut label.analysis-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.analysis-toggle input {
+  width: auto;
 }

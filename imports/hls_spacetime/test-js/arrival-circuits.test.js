@@ -22,10 +22,10 @@ function fixture() {
   });
   const index = {
     pinGeometry: [
-      [0, 0, 0],
-      [1, 10, 0],
-      [1, 10, 0],
-      [2, 20, 0],
+      [0, 0, 0, "source/Q"],
+      [1, 10, 0, "logic/I0"],
+      [1, 10, 0, "logic/O"],
+      [2, 20, 0, "sink/D"],
     ],
     arcGeometry: [
       [0, 1, 0, 2],
@@ -83,7 +83,7 @@ test("propagation interpolates local delay along chords and keeps logic delay ve
 test("reconvergence exposes readiness separately instead of charging it to propagation", () => {
   const { index, layer } = fixture(),
     cone = layer.cones[0];
-  index.pinGeometry.push([3, -5, 0], [1, 10, 0]);
+  index.pinGeometry.push([3, -5, 0, "other/Q"], [1, 10, 0, "logic/I1"]);
   index.arcGeometry.push([4, 5, 0, 5], [5, 2, 1, 3]);
   index.primitives.push({
     type: "segments",
@@ -184,7 +184,7 @@ test("unknown arrival, outside scope and missing coordinates stay explicit", () 
   assert.equal(excluded.summary.outsideArcs, 3);
   assert(excluded.marks.every((row) => row.status === "not_applicable"));
   const missing = fixture();
-  missing.index.pinGeometry[3] = [null, null, null];
+  missing.index.pinGeometry[3] = [null, null, null, "sink/D"];
   missing.index.routes[1].primitives = [];
   const absent = arrivalCircuit(missing.index, missing.layer);
   assert.equal(absent.summary.unlocatedArcs, 1);
@@ -214,8 +214,8 @@ test("unresolved visibility never invents a route and zero-XY nets retain positi
     primitive.from = { x: 0, y: 0 };
     primitive.to = { x: 0, y: 0 };
   }
-  zero.index.pinGeometry[1] = [1, 0, 0];
-  zero.index.pinGeometry[2] = [1, 0, 0];
+  zero.index.pinGeometry[1] = [1, 0, 0, "logic/I0"];
+  zero.index.pinGeometry[2] = [1, 0, 0, "logic/O"];
   const vertical = arrivalCircuit(zero.index, zero.layer).segments.filter(
     (row) => row.arcIds.includes(0),
   );
@@ -254,8 +254,8 @@ test("hiding unresolved chords preserves arrival coordinates on visible branches
     index.routes[0].primitives = [0, 1, 2];
     index.routes[1].primitives = [];
     if (zeroLength) {
-      index.pinGeometry[1] = [1, 0, 0];
-      index.pinGeometry[2] = [1, 0, 0];
+      index.pinGeometry[1] = [1, 0, 0, "logic/I0"];
+      index.pinGeometry[2] = [1, 0, 0, "logic/O"];
     }
     const shown = arrivalCircuit(index, layer);
     const hidden = arrivalCircuit(index, layer, { includeUnresolved: false });
@@ -322,4 +322,350 @@ test("missing write associations stay unowned and inconsistent timing rejects", 
     () => arrivalCircuit(bad.index, bad.layer),
     /precedes propagation/,
   );
+});
+
+/** Two sinks in the first cone and a second, independently owned cone make
+ * unwanted marks/roots visible even when their connecting arcs are suppressed. */
+function selectionFixture() {
+  const f = fixture(),
+    cone = f.layer.cones[0];
+  f.index.pinGeometry.push([3, 30, 0, "second/D"]);
+  f.index.arcGeometry.push([2, 4, 0, 2]);
+  f.index.primitives.push({
+    type: "segments",
+    from: { x: 10, y: 0 },
+    to: { x: 30, y: 0 },
+    kind: "node",
+  });
+  f.index.routes.push({ arc: 3, primitives: [3], disposition: "resolved" });
+  cone.pinIndices.push(4);
+  cone.arcIndices.push(3);
+  cone.rootPins.push(4);
+  for (const scope of ["registered", "static"]) {
+    cone.pinArrivals[scope].push(7);
+    cone.pathDelays[scope].push(7);
+  }
+  const other = structuredClone(cone);
+  other.id = "other/data";
+  f.index.cones.push(other);
+  f.index.writes.set("other", { cones: [1] });
+  f.index.model.events.set("other", { access: { resource: "other" } });
+  f.layer.cones.push(other);
+  f.layer.operations.push({ event: "other" });
+  return f;
+}
+
+test("selection removes unrelated cones, roots, pins and arc geometry before aggregation", () => {
+  const { index, layer } = selectionFixture();
+  const selection = new Map([
+    ["sink/data", { arcIds: new Set([2]), rootPins: new Set([3]) }],
+  ]);
+  const result = arrivalCircuit(index, layer, { selection });
+  assert.deepEqual(
+    result.details.map((row) => row.arc),
+    [2],
+  );
+  assert.deepEqual(result.marks.map((row) => row.pin).sort(), [2, 3]);
+  assert.deepEqual(
+    result.roots.map((row) => row.pin),
+    [3],
+  );
+  assert.equal(result.summary.arcContributions, 1);
+  assert(
+    result.segments.every(
+      (row) => row.arcIds.length === 1 && row.arcIds[0] === 2,
+    ),
+  );
+  assert(
+    result.segments.every(
+      (row) => row.computationKey === "word" && row.delayKind === "net",
+    ),
+  );
+  const changedActor = arrivalCircuit(
+    index,
+    {
+      cones: [index.cones[1]],
+      operations: [{ event: "other" }],
+    },
+    { selection },
+  );
+  for (const key of ["segments", "marks", "roots", "details"])
+    assert.deepEqual(changedActor[key], []);
+  const none = arrivalCircuit(index, layer, { selection: new Map() });
+  for (const key of ["segments", "marks", "roots", "details"])
+    assert.deepEqual(none[key], []);
+  const rootOnly = arrivalCircuit(index, layer, {
+    selection: new Map([
+      ["sink/data", { arcIds: new Set(), rootPins: new Set([4]) }],
+    ]),
+  });
+  assert.deepEqual(
+    rootOnly.marks.map((row) => row.pin),
+    [4],
+  );
+  assert.deepEqual(
+    rootOnly.roots.map((row) => row.pin),
+    [4],
+  );
+  assert.equal(rootOnly.roots[0].delayKind, null);
+  assert.equal(rootOnly.segments.length, 0);
+});
+
+test("selection closure and cost overrides determine cache identity without changing local arrivals", () => {
+  const { index, layer } = fixture();
+  const choice = {
+    arcIds: new Set([2]),
+    rootPins: new Set([3]),
+    pathCosts: new Map([[2, 4]]),
+  };
+  const selection = new Map([["sink/data", choice]]);
+  const selected = arrivalCircuit(index, layer, { selection });
+  assert.equal(selected.segments[0].pathDelayNs, 4);
+  assert.equal(selected.segments[0].localDelayNs, 1);
+  assert.deepEqual(
+    [selected.segments[0].from.arrivalNs, selected.segments[0].to.arrivalNs],
+    [5, 6],
+  );
+  assert.equal(selected.roots[0].arrivalNs, 6);
+  assert.equal(
+    arrivalCircuit(index, layer, { selection: structuredClone(selection) }),
+    selected,
+  );
+  choice.pathCosts.set(2, null);
+  const unknown = arrivalCircuit(index, layer, { selection });
+  assert.notEqual(unknown, selected);
+  assert.equal(unknown.segments[0].pathDelayNs, null);
+  assert.equal(unknown.segments[0].timingUnknown, true);
+  assert.equal(unknown.segments[0].localDelayNs, 1);
+  assert.equal(unknown.segments[0].to.arrivalNs, 6);
+  choice.pathCosts.set(2, "not_applicable");
+  const outside = arrivalCircuit(index, layer, { selection });
+  assert.equal(outside.segments.length, 0);
+  assert.equal(outside.details[0].status, "not_applicable");
+  choice.arcIds = new Set([1]);
+  choice.rootPins = new Set();
+  choice.pathCosts = new Map([[1, 9]]);
+  const changedPath = arrivalCircuit(index, layer, { selection });
+  assert.deepEqual(
+    changedPath.details.map((row) => row.arc),
+    [1],
+  );
+  assert.deepEqual(changedPath.marks.map((row) => row.pin).sort(), [1, 2]);
+  assert.equal(changedPath.roots.length, 0);
+  assert.equal(changedPath.segments[0].delayKind, "logic");
+  assert.equal(changedPath.segments[0].pathDelayNs, 9);
+  choice.arcIds = new Set([2, 1]);
+  choice.pathCosts = new Map([
+    [2, 4],
+    [1, 9],
+  ]);
+  const both = arrivalCircuit(index, layer, { selection });
+  const reordered = new Map([
+    [
+      "sink/data",
+      {
+        arcIds: new Set([1, 2]),
+        rootPins: new Set(),
+        pathCosts: new Map([
+          [1, 9],
+          [2, 4],
+        ]),
+      },
+    ],
+  ]);
+  assert.equal(arrivalCircuit(index, layer, { selection: reordered }), both);
+});
+
+test("coincident logic and transmission contributions retain mixed delay attribution", () => {
+  const { index, layer } = fixture(),
+    cone = layer.cones[0];
+  index.arcGeometry.push([1, 2, 0, 3]);
+  index.primitives.push({
+    type: "segments",
+    from: { x: 10, y: 0 },
+    to: { x: 10, y: 0 },
+    kind: "node",
+  });
+  index.routes.push({ arc: 3, primitives: [3], disposition: "resolved" });
+  cone.arcIndices.push(3);
+  for (const scope of ["registered", "static"]) cone.pathDelays[scope].push(6);
+  const result = arrivalCircuit(index, layer);
+  const mixed = result.segments.find((row) => row.arcIds.includes(1));
+  assert.deepEqual(mixed.arcIds, [1, 3]);
+  assert.equal(mixed.delayKind, "mixed");
+  assert.equal(mixed.localDelayNs, 3);
+  assert.equal(mixed.geometryKind, "mixed");
+  assert.equal(mixed.interpolation, "mixed");
+  assert.equal(result.marks.find((row) => row.pin === 1).delayKind, "mixed");
+  assert.equal(result.details.find((row) => row.arc === 1).delayKind, "logic");
+  assert.equal(result.details.find((row) => row.arc === 3).delayKind, "net");
+  const logicOnly = arrivalCircuit(index, layer, {
+    selection: new Map([
+      [cone.id, { arcIds: new Set([1]), rootPins: new Set() }],
+    ]),
+  });
+  assert(logicOnly.segments.every((row) => row.delayKind === "logic"));
+  assert(logicOnly.marks.every((row) => row.delayKind === "logic"));
+});
+
+test("invalid selection closures reject instead of caching partial geometry", () => {
+  for (const selection of [
+    {},
+    new Map([["missing", { arcIds: new Set(), rootPins: new Set() }]]),
+    new Map([["sink/data", { arcIds: [], rootPins: new Set() }]]),
+    new Map([["sink/data", { arcIds: new Set([99]), rootPins: new Set() }]]),
+    new Map([["sink/data", { arcIds: new Set(), rootPins: new Set([1]) }]]),
+    new Map([
+      [
+        "sink/data",
+        {
+          arcIds: new Set([2]),
+          rootPins: new Set([3]),
+          pathCosts: new Map([[1, 4]]),
+        },
+      ],
+    ]),
+    new Map([
+      [
+        "sink/data",
+        {
+          arcIds: new Set([2]),
+          rootPins: new Set([3]),
+          pathCosts: new Map([[2, NaN]]),
+        },
+      ],
+    ]),
+  ]) {
+    const { index, layer } = fixture();
+    assert.throws(
+      () => arrivalCircuit(index, layer, { selection }),
+      /Arrival circuits/,
+    );
+  }
+});
+
+test("known timing can bridge incomplete native geometry without qualifying it", () => {
+  for (const reason of ["partial", "intrasite", "missing", "discontinuous"]) {
+    const { index, layer } = fixture();
+    if (reason === "missing")
+      index.routes = index.routes.filter((row) => row.arc !== 0);
+    else if (reason === "discontinuous") index.primitives[1].from.x = 7;
+    else index.routes[0].disposition = reason;
+    const original = structuredClone(index);
+    const ordinary = arrivalCircuit(index, layer);
+    const bridged = arrivalCircuit(index, layer, { bridgeKnownGeometry: true });
+    const links = bridged.segments.filter((row) => row.arcIds.includes(0));
+    assert.equal(links.length, 1);
+    assert.deepEqual(links[0].from, { x: 0, y: 0, arrivalNs: 0 });
+    assert.deepEqual(links[0].to, { x: 10, y: 0, arrivalNs: 2 });
+    assert.equal(links[0].kind, "propagation");
+    assert.equal(links[0].schematic, true);
+    assert.equal(links[0].status, "known");
+    assert.equal(links[0].geometryKind, "endpoint_bridge");
+    assert.equal(links[0].interpolation, "schematic_endpoint_chord");
+    assert.equal(links[0].directionUnknown, false);
+    assert.equal(links[0].localDelayNs, 2);
+    assert.equal(links[0].pathDelayNs, 6);
+    assert.equal(links[0].computationKey, "word");
+    assert.equal(links[0].timingUnknown, false);
+    assert.equal(bridged.summary.schematicArcs, 1);
+    assert.equal(
+      bridged.summary.geometryIncompleteArcs,
+      ordinary.summary.geometryIncompleteArcs,
+    );
+    assert.equal(
+      bridged.summary.geometryUnavailableArcs,
+      ordinary.summary.geometryUnavailableArcs,
+    );
+    assert.equal(bridged.details[0].geometryIncomplete, true);
+    assert.equal(bridged.details[0].schematic, true);
+    assert.equal(ordinary.details[0].schematic, false);
+    assert.notEqual(bridged, ordinary);
+    assert.equal(
+      arrivalCircuit(index, layer, { bridgeKnownGeometry: true }),
+      bridged,
+    );
+    assert.equal(arrivalCircuit(index, layer), ordinary);
+    assert.deepEqual(index, original);
+  }
+});
+
+test("schematic bridges require actual endpoint locations and all local arrival evidence", () => {
+  for (const reason of ["delay", "head", "tail", "from", "to", "outside"]) {
+    const { index, layer } = fixture();
+    index.routes[0].disposition = "partial";
+    const cone = layer.cones[0];
+    if (reason === "delay") index.arcGeometry[0][3] = null;
+    if (reason === "head") cone.pinArrivals.registered[0] = null;
+    if (reason === "tail") cone.pinArrivals.registered[1] = null;
+    if (reason === "from") index.pinGeometry[0] = [0, null, null, "source/Q"];
+    if (reason === "to") index.pinGeometry[1] = [1, null, null, "logic/I0"];
+    if (reason === "outside") cone.pathDelays.registered[0] = "not_applicable";
+    const result = arrivalCircuit(index, layer, { bridgeKnownGeometry: true });
+    assert.equal(result.summary.schematicArcs, 0, reason);
+    assert.equal(result.details[0].schematic, false, reason);
+    assert(!result.segments.some((row) => row.schematic));
+  }
+  const { index, layer } = fixture();
+  assert.throws(
+    () => arrivalCircuit(index, layer, { bridgeKnownGeometry: "yes" }),
+    /display scope/,
+  );
+});
+
+test("bridges preserve reconvergence readiness and are independent of unresolved visibility", () => {
+  const { index, layer } = fixture();
+  index.routes[0].disposition = "partial";
+  for (const row of index.primitives.slice(0, 2)) row.kind = "unresolved";
+  for (const scope of ["registered", "static"]) {
+    layer.cones[0].pinArrivals[scope] = [0, 4, 7, 8];
+    layer.cones[0].pathDelays[scope] = [8, 8, 8];
+  }
+  const shown = arrivalCircuit(index, layer, { bridgeKnownGeometry: true });
+  const hidden = arrivalCircuit(index, layer, {
+    bridgeKnownGeometry: true,
+    includeUnresolved: false,
+  });
+  const links = (result) =>
+    result.segments.filter((row) => row.arcIds.includes(0));
+  assert.deepEqual(links(hidden), links(shown));
+  const bridge = links(shown).find((row) => row.schematic);
+  const readiness = links(shown).find((row) => row.kind === "readiness");
+  assert.deepEqual([bridge.from.arrivalNs, bridge.to.arrivalNs], [0, 2]);
+  assert.deepEqual([readiness.from.arrivalNs, readiness.to.arrivalNs], [2, 4]);
+  assert.equal(readiness.from.x, 10);
+  assert.equal(readiness.to.x, 10);
+  assert.equal(bridge.localDelayNs, 2);
+  assert(!links(shown).some((row) => row.kind === "unknown"));
+});
+
+test("coincident ordinary and schematic spans merge with the schematic warning retained", () => {
+  const { index, layer } = fixture(),
+    cone = layer.cones[0];
+  index.routes[0].disposition = "intrasite";
+  index.pinGeometry.push([3, 0, 0, "other/Q"], [1, 10, 0, "logic/I1"]);
+  index.arcGeometry.push([4, 5, 0, 2], [5, 2, 1, 3]);
+  index.primitives.push({
+    type: "segments",
+    from: { x: 0, y: 0 },
+    to: { x: 10, y: 0 },
+    kind: "node",
+  });
+  index.routes.push({ arc: 3, primitives: [3], disposition: "resolved" });
+  cone.pinIndices.push(4, 5);
+  cone.arcIndices.push(3, 4);
+  for (const scope of ["registered", "static"]) {
+    cone.pinArrivals[scope].push(0, 2);
+    cone.pathDelays[scope].push(6, 6);
+  }
+  const result = arrivalCircuit(index, layer, { bridgeKnownGeometry: true });
+  const merged = result.segments.filter(
+    (row) => row.arcIds.includes(0) || row.arcIds.includes(3),
+  );
+  assert.equal(merged.length, 1);
+  assert.deepEqual(merged[0].arcIds, [0, 3]);
+  assert.equal(merged[0].schematic, true);
+  assert.equal(merged[0].geometryKind, "mixed");
+  assert.equal(result.summary.schematicArcs, 1);
+  assert.equal(result.details.find((row) => row.arc === 3).schematic, false);
 });

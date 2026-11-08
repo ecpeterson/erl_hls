@@ -87,12 +87,13 @@
         hypothetical 10 ns; it is not a measured clock period. Late arrivals
         extend beyond that boundary. Gray links distinguish input-readiness and
         ready-to-capture gaps from recorded storage; red marks budget overruns.
-        Unknown arrival has a separate labelled shelf, not a zero-delay height.
-        Heights between measured pin endpoints are interpolated along schematic
-        routing chords. These are timing bounds, not a switching trace.
-        Computation + urgency keeps destination hue and brightens complete paths
-        within the chosen distance of the capture-wide longest path. It is not
-        STA slack or a congestion measurement.
+        Unknown timing uses a labelled shelf, not a zero-delay height. Known
+        endpoints with incomplete route geometry stay connected by a thin core
+        with a dashed sleeve. Heights between measured pin endpoints are
+        interpolated along schematic routing chords. These are timing bounds,
+        not a switching trace. Computation + urgency keeps destination hue and
+        brightens complete paths within the chosen distance of the capture-wide
+        longest path. It is not STA slack or a congestion measurement.
       </p>
       <p>
         Delay emphasis uses a fixed capture-wide color scale for the selected
@@ -259,6 +260,7 @@
               <label
                 >Color style<select id="color-mode">
                   <option value="criticality">Computation + urgency</option>
+                  <option value="delay-kind">Logic / net + urgency</option>
                   <option value="role" selected>Data / enable / reset</option>
                   <option value="computation">Sub-computation</option>
                   <option value="direction">Flow direction</option>
@@ -295,15 +297,24 @@
                   <p>
                     Hue follows the destination register across clocks. Colors
                     are hints, not unique identifiers. Untimed storage keeps its
-                    categorical hue.
+                    categorical hue outside timing modes.
                   </p>
                 </details>
               </div>
               <p class="legend-note">
-                Dashed links join known routing locations; bends and track
-                offsets are unavailable. Coincident spans are combined, not
-                electrically connected.
+                Routing links join known locations; bends and track offsets are
+                unavailable. Coincident spans are combined, not electrically
+                connected.
               </p>
+              <div id="analysis-legend" hidden></div>
+              <div id="delay-kind-legend" hidden>
+                <span><i class="sink-logic"></i>Logic delay</span
+                ><span><i class="sink-net"></i>Net delay</span
+                ><span
+                  >Brightness: near-longest paths · gray: shared categories /
+                  untimed storage</span
+                >
+              </div>
               <div id="urgency-legend" hidden>
                 <span id="urgency-summary"></span>
               </div>
@@ -312,6 +323,10 @@
                   >Height: latest static arrival · gray: reconvergence /
                   ready-to-capture interval · red: budget overrun · unknowns on
                   a separate shelf</span
+                ><span
+                  >Solid: retained endpoint / routing connectivity · thin core
+                  with dashed sleeve: schematic endpoint connection across
+                  incomplete routing geometry</span
                 >
               </div>
               <div id="direction-legend" hidden>
@@ -354,17 +369,191 @@
                 aria-label="Window first clock"
               /><span id="window-label"></span>
             </div>
-            <div id="scene-frame" class="canvas-wrap">
-              <canvas id="scene3d" aria-hidden="true"></canvas>
-              <canvas
-                id="stack"
-                aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
-                tabindex="0"
-              ></canvas>
-              <div class="axis-hint">
-                CLOCK AXIS<span>Presets restore time orientation</span>
+            <div class="path-workbench">
+              <div id="scene-frame" class="canvas-wrap">
+                <canvas id="scene3d" aria-hidden="true"></canvas>
+                <canvas
+                  id="stack"
+                  aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
+                  tabindex="0"
+                ></canvas>
+                <div class="axis-hint">
+                  CLOCK AXIS<span>Presets restore time orientation</span>
+                </div>
+                <div id="tooltip" hidden></div>
               </div>
-              <div id="tooltip" hidden></div>
+              <details id="sink-panel" class="render-notes" open hidden>
+                <summary>Paths to sinks · logic / net delay</summary>
+                <div class="sink-controls">
+                  <label
+                    >Path view<select id="sink-mode">
+                      <option value="all">All circuitry</option>
+                      <option value="per-sink">
+                        Longest path to every sink
+                      </option>
+                      <option value="selected">
+                        Selected sink: longest path
+                      </option>
+                      <option value="neighborhood">Path neighborhood</option>
+                      <option value="cut">Candidate register cut</option>
+                      <option value="near">
+                        Selected sink: near-longest paths
+                      </option>
+                    </select></label
+                  >
+                  <label
+                    >Near-longest margin (ns)<input
+                      id="sink-margin"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value="0.5"
+                      required
+                      disabled
+                  /></label>
+                </div>
+                <p id="sink-selection" class="sink-selection"></p>
+                <p id="sink-path-summary"></p>
+                <section id="path-neighborhood" hidden>
+                  <div class="analysis-controls">
+                    <label
+                      >Similar timing ± ns<input
+                        id="family-margin"
+                        type="number"
+                        min="0"
+                        step="0.05"
+                        value="0.1"
+                        required
+                    /></label>
+                    <label
+                      >Region padding (tiles)<input
+                        id="family-padding"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value="12"
+                        required
+                    /></label>
+                  </div>
+                  <label class="analysis-toggle"
+                    ><input id="family-context" type="checkbox" checked />
+                    Nearby installed logic</label
+                  >
+                  <p id="family-summary"></p>
+                  <label
+                    >Driver fanout<select id="family-driver">
+                      <option value="">No fanout overlay</option>
+                    </select></label
+                  >
+                  <p id="family-driver-summary"></p>
+                  <details open>
+                    <summary>Similar sinks</summary>
+                    <div id="family-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="family-prev" type="button">
+                        Previous family page</button
+                      ><span id="family-page"></span
+                      ><button id="family-next" type="button">
+                        Next family page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Neighborhood coverage</summary>
+                    <p id="family-coverage"></p>
+                  </details>
+                </section>
+                <section id="path-cut" hidden>
+                  <label
+                    >Cut after arrival (ns)<input
+                      id="cut-time"
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                  /></label>
+                  <input
+                    id="cut-threshold"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.5"
+                    aria-label="Candidate cut arrival"
+                  />
+                  <label class="analysis-toggle"
+                    ><input id="cut-full-graph" type="checkbox" /> Show complete
+                    input graph</label
+                  >
+                  <p class="muted">
+                    Default: longest path and all crossing bits. Estimates
+                    always include the complete eligible input graph.
+                  </p>
+                  <p id="cut-summary"></p>
+                  <div id="cut-bars" class="cut-bars"></div>
+                  <p class="analysis-key">
+                    Amber: before cut · blue: after cut · gold: crossing bit.
+                    Original arrival heights are retained; no hardware or clock
+                    stages were changed.
+                  </p>
+                  <p id="cut-side-inputs"></p>
+                  <details open>
+                    <summary>Values crossing the cut</summary>
+                    <div id="cut-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="cut-prev" type="button">
+                        Previous cut page</button
+                      ><span id="cut-page"></span
+                      ><button id="cut-next" type="button">
+                        Next cut page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Estimate limits</summary>
+                    <p id="cut-limits"></p>
+                  </details>
+                </section>
+                <div class="sink-kind-legend">
+                  <span><i class="sink-logic"></i>Logic</span
+                  ><span><i class="sink-net"></i>Net / transmission</span
+                  ><span
+                    >Strip widths show each arc's local delay; parallel paths
+                    are not added.</span
+                  >
+                </div>
+                <div
+                  id="sink-strip"
+                  class="sink-strip"
+                  aria-label="Ordered source-to-sink delay contributions"
+                ></div>
+                <p
+                  id="sink-arc-detail"
+                  class="sink-arc-detail"
+                  aria-live="polite"
+                ></p>
+                <p id="sink-geometry" class="muted"></p>
+                <details>
+                  <summary>All ordered arcs, including zero-delay arcs</summary>
+                  <div id="sink-steps" class="sink-steps"></div>
+                </details>
+                <details open class="sink-ranking">
+                  <summary>Ranked sinks</summary>
+                  <label
+                    >Find sink<input
+                      id="sink-search"
+                      type="search"
+                      placeholder="Pin, register or role"
+                  /></label>
+                  <p id="sink-population"></p>
+                  <div id="sink-list" class="sink-list"></div>
+                  <div class="sink-paging">
+                    <button type="button" id="sink-prev">Previous</button
+                    ><span id="sink-page"></span
+                    ><button type="button" id="sink-next">Next</button>
+                  </div>
+                </details>
+              </details>
             </div>
             <details id="scene-options" class="scene-options">
               <summary>Layers, storage & timing filters</summary>

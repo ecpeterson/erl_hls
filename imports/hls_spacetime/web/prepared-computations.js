@@ -69,7 +69,7 @@ export function createPreparedComputations(model, data) {
   check(
     data.format === "spacetime-prepared-render" &&
       data.schema === 1 &&
-      data.algorithm === 3,
+      data.algorithm === 4,
     "unsupported format",
   );
   check(
@@ -114,15 +114,21 @@ export function createPreparedComputations(model, data) {
     pinGeometry.length === counts.pins && arcGeometry.length === counts.arcs,
     "incomplete pin/arc geometry population",
   );
-  for (const row of pinGeometry)
+  const pinNames = new Set();
+  for (const row of pinGeometry) {
     check(
       Array.isArray(row) &&
-        row.length === 3 &&
+        row.length === 4 &&
         (row[0] === null || (count(row[0]) && row[0] < counts.cells)) &&
         ((row[1] === null && row[2] === null) ||
-          (Number.isFinite(row[1]) && Number.isFinite(row[2]))),
-      "invalid pin geometry",
+          (Number.isFinite(row[1]) && Number.isFinite(row[2]))) &&
+        typeof row[3] === "string" &&
+        row[3].length > 0 &&
+        !pinNames.has(row[3]),
+      "invalid or duplicate pin geometry/name",
     );
+    pinNames.add(row[3]);
+  }
   for (const row of arcGeometry)
     check(
       Array.isArray(row) &&

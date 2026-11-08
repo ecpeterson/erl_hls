@@ -37,7 +37,7 @@ test("propagation rises by arrival while readiness stays a separate neutral link
   );
   assert.deepEqual(result.segments[0].from, [0, 0, 4.1]);
   assert.deepEqual(result.segments[0].to, [1, 2, 4.3]);
-  assert.equal(result.segments[0].dash, 0.018);
+  assert.equal(result.segments[0].dash, 0);
   assert.equal(result.segments[0].color, "#123456");
   assert.equal(result.segments[1].kind, "arrival-readiness");
   assert.notEqual(result.segments[1].color, "#123456");
@@ -154,4 +154,98 @@ test("empty circuits still validate budget and exact capture equality creates no
   assert.equal(result.summary.lateRoots, 0);
   assert.equal(result.segments.length, 0);
   assert.equal(result.markers[0].position[2], 5);
+});
+
+test("arc focus overrides direction shading but never turns readiness into delay", () => {
+  const circuit = {
+    segments: [
+      { from: p(0, 0, 0), to: p(10, 20, 3), kind: "propagation", arcIds: [4] },
+      { from: p(10, 20, 3), to: p(10, 20, 5), kind: "readiness", arcIds: [4] },
+    ],
+    marks: [
+      { ...mark(3), arcIds: [4] },
+      { ...mark(0), arcIds: [5] },
+    ],
+  };
+  const result = arrivalScene(circuit, {
+    ...options,
+    mode: "direction",
+    activeArc: 4,
+  });
+  assert.equal(result.segments[0].color, "#fff2bc");
+  assert.equal(result.segments[0].colorEnd, "#fff2bc");
+  assert.notEqual(result.segments[1].color, "#fff2bc");
+  assert.equal(result.markers[0].color, "#fff2bc");
+  assert.ok(result.markers[0].size > result.markers[1].size);
+});
+
+test("schematic propagation has a continuous core and distinct dashed sleeve", () => {
+  const row = {
+    from: p(0, 0, 1),
+    to: p(10, 20, 3),
+    kind: "propagation",
+    schematic: true,
+    arcIds: [4],
+  };
+  const result = arrivalScene(
+    { segments: [row] },
+    { ...options, mode: "direction" },
+  );
+  const [core, sleeve] = result.segments;
+  assert.equal(core.kind, "arrival-schematic-core");
+  assert.equal(core.dash, 0);
+  assert.equal(sleeve.kind, "arrival-schematic");
+  assert.equal(sleeve.dash, 0.018);
+  assert.ok(core.radius < sleeve.radius);
+  assert.deepEqual(core.from, [0, 0, 4.1]);
+  assert.deepEqual(core.to, [1, 2, 4.3]);
+  assert.deepEqual(sleeve.from, core.from);
+  assert.deepEqual(sleeve.to, core.to);
+  assert.equal(core.color, DIRECTION_SOURCE_COLOR);
+  assert.equal(core.colorEnd, DIRECTION_SINK_COLOR);
+  assert.equal(sleeve.color, core.color);
+  assert.equal(sleeve.colorEnd, core.colorEnd);
+  assert.equal(result.summary.unknownSegments, 0);
+  const focused = arrivalScene(
+    { segments: [row] },
+    { ...options, activeArc: 4 },
+  );
+  assert.ok(
+    focused.segments.every(
+      (s) => s.color === "#fff2bc" && s.colorEnd === "#fff2bc",
+    ),
+  );
+  assert.ok(focused.segments[0].radius < focused.segments[1].radius);
+  assert.equal(
+    arrivalScene({ segments: [row] }, { ...options, detail: "overview" })
+      .segments.length,
+    0,
+  );
+});
+
+test("schematic metadata never turns unknown or readiness spans into propagation", () => {
+  const result = arrivalScene(
+    {
+      segments: [
+        {
+          from: p(0, 0, null),
+          to: p(10, 20, null),
+          kind: "unknown",
+          schematic: true,
+        },
+        {
+          from: p(10, 20, 3),
+          to: p(10, 20, 5),
+          kind: "readiness",
+          schematic: true,
+        },
+      ],
+    },
+    options,
+  );
+  assert.equal(result.segments.length, 2);
+  assert.equal(result.segments[0].kind, "arrival-unknown");
+  assert.equal(result.segments[0].from[2], 3.82);
+  assert.equal(result.segments[1].kind, "arrival-readiness");
+  assert.ok(result.segments.every((s) => s.dash === 0.018));
 });

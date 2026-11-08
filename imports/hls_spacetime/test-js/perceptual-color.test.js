@@ -3,12 +3,14 @@ import test from "node:test";
 import {
   COMPUTATION_COLORS,
   COMPUTATION_SHARED_COLOR,
+  DELAY_KIND_COLORS,
   DIRECTION_SINK_COLOR,
   DIRECTION_SOURCE_COLOR,
   FUNCTION_COLORS,
   UNKNOWN_COLOR,
   OUTSIDE_TIMING_COLOR,
   computationColor,
+  delayKindColor,
   directionColor,
   sceneColor,
   timingColor,
@@ -235,5 +237,116 @@ test("relative urgency uses a fixed capture maximum and preserves unknown owners
   assert.throws(
     () => sceneColor({ ...base, delayNs: 10, marginWindowNs: 0 }),
     /positive/,
+  );
+});
+
+test("delay categories distinguish logic and nets without ranking their hue", () => {
+  assert.equal(new Set(Object.values(DELAY_KIND_COLORS)).size, 3);
+  for (const [kind, color] of Object.entries(DELAY_KIND_COLORS)) {
+    assert.equal(delayKindColor(kind), color);
+    assert.ok(Math.abs(lightness(color) - 0.73) < 0.003);
+    assert.notEqual(color, UNKNOWN_COLOR);
+  }
+  const channel = (color, offset) =>
+    Number.parseInt(color.slice(offset, offset + 2), 16);
+  assert.ok(
+    channel(DELAY_KIND_COLORS.logic, 1) > channel(DELAY_KIND_COLORS.logic, 5),
+  );
+  assert.ok(
+    channel(DELAY_KIND_COLORS.net, 5) > channel(DELAY_KIND_COLORS.net, 1),
+  );
+  for (const kind of [undefined, null, "unclassified", "constructor"])
+    assert.equal(delayKindColor(kind), DELAY_KIND_COLORS.mixed);
+});
+
+test("delay-kind brightness uses the same bounded urgency window for both hues", () => {
+  const options = { maxDelayNs: 10, marginWindowNs: 2 };
+  for (const kind of ["logic", "net", "mixed"]) {
+    let previous = 0;
+    for (let step = 0; step <= 100; step++) {
+      const delayNs = 8 + step / 50;
+      const color = delayKindColor(kind, { ...options, delayNs });
+      const current = lightness(color);
+      assert.ok(current >= previous - 0.0015);
+      assert.ok(Math.abs(current - (0.28 + (0.62 * step) / 100)) < 0.003);
+      assert.equal(
+        color,
+        sceneColor({ mode: "delay-kind", kind, ...options, delayNs }),
+      );
+      previous = current;
+    }
+    assert.equal(
+      delayKindColor(kind, { ...options, delayNs: 0 }),
+      delayKindColor(kind, { ...options, delayNs: 8 }),
+    );
+    assert.equal(
+      delayKindColor(kind, { ...options, delayNs: 10 }),
+      delayKindColor(kind, { ...options, delayNs: 12 }),
+    );
+    assert.ok(
+      lightness(delayKindColor(kind, { ...options, delayNs: 9 })) <
+        lightness(
+          delayKindColor(kind, { ...options, delayNs: 9, marginWindowNs: 4 }),
+        ),
+    );
+    const reference = sceneColor({
+      mode: "criticality",
+      computationShared: true,
+      ...options,
+      delayNs: 9,
+    });
+    assert.ok(
+      Math.abs(
+        lightness(reference) -
+          lightness(
+            delayKindColor(kind, {
+              ...options,
+              delayNs: 9,
+            }),
+          ),
+      ) < 0.003,
+    );
+  }
+});
+
+test("delay kind preserves known zero, unknown timing and outside-scope timing", () => {
+  for (const kind of ["logic", "net", "mixed", undefined]) {
+    for (const delayNs of [undefined, null, NaN, Infinity, -1]) {
+      assert.equal(
+        delayKindColor(kind, { delayNs, maxDelayNs: 10 }),
+        UNKNOWN_COLOR,
+      );
+      assert.equal(
+        sceneColor({ mode: "delay-kind", kind, delayNs, maxDelayNs: 10 }),
+        UNKNOWN_COLOR,
+      );
+    }
+    assert.equal(delayKindColor(kind, { delayNs: 0 }), UNKNOWN_COLOR);
+    const zero = delayKindColor(kind, { delayNs: 0, maxDelayNs: 0 });
+    assert.notEqual(zero, UNKNOWN_COLOR);
+    assert.ok(Math.abs(lightness(zero) - 0.9) < 0.003);
+    assert.equal(
+      delayKindColor(kind, { timingApplicable: false }),
+      OUTSIDE_TIMING_COLOR,
+    );
+    assert.equal(
+      sceneColor({ mode: "delay-kind", kind, timingApplicable: false }),
+      OUTSIDE_TIMING_COLOR,
+    );
+    for (const marginWindowNs of [0, -1, NaN, Infinity])
+      assert.throws(
+        () =>
+          delayKindColor(kind, { delayNs: 0, maxDelayNs: 0, marginWindowNs }),
+        /positive/,
+      );
+  }
+  const options = { delayNs: 10, maxDelayNs: 10 };
+  assert.equal(
+    delayKindColor(undefined, options),
+    delayKindColor("mixed", options),
+  );
+  assert.equal(
+    delayKindColor("unclassified", options),
+    delayKindColor("mixed", options),
   );
 });

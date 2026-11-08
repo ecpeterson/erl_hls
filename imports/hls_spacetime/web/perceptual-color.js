@@ -1,4 +1,4 @@
-/** Function, computation, direction and perceptually ordered static-path-delay colors.
+/** Function, computation, delay kind and perceptually ordered static-path colors.
  * Delays are supplied by the caller; this module never infers timing or activity.
  * Selection belongs to a separate outline/halo, not this color mapping.
  */
@@ -94,6 +94,24 @@ export const COMPUTATION_COLORS = Object.freeze(
 );
 export const COMPUTATION_SHARED_COLOR = hexColor(0.8, 0, 0);
 
+// Delay kinds use equal-lightness amber/blue categories. A mixed or unspecified
+// kind is neutral; it does not invent a dominant contribution.
+function delayKindHue(lightness, kind) {
+  const angle = kind === "logic" ? 75 : kind === "net" ? 245 : null;
+  if (angle === null) return hexColor(lightness, 0, 0);
+  const radians = (angle * Math.PI) / 180;
+  return hexColor(
+    lightness,
+    0.13 * Math.cos(radians),
+    0.13 * Math.sin(radians),
+  );
+}
+export const DELAY_KIND_COLORS = Object.freeze({
+  logic: delayKindHue(0.73, "logic"),
+  net: delayKindHue(0.73, "net"),
+  mixed: delayKindHue(0.73, "mixed"),
+});
+
 /** Stable FNV-1a over JavaScript string code units; key type is part of identity.
  * Missing/invalid keys are unknown rather than silently joining one category.
  */
@@ -165,6 +183,37 @@ export function timingColor(delayNs, maxDelayNs) {
   );
 }
 
+/** Near-longest structural margin controls lightness independently of hue.
+ * A positive bandwidth is required; absent timing remains unknown.
+ */
+function urgencyLightness(delayNs, maxDelayNs, marginWindowNs) {
+  if (!(Number.isFinite(marginWindowNs) && marginWindowNs > 0))
+    throw new RangeError("Criticality window must be positive");
+  if (!knownDelay(delayNs) || !knownDelay(maxDelayNs)) return null;
+  const margin = Math.max(0, maxDelayNs - delayNs);
+  return 0.28 + 0.62 * Math.max(0, 1 - margin / marginWindowNs);
+}
+
+/** Categorical logic/net color when options are omitted; otherwise combine its
+ * hue with the supplied complete-path urgency. An unknown kind is neutral,
+ * while unknown timing and out-of-scope timing retain distinct dispositions.
+ */
+export function delayKindColor(kind, options) {
+  if (options === undefined)
+    return kind === "logic" || kind === "net"
+      ? DELAY_KIND_COLORS[kind]
+      : DELAY_KIND_COLORS.mixed;
+  const {
+    delayNs = null,
+    maxDelayNs = null,
+    marginWindowNs = 1,
+    timingApplicable = true,
+  } = options;
+  if (!timingApplicable) return OUTSIDE_TIMING_COLOR;
+  const lightness = urgencyLightness(delayNs, maxDelayNs, marginWindowNs);
+  return lightness === null ? UNKNOWN_COLOR : delayKindHue(lightness, kind);
+}
+
 /** Map supplied function, computation identity or complete-path delay to opaque
  * CSS color. Hybrid mode retains a computation hue and uses timing lightness.
  * Explicitly shared computation ownership uses neutral gray, never a fake key.
@@ -172,6 +221,7 @@ export function timingColor(delayNs, maxDelayNs) {
  */
 export function sceneColor({
   role = "data",
+  kind = null,
   mode = "role",
   delayNs = null,
   maxDelayNs = null,
@@ -182,27 +232,29 @@ export function sceneColor({
 } = {}) {
   if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
   if (
-    ["timing", "computation-timing", "criticality"].includes(mode) &&
+    ["timing", "computation-timing", "criticality", "delay-kind"].includes(
+      mode,
+    ) &&
     !timingApplicable
   )
     return OUTSIDE_TIMING_COLOR;
   if (mode === "timing") return timingColor(delayNs, maxDelayNs);
+  if (mode === "delay-kind")
+    return delayKindColor(kind, {
+      delayNs,
+      maxDelayNs,
+      marginWindowNs,
+      timingApplicable,
+    });
   if (mode === "computation")
     return computationShared
       ? COMPUTATION_SHARED_COLOR
       : computationColor(computationKey);
   if (mode === "criticality") {
-    if (!(Number.isFinite(marginWindowNs) && marginWindowNs > 0))
-      throw new RangeError("Criticality window must be positive");
+    const lightness = urgencyLightness(delayNs, maxDelayNs, marginWindowNs);
     const index = computationIndex(computationKey);
-    if (
-      !knownDelay(delayNs) ||
-      !knownDelay(maxDelayNs) ||
-      (!computationShared && index === null)
-    )
+    if (lightness === null || (!computationShared && index === null))
       return UNKNOWN_COLOR;
-    const margin = Math.max(0, maxDelayNs - delayNs);
-    const lightness = 0.28 + 0.62 * Math.max(0, 1 - margin / marginWindowNs);
     return computationShared
       ? hexColor(lightness, 0, 0)
       : computationHue(lightness, index);
