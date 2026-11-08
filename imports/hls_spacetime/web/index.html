@@ -514,6 +514,97 @@
                     <p id="cut-limits"></p>
                   </details>
                 </section>
+                <details id="regional-panel" class="regional-panel">
+                  <summary>Regional routing resources</summary>
+                  <p id="region-status" aria-live="polite">
+                    This capture has no prepared regional-resource data.
+                  </p>
+                  <button id="region-load" type="button" disabled>
+                    Load saved regional data
+                  </button>
+                  <div id="region-content" hidden>
+                    <div class="analysis-controls">
+                      <label
+                        >Count<select id="region-metric">
+                          <option value="pips">
+                            Distinct routing switches
+                          </option>
+                          <option value="cells">Installed cells</option>
+                          <option value="nets">Distinct routed nets</option>
+                        </select></label
+                      >
+                      <label
+                        >Primitive kind<select id="region-kind" disabled>
+                          <option value="">All primitive kinds</option>
+                        </select></label
+                      >
+                      <label
+                        >Map extent<select id="region-scope">
+                          <option value="family">Path neighborhood</option>
+                          <option value="all">Whole installed device</option>
+                        </select></label
+                      >
+                    </div>
+                    <p id="region-scope-note"></p>
+                    <div id="region-map" class="region-map"></div>
+                    <label
+                      >Region<select id="region-bin">
+                        <option value="">Select a region</option>
+                      </select></label
+                    >
+                    <p id="region-scale"></p>
+                    <label class="analysis-toggle"
+                      ><input id="region-overlay" type="checkbox" /> Show
+                      resource map on 3D reference plane</label
+                    >
+                    <p class="muted">
+                      Installed allocation and route membership, not capacity
+                      utilization, routing demand, congestion or placement
+                      causality. Counts use complete retained native
+                      populations, independent of the clock window.
+                    </p>
+                    <p id="region-selection"></p>
+                    <p class="muted">
+                      Resource selection stays pinned across path and list
+                      filters for comparison; Clear resource selection removes
+                      it.
+                    </p>
+                    <button id="region-clear" type="button">
+                      Clear resource selection
+                    </button>
+                    <label
+                      >Contributors<select id="region-population">
+                        <option value="nets">Nets</option>
+                        <option value="cells">Cells</option>
+                        <option value="pips">Routing switches</option>
+                      </select></label
+                    >
+                    <label
+                      >Find contributor<input
+                        id="region-search"
+                        type="search"
+                        placeholder="Native cell, net or PIP name"
+                    /></label>
+                    <label class="analysis-toggle"
+                      ><input id="region-family-only" type="checkbox" />
+                      Contributors touching the path family</label
+                    >
+                    <div id="region-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="region-prev" type="button">
+                        Previous resource page</button
+                      ><span id="region-page"></span
+                      ><button id="region-next" type="button">
+                        Next resource page
+                      </button>
+                    </div>
+                    <p id="region-footprint"></p>
+                    <details>
+                      <summary>Resource coverage</summary>
+                      <p id="region-coverage"></p>
+                    </details>
+                  </div>
+                </details>
                 <div class="sink-kind-legend">
                   <span><i class="sink-logic"></i>Logic</span
                   ><span><i class="sink-net"></i>Net / transmission</span

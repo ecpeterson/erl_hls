@@ -1206,3 +1206,30 @@ body.scene-focus {
 .analysis-toggle input {
   width: auto;
 }
+
+/* Resource maps use complete native populations on an independent reference plane. */
+.regional-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #34434b;
+  padding-top: 0.75rem;
+}
+.region-map {
+  background: #111c22;
+  border-radius: 0.35rem;
+  margin-top: 0.6rem;
+}
+.region-map svg {
+  display: block;
+  width: 100%;
+  max-height: 290px;
+}
+.region-map [data-region-bin] {
+  cursor: pointer;
+}
+.region-map [data-region-bin]:hover rect {
+  stroke: white;
+  stroke-width: 0.7;
+}
+#region-list td:first-child {
+  overflow-wrap: anywhere;
+}

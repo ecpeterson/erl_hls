@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { arrivalScene } from "../web/arrival-scene.js";
+import { overlayDisplay } from "../web/overlay-display.js";
 import {
   DIRECTION_SOURCE_COLOR,
   DIRECTION_SINK_COLOR,
@@ -248,4 +249,51 @@ test("schematic metadata never turns unknown or readiness spans into propagation
   assert.equal(result.segments[0].from[2], 3.82);
   assert.equal(result.segments[1].kind, "arrival-readiness");
   assert.ok(result.segments.every((s) => s.dash === 0.018));
+});
+
+test("arrival overlay metadata preserves timing at a coincident capture boundary", () => {
+  const scene = arrivalScene({ marks: [mark(10)], roots: [root(10)] }, options);
+  assert.equal(scene.markers[0].overlayRole, "timing");
+  assert.equal(scene.markers[0].timingUnknown, false);
+  assert.equal(scene.markers[1].overlayRole, "annotation");
+  const [merged] = overlayDisplay(scene).markers;
+  assert.equal(merged.color, "#123456");
+  assert.equal(merged.contributors, 2);
+  assert.deepEqual(merged.overlayEvidence, {
+    known: 1,
+    unknown: 0,
+    annotations: 1,
+  });
+  const focused = arrivalScene(
+    { marks: [{ ...mark(10), arcIds: [4] }], roots: [root(10)] },
+    { ...options, activeArc: 4 },
+  );
+  assert.equal(focused.markers[0].priority, 3);
+  assert.equal(overlayDisplay(focused).markers[0].color, "#fff2bc");
+});
+
+test("timing uncertainty remains metadata even with a known pin arrival", () => {
+  const scene = arrivalScene(
+    {
+      marks: [{ ...mark(3), timingUnknown: true }, mark(null)],
+      segments: [
+        {
+          from: p(0, 0, 0),
+          to: p(10, 20, 3),
+          kind: "propagation",
+          timingUnknown: true,
+        },
+        { from: p(10, 20, 3), to: p(10, 20, 5), kind: "readiness" },
+      ],
+    },
+    options,
+  );
+  assert.ok(
+    scene.markers.every(
+      (row) => row.overlayRole === "timing" && row.timingUnknown,
+    ),
+  );
+  assert.equal(scene.segments[0].overlayRole, "timing");
+  assert.equal(scene.segments[0].timingUnknown, true);
+  assert.equal(scene.segments[1].overlayRole, "annotation");
 });

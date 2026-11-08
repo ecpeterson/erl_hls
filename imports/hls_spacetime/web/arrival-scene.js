@@ -71,11 +71,20 @@ export function arrivalScene(
     arrivalCoordinate(cycle, arrivalNs, budgetNs) ?? cycle + SHELF_OFFSET;
   const position = (raw, arrivalNs = raw.arrivalNs ?? null) =>
     world(point(raw), phase(arrivalNs));
-  const mark = (at, color, size, kind) => {
-    result.markers.push({ position: at, color, size, kind });
+  const mark = (at, color, size, kind, overlay) => {
+    result.markers.push({ position: at, color, size, kind, ...overlay });
     result.focus.push(at);
   };
-  const span = (from, to, color, colorEnd, radius, kind, dash = 0.018) => {
+  const span = (
+    from,
+    to,
+    color,
+    colorEnd,
+    radius,
+    kind,
+    dash = 0.018,
+    overlay,
+  ) => {
     if (from.every((value, index) => value === to[index])) return;
     result.segments.push({
       from,
@@ -85,6 +94,7 @@ export function arrivalScene(
       radius,
       kind,
       dash,
+      ...overlay,
     });
     result.focus.push(from, to);
   };
@@ -119,6 +129,11 @@ export function arrivalScene(
       to = position(row.to),
       startColor = directional ? DIRECTION_SOURCE_COLOR : color,
       endColor = directional ? DIRECTION_SINK_COLOR : color;
+    const overlay = {
+      overlayRole: unknown || !readiness ? "timing" : "annotation",
+      timingUnknown: unknown || row.timingUnknown === true,
+      priority: active ? 3 : 0,
+    };
     const schematic = row.schematic && !unknown && !readiness;
     // A thin solid core keeps endpoint connectivity visible through the wider
     // dashed sleeve. The sleeve identifies interpolation across missing route
@@ -132,6 +147,7 @@ export function arrivalScene(
         active ? 0.0013 : 0.0007,
         "arrival-schematic-core",
         0,
+        overlay,
       );
     span(
       from,
@@ -147,6 +163,7 @@ export function arrivalScene(
             ? "arrival-schematic"
             : "arrival-propagation",
       unknown || readiness || schematic ? 0.018 : 0,
+      overlay,
     );
   }
   for (const row of circuit.marks ?? []) {
@@ -170,6 +187,11 @@ export function arrivalScene(
             : shade(row),
       active ? 0.006 : 0.004,
       unknown ? "arrival-unknown-pin" : "arrival-pin",
+      {
+        overlayRole: "timing",
+        timingUnknown: unknown || row.timingUnknown === true,
+        priority: active ? 3 : 0,
+      },
     );
   }
   const captureCycle = captureAvailable
@@ -200,12 +222,15 @@ export function arrivalScene(
       late ? LATE_COLOR : READY_COLOR,
       0.0008,
       late ? "arrival-overrun" : "arrival-capture-readiness",
+      0.018,
+      { overlayRole: "annotation" },
     );
     mark(
       capture,
       late ? LATE_COLOR : READY_COLOR,
       0.005,
       "arrival-capture-boundary",
+      { overlayRole: "annotation" },
     );
   }
   return result;

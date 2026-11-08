@@ -276,13 +276,18 @@ export function pathNeighborhood(
     return done();
   }
   summary.status = "known";
+  const catalogue = index.model.catalogue?.cells ?? [];
+  const catalogueIds = new Set(catalogue.map((cell) => cell.id));
   const familyCells = new Set(),
     usedDrivers = new Map(),
     writeEvents = new Set(),
     clocks = new Set();
   const addPinCell = (pin) => {
-    const cell = index.pinGeometry[pin]?.[0];
-    if (Number.isSafeInteger(cell) && cell >= 0) familyCells.add(cell);
+    // Prepared native cell indexes need not equal catalogue array positions.
+    // The retained canonical pin name is exactly <native cell>/<port>.
+    const name = index.pinGeometry[pin]?.[3];
+    const cell = name?.slice(0, name.lastIndexOf("/"));
+    if (catalogueIds.has(cell)) familyCells.add(cell);
   };
   for (const row of state.rows) {
     if (row.status !== "known" || !point(index, row.pin)) continue;
@@ -338,7 +343,6 @@ export function pathNeighborhood(
   result.members.sort(
     (a, b) => b.delayNs - a.delayNs || a.key.localeCompare(b.key),
   );
-  const catalogue = index.model.catalogue?.cells ?? [];
   catalogue.forEach((cell, i) => {
     const located = Number.isFinite(cell.x) && Number.isFinite(cell.y);
     if (!located) summary.unlocatedCells++;
@@ -346,9 +350,9 @@ export function pathNeighborhood(
       result.cells.push({
         index: i,
         cell,
-        kind: familyCells.has(i) ? "family" : "context",
+        kind: familyCells.has(cell.id) ? "family" : "context",
       });
-    else if (familyCells.has(i)) summary.familyCellsOutsideRegion++;
+    else if (familyCells.has(cell.id)) summary.familyCellsOutsideRegion++;
   });
   result.fanouts = fanoutRows(index, cache.drivers, usedDrivers, result.region);
   Object.assign(summary, {

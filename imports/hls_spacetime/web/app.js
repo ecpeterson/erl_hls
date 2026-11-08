@@ -27,6 +27,7 @@ import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
+import { createRegionalControls } from "./regional-controls.js";
 import { eventCoordinate } from "./arrival-layout.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
@@ -107,6 +108,7 @@ const state = {
   loadSequence: 0,
 };
 const sinkInspector = createSinkInspector(() => repaint());
+const regionalControls = createRegionalControls(() => repaint());
 
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
@@ -149,6 +151,7 @@ async function loadDocument(
   integrity = "File supplied locally; source evidence not revalidated",
   computationData = null,
 ) {
+  regionalControls.configure();
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
     : createComputations(
@@ -1447,6 +1450,7 @@ function buildStackScene() {
     scope: metric === "registered_launch" ? "registered" : "static",
   });
   const explorer = sinkInspector.explorer;
+  regionalControls.update(state.computations, explorer.neighborhood);
   const cutMode = explorer.mode === "cut";
   $("color-mode").disabled = cutMode;
   $("analysis-legend").hidden = !["neighborhood", "cut"].includes(
@@ -1686,6 +1690,17 @@ function buildStackScene() {
     result.labels = result.labels.concat(context.labels);
     result.focus = result.focus.concat(context.focus);
     result.selection = result.selection.concat(context.focus);
+  }
+  const regional = regionalControls.scene({
+    cycle: state.first + state.window + 0.3,
+    point: cellPoint,
+    world,
+    showCells: true,
+  });
+  if (regional) {
+    for (const key of ["surfaces", "segments", "markers", "labels", "focus"])
+      result[key] = result[key].concat(regional[key]);
+    result.selection = result.selection.concat(regional.selection);
   }
   renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
@@ -2539,6 +2554,7 @@ function bindControls() {
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
     const sequence = ++state.loadSequence;
+    regionalControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const signal = state.loadController.signal,
@@ -2576,6 +2592,12 @@ function bindControls() {
         decoded.model,
         "Projection bytes verified against the local index; source evidence was verified during preparation.",
       );
+      regionalControls.configure(state.model, {
+        entry: expected.regions,
+        view: { bytes: byteLength, sha256: digest },
+        source: expected.computations,
+        baseUrl: new URL("data/", window.location.href).href,
+      });
       if (state.model.document.examples?.length) {
         $("example").value = "0";
         chooseExample(0);
@@ -2631,6 +2653,7 @@ function bindControls() {
   };
   $("file").onchange = async () => {
     const sequence = ++state.loadSequence;
+    regionalControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const file = $("file").files[0];

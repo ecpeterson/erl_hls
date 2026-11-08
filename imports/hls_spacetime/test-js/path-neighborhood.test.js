@@ -293,3 +293,15 @@ test("zero tolerance, scopes and input bounds remain explicit", () => {
       /Invalid/,
     );
 });
+
+test("native family identities survive a reordered placement catalogue", () => {
+  const original = fixture(),
+    reordered = fixture();
+  reordered.index.model.catalogue.cells.reverse();
+  const a = pathNeighborhood(original.index, original.layers, original.sink),
+    b = pathNeighborhood(reordered.index, reordered.layers, reordered.sink);
+  const memberships = (result) =>
+    result.cells.map((r) => [r.cell.id, r.kind]).sort();
+  assert.deepEqual(memberships(a), memberships(b));
+  assert.deepEqual(a.summary, b.summary);
+});
