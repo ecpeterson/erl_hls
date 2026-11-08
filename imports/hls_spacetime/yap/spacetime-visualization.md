@@ -41,6 +41,8 @@ The first end-to-end milestone is a small, deterministic, single-device, single-
 
 The first [display/readability pass](spacetime-display-2.md) now uses real depth-tested geometry, camera controls, optional inspector/flat panels, explicit detail levels and perceptual static-delay colors. Prepared shared geometry and workers reduce the browser payload while retaining complete event/write coverage and original source identity. Dense-window scene construction and structural overlap remain measured display limits; further iteration can address them without repeating native extraction or weakening evidence boundaries.
 
+The [within-clock arrival view](spacetime-arrival-layout-1.md) now separates old-Q launch references, latest static pin arrivals, reconvergence readiness, capture boundaries and overruns within a common hypothetical budget. Destination hue and near-longest-path brightness provide independent functional/timing emphasis. Native sources remain unchanged; intermediate routed heights are explicitly illustrative and unknown geometry stays unresolved. This extends the display without claiming switching simulation or a physical clock period.
+
 Multi-device and multi-clock views, live hardware trace acquisition, exhaustive electrical switching/glitch animation, general value-sensitive gate causality, automatic rescheduling or speedup prediction, and architecture changes suggested by the picture are separate work. Timing simulation within a clock can be added when a concrete inspection question needs it; it is not a prerequisite for the initial cycle-layer view.
 
 ## Maintaining this plan

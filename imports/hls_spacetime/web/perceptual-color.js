@@ -178,15 +178,35 @@ export function sceneColor({
   computationKey = null,
   computationShared = false,
   timingApplicable = true,
+  marginWindowNs = 1,
 } = {}) {
   if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
-  if ((mode === "timing" || mode === "computation-timing") && !timingApplicable)
+  if (
+    ["timing", "computation-timing", "criticality"].includes(mode) &&
+    !timingApplicable
+  )
     return OUTSIDE_TIMING_COLOR;
   if (mode === "timing") return timingColor(delayNs, maxDelayNs);
   if (mode === "computation")
     return computationShared
       ? COMPUTATION_SHARED_COLOR
       : computationColor(computationKey);
+  if (mode === "criticality") {
+    if (!(Number.isFinite(marginWindowNs) && marginWindowNs > 0))
+      throw new RangeError("Criticality window must be positive");
+    const index = computationIndex(computationKey);
+    if (
+      !knownDelay(delayNs) ||
+      !knownDelay(maxDelayNs) ||
+      (!computationShared && index === null)
+    )
+      return UNKNOWN_COLOR;
+    const margin = Math.max(0, maxDelayNs - delayNs);
+    const lightness = 0.28 + 0.62 * Math.max(0, 1 - margin / marginWindowNs);
+    return computationShared
+      ? hexColor(lightness, 0, 0)
+      : computationHue(lightness, index);
+  }
   if (mode === "computation-timing") {
     const index = computationIndex(computationKey);
     const value = delayFraction(delayNs, maxDelayNs);

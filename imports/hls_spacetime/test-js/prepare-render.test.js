@@ -237,6 +237,22 @@ test("fresh portable derivative keeps exact recording/full source and loads with
     },
   });
   assert(requested.every((url) => url.includes("/render/")));
+  assert.equal(data.algorithm, 3);
+  assert.deepEqual(data.pinGeometry, [
+    [0, 10, 20],
+    [0, 10, 20],
+  ]);
+  assert.deepEqual(data.arcGeometry, [[0, 1, 0, 0.02]]);
+  for (const scope of ["registered", "static"])
+    assert.deepEqual(
+      Object.fromEntries(
+        data.cones[0].pinIndices.map((pin, i) => [
+          pin,
+          data.cones[0].pinArrivals[scope][i],
+        ]),
+      ),
+      { 0: 0, 1: 0.02 },
+    );
   assert.deepEqual(
     gunzipSync(await readFile(join(f.output, "recording.json.gz"))),
     await readFile(join(f.output, "recording.json")),
@@ -244,6 +260,15 @@ test("fresh portable derivative keeps exact recording/full source and loads with
   const renderManifest = JSON.parse(
     await readFile(join(f.output, entry.render.file)),
   );
+  assert.equal(renderManifest.algorithm, 3);
+  assert.equal(renderManifest.totals.pinGeometry, 2);
+  assert.equal(renderManifest.totals.arcGeometry, 1);
+  for (const table of ["pinGeometry", "arcGeometry"])
+    assert(
+      renderManifest.parts.some(
+        (part) => part.table === table && part.encoding === "json-rows-v1",
+      ),
+    );
   for (const part of renderManifest.parts)
     assert.deepEqual(
       gunzipSync(await readFile(join(f.output, "render", `${part.file}.gz`))),
@@ -283,6 +308,32 @@ test("publication carries complete branch costs into shared geometry without dro
   const layer = preparedComputationLayers(index, ["w"])[0];
   const paint = preparedCircuitPaint(index, layer);
   assert.equal(layer.cones[0].registeredDelayNs, 8);
+  assert.equal(data.algorithm, 3);
+  assert.deepEqual(index.pinGeometry, [
+    [0, 10, 20],
+    [0, 10, 20],
+    [1, 20, 20],
+    [2, 30, 20],
+    [2, 30, 20],
+    [2, 30, 20],
+  ]);
+  assert.deepEqual(index.arcGeometry, [
+    [0, 3, 0, 1],
+    [2, 4, 0, 3],
+    [3, 5, 1, 2],
+    [4, 5, 1, 4],
+    [5, 1, 0, 1],
+  ]);
+  for (const scope of ["registered", "static"])
+    assert.deepEqual(
+      Object.fromEntries(
+        layer.cones[0].pinIndices.map((pin, i) => [
+          pin,
+          layer.cones[0].pinArrivals[scope][i],
+        ]),
+      ),
+      { 0: 0, 1: 8, 2: 0, 3: 1, 4: 3, 5: 7 },
+    );
   assert.deepEqual(index.maxDelays, { registered: 8, static: 8 });
   assert.equal(paint.segments.length, 3);
   for (const row of paint.segments) {

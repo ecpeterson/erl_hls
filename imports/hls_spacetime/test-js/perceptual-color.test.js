@@ -209,3 +209,31 @@ test("outside-scope timing is distinct from unknown and zero without changing ca
     computationColor("a"),
   );
 });
+
+test("relative urgency uses a fixed capture maximum and preserves unknown ownership/timing", () => {
+  const base = {
+    mode: "criticality",
+    computationKey: "actor",
+    maxDelayNs: 10,
+    marginWindowNs: 1,
+  };
+  const distant = sceneColor({ ...base, delayNs: 8 });
+  const near = sceneColor({ ...base, delayNs: 9.5 });
+  const critical = sceneColor({ ...base, delayNs: 10 });
+  assert(lightness(distant) < lightness(near));
+  assert(lightness(near) < lightness(critical));
+  assert.equal(distant, sceneColor({ ...base, delayNs: 0 }));
+  assert.equal(sceneColor({ ...base, delayNs: null }), UNKNOWN_COLOR);
+  assert.equal(
+    sceneColor({ ...base, delayNs: 10, computationKey: null }),
+    UNKNOWN_COLOR,
+  );
+  assert.equal(
+    sceneColor({ ...base, delayNs: 10, timingApplicable: false }),
+    OUTSIDE_TIMING_COLOR,
+  );
+  assert.throws(
+    () => sceneColor({ ...base, delayNs: 10, marginWindowNs: 0 }),
+    /positive/,
+  );
+});

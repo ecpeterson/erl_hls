@@ -965,3 +965,27 @@ body.scene-focus {
 .outside-timing {
   background: #526471;
 }
+
+/* Arc detail rows scroll independently of the scene and retain numeric alignment. */
+#arrival-table {
+  max-height: 18rem;
+  overflow: auto;
+}
+#arrival-table table {
+  font-size: 0.75rem;
+  border-collapse: collapse;
+  width: 100%;
+}
+#arrival-table th,
+#arrival-table td {
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid #29414c;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+#arrival-legend,
+#urgency-legend {
+  max-width: 60rem;
+  color: #b7c8d2;
+  font-size: 0.75rem;
+}

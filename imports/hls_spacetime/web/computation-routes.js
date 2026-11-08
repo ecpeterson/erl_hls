@@ -457,25 +457,33 @@ function extendDistance(distance, delay) {
   };
 }
 
-/** Longest complete eligible path through each arc, in the supplied arc order.
- * Forward/backward DAG passes are linear in this cone, without enumerating paths.
+/** Longest eligible prefixes at pins and complete through-path costs at arcs.
+ * Arrays follow the supplied pin/arc orders. Forward/backward DAG passes are
+ * linear in this cone, without enumerating paths.
  * Prefix/suffix unknowns affect only arcs whose through-path can include them.
  * Values use the same conservative SDF envelope as the existing cone bounds;
  * they omit endpoint timing checks, clock effects and sensitization. */
-function pathDelays(
+function pathTiming(
   index,
   roots,
   frontiers,
   outgoing,
   order,
   arcIndices,
+  pinIndices,
   cyclic,
   unsupported,
 ) {
   if (cyclic || unsupported)
     return {
-      registered: arcIndices.map(() => null),
-      static: arcIndices.map(() => null),
+      pathDelays: {
+        registered: arcIndices.map(() => null),
+        static: arcIndices.map(() => null),
+      },
+      pinArrivals: {
+        registered: pinIndices.map(() => null),
+        static: pinIndices.map(() => null),
+      },
     };
   const suffix = new Map(
     roots.map((pin) => [pin, { known: 0, unknown: false }]),
@@ -508,7 +516,7 @@ function pathDelays(
           extendDistance(head, index.delays[arcIndex]),
         );
     }
-    return arcIndices.map((arcIndex) => {
+    const paths = arcIndices.map((arcIndex) => {
       const arc = index.arcs[arcIndex],
         delay = index.delays[arcIndex];
       const head = prefix.get(arc.from),
@@ -518,8 +526,19 @@ function pathDelays(
       const cost = head.known + delay + tail.known;
       return Number.isFinite(cost) ? cost : null;
     });
+    const arrivals = pinIndices.map((pin) => {
+      const head = prefix.get(pin);
+      if (!head) return "not_applicable";
+      return head.unknown ? null : head.known;
+    });
+    return { paths, arrivals };
   };
-  return { registered: costs(true), static: costs(false) };
+  const registered = costs(true),
+    whole = costs(false);
+  return {
+    pathDelays: { registered: registered.paths, static: whole.paths },
+    pinArrivals: { registered: registered.arrivals, static: whole.arrivals },
+  };
 }
 
 /** Build a backward graph cone once, then compute a conservative longest static
@@ -590,23 +609,26 @@ function cone(index, roots, role) {
     cyclic,
     unsupported,
   );
-  const arcIndices = [...arcSet];
+  const arcIndices = [...arcSet],
+    pinIndices = [...pinSet];
+  const timing = pathTiming(
+    index,
+    rootPins,
+    frontiers,
+    outgoing,
+    ready,
+    arcIndices,
+    pinIndices,
+    cyclic,
+    unsupported,
+  );
   const result = {
     id: key,
     rootPins,
     role,
-    pinIndices: [...pinSet],
+    pinIndices,
     arcIndices,
-    pathDelays: pathDelays(
-      index,
-      rootPins,
-      frontiers,
-      outgoing,
-      ready,
-      arcIndices,
-      cyclic,
-      unsupported,
-    ),
+    ...timing,
     frontiers,
     cellIndices: [
       ...new Set(

@@ -23,6 +23,9 @@ import {
   preparedCircuitPaint,
 } from "./prepared-computations.js";
 import { circuitDisplay } from "./circuit-display.js";
+import { arrivalCircuit } from "./arrival-circuits.js";
+import { arrivalScene } from "./arrival-scene.js";
+import { eventCoordinate } from "./arrival-layout.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
 import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
@@ -197,6 +200,8 @@ async function loadDocument(
   ])
     $(id).disabled = !computations;
   $("computation-circuits").checked = Boolean(computations);
+  $("time-layout").disabled = !computations?.prepared;
+  $("time-layout").value = computations?.prepared ? "arrival" : "flat";
   $("circuit-role").value = "";
   $("circuit-timing").value = "registered_launch";
   $("circuit-delay").value = "0";
@@ -322,6 +327,15 @@ function installComputationData(data) {
   ])
     $(id).disabled = false;
   $("computation-circuits").checked = true;
+  $("time-layout").disabled = !state.computations.prepared;
+  $("time-layout").value = state.computations.prepared ? "arrival" : "flat";
+  if (state.computations.prepared) {
+    $("color-mode").value = "criticality";
+    // Begin with a few readable intervals; Window remains unrestricted.
+    state.window = Math.min(state.window, 3);
+    state.spacing = 32;
+    $("spacing").value = state.spacing;
+  }
   state.autoFit = true;
   render();
 }
@@ -672,6 +686,20 @@ function extendBounds(bounds, object) {
   bounds.maxY = Math.max(bounds.maxY, object.y);
 }
 
+/** Arrival phases require the qualified native pin and arc tables. */
+function arrivalEnabled() {
+  return (
+    Boolean(state.computations?.prepared) &&
+    $("time-layout").value === "arrival"
+  );
+}
+/** A following sample must exist in this incarnation before depicting capture.
+ * The final pre-edge sample alone does not establish next-Q observation. */
+function captureAvailable(cycle) {
+  return state.model.bundle.capture.incarnations.some(
+    (epoch) => epoch.first_cycle <= cycle && cycle + 1 < epoch.end_cycle,
+  );
+}
 /** Cache the visible clock-layer unions independently of the camera. All graph
  * rows remain retained when functionality or static-delay filters hide geometry. */
 function circuitLayers() {
@@ -1133,7 +1161,7 @@ function selectedLifetimes() {
 function visibleStorage() {
   const options = {
     firstCycle: state.first,
-    endCycle: state.first + state.window,
+    endCycle: state.first + state.window + (arrivalEnabled() ? 1 : 0),
     ...filters(),
     usedOnly: !$("full-storage").checked,
   };
@@ -1242,6 +1270,56 @@ function renderNativePath() {
     : "";
 }
 
+/** Small inspection table exposes native arc identities and local versus complete
+ * delay. Only table rows are paged; the renderer retains every visible arc. */
+function renderArrivalDetails(circuits, maximum, summaries) {
+  $("arrival-details").hidden = !arrivalEnabled();
+  if (!arrivalEnabled()) return;
+  const arcs = new Map();
+  for (const circuit of circuits)
+    for (const row of circuit.details) {
+      const old = arcs.get(row.arc);
+      if (!old) arcs.set(row.arc, { ...row });
+      else {
+        old.pathDelayNs =
+          old.pathDelayNs === null
+            ? row.pathDelayNs
+            : row.pathDelayNs === null
+              ? old.pathDelayNs
+              : Math.max(old.pathDelayNs, row.pathDelayNs);
+        old.timingUnknown ||= row.timingUnknown;
+        old.arrivalUnknown ||= row.arrivalUnknown;
+        for (const field of ["arrivalFromNs", "arrivalViaNs", "arrivalToNs"])
+          if (old[field] !== row[field]) {
+            old[field] = null;
+            old.arrivalUnknown = true;
+          }
+      }
+    }
+  const rows = [...arcs.values()].sort(
+    (a, b) =>
+      (b.pathDelayNs ?? -1) - (a.pathDelayNs ?? -1) ||
+      (b.delayNs ?? -1) - (a.delayNs ?? -1),
+  );
+  const format = (value) =>
+    typeof value === "number"
+      ? value.toFixed(3)
+      : value === "not_applicable"
+        ? "outside scope"
+        : "unknown";
+  const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
+  $("arrival-summary").textContent =
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
+  $("arrival-table").innerHTML =
+    `<table><thead><tr><th>Native arc / pins</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
+      .slice(0, 40)
+      .map(
+        (row) =>
+          `<tr><td>${esc(row.arc)}: ${esc(row.fromPin)} → ${esc(row.toPin)}</td><td>${format(row.delayNs)}</td><td>${row.timingUnknown ? "unknown" : format(row.pathDelayNs)}</td><td>${format(!row.timingUnknown && row.pathDelayNs !== null && maximum !== null ? maximum - row.pathDelayNs : null)}</td><td>${format(row.arrivalFromNs)} → ${format(row.arrivalViaNs)} → ${format(row.arrivalToNs)}</td></tr>`,
+      )
+      .join("")}</tbody></table>`;
+}
+
 /** Assemble world geometry only when data or visibility changes. Camera motion
  * reuses the GPU buffers and does not redo graph queries, filtering or unions. */
 function buildStackScene() {
@@ -1277,8 +1355,13 @@ function buildStackScene() {
     });
   const marker = (position, color, size = 0.006, priority = 0) =>
     result.markers.push({ position, color, size, priority });
+  const arrival = arrivalEnabled();
   const interval = Math.max(1, Math.ceil(state.window / 8));
-  for (let c = state.first; c < state.first + state.window; c += interval) {
+  const planes = [];
+  for (let c = state.first; c < state.first + state.window; c += interval)
+    planes.push(c);
+  if (arrival) planes.push(state.first + state.window);
+  for (const c of planes) {
     const corners = [
       [-1, -1],
       [1, -1],
@@ -1288,7 +1371,11 @@ function buildStackScene() {
     for (let i = 0; i < 4; i++)
       segment(corners[i], corners[(i + 1) % 4], "#2d4855", 0.0009, "frame");
     result.labels.push({
-      text: `C${c}`,
+      text: arrival
+        ? c < state.model.bundle.capture.end_cycle
+          ? `Q sample ${c}`
+          : `Boundary ${c} (no Q sample)`
+        : `C${c}`,
       position: world({ x: -1.04, y: -1.04 }, c),
       alternatives: corners,
     });
@@ -1324,7 +1411,12 @@ function buildStackScene() {
     state.computations?.maxDelays?.[
       metric === "registered_launch" ? "registered" : "static"
     ] ?? null;
-  for (const value of ["timing", "computation", "computation-timing"]) {
+  for (const value of [
+    "timing",
+    "computation",
+    "computation-timing",
+    "criticality",
+  ]) {
     const option = $("color-mode").querySelector(`option[value="${value}"]`);
     option.disabled = !state.computations?.prepared;
     option.title = option.disabled
@@ -1335,9 +1427,17 @@ function buildStackScene() {
     $("color-mode").value = "role";
   const mode = $("color-mode").value;
   const membershipMode =
-    mode === "computation" || mode === "computation-timing";
+    mode === "computation" ||
+    mode === "computation-timing" ||
+    mode === "criticality";
   const scalarMode = mode === "timing" || mode === "computation-timing";
   $("role-legend").hidden = mode !== "role";
+  $("arrival-legend").hidden = !arrival;
+  $("arrival-budget").disabled = !arrival;
+  $("urgency-window").disabled = mode !== "criticality";
+  $("urgency-legend").hidden = mode !== "criticality";
+  $("urgency-summary").textContent =
+    `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
   $("timing-legend").hidden = !scalarMode;
   $("computation-legend").hidden = !membershipMode;
   $("direction-legend").hidden = mode !== "direction";
@@ -1363,6 +1463,12 @@ function buildStackScene() {
         `<span title="${esc(key)}"><i style="background:${computationColor(key)}"></i>${esc(key)}</span>`,
     )
     .join("");
+  $("detail-level").querySelector('option[value="overview"]').textContent =
+    arrival ? "Pin arrivals" : "Occupied tiles";
+  $("detail-level").querySelector('option[value="switches"]').disabled =
+    arrival;
+  if (arrival && $("detail-level").value === "switches")
+    $("detail-level").value = "routes";
   const detail = $("detail-level").value;
   const dim = $("ghost-context").checked;
   // A small style cache avoids repeating perceptual color conversion per primitive.
@@ -1394,11 +1500,50 @@ function buildStackScene() {
           delayNs,
           timingApplicable: row[applicableKey],
           maxDelayNs: maximum,
+          marginWindowNs: Number($("urgency-window").value),
         }),
       );
     return palette.get(key);
   };
+  const arrivalCircuits = [],
+    arrivalSummaries = [];
   for (const layer of layers) {
+    if (arrival) {
+      const circuit = arrivalCircuit(state.computations, layer, {
+        scope: metric === "registered_launch" ? "registered" : "static",
+        includeUnresolved: !mappedOnly(),
+      });
+      const scene = arrivalScene(circuit, {
+        cycle: layer.cycle,
+        budgetNs: Number($("arrival-budget").value),
+        captureAvailable: captureAvailable(layer.cycle),
+        point: cellPoint,
+        world,
+        shade: (row) =>
+          shade({
+            ...row,
+            [delayKey]: row.timingUnknown ? null : row.pathDelayNs,
+            [applicableKey]: row.status !== "not_applicable",
+            [metric === "registered_launch"
+              ? "registeredPathTimingUnknown"
+              : "staticPathTimingUnknown"]: row.timingUnknown,
+          }),
+        mode,
+        detail,
+      });
+      // Concatenation avoids argument limits on complete native populations.
+      result.segments = result.segments.concat(scene.segments);
+      result.markers = result.markers.concat(scene.markers);
+      result.focus = result.focus.concat(scene.focus);
+      arrivalCircuits.push(circuit);
+      arrivalSummaries.push(scene.summary);
+      if (scene.summary.unknownSegments || scene.summary.unknownMarks)
+        result.labels.push({
+          text: `C${layer.cycle}: unknown arrival shelf`,
+          position: world({ x: -1.04, y: -1.04 }, layer.cycle - 0.18),
+        });
+      continue;
+    }
     const paint = circuitDisplay(layer.paint, {
       includeUnresolved: !mappedOnly(),
     });
@@ -1470,11 +1615,15 @@ function buildStackScene() {
       result.focus.push(row.position);
     }
   }
+  renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
   const storage = $("residence").checked ? visibleStorage() : [];
   let loads = 0,
     holds = 0;
   for (const item of storage) {
+    // Qualified arrival-to-capture annotations replace full-clock load glyphs.
+    // Recorded write markers remain even without a timed root; holds retain sampled evidence.
+    if (arrival && item.kind === "write") continue;
     item.kind === "write" ? loads++ : holds++;
     for (const p of spatialPoints(storagePoints(item), mappedOnly())) {
       const active =
@@ -1519,7 +1668,7 @@ function buildStackScene() {
     }
   }
   $("storage-summary").textContent =
-    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.storage.length.toLocaleString()} spatial links. Thick links load a value; thin links retain it.`;
+    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.storage.length.toLocaleString()} spatial links. ${arrival ? "Arrival view shows readiness separately; residence spans retain sampled values." : "Thick links load a value; thin links retain it."}`;
   const seeds = new Set(selectionEvents().map((e) => e.id));
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
@@ -1531,7 +1680,10 @@ function buildStackScene() {
       expanded ? geometry.points : [eventPoint(event)],
       mappedOnly(),
     )) {
-      const position = world(point, event.cycle),
+      const position = world(
+          point,
+          arrival ? eventCoordinate(event) : event.cycle,
+        ),
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
       const resources = resourcesForEvent(event);
@@ -1581,8 +1733,17 @@ function buildStackScene() {
     );
     for (const [source, target] of pairs) {
       segment(
-        world(source, Math.max(state.first, from.cycle)),
-        world(target, Math.min(state.first + state.window - 1, to.cycle)),
+        world(
+          source,
+          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
+        ),
+        world(
+          target,
+          Math.min(
+            state.first + state.window - (arrival ? 0 : 1),
+            arrival ? eventCoordinate(to) : to.cycle,
+          ),
+        ),
         mode === "direction" ? DIRECTION_SOURCE_COLOR : "#d8dedc",
         0.003,
         "dependency",
@@ -1590,8 +1751,17 @@ function buildStackScene() {
         0.018,
       );
       result.focus.push(
-        world(source, Math.max(state.first, from.cycle)),
-        world(target, Math.min(state.first + state.window - 1, to.cycle)),
+        world(
+          source,
+          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
+        ),
+        world(
+          target,
+          Math.min(
+            state.first + state.window - (arrival ? 0 : 1),
+            arrival ? eventCoordinate(to) : to.cycle,
+          ),
+        ),
       );
       traces++;
     }
@@ -1639,7 +1809,7 @@ function buildStackScene() {
     }
   }
   $("access-summary").textContent =
-    `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? "occupied-bin overview (aggregated, not native geometry)" : detail === "routes" ? "schematic routing links and cells; switch markers hidden" : "schematic links, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
+    `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? (arrival ? "native pin arrival markers" : "occupied-bin overview (aggregated, not native geometry)") : detail === "routes" ? "schematic routing links and cells; switch markers hidden" : "schematic links, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
   if (
     state.computations &&
     $("computation-circuits").checked &&
@@ -1670,6 +1840,26 @@ function buildStackScene() {
         layer.cycle >= state.first + state.window
       )
         continue;
+      if (arrival) {
+        const scene = arrivalScene(
+          arrivalCircuit(state.computations, layer, {
+            scope: metric === "registered_launch" ? "registered" : "static",
+            includeUnresolved: !mappedOnly(),
+          }),
+          {
+            cycle: layer.cycle,
+            budgetNs: Number($("arrival-budget").value),
+            captureAvailable: captureAvailable(layer.cycle),
+            point: cellPoint,
+            world,
+            shade,
+            mode,
+            detail,
+          },
+        );
+        result.selection = result.selection.concat(scene.focus);
+        continue;
+      }
       const paint = circuitPaint(layer);
       for (const row of paint.segments)
         if (row.kind !== "unresolved" || !mappedOnly())
@@ -2658,8 +2848,23 @@ function bindControls() {
       state.scene?.fit(state.sceneContent.selectionBounds);
     repaint(true);
   };
-  for (const id of ["color-mode", "detail-level", "ghost-context"])
-    $(id).onchange = () => repaint();
+  for (const id of [
+    "color-mode",
+    "detail-level",
+    "ghost-context",
+    "time-layout",
+    "arrival-budget",
+    "urgency-window",
+  ])
+    $(id).onchange = () => {
+      for (const control of ["arrival-budget", "urgency-window"])
+        if (!$(control).checkValidity()) {
+          $(control).reportValidity();
+          return;
+        }
+      if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
+      repaint();
+    };
   new ResizeObserver(() => repaint()).observe(
     document.querySelector(".workspace"),
   );

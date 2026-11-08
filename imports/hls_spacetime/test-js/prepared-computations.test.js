@@ -240,8 +240,33 @@ test("missing coverage, stale identities and invented references reject", () => 
   const original = prepareRenderData(model, { attachment, routeNets });
   for (const mutate of [
     (d) => (d.algorithm = 1),
-    (d) => (d.algorithm = 3),
+    (d) => (d.algorithm = 2),
+    (d) => (d.algorithm = 4),
     (d) => (d.schema = 2),
+    (d) => delete d.pinGeometry,
+    (d) => delete d.arcGeometry,
+    (d) => d.pinGeometry.pop(),
+    (d) => d.arcGeometry.pop(),
+    (d) => (d.pinGeometry[0] = [d.sourceCounts.cells, 1, 2]),
+    (d) => (d.pinGeometry[0] = [-1, 1, 2]),
+    (d) => (d.pinGeometry[0] = [null, null, 2]),
+    (d) => (d.pinGeometry[0] = [0, NaN, 2]),
+    (d) => (d.pinGeometry[0] = [0, 1, Infinity]),
+    (d) => (d.pinGeometry[0] = [0, 1, 2, 3]),
+    (d) => (d.arcGeometry[0] = [d.sourceCounts.pins, 1, 0, 1]),
+    (d) => (d.arcGeometry[0] = [0, d.sourceCounts.pins, 0, 1]),
+    (d) => (d.arcGeometry[0] = [0, 1, 2, 1]),
+    (d) => (d.arcGeometry[0] = [0, 1, 0, -1]),
+    (d) => (d.arcGeometry[0] = [0, 1, 0, NaN]),
+    (d) => (d.arcGeometry[0] = [0, 1, 0, "not_applicable"]),
+    (d) => (d.arcGeometry[0] = [0, 1, 0]),
+    (d) => delete d.cones[0].pinArrivals,
+    (d) => d.cones[0].pinArrivals.registered.pop(),
+    (d) => d.cones[0].pinArrivals.static.push(0),
+    (d) => (d.cones[0].pinArrivals.registered[0] = -1),
+    (d) => (d.cones[0].pinArrivals.static[0] = Infinity),
+    (d) => (d.cones[0].pinArrivals.static[0] = "unknown"),
+    (d) => delete d.cones[0].pinArrivals.static[0],
     (d) => delete d.cones[0].pathDelays,
     (d) => d.cones[0].pathDelays.registered.pop(),
     (d) => d.cones[0].pathDelays.static.push(0),
@@ -531,4 +556,31 @@ test("global color bounds use finite primitive path costs even when cone bounds 
     createPreparedComputations(model, data).maxDelays,
     data.maxDelays,
   );
+});
+
+test("pin/arc geometry and aligned arrivals retain known, unknown and outside values", () => {
+  const { model, attachment, routeNets } = fixture();
+  const data = prepareRenderData(model, { attachment, routeNets });
+  assert.equal(data.pinGeometry.length, attachment.pins.length);
+  assert.equal(data.arcGeometry.length, attachment.arcs.length);
+  data.pinGeometry[0] = [null, null, null];
+  data.pinGeometry[1] = [1, null, null];
+  data.pinGeometry[2] = [null, -1.25, 2.5];
+  data.arcGeometry[0] = [0, 1, 0, null];
+  data.arcGeometry[1] = [0, 2, 1, 0];
+  const arrivals = data.cones[0].pinArrivals;
+  for (const scope of ["registered", "static"]) {
+    arrivals[scope][0] = 0;
+    arrivals[scope][1] = null;
+    arrivals[scope][2] = "not_applicable";
+  }
+  const index = createPreparedComputations(model, data);
+  assert.equal(index.pinGeometry, data.pinGeometry);
+  assert.equal(index.arcGeometry, data.arcGeometry);
+  assert.equal(index.cones[0].pinArrivals, arrivals);
+  assert.deepEqual(index.cones[0].pinArrivals.static.slice(0, 3), [
+    0,
+    null,
+    "not_applicable",
+  ]);
 });

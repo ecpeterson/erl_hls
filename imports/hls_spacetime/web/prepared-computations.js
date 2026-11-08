@@ -69,7 +69,7 @@ export function createPreparedComputations(model, data) {
   check(
     data.format === "spacetime-prepared-render" &&
       data.schema === 1 &&
-      data.algorithm === 2,
+      data.algorithm === 3,
     "unsupported format",
   );
   check(
@@ -80,9 +80,25 @@ export function createPreparedComputations(model, data) {
       ),
     "build/checkpoint mismatch",
   );
-  for (const key of ["operations", "writes", "cones", "routes", "primitives"])
+  for (const key of [
+    "operations",
+    "writes",
+    "cones",
+    "routes",
+    "primitives",
+    "pinGeometry",
+    "arcGeometry",
+  ])
     check(Array.isArray(data[key]), `missing ${key} table`);
-  const { operations, writes, cones, routes, primitives } = data;
+  const {
+    operations,
+    writes,
+    cones,
+    routes,
+    primitives,
+    pinGeometry,
+    arcGeometry,
+  } = data;
   const counts = data.sourceCounts;
   check(
     counts &&
@@ -94,6 +110,31 @@ export function createPreparedComputations(model, data) {
       counts.routeNets === counts.nets,
     "invalid source population counts",
   );
+  check(
+    pinGeometry.length === counts.pins && arcGeometry.length === counts.arcs,
+    "incomplete pin/arc geometry population",
+  );
+  for (const row of pinGeometry)
+    check(
+      Array.isArray(row) &&
+        row.length === 3 &&
+        (row[0] === null || (count(row[0]) && row[0] < counts.cells)) &&
+        ((row[1] === null && row[2] === null) ||
+          (Number.isFinite(row[1]) && Number.isFinite(row[2]))),
+      "invalid pin geometry",
+    );
+  for (const row of arcGeometry)
+    check(
+      Array.isArray(row) &&
+        row.length === 4 &&
+        count(row[0]) &&
+        row[0] < counts.pins &&
+        count(row[1]) &&
+        row[1] < counts.pins &&
+        (row[2] === 0 || row[2] === 1) &&
+        finite(row[3]),
+      "invalid arc geometry",
+    );
   const primitiveIds = new Set();
   for (const row of primitives) {
     check(
@@ -169,6 +210,13 @@ export function createPreparedComputations(model, data) {
         `${table} static`,
       );
     }
+    for (const scope of ["registered", "static"])
+      pathCosts(
+        cone.pinArrivals?.[scope],
+        cone.pinIndices.length,
+        true,
+        `pinArrivals ${scope}`,
+      );
     for (const id of cone.primitives) ref(id, primitives, "primitive");
     const arcSet = new Set(cone.arcIndices),
       geometry = new Set(cone.primitives);
@@ -289,6 +337,8 @@ export function createPreparedComputations(model, data) {
     cones,
     routes,
     primitives,
+    pinGeometry,
+    arcGeometry,
     bounds: data.bounds,
     maxDelays,
     paints: new Map(),

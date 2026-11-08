@@ -625,5 +625,129 @@ test("unsupported frontiers and cycles keep all per-arc costs indeterminate", ()
     assert.equal(cone.pathDelays.registered.length, cone.arcIndices.length);
     assert(cone.pathDelays.registered.every((value) => value === null));
     assert(cone.pathDelays.static.every((value) => value === null));
+    assert.equal(cone.pinArrivals.registered.length, cone.pinIndices.length);
+    assert(cone.pinArrivals.registered.every((value) => value === null));
+    assert(cone.pinArrivals.static.every((value) => value === null));
   }
+});
+
+/** Independently enumerate prefixes in the tiny fixtures. A reconvergent pin
+ * sees every incoming path, including unknown ones; suffixes are irrelevant. */
+function enumeratePinArrivals(index, cone, registered) {
+  const values = new Map(cone.pinIndices.map((pin) => [pin, []]));
+  const outgoing = new Map();
+  for (const id of cone.arcIndices) {
+    const arc = index.arcs[id];
+    if (!outgoing.has(arc.from)) outgoing.set(arc.from, []);
+    outgoing.get(arc.from).push(id);
+  }
+  const walk = (pin, value, depth) => {
+    assert(
+      depth <= cone.arcIndices.length,
+      "prefix oracle requires an acyclic fixture",
+    );
+    values.get(pin).push(value);
+    for (const id of outgoing.get(pin) ?? []) {
+      const delay = index.delays[id];
+      walk(
+        index.arcs[id].to,
+        value === null || delay === null ? null : value + delay,
+        depth + 1,
+      );
+    }
+  };
+  for (const source of cone.frontiers)
+    if (!registered || source.kind === "sequential") walk(source.pin, 0, 0);
+  return cone.pinIndices.map((pin) => {
+    const arrivals = values.get(pin);
+    if (!arrivals.length) return "not_applicable";
+    return arrivals.includes(null) ? null : Math.max(...arrivals);
+  });
+}
+
+function namedArrivals(index, cone, scope = "registered") {
+  return Object.fromEntries(
+    cone.pinIndices.map((pin, i) => [
+      index.pins[pin].id,
+      cone.pinArrivals[scope][i],
+    ]),
+  );
+}
+
+function assertTimingOracles(index, cone) {
+  for (const scope of ["registered", "static"]) {
+    assertCosts(
+      cone.pinArrivals[scope],
+      enumeratePinArrivals(index, cone, scope === "registered"),
+    );
+    assertCosts(
+      cone.pathDelays[scope],
+      enumeratePathCosts(index, cone, scope === "registered"),
+    );
+  }
+}
+
+test("pin arrivals use the latest reconvergent prefix and preserve through-path costs", () => {
+  const { model, attachment } = fixture();
+  addSecondRoot(model, attachment);
+  const index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+  const cone = layer.cones[0],
+    arrivals = namedArrivals(index, cone);
+  assertCosts(
+    [
+      arrivals["source/Q"],
+      arrivals["lut/I0"],
+      arrivals["lut/I1"],
+      arrivals["lut/O"],
+      arrivals["sink/D"],
+      arrivals["second/D"],
+    ],
+    [0, 0.1, 0.1, 0.6, 1, 2],
+  );
+  assertTimingOracles(index, cone);
+});
+
+test("unknown prefixes poison downstream arrivals but missing suffixes do not", () => {
+  for (const missing of [0, 1, 2, 3, 4]) {
+    const { model, attachment } = fixture();
+    attachment.arcs[missing].timing.slow[0].maxPs = null;
+    const index = createComputations(model, attachment);
+    const [layer] = computationLayers(index, ["w0"], { roles: ["data"] });
+    const cone = layer.cones[0],
+      arrivals = namedArrivals(index, cone);
+    assert.equal(arrivals["source/Q"], 0);
+    assert.equal(arrivals["sink/D"], null);
+    assertCosts([arrivals[missing === 0 ? "lut/I1" : "lut/I0"]], [0.1]);
+    if (missing === 4) assertCosts([arrivals["lut/O"]], [0.6]);
+    else assert.equal(arrivals["lut/O"], null);
+    assertTimingOracles(index, cone);
+  }
+});
+
+test("registered pin arrivals keep external and constant-only prefixes outside scope", () => {
+  const { model, attachment } = fixture();
+  addUntimedAlternative(attachment, "external");
+  addUntimedAlternative(attachment, "constant");
+  const index = createComputations(model, attachment);
+  const [layer] = computationLayers(index, ["w0"]);
+  const cone = layer.cones.find((row) => row.role === "data");
+  const registered = namedArrivals(index, cone),
+    whole = namedArrivals(index, cone, "static");
+  for (const source of ["external-input", "constant/P"]) {
+    assert.equal(registered[source], "not_applicable");
+    assert.equal(whole[source], 0);
+  }
+  for (const input of ["lut/external", "lut/constant"]) {
+    assert.equal(registered[input], "not_applicable");
+    assert.equal(whole[input], null);
+  }
+  assertCosts([registered["lut/O"], registered["sink/D"]], [0.6, 1]);
+  assert.equal(whole["lut/O"], null);
+  assert.equal(whole["sink/D"], null);
+  for (const row of layer.cones) assertTimingOracles(index, row);
+  for (const row of layer.cones.filter((row) => row.role !== "data"))
+    assert(
+      row.pinArrivals.registered.every((value) => value === "not_applicable"),
+    );
 });

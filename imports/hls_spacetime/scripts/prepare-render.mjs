@@ -25,7 +25,15 @@ import {
 import { createPreparedComputations } from "../web/prepared-computations.js";
 import { loadComputations } from "../web/computation-loader.js";
 const MiB = 1024 * 1024;
-const TABLES = ["operations", "writes", "cones", "routes", "primitives"];
+const TABLES = [
+  "operations",
+  "writes",
+  "cones",
+  "routes",
+  "primitives",
+  "pinGeometry",
+  "arcGeometry",
+];
 function check(ok, reason) {
   if (!ok) throw Error(`Prepare render: ${reason}`);
 }
@@ -290,7 +298,7 @@ export function prepareRenderData(model, computationData) {
   const data = {
     format: "spacetime-prepared-render",
     schema: 1,
-    algorithm: 2,
+    algorithm: 3,
     build: index.attachment.build,
     nativeBuild: index.attachment.nativeBuild,
     checkpoint: index.attachment.checkpoint,
@@ -321,6 +329,18 @@ export function prepareRenderData(model, computationData) {
     cones,
     routes,
     primitives,
+    // Compact native pin/arc correspondence supports a timing layout without
+    // cloning the full source graph into each cone or inventing pin positions.
+    pinGeometry: index.pins.map((pin) => {
+      const point = cellPoint(pin.cell);
+      return [pin.cell, point?.x ?? null, point?.y ?? null];
+    }),
+    arcGeometry: index.arcs.map((arc, i) => [
+      arc.from,
+      arc.to,
+      arc.kind === "net" ? 0 : 1,
+      index.delays[i],
+    ]),
   };
   createPreparedComputations(model, data);
   return data;
@@ -447,7 +467,7 @@ export async function prepareRender({ input, output, capture }) {
   const manifest = {
     format: "spacetime-render-manifest",
     schema: 1,
-    algorithm: 2,
+    algorithm: 3,
     view: { bytes: viewBytes.length, sha256: hash(viewBytes) },
     source: sourceDescriptor,
     parts: published.parts,
