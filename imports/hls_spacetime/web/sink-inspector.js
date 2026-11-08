@@ -2,6 +2,7 @@
  * Paging affects the list only; scene membership is explicit in the view mode. */
 import { sinkRows } from "./sink-paths.js";
 import { visibleSink, selectedSinkPath, sinkSelections } from "./sink-view.js";
+import { createPathExplorer } from "./path-explorer.js";
 import { DELAY_KIND_COLORS } from "./perceptual-color.js";
 const $ = (id) => document.getElementById(id),
   PAGE = 12;
@@ -41,6 +42,15 @@ export function createSinkInspector(onChange) {
     dirty = true;
     onChange();
   };
+  const chooseSink = (nextKey) => {
+    key = nextKey;
+    activeArc = null;
+    contextChanged = false;
+    if (["all", "per-sink"].includes($("sink-mode").value))
+      $("sink-mode").value = "selected";
+    invalidate();
+  };
+  const explorer = createPathExplorer(invalidate, chooseSink);
   const matching = () => {
     const query = $("sink-search").value.trim().toLowerCase();
     return query
@@ -126,12 +136,7 @@ export function createSinkInspector(onChange) {
   $("sink-list").onclick = (event) => {
     const node = event.target.closest("[data-sink]");
     if (!node) return;
-    key = node.dataset.sink;
-    activeArc = null;
-    contextChanged = false;
-    if (["all", "per-sink"].includes($("sink-mode").value))
-      $("sink-mode").value = "selected";
-    invalidate();
+    chooseSink(node.dataset.sink);
   };
   const chooseArc = (event) => {
     const node = event.target.closest("[data-arc]");
@@ -171,6 +176,11 @@ export function createSinkInspector(onChange) {
       enabledView = enabled;
       $("sink-panel").hidden = !enabled;
       if (!enabled) {
+        explorer.update(index, layers, null, {
+          scope,
+          mode: "all",
+          enabled: false,
+        });
         activeArc = null;
         selection = null;
         dirty = true;
@@ -203,12 +213,18 @@ export function createSinkInspector(onChange) {
       if (dirty) {
         renderList();
         renderPath();
-        selection = sinkSelections(index, layers, {
+        explorer.update(index, layers, selected(), {
           scope,
           mode: $("sink-mode").value,
-          sink: selected(),
-          marginNs,
         });
+        selection = ["neighborhood", "cut"].includes($("sink-mode").value)
+          ? explorer.selection
+          : sinkSelections(index, layers, {
+              scope,
+              mode: $("sink-mode").value,
+              sink: selected(),
+              marginNs,
+            });
         $("sink-margin").disabled = $("sink-mode").value !== "near";
         $("sink-margin").closest("label").hidden =
           $("sink-mode").value !== "near";
@@ -237,6 +253,9 @@ export function createSinkInspector(onChange) {
             : "")
         : "";
     },
+    get explorer() {
+      return explorer;
+    },
     get selection() {
       return selection;
     },
@@ -244,7 +263,12 @@ export function createSinkInspector(onChange) {
       return activeArc;
     },
     get focused() {
-      return enabledView && ["selected", "near"].includes($("sink-mode").value);
+      return (
+        enabledView &&
+        ["selected", "near", "neighborhood", "cut"].includes(
+          $("sink-mode").value,
+        )
+      );
     },
   };
 }

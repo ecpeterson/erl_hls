@@ -1130,3 +1130,79 @@ body.scene-focus {
     width: 100%;
   }
 }
+
+/* Analysis panels retain complete populations; only table pages are bounded. */
+#path-neighborhood,
+#path-cut {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+#path-neighborhood[hidden],
+#path-cut[hidden] {
+  display: none;
+}
+#path-neighborhood label,
+#path-cut label {
+  display: block;
+  margin: 8px 0;
+}
+#family-driver,
+#cut-threshold {
+  width: 100%;
+}
+.analysis-list {
+  overflow: auto;
+  max-height: 250px;
+}
+.analysis-list table {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.analysis-list td,
+.analysis-list th {
+  padding: 5px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.analysis-key {
+  color: #c5d2d8;
+}
+.cut-bars div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin: 6px 0;
+}
+.cut-bars i {
+  display: block;
+  min-width: 1px;
+  height: 9px;
+  flex-shrink: 1;
+}
+.cut-bars b {
+  white-space: nowrap;
+  font-weight: normal;
+}
+.cut-bars span {
+  min-width: 42px;
+}
+
+.analysis-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.analysis-controls input {
+  width: 100%;
+}
+#path-neighborhood label.analysis-toggle,
+#path-cut label.analysis-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.analysis-toggle input {
+  width: auto;
+}

@@ -26,6 +26,7 @@ import { circuitDisplay } from "./circuit-display.js";
 import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
+import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { eventCoordinate } from "./arrival-layout.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
@@ -1445,17 +1446,27 @@ function buildStackScene() {
     enabled: arrival,
     scope: metric === "registered_launch" ? "registered" : "static",
   });
-  $("delay-kind-legend").hidden = mode !== "delay-kind";
-  $("role-legend").hidden = mode !== "role";
+  const explorer = sinkInspector.explorer;
+  const cutMode = explorer.mode === "cut";
+  $("color-mode").disabled = cutMode;
+  $("analysis-legend").hidden = !["neighborhood", "cut"].includes(
+    explorer.mode,
+  );
+  $("analysis-legend").textContent = cutMode
+    ? "Candidate cut: amber before, blue after, gold crossing bits. Original arrival geometry; no new hardware or timing measurement."
+    : "Neighborhood: representative paths to similarly timed nearby sinks; installed logic on a separate reference plane. Driver spokes show connectivity, not routed wires or activity.";
+  $("delay-kind-legend").hidden = cutMode || mode !== "delay-kind";
+  $("role-legend").hidden = cutMode || mode !== "role";
   $("arrival-legend").hidden = !arrival;
   $("arrival-budget").disabled = !arrival;
   $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
-  $("urgency-legend").hidden = !["criticality", "delay-kind"].includes(mode);
+  $("urgency-legend").hidden =
+    cutMode || !["criticality", "delay-kind"].includes(mode);
   $("urgency-summary").textContent =
     `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
-  $("timing-legend").hidden = !scalarMode;
-  $("computation-legend").hidden = !membershipMode;
-  $("direction-legend").hidden = mode !== "direction";
+  $("timing-legend").hidden = cutMode || !scalarMode;
+  $("computation-legend").hidden = cutMode || !membershipMode;
+  $("direction-legend").hidden = cutMode || mode !== "direction";
   $("timing-min").textContent = "0 ns";
   $("timing-max").textContent =
     maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
@@ -1539,15 +1550,18 @@ function buildStackScene() {
         point: cellPoint,
         world,
         shade: (row) =>
-          shade({
-            ...row,
-            [delayKey]: row.timingUnknown ? null : row.pathDelayNs,
-            [applicableKey]: row.status !== "not_applicable",
-            [metric === "registered_launch"
-              ? "registeredPathTimingUnknown"
-              : "staticPathTimingUnknown"]: row.timingUnknown,
-          }),
-        mode,
+          explorer.shade(
+            row,
+            shade({
+              ...row,
+              [delayKey]: row.timingUnknown ? null : row.pathDelayNs,
+              [applicableKey]: row.status !== "not_applicable",
+              [metric === "registered_launch"
+                ? "registeredPathTimingUnknown"
+                : "staticPathTimingUnknown"]: row.timingUnknown,
+            }),
+          ),
+        mode: cutMode ? "cut" : mode,
         detail,
         activeArc: sinkInspector.activeArc,
       });
@@ -1557,6 +1571,19 @@ function buildStackScene() {
       result.segments = result.segments.concat(scene.segments);
       result.markers = result.markers.concat(scene.markers);
       result.focus = result.focus.concat(scene.focus);
+      if (explorer.cut?.status === "known" && circuit.summary.arcs) {
+        const boundary = cutScene(explorer.cut, {
+          cycle: layer.cycle,
+          budgetNs: Number($("arrival-budget").value),
+          point: cellPoint,
+          world,
+          selectedPin: explorer.cutPin,
+        });
+        result.markers = result.markers.concat(boundary.markers);
+        result.labels = result.labels.concat(boundary.labels);
+        result.focus = result.focus.concat(boundary.focus);
+        result.selection = result.selection.concat(boundary.focus);
+      }
       arrivalCircuits.push(circuit);
       arrivalSummaries.push(scene.summary);
       if (scene.summary.unknownSegments || scene.summary.unknownMarks)
@@ -1636,6 +1663,29 @@ function buildStackScene() {
       result.markers.push(row);
       result.focus.push(row.position);
     }
+  }
+  if (explorer.neighborhood?.region) {
+    const familyCycles = explorer.neighborhood.members.flatMap(
+      (row) => row.cycles,
+    );
+    const referenceCycle = familyCycles.reduce(
+      (first, cycle) => Math.min(first, cycle),
+      Infinity,
+    );
+    const contextCycle =
+      (Number.isFinite(referenceCycle) ? referenceCycle : state.first) - 0.25;
+    const context = neighborhoodScene(explorer.neighborhood, {
+      cycle: contextCycle,
+      point: cellPoint,
+      world,
+      driverPin: explorer.driverPin,
+      showContext: explorer.showContext,
+    });
+    result.segments = result.segments.concat(context.segments);
+    result.markers = result.markers.concat(context.markers);
+    result.labels = result.labels.concat(context.labels);
+    result.focus = result.focus.concat(context.focus);
+    result.selection = result.selection.concat(context.focus);
   }
   renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));

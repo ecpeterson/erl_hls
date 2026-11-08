@@ -306,6 +306,7 @@
                 unavailable. Coincident spans are combined, not electrically
                 connected.
               </p>
+              <div id="analysis-legend" hidden></div>
               <div id="delay-kind-legend" hidden>
                 <span><i class="sink-logic"></i>Logic delay</span
                 ><span><i class="sink-net"></i>Net delay</span
@@ -393,6 +394,8 @@
                       <option value="selected">
                         Selected sink: longest path
                       </option>
+                      <option value="neighborhood">Path neighborhood</option>
+                      <option value="cut">Candidate register cut</option>
                       <option value="near">
                         Selected sink: near-longest paths
                       </option>
@@ -411,6 +414,106 @@
                 </div>
                 <p id="sink-selection" class="sink-selection"></p>
                 <p id="sink-path-summary"></p>
+                <section id="path-neighborhood" hidden>
+                  <div class="analysis-controls">
+                    <label
+                      >Similar timing ± ns<input
+                        id="family-margin"
+                        type="number"
+                        min="0"
+                        step="0.05"
+                        value="0.1"
+                        required
+                    /></label>
+                    <label
+                      >Region padding (tiles)<input
+                        id="family-padding"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value="12"
+                        required
+                    /></label>
+                  </div>
+                  <label class="analysis-toggle"
+                    ><input id="family-context" type="checkbox" checked />
+                    Nearby installed logic</label
+                  >
+                  <p id="family-summary"></p>
+                  <label
+                    >Driver fanout<select id="family-driver">
+                      <option value="">No fanout overlay</option>
+                    </select></label
+                  >
+                  <p id="family-driver-summary"></p>
+                  <details open>
+                    <summary>Similar sinks</summary>
+                    <div id="family-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="family-prev" type="button">
+                        Previous family page</button
+                      ><span id="family-page"></span
+                      ><button id="family-next" type="button">
+                        Next family page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Neighborhood coverage</summary>
+                    <p id="family-coverage"></p>
+                  </details>
+                </section>
+                <section id="path-cut" hidden>
+                  <label
+                    >Cut after arrival (ns)<input
+                      id="cut-time"
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                  /></label>
+                  <input
+                    id="cut-threshold"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.5"
+                    aria-label="Candidate cut arrival"
+                  />
+                  <label class="analysis-toggle"
+                    ><input id="cut-full-graph" type="checkbox" /> Show complete
+                    input graph</label
+                  >
+                  <p class="muted">
+                    Default: longest path and all crossing bits. Estimates
+                    always include the complete eligible input graph.
+                  </p>
+                  <p id="cut-summary"></p>
+                  <div id="cut-bars" class="cut-bars"></div>
+                  <p class="analysis-key">
+                    Amber: before cut · blue: after cut · gold: crossing bit.
+                    Original arrival heights are retained; no hardware or clock
+                    stages were changed.
+                  </p>
+                  <p id="cut-side-inputs"></p>
+                  <details open>
+                    <summary>Values crossing the cut</summary>
+                    <div id="cut-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="cut-prev" type="button">
+                        Previous cut page</button
+                      ><span id="cut-page"></span
+                      ><button id="cut-next" type="button">
+                        Next cut page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Estimate limits</summary>
+                    <p id="cut-limits"></p>
+                  </details>
+                </section>
                 <div class="sink-kind-legend">
                   <span><i class="sink-logic"></i>Logic</span
                   ><span><i class="sink-net"></i>Net / transmission</span
