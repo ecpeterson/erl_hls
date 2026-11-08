@@ -530,6 +530,57 @@
                     <p id="cut-limits"></p>
                   </details>
                 </section>
+                <details id="scenario-panel" class="regional-panel">
+                  <summary>What-if: added actor latency</summary>
+                  <p id="scenario-status" aria-live="polite">
+                    No scenario profile loaded.
+                  </p>
+                  <button type="button" id="scenario-load" disabled>
+                    Load saved scenario profile
+                  </button>
+                  <div id="scenario-content" hidden>
+                    <label>Change<select id="scenario-choice"></select></label>
+                    <div class="analysis-controls">
+                      <label
+                        >Extra clocks per action<input
+                          id="scenario-latency"
+                          type="number"
+                          min="0"
+                          max="1000"
+                          step="1"
+                          value="1"
+                          required
+                      /></label>
+                      <label
+                        >Assumed baseline period (ns)<input
+                          id="scenario-before"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="10"
+                          required
+                      /></label>
+                      <label
+                        >Assumed candidate period (ns)<input
+                          id="scenario-after"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="8.5"
+                          required
+                      /></label>
+                    </div>
+                    <button type="button" id="scenario-run">
+                      Run conditional scenario
+                    </button>
+                    <div id="scenario-results"></div>
+                    <p id="scenario-physical"></p>
+                    <details>
+                      <summary>Source obligations & limitations</summary>
+                      <div id="scenario-evidence"></div>
+                    </details>
+                  </div>
+                </details>
                 <details id="regional-panel" class="regional-panel">
                   <summary>Regional routing resources</summary>
                   <p id="region-status" aria-live="polite">

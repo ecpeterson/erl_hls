@@ -28,6 +28,7 @@ import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { createRegionalControls } from "./regional-controls.js";
+import { createScenarioControls } from "./scenario-controls.js";
 import { createSceneSelection } from "./scene-selection.js";
 import { sinkPickTargets } from "./scene-picking.js";
 import { eventCoordinate } from "./arrival-layout.js";
@@ -130,6 +131,7 @@ const sceneSelection = createSceneSelection({
   onOverlay: () => drawStackOverlay(),
 });
 const regionalControls = createRegionalControls(() => repaint());
+const scenarioControls = createScenarioControls();
 
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
@@ -174,6 +176,7 @@ async function loadDocument(
 ) {
   sceneSelection.reset();
   regionalControls.configure();
+  scenarioControls.configure();
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
     : createComputations(
@@ -1475,6 +1478,7 @@ function buildStackScene() {
   });
   const explorer = sinkInspector.explorer;
   regionalControls.update(state.computations, explorer.neighborhood);
+  scenarioControls.update(state.computations, explorer.cut);
   const cutMode = explorer.mode === "cut";
   $("color-mode").disabled = cutMode;
   $("analysis-legend").hidden = !["neighborhood", "cut"].includes(
@@ -2561,6 +2565,7 @@ function bindControls() {
     sceneSelection.reset();
     const sequence = ++state.loadSequence;
     regionalControls.configure();
+    scenarioControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const signal = state.loadController.signal,
@@ -2598,6 +2603,11 @@ function bindControls() {
         decoded.model,
         "Projection bytes verified against the local index; source evidence was verified during preparation.",
       );
+      scenarioControls.configure(state.model, {
+        entry: expected.latencyProfile,
+        recording: { bytes: byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+      });
       regionalControls.configure(state.model, {
         entry: expected.regions,
         view: { bytes: byteLength, sha256: digest },
@@ -2661,6 +2671,7 @@ function bindControls() {
     sceneSelection.reset();
     const sequence = ++state.loadSequence;
     regionalControls.configure();
+    scenarioControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const file = $("file").files[0];

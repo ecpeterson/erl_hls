@@ -245,6 +245,10 @@ This independently advances each recorded word through every clock, then compare
 
 Inputs are bounded to 128 MiB and one million adjacent-clock/word comparisons. `--max-comparisons COUNT` may lower the comparison budget; repeated limits use the last value. Exceeding the limit rejects rather than silently sampling. Normal unit tests use small synthetic histories; these optional saved-case checks require only the prepared files.
 
+## Conditional latency experiments
+
+The optional **What-if: added actor latency** panel compares source-bound result delays against saved public completion and the full mapped timing population. See [latency scenarios](latency-scenarios.md) for assumptions, profile construction, period sensitivity and offline use. It does not alter the recording or predict placement.
+
 ## Local checks
 
 `npm test` runs small graph, history, coverage, access-footprint, static-path parser/attachment and projection-integrity tests. `node --check web/app.js` checks the browser controller syntax. Format browser code with `npx prettier@3.6.2 --write web/*.js web/*.css web/*.html scripts/*.mjs test-js/*.js`; this optional development command downloads the pinned formatter, while serving and testing need no dependencies. The Erlang/native checks are described separately in [source quality](source-quality.md).
