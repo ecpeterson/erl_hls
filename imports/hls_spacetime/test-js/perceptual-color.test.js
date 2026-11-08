@@ -13,8 +13,6 @@ import {
   delayKindColor,
   directionColor,
   sceneColor,
-  timingColor,
-  timingExtent,
 } from "../web/perceptual-color.js";
 
 // Independently recover Oklab lightness from the final quantized display color.
@@ -30,21 +28,6 @@ function lightness(hex) {
   return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
 }
 
-test("capture timing domain preserves unknowns and known zero", () => {
-  assert.deepEqual(timingExtent([null, 0, 4.2, undefined, NaN, -1]), {
-    min: 0,
-    max: 4.2,
-    known: 2,
-    unknown: 4,
-  });
-  assert.deepEqual(timingExtent([null]), {
-    min: 0,
-    max: null,
-    known: 0,
-    unknown: 1,
-  });
-});
-
 test("function colors do not depend on timing or selection", () => {
   for (const [role, color] of Object.entries(FUNCTION_COLORS)) {
     assert.equal(sceneColor({ role, delayNs: 100, maxDelayNs: 100 }), color);
@@ -55,24 +38,44 @@ test("function colors do not depend on timing or selection", () => {
 test("unknown timing is never rendered as a zero-delay sample", () => {
   for (const delayNs of [null, undefined, NaN, Infinity, -1]) {
     assert.equal(
-      sceneColor({ mode: "timing", delayNs, maxDelayNs: 10 }),
+      sceneColor({
+        mode: "criticality",
+        computationKey: "actor",
+        marginWindowNs: 10,
+        delayNs,
+        maxDelayNs: 10,
+      }),
       UNKNOWN_COLOR,
-      OUTSIDE_TIMING_COLOR,
     );
   }
   assert.notEqual(
-    sceneColor({ mode: "timing", delayNs: 0, maxDelayNs: 0 }),
+    sceneColor({
+      mode: "criticality",
+      computationKey: "actor",
+      marginWindowNs: 10,
+      delayNs: 0,
+      maxDelayNs: 0,
+    }),
     UNKNOWN_COLOR,
-    OUTSIDE_TIMING_COLOR,
   );
-  assert.equal(sceneColor({ mode: "timing", delayNs: 3 }), UNKNOWN_COLOR);
+  assert.equal(
+    sceneColor({
+      mode: "criticality",
+      computationKey: "actor",
+      marginWindowNs: 10,
+      delayNs: 3,
+    }),
+    UNKNOWN_COLOR,
+  );
 });
 
-test("the final display scale increases perceptual lightness", () => {
+test("urgency increases perceptual lightness within its window", () => {
   let previous = 0;
   for (let step = 0; step <= 100; step++) {
     const color = sceneColor({
-      mode: "timing",
+      mode: "criticality",
+      computationKey: "actor",
+      marginWindowNs: 10,
       delayNs: step / 10,
       maxDelayNs: 10,
     });
@@ -88,12 +91,29 @@ test("the final display scale increases perceptual lightness", () => {
 });
 
 test("one fixed domain gives stable colors across display windows", () => {
-  const extent = timingExtent([1, 2, 5, 10]);
-  const options = { mode: "timing", delayNs: 2, maxDelayNs: extent.max };
+  const options = {
+    mode: "criticality",
+    computationKey: "actor",
+    marginWindowNs: 10,
+    delayNs: 2,
+    maxDelayNs: 10,
+  };
   assert.equal(sceneColor(options), sceneColor({ ...options, focus: true }));
   assert.equal(
-    sceneColor({ mode: "timing", delayNs: 20, maxDelayNs: 10 }),
-    sceneColor({ mode: "timing", delayNs: 10, maxDelayNs: 10 }),
+    sceneColor({
+      mode: "criticality",
+      computationKey: "actor",
+      marginWindowNs: 10,
+      delayNs: 20,
+      maxDelayNs: 10,
+    }),
+    sceneColor({
+      mode: "criticality",
+      computationKey: "actor",
+      marginWindowNs: 10,
+      delayNs: 10,
+      maxDelayNs: 10,
+    }),
   );
 });
 
@@ -133,15 +153,6 @@ test("direction has fixed source/sink endpoints and ordered lightness", () => {
   }
 });
 
-test("timing separates dim low-delay and bright high-delay circuitry", () => {
-  assert.ok(lightness(timingColor(0, 10)) < 0.41);
-  assert.ok(lightness(timingColor(10, 10)) > 0.89);
-  assert.equal(
-    timingColor(3, 10),
-    sceneColor({ mode: "timing", delayNs: 3, maxDelayNs: 10 }),
-  );
-});
-
 test("computation modes preserve categorical identity and unknown timing", () => {
   const options = { mode: "computation", computationKey: "actor/1:update" };
   assert.equal(sceneColor(options), computationColor(options.computationKey));
@@ -149,21 +160,26 @@ test("computation modes preserve categorical identity and unknown timing", () =>
     sceneColor({ ...options, delayNs: 10, maxDelayNs: 10 }),
     sceneColor(options),
   );
-  const hybrid = { ...options, mode: "computation-timing", maxDelayNs: 10 };
-  assert.equal(sceneColor(hybrid), UNKNOWN_COLOR);
+  const urgency = {
+    ...options,
+    mode: "criticality",
+    marginWindowNs: 10,
+    maxDelayNs: 10,
+  };
+  assert.equal(sceneColor(urgency), UNKNOWN_COLOR);
   assert.equal(
-    sceneColor({ ...hybrid, computationKey: null, delayNs: 10 }),
+    sceneColor({ ...urgency, computationKey: null, delayNs: 10 }),
     UNKNOWN_COLOR,
-    OUTSIDE_TIMING_COLOR,
   );
   let previous = 0;
   for (let step = 0; step <= 100; step++) {
-    const current = lightness(sceneColor({ ...hybrid, delayNs: step / 10 }));
+    const current = lightness(sceneColor({ ...urgency, delayNs: step / 10 }));
     assert.ok(current >= previous - 0.0015);
     previous = current;
   }
   assert.ok(previous > 0.89);
-  assert.throws(() => sceneColor({ mode: "invented" }), RangeError);
+  for (const mode of ["timing", "computation-timing", "invented"])
+    assert.throws(() => sceneColor({ mode }), /Unknown scene color mode/);
 });
 
 test("known shared computations use neutral gray without claiming an identity", () => {
@@ -173,25 +189,30 @@ test("known shared computations use neutral gray without claiming an identity", 
   );
   assert.notEqual(COMPUTATION_SHARED_COLOR, UNKNOWN_COLOR);
   assert.equal(sceneColor({ mode: "computation" }), UNKNOWN_COLOR);
-  const hybrid = {
-    mode: "computation-timing",
+  const urgency = {
+    mode: "criticality",
+    marginWindowNs: 10,
     computationShared: true,
     maxDelayNs: 10,
   };
-  assert.equal(sceneColor(hybrid), UNKNOWN_COLOR);
+  assert.equal(sceneColor(urgency), UNKNOWN_COLOR);
   for (const delayNs of [0, 5, 10]) {
-    const color = sceneColor({ ...hybrid, delayNs });
+    const color = sceneColor({ ...urgency, delayNs });
     assert.equal(color.slice(1, 3), color.slice(3, 5));
     assert.equal(color.slice(3, 5), color.slice(5, 7));
     assert.equal(
       color,
-      sceneColor({ ...hybrid, delayNs, computationKey: "ignored/when/shared" }),
+      sceneColor({
+        ...urgency,
+        delayNs,
+        computationKey: "ignored/when/shared",
+      }),
     );
   }
 });
 
 test("outside-scope timing is distinct from unknown and zero without changing categorical styles", () => {
-  for (const mode of ["timing", "computation-timing"]) {
+  for (const mode of ["criticality", "delay-kind"]) {
     assert.equal(
       sceneColor({ mode, timingApplicable: false }),
       OUTSIDE_TIMING_COLOR,

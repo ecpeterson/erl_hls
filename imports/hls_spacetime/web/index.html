@@ -87,26 +87,21 @@
         hypothetical 10 ns; it is not a measured clock period. Late arrivals
         extend beyond that boundary. Gray links distinguish input-readiness and
         ready-to-capture gaps from recorded storage; red marks budget overruns.
-        Unknown timing uses a labelled shelf, not a zero-delay height. Known
-        endpoints with incomplete route geometry stay connected by a thin core
-        with a dashed sleeve. Heights between measured pin endpoints are
-        interpolated along schematic routing chords. These are timing bounds,
-        not a switching trace. Computation + urgency keeps destination hue and
-        brightens complete paths within the chosen distance of the capture-wide
-        longest path. It is not STA slack or a congestion measurement.
+        Geometry without arrival timing is omitted here; clock planes retain its
+        spatial context. Known endpoints with incomplete route geometry stay
+        connected by a thin core with a dashed sleeve. Heights between measured
+        pin endpoints are interpolated along schematic routing chords. These are
+        timing bounds, not a switching trace. Computation + urgency keeps
+        destination hue and brightens complete paths within the chosen distance
+        of the capture-wide longest path. It is not STA slack or a congestion
+        measurement.
       </p>
       <p>
-        Delay emphasis uses a fixed capture-wide color scale for the selected
-        timing scope. A segment carries the longest complete source-to-sink path
-        through it. Shared geometry takes the maximum applicable path bound; an
-        untimed through-path makes it unknown. Geometry outside the timing scope
-        is neutral. The minimum-delay filter still uses whole-cone bounds. This
-        is neither the mark's individual delay nor path slack or dynamic
-        criticality. Register Q → D/control excludes external and constant
-        launches, clock-to-Q and setup. Whole-cone timing includes all source
-        boundaries. Both preserve the full selected cone and use conservative
-        SDF bounds. Actor, task and operation filters select work; function and
-        delay filters select its circuits. The prepared viewer loads rendering
+        Register Q → D/control excludes external and constant launches,
+        clock-to-Q and setup. Whole-cone timing includes all source boundaries.
+        Both preserve the full selected cone and use conservative SDF bounds.
+        Actor, task and operation filters select work; function and delay
+        filters select its circuits. The prepared viewer loads rendering
         indexes; the original native graph and records remain separately
         retained, hash-bound evidence. They need not all be loaded into the
         browser to render the scene.
@@ -264,10 +259,6 @@
                   <option value="role" selected>Data / enable / reset</option>
                   <option value="computation">Sub-computation</option>
                   <option value="direction">Flow direction</option>
-                  <option value="timing">Delay emphasis</option>
-                  <option value="computation-timing">
-                    Computation + delay
-                  </option>
                 </select></label
               >
               <label
@@ -321,8 +312,8 @@
               <div id="arrival-legend" hidden>
                 <span
                   >Height: latest static arrival · gray: reconvergence /
-                  ready-to-capture interval · red: budget overrun · unknowns on
-                  a separate shelf</span
+                  ready-to-capture interval · red: budget overrun · missing
+                  arrival timing is omitted</span
                 ><span
                   >Solid: retained endpoint / routing connectivity · thin core
                   with dashed sleeve: schematic endpoint connection across
@@ -337,16 +328,6 @@
                   >Each displayed span restarts the ramp · conflicting
                   directions / unknown routes stay neutral · connectivity, not
                   switching</span
-                >
-              </div>
-              <div id="timing-legend" hidden>
-                <span id="timing-min">0 ns</span
-                ><i id="timing-ramp" class="timing-ramp"></i
-                ><span id="timing-max">Unknown</span
-                ><span><i class="outside-timing"></i>Outside scope</span
-                ><span class="legend-note"
-                  >Longest source → sink path through each segment; uniform
-                  color means equal path cost, not zero added delay</span
                 >
               </div>
               <span><i class="role-unknown"></i>Unknown</span>
@@ -369,18 +350,53 @@
                 aria-label="Window first clock"
               /><span id="window-label"></span>
             </div>
+            <div class="selection-toolbar">
+              <label
+                >Click target<select id="pick-mode">
+                  <option value="sinks">Timing sinks</option>
+                  <option value="reads">Read events</option>
+                  <option value="writes">Write events</option>
+                  <option value="storage">Storage spans</option>
+                  <option value="navigate">Navigate only</option>
+                </select></label
+              >
+              <label
+                ><input type="checkbox" id="pick-all" /> Show all targets</label
+              >
+              <span id="pick-summary"></span>
+            </div>
+            <p id="untimed-summary" class="legend-note" hidden></p>
+            <p id="pick-notice" class="legend-note" aria-live="polite"></p>
             <div class="path-workbench">
               <div id="scene-frame" class="canvas-wrap">
                 <canvas id="scene3d" aria-hidden="true"></canvas>
                 <canvas
                   id="stack"
-                  aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
+                  aria-label="Interactive chip stack. Choose a click target above. Diamonds select timing sinks; circles select events. Overlapping targets open a keyboard-accessible chooser. Drag to move the camera."
                   tabindex="0"
                 ></canvas>
                 <div class="axis-hint">
                   CLOCK AXIS<span>Presets restore time orientation</span>
                 </div>
                 <div id="tooltip" hidden></div>
+                <section
+                  id="pick-chooser"
+                  aria-label="Targets at cursor"
+                  hidden
+                >
+                  <div class="pick-heading">
+                    <strong id="pick-heading"></strong
+                    ><button id="pick-close" aria-label="Close target chooser">
+                      ×
+                    </button>
+                  </div>
+                  <div id="pick-choices"></div>
+                  <div class="pick-paging">
+                    <button id="pick-prev">Previous targets</button
+                    ><span id="pick-page"></span
+                    ><button id="pick-next">Next targets</button>
+                  </div>
+                </section>
               </div>
               <details id="sink-panel" class="render-notes" open hidden>
                 <summary>Paths to sinks · logic / net delay</summary>

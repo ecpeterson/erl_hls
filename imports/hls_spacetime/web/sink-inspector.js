@@ -43,12 +43,14 @@ export function createSinkInspector(onChange) {
     onChange();
   };
   const chooseSink = (nextKey) => {
+    if (!enabledView || !visibleSink(rows, nextKey)) return false;
     key = nextKey;
     activeArc = null;
     contextChanged = false;
     if (["all", "per-sink"].includes($("sink-mode").value))
       $("sink-mode").value = "selected";
     invalidate();
+    return true;
   };
   const explorer = createPathExplorer(invalidate, chooseSink);
   const matching = () => {
@@ -172,6 +174,7 @@ export function createSinkInspector(onChange) {
     renderList();
   };
   return {
+    choose: chooseSink,
     update(nextIndex, nextLayers, { enabled, scope: nextScope }) {
       enabledView = enabled;
       $("sink-panel").hidden = !enabled;
@@ -252,6 +255,9 @@ export function createSinkInspector(onChange) {
             ? ` Selected arc: ${selectedGeometry.schematic ? "schematic endpoint connection" : selectedGeometry.geometryIncomplete ? "incomplete routing geometry" : "retained endpoint / routing connectivity"}.`
             : "")
         : "";
+    },
+    get key() {
+      return enabledView ? key : null;
     },
     get explorer() {
       return explorer;

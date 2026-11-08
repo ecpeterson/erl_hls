@@ -28,6 +28,8 @@ import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { createRegionalControls } from "./regional-controls.js";
+import { createSceneSelection } from "./scene-selection.js";
+import { sinkPickTargets } from "./scene-picking.js";
 import { eventCoordinate } from "./arrival-layout.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
@@ -35,7 +37,6 @@ import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
 import {
   sceneColor,
   computationColor,
-  timingColor,
   COMPUTATION_SHARED_COLOR,
   DIRECTION_SOURCE_COLOR,
   DIRECTION_SINK_COLOR,
@@ -76,15 +77,12 @@ const state = {
   sceneContent: null,
   sceneDirty: true,
   sceneError: null,
-  hitsDirty: true,
   frameFull: false,
   autoFit: true,
   eventCache: null,
   loadTimings: {},
   spacing: 8,
-  hits: [],
   flatHits: [],
-  storageHits: [],
   storageCache: null,
   metricsCache: null,
   storagePointCache: new Map(),
@@ -107,7 +105,30 @@ const state = {
   index: new Map(),
   loadSequence: 0,
 };
-const sinkInspector = createSinkInspector(() => repaint());
+const sinkInspector = createSinkInspector(() => {
+  $("pick-notice").textContent = "";
+  repaint();
+});
+const sceneSelection = createSceneSelection({
+  onChoose(target) {
+    if (target.kind === "sink") {
+      if (!sinkInspector.choose(target.sinkKey)) return false;
+      $("sink-panel").open = true;
+    } else if (target.kind === "event") {
+      if (
+        state.model.events.get(target.event.id) !== target.event ||
+        !visibleEvents().includes(target.event)
+      )
+        return false;
+      selectEvent(target.event.id, false);
+    } else {
+      if (!visibleStorage().includes(target.segment)) return false;
+      selectStorage(target.segment.version, target.point.cell ?? null);
+    }
+    return true;
+  },
+  onOverlay: () => drawStackOverlay(),
+});
 const regionalControls = createRegionalControls(() => repaint());
 
 /** Escape untrusted labels before placing small templates in the DOM. */
@@ -151,6 +172,7 @@ async function loadDocument(
   integrity = "File supplied locally; source evidence not revalidated",
   computationData = null,
 ) {
+  sceneSelection.reset();
   regionalControls.configure();
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
@@ -209,6 +231,7 @@ async function loadDocument(
   $("computation-circuits").checked = Boolean(computations);
   $("time-layout").disabled = !computations?.prepared;
   $("time-layout").value = computations?.prepared ? "arrival" : "flat";
+  $("pick-mode").value = computations?.prepared ? "sinks" : "writes";
   $("circuit-role").value = "";
   $("circuit-timing").value = "registered_launch";
   $("circuit-delay").value = "0";
@@ -336,6 +359,7 @@ function installComputationData(data) {
   $("computation-circuits").checked = true;
   $("time-layout").disabled = !state.computations.prepared;
   $("time-layout").value = state.computations.prepared ? "arrival" : "flat";
+  $("pick-mode").value = state.computations.prepared ? "sinks" : "writes";
   if (state.computations.prepared) {
     $("color-mode").value = "criticality";
     // Begin with a few readable intervals; Window remains unrestricted.
@@ -412,6 +436,7 @@ function normalizeWindow() {
 }
 /** Queue one canvas repaint for related inputs or pointer movement. */
 function repaint(cameraOnly = false) {
+  sceneSelection.invalidate();
   if (!cameraOnly) {
     state.sceneDirty = true;
     state.frameFull = true;
@@ -427,8 +452,7 @@ function repaint(cameraOnly = false) {
         state.sceneError = `${error.message} Narrow the clock window or choose Occupied tiles; no geometry prefix was rendered.`;
         state.sceneDirty = false;
         state.sceneContent = null;
-        state.hits = [];
-        state.storageHits = [];
+        sceneSelection.reset();
         state.scene?.setScene({});
         state.scene?.render({
           width: $("stack").clientWidth,
@@ -446,6 +470,7 @@ function repaint(cameraOnly = false) {
 /** Synchronize controls, visible event list and selected evidence. */
 function render() {
   if (!state.model) return;
+  $("pick-notice").textContent = "";
   normalizeWindow();
   updateActivations();
   clearFilteredSelection();
@@ -1280,6 +1305,7 @@ function renderNativePath() {
 /** Small inspection table exposes native arc identities and local versus complete
  * delay. Only table rows are paged; the renderer retains every visible arc. */
 function renderArrivalDetails(circuits, maximum, summaries) {
+  $("untimed-summary").hidden = !arrivalEnabled();
   $("arrival-details").hidden = !arrivalEnabled();
   if (!arrivalEnabled()) return;
   const arcs = new Map();
@@ -1318,8 +1344,14 @@ function renderArrivalDetails(circuits, maximum, summaries) {
         : "unknown";
   const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
   sinkInspector.updateGeometry(circuits);
+  $("untimed-summary").textContent =
+    `${count("unknownSegments").toLocaleString()} spans · ${count("unknownMarks").toLocaleString()} pin marks · ${count("unknownRoots").toLocaleString()} roots lack arrival timing and are omitted here. Clock planes retain their spatial context; missing timing is not zero.`;
+  $("untimed-summary").hidden =
+    !count("unknownSegments") &&
+    !count("unknownMarks") &&
+    !count("unknownRoots");
   $("arrival-summary").textContent =
-    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. ${count("unknownSegments")} untimed spans and ${count("unknownMarks")} untimed pin marks omitted from arrival view. Showing the first ${Math.min(40, rows.length)} inspection rows; clock planes retain spatial context.`;
   $("arrival-table").innerHTML =
     `<table><thead><tr><th>Native arc / pins</th><th>Geometry</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
       .slice(0, 40)
@@ -1337,8 +1369,7 @@ function buildStackScene() {
     segments: [],
     markers: [],
     surfaces: [],
-    events: [],
-    storage: [],
+    targets: [],
     labels: [],
     focus: [],
     selection: [],
@@ -1366,6 +1397,10 @@ function buildStackScene() {
   const marker = (position, color, size = 0.006, priority = 0) =>
     result.markers.push({ position, color, size, priority });
   const arrival = arrivalEnabled();
+  $("pick-mode").querySelector('option[value="sinks"]').disabled = !arrival;
+  if (!arrival && $("pick-mode").value === "sinks")
+    $("pick-mode").value = "writes";
+  const pickMode = $("pick-mode").value;
   const interval = Math.max(1, Math.ceil(state.window / 8));
   const planes = [];
   for (let c = state.first; c < state.first + state.window; c += interval)
@@ -1421,13 +1456,7 @@ function buildStackScene() {
     state.computations?.maxDelays?.[
       metric === "registered_launch" ? "registered" : "static"
     ] ?? null;
-  for (const value of [
-    "timing",
-    "computation",
-    "computation-timing",
-    "criticality",
-    "delay-kind",
-  ]) {
+  for (const value of ["computation", "criticality", "delay-kind"]) {
     const option = $("color-mode").querySelector(`option[value="${value}"]`);
     option.disabled =
       !state.computations?.prepared || (value === "delay-kind" && !arrival);
@@ -1438,13 +1467,8 @@ function buildStackScene() {
   if ($("color-mode").selectedOptions[0].disabled)
     $("color-mode").value = "role";
   const mode = $("color-mode").value;
-  const membershipMode =
-    mode === "computation" ||
-    mode === "computation-timing" ||
-    mode === "criticality";
-  const scalarMode = mode === "timing" || mode === "computation-timing";
-  const neutralTiming =
-    scalarMode || mode === "criticality" || mode === "delay-kind";
+  const membershipMode = mode === "computation" || mode === "criticality";
+  const neutralTiming = mode === "criticality" || mode === "delay-kind";
   sinkInspector.update(state.computations, layers, {
     enabled: arrival,
     scope: metric === "registered_launch" ? "registered" : "static",
@@ -1468,16 +1492,8 @@ function buildStackScene() {
     cutMode || !["criticality", "delay-kind"].includes(mode);
   $("urgency-summary").textContent =
     `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
-  $("timing-legend").hidden = cutMode || !scalarMode;
   $("computation-legend").hidden = cutMode || !membershipMode;
   $("direction-legend").hidden = cutMode || mode !== "direction";
-  $("timing-min").textContent = "0 ns";
-  $("timing-max").textContent =
-    maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
-  $("timing-ramp").style.background =
-    mode === "computation-timing"
-      ? `linear-gradient(90deg, ${sceneColor({ mode, computationShared: true, delayNs: 0, maxDelayNs: 1 })}, ${sceneColor({ mode, computationShared: true, delayNs: 1, maxDelayNs: 1 })})`
-      : `linear-gradient(90deg, ${timingColor(0, 1)}, ${timingColor(0.5, 1)}, ${timingColor(1, 1)})`;
   $("direction-ramp").style.background =
     `linear-gradient(90deg, ${DIRECTION_SOURCE_COLOR}, ${DIRECTION_SINK_COLOR})`;
   const destinations = [
@@ -1588,13 +1604,18 @@ function buildStackScene() {
         result.focus = result.focus.concat(boundary.focus);
         result.selection = result.selection.concat(boundary.focus);
       }
+      result.targets = result.targets.concat(
+        sinkPickTargets(circuit, {
+          cycle: layer.cycle,
+          budgetNs: Number($("arrival-budget").value),
+          point: cellPoint,
+          world,
+          pinName: (pin) =>
+            state.computations.pinGeometry[pin]?.[3] ?? String(pin),
+        }),
+      );
       arrivalCircuits.push(circuit);
       arrivalSummaries.push(scene.summary);
-      if (scene.summary.unknownSegments || scene.summary.unknownMarks)
-        result.labels.push({
-          text: `C${layer.cycle}: unresolved timing / route geometry`,
-          position: world({ x: -1.04, y: -1.04 }, layer.cycle - 0.18),
-        });
       continue;
     }
     const paint = circuitDisplay(layer.paint, {
@@ -1705,7 +1726,9 @@ function buildStackScene() {
   renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
   const storage =
-    $("residence").checked && !sinkInspector.focused ? visibleStorage() : [];
+    $("residence").checked && (!sinkInspector.focused || pickMode === "storage")
+      ? visibleStorage()
+      : [];
   let loads = 0,
     holds = 0;
   for (const item of storage) {
@@ -1752,18 +1775,33 @@ function buildStackScene() {
           active ? 0.012 : 0.007,
           active ? 3 : 1,
         );
-      result.storage.push({ from: a, to: b, segment: item, point: p });
+      result.targets.push({
+        kind: "storage",
+        id: JSON.stringify([
+          item.version,
+          p.cell ?? p.kind,
+          item.visibleFromCycle,
+          item.visibleToCycle,
+        ]),
+        from: a,
+        to: b,
+        segment: item,
+        point: p,
+      });
       result.focus.push(a, b);
       if (active) result.selection.push(a, b);
     }
   }
   $("storage-summary").textContent =
-    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.storage.length.toLocaleString()} spatial links. ${arrival ? "Arrival view shows readiness separately; residence spans retain sampled values." : "Thick links load a value; thin links retain it."}`;
+    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.targets.filter((row) => row.kind === "storage").length.toLocaleString()} spatial links. ${arrival ? "Arrival view shows readiness separately; residence spans retain sampled values." : "Thick links load a value; thin links retain it."}`;
   const seeds = new Set(selectionEvents().map((e) => e.id));
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
   let glyphs = 0;
-  for (const event of sinkInspector.focused ? [] : visibleEvents()) {
+  for (const event of sinkInspector.focused &&
+  !["reads", "writes"].includes(pickMode)
+    ? []
+    : visibleEvents()) {
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
     if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
     for (const point of spatialPoints(
@@ -1785,7 +1823,7 @@ function buildStackScene() {
             : resources.length > 1
               ? COMPUTATION_SHARED_COLOR
               : "#627780"
-          : mode === "direction" || scalarMode
+          : mode === "direction"
             ? "#627780"
             : color(event);
       marker(
@@ -1794,7 +1832,7 @@ function buildStackScene() {
         active ? 0.014 : onPath ? 0.009 : 0.004,
         active ? 3 : onPath ? 2 : 1,
       );
-      result.events.push({ position, event });
+      result.targets.push({ kind: "event", id: event.id, position, event });
       result.focus.push(position);
       if (active) result.selection.push(position);
       glyphs++;
@@ -1978,7 +2016,7 @@ function buildStackScene() {
 /** Paint opaque depth-tested geometry, with sparse labels on the interaction
  * overlay. Projected hit candidates keep their depth and reject clipped points. */
 function drawStack() {
-  const { ctx, w, h } = canvasContext("stack");
+  const { w, h } = canvasContext("stack");
   if (!state.model || (state.sceneError && !state.sceneDirty)) return;
   if (state.sceneDirty) state.sceneError = null;
   if (!state.scene) {
@@ -2017,6 +2055,16 @@ function drawStack() {
     pixelRatio: window.devicePixelRatio || 1,
     shading: ["role", "computation"].includes($("color-mode").value),
   });
+  sceneSelection.project(state.sceneContent.targets, state.scene, {
+    sinkKey: sinkInspector.key,
+    eventId: state.selected?.id,
+  });
+  drawStackOverlay();
+}
+/** Hover changes only the annotation canvas; GPU geometry and graph caches stay intact. */
+function drawStackOverlay() {
+  const { ctx, w, h } = canvasContext("stack");
+  if (!state.scene || !state.sceneContent) return;
   const project = (point) => state.scene.project(point);
   const labels = canvasLabels(ctx, w, h);
   ctx.font = "11px ui-monospace,monospace";
@@ -2029,22 +2077,7 @@ function drawStack() {
     if (p) labels.add(label.text, Math.max(4, p.x - 44), p.y - 6, 100);
   }
   labels.draw();
-  state.hitsDirty = true;
-}
-/** Picking is deferred until the pointer settles; dragging only updates the GPU
- * camera and sparse labels. Frontmost equal-distance candidates win. */
-function ensureSceneHits() {
-  if (!state.hitsDirty || !state.sceneContent || !state.scene) return;
-  const project = (point) => state.scene.project(point);
-  state.hits = state.sceneContent.events
-    .map((row) => ({ ...project(row.position), event: row.event }))
-    .filter((p) => p.visible)
-    .sort((a, b) => b.depth - a.depth);
-  state.storageHits = state.sceneContent.storage.flatMap((row) => {
-    const points = state.scene.projectSegment(row.from, row.to);
-    return points ? [{ ...row, a: points[0], b: points[1] }] : [];
-  });
-  state.hitsDirty = false;
+  sceneSelection.draw(ctx);
 }
 /** Flat chip projection retains installed population, rather than layer copies. */
 function drawFlat() {
@@ -2473,7 +2506,7 @@ function chooseExample(index) {
   } else if (Number.isFinite(example.cycle)) selectAnnotation(example);
   else notice("This example has no selectable recorded event.", true);
 }
-/** Canvas hit test returns the nearest visible operation; a tie remains selectable in the list. */
+/** Flat-chip hit test chooses a native cell; scene evidence uses explicit target modes. */
 function nearest(hits, x, y, limit = 12) {
   let best = null,
     dist = limit * limit;
@@ -2490,35 +2523,7 @@ function nearest(hits, x, y, limit = 12) {
   }
   return best;
 }
-/** Nearest rendered storage span, independently of dense same-clock dots. */
-function nearestStorage(x, y) {
-  let best = null,
-    distance = 25,
-    bestDepth = Infinity;
-  for (const hit of state.storageHits) {
-    const dx = hit.b.x - hit.a.x,
-      dy = hit.b.y - hit.a.y;
-    const t = Math.max(
-      0,
-      Math.min(
-        1,
-        ((x - hit.a.x) * dx + (y - hit.a.y) * dy) / (dx * dx + dy * dy || 1),
-      ),
-    );
-    const d = (x - hit.a.x - t * dx) ** 2 + (y - hit.a.y - t * dy) ** 2;
-    const depth =
-      (hit.a.depth ?? 0) + t * ((hit.b.depth ?? 0) - (hit.a.depth ?? 0));
-    if (
-      d < distance - 1e-6 ||
-      (Math.abs(d - distance) <= 1e-6 && depth < bestDepth)
-    ) {
-      best = hit;
-      distance = d;
-      bestDepth = depth;
-    }
-  }
-  return best;
-}
+
 /** Local pointer coordinates independent of page scrolling. */
 function pointer(event) {
   const r = event.currentTarget.getBoundingClientRect();
@@ -2553,6 +2558,7 @@ function bindControls() {
   };
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
+    sceneSelection.reset();
     const sequence = ++state.loadSequence;
     regionalControls.configure();
     state.loadController?.abort();
@@ -2652,6 +2658,7 @@ function bindControls() {
     }
   };
   $("file").onchange = async () => {
+    sceneSelection.reset();
     const sequence = ++state.loadSequence;
     regionalControls.configure();
     state.loadController?.abort();
@@ -2817,6 +2824,7 @@ function bindControls() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches("[data-cell]")) e.target.click();
   });
+  $("pick-all").onchange = () => drawStackOverlay();
   const stack = $("stack");
   let drag = null;
   stack.onpointerdown = (e) => {
@@ -2841,29 +2849,13 @@ function bindControls() {
       drag.y = p.y;
       repaint(true);
     } else {
-      ensureSceneHits();
-      const hit = nearest(state.hits, p.x, p.y, 5);
-      const storage = hit ? null : nearestStorage(p.x, p.y);
-      $("tooltip").hidden = !hit && !storage;
-      if (hit || storage) {
-        $("tooltip").textContent = hit
-          ? `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`
-          : `${storage.segment.kind === "write" ? "Load" : "Residence"} C${storage.segment.fromCycle}→C${storage.segment.toCycle} · ${storage.segment.version} · ${storage.point.cell ?? storage.segment.resource}`;
-        $("tooltip").style.left =
-          `${Math.min(p.x + 12, stack.clientWidth - 220)}px`;
-        $("tooltip").style.top = `${p.y + 14}px`;
-      }
+      sceneSelection.hover(p);
     }
   };
   stack.onpointerup = (e) => {
     const p = pointer(e);
-    if (drag && !drag.moved) {
-      ensureSceneHits();
-      const hit = nearest(state.hits, p.x, p.y, 5);
-      const storage = hit ? null : nearestStorage(p.x, p.y);
-      if (hit) selectEvent(hit.event.id, false);
-      else if (storage)
-        selectStorage(storage.segment.version, storage.point.cell ?? null);
+    if (drag && !drag.moved && !drag.pan && e.button === 0) {
+      sceneSelection.click(p);
     }
     drag = null;
   };
@@ -2873,12 +2865,21 @@ function bindControls() {
     repaint(true);
   };
   stack.oncontextmenu = (e) => e.preventDefault();
-  stack.onpointercancel = () => (drag = null);
+  stack.onpointercancel = () => {
+    drag = null;
+    sceneSelection.clear();
+    drawStackOverlay();
+  };
   stack.onpointerleave = () => {
-    $("tooltip").hidden = true;
+    sceneSelection.leave();
   };
   stack.onkeydown = (e) => {
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+    if (e.key === "Escape") {
+      sceneSelection.clear();
+      drawStackOverlay();
+    } else if (
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+    ) {
       const x = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
       const y = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
       if (e.shiftKey) state.scene?.pan(x * 20, y * 20);
@@ -2954,6 +2955,7 @@ function bindControls() {
     repaint(true);
   };
   for (const id of [
+    "pick-mode",
     "color-mode",
     "detail-level",
     "ghost-context",
@@ -2968,6 +2970,8 @@ function bindControls() {
           return;
         }
       if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
+      if (id === "time-layout" && arrivalEnabled())
+        $("pick-mode").value = "sinks";
       repaint();
     };
   const resize = new ResizeObserver(() => repaint());
