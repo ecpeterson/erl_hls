@@ -1539,7 +1539,7 @@ function buildStackScene() {
       arrivalSummaries.push(scene.summary);
       if (scene.summary.unknownSegments || scene.summary.unknownMarks)
         result.labels.push({
-          text: `C${layer.cycle}: unknown arrival shelf`,
+          text: `C${layer.cycle}: unresolved timing / route geometry`,
           position: world({ x: -1.04, y: -1.04 }, layer.cycle - 0.18),
         });
       continue;

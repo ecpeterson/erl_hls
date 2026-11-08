@@ -24,6 +24,16 @@ Use `--capture RECORDING_FILE` if the publication contains more than one computa
 
 Open the printed loopback URL. No capture is uploaded. “Open file” also accepts a prepared `spacetime-view` JSON projection. The [maintained workflow](docs/workflow.md) covers capture, native extraction, finite binding qualification, join, validation and routed-path attachment. It has no campaign-directory dependency. `prepare-example.mjs` remains the adapter for retained S3/S4 demonstration archives; it is not the entry point for new workloads. See [the viewer guide](docs/viewer.md) for controls and interpretation.
 
+## Timing diagnostics
+
+Generate an [explainable timing report](docs/timing-report.md) from a saved computation publication:
+
+```sh
+node scripts/report-timing.mjs --input /path/to/computation-publication --output /path/to/fresh-report
+```
+
+The report retains every selected write, one representative maximizing source-to-sink chain per known cone, logic/net contributions and explicit timing/mapping gaps. It runs no native tools and does not infer an achieved clock period.
+
 ## Library and checks
 
 Use OTP 28.0.2 and rebar3 3.24.0:

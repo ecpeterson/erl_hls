@@ -89,3 +89,7 @@ Rendering-time aggregation combines coincident marks/spans and overlapping axis-
 The browser parses and indexes the recording in a worker, makes that recording interactive, then loads and validates the prepared circuit parts in a worker. It does not fetch the full retained source tables in this mode. A publication without a derivative still uses the complete-graph loader. **Loading details** separates recording transfer/verification, parsing, indexing and first-frame timings from circuit loading; these browser measurements are distinct from offline preparation time. Camera motion reuses uploaded geometry rather than traversing the source graph again.
 
 See [the viewer guide](viewer.md#complete-computation-circuits) for circuit colors, functionality and static-delay filters, and the distinction between measured routing locations, schematic spans, timing dependencies and dynamic sensitization. No routed delay in this workflow establishes a physical execution period.
+
+## Explain a timing bound
+
+The [offline timing report](timing-report.md) reuses this complete source publication to recover deterministic representative source-to-sink chains, cumulative arc costs, logic/net contributions and every selected recorded write association. Known timing and partial routing geometry remain separate. It does not require new native extraction or change the rendering derivative.
