@@ -1292,6 +1292,8 @@ function renderArrivalDetails(circuits, maximum, summaries) {
               : Math.max(old.pathDelayNs, row.pathDelayNs);
         old.timingUnknown ||= row.timingUnknown;
         old.arrivalUnknown ||= row.arrivalUnknown;
+        old.schematic ||= row.schematic;
+        old.geometryIncomplete ||= row.geometryIncomplete;
         for (const field of ["arrivalFromNs", "arrivalViaNs", "arrivalToNs"])
           if (old[field] !== row[field]) {
             old[field] = null;
@@ -1311,14 +1313,15 @@ function renderArrivalDetails(circuits, maximum, summaries) {
         ? "outside scope"
         : "unknown";
   const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
+  sinkInspector.updateGeometry(circuits);
   $("arrival-summary").textContent =
-    `${arcs.size.toLocaleString()} distinct visible arcs · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
   $("arrival-table").innerHTML =
-    `<table><thead><tr><th>Native arc / pins</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
+    `<table><thead><tr><th>Native arc / pins</th><th>Geometry</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
       .slice(0, 40)
       .map(
         (row) =>
-          `<tr><td>${esc(row.arc)}: ${esc(row.fromPin)} → ${esc(row.toPin)}</td><td>${format(row.delayNs)}</td><td>${row.timingUnknown ? "unknown" : format(row.pathDelayNs)}</td><td>${format(!row.timingUnknown && row.pathDelayNs !== null && maximum !== null ? maximum - row.pathDelayNs : null)}</td><td>${format(row.arrivalFromNs)} → ${format(row.arrivalViaNs)} → ${format(row.arrivalToNs)}</td></tr>`,
+          `<tr><td>${esc(row.arc)}: ${esc(row.fromPin)} → ${esc(row.toPin)}</td><td>${row.schematic ? "schematic endpoint connection" : row.geometryIncomplete ? "incomplete" : row.located ? "retained endpoints / connectivity" : "unlocated"}</td><td>${format(row.delayNs)}</td><td>${row.timingUnknown ? "unknown" : format(row.pathDelayNs)}</td><td>${format(!row.timingUnknown && row.pathDelayNs !== null && maximum !== null ? maximum - row.pathDelayNs : null)}</td><td>${format(row.arrivalFromNs)} → ${format(row.arrivalViaNs)} → ${format(row.arrivalToNs)}</td></tr>`,
       )
       .join("")}</tbody></table>`;
 }
@@ -1526,6 +1529,7 @@ function buildStackScene() {
       const circuit = arrivalCircuit(state.computations, layer, {
         scope: metric === "registered_launch" ? "registered" : "static",
         includeUnresolved: !mappedOnly(),
+        bridgeKnownGeometry: true,
         selection: sinkInspector.selection,
       });
       const scene = arrivalScene(circuit, {
@@ -1869,6 +1873,7 @@ function buildStackScene() {
           arrivalCircuit(state.computations, layer, {
             scope: metric === "registered_launch" ? "registered" : "static",
             includeUnresolved: !mappedOnly(),
+            bridgeKnownGeometry: true,
           }),
           {
             cycle: layer.cycle,

@@ -120,7 +120,7 @@ export function createSinkInspector(onChange) {
       `<ol>${steps.map((s) => `<li><button type="button" data-arc="${s.arc}" aria-pressed="${activeArc === s.arc}">${esc(labels.get(s.arc))}</button></li>`).join("")}</ol>`;
     $("sink-arc-detail").textContent =
       activeArc === null
-        ? "Click a strip segment or an ordered arc to highlight its available 3D geometry. Net height within a connection remains interpolated; unresolved geometry may lie on the shelf."
+        ? "Click a strip segment or an ordered arc to highlight its available 3D geometry. Height within a connection is interpolated. A thin core with a dashed sleeve marks schematic connections across missing route detail."
         : labels.get(activeArc);
   }
   $("sink-list").onclick = (event) => {
@@ -214,6 +214,28 @@ export function createSinkInspector(onChange) {
           $("sink-mode").value !== "near";
         dirty = false;
       }
+    },
+    updateGeometry(circuits) {
+      const visible = new Map();
+      for (const circuit of circuits)
+        for (const row of circuit.details) {
+          const old = visible.get(row.arc);
+          visible.set(row.arc, {
+            schematic: row.schematic || old?.schematic,
+            geometryIncomplete:
+              row.geometryIncomplete || old?.geometryIncomplete,
+          });
+        }
+      const bridged =
+        path?.arcIndices.filter((a) => visible.get(a)?.schematic).length ?? 0;
+      const selectedGeometry =
+        activeArc === null ? null : visible.get(activeArc);
+      $("sink-geometry").textContent = path
+        ? `${bridged} visible path arcs use schematic endpoint connections: thin continuous core + dashed sleeve. Their native routing geometry remains incomplete; endpoint timing is known.` +
+          (selectedGeometry
+            ? ` Selected arc: ${selectedGeometry.schematic ? "schematic endpoint connection" : selectedGeometry.geometryIncomplete ? "incomplete routing geometry" : "retained endpoint / routing connectivity"}.`
+            : "")
+        : "";
     },
     get selection() {
       return selection;

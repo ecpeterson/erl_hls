@@ -75,7 +75,7 @@ export function arrivalScene(
     result.markers.push({ position: at, color, size, kind });
     result.focus.push(at);
   };
-  const span = (from, to, color, colorEnd, radius, kind) => {
+  const span = (from, to, color, colorEnd, radius, kind, dash = 0.018) => {
     if (from.every((value, index) => value === to[index])) return;
     result.segments.push({
       from,
@@ -84,7 +84,7 @@ export function arrivalScene(
       colorEnd,
       radius,
       kind,
-      dash: 0.018,
+      dash,
     });
     result.focus.push(from, to);
   };
@@ -115,17 +115,38 @@ export function arrivalScene(
           : mode === "direction"
             ? OUTSIDE_TIMING_COLOR
             : shade(row);
+    const from = position(row.from),
+      to = position(row.to),
+      startColor = directional ? DIRECTION_SOURCE_COLOR : color,
+      endColor = directional ? DIRECTION_SINK_COLOR : color;
+    const schematic = row.schematic && !unknown && !readiness;
+    // A thin solid core keeps endpoint connectivity visible through the wider
+    // dashed sleeve. The sleeve identifies interpolation across missing route
+    // detail; separate radii avoid coincident tube surfaces.
+    if (schematic)
+      span(
+        from,
+        to,
+        startColor,
+        endColor,
+        active ? 0.0013 : 0.0007,
+        "arrival-schematic-core",
+        0,
+      );
     span(
-      position(row.from),
-      position(row.to),
-      directional ? DIRECTION_SOURCE_COLOR : color,
-      directional ? DIRECTION_SINK_COLOR : color,
+      from,
+      to,
+      startColor,
+      endColor,
       active ? 0.0032 : readiness ? 0.0008 : 0.0017,
       unknown
         ? "arrival-unknown"
         : readiness
           ? "arrival-readiness"
-          : "arrival-propagation",
+          : schematic
+            ? "arrival-schematic"
+            : "arrival-propagation",
+      unknown || readiness || schematic ? 0.018 : 0,
     );
   }
   for (const row of circuit.marks ?? []) {

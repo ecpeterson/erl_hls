@@ -87,8 +87,9 @@
         hypothetical 10 ns; it is not a measured clock period. Late arrivals
         extend beyond that boundary. Gray links distinguish input-readiness and
         ready-to-capture gaps from recorded storage; red marks budget overruns.
-        Unknown timing or incomplete route geometry uses a labelled shelf, not a
-        zero-delay height. Heights between measured pin endpoints are
+        Unknown timing uses a labelled shelf, not a zero-delay height. Known
+        endpoints with incomplete route geometry stay connected by a thin core
+        with a dashed sleeve. Heights between measured pin endpoints are
         interpolated along schematic routing chords. These are timing bounds,
         not a switching trace. Computation + urgency keeps destination hue and
         brightens complete paths within the chosen distance of the capture-wide
@@ -301,9 +302,9 @@
                 </details>
               </div>
               <p class="legend-note">
-                Dashed links join known routing locations; bends and track
-                offsets are unavailable. Coincident spans are combined, not
-                electrically connected.
+                Routing links join known locations; bends and track offsets are
+                unavailable. Coincident spans are combined, not electrically
+                connected.
               </p>
               <div id="delay-kind-legend" hidden>
                 <span><i class="sink-logic"></i>Logic delay</span
@@ -321,6 +322,10 @@
                   >Height: latest static arrival · gray: reconvergence /
                   ready-to-capture interval · red: budget overrun · unknowns on
                   a separate shelf</span
+                ><span
+                  >Solid: retained endpoint / routing connectivity · thin core
+                  with dashed sleeve: schematic endpoint connection across
+                  incomplete routing geometry</span
                 >
               </div>
               <div id="direction-legend" hidden>
@@ -424,6 +429,7 @@
                   class="sink-arc-detail"
                   aria-live="polite"
                 ></p>
+                <p id="sink-geometry" class="muted"></p>
                 <details>
                   <summary>All ordered arcs, including zero-delay arcs</summary>
                   <div id="sink-steps" class="sink-steps"></div>
