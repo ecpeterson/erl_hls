@@ -292,7 +292,7 @@ rewrite(Value, _Helpers) ->
 -doc "Builds definitions belonging to the actor module. Imported bodies are returned separately by modules/3; calls retain their qualified DSLX names.".
 -spec emit([helper()], atom(), map()) -> xls_dslx:value().
 emit(Helpers, DataName, EnumAtoms) ->
-    [emit_function(H, DataName, EnumAtoms) || H <- Helpers, not maps:is_key(owner, H)].
+    [[emit_function(H, DataName, EnumAtoms), "\n"] || H <- Helpers, not maps:is_key(owner, H)].
 
 -doc "Builds separate source-helper module documents for final allocation by xls_emitted. The actor and these dependencies share one artifact-local failure codebook.".
 -spec modules([helper()], atom(), map()) -> #{file:filename() => xls_emitted:module_document()}.
@@ -366,7 +366,7 @@ emit_function(
         integer_to_list(erl_anno:line(Line)),
         "\n",
         xls_dslx:indent(Body, 2),
-        "}\n\n"
+        "}\n"
     ].
 
 plain_head([{clause, _, Parameters, [], _}]) ->

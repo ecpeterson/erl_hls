@@ -193,7 +193,7 @@ document(Module, Helpers, Graph, DataName, EnumAtoms) ->
         )
      || H = #{owner := #{name := N}, clauses := C} <- Own
     ],
-    {Path, #{preamble => Preamble, body => Bodies}}.
+    {Path, #{preamble => Preamble, body => lists:join("\n", Bodies)}}.
 
 %% Same-module calls are unqualified; calls to other source modules remain remote.
 -spec local_calls(term(), atom()) -> term().
