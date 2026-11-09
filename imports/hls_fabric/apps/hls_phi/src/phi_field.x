@@ -2,8 +2,12 @@
 import hls_fixed;
 import hls_vec;
 
+// One signed Q15.16 layer.
 pub type Scalar = s32;
+// Center followed by auxiliary bulk.
 pub type Field = Scalar[2];
+// Unrounded line recurrence, retained across completion and entry callbacks.
+pub type LineNumerators = sN[36][2];
 
 // At most four scalar contributions fit in the diffusion accumulator.
 pub fn accumulate(sum: s64, value: Scalar) -> s64 { sum + (value as s64) }
@@ -29,22 +33,33 @@ pub fn relax_bulk(phi0: Scalar, phi1: Scalar, neighbor_sum: s64) -> Scalar {
   hls_fixed::saturate<u32:32>(rounded_twelfth(numerator))
 }
 
+// Complete four-neighbor recurrence.
 pub fn relax(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {
   [relax_center(anyon, field[u32:0], field[u32:1], sum0),
    relax_bulk(field[u32:0], field[u32:1], sum1)]
 }
 
-// Two physical neighbors plus two auxiliary-layer neighbors, with eta=1/2.
-// Each sum contains exactly two s32 values; the complete numerators fit s36.
-pub fn relax_line(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {
+// Two physical neighbors plus two auxiliary layers, with eta=1/2.
+// Each sum contains at most two s32 values; the weighted numerators fit s36.
+pub fn line_numerators(field: Field, sum0: s64, sum1: s64) -> LineNumerators {
   let phi0 = field[u32:0] as sN[36];
   let phi1 = field[u32:1] as sN[36];
-  let center = sN[36]:4 * phi0 + sN[36]:2 * phi1 + (sum0 as sN[36]);
-  let bulk = phi0 + sN[36]:5 * phi1 + (sum1 as sN[36]);
-  [hls_fixed::saturate<u32:32>(((anyon as s64) << u32:16) +
-     (hls_fixed::round_ratio<u32:8>(center) as s64)),
-   hls_fixed::saturate<u32:32>(hls_fixed::round_ratio<u32:8>(bulk))]
+  [sN[36]:4 * phi0 + sN[36]:2 * phi1 + (sum0 as sN[36]),
+   phi0 + sN[36]:5 * phi1 + (sum1 as sN[36])]
 }
+
+// Finish a saved recurrence before publication; round before injection and saturation.
+pub fn finish_line(anyon: u32, numerators: LineNumerators) -> Field {
+  [hls_fixed::saturate<u32:32>(((anyon as s64) << u32:16) +
+     (hls_fixed::round_ratio<u32:8>(numerators[u32:0]) as s64)),
+   hls_fixed::saturate<u32:32>(hls_fixed::round_ratio<u32:8>(numerators[u32:1]))]
+}
+
+// Complete two-neighbor recurrence; splitting the calls alone adds no register.
+pub fn relax_line(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {
+  finish_line(anyon, line_numerators(field, sum0, sum1))
+}
+
 
 #[test]
 fn accumulator_preserves_four_extreme_neighbors_test() {

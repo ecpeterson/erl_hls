@@ -39,6 +39,21 @@ composite_field_test() ->
          reference_relax_bulk(65536, -32768, -100)],
         phi_field:relax(1, Values, 100, -100)).
 
+%% Intermediate arithmetic uses the ordinary signed-vector codec and its range checks.
+-spec line_numerator_type_test() -> ok.
+line_numerator_type_test() ->
+    Type = phi_field:line_numerators(),
+    Generic = hls_vec:vector(hls_nums:sN(36), 2),
+    ?assertEqual(72, hls_type:width(Type)),
+    ?assertEqual([0, 0], hls_type:zero(Type)),
+    Values = [-(1 bsl 35), (1 bsl 35)-1],
+    Packed = hls_type:pack(Values, Generic),
+    ?assertEqual(Packed, hls_type:pack(Values, Type)),
+    ?assertEqual({Values, <<5:3>>}, hls_type:unpack(<<Packed/bitstring, 5:3>>, Type)),
+    ?assertError(badarg, hls_type:pack([0], Type)),
+    ?assertError(badarg, hls_type:pack([0, 1 bsl 35], Type)),
+    ?assertError(badarg, hls_type:pack([-(1 bsl 35)-1, 0], Type)).
+
 %% Check center weights, the anyon source term and one fractional neighbor contribution.
 -spec center_recurrence_test() -> ok.
 center_recurrence_test() ->

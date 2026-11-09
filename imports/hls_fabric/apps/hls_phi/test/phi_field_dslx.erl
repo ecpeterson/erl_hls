@@ -20,6 +20,11 @@ to_dslx() ->
         "fn lowered_recurrences_match_beam_test() {\n",
         rounding_assertions(),
         boundary_assertions(),
+        "}\n\n",
+        "// The line split retains exact signed numerators across the owner boundary.\n",
+        "#[test]\n",
+        "fn lowered_line_stages_match_beam_test() {\n",
+        line_assertions(),
         "}\n"
     ].
 
@@ -49,6 +54,36 @@ boundary_assertions() ->
            Phi1 <- Fields,
            NeighborSum <- NeighborSums
     ]).
+
+%% Bound the line witness to signed half ties and representative two-neighbor extremes.
+-spec line_assertions() -> iolist().
+line_assertions() ->
+    Extremes = [
+        {?S32_MIN, ?S32_MIN, 2 * ?S32_MIN, 2 * ?S32_MIN},
+        {?S32_MAX, ?S32_MAX, 2 * ?S32_MAX, 2 * ?S32_MAX},
+        {?S32_MIN, ?S32_MAX, 2 * ?S32_MAX, 2 * ?S32_MIN},
+        {?S32_MAX, ?S32_MIN, 2 * ?S32_MIN, 2 * ?S32_MAX}
+    ],
+    Cases = [{0, 0, N, -N} || N <- lists:seq(-9, 9)] ++ Extremes,
+    [line_assertion(A, P, Q, S, T) || A <- [0, 1], {P, Q, S, T} <- Cases].
+
+%% Check retained partials independently and then compare the lowered finish with BEAM.
+-spec line_assertion(0 | 1, phi_field:scalar(), phi_field:scalar(),
+    phi_field:accumulator(), phi_field:accumulator()) -> iolist().
+line_assertion(Anyon, Phi0, Phi1, Sum0, Sum1) ->
+    Numerators = [4 * Phi0 + 2 * Phi1 + Sum0, Phi0 + 5 * Phi1 + Sum1],
+    [Center, Bulk] = Numerators,
+    [Final0, Final1] = phi_field:relax_line(Anyon, [Phi0, Phi1], Sum0, Sum1),
+    Partial = ["phi_field::line_numerators([", signed_literal(32, Phi0), ", ",
+        signed_literal(32, Phi1), "], ", signed_literal(64, Sum0), ", ",
+        signed_literal(64, Sum1), ")"],
+    [
+        "  assert_eq(", Partial, ", [sN[36]:", integer_to_list(Center),
+        ", sN[36]:", integer_to_list(Bulk), "]);\n",
+        "  assert_eq(phi_field::finish_line(", unsigned_literal(Anyon), ", ",
+        Partial, "), [", signed_literal(32, Final0), ", ",
+        signed_literal(32, Final1), "]);\n"
+    ].
 
 %% Render one center recurrence assertion against its BEAM-computed result.
 -spec center_assertion(0 | 1, phi_field:scalar(), phi_field:scalar(),

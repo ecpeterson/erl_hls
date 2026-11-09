@@ -1,5 +1,4 @@
 %% Shared callbacks for the grid and line wrappers; geometry is compile-time.
--include("phi_protocol.hrl").
 -include("phi_neighborhood.hrl").
 
 %% CPU lifecycle, input helpers and inspection.
@@ -29,16 +28,6 @@
 -behavior(hls_statem).
 -hls_data(cell).
 -hls_phases([configuring, measuring, gathering, comparing, flipping]).
--ifdef(PHI_REPETITION).
--hls_outputs([east, west, syndrome, correction, status]).
--else.
--hls_outputs([north, east, west, south, syndrome, correction, status]).
--endif.
--ifdef(PHI_REPETITION).
--hls_mailbox_capacity(3).
--else.
--hls_mailbox_capacity(5).
--endif.
 -compile({parse_transform, hls_pack}).
 
 %% TODO: Replace the fixed diffusion count with the decoder's stopping rule.
@@ -50,19 +39,6 @@
 %% TODO: Separate logical field types from word-aligned wire codecs so
 %% #anyon_move.present can be boolean in lowerable callbacks.
 
--record(cell, {
-    step = hls_type:zero() :: hls_nums:u32(),
-    diffusion_epoch = hls_type:zero() :: hls_nums:u32(),
-    phi = hls_type:zero() :: phi_field:field(),
-    best_direction = hls_type:zero() :: hls_nums:u32(),
-    anyon = hls_type:zero() :: hls_nums:u32(),
-    random_state = hls_type:zero() :: hls_nums:u32(),
-    x = hls_type:zero() :: hls_nums:u16(),
-    y = hls_type:zero() :: hls_nums:u16(),
-    noise_quiet = hls_type:zero() :: hls_nums:u32(),
-    status_valid = hls_type:zero() :: hls_nums:u32()
-}).
-
 %% Private actor state shared by the three barrier reductions. `value0` and
 %% `value1` hold widened layer sums during diffusion, maximum and winner mask
 %% during comparison, and incoming parity in `value0` during movement.
@@ -73,27 +49,6 @@
 
 %% Named protocol barriers; state entry emits each barrier's actions.
 -type phase() :: configuring | measuring | gathering | comparing | flipping.
--ifdef(PHI_REPETITION).
-%% Required connections for the two-neighbor protocol.
--type neighbors() :: #{
-    east := pid(),
-    west := pid(),
-    syndrome := pid(),
-    correction := pid(),
-    status := pid()
-}.
--else.
-%% Required connections for the four-neighbor protocol.
--type neighbors() :: #{
-    north := pid(),
-    east := pid(),
-    west := pid(),
-    south := pid(),
-    syndrome := pid(),
-    correction := pid(),
-    status := pid()
-}.
--endif.
 %% Direction names are the actor's physically present ports.
 -type direction() :: ?NEIGHBOR_TYPE.
 
@@ -328,17 +283,13 @@ measuring(cast, #anyon_move{}, Cell) ->
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 gathering(enter, _OldPhase, Cell) ->
+    Updated = finish_diffusion(Cell),
     Epoch = Cell#cell.diffusion_epoch,
-    Message = #phi{epoch = Epoch, values = Cell#cell.phi},
-    {Cell, [
+    Message = #phi{epoch = Epoch, values = Updated#cell.phi},
+    {Updated, [
         {open_reduction, diffusion, Cell#cell.diffusion_epoch, {count, ?NEIGHBOR_COUNT},
             {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
-        | ?NEIGHBOR_ACTIONS(
-            {cast, north, Message},
-            {cast, east, Message},
-            {cast, west, Message},
-            {cast, south, Message}
-        )
+        | [{cast, Port, Message} || Port <- ?NEIGHBOR_PORTS]
     ]};
 gathering(
     cast,
@@ -355,12 +306,9 @@ gathering(
     {reduction_complete, diffusion, Epoch, #phi_fold{value0 = Sum0, value1 = Sum1}},
     Cell = #cell{step = Step, diffusion_epoch = Epoch}
 ) ->
-    NewPhi = phi_field:?FIELD_RELAX(Cell#cell.anyon, Cell#cell.phi, Sum0, Sum1),
+    Prepared = prepare_diffusion(Cell, Sum0, Sum1),
     NextEpoch = (Epoch + 1) band ?U32_MASK,
-    Updated = Cell#cell{
-        diffusion_epoch = NextEpoch,
-        phi = NewPhi
-    },
+    Updated = Prepared#cell{diffusion_epoch = NextEpoch},
     NextStepEpoch = ((Step + 1) * ?DIFFUSION_ROUNDS) band ?U32_MASK,
     {NextPhase, NextCell} =
         case NextEpoch =:= NextStepEpoch of
@@ -410,20 +358,17 @@ gathering(cast, #phi_config{}, Cell) ->
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
-    [Phi0 | _] = Cell#cell.phi,
+    Updated = finish_diffusion(Cell),
+    [Phi0 | _] = Updated#cell.phi,
     Message = #phi0{
         step = Cell#cell.step,
         value = Phi0
     },
-    {Cell, [
+    {Updated, [
         {open_reduction, comparison, Cell#cell.step, {members, ?NEIGHBOR_MEMBERS},
             {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
-        | ?NEIGHBOR_ACTIONS(
-            {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
-            {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
-            {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
-            {cast, south, Message#phi0{source = ?PHI_NORTH_MASK}}
-        )
+        | [{cast, Port, Message#phi0{source = Source}}
+         || {Port, _Direction, Source} <- ?NEIGHBORS]
     ]};
 comparing(
     cast,
@@ -470,49 +415,6 @@ comparing(cast, #phenom_anyon{}, Cell) ->
 comparing(cast, #phi_config{}, Cell) ->
     {comparing, Cell, fail}.
 
--ifdef(PHI_REPETITION).
-%% Equivalent to multiply-high ranking for the valid winner masks 0, 2, 4, 6.
-%% Two tied edges split the low-31-bit draw at bit 30; no multiplication remains.
--spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
-choose_direction(Mask, Random) ->
-    case Mask of
-        ?PHI_EAST_MASK ->
-            ?PHI_EAST_MASK;
-        ?PHI_WEST_MASK ->
-            ?PHI_WEST_MASK;
-        ?NEIGHBOR_MASK ->
-            case Random band 16#40000000 of
-                0 -> ?PHI_EAST_MASK;
-                _ -> ?PHI_WEST_MASK
-            end;
-        _ ->
-            ?NO_DIRECTION
-    end.
--else.
-%% Map the low 31 random bits to an ordinal among the winning edges. Multiply
-%% high avoids division; the three-way case's bucket sizes differ by one draw.
--spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
-choose_direction(Mask, Random) ->
-    North = Mask band 1,
-    East = (Mask bsr 1) band 1,
-    West = (Mask bsr 2) band 1,
-    South = (Mask bsr 3) band 1,
-    Count = North + East + West + South,
-    Draw = hls_type:as(hls_nums:u64(), Random band 16#7fffffff),
-    Rank = hls_type:as(
-        hls_nums:u32(),
-        (Draw * hls_type:as(hls_nums:u64(), Count)) bsr 31
-    ),
-    if
-        Count =:= 0 -> ?NO_DIRECTION;
-        Rank < North -> ?PHI_NORTH_MASK;
-        Rank < North + East -> ?PHI_EAST_MASK;
-        Rank < North + East + West -> ?PHI_WEST_MASK;
-        true -> ?PHI_SOUTH_MASK
-    end.
-
--endif.
-
 -doc "Chooses a correction and publishes directional moves, then collects neighbor arrivals.".
 -spec flipping
     (enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
@@ -546,14 +448,6 @@ flipping(enter, _OldPhase, Cell) ->
             true ->
                 {Absent, []}
         end,
-    {_NorthPresent, EastPresent, WestPresent, _SouthPresent} =
-        case Cell#cell.best_direction of
-            ?PHI_NORTH_MASK -> {Present, Absent, Absent, Absent};
-            ?PHI_EAST_MASK -> {Absent, Present, Absent, Absent};
-            ?PHI_WEST_MASK -> {Absent, Absent, Present, Absent};
-            ?PHI_SOUTH_MASK -> {Absent, Absent, Absent, Present};
-            _ -> {Absent, Absent, Absent, Absent}
-        end,
     Message = #anyon_move{step = Cell#cell.step},
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,
@@ -562,12 +456,12 @@ flipping(enter, _OldPhase, Cell) ->
     {Updated, [
         {open_reduction, movement, Cell#cell.step, {count, ?NEIGHBOR_COUNT},
             {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}}
-        | ?NEIGHBOR_ACTIONS(
-            {cast, north, Message#anyon_move{present = _NorthPresent}},
-            {cast, east, Message#anyon_move{present = EastPresent}},
-            {cast, west, Message#anyon_move{present = WestPresent}},
-            {cast, south, Message#anyon_move{present = _SouthPresent}}
-        ) ++ Corrections
+        | [{cast, Port, Message#anyon_move{
+              present = case Cell#cell.best_direction =:= Direction of
+                  true -> Present;
+                  false -> Absent
+              end}}
+         || {Port, Direction, _Source} <- ?NEIGHBORS] ++ Corrections
     ]};
 flipping(
     cast,

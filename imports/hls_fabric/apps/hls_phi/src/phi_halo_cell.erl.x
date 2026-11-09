@@ -50,35 +50,35 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L238 = u16:22; // ../include/phi_halo_cell_impl.hrl:L238
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L242 = u16:38; // ../include/phi_halo_cell_impl.hrl:L242
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L246 = u16:54; // ../include/phi_halo_cell_impl.hrl:L246
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L248 = u16:70; // ../include/phi_halo_cell_impl.hrl:L248
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L250 = u16:86; // ../include/phi_halo_cell_impl.hrl:L250
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L280 = u16:102; // ../include/phi_halo_cell_impl.hrl:L280
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L302 = u16:118; // ../include/phi_halo_cell_impl.hrl:L302
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L310 = u16:134; // ../include/phi_halo_cell_impl.hrl:L310
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L312 = u16:150; // ../include/phi_halo_cell_impl.hrl:L312
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L314 = u16:166; // ../include/phi_halo_cell_impl.hrl:L314
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L353 = u16:177; // ../include/phi_halo_cell_impl.hrl:L353
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L370 = u16:198; // ../include/phi_halo_cell_impl.hrl:L370
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L378 = u16:214; // ../include/phi_halo_cell_impl.hrl:L378
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L386 = u16:230; // ../include/phi_halo_cell_impl.hrl:L386
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L394 = u16:246; // ../include/phi_halo_cell_impl.hrl:L394
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L396 = u16:262; // ../include/phi_halo_cell_impl.hrl:L396
-const XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L413 = u16:274; // ../include/phi_halo_cell_impl.hrl:L413
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L438 = u16:289; // ../include/phi_halo_cell_impl.hrl:L438
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L445 = u16:310; // ../include/phi_halo_cell_impl.hrl:L445
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L453 = u16:326; // ../include/phi_halo_cell_impl.hrl:L453
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L461 = u16:342; // ../include/phi_halo_cell_impl.hrl:L461
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L469 = u16:358; // ../include/phi_halo_cell_impl.hrl:L469
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L471 = u16:374; // ../include/phi_halo_cell_impl.hrl:L471
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L579 = u16:390; // ../include/phi_halo_cell_impl.hrl:L579
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L598 = u16:401; // ../include/phi_halo_cell_impl.hrl:L598
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L605 = u16:422; // ../include/phi_halo_cell_impl.hrl:L605
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L617 = u16:438; // ../include/phi_halo_cell_impl.hrl:L617
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L626 = u16:454; // ../include/phi_halo_cell_impl.hrl:L626
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L628 = u16:470; // ../include/phi_halo_cell_impl.hrl:L628
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L193 = u16:22; // ../include/phi_halo_cell_impl.hrl:L193
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L197 = u16:38; // ../include/phi_halo_cell_impl.hrl:L197
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L201 = u16:54; // ../include/phi_halo_cell_impl.hrl:L201
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L203 = u16:70; // ../include/phi_halo_cell_impl.hrl:L203
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L205 = u16:86; // ../include/phi_halo_cell_impl.hrl:L205
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L235 = u16:102; // ../include/phi_halo_cell_impl.hrl:L235
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L257 = u16:118; // ../include/phi_halo_cell_impl.hrl:L257
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L265 = u16:134; // ../include/phi_halo_cell_impl.hrl:L265
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L267 = u16:150; // ../include/phi_halo_cell_impl.hrl:L267
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L269 = u16:166; // ../include/phi_halo_cell_impl.hrl:L269
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L304 = u16:177; // ../include/phi_halo_cell_impl.hrl:L304
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L318 = u16:198; // ../include/phi_halo_cell_impl.hrl:L318
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L326 = u16:214; // ../include/phi_halo_cell_impl.hrl:L326
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L334 = u16:230; // ../include/phi_halo_cell_impl.hrl:L334
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L342 = u16:246; // ../include/phi_halo_cell_impl.hrl:L342
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L344 = u16:262; // ../include/phi_halo_cell_impl.hrl:L344
+const XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L362 = u16:274; // ../include/phi_halo_cell_impl.hrl:L362
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L383 = u16:289; // ../include/phi_halo_cell_impl.hrl:L383
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L390 = u16:310; // ../include/phi_halo_cell_impl.hrl:L390
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L398 = u16:326; // ../include/phi_halo_cell_impl.hrl:L398
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L406 = u16:342; // ../include/phi_halo_cell_impl.hrl:L406
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L414 = u16:358; // ../include/phi_halo_cell_impl.hrl:L414
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L416 = u16:374; // ../include/phi_halo_cell_impl.hrl:L416
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L473 = u16:390; // ../include/phi_halo_cell_impl.hrl:L473
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L492 = u16:401; // ../include/phi_halo_cell_impl.hrl:L492
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L499 = u16:422; // ../include/phi_halo_cell_impl.hrl:L499
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L511 = u16:438; // ../include/phi_halo_cell_impl.hrl:L511
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L520 = u16:454; // ../include/phi_halo_cell_impl.hrl:L520
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L522 = u16:470; // ../include/phi_halo_cell_impl.hrl:L522
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -400,7 +400,7 @@ pub fn bits_from_phifold(s: Phifold) -> bits[128] {
   hls_bits::from_stream(hls_bits::to_stream(s.value0 as bits[64]) ++ hls_bits::to_stream(s.value1 as bits[64]) ++ zero!<bits[0]>())
 }
 
-fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // L495
+fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // L141
   let v_Mask_1 = argument_1;
   let v_Random_1 = argument_2;
   let _0 = v_Mask_1 & 1;
@@ -455,6 +455,26 @@ fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_
     }
   };
   (_19.0, _19.1)
+}
+
+fn hls_local_finish_diffusion__1(argument_1: (Tag, Cell)) -> ((Tag, Cell), hls_failure::Code) {  // L167
+  let v_Cell_1 = argument_1;
+  (v_Cell_1, hls_failure::NONE)
+}
+
+fn hls_local_prepare_diffusion__3(argument_1: (Tag, Cell), argument_2: s64, argument_3: s64) -> ((Tag, Cell), hls_failure::Code) {  // L162
+  let v_Cell_1 = argument_1;
+  let v_Sum0_1 = argument_2;
+  let v_Sum1_1 = argument_3;
+  let _0 = v_Cell_1.1.anyon;
+  let _1 = v_Cell_1.1.phi;
+  let _2 = phi_field::relax(_0, _1, v_Sum0_1, v_Sum1_1);
+  let _3 = Cell {
+    phi: _2,
+    ..(v_Cell_1).1
+  };
+  let _4 = (Tag::CELL, _3);
+  (_4, hls_failure::NONE)
 }
 
 enum ReductionStatus : u2 {
@@ -963,49 +983,46 @@ fn reduction_dispatch_completion(
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
           if v_Xls_clause_1_Epoch_1 == data.diffusion_epoch {
-  let _0 = v_Xls_clause_1_Cell_1.1.anyon;
-  let _1 = v_Xls_clause_1_Cell_1.1.phi;
-  let _2 = phi_field::relax(_0, _1, v_Xls_clause_1_Sum0_1, v_Xls_clause_1_Sum1_1);
-  let v_Xls_clause_1_NewPhi_1 = _2;
-  let _3 = ((v_Xls_clause_1_Epoch_1) + (u32:1));
-  let _4 = _3 & u32:4294967295;
-  let v_Xls_clause_1_NextEpoch_1 = _4;
-  let _5 = Cell {
+  let _0 = hls_local_prepare_diffusion__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_Sum0_1, v_Xls_clause_1_Sum1_1);
+  let v_Xls_clause_1_Prepared_1 = _0.0;
+  let _1 = ((v_Xls_clause_1_Epoch_1) + (u32:1));
+  let _2 = _1 & u32:4294967295;
+  let v_Xls_clause_1_NextEpoch_1 = _2;
+  let _3 = Cell {
     diffusion_epoch: v_Xls_clause_1_NextEpoch_1,
-    phi: v_Xls_clause_1_NewPhi_1,
-    ..(v_Xls_clause_1_Cell_1).1
+    ..(v_Xls_clause_1_Prepared_1).1
   };
-  let _6 = (Tag::CELL, _5);
-  let v_Xls_clause_1_Updated_1 = _6;
-  let _7 = ((v_Xls_clause_1_Step_1) + (1));
-  let _8 = _7 * 12;
-  let _9 = _8 & 4294967295;
-  let v_Xls_clause_1_NextStepEpoch_1 = _9;
-  let _10 = hls_integer::equal(v_Xls_clause_1_NextEpoch_1, v_Xls_clause_1_NextStepEpoch_1);
-  let _15 = if _10 {
-    let _11 = Cell {
+  let _4 = (Tag::CELL, _3);
+  let v_Xls_clause_1_Updated_1 = _4;
+  let _5 = ((v_Xls_clause_1_Step_1) + (1));
+  let _6 = _5 * 12;
+  let _7 = _6 & 4294967295;
+  let v_Xls_clause_1_NextStepEpoch_1 = _7;
+  let _8 = hls_integer::equal(v_Xls_clause_1_NextEpoch_1, v_Xls_clause_1_NextStepEpoch_1);
+  let _13 = if _8 {
+    let _9 = Cell {
       best_direction: u32:0,
       ..(v_Xls_clause_1_Updated_1).1
     };
-    let _12 = (Tag::CELL, _11);
-    let v_Xls_clause_1_Xls_result_0_1 = _12;
+    let _10 = (Tag::CELL, _9);
+    let v_Xls_clause_1_Xls_result_0_1 = _10;
     let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Xls_result_0_1;
-    let _13 = (Phase::COMPARING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
-    let _14 = (_13.0, _13.1, _13.2, _13.3, hls_failure::check(_13.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L370));
-    (_14, hls_failure::NONE)
+    let _11 = (Phase::COMPARING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
+    let _12 = (_11.0, _11.1, _11.2, _11.3, hls_failure::check(_11.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L318));
+    (_12, hls_failure::NONE)
   } else {
     let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Updated_1;
-    let _11 = hls_failure::NONE;
-    let _12 = (Phase::GATHERING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:1, _11, );
-    (_12, hls_failure::NONE)
+    let _9 = hls_failure::NONE;
+    let _10 = (Phase::GATHERING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:1, _9, );
+    (_10, hls_failure::NONE)
   };
-  if ((_15.1) != hls_failure::NONE) {
-    (phase, data, Directive::FAIL, u1:0, _15.1)
+  if ((hls_failure::first_all([_0.1, _13.1])) != hls_failure::NONE) {
+    (phase, data, Directive::FAIL, u1:0, hls_failure::first_all([_0.1, _13.1]))
   } else {
-    (_15.0.0, _15.0.1.1, _15.0.2, _15.0.3, _15.0.4)
+    (_13.0.0, _13.0.1.1, _13.0.2, _13.0.3, _13.0.4)
   }
 } else {
-  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L353)
+  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L304)
 }
         };
         ReductionDispatch {
@@ -1039,14 +1056,14 @@ fn reduction_dispatch_completion(
   };
   let _7 = (Tag::CELL, _6);
   let _8 = (Phase::FLIPPING, _7, Directive::CONSUME, bool:0, );
-  let _9 = (_8.0, _8.1, _8.2, _8.3, hls_failure::check(_8.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L445));
+  let _9 = (_8.0, _8.1, _8.2, _8.3, hls_failure::check(_8.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L390));
   if ((_5.1) != hls_failure::NONE) {
     (phase, data, Directive::FAIL, u1:0, _5.1)
   } else {
     (_9.0, _9.1.1, _9.2, _9.3, _9.4)
   }
 } else {
-  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L438)
+  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L383)
 }
         };
         ReductionDispatch {
@@ -1087,11 +1104,11 @@ fn reduction_dispatch_completion(
     let _9 = (Tag::CELL, _8);
     let v_Xls_clause_1_Advanced_1 = _9;
     let _10 = (Phase::MEASURING, v_Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
-    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L617));
+    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L511));
     (_11, hls_failure::NONE)
   } else {
     let _1 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L605));
+    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L499));
     (_2, hls_failure::NONE)
   };
   if ((_12.1) != hls_failure::NONE) {
@@ -1100,7 +1117,7 @@ fn reduction_dispatch_completion(
     (_12.0.0, _12.0.1.1, _12.0.2, _12.0.3, _12.0.4)
   }
 } else {
-  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L598)
+  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L492)
 }
         };
         ReductionDispatch {
@@ -1125,7 +1142,7 @@ fn reduction_dispatch_completion(
   }
 }
 
-fn initial_actor_state_outcome() -> (bool, ActorState) {  // L214
+fn initial_actor_state_outcome() -> (bool, ActorState) {  // L169
   let _0 = Cell {
     ..zero!<Cell>()
   };
@@ -1263,35 +1280,37 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
     Phase::GATHERING => {
       let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
-      let _0 = v_Cell_1.1.diffusion_epoch;
-      let v_Epoch_1 = _0;
-      let _1 = v_Cell_1.1.phi;
-      let _2 = Phi {
+      let _0 = hls_local_finish_diffusion__1(v_Cell_1);
+      let v_Updated_1 = _0.0;
+      let _1 = v_Cell_1.1.diffusion_epoch;
+      let v_Epoch_1 = _1;
+      let _2 = v_Updated_1.1.phi;
+      let _3 = Phi {
         epoch: v_Epoch_1,
-        values: _1,
+        values: _2,
         ..zero!<Phi>()
       };
-      let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-      let v_Message_1 = _3;
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _4 = v_Cell_1.1.diffusion_epoch;
-      let _5 = (_4 as u32);
-      let _6 = Phifold {
+      let _4 = (Tag::PHI, _3, bits_from_phi(_3));
+      let v_Message_1 = _4;
+      let v_Xls_entry_0_1 = v_Updated_1;
+      let _5 = v_Cell_1.1.diffusion_epoch;
+      let _6 = (_5 as u32);
+      let _7 = Phifold {
         value0: s64:0,
         value1: s64:0,
         ..zero!<Phifold>()
       };
-      let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-      let _8 = (_5, _7, );
-      let v_Xls_entry_1_1 = _8;
+      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
+      let _9 = (_6, _8, );
+      let v_Xls_entry_1_1 = _9;
       let v_Xls_entry_2_1 = v_Message_1;
       let v_Xls_entry_3_1 = v_Message_1;
       let v_Xls_entry_4_1 = v_Message_1;
       let v_Xls_entry_5_1 = v_Message_1;
-      let _9 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
-      let _10 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _9, );
-      let _11 = {
-        let evaluated = _10;
+      let _10 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
+      let _11 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _10, );
+      let _12 = {
+        let evaluated = _11;
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
@@ -1302,68 +1321,70 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           },
         }
       };
-      if bool:false {
+      if (_0.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
-          failure: hls_failure::NONE,
+          failure: _0.1,
           ..zero!<EntryOutcome>()
         }
       } else {
-        _11
+        _12
       }
     },
     Phase::COMPARING => {
       let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
-      let _0 = v_Cell_1.1.phi;
-      let v_Phi0_1 = _0[u32:0 % array_size(_0)];
-      let _1 = v_Cell_1.1.step;
-      let _2 = Phi0 {
-        step: _1,
+      let _0 = hls_local_finish_diffusion__1(v_Cell_1);
+      let v_Updated_1 = _0.0;
+      let _1 = v_Updated_1.1.phi;
+      let v_Phi0_1 = _1[u32:0 % array_size(_1)];
+      let _2 = v_Cell_1.1.step;
+      let _3 = Phi0 {
+        step: _2,
         value: v_Phi0_1,
         ..zero!<Phi0>()
       };
-      let _3 = (Tag::PHI0, _2, bits_from_phi0(_2));
-      let v_Message_1 = _3;
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _4 = v_Cell_1.1.step;
-      let _5 = (_4 as u32);
-      let _6 = Phifold {
+      let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
+      let v_Message_1 = _4;
+      let v_Xls_entry_0_1 = v_Updated_1;
+      let _5 = v_Cell_1.1.step;
+      let _6 = (_5 as u32);
+      let _7 = Phifold {
         value0: s64:0,
         value1: s64:0,
         ..zero!<Phifold>()
       };
-      let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-      let _8 = (_5, _7, );
-      let v_Xls_entry_1_1 = _8;
-      let _9 = Phi0 {
+      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
+      let _9 = (_6, _8, );
+      let v_Xls_entry_1_1 = _9;
+      let _10 = Phi0 {
         source: u32:8,
         ..(v_Message_1).1
       };
-      let _10 = (Tag::PHI0, _9, bits_from_phi0(_9));
-      let v_Xls_entry_2_1 = _10;
-      let _11 = Phi0 {
+      let _11 = (Tag::PHI0, _10, bits_from_phi0(_10));
+      let v_Xls_entry_2_1 = _11;
+      let _12 = Phi0 {
         source: u32:4,
         ..(v_Message_1).1
       };
-      let _12 = (Tag::PHI0, _11, bits_from_phi0(_11));
-      let v_Xls_entry_3_1 = _12;
-      let _13 = Phi0 {
+      let _13 = (Tag::PHI0, _12, bits_from_phi0(_12));
+      let v_Xls_entry_3_1 = _13;
+      let _14 = Phi0 {
         source: u32:2,
         ..(v_Message_1).1
       };
-      let _14 = (Tag::PHI0, _13, bits_from_phi0(_13));
-      let v_Xls_entry_4_1 = _14;
-      let _15 = Phi0 {
+      let _15 = (Tag::PHI0, _14, bits_from_phi0(_14));
+      let v_Xls_entry_4_1 = _15;
+      let _16 = Phi0 {
         source: u32:1,
         ..(v_Message_1).1
       };
-      let _16 = (Tag::PHI0, _15, bits_from_phi0(_15));
-      let v_Xls_entry_5_1 = _16;
-      let _17 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
-      let _18 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _17, );
-      let _19 = {
-        let evaluated = _18;
+      let _17 = (Tag::PHI0, _16, bits_from_phi0(_16));
+      let v_Xls_entry_5_1 = _17;
+      let _18 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
+      let _19 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _18, );
+      let _20 = {
+        let evaluated = _19;
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
@@ -1374,14 +1395,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           },
         }
       };
-      if (hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L413)) != hls_failure::NONE {
+      if (hls_failure::first_all([_0.1, hls_failure::check(!(array_size(_1) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L362)])) != hls_failure::NONE {
         EntryOutcome {
           data: data,
-          failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L413),
+          failure: hls_failure::first_all([_0.1, hls_failure::check(!(array_size(_1) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L362)]),
           ..zero!<EntryOutcome>()
         }
       } else {
-        _19
+        _20
       }
     },
     Phase::FLIPPING => {
@@ -1392,8 +1413,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
       let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
       let v_NextRandom_1 = _3;
-      let v_Absent_1 = u32:0;
-      let _44 = {
+      let _53 = {
         let _4 = v_Cell_1.1.anyon;
         let _5 = hls_integer::equal(_4, sN[2]:1);
         let _11 = if _5 {
@@ -1425,92 +1445,89 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           };
           let _17 = (Tag::PHI_CORRECTION, _16, bits_from_phicorrection(_16));
           let v_Xls_entry_0_1 = _17;
-          let _18 = v_Cell_1.1.best_direction;
-          let _20 = {
-            if _18 == 1 {
-              let _19 = (v_Present_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-              (_19, hls_failure::NONE)
-            } else {
-              if _18 == 2 {
-                let _19 = (v_Absent_1, v_Present_1, v_Absent_1, v_Absent_1, );
-                (_19, hls_failure::NONE)
-              } else {
-                if _18 == 4 {
-                  let _19 = (v_Absent_1, v_Absent_1, v_Present_1, v_Absent_1, );
-                  (_19, hls_failure::NONE)
-                } else {
-                  if _18 == 8 {
-                    let _19 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Present_1, );
-                    (_19, hls_failure::NONE)
-                  } else {
-                    {
-                      let _19 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-                      (_19, hls_failure::NONE)
-                    }
-                  }
-                }
-              }
-            }
-          };
-          let _v__NorthPresent_1 = _20.0.0;
-          let v_EastPresent_1 = _20.0.1;
-          let v_WestPresent_1 = _20.0.2;
-          let _v__SouthPresent_1 = _20.0.3;
-          let _21 = v_Cell_1.1.step;
-          let _22 = Anyonmove {
-            step: _21,
+          let _18 = v_Cell_1.1.step;
+          let _19 = Anyonmove {
+            step: _18,
             ..zero!<Anyonmove>()
           };
-          let _23 = (Tag::ANYON_MOVE, _22, bits_from_anyonmove(_22));
-          let v_Message_1 = _23;
-          let _24 = v_Cell_1.1.anyon;
-          let _25 = ((_24) ^ (v_Present_1));
-          let _26 = Cell {
-            anyon: _25,
+          let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+          let v_Message_1 = _20;
+          let _21 = v_Cell_1.1.anyon;
+          let _22 = ((_21) ^ (v_Present_1));
+          let _23 = Cell {
+            anyon: _22,
             random_state: v_NextRandom_1,
             ..(v_Cell_1).1
           };
-          let _27 = (Tag::CELL, _26);
-          let v_Updated_1 = _27;
+          let _24 = (Tag::CELL, _23);
+          let v_Updated_1 = _24;
           let v_Xls_entry_1_1 = v_Updated_1;
-          let _28 = v_Cell_1.1.step;
-          let _29 = (_28 as u32);
-          let _30 = Phifold {
+          let _25 = v_Cell_1.1.step;
+          let _26 = (_25 as u32);
+          let _27 = Phifold {
             value0: s64:0,
             value1: s64:0,
             ..zero!<Phifold>()
           };
-          let _31 = (Tag::PHI_FOLD, _30, bits_from_phifold(_30));
-          let _32 = (_29, _31, );
-          let v_Xls_entry_2_1 = _32;
+          let _28 = (Tag::PHI_FOLD, _27, bits_from_phifold(_27));
+          let _29 = (_26, _28, );
+          let v_Xls_entry_2_1 = _29;
+          let _30 = v_Cell_1.1.best_direction;
+          let _31 = hls_integer::equal(_30, sN[2]:1);
+          let _32 = if _31 {
+            (v_Present_1, hls_failure::NONE)
+          } else {
+            (u32:0, hls_failure::NONE)
+          };
           let _33 = Anyonmove {
-            present: _v__NorthPresent_1,
+            present: _32.0,
             ..(v_Message_1).1
           };
           let _34 = (Tag::ANYON_MOVE, _33, bits_from_anyonmove(_33));
           let v_Xls_entry_3_1 = _34;
-          let _35 = Anyonmove {
-            present: v_EastPresent_1,
+          let _35 = v_Cell_1.1.best_direction;
+          let _36 = hls_integer::equal(_35, sN[3]:2);
+          let _37 = if _36 {
+            (v_Present_1, hls_failure::NONE)
+          } else {
+            (u32:0, hls_failure::NONE)
+          };
+          let _38 = Anyonmove {
+            present: _37.0,
             ..(v_Message_1).1
           };
-          let _36 = (Tag::ANYON_MOVE, _35, bits_from_anyonmove(_35));
-          let v_Xls_entry_4_1 = _36;
-          let _37 = Anyonmove {
-            present: v_WestPresent_1,
+          let _39 = (Tag::ANYON_MOVE, _38, bits_from_anyonmove(_38));
+          let v_Xls_entry_4_1 = _39;
+          let _40 = v_Cell_1.1.best_direction;
+          let _41 = hls_integer::equal(_40, sN[4]:4);
+          let _42 = if _41 {
+            (v_Present_1, hls_failure::NONE)
+          } else {
+            (u32:0, hls_failure::NONE)
+          };
+          let _43 = Anyonmove {
+            present: _42.0,
             ..(v_Message_1).1
           };
-          let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
-          let v_Xls_entry_5_1 = _38;
-          let _39 = Anyonmove {
-            present: _v__SouthPresent_1,
+          let _44 = (Tag::ANYON_MOVE, _43, bits_from_anyonmove(_43));
+          let v_Xls_entry_5_1 = _44;
+          let _45 = v_Cell_1.1.best_direction;
+          let _46 = hls_integer::equal(_45, sN[5]:8);
+          let _47 = if _46 {
+            (v_Present_1, hls_failure::NONE)
+          } else {
+            (u32:0, hls_failure::NONE)
+          };
+          let _48 = Anyonmove {
+            present: _47.0,
             ..(v_Message_1).1
           };
-          let _40 = (Tag::ANYON_MOVE, _39, bits_from_anyonmove(_39));
-          let v_Xls_entry_6_1 = _40;
-          let _41 = (v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, v_Xls_entry_6_1, v_Xls_entry_0_1, );
-          let _42 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _41, );
-          let _43 = {
-            let evaluated = _42;
+          let _49 = (Tag::ANYON_MOVE, _48, bits_from_anyonmove(_48));
+          let v_Xls_entry_6_1 = _49;
+          let _50 = (v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, v_Xls_entry_6_1, v_Xls_entry_0_1, );
+          let _51 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _50, );
+          let _52 = {
+            let evaluated = _51;
             EntryOutcome {
               data: evaluated.0.1,
               reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
@@ -1521,96 +1538,93 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
               },
             }
           };
-          (_43, _20.1)
+          (_52, hls_failure::first_all([_32.1, _37.1, _42.1, _47.1]))
         } else {
           {
-            let v_Present_1 = v_Absent_1;
-            let _4 = v_Cell_1.1.best_direction;
-            let _6 = {
-              if _4 == 1 {
-                let _5 = (v_Present_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-                (_5, hls_failure::NONE)
-              } else {
-                if _4 == 2 {
-                  let _5 = (v_Absent_1, v_Present_1, v_Absent_1, v_Absent_1, );
-                  (_5, hls_failure::NONE)
-                } else {
-                  if _4 == 4 {
-                    let _5 = (v_Absent_1, v_Absent_1, v_Present_1, v_Absent_1, );
-                    (_5, hls_failure::NONE)
-                  } else {
-                    if _4 == 8 {
-                      let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Present_1, );
-                      (_5, hls_failure::NONE)
-                    } else {
-                      {
-                        let _5 = (v_Absent_1, v_Absent_1, v_Absent_1, v_Absent_1, );
-                        (_5, hls_failure::NONE)
-                      }
-                    }
-                  }
-                }
-              }
-            };
-            let _v__NorthPresent_1 = _6.0.0;
-            let v_EastPresent_1 = _6.0.1;
-            let v_WestPresent_1 = _6.0.2;
-            let _v__SouthPresent_1 = _6.0.3;
-            let _7 = v_Cell_1.1.step;
-            let _8 = Anyonmove {
-              step: _7,
+            let v_Present_1 = u32:0;
+            let _4 = v_Cell_1.1.step;
+            let _5 = Anyonmove {
+              step: _4,
               ..zero!<Anyonmove>()
             };
-            let _9 = (Tag::ANYON_MOVE, _8, bits_from_anyonmove(_8));
-            let v_Message_1 = _9;
-            let _10 = v_Cell_1.1.anyon;
-            let _11 = ((_10) ^ (v_Present_1));
-            let _12 = Cell {
-              anyon: _11,
+            let _6 = (Tag::ANYON_MOVE, _5, bits_from_anyonmove(_5));
+            let v_Message_1 = _6;
+            let _7 = v_Cell_1.1.anyon;
+            let _8 = ((_7) ^ (v_Present_1));
+            let _9 = Cell {
+              anyon: _8,
               random_state: v_NextRandom_1,
               ..(v_Cell_1).1
             };
-            let _13 = (Tag::CELL, _12);
-            let v_Updated_1 = _13;
+            let _10 = (Tag::CELL, _9);
+            let v_Updated_1 = _10;
             let v_Xls_entry_7_1 = v_Updated_1;
-            let _14 = v_Cell_1.1.step;
-            let _15 = (_14 as u32);
-            let _16 = Phifold {
+            let _11 = v_Cell_1.1.step;
+            let _12 = (_11 as u32);
+            let _13 = Phifold {
               value0: s64:0,
               value1: s64:0,
               ..zero!<Phifold>()
             };
-            let _17 = (Tag::PHI_FOLD, _16, bits_from_phifold(_16));
-            let _18 = (_15, _17, );
-            let v_Xls_entry_8_1 = _18;
+            let _14 = (Tag::PHI_FOLD, _13, bits_from_phifold(_13));
+            let _15 = (_12, _14, );
+            let v_Xls_entry_8_1 = _15;
+            let _16 = v_Cell_1.1.best_direction;
+            let _17 = hls_integer::equal(_16, sN[2]:1);
+            let _18 = if _17 {
+              (v_Present_1, hls_failure::NONE)
+            } else {
+              (u32:0, hls_failure::NONE)
+            };
             let _19 = Anyonmove {
-              present: _v__NorthPresent_1,
+              present: _18.0,
               ..(v_Message_1).1
             };
             let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
             let v_Xls_entry_9_1 = _20;
-            let _21 = Anyonmove {
-              present: v_EastPresent_1,
+            let _21 = v_Cell_1.1.best_direction;
+            let _22 = hls_integer::equal(_21, sN[3]:2);
+            let _23 = if _22 {
+              (v_Present_1, hls_failure::NONE)
+            } else {
+              (u32:0, hls_failure::NONE)
+            };
+            let _24 = Anyonmove {
+              present: _23.0,
               ..(v_Message_1).1
             };
-            let _22 = (Tag::ANYON_MOVE, _21, bits_from_anyonmove(_21));
-            let v_Xls_entry_10_1 = _22;
-            let _23 = Anyonmove {
-              present: v_WestPresent_1,
+            let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));
+            let v_Xls_entry_10_1 = _25;
+            let _26 = v_Cell_1.1.best_direction;
+            let _27 = hls_integer::equal(_26, sN[4]:4);
+            let _28 = if _27 {
+              (v_Present_1, hls_failure::NONE)
+            } else {
+              (u32:0, hls_failure::NONE)
+            };
+            let _29 = Anyonmove {
+              present: _28.0,
               ..(v_Message_1).1
             };
-            let _24 = (Tag::ANYON_MOVE, _23, bits_from_anyonmove(_23));
-            let v_Xls_entry_11_1 = _24;
-            let _25 = Anyonmove {
-              present: _v__SouthPresent_1,
+            let _30 = (Tag::ANYON_MOVE, _29, bits_from_anyonmove(_29));
+            let v_Xls_entry_11_1 = _30;
+            let _31 = v_Cell_1.1.best_direction;
+            let _32 = hls_integer::equal(_31, sN[5]:8);
+            let _33 = if _32 {
+              (v_Present_1, hls_failure::NONE)
+            } else {
+              (u32:0, hls_failure::NONE)
+            };
+            let _34 = Anyonmove {
+              present: _33.0,
               ..(v_Message_1).1
             };
-            let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-            let v_Xls_entry_12_1 = _26;
-            let _27 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );
-            let _28 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _27, );
-            let _29 = {
-              let evaluated = _28;
+            let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+            let v_Xls_entry_12_1 = _35;
+            let _36 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );
+            let _37 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _36, );
+            let _38 = {
+              let evaluated = _37;
               EntryOutcome {
                 data: evaluated.0.1,
                 reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
@@ -1621,18 +1635,18 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
                 },
               }
             };
-            (_29, _6.1)
+            (_38, hls_failure::first_all([_18.1, _23.1, _28.1, _33.1]))
           }
         }
       };
-      if (_44.1) != hls_failure::NONE {
+      if (_53.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
-          failure: _44.1,
+          failure: _53.1,
           ..zero!<EntryOutcome>()
         }
       } else {
-        _44.0
+        _53.0
       }
     },
   }
@@ -1864,7 +1878,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L242);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L197);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1890,7 +1904,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L310);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L265);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1912,7 +1926,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L453);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L398);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1934,7 +1948,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L579);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L473);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1951,7 +1965,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L250);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L205);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1961,7 +1975,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::MEASURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L314);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L269);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1982,7 +1996,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L386);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L334);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2004,7 +2018,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L461);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L406);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2021,7 +2035,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L248);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L203);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2031,7 +2045,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::MEASURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L312);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L267);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2052,7 +2066,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L378);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L326);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2103,7 +2117,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L246);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L201);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2174,7 +2188,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L302);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L257);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2200,7 +2214,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L394);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L342);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2226,7 +2240,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L469);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L414);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2252,7 +2266,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L626);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L520);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2298,7 +2312,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L238);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L193);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2309,7 +2323,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::MEASURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L280);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L235);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2319,7 +2333,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::GATHERING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L396);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L344);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2329,7 +2343,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::COMPARING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L471);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L416);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2339,7 +2353,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::FLIPPING => {
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L628);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L522);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {

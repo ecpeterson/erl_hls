@@ -1,0 +1,200 @@
+// Append to a freshly emitted phi_line_cell local owner. These finite transition
+// witnesses start from a completed two-neighbor reduction; they do not prove
+// network reachability or a physical clock period. Named generated types and
+// codecs keep the fixture independent of machine packing and effect layouts.
+
+// Seed the first or last of the source's twelve diffusion rounds in step zero.
+// The two-neighbor sums produce numerators 216 and 164, then field [65563, 21]
+// after round-to-nearest/away-from-zero and the single anyon injection.
+fn line_owner_completed(final_round: bool) -> LocalOwnerState {
+  let epoch = if final_round { u32:11 } else { u32:0 };
+  let initial = initial_actor_state();
+  let machine = ActorState {
+    phase: Phase::GATHERING,
+    entered_from: Phase::GATHERING,
+    enter_pending: false,
+    data: Cell {
+      step: u32:0, diffusion_epoch: epoch,
+      phi: [s32:40, s32:20], anyon: u32:1,
+      ..initial.data
+    },
+    reduction: ReductionState {
+      status: ReductionStatus::COMPLETE,
+      site: ReductionSite::GATHERING,
+      key: epoch,
+      accumulator: Phifold { value0: s64:16, value1: s64:24 },
+      ..zero!<ReductionState>()
+    },
+    ..initial
+  };
+  LocalOwnerState { machine: bits_from_machine(machine), ..local_owner_initial() }
+}
+
+// An internal completion registers numerators without committing state or
+// accepting a mailbox head. Rounding and injection have not happened yet.
+fn line_owner_launch(final_round: bool) -> LocalOwnerState {
+  let source = line_owner_completed(final_round);
+  let tick = local_owner_tick(source, zero!<LocalOwnerInputs>());
+  assert_eq(tick.state.machine, source.machine);
+  assert_eq(tick.state.action_valid, true);
+  assert_eq(tick.state.selected, false);
+  assert_eq(tick.output.input_ready, false);
+  assert_eq(tick.output.head_done, false);
+  assert_eq(tick.output.output_valid, false);
+  let pending = machine_from_bits(tick.state.action.private_machine);
+  assert_eq(pending.data.phi, [s32:40, s32:20]);
+  assert_eq(pending.data.numerators, [sN[36]:216, sN[36]:164]);
+  assert_eq(pending.data.numerical_pending, u1:1);
+  assert_eq(pending.data.diffusion_epoch, if final_round { u32:12 } else { u32:1 });
+  assert_eq(pending.phase, if final_round { Phase::COMPARING } else { Phase::GATHERING });
+  assert_eq(pending.enter_pending, true);
+  assert_eq(pending.failure, hls_failure::NONE);
+  tick.state
+}
+
+// Check the source's ordered neighbor payloads through generated message codecs;
+// the expected arithmetic is literal and independent of the arithmetic provider.
+fn line_owner_check_batch(outbox: LocalOutbox, final_round: bool) {
+  assert_eq(outbox.count, u8:2);
+  assert_eq(outbox.index, u8:0);
+  let _ = for (index, _): (u8, ()) in u8:0..u8:2 {
+    let effect = local_effect(outbox.layout, outbox.payload, index);
+    let frame = axis::frame_from_bits(effect.frame);
+    assert_eq(effect.port,
+      if index == u8:0 { OutputPort::EAST as u8 } else { OutputPort::WEST as u8 });
+    if final_round {
+      assert_eq(frame.header.op, Tag::PHI0 as u8);
+      assert_eq(phi0_from_bits(frame.payload), Phi0 {
+        step: u32:0, source: if index == u8:0 { u32:4 } else { u32:2 },
+        value: s32:65563,
+      });
+    } else {
+      assert_eq(frame.header.op, Tag::PHI as u8);
+      assert_eq(phi_from_bits(frame.payload), Phi {
+        epoch: u32:1, values: [s32:65563, s32:21],
+      });
+    };
+  }(());
+}
+
+// Entry commits the finished value once, clears partials, opens the next source
+// reduction and reserves the outgoing batch. This internal action retires no head.
+fn line_owner_check_commit(tick: LocalOwnerTick, final_round: bool) {
+  let committed = machine_from_bits(tick.state.machine);
+  assert_eq(tick.state.action_valid, false);
+  assert_eq(tick.state.selected, false);
+  assert_eq(tick.output.head_done, false);
+  assert_eq(tick.output.dispatched, false);
+  assert_eq(tick.output.phase_boundary, true);
+  assert_eq(committed.enter_pending, false);
+  assert_eq(committed.failure, hls_failure::NONE);
+  assert_eq(committed.data.phi, [s32:65563, s32:21]);
+  assert_eq(committed.data.numerators, [sN[36]:0, sN[36]:0]);
+  assert_eq(committed.data.numerical_pending, u1:0);
+  assert_eq(committed.data.diffusion_epoch, if final_round { u32:12 } else { u32:1 });
+  assert_eq(committed.phase, if final_round { Phase::COMPARING } else { Phase::GATHERING });
+  assert_eq(committed.reduction.status, ReductionStatus::OPEN);
+  assert_eq(committed.reduction.site,
+    if final_round { ReductionSite::COMPARING } else { ReductionSite::GATHERING });
+  assert_eq(committed.reduction.key, if final_round { u32:0 } else { u32:1 });
+  line_owner_check_batch(tick.state.outbox, final_round);
+}
+
+// A valid older batch may remain while receipts complete the next reduction.
+// Keep its final effect pending to expose the no-reuse-on-last-drain rule.
+fn line_owner_with_old_batch(pending: LocalOwnerState) -> LocalOwnerState {
+  let finished = local_owner_tick(pending, zero!<LocalOwnerInputs>());
+  LocalOwnerState {
+    outbox: LocalOutbox {
+      index: finished.state.outbox.count - u8:1,
+      ..finished.state.outbox
+    },
+    ..pending
+  }
+}
+
+// Free entry finishes on the edge after launch for ordinary and final rounds.
+// Subsequent idle/drain edges must not repeat rounding or anyon injection.
+#[test]
+fn line_owner_two_edge_numerical_action() {
+  let _ = for (round, _): (u32, ()) in u32:0..u32:2 {
+    let final_round = round == u32:1;
+    let pending = line_owner_launch(final_round);
+    let committed = local_owner_tick(pending, zero!<LocalOwnerInputs>());
+    line_owner_check_commit(committed, final_round);
+    let stable = for (clock, owner): (u32, LocalOwnerState) in u32:0..u32:4 {
+      let tick = local_owner_tick(owner, LocalOwnerInputs {
+        output_ready: clock >= u32:2, ..zero!<LocalOwnerInputs>()
+      });
+      assert_eq(tick.state.machine, committed.state.machine);
+      assert_eq(tick.state.action_valid, false);
+      assert_eq(tick.output.phase_boundary, false);
+      tick.state
+    }(committed.state);
+    assert_eq(stable.outbox.index, stable.outbox.count);
+  }(());
+}
+
+// Several blocked entry attempts retain the identical registered action and
+// old committed state. Changing the offered head is irrelevant while owned;
+// draining the old batch still needs one following edge before entry can commit.
+#[test]
+fn line_owner_blocked_numerical_entry() {
+  let _ = for (round, _): (u32, ()) in u32:0..u32:2 {
+    let final_round = round == u32:1;
+    let pending = line_owner_launch(final_round);
+    let occupied = line_owner_with_old_batch(pending);
+    let held = for (_, owner): (u32, LocalOwnerState) in u32:0..u32:4 {
+      let tick = local_owner_tick(owner, zero!<LocalOwnerInputs>());
+      assert_eq(tick.state, occupied);
+      assert_eq(tick.output.output_valid, true);
+      assert_eq(tick.output.input_ready, false);
+      assert_eq(tick.output.head_done, false);
+      assert_eq(tick.output.phase_boundary, false);
+      let changed_offer = local_owner_tick(owner, LocalOwnerInputs {
+        received: true, frame: !zero!<bits[axis::FRAME_BITS]>(), slot: u32:7,
+        ..zero!<LocalOwnerInputs>()
+      });
+      assert_eq(changed_offer, tick);
+      tick.state
+    }(occupied);
+    let drained = local_owner_tick(held, LocalOwnerInputs {
+      output_ready: true, ..zero!<LocalOwnerInputs>()
+    });
+    assert_eq(drained.output.output_valid, true);
+    assert_eq(drained.output.phase_boundary, false);
+    assert_eq(drained.state.outbox.index, drained.state.outbox.count);
+    assert_eq(drained.state.machine, pending.machine);
+    assert_eq(drained.state.action, pending.action);
+    assert_eq(drained.state.action_valid, true);
+    let committed = local_owner_tick(drained.state, zero!<LocalOwnerInputs>());
+    line_owner_check_commit(committed, final_round);
+  }(());
+}
+
+// Reset wins before launch, during held partials, at a blocked entry and after
+// commit. It clears pending arithmetic and publication, including a simultaneous
+// output acceptance/new offer, for both ordinary and final diffusion rounds.
+#[test]
+fn line_owner_reset_numerical_action() {
+  let _ = for (round, _): (u32, ()) in u32:0..u32:2 {
+    let final_round = round == u32:1;
+    let completed = line_owner_completed(final_round);
+    let pending = line_owner_launch(final_round);
+    let occupied = line_owner_with_old_batch(pending);
+    let committed = local_owner_tick(pending, zero!<LocalOwnerInputs>()).state;
+    let states = [completed, pending, occupied, committed];
+    let _ = for (position, _): (u32, ()) in u32:0..u32:4 {
+      let reset = local_owner_tick(states[position], LocalOwnerInputs {
+        reset: true, received: true, output_ready: true,
+        frame: !zero!<bits[axis::FRAME_BITS]>(),
+        ..zero!<LocalOwnerInputs>()
+      });
+      assert_eq(reset.state, local_owner_initial());
+      assert_eq(reset.output, zero!<LocalOwnerOutputs>());
+      let restarted = local_owner_tick(reset.state, zero!<LocalOwnerInputs>());
+      assert_eq(machine_from_bits(restarted.state.machine).data, initial_actor_state().data);
+      assert_eq(restarted.state.outbox.count, u8:0);
+    }(());
+  }(());
+}

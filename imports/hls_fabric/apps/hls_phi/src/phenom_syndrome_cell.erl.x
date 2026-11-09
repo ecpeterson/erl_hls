@@ -51,14 +51,14 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L242 = u16:22; // ../include/pheno
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L250 = u16:38; // ../include/phenom_syndrome_cell_impl.hrl:L250
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L252 = u16:54; // ../include/phenom_syndrome_cell_impl.hrl:L252
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L254 = u16:70; // ../include/phenom_syndrome_cell_impl.hrl:L254
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L302 = u16:86; // ../include/phenom_syndrome_cell_impl.hrl:L302
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L321 = u16:102; // ../include/phenom_syndrome_cell_impl.hrl:L321
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L329 = u16:118; // ../include/phenom_syndrome_cell_impl.hrl:L329
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L397 = u16:134; // ../include/phenom_syndrome_cell_impl.hrl:L397
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L414 = u16:150; // ../include/phenom_syndrome_cell_impl.hrl:L414
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L433 = u16:166; // ../include/phenom_syndrome_cell_impl.hrl:L433
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L444 = u16:182; // ../include/phenom_syndrome_cell_impl.hrl:L444
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L452 = u16:198; // ../include/phenom_syndrome_cell_impl.hrl:L452
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L298 = u16:86; // ../include/phenom_syndrome_cell_impl.hrl:L298
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L317 = u16:102; // ../include/phenom_syndrome_cell_impl.hrl:L317
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L325 = u16:118; // ../include/phenom_syndrome_cell_impl.hrl:L325
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L393 = u16:134; // ../include/phenom_syndrome_cell_impl.hrl:L393
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L410 = u16:150; // ../include/phenom_syndrome_cell_impl.hrl:L410
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L429 = u16:166; // ../include/phenom_syndrome_cell_impl.hrl:L429
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L440 = u16:182; // ../include/phenom_syndrome_cell_impl.hrl:L440
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L448 = u16:198; // ../include/phenom_syndrome_cell_impl.hrl:L448
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -863,7 +863,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::COLLECTING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L302);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L298);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -873,7 +873,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::ANNOUNCING => {
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L414);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L410);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -922,7 +922,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L329);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L325);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -950,7 +950,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L444);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L440);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1134,7 +1134,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L397);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L393);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1160,7 +1160,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L452);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L448);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1241,7 +1241,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L321);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L317);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1276,7 +1276,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L433);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L429);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {

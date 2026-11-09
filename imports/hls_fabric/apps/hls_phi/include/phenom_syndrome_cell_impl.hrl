@@ -292,12 +292,8 @@ collecting(enter, _OldPhase, Syndrome) ->
     },
     {Cleared,
         Announcements ++
-            ?NEIGHBOR_ACTIONS(
-                {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
-                {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
-                {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
-                {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}}
-            )};
+            [{cast, Port, Query#phenom_query{source = Source}}
+             || {Port, _Direction, Source} <- ?NEIGHBORS]};
 collecting(cast, #phenom_config{}, Syndrome) ->
     {collecting, Syndrome, fail};
 collecting(

@@ -417,12 +417,8 @@ reporting(enter, _OldPhase, Cell) ->
         flags = Cell#data_cell.event bor QuietFlag
     },
     {Cell,
-        ?NEIGHBOR_ACTIONS(
-            {cast, north, Message#phenom_data{source = ?PHI_SOUTH_MASK}},
-            {cast, east, Message#phenom_data{source = ?PHI_WEST_MASK}},
-            {cast, west, Message#phenom_data{source = ?PHI_EAST_MASK}},
-            {cast, south, Message#phenom_data{source = ?PHI_NORTH_MASK}}
-        )};
+        [{cast, Port, Message#phenom_data{source = Source}}
+             || {Port, _Direction, Source} <- ?NEIGHBORS]};
 reporting(
     cast,
     #noise_cutoff{
