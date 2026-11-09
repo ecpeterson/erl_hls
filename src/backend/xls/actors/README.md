@@ -4,7 +4,7 @@ The parent `xls_parse` facade selects the state-machine or server path. `xls_sta
 
 | Family | Responsibility |
 | --- | --- |
-| `xls_init`, `xls_callback_result`, `xls_statem_callbacks`, `xls_statem_entry` | Normalize callback/entry contracts; select and lower constant initialization |
+| `xls_init`, `xls_callback_result`, `xls_statem_callbacks`, `xls_entry_comprehensions`, `xls_statem_entry` | Normalize callback/entry contracts; select and lower constant initialization |
 | `xls_entry_storage` | Encode and reconstruct already evaluated entry effects without losing source evaluation |
 | `xls_actor_codegen`, `xls_statem_codegen` | Assemble common definitions and the dedicated register-backed execution body |
 | `xls_statem_continuation`, `xls_statem_event_codegen`, `xls_statem_reply_codegen` | Validate finite internal events and render continuation/caller ownership |

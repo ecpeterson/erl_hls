@@ -6,7 +6,7 @@ An unselected `andalso`, `orelse`, `case`, or `if` expression branch contributes
 
 ## Branching and storage
 
-An entry may choose its complete `{NextData, Actions}` result or an action-list segment with nested `case`/`if` expressions. Complete results and segments may be named and aliased; returning a named result uses the data and payloads captured when it was constructed. Arms may contain local computations and return different ports, message schemas, or list lengths. Lists must be built from literal cons cells, `[]`, and `++` over supported segments. Tuple destructuring may bind ordinary values and segments together using fresh variables or `_`, including from a named result. Refutable patterns in these segment bindings are unsupported. Recursive list construction, function-produced lists, dynamic ports, and matching an already-bound segment are rejected. Each port may occur once per selected path. See the shared [callback result binding rules](local-helpers.md#callback-result-bindings).
+An entry may choose its complete `{NextData, Actions}` result or an action-list segment with nested `case`/`if` expressions. Complete results and segments may be named and aliased; returning a named result uses the data and payloads captured when it was constructed. Arms may contain local computations and return different ports, message schemas, or list lengths. Lists use literal cons cells, `[]`, `++` over supported segments, or the finite comprehensions described below. Tuple destructuring may bind ordinary values and segments together using fresh variables or `_`, including from a named result. Refutable patterns in these segment bindings are unsupported. Recursive list construction, function-produced lists, dynamic ports, and matching an already-bound segment are rejected. Each port may occur once per selected path. See the shared [callback result binding rules](local-helpers.md#callback-result-bindings).
 
 ```erlang
 running(enter, _OldPhase, Data) ->
@@ -26,6 +26,19 @@ At most 256 expanded paths per entry and 256 distinct effect encodings per actor
 A phase can open the same reduction site in several alternatives or leave it unopened. Its opening alternatives must agree on name, population, key expression, and identity; existing data-relative key and constant-identity restrictions apply. An unopened alternative preserves an existing reduction. An opening alternative fails if a reduction is already active.
 
 Interface inference records the conservative union of possible effects at each ordered position. A common effect is marked unconditional only when all paths contain it there. Routing checks every possible schema; reservation capacity follows the largest selected list.
+
+## Static neighbor lists
+
+Entry callbacks may construct actions with one ordinary list generator over a literal proper list containing at most 256 atoms, integers or nested tuples of those values. A generator accepts variables, `_`, tuples and literal patterns; unmatched elements are skipped and repeated variables within one pattern must agree. For example:
+
+```erlang
+{Cell, [{cast, Port, #report{value = Cell#state.value}}
+        || Port <- [east, west]]}
+```
+
+The compiler expands the literal domain before interface analysis and expected-type propagation, so each resulting port remains static. Macro-expanded literal tables work too. Body evaluation follows list order, once for each matching element; an empty domain evaluates no body. Generator variables shadow outer names, body-local bindings remain private to each iteration, and constructed segment aliases keep their usual eager failure behavior.
+
+Computed domains, filters, multiple generators, and nested comprehensions or closures are not supported. Other body expressions retain the ordinary callback restrictions; a returned action must still expose its constructor, port and message schema. Expansion adds no actor state or scheduling boundary. Existing effect, duplicate-port and path limits apply to the expanded entry.
 
 ## Execution contract
 

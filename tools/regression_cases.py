@@ -55,7 +55,7 @@ def phase_values(c: Case) -> None:
 def entry_outcomes(c: Case) -> None:
     """Retain all entry/storage interpreter witnesses and both RTL outcome benches."""
     c.compile(); c.fixture("entry_outcomes")
-    for name in ("xls_entry_outcome", "xls_entry_branch", "xls_entry_reduction", "xls_entry_storage", "known_bits"):
+    for name in ("xls_entry_outcome", "xls_entry_branch", "xls_entry_reduction", "xls_entry_storage", "xls_static_actions", "known_bits"):
         c.interpret(name + ".x")
     for name, top in (("xls_entry_outcome", "entry_probe"), ("xls_entry_branch", "entry_cycle_probe")):
         c.convert(name, top); c.codegen(name, module=top)
