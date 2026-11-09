@@ -16,6 +16,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { encodePrimitive } from "../web/prepared-format.js";
+import { chainTargetMasks } from "../web/action-chain.js";
 import { createModel } from "../web/model.js";
 import {
   createComputations,
@@ -255,6 +256,12 @@ export function prepareRenderData(model, computationData) {
     });
     return id;
   };
+  const selections = new Map();
+  for (const chain of model.chains?.values() ?? [])
+    for (const [event, mask] of chainTargetMasks(model, chain)) {
+      if (!selections.has(event)) selections.set(event, new Set());
+      selections.get(event).add(mask);
+    }
   for (const event of model.events.values())
     if (event.access?.kind === "write") {
       const [layer] = computationLayers(index, [event.id]);
@@ -267,6 +274,22 @@ export function prepareRenderData(model, computationData) {
         event: event.id,
         cones: layer.cones.map(coneFor),
         coverage: { requestedBits, mappedBits, unknownBits },
+        ...(selections.has(event.id)
+          ? {
+              selections: [...selections.get(event.id)].map((mask) => {
+                const [focused] = computationLayers(index, [event.id], {
+                  targetMasks: new Map([[event.id, mask]]),
+                });
+                const { requestedBits, mappedBits, unknownBits } =
+                  focused.coverage;
+                return {
+                  mask,
+                  cones: focused.cones.map(coneFor),
+                  coverage: { requestedBits, mappedBits, unknownBits },
+                };
+              }),
+            }
+          : {}),
       });
     }
   const bounds = { ...model.geometryBounds };

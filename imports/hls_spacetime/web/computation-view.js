@@ -24,3 +24,27 @@ export function computationWindowUnion(layers) {
     operations: [...operations.values()],
   };
 }
+
+/** A pending prepared attachment is not a capability rejection. Preserve the
+ * intended control values until it arrives, including intervening user choices;
+ * only a genuinely unavailable color or sink view gets a fallback. */
+export function computationControlSelection({
+  preparedPending,
+  prepared,
+  arrival,
+  pickMode,
+  colorMode,
+}) {
+  const preparedColor = ["computation", "criticality", "delay-kind"].includes(
+    colorMode,
+  );
+  const colorAvailable =
+    !preparedColor || (prepared && (colorMode !== "delay-kind" || arrival));
+  return {
+    pickMode:
+      !preparedPending && !arrival && pickMode === "sinks"
+        ? "writes"
+        : pickMode,
+    colorMode: !preparedPending && !colorAvailable ? "role" : colorMode,
+  };
+}

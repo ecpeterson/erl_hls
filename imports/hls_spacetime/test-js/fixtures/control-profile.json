@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "label": "Two actors and one registered capture: manual clock fixture",
+  "start": 1,
+  "endCycle": 60,
+  "targets": ["done"],
+  "actors": [
+    {
+      "id": "a",
+      "slots": [
+        {
+          "kind": "unused"
+        }
+      ],
+      "initial": {
+        "owner": {
+          "pending": true
+        },
+        "inbox": {
+          "slotCount": 1,
+          "cursor": 0,
+          "held": null,
+          "postponed": [],
+          "released": []
+        }
+      },
+      "operations": [
+        {
+          "id": "make",
+          "kind": "action",
+          "accepted": false,
+          "numerical": true,
+          "nextPending": false,
+          "dispatched": true,
+          "directive": 0,
+          "phaseBoundary": true,
+          "batch": {
+            "id": "a-batch",
+            "deliveries": [
+              {
+                "id": "message",
+                "recipient": 0,
+                "slot": "link/pair/slot/0",
+                "payload": {
+                  "symbol": "sample"
+                },
+                "kind": "capture",
+                "link": "pair",
+                "captureSlot": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "slots": [
+        {
+          "kind": "capture",
+          "link": "pair",
+          "slot": 0
+        }
+      ],
+      "initial": {
+        "owner": {
+          "pending": false
+        },
+        "inbox": {
+          "slotCount": 1,
+          "cursor": 0,
+          "held": null,
+          "postponed": [],
+          "released": []
+        }
+      },
+      "operations": [
+        {
+          "id": "receive",
+          "kind": "receipt",
+          "accepted": true,
+          "input": {
+            "slot": 0,
+            "id": "message"
+          },
+          "nextPending": true,
+          "dispatched": true,
+          "directive": 0,
+          "phaseBoundary": false,
+          "batch": null
+        },
+        {
+          "id": "respond",
+          "kind": "action",
+          "accepted": false,
+          "nextPending": false,
+          "dispatched": true,
+          "directive": 0,
+          "phaseBoundary": true,
+          "batch": {
+            "id": "b-batch",
+            "deliveries": [
+              {
+                "id": "public-delivery",
+                "recipient": 0,
+                "slot": "endpoint/public",
+                "payload": null,
+                "kind": "boundary",
+                "endpoint": "public",
+                "frame": "done"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "pair",
+      "slots": [
+        {
+          "owner": "free",
+          "value": null
+        }
+      ],
+      "order": {
+        "slotCount": 1,
+        "pending": []
+      }
+    }
+  ],
+  "publishers": [
+    {
+      "actor": "a",
+      "state": {
+        "recipientCount": 1,
+        "batchId": null,
+        "queues": [[]]
+      }
+    },
+    {
+      "actor": "b",
+      "state": {
+        "recipientCount": 1,
+        "batchId": null,
+        "queues": [[]]
+      }
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "public",
+      "producers": ["b"],
+      "initial": {}
+    }
+  ],
+  "host": {
+    "initial": {
+      "transmitter": {
+        "streamCount": 1,
+        "started": true,
+        "cursor": 0
+      },
+      "completed": {}
+    },
+    "outputReady": {
+      "period": 1,
+      "residues": [0]
+    },
+    "commands": [],
+    "frames": [
+      {
+        "id": "done",
+        "words": [17, 0]
+      }
+    ]
+  },
+  "initialIngress": null,
+  "failureFree": true
+}

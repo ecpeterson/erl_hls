@@ -105,7 +105,7 @@ export function sinkRows(index, layers, { scope = "registered" } = {}) {
         write && event?.access?.kind === "write",
         "missing write association",
       );
-      for (const id of write.cones) {
+      for (const id of operation.selectedCones ?? write.cones) {
         const cone = visible.get(index.cones[id].id);
         if (!cone) continue;
         for (const pin of cone.rootPins) {

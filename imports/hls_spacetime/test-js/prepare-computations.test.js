@@ -787,3 +787,52 @@ test("preparation without producer ancestry preserves all writes and discloses m
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("native graph preparation recognizes only a qualified same-capture observation revision", () => {
+  const { input, view } = fixture();
+  const build = {
+    source: "a".repeat(64),
+    rtl: "b".repeat(64),
+    observation: "c".repeat(64),
+  };
+  const revised = { ...build, observation: "d".repeat(64) },
+    checkpoint = "e".repeat(64);
+  input.manifest.build = build;
+  input.manifest.checkpoint.sha256 = checkpoint;
+  view.bundle.build = revised;
+  view.catalogue.build = revised;
+  view.catalogue.checkpoint = checkpoint;
+  const origin = {
+    kind: "observation-reinterpretation",
+    schema: 1,
+    build,
+    revised_build: revised,
+    checkpoint,
+    base_projection_sha256: "1".repeat(64),
+    original_trace_sha256: "2".repeat(64),
+    extended_trace_sha256: "2".repeat(64),
+    capture_bytes: 100,
+    dependency_observer: "dependencies",
+    original_plan_sha256: "3".repeat(64),
+    revised_plan_sha256: "4".repeat(64),
+    review_sha256: "5".repeat(64),
+    comparison: {
+      same_capture_bytes: true,
+      source_rtl_unchanged: true,
+      declarations_unchanged: true,
+      old_dependency_bindings_retained: true,
+      only_equivalent_state_bindings_added: true,
+      added_bindings: 1,
+      first_cycle: 0,
+      end_cycle: 4,
+      compared_cycles: 4,
+    },
+  };
+  view.catalogue.correspondence_origin = origin;
+  assert.equal(nativeGraph(input).nets.length, 5);
+  origin.extended_trace_sha256 = "9".repeat(64);
+  assert.throws(() => nativeGraph(input), /same-capture/);
+  origin.extended_trace_sha256 = origin.original_trace_sha256;
+  delete origin.review_sha256;
+  assert.throws(() => nativeGraph(input), /review identity/);
+});

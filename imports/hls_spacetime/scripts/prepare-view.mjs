@@ -45,17 +45,21 @@ async function input(path, limit) {
   };
 }
 
-/** Metadata carries navigation/context only; it cannot replace execution,
- * placement or provenance. Missing native evidence gets logical resource lanes. */
+/** Metadata adds navigation and separately validated reviewed timing/step
+ * annotations; it cannot replace execution or placement. Missing native
+ * evidence gets logical resource lanes. */
 export function prepareView(bundle, metadata = {}) {
   const allowed = new Set([
     "title",
     "selection",
     "annotations",
     "examples",
+    "chains",
     "scope",
     "coverage",
     "measurement",
+    "clockReference",
+    "stepComparison",
   ]);
   check(
     metadata && !Array.isArray(metadata) && typeof metadata === "object",

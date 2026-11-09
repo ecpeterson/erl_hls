@@ -1102,7 +1102,7 @@ body.scene-focus {
 }
 .scene-focus .path-workbench > .canvas-wrap {
   height: 100%;
-  min-height: 260px;
+  min-height: 0;
 }
 @media (min-width: 1000px) {
   .path-workbench:has(#sink-panel[open]:not([hidden])) {
@@ -1205,4 +1205,197 @@ body.scene-focus {
 }
 .analysis-toggle input {
   width: auto;
+}
+
+/* Resource maps use complete native populations on an independent reference plane. */
+.regional-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #34434b;
+  padding-top: 0.75rem;
+}
+.region-map {
+  background: #111c22;
+  border-radius: 0.35rem;
+  margin-top: 0.6rem;
+}
+.region-map svg {
+  display: block;
+  width: 100%;
+  max-height: 290px;
+}
+.region-map [data-region-bin] {
+  cursor: pointer;
+}
+.region-map [data-region-bin]:hover rect {
+  stroke: white;
+  stroke-width: 0.7;
+}
+#region-list td:first-child {
+  overflow-wrap: anywhere;
+}
+
+/* Explicit picking belongs to the screen overlay, separate from timed pipes. */
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.selection-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#pick-summary {
+  font-size: 12px;
+  color: var(--muted);
+}
+#pick-notice:empty {
+  display: none;
+}
+#untimed-summary {
+  padding: 8px 12px;
+  border-left: 2px solid #b6a4cc;
+}
+#pick-chooser {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  width: min(440px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+  background: #12202bf5;
+  border: 1px solid #718795;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px #0008;
+}
+.pick-heading,
+.pick-paging {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pick-heading strong {
+  font-size: 13px;
+}
+#pick-choices {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+#pick-choices button {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+#pick-choices button:hover,
+#pick-choices button:focus-visible {
+  border-color: #ffe4a4;
+  background: #273644;
+}
+#tooltip {
+  max-width: 330px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.scene-focus #color-legend {
+  max-height: 84px;
+  overflow: auto;
+}
+
+/* A short recorded action stays readable above the physical scene. */
+.chain-panel {
+  margin: 0 0 0.8rem;
+}
+.chain-panel[hidden] {
+  display: none;
+}
+.chain-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.chain-milestones button {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+.chain-milestones button span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Compact viewing hides presentation chrome, never its values or evidence. */
+.compact-scene-caption {
+  display: none;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+#scene-panel.scene-controls-hidden > :not(.panel-heading):not(.path-workbench),
+.scene-controls-hidden #space-unit,
+.scene-controls-hidden #sink-panel {
+  display: none;
+}
+.scene-controls-hidden .compact-scene-caption {
+  display: block;
+}
+#scene-panel.scene-controls-hidden .path-workbench:has(#sink-panel) {
+  display: block;
+}
+.scene-controls-hidden .scene-actions {
+  flex-shrink: 0;
+}
+.scene-focus .scene-controls-hidden .path-workbench {
+  overflow: hidden;
+}
+
+/* Clock references sit beside the scene so an automatic estimate and
+ * a manual hypothetical period cannot be mistaken for a measured device clock. */
+.clock-reference-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.clock-reference-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.clock-reference-controls input {
+  width: 100px;
+}
+.clock-reference-controls input[readonly] {
+  color: #b4c9d3;
+  border-style: dashed;
+}
+.clock-reference-controls .legend-note {
+  flex: 1 1 360px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.clock-reference-controls details {
+  flex-basis: 100%;
+  padding: 0;
+  border: none;
+}
+#clock-reference-provenance {
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
 }

@@ -15,22 +15,6 @@ export const FUNCTION_COLORS = Object.freeze({
 const knownDelay = (value) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 
-/** Compute one capture-wide zero-based domain before applying display filters. */
-export function timingExtent(values) {
-  let max = null;
-  let known = 0;
-  let unknown = 0;
-  for (const value of values) {
-    if (knownDelay(value)) {
-      max = Math.max(max ?? 0, value);
-      known++;
-    } else {
-      unknown++;
-    }
-  }
-  return { min: 0, max, known, unknown };
-}
-
 // Oklab preserves a meaningful lightness axis while changing hue. Gamut fitting
 // reduces chroma only; it does not flatten the increasing lightness of the scale.
 function linearRgb(lightness, a, b) {
@@ -145,16 +129,6 @@ function fraction(value) {
     : null;
 }
 
-/** A zero-only capture has one known low endpoint; overscale values saturate. */
-function delayFraction(delayNs, maxDelayNs) {
-  if (!knownDelay(delayNs) || !knownDelay(maxDelayNs)) return null;
-  return maxDelayNs === 0
-    ? delayNs === 0
-      ? 0
-      : 1
-    : Math.min(1, delayNs / maxDelayNs);
-}
-
 /** Direction means a caller-supplied source-to-sink coordinate, not timing or
  * observed activity. Dark cool sources lead to bright warm sinks.
  */
@@ -169,19 +143,6 @@ export function directionColor(position) {
 }
 export const DIRECTION_SOURCE_COLOR = directionColor(0);
 export const DIRECTION_SINK_COLOR = directionColor(1);
-
-/** Dim low-delay circuitry and brighten high-delay circuitry on one fixed
- * capture-wide scale. Unknown timing and an absent domain remain distinct.
- */
-export function timingColor(delayNs, maxDelayNs) {
-  const value = delayFraction(delayNs, maxDelayNs);
-  if (value === null) return UNKNOWN_COLOR;
-  return hexColor(
-    0.4 + 0.5 * value,
-    0.025 + 0.005 * value,
-    -0.085 + 0.215 * value,
-  );
-}
 
 /** Near-longest structural margin controls lightness independently of hue.
  * A positive bandwidth is required; absent timing remains unknown.
@@ -214,8 +175,8 @@ export function delayKindColor(kind, options) {
   return lightness === null ? UNKNOWN_COLOR : delayKindHue(lightness, kind);
 }
 
-/** Map supplied function, computation identity or complete-path delay to opaque
- * CSS color. Hybrid mode retains a computation hue and uses timing lightness.
+/** Map supplied function, computation identity or complete-path urgency to opaque
+ * CSS color. Urgency retains computation or delay-kind hue and varies lightness.
  * Explicitly shared computation ownership uses neutral gray, never a fake key.
  * Use the same maxDelayNs across the capture, not each window or selection.
  */
@@ -231,14 +192,8 @@ export function sceneColor({
   marginWindowNs = 1,
 } = {}) {
   if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
-  if (
-    ["timing", "computation-timing", "criticality", "delay-kind"].includes(
-      mode,
-    ) &&
-    !timingApplicable
-  )
+  if (["criticality", "delay-kind"].includes(mode) && !timingApplicable)
     return OUTSIDE_TIMING_COLOR;
-  if (mode === "timing") return timingColor(delayNs, maxDelayNs);
   if (mode === "delay-kind")
     return delayKindColor(kind, {
       delayNs,
@@ -255,16 +210,6 @@ export function sceneColor({
     const index = computationIndex(computationKey);
     if (lightness === null || (!computationShared && index === null))
       return UNKNOWN_COLOR;
-    return computationShared
-      ? hexColor(lightness, 0, 0)
-      : computationHue(lightness, index);
-  }
-  if (mode === "computation-timing") {
-    const index = computationIndex(computationKey);
-    const value = delayFraction(delayNs, maxDelayNs);
-    if (value === null || (!computationShared && index === null))
-      return UNKNOWN_COLOR;
-    const lightness = 0.4 + 0.5 * value;
     return computationShared
       ? hexColor(lightness, 0, 0)
       : computationHue(lightness, index);

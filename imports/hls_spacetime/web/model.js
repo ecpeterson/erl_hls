@@ -1,6 +1,10 @@
 /** Pure saved-recording indexes. These checks protect the view; they do not rerun
  * the producer's full validator or establish physical/dynamic equivalence. */
 
+import { indexChains } from "./action-chain.js";
+import { validateClockReference } from "./clock-reference.js";
+import { validateStepComparison } from "./step-analysis.js";
+
 /** Reject a malformed projection with a concise, inspectable cause. */
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -293,6 +297,9 @@ export function createModel(document) {
       }),
       { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
     );
+  model.chains = indexChains(model, document.chains);
+  model.clockReference = validateClockReference(model);
+  model.stepComparison = validateStepComparison(model);
   return model;
 }
 

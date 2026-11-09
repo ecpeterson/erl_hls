@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { openArchive, readVerifiedBytes } from "./prepare-example.mjs";
 import { createModel } from "../web/model.js";
+import { validateObservationRevisionOrigin } from "./observation-revision.mjs";
 
 const MAX_INPUT = 256 * 1024 * 1024;
 const MAX_PART = 32 * 1024 * 1024;
@@ -76,7 +77,8 @@ function originalBuild(view, build, checkpoint) {
     "source/RTL mismatch",
   );
   if (sameBuild(view.catalogue.build, build)) return;
-  let origin = view.catalogue.correspondence_origin;
+  let origin = view.catalogue.correspondence_origin,
+    newerBuild = view.catalogue.build;
   for (
     let i = 0;
     origin && i < 64;
@@ -87,7 +89,16 @@ function originalBuild(view, build, checkpoint) {
         ["source", "rtl"].every((k) => origin.build?.[k] === build[k]),
       "invalid correspondence chain",
     );
+    if (origin.kind === "observation-reinterpretation") {
+      validateObservationRevisionOrigin(
+        origin,
+        newerBuild,
+        view.bundle.capture,
+        checkpoint,
+      );
+    }
     if (sameBuild(origin.build, build)) return;
+    newerBuild = origin.build;
   }
   throw Error(
     "Prepare computations: original native build absent from correspondence chain",

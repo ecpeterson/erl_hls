@@ -11,10 +11,18 @@ import {
   storageSegments,
   storageLifetimes,
 } from "./model.js";
+import {
+  traceChain,
+  matchingChain,
+  chainDisplayBounds,
+  chainTargetMasks,
+  chainCircuitSelection,
+  chainStorageSegments,
+} from "./action-chain.js";
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
-import { loadComputations } from "./computation-loader.js";
+import { loadComputations, publicationUrl } from "./computation-loader.js";
 import { loadRecording } from "./recording-loader.js";
 import { loadPreparedRenderWorker } from "./prepared-loader.js";
 import {
@@ -26,15 +34,29 @@ import { circuitDisplay } from "./circuit-display.js";
 import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
+import { arrivalRuler } from "./arrival-ruler.js";
+import { selectClockPeriod, timePoint } from "./clock-reference.js";
+import { clockSink } from "./clock-sink.js";
+import {
+  createStepComparison,
+  installStepEvidence,
+} from "./step-comparison.js";
+import { loadStepEvidence } from "./step-evidence-loader.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
-import { eventCoordinate } from "./arrival-layout.js";
+import { createRegionalControls } from "./regional-controls.js";
+import { createScenarioControls } from "./scenario-controls.js";
+import { createSceneSelection } from "./scene-selection.js";
+import { sinkPickTargets } from "./scene-picking.js";
+import {
+  arrivalEventAnchor,
+  arrivalEventConnection,
+} from "./arrival-events.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
-import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
+import { sceneBounds, occupiedBins } from "./scene-layout.js";
 import {
   sceneColor,
   computationColor,
-  timingColor,
   COMPUTATION_SHARED_COLOR,
   DIRECTION_SOURCE_COLOR,
   DIRECTION_SINK_COLOR,
@@ -48,9 +70,10 @@ import {
 import {
   computationSelection,
   computationWindowUnion,
+  computationControlSelection,
 } from "./computation-view.js";
 import { windowMetrics } from "./metrics.js";
-import { layoutLabels } from "./labels.js";
+import { layoutLabels, projectLabelAnchors } from "./labels.js";
 import { spatialPoints, spatialPairs } from "./visibility.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
@@ -69,21 +92,26 @@ const state = {
   trace: null,
   traceDirection: "backward",
   annotation: null,
+  chain: null,
+  chainMatchNote: null,
+  nativeBounds: null,
+  displayBounds: null,
+  expectsPrepared: false,
   first: 0,
   window: 24,
   scene: null,
   sceneContent: null,
   sceneDirty: true,
   sceneError: null,
-  hitsDirty: true,
   frameFull: false,
   autoFit: true,
   eventCache: null,
   loadTimings: {},
   spacing: 8,
-  hits: [],
+  manualPeriodNs: 10,
+  clockSelection: null,
+  timeOriginCycle: null,
   flatHits: [],
-  storageHits: [],
   storageCache: null,
   metricsCache: null,
   storagePointCache: new Map(),
@@ -106,7 +134,38 @@ const state = {
   index: new Map(),
   loadSequence: 0,
 };
-const sinkInspector = createSinkInspector(() => repaint());
+const sinkInspector = createSinkInspector(() => {
+  $("pick-notice").textContent = "";
+  repaint();
+});
+const sceneSelection = createSceneSelection({
+  onChoose(target) {
+    if (target.kind === "sink") {
+      if (!sinkInspector.choose(target.sinkKey)) return false;
+      $("sink-panel").open = true;
+    } else if (target.kind === "event") {
+      if (
+        state.model.events.get(target.event.id) !== target.event ||
+        !visibleEvents().includes(target.event)
+      )
+        return false;
+      selectEvent(target.event.id, false);
+    } else {
+      if (!visibleStorage().includes(target.segment)) return false;
+      selectStorage(target.segment.version, target.point.cell ?? null);
+    }
+    return true;
+  },
+  onOverlay: () => drawStackOverlay(),
+});
+const regionalControls = createRegionalControls(() => repaint());
+const scenarioControls = createScenarioControls();
+const stepComparison = createStepComparison({
+  element: $("step-comparison"),
+  onFocusBoundary: (boundary) => focusStepBoundary(boundary, false),
+  onTraceCompletion: (boundary) => focusStepBoundary(boundary, true),
+  onInspectClockPath: inspectClockPath,
+});
 
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
@@ -148,7 +207,11 @@ async function loadDocument(
   model,
   integrity = "File supplied locally; source evidence not revalidated",
   computationData = null,
+  { preparedExpected = false, computationsExpected = false } = {},
 ) {
+  sceneSelection.reset();
+  regionalControls.configure();
+  scenarioControls.configure();
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
     : createComputations(
@@ -203,20 +266,35 @@ async function loadDocument(
     "circuit-selected",
   ])
     $(id).disabled = !computations;
-  $("computation-circuits").checked = Boolean(computations);
+  state.expectsPrepared = Boolean(computations?.prepared || preparedExpected);
+  $("computation-circuits").checked = Boolean(
+    computations || computationsExpected || preparedExpected,
+  );
   $("time-layout").disabled = !computations?.prepared;
-  $("time-layout").value = computations?.prepared ? "arrival" : "flat";
+  $("time-layout").value = state.expectsPrepared ? "arrival" : "flat";
+  $("pick-mode").value = state.expectsPrepared ? "sinks" : "writes";
+  if (state.expectsPrepared) {
+    $("color-mode").value = "criticality";
+    state.spacing = 32;
+    $("spacing").value = state.spacing;
+  }
   $("circuit-role").value = "";
   $("circuit-timing").value = "registered_launch";
   $("circuit-delay").value = "0";
   $("circuit-unknown").checked = true;
   $("circuit-selected").checked = false;
   state.model = model;
+  state.timeOriginCycle =
+    model.stepComparison?.start.cycle ?? selectedBounds().firstCycle;
+  state.nativeBounds = model.geometryBounds;
+  state.displayBounds = null;
   state.autoFit = true;
   state.eventCache = null;
   state.selected = null;
   state.trace = null;
   state.annotation = null;
+  state.chain = null;
+  state.chainMatchNote = null;
   state.resource = null;
   state.cell = null;
   state.focusVersion = null;
@@ -260,8 +338,15 @@ async function loadDocument(
       ),
     ),
   );
+  $("chain").replaceChildren(new Option("Choose an action chain", ""));
+  for (const chain of model.chains.values())
+    $("chain").add(new Option(chain.title, chain.id));
+  $("chain-panel").hidden = model.chains.size === 0;
   state.first = selectedBounds().firstCycle;
-  state.window = Math.min(24, selectedBounds().endCycle - state.first);
+  state.window = Math.min(
+    state.expectsPrepared ? 3 : 24,
+    selectedBounds().endCycle - state.first,
+  );
   const logical = !model.catalogue;
   $("title").textContent = model.document.title ?? "Saved execution";
   $("subtitle").textContent =
@@ -299,6 +384,9 @@ async function loadDocument(
 /** Install complete prepared geometry after the recording is already interactive.
  * Native source evidence remains retained at manifest references, not in UI memory. */
 function installComputationData(data) {
+  state.model.geometryBounds = state.nativeBounds
+    ? { ...state.nativeBounds }
+    : null;
   state.computations = data.prepared
     ? createPreparedComputations(state.model, data.prepared)
     : createComputations(state.model, data.attachment, data.routeNets);
@@ -312,6 +400,12 @@ function installComputationData(data) {
         for (const wire of node.wires ?? [])
           extendBounds(state.model.geometryBounds, wire);
     }
+  state.nativeBounds = state.model.geometryBounds;
+  state.model.geometryBounds = chainDisplayBounds(
+    state.chain,
+    state.nativeBounds,
+    state.displayBounds,
+  );
   for (const key of [
     "pointCache",
     "resourceCache",
@@ -330,17 +424,10 @@ function installComputationData(data) {
     "circuit-selected",
   ])
     $(id).disabled = false;
-  $("computation-circuits").checked = true;
   $("time-layout").disabled = !state.computations.prepared;
-  $("time-layout").value = state.computations.prepared ? "arrival" : "flat";
-  if (state.computations.prepared) {
-    $("color-mode").value = "criticality";
-    // Begin with a few readable intervals; Window remains unrestricted.
-    state.window = Math.min(state.window, 3);
-    state.spacing = 32;
-    $("spacing").value = state.spacing;
-  }
-  state.autoFit = true;
+  if (!state.computations.prepared) $("time-layout").value = "flat";
+  // Defaults were chosen before interaction. Installing geometry must not reset
+  // the user's window, camera, picking mode or controls, even without a chain.
   render();
 }
 
@@ -407,8 +494,76 @@ function normalizeWindow() {
   $("window-label").textContent =
     `C${state.first}–${state.first + state.window - 1}`;
 }
+/** Clock selection uses whole-design metadata, never the visible circuit subset.
+ * Captures without qualified clock metadata retain an explicit manual fallback.
+ * The manual value is shared across capture changes and is never overwritten by
+ * an automatic or original-target selection.
+ */
+function syncClockControls() {
+  const mode = $("clock-source").value;
+  const options = { mode, manualPeriodNs: state.manualPeriodNs };
+  const selected = selectClockPeriod(
+    state.model?.clockReference ?? null,
+    options,
+  );
+  const fallback = selected.status !== "available";
+  state.clockSelection = fallback
+    ? {
+        ...selectClockPeriod(null, { ...options, mode: "manual" }),
+        requestedMode: mode,
+        fallback: true,
+        label: `Manual fallback (${state.manualPeriodNs} ns)`,
+      }
+    : selected;
+  const input = $("arrival-budget");
+  input.value = Number(state.clockSelection.periodNs.toPrecision(12));
+  input.readOnly = mode !== "manual";
+  input.title =
+    mode === "manual"
+      ? "Shared hypothetical period; changing it does not change static arc delays"
+      : "Resolved from the selected period source; choose Manual to override";
+  const available = Boolean(state.model?.clockReference);
+  $("clock-source").querySelector('option[value="target"]').disabled =
+    !available;
+  const evidence = state.clockSelection.provenance;
+  const basis = evidence
+    ? mode === "auto"
+      ? `${evidence.targetPeriodNs} ns target − (${evidence.setupWnsNs} ns WNS). `
+      : `${evidence.targetPeriodNs} ns original constraint. `
+    : "";
+  $("clock-reference-note").textContent =
+    `${state.clockSelection.label}. ${fallback ? "Requested clock evidence is unavailable; using the shared manual value. " : ""}${basis}This is a reference estimate or assumption, not a measured running clock. One common nanosecond scale is retained across captures; filters do not change the period.`;
+  $("clock-reference-evidence").hidden = !available;
+  $("clock-reference-provenance").textContent = available
+    ? JSON.stringify(state.model.clockReference, null, 2)
+    : "";
+  return state.clockSelection;
+}
+
+/** The chosen action/step establishes elapsed-time zero. Ordinary event picks
+ * and filters retain it. Neither a changed period nor a matched capture recenters
+ * time about its visible midpoint; the camera retains the common comparison scale.
+ */
+function clockOriginCycle() {
+  return state.timeOriginCycle ?? selectedBounds().firstCycle;
+}
+
+/** Keep the compact scene identifiable without reopening its hidden controls. */
+function renderSceneCaption() {
+  if (!state.model) return;
+  const labels = [state.model.document.title ?? "Saved execution"];
+  if (state.chain) labels.push(state.chain.title);
+  labels.push(`C${state.first}–${state.first + state.window - 1}`);
+  const clock = state.clockSelection ?? syncClockControls();
+  labels.push(
+    `${Number(clock.periodNs.toPrecision(12))} ns · ${clock.label} · common ns scale · t=0 at C${clockOriginCycle()}`,
+  );
+  $("scene-caption").textContent = labels.join(" · ");
+}
 /** Queue one canvas repaint for related inputs or pointer movement. */
 function repaint(cameraOnly = false) {
+  renderSceneCaption();
+  sceneSelection.invalidate();
   if (!cameraOnly) {
     state.sceneDirty = true;
     state.frameFull = true;
@@ -424,8 +579,7 @@ function repaint(cameraOnly = false) {
         state.sceneError = `${error.message} Narrow the clock window or choose Occupied tiles; no geometry prefix was rendered.`;
         state.sceneDirty = false;
         state.sceneContent = null;
-        state.hits = [];
-        state.storageHits = [];
+        sceneSelection.reset();
         state.scene?.setScene({});
         state.scene?.render({
           width: $("stack").clientWidth,
@@ -443,7 +597,14 @@ function repaint(cameraOnly = false) {
 /** Synchronize controls, visible event list and selected evidence. */
 function render() {
   if (!state.model) return;
+  $("pick-notice").textContent = "";
   normalizeWindow();
+  syncClockControls();
+  stepComparison.update(state.model, {
+    clockSelection: state.clockSelection,
+    firstCycle: state.first,
+    endCycle: state.first + state.window,
+  });
   updateActivations();
   clearFilteredSelection();
   renderMetrics();
@@ -462,6 +623,7 @@ function render() {
       )
       .join("") ||
     '<p class="empty">No operations match these filters and clocks.</p>';
+  renderChain();
   renderInspector();
   renderResource();
   repaint();
@@ -474,10 +636,7 @@ function renderMetrics() {
     endCycle: state.first + state.window,
     ...filters(),
     usedOnly: !$("full-storage").checked,
-    whatIfPeriodNs:
-      $("what-if-period").value === ""
-        ? null
-        : Number($("what-if-period").value),
+    whatIfPeriodNs: state.clockSelection.periodNs,
     waitOperations:
       (state.model.document.metric_hints ?? state.model.bundle.metric_hints)
         ?.wait_operations ?? [],
@@ -495,12 +654,7 @@ function renderMetrics() {
   $("activity-summary").textContent =
     `${activity.eventSamples.toLocaleString()} recorded operations on ${activity.clocksWithEvents.toLocaleString()} clocks in view · peak ${activity.peakEventsPerClock} operations per clock. Counts follow filters; they are not electrical switching or proof that other clocks were idle.`;
   $("timing-summary").textContent =
-    (timing.reason === "failed_target_is_not_execution_period"
-      ? "Physical elapsed time unknown: the native target failed timing. "
-      : "Physical elapsed time unknown: no qualified execution period. ") +
-    (timing.whatIf
-      ? `Hypothetical only: ${timing.whatIf.elapsedClocks} clocks × ${timing.whatIf.periodNs} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns. Static path delays are not added again.`
-      : "Enter a period for an explicitly hypothetical clocks × period calculation.");
+    `${state.clockSelection.label}: ${timing.whatIf.elapsedClocks} clocks × ${Number(timing.whatIf.periodNs.toPrecision(12))} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns for this window. This reference estimate uses the same period as the scene and whole-step panel; it is not measured elapsed time. Static path delays are not added again.`;
   $("metrics").innerHTML =
     `<div><strong>${metrics.interval.elapsedClocks.toLocaleString()}</strong><span>clocks in view</span></div><div><strong>${storage.totalWordClocks.toLocaleString()}</strong><span>logical word-clocks</span></div><div><strong>${installed ? installed.cells.toLocaleString() : "—"}</strong><span>unique installed cells</span></div>`;
   let detail = $("metrics-detail");
@@ -525,13 +679,15 @@ function renderMetrics() {
 /** Resolve selection seeds without creating an event for an application annotation. */
 function selectionEvents() {
   if (state.selected) return [state.model.events.get(state.selected)];
+  if (state.chain)
+    return state.chain.sinks.map((id) => state.model.events.get(id));
   return state.annotation
     ? annotationEvents(state.model, state.annotation)
     : [];
 }
 /** Semantic filters clear excluded selections across the full capture, not the window. */
 function clearFilteredSelection() {
-  const seeds = selectionEvents();
+  const seeds = state.chain ? state.trace.events : selectionEvents();
   if (!seeds.length) return;
   const matching = new Set(
     eventsInWindow(state.model, filters()).map((event) => event.id),
@@ -541,6 +697,8 @@ function clearFilteredSelection() {
   state.trace = null;
   state.annotation = null;
   state.focusVersion = null;
+  state.chain = null;
+  $("chain").value = "";
   state.resource = null;
   state.cell = null;
   state.traceNote = "";
@@ -551,6 +709,8 @@ function clearFilteredSelection() {
 function traceSelection(direction) {
   const seeds = selectionEvents().map((event) => event.id);
   if (!seeds.length) return;
+  state.chain = null;
+  $("chain").value = "";
   state.trace = traceDependencies(state.model, seeds, { direction });
   state.traceDirection = direction;
 }
@@ -561,9 +721,22 @@ function visibleEvents() {
     endCycle: state.first + state.window,
     ...filters(),
   };
-  const key = JSON.stringify(opts);
-  if (state.eventCache?.key !== key)
-    state.eventCache = { key, events: eventsInWindow(state.model, opts) };
+  const key = JSON.stringify([
+    opts,
+    state.chain?.id,
+    $("chain-only").checked,
+    $("chain-context").checked,
+  ]);
+  if (state.eventCache?.key !== key) {
+    let events = eventsInWindow(state.model, opts);
+    if (state.chain && $("chain-only").checked) {
+      const ids = new Set(state.trace.events.map((event) => event.id));
+      if ($("chain-context").checked)
+        for (const edge of state.trace.boundaryInputs) ids.add(edge.source);
+      events = events.filter((event) => ids.has(event.id));
+    }
+    state.eventCache = { key, events };
+  }
   return state.eventCache.events;
 }
 /** Cache logical-resource layout. Unknown placement occupies a labelled rail. */
@@ -638,16 +811,21 @@ function cellPoint(cell) {
 /** Native cells sharing a tile overlap at this scale; retain their identities
  * while drawing one glyph per occupied tile. Unknown bits keep their own rail. */
 function accessGeometry(event) {
+  const displayMask =
+    state.chain && $("chain-only").checked
+      ? chainTargetMasks(state.model, state.chain).get(event.id)
+      : undefined;
   const key = event.access
     ? JSON.stringify([
         event.access.resource,
         event.access.kind,
         event.access.mask ?? null,
         event.access.read_mask ?? null,
+        displayMask ?? null,
       ])
     : event.id;
   if (state.footprintCache.has(key)) return state.footprintCache.get(key);
-  const footprint = eventFootprint(state.model, event.id);
+  const footprint = eventFootprint(state.model, event.id, { displayMask });
   const tiles = new Map();
   for (const cell of footprint.cells) {
     const key = `${cell.x}/${cell.y}`;
@@ -708,11 +886,14 @@ function captureAvailable(cycle) {
  * rows remain retained when functionality or static-delay filters hide geometry. */
 function circuitLayers() {
   if (!state.computations || !$("computation-circuits").checked) return [];
-  const selectedOnly = $("circuit-selected").checked;
+  const selectedOnly = $("circuit-selected").checked && !state.chain;
   const key = JSON.stringify([
     state.first,
     state.window,
     filters(),
+    state.chain?.id,
+    $("chain-only").checked,
+    $("chain-context").checked,
     selectedOnly,
     selectedOnly ? selectionEvents().map((e) => e.id) : null,
     $("circuit-role").value,
@@ -726,7 +907,10 @@ function circuitLayers() {
         selectionEvents(),
         eventsInWindow(state.model, filters()),
       )
-    : visibleEvents();
+    : chainCircuitSelection(state.chain, visibleEvents(), {
+        onlyChain: $("chain-only").checked,
+        includeContext: $("chain-context").checked,
+      });
   const generated = (
     state.computations.prepared ? preparedComputationLayers : computationLayers
   )(state.computations, supplied, {
@@ -736,6 +920,10 @@ function circuitLayers() {
     minimumDelayNs: Number($("circuit-delay").value),
     timingMetric: $("circuit-timing").value,
     includeUnknownTiming: $("circuit-unknown").checked,
+    targetMasks:
+      state.chain && $("chain-only").checked
+        ? chainTargetMasks(state.model, state.chain)
+        : new Map(),
   });
   const layers = generated.filter(
     (layer) =>
@@ -1146,6 +1334,10 @@ function canvasLabels(ctx, width, height) {
 /** Residence can belong to a selected input chain, not only its final consumer.
  * The example's explicit version is preferred; this never adds an ancestry edge. */
 function selectedLifetimes() {
+  if (state.chain)
+    return state.trace.focusVersions
+      .map((id) => state.model.lifetimes.get(id))
+      .filter(Boolean);
   const found = new Map();
   if (state.focusVersion && state.model.lifetimes.has(state.focusVersion)) {
     const life = state.model.lifetimes.get(state.focusVersion);
@@ -1175,7 +1367,17 @@ function visibleStorage() {
       key,
       segments: storageSegments(state.model, options),
     };
-  return state.storageCache.segments;
+  return state.chain && $("chain-only").checked
+    ? chainStorageSegments(
+        state.model,
+        state.chain,
+        state.trace,
+        state.storageCache.segments,
+        {
+          includeContext: $("chain-context").checked,
+        },
+      ).segments
+    : state.storageCache.segments;
 }
 /** Place unknown bits on their own labelled rail even for partly placed words. */
 function unknownStoragePoint(resource) {
@@ -1192,8 +1394,19 @@ function unknownStoragePoint(resource) {
  * positions merely because a neighbouring bit has a binding. */
 function storagePoints(segment) {
   const expand =
-    $("expand-storage").checked && state.resource === segment.resource;
-  const key = JSON.stringify([segment.resource, segment.address, expand]);
+    $("expand-storage").checked &&
+    (state.resource === segment.resource || Boolean(state.chain));
+  const producer = state.model.versions.get(segment.version).producer;
+  const displayMask =
+    state.chain && $("chain-only").checked
+      ? chainTargetMasks(state.model, state.chain).get(producer)
+      : undefined;
+  const key = JSON.stringify([
+    segment.resource,
+    segment.address,
+    expand,
+    displayMask,
+  ]);
   if (state.storagePointCache.has(key)) return state.storagePointCache.get(key);
   const save = (points) => {
     state.storagePointCache.set(key, points);
@@ -1208,7 +1421,13 @@ function storagePoints(segment) {
       { ...base, y: base.y + segment.address * 0.6, kind: "logical" },
     ]);
   }
-  const placed = placement.cells.filter(
+  const subset = displayMask
+    ? eventFootprint(model, producer, { displayMask })
+    : null;
+  const represented = subset
+    ? [...subset.cells, ...subset.unplacedCells]
+    : placement.cells;
+  const placed = represented.filter(
     (c) => Number.isFinite(c.x) && Number.isFinite(c.y),
   );
   const points =
@@ -1225,9 +1444,9 @@ function storagePoints(segment) {
         : [];
   if (
     !placed.length ||
-    placement.unknownBits ||
-    placement.candidateCells.length ||
-    placed.length < placement.cells.length
+    (subset ? subset.unknownBits : placement.unknownBits) ||
+    (!subset && placement.candidateCells.length) ||
+    placed.length < represented.length
   )
     points.push({ ...unknownStoragePoint(segment.resource), kind: "unknown" });
   return save(points);
@@ -1276,7 +1495,8 @@ function renderNativePath() {
 
 /** Small inspection table exposes native arc identities and local versus complete
  * delay. Only table rows are paged; the renderer retains every visible arc. */
-function renderArrivalDetails(circuits, maximum, summaries) {
+function renderArrivalDetails(circuits, maximum, summaries, eventOmissions) {
+  $("untimed-summary").hidden = !arrivalEnabled();
   $("arrival-details").hidden = !arrivalEnabled();
   if (!arrivalEnabled()) return;
   const arcs = new Map();
@@ -1315,8 +1535,17 @@ function renderArrivalDetails(circuits, maximum, summaries) {
         : "unknown";
   const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
   sinkInspector.updateGeometry(circuits);
+  $("untimed-summary").textContent =
+    `${count("unknownSegments").toLocaleString()} spans · ${count("unknownMarks").toLocaleString()} pin marks · ${count("unknownRoots").toLocaleString()} roots lack arrival timing. ${eventOmissions.events.toLocaleString()} event overlays and ${eventOmissions.dependencies.toLocaleString()} dependency overlays lack qualified boundary coordinates. These are omitted here; clock planes, event lists and inspectors retain the evidence. Missing timing is not zero.${eventOmissions.staticPath ? " The saved STA path overlay also remains in clock planes because its geometry has no qualified arrival heights." : ""}`;
+  $("untimed-summary").hidden =
+    !count("unknownSegments") &&
+    !count("unknownMarks") &&
+    !count("unknownRoots") &&
+    !eventOmissions.events &&
+    !eventOmissions.dependencies &&
+    !eventOmissions.staticPath;
   $("arrival-summary").textContent =
-    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. Showing the first ${Math.min(40, rows.length)} inspection rows; all geometry remains available.`;
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the ${$("arrival-budget").value} ns reference period · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. ${count("unknownSegments")} untimed spans and ${count("unknownMarks")} untimed pin marks omitted from arrival view. Showing the first ${Math.min(40, rows.length)} inspection rows; clock planes retain spatial context.`;
   $("arrival-table").innerHTML =
     `<table><thead><tr><th>Native arc / pins</th><th>Geometry</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
       .slice(0, 40)
@@ -1334,14 +1563,18 @@ function buildStackScene() {
     segments: [],
     markers: [],
     surfaces: [],
-    events: [],
-    storage: [],
+    targets: [],
     labels: [],
     focus: [],
     selection: [],
   };
+  const clock = state.clockSelection ?? syncClockControls();
   const world = (p, c) =>
-    clockPoint(p, c, state.first, state.window, state.spacing);
+    timePoint(p, c, {
+      periodNs: clock.periodNs,
+      originCycle: clockOriginCycle(),
+      unitsPerNs: state.spacing / 800,
+    });
   const segment = (
     a,
     b,
@@ -1363,6 +1596,16 @@ function buildStackScene() {
   const marker = (position, color, size = 0.006, priority = 0) =>
     result.markers.push({ position, color, size, priority });
   const arrival = arrivalEnabled();
+  $("pick-mode").querySelector('option[value="sinks"]').disabled = !arrival;
+  const controlSelection = computationControlSelection({
+    preparedPending: state.expectsPrepared && !state.computations,
+    prepared: Boolean(state.computations?.prepared),
+    arrival,
+    pickMode: $("pick-mode").value,
+    colorMode: $("color-mode").value,
+  });
+  $("pick-mode").value = controlSelection.pickMode;
+  const pickMode = controlSelection.pickMode;
   const interval = Math.max(1, Math.ceil(state.window / 8));
   const planes = [];
   for (let c = state.first; c < state.first + state.window; c += interval)
@@ -1377,16 +1620,40 @@ function buildStackScene() {
     ].map(([x, y]) => world({ x, y }, c));
     for (let i = 0; i < 4; i++)
       segment(corners[i], corners[(i + 1) % 4], "#2d4855", 0.0009, "frame");
+    const elapsedNs = Number(
+      ((c - clockOriginCycle()) * clock.periodNs).toFixed(3),
+    );
     result.labels.push({
       text: arrival
         ? c < state.model.bundle.capture.end_cycle
-          ? `Q sample ${c}`
-          : `Boundary ${c} (no Q sample)`
-        : `C${c}`,
+          ? `Q C${c} · ${elapsedNs} ns`
+          : `Boundary C${c} · ${elapsedNs} ns (no Q)`
+        : `C${c} · ${elapsedNs} ns`,
       position: world({ x: -1.04, y: -1.04 }, c),
       alternatives: corners,
+      anchorGroup: "clock-axis",
     });
   }
+  if (arrival)
+    for (const label of arrivalRuler(
+      state.first,
+      state.window,
+      state.clockSelection.periodNs,
+    )) {
+      const corners = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ].map(([x, y]) => world({ x, y }, label.coordinate));
+      result.labels.push({
+        ...label,
+        position: corners[0],
+        alternatives: corners,
+        anchorGroup: "clock-axis",
+        minor: true,
+      });
+    }
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
     if (
       epoch.first_cycle < state.first ||
@@ -1418,13 +1685,7 @@ function buildStackScene() {
     state.computations?.maxDelays?.[
       metric === "registered_launch" ? "registered" : "static"
     ] ?? null;
-  for (const value of [
-    "timing",
-    "computation",
-    "computation-timing",
-    "criticality",
-    "delay-kind",
-  ]) {
+  for (const value of ["computation", "criticality", "delay-kind"]) {
     const option = $("color-mode").querySelector(`option[value="${value}"]`);
     option.disabled =
       !state.computations?.prepared || (value === "delay-kind" && !arrival);
@@ -1432,21 +1693,17 @@ function buildStackScene() {
       ? "Prepare rendering data to enable this color style"
       : "";
   }
-  if ($("color-mode").selectedOptions[0].disabled)
-    $("color-mode").value = "role";
+  $("color-mode").value = controlSelection.colorMode;
   const mode = $("color-mode").value;
-  const membershipMode =
-    mode === "computation" ||
-    mode === "computation-timing" ||
-    mode === "criticality";
-  const scalarMode = mode === "timing" || mode === "computation-timing";
-  const neutralTiming =
-    scalarMode || mode === "criticality" || mode === "delay-kind";
+  const membershipMode = mode === "computation" || mode === "criticality";
+  const neutralTiming = mode === "criticality" || mode === "delay-kind";
   sinkInspector.update(state.computations, layers, {
     enabled: arrival,
     scope: metric === "registered_launch" ? "registered" : "static",
   });
   const explorer = sinkInspector.explorer;
+  regionalControls.update(state.computations, explorer.neighborhood);
+  scenarioControls.update(state.computations, explorer.cut);
   const cutMode = explorer.mode === "cut";
   $("color-mode").disabled = cutMode;
   $("analysis-legend").hidden = !["neighborhood", "cut"].includes(
@@ -1458,22 +1715,17 @@ function buildStackScene() {
   $("delay-kind-legend").hidden = cutMode || mode !== "delay-kind";
   $("role-legend").hidden = cutMode || mode !== "role";
   $("arrival-legend").hidden = !arrival;
-  $("arrival-budget").disabled = !arrival;
+  $("arrival-ruler-note").textContent =
+    state.window <= 4
+      ? "Ruler: nanoseconds after each Q reference at quarter-budget intervals; labels yield to clock labels when crowded."
+      : "Minor ruler labels are omitted for windows over four clocks; no computation geometry is omitted.";
   $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
   $("urgency-legend").hidden =
     cutMode || !["criticality", "delay-kind"].includes(mode);
   $("urgency-summary").textContent =
     `Bright: within ${$("urgency-window").value} ns of the capture-wide longest ${metric === "registered_launch" ? "registered-launch" : "static"} path (${maximum?.toFixed(3) ?? "unknown"} ns). Relative structural margin, not STA slack or congestion.`;
-  $("timing-legend").hidden = cutMode || !scalarMode;
   $("computation-legend").hidden = cutMode || !membershipMode;
   $("direction-legend").hidden = cutMode || mode !== "direction";
-  $("timing-min").textContent = "0 ns";
-  $("timing-max").textContent =
-    maximum === null ? "unknown" : `${Number(maximum).toFixed(2)} ns`;
-  $("timing-ramp").style.background =
-    mode === "computation-timing"
-      ? `linear-gradient(90deg, ${sceneColor({ mode, computationShared: true, delayNs: 0, maxDelayNs: 1 })}, ${sceneColor({ mode, computationShared: true, delayNs: 1, maxDelayNs: 1 })})`
-      : `linear-gradient(90deg, ${timingColor(0, 1)}, ${timingColor(0.5, 1)}, ${timingColor(1, 1)})`;
   $("direction-ramp").style.background =
     `linear-gradient(90deg, ${DIRECTION_SOURCE_COLOR}, ${DIRECTION_SINK_COLOR})`;
   const destinations = [
@@ -1545,7 +1797,7 @@ function buildStackScene() {
       });
       const scene = arrivalScene(circuit, {
         cycle: layer.cycle,
-        budgetNs: Number($("arrival-budget").value),
+        budgetNs: state.clockSelection.periodNs,
         captureAvailable: captureAvailable(layer.cycle),
         point: cellPoint,
         world,
@@ -1574,7 +1826,7 @@ function buildStackScene() {
       if (explorer.cut?.status === "known" && circuit.summary.arcs) {
         const boundary = cutScene(explorer.cut, {
           cycle: layer.cycle,
-          budgetNs: Number($("arrival-budget").value),
+          budgetNs: state.clockSelection.periodNs,
           point: cellPoint,
           world,
           selectedPin: explorer.cutPin,
@@ -1584,13 +1836,18 @@ function buildStackScene() {
         result.focus = result.focus.concat(boundary.focus);
         result.selection = result.selection.concat(boundary.focus);
       }
+      result.targets = result.targets.concat(
+        sinkPickTargets(circuit, {
+          cycle: layer.cycle,
+          budgetNs: state.clockSelection.periodNs,
+          point: cellPoint,
+          world,
+          pinName: (pin) =>
+            state.computations.pinGeometry[pin]?.[3] ?? String(pin),
+        }),
+      );
       arrivalCircuits.push(circuit);
       arrivalSummaries.push(scene.summary);
-      if (scene.summary.unknownSegments || scene.summary.unknownMarks)
-        result.labels.push({
-          text: `C${layer.cycle}: unresolved timing / route geometry`,
-          position: world({ x: -1.04, y: -1.04 }, layer.cycle - 0.18),
-        });
       continue;
     }
     const paint = circuitDisplay(layer.paint, {
@@ -1687,15 +1944,27 @@ function buildStackScene() {
     result.focus = result.focus.concat(context.focus);
     result.selection = result.selection.concat(context.focus);
   }
-  renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
+  const regional = regionalControls.scene({
+    cycle: state.first + state.window + 0.3,
+    point: cellPoint,
+    world,
+    showCells: true,
+  });
+  if (regional) {
+    for (const key of ["surfaces", "segments", "markers", "labels", "focus"])
+      result[key] = result[key].concat(regional[key]);
+    result.selection = result.selection.concat(regional.selection);
+  }
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
   const storage =
-    $("residence").checked && !sinkInspector.focused ? visibleStorage() : [];
+    $("residence").checked && (!sinkInspector.focused || pickMode === "storage")
+      ? visibleStorage()
+      : [];
   let loads = 0,
     holds = 0;
   for (const item of storage) {
     // Qualified arrival-to-capture annotations replace full-clock load glyphs.
-    // Recorded write markers remain even without a timed root; holds retain sampled evidence.
+    // Qualified register captures remain boundary markers; holds retain sampled evidence.
     if (arrival && item.kind === "write") continue;
     item.kind === "write" ? loads++ : holds++;
     for (const p of spatialPoints(storagePoints(item), mappedOnly())) {
@@ -1708,8 +1977,8 @@ function buildStackScene() {
           ? DIRECTION_SOURCE_COLOR
           : neutralTiming
             ? active
-              ? "#aebec6"
-              : "#526471"
+              ? "#60737e"
+              : "#3e515c"
             : membershipMode
               ? computationColor(item.resource)
               : p.kind === "unknown"
@@ -1726,7 +1995,15 @@ function buildStackScene() {
         a,
         b,
         color,
-        active ? 0.004 : item.kind === "write" ? 0.0028 : 0.0018,
+        neutralTiming
+          ? active
+            ? 0.001
+            : 0.0006
+          : active
+            ? 0.004
+            : item.kind === "write"
+              ? 0.0028
+              : 0.0018,
         "storage",
         endColor,
       );
@@ -1737,28 +2014,48 @@ function buildStackScene() {
           active ? 0.012 : 0.007,
           active ? 3 : 1,
         );
-      result.storage.push({ from: a, to: b, segment: item, point: p });
+      result.targets.push({
+        kind: "storage",
+        id: JSON.stringify([
+          item.version,
+          p.cell ?? p.kind,
+          item.visibleFromCycle,
+          item.visibleToCycle,
+        ]),
+        from: a,
+        to: b,
+        segment: item,
+        point: p,
+      });
       result.focus.push(a, b);
       if (active) result.selection.push(a, b);
     }
   }
   $("storage-summary").textContent =
-    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.storage.length.toLocaleString()} spatial links. ${arrival ? "Arrival view shows readiness separately; residence spans retain sampled values." : "Thick links load a value; thin links retain it."}`;
+    `${$("full-storage").checked ? "Full storage history" : "Recorded uses only"} · ${loads} loads · ${holds} residence spans · ${result.targets.filter((row) => row.kind === "storage").length.toLocaleString()} spatial links. ${arrival ? "Arrival view shows readiness separately; residence spans retain sampled values." : "Thick links load a value; thin links retain it."}`;
   const seeds = new Set(selectionEvents().map((e) => e.id));
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
   let glyphs = 0;
-  for (const event of sinkInspector.focused ? [] : visibleEvents()) {
+  const eventOmissions = { events: 0, dependencies: 0, staticPath: false };
+  for (const event of sinkInspector.focused &&
+  !["reads", "writes"].includes(pickMode)
+    ? []
+    : visibleEvents()) {
+    const coordinate = arrival
+      ? arrivalEventAnchor(state.model, event).coordinate
+      : event.cycle;
+    if (coordinate === null) {
+      eventOmissions.events++;
+      continue;
+    }
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
     if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
     for (const point of spatialPoints(
       expanded ? geometry.points : [eventPoint(event)],
       mappedOnly(),
     )) {
-      const position = world(
-          point,
-          arrival ? eventCoordinate(event) : event.cycle,
-        ),
+      const position = world(point, coordinate),
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
       const resources = resourcesForEvent(event);
@@ -1770,16 +2067,25 @@ function buildStackScene() {
             : resources.length > 1
               ? COMPUTATION_SHARED_COLOR
               : "#627780"
-          : mode === "direction" || scalarMode
+          : mode === "direction"
             ? "#627780"
             : color(event);
+      const highlight = active && (!state.chain || state.selected === event.id);
       marker(
         position,
-        active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
-        active ? 0.014 : onPath ? 0.009 : 0.004,
-        active ? 3 : onPath ? 2 : 1,
+        highlight
+          ? "#f3f5ed"
+          : neutralTiming
+            ? "#627780"
+            : onPath
+              ? "#d3dcda"
+              : dim
+                ? "#536b77"
+                : accessColor,
+        highlight ? 0.014 : neutralTiming ? 0.004 : onPath ? 0.009 : 0.004,
+        highlight ? 3 : neutralTiming ? 0 : onPath ? 2 : 1,
       );
-      result.events.push({ position, event });
+      result.targets.push({ kind: "event", id: event.id, position, event });
       result.focus.push(position);
       if (active) result.selection.push(position);
       glyphs++;
@@ -1791,6 +2097,13 @@ function buildStackScene() {
       to = state.model.events.get(edge.target);
     if (from.cycle >= state.first + state.window || to.cycle < state.first)
       continue;
+    const coordinates = arrival
+      ? arrivalEventConnection(state.model, from, to)
+      : { from: from.cycle, to: to.cycle };
+    if (!coordinates) {
+      eventOmissions.dependencies++;
+      continue;
+    }
     const sources =
       expanded || mappedOnly()
         ? accessGeometry(from).points
@@ -1810,40 +2123,45 @@ function buildStackScene() {
     );
     for (const [source, target] of pairs) {
       segment(
-        world(
-          source,
-          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
-        ),
+        world(source, Math.max(state.first, coordinates.from)),
         world(
           target,
           Math.min(
             state.first + state.window - (arrival ? 0 : 1),
-            arrival ? eventCoordinate(to) : to.cycle,
+            coordinates.to,
           ),
         ),
-        mode === "direction" ? DIRECTION_SOURCE_COLOR : "#d8dedc",
-        0.003,
+        mode === "direction"
+          ? DIRECTION_SOURCE_COLOR
+          : neutralTiming
+            ? "#536975"
+            : "#d8dedc",
+        neutralTiming ? 0.00065 : 0.003,
         "dependency",
-        mode === "direction" ? DIRECTION_SINK_COLOR : "#d8dedc",
+        mode === "direction"
+          ? DIRECTION_SINK_COLOR
+          : neutralTiming
+            ? "#536975"
+            : "#d8dedc",
         0.018,
       );
       result.focus.push(
-        world(
-          source,
-          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
-        ),
+        world(source, Math.max(state.first, coordinates.from)),
         world(
           target,
           Math.min(
             state.first + state.window - (arrival ? 0 : 1),
-            arrival ? eventCoordinate(to) : to.cycle,
+            coordinates.to,
           ),
         ),
       );
       traces++;
     }
   }
-  if (state.nativePath && !sinkInspector.focused) {
+  eventOmissions.staticPath = Boolean(
+    arrival && state.nativePath && !sinkInspector.focused,
+  );
+  if (state.nativePath && !sinkInspector.focused && !arrival) {
     const cycle = Math.max(
       state.first,
       Math.min(
@@ -1885,6 +2203,12 @@ function buildStackScene() {
         }
     }
   }
+  renderArrivalDetails(
+    arrivalCircuits,
+    maximum,
+    arrivalSummaries,
+    eventOmissions,
+  );
   $("access-summary").textContent =
     `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? (arrival ? "native pin arrival markers" : "occupied-bin overview (aggregated, not native geometry)") : detail === "routes" ? "schematic routing links and cells; switch markers hidden" : "schematic links, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
   if (
@@ -1893,25 +2217,25 @@ function buildStackScene() {
     selectionEvents().length &&
     !sinkInspector.focused
   ) {
-    const selectedLayers = (
-      state.computations.prepared
-        ? preparedComputationLayers
-        : computationLayers
-    )(
-      state.computations,
-      computationSelection(
-        selectionEvents(),
-        eventsInWindow(state.model, filters()),
-      ),
-      {
-        roles: $("circuit-role").value
-          ? [$("circuit-role").value]
-          : ["data", "enable", "reset"],
-        minimumDelayNs: Number($("circuit-delay").value),
-        timingMetric: metric,
-        includeUnknownTiming: $("circuit-unknown").checked,
-      },
-    );
+    const selectedLayers = state.chain
+      ? circuitLayers()
+      : (state.computations.prepared
+          ? preparedComputationLayers
+          : computationLayers)(
+          state.computations,
+          computationSelection(
+            selectionEvents(),
+            eventsInWindow(state.model, filters()),
+          ),
+          {
+            roles: $("circuit-role").value
+              ? [$("circuit-role").value]
+              : ["data", "enable", "reset"],
+            minimumDelayNs: Number($("circuit-delay").value),
+            timingMetric: metric,
+            includeUnknownTiming: $("circuit-unknown").checked,
+          },
+        );
     for (const layer of selectedLayers) {
       if (
         layer.cycle < state.first ||
@@ -1927,7 +2251,7 @@ function buildStackScene() {
           }),
           {
             cycle: layer.cycle,
-            budgetNs: Number($("arrival-budget").value),
+            budgetNs: state.clockSelection.periodNs,
             captureAvailable: captureAvailable(layer.cycle),
             point: cellPoint,
             world,
@@ -1963,7 +2287,7 @@ function buildStackScene() {
 /** Paint opaque depth-tested geometry, with sparse labels on the interaction
  * overlay. Projected hit candidates keep their depth and reject clipped points. */
 function drawStack() {
-  const { ctx, w, h } = canvasContext("stack");
+  const { w, h } = canvasContext("stack");
   if (!state.model || (state.sceneError && !state.sceneDirty)) return;
   if (state.sceneDirty) state.sceneError = null;
   if (!state.scene) {
@@ -2002,34 +2326,34 @@ function drawStack() {
     pixelRatio: window.devicePixelRatio || 1,
     shading: ["role", "computation"].includes($("color-mode").value),
   });
+  sceneSelection.project(state.sceneContent.targets, state.scene, {
+    sinkKey: sinkInspector.key,
+    eventId: state.selected?.id,
+  });
+  drawStackOverlay();
+}
+/** Hover changes only the annotation canvas; GPU geometry and graph caches stay intact. */
+function drawStackOverlay() {
+  const { ctx, w, h } = canvasContext("stack");
+  if (!state.scene || !state.sceneContent) return;
   const project = (point) => state.scene.project(point);
   const labels = canvasLabels(ctx, w, h);
-  ctx.font = "11px ui-monospace,monospace";
-  ctx.fillStyle = "#a5bdc8";
-  for (const label of state.sceneContent.labels) {
-    const candidates = (label.alternatives ?? [label.position])
-      .map(project)
-      .filter((p) => p.visible);
-    const p = candidates.sort((a, b) => a.x - b.x)[0];
-    if (p) labels.add(label.text, Math.max(4, p.x - 44), p.y - 6, 100);
+  for (const { label, point } of projectLabelAnchors(
+    state.sceneContent.labels,
+    project,
+  )) {
+    ctx.font = `${label.minor ? 10 : 11}px ui-monospace,monospace`;
+    ctx.fillStyle = label.minor ? "#7d949f" : "#a5bdc8";
+    labels.add(
+      label.text,
+      Math.max(4, point.x - 44),
+      point.y - 6,
+      label.minor ? 90 : 100,
+      label.key ?? label.text,
+    );
   }
   labels.draw();
-  state.hitsDirty = true;
-}
-/** Picking is deferred until the pointer settles; dragging only updates the GPU
- * camera and sparse labels. Frontmost equal-distance candidates win. */
-function ensureSceneHits() {
-  if (!state.hitsDirty || !state.sceneContent || !state.scene) return;
-  const project = (point) => state.scene.project(point);
-  state.hits = state.sceneContent.events
-    .map((row) => ({ ...project(row.position), event: row.event }))
-    .filter((p) => p.visible)
-    .sort((a, b) => b.depth - a.depth);
-  state.storageHits = state.sceneContent.storage.flatMap((row) => {
-    const points = state.scene.projectSegment(row.from, row.to);
-    return points ? [{ ...row, a: points[0], b: points[1] }] : [];
-  });
-  state.hitsDirty = false;
+  sceneSelection.draw(ctx);
 }
 /** Flat chip projection retains installed population, rather than layer copies. */
 function drawFlat() {
@@ -2185,11 +2509,19 @@ function drawTimeline() {
     `${c.end_cycle - c.first_cycle} clocks retained · ${model.bundle.capture.incarnations.length} incarnation(s)`;
 }
 /** Choose a recorded event, retaining ancestry outside the current window. */
-function selectEvent(id, move = true) {
+function selectEvent(id, move = true, keepChain = false) {
   if (!state.model?.events.has(id)) return;
+  if (keepChain) {
+    $("sink-mode").value = "all";
+    $("sink-mode").onchange();
+  }
+  if (!keepChain) {
+    state.chain = null;
+    $("chain").value = "";
+  }
   state.selected = id;
   state.annotation = null;
-  state.trace = null;
+  if (!keepChain) state.trace = null;
   state.cell = null;
   state.focusVersion = null;
   const event = state.model.events.get(id);
@@ -2199,12 +2531,16 @@ function selectEvent(id, move = true) {
   if (
     move &&
     (event.cycle < state.first || event.cycle >= state.first + state.window)
-  )
+  ) {
     state.first = event.cycle - Math.floor(state.window / 2);
+    state.autoFit = true;
+  }
   render();
 }
 /** Select a stored version, including roots with no fabricated producer event. */
 function selectStorage(version, cell = null) {
+  state.chain = null;
+  $("chain").value = "";
   const life = state.model.lifetimes.get(version);
   if (!life) return;
   state.selected = life.producer;
@@ -2216,8 +2552,114 @@ function selectStorage(version, cell = null) {
   $("resource").value = life.resource;
   render();
 }
+/** Navigate an explicit step boundary or trace only its retained event anchors.
+ * A public boundary later than those events remains separate metadata; it never
+ * becomes a new graph event or gains ancestry from chronological proximity.
+ */
+function focusStepBoundary(boundary, trace) {
+  state.timeOriginCycle = state.model.stepComparison.start.cycle;
+  const events = boundary.eventIds.map((id) => state.model.events.get(id));
+  if (events.some((event) => !event)) return;
+  for (const key of ["actor", "activation", "operation", "task"])
+    $(key).value = "";
+  state.chain = null;
+  state.selected = null;
+  state.trace = null;
+  state.resource = null;
+  state.cell = null;
+  state.focusVersion = null;
+  $("chain").value = "";
+  $("resource").value = "";
+  $("sink-mode").value = "all";
+  state.annotation = {
+    label: boundary.label,
+    cycle: events.length
+      ? Math.max(...events.map((event) => event.cycle))
+      : boundary.cycle,
+    publicBoundaryCycle: boundary.cycle,
+    ...(events.length
+      ? {
+          graph_events: boundary.eventIds,
+          graph_incarnation: events[0].incarnation,
+          dependency_endpoint: true,
+        }
+      : { dependency_endpoint: false }),
+  };
+  if (trace && events.length) traceSelection("backward");
+  state.first = boundary.cycle - Math.floor(state.window / 2);
+  state.autoFit = true;
+  render();
+  if (!events.length)
+    notice(
+      `${boundary.label}: this boundary has no recorded event anchors; no ancestry was inferred.`,
+    );
+}
+
+/** Inspect the prepared sink whose exact pin identity matches the global STA
+ * endpoint. Its recorded write association locates the view, not STA activity;
+ * the displayed SDF maximizing chain need not be the original STA path.
+ */
+function inspectClockPath(row) {
+  const step = state.model.stepComparison;
+  const match = clockSink(state.computations, row.endpoint, {
+    firstCycle: step?.start.cycle,
+    endCycle: step?.end.cycle,
+  });
+  if (match.status !== "available") {
+    notice(
+      `${match.reason} The global STA report summary remains available.`,
+      true,
+    );
+    return;
+  }
+  for (const key of ["actor", "activation", "operation", "task"])
+    $(key).value = "";
+  state.chain = null;
+  state.annotation = null;
+  state.trace = null;
+  state.selected = match.event.id;
+  state.resource = match.event.access.resource;
+  state.cell = null;
+  state.focusVersion = null;
+  state.timeOriginCycle = step?.start.cycle ?? selectedBounds().firstCycle;
+  $("chain").value = "";
+  $("resource").value = state.resource;
+  $("time-layout").value = "arrival";
+  $("computation-circuits").checked = true;
+  $("circuit-role").value = "";
+  $("circuit-delay").value = "0";
+  $("circuit-unknown").checked = true;
+  $("circuit-selected").checked = false;
+  $("sink-mode").value = "selected";
+  state.first = match.event.cycle - 1;
+  state.window = 3;
+  normalizeWindow();
+  sinkInspector.update(state.computations, circuitLayers(), {
+    enabled: true,
+    scope:
+      $("circuit-timing").value === "registered_launch"
+        ? "registered"
+        : "static",
+  });
+  if (!sinkInspector.choose(match.key)) {
+    notice(
+      "The exact limiting sink is associated with a write but unavailable in the current circuit view.",
+      true,
+    );
+    return;
+  }
+  $("sink-panel").open = true;
+  state.autoFit = true;
+  render();
+  notice(
+    `Showing an SDF maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
+  );
+}
+
 /** Follow explicitly bound contributors while leaving unanchored observations as context. */
 function selectAnnotation(annotation) {
+  state.chain = null;
+  $("chain").value = "";
   const anchors = annotationEvents(state.model, annotation);
   if (anchors.length > 1000) {
     notice(
@@ -2235,6 +2677,7 @@ function selectAnnotation(annotation) {
   state.focusVersion = null;
   $("resource").value = "";
   state.first = annotation.cycle - Math.floor(state.window / 2);
+  state.autoFit = true;
   render();
 }
 /** Neighbour buttons are exact dependency endpoints; root versions stop traversal. */
@@ -2271,6 +2714,19 @@ function renderInspector() {
   const seeds = selectionEvents();
   $("backward").disabled = !seeds.length;
   $("forward").disabled = !seeds.length;
+  if (state.chain && !state.selected) {
+    $("selected-kind").textContent = "Recorded action chain";
+    $("selection").innerHTML =
+      `<h3>${esc(state.chain.title)}</h3><p>${esc(state.chain.evidence ?? "Producer-selected action; every connection comes from the recorded graph.")}</p><p>Semantic comparison key: ${esc(state.chain.comparisonKey)}</p>`;
+    $("neighbors").innerHTML = state.trace.boundaryInputs
+      .map(
+        (edge) =>
+          `<button data-event="${esc(edge.source)}">Outside input · ${esc(edge.kind)} · ${esc(edge.source)}</button>`,
+      )
+      .join("");
+    renderTraceSummary();
+    return;
+  }
   if (state.annotation) {
     $("selected-kind").textContent = "Public annotation";
     $("selection").innerHTML =
@@ -2349,7 +2805,7 @@ function renderTraceSummary() {
     ).values(),
   ];
   $("trace-summary").innerHTML =
-    `${state.traceDirection === "backward" ? "Inputs" : "Consumers"}: ${state.trace.events.length} recorded operations · ${state.trace.edges.length} dependencies · ${roots.length} root versions` +
+    `${state.chain ? "Action corridor" : state.traceDirection === "backward" ? "Inputs" : "Consumers"}: ${state.trace.events.length} recorded operations · ${state.trace.edges.length} dependencies · ${roots.length} root versions` +
     (state.trace.truncated ? " · traversal capped at 1,000 operations" : "") +
     '<p class="evidence-note">Partial recorded ancestry, not a complete computation or critical path.</p>' +
     roots
@@ -2402,7 +2858,8 @@ function renderResource() {
         ? "<p>First 80 listed; narrow the clock window to inspect the rest.</p>"
         : "")
     : "Select a storage resource to inspect its versions.";
-  $("expand-storage").disabled = !state.resource || !state.model.catalogue;
+  $("expand-storage").disabled =
+    (!state.resource && !state.chain) || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
     ? `${cells.length} associated native storage cells highlighted`
     : "Unique installed cells, counted once";
@@ -2419,10 +2876,95 @@ function renderResource() {
       ? "<p>First 600 cells listed; all are drawn on the flat chip.</p>"
       : "");
 }
+/** Select a finite semantic action using only existing graph paths. */
+function chooseChain(id) {
+  const chain = state.model.chains.get(id);
+  state.chain = chain ?? null;
+  state.chainMatchNote = null;
+  if (chain)
+    state.displayBounds = chain.spatialBounds
+      ? { ...chain.spatialBounds }
+      : null;
+  state.model.geometryBounds = chainDisplayBounds(
+    chain,
+    state.nativeBounds,
+    state.displayBounds,
+  );
+  for (const key of [
+    "pointCache",
+    "resourceCache",
+    "footprintCache",
+    "storagePointCache",
+    "circuitPaintCache",
+  ])
+    state[key].clear();
+  state.circuitCache = null;
+  state.selected = null;
+  state.annotation = null;
+  state.focusVersion = null;
+  state.resource = null;
+  state.cell = null;
+  $("resource").value = "";
+  $("example").value = "";
+  if (!chain) {
+    state.trace = null;
+    render();
+    return;
+  }
+  for (const filter of ["actor", "activation", "operation", "task"])
+    $(filter).value = "";
+  state.trace = traceChain(state.model, chain);
+  state.first = chain.firstCycle;
+  state.timeOriginCycle = chain.firstCycle;
+  state.window = chain.endCycle - chain.firstCycle;
+  $("chain").value = id;
+  $("circuit-selected").checked = false;
+  $("sink-mode").value = "all";
+  $("ghost-context").checked = true;
+  state.autoFit = true;
+  render();
+}
+
+/** Milestones are navigation labels, not added computation or dependency nodes. */
+function renderChain() {
+  const chain = state.chain;
+  $("chain-panel").hidden =
+    state.model.chains.size === 0 && !state.chainMatchNote;
+  $("chain-only").disabled = !chain;
+  $("chain-context").disabled = !chain;
+  $("chain-summary").textContent = chain
+    ? `${state.trace.connected ? "Recorded source-to-sink paths" : "Unresolved connection: isolated anchors retained"} · ${state.trace.events.length} operations · ${state.trace.focusVersions.length} focused stored versions · ${state.trace.boundaryInputs.length} outside inputs.${chain.targets?.length && $("chain-only").checked && !$("chain-context").checked ? " Primary destination circuitry; other recorded/control circuitry hidden (enable Adjacent input context to show it)." : ""} Destination bit masks limit the display, not the recorded writes. Physical cones show structural alternatives, not gate activity.`
+    : (state.chainMatchNote ??
+      "Choose a recorded action to follow its value through clock boundaries.");
+  if (chain && $("chain-only").checked) {
+    const residence = chainStorageSegments(
+      state.model,
+      chain,
+      state.trace,
+      [],
+      {
+        includeContext: $("chain-context").checked,
+      },
+    );
+    $("chain-summary").textContent +=
+      ` Residence stops at this action's recorded uses of the displayed fields; global history stays in the inspector.${residence.unresolved.length ? ` ${residence.unresolved.length} field-use masks unresolved; their possible uses are retained.` : ""}${residence.unusedVersions.length ? ` ${residence.unusedVersions.length} versions have no matching recorded use in this action and no residence link.` : ""}`;
+  }
+  $("chain-milestones").innerHTML = (chain?.milestones ?? [])
+    .map((milestone) => {
+      const event = state.model.events.get(milestone.event);
+      const unresolved = state.trace.unresolved.milestones.some(
+        (row) => row.event === event.id,
+      );
+      return `<button data-chain-event="${esc(event.id)}"><b>${esc(milestone.label)}</b><span>C${event.cycle}${unresolved ? " · unresolved" : ""}</span></button>`;
+    })
+    .join("");
+}
+
 /** Apply a fixture's inspectable entry point, never a fabricated causal chain. */
 function chooseExample(index) {
   const example = state.model.document.examples?.[index];
   if (!example) return;
+  state.autoFit = true;
   ["actor", "activation", "operation", "task"].forEach(
     (key) => ($(key).value = ""),
   );
@@ -2458,7 +3000,7 @@ function chooseExample(index) {
   } else if (Number.isFinite(example.cycle)) selectAnnotation(example);
   else notice("This example has no selectable recorded event.", true);
 }
-/** Canvas hit test returns the nearest visible operation; a tie remains selectable in the list. */
+/** Flat-chip hit test chooses a native cell; scene evidence uses explicit target modes. */
 function nearest(hits, x, y, limit = 12) {
   let best = null,
     dist = limit * limit;
@@ -2475,35 +3017,7 @@ function nearest(hits, x, y, limit = 12) {
   }
   return best;
 }
-/** Nearest rendered storage span, independently of dense same-clock dots. */
-function nearestStorage(x, y) {
-  let best = null,
-    distance = 25,
-    bestDepth = Infinity;
-  for (const hit of state.storageHits) {
-    const dx = hit.b.x - hit.a.x,
-      dy = hit.b.y - hit.a.y;
-    const t = Math.max(
-      0,
-      Math.min(
-        1,
-        ((x - hit.a.x) * dx + (y - hit.a.y) * dy) / (dx * dx + dy * dy || 1),
-      ),
-    );
-    const d = (x - hit.a.x - t * dx) ** 2 + (y - hit.a.y - t * dy) ** 2;
-    const depth =
-      (hit.a.depth ?? 0) + t * ((hit.b.depth ?? 0) - (hit.a.depth ?? 0));
-    if (
-      d < distance - 1e-6 ||
-      (Math.abs(d - distance) <= 1e-6 && depth < bestDepth)
-    ) {
-      best = hit;
-      distance = d;
-      bestDepth = depth;
-    }
-  }
-  return best;
-}
+
 /** Local pointer coordinates independent of page scrolling. */
 function pointer(event) {
   const r = event.currentTarget.getBoundingClientRect();
@@ -2513,6 +3027,7 @@ function pointer(event) {
 function setBusy(busy) {
   for (const id of [
     "example",
+    "chain",
     "actor",
     "activation",
     "operation",
@@ -2526,6 +3041,8 @@ function setBusy(busy) {
     "all",
     "previous",
     "next",
+    "clock-source",
+    "arrival-budget",
   ])
     $(id).disabled = busy;
 }
@@ -2538,7 +3055,78 @@ function bindControls() {
   };
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
+    sceneSelection.reset();
+    const captureComparisonView = () => {
+      const comparison = state.chain ?? state.model?.stepComparison;
+      if (!comparison?.comparisonKey) return null;
+      const origin = state.chain
+        ? state.chain.firstCycle
+        : comparison.start.cycle;
+      return {
+        kind: state.chain ? "chain" : "step",
+        key: comparison.comparisonKey,
+        offset: state.first - origin,
+        originOffset: clockOriginCycle() - origin,
+        window: state.window,
+        manualPeriodNs: state.manualPeriodNs,
+        camera: state.scene?.getCamera(),
+        controls: Object.fromEntries(
+          [
+            "clock-source",
+            "time-layout",
+            "color-mode",
+            "urgency-window",
+            "spacing",
+            "detail-level",
+            "pick-mode",
+            "computation-circuits",
+            "circuit-role",
+            "circuit-timing",
+            "circuit-delay",
+            "circuit-unknown",
+            "circuit-selected",
+            "ghost-context",
+          ].map((id) => [
+            id,
+            {
+              value: $(id).value,
+              checked: $(id).type === "checkbox" ? $(id).checked : undefined,
+            },
+          ]),
+        ),
+      };
+    };
+    const previousView = captureComparisonView();
+    const restoreComparisonView = (snapshot = previousView) => {
+      const comparison =
+        snapshot?.kind === "chain" ? state.chain : state.model.stepComparison;
+      if (!snapshot || !comparison || comparison.comparisonKey !== snapshot.key)
+        return;
+      const origin =
+        snapshot.kind === "chain"
+          ? comparison.firstCycle
+          : comparison.start.cycle;
+      state.first = origin + snapshot.offset;
+      state.timeOriginCycle = origin + snapshot.originOffset;
+      state.window = snapshot.window;
+      state.manualPeriodNs = snapshot.manualPeriodNs;
+      for (const [id, control] of Object.entries(snapshot.controls)) {
+        $(id).value = control.value;
+        if (typeof control.checked === "boolean")
+          $(id).checked = control.checked;
+      }
+      if (!state.expectsPrepared && !state.computations?.prepared)
+        $("time-layout").value = "flat";
+      state.spacing = Number($("spacing").value);
+      syncClockControls();
+      if (snapshot.camera) state.scene?.setCamera(snapshot.camera);
+      state.autoFit = !snapshot.camera;
+      render();
+    };
     const sequence = ++state.loadSequence;
+    stepComparison.reset();
+    regionalControls.configure();
+    scenarioControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const signal = state.loadController.signal,
@@ -2572,13 +3160,59 @@ function bindControls() {
       if (sequence !== state.loadSequence) return;
       state.loadTimings["Recording JSON parse"] = decoded.timings.parseMs;
       state.loadTimings["Recording index"] = decoded.timings.indexMs;
+      const stepEvidence = await loadStepEvidence({
+        entry: expected.stepEvidence,
+        recording: { bytes: byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+        signal,
+      });
+      if (sequence !== state.loadSequence) return;
+      if (stepEvidence) installStepEvidence(decoded.model, stepEvidence);
       await loadDocument(
         decoded.model,
         "Projection bytes verified against the local index; source evidence was verified during preparation.",
+        null,
+        {
+          preparedExpected: Boolean(expected.render),
+          computationsExpected: Boolean(expected.computations),
+        },
       );
-      if (state.model.document.examples?.length) {
+      scenarioControls.configure(state.model, {
+        entry: expected.latencyProfile,
+        recording: { bytes: byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+      });
+      regionalControls.configure(state.model, {
+        entry: expected.regions,
+        view: { bytes: byteLength, sha256: digest },
+        source: expected.computations,
+        baseUrl: new URL("data/", window.location.href).href,
+      });
+      const matched =
+        previousView?.kind === "chain"
+          ? matchingChain(state.model, previousView.key)
+          : previousView?.key === state.model.stepComparison?.comparisonKey
+            ? state.model.stepComparison
+            : null;
+      const initial = previousView
+        ? previousView.kind === "chain"
+          ? matched
+          : null
+        : state.model.chains.values().next().value;
+      state.chainMatchNote =
+        previousView && !matched
+          ? `No matching ${previousView.kind} for ${previousView.key} in this capture. Select another explicitly; no comparison was inferred.`
+          : null;
+      if (initial) {
+        chooseChain(initial.id);
+        restoreComparisonView();
+      } else if (matched) {
+        restoreComparisonView();
+      } else if (!previousView && state.model.document.examples?.length) {
         $("example").value = "0";
         chooseExample(0);
+      } else {
+        render();
       }
       setBusy(false);
       await new Promise((resolve) =>
@@ -2630,7 +3264,11 @@ function bindControls() {
     }
   };
   $("file").onchange = async () => {
+    sceneSelection.reset();
     const sequence = ++state.loadSequence;
+    stepComparison.reset();
+    regionalControls.configure();
+    scenarioControls.configure();
     state.loadController?.abort();
     state.loadController = new AbortController();
     const file = $("file").files[0];
@@ -2662,14 +3300,17 @@ function bindControls() {
   };
   $("first").onchange = () => {
     state.first = Number($("first").value);
+    state.autoFit = true;
     render();
   };
   $("window").onchange = () => {
     state.window = Number($("window").value);
+    state.autoFit = true;
     render();
   };
   $("position").oninput = () => {
     state.first = Number($("position").value);
+    state.autoFit = true;
     render();
   };
   $("spacing").oninput = () => {
@@ -2677,23 +3318,6 @@ function bindControls() {
     repaint();
   };
   $("spatial-density").onchange = () => repaint();
-  $("what-if-period").onchange = () => {
-    const input = $("what-if-period");
-    const period = Number(input.value);
-    if (
-      input.value !== "" &&
-      (!Number.isFinite(period) ||
-        period <= 0 ||
-        period * state.window > Number.MAX_SAFE_INTEGER)
-    ) {
-      input.value = "";
-      notice(
-        "A hypothetical period must be positive and within the numeric range.",
-        true,
-      );
-    }
-    render();
-  };
   for (const id of [
     "computation-circuits",
     "circuit-role",
@@ -2731,10 +3355,12 @@ function bindControls() {
   };
   $("previous").onclick = () => {
     state.first -= state.window;
+    state.autoFit = true;
     render();
   };
   $("next").onclick = () => {
     state.first += state.window;
+    state.autoFit = true;
     render();
   };
   $("step").onclick = () => {
@@ -2742,6 +3368,7 @@ function bindControls() {
     const b = selectedBounds();
     state.first = b.firstCycle;
     state.window = b.endCycle - b.firstCycle;
+    state.autoFit = true;
     render();
   };
   $("completion").onclick = () => {
@@ -2757,11 +3384,15 @@ function bindControls() {
     const c = state.model.bundle.capture;
     state.first = c.first_cycle;
     state.window = c.end_cycle - c.first_cycle;
+    state.autoFit = true;
     render();
   };
   $("example").onchange = () => {
     if ($("example").value !== "") chooseExample(Number($("example").value));
   };
+  $("chain").onchange = () => chooseChain($("chain").value);
+  $("chain-only").onchange = render;
+  $("chain-context").onchange = render;
   $("resource").onchange = () => {
     state.resource = $("resource").value || null;
     $("fit-selection").disabled =
@@ -2776,10 +3407,14 @@ function bindControls() {
       render();
     };
   $("clear-trace").onclick = () => {
+    state.chain = null;
+    $("chain").value = "";
     state.trace = null;
     render();
   };
   document.addEventListener("click", (e) => {
+    const milestone = e.target.closest("[data-chain-event]");
+    if (milestone) selectEvent(milestone.dataset.chainEvent, true, true);
     const target = e.target.closest("[data-event]");
     if (target) selectEvent(target.dataset.event);
     const version = e.target.closest("[data-version]");
@@ -2794,6 +3429,7 @@ function bindControls() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches("[data-cell]")) e.target.click();
   });
+  $("pick-all").onchange = () => drawStackOverlay();
   const stack = $("stack");
   let drag = null;
   stack.onpointerdown = (e) => {
@@ -2818,29 +3454,13 @@ function bindControls() {
       drag.y = p.y;
       repaint(true);
     } else {
-      ensureSceneHits();
-      const hit = nearest(state.hits, p.x, p.y, 5);
-      const storage = hit ? null : nearestStorage(p.x, p.y);
-      $("tooltip").hidden = !hit && !storage;
-      if (hit || storage) {
-        $("tooltip").textContent = hit
-          ? `C${hit.event.cycle} · ${hit.event.actor} · ${hit.event.operation}`
-          : `${storage.segment.kind === "write" ? "Load" : "Residence"} C${storage.segment.fromCycle}→C${storage.segment.toCycle} · ${storage.segment.version} · ${storage.point.cell ?? storage.segment.resource}`;
-        $("tooltip").style.left =
-          `${Math.min(p.x + 12, stack.clientWidth - 220)}px`;
-        $("tooltip").style.top = `${p.y + 14}px`;
-      }
+      sceneSelection.hover(p);
     }
   };
   stack.onpointerup = (e) => {
     const p = pointer(e);
-    if (drag && !drag.moved) {
-      ensureSceneHits();
-      const hit = nearest(state.hits, p.x, p.y, 5);
-      const storage = hit ? null : nearestStorage(p.x, p.y);
-      if (hit) selectEvent(hit.event.id, false);
-      else if (storage)
-        selectStorage(storage.segment.version, storage.point.cell ?? null);
+    if (drag && !drag.moved && !drag.pan && e.button === 0) {
+      sceneSelection.click(p);
     }
     drag = null;
   };
@@ -2850,12 +3470,21 @@ function bindControls() {
     repaint(true);
   };
   stack.oncontextmenu = (e) => e.preventDefault();
-  stack.onpointercancel = () => (drag = null);
+  stack.onpointercancel = () => {
+    drag = null;
+    sceneSelection.clear();
+    drawStackOverlay();
+  };
   stack.onpointerleave = () => {
-    $("tooltip").hidden = true;
+    sceneSelection.leave();
   };
   stack.onkeydown = (e) => {
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+    if (e.key === "Escape") {
+      sceneSelection.clear();
+      drawStackOverlay();
+    } else if (
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+    ) {
       const x = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
       const y = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
       if (e.shiftKey) state.scene?.pan(x * 20, y * 20);
@@ -2890,6 +3519,7 @@ function bindControls() {
           ((p.x - 16) / ($("timeline").clientWidth - 32)) *
             (c.end_cycle - c.first_cycle),
       ) - Math.floor(state.window / 2);
+    state.autoFit = true;
     render();
   };
   $("toggle-inspector").onclick = () => {
@@ -2898,6 +3528,14 @@ function bindControls() {
     $("explorer").classList.toggle("inspector-open", open);
     $("toggle-inspector").setAttribute("aria-expanded", String(open));
     repaint();
+  };
+  $("toggle-scene-controls").onclick = () => {
+    const hidden = $("scene-panel").classList.toggle("scene-controls-hidden");
+    $("toggle-scene-controls").textContent = hidden
+      ? "Show controls"
+      : "Hide controls";
+    $("toggle-scene-controls").setAttribute("aria-expanded", String(!hidden));
+    repaint(true);
   };
   $("scene-focus").onclick = () => {
     const open = document.body.classList.toggle("scene-focus");
@@ -2931,11 +3569,11 @@ function bindControls() {
     repaint(true);
   };
   for (const id of [
+    "pick-mode",
     "color-mode",
     "detail-level",
     "ghost-context",
     "time-layout",
-    "arrival-budget",
     "urgency-window",
   ])
     $(id).onchange = () => {
@@ -2944,9 +3582,41 @@ function bindControls() {
           $(control).reportValidity();
           return;
         }
-      if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
+      if (id === "time-layout") state.autoFit = true;
+      if (id === "time-layout" && arrivalEnabled())
+        $("pick-mode").value = "sinks";
       repaint();
     };
+  $("clock-source").onchange = () => {
+    state.autoFit = false;
+    syncClockControls();
+    render();
+  };
+  $("arrival-budget").onchange = () => {
+    const input = $("arrival-budget");
+    if (!input.checkValidity()) {
+      input.reportValidity();
+      return;
+    }
+    const periodNs = Number(input.value);
+    const clocks = state.model
+      ? state.model.bundle.capture.end_cycle -
+        state.model.bundle.capture.first_cycle
+      : 1;
+    if (periodNs * clocks > Number.MAX_SAFE_INTEGER) {
+      notice(
+        "The manual period exceeds the viewer's numeric range for this capture.",
+        true,
+      );
+      syncClockControls();
+      return;
+    }
+    state.manualPeriodNs = periodNs;
+    state.autoFit = false;
+    $("clock-source").value = "manual";
+    syncClockControls();
+    render();
+  };
   const resize = new ResizeObserver(() => repaint());
   resize.observe(document.querySelector(".workspace"));
   resize.observe($("scene-frame"));
@@ -2963,9 +3633,10 @@ async function initialize() {
       : (index.captures ?? index.examples ?? index.files ?? []);
     for (const entry of entries) {
       const path = entry.file;
-      if (typeof path !== "string" || !/^[-a-zA-Z0-9_]+\.json$/.test(path))
-        throw Error("Unsafe example filename");
-      const url = `data/${path}`;
+      const url = publicationUrl(
+        path,
+        new URL("data/", window.location.href).href,
+      );
       state.index.set(url, entry);
       $("capture").add(
         new Option(

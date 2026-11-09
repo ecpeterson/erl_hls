@@ -101,8 +101,8 @@ test("reconvergence exposes readiness separately instead of charging it to propa
   const result = arrivalCircuit(index, layer),
     ready = result.segments.filter((row) => row.kind === "readiness");
   assert.equal(ready.length, 1);
-  assert.deepEqual([ready[0].from.arrivalNs, ready[0].to.arrivalNs], [5, 8]);
-  assert.equal(ready[0].interpolation, "latest_input_readiness_not_storage");
+  assert.deepEqual([ready[0].from.arrivalNs, ready[0].to.arrivalNs], [2, 5]);
+  assert.equal(ready[0].interpolation, "latest_input_readiness");
   const propagation = result.segments.find(
     (row) => row.kind === "propagation" && row.arcIds.includes(1),
   );
@@ -117,6 +117,80 @@ test("reconvergence exposes readiness separately instead of charging it to propa
         row.to.arrivalNs === 8,
     ),
   );
+});
+
+test("logic settling aligns to output readiness without changing native arc timing", () => {
+  const cone = {
+    id: "sink/data",
+    role: "data",
+    pinIndices: [0, 1, 2],
+    arcIndices: [0, 1],
+    rootPins: [2],
+    pinArrivals: { registered: [0, 5, 7], static: [0, 5, 7] },
+    pathDelays: { registered: [1, 7], static: [1, 7] },
+  };
+  const index = {
+    pinGeometry: [
+      [0, 0, 0, "logic/I0"],
+      [0, 10, 0, "logic/I1"],
+      [0, 20, 0, "logic/O"],
+    ],
+    arcGeometry: [
+      [0, 2, 1, 1],
+      [1, 2, 1, 2],
+    ],
+    primitives: [],
+    routes: [],
+    cones: [cone],
+    writes: new Map([["write", { cones: [0] }]]),
+    model: { events: new Map([["write", { access: { resource: "word" } }]]) },
+  };
+  const layer = { cones: [cone], operations: [{ event: "write" }] },
+    original = structuredClone(index);
+  for (const scope of ["registered", "static"]) {
+    const result = arrivalCircuit(index, layer, { scope });
+    const ready = result.segments.filter((row) => row.kind === "readiness");
+    assert.equal(ready.length, 1);
+    assert.deepEqual(ready[0].from, { x: 0, y: 0, arrivalNs: 0 });
+    assert.deepEqual(ready[0].to, { x: 0, y: 0, arrivalNs: 6 });
+    assert.equal(ready[0].interpolation, "latest_input_readiness");
+    const logic = result.segments.filter((row) => row.kind === "propagation");
+    assert.deepEqual(
+      logic.map((row) => [
+        row.from.arrivalNs,
+        row.to.arrivalNs,
+        row.localDelayNs,
+      ]),
+      [
+        [6, 7, 1],
+        [5, 7, 2],
+      ],
+    );
+    assert(
+      logic.every(
+        (row) =>
+          row.to.x === 20 &&
+          row.interpolation === "completion_aligned_logic_arc",
+      ),
+    );
+    assert.deepEqual(
+      result.details.map((row) => [
+        row.arrivalFromNs,
+        row.arrivalViaNs,
+        row.arrivalToNs,
+        row.delayNs,
+      ]),
+      [
+        [0, 1, 7, 1],
+        [5, 7, 7, 2],
+      ],
+    );
+    assert.deepEqual(
+      logic.map((row) => row.pathDelayNs),
+      [1, 7],
+    );
+  }
+  assert.deepEqual(index, original);
 });
 
 test("identical timing geometry unions contributors but differing arrival times remain distinct", () => {

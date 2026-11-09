@@ -48,6 +48,9 @@ function spatialBounds(cells) {
  * whole-cell binding without bit identities also remains contextual, even for
  * writes. Folded bits share one cell entry with all selected logical bit IDs.
  *
+ * An optional displayMask narrows a write for presentation only. It must be a
+ * nonempty subset of the recorded write; the original access is never changed.
+ *
  * cells/unplacedCells hold native records plus bits/accessed/contextual flags;
  * accessed means selected by a logical access mask, never native enable/activity.
  * unknownBits counts considered bits lacking a supported cell identity;
@@ -56,10 +59,12 @@ function spatialBounds(cells) {
  * A delayed response is not placed at the source word: its execution location
  * needs separate evidence. Unknown events, widths, bit IDs and masks reject.
  */
-export function eventFootprint(model, eventId) {
+export function eventFootprint(model, eventId, { displayMask } = {}) {
   const event = model.events.get(eventId);
   if (!event) throw Error(`Unknown footprint event: ${eventId}`);
   const access = event.access;
+  if (displayMask !== undefined && access?.kind !== "write")
+    throw Error("Display footprint subset requires a recorded write");
   const result = {
     event: eventId,
     resource: access?.resource ?? null,
@@ -90,27 +95,48 @@ export function eventFootprint(model, eventId) {
   const write = access.kind === "write";
   const selectedRead =
     access.kind === "read_request" && access.read_mask !== undefined;
-  const mask =
+  let mask =
     write || selectedRead
       ? accessMask(write ? access.mask : access.read_mask, width)
       : null;
+  if (displayMask !== undefined) {
+    if (!write)
+      throw Error("Display footprint subset requires a recorded write");
+    const selected = accessMask(displayMask, width);
+    if (
+      !selected.population ||
+      (selected.value & mask.value) !== selected.value
+    )
+      throw Error("Display footprint subset exceeds the recorded write");
+    mask = selected;
+  }
   if (selectedRead && !mask.population)
     throw Error("Read footprint mask is empty");
   const known = mask !== null;
   const consideredBits = known ? mask.population : width;
   Object.assign(result, {
-    mode: write ? "write_bits" : selectedRead ? "read_bits" : "word_context",
+    mode:
+      displayMask !== undefined
+        ? "display_bits"
+        : write
+          ? "write_bits"
+          : selectedRead
+            ? "read_bits"
+            : "word_context",
     bitSelectionKnown: known,
     consideredBits,
     selectedBits: known ? consideredBits : null,
     unknownBits: consideredBits,
-    reason: write
-      ? "Logical write-mask bits at qualified stored-value locations; native enable and switching are not established."
-      : selectedRead
-        ? "Recorded selected operational read bits at qualified stored-value locations; not sensitized gate activity."
-        : access.kind === "hold"
-          ? "Whole-word storage context; a hold is not a computation or read."
-          : "Whole-word storage context; the consumed read-bit subset is unknown.",
+    reason:
+      displayMask !== undefined
+        ? "Displayed destination subset of the recorded full write; omitted bits remain in the evidence. This is not a sensitized path selection."
+        : write
+          ? "Logical write-mask bits at qualified stored-value locations; native enable and switching are not established."
+          : selectedRead
+            ? "Recorded selected operational read bits at qualified stored-value locations; not sensitized gate activity."
+            : access.kind === "hold"
+              ? "Whole-word storage context; a hold is not a computation or read."
+              : "Whole-word storage context; the consumed read-bit subset is unknown.",
   });
   if (!consideredBits) return result;
   const bindingBits = placement.binding?.bits ?? [];

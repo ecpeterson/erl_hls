@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>HLS Spacetime · saved execution explorer</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="step-comparison.css" />
   </head>
   <body>
     <header>
@@ -83,30 +84,29 @@
       <p>
         Within-clock arrival places old Q sampled at C on the launch reference
         plane, combinational pins at their latest static arrival, and write C at
-        the next Q/capture plane C+1. The common Display budget starts at a
-        hypothetical 10 ns; it is not a measured clock period. Late arrivals
-        extend beyond that boundary. Gray links distinguish input-readiness and
-        ready-to-capture gaps from recorded storage; red marks budget overruns.
-        Unknown timing uses a labelled shelf, not a zero-delay height. Known
-        endpoints with incomplete route geometry stay connected by a thin core
-        with a dashed sleeve. Heights between measured pin endpoints are
+        the next Q/capture plane C+1. Auto STA uses the saved whole-design
+        reference estimate; Original target uses its constraint, and Manual
+        supplies a shared hypothetical period. Missing clock evidence falls back
+        explicitly to the shared manual value, initially 10 ns. The spatial
+        scale per nanosecond stays fixed across matched captures. None is a
+        measured running clock. Late arrivals extend beyond the next reference
+        boundary. Gray links distinguish other-input readiness and
+        ready-to-capture intervals from recorded storage. Logic is shown at
+        output settling time; red marks budget overruns. Geometry without
+        arrival timing is omitted here; clock planes retain its spatial context.
+        Known endpoints with incomplete route geometry stay connected by a thin
+        core with a dashed sleeve. Heights between measured pin endpoints are
         interpolated along schematic routing chords. These are timing bounds,
         not a switching trace. Computation + urgency keeps destination hue and
         brightens complete paths within the chosen distance of the capture-wide
         longest path. It is not STA slack or a congestion measurement.
       </p>
       <p>
-        Delay emphasis uses a fixed capture-wide color scale for the selected
-        timing scope. A segment carries the longest complete source-to-sink path
-        through it. Shared geometry takes the maximum applicable path bound; an
-        untimed through-path makes it unknown. Geometry outside the timing scope
-        is neutral. The minimum-delay filter still uses whole-cone bounds. This
-        is neither the mark's individual delay nor path slack or dynamic
-        criticality. Register Q → D/control excludes external and constant
-        launches, clock-to-Q and setup. Whole-cone timing includes all source
-        boundaries. Both preserve the full selected cone and use conservative
-        SDF bounds. Actor, task and operation filters select work; function and
-        delay filters select its circuits. The prepared viewer loads rendering
+        Register Q → D/control excludes external and constant launches,
+        clock-to-Q and setup. Whole-cone timing includes all source boundaries.
+        Both preserve the full selected cone and use conservative SDF bounds.
+        Actor, task and operation filters select work; function and delay
+        filters select its circuits. The prepared viewer loads rendering
         indexes; the original native graph and records remain separately
         retained, hash-bound evidence. They need not all be loaded into the
         browser to render the scene.
@@ -168,6 +168,26 @@
             <option value="">Choose a recorded example</option>
           </select></label
         >
+        <section id="chain-panel" class="chain-panel" hidden>
+          <div class="selection-toolbar">
+            <label
+              >Follow an action<select id="chain">
+                <option value="">Choose an action chain</option>
+              </select></label
+            >
+            <label
+              ><input type="checkbox" id="chain-only" checked /> Only this
+              chain</label
+            >
+            <label
+              ><input type="checkbox" id="chain-context" /> Adjacent input
+              context</label
+            >
+          </div>
+          <p id="chain-summary" class="legend-note"></p>
+          <div id="chain-milestones" class="chain-milestones"></div>
+        </section>
+        <section id="step-comparison" hidden></section>
         <div class="view-grid">
           <section id="scene-panel" class="panel stack-panel">
             <div class="panel-heading">
@@ -176,8 +196,16 @@
                 <span id="space-unit"
                   >Device tile coordinates · time flows down</span
                 >
+                <p id="scene-caption" class="compact-scene-caption"></p>
               </div>
               <div class="scene-actions">
+                <button
+                  id="toggle-scene-controls"
+                  aria-expanded="true"
+                  title="Hide toolbars and details without changing the view settings"
+                >
+                  Hide controls
+                </button>
                 <button
                   id="toggle-inspector"
                   aria-controls="evidence-inspector"
@@ -246,6 +274,29 @@
                 >Drag to orbit · Shift-drag to pan · Scroll to zoom</span
               >
             </div>
+            <div class="clock-reference-controls">
+              <label
+                >Period source<select id="clock-source">
+                  <option value="auto">Auto STA</option>
+                  <option value="target">Original target</option>
+                  <option value="manual">Manual</option>
+                </select></label
+              >
+              <label
+                >Period (ns)<input
+                  id="arrival-budget"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  value="10"
+                  required
+              /></label>
+              <p id="clock-reference-note" class="legend-note"></p>
+              <details id="clock-reference-evidence" hidden>
+                <summary>Whole-design STA evidence</summary>
+                <pre id="clock-reference-provenance"></pre>
+              </details>
+            </div>
             <div class="scene-display-controls">
               <label
                 ><input id="computation-circuits" type="checkbox" disabled />
@@ -264,10 +315,6 @@
                   <option value="role" selected>Data / enable / reset</option>
                   <option value="computation">Sub-computation</option>
                   <option value="direction">Flow direction</option>
-                  <option value="timing">Delay emphasis</option>
-                  <option value="computation-timing">
-                    Computation + delay
-                  </option>
                 </select></label
               >
               <label
@@ -320,14 +367,16 @@
               </div>
               <div id="arrival-legend" hidden>
                 <span
-                  >Height: latest static arrival · gray: reconvergence /
-                  ready-to-capture interval · red: budget overrun · unknowns on
-                  a separate shelf</span
+                  >Height: latest static arrival · logic shown at output
+                  settling time · gray: other-input readiness / ready-to-capture
+                  interval · red: budget overrun · missing arrival timing is
+                  omitted</span
                 ><span
                   >Solid: retained endpoint / routing connectivity · thin core
                   with dashed sleeve: schematic endpoint connection across
                   incomplete routing geometry</span
                 >
+                <span id="arrival-ruler-note"></span>
               </div>
               <div id="direction-legend" hidden>
                 <span>Source / earlier</span
@@ -337,16 +386,6 @@
                   >Each displayed span restarts the ramp · conflicting
                   directions / unknown routes stay neutral · connectivity, not
                   switching</span
-                >
-              </div>
-              <div id="timing-legend" hidden>
-                <span id="timing-min">0 ns</span
-                ><i id="timing-ramp" class="timing-ramp"></i
-                ><span id="timing-max">Unknown</span
-                ><span><i class="outside-timing"></i>Outside scope</span
-                ><span class="legend-note"
-                  >Longest source → sink path through each segment; uniform
-                  color means equal path cost, not zero added delay</span
                 >
               </div>
               <span><i class="role-unknown"></i>Unknown</span>
@@ -369,18 +408,53 @@
                 aria-label="Window first clock"
               /><span id="window-label"></span>
             </div>
+            <div class="selection-toolbar">
+              <label
+                >Click target<select id="pick-mode">
+                  <option value="sinks">Timing sinks</option>
+                  <option value="reads">Read events</option>
+                  <option value="writes">Write events</option>
+                  <option value="storage">Storage spans</option>
+                  <option value="navigate">Navigate only</option>
+                </select></label
+              >
+              <label
+                ><input type="checkbox" id="pick-all" /> Show all targets</label
+              >
+              <span id="pick-summary"></span>
+            </div>
+            <p id="untimed-summary" class="legend-note" hidden></p>
+            <p id="pick-notice" class="legend-note" aria-live="polite"></p>
             <div class="path-workbench">
               <div id="scene-frame" class="canvas-wrap">
                 <canvas id="scene3d" aria-hidden="true"></canvas>
                 <canvas
                   id="stack"
-                  aria-label="Interactive chip stack. Camera controls change the view; the event list supports keyboard selection."
+                  aria-label="Interactive chip stack. Choose a click target above. Diamonds select timing sinks; circles select events. Overlapping targets open a keyboard-accessible chooser. Drag to move the camera."
                   tabindex="0"
                 ></canvas>
                 <div class="axis-hint">
                   CLOCK AXIS<span>Presets restore time orientation</span>
                 </div>
                 <div id="tooltip" hidden></div>
+                <section
+                  id="pick-chooser"
+                  aria-label="Targets at cursor"
+                  hidden
+                >
+                  <div class="pick-heading">
+                    <strong id="pick-heading"></strong
+                    ><button id="pick-close" aria-label="Close target chooser">
+                      ×
+                    </button>
+                  </div>
+                  <div id="pick-choices"></div>
+                  <div class="pick-paging">
+                    <button id="pick-prev">Previous targets</button
+                    ><span id="pick-page"></span
+                    ><button id="pick-next">Next targets</button>
+                  </div>
+                </section>
               </div>
               <details id="sink-panel" class="render-notes" open hidden>
                 <summary>Paths to sinks · logic / net delay</summary>
@@ -514,6 +588,148 @@
                     <p id="cut-limits"></p>
                   </details>
                 </section>
+                <details id="scenario-panel" class="regional-panel">
+                  <summary>What-if: added actor latency</summary>
+                  <p id="scenario-status" aria-live="polite">
+                    No scenario profile loaded.
+                  </p>
+                  <button type="button" id="scenario-load" disabled>
+                    Load saved scenario profile
+                  </button>
+                  <div id="scenario-content" hidden>
+                    <label>Change<select id="scenario-choice"></select></label>
+                    <div class="analysis-controls">
+                      <label
+                        >Extra clocks per action<input
+                          id="scenario-latency"
+                          type="number"
+                          min="0"
+                          max="1000"
+                          step="1"
+                          value="1"
+                          required
+                      /></label>
+                      <label
+                        >Assumed baseline period (ns)<input
+                          id="scenario-before"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="10"
+                          required
+                      /></label>
+                      <label
+                        >Assumed candidate period (ns)<input
+                          id="scenario-after"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="8.5"
+                          required
+                      /></label>
+                    </div>
+                    <button type="button" id="scenario-run">
+                      Run conditional scenario
+                    </button>
+                    <div id="scenario-results"></div>
+                    <p id="scenario-physical"></p>
+                    <details>
+                      <summary>Source obligations & limitations</summary>
+                      <div id="scenario-evidence"></div>
+                    </details>
+                  </div>
+                </details>
+                <details id="regional-panel" class="regional-panel">
+                  <summary>Regional routing resources</summary>
+                  <p id="region-status" aria-live="polite">
+                    This capture has no prepared regional-resource data.
+                  </p>
+                  <button id="region-load" type="button" disabled>
+                    Load saved regional data
+                  </button>
+                  <div id="region-content" hidden>
+                    <div class="analysis-controls">
+                      <label
+                        >Count<select id="region-metric">
+                          <option value="pips">
+                            Distinct routing switches
+                          </option>
+                          <option value="cells">Installed cells</option>
+                          <option value="nets">Distinct routed nets</option>
+                        </select></label
+                      >
+                      <label
+                        >Primitive kind<select id="region-kind" disabled>
+                          <option value="">All primitive kinds</option>
+                        </select></label
+                      >
+                      <label
+                        >Map extent<select id="region-scope">
+                          <option value="family">Path neighborhood</option>
+                          <option value="all">Whole installed device</option>
+                        </select></label
+                      >
+                    </div>
+                    <p id="region-scope-note"></p>
+                    <div id="region-map" class="region-map"></div>
+                    <label
+                      >Region<select id="region-bin">
+                        <option value="">Select a region</option>
+                      </select></label
+                    >
+                    <p id="region-scale"></p>
+                    <label class="analysis-toggle"
+                      ><input id="region-overlay" type="checkbox" /> Show
+                      resource map on 3D reference plane</label
+                    >
+                    <p class="muted">
+                      Installed allocation and route membership, not capacity
+                      utilization, routing demand, congestion or placement
+                      causality. Counts use complete retained native
+                      populations, independent of the clock window.
+                    </p>
+                    <p id="region-selection"></p>
+                    <p class="muted">
+                      Resource selection stays pinned across path and list
+                      filters for comparison; Clear resource selection removes
+                      it.
+                    </p>
+                    <button id="region-clear" type="button">
+                      Clear resource selection
+                    </button>
+                    <label
+                      >Contributors<select id="region-population">
+                        <option value="nets">Nets</option>
+                        <option value="cells">Cells</option>
+                        <option value="pips">Routing switches</option>
+                      </select></label
+                    >
+                    <label
+                      >Find contributor<input
+                        id="region-search"
+                        type="search"
+                        placeholder="Native cell, net or PIP name"
+                    /></label>
+                    <label class="analysis-toggle"
+                      ><input id="region-family-only" type="checkbox" />
+                      Contributors touching the path family</label
+                    >
+                    <div id="region-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="region-prev" type="button">
+                        Previous resource page</button
+                      ><span id="region-page"></span
+                      ><button id="region-next" type="button">
+                        Next resource page
+                      </button>
+                    </div>
+                    <p id="region-footprint"></p>
+                    <details>
+                      <summary>Resource coverage</summary>
+                      <p id="region-coverage"></p>
+                    </details>
+                  </div>
+                </details>
                 <div class="sink-kind-legend">
                   <span><i class="sink-logic"></i>Logic</span
                   ><span><i class="sink-net"></i>Net / transmission</span
@@ -559,16 +775,6 @@
               <summary>Layers, storage & timing filters</summary>
               <div class="stack-controls">
                 <label
-                  >Display budget (ns)<input
-                    id="arrival-budget"
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    value="10"
-                    required
-                    title="Hypothetical common Q-to-D budget; not a measured clock period"
-                /></label>
-                <label
                   >Highlight within (ns)<input
                     id="urgency-window"
                     type="number"
@@ -579,7 +785,7 @@
                     title="Distance below the capture-wide longest structural path"
                 /></label>
                 <label
-                  >Layer spacing<input
+                  >Time scale<input
                     id="spacing"
                     type="range"
                     min="2"
@@ -608,7 +814,7 @@
                     checked
                     disabled
                   />
-                  Expand selected word into cells</label
+                  Expand selected storage into cells</label
                 ><span class="legend"
                   ><i class="load"></i> load C→C+1
                   <i class="hold"></i> residence <i></i> selected
@@ -762,14 +968,6 @@
             tabindex="0"
           ></canvas>
           <p id="activity-summary" class="storage-summary"></p>
-          <label
-            >Hypothetical clock period (ns; optional)<input
-              id="what-if-period"
-              type="number"
-              min="0.001"
-              step="any"
-              placeholder="Unspecified"
-          /></label>
           <p id="timing-summary" class="storage-summary"></p>
         </section>
         <section class="panel events-panel">

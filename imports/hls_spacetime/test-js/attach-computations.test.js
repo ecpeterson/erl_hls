@@ -372,3 +372,105 @@ test("a changed recording cannot reuse an earlier exact-byte binding", async (t)
   await writeFile(options.view, "{}");
   await assert.rejects(() => attachComputations(options), /identity mismatch/);
 });
+
+/** A same-capture revision has no new simulator identity or tap population. */
+function reinterpret({ graph, recording }, observation = "f".repeat(64)) {
+  const previous = recording.catalogue.correspondence_origin ?? null,
+    current = recording.bundle.build;
+  const build = { ...current, observation };
+  const trace = previous?.extended_trace_sha256 ?? "2".repeat(64);
+  recording.catalogue.correspondence_origin = {
+    kind: "observation-reinterpretation",
+    schema: 1,
+    build: { ...current },
+    revised_build: build,
+    previous_correspondence: previous,
+    checkpoint: graph.checkpoint,
+    base_projection_sha256: "1".repeat(64),
+    original_trace_sha256: trace,
+    extended_trace_sha256: trace,
+    capture_bytes: 100,
+    dependency_observer: "dependencies",
+    original_plan_sha256: "4".repeat(64),
+    revised_plan_sha256: "5".repeat(64),
+    review_sha256: "6".repeat(64),
+    comparison: {
+      same_capture_bytes: true,
+      source_rtl_unchanged: true,
+      declarations_unchanged: true,
+      old_dependency_bindings_retained: true,
+      only_equivalent_state_bindings_added: true,
+      added_bindings: 1,
+      first_cycle: 0,
+      end_cycle: 3,
+      compared_cycles: 3,
+    },
+  };
+  graph.build = { ...build };
+  graph.attachment.build = { ...build };
+  recording.bundle.build = { ...build };
+  recording.catalogue.build = { ...build };
+}
+
+test("same-capture revisions compose with existing native correspondence without fabricated simulator receipts", async (t) => {
+  for (const setup of [
+    reinterpret,
+    (s) => {
+      extend(s);
+      reinterpret(s);
+    },
+    (s) => {
+      reinterpret(s);
+      extend(s, "9".repeat(64));
+    },
+    (s) => {
+      extend(s);
+      reinterpret(s);
+      extend(s, "9".repeat(64));
+    },
+  ]) {
+    const { options } = await fixture(t, setup);
+    await attachComputations(options);
+    const manifest = JSON.parse(
+      await readFile(join(options.output, "computations", "manifest.json")),
+    );
+    assert.equal(manifest.attachment.nativeBuild.observation, "c".repeat(64));
+  }
+});
+
+test("reinterpretation cannot bypass trace, plan, build, bounds or legacy simulator continuity checks", async (t) => {
+  for (const change of [
+    (s) =>
+      (s.recording.catalogue.correspondence_origin.extended_trace_sha256 =
+        "9".repeat(64)),
+    (s) =>
+      delete s.recording.catalogue.correspondence_origin.original_plan_sha256,
+    (s) => delete s.recording.catalogue.correspondence_origin.review_sha256,
+    (s) =>
+      (s.recording.catalogue.correspondence_origin.revised_build.observation =
+        "9".repeat(64)),
+    (s) =>
+      (s.recording.catalogue.correspondence_origin.comparison.old_dependency_bindings_retained = false),
+    (s) =>
+      (s.recording.catalogue.correspondence_origin.comparison.end_cycle = 4),
+    (s) =>
+      (s.recording.catalogue.correspondence_origin.kind =
+        "unreviewed-revision"),
+    (s) => {
+      extend(s, "9".repeat(64));
+      s.recording.catalogue.correspondence_origin.simulator_sha256 = "8".repeat(
+        64,
+      );
+    },
+  ]) {
+    const { options } = await fixture(t, (s) => {
+      extend(s);
+      reinterpret(s);
+      change(s);
+    });
+    await assert.rejects(
+      () => attachComputations(options),
+      /identity|comparison|correspondence/,
+    );
+  }
+});

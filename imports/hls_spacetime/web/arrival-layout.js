@@ -41,8 +41,9 @@ export function arrivalCoordinate(cycle, arrivalNs, budgetNs) {
 }
 
 /** A recorded write at C belongs to capture boundary B_(C+1). Other events
- * retain their cycle anchor; this helper neither edits evidence nor infers an
- * arrival for semantic events, RAM responses, reset roots or missing samples.
+ * retain their cycle anchor. This arithmetic helper does not qualify an event
+ * for arrival geometry: callers must establish boundary semantics first using
+ * arrivalEventAnchor or an explicit native capture predicate.
  */
 export function eventCoordinate(event) {
   requireCycle(event?.cycle);

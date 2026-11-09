@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { arrivalScene } from "../web/arrival-scene.js";
+import { overlayDisplay } from "../web/overlay-display.js";
 import {
   DIRECTION_SOURCE_COLOR,
   DIRECTION_SINK_COLOR,
-  UNKNOWN_COLOR,
 } from "../web/perceptual-color.js";
 const p = (x, y, arrivalNs) => ({ x, y, arrivalNs });
 const options = {
@@ -70,7 +70,7 @@ test("a final or reset-retired write gains no following capture geometry", () =>
   assert.equal(result.markers[0].kind, "arrival-pin");
 });
 
-test("unknown mapped timing uses an explicit shelf, not arrival zero", () => {
+test("unknown arrivals retain coverage without acquiring a time coordinate", () => {
   const result = arrivalScene(
     {
       segments: [{ from: p(0, 0, null), to: p(10, 20, null), kind: "unknown" }],
@@ -79,13 +79,16 @@ test("unknown mapped timing uses an explicit shelf, not arrival zero", () => {
     },
     options,
   );
-  assert.equal(result.summary.unknownSegments, 1);
-  assert.equal(result.summary.unknownMarks, 1);
-  assert.equal(result.summary.unknownRoots, 1);
-  assert.equal(result.segments[0].from[2], 3.82);
-  assert.equal(result.markers[0].position[2], 3.82);
-  assert.equal(result.markers[0].color, UNKNOWN_COLOR);
-  assert.equal(result.markers.length, 1);
+  assert.deepEqual(result.summary, {
+    lateRoots: 0,
+    unknownRoots: 1,
+    uncapturedRoots: 0,
+    unknownSegments: 1,
+    unknownMarks: 1,
+  });
+  assert.deepEqual(result.segments, []);
+  assert.deepEqual(result.markers, []);
+  assert.deepEqual(result.focus, []);
 });
 
 test("outside scope and missing XY never invent timed physical positions", () => {
@@ -243,9 +246,166 @@ test("schematic metadata never turns unknown or readiness spans into propagation
     },
     options,
   );
-  assert.equal(result.segments.length, 2);
-  assert.equal(result.segments[0].kind, "arrival-unknown");
-  assert.equal(result.segments[0].from[2], 3.82);
-  assert.equal(result.segments[1].kind, "arrival-readiness");
-  assert.ok(result.segments.every((s) => s.dash === 0.018));
+  assert.equal(result.summary.unknownSegments, 1);
+  assert.equal(result.segments.length, 1);
+  assert.equal(result.segments[0].kind, "arrival-readiness");
+  assert.equal(result.segments[0].dash, 0.018);
+});
+
+test("arrival overlay metadata preserves timing at a coincident capture boundary", () => {
+  const scene = arrivalScene({ marks: [mark(10)], roots: [root(10)] }, options);
+  assert.equal(scene.markers[0].overlayRole, "timing");
+  assert.equal(scene.markers[0].timingUnknown, false);
+  assert.equal(scene.markers[1].overlayRole, "annotation");
+  const [merged] = overlayDisplay(scene).markers;
+  assert.equal(merged.color, "#123456");
+  assert.equal(merged.contributors, 2);
+  assert.deepEqual(merged.overlayEvidence, {
+    known: 1,
+    unknown: 0,
+    annotations: 1,
+  });
+  const focused = arrivalScene(
+    { marks: [{ ...mark(10), arcIds: [4] }], roots: [root(10)] },
+    { ...options, activeArc: 4 },
+  );
+  assert.equal(focused.markers[0].priority, 3);
+  assert.equal(overlayDisplay(focused).markers[0].color, "#fff2bc");
+});
+
+test("timing uncertainty remains metadata even with a known pin arrival", () => {
+  const scene = arrivalScene(
+    {
+      marks: [{ ...mark(3), timingUnknown: true }, mark(null)],
+      segments: [
+        {
+          from: p(0, 0, 0),
+          to: p(10, 20, 3),
+          kind: "propagation",
+          timingUnknown: true,
+        },
+        { from: p(10, 20, 3), to: p(10, 20, 5), kind: "readiness" },
+      ],
+    },
+    options,
+  );
+  assert.ok(
+    scene.markers.every(
+      (row) => row.overlayRole === "timing" && row.timingUnknown,
+    ),
+  );
+  assert.equal(scene.segments[0].overlayRole, "timing");
+  assert.equal(scene.segments[0].timingUnknown, true);
+  assert.equal(scene.segments[1].overlayRole, "annotation");
+});
+
+test("partly known endpoints and active selection never fabricate missing propagation time", () => {
+  const circuit = {
+    segments: [
+      { from: p(0, 0, 1), to: p(10, 20, null), kind: "unknown", arcIds: [4] },
+      { from: p(0, 0, null), to: p(10, 20, 3), kind: "unknown" },
+      {
+        from: p(0, 0, 1),
+        to: p(10, 20, 3),
+        kind: "unknown",
+        localDelayNs: null,
+      },
+      { from: { x: 0, y: 0 }, to: { x: 10, y: 20 }, kind: "propagation" },
+    ],
+    marks: [mark(1), mark(3, 2), mark(null, 3)],
+    roots: [root(null)],
+  };
+  const before = structuredClone(circuit);
+  const scene = arrivalScene(circuit, {
+    ...options,
+    mode: "direction",
+    activeArc: 4,
+  });
+  assert.deepEqual(scene.summary, {
+    lateRoots: 0,
+    unknownRoots: 1,
+    uncapturedRoots: 0,
+    unknownSegments: 4,
+    unknownMarks: 1,
+  });
+  assert.deepEqual(scene.segments, []);
+  assert.deepEqual(
+    scene.markers.map((row) => row.position[2]),
+    [4.1, 4.3],
+  );
+  assert.deepEqual(circuit, before);
+});
+
+test("known arrival geometry survives unknown complete-path bounds and mixed local delays", () => {
+  const scene = arrivalScene(
+    {
+      segments: [
+        {
+          from: p(0, 0, 1),
+          to: p(10, 20, 3),
+          kind: "propagation",
+          timingUnknown: true,
+          pathDelayNs: null,
+          localDelayNs: null,
+        },
+      ],
+      marks: [{ ...mark(3), timingUnknown: true }],
+    },
+    options,
+  );
+  assert.equal(scene.summary.unknownSegments, 0);
+  assert.equal(scene.summary.unknownMarks, 0);
+  assert.equal(scene.segments.length, 1);
+  assert.deepEqual(scene.segments[0].from, [0, 0, 4.1]);
+  assert.deepEqual(scene.segments[0].to, [1, 2, 4.3]);
+  assert.equal(scene.segments[0].timingUnknown, true);
+  assert.equal(scene.markers.length, 1);
+});
+
+test("unknown coverage is independent of detail, placement and capture availability", () => {
+  const circuit = {
+    segments: [{ from: null, to: p(10, 20, null), kind: "unknown" }],
+    marks: [{ ...mark(null), point: null }],
+    roots: [{ ...root(null), point: null }],
+  };
+  for (const detail of ["overview", "routes", "switches"]) {
+    const scene = arrivalScene(circuit, {
+      ...options,
+      detail,
+      captureAvailable: false,
+    });
+    assert.deepEqual(scene.summary, {
+      lateRoots: 0,
+      unknownRoots: 1,
+      uncapturedRoots: 1,
+      unknownSegments: 1,
+      unknownMarks: 1,
+    });
+    assert.deepEqual(scene.focus, []);
+  }
+});
+
+test("outside-scope arrival sentinels never pass null coordinates to the renderer", () => {
+  const scene = arrivalScene(
+    {
+      segments: [
+        {
+          from: p(0, 0, "not_applicable"),
+          to: p(10, 20, 2),
+          kind: "propagation",
+        },
+      ],
+      marks: [mark("not_applicable")],
+      roots: [root("not_applicable")],
+    },
+    options,
+  );
+  assert.deepEqual(scene.focus, []);
+  assert.deepEqual(scene.summary, {
+    lateRoots: 0,
+    unknownRoots: 0,
+    uncapturedRoots: 0,
+    unknownSegments: 0,
+    unknownMarks: 0,
+  });
 });

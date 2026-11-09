@@ -1,0 +1,27 @@
+# Regional routing resources
+
+2026-11-08. F3 complete within the saved-evidence scope. The optional regional derivative separates installed placement and complete routed-net footprints from selected representative path families. No compiler, application, simulation or native implementation changed or ran.
+
+## Implementation and limits
+
+`prepare-regions.mjs` verifies the exact recording and complete computation publication before producing a fresh schema-1/algorithm-1 sidecar. Native cells, globally distinct PIP identities, canonical nets, arc-to-net references and reciprocal bin memberships retain complete contributors. Net footprints include all exported wire/PIP positions, not merely the branches used by displayed paths. Source population counts reconcile unique PIPs with per-net membership and located/unknown wire memberships. Tile coordinates remain native; unknown positions, kinds and directions stay explicit. The derivative binds build/checkpoint, view bytes/hash, source descriptor and original index identity. Parts are bounded to 8 MiB and the total to 64 MiB; optional gzip changes only transport. Existing algorithm-4 render data is reused unchanged.
+
+The browser loads it only on request in a worker. Cells by primitive kind, unique PIPs and net/bin incidence use fixed full-capture scales. Keyboard/selectable map bins expose complete paged/searchable contributors. Native IDs join physical tables even when catalogue order differs. Family nets include other fanout branches and do not imply exclusive ownership or activity. A selected net exposes its whole known footprint beyond the path neighborhood. Resource selections remain pinned across list/path filters for comparison and clear on capture replacement. The optional 3D plane sits behind the last displayed clock; only explicitly selected resource geometry expands Fit selection.
+
+Counts measure installed allocation and footprint, not available capacity, utilization, router demand, congestion, electrical activity or placement causality. Nets without exported wire/PIP locations are counted separately; missing locations are not assigned invented geometry. Family/other attribution refers only to the chosen representative chains and their complete nets, not semantic ownership of surrounding circuitry.
+
+The accompanying overlay fix makes explicit selection, unknown timing, qualified timing and neutral annotations distinct presentation priorities. Exact equal-radius/equal-dash surfaces draw once across annotation kinds; intentional schematic core/sleeve geometry remains distinct. Equal-priority color conflicts remain neutral with contributor evidence retained. Arrival timing is no longer washed out by coincident readiness/access marks.
+
+## Local qualification
+
+Artifacts: `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-08/regional-routing-1/`.
+
+- The first 59 focused regional/overlay/path tests passed. The full suite then passed 401 JavaScript and 155 Erlang tests, formatting, Dialyzer and the 18-file source-contract audit with zero findings. A final camera-selection regression added one test; the affected 17 regional scene/controller tests passed, bringing the distinct JavaScript suite to 402 tests. No unrelated native/application check was repeated.
+- Main sidecar preparation ran once: 5.177 seconds, sampled peak process-group RSS 2,326,528,000 bytes, exit 0, no guard, no remaining group. Its complete raw payload is 55,271,111 bytes. Optional gzip transport is 5,161,173 bytes with exact decompression/hash equality; the raw evidence was not regenerated.
+- Saved-example review ran once: 3.114 seconds, sampled peak RSS 1,685,274,624 bytes, exit 0, no guard, no remaining group. Regional loading/validation inside that local process took 476 ms; this is not a browser benchmark. Complete counts: 21,756 cells, 23,292 canonical nets, 289,074 unique PIPs in 103 occupied bins. There are 310,601 PIP/net memberships, 762,180 located wire/net memberships and 32,425 net/bin incidences. Eleven cells lack positions; no cell kinds, PIP positions/directions or wire positions are unknown in this recording. 9,423 nets have no located routing resources; that is not an assertion that they are absent or unused.
+- For clocks 1852–1854 and the leading state137[123]/D sink, the original 47-member path neighborhood has 167 family cells, 121 touched nets and 2,383 PIPs across their full footprints. Bin X320–336/Y128–144 contains 1,200 cells, 20,501 PIPs and 1,751 nets; 39 cells, 729 PIPs and 38 nets touch the family. These bin bounds are half-open. The selected state137[342]\_i_10_n_0 net spans nine bins with 405 PIPs and 900 known wire memberships.
+- Browser review verified explicit loading, region selection, full-footprint highlighting, contributor search, cell-kind→PIP metric changes, no-neighborhood fallback, capture replacement and optional 3D placement/selection framing, with no console errors. `browser-review.json` and `regional-resources.jpg` retain the result.
+
+## Follow-on
+
+Regional attribution now supplies a spatial comparison tool. Real congestion/capacity evidence would require a separate bounded vendor report and remains unmeasured. Cross-clock completion analysis is a later task: omitted controls and unmapped state still prevent a complete causal budget, and timestamp-difference longest paths would telescope rather than establish optimization leverage. Neither follow-on is included in this change.
