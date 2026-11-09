@@ -35,6 +35,13 @@ import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
 import { arrivalRuler } from "./arrival-ruler.js";
+import { selectClockPeriod, timePoint } from "./clock-reference.js";
+import { clockSink } from "./clock-sink.js";
+import {
+  createStepComparison,
+  installStepEvidence,
+} from "./step-comparison.js";
+import { loadStepEvidence } from "./step-evidence-loader.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { createRegionalControls } from "./regional-controls.js";
 import { createScenarioControls } from "./scenario-controls.js";
@@ -46,7 +53,7 @@ import {
 } from "./arrival-events.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
-import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
+import { sceneBounds, occupiedBins } from "./scene-layout.js";
 import {
   sceneColor,
   computationColor,
@@ -101,6 +108,9 @@ const state = {
   eventCache: null,
   loadTimings: {},
   spacing: 8,
+  manualPeriodNs: 10,
+  clockSelection: null,
+  timeOriginCycle: null,
   flatHits: [],
   storageCache: null,
   metricsCache: null,
@@ -150,6 +160,12 @@ const sceneSelection = createSceneSelection({
 });
 const regionalControls = createRegionalControls(() => repaint());
 const scenarioControls = createScenarioControls();
+const stepComparison = createStepComparison({
+  element: $("step-comparison"),
+  onFocusBoundary: (boundary) => focusStepBoundary(boundary, false),
+  onTraceCompletion: (boundary) => focusStepBoundary(boundary, true),
+  onInspectClockPath: inspectClockPath,
+});
 
 /** Escape untrusted labels before placing small templates in the DOM. */
 const esc = (value) =>
@@ -268,6 +284,8 @@ async function loadDocument(
   $("circuit-unknown").checked = true;
   $("circuit-selected").checked = false;
   state.model = model;
+  state.timeOriginCycle =
+    model.stepComparison?.start.cycle ?? selectedBounds().firstCycle;
   state.nativeBounds = model.geometryBounds;
   state.displayBounds = null;
   state.autoFit = true;
@@ -476,13 +494,70 @@ function normalizeWindow() {
   $("window-label").textContent =
     `C${state.first}–${state.first + state.window - 1}`;
 }
+/** Clock selection uses whole-design metadata, never the visible circuit subset.
+ * Captures without qualified clock metadata retain an explicit manual fallback.
+ * The manual value is shared across capture changes and is never overwritten by
+ * an automatic or original-target selection.
+ */
+function syncClockControls() {
+  const mode = $("clock-source").value;
+  const options = { mode, manualPeriodNs: state.manualPeriodNs };
+  const selected = selectClockPeriod(
+    state.model?.clockReference ?? null,
+    options,
+  );
+  const fallback = selected.status !== "available";
+  state.clockSelection = fallback
+    ? {
+        ...selectClockPeriod(null, { ...options, mode: "manual" }),
+        requestedMode: mode,
+        fallback: true,
+        label: `Manual fallback (${state.manualPeriodNs} ns)`,
+      }
+    : selected;
+  const input = $("arrival-budget");
+  input.value = Number(state.clockSelection.periodNs.toPrecision(12));
+  input.readOnly = mode !== "manual";
+  input.title =
+    mode === "manual"
+      ? "Shared hypothetical period; changing it does not change static arc delays"
+      : "Resolved from the selected period source; choose Manual to override";
+  const available = Boolean(state.model?.clockReference);
+  $("clock-source").querySelector('option[value="target"]').disabled =
+    !available;
+  const evidence = state.clockSelection.provenance;
+  const basis = evidence
+    ? mode === "auto"
+      ? `${evidence.targetPeriodNs} ns target − (${evidence.setupWnsNs} ns WNS). `
+      : `${evidence.targetPeriodNs} ns original constraint. `
+    : "";
+  $("clock-reference-note").textContent =
+    `${state.clockSelection.label}. ${fallback ? "Requested clock evidence is unavailable; using the shared manual value. " : ""}${basis}This is a reference estimate or assumption, not a measured running clock. One common nanosecond scale is retained across captures; filters do not change the period.`;
+  $("clock-reference-evidence").hidden = !available;
+  $("clock-reference-provenance").textContent = available
+    ? JSON.stringify(state.model.clockReference, null, 2)
+    : "";
+  return state.clockSelection;
+}
+
+/** The chosen action/step establishes elapsed-time zero. Ordinary event picks
+ * and filters retain it. Neither a changed period nor a matched capture recenters
+ * time about its visible midpoint; the camera retains the common comparison scale.
+ */
+function clockOriginCycle() {
+  return state.timeOriginCycle ?? selectedBounds().firstCycle;
+}
+
 /** Keep the compact scene identifiable without reopening its hidden controls. */
 function renderSceneCaption() {
   if (!state.model) return;
   const labels = [state.model.document.title ?? "Saved execution"];
   if (state.chain) labels.push(state.chain.title);
   labels.push(`C${state.first}–${state.first + state.window - 1}`);
-  labels.push(`${$("arrival-budget").value} ns display budget (hypothetical)`);
+  const clock = state.clockSelection ?? syncClockControls();
+  labels.push(
+    `${Number(clock.periodNs.toPrecision(12))} ns · ${clock.label} · common ns scale · t=0 at C${clockOriginCycle()}`,
+  );
   $("scene-caption").textContent = labels.join(" · ");
 }
 /** Queue one canvas repaint for related inputs or pointer movement. */
@@ -524,6 +599,12 @@ function render() {
   if (!state.model) return;
   $("pick-notice").textContent = "";
   normalizeWindow();
+  syncClockControls();
+  stepComparison.update(state.model, {
+    clockSelection: state.clockSelection,
+    firstCycle: state.first,
+    endCycle: state.first + state.window,
+  });
   updateActivations();
   clearFilteredSelection();
   renderMetrics();
@@ -555,10 +636,7 @@ function renderMetrics() {
     endCycle: state.first + state.window,
     ...filters(),
     usedOnly: !$("full-storage").checked,
-    whatIfPeriodNs:
-      $("what-if-period").value === ""
-        ? null
-        : Number($("what-if-period").value),
+    whatIfPeriodNs: state.clockSelection.periodNs,
     waitOperations:
       (state.model.document.metric_hints ?? state.model.bundle.metric_hints)
         ?.wait_operations ?? [],
@@ -576,12 +654,7 @@ function renderMetrics() {
   $("activity-summary").textContent =
     `${activity.eventSamples.toLocaleString()} recorded operations on ${activity.clocksWithEvents.toLocaleString()} clocks in view · peak ${activity.peakEventsPerClock} operations per clock. Counts follow filters; they are not electrical switching or proof that other clocks were idle.`;
   $("timing-summary").textContent =
-    (timing.reason === "failed_target_is_not_execution_period"
-      ? "Physical elapsed time unknown: the native target failed timing. "
-      : "Physical elapsed time unknown: no qualified execution period. ") +
-    (timing.whatIf
-      ? `Hypothetical only: ${timing.whatIf.elapsedClocks} clocks × ${timing.whatIf.periodNs} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns. Static path delays are not added again.`
-      : "Enter a period for an explicitly hypothetical clocks × period calculation.");
+    `${state.clockSelection.label}: ${timing.whatIf.elapsedClocks} clocks × ${Number(timing.whatIf.periodNs.toPrecision(12))} ns = ${timing.whatIf.elapsedNs.toLocaleString(undefined, { maximumFractionDigits: 6 })} ns for this window. This reference estimate uses the same period as the scene and whole-step panel; it is not measured elapsed time. Static path delays are not added again.`;
   $("metrics").innerHTML =
     `<div><strong>${metrics.interval.elapsedClocks.toLocaleString()}</strong><span>clocks in view</span></div><div><strong>${storage.totalWordClocks.toLocaleString()}</strong><span>logical word-clocks</span></div><div><strong>${installed ? installed.cells.toLocaleString() : "—"}</strong><span>unique installed cells</span></div>`;
   let detail = $("metrics-detail");
@@ -1472,7 +1545,7 @@ function renderArrivalDetails(circuits, maximum, summaries, eventOmissions) {
     !eventOmissions.dependencies &&
     !eventOmissions.staticPath;
   $("arrival-summary").textContent =
-    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. ${count("unknownSegments")} untimed spans and ${count("unknownMarks")} untimed pin marks omitted from arrival view. Showing the first ${Math.min(40, rows.length)} inspection rows; clock planes retain spatial context.`;
+    `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the ${$("arrival-budget").value} ns reference period · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. ${count("unknownSegments")} untimed spans and ${count("unknownMarks")} untimed pin marks omitted from arrival view. Showing the first ${Math.min(40, rows.length)} inspection rows; clock planes retain spatial context.`;
   $("arrival-table").innerHTML =
     `<table><thead><tr><th>Native arc / pins</th><th>Geometry</th><th>Local ns</th><th>Complete ns</th><th>Below longest ns</th><th>Arrival from → via → latest ns</th></tr></thead><tbody>${rows
       .slice(0, 40)
@@ -1495,8 +1568,13 @@ function buildStackScene() {
     focus: [],
     selection: [],
   };
+  const clock = state.clockSelection ?? syncClockControls();
   const world = (p, c) =>
-    clockPoint(p, c, state.first, state.window, state.spacing);
+    timePoint(p, c, {
+      periodNs: clock.periodNs,
+      originCycle: clockOriginCycle(),
+      unitsPerNs: state.spacing / 800,
+    });
   const segment = (
     a,
     b,
@@ -1542,12 +1620,15 @@ function buildStackScene() {
     ].map(([x, y]) => world({ x, y }, c));
     for (let i = 0; i < 4; i++)
       segment(corners[i], corners[(i + 1) % 4], "#2d4855", 0.0009, "frame");
+    const elapsedNs = Number(
+      ((c - clockOriginCycle()) * clock.periodNs).toFixed(3),
+    );
     result.labels.push({
       text: arrival
         ? c < state.model.bundle.capture.end_cycle
-          ? `Q sample ${c}`
-          : `Boundary ${c} (no Q sample)`
-        : `C${c}`,
+          ? `Q C${c} · ${elapsedNs} ns`
+          : `Boundary C${c} · ${elapsedNs} ns (no Q)`
+        : `C${c} · ${elapsedNs} ns`,
       position: world({ x: -1.04, y: -1.04 }, c),
       alternatives: corners,
       anchorGroup: "clock-axis",
@@ -1557,7 +1638,7 @@ function buildStackScene() {
     for (const label of arrivalRuler(
       state.first,
       state.window,
-      Number($("arrival-budget").value),
+      state.clockSelection.periodNs,
     )) {
       const corners = [
         [-1, -1],
@@ -1638,7 +1719,6 @@ function buildStackScene() {
     state.window <= 4
       ? "Ruler: nanoseconds after each Q reference at quarter-budget intervals; labels yield to clock labels when crowded."
       : "Minor ruler labels are omitted for windows over four clocks; no computation geometry is omitted.";
-  $("arrival-budget").disabled = !arrival;
   $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
   $("urgency-legend").hidden =
     cutMode || !["criticality", "delay-kind"].includes(mode);
@@ -1717,7 +1797,7 @@ function buildStackScene() {
       });
       const scene = arrivalScene(circuit, {
         cycle: layer.cycle,
-        budgetNs: Number($("arrival-budget").value),
+        budgetNs: state.clockSelection.periodNs,
         captureAvailable: captureAvailable(layer.cycle),
         point: cellPoint,
         world,
@@ -1746,7 +1826,7 @@ function buildStackScene() {
       if (explorer.cut?.status === "known" && circuit.summary.arcs) {
         const boundary = cutScene(explorer.cut, {
           cycle: layer.cycle,
-          budgetNs: Number($("arrival-budget").value),
+          budgetNs: state.clockSelection.periodNs,
           point: cellPoint,
           world,
           selectedPin: explorer.cutPin,
@@ -1759,7 +1839,7 @@ function buildStackScene() {
       result.targets = result.targets.concat(
         sinkPickTargets(circuit, {
           cycle: layer.cycle,
-          budgetNs: Number($("arrival-budget").value),
+          budgetNs: state.clockSelection.periodNs,
           point: cellPoint,
           world,
           pinName: (pin) =>
@@ -2171,7 +2251,7 @@ function buildStackScene() {
           }),
           {
             cycle: layer.cycle,
-            budgetNs: Number($("arrival-budget").value),
+            budgetNs: state.clockSelection.periodNs,
             captureAvailable: captureAvailable(layer.cycle),
             point: cellPoint,
             world,
@@ -2451,8 +2531,10 @@ function selectEvent(id, move = true, keepChain = false) {
   if (
     move &&
     (event.cycle < state.first || event.cycle >= state.first + state.window)
-  )
+  ) {
     state.first = event.cycle - Math.floor(state.window / 2);
+    state.autoFit = true;
+  }
   render();
 }
 /** Select a stored version, including roots with no fabricated producer event. */
@@ -2470,6 +2552,110 @@ function selectStorage(version, cell = null) {
   $("resource").value = life.resource;
   render();
 }
+/** Navigate an explicit step boundary or trace only its retained event anchors.
+ * A public boundary later than those events remains separate metadata; it never
+ * becomes a new graph event or gains ancestry from chronological proximity.
+ */
+function focusStepBoundary(boundary, trace) {
+  state.timeOriginCycle = state.model.stepComparison.start.cycle;
+  const events = boundary.eventIds.map((id) => state.model.events.get(id));
+  if (events.some((event) => !event)) return;
+  for (const key of ["actor", "activation", "operation", "task"])
+    $(key).value = "";
+  state.chain = null;
+  state.selected = null;
+  state.trace = null;
+  state.resource = null;
+  state.cell = null;
+  state.focusVersion = null;
+  $("chain").value = "";
+  $("resource").value = "";
+  $("sink-mode").value = "all";
+  state.annotation = {
+    label: boundary.label,
+    cycle: events.length
+      ? Math.max(...events.map((event) => event.cycle))
+      : boundary.cycle,
+    publicBoundaryCycle: boundary.cycle,
+    ...(events.length
+      ? {
+          graph_events: boundary.eventIds,
+          graph_incarnation: events[0].incarnation,
+          dependency_endpoint: true,
+        }
+      : { dependency_endpoint: false }),
+  };
+  if (trace && events.length) traceSelection("backward");
+  state.first = boundary.cycle - Math.floor(state.window / 2);
+  state.autoFit = true;
+  render();
+  if (!events.length)
+    notice(
+      `${boundary.label}: this boundary has no recorded event anchors; no ancestry was inferred.`,
+    );
+}
+
+/** Inspect the prepared sink whose exact pin identity matches the global STA
+ * endpoint. Its recorded write association locates the view, not STA activity;
+ * the displayed SDF maximizing chain need not be the original STA path.
+ */
+function inspectClockPath(row) {
+  const step = state.model.stepComparison;
+  const match = clockSink(state.computations, row.endpoint, {
+    firstCycle: step?.start.cycle,
+    endCycle: step?.end.cycle,
+  });
+  if (match.status !== "available") {
+    notice(
+      `${match.reason} The global STA report summary remains available.`,
+      true,
+    );
+    return;
+  }
+  for (const key of ["actor", "activation", "operation", "task"])
+    $(key).value = "";
+  state.chain = null;
+  state.annotation = null;
+  state.trace = null;
+  state.selected = match.event.id;
+  state.resource = match.event.access.resource;
+  state.cell = null;
+  state.focusVersion = null;
+  state.timeOriginCycle = step?.start.cycle ?? selectedBounds().firstCycle;
+  $("chain").value = "";
+  $("resource").value = state.resource;
+  $("time-layout").value = "arrival";
+  $("computation-circuits").checked = true;
+  $("circuit-role").value = "";
+  $("circuit-delay").value = "0";
+  $("circuit-unknown").checked = true;
+  $("circuit-selected").checked = false;
+  $("sink-mode").value = "selected";
+  state.first = match.event.cycle - 1;
+  state.window = 3;
+  normalizeWindow();
+  sinkInspector.update(state.computations, circuitLayers(), {
+    enabled: true,
+    scope:
+      $("circuit-timing").value === "registered_launch"
+        ? "registered"
+        : "static",
+  });
+  if (!sinkInspector.choose(match.key)) {
+    notice(
+      "The exact limiting sink is associated with a write but unavailable in the current circuit view.",
+      true,
+    );
+    return;
+  }
+  $("sink-panel").open = true;
+  state.autoFit = true;
+  render();
+  notice(
+    `Showing an SDF maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
+  );
+}
+
 /** Follow explicitly bound contributors while leaving unanchored observations as context. */
 function selectAnnotation(annotation) {
   state.chain = null;
@@ -2491,6 +2677,7 @@ function selectAnnotation(annotation) {
   state.focusVersion = null;
   $("resource").value = "";
   state.first = annotation.cycle - Math.floor(state.window / 2);
+  state.autoFit = true;
   render();
 }
 /** Neighbour buttons are exact dependency endpoints; root versions stop traversal. */
@@ -2728,6 +2915,7 @@ function chooseChain(id) {
     $(filter).value = "";
   state.trace = traceChain(state.model, chain);
   state.first = chain.firstCycle;
+  state.timeOriginCycle = chain.firstCycle;
   state.window = chain.endCycle - chain.firstCycle;
   $("chain").value = id;
   $("circuit-selected").checked = false;
@@ -2776,6 +2964,7 @@ function renderChain() {
 function chooseExample(index) {
   const example = state.model.document.examples?.[index];
   if (!example) return;
+  state.autoFit = true;
   ["actor", "activation", "operation", "task"].forEach(
     (key) => ($(key).value = ""),
   );
@@ -2852,6 +3041,8 @@ function setBusy(busy) {
     "all",
     "previous",
     "next",
+    "clock-source",
+    "arrival-budget",
   ])
     $(id).disabled = busy;
 }
@@ -2865,50 +3056,60 @@ function bindControls() {
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
     sceneSelection.reset();
-    const captureChainView = () =>
-      state.chain
-        ? {
-            key: state.chain.comparisonKey,
-            offset: state.first - state.chain.firstCycle,
-            window: state.window,
-            camera: state.scene?.getCamera(),
-            controls: Object.fromEntries(
-              [
-                "arrival-budget",
-                "time-layout",
-                "color-mode",
-                "urgency-window",
-                "spacing",
-                "detail-level",
-                "pick-mode",
-                "computation-circuits",
-                "circuit-role",
-                "circuit-timing",
-                "circuit-delay",
-                "circuit-unknown",
-                "circuit-selected",
-                "ghost-context",
-              ].map((id) => [
-                id,
-                {
-                  value: $(id).value,
-                  checked:
-                    $(id).type === "checkbox" ? $(id).checked : undefined,
-                },
-              ]),
-            ),
-          }
-        : null;
-    const previousChain = captureChainView();
-    const restoreChainView = (snapshot = previousChain) => {
-      if (
-        !snapshot ||
-        !state.chain ||
-        state.chain.comparisonKey !== snapshot.key
-      )
+    const captureComparisonView = () => {
+      const comparison = state.chain ?? state.model?.stepComparison;
+      if (!comparison?.comparisonKey) return null;
+      const origin = state.chain
+        ? state.chain.firstCycle
+        : comparison.start.cycle;
+      return {
+        kind: state.chain ? "chain" : "step",
+        key: comparison.comparisonKey,
+        offset: state.first - origin,
+        originOffset: clockOriginCycle() - origin,
+        window: state.window,
+        manualPeriodNs: state.manualPeriodNs,
+        camera: state.scene?.getCamera(),
+        controls: Object.fromEntries(
+          [
+            "clock-source",
+            "time-layout",
+            "color-mode",
+            "urgency-window",
+            "spacing",
+            "detail-level",
+            "pick-mode",
+            "computation-circuits",
+            "circuit-role",
+            "circuit-timing",
+            "circuit-delay",
+            "circuit-unknown",
+            "circuit-selected",
+            "ghost-context",
+          ].map((id) => [
+            id,
+            {
+              value: $(id).value,
+              checked: $(id).type === "checkbox" ? $(id).checked : undefined,
+            },
+          ]),
+        ),
+      };
+    };
+    const previousView = captureComparisonView();
+    const restoreComparisonView = (snapshot = previousView) => {
+      const comparison =
+        snapshot?.kind === "chain" ? state.chain : state.model.stepComparison;
+      if (!snapshot || !comparison || comparison.comparisonKey !== snapshot.key)
         return;
-      state.first = state.chain.firstCycle + snapshot.offset;
+      const origin =
+        snapshot.kind === "chain"
+          ? comparison.firstCycle
+          : comparison.start.cycle;
+      state.first = origin + snapshot.offset;
+      state.timeOriginCycle = origin + snapshot.originOffset;
       state.window = snapshot.window;
+      state.manualPeriodNs = snapshot.manualPeriodNs;
       for (const [id, control] of Object.entries(snapshot.controls)) {
         $(id).value = control.value;
         if (typeof control.checked === "boolean")
@@ -2917,11 +3118,13 @@ function bindControls() {
       if (!state.expectsPrepared && !state.computations?.prepared)
         $("time-layout").value = "flat";
       state.spacing = Number($("spacing").value);
+      syncClockControls();
       if (snapshot.camera) state.scene?.setCamera(snapshot.camera);
-      state.autoFit = false;
+      state.autoFit = !snapshot.camera;
       render();
     };
     const sequence = ++state.loadSequence;
+    stepComparison.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();
@@ -2957,6 +3160,14 @@ function bindControls() {
       if (sequence !== state.loadSequence) return;
       state.loadTimings["Recording JSON parse"] = decoded.timings.parseMs;
       state.loadTimings["Recording index"] = decoded.timings.indexMs;
+      const stepEvidence = await loadStepEvidence({
+        entry: expected.stepEvidence,
+        recording: { bytes: byteLength, sha256: digest },
+        baseUrl: new URL("data/", window.location.href).href,
+        signal,
+      });
+      if (sequence !== state.loadSequence) return;
+      if (stepEvidence) installStepEvidence(decoded.model, stepEvidence);
       await loadDocument(
         decoded.model,
         "Projection bytes verified against the local index; source evidence was verified during preparation.",
@@ -2977,18 +3188,27 @@ function bindControls() {
         source: expected.computations,
         baseUrl: new URL("data/", window.location.href).href,
       });
-      const matched = matchingChain(state.model, previousChain?.key);
-      const initial = previousChain
-        ? matched
+      const matched =
+        previousView?.kind === "chain"
+          ? matchingChain(state.model, previousView.key)
+          : previousView?.key === state.model.stepComparison?.comparisonKey
+            ? state.model.stepComparison
+            : null;
+      const initial = previousView
+        ? previousView.kind === "chain"
+          ? matched
+          : null
         : state.model.chains.values().next().value;
       state.chainMatchNote =
-        previousChain && !matched
-          ? `No matching action for ${previousChain.key} in this capture. Select another action explicitly; no comparison was inferred.`
+        previousView && !matched
+          ? `No matching ${previousView.kind} for ${previousView.key} in this capture. Select another explicitly; no comparison was inferred.`
           : null;
       if (initial) {
         chooseChain(initial.id);
-        restoreChainView();
-      } else if (!previousChain && state.model.document.examples?.length) {
+        restoreComparisonView();
+      } else if (matched) {
+        restoreComparisonView();
+      } else if (!previousView && state.model.document.examples?.length) {
         $("example").value = "0";
         chooseExample(0);
       } else {
@@ -3046,6 +3266,7 @@ function bindControls() {
   $("file").onchange = async () => {
     sceneSelection.reset();
     const sequence = ++state.loadSequence;
+    stepComparison.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();
@@ -3079,14 +3300,17 @@ function bindControls() {
   };
   $("first").onchange = () => {
     state.first = Number($("first").value);
+    state.autoFit = true;
     render();
   };
   $("window").onchange = () => {
     state.window = Number($("window").value);
+    state.autoFit = true;
     render();
   };
   $("position").oninput = () => {
     state.first = Number($("position").value);
+    state.autoFit = true;
     render();
   };
   $("spacing").oninput = () => {
@@ -3094,23 +3318,6 @@ function bindControls() {
     repaint();
   };
   $("spatial-density").onchange = () => repaint();
-  $("what-if-period").onchange = () => {
-    const input = $("what-if-period");
-    const period = Number(input.value);
-    if (
-      input.value !== "" &&
-      (!Number.isFinite(period) ||
-        period <= 0 ||
-        period * state.window > Number.MAX_SAFE_INTEGER)
-    ) {
-      input.value = "";
-      notice(
-        "A hypothetical period must be positive and within the numeric range.",
-        true,
-      );
-    }
-    render();
-  };
   for (const id of [
     "computation-circuits",
     "circuit-role",
@@ -3148,10 +3355,12 @@ function bindControls() {
   };
   $("previous").onclick = () => {
     state.first -= state.window;
+    state.autoFit = true;
     render();
   };
   $("next").onclick = () => {
     state.first += state.window;
+    state.autoFit = true;
     render();
   };
   $("step").onclick = () => {
@@ -3159,6 +3368,7 @@ function bindControls() {
     const b = selectedBounds();
     state.first = b.firstCycle;
     state.window = b.endCycle - b.firstCycle;
+    state.autoFit = true;
     render();
   };
   $("completion").onclick = () => {
@@ -3174,6 +3384,7 @@ function bindControls() {
     const c = state.model.bundle.capture;
     state.first = c.first_cycle;
     state.window = c.end_cycle - c.first_cycle;
+    state.autoFit = true;
     render();
   };
   $("example").onchange = () => {
@@ -3308,6 +3519,7 @@ function bindControls() {
           ((p.x - 16) / ($("timeline").clientWidth - 32)) *
             (c.end_cycle - c.first_cycle),
       ) - Math.floor(state.window / 2);
+    state.autoFit = true;
     render();
   };
   $("toggle-inspector").onclick = () => {
@@ -3362,7 +3574,6 @@ function bindControls() {
     "detail-level",
     "ghost-context",
     "time-layout",
-    "arrival-budget",
     "urgency-window",
   ])
     $(id).onchange = () => {
@@ -3371,11 +3582,41 @@ function bindControls() {
           $(control).reportValidity();
           return;
         }
-      if (id === "time-layout" || id === "arrival-budget") state.autoFit = true;
+      if (id === "time-layout") state.autoFit = true;
       if (id === "time-layout" && arrivalEnabled())
         $("pick-mode").value = "sinks";
       repaint();
     };
+  $("clock-source").onchange = () => {
+    state.autoFit = false;
+    syncClockControls();
+    render();
+  };
+  $("arrival-budget").onchange = () => {
+    const input = $("arrival-budget");
+    if (!input.checkValidity()) {
+      input.reportValidity();
+      return;
+    }
+    const periodNs = Number(input.value);
+    const clocks = state.model
+      ? state.model.bundle.capture.end_cycle -
+        state.model.bundle.capture.first_cycle
+      : 1;
+    if (periodNs * clocks > Number.MAX_SAFE_INTEGER) {
+      notice(
+        "The manual period exceeds the viewer's numeric range for this capture.",
+        true,
+      );
+      syncClockControls();
+      return;
+    }
+    state.manualPeriodNs = periodNs;
+    state.autoFit = false;
+    $("clock-source").value = "manual";
+    syncClockControls();
+    render();
+  };
   const resize = new ResizeObserver(() => repaint());
   resize.observe(document.querySelector(".workspace"));
   resize.observe($("scene-frame"));

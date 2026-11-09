@@ -1357,3 +1357,45 @@ body.scene-focus {
 .scene-focus .scene-controls-hidden .path-workbench {
   overflow: hidden;
 }
+
+/* Clock references sit beside the scene so an automatic estimate and
+ * a manual hypothetical period cannot be mistaken for a measured device clock. */
+.clock-reference-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.clock-reference-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.clock-reference-controls input {
+  width: 100px;
+}
+.clock-reference-controls input[readonly] {
+  color: #b4c9d3;
+  border-style: dashed;
+}
+.clock-reference-controls .legend-note {
+  flex: 1 1 360px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.clock-reference-controls details {
+  flex-basis: 100%;
+  padding: 0;
+  border: none;
+}
+#clock-reference-provenance {
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}

@@ -1,0 +1,96 @@
+#step-comparison {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #28414a;
+  border-radius: 10px;
+  background: #111e25;
+}
+.step-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.step-heading h2 {
+  margin: 0.3rem 0;
+}
+.step-heading > span,
+.step-milestones span {
+  color: #a1b6bd;
+  font-size: 0.8rem;
+}
+.step-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0;
+}
+.step-table th,
+.step-table td {
+  text-align: right;
+  padding: 0.45rem;
+  border-bottom: 1px solid #28414a;
+}
+.step-table th:first-child,
+.step-table td:first-child {
+  text-align: left;
+}
+.step-current {
+  color: #aee6d2;
+}
+.step-bars {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.8rem 0;
+}
+.step-bars > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) 3fr 7rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.step-bar-track {
+  height: 0.7rem;
+  background: #22333d;
+}
+.step-bar {
+  height: 100%;
+  background: #78b8cc;
+}
+.step-bars > div:nth-child(2) .step-bar {
+  background: #91d3ad;
+}
+.step-detail {
+  margin-top: 0.7rem;
+  border-top: 1px solid #28414a;
+  padding-top: 0.7rem;
+}
+.step-detail summary {
+  cursor: pointer;
+}
+.step-detail pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+.step-detail code {
+  overflow-wrap: anywhere;
+}
+.step-milestones {
+  padding-left: 1.4rem;
+}
+.step-milestones li {
+  margin: 0.5rem 0;
+}
+.step-milestones span {
+  margin: 0 0.5rem;
+}
+@media (max-width: 650px) {
+  .step-heading {
+    display: block;
+  }
+  .step-bars > div {
+    grid-template-columns: 6rem 1fr 6rem;
+  }
+}
