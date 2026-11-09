@@ -7,15 +7,16 @@
 -spec write(file:filename()) -> ok.
 write(Stage) ->
     {ok, Semantics} = file:read_file("test_data/xls_static_actions_semantics.inc.x"),
-    Generated = xls_parse:to_xls("test/xls_remote_values_fixture.erl"),
+    Artifact = xls_parse:to_artifact("test/xls_remote_values_fixture.erl"),
     Cases = [{Index, Phase, Value, Ready}
         || {Index, Phase} <- lists:enumerate(0, phases()),
            Value <- [0, 1, 2, 3], Ready <- [16#ffff, 16#aaa0, 0]],
     Tests = [assertion(Case) || Case <- Cases],
-    file:write_file(filename:join(Stage, "xls_remote_values.x"),
-        [Generated, Semantics,
+    Bytes = [xls_emitted:bytes(Artifact), Semantics,
          "\n// Sixty finite BEAM outcomes, each observed through sixteen direct-owner clocks.\n",
-         "#[test]\nfn remote_values_match_beam() {\n", Tests, "}\n"]).
+         "#[test]\nfn remote_values_match_beam() {\n", Tests, "}\n"],
+    xls_emitted:write(xls_emitted:with_bytes(Artifact, Bytes),
+        filename:join(Stage, "xls_remote_values.x")).
 
 %% Keep the actor's declared phase order explicit in the finite oracle.
 -spec phases() -> [atom()].

@@ -2,6 +2,207 @@
 -moduledoc "Source-only remote helper closure, namespace, preprocessing and saved-plan checks.".
 -include_lib("eunit/include/eunit.hrl").
 
+%% An imported module keeps its public entry and private implementation out of the actor file.
+-spec emitted_module_preserves_public_private_boundary_test() -> ok.
+emitted_module_preserves_public_private_boundary_test() ->
+    with_sources([
+        {"root.erl", actor("remote_math:outer(Value)")},
+        {"remote_math.erl", module(remote_math, ["outer/1"], [
+            function(outer, "inner(Value)"), function(inner, "Value + 1"),
+            "host_only() -> io:format(\"not hardware\"), unsupported().\n"
+        ])}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Main = xls_emitted:bytes(Artifact),
+        ?assertMatch(#{"source_helpers_actor_helpers/remote_math.x" := _},
+            xls_emitted:dependencies(Artifact)),
+        ?assertEqual(1, map_size(xls_emitted:dependencies(Artifact))),
+        Remote = maps:get("source_helpers_actor_helpers/remote_math.x",
+            xls_emitted:dependencies(Artifact)),
+        ?assertNotEqual(nomatch, binary:match(Main, <<"import source_helpers_actor_helpers.remote_math;">>)),
+        ?assertNotEqual(nomatch, binary:match(Main, <<"remote_math::outer(">>)),
+        ?assertEqual(nomatch, binary:match(Main, <<"fn outer(">>)),
+        ?assertEqual(nomatch, binary:match(Main, <<"fn inner(">>)),
+        {Inner, _} = binary:match(Remote, <<"fn inner(">>),
+        {Outer, _} = binary:match(Remote, <<"pub fn outer(">>),
+        ?assert(Inner < Outer),
+        ?assertEqual(nomatch, binary:match(Remote, <<"pub fn inner(">>)),
+        ?assertEqual(nomatch, binary:match(Remote, <<"remote_math::inner(">>)),
+        ?assertEqual(nomatch, binary:match(Remote, <<"host_only">>)),
+        ok
+    end).
+
+%% Transitive source calls remain qualified imports while each module scopes its private calls.
+-spec emitted_transitive_calls_keep_module_boundaries_test() -> ok.
+emitted_transitive_calls_keep_module_boundaries_test() ->
+    with_sources([
+        {"root.erl", actor("outer_math:value(Value)")},
+        {"outer_math.erl", module(outer_math, ["value/1"], [
+            function(value, "inner_math:value(Value)")])},
+        {"inner_math.erl", module(inner_math, ["value/1"], [
+            function(value, "private_value(Value)"), function(private_value, "Value + 4")])}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Dependencies = xls_emitted:dependencies(Artifact),
+        ?assertEqual(2, map_size(Dependencies)),
+        Outer = maps:get("source_helpers_actor_helpers/outer_math.x", Dependencies),
+        Inner = maps:get("source_helpers_actor_helpers/inner_math.x", Dependencies),
+        ?assertNotEqual(nomatch, binary:match(Outer,
+            <<"import source_helpers_actor_helpers.inner_math;">>)),
+        ?assertNotEqual(nomatch, binary:match(Outer, <<"inner_math::value(">>)),
+        ?assertEqual(nomatch, binary:match(Inner, <<"source_helpers_actor_helpers.outer_math">>)),
+        ?assertNotEqual(nomatch, binary:match(Inner, <<"fn private_value(">>)),
+        ?assertEqual(nomatch, binary:match(Inner, <<"pub fn private_value(">>)),
+        ?assertEqual(nomatch, binary:match(Inner, <<"inner_math::private_value(">>)),
+        ok
+    end).
+
+%% A finite nonrecursive function graph may nevertheless require illegal circular DSLX imports.
+-spec acyclic_functions_with_circular_modules_are_rejected_test() -> ok.
+acyclic_functions_with_circular_modules_are_rejected_test() ->
+    with_sources([
+        {"root.erl", root("cycle_left:start(Value)")},
+        {"cycle_left.erl", module(cycle_left, ["start/1", "finish/1"], [
+            function(start, "cycle_right:relay(Value)"), function(finish, "Value + 1")])},
+        {"cycle_right.erl", module(cycle_right, ["relay/1"], [
+            function(relay, "cycle_left:finish(Value)")])}
+    ], fun(Directory) ->
+        {_, Helpers} = prepare(Directory, []),
+        ?assertEqual(3, length(Helpers)),
+        ?assertException(error, {circular_xls_source_modules, _},
+            xls_helpers:modules(Helpers, cell, #{})),
+        ok
+    end).
+
+%% Overloaded Erlang names need distinct DSLX symbols in both definitions and callsites.
+-spec emitted_overloads_receive_matching_arity_names_test() -> ok.
+emitted_overloads_receive_matching_arity_names_test() ->
+    with_sources([
+        {"root.erl", actor("overload_math:value(Value) + overload_math:value(Value, Value)")},
+        {"overload_math.erl", module(overload_math, ["value/1", "value/2"], [
+            function(value, "Value + 1"),
+            "-spec value(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().\n",
+            "value(Left, Right) -> Left + Right.\n"])}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Main = xls_emitted:bytes(Artifact),
+        Remote = maps:get("source_helpers_actor_helpers/overload_math.x",
+            xls_emitted:dependencies(Artifact)),
+        lists:foreach(fun(Arity) ->
+            Name = "value__" ++ integer_to_list(Arity),
+            ?assertNotEqual(nomatch, binary:match(Main, list_to_binary("overload_math::" ++ Name ++ "("))),
+            ?assertNotEqual(nomatch, binary:match(Remote, list_to_binary("pub fn " ++ Name ++ "(")))
+        end, [1, 2]),
+        ok
+    end).
+
+%% An existing source spelling cannot silently capture an overload's generated symbol.
+-spec emitted_overload_name_collision_is_rejected_test() -> ok.
+emitted_overload_name_collision_is_rejected_test() ->
+    with_sources([
+        {"root.erl", root("overload_math:value(Value) + overload_math:value(Value, Value) + overload_math:value__1(Value)")},
+        {"overload_math.erl", module(overload_math, ["value/1", "value/2", "value__1/1"], [
+            function(value, "Value + 1"), function(value__1, "Value + 2"),
+            "-spec value(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().\n",
+            "value(Left, Right) -> Left + Right.\n"])}
+    ], fun(Directory) ->
+        ?assertException(error, {xls_source_helper_name_collision, _}, prepare(Directory, [])),
+        ok
+    end).
+
+%% DSLX keywords and the escape prefix are encoded injectively, including module aliases.
+-spec emitted_quoted_names_keep_distinct_escaped_symbols_test() -> ok.
+emitted_quoted_names_keep_distinct_escaped_symbols_test() ->
+    with_sources([
+        {"root.erl", actor("'odd-math':'fn'(Value) + 'odd-math':erl_escape_666e(Value)")},
+        {"odd-math.erl", [
+            "-module('odd-math').\n-export(['fn'/1, erl_escape_666e/1]).\n",
+            "-spec 'fn'(hls_nums:u32()) -> hls_nums:u32().\n'fn'(Value) -> Value + 1.\n",
+            function(erl_escape_666e, "Value + 2")
+        ]}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Alias = escaped('odd-math'),
+        Dependencies = xls_emitted:dependencies(Artifact),
+        Remote = maps:get("source_helpers_actor_helpers/" ++ Alias ++ ".x", Dependencies),
+        Main = xls_emitted:bytes(Artifact),
+        lists:foreach(fun(Function) ->
+            Name = escaped(Function),
+            ?assertNotEqual(nomatch, binary:match(Main, list_to_binary(Alias ++ "::" ++ Name ++ "("))),
+            ?assertNotEqual(nomatch, binary:match(Remote, list_to_binary("pub fn " ++ Name ++ "(")))
+        end, ['fn', erl_escape_666e]),
+        ok
+    end).
+
+%% An exported source function cannot shadow the failure runtime module it imports.
+-spec emitted_function_names_do_not_capture_runtime_imports_test() -> ok.
+emitted_function_names_do_not_capture_runtime_imports_test() ->
+    with_sources([
+        {"root.erl", actor("reserved_math:hls_failure(Value)")},
+        {"reserved_math.erl", module(reserved_math, ["hls_failure/1"], [
+            function(hls_failure, "Value + 1")])}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Remote = maps:get("source_helpers_actor_helpers/reserved_math.x",
+            xls_emitted:dependencies(Artifact)),
+        {Qualified, Name} = actor_helper_name(Directory, reserved_math, true),
+        ?assertNotEqual("hls_failure", Name),
+        ?assertNotEqual(nomatch, binary:match(Remote, <<"import hls_failure;">>)),
+        ?assertNotEqual(nomatch, binary:match(Remote, list_to_binary("pub fn " ++ Name ++ "("))),
+        ?assertEqual(nomatch, binary:match(Remote, <<"fn hls_failure(">>)),
+        ?assertNotEqual(nomatch, binary:match(xls_emitted:bytes(Artifact),
+            list_to_binary(Qualified ++ "("))),
+        ok
+    end).
+
+%% Local function and imported-module namespaces are distinct in Erlang but shared in DSLX.
+-spec emitted_private_names_do_not_capture_source_imports_test() -> ok.
+emitted_private_names_do_not_capture_source_imports_test() ->
+    with_sources([
+        {"root.erl", actor("outer_math:value(Value)")},
+        {"outer_math.erl", module(outer_math, ["value/1"], [
+            function(value, "inner_math(Value) + inner_math:value(Value)"),
+            function(inner_math, "Value + 1")])},
+        {"inner_math.erl", module(inner_math, ["value/1"], [function(value, "Value + 2")])}
+    ], fun(Directory) ->
+        Artifact = xls_parse:to_artifact(filename:join(Directory, "root.erl")),
+        Remote = maps:get("source_helpers_actor_helpers/outer_math.x",
+            xls_emitted:dependencies(Artifact)),
+        {_Qualified, Name} = actor_helper_name(Directory, outer_math, false),
+        ?assertNotEqual("inner_math", Name),
+        ?assertNotEqual(nomatch, binary:match(Remote,
+            <<"import source_helpers_actor_helpers.inner_math;">>)),
+        ?assertNotEqual(nomatch, binary:match(Remote, <<"inner_math::value(">>)),
+        ?assertNotEqual(nomatch, binary:match(Remote, list_to_binary("fn " ++ Name ++ "("))),
+        ?assertEqual(nomatch, binary:match(Remote, list_to_binary("pub fn " ++ Name ++ "("))),
+        ?assertEqual(nomatch, binary:match(Remote, <<"fn inner_math(">>)),
+        ok
+    end).
+
+%% Retained snapshots may be broader than a later root selection; absent modules are not imports.
+-spec narrower_reselection_omits_absent_module_imports_test() -> ok.
+narrower_reselection_omits_absent_module_imports_test() ->
+    with_sources([
+        {"root.erl", [root("left_math:value(Value)"),
+            "other(Value) -> right_math:value(Value).\n"]},
+        {"left_math.erl", module(left_math, ["value/1"], [function(value, "Value + 1")])},
+        {"right_math.erl", module(right_math, ["value/1"], [function(value, "Value + 2")])}
+    ], fun(Directory) ->
+        {ok, Source} = hls_source:parse_file(filename:join(Directory, "root.erl"), []),
+        Broad = xls_hardware_source:select(Source, [{root, 1}, {other, 1}]),
+        ?assertEqual(['source_helpers_root_helpers.left_math',
+            'source_helpers_root_helpers.right_math'], xls_helper_modules:imports(Broad)),
+        Narrow = xls_hardware_source:select(Broad, [{root, 1}]),
+        ?assertEqual(['source_helpers_root_helpers.left_math'], xls_helper_modules:imports(Narrow)),
+        ?assertNot(lists:member('source_helpers_root_helpers.right_math',
+            xls_dslx_imports:from_forms(Narrow))),
+        {Prepared, Helpers} = xls_helpers:prepare(Narrow, [{root, 1}]),
+        ?assertEqual(['source_helpers_root_helpers.left_math'], xls_helper_modules:imports(Prepared)),
+        ?assertEqual(["source_helpers_root_helpers/left_math.x"],
+            maps:keys(xls_helpers:modules(Helpers, cell, #{}))),
+        ok
+    end).
+
 %% A public source function may use private helpers without importing host code.
 -spec exported_function_and_private_closure_test() -> ok.
 exported_function_and_private_closure_test() ->
@@ -328,6 +529,14 @@ imported_body_failure_keeps_source_location_test() ->
         Sites = xls_emitted:sites(Emitted),
         ?assertMatch([_ | _], [Site || Site = #{kind := case_clause,
             file := <<"math_impl.hrl">>, line := 2} <- Sites]),
+        [ImportedSite] = [Site || Site = #{kind := case_clause,
+            file := <<"math_impl.hrl">>, line := 2} <- Sites],
+        Remote = maps:get("source_helpers_actor_helpers/plan_math.x",
+            xls_emitted:dependencies(Emitted)),
+        Declaration = iolist_to_binary(xls_failure_sites:declarations([ImportedSite])),
+        ?assertNotEqual(nomatch, binary:match(Remote, Declaration)),
+        ?assertEqual(nomatch, binary:match(xls_emitted:bytes(Emitted), Declaration)),
+        ?assertNotEqual(nomatch, binary:match(xls_emitted:bytes(Emitted), <<"plan_math::value(">>)),
         ok
     end).
 
@@ -383,7 +592,11 @@ function(Name, Expression) -> [
 
 %% A small complete actor permits saved-plan identity checks without a workload fixture.
 -spec actor() -> iodata().
-actor() -> [
+actor() -> actor("plan_math:value(Value)").
+
+%% Vary only the actor's numerical expression when testing generated helper modules.
+-spec actor(iodata()) -> iodata().
+actor(Expression) -> [
     "-module(source_helpers_actor).\n-behavior(hls_statem).\n",
     "-hls_data(cell).\n-hls_tags([request, report]).\n-hls_phases([waiting]).\n-hls_outputs([out]).\n",
     "-hls_mailbox_capacity(2).\n",
@@ -393,8 +606,22 @@ actor() -> [
     "init([]) -> {ok, waiting, #cell{}}.\n",
     "waiting(enter, _, Cell) -> {Cell, [{cast, out, #report{value = Cell#cell.value}}]};\n",
     "waiting(cast, #request{value = Value}, Cell) ->\n",
-    "  {repeat_phase, Cell#cell{value = plan_math:value(Value)}, consume}.\n"
+    "  {repeat_phase, Cell#cell{value = ", Expression, "}, consume}.\n"
 ].
+
+%% Spelling here checks the documented escaping convention independently of helper metadata.
+-spec escaped(atom()) -> string().
+escaped(Name) -> "erl_escape_" ++ binary_to_list(binary:encode_hex(atom_to_binary(Name), lowercase)).
+
+%% Compare emitted definitions and callsites using the prepared name rather than its escape details.
+-spec actor_helper_name(file:filename(), module(), boolean()) -> {string(), string()}.
+actor_helper_name(Directory, Module, Public) ->
+    {ok, Forms} = hls_source:parse_file(filename:join(Directory, "root.erl"), []),
+    {_, Helpers} = xls_helpers:prepare(Forms, [{init, 1}, {waiting, 3}]),
+    [{Qualified, Local}] = [{Q, N} || #{name := Q,
+        owner := #{module := M, public := P, name := N}} <- Helpers,
+        M =:= Module, P =:= Public],
+    {Qualified, Local}.
 
 %% Use the same public preparation entry as ordinary compiler helper tests.
 -spec prepare(file:filename(), [hls_source:option()]) -> {[hls_source:form()], [map()]}.

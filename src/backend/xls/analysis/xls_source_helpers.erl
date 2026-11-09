@@ -2,7 +2,7 @@
 -moduledoc "Closes statically named pure source calls before XLS helper and failure analysis. xls_hardware_source supplies the selected actor roots; imported functions keep their own source locations and private helper scope. Built-in and explicitly exported custom providers retain provider dispatch. No source function is executed during discovery.".
 
 %% Extend a selected local graph and retain its source dependencies.
--export([expand/2, dependencies/1]).
+-export([expand/2, dependencies/1, bindings/1]).
 -export_type([snapshot/0]).
 
 -doc "One include-expanded helper module and the preprocessing context used for this compilation.".
@@ -33,7 +33,7 @@
     used := #{atom() => true}
 }.
 
--doc "Rewrites selected remote source calls into a namespaced local helper closure. Original supplies the actor's complete source for backreferences. Repeated selection reuses the captured graph; at most 64 modules and 4096 imported functions are admitted.".
+-doc "Captures selected remote source calls in one analysis graph while preserving their module ownership for separate DSLX emission. Original supplies the actor's complete source for backreferences. Repeated selection reuses the captured graph; at most 64 modules and 4096 imported functions are admitted.".
 -spec expand([hls_source:form()], [hls_source:form()]) -> [hls_source:form()].
 expand(Selected, Original) ->
     case hls_source:find_optional_attribute(Selected, hls_source_helpers) of
@@ -73,8 +73,26 @@ expand(Selected, Original) ->
             ],
             %% Binary metadata is opaque to generic AST walkers: retained host code
             %% must not add providers, failures, records or hardware dependencies.
+            Bindings = maps:from_list([
+                {{Local, Arity}, #{
+                    module => M,
+                    function => N,
+                    arity => Arity,
+                    public => lists:member(
+                        {N, Arity},
+                        maps:get(
+                            exports,
+                            maps:get(M, maps:get(sources, State))
+                        )
+                    )
+                }}
+             || {{M, N, Arity}, Local} <- maps:to_list(maps:get(helpers, State))
+            ]),
             Marker =
-                {attribute, 0, hls_source_helpers, term_to_binary(Dependencies, [deterministic])},
+                {attribute, 0, hls_source_helpers,
+                    term_to_binary(#{dependencies => Dependencies, bindings => Bindings}, [
+                        deterministic
+                    ])},
             Rewritten ++ Imported ++ [Marker]
     end.
 
@@ -83,7 +101,20 @@ expand(Selected, Original) ->
 dependencies(Forms) ->
     case hls_source:find_optional_attribute(Forms, hls_source_helpers) of
         none -> [];
-        {ok, Encoded} -> binary_to_term(Encoded, [safe])
+        {ok, Encoded} -> maps:get(dependencies, binary_to_term(Encoded, [safe]))
+    end.
+
+-doc "Returns source ownership for analysis-local helper identifiers. Emitters use this to restore module-qualified calls and original visibility; these identifiers are not DSLX symbols.".
+-spec bindings([hls_source:form()]) ->
+    #{
+        {atom(), arity()} => #{
+            module := module(), function := atom(), arity := arity(), public := boolean()
+        }
+    }.
+bindings(Forms) ->
+    case hls_source:find_optional_attribute(Forms, hls_source_helpers) of
+        none -> #{};
+        {ok, Encoded} -> maps:get(bindings, binary_to_term(Encoded, [safe]))
     end.
 
 %% Provider source inspected for dispatch is not an imported source dependency.

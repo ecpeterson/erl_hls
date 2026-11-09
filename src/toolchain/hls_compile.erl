@@ -59,7 +59,7 @@ actor(Source, Options, Output) ->
     }),
     Dslx = xls_emitted:bytes(Emitted),
     Directory = hls_artifact_bundle:open(Output),
-    ok = file:write_file(filename:join(Directory, "actor.x"), Dslx, [exclusive]),
+    ok = xls_emitted:write(Emitted, filename:join(Directory, "actor.x")),
     ok = file:write_file(
         filename:join(Directory, "actor.x.json"),
         json:encode(#{

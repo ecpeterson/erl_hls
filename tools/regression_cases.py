@@ -54,6 +54,7 @@ def phase_values(c: Case) -> None:
 
 def entry_outcomes(c: Case) -> None:
     """Retain all entry/storage interpreter witnesses and both RTL outcome benches."""
+    c.stage_import = True
     c.compile(); c.fixture("entry_outcomes")
     for name in ("xls_entry_outcome", "xls_entry_branch", "xls_entry_reduction", "xls_entry_storage", "xls_static_actions", "xls_remote_values", "known_bits"):
         c.interpret(name + ".x")
@@ -181,6 +182,23 @@ def helpers(c: Case) -> None:
     scalar(c, "nested_records", top="nested_transition", module="nested_records")
     for kind in ("nested", "expression_case", "empty_case", "field_access"):
         c.interpret("nested_wrong_" + kind + ".x", compare="none", rejection=r"TypeInferenceError|[Tt]ype[Mm]ismatch|[Tt]ype mismatch")
+
+
+
+def source_helpers(c: Case) -> None:
+    """Check BEAM-selected values and XLS folding through compiler-emitted helper modules."""
+    c.stage_import = True
+    c.generate("xls_source_helper_optimization")
+    c.erl("ok = xls_remote_values_dslx:write(hd(init:get_plain_arguments())), halt().",
+        name="remote-values-fixtures")
+    c.interpret("xls_remote_values.x")
+    c.interpret("source_helpers.x")
+    for kind in ("constant", "dynamic"):
+        c.convert(kind, kind + "_probe", "source_helpers.x")
+    c.command("source-helper-optimization", [sys.executable,
+        c.root / "tools/check_source_helper_optimization.py", c.stage],
+        products=(c.path("source-helper-optimization.json"),),
+        completion="PASS: cross-module constant selection removed; dynamic selection retained")
 
 
 def control_failures(c: Case) -> None:

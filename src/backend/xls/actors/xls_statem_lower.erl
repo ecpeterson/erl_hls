@@ -173,6 +173,7 @@ compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
         data_width => DataWidth,
         record_declarations => RecordDeclarations,
         helper_functions => xls_helpers:emit(Helpers, DataName, EnumAtoms),
+        helper_modules => xls_helpers:modules(Helpers, DataName, EnumAtoms),
         init => Init,
         entries => Entries,
         casts => Casts,

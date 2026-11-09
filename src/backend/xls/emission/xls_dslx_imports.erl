@@ -2,7 +2,7 @@
 -moduledoc "Collects declared DSLX dependencies from the selected source and its type providers, then renders checked imports for actor/server emitters. xls_hardware_source and helper preparation establish the source closure first; this module neither resolves filesystem search paths nor copies support libraries.".
 
 %% Discover dependencies from already selected source forms.
--export([from_forms/1]).
+-export([from_forms/1, companions/1]).
 %% Render imports together with execution-backend requirements.
 -export([emit/2]).
 
@@ -11,6 +11,11 @@
 -doc "Returns the unique DSLX imports required by types, provider calls and supported syntax. Calls qualified by the source module remain local helper calls, not provider dependencies.".
 -spec from_forms([hls_source:form()]) -> [atom()].
 from_forms(Forms) ->
+    lists:usort(xls_helper_modules:imports(Forms) ++ companions(Forms)).
+
+-doc "Returns only provider/runtime dependencies of prepared syntax. Source-module emission uses this independently of the generated source import graph.".
+-spec companions([hls_source:form()]) -> [atom()].
+companions(Forms) ->
     Uses = uses(Forms),
     Self = hls_source:find_optional_attribute(Forms, module),
     References = lists:usort(

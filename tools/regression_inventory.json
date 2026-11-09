@@ -206,6 +206,20 @@
         "test/hls_source_dslx.erl"
       ]
     },
+    "source_helpers": {
+      "group": "test",
+      "default_stage": "_build/source-helpers",
+      "dependencies": [
+        "test/xls_remote_selection_fixture.erl",
+        "test/xls_remote_selector.erl",
+        "test/xls_remote_value_bias.erl",
+        "test/xls_remote_value_math.erl",
+        "test/xls_remote_values_dslx.erl",
+        "test/xls_remote_values_fixture.erl",
+        "test/xls_source_helper_optimization.erl",
+        "test_data/xls_static_actions_semantics.inc.x"
+      ]
+    },
     "state_updates": {
       "group": "test",
       "default_stage": "_build/state_updates",

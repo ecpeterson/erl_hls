@@ -144,4 +144,4 @@ artifact(Filename, Forms0, Layout) ->
         """
     ],
 
-    xls_emitted:new(Sites, Preamble, Body).
+    xls_emitted:new(Sites, Preamble, Body, xls_helpers:modules(Helpers, StateName, #{})).
