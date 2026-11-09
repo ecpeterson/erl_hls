@@ -30,6 +30,7 @@ write(entry_outcomes, Stage) ->
     ok = xls_entry_branch_dslx:write(Stage),
     ok = xls_entry_storage_dslx:write(Stage),
     ok = xls_static_actions_dslx:write(Stage),
+    ok = xls_remote_values_dslx:write(Stage),
     xls_known_bits_dslx:write(Stage);
 %% The unused-binding witness is checked with warnings promoted to errors.
 write(names, Stage) ->

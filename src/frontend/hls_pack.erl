@@ -156,7 +156,9 @@ record_resolution_forms(Forms) ->
     Selected =
         case hls_source:find_optional_attribute(Forms, hls_phases) of
             {ok, Phases} ->
-                xls_hardware_source:statem(Forms, Phases);
+                xls_hardware_source:local(Forms, [
+                    {init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- Phases]
+                ]);
             none ->
                 case has_server_callbacks(Forms) of
                     false ->
@@ -169,7 +171,7 @@ record_resolution_forms(Forms) ->
                                     2 -> [];
                                     3 -> [{handle_continue, 2}]
                                 end,
-                        xls_hardware_source:select(Forms, Roots)
+                        xls_hardware_source:local(Forms, Roots)
                 end
         end,
     Functions = maps:from_keys(

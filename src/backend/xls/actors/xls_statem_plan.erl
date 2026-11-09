@@ -87,6 +87,8 @@ build(
         data_width := DataWidth
     }
 ) ->
+    Dependencies = xls_source_helpers:dependencies(Forms),
+    BoundSource = bind_dependencies(Source, Dependencies),
     Families = xls_statem_callbacks:prepare(Forms, Phases),
     Callbacks = lists:append([
         callbacks(Kind, maps:get(Kind, Families))
@@ -108,10 +110,10 @@ build(
     #{
         version => 1,
         source => Filename,
-        source_sha256 => digest(Source),
+        source_sha256 => digest(BoundSource),
         artifact_sha256 => digest(Spec),
         planner_md5 => ?MODULE:module_info(md5),
-        identity_inputs => identity_inputs(Source, Spec),
+        identity_inputs => identity_inputs(Source, Spec, Dependencies),
         phases => Phases,
         data => #{name => DataName, width => DataWidth},
         records => [F || F = {attribute, _, record, _} <- Forms],
@@ -283,8 +285,9 @@ identity(
 
 %% Canonicalize only compiler-owned provenance fields. In particular, a source
 %% ?FILE expansion is an ordinary literal and must retain its semantic value.
--spec identity_inputs([hls_source:form()], xls_actor_codegen:spec()) -> identity_inputs().
-identity_inputs(Source, Spec = #{source := Filename}) ->
+-spec identity_inputs([hls_source:form()], xls_actor_codegen:spec(), [xls_source_helpers:snapshot()]) ->
+    identity_inputs().
+identity_inputs(Source, Spec = #{source := Filename}, Dependencies) ->
     Context =
         #{
             directory := Directory,
@@ -305,9 +308,42 @@ identity_inputs(Source, Spec = #{source := Filename}) ->
          || Path <- maps:get(origins, Context)
         ])
     },
+    SourceInput = bind_dependencies(
+        #{forms => Forms, preprocessing => Preprocessing},
+        [dependency_identity(Dependency, ActorRoot) || Dependency <- Dependencies]
+    ),
     #{
-        source_sha256 => digest(#{forms => Forms, preprocessing => Preprocessing}),
+        source_sha256 => digest(SourceInput),
         artifact_sha256 => digest(Spec#{source := relative_path(Filename, Directory, ActorRoot)})
+    }.
+
+%% Compilations without remote helpers retain the existing source identity.
+-spec bind_dependencies(term(), [term()]) -> term().
+bind_dependencies(Source, []) -> Source;
+bind_dependencies(Source, Dependencies) -> #{source => Source, dependencies => Dependencies}.
+
+%% Normalize dependency paths at the actor root while retaining literal ?FILE values.
+-spec dependency_identity(xls_source_helpers:snapshot(), file:filename()) -> map().
+dependency_identity(
+    #{module := Module, path := Path, forms := Forms, context := Context}, ActorRoot
+) ->
+    #{directory := Directory, source_name := SourceName, includes := Includes} = Context,
+    Preprocessing = (maps:remove(directory, Context))#{
+        source_name := relative_path(SourceName, Directory, ActorRoot),
+        includes := [relative_path(Include, Directory, ActorRoot) || Include <- Includes],
+        origins := lists:usort([
+            relative_path(Origin, Directory, ActorRoot)
+         || Origin <- maps:get(origins, Context, [])
+        ])
+    },
+    #{
+        module => Module,
+        path => relative_path(Path, Directory, ActorRoot),
+        forms => [
+            identity_form(Form, Directory, ActorRoot)
+         || Form <- Forms, not source_context(Form)
+        ],
+        preprocessing => Preprocessing
     }.
 
 %% The context is represented once, independently of its synthetic form location.
