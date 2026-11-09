@@ -85,12 +85,13 @@
         plane, combinational pins at their latest static arrival, and write C at
         the next Q/capture plane C+1. The common Display budget starts at a
         hypothetical 10 ns; it is not a measured clock period. Late arrivals
-        extend beyond that boundary. Gray links distinguish input-readiness and
-        ready-to-capture gaps from recorded storage; red marks budget overruns.
-        Geometry without arrival timing is omitted here; clock planes retain its
-        spatial context. Known endpoints with incomplete route geometry stay
-        connected by a thin core with a dashed sleeve. Heights between measured
-        pin endpoints are interpolated along schematic routing chords. These are
+        extend beyond that boundary. Gray links distinguish other-input
+        readiness and ready-to-capture intervals from recorded storage. Logic is
+        shown at output settling time; red marks budget overruns. Geometry
+        without arrival timing is omitted here; clock planes retain its spatial
+        context. Known endpoints with incomplete route geometry stay connected
+        by a thin core with a dashed sleeve. Heights between measured pin
+        endpoints are interpolated along schematic routing chords. These are
         timing bounds, not a switching trace. Computation + urgency keeps
         destination hue and brightens complete paths within the chosen distance
         of the capture-wide longest path. It is not STA slack or a congestion
@@ -338,14 +339,16 @@
               </div>
               <div id="arrival-legend" hidden>
                 <span
-                  >Height: latest static arrival · gray: reconvergence /
-                  ready-to-capture interval · red: budget overrun · missing
-                  arrival timing is omitted</span
+                  >Height: latest static arrival · logic shown at output
+                  settling time · gray: other-input readiness / ready-to-capture
+                  interval · red: budget overrun · missing arrival timing is
+                  omitted</span
                 ><span
                   >Solid: retained endpoint / routing connectivity · thin core
                   with dashed sleeve: schematic endpoint connection across
                   incomplete routing geometry</span
                 >
+                <span id="arrival-ruler-note"></span>
               </div>
               <div id="direction-legend" hidden>
                 <span>Source / earlier</span

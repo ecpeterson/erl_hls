@@ -261,10 +261,13 @@ function remember(cache, key, result) {
   return result;
 }
 
-/** Compute one complete selected arrival layout. Propagation ends at A(from)+d;
- * a separate readiness link reaches the latest reconvergent A(to), never a storage
- * edge. Unknown arrival geometry has null times. Outside-scope arcs retain detail
- * rows but produce no propagation. Missing coordinates are counted, never filled.
+/** Compute one complete selected arrival layout. Nets propagate from A(from)
+ * to A(from)+d. Logic contributions end at the latest reconvergent A(to), with
+ * any analytical readiness gap at the input before the unchanged local delay.
+ * This settling depiction is not a measured internal start or switching time.
+ * Exact A(from), A(from)+d and A(to) remain in detail rows. Unknown arrival geometry
+ * has null times. Outside-scope arcs retain detail rows but produce no propagation.
+ * Missing coordinates are counted, never filled.
  * Roots expose pin/role/destination/cone identities; the caller joins current write
  * events and sampling edges. Optional selection filters before aggregation; its
  * path-cost overrides never change local delays or cached pin arrivals.
@@ -412,6 +415,15 @@ export function arrivalCircuit(
           : null;
       const known = !outside && numeric(head) && numeric(via);
       const status = outside ? "not_applicable" : known ? "known" : "unknown";
+      const alignedLogic = type === 1 && known && numeric(tail);
+      // The latest output bounds all input contributions. Keep early inputs at
+      // their own pins until this analytical settling interval; do not depict an
+      // early input as a completed output. Near-equal times retain exact launches.
+      const logicStart = alignedLogic
+        ? sameValue(via, tail)
+          ? head
+          : tail - delay
+        : head;
       if (known && numeric(tail))
         check(
           via <= tail || sameValue(via, tail),
@@ -530,8 +542,18 @@ export function arrivalCircuit(
             known && completeGeometry && row.kind !== "unresolved";
           emit(
             {
-              from: at(row.from, located ? head + delay * start : null),
-              to: at(row.to, located ? head + delay * end : null),
+              from: at(
+                row.from,
+                located
+                  ? alignedLogic
+                    ? logicStart
+                    : head + delay * start
+                  : null,
+              ),
+              to: at(
+                row.to,
+                located ? (alignedLogic ? tail : head + delay * end) : null,
+              ),
               kind: located ? "propagation" : "unknown",
               status: located
                 ? "known"
@@ -542,8 +564,9 @@ export function arrivalCircuit(
                     : "unknown_arrival",
               directionUnknown: row.kind === "unresolved",
               geometryKind: row.kind,
-              interpolation:
-                type === 1
+              interpolation: alignedLogic
+                ? "completion_aligned_logic_arc"
+                : type === 1
                   ? "native_logic_arc_endpoints"
                   : "display_chord_length_fraction",
             },
@@ -551,14 +574,23 @@ export function arrivalCircuit(
           );
         });
       }
-      if (known && numeric(tail) && tail > via && !sameValue(tail, via) && to)
+      const readinessPoint = alignedLogic ? from : to;
+      if (
+        known &&
+        numeric(tail) &&
+        tail > via &&
+        !sameValue(tail, via) &&
+        readinessPoint
+      )
         emit(
           {
-            from: at(to, via),
-            to: at(to, tail),
+            from: at(readinessPoint, alignedLogic ? head : via),
+            to: at(readinessPoint, alignedLogic ? logicStart : tail),
             kind: "readiness",
             status: "known",
-            interpolation: "latest_input_readiness_not_storage",
+            interpolation: alignedLogic
+              ? "latest_input_readiness"
+              : "latest_input_readiness_not_storage",
           },
           source,
         );

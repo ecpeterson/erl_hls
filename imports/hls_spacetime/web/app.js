@@ -34,12 +34,16 @@ import { circuitDisplay } from "./circuit-display.js";
 import { createSinkInspector } from "./sink-inspector.js";
 import { arrivalCircuit } from "./arrival-circuits.js";
 import { arrivalScene } from "./arrival-scene.js";
+import { arrivalRuler } from "./arrival-ruler.js";
 import { neighborhoodScene, cutScene } from "./neighborhood-scene.js";
 import { createRegionalControls } from "./regional-controls.js";
 import { createScenarioControls } from "./scenario-controls.js";
 import { createSceneSelection } from "./scene-selection.js";
 import { sinkPickTargets } from "./scene-picking.js";
-import { eventCoordinate } from "./arrival-layout.js";
+import {
+  arrivalEventAnchor,
+  arrivalEventConnection,
+} from "./arrival-events.js";
 import { overlayDisplay } from "./overlay-display.js";
 import { createScene3D } from "./scene3d.js";
 import { clockPoint, sceneBounds, occupiedBins } from "./scene-layout.js";
@@ -1418,7 +1422,7 @@ function renderNativePath() {
 
 /** Small inspection table exposes native arc identities and local versus complete
  * delay. Only table rows are paged; the renderer retains every visible arc. */
-function renderArrivalDetails(circuits, maximum, summaries) {
+function renderArrivalDetails(circuits, maximum, summaries, eventOmissions) {
   $("untimed-summary").hidden = !arrivalEnabled();
   $("arrival-details").hidden = !arrivalEnabled();
   if (!arrivalEnabled()) return;
@@ -1459,11 +1463,14 @@ function renderArrivalDetails(circuits, maximum, summaries) {
   const count = (key) => summaries.reduce((n, row) => n + (row[key] ?? 0), 0);
   sinkInspector.updateGeometry(circuits);
   $("untimed-summary").textContent =
-    `${count("unknownSegments").toLocaleString()} spans · ${count("unknownMarks").toLocaleString()} pin marks · ${count("unknownRoots").toLocaleString()} roots lack arrival timing and are omitted here. Clock planes retain their spatial context; missing timing is not zero.`;
+    `${count("unknownSegments").toLocaleString()} spans · ${count("unknownMarks").toLocaleString()} pin marks · ${count("unknownRoots").toLocaleString()} roots lack arrival timing. ${eventOmissions.events.toLocaleString()} event overlays and ${eventOmissions.dependencies.toLocaleString()} dependency overlays lack qualified boundary coordinates. These are omitted here; clock planes, event lists and inspectors retain the evidence. Missing timing is not zero.${eventOmissions.staticPath ? " The saved STA path overlay also remains in clock planes because its geometry has no qualified arrival heights." : ""}`;
   $("untimed-summary").hidden =
     !count("unknownSegments") &&
     !count("unknownMarks") &&
-    !count("unknownRoots");
+    !count("unknownRoots") &&
+    !eventOmissions.events &&
+    !eventOmissions.dependencies &&
+    !eventOmissions.staticPath;
   $("arrival-summary").textContent =
     `${arcs.size.toLocaleString()} distinct visible arcs · ${rows.filter((row) => row.schematic).length} schematic endpoint connections (native route geometry incomplete) · ${count("lateRoots")} late roots at the hypothetical ${$("arrival-budget").value} ns budget · ${count("unknownRoots")} roots without arrival · ${count("uncapturedRoots")} roots without a following sample. ${count("unknownSegments")} untimed spans and ${count("unknownMarks")} untimed pin marks omitted from arrival view. Showing the first ${Math.min(40, rows.length)} inspection rows; clock planes retain spatial context.`;
   $("arrival-table").innerHTML =
@@ -1546,6 +1553,26 @@ function buildStackScene() {
       anchorGroup: "clock-axis",
     });
   }
+  if (arrival)
+    for (const label of arrivalRuler(
+      state.first,
+      state.window,
+      Number($("arrival-budget").value),
+    )) {
+      const corners = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ].map(([x, y]) => world({ x, y }, label.coordinate));
+      result.labels.push({
+        ...label,
+        position: corners[0],
+        alternatives: corners,
+        anchorGroup: "clock-axis",
+        minor: true,
+      });
+    }
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
     if (
       epoch.first_cycle < state.first ||
@@ -1607,6 +1634,10 @@ function buildStackScene() {
   $("delay-kind-legend").hidden = cutMode || mode !== "delay-kind";
   $("role-legend").hidden = cutMode || mode !== "role";
   $("arrival-legend").hidden = !arrival;
+  $("arrival-ruler-note").textContent =
+    state.window <= 4
+      ? "Ruler: nanoseconds after each Q reference at quarter-budget intervals; labels yield to clock labels when crowded."
+      : "Minor ruler labels are omitted for windows over four clocks; no computation geometry is omitted.";
   $("arrival-budget").disabled = !arrival;
   $("urgency-window").disabled = !["criticality", "delay-kind"].includes(mode);
   $("urgency-legend").hidden =
@@ -1844,7 +1875,6 @@ function buildStackScene() {
       result[key] = result[key].concat(regional[key]);
     result.selection = result.selection.concat(regional.selection);
   }
-  renderArrivalDetails(arrivalCircuits, maximum, arrivalSummaries);
   const activeVersions = new Set(selectedLifetimes().map((x) => x.version));
   const storage =
     $("residence").checked && (!sinkInspector.focused || pickMode === "storage")
@@ -1854,7 +1884,7 @@ function buildStackScene() {
     holds = 0;
   for (const item of storage) {
     // Qualified arrival-to-capture annotations replace full-clock load glyphs.
-    // Recorded write markers remain even without a timed root; holds retain sampled evidence.
+    // Qualified register captures remain boundary markers; holds retain sampled evidence.
     if (arrival && item.kind === "write") continue;
     item.kind === "write" ? loads++ : holds++;
     for (const p of spatialPoints(storagePoints(item), mappedOnly())) {
@@ -1927,20 +1957,25 @@ function buildStackScene() {
   const pathIds = new Set(state.trace?.events.map((e) => e.id) ?? []);
   const expanded = $("access-footprints").checked && state.model.catalogue;
   let glyphs = 0;
+  const eventOmissions = { events: 0, dependencies: 0, staticPath: false };
   for (const event of sinkInspector.focused &&
   !["reads", "writes"].includes(pickMode)
     ? []
     : visibleEvents()) {
+    const coordinate = arrival
+      ? arrivalEventAnchor(state.model, event).coordinate
+      : event.cycle;
+    if (coordinate === null) {
+      eventOmissions.events++;
+      continue;
+    }
     const geometry = expanded || mappedOnly() ? accessGeometry(event) : null;
     if (mappedOnly() && !geometry.points.some((p) => p.physical)) continue;
     for (const point of spatialPoints(
       expanded ? geometry.points : [eventPoint(event)],
       mappedOnly(),
     )) {
-      const position = world(
-          point,
-          arrival ? eventCoordinate(event) : event.cycle,
-        ),
+      const position = world(point, coordinate),
         active = seeds.has(event.id),
         onPath = pathIds.has(event.id);
       const resources = resourcesForEvent(event);
@@ -1982,6 +2017,13 @@ function buildStackScene() {
       to = state.model.events.get(edge.target);
     if (from.cycle >= state.first + state.window || to.cycle < state.first)
       continue;
+    const coordinates = arrival
+      ? arrivalEventConnection(state.model, from, to)
+      : { from: from.cycle, to: to.cycle };
+    if (!coordinates) {
+      eventOmissions.dependencies++;
+      continue;
+    }
     const sources =
       expanded || mappedOnly()
         ? accessGeometry(from).points
@@ -2001,15 +2043,12 @@ function buildStackScene() {
     );
     for (const [source, target] of pairs) {
       segment(
-        world(
-          source,
-          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
-        ),
+        world(source, Math.max(state.first, coordinates.from)),
         world(
           target,
           Math.min(
             state.first + state.window - (arrival ? 0 : 1),
-            arrival ? eventCoordinate(to) : to.cycle,
+            coordinates.to,
           ),
         ),
         mode === "direction"
@@ -2027,22 +2066,22 @@ function buildStackScene() {
         0.018,
       );
       result.focus.push(
-        world(
-          source,
-          Math.max(state.first, arrival ? eventCoordinate(from) : from.cycle),
-        ),
+        world(source, Math.max(state.first, coordinates.from)),
         world(
           target,
           Math.min(
             state.first + state.window - (arrival ? 0 : 1),
-            arrival ? eventCoordinate(to) : to.cycle,
+            coordinates.to,
           ),
         ),
       );
       traces++;
     }
   }
-  if (state.nativePath && !sinkInspector.focused) {
+  eventOmissions.staticPath = Boolean(
+    arrival && state.nativePath && !sinkInspector.focused,
+  );
+  if (state.nativePath && !sinkInspector.focused && !arrival) {
     const cycle = Math.max(
       state.first,
       Math.min(
@@ -2084,6 +2123,12 @@ function buildStackScene() {
         }
     }
   }
+  renderArrivalDetails(
+    arrivalCircuits,
+    maximum,
+    arrivalSummaries,
+    eventOmissions,
+  );
   $("access-summary").textContent =
     `${glyphs.toLocaleString()} access positions · ${traces} selected dependency links · ${detail === "overview" ? (arrival ? "native pin arrival markers" : "occupied-bin overview (aggregated, not native geometry)") : detail === "routes" ? "schematic routing links and cells; switch markers hidden" : "schematic links, cells, switches and wire tiles"}${mappedOnly() ? " · unmapped geometry hidden; evidence retained" : ""}`;
   if (
@@ -2213,13 +2258,20 @@ function drawStackOverlay() {
   if (!state.scene || !state.sceneContent) return;
   const project = (point) => state.scene.project(point);
   const labels = canvasLabels(ctx, w, h);
-  ctx.font = "11px ui-monospace,monospace";
-  ctx.fillStyle = "#a5bdc8";
   for (const { label, point } of projectLabelAnchors(
     state.sceneContent.labels,
     project,
-  ))
-    labels.add(label.text, Math.max(4, point.x - 44), point.y - 6, 100);
+  )) {
+    ctx.font = `${label.minor ? 10 : 11}px ui-monospace,monospace`;
+    ctx.fillStyle = label.minor ? "#7d949f" : "#a5bdc8";
+    labels.add(
+      label.text,
+      Math.max(4, point.x - 44),
+      point.y - 6,
+      label.minor ? 90 : 100,
+      label.key ?? label.text,
+    );
+  }
   labels.draw();
   sceneSelection.draw(ctx);
 }
