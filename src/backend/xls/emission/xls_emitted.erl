@@ -3,17 +3,23 @@
 %% Allocate references and render a complete module with its generated imports.
 -export([new/2, new/3, new/4]).
 %% Read or write emitted files and validate their source-failure metadata.
--export([bytes/1, dependencies/1, write/2, sites/1, sites/2]).
+-export([bytes/1, dependencies/1, source_maps/1, write/2, sites/1, sites/2]).
 %% Retain metadata when a backend wraps an existing artifact.
 -export([with_bytes/2]).
--export_type([artifact/0, module_document/0]).
+-export_type([artifact/0, module_document/0, source_maps/0]).
 
 -doc "A completed module, generated imports and failure sites under one consistency seal. Construct through new/2,3,4; use with_bytes/2 only for trusted composition which preserves imports and failure semantics.".
 -opaque artifact() :: #{
     dslx := binary(),
     dependencies := #{string() => binary()},
     sites := [xls_failure_sites:site()],
+    source_maps := source_maps(),
     sha256 := binary()
+}.
+
+-doc "Maps for the main module and each generated import, keyed by main or its canonical relative .x path.".
+-type source_maps() :: #{
+    main := xls_source_map:source_map(), string() => xls_source_map:source_map()
 }.
 
 -doc "One generated import before final failure allocation. Its preamble precedes the declarations used by its body.".
@@ -40,8 +46,11 @@ new(Locations, Preamble, Body, Modules) ->
     Sites = xls_failure_sites:allocate(Locations, [
         document(Main) | [document(M) || {_Path, M} <- lists:sort(maps:to_list(Modules))]
     ]),
-    Dependencies = maps:map(fun(_Path, Module) -> render(Module, Sites, Locations) end, Modules),
-    seal(render(Main, Sites, Locations), Dependencies, Sites).
+    Rendered = maps:map(fun(_Path, Module) -> render(Module, Sites, Locations) end, Modules),
+    Dependencies = maps:map(fun(_Path, {Bytes, _Ranges}) -> Bytes end, Rendered),
+    Maps = maps:map(fun(_Path, {Bytes, Ranges}) -> xls_source_map:new(Bytes, Ranges) end, Rendered),
+    {MainBytes, MainRanges} = render(Main, Sites, Locations),
+    seal(MainBytes, Dependencies, Sites, Maps#{main => xls_source_map:new(MainBytes, MainRanges)}).
 
 %% Allocation sees every module before any declaration receives its numeric value.
 -spec document(module_document()) -> xls_dslx:value().
@@ -49,18 +58,14 @@ document(#{preamble := Preamble, body := Body}) -> [Preamble, Body].
 
 %% A module declares only its own references without renumbering the shared codebook.
 -spec render(module_document(), [xls_failure_sites:site()], [xls_failure_sites:location()]) ->
-    binary().
+    {binary(), [xls_source_map:range()]}.
 render(Module = #{preamble := Preamble, body := Body}, Sites, Locations) ->
     Referenced = [
         maps:remove(code, S)
      || S <- xls_failure_sites:allocate(Locations, document(Module))
     ],
     LocalSites = [S || S <- Sites, lists:member(maps:remove(code, S), Referenced)],
-    iolist_to_binary([
-        xls_dslx:render(Preamble),
-        xls_failure_sites:declarations(LocalSites),
-        xls_dslx:render(Body)
-    ]).
+    xls_dslx:render_mapped([Preamble, xls_failure_sites:declarations(LocalSites), Body]).
 
 -doc "Returns final DSLX bytes after checking their codebook consistency seal.".
 -spec bytes(artifact()) -> binary().
@@ -74,9 +79,15 @@ dependencies(Module = #{dependencies := Dependencies}) ->
     ok = validate(Module),
     Dependencies.
 
--doc "Writes the main module and all generated imports beside it, creating parent directories and replacing existing generated files. Validates the complete artifact and rejects escaping paths or a dependency named like the main file before writing. Partial output is retained on filesystem errors; compiler support libraries are supplied separately.".
+-doc "Returns source maps after checking the complete artifact seal. Main is keyed by main; imported maps use the same relative paths as dependencies/1. Empty ranges explicitly represent unmapped output.".
+-spec source_maps(artifact()) -> source_maps().
+source_maps(Module = #{source_maps := Maps}) ->
+    ok = validate(Module),
+    Maps.
+
+-doc "Writes the main module and all generated imports with adjacent .map.json source maps, creating parent directories and replacing existing generated files. Validates the complete artifact and rejects escaping paths or a dependency named like the main file before writing. Partial output is retained on filesystem errors; compiler support libraries are supplied separately.".
 -spec write(artifact(), file:filename()) -> ok.
-write(Module = #{dslx := Bytes, dependencies := Dependencies}, MainFilename) ->
+write(Module = #{dslx := Bytes, dependencies := Dependencies, source_maps := Maps}, MainFilename) ->
     ok = validate(Module),
     lists:foreach(fun dependency_path/1, maps:keys(Dependencies)),
     case maps:is_key(filename:basename(MainFilename), Dependencies) of
@@ -88,12 +99,18 @@ write(Module = #{dslx := Bytes, dependencies := Dependencies}, MainFilename) ->
         fun({Path, Contents}) ->
             Target = filename:join(Directory, Path),
             ok = filelib:ensure_dir(Target),
-            ok = file:write_file(Target, Contents)
+            ok = file:write_file(Target, Contents),
+            ok = write_map(Target, maps:get(Path, Maps))
         end,
         lists:sort(maps:to_list(Dependencies))
     ),
     ok = filelib:ensure_dir(MainFilename),
-    file:write_file(MainFilename, Bytes).
+    ok = file:write_file(MainFilename, Bytes),
+    write_map(MainFilename, maps:get(main, Maps)).
+
+%% Keep the map beside its generated file so relocatable build directories need no absolute lookup.
+-spec write_map(file:filename(), xls_source_map:source_map()) -> ok.
+write_map(Filename, Map) -> file:write_file(Filename ++ ".map.json", [json:encode(Map), "\n"]).
 
 %% Keep emitted identities canonical and below the enclosing module's directory.
 -spec dependency_path(string()) -> ok.
@@ -124,31 +141,45 @@ sites(Module = #{sites := Sites}, Locations) ->
     ok = xls_failure_sites:validate_sites(Locations, Sites),
     Sites.
 
--doc "Rebinds an already checked codebook to trusted composed bytes. The caller must preserve the failure-code semantics, including imported owners; this is not an API for accepting edited external artifacts.".
+-doc "Rebinds an already checked codebook to trusted composed bytes. Changed main bytes discard their source ranges; unchanged imports retain theirs. The caller must preserve failure-code semantics; this is not an API for accepting edited external artifacts.".
 -spec with_bytes(artifact(), iodata()) -> artifact().
-with_bytes(Module = #{sites := Sites, dependencies := Dependencies}, Bytes) ->
+with_bytes(
+    Module = #{dslx := Original, sites := Sites, dependencies := Dependencies, source_maps := Maps},
+    Bytes
+) ->
     ok = validate(Module),
-    seal(iolist_to_binary(Bytes), Dependencies, Sites).
+    Updated = iolist_to_binary(Bytes),
+    UpdatedMaps =
+        case Updated =:= Original of
+            true -> Maps;
+            false -> Maps#{main := xls_source_map:new(Updated, [])}
+        end,
+    seal(Updated, Dependencies, Sites, UpdatedMaps).
 
 %% Keep all emitted bytes and their shared codebook under one deterministic identity.
--spec seal(binary(), #{string() => binary()}, [xls_failure_sites:site()]) -> artifact().
-seal(Bytes, Dependencies, Sites) ->
+-spec seal(binary(), #{string() => binary()}, [xls_failure_sites:site()], source_maps()) ->
+    artifact().
+seal(Bytes, Dependencies, Sites, Maps) ->
     #{
         dslx => Bytes,
         dependencies => Dependencies,
         sites => Sites,
-        sha256 => digest(Bytes, Dependencies, Sites)
+        source_maps => Maps,
+        sha256 => digest(Bytes, Dependencies, Sites, Maps)
     }.
 
 %% An opaque value can still arrive from a modified sidecar or external caller.
 -spec validate(artifact()) -> ok.
-validate(#{dslx := Bytes, dependencies := Dependencies, sites := Sites, sha256 := Hash}) ->
-    case digest(Bytes, Dependencies, Sites) =:= Hash of
+validate(#{
+    dslx := Bytes, dependencies := Dependencies, sites := Sites, source_maps := Maps, sha256 := Hash
+}) ->
+    case digest(Bytes, Dependencies, Sites, Maps) =:= Hash of
         true -> ok;
         false -> error(emitted_module_mismatch)
     end.
 
 %% This integrity boundary is local to the trusted build, not cryptographic authorship.
--spec digest(binary(), #{string() => binary()}, [xls_failure_sites:site()]) -> binary().
-digest(Bytes, Dependencies, Sites) ->
-    crypto:hash(sha256, term_to_binary({Bytes, Dependencies, Sites}, [deterministic])).
+-spec digest(binary(), #{string() => binary()}, [xls_failure_sites:site()], source_maps()) ->
+    binary().
+digest(Bytes, Dependencies, Sites, Maps) ->
+    crypto:hash(sha256, term_to_binary({Bytes, Dependencies, Sites, Maps}, [deterministic])).

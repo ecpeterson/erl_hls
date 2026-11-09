@@ -5,9 +5,9 @@
 %% Ordered lexical computations and target-language operations.
 -export([bind/2, block/2, choose/3, match/2, binary/3, unary/2, cast/2]).
 %% Deferred metadata and formatting retained in the enclosing document.
--export([failure_ref/1, indent/2]).
+-export([failure_ref/1, source/2, indent/2]).
 %% Validate the document shape and render terminal iodata.
--export([validate/1, render/1]).
+-export([validate/1, render/1, render_mapped/1]).
 -export_type([expr/0, binding/0, value/0, type/0, name/0, fields/0]).
 
 -doc "A checked DSLX name or pattern spelling supplied by the compiler, without parsing emitted source.".
@@ -60,7 +60,8 @@
     | {xls_dslx, unary, unary_op(), value()}
     | {xls_dslx, cast, value(), type()}
     | {xls_dslx, failure_ref, xls_failure_sites:origin()}
-    | {xls_dslx, indent, value(), non_neg_integer()}.
+    | {xls_dslx, indent, value(), non_neg_integer()}
+    | {xls_dslx, source, xls_source_map:location(), value()}.
 
 -doc "References a checked local or qualified name.".
 -spec ref(name()) -> expr().
@@ -131,6 +132,10 @@ cast(Value, Type) -> {xls_dslx, cast, Value, Type}.
 -spec failure_ref(xls_failure_sites:origin()) -> expr().
 failure_ref(Origin) -> {xls_dslx, failure_ref, Origin}.
 
+-doc "Associates syntax with its original source location without changing its grouping or emitted bytes. Nested locations retain their narrower generated ranges.".
+-spec source(xls_source_map:location(), value()) -> expr().
+source(Location, Value) -> {xls_dslx, source, Location, Value}.
+
 -doc "Defers indentation so nested failure references remain available to module allocation.".
 -spec indent(value(), non_neg_integer()) -> expr().
 indent(Value, Spaces) when Spaces >= 0 -> {xls_dslx, indent, Value, Spaces}.
@@ -154,6 +159,9 @@ validate({xls_dslx, failure_ref, #{file := File, line := Line, kind := Kind} = O
     is_atom(Kind)
 ->
     ok;
+validate({xls_dslx, source, Location, Value}) ->
+    ok = xls_source_map:validate_location(Location),
+    validate(Value);
 validate({xls_dslx, indent, Value, Spaces}) when is_integer(Spaces), Spaces >= 0 -> validate(Value);
 validate({xls_dslx, field, Value, Name}) ->
     ok = validate(Value),
@@ -249,63 +257,73 @@ validate_type({bits, Width}) when is_integer(Width), Width > 0 -> ok;
 validate_type(Type) -> validate_name(Type).
 
 -doc "Renders shared syntax and opaque leaves without source parsing or semantic lowering. Untyped integers retain contextual sizing; unlowered floats and phantom types are rejected.".
--spec render(value()) -> iodata() | char().
-render({xls_dslx, ref, Name}) ->
+-spec render(value()) -> binary().
+render(Value) ->
+    {Bytes, _Ranges} = render_mapped(Value),
+    Bytes.
+
+-doc "Renders the same bytes as render/1 and their retained source ranges, using one-based lines and half-open byte columns after all indentation.".
+-spec render_mapped(value()) -> {binary(), [xls_source_map:range()]}.
+render_mapped(Value) -> xls_source_map:render(format(Value)).
+
+%% One formatter supplies both ordinary output and source-mapped output.
+-spec format(value()) -> xls_source_map:document().
+format({xls_dslx, ref, Name}) ->
     Name;
-render({xls_dslx, failure_ref, Origin}) ->
+format({xls_dslx, failure_ref, Origin}) ->
     xls_failure_sites:reference(Origin);
-render({xls_dslx, indent, Value, Spaces}) ->
-    xls_parse_io:indent([render(Value)], Spaces);
-render({xls_dslx, field, Value, Name}) ->
+format({xls_dslx, source, Location, Value}) ->
+    {source, Location, format(Value)};
+format({xls_dslx, indent, Value, Spaces}) ->
+    {indent, format(Value), Spaces};
+format({xls_dslx, field, Value, Name}) ->
     [postfix(Value), ".", member(Name)];
-render({xls_dslx, index, Value, Index}) ->
-    [postfix(Value), "[", render(Index), "]"];
-render({xls_dslx, slice, Value, Start, Width}) ->
+format({xls_dslx, index, Value, Index}) ->
+    [postfix(Value), "[", format(Index), "]"];
+format({xls_dslx, slice, Value, Start, Width}) ->
     [postfix(Value), "[", integer_to_list(Start), ":", integer_to_list(Start + Width), "]"];
-render({xls_dslx, call, Name, Arguments}) ->
-    [Name, "(", join([render(Value) || Value <- Arguments]), ")"];
-render({xls_dslx, literal, Type, Integer}) ->
+format({xls_dslx, call, Name, Arguments}) ->
+    [Name, "(", join([format(Value) || Value <- Arguments]), ")"];
+format({xls_dslx, literal, Type, Integer}) ->
     [type(Type), ":", integer_to_list(Integer)];
-render({xls_dslx, tuple, [Value]}) ->
-    ["(", render(Value), ",)"];
-render({xls_dslx, tuple, Values}) ->
-    ["(", join([render(Value) || Value <- Values]), ")"];
-render({xls_dslx, construct, Type, Fields, Base}) ->
-    Members = [[Name, ": ", render(Value), ",\n"] || {Name, Value} <- Fields],
+format({xls_dslx, tuple, [Value]}) ->
+    ["(", format(Value), ",)"];
+format({xls_dslx, tuple, Values}) ->
+    ["(", join([format(Value) || Value <- Values]), ")"];
+format({xls_dslx, construct, Type, Fields, Base}) ->
+    Members = [[Name, ": ", format(Value), ",\n"] || {Name, Value} <- Fields],
     Spread =
         case Base of
             none -> [];
-            {base, Value} -> ["..", render(Value), "\n"]
+            {base, Value} -> ["..", format(Value), "\n"]
         end,
-    [type(Type), " {\n", xls_parse_io:indent([Members, Spread], 2), "}"];
-render({xls_dslx, bind, Name, Value}) ->
-    ["let ", Name, " = ", render(Value), ";\n"];
-render({xls_dslx, block, Statements, Result}) ->
-    ["{\n", xls_parse_io:indent([render(Statements), render(Result), "\n"], 2), "}"];
-render({xls_dslx, choose, Condition, Then, Else}) ->
-    ["if ", render(Condition), " ", branch(Then), " else ", branch(Else)];
-render({xls_dslx, match, Value, Arms}) ->
+    [type(Type), " {\n", {indent, [Members, Spread], 2}, "}"];
+format({xls_dslx, bind, Name, Value}) ->
+    ["let ", Name, " = ", format(Value), ";\n"];
+format({xls_dslx, block, Statements, Result}) ->
+    ["{\n", {indent, [format(Statements), format(Result), "\n"], 2}, "}"];
+format({xls_dslx, choose, Condition, Then, Else}) ->
+    ["if ", format(Condition), " ", branch(Then), " else ", branch(Else)];
+format({xls_dslx, match, Value, Arms}) ->
     [
         "match ",
-        render(Value),
+        format(Value),
         " {\n",
-        xls_parse_io:indent(
-            [[render(Pattern), " => ", render(Body), ",\n"] || {Pattern, Body} <- Arms], 2
-        ),
+        {indent, [[format(Pattern), " => ", format(Body), ",\n"] || {Pattern, Body} <- Arms], 2},
         "}"
     ];
-render({xls_dslx, binary, Operator, Left, Right}) ->
+format({xls_dslx, binary, Operator, Left, Right}) ->
     ["(", operand(Left), " ", atom_to_list(Operator), " ", operand(Right), ")"];
-render({xls_dslx, unary, Operator, Value}) ->
-    [atom_to_list(Operator), "(", render(Value), ")"];
-render({xls_dslx, cast, Value, Type}) ->
+format({xls_dslx, unary, Operator, Value}) ->
+    [atom_to_list(Operator), "(", format(Value), ")"];
+format({xls_dslx, cast, Value, Type}) ->
     ["(", operand(Value), " as ", type(Type), ")"];
-render(Value) when is_binary(Value) -> Value;
-render(Value) when is_integer(Value), Value >= 0, Value =< 255 -> Value;
-render(Values) when is_list(Values) -> [render(Value) || Value <- Values];
-render({static, integer, Integer}) ->
+format(Value) when is_binary(Value) -> Value;
+format(Value) when is_integer(Value), Value >= 0, Value =< 255 -> Value;
+format(Values) when is_list(Values) -> [format(Value) || Value <- Values];
+format({static, integer, Integer}) ->
     integer_to_list(Integer);
-render({static, float, Value}) ->
+format({static, float, Value}) ->
     error({untyped_float_literal, Value, {use, hls_float, literal, 2}}).
 
 %% Native type names remain leaves; widths are compiler-checked constants.
@@ -319,30 +337,33 @@ member(Index) when is_integer(Index) -> integer_to_list(Index);
 member(Name) -> Name.
 
 %% Parenthesize opaque leaves before postfix access so provider casts remain intact.
--spec postfix(value()) -> iodata().
-postfix({xls_dslx, ref, _} = Value) -> render(Value);
-postfix({xls_dslx, field, _, _} = Value) -> render(Value);
-postfix({xls_dslx, index, _, _} = Value) -> render(Value);
-postfix({xls_dslx, slice, _, _, _} = Value) -> render(Value);
-postfix({xls_dslx, call, _, _} = Value) -> render(Value);
-postfix({xls_dslx, cast, _, _} = Value) -> render(Value);
-postfix({xls_dslx, binary, _, _, _} = Value) -> render(Value);
-postfix(Value) -> ["(", render(Value), ")"].
+-spec postfix(value()) -> xls_source_map:document().
+postfix({xls_dslx, source, Location, Value}) -> {source, Location, postfix(Value)};
+postfix({xls_dslx, ref, _} = Value) -> format(Value);
+postfix({xls_dslx, field, _, _} = Value) -> format(Value);
+postfix({xls_dslx, index, _, _} = Value) -> format(Value);
+postfix({xls_dslx, slice, _, _, _} = Value) -> format(Value);
+postfix({xls_dslx, call, _, _} = Value) -> format(Value);
+postfix({xls_dslx, cast, _, _} = Value) -> format(Value);
+postfix({xls_dslx, binary, _, _, _} = Value) -> format(Value);
+postfix(Value) -> ["(", format(Value), ")"].
 
 %% Opaque provider snippets may contain operators of lower precedence.
--spec operand(value()) -> iodata() | char().
-operand({xls_dslx, choose, _, _, _} = Value) -> ["(", render(Value), ")"];
-operand({xls_dslx, match, _, _} = Value) -> ["(", render(Value), ")"];
-operand({xls_dslx, _, _} = Value) -> render(Value);
-operand({xls_dslx, _, _, _} = Value) -> render(Value);
-operand({xls_dslx, _, _, _, _} = Value) -> render(Value);
-operand(Value) -> ["(", render(Value), ")"].
+-spec operand(value()) -> xls_source_map:document().
+operand({xls_dslx, source, Location, Value}) -> {source, Location, operand(Value)};
+operand({xls_dslx, choose, _, _, _} = Value) -> ["(", format(Value), ")"];
+operand({xls_dslx, match, _, _} = Value) -> ["(", format(Value), ")"];
+operand({xls_dslx, _, _} = Value) -> format(Value);
+operand({xls_dslx, _, _, _} = Value) -> format(Value);
+operand({xls_dslx, _, _, _, _} = Value) -> format(Value);
+operand(Value) -> ["(", format(Value), ")"].
 
 %% A branch's existing lexical scope is sufficient; bare expressions get one scope.
--spec branch(value()) -> iodata().
-branch({xls_dslx, block, _, _} = Value) -> render(Value);
-branch(Value) -> render(block([], Value)).
+-spec branch(value()) -> xls_source_map:document().
+branch({xls_dslx, source, Location, Value}) -> {source, Location, branch(Value)};
+branch({xls_dslx, block, _, _} = Value) -> format(Value);
+branch(Value) -> format(block([], Value)).
 
 %% Commas do not change the ordered expression list.
--spec join([iodata()]) -> iodata().
+-spec join([xls_source_map:document()]) -> xls_source_map:document().
 join(Values) -> lists:join(", ", Values).

@@ -85,3 +85,55 @@ value(Origin) -> ["pub fn value() -> u16 { ", xls_dslx:failure_ref(Origin), " }\
 %% Each test owns a fresh directory and removes only its own generated files.
 -spec scratch() -> file:filename().
 scratch() -> filename:join("_build", "emitted-tests-" ++ integer_to_list(erlang:unique_integer([positive]))).
+
+%% Final declaration insertion shifts main ranges while each dependency owns independent coordinates.
+-spec source_maps_follow_final_bytes_and_imports_test() -> ok.
+source_maps_follow_final_bytes_and_imports_test() ->
+    Origin = origin("include/actions.hrl", 8, badarg),
+    Source = maps:remove(kind, Origin),
+    ImportedSource = #{file => <<"helper.erl">>, line => 17},
+    Artifact = xls_emitted:new([Source], "// preamble\n", xls_dslx:source(Source, value(Origin)), #{
+        "imports/helper.x" => #{preamble => "// import\n",
+            body => xls_dslx:source(ImportedSource, "pub fn helper() -> u1 { u1:0 }\n")}
+    }),
+    Bytes = xls_emitted:bytes(Artifact),
+    Maps = xls_emitted:source_maps(Artifact),
+    MainMap = maps:get(main, Maps),
+    [Range] = maps:get(ranges, MainMap),
+    {BodyOffset, _} = binary:match(Bytes, <<"pub fn value()">>),
+    Prefix = binary:part(Bytes, 0, BodyOffset),
+    ?assertEqual([length(binary:matches(Prefix, <<"\n">>)) + 1, 1], maps:get(start, Range)),
+    ?assertEqual(Source, maps:get(source, Range)),
+    ?assertEqual(binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
+        maps:get(generated_sha256, MainMap)),
+    ImportMap = maps:get("imports/helper.x", Maps),
+    ?assertMatch([#{start := [2, 1], source := ImportedSource}], maps:get(ranges, ImportMap)),
+    Directory = scratch(),
+    try
+        Main = filename:join(Directory, "renamed.x"),
+        ok = xls_emitted:write(Artifact, Main),
+        lists:foreach(fun({Path, Map}) ->
+            {ok, Json} = file:read_file(filename:join(Directory, Path)),
+            ?assertEqual(json:decode(iolist_to_binary(json:encode(Map))), json:decode(Json))
+        end, [{"renamed.x.map.json", MainMap}, {"imports/helper.x.map.json", ImportMap}])
+    after
+        ok = file:del_dir_r(Directory)
+    end.
+
+%% Metadata is sealed, and arbitrary composition cannot keep stale main-file associations.
+-spec source_maps_are_sealed_and_composition_invalidates_only_main_test() -> ok.
+source_maps_are_sealed_and_composition_invalidates_only_main_test() ->
+    Source = #{file => <<"actor.erl">>, line => 2},
+    Body = xls_dslx:source(Source, "pub fn value() -> u1 { u1:0 }\n"),
+    Artifact = xls_emitted:new([], [], Body, #{"helper.x" => #{preamble => [], body => Body}}),
+    Maps = xls_emitted:source_maps(Artifact),
+    ?assertEqual(Maps, xls_emitted:source_maps(xls_emitted:with_bytes(Artifact, xls_emitted:bytes(Artifact)))),
+    Changed = xls_emitted:with_bytes(Artifact, "// wrapped\n"),
+    ChangedMaps = xls_emitted:source_maps(Changed),
+    ?assertEqual([], maps:get(ranges, maps:get(main, ChangedMaps))),
+    ?assertEqual(maps:get("helper.x", Maps), maps:get("helper.x", ChangedMaps)),
+    ?assertEqual(xls_source_map:new(<<"// wrapped\n">>, []), maps:get(main, ChangedMaps)),
+    Raw = binary_to_term(term_to_binary(Artifact)),
+    Bad = Raw#{source_maps := Maps#{main := xls_source_map:new(xls_emitted:bytes(Artifact), [])}},
+    ?assertError(emitted_module_mismatch, xls_emitted:source_maps(Bad)),
+    ?assertError(emitted_module_mismatch, xls_emitted:bytes(Bad)).

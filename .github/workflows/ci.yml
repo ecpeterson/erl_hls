@@ -112,6 +112,10 @@ jobs:
           rebar3 release
           python3 tools/test_source_toolchain.py
           python3 -m unittest tools.test_source_build_executor
+          python3 tools/test_source_diagnostics.py
+          erl -noshell -pa _build/test/lib/erl_hls/ebin -pa _build/test/lib/hls_runtime/ebin -pa _build/test/lib/erl_hls/test \
+            -eval 'ok = xls_source_map_dslx:write("_build/source-maps"), halt().'
+          python3 tools/test_source_maps.py --xls "$RUNNER_TEMP/xls" --stage _build/source-maps
           python3 tools/test_xls_ir_census.py
           python3 tools/test_regression.py
 
@@ -251,6 +255,7 @@ jobs:
             _build/statem-gathers/**
             _build/statem-replies/**
             _build/source_context/**
+            _build/source-maps/**
             _build/mailbox-formal/**
             _build/helpers/**
             _build/control_failures/**

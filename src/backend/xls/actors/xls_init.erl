@@ -10,6 +10,7 @@
 -doc "Initialization retains its selected failure references until module allocation.".
 -type lowered() :: #{
     line := non_neg_integer(),
+    source_annotation := erl_anno:anno(),
     body := xls_dslx:value(),
     result := xls_dslx:value(),
     failed := xls_dslx:value()
@@ -43,6 +44,7 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
         xls_clause_lower:clause_outcome(Clause, [], DataName, EnumAtoms),
     #{
         line => erl_anno:line(Line),
+        source_annotation => Line,
         body => Body,
         result => Postprocess(Result),
         failed => Failed
@@ -53,12 +55,13 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
 -spec emit(string(), string(), lowered()) -> xls_dslx:value().
 emit(Name, Type, #{
     line := Line,
+    source_annotation := Anno,
     body := Body,
     result := Result,
     failed := Failed
 }) ->
     Constant = string:uppercase(Name),
-    [
+    xls_source_map:at(Anno, [
         "fn ",
         Name,
         "_outcome() -> (bool, ",
@@ -84,4 +87,4 @@ emit(Name, Type, #{
         " { ",
         Constant,
         ".1 }\n\n"
-    ].
+    ]).

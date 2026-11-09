@@ -130,6 +130,94 @@ def cached_artifact(directory: Path) -> Path:
     return directory / artifact
 
 
+
+def source_diagnostics(diagnostics: str, directory: Path) -> list[str]:
+    """Map explicit XLS source spans through adjacent, hash-bound generated maps.
+
+    The original tool diagnostic remains authoritative. Missing, malformed or
+    stale maps contribute no attribution, and source filenames are descriptive:
+    they are never opened or interpreted relative to a generated helper module.
+    """
+    directory = directory.resolve()
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", diagnostics)
+    locations = re.finditer(r"(?P<file>[^:\n]+\.x):(?P<line>[0-9]+):(?P<column>[0-9]+)", plain)
+    notes: list[str] = []
+    seen: set[tuple[str, int, int, str, int]] = set()
+    for location in locations:
+        filename = location['file'].strip()
+        try:
+            generated = (directory / filename).resolve()
+            if not generated.is_relative_to(directory):
+                continue
+        except (OSError, ValueError, RuntimeError):
+            # A malformed tool location must not obscure the actual failure.
+            continue
+        line, column = int(location['line']), int(location['column'])
+        origin = mapped_source(generated, line, column)
+        if origin is None:
+            continue
+        source, source_line = origin
+        key = (str(generated), line, column, source, source_line)
+        if key not in seen:
+            seen.add(key)
+            relative_generated = generated.relative_to(directory)
+            notes.append(f"Erlang source: {source}:{source_line} "
+                         f"(generated {relative_generated}:{line}:{column})")
+    return notes
+
+
+def mapped_source(generated: Path, line: int, column: int) -> tuple[str, int] | None:
+    """Return the narrowest containing source origin, rejecting invalid maps as a whole.
+
+    Generated coordinates are one-based UTF-8 byte positions with half-open
+    ranges. A sidecar only describes the exact adjacent generated file bytes.
+    """
+    try:
+        mapping = json.loads(generated.with_name(generated.name + '.map.json').read_bytes())
+        data = generated.read_bytes()
+        if (not isinstance(mapping, dict) or type(mapping.get('version')) is not int or
+                mapping['version'] != 1 or
+                mapping.get('generated_sha256') != hashlib.sha256(data).hexdigest() or
+                not isinstance(mapping.get('ranges'), list)):
+            return None
+        starts = [0, *(index + 1 for index, byte in enumerate(data) if byte == 10)]
+
+        def offset(position: object) -> int:
+            """Validate a location without allowing a column to cross its source line."""
+            if (not isinstance(position, list) or len(position) != 2 or
+                    any(type(part) is not int or part < 1 for part in position)):
+                raise ValueError('invalid generated position')
+            row, col = position
+            if row > len(starts):
+                raise ValueError('generated line outside file')
+            start = starts[row - 1]
+            end = starts[row] - 1 if row < len(starts) else len(data)
+            if col > end - start + 1:
+                raise ValueError('generated column outside line')
+            return start + col - 1
+
+        point = offset([line, column])
+        matches: list[tuple[int, str, int]] = []
+        for entry in mapping['ranges']:
+            start, end = offset(entry['start']), offset(entry['end'])
+            source = entry['source']
+            name, source_line = source['file'], source['line']
+            if (end < start or not isinstance(name, str) or not name or
+                    '\n' in name or '\r' in name or
+                    type(source_line) is not int or source_line < 1):
+                return None
+            if start <= point < end:
+                matches.append((end - start, name, source_line))
+        if not matches:
+            return None
+        smallest = min(length for length, _, _ in matches)
+        origins = {(name, source_line) for length, name, source_line in matches if length == smallest}
+        # Equal-sized conflicting annotations cannot choose a truthful source.
+        return next(iter(origins)) if len(origins) == 1 else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def run(argv: list[str], work: Path, output: str, timeout: float, *,
         cwd: Path | None = None, allow_empty: bool = False,
         expect_failure: str | None = None) -> dict[str, Any]:
@@ -184,7 +272,12 @@ def run(argv: list[str], work: Path, output: str, timeout: float, *,
         if process.returncode <= 0 or re.search(expect_failure, diagnostics) is None:
             raise RuntimeError(f"expected rejection did not match (exit {process.returncode}): {work / 'stderr.log'}")
     elif process.returncode:
-        raise RuntimeError(f"compiler exited {process.returncode}: {work / 'stderr.log'}")
+        diagnostics = (work / "stderr.log").read_text(errors="replace")
+        notes = source_diagnostics(diagnostics, work if cwd is None else cwd)
+        detail = "\n" + diagnostics if diagnostics else ""
+        if notes:
+            detail += ("" if detail.endswith("\n") else "\n") + "\n".join(notes)
+        raise RuntimeError(f"compiler exited {process.returncode}: {work / 'stderr.log'}{detail}")
     if not allow_empty and not (work / output).stat().st_size:
         raise ValueError(f"compiler produced empty {output}")
     return metrics
@@ -523,7 +616,10 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
         if "optimizer_pipeline.txtpb" in asset_files or "optimizer_pipeline.txtpb" in sources:
             raise ValueError("reserved optimizer pipeline asset name")
         asset_files["optimizer_pipeline.txtpb"] = Path(optimizer_pipeline).resolve()
-    files = {**sources, **stdlib_files, **{f"assets/{asset}": path for asset, path in asset_files.items()}}
+    source_maps = {name + ".map.json": path.with_name(path.name + ".map.json")
+                   for name, path in sources.items() if path.with_name(path.name + ".map.json").is_file()}
+    files = {**sources, **source_maps, **stdlib_files,
+             **{f"assets/{asset}": path for asset, path in asset_files.items()}}
     prepared: dict[str, Any] = {}
 
     def prepare(snapshot: Path) -> list[StageSpec]:
@@ -590,7 +686,7 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
             if asset in selected or asset == f"{name}.build.json":
                 raise ValueError(f"asset shadows generated output: {asset}")
             selected[asset] = "assets/" + asset
-        selected.update({"sources/" + path: path for path in sources})
+        selected.update({"sources/" + path: path for path in [*sources, *source_maps]})
         selected.update({"stdlib/" + str(Path(path).relative_to("_stdlib")): path for path in stdlib_files})
         return {"manifest_name": f"{name}.build.json", "manifest": manifest, "files": selected}
 

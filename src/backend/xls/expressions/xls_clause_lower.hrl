@@ -13,6 +13,8 @@
     live_bindings = #{} :: #{atom() => true},
     %% hls_failure::Code expressions in reverse evaluation order.
     failures = [] :: [xls_clause_lower:printable()],
+    %% The current source expression; synthetic operations inherit their enclosing origin.
+    source_annotation = 0 :: erl_anno:anno(),
     statements = [] :: xls_clause_lower:printable(),
     reference = none :: none | xls_clause_lower:ir(),
     state_name = undefined :: undefined | atom(),

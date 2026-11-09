@@ -13,7 +13,7 @@
 -spec condition(
     [[erl_parse:abstract_expr()]],
     [xls_clause_lower:printable()],
-    erl_anno:location()
+    erl_anno:anno()
 ) -> term().
 condition([], Conditions, _Line) ->
     conjunction(Conditions);
@@ -23,7 +23,7 @@ condition(Guards, Conditions, Line) ->
     {op, Line, 'andalso', conjunction(Conditions), predicate(Guards, Line)}.
 
 -doc "Lowers nonempty guard alternatives, preserving short-circuiting and failure-as-false semantics.".
--spec predicate([[erl_parse:abstract_expr()]], erl_anno:location()) ->
+-spec predicate([[erl_parse:abstract_expr()]], erl_anno:anno()) ->
     term().
 predicate(Guards = [_ | _], Line) ->
     alternatives([guard_sequence(Expressions, Line) || Expressions <- Guards]);

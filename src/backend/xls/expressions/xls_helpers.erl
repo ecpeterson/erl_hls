@@ -349,7 +349,7 @@ emit_function(
                 ),
                 [Computation, Result]
         end,
-    [
+    xls_source_map:at(Line, [
         case maps:get(owner, Helper, #{public => false}) of
             #{public := true} -> "pub fn ";
             _ -> "fn "
@@ -367,7 +367,7 @@ emit_function(
         "\n",
         xls_dslx:indent(Body, 2),
         "}\n"
-    ].
+    ]).
 
 plain_head([{clause, _, Parameters, [], _}]) ->
     Names = [N || {var, _, N} <- Parameters, N =/= '_'],
