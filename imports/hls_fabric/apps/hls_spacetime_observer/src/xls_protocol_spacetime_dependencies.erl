@@ -25,7 +25,11 @@
 }.
 %% A native signal binding distinguishes stored state from an external sampled input.
 -type binding() :: #{
-    kind := state | input, signal := binary(), width := pos_integer(), state_element => binary()
+    kind := state | input,
+    signal := binary(),
+    width := pos_integer(),
+    state_element => binary(),
+    equivalent_state => binary()
 }.
 %% One XLS state update and its optional guard.
 -type update() :: #{node := binary(), value := binary(), predicate := binary() | unconditional}.
@@ -77,7 +81,7 @@
 -define(MAX_TABLE_ENTRIES, 65536).
 -define(MAX_TABLE_BITS, 1024 * 1024).
 
--doc "Parses generated optimized XLS scalar nodes and next_value operations, checking state leaves against supplied exact RTL registers. External scalar tuple reads are bound only when the received channel tuple and corresponding RTL packed slice agree. Rejects malformed/duplicate nodes and exceeded fixed limits; unsupported operations survive as unknowns. Flat literal tables are bounded to 65,536 entries and 1,048,576 bits in aggregate. Input binaries are retained only through SHA-256 identities.".
+-doc "Parses generated optimized XLS scalar nodes and next_value operations, checking state leaves against supplied exact RTL registers. Coalesced states may share one observed representative when one proc gives them identical widths, initial literals and sole guarded updates. External scalar tuple reads require matching received tuples and RTL slices. Rejects malformed/duplicate nodes and exceeded fixed limits; unsupported forms remain unknown. Flat literal tables are bounded to 65,536 entries and 1,048,576 bits. Input binaries are retained through SHA-256 identities.".
 -spec plan(binary(), binary(), [register()]) -> plan().
 plan(Ir, Rtl, Registers) when byte_size(Ir) =< ?MAX_BYTES, byte_size(Rtl) =< ?MAX_BYTES ->
     Lines = binary:split(Ir, <<"\n">>, [global]),
@@ -96,11 +100,12 @@ plan(Ir, Rtl, Registers) when byte_size(Ir) =< ?MAX_BYTES, byte_size(Rtl) =< ?MA
     Nodes = [bind_table(N, Tables) || N <- ScalarNodes],
     RawIndex = unique_nodes(Nodes),
     Index = maps:map(fun(_, N) -> normalize_node(N, RawIndex) end, RawIndex),
-    State = state_bindings(Nodes, Registers, Rtl),
+    DirectState = state_bindings(Nodes, Registers, Rtl),
+    Updates = parse_updates(Lines),
+    State = equivalent_states(Nodes, DirectState, Updates, initial_state(Lines)),
     Inputs = input_bindings(Nodes, Lines, Rtl),
     Bindings = maps:merge(State, Inputs),
-    Updates = parse_updates(Lines),
-    BoundRegisters = [bind_register(R, State, Updates) || R <- Registers],
+    BoundRegisters = [bind_register(R, DirectState, Updates) || R <- Registers],
     #{
         schema => 1,
         inputs => #{optimized_ir => digest(Ir), rtl => digest(Rtl)},
@@ -363,6 +368,139 @@ state_bindings(Nodes, Registers, Rtl) ->
         end,
         #{},
         Nodes
+    ).
+
+%% Scalar initial values belong to one proc's common transition boundary. Other
+%% proc counts or aggregate initial forms provide no recurrence-alias evidence.
+-spec initial_state([binary()]) -> #{binary() => {pos_integer(), non_neg_integer()}}.
+initial_state(Lines) ->
+    Headers = [L || L <- Lines, re:run(L, <<"^(top )?proc ">>, [{capture, none}]) =:= match],
+    case Headers of
+        [Header] ->
+            case
+                captures(
+                    Header,
+                    <<"^(?:top )?proc [A-Za-z_][A-Za-z_0-9]*(?:<.*>)?\\((.*), init=\\{([^{}]*)\\}\\) \\{$">>,
+                    [1, 2]
+                )
+            of
+                [[Parameters, Initial]] -> scalar_initials(Parameters, Initial);
+                [] -> #{}
+            end;
+        _ ->
+            #{}
+    end.
+
+%% Only a complete scalar parameter/initial list can establish initial equality;
+%% unsupported syntax is left unbound rather than guessing zero or source offsets.
+-spec scalar_initials(binary(), binary()) -> #{binary() => {pos_integer(), non_neg_integer()}}.
+scalar_initials(Parameters, Initial) ->
+    Pattern = <<"([A-Za-z_][A-Za-z_0-9]*): bits\\[([0-9]+)\\](?: pos=\\[[^\\]]*\\])?">>,
+    case re:run(Parameters, Pattern, [global, {capture, [1, 2], binary}]) of
+        {match, Declarations} ->
+            Remainder = re:replace(Parameters, Pattern, <<>>, [global, {return, binary}]),
+            Tokens = [trim(V) || V <- binary:split(Initial, <<",">>, [global])],
+            Complete = re:run(Remainder, <<"^[ ,]*$">>, [{capture, none}]) =:= match,
+            Literals = lists:all(
+                fun(T) ->
+                    re:run(T, <<"^(0x[0-9A-Fa-f][0-9A-Fa-f_]*|0b[01][01_]*|[0-9][0-9_]*)$">>, [
+                        {capture, none}
+                    ]) =:= match
+                end,
+                Tokens
+            ),
+            case Complete andalso Literals andalso length(Declarations) =:= length(Tokens) of
+                true ->
+                    Rows = [
+                        {Name, {binary_to_integer(Width), parse_integer(Value)}}
+                     || {[Name, Width], Value} <- lists:zip(Declarations, Tokens)
+                    ],
+                    case
+                        length(lists:usort([N || {N, _} <- Rows])) =:= length(Rows) andalso
+                            lists:all(
+                                fun({_, {W, V}}) ->
+                                    W > 0 andalso W =< ?MAX_WIDTH andalso V =< mask(W)
+                                end,
+                                Rows
+                            )
+                    of
+                        true -> maps:from_list(Rows);
+                        false -> #{}
+                    end;
+                false ->
+                    #{}
+            end;
+        nomatch ->
+            #{}
+    end.
+
+%% Equal initial constants and the same sole guard/value preserve equality on
+%% every shared proc transition (including holds). This is an IR recurrence
+%% argument, not equality inferred from sampled values or a native proof. More
+%% than one update is excluded because its conflict semantics need separate work.
+-spec equivalent_states(
+    [scalar_node()],
+    #{binary() => binding()},
+    #{binary() => [update()]},
+    #{binary() => {pos_integer(), non_neg_integer()}}
+) ->
+    #{binary() => binding()}.
+equivalent_states(Nodes, Direct, Updates, Initial) ->
+    Groups = lists:foldl(
+        fun
+            (#{name := Name, op := <<"state_read">>, width := W, attrs := A}, Acc) ->
+                State = maps:get(<<"state_element">>, A),
+                case {maps:find(State, Initial), maps:get(State, Updates, [])} of
+                    {{ok, {W, Value}}, [#{value := Next, predicate := Predicate}]} ->
+                        Key = {W, Value, Next, Predicate},
+                        maps:update_with(
+                            Key, fun(Group) -> [{Name, State} | Group] end, [{Name, State}], Acc
+                        );
+                    _ ->
+                        Acc
+                end;
+            (_, Acc) ->
+                Acc
+        end,
+        #{},
+        Nodes
+    ),
+    maps:fold(
+        fun(_, Group, Acc) ->
+            Representatives = lists:usort([
+                {maps:get(signal, B), maps:get(state_element, B)}
+             || {Name, _} <- Group, {ok, B} <- [maps:find(Name, Direct)]
+            ]),
+            case Representatives of
+                [{Signal, State}] ->
+                    [Binding | _] = [
+                        B
+                     || {_, B = #{signal := S, state_element := E}} <- maps:to_list(Direct),
+                        S =:= Signal,
+                        E =:= State
+                    ],
+                    lists:foldl(
+                        fun({Name, Equivalent}, Bindings) ->
+                            case maps:is_key(Name, Bindings) of
+                                true ->
+                                    Bindings;
+                                false ->
+                                    Bindings#{
+                                        Name => Binding#{
+                                            state_element := Equivalent, equivalent_state => State
+                                        }
+                                    }
+                            end
+                        end,
+                        Acc,
+                        Group
+                    );
+                _ ->
+                    Acc
+            end
+        end,
+        Direct,
+        Groups
     ).
 
 %% Check exact generated scalar declarations, including one-bit syntax.

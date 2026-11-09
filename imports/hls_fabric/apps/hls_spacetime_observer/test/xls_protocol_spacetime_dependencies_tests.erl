@@ -111,6 +111,108 @@ rejection_test() ->
 -spec reason(term()) -> binary().
 reason(Term) -> iolist_to_binary(io_lib:format("~tp", [Term])).
 
+%% A coalesced startup flag still selects writes through its exact proc recurrence.
+-spec equivalent_state_test() -> ok.
+equivalent_state_test() ->
+    {Ir, Rtl, Registers} = equivalent_fixture(<<"0">>, <<"value=one">>, false),
+    P = xls_protocol_spacetime_dependencies:plan(Ir, Rtl, Registers),
+    B = maps:get(<<"folded">>, maps:get(bindings, P)),
+    ?assertEqual(<<"__state_0">>, maps:get(equivalent_state, B)),
+    ?assertEqual(<<"____state_0">>, maps:get(signal, B)),
+    S = xls_protocol_spacetime_dependencies:sample(P, #{<<"____state_0">> => 1, <<"__result">> => 0}),
+    R = xls_protocol_spacetime_dependencies:write(P, <<"__result">>, S),
+    ?assertEqual(42, maps:get(value, R)),
+    ?assertEqual(#{<<"____state_0">> => 1}, maps:get(control_masks, R)),
+    ?assertEqual([], maps:get(unknown, R)),
+    %% Alias nodes must not make the original register's update binding ambiguous.
+    ?assertEqual(1, maps:get(value, xls_protocol_spacetime_dependencies:write(P, <<"____state_0">>, S))).
+
+%% Initial values, update expression and guard are semantic, not cosmetic matches.
+-spec unequal_recurrence_test() -> ok.
+unequal_recurrence_test() ->
+    lists:foreach(fun({Initial, Update}) ->
+        {Ir, Rtl, Registers} = equivalent_fixture(Initial, Update, false),
+        P = xls_protocol_spacetime_dependencies:plan(Ir, Rtl, Registers),
+        ?assertNot(maps:is_key(<<"folded">>, maps:get(bindings, P)))
+    end, [{<<"1">>, <<"value=one">>}, {<<"0">>, <<"value=zero">>},
+          {<<"0">>, <<"value=one, predicate=one">>}]).
+
+%% No unique observed representative means no native identity is chosen.
+-spec ambiguous_recurrence_test() -> ok.
+ambiguous_recurrence_test() ->
+    {Ir, Rtl, Registers} = equivalent_fixture(<<"0">>, <<"value=one">>, true),
+    WithThird = binary:replace(Ir, <<"result: bits[8], init={0, 0, 0}">>,
+        <<"result: bits[8], folded_again: bits[1], init={0, 0, 0, 0}">>),
+    Third = <<WithThird/binary,
+        "  folded_again: bits[1] = state_read(state_element=folded_again, id=20)\n",
+        "  third: () = next_value(state_element=folded_again, value=one, id=21)\n">>,
+    P = xls_protocol_spacetime_dependencies:plan(Third, Rtl, Registers),
+    ?assertNot(maps:is_key(equivalent_state, maps:get(<<"folded">>, maps:get(bindings, P)))),
+    ?assertNot(maps:is_key(<<"folded_again">>, maps:get(bindings, P))),
+    %% Remove both direct flag representatives while retaining the data register.
+    P0 = xls_protocol_spacetime_dependencies:plan(Ir, <<"  reg [7:0] __result;\n">>,
+        [R || R = #{name := N} <- Registers, N =:= <<"__result">>]),
+    ?assertNot(maps:is_key(<<"folded">>, maps:get(bindings, P0))).
+
+%% Channel parameters and source positions are outside the scalar state initializer.
+-spec equivalent_proc_header_test() -> ok.
+equivalent_proc_header_test() ->
+    {Ir, Rtl, Registers} = equivalent_fixture(<<"0">>, <<"value=one">>, false),
+    Header = binary:replace(Ir, <<"top proc sample(__state_0: bits[1],">>,
+        <<"top proc sample<commands: (bits[1], bits[8]) in>(__state_0: bits[1] pos=[(1,2,3)],">>),
+    P = xls_protocol_spacetime_dependencies:plan(Header, Rtl, Registers),
+    ?assertEqual(<<"__state_0">>, maps:get(equivalent_state, maps:get(<<"folded">>, maps:get(bindings, P)))).
+
+%% Multiple procs, aggregate/malformed initial values and conflicting updates
+%% cannot establish the common transition and unique-update argument.
+-spec unsupported_recurrence_test() -> ok.
+unsupported_recurrence_test() ->
+    {Ir, Rtl, Registers} = equivalent_fixture(<<"0">>, <<"value=one">>, false),
+    Variants = [
+        <<Ir/binary, "proc other(s: bits[1], init={0}) {\n}\n">>,
+        binary:replace(Ir, <<"init={0, 0, 0}">>, <<"init={0, (0, 0), 0}">>),
+        binary:replace(Ir, <<"init={0, 0, 0}">>, <<"init={0, 2, 0}">>),
+        binary:replace(Ir, <<"init={0, 0, 0}">>, <<"init={0, _, 0}">>),
+        binary:replace(Ir, <<"init={0, 0, 0}">>, <<"init={0, 0x_, 0}">>),
+        <<Ir/binary, "  extra: () = next_value(state_element=folded, value=one, predicate=one, id=20)\n">>
+    ],
+    lists:foreach(fun(Bad) ->
+        P = xls_protocol_spacetime_dependencies:plan(Bad, Rtl, Registers),
+        ?assertNot(maps:is_key(<<"folded">>, maps:get(bindings, P)))
+    end, Variants).
+
+%% Different source widths cannot share the representative's sampled bits.
+-spec equivalent_width_test() -> ok.
+equivalent_width_test() ->
+    {Ir, Rtl, Registers} = equivalent_fixture(<<"0">>, <<"value=one">>, false),
+    Wide = binary:replace(Ir, <<"folded: bits[1]">>, <<"folded: bits[2]">>, [global]),
+    P = xls_protocol_spacetime_dependencies:plan(Wide, Rtl, Registers),
+    ?assertNot(maps:is_key(<<"folded">>, maps:get(bindings, P))).
+
+%% The selected predicate refers to an IR state whose RTL copy was coalesced.
+-spec equivalent_fixture(binary(), binary(), boolean()) ->
+    {binary(), binary(), [xls_protocol_spacetime_dependencies:register()]}.
+equivalent_fixture(Initial, Update, BothObserved) ->
+    Ir = iolist_to_binary([
+        "top proc sample(__state_0: bits[1], folded: bits[1], result: bits[8], init={0, ", Initial, ", 0}) {\n",
+        "  __state_0: bits[1] = state_read(state_element=__state_0, id=1)\n",
+        "  folded: bits[1] = state_read(state_element=folded, id=2)\n",
+        "  result: bits[8] = state_read(state_element=result, id=3)\n",
+        "  one: bits[1] = literal(value=1, id=4)\n",
+        "  zero: bits[1] = literal(value=0, id=5)\n",
+        "  answer: bits[8] = literal(value=42, id=6)\n",
+        "  a: () = next_value(state_element=__state_0, value=one, id=7)\n",
+        "  b: () = next_value(state_element=folded, ", Update, ", id=8)\n",
+        "  c: () = next_value(state_element=result, value=answer, predicate=folded, id=9)\n}\n"
+    ]),
+    Names = [{<<"____state_0">>, 1}, {<<"__result">>, 8}] ++
+        case BothObserved of true -> [{<<"__folded">>, 1}]; false -> [] end,
+    Rtl = iolist_to_binary([["  reg ", case W of 1 -> []; _ -> ["[", integer_to_list(W-1), ":0] "] end,
+        N, ";\n"] || {N, W} <- Names]),
+    Registers = [#{name => N, width => W, data => <<"D">>, enable => <<"CE">>,
+        rule => enabled_same_edge_register_write} || {N, W} <- Names],
+    {Ir, Rtl, Registers}.
+
 %% Priority selection chooses the lowest asserted lane; one-hot selection combines all asserted lanes.
 -spec multi_selector_test() -> ok.
 multi_selector_test() ->
