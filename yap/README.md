@@ -8,8 +8,8 @@ Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on
 
 ## Compiler usability, in priority order
 
-- [x] Map generated DSLX diagnostics to actor/include/imported-helper Erlang origins; [local qualification](source-diagnostics.md).
-- [x] Extend differential checking to finite actor transitions, with BEAM/RTL witnesses and an injected-defect shrink/replay check; implemented on `codex/actor-differential` (separate review).
+- [x] Map generated DSLX diagnostics to actor/include/imported-helper Erlang origins; [PR #37](https://github.com/ecpeterson/erl_hls/pull/37) and [local qualification](source-diagnostics.md).
+- [x] Extend differential checking to finite actor transitions, with BEAM/RTL witnesses and an injected-defect shrink/replay check; [PR #38](https://github.com/ecpeterson/erl_hls/pull/38) (independent review).
 - [ ] Package a communicating telemetry topology through `hlsc`.
   - Expose existing compiler topology/bundle APIs through the CLI; keep fabric scheduling and deployment policy downstream.
   - Finish when the [telemetry project](../src/examples/telemetry/README.md) has one documented packaging command, a relocatable bundle and a focused public-port RTL witness. Small-to-medium toolchain task.
