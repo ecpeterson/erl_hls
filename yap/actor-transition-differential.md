@@ -1,0 +1,16 @@
+# Finite actor differential qualification
+
+- [x] Generate two-phase actors and compare actual BEAM `hls_statem` execution with normally lowered, optimized RTL owner transitions.
+- [x] Retain and replay schedules; shrink semantic mismatches without changing actor source or the 64-transition segment horizon.
+- [x] Detect a deliberately corrupted generated arithmetic literal, reduce its input sequence and replay the uncorrupted witness successfully.
+- [x] Add fast checker tests and one bounded actor smoke to the existing compiler CI job; leave the full injected-defect campaign explicitly invoked.
+
+The generated grammar uses three distinct output ports, at least two ordered entry effects, optional third effects, byte arithmetic, phase changes, postponement/retry, `repeat_phase` and checked failure. Comparison covers each drained prefix's committed phase/data, postponed count and complete ordered outputs. Per-transition checks reject output under backpressure, tentative entry-state commit while blocked and mutation after latched failure. Reset is tested only at quiescent/failed boundaries; this work adds no failure/reset/retry semantics and does not test full transport services or physical timing. See [the runnable workflow](../docs/compiler-differential.md#actor-transition-sequences).
+
+Local qualification on 2026-11-09 used OTP 28.0.2, rebar3 3.24.0, the pinned optimized XLS bundle and Icarus. Four seeded actors agreed across 32 finite segments / 2,048 RTL owner transitions. They cover both arithmetic operators, both output orders, two/three-effect entry branches, stalled publication, deferred messages, selected/unselected failure and two incarnations. The first successful actor took 3.28 seconds including incremental test compilation; the other three took 4.57 seconds. These are simulation witnesses, not proofs or measured hardware clocks.
+
+The detector self-test changed generated bias 7 to 6 while leaving the compiled BEAM oracle unchanged: RTL state 15 disagreed with BEAM state 17. Six reduction attempts retained that observable mismatch and produced one reset segment containing only command `{kind=2, value=0}`, with a zero readiness calendar. The clean replay agreed. Detection, shrinking and replay took 8.60 seconds. Every native tool command and generated source/oracle/trace remains under its fresh `_build` stage; provenance records hashes of compiler objects, libraries and tool binaries.
+
+Nine fast harness tests passed. Required format, Dialyzer and package checks passed; the full source-contract audit reports 3,334 inherited gaps and zero new/changed gaps, and strict checking of the new worker reports zero gaps. The final quality wrapper took 22.47 seconds with sampled descendant RSS below 1 GiB. All guarded runs ended with no surviving owned groups; no native implementation or remote CI was launched.
+
+Two setup mistakes are retained rather than counted as compiler defects: the first generated actor used the same output port twice in an entry and was correctly rejected by BEAM; the first fault injector expected a typed literal whereas normal DSLX uses an inferred literal. The initial package audit targeted an unbuilt default profile; it passed after the required default-profile Dialyzer build. Completed actor witnesses were not rerun for those unrelated checks.

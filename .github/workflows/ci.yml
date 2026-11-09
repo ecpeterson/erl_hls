@@ -124,12 +124,15 @@ jobs:
       - name: Check differential compiler runner and shrinking
         run: |
           python3 tools/test_compiler_differential.py
+          python3 tools/test_actor_differential.py
           python3 tools/test_compiler_differential.py --xls-root "$RUNNER_TEMP/xls"
 
       - name: Compare generated Erlang functions with DSLX, JIT, and RTL
         run: |
           python3 tools/compiler_differential.py "$RUNNER_TEMP/xls" \
             --count 16 --depth 3 --inputs 20 --rtl-batches 2 --shrink-budget 40
+          python3 tools/actor_differential.py "$RUNNER_TEMP/xls" \
+            --count 1 --skip-compile --shrink-budget 0
 
       - name: Check localized compiler regressions
         env:
@@ -265,6 +268,7 @@ jobs:
             _build/names/**
             _build/compiler-differential/**
             _build/differential-self-test/**
+            _build/actor-differential/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log
