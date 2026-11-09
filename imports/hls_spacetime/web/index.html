@@ -163,6 +163,25 @@
             <option value="">Choose a recorded example</option>
           </select></label
         >
+        <section id="chain-panel" class="chain-panel" hidden>
+          <div class="selection-toolbar">
+            <label
+              >Follow an action<select id="chain">
+                <option value="">Choose an action chain</option>
+              </select></label
+            >
+            <label
+              ><input type="checkbox" id="chain-only" checked /> Only this
+              chain</label
+            >
+            <label
+              ><input type="checkbox" id="chain-context" /> Adjacent input
+              context</label
+            >
+          </div>
+          <p id="chain-summary" class="legend-note"></p>
+          <div id="chain-milestones" class="chain-milestones"></div>
+        </section>
         <div class="view-grid">
           <section id="scene-panel" class="panel stack-panel">
             <div class="panel-heading">
@@ -171,8 +190,16 @@
                 <span id="space-unit"
                   >Device tile coordinates · time flows down</span
                 >
+                <p id="scene-caption" class="compact-scene-caption"></p>
               </div>
               <div class="scene-actions">
+                <button
+                  id="toggle-scene-controls"
+                  aria-expanded="true"
+                  title="Hide toolbars and details without changing the view settings"
+                >
+                  Hide controls
+                </button>
                 <button
                   id="toggle-inspector"
                   aria-controls="evidence-inspector"
@@ -766,7 +793,7 @@
                     checked
                     disabled
                   />
-                  Expand selected word into cells</label
+                  Expand selected storage into cells</label
                 ><span class="legend"
                   ><i class="load"></i> load C→C+1
                   <i class="hold"></i> residence <i></i> selected

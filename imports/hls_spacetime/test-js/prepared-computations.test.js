@@ -594,3 +594,79 @@ test("pin/arc geometry and aligned arrivals retain known, unknown and outside va
     "not_applicable",
   ]);
 });
+
+test("prepared destination subsets retain complete source writes and unknown bit coverage", () => {
+  const { model, attachment, routeNets } = fixture();
+  model.chains = new Map([
+    [
+      "focus",
+      {
+        targets: [
+          { event: "w0", mask: "0x1" },
+          { event: "w1", mask: "0x2" },
+        ],
+      },
+    ],
+  ]);
+  const original = structuredClone(attachment);
+  const source = createComputations(model, attachment, routeNets);
+  const data = prepareRenderData(model, { attachment, routeNets });
+  const index = createPreparedComputations(model, data);
+  assert.deepEqual(attachment, original);
+  assert.equal(model.events.get("w0").access.mask, "0x3");
+  assert.equal(index.writes.get("w0").coverage.requestedBits, 2);
+  const targetMasks = new Map([
+    ["w0", "0x1"],
+    ["w1", "0x2"],
+  ]);
+  const [focused] = preparedComputationLayers(index, ["w0", "w1"], {
+    targetMasks,
+  });
+  assert.deepEqual(focused.coverage, {
+    requestedBits: 2,
+    mappedBits: 1,
+    unknownBits: 1,
+    filteredCones: 0,
+  });
+  const [unknown] = preparedComputationLayers(index, ["w1"], { targetMasks });
+  assert.deepEqual(unknown.coverage, {
+    requestedBits: 1,
+    mappedBits: 0,
+    unknownBits: 1,
+    filteredCones: 0,
+  });
+  assert.equal(unknown.cones.length, 0);
+  const forged = structuredClone(data);
+  const forgedWrite = forged.writes.find((write) => write.event === "w1");
+  forgedWrite.selections[0].cones = [...forgedWrite.cones];
+  assert.throws(
+    () => createPreparedComputations(model, forged),
+    /mapped coverage/,
+  );
+  const [direct] = computationLayers(source, ["w0", "w1"], { targetMasks });
+  assert.deepEqual(focused.coverage, direct.coverage);
+  assert.deepEqual(
+    focused.cones.map((cone) => cone.id),
+    direct.cones.map((cone) => cone.id),
+  );
+  const paint = preparedCircuitPaint(index, focused);
+  assert.deepEqual(paint.computations, ["word"]);
+  assert.throws(
+    () =>
+      preparedComputationLayers(index, ["w2"], {
+        targetMasks: new Map([["w2", "0x1"]]),
+      }),
+    /not prepared/,
+  );
+  assert.throws(
+    () =>
+      computationLayers(source, ["w0"], {
+        targetMasks: new Map([["w0", "0x4"]]),
+      }),
+    /outside recorded write/,
+  );
+  assert.equal(
+    preparedComputationLayers(index, ["w0"])[0].coverage.requestedBits,
+    2,
+  );
+});

@@ -285,3 +285,32 @@ test("selected reads reject malformed or empty masks", () => {
     assert.throws(() => eventFootprint(model, "read"), /mask/);
   }
 });
+
+test("presentation subsets retain original write evidence and show only nominated cells", () => {
+  const model = fixture();
+  const result = eventFootprint(model, "write", { displayMask: "0xC" });
+  assert.equal(model.events.get("write").access.mask, "0xFF");
+  assert.equal(result.mode, "display_bits");
+  assert.equal(result.selectedBits, 2);
+  assert.equal(result.unknownBits, 1);
+  assert.deepEqual(
+    result.cells.map((cell) => cell.id),
+    ["far"],
+  );
+  assert.match(result.reason, /Displayed destination subset/);
+  for (const displayMask of ["0x0", "0x100"])
+    assert.throws(
+      () => eventFootprint(model, "write", { displayMask }),
+      /mask|subset/,
+    );
+  for (const id of ["read", "response", "compute"])
+    assert.throws(
+      () => eventFootprint(model, id, { displayMask: "0x1" }),
+      /requires a recorded write/,
+    );
+  model.events.get("write").access.mask = "0x1";
+  assert.throws(
+    () => eventFootprint(model, "write", { displayMask: "0x3" }),
+    /exceeds/,
+  );
+});

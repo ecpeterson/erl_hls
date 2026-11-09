@@ -11,10 +11,18 @@ import {
   storageSegments,
   storageLifetimes,
 } from "./model.js";
+import {
+  traceChain,
+  matchingChain,
+  chainDisplayBounds,
+  chainTargetMasks,
+  chainCircuitSelection,
+  chainStorageSegments,
+} from "./action-chain.js";
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
-import { loadComputations } from "./computation-loader.js";
+import { loadComputations, publicationUrl } from "./computation-loader.js";
 import { loadRecording } from "./recording-loader.js";
 import { loadPreparedRenderWorker } from "./prepared-loader.js";
 import {
@@ -51,9 +59,10 @@ import {
 import {
   computationSelection,
   computationWindowUnion,
+  computationControlSelection,
 } from "./computation-view.js";
 import { windowMetrics } from "./metrics.js";
-import { layoutLabels } from "./labels.js";
+import { layoutLabels, projectLabelAnchors } from "./labels.js";
 import { spatialPoints, spatialPairs } from "./visibility.js";
 const $ = (id) => document.getElementById(id);
 const colors = [
@@ -72,6 +81,11 @@ const state = {
   trace: null,
   traceDirection: "backward",
   annotation: null,
+  chain: null,
+  chainMatchNote: null,
+  nativeBounds: null,
+  displayBounds: null,
+  expectsPrepared: false,
   first: 0,
   window: 24,
   scene: null,
@@ -173,6 +187,7 @@ async function loadDocument(
   model,
   integrity = "File supplied locally; source evidence not revalidated",
   computationData = null,
+  { preparedExpected = false, computationsExpected = false } = {},
 ) {
   sceneSelection.reset();
   regionalControls.configure();
@@ -231,21 +246,33 @@ async function loadDocument(
     "circuit-selected",
   ])
     $(id).disabled = !computations;
-  $("computation-circuits").checked = Boolean(computations);
+  state.expectsPrepared = Boolean(computations?.prepared || preparedExpected);
+  $("computation-circuits").checked = Boolean(
+    computations || computationsExpected || preparedExpected,
+  );
   $("time-layout").disabled = !computations?.prepared;
-  $("time-layout").value = computations?.prepared ? "arrival" : "flat";
-  $("pick-mode").value = computations?.prepared ? "sinks" : "writes";
+  $("time-layout").value = state.expectsPrepared ? "arrival" : "flat";
+  $("pick-mode").value = state.expectsPrepared ? "sinks" : "writes";
+  if (state.expectsPrepared) {
+    $("color-mode").value = "criticality";
+    state.spacing = 32;
+    $("spacing").value = state.spacing;
+  }
   $("circuit-role").value = "";
   $("circuit-timing").value = "registered_launch";
   $("circuit-delay").value = "0";
   $("circuit-unknown").checked = true;
   $("circuit-selected").checked = false;
   state.model = model;
+  state.nativeBounds = model.geometryBounds;
+  state.displayBounds = null;
   state.autoFit = true;
   state.eventCache = null;
   state.selected = null;
   state.trace = null;
   state.annotation = null;
+  state.chain = null;
+  state.chainMatchNote = null;
   state.resource = null;
   state.cell = null;
   state.focusVersion = null;
@@ -289,8 +316,15 @@ async function loadDocument(
       ),
     ),
   );
+  $("chain").replaceChildren(new Option("Choose an action chain", ""));
+  for (const chain of model.chains.values())
+    $("chain").add(new Option(chain.title, chain.id));
+  $("chain-panel").hidden = model.chains.size === 0;
   state.first = selectedBounds().firstCycle;
-  state.window = Math.min(24, selectedBounds().endCycle - state.first);
+  state.window = Math.min(
+    state.expectsPrepared ? 3 : 24,
+    selectedBounds().endCycle - state.first,
+  );
   const logical = !model.catalogue;
   $("title").textContent = model.document.title ?? "Saved execution";
   $("subtitle").textContent =
@@ -328,6 +362,9 @@ async function loadDocument(
 /** Install complete prepared geometry after the recording is already interactive.
  * Native source evidence remains retained at manifest references, not in UI memory. */
 function installComputationData(data) {
+  state.model.geometryBounds = state.nativeBounds
+    ? { ...state.nativeBounds }
+    : null;
   state.computations = data.prepared
     ? createPreparedComputations(state.model, data.prepared)
     : createComputations(state.model, data.attachment, data.routeNets);
@@ -341,6 +378,12 @@ function installComputationData(data) {
         for (const wire of node.wires ?? [])
           extendBounds(state.model.geometryBounds, wire);
     }
+  state.nativeBounds = state.model.geometryBounds;
+  state.model.geometryBounds = chainDisplayBounds(
+    state.chain,
+    state.nativeBounds,
+    state.displayBounds,
+  );
   for (const key of [
     "pointCache",
     "resourceCache",
@@ -359,18 +402,10 @@ function installComputationData(data) {
     "circuit-selected",
   ])
     $(id).disabled = false;
-  $("computation-circuits").checked = true;
   $("time-layout").disabled = !state.computations.prepared;
-  $("time-layout").value = state.computations.prepared ? "arrival" : "flat";
-  $("pick-mode").value = state.computations.prepared ? "sinks" : "writes";
-  if (state.computations.prepared) {
-    $("color-mode").value = "criticality";
-    // Begin with a few readable intervals; Window remains unrestricted.
-    state.window = Math.min(state.window, 3);
-    state.spacing = 32;
-    $("spacing").value = state.spacing;
-  }
-  state.autoFit = true;
+  if (!state.computations.prepared) $("time-layout").value = "flat";
+  // Defaults were chosen before interaction. Installing geometry must not reset
+  // the user's window, camera, picking mode or controls, even without a chain.
   render();
 }
 
@@ -437,8 +472,18 @@ function normalizeWindow() {
   $("window-label").textContent =
     `C${state.first}–${state.first + state.window - 1}`;
 }
+/** Keep the compact scene identifiable without reopening its hidden controls. */
+function renderSceneCaption() {
+  if (!state.model) return;
+  const labels = [state.model.document.title ?? "Saved execution"];
+  if (state.chain) labels.push(state.chain.title);
+  labels.push(`C${state.first}–${state.first + state.window - 1}`);
+  labels.push(`${$("arrival-budget").value} ns display budget (hypothetical)`);
+  $("scene-caption").textContent = labels.join(" · ");
+}
 /** Queue one canvas repaint for related inputs or pointer movement. */
 function repaint(cameraOnly = false) {
+  renderSceneCaption();
   sceneSelection.invalidate();
   if (!cameraOnly) {
     state.sceneDirty = true;
@@ -493,6 +538,7 @@ function render() {
       )
       .join("") ||
     '<p class="empty">No operations match these filters and clocks.</p>';
+  renderChain();
   renderInspector();
   renderResource();
   repaint();
@@ -556,13 +602,15 @@ function renderMetrics() {
 /** Resolve selection seeds without creating an event for an application annotation. */
 function selectionEvents() {
   if (state.selected) return [state.model.events.get(state.selected)];
+  if (state.chain)
+    return state.chain.sinks.map((id) => state.model.events.get(id));
   return state.annotation
     ? annotationEvents(state.model, state.annotation)
     : [];
 }
 /** Semantic filters clear excluded selections across the full capture, not the window. */
 function clearFilteredSelection() {
-  const seeds = selectionEvents();
+  const seeds = state.chain ? state.trace.events : selectionEvents();
   if (!seeds.length) return;
   const matching = new Set(
     eventsInWindow(state.model, filters()).map((event) => event.id),
@@ -572,6 +620,8 @@ function clearFilteredSelection() {
   state.trace = null;
   state.annotation = null;
   state.focusVersion = null;
+  state.chain = null;
+  $("chain").value = "";
   state.resource = null;
   state.cell = null;
   state.traceNote = "";
@@ -582,6 +632,8 @@ function clearFilteredSelection() {
 function traceSelection(direction) {
   const seeds = selectionEvents().map((event) => event.id);
   if (!seeds.length) return;
+  state.chain = null;
+  $("chain").value = "";
   state.trace = traceDependencies(state.model, seeds, { direction });
   state.traceDirection = direction;
 }
@@ -592,9 +644,22 @@ function visibleEvents() {
     endCycle: state.first + state.window,
     ...filters(),
   };
-  const key = JSON.stringify(opts);
-  if (state.eventCache?.key !== key)
-    state.eventCache = { key, events: eventsInWindow(state.model, opts) };
+  const key = JSON.stringify([
+    opts,
+    state.chain?.id,
+    $("chain-only").checked,
+    $("chain-context").checked,
+  ]);
+  if (state.eventCache?.key !== key) {
+    let events = eventsInWindow(state.model, opts);
+    if (state.chain && $("chain-only").checked) {
+      const ids = new Set(state.trace.events.map((event) => event.id));
+      if ($("chain-context").checked)
+        for (const edge of state.trace.boundaryInputs) ids.add(edge.source);
+      events = events.filter((event) => ids.has(event.id));
+    }
+    state.eventCache = { key, events };
+  }
   return state.eventCache.events;
 }
 /** Cache logical-resource layout. Unknown placement occupies a labelled rail. */
@@ -669,16 +734,21 @@ function cellPoint(cell) {
 /** Native cells sharing a tile overlap at this scale; retain their identities
  * while drawing one glyph per occupied tile. Unknown bits keep their own rail. */
 function accessGeometry(event) {
+  const displayMask =
+    state.chain && $("chain-only").checked
+      ? chainTargetMasks(state.model, state.chain).get(event.id)
+      : undefined;
   const key = event.access
     ? JSON.stringify([
         event.access.resource,
         event.access.kind,
         event.access.mask ?? null,
         event.access.read_mask ?? null,
+        displayMask ?? null,
       ])
     : event.id;
   if (state.footprintCache.has(key)) return state.footprintCache.get(key);
-  const footprint = eventFootprint(state.model, event.id);
+  const footprint = eventFootprint(state.model, event.id, { displayMask });
   const tiles = new Map();
   for (const cell of footprint.cells) {
     const key = `${cell.x}/${cell.y}`;
@@ -739,11 +809,14 @@ function captureAvailable(cycle) {
  * rows remain retained when functionality or static-delay filters hide geometry. */
 function circuitLayers() {
   if (!state.computations || !$("computation-circuits").checked) return [];
-  const selectedOnly = $("circuit-selected").checked;
+  const selectedOnly = $("circuit-selected").checked && !state.chain;
   const key = JSON.stringify([
     state.first,
     state.window,
     filters(),
+    state.chain?.id,
+    $("chain-only").checked,
+    $("chain-context").checked,
     selectedOnly,
     selectedOnly ? selectionEvents().map((e) => e.id) : null,
     $("circuit-role").value,
@@ -757,7 +830,10 @@ function circuitLayers() {
         selectionEvents(),
         eventsInWindow(state.model, filters()),
       )
-    : visibleEvents();
+    : chainCircuitSelection(state.chain, visibleEvents(), {
+        onlyChain: $("chain-only").checked,
+        includeContext: $("chain-context").checked,
+      });
   const generated = (
     state.computations.prepared ? preparedComputationLayers : computationLayers
   )(state.computations, supplied, {
@@ -767,6 +843,10 @@ function circuitLayers() {
     minimumDelayNs: Number($("circuit-delay").value),
     timingMetric: $("circuit-timing").value,
     includeUnknownTiming: $("circuit-unknown").checked,
+    targetMasks:
+      state.chain && $("chain-only").checked
+        ? chainTargetMasks(state.model, state.chain)
+        : new Map(),
   });
   const layers = generated.filter(
     (layer) =>
@@ -1177,6 +1257,10 @@ function canvasLabels(ctx, width, height) {
 /** Residence can belong to a selected input chain, not only its final consumer.
  * The example's explicit version is preferred; this never adds an ancestry edge. */
 function selectedLifetimes() {
+  if (state.chain)
+    return state.trace.focusVersions
+      .map((id) => state.model.lifetimes.get(id))
+      .filter(Boolean);
   const found = new Map();
   if (state.focusVersion && state.model.lifetimes.has(state.focusVersion)) {
     const life = state.model.lifetimes.get(state.focusVersion);
@@ -1206,7 +1290,17 @@ function visibleStorage() {
       key,
       segments: storageSegments(state.model, options),
     };
-  return state.storageCache.segments;
+  return state.chain && $("chain-only").checked
+    ? chainStorageSegments(
+        state.model,
+        state.chain,
+        state.trace,
+        state.storageCache.segments,
+        {
+          includeContext: $("chain-context").checked,
+        },
+      ).segments
+    : state.storageCache.segments;
 }
 /** Place unknown bits on their own labelled rail even for partly placed words. */
 function unknownStoragePoint(resource) {
@@ -1223,8 +1317,19 @@ function unknownStoragePoint(resource) {
  * positions merely because a neighbouring bit has a binding. */
 function storagePoints(segment) {
   const expand =
-    $("expand-storage").checked && state.resource === segment.resource;
-  const key = JSON.stringify([segment.resource, segment.address, expand]);
+    $("expand-storage").checked &&
+    (state.resource === segment.resource || Boolean(state.chain));
+  const producer = state.model.versions.get(segment.version).producer;
+  const displayMask =
+    state.chain && $("chain-only").checked
+      ? chainTargetMasks(state.model, state.chain).get(producer)
+      : undefined;
+  const key = JSON.stringify([
+    segment.resource,
+    segment.address,
+    expand,
+    displayMask,
+  ]);
   if (state.storagePointCache.has(key)) return state.storagePointCache.get(key);
   const save = (points) => {
     state.storagePointCache.set(key, points);
@@ -1239,7 +1344,13 @@ function storagePoints(segment) {
       { ...base, y: base.y + segment.address * 0.6, kind: "logical" },
     ]);
   }
-  const placed = placement.cells.filter(
+  const subset = displayMask
+    ? eventFootprint(model, producer, { displayMask })
+    : null;
+  const represented = subset
+    ? [...subset.cells, ...subset.unplacedCells]
+    : placement.cells;
+  const placed = represented.filter(
     (c) => Number.isFinite(c.x) && Number.isFinite(c.y),
   );
   const points =
@@ -1256,9 +1367,9 @@ function storagePoints(segment) {
         : [];
   if (
     !placed.length ||
-    placement.unknownBits ||
-    placement.candidateCells.length ||
-    placed.length < placement.cells.length
+    (subset ? subset.unknownBits : placement.unknownBits) ||
+    (!subset && placement.candidateCells.length) ||
+    placed.length < represented.length
   )
     points.push({ ...unknownStoragePoint(segment.resource), kind: "unknown" });
   return save(points);
@@ -1401,9 +1512,15 @@ function buildStackScene() {
     result.markers.push({ position, color, size, priority });
   const arrival = arrivalEnabled();
   $("pick-mode").querySelector('option[value="sinks"]').disabled = !arrival;
-  if (!arrival && $("pick-mode").value === "sinks")
-    $("pick-mode").value = "writes";
-  const pickMode = $("pick-mode").value;
+  const controlSelection = computationControlSelection({
+    preparedPending: state.expectsPrepared && !state.computations,
+    prepared: Boolean(state.computations?.prepared),
+    arrival,
+    pickMode: $("pick-mode").value,
+    colorMode: $("color-mode").value,
+  });
+  $("pick-mode").value = controlSelection.pickMode;
+  const pickMode = controlSelection.pickMode;
   const interval = Math.max(1, Math.ceil(state.window / 8));
   const planes = [];
   for (let c = state.first; c < state.first + state.window; c += interval)
@@ -1426,6 +1543,7 @@ function buildStackScene() {
         : `C${c}`,
       position: world({ x: -1.04, y: -1.04 }, c),
       alternatives: corners,
+      anchorGroup: "clock-axis",
     });
   }
   for (const epoch of state.model.bundle.capture.incarnations.slice(1)) {
@@ -1467,8 +1585,7 @@ function buildStackScene() {
       ? "Prepare rendering data to enable this color style"
       : "";
   }
-  if ($("color-mode").selectedOptions[0].disabled)
-    $("color-mode").value = "role";
+  $("color-mode").value = controlSelection.colorMode;
   const mode = $("color-mode").value;
   const membershipMode = mode === "computation" || mode === "criticality";
   const neutralTiming = mode === "criticality" || mode === "delay-kind";
@@ -1750,8 +1867,8 @@ function buildStackScene() {
           ? DIRECTION_SOURCE_COLOR
           : neutralTiming
             ? active
-              ? "#aebec6"
-              : "#526471"
+              ? "#60737e"
+              : "#3e515c"
             : membershipMode
               ? computationColor(item.resource)
               : p.kind === "unknown"
@@ -1768,7 +1885,15 @@ function buildStackScene() {
         a,
         b,
         color,
-        active ? 0.004 : item.kind === "write" ? 0.0028 : 0.0018,
+        neutralTiming
+          ? active
+            ? 0.001
+            : 0.0006
+          : active
+            ? 0.004
+            : item.kind === "write"
+              ? 0.0028
+              : 0.0018,
         "storage",
         endColor,
       );
@@ -1830,11 +1955,20 @@ function buildStackScene() {
           : mode === "direction"
             ? "#627780"
             : color(event);
+      const highlight = active && (!state.chain || state.selected === event.id);
       marker(
         position,
-        active ? "#f3f5ed" : onPath ? "#d3dcda" : dim ? "#536b77" : accessColor,
-        active ? 0.014 : onPath ? 0.009 : 0.004,
-        active ? 3 : onPath ? 2 : 1,
+        highlight
+          ? "#f3f5ed"
+          : neutralTiming
+            ? "#627780"
+            : onPath
+              ? "#d3dcda"
+              : dim
+                ? "#536b77"
+                : accessColor,
+        highlight ? 0.014 : neutralTiming ? 0.004 : onPath ? 0.009 : 0.004,
+        highlight ? 3 : neutralTiming ? 0 : onPath ? 2 : 1,
       );
       result.targets.push({ kind: "event", id: event.id, position, event });
       result.focus.push(position);
@@ -1878,10 +2012,18 @@ function buildStackScene() {
             arrival ? eventCoordinate(to) : to.cycle,
           ),
         ),
-        mode === "direction" ? DIRECTION_SOURCE_COLOR : "#d8dedc",
-        0.003,
+        mode === "direction"
+          ? DIRECTION_SOURCE_COLOR
+          : neutralTiming
+            ? "#536975"
+            : "#d8dedc",
+        neutralTiming ? 0.00065 : 0.003,
         "dependency",
-        mode === "direction" ? DIRECTION_SINK_COLOR : "#d8dedc",
+        mode === "direction"
+          ? DIRECTION_SINK_COLOR
+          : neutralTiming
+            ? "#536975"
+            : "#d8dedc",
         0.018,
       );
       result.focus.push(
@@ -1950,25 +2092,25 @@ function buildStackScene() {
     selectionEvents().length &&
     !sinkInspector.focused
   ) {
-    const selectedLayers = (
-      state.computations.prepared
-        ? preparedComputationLayers
-        : computationLayers
-    )(
-      state.computations,
-      computationSelection(
-        selectionEvents(),
-        eventsInWindow(state.model, filters()),
-      ),
-      {
-        roles: $("circuit-role").value
-          ? [$("circuit-role").value]
-          : ["data", "enable", "reset"],
-        minimumDelayNs: Number($("circuit-delay").value),
-        timingMetric: metric,
-        includeUnknownTiming: $("circuit-unknown").checked,
-      },
-    );
+    const selectedLayers = state.chain
+      ? circuitLayers()
+      : (state.computations.prepared
+          ? preparedComputationLayers
+          : computationLayers)(
+          state.computations,
+          computationSelection(
+            selectionEvents(),
+            eventsInWindow(state.model, filters()),
+          ),
+          {
+            roles: $("circuit-role").value
+              ? [$("circuit-role").value]
+              : ["data", "enable", "reset"],
+            minimumDelayNs: Number($("circuit-delay").value),
+            timingMetric: metric,
+            includeUnknownTiming: $("circuit-unknown").checked,
+          },
+        );
     for (const layer of selectedLayers) {
       if (
         layer.cycle < state.first ||
@@ -2073,13 +2215,11 @@ function drawStackOverlay() {
   const labels = canvasLabels(ctx, w, h);
   ctx.font = "11px ui-monospace,monospace";
   ctx.fillStyle = "#a5bdc8";
-  for (const label of state.sceneContent.labels) {
-    const candidates = (label.alternatives ?? [label.position])
-      .map(project)
-      .filter((p) => p.visible);
-    const p = candidates.sort((a, b) => a.x - b.x)[0];
-    if (p) labels.add(label.text, Math.max(4, p.x - 44), p.y - 6, 100);
-  }
+  for (const { label, point } of projectLabelAnchors(
+    state.sceneContent.labels,
+    project,
+  ))
+    labels.add(label.text, Math.max(4, point.x - 44), point.y - 6, 100);
   labels.draw();
   sceneSelection.draw(ctx);
 }
@@ -2237,11 +2377,19 @@ function drawTimeline() {
     `${c.end_cycle - c.first_cycle} clocks retained · ${model.bundle.capture.incarnations.length} incarnation(s)`;
 }
 /** Choose a recorded event, retaining ancestry outside the current window. */
-function selectEvent(id, move = true) {
+function selectEvent(id, move = true, keepChain = false) {
   if (!state.model?.events.has(id)) return;
+  if (keepChain) {
+    $("sink-mode").value = "all";
+    $("sink-mode").onchange();
+  }
+  if (!keepChain) {
+    state.chain = null;
+    $("chain").value = "";
+  }
   state.selected = id;
   state.annotation = null;
-  state.trace = null;
+  if (!keepChain) state.trace = null;
   state.cell = null;
   state.focusVersion = null;
   const event = state.model.events.get(id);
@@ -2257,6 +2405,8 @@ function selectEvent(id, move = true) {
 }
 /** Select a stored version, including roots with no fabricated producer event. */
 function selectStorage(version, cell = null) {
+  state.chain = null;
+  $("chain").value = "";
   const life = state.model.lifetimes.get(version);
   if (!life) return;
   state.selected = life.producer;
@@ -2270,6 +2420,8 @@ function selectStorage(version, cell = null) {
 }
 /** Follow explicitly bound contributors while leaving unanchored observations as context. */
 function selectAnnotation(annotation) {
+  state.chain = null;
+  $("chain").value = "";
   const anchors = annotationEvents(state.model, annotation);
   if (anchors.length > 1000) {
     notice(
@@ -2323,6 +2475,19 @@ function renderInspector() {
   const seeds = selectionEvents();
   $("backward").disabled = !seeds.length;
   $("forward").disabled = !seeds.length;
+  if (state.chain && !state.selected) {
+    $("selected-kind").textContent = "Recorded action chain";
+    $("selection").innerHTML =
+      `<h3>${esc(state.chain.title)}</h3><p>${esc(state.chain.evidence ?? "Producer-selected action; every connection comes from the recorded graph.")}</p><p>Semantic comparison key: ${esc(state.chain.comparisonKey)}</p>`;
+    $("neighbors").innerHTML = state.trace.boundaryInputs
+      .map(
+        (edge) =>
+          `<button data-event="${esc(edge.source)}">Outside input · ${esc(edge.kind)} · ${esc(edge.source)}</button>`,
+      )
+      .join("");
+    renderTraceSummary();
+    return;
+  }
   if (state.annotation) {
     $("selected-kind").textContent = "Public annotation";
     $("selection").innerHTML =
@@ -2401,7 +2566,7 @@ function renderTraceSummary() {
     ).values(),
   ];
   $("trace-summary").innerHTML =
-    `${state.traceDirection === "backward" ? "Inputs" : "Consumers"}: ${state.trace.events.length} recorded operations · ${state.trace.edges.length} dependencies · ${roots.length} root versions` +
+    `${state.chain ? "Action corridor" : state.traceDirection === "backward" ? "Inputs" : "Consumers"}: ${state.trace.events.length} recorded operations · ${state.trace.edges.length} dependencies · ${roots.length} root versions` +
     (state.trace.truncated ? " · traversal capped at 1,000 operations" : "") +
     '<p class="evidence-note">Partial recorded ancestry, not a complete computation or critical path.</p>' +
     roots
@@ -2454,7 +2619,8 @@ function renderResource() {
         ? "<p>First 80 listed; narrow the clock window to inspect the rest.</p>"
         : "")
     : "Select a storage resource to inspect its versions.";
-  $("expand-storage").disabled = !state.resource || !state.model.catalogue;
+  $("expand-storage").disabled =
+    (!state.resource && !state.chain) || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
     ? `${cells.length} associated native storage cells highlighted`
     : "Unique installed cells, counted once";
@@ -2471,6 +2637,89 @@ function renderResource() {
       ? "<p>First 600 cells listed; all are drawn on the flat chip.</p>"
       : "");
 }
+/** Select a finite semantic action using only existing graph paths. */
+function chooseChain(id) {
+  const chain = state.model.chains.get(id);
+  state.chain = chain ?? null;
+  state.chainMatchNote = null;
+  if (chain)
+    state.displayBounds = chain.spatialBounds
+      ? { ...chain.spatialBounds }
+      : null;
+  state.model.geometryBounds = chainDisplayBounds(
+    chain,
+    state.nativeBounds,
+    state.displayBounds,
+  );
+  for (const key of [
+    "pointCache",
+    "resourceCache",
+    "footprintCache",
+    "storagePointCache",
+    "circuitPaintCache",
+  ])
+    state[key].clear();
+  state.circuitCache = null;
+  state.selected = null;
+  state.annotation = null;
+  state.focusVersion = null;
+  state.resource = null;
+  state.cell = null;
+  $("resource").value = "";
+  $("example").value = "";
+  if (!chain) {
+    state.trace = null;
+    render();
+    return;
+  }
+  for (const filter of ["actor", "activation", "operation", "task"])
+    $(filter).value = "";
+  state.trace = traceChain(state.model, chain);
+  state.first = chain.firstCycle;
+  state.window = chain.endCycle - chain.firstCycle;
+  $("chain").value = id;
+  $("circuit-selected").checked = false;
+  $("sink-mode").value = "all";
+  $("ghost-context").checked = true;
+  state.autoFit = true;
+  render();
+}
+
+/** Milestones are navigation labels, not added computation or dependency nodes. */
+function renderChain() {
+  const chain = state.chain;
+  $("chain-panel").hidden =
+    state.model.chains.size === 0 && !state.chainMatchNote;
+  $("chain-only").disabled = !chain;
+  $("chain-context").disabled = !chain;
+  $("chain-summary").textContent = chain
+    ? `${state.trace.connected ? "Recorded source-to-sink paths" : "Unresolved connection: isolated anchors retained"} · ${state.trace.events.length} operations · ${state.trace.focusVersions.length} focused stored versions · ${state.trace.boundaryInputs.length} outside inputs.${chain.targets?.length && $("chain-only").checked && !$("chain-context").checked ? " Primary destination circuitry; other recorded/control circuitry hidden (enable Adjacent input context to show it)." : ""} Destination bit masks limit the display, not the recorded writes. Physical cones show structural alternatives, not gate activity.`
+    : (state.chainMatchNote ??
+      "Choose a recorded action to follow its value through clock boundaries.");
+  if (chain && $("chain-only").checked) {
+    const residence = chainStorageSegments(
+      state.model,
+      chain,
+      state.trace,
+      [],
+      {
+        includeContext: $("chain-context").checked,
+      },
+    );
+    $("chain-summary").textContent +=
+      ` Residence stops at this action's recorded uses of the displayed fields; global history stays in the inspector.${residence.unresolved.length ? ` ${residence.unresolved.length} field-use masks unresolved; their possible uses are retained.` : ""}${residence.unusedVersions.length ? ` ${residence.unusedVersions.length} versions have no matching recorded use in this action and no residence link.` : ""}`;
+  }
+  $("chain-milestones").innerHTML = (chain?.milestones ?? [])
+    .map((milestone) => {
+      const event = state.model.events.get(milestone.event);
+      const unresolved = state.trace.unresolved.milestones.some(
+        (row) => row.event === event.id,
+      );
+      return `<button data-chain-event="${esc(event.id)}"><b>${esc(milestone.label)}</b><span>C${event.cycle}${unresolved ? " · unresolved" : ""}</span></button>`;
+    })
+    .join("");
+}
+
 /** Apply a fixture's inspectable entry point, never a fabricated causal chain. */
 function chooseExample(index) {
   const example = state.model.document.examples?.[index];
@@ -2537,6 +2786,7 @@ function pointer(event) {
 function setBusy(busy) {
   for (const id of [
     "example",
+    "chain",
     "actor",
     "activation",
     "operation",
@@ -2563,6 +2813,62 @@ function bindControls() {
   $("capture").onchange = async () => {
     if (!$("capture").value) return;
     sceneSelection.reset();
+    const captureChainView = () =>
+      state.chain
+        ? {
+            key: state.chain.comparisonKey,
+            offset: state.first - state.chain.firstCycle,
+            window: state.window,
+            camera: state.scene?.getCamera(),
+            controls: Object.fromEntries(
+              [
+                "arrival-budget",
+                "time-layout",
+                "color-mode",
+                "urgency-window",
+                "spacing",
+                "detail-level",
+                "pick-mode",
+                "computation-circuits",
+                "circuit-role",
+                "circuit-timing",
+                "circuit-delay",
+                "circuit-unknown",
+                "circuit-selected",
+                "ghost-context",
+              ].map((id) => [
+                id,
+                {
+                  value: $(id).value,
+                  checked:
+                    $(id).type === "checkbox" ? $(id).checked : undefined,
+                },
+              ]),
+            ),
+          }
+        : null;
+    const previousChain = captureChainView();
+    const restoreChainView = (snapshot = previousChain) => {
+      if (
+        !snapshot ||
+        !state.chain ||
+        state.chain.comparisonKey !== snapshot.key
+      )
+        return;
+      state.first = state.chain.firstCycle + snapshot.offset;
+      state.window = snapshot.window;
+      for (const [id, control] of Object.entries(snapshot.controls)) {
+        $(id).value = control.value;
+        if (typeof control.checked === "boolean")
+          $(id).checked = control.checked;
+      }
+      if (!state.expectsPrepared && !state.computations?.prepared)
+        $("time-layout").value = "flat";
+      state.spacing = Number($("spacing").value);
+      if (snapshot.camera) state.scene?.setCamera(snapshot.camera);
+      state.autoFit = false;
+      render();
+    };
     const sequence = ++state.loadSequence;
     regionalControls.configure();
     scenarioControls.configure();
@@ -2602,6 +2908,11 @@ function bindControls() {
       await loadDocument(
         decoded.model,
         "Projection bytes verified against the local index; source evidence was verified during preparation.",
+        null,
+        {
+          preparedExpected: Boolean(expected.render),
+          computationsExpected: Boolean(expected.computations),
+        },
       );
       scenarioControls.configure(state.model, {
         entry: expected.latencyProfile,
@@ -2614,9 +2925,22 @@ function bindControls() {
         source: expected.computations,
         baseUrl: new URL("data/", window.location.href).href,
       });
-      if (state.model.document.examples?.length) {
+      const matched = matchingChain(state.model, previousChain?.key);
+      const initial = previousChain
+        ? matched
+        : state.model.chains.values().next().value;
+      state.chainMatchNote =
+        previousChain && !matched
+          ? `No matching action for ${previousChain.key} in this capture. Select another action explicitly; no comparison was inferred.`
+          : null;
+      if (initial) {
+        chooseChain(initial.id);
+        restoreChainView();
+      } else if (!previousChain && state.model.document.examples?.length) {
         $("example").value = "0";
         chooseExample(0);
+      } else {
+        render();
       }
       setBusy(false);
       await new Promise((resolve) =>
@@ -2803,6 +3127,9 @@ function bindControls() {
   $("example").onchange = () => {
     if ($("example").value !== "") chooseExample(Number($("example").value));
   };
+  $("chain").onchange = () => chooseChain($("chain").value);
+  $("chain-only").onchange = render;
+  $("chain-context").onchange = render;
   $("resource").onchange = () => {
     state.resource = $("resource").value || null;
     $("fit-selection").disabled =
@@ -2817,10 +3144,14 @@ function bindControls() {
       render();
     };
   $("clear-trace").onclick = () => {
+    state.chain = null;
+    $("chain").value = "";
     state.trace = null;
     render();
   };
   document.addEventListener("click", (e) => {
+    const milestone = e.target.closest("[data-chain-event]");
+    if (milestone) selectEvent(milestone.dataset.chainEvent, true, true);
     const target = e.target.closest("[data-event]");
     if (target) selectEvent(target.dataset.event);
     const version = e.target.closest("[data-version]");
@@ -2934,6 +3265,14 @@ function bindControls() {
     $("toggle-inspector").setAttribute("aria-expanded", String(open));
     repaint();
   };
+  $("toggle-scene-controls").onclick = () => {
+    const hidden = $("scene-panel").classList.toggle("scene-controls-hidden");
+    $("toggle-scene-controls").textContent = hidden
+      ? "Show controls"
+      : "Hide controls";
+    $("toggle-scene-controls").setAttribute("aria-expanded", String(!hidden));
+    repaint(true);
+  };
   $("scene-focus").onclick = () => {
     const open = document.body.classList.toggle("scene-focus");
     $("scene-focus").setAttribute("aria-pressed", String(open));
@@ -3001,9 +3340,10 @@ async function initialize() {
       : (index.captures ?? index.examples ?? index.files ?? []);
     for (const entry of entries) {
       const path = entry.file;
-      if (typeof path !== "string" || !/^[-a-zA-Z0-9_]+\.json$/.test(path))
-        throw Error("Unsafe example filename");
-      const url = `data/${path}`;
+      const url = publicationUrl(
+        path,
+        new URL("data/", window.location.href).href,
+      );
       state.index.set(url, entry);
       $("capture").add(
         new Option(

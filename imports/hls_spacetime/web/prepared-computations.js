@@ -1,5 +1,6 @@
 /** Compact, derived rendering indexes. The authoritative graph and native records
  * remain hash-bound source attachments; these tables do not replace that evidence. */
+import { chainTargetMasks } from "./action-chain.js";
 import { cachePaint } from "./paint-cache.js";
 const ROLES = new Set(["data", "enable", "reset"]);
 const TYPES = new Set(["tiles", "pips", "cells", "segments"]);
@@ -295,6 +296,50 @@ export function createPreparedComputations(model, data) {
     );
     unique(write.cones, "write cone");
     for (const id of write.cones) ref(id, cones, "cone");
+    const selectionMasks = new Set();
+    check(Array.isArray(write.selections ?? []), "invalid target selections");
+    for (const selected of write.selections ?? []) {
+      const requested = popcount(selected.mask),
+        selectedMask = BigInt(selected.mask);
+      const selectedCoverage = selected.coverage;
+      check(
+        requested > 0 &&
+          !selectionMasks.has(selectedMask.toString()) &&
+          (selectedMask & BigInt(event.access.mask)) === selectedMask &&
+          selectedCoverage &&
+          selectedCoverage.requestedBits === requested &&
+          [selectedCoverage.mappedBits, selectedCoverage.unknownBits].every(
+            count,
+          ) &&
+          selectedCoverage.mappedBits + selectedCoverage.unknownBits ===
+            requested,
+        "invalid target selection coverage",
+      );
+      selectionMasks.add(selectedMask.toString());
+      unique(selected.cones, "target selection cone");
+      check(
+        (selectedCoverage.mappedBits === 0) === (selected.cones.length === 0),
+        "target selection geometry disagrees with mapped coverage",
+      );
+      for (const id of selected.cones) {
+        const subset = ref(id, cones, "cone");
+        const parents = write.cones
+          .map((parent) => cones[parent])
+          .filter((cone) => cone.role === subset.role);
+        for (const field of [
+          "rootPins",
+          "arcIndices",
+          "pinIndices",
+          "cellIndices",
+        ]) {
+          const allowed = new Set(parents.flatMap((cone) => cone[field]));
+          check(
+            subset[field].every((value) => allowed.has(value)),
+            `target selection exceeds original ${field}`,
+          );
+        }
+      }
+    }
     writeIndex.set(write.event, write);
   }
   check(writes.length === counts.writes, "source write population mismatch");
@@ -361,9 +406,14 @@ export function preparedComputationLayers(
     minimumDelayNs = 0,
     includeUnknownTiming = true,
     timingMetric = "whole_cone",
+    targetMasks = new Map(),
   } = {},
 ) {
   if (!index) return [];
+  if (!(targetMasks instanceof Map)) throw Error("Invalid target masks");
+  targetMasks = chainTargetMasks(index.model, {
+    targets: [...targetMasks].map(([event, mask]) => ({ event, mask })),
+  });
   check(
     Array.isArray(roles) &&
       roles.every((r) => ROLES.has(r)) &&
@@ -387,6 +437,15 @@ export function preparedComputationLayers(
       const write = index.writes.get(id),
         event = index.model.events.get(id);
       check(write, "missing selected write");
+      const mask = targetMasks.get(id);
+      const displayed =
+        mask === undefined
+          ? write
+          : write.selections?.find((row) => BigInt(row.mask) === BigInt(mask));
+      check(
+        displayed,
+        "target selection is not prepared; prepare rendering indexes again",
+      );
       if (!layers.has(event.cycle))
         layers.set(event.cycle, {
           cycle: event.cycle,
@@ -404,10 +463,13 @@ export function preparedComputationLayers(
           },
         });
       const layer = layers.get(event.cycle);
-      layer.operations.push(index.operations.get(id));
+      layer.operations.push({
+        ...index.operations.get(id),
+        selectedCones: displayed.cones,
+      });
       for (const key of ["requestedBits", "mappedBits", "unknownBits"])
-        layer.coverage[key] += write.coverage[key];
-      for (const coneId of write.cones) {
+        layer.coverage[key] += displayed.coverage[key];
+      for (const coneId of displayed.cones) {
         const cone = index.cones[coneId],
           delay =
             timingMetric === "registered_launch"
@@ -450,7 +512,7 @@ function paintMemberships(index, layer) {
       write && typeof event?.access?.resource === "string",
       "missing paint destination",
     );
-    for (const coneId of write.cones) {
+    for (const coneId of operation.selectedCones ?? write.cones) {
       const members = memberships.get(index.cones[coneId].id);
       if (members) members.add(event.access.resource);
     }

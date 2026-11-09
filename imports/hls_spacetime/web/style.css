@@ -1309,3 +1309,51 @@ body.scene-focus {
   max-height: 84px;
   overflow: auto;
 }
+
+/* A short recorded action stays readable above the physical scene. */
+.chain-panel {
+  margin: 0 0 0.8rem;
+}
+.chain-panel[hidden] {
+  display: none;
+}
+.chain-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.chain-milestones button {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+.chain-milestones button span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Compact viewing hides presentation chrome, never its values or evidence. */
+.compact-scene-caption {
+  display: none;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+#scene-panel.scene-controls-hidden > :not(.panel-heading):not(.path-workbench),
+.scene-controls-hidden #space-unit,
+.scene-controls-hidden #sink-panel {
+  display: none;
+}
+.scene-controls-hidden .compact-scene-caption {
+  display: block;
+}
+#scene-panel.scene-controls-hidden .path-workbench:has(#sink-panel) {
+  display: block;
+}
+.scene-controls-hidden .scene-actions {
+  flex-shrink: 0;
+}
+.scene-focus .scene-controls-hidden .path-workbench {
+  overflow: hidden;
+}

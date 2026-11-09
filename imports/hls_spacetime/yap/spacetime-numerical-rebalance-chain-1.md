@@ -1,0 +1,23 @@
+# Matched numerical-action histories
+
+The viewer now follows one recorded action across clocks and switches between explicitly corresponding source actions in different implementations. The retained N2 Phi example connects original state, private numerical results or numerator registers, commit, outbox and local publication. Two ordinary actions and one blocked action are included. Each implementation uses its own placement, routed connectivity and timing; a shared camera, tile extent and display budget make the pictures comparable.
+
+Before rebalance, the first transition stores completed Phi. Afterwards it stores two signed 36-bit numerators, and the existing second transition finishes the arithmetic. The selected actor-3 action still launches at C1779, commits at C1780 and publishes at C1781. Its registered-launch data envelope falls from 8.8635 ns to 3.2460/3.1633 ns at the first destinations; the committed-Phi envelope is 5.4633 ns before and 5.1228 ns after. These saved SDF envelopes explain the redistribution; they are not new STA periods. The separate [physical experiment](spacetime-numerical-rebalance-physical-1.md) retains the 8.997→5.560 ns setup-equivalent result and unchanged public schedule.
+
+The blocked action launches at C1860, holds its intermediate values through C1861–1864, commits at C1865 and publishes at C1867. Intervening baseline ordering-matrix updates do not rewrite the held Phi field. Destination masks and selected value lifetimes reduce the picture to the numerical corridor; the complete graph, writes and auxiliary control context remain available.
+
+## Boundaries
+
+`chains` is producer-supplied navigation metadata, validated against existing graph events, versions and one reset incarnation. The viewer takes the full forward/backward dependency intersection between declared sources and sinks, excluding resource-order edges. A semantic `comparisonKey` matches actions across captures; names, equal values or coincident cycles never establish correspondence. Missing matches and disconnected milestones remain explicit.
+
+Recorded operands describe this action's dependencies. Physical cones describe structural alternatives: a selected-away operand can still switch, and it may affect another action. Connectivity alone does not establish that every timing path is sensitizable. Arrival height is a registered-launch SDF envelope, not measured gate-switching time. The figures stop at local publication; the candidate recording lacks gateway taps for remote/host continuation. Selected numerator and Phi fields are fully mapped, while each outbox retains 30 unknown bits out of 160.
+
+The producer needed one narrow repair: XLS had coalesced equivalent startup-state reads. [hls_fabric #160](https://github.com/ecpeterson/hls_fabric/pull/160) resolves missing scalar reads only through matching initialization and guarded source recurrence with one observed representative. Both original captures were reinterpreted without changing source, RTL, sampled events or stored writes. Every selected numerical/commit/outbox D is checked. A separate finite functional-netlist witness matches 6,428 candidate bits over 2,369 clocks, including all numerator bits; it does not establish unrestricted equivalence.
+
+The candidate's exact routed checkpoint was read without synthesis, placement or routing. Two bounded catalogue attempts retained failures and complete prefixes; a remaining-row export completed the catalogue. The final export retains 22,785 cells and 24,319 nets with 123,628 endpoints. Every new job was terminal-verified, collected once, and its runner/process group retired. Old successful jobs and measurements were not repeated.
+
+## Qualification and retained view
+
+The observer passes 21 EUnit tests, strict changed-module contracts, application-context Dialyzer and final-plan equality checks. The viewer's final serial JavaScript run passes 538 tests, followed by three focused storage-residence tests. Its earlier five timing-report cache regressions and the fixes remain recorded. Real browser review covers matching actions, filtering, milestones and full-scene viewing; a clock-label corner-selection bug was corrected without changing time coordinates.
+
+The report, pictures, exact prepared viewer, producer plans, captures, new native evidence and failed-attempt receipts are retained in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/numerical-rebalance-chain-1`. The aggregate archival budget is 192 MiB; each native job's prior bounds and all experiment gates remain unchanged. Restore instructions and byte-verification results accompany that archive. See [viewer controls and metadata](../docs/viewer.md) for the maintained interface.

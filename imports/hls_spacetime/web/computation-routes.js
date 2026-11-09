@@ -1,3 +1,4 @@
+import { chainTargetMasks } from "./action-chain.js";
 import { createNativeRouting, nativeConnection } from "./native-routes.js";
 
 /** Structural native cones associated with recorded writes. Static graph and
@@ -337,6 +338,7 @@ export function createComputations(model, attachment, routeNets = []) {
     routing,
     cones: new Map(),
     writeCones: new Map(),
+    displayWriteCones: new Map(),
   };
 }
 
@@ -656,16 +658,26 @@ function cone(index, roots, role) {
 }
 
 /** Masks select declared destination bits, while each physical sink/root is
- * shared. Unknown bindings remain counted; a neighboring mapped bit cannot fill them. */
-function writeCones(index, operation) {
-  if (index.writeCones.has(operation.event))
-    return index.writeCones.get(operation.event);
+ * shared. Unknown bindings remain counted; a neighboring mapped bit cannot fill them.
+ * Canonical full writes keep their event-ID keys for reporting consumers. Display
+ * selections use a separate cache, so even JSON-shaped event IDs cannot collide. */
+function writeCones(index, operation, displayMask) {
+  const selected = displayMask !== undefined;
+  const cache = selected ? index.displayWriteCones : index.writeCones;
+  const key = selected
+    ? JSON.stringify([operation.event, displayMask])
+    : operation.event;
+  if (cache.has(key)) return cache.get(key);
   const roots = new Map();
   let requestedBits = 0,
     mappedBits = 0;
   for (const target of operation.targets) {
     const resource = index.model.resources.get(target.resource),
-      selected = mask(target.mask, resource.width);
+      selected =
+        mask(target.mask, resource.width) &
+        (displayMask === undefined
+          ? mask(target.mask, resource.width)
+          : mask(displayMask, resource.width));
     const bits = index.bindings.get(target.resource);
     for (let bitIndex = 0; bitIndex < resource.width; bitIndex++) {
       if (!(selected & (1n << BigInt(bitIndex)))) continue;
@@ -705,7 +717,7 @@ function writeCones(index, operation) {
       unknownBits: requestedBits - mappedBits,
     },
   };
-  index.writeCones.set(operation.event, result);
+  cache.set(key, result);
   return result;
 }
 
@@ -722,9 +734,14 @@ export function computationLayers(
     minimumDelayNs = 0,
     includeUnknownTiming = true,
     timingMetric = "whole_cone",
+    targetMasks = new Map(),
   } = {},
 ) {
   if (!index) return [];
+  if (!(targetMasks instanceof Map)) throw Error("Invalid target masks");
+  targetMasks = chainTargetMasks(index.model, {
+    targets: [...targetMasks].map(([event, mask]) => ({ event, mask })),
+  });
   requireValue(
     Array.isArray(roles) &&
       roles.every((role) => ROLES.has(role)) &&
@@ -749,7 +766,7 @@ export function computationLayers(
       seenWrites.add(write);
       const event = index.model.events.get(write),
         op = index.operations.get(write);
-      const geometry = writeCones(index, op);
+      const geometry = writeCones(index, op, targetMasks.get(write));
       const selected = geometry.cones.filter((item) => {
         const delay =
           timingMetric === "registered_launch"

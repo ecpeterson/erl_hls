@@ -751,3 +751,36 @@ test("registered pin arrivals keep external and constant-only prefixes outside s
       row.pinArrivals.registered.every((value) => value === "not_applicable"),
     );
 });
+
+test("display subsets cannot replace canonical full-write report caches or collide with event IDs", () => {
+  const { model, attachment } = fixture();
+  const collision = JSON.stringify(["w0", "0x1"]);
+  const renamed = { ...model.events.get("w2"), id: collision };
+  model.events.delete("w2");
+  model.events.set(collision, renamed);
+  attachment.operations.find((op) => op.event === "w2").event = collision;
+  const index = createComputations(model, attachment);
+  const [unknown] = computationLayers(index, ["w0"], {
+    targetMasks: new Map([["w0", "0x2"]]),
+  });
+  assert.equal(unknown.coverage.unknownBits, 1);
+  assert.equal(index.writeCones.has("w0"), false);
+  computationLayers(index, ["w0", collision]);
+  const canonical = index.writeCones.get("w0"),
+    other = index.writeCones.get(collision);
+  assert.deepEqual(canonical.coverage, {
+    requestedBits: 2,
+    mappedBits: 1,
+    unknownBits: 1,
+  });
+  assert.deepEqual(other.coverage, canonical.coverage);
+  const [selected] = computationLayers(index, ["w0"], {
+    targetMasks: new Map([["w0", "0x1"]]),
+  });
+  assert.equal(selected.coverage.requestedBits, 1);
+  assert.equal(index.writeCones.get("w0"), canonical);
+  assert.equal(index.writeCones.get(collision), other);
+  assert.equal(other.coverage.requestedBits, 2);
+  const [full] = computationLayers(index, ["w0"]);
+  assert.equal(full.coverage.requestedBits, 2);
+});

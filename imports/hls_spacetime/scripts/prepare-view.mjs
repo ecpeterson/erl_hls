@@ -53,6 +53,7 @@ export function prepareView(bundle, metadata = {}) {
     "selection",
     "annotations",
     "examples",
+    "chains",
     "scope",
     "coverage",
     "measurement",

@@ -11,13 +11,14 @@ const TABLES = [
 ];
 const MiB = 1024 * 1024;
 
-/** Relative publication paths cannot escape their containing directory. */
-function publicationUrl(file, base) {
+/** Resolve a normalized relative JSON publication path. Used by capture indexes
+ * and native attachments; schemes, traversal and encoded/empty segments reject. */
+export function publicationUrl(file, base) {
   if (
     typeof file !== "string" ||
     !/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*\.json$/.test(file)
   )
-    throw Error("Unsafe computation publication path");
+    throw Error("Unsafe publication path");
   return new URL(file, base).href;
 }
 

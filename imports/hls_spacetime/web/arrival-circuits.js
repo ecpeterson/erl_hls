@@ -69,7 +69,7 @@ function memberships(index, layer) {
     const write = index.writes.get(operation.event);
     const resource = index.model.events.get(operation.event)?.access?.resource;
     check(write && typeof resource === "string", "missing write destination");
-    for (const coneId of write.cones)
+    for (const coneId of operation.selectedCones ?? write.cones)
       rows.get(index.cones[coneId].id)?.add(resource);
   }
   return [...rows]

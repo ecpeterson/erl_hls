@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { layoutLabels } from "../web/labels.js";
+import { layoutLabels, projectLabelAnchors } from "../web/labels.js";
 
 const viewport = { width: 320, height: 200 };
 const label = (text, x, y, extra = {}) => ({
@@ -79,4 +79,53 @@ test("ties are stable, metadata survives and invalid rectangles are omitted", ()
   const placed = layoutLabels([...invalid, first, second], viewport);
   assert.deepEqual(placed, [first]);
   assert.equal(placed[0], first);
+});
+
+test("clock labels share one spatial corner when clipping would reorder them", () => {
+  const clocks = [1779, 1780, 1781, 1782, 1783].map((cycle, index) => ({
+    text: `Q sample ${cycle}`,
+    anchorGroup: "clock-axis",
+    alternatives: [
+      { x: 20, y: -40 + index * 30, visible: index >= 2 },
+      { x: 40, y: 100 + index * 30, visible: index <= 1 },
+    ],
+  }));
+  const project = (point) => point;
+  const independent = projectLabelAnchors(
+    clocks.map(({ anchorGroup, ...label }) => label),
+    project,
+  );
+  assert.deepEqual(
+    independent
+      .sort((a, b) => a.point.y - b.point.y)
+      .map(({ label }) => label.text),
+    [
+      "Q sample 1781",
+      "Q sample 1782",
+      "Q sample 1783",
+      "Q sample 1779",
+      "Q sample 1780",
+    ],
+  );
+  const aligned = projectLabelAnchors(clocks, project);
+  assert.deepEqual(
+    aligned.map(({ label }) => label.text),
+    ["Q sample 1781", "Q sample 1782", "Q sample 1783"],
+  );
+  assert.deepEqual(
+    aligned.map(({ point }) => point.y),
+    [20, 50, 80],
+  );
+  assert.equal(clocks.length, 5);
+  assert.throws(
+    () =>
+      projectLabelAnchors(
+        [
+          clocks[0],
+          { ...clocks[1], alternatives: clocks[1].alternatives.slice(1) },
+        ],
+        project,
+      ),
+    /equal lengths/,
+  );
 });

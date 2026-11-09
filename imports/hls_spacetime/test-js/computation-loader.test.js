@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { loadComputations } from "../web/computation-loader.js";
+import { loadComputations, publicationUrl } from "../web/computation-loader.js";
 
 const tables = [
   "cells",
@@ -114,4 +114,39 @@ test("rejects escaped paths, duplicate shards, missing rows and unknown tables",
 
 test("an unattached recording stays usable", async () => {
   assert.equal(await loadComputations({ entry: null }), null);
+});
+
+test("capture and computation publications accept normalized subdirectories without URL escape", () => {
+  const base = "http://127.0.0.1:4177/data/";
+  for (const file of [
+    "recording.json",
+    "baseline/recording.json",
+    "candidate/render/manifest.json",
+    "run_1/part-0001.json",
+  ]) {
+    assert.equal(publicationUrl(file, base), base + file);
+  }
+  for (const file of [
+    undefined,
+    null,
+    "",
+    "/recording.json",
+    "//other.test/recording.json",
+    "../recording.json",
+    "base/../recording.json",
+    "./recording.json",
+    "base/./recording.json",
+    "base//recording.json",
+    "base\\recording.json",
+    "https://other.test/recording.json",
+    "file:///recording.json",
+    "C:/recording.json",
+    "base/%2e%2e/recording.json",
+    "recording.json?other",
+    "recording.json#fragment",
+    "base/",
+    "base /recording.json",
+  ]) {
+    assert.throws(() => publicationUrl(file, base), /Unsafe publication path/);
+  }
 });

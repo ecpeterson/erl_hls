@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { resolve, dirname, join, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateObservationRevisionOrigin } from "./observation-revision.mjs";
 
 const PART_BYTES = 32 * 1024 * 1024;
 const TOTAL_BYTES = 512 * 1024 * 1024;
@@ -140,36 +141,52 @@ function verifyBuilds(graph, native, recording) {
   let origin = recording.catalogue.correspondence_origin,
     newer = null,
     found = false,
-    depth = 0;
+    depth = 0,
+    newerSimulator = null;
   while (origin != null) {
     check(++depth <= 16, "correspondence chain too deep");
-    const comparison = origin.comparison;
-    check(
-      ["source", "rtl", "observation"].every((key) =>
-        digest(origin.build?.[key]),
-      ) &&
-        origin.build.source === current.source &&
-        origin.build.rtl === current.rtl &&
-        origin.checkpoint === checkpoint &&
-        [
-          "base_projection_sha256",
-          "original_trace_sha256",
-          "extended_trace_sha256",
-          "simulator_sha256",
-        ].every((key) => digest(origin[key])) &&
-        comparison?.old_taps_equal === true &&
-        comparison.public_fields_equal === true &&
-        Number.isSafeInteger(comparison.original_taps) &&
-        comparison.original_taps > 0 &&
-        comparison.first_cycle === capture.first_cycle &&
-        comparison.end_cycle === capture.end_cycle &&
-        comparison.compared_cycles === capture.end_cycle - capture.first_cycle,
-      "unqualified correspondence origin",
-    );
+    if (origin.kind === "observation-reinterpretation") {
+      validateObservationRevisionOrigin(
+        origin,
+        newer?.build ?? current,
+        capture,
+        checkpoint,
+      );
+    } else {
+      const comparison = origin.comparison;
+      check(
+        (origin.kind == null || origin.kind === "capture-extension") &&
+          ["source", "rtl", "observation"].every((key) =>
+            digest(origin.build?.[key]),
+          ) &&
+          origin.build.source === current.source &&
+          origin.build.rtl === current.rtl &&
+          origin.checkpoint === checkpoint &&
+          [
+            "base_projection_sha256",
+            "original_trace_sha256",
+            "extended_trace_sha256",
+            "simulator_sha256",
+          ].every((key) => digest(origin[key])) &&
+          comparison?.old_taps_equal === true &&
+          comparison.public_fields_equal === true &&
+          Number.isSafeInteger(comparison.original_taps) &&
+          comparison.original_taps > 0 &&
+          comparison.first_cycle === capture.first_cycle &&
+          comparison.end_cycle === capture.end_cycle &&
+          comparison.compared_cycles ===
+            capture.end_cycle - capture.first_cycle,
+        "unqualified correspondence origin",
+      );
+      check(
+        newerSimulator === null || newerSimulator === origin.simulator_sha256,
+        "correspondence preceding trace/simulator mismatch",
+      );
+      newerSimulator = origin.simulator_sha256;
+    }
     check(
       newer === null ||
-        (newer.original_trace_sha256 === origin.extended_trace_sha256 &&
-          newer.simulator_sha256 === origin.simulator_sha256),
+        newer.original_trace_sha256 === origin.extended_trace_sha256,
       "correspondence preceding trace/simulator mismatch",
     );
     found ||= sameBuild(origin.build, nativeBuild);
