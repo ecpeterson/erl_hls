@@ -349,7 +349,7 @@ emit_function(
                 ),
                 [Computation, Result]
         end,
-    [
+    xls_source_map:at(Line, [
         case maps:get(owner, Helper, #{public => false}) of
             #{public := true} -> "pub fn ";
             _ -> "fn "
@@ -362,12 +362,10 @@ emit_function(
         ]),
         ") -> (",
         Type,
-        ", hls_failure::Code) {  // L",
-        integer_to_list(erl_anno:line(Line)),
-        "\n",
+        ", hls_failure::Code) {\n",
         xls_dslx:indent(Body, 2),
         "}\n"
-    ].
+    ]).
 
 plain_head([{clause, _, Parameters, [], _}]) ->
     Names = [N || {var, _, N} <- Parameters, N =/= '_'],

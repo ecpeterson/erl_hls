@@ -134,7 +134,8 @@ typed_arithmetic_is_not_folded_test() ->
     ?assertNotMatch({static, integer, _}, Result),
     ?assertEqual(['-'], [Op || {xls_dslx, binary, Op, _, _} <- syntax_nodes(Body)]),
     ?assertEqual(["u8", "u8"], [Type ||
-        {xls_dslx, bind, _, ["(", _, " as ", Type, ")"]} <- Body]),
+        Statement <- Body,
+        {xls_dslx, bind, _, ["(", _, " as ", Type, ")"]} <- [without_source(Statement)]]),
     ?assertEqual([], [Type || {xls_dslx, literal, Type, _} <- syntax_nodes(Body)]).
 
 %% Dynamic arithmetic retains its operands; the new constant path supplies no cast.
@@ -347,10 +348,16 @@ parse(Source) ->
 -spec definition(xls_clause_lower:printable(), [xls_clause_lower:printable()]) ->
     xls_clause_lower:printable().
 definition(Result, Body) ->
-    case [Value || {xls_dslx, bind, Name, Value} <- Body, Name =:= Result] of
+    case [Value || Statement <- Body,
+            {xls_dslx, bind, Name, Value} <- [without_source(Statement)], Name =:= Result] of
         [Value] -> Value;
         [] -> Result
     end.
+
+%% Binding assertions ignore only transparent source scopes, preserving all semantic node structure.
+-spec without_source(xls_dslx:value()) -> xls_dslx:value().
+without_source({xls_dslx, source, _Location, Value}) -> without_source(Value);
+without_source(Value) -> Value.
 
 %% Traverse retained syntax; text remains opaque to semantic assertions.
 -spec syntax_nodes(term()) -> [tuple()].

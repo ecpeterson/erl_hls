@@ -95,6 +95,7 @@ lower_chain(
 ) ->
     Initial = #clause_state{
         state_name = StateName,
+        source_annotation = Line,
         enum_atoms = EnumAtoms
     },
     {PatternState, Conditions} = xls_pattern_lower:lower(
@@ -113,7 +114,7 @@ lower_chain(
     BodyBase = GuardState#clause_state{statements = [], reference = none, failures = []},
     BodyState = lower_expressions(xls_var_scope:annotate(Body), BodyBase),
     BodyMismatch = xls_clause_lower:failure_expression(BodyState),
-    Selected = [
+    Selected = xls_source_map:at(Line, [
         lists:reverse(BodyState#clause_state.statements),
         "if (",
         BodyMismatch,
@@ -122,7 +123,7 @@ lower_chain(
         "} else {\n",
         xls_dslx:indent(Postprocessor(BodyState#clause_state.reference), 2),
         "}"
-    ],
+    ]),
     {NextBody, NextResult} = lower_chain(
         Rest,
         Arguments,

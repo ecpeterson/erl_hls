@@ -1,5 +1,5 @@
 -module(xls_emitted).
--moduledoc "Finalizes an actor/server DSLX module and its generated imports with one failure codebook allocated from their structured references. Renderers create these artifacts; build clients write their files and debug builders consume their sites. Imported modules belong to the enclosing artifact, not independent codebooks. Digests detect accidental replacement across build boundaries, not authenticity or hardware equivalence.".
+-moduledoc "Finalizes an actor/server DSLX module and its generated imports with one failure codebook allocated from their structured references. Renderers create these artifacts; build clients write their files and debug builders consume their sites. Readable source-origin comments are embedded in each module at finalization. Imported modules belong to the enclosing artifact, not independent codebooks. Digests detect accidental replacement across build boundaries, not authenticity or hardware equivalence.".
 %% Allocate references and render a complete module with its generated imports.
 -export([new/2, new/3, new/4]).
 %% Read or write emitted files and validate their source-failure metadata.
@@ -56,11 +56,7 @@ render(Module = #{preamble := Preamble, body := Body}, Sites, Locations) ->
      || S <- xls_failure_sites:allocate(Locations, document(Module))
     ],
     LocalSites = [S || S <- Sites, lists:member(maps:remove(code, S), Referenced)],
-    iolist_to_binary([
-        xls_dslx:render(Preamble),
-        xls_failure_sites:declarations(LocalSites),
-        xls_dslx:render(Body)
-    ]).
+    xls_dslx:render_annotated([Preamble, xls_failure_sites:declarations(LocalSites), Body]).
 
 -doc "Returns final DSLX bytes after checking their codebook consistency seal.".
 -spec bytes(artifact()) -> binary().
@@ -74,7 +70,7 @@ dependencies(Module = #{dependencies := Dependencies}) ->
     ok = validate(Module),
     Dependencies.
 
--doc "Writes the main module and all generated imports beside it, creating parent directories and replacing existing generated files. Validates the complete artifact and rejects escaping paths or a dependency named like the main file before writing. Partial output is retained on filesystem errors; compiler support libraries are supplied separately.".
+-doc "Writes the annotated main module and all generated imports beside it, creating parent directories and replacing existing generated files. Validates the complete artifact and rejects escaping paths or a dependency named like the main file before writing. Partial output is retained on filesystem errors; compiler support libraries are supplied separately.".
 -spec write(artifact(), file:filename()) -> ok.
 write(Module = #{dslx := Bytes, dependencies := Dependencies}, MainFilename) ->
     ok = validate(Module),
@@ -124,7 +120,7 @@ sites(Module = #{sites := Sites}, Locations) ->
     ok = xls_failure_sites:validate_sites(Locations, Sites),
     Sites.
 
--doc "Rebinds an already checked codebook to trusted composed bytes. The caller must preserve the failure-code semantics, including imported owners; this is not an API for accepting edited external artifacts.".
+-doc "Rebinds an already checked codebook to trusted composed bytes. The caller must preserve the failure-code semantics and placement of embedded source annotations, including imported owners; this is not an API for accepting edited external artifacts.".
 -spec with_bytes(artifact(), iodata()) -> artifact().
 with_bytes(Module = #{sites := Sites, dependencies := Dependencies}, Bytes) ->
     ok = validate(Module),

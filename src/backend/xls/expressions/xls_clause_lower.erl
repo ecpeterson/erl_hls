@@ -109,7 +109,7 @@ clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
 -spec lower_clause(erl_parse:abstract_clause(), [printable()], atom(), #{atom() => printable()}) ->
     clause_state().
 lower_clause(
-    {clause, _Line, ArgPatterns, _Guards, Body},
+    {clause, Line, ArgPatterns, _Guards, Body},
     ArgVals,
     StateName,
     EnumAtoms
@@ -129,7 +129,7 @@ lower_clause(
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
-        #clause_state{state_name = StateName, enum_atoms = EnumAtoms},
+        #clause_state{state_name = StateName, enum_atoms = EnumAtoms, source_annotation = Line},
         xls_var_scope:annotate(BigBody)
     ).
 
@@ -138,19 +138,37 @@ lower_clause(
 Main transpiler workhorse.  Recursively converts a complex `erl_parse`
 expression into a sequence of simple emitted XLS expressions.
 """.
+statement_from_statement(Expression, State = #clause_state{source_annotation = Previous}) ->
+    Anno = expression_annotation(Expression, Previous),
+    Lowered = lower_statement(Expression, State#clause_state{source_annotation = Anno}),
+    Lowered#clause_state{source_annotation = Previous}.
+
+%% Synthetic syntax and already-renderable arguments inherit the surrounding expression.
+-spec expression_annotation(term(), erl_anno:anno()) -> erl_anno:anno().
+expression_annotation(Expression, Previous) when is_tuple(Expression), tuple_size(Expression) > 1 ->
+    Anno = element(2, Expression),
+    case erl_anno:is_anno(Anno) andalso erl_anno:line(Anno) > 0 of
+        true -> Anno;
+        false -> Previous
+    end;
+expression_annotation(_, Previous) ->
+    Previous.
+
+%% Source annotation is scoped around recursive lowering, without wrapping semantic values.
+-spec lower_statement(erl_parse:abstract_expr(), clause_state()) -> clause_state().
 %% Private normalization nodes, introduced after source analysis. Mapping a
 %% selected value into a common backend type lets case arms retain different
 %% source shapes without moving their computations across a branch boundary.
-statement_from_statement({xls_live, _Line, Live, Expression}, State) ->
+lower_statement({xls_live, _Line, Live, Expression}, State) ->
     Lowered = statement_from_statement(Expression, State#clause_state{live_bindings = Live}),
     Lowered#clause_state{live_bindings = State#clause_state.live_bindings};
-statement_from_statement({xls_map, _Line, Expression, Render}, State) ->
+lower_statement({xls_map, _Line, Expression, Render}, State) ->
     Evaluated = statement_from_statement(Expression, State),
     instr(Evaluated#clause_state{reference = none}, Render(reference(Evaluated)));
 %% A guard sequence has its own exception boundary. An arithmetic failure
 %% rejects this sequence; it must neither fail the actor nor prevent a later
 %% semicolon alternative from matching. Earlier body failures remain intact.
-statement_from_statement({xls_guard, _Line, Expression}, State) ->
+lower_statement({xls_guard, _Line, Expression}, State) ->
     Evaluated = statement_from_statement(Expression, State#clause_state{failures = []}),
     Guard = instr(Evaluated, [
         "!(",
@@ -160,15 +178,15 @@ statement_from_statement({xls_guard, _Line, Expression}, State) ->
         ")"
     ]),
     Guard#clause_state{failures = State#clause_state.failures};
-statement_from_statement({block, _Line, Expressions}, State) ->
+lower_statement({block, _Line, Expressions}, State) ->
     lower_expression_sequence(Expressions, State);
-statement_from_statement(String, State) when is_list(String) ->
+lower_statement(String, State) when is_list(String) ->
     reference(State, String);
-statement_from_statement({atom, _L, true}, State) ->
+lower_statement({atom, _L, true}, State) ->
     reference(State, "bool:1");
-statement_from_statement({atom, _L, false}, State) ->
+lower_statement({atom, _L, false}, State) ->
     reference(State, "bool:0");
-statement_from_statement(
+lower_statement(
     {atom, _L, Atom},
     State = #clause_state{
         enum_atoms = EnumAtoms
@@ -178,30 +196,30 @@ statement_from_statement(
         State,
         maps:get(Atom, EnumAtoms, xls_names:enum_member(Atom))
     );
-statement_from_statement({var, Line, Name}, State) ->
+lower_statement({var, Line, Name}, State) ->
     case find_binding(Name, Line, State) of
         {ok, Value} -> reference(State, Value);
         error -> error({unbound_xls_variable, Line, Name})
     end;
-statement_from_statement({integer, _L, Integer}, State) ->
+lower_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
 %% A signature gives this literal its width without casting an existing value.
-statement_from_statement({xls_typed_integer, _L, Type, Integer}, State) ->
+lower_statement({xls_typed_integer, _L, Type, Integer}, State) ->
     reference(State, [Type, ":", integer_to_list(Integer)]);
-statement_from_statement({char, _L, Integer}, State) ->
+lower_statement({char, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
-statement_from_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->
+lower_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->
     reference(State, {static, integer, Integer});
-statement_from_statement({float, _L, Float}, State) ->
+lower_statement({float, _L, Float}, State) ->
     reference(State, {static, float, Float});
-statement_from_statement({op, _L, '+', {float, _FloatLine, Float}}, State) ->
+lower_statement({op, _L, '+', {float, _FloatLine, Float}}, State) ->
     reference(State, {static, float, Float});
-statement_from_statement({op, _L, '-', {float, _FloatLine, Float}}, State) ->
+lower_statement({op, _L, '-', {float, _FloatLine, Float}}, State) ->
     reference(State, {static, float, -Float});
 %% Preserve signed literals for width-directed conversions such as wrap/2.
-statement_from_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
+lower_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
     reference(State, {static, integer, -Integer});
-statement_from_statement({op, Line, 'andalso', Left, Right}, State) ->
+lower_statement({op, Line, 'andalso', Left, Right}, State) ->
     xls_case_lower:lower(
         Line,
         Left,
@@ -211,7 +229,7 @@ statement_from_statement({op, Line, 'andalso', Left, Right}, State) ->
         ],
         State
     );
-statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
+lower_statement({op, Line, 'orelse', Left, Right}, State) ->
     xls_case_lower:lower(
         Line,
         Left,
@@ -221,20 +239,20 @@ statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
         ],
         State
     );
-statement_from_statement({op, Line, Op, Left, Right}, State) when
+lower_statement({op, Line, Op, Left, Right}, State) when
     Op =:= 'bsl'; Op =:= 'bsr'
 ->
     {[Value, Count], Evaluated} = lower_arguments([Left, Right], State),
     lower_shift(Op, Value, Count, Line, Evaluated);
 %% Integer facts are attached before callback/helper normalization.
-statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
+lower_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
     {References, Evaluated} = lower_arguments([Left, Right], State),
     instr(Evaluated, xls_comparison:lower(Op, References));
-statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
+lower_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
     lower_operator(Op, References, Line, ArgState);
-statement_from_statement({xls_bit_size, _, Name, Value}, State) ->
+lower_statement({xls_bit_size, _, Name, Value}, State) ->
     Evaluated = statement_from_statement(Value, State),
     Size = ["hls_bits::length(", reference(Evaluated), ")"],
     instr(
@@ -244,9 +262,9 @@ statement_from_statement({xls_bit_size, _, Name, Value}, State) ->
             byte_size -> ["((", Size, " + u32:7) / u32:8)"]
         end
     );
-statement_from_statement(Binary = {bin, _, _}, State) ->
+lower_statement(Binary = {bin, _, _}, State) ->
     xls_binary_lower:construct(Binary, State);
-statement_from_statement({tuple, _L, Slots}, State) ->
+lower_statement({tuple, _L, Slots}, State) ->
     {BwdReferences, IntermediateState} = lists:foldl(
         fun(Slot, {References, ThisState}) ->
             NewState = statement_from_statement(Slot, ThisState#clause_state{reference = none}),
@@ -256,7 +274,7 @@ statement_from_statement({tuple, _L, Slots}, State) ->
         Slots
     ),
     instr(IntermediateState, ["(", [[Ref, ", "] || Ref <- lists:reverse(BwdReferences)], ")"]);
-statement_from_statement({record, _L, NameAtom, Fields}, State) ->
+lower_statement({record, _L, NameAtom, Fields}, State) ->
     {BwdAssignments, IntermediateState} = lists:foldl(
         fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
             NewState = statement_from_statement(RHS, ThisState#clause_state{reference = none}),
@@ -279,7 +297,7 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
-statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
+lower_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
     InputState = statement_from_statement(ToUpdate, State),
     {BwdAssignments, IntermediateState} = lists:foldl(
         fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
@@ -303,15 +321,15 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
-statement_from_statement({'if', Line, Clauses}, State) ->
+lower_statement({'if', Line, Clauses}, State) ->
     xls_case_lower:lower_if(Line, Clauses, State);
-statement_from_statement({'case', Line, Condition, Clauses}, State) ->
+lower_statement({'case', Line, Condition, Clauses}, State) ->
     xls_case_lower:lower(Line, Condition, Clauses, State);
-statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
+lower_statement({xls_helper_call, _Line, Name, Args}, State) ->
     {References, ArgState} = lower_arguments(Args, State),
     CallState = instr(ArgState, [Name, "(", lists:join(", ", References), ")"]),
     outcome_value(CallState);
-statement_from_statement({call, Line, MF, Args}, State) ->
+lower_statement({call, Line, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
     {References, ArgState} = lower_arguments(Args, State),
     case xls_type:transpile(Module, FAtom, References, ArgState) of
@@ -334,12 +352,12 @@ statement_from_statement({call, Line, MF, Args}, State) ->
         X ->
             instr(ArgState, X)
     end;
-statement_from_statement({record_field, _L, Object, RecordAtom, {atom, _LL, SlotAtom}}, State) ->
+lower_statement({record_field, _L, Object, RecordAtom, {atom, _LL, SlotAtom}}, State) ->
     IntermediateState = statement_from_statement(Object, State),
     instr(IntermediateState, [
         record_raw(RecordAtom, reference(IntermediateState)), ".", atom_to_list(SlotAtom)
     ]);
-statement_from_statement({match, _L, LHS, RHS}, State) ->
+lower_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     xls_pattern_lower:match(LHS, reference(RHSState), RHSState).
 
@@ -609,7 +627,12 @@ instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
 instr(ClauseState, Place, Expr) ->
     ClauseState#clause_state{
         reference = Place,
-        statements = [xls_dslx:bind(Place, Expr) | ClauseState#clause_state.statements]
+        statements = [
+            xls_source_map:at(
+                ClauseState#clause_state.source_annotation, xls_dslx:bind(Place, Expr)
+            )
+            | ClauseState#clause_state.statements
+        ]
     }.
 
 %%%

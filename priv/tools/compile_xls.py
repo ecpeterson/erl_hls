@@ -130,6 +130,149 @@ def cached_artifact(directory: Path) -> Path:
     return directory / artifact
 
 
+
+def source_diagnostics(diagnostics: str, directory: Path) -> list[str]:
+    """Map explicit XLS source spans through embedded generated-source annotations.
+
+    The original tool diagnostic remains authoritative. Missing or malformed
+    annotations contribute no attribution, and source filenames are descriptive:
+    they are never opened or interpreted relative to a generated helper module.
+    """
+    directory = directory.resolve()
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", diagnostics)
+    locations = re.finditer(r"(?P<file>[^:\n]+\.x):(?P<line>[0-9]+):(?P<column>[0-9]+)", plain)
+    notes: list[str] = []
+    seen: set[tuple[str, int, int, str, int]] = set()
+    for location in locations:
+        filename = location['file'].strip()
+        try:
+            generated = (directory / filename).resolve()
+            if not generated.is_relative_to(directory):
+                continue
+        except (OSError, ValueError, RuntimeError):
+            # A malformed tool location must not obscure the actual failure.
+            continue
+        line, column = int(location['line']), int(location['column'])
+        origin = mapped_source(generated, line, column)
+        if origin is None:
+            continue
+        source, source_line = origin
+        key = (str(generated), line, column, source, source_line)
+        if key not in seen:
+            seen.add(key)
+            relative_generated = generated.relative_to(directory)
+            notes.append(f"Erlang source: {source}:{source_line} "
+                         f"(generated {relative_generated}:{line}:{column})")
+    return notes
+
+
+def dslx_line_comments(data: bytes) -> list[tuple[bytes, int | None]]:
+    """Locate real // comments, preserving XLS string/backtick state across lines.
+
+    XLS has no block comments. Identifier apostrophes and label prefixes are
+    distinct from character literals; escapes protect the following byte in
+    quoted literals. This scanner only locates comments, not DSLX syntax errors.
+    """
+    rows: list[tuple[bytes, int | None]] = []
+    quote = 0
+    for line in data.split(b'\n'):
+        index, comment = 0, None
+        while index < len(line):
+            byte = line[index]
+            if quote:
+                if byte == 92:
+                    index += 2
+                    continue
+                if byte == quote:
+                    quote = 0
+            elif line[index:index + 2] == b'//':
+                comment = index
+                break
+            elif byte in (34, 96):
+                quote = byte
+            elif byte == 39 and (index + 1 >= len(line) or line[index + 1] == 92 or
+                                 index + 2 >= len(line) or line[index + 2] == 39):
+                quote = byte
+            elif byte in b'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_':
+                index += 1
+                while index < len(line) and line[index] in (
+                        b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789!'"):
+                    index += 1
+                continue
+            index += 1
+        rows.append((line, comment))
+    return rows
+
+
+def source_annotation(payload: bytes, *, continuation: bool = False) -> tuple[int | None, int | None, str, int]:
+    """Parse one reserved annotation with an exact trailing JSON filename and source line."""
+    marker = rb'@erl\+' if continuation else rb'@erl'
+    match = re.fullmatch(marker + rb'[ \t]+(?:(?P<start>[1-9][0-9]*):(?P<end>[1-9][0-9]*)[ \t]+)?'
+                         rb'(?P<file>"(?:[^"\\\r\n]|\\.)*"):(?P<line>[1-9][0-9]*)[ \t\r]*', payload)
+    if match is None or (continuation and match['start'] is None):
+        raise ValueError('invalid source annotation')
+    name = json.loads(match['file'])
+    if not name or any(ord(char) < 32 for char in name):
+        raise ValueError('invalid source filename')
+    start = int(match['start']) if match['start'] is not None else None
+    end = int(match['end']) if match['end'] is not None else None
+    return start, end, name, int(match['line'])
+
+
+def mapped_source(generated: Path, line: int, column: int) -> tuple[str, int] | None:
+    """Read the diagnostic line's embedded origins without inheriting another line's annotation.
+
+    Simple annotations cover that line's code. Explicit byte-column ranges are
+    half-open, nonoverlapping and inside code; adjacent aligned @erl+ comments
+    extend only their anchor line. Invalid or ambiguous annotations map nothing.
+    """
+    try:
+        rows = dslx_line_comments(generated.read_bytes())
+        if line < 1 or line > len(rows) or column < 1:
+            return None
+        code, comment = rows[line - 1]
+        if comment is None or not code[:comment].strip():
+            return None
+        body = code[comment + 2:]
+        # Two spaces reserve the delimiter after an existing ordinary comment.
+        marker = re.search(rb'(?:^[ \t]*|[ \t]{2,})(?P<marker>@erl)(?=$|[ \t+])', body)
+        if marker is None:
+            return None
+        marker_offset = comment + 2 + marker.start('marker')
+        entries = [source_annotation(body[marker.start('marker'):])]
+        for following, next_comment in rows[line:]:
+            if next_comment is None:
+                break
+            next_body = following[next_comment + 2:]
+            if re.search(rb'(?<!\S)@erl\+', next_body) is None:
+                break
+            if following[:next_comment].strip() or next_comment != marker_offset - 3:
+                return None
+            entries.append(source_annotation(next_body.lstrip(b' \t'), continuation=True))
+        first = len(code[:comment]) - len(code[:comment].lstrip()) + 1
+        last = len(code[:comment].rstrip()) + 1
+        if not first <= column < last:
+            return None
+        ranges = []
+        for start, end, name, source_line in entries:
+            if start is None:
+                if len(entries) != 1:
+                    return None
+                start, end = first, last
+            if end is None or not first <= start < end <= last:
+                return None
+            ranges.append((start, end, name, source_line))
+        ordered = sorted(ranges)
+        if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+            return None
+        for start, end, name, source_line in ordered:
+            if start <= column < end:
+                return name, source_line
+        return None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 def run(argv: list[str], work: Path, output: str, timeout: float, *,
         cwd: Path | None = None, allow_empty: bool = False,
         expect_failure: str | None = None) -> dict[str, Any]:
@@ -184,7 +327,12 @@ def run(argv: list[str], work: Path, output: str, timeout: float, *,
         if process.returncode <= 0 or re.search(expect_failure, diagnostics) is None:
             raise RuntimeError(f"expected rejection did not match (exit {process.returncode}): {work / 'stderr.log'}")
     elif process.returncode:
-        raise RuntimeError(f"compiler exited {process.returncode}: {work / 'stderr.log'}")
+        diagnostics = (work / "stderr.log").read_text(errors="replace")
+        notes = source_diagnostics(diagnostics, work if cwd is None else cwd)
+        detail = "\n" + diagnostics if diagnostics else ""
+        if notes:
+            detail += ("" if detail.endswith("\n") else "\n") + "\n".join(notes)
+        raise RuntimeError(f"compiler exited {process.returncode}: {work / 'stderr.log'}{detail}")
     if not allow_empty and not (work / output).stat().st_size:
         raise ValueError(f"compiler produced empty {output}")
     return metrics
@@ -523,7 +671,8 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
         if "optimizer_pipeline.txtpb" in asset_files or "optimizer_pipeline.txtpb" in sources:
             raise ValueError("reserved optimizer pipeline asset name")
         asset_files["optimizer_pipeline.txtpb"] = Path(optimizer_pipeline).resolve()
-    files = {**sources, **stdlib_files, **{f"assets/{asset}": path for asset, path in asset_files.items()}}
+    files = {**sources, **stdlib_files,
+             **{f"assets/{asset}": path for asset, path in asset_files.items()}}
     prepared: dict[str, Any] = {}
 
     def prepare(snapshot: Path) -> list[StageSpec]:

@@ -85,3 +85,44 @@ value(Origin) -> ["pub fn value() -> u16 { ", xls_dslx:failure_ref(Origin), " }\
 %% Each test owns a fresh directory and removes only its own generated files.
 -spec scratch() -> file:filename().
 scratch() -> filename:join("_build", "emitted-tests-" ++ integer_to_list(erlang:unique_integer([positive]))).
+
+%% Origins travel in the generated main and imports without a companion map file.
+-spec origins_are_embedded_in_main_and_imports_test() -> ok.
+origins_are_embedded_in_main_and_imports_test() ->
+    Origin = origin("include/actions.hrl", 8, badarg),
+    Source = maps:remove(kind, Origin),
+    ImportedSource = #{file => <<"helper.erl">>, line => 17},
+    Artifact = xls_emitted:new([Source], "// preamble\n", xls_dslx:source(Source, value(Origin)), #{
+        "imports/helper.x" => #{preamble => "// import\n",
+            body => xls_dslx:source(ImportedSource, "pub fn helper() -> u1 { u1:0 }\n")}
+    }),
+    Bytes = xls_emitted:bytes(Artifact),
+    Imported = maps:get("imports/helper.x", xls_emitted:dependencies(Artifact)),
+    ?assertNotEqual(nomatch, binary:match(Bytes, <<"@erl \"include/actions.hrl\":8">>)),
+    ?assertNotEqual(nomatch, binary:match(Imported, <<"@erl \"helper.erl\":17">>)),
+    ?assertEqual(xls_failure_sites:number([Origin]), xls_emitted:sites(Artifact)),
+    Directory = scratch(),
+    try
+        Main = filename:join(Directory, "renamed.x"),
+        ok = xls_emitted:write(Artifact, Main),
+        ?assertEqual({ok, Bytes}, file:read_file(Main)),
+        ?assertEqual({ok, Imported}, file:read_file(filename:join(Directory, "imports/helper.x"))),
+        ?assertEqual([], filelib:wildcard(filename:join(Directory, "**/*.json")))
+    after
+        ok = file:del_dir_r(Directory)
+    end.
+
+%% Source comments share the byte seal and remain attached through whole-line composition.
+-spec origin_comments_are_sealed_and_move_with_code_test() -> ok.
+origin_comments_are_sealed_and_move_with_code_test() ->
+    Source = #{file => <<"actor.erl">>, line => 2},
+    Body = xls_dslx:source(Source, "pub fn value() -> u1 { u1:0 }\n"),
+    Artifact = xls_emitted:new([], [], Body, #{"helper.x" => #{preamble => [], body => Body}}),
+    Bytes = xls_emitted:bytes(Artifact),
+    Wrapped = <<"// enclosing module\n", Bytes/binary>>,
+    Changed = xls_emitted:with_bytes(Artifact, Wrapped),
+    ?assertEqual(Wrapped, xls_emitted:bytes(Changed)),
+    ?assertEqual(xls_emitted:dependencies(Artifact), xls_emitted:dependencies(Changed)),
+    Raw = binary_to_term(term_to_binary(Artifact)),
+    Bad = Raw#{dslx := binary:replace(Bytes, <<"actor.erl">>, <<"other.erl">>)},
+    ?assertError(emitted_module_mismatch, xls_emitted:bytes(Bad)).

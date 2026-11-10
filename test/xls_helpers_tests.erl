@@ -19,7 +19,7 @@ reachable_graph_test() ->
         {xls_helper_call, _, "hls_local_outer__1", _}}]}] =
         hls_source:find_function(Forms, root, 0),
     Emitted = iolist_to_binary(xls_dslx:render(xls_helpers:emit(Helpers, cell, #{}))),
-    ?assertNotEqual(nomatch, binary:match(Emitted, <<"{  // L1\n">>)),
+    ?assertEqual(2, length(binary:matches(Emitted, <<"fn hls_local_">>))),
     ?assertEqual(nomatch, binary:match(Emitted, <<"unused">>)).
 
 cycle_has_a_finite_diagnostic_test() ->
