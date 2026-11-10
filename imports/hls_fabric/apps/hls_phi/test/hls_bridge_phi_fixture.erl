@@ -49,8 +49,8 @@ write(Stage) ->
     lists:foreach(fun(Module) ->
         Source = filename:join([Dependency, "src",
             atom_to_list(Module) ++ ".erl"]),
-        Artifact = xls_scheduler_actor:to_xls(Source),
-        write(Stage, atom_to_list(Module) ++ ".x", Artifact)
+        Artifact = xls_scheduler_actor:to_artifact(Source),
+        ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x"))
     end, [phi_halo_cell, phi_syndrome_replay_cell]),
     Devices = [begin
         #{tx_lanes := Tx, rx_lanes := Rx, externals := Externals} =

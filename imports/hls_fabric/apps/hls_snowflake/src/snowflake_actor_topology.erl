@@ -271,9 +271,9 @@ write(Distance, Height, Directory, Options) ->
             ]),
             [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
             Artifact = ActorBackend:to_artifact(Source, Requirement#{source_options => Context}),
-            ok = file:write_file(
-                filename:join(Directory, atom_to_list(Module) ++ ".x"),
-                xls_emitted:bytes(Artifact)
+            ok = xls_emitted:write(
+                Artifact,
+                filename:join(Directory, atom_to_list(Module) ++ ".x")
             ),
             Artifact
         end,

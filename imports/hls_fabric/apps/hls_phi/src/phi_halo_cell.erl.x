@@ -8,6 +8,7 @@ import hls_bits;
 import direct_mailbox_observation;
 import hls_integer;
 import phi_field;
+import phi_halo_cell_helpers.phi_direction;
 
 const_assert!(axis::FRAME_BITS == u32:128);
 
@@ -400,69 +401,19 @@ pub fn bits_from_phifold(s: Phifold) -> bits[128] {
   hls_bits::from_stream(hls_bits::to_stream(s.value0 as bits[64]) ++ hls_bits::to_stream(s.value1 as bits[64]) ++ zero!<bits[0]>())
 }
 
-fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // L141
+fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // L140
   let v_Mask_1 = argument_1;
   let v_Random_1 = argument_2;
-  let _0 = v_Mask_1 & 1;
-  let v_North_1 = _0;
-  let _1 = hls_integer::shift<false>(v_Mask_1, u1:1);
-  let _2 = _1 & 1;
-  let v_East_1 = _2;
-  let _3 = hls_integer::shift<false>(v_Mask_1, u2:2);
-  let _4 = _3 & 1;
-  let v_West_1 = _4;
-  let _5 = hls_integer::shift<false>(v_Mask_1, u2:3);
-  let _6 = _5 & 1;
-  let v_South_1 = _6;
-  let _7 = ((v_North_1) + (v_East_1));
-  let _8 = ((_7) + (v_West_1));
-  let _9 = ((_8) + (v_South_1));
-  let v_Count_1 = _9;
-  let _10 = v_Random_1 & 2147483647;
-  let _11 = (_10 as u64);
-  let v_Draw_1 = _11;
-  let _12 = (v_Count_1 as u64);
-  let _13 = v_Draw_1 * _12;
-  let _14 = hls_integer::shift<false>(_13, u5:31);
-  let _15 = (_14 as u32);
-  let v_Rank_1 = _15;
-  let _19 = {
-    let _16 = hls_integer::equal(v_Count_1, sN[2]:0);
-    if _16 {
-      (u32:0, hls_failure::NONE)
-    } else {
-      let _16 = hls_integer::less(v_Rank_1, v_North_1);
-      if _16 {
-        (u32:1, hls_failure::NONE)
-      } else {
-        let _16 = ((v_North_1) + (v_East_1));
-        let _17 = hls_integer::less(v_Rank_1, _16);
-        if _17 {
-          (u32:2, hls_failure::NONE)
-        } else {
-          let _16 = ((v_North_1) + (v_East_1));
-          let _17 = ((_16) + (v_West_1));
-          let _18 = hls_integer::less(v_Rank_1, _17);
-          if _18 {
-            (u32:4, hls_failure::NONE)
-          } else {
-            {
-              (u32:8, hls_failure::NONE)
-            }
-          }
-        }
-      }
-    }
-  };
-  (_19.0, _19.1)
+  let _0 = phi_direction::select_grid(v_Mask_1, v_Random_1);
+  (_0.0, _0.1)
 }
 
-fn hls_local_finish_diffusion__1(argument_1: (Tag, Cell)) -> ((Tag, Cell), hls_failure::Code) {  // L167
+fn hls_local_finish_diffusion__1(argument_1: (Tag, Cell)) -> ((Tag, Cell), hls_failure::Code) {  // L149
   let v_Cell_1 = argument_1;
   (v_Cell_1, hls_failure::NONE)
 }
 
-fn hls_local_prepare_diffusion__3(argument_1: (Tag, Cell), argument_2: s64, argument_3: s64) -> ((Tag, Cell), hls_failure::Code) {  // L162
+fn hls_local_prepare_diffusion__3(argument_1: (Tag, Cell), argument_2: s64, argument_3: s64) -> ((Tag, Cell), hls_failure::Code) {  // L144
   let v_Cell_1 = argument_1;
   let v_Sum0_1 = argument_2;
   let v_Sum1_1 = argument_3;

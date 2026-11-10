@@ -79,7 +79,7 @@ ports(
         ])
     ].
 
--doc "Renders a receiver's import facade for an already emitted owner. File is the relative owner DSLX path from the same trusted transport build; its module basename and byte hash bind the import. Retains and rebinds the owner's checked failure codebook without source reads.".
+-doc "Renders a receiver's import facade for an already emitted owner. File is the relative owner DSLX path from the same trusted transport build; its module basename and actor/helper byte hashes bind the import. Retains and rebinds the owner's checked failure codebook and dependencies without source reads.".
 -spec import_owner(hls_local_actor:artifact(), binary()) -> hls_local_actor:artifact().
 import_owner(Owner = #{emitted := Emitted}, File) ->
     Bytes = xls_emitted:bytes(Emitted),
@@ -89,7 +89,11 @@ import_owner(Owner = #{emitted := Emitted}, File) ->
         emitted := xls_emitted:with_bytes(Emitted, Imported),
         owner_import => #{
             file => File,
-            dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase)
+            dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
+            dslx_dependencies => maps:from_list([
+                {unicode:characters_to_binary(Dependency), hls_generated_files:hash(Data)}
+             || {Dependency, Data} <- maps:to_list(xls_emitted:dependencies(Emitted))
+            ])
         }
     }.
 

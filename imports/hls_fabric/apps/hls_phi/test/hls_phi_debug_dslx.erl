@@ -19,7 +19,7 @@ write(Stage, Enabled, Shards) ->
         xls_scheduler_actor:to_artifact(filename:join(filename:join(code:lib_dir(hls_phi), "src"), atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, Options))
     end, xls_fabric_topology_dslx:artifact_requirements(Plan, Profile)),
-    maps:foreach(fun(Module, Artifact) -> write_file(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)) end, Artifacts),
+    maps:foreach(fun(Module, Artifact) -> ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x")) end, Artifacts),
     write_file(Stage, "phi_noise_topology.x", xls_fabric_topology_dslx:emit(Plan, maps:merge(Profile, Options))),
     write_file(Stage, "phi_memory_gateway.x", phi_memory_gateway_dslx:to_dslx(3, {phi_shards, Shards}, Options)),
     write_file(Stage, "phi_memory_top.v", phi_memory_debug_top_v:application({phi_shards, Shards}, Options)),

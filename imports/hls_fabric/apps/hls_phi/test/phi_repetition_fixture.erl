@@ -8,8 +8,8 @@ write(Stage, N) ->
     Plan = hls_topology:normalize(phi_repetition_topology:topology(N)),
     Profile = #{scheduler_groups := Groups} = phi_shared_repetition_profile:profile(N),
     maps:foreach(fun(Module, Options) ->
-        Source = xls_scheduler_actor:to_xls(filename:join([code:lib_dir(hls_phi), "src", atom_to_list(Module) ++ ".erl"]), Options),
-        save(Stage, atom_to_list(Module) ++ ".x", Source)
+        Artifact = xls_scheduler_actor:to_artifact(filename:join([code:lib_dir(hls_phi), "src", atom_to_list(Module) ++ ".erl"]), Options),
+        ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x"))
     end, xls_fabric_topology_dslx:artifact_requirements(Plan, Profile)),
     save(Stage, "phi_repetition_topology.x", xls_fabric_topology_dslx:emit(Plan, Profile)),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),

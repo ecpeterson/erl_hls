@@ -41,7 +41,7 @@ actor_artifacts(Stage, Partition = #{actors := Actors}) ->
         Options = (maps:get(Module, Requirements,
             #{shared_service => ordinary}))#{mailbox_debug => true},
         Artifact = xls_scheduler_actor:to_artifact(Source, Options),
-        ok = save(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)),
+        ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x")),
         {Module, Artifact}
     end || Module <- lists:usort([Module || #{module := Module} <- Actors])]).
 

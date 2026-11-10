@@ -27,8 +27,8 @@ write(Stage) ->
     ok = filelib:ensure_dir(filename:join(Stage, "ordinary.x")),
     lists:foreach(fun(Name) ->
         {_, _, Artifact} = prepare(Name),
-        ok = file:write_file(filename:join(Stage, atom_to_list(Name) ++ ".x"),
-            [xls_emitted:bytes(Artifact), checks(Name)], [exclusive])
+        Checked = xls_emitted:with_bytes(Artifact, [xls_emitted:bytes(Artifact), checks(Name)]),
+        ok = xls_emitted:write(Checked, filename:join(Stage, atom_to_list(Name) ++ ".x"))
     end, cases()).
 
 %% One combined reduction/caller fixture checks the two appended fields together.

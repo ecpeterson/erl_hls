@@ -14,7 +14,7 @@ Prepared-source build used by decoder-profile fixtures and staging tools. Combin
     effect_window_partition => global | weak_components
 }.
 
--doc "Returns generated relative files and the matching topology/profile/artifact requirements without writing output. Compiles each required actor once; wrapper, observation projection and RAM configuration reuse one retained generation plan and interface catalog. The input manifest hashes actor DSLX, topology DSLX, wrapper, geometry and the default compilation policy so an external compiler can reject changed bytes without parsing DSLX. Options may select observations or effect-window partitioning, not replace placement. Source/provider and template reads remain; no XLS or admission checks run.".
+-doc "Returns generated relative files and the matching topology/profile/artifact requirements without writing output. Compiles each required actor once; wrapper, observation projection and RAM configuration reuse one retained generation plan and interface catalog. The input manifest hashes actor/helper DSLX, topology DSLX, wrapper, geometry and the default compilation policy so an external compiler can reject changed bytes without parsing DSLX. Options may select observations or effect-window partitioning, not replace placement. Source/provider and template reads remain; no XLS or admission checks run.".
 -spec emit(pos_integer() | map(), options()) -> hls_generated_files:output().
 emit(ProfileOptions, Options) ->
     ok = options(Options),
@@ -37,10 +37,15 @@ emit(ProfileOptions, Options) ->
         Requirements
     ),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler, hls_frame_layout:new(Words), Interfaces),
-    ActorFiles = maps:from_list([
-        {atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)}
-     || {Module, Artifact} <- maps:to_list(Artifacts)
-    ]),
+    ActorFiles = hls_generated_files:merge(
+        lists:append([
+            [
+                #{atom_to_list(Module) ++ ".x" => xls_emitted:bytes(Artifact)},
+                xls_emitted:dependencies(Artifact)
+            ]
+         || {Module, Artifact} <- maps:to_list(Artifacts)
+        ])
+    ),
     Inputs = hls_generated_files:merge([
         ActorFiles,
         #{

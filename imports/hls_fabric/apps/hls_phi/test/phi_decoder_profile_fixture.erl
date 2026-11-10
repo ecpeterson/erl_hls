@@ -75,4 +75,6 @@ collect(Remaining, Events, Deadline) ->
 %% Writes generated DSLX and the matching oracle or wrapper files into the test stage.
 -spec write(atom() | binary() | [atom() | [any()] | char()],nonempty_string(),binary() | maybe_improper_list(binary() | maybe_improper_list(any(),binary() | []) | byte(),binary() | [])) -> 'ok'.
 write(Stage, Name, Contents) ->
-    ok = file:write_file(filename:join(Stage, Name), Contents).
+    Path = filename:join(Stage, Name),
+    ok = filelib:ensure_dir(Path),
+    ok = file:write_file(Path, Contents).

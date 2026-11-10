@@ -36,23 +36,9 @@ Shares phi_halo_cell_impl.hrl with the grid wrapper; phi_repetition_topology sel
 
 -include("../include/phi_halo_cell_impl.hrl").
 
-%% Equivalent to multiply-high ranking for the valid winner masks 0, 2, 4, 6.
-%% Two tied edges split the low-31-bit draw at bit 30; no multiplication remains.
+%% The geometry wrapper selects an ordinary source helper; neither call adds a phase.
 -spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
-choose_direction(Mask, Random) ->
-    case Mask of
-        ?PHI_EAST_MASK ->
-            ?PHI_EAST_MASK;
-        ?PHI_WEST_MASK ->
-            ?PHI_WEST_MASK;
-        ?NEIGHBOR_MASK ->
-            case Random band 16#40000000 of
-                0 -> ?PHI_EAST_MASK;
-                _ -> ?PHI_WEST_MASK
-            end;
-        _ ->
-            ?NO_DIRECTION
-    end.
+choose_direction(Mask, Random) -> phi_direction:select_line(Mask, Random).
 
 %% Retain the arithmetic prefix in the ordinary completion-to-entry transition.
 -spec prepare_diffusion(#cell{}, hls_nums:s64(), hls_nums:s64()) -> #cell{}.

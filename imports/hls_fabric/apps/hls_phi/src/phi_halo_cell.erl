@@ -135,27 +135,9 @@ The callbacks and CPU helper exports are defined in phi_halo_cell_impl.hrl. Grid
 
 -include("../include/phi_halo_cell_impl.hrl").
 
-%% Map the low 31 random bits to an ordinal among the winning edges. Multiply
-%% high avoids division; the three-way case's bucket sizes differ by one draw.
+%% The geometry wrapper selects an ordinary source helper; neither call adds a phase.
 -spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
-choose_direction(Mask, Random) ->
-    North = Mask band 1,
-    East = (Mask bsr 1) band 1,
-    West = (Mask bsr 2) band 1,
-    South = (Mask bsr 3) band 1,
-    Count = North + East + West + South,
-    Draw = hls_type:as(hls_nums:u64(), Random band 16#7fffffff),
-    Rank = hls_type:as(
-        hls_nums:u32(),
-        (Draw * hls_type:as(hls_nums:u64(), Count)) bsr 31
-    ),
-    if
-        Count =:= 0 -> ?NO_DIRECTION;
-        Rank < North -> ?PHI_NORTH_MASK;
-        Rank < North + East -> ?PHI_EAST_MASK;
-        Rank < North + East + West -> ?PHI_WEST_MASK;
-        true -> ?PHI_SOUTH_MASK
-    end.
+choose_direction(Mask, Random) -> phi_direction:select_grid(Mask, Random).
 
 %% The grid keeps its established unsplit recurrence and state representation.
 -spec prepare_diffusion(#cell{}, hls_nums:s64(), hls_nums:s64()) -> #cell{}.

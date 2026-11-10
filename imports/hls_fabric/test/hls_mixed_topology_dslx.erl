@@ -83,7 +83,7 @@ write(Placement, Stage) ->
         xls_scheduler_actor:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
     end, Requirements),
     maps:foreach(fun(Module, Artifact) ->
-        ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), xls_emitted:bytes(Artifact))
+        ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x"))
     end, Artifacts),
     ok = file:write_file(filename:join(Stage, "mixed_topology.x"), xls_fabric_topology_dslx:emit(Plan, Profile)),
     ok = file:write_file(filename:join(Stage, "actors.json"),

@@ -10,7 +10,7 @@
 -doc "Renders ordinary shared execution and its dedicated service from the same callbacks.".
 -spec to_xls(file:filename()) -> binary().
 to_xls(Filename) -> to_xls(Filename, #{}).
--doc "Selects shared reduction placement and optional physical observations.".
+-doc "Selects shared reduction placement and optional physical observations, returning only the main module bytes. Use to_artifact/2 with xls_emitted:write/2 to retain generated helper imports.".
 -spec to_xls(file:filename(), map()) -> binary().
 to_xls(Filename, Options) -> xls_emitted:bytes(to_artifact(Filename, Options)).
 
@@ -18,7 +18,7 @@ to_xls(Filename, Options) -> xls_emitted:bytes(to_artifact(Filename, Options)).
 -spec to_artifact(file:filename()) -> xls_emitted:artifact().
 to_artifact(Filename) -> to_artifact(Filename, #{}).
 
--doc "Compiles the selected physical specialization, retaining exact DSLX bytes and its allocated source failure codes. Debug projections must use this result rather than reconstruct metadata from text.".
+-doc "Compiles the selected physical specialization, retaining exact actor/helper DSLX bytes and their allocated source failure codes. Debug projections must use this result rather than reconstruct metadata from text.".
 -spec to_artifact(file:filename(), map()) -> xls_emitted:artifact().
 to_artifact(Filename, Options) ->
     case

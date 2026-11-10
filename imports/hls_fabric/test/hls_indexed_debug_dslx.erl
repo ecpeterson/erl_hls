@@ -26,7 +26,7 @@ write(Stage) ->
             maps:merge(Requirement, #{mailbox_debug => true}))
     end, Requirements),
     maps:foreach(fun(Module, Actor) ->
-        ok = file:write_file(filename:join(Stage, atom_to_list(Module) ++ ".x"), xls_emitted:bytes(Actor))
+        ok = xls_emitted:write(Actor, filename:join(Stage, atom_to_list(Module) ++ ".x"))
     end, Artifacts),
     ok = file:write_file(filename:join(Stage, "actor_debug.x"), xls_fabric_topology_dslx:emit(Plan, Options)),
     Scheduler = #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Groups),

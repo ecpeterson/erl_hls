@@ -77,7 +77,9 @@ invalid_options_test() ->
 check_bundle(Files, Schedulers, Actors, Debug) ->
     #{<<"version">> := 1, <<"inputs">> := Hashes, <<"ram_configurations">> := Configurations} =
         document(Files, "phi_decoder_profile.inputs.json"),
-    Names = ["phi_halo_cell.x", "phi_syndrome_replay_cell.x", "phi_decoder_profile_topology.x",
+    Helpers = [Name || Name <- maps:keys(Files), lists:suffix("/phi_direction.x", Name)],
+    ?assertEqual(1, length(Helpers)),
+    Names = Helpers ++ ["phi_halo_cell.x", "phi_syndrome_replay_cell.x", "phi_decoder_profile_topology.x",
         "phi_decoder_profile_top.v", "phi_decoder_profile.json", "phi_decoder_profile.build-profile.json"],
     ?assertEqual(lists:sort([list_to_binary(Name) || Name <- Names]), lists:sort(maps:keys(Hashes))),
     [?assertEqual(binary:encode_hex(crypto:hash(sha256, bytes(Files, Name)), lowercase),

@@ -31,4 +31,4 @@ write(Stage) ->
           "        GatherSite::WRONG_TEST_SITE => fail!(\"wrong_test_site_reached_gather_apply\", state.values),\n">>),
     Output = filename:join(Stage, "indexed_adapter.x"),
     ok = filelib:ensure_dir(Output),
-    file:write_file(Output, Actor).
+    xls_emitted:write(xls_emitted:with_bytes(Artifact, Actor), Output).

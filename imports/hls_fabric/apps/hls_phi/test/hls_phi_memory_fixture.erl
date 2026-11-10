@@ -90,7 +90,7 @@ write(Stage, Mode, Case, Limits, ReductionMode, Transport, Tile) ->
         Source = filename:join([Dependency, "src", atom_to_list(Module) ++ ".erl"]),
         Artifact = xls_scheduler_actor:to_artifact(Source,
             (maps:get(Module, Requirements, #{shared_service => ordinary}))#{mailbox_debug => Mode =/= direct}),
-        save(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Artifact)),
+        ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x")),
         {Module, Artifact}
     end || Module <- [phi_halo_cell, phenom_syndrome_cell, phenom_data_cell]]),
     Devices = [begin

@@ -78,21 +78,24 @@
 -doc "Source/owner interface metadata before the module's generated-byte identity. Imported receivers may retain their owner's hash; source_plan is compiler-owned JSON provenance, not a backend planning input.".
 -type descriptor() :: #{?INTERFACE_FIELDS}.
 
--doc "The source/owner interface with its allocated failure codebook and hashes of rendered DSLX and selected frame configuration bytes.".
+-doc "The source/owner interface with its allocated failure codebook and hashes of the actor, source-helper modules and selected frame configuration bytes.".
 -type manifest() :: #{
     ?INTERFACE_FIELDS,
     dslx_sha256 := binary(),
     frame_config_sha256 := binary(),
+    dslx_dependencies := #{binary() => binary()},
     failure_sites := [xls_failure_sites:site()]
 }.
 
-%% Planning binds the import path; emission additionally binds the rendered owner bytes.
--type owner_import() :: #{file := binary(), dslx_sha256 => binary()}.
+%% Planning binds the import path; emission additionally binds owner and helper bytes.
+-type owner_import() :: #{
+    file := binary(), dslx_sha256 => binary(), dslx_dependencies => #{binary() => binary()}
+}.
 
 -doc "Local scalar completion or a source-compatible shared group selected by the arithmetic planner.".
 -type completion() :: #{mode := local} | #{mode := shared, group := non_neg_integer()}.
 
--doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by xls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and its DSLX hash.".
+-doc "One fresh ordinary compilation, its activation/receipt/action functions and clocked owner, rendered after optional shared-completion selection and bound to its checked inbox by xls_protocol_inbox:attach/2. The opaque compiler program owns the complete source snapshot; retain it with the DSLX. Supplied or edited artifacts are outside this trusted build API. Network receivers may import an owner artifact in the same bundle; owner_import binds that relative file and the hashes of its DSLX and helper modules.".
 -type artifact() :: #{
     program := xls_actor_program:program(),
     emitted := xls_emitted:artifact(),
@@ -144,7 +147,7 @@ render(Source = #{program := Program}) ->
         )
     }.
 
--doc "Returns an existing artifact's DSLX, JSON provenance and selected frame_config.x beside the relative source filename, without recompilation or output I/O. The enclosing writer validates paths; multiple actors in one directory must share the same configuration.".
+-doc "Returns the actor DSLX, source-helper modules, JSON provenance and selected frame_config.x beside the relative source filename, without recompilation or output I/O. Dependency paths are relative to the actor directory; conflicting generated paths reject.".
 -spec emit(artifact(), string()) -> hls_generated_files:files().
 emit(Artifact = #{emitted := Emitted}, RelativeFilename) ->
     Bytes = xls_emitted:bytes(Emitted),
@@ -158,47 +161,76 @@ emit(Artifact = #{emitted := Emitted}, RelativeFilename) ->
         ConfigName -> error({local_actor_reserved_output, RelativeFilename});
         _ -> ok
     end,
-    #{
-        RelativeFilename => Bytes,
-        RelativeFilename ++ ".json" => json:encode(Manifest),
-        ConfigName => xls_frame_layout:config(Layout)
-    }.
+    Dependencies =
+        case filename:dirname(RelativeFilename) of
+            "." -> xls_emitted:dependencies(Emitted);
+            Parent -> hls_generated_files:prefix(Parent, xls_emitted:dependencies(Emitted))
+        end,
+    hls_generated_files:merge([
+        Dependencies,
+        #{
+            RelativeFilename => Bytes,
+            RelativeFilename ++ ".json" => json:encode(Manifest),
+            ConfigName => xls_frame_layout:config(Layout)
+        }
+    ]).
 
--doc "Writes a fresh source-derived DSLX module, provenance and selected frame_config.x. Refuses existing source/manifest files and an incompatible shared frame configuration; generated code contains no application-specific RTL controller.".
+-doc "Writes fresh source-derived DSLX, helper modules, provenance and selected frame_config.x. Refuses existing source/manifest files and incompatible shared dependencies; generated code contains no application-specific RTL controller.".
 -spec write(file:filename(), [hls_source:option()] | hls_source:context(), file:filename()) ->
     manifest().
 write(Source, Options, Output) ->
     write(compile(Source, Options), Output).
 
--doc "Writes an artifact returned by render/1 without recompiling. Output and its .json sidecar must be absent; an existing sibling frame_config.x is accepted only if its bytes match. Conflicting capacity rejects before writing the source or sidecar; partial I/O failures are retained. This trusted in-process API does not validate saved or supplied artifacts.".
+-doc "Writes an artifact returned by render/1 without recompiling. Output and its .json sidecar must be absent; existing frame configuration and helper modules are accepted only when their bytes match. Checks all shared files before writing; partial I/O failures are retained. This trusted in-process API does not validate saved or supplied artifacts.".
 -spec write(artifact(), file:filename()) -> manifest().
 write(Artifact, Output) ->
     lists:foreach(fun fresh/1, [Output, Output ++ ".json"]),
     Manifest = manifest(Artifact),
     Filename = filename:basename(Output),
     Sidecar = Filename ++ ".json",
-    #{Filename := Bytes, Sidecar := Json, "frame_config.x" := Config} = emit(Artifact, Filename),
-    ok = shared_frame_config(
-        filename:join(filename:dirname(Output), "frame_config.x"), iolist_to_binary(Config)
+    Files = #{Filename := Bytes, Sidecar := Json} = emit(Artifact, Filename),
+    Directory = filename:dirname(Output),
+    Shared = lists:sort(maps:to_list(maps:without([Filename, Sidecar], Files))),
+    lists:foreach(
+        fun({Name, Data}) ->
+            check_shared(filename:join(Directory, Name), iolist_to_binary(Data), Name)
+        end,
+        Shared
+    ),
+    lists:foreach(
+        fun({Name, Data}) ->
+            shared_file(filename:join(Directory, Name), iolist_to_binary(Data), Name)
+        end,
+        Shared
     ),
     ok = file:write_file(Output, Bytes, [exclusive]),
     ok = file:write_file(Output ++ ".json", Json, [exclusive]),
     Manifest.
 
-%% Exclusive creation preserves an existing layout, including when two writers reach the directory together.
--spec shared_frame_config(file:filename(), binary()) -> ok.
-shared_frame_config(Path, Bytes) ->
-    case file:write_file(Path, Bytes, [exclusive]) of
-        ok ->
+%% Shared bytes may already belong to another actor; reject disagreement before new outputs.
+-spec check_shared(file:filename(), binary(), string()) -> ok.
+check_shared(Path, Bytes, Name) ->
+    case file:read_file(Path) of
+        {ok, Bytes} ->
             ok;
-        {error, eexist} ->
-            case file:read_file(Path) of
-                {ok, Bytes} -> ok;
-                {ok, _} -> error({local_actor_frame_config_mismatch, Path});
-                {error, Reason} -> error({local_actor_output, Path, Reason})
-            end;
+        {ok, _} when Name =:= "frame_config.x" ->
+            error({local_actor_frame_config_mismatch, Path});
+        {ok, _} ->
+            error({local_actor_dependency_mismatch, Path});
+        {error, enoent} ->
+            ok;
         {error, Reason} ->
             error({local_actor_output, Path, Reason})
+    end.
+
+%% Exclusive creation preserves shared modules when two writers reach the same directory.
+-spec shared_file(file:filename(), binary(), string()) -> ok.
+shared_file(Path, Bytes, Name) ->
+    ok = filelib:ensure_dir(Path),
+    case file:write_file(Path, Bytes, [exclusive]) of
+        ok -> ok;
+        {error, eexist} -> check_shared(Path, Bytes, Name);
+        {error, Reason} -> error({local_actor_output, Path, Reason})
     end.
 
 %% Refuse either existing output before writing its companion; exclusive writes also guard races.
@@ -219,6 +251,10 @@ manifest(Artifact = #{emitted := Emitted, program := Program}) ->
     Descriptor#{
         failure_sites => xls_emitted:sites(Emitted, Locations),
         dslx_sha256 => hls_generated_files:hash(Bytes),
+        dslx_dependencies => maps:from_list([
+            {unicode:characters_to_binary(Name), hls_generated_files:hash(Data)}
+         || {Name, Data} <- maps:to_list(xls_emitted:dependencies(Emitted))
+        ]),
         frame_config_sha256 => hls_generated_files:hash(xls_frame_layout:config(Layout))
     }.
 

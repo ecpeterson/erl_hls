@@ -23,3 +23,23 @@ Evidence and preserved failed setup attempts: `/Users/ecpeterson/Documents/code/
 Retain the shared geometry choice and the genuinely different numerical policies. General cross-module callback compilation, parameterized state and actor-wide specialization remain separate work. This refactor adds no actor state, phases or scheduling edges; physical timing is not remeasured.
 
 Cleanup validation: all six line/grid actor interface maps match the preceding source revision after removing source-location diagnostics; 219 focused application tests, 78 compiler EUnit tests and 60 finite generated-owner cases pass. The fresh N2 RTL replay again matches all 2,369 public clocks and accepted words; attachment identity is rebound in the scoreboard only. Optimized boundary storage remains 206 state elements / 9,090 logical bits. Source contracts, Dialyzer, formatting and package/application boundaries pass. Evidence and preserved setup failures are in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/phi-static-actions-1/`.
+
+## Ordinary source helpers
+
+- [x] Move line/grid direction policies into one ordinary Erlang module, preserving their different arithmetic and tie ordering.
+- [x] Qualify imported-source ownership, failure behavior, actor interfaces and line/grid selection.
+- [x] Pin compiler source helpers from erl_hls #36 for the Phi consumer.
+
+Cross-module numerical helpers are a general compiler capability, not a Phi-specific lowering hook. The line keeps its multiplication-free tie split; the grid keeps multiply-high ranking. This change introduces no state or callback boundary. Parameterized/local type aliases, module-local records and compile-time descriptor helpers remain prerequisites for considering removal of the fixed-point arithmetic companion. Full cross-module callback compilation and actor-wide specialization remain separate work.
+
+Compiler revision: `02458d97e6c5d2e245bde665dbaee427a1d6e4cd`. Local qualification covers 162 application EUnit cases, 85 compiler EUnit cases, 60 finite generated-owner cases over 16 clocks each, six unchanged actor interface maps, and 950 generated Phi direction-selection cases (304 line / 646 grid) against an ordered-list oracle. Timing and native area are not remeasured. Source contracts (289 inherited gaps, zero new), Dialyzer, formatting and application boundaries pass. Full local quality and application-test disposition are retained in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/phi-source-helpers-1/`.
+
+## Generated source-module boundaries
+
+- [x] Keep numerical helper bodies in separate generated DSLX modules, with ordinary qualified calls and public/private visibility.
+- [x] Retain helper files and their hashes through local-owner, scheduler, profile and protocol bundle emission.
+- [x] Check real line/grid behavior and fixed-mask optimization through those module boundaries.
+
+Current compiler revision: `4d8a9d6541bb51ff575393427e0d270744976a69` in erl_hls #36. The grid actor now imports `phi_halo_cell_helpers.phi_direction` and calls `phi_direction::select_grid`; the checked-in helper file contains its public implementation. Failure codes are shared within the generated actor bundle, so no callsite remapping is needed. Identical receiver dependencies are written once; conflicting bytes reject.
+
+The 950 retained direction cases pass with the revised generated modules. XLS reduces fixed-mask line/grid probes to single literals 2 and 4; the compiler's separate selector regression eliminates constant selection while retaining one dynamic select. Twenty-eight packaging/inbox/frame/scheduler/profile tests and the checked-in grid consistency test pass. Source contracts (289 inherited gaps, zero new), Dialyzer and formatting pass. Physical timing is not remeasured. Evidence and corrected setup failures: `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/source-helper-modules-1/`.

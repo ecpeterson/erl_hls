@@ -9,7 +9,7 @@ prepare(Directory) ->
       capture := #{channels := Channels}, fabric := #{links := Links, boundaries := Boundaries}} = binary_to_term(Bytes),
     [{Module, #{program := Program}}] = maps:to_list(Modules),
     Spec = xls_actor_program:spec(Program),
-    ok = file:write_file(filename:join(Directory, "reference.x"), xls_activation_codegen:emit(Spec), [exclusive]),
+    ok = xls_emitted:write(xls_activation_codegen:artifact(Spec), filename:join(Directory, "reference.x")),
     Pairs = [begin
         SlotRows = [begin
             [C] = [C0 || C0 <- Channels, maps:with([source,port,tag,destination], C0) =:= Identity],

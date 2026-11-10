@@ -469,7 +469,7 @@ emit_actor(Descriptor = #{file := Relative}, Artifact) ->
         files = hls_local_actor:emit(Artifact, binary_to_list(Relative))
     }.
 
-%% Package finalized actors, fabric and reports without changing public file names or manifest schemas.
+%% Package finalized actor and helper bytes, fabric and reports under their public file names.
 -spec transport_files(descriptor(), xls_protocol_transport:plan(), [hls_generated_files:files()]) ->
     hls_generated_files:files().
 transport_files(
@@ -512,9 +512,16 @@ transport_files(
         {filename:join(filename:dirname(binary_to_list(File)), "frame_config.x"), Config}
      || #{file := File} <- Functions ++ Receivers
     ]),
-    SourceFiles = [maps:without(maps:keys(ConfigFiles), Files) || Files <- ActorFiles],
+    DependencyPaths = lists:usort([
+        filename:join(filename:dirname(binary_to_list(File)), binary_to_list(Path))
+     || #{file := File, manifest := #{dslx_dependencies := Dependencies}} <- Functions ++ Receivers,
+        Path <- maps:keys(Dependencies)
+    ]),
+    SharedPaths = maps:keys(ConfigFiles) ++ DependencyPaths,
+    Shared = shared_actor_files(ActorFiles, SharedPaths, ConfigFiles),
+    SourceFiles = [maps:without(SharedPaths, Files) || Files <- ActorFiles],
     hls_generated_files:merge(
-        [ConfigFiles | SourceFiles] ++
+        [Shared | SourceFiles] ++
             [
                 hls_generated_files:prefix("dslx", TransportFiles),
                 ModelFiles,
@@ -523,6 +530,33 @@ transport_files(
                     "summary.json" => json:encode(Summary)
                 }
             ]
+    ).
+
+%% Owners and their receiver facades reuse helper modules only when exact bytes agree.
+-spec shared_actor_files([hls_generated_files:files()], [string()], hls_generated_files:files()) ->
+    hls_generated_files:files().
+shared_actor_files(Sets, Paths, Initial) ->
+    lists:foldl(
+        fun(Files, Acc) ->
+            maps:fold(
+                fun(Path, Data, Combined) ->
+                    Bytes = iolist_to_binary(Data),
+                    case maps:find(Path, Combined) of
+                        error ->
+                            Combined#{Path => Bytes};
+                        {ok, Previous} ->
+                            case iolist_to_binary(Previous) =:= Bytes of
+                                true -> Combined;
+                                false -> error({shared_actor_dependency_mismatch, Path})
+                            end
+                    end
+                end,
+                Acc,
+                maps:with(Paths, Files)
+            )
+        end,
+        Initial,
+        Sets
     ).
 
 %% Both backends share the same structured source diagnostics and captured build context.

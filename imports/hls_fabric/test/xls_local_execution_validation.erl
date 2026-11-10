@@ -47,5 +47,6 @@ projection(Stage) ->
     Spec = xls_parse:actor_artifact(File, Context),
     ok = xls_state_projection:validate(Spec, Projection, hls_source:read(File, Context)),
     {ok, Checks} = file:read_file("test/local_projection_semantics.x.in"),
-    file:write_file(filename:join(Stage, "projected.x"),
-        [xls_activation_codegen:emit(Spec#{state_projection => Projection}), Checks], [exclusive]).
+    Artifact = xls_activation_codegen:artifact(Spec#{state_projection => Projection}),
+    xls_emitted:write(xls_emitted:with_bytes(Artifact, [xls_emitted:bytes(Artifact), Checks]),
+        filename:join(Stage, "projected.x")).

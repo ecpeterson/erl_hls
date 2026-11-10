@@ -107,7 +107,7 @@ write(Kind, Stage, Options0) ->
     end,
     {Plan, Specs} = fixture(Kind),
     Small = artifacts(Kind, Options0),
-    maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", xls_emitted:bytes(Actor)) end, Small),
+    maps:foreach(fun(Module, Actor) -> ok = xls_emitted:write(Actor, filename:join(Stage, atom_to_list(Module) ++ ".x")) end, Small),
     ok = write_file(Stage, "actor_debug.x", xls_fabric_topology_dslx:emit(Plan,
         maps:merge(#{name => actor_debug, channel_depth => 1, actor_egress_depth => burst,
             scheduler_groups => Specs}, Options))),
@@ -149,4 +149,7 @@ write(Kind, Stage, Options0) ->
 
 %% Writes one generated test artifact below the selected stage.
 -spec write_file(atom() | binary() | [atom() | [any()] | char()],nonempty_string(),binary() | maybe_improper_list(binary() | maybe_improper_list(any(),binary() | []) | byte(),binary() | [])) -> 'ok' | {'error',atom()}.
-write_file(Stage, Name, Data) -> file:write_file(filename:join(Stage, Name), Data).
+write_file(Stage, Name, Data) ->
+    Path = filename:join(Stage, Name),
+    ok = filelib:ensure_dir(Path),
+    file:write_file(Path, Data).

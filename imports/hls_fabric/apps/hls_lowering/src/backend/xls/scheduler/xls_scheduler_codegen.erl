@@ -14,11 +14,11 @@
 -spec publication_depth() -> pos_integer().
 publication_depth() -> 2.
 
--doc "Renders RAM-backed shared execution of a validated actor artifact.".
+-doc "Renders the main module bytes for RAM-backed shared execution of a validated actor artifact. Use artifact/1 to retain generated helper imports and their failure metadata.".
 -spec emit(spec()) -> binary().
 emit(Spec) -> xls_emitted:bytes(artifact(Spec)).
 
--doc "Renders one specialized shared actor and retains its allocated failure codebook beside the exact module bytes.".
+-doc "Renders one specialized shared actor and retains its generated helper modules and allocated failure codebook beside the exact main-module bytes.".
 -spec artifact(spec()) -> xls_emitted:artifact().
 artifact(Spec) ->
     ok = xls_machine_names:validate(Spec),

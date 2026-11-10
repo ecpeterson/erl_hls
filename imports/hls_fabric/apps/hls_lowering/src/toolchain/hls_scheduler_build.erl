@@ -364,14 +364,22 @@ actors(Requirements, Loaded, Placement) ->
             ),
             Bytes = xls_emitted:bytes(Artifact),
             Name = "actors/" ++ atom_to_list(Module) ++ ".x",
-            #{
-                Name => Bytes,
-                Name ++
-                    ".json" => json:encode(#{
-                        dslx_sha256 => hls_generated_files:hash(Bytes),
-                        failure_sites => xls_emitted:sites(Artifact)
-                    })
-            }
+            Dependencies = xls_emitted:dependencies(Artifact),
+            hls_generated_files:merge([
+                hls_generated_files:prefix("actors", Dependencies),
+                #{
+                    Name => Bytes,
+                    Name ++
+                        ".json" => json:encode(#{
+                            dslx_sha256 => hls_generated_files:hash(Bytes),
+                            dslx_dependencies => maps:from_list([
+                                {unicode:characters_to_binary(Path), hls_generated_files:hash(Data)}
+                             || {Path, Data} <- maps:to_list(Dependencies)
+                            ]),
+                            failure_sites => xls_emitted:sites(Artifact)
+                        })
+                }
+            ])
         end
      || {Module, Requirement} <- lists:sort(maps:to_list(Requirements))
     ]).
