@@ -42,3 +42,25 @@ python3 tools/test_compiler_differential.py
 python3 tools/test_compiler_differential.py --xls-root XLS_ROOT \
   --stage _build/differential-self-test
 ```
+
+## Actor transition sequences
+
+`tools/actor_differential.py` generates small two-phase `hls_statem` actors and compares finite transition sequences against their normally lowered XLS owners. Its oracle runs the actual compiled actor in the BEAM `hls_statem` runtime. It compares committed phase/data, postponed-message counts and the complete ordered output sequence after each drained input prefix. The source varies unsigned byte arithmetic, initial state, entry updates, conditional effect counts and output-port order. Schedules cover postponement followed by a phase change, same-phase updates, `repeat_phase`, selected and unselected failure, partial entry backpressure, absorbing hardware failure, and fresh incarnations.
+
+The RTL testbench carries the complete generated `Machine` value between calls to the generated `machine_step`; it does not reproduce the mailbox, selection, effect or commit implementation. A small appended DSLX function frames inputs with the generated codecs and exposes observations. Each segment has 64 owner transitions, with an independently chosen output-readiness calendar for the first 16 and readiness thereafter. Healthy segments must accept every offered input and drain all eligible work; an incomplete tail is a failed qualification, not equality. Outputs while blocked and movement after latched failure also reject the trace. All CPU output ports target the oracle process, retaining source ordering; generated payload markers identify the intended ports independently of the RTL egress selector.
+
+These are finite simulation witnesses for the generated owner, not proofs or full streaming-service/transport tests. BEAM does not simulate ready/valid clocks: comparison uses drained prefixes and ordered effects, not cycle-by-cycle equality with BEAM. The RTL may take several transitions to execute one CPU callback. CPU callback failure terminates the process; its `terminate/3` hook reports the preceding committed state, which is compared with the hardware's latched failure. Reset occurs only at segment boundaries after quiescence or failure, replacing the CPU process and resetting the RTL owner. Mid-flight reset, replay/retry delivery, links and physical timing are outside this check.
+
+```sh
+python3 tools/actor_differential.py XLS_ROOT --stage _build/actor-smoke \
+  --seed 20261109 --count 4
+python3 tools/actor_differential.py XLS_ROOT --stage _build/actor-replay \
+  --replay _build/actor-smoke/minimized.json --shrink-budget 0
+python3 tools/test_actor_differential.py
+python3 tools/test_actor_differential.py --xls-root XLS_ROOT \
+  --stage _build/actor-detector-self-test
+```
+
+The same prerequisites, fresh-stage requirement, tool timeouts and provenance retention apply. Every actor crosses serialized XLS IR, optimization and generated RTL; no large application workload is required. `--skip-compile` reuses a current test build. The optional detector self-test changes an arithmetic literal only in generated DSLX, requires an RTL/BEAM disagreement, shrinks the schedule and replays it without the corruption.
+
+Actor minimization removes segments and commands, then reduces input values and readiness calendars while retaining exact actor source and the fixed horizon. It preserves the mismatch phase, category and observable, with a default budget of 20 tool attempts; changing the observable or exhausting the drain horizon does not count as preserving the original mismatch. The final witness still requires inspection because a common observable is not a proof of common root cause. `case.json`, `minimized.json`, `shrink.json`, source, oracle observations, complete RTL trace and command logs make failures reproducible without the original seed.
