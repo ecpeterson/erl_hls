@@ -19,7 +19,7 @@ Standalone actor-to-bundle API used by hls_compile_cli and build clients. Lowers
     frame_payload_words => hls_frame_layout:words()
 }.
 
--doc "Lowers one supported actor into a fresh portable DSLX bundle using xls_parse:to_artifact/2. Caller include paths/macros/features pass unchanged to hls_source; the compiler include directory is appended. Retains hashed failure-codebook and generated-source-map sidecars. Records a Top proc with module hls_actor and an explicit XLS unit-delay pipeline recipe, not a timing claim. Unknown options and nonpositive stage counts fail; partial output is retained. Original source paths in request.erl are descriptive, not a portable source-recompilation recipe.".
+-doc "Lowers one supported actor into a fresh portable DSLX bundle using xls_parse:to_artifact/2. Caller include paths/macros/features pass unchanged to hls_source; the compiler include directory is appended. Embeds readable source-origin comments and retains the hashed runtime failure-codebook sidecar. Records a Top proc with module hls_actor and an explicit XLS unit-delay pipeline recipe, not a timing claim. Unknown options and nonpositive stage counts fail; partial output is retained. Original source paths in request.erl are descriptive, not a portable source-recompilation recipe.".
 -spec actor(file:filename(), options(), file:filename()) -> map().
 actor(Source, Options, Output) ->
     case

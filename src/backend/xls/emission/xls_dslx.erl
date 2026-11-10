@@ -7,7 +7,7 @@
 %% Deferred metadata and formatting retained in the enclosing document.
 -export([failure_ref/1, source/2, indent/2]).
 %% Validate the document shape and render terminal iodata.
--export([validate/1, render/1, render_mapped/1]).
+-export([validate/1, render/1, render_annotated/1]).
 -export_type([expr/0, binding/0, value/0, type/0, name/0, fields/0]).
 
 -doc "A checked DSLX name or pattern spelling supplied by the compiler, without parsing emitted source.".
@@ -258,13 +258,11 @@ validate_type(Type) -> validate_name(Type).
 
 -doc "Renders shared syntax and opaque leaves without source parsing or semantic lowering. Untyped integers retain contextual sizing; unlowered floats and phantom types are rejected.".
 -spec render(value()) -> binary().
-render(Value) ->
-    {Bytes, _Ranges} = render_mapped(Value),
-    Bytes.
+render(Value) -> xls_source_map:render(format(Value)).
 
--doc "Renders the same bytes as render/1 and their retained source ranges, using one-based lines and half-open byte columns after all indentation.".
--spec render_mapped(value()) -> {binary(), [xls_source_map:range()]}.
-render_mapped(Value) -> xls_source_map:render(format(Value)).
+-doc "Renders a complete module with readable source comments. Use only at final artifact emission; intermediate fragments use render/1 or remain structured.".
+-spec render_annotated(value()) -> binary().
+render_annotated(Value) -> xls_source_map:render_annotated(format(Value)).
 
 %% One formatter supplies both ordinary output and source-mapped output.
 -spec format(value()) -> xls_source_map:document().

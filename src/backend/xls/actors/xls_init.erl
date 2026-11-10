@@ -9,7 +9,6 @@
 
 -doc "Initialization retains its selected failure references until module allocation.".
 -type lowered() :: #{
-    line := non_neg_integer(),
     source_annotation := erl_anno:anno(),
     body := xls_dslx:value(),
     result := xls_dslx:value(),
@@ -43,7 +42,6 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
     #{body := Body, result := Result, failed := Failed} =
         xls_clause_lower:clause_outcome(Clause, [], DataName, EnumAtoms),
     #{
-        line => erl_anno:line(Line),
         source_annotation => Line,
         body => Body,
         result => Postprocess(Result),
@@ -54,7 +52,6 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
 %% Evaluate the outcome as a constant even if the caller runs after proc init().
 -spec emit(string(), string(), lowered()) -> xls_dslx:value().
 emit(Name, Type, #{
-    line := Line,
     source_annotation := Anno,
     body := Body,
     result := Result,
@@ -66,9 +63,7 @@ emit(Name, Type, #{
         Name,
         "_outcome() -> (bool, ",
         Type,
-        ") {  // L",
-        integer_to_list(Line),
-        "\n",
+        ") {\n",
         xls_dslx:indent(Body, 2),
         xls_dslx:indent(["(", Failed, ", ", Result, ")"], 2),
         "}\n",

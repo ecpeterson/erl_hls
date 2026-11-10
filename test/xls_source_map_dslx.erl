@@ -8,7 +8,7 @@
     source := binary() | null, line := pos_integer() | null,
     extras := [{file:filename(), iodata()}]}.
 
--doc "Emits three deliberately ill-typed actor bundles and one valid control under a fresh staging directory. Retains original sources and explicit expected locations in cases.json; raises on lowering or file errors.".
+-doc "Emits three deliberately ill-typed actor bundles, one valid control and a mixed-origin continuation probe under a fresh staging directory. Retains original sources and explicit expected locations in cases.json; raises on lowering or file errors.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
     Cases = [
@@ -32,7 +32,7 @@ write(Stage) ->
     lists:foreach(fun(Case) -> write_case(Stage, Case) end, Cases),
     Expectations = [maps:with([name, source, line], Case) || Case <- Cases],
     ok = file:write_file(filename:join(Stage, "cases.json"), json:encode(Expectations), [exclusive]),
-    ok.
+    write_continuation_probe(Stage).
 
 %% Compile from source-only files so includes and imported modules retain their own origins.
 -spec write_case(file:filename(), fixture()) -> ok.
@@ -69,3 +69,20 @@ actor(Expression) -> at_line([
 -spec at_line([iodata()], pos_integer(), iodata()) -> iodata().
 at_line(Prefix, Line, Body) when length(Prefix) < Line ->
     [[Text, "\n"] || Text <- Prefix ++ lists:duplicate(Line - length(Prefix) - 1, []) ++ [Body]].
+
+%% Actual rendering inserts continuation rows before a later deliberate XLS type mismatch.
+-spec write_continuation_probe(file:filename()) -> ok.
+write_continuation_probe(Stage) ->
+    Source = #{file => <<"probe.erl">>, line => 69},
+    Included = #{file => <<"include/probe.hrl">>, line => 7},
+    Invalid = #{file => <<"probe.erl">>, line => 71},
+    Document = [
+        "pub fn probe() -> u32 {\n",
+        xls_dslx:source(Source, ["  let value = u32:1 + ",
+            xls_dslx:source(Included, "u32:2"), ";\n"]),
+        xls_dslx:source(Invalid, "  value + true\n"),
+        "}\n"
+    ],
+    ok = file:write_file(filename:join(Stage, "continuation_probe.x"),
+        xls_dslx:render_annotated(Document), [exclusive]),
+    ok.

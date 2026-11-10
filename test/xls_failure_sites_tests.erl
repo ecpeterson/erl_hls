@@ -214,9 +214,8 @@ runtime_catalog_rejects_changed_origins_and_codes_test() ->
 %% Model an externally supplied term: a digest is a consistency check, never source authority.
 -spec sidecar(binary(), [map()]) -> term().
 sidecar(Bytes, Sites) ->
-    Maps = #{main => xls_source_map:new(Bytes, [])},
-    #{dslx => Bytes, dependencies => #{}, sites => Sites, source_maps => Maps,
-        sha256 => crypto:hash(sha256, term_to_binary({Bytes, #{}, Sites, Maps}, [deterministic]))}.
+    #{dslx => Bytes, dependencies => #{}, sites => Sites,
+        sha256 => crypto:hash(sha256, term_to_binary({Bytes, #{}, Sites}, [deterministic]))}.
 
 %% Construct a typed reference without depending on its emitted identifier spelling.
 -spec failure(xls_failure_sites:kind(), pos_integer()) -> xls_dslx:value().

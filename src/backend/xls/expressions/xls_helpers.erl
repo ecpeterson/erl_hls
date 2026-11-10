@@ -362,9 +362,7 @@ emit_function(
         ]),
         ") -> (",
         Type,
-        ", hls_failure::Code) {  // L",
-        integer_to_list(erl_anno:line(Line)),
-        "\n",
+        ", hls_failure::Code) {\n",
         xls_dslx:indent(Body, 2),
         "}\n"
     ]).

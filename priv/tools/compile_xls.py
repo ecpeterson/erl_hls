@@ -132,10 +132,10 @@ def cached_artifact(directory: Path) -> Path:
 
 
 def source_diagnostics(diagnostics: str, directory: Path) -> list[str]:
-    """Map explicit XLS source spans through adjacent, hash-bound generated maps.
+    """Map explicit XLS source spans through embedded generated-source annotations.
 
-    The original tool diagnostic remains authoritative. Missing, malformed or
-    stale maps contribute no attribution, and source filenames are descriptive:
+    The original tool diagnostic remains authoritative. Missing or malformed
+    annotations contribute no attribution, and source filenames are descriptive:
     they are never opened or interpreted relative to a generated helper module.
     """
     directory = directory.resolve()
@@ -166,55 +166,110 @@ def source_diagnostics(diagnostics: str, directory: Path) -> list[str]:
     return notes
 
 
-def mapped_source(generated: Path, line: int, column: int) -> tuple[str, int] | None:
-    """Return the narrowest containing source origin, rejecting invalid maps as a whole.
+def dslx_line_comments(data: bytes) -> list[tuple[bytes, int | None]]:
+    """Locate real // comments, preserving XLS string/backtick state across lines.
 
-    Generated coordinates are one-based UTF-8 byte positions with half-open
-    ranges. A sidecar only describes the exact adjacent generated file bytes.
+    XLS has no block comments. Identifier apostrophes and label prefixes are
+    distinct from character literals; escapes protect the following byte in
+    quoted literals. This scanner only locates comments, not DSLX syntax errors.
+    """
+    rows: list[tuple[bytes, int | None]] = []
+    quote = 0
+    for line in data.split(b'\n'):
+        index, comment = 0, None
+        while index < len(line):
+            byte = line[index]
+            if quote:
+                if byte == 92:
+                    index += 2
+                    continue
+                if byte == quote:
+                    quote = 0
+            elif line[index:index + 2] == b'//':
+                comment = index
+                break
+            elif byte in (34, 96):
+                quote = byte
+            elif byte == 39 and (index + 1 >= len(line) or line[index + 1] == 92 or
+                                 index + 2 >= len(line) or line[index + 2] == 39):
+                quote = byte
+            elif byte in b'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_':
+                index += 1
+                while index < len(line) and line[index] in (
+                        b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789!'"):
+                    index += 1
+                continue
+            index += 1
+        rows.append((line, comment))
+    return rows
+
+
+def source_annotation(payload: bytes, *, continuation: bool = False) -> tuple[int | None, int | None, str, int]:
+    """Parse one reserved annotation with an exact trailing JSON filename and source line."""
+    marker = rb'@erl\+' if continuation else rb'@erl'
+    match = re.fullmatch(marker + rb'[ \t]+(?:(?P<start>[1-9][0-9]*):(?P<end>[1-9][0-9]*)[ \t]+)?'
+                         rb'(?P<file>"(?:[^"\\\r\n]|\\.)*"):(?P<line>[1-9][0-9]*)[ \t\r]*', payload)
+    if match is None or (continuation and match['start'] is None):
+        raise ValueError('invalid source annotation')
+    name = json.loads(match['file'])
+    if not name or any(ord(char) < 32 for char in name):
+        raise ValueError('invalid source filename')
+    start = int(match['start']) if match['start'] is not None else None
+    end = int(match['end']) if match['end'] is not None else None
+    return start, end, name, int(match['line'])
+
+
+def mapped_source(generated: Path, line: int, column: int) -> tuple[str, int] | None:
+    """Read the diagnostic line's embedded origins without inheriting another line's annotation.
+
+    Simple annotations cover that line's code. Explicit byte-column ranges are
+    half-open, nonoverlapping and inside code; adjacent aligned @erl+ comments
+    extend only their anchor line. Invalid or ambiguous annotations map nothing.
     """
     try:
-        mapping = json.loads(generated.with_name(generated.name + '.map.json').read_bytes())
-        data = generated.read_bytes()
-        if (not isinstance(mapping, dict) or type(mapping.get('version')) is not int or
-                mapping['version'] != 1 or
-                mapping.get('generated_sha256') != hashlib.sha256(data).hexdigest() or
-                not isinstance(mapping.get('ranges'), list)):
+        rows = dslx_line_comments(generated.read_bytes())
+        if line < 1 or line > len(rows) or column < 1:
             return None
-        starts = [0, *(index + 1 for index, byte in enumerate(data) if byte == 10)]
-
-        def offset(position: object) -> int:
-            """Validate a location without allowing a column to cross its source line."""
-            if (not isinstance(position, list) or len(position) != 2 or
-                    any(type(part) is not int or part < 1 for part in position)):
-                raise ValueError('invalid generated position')
-            row, col = position
-            if row > len(starts):
-                raise ValueError('generated line outside file')
-            start = starts[row - 1]
-            end = starts[row] - 1 if row < len(starts) else len(data)
-            if col > end - start + 1:
-                raise ValueError('generated column outside line')
-            return start + col - 1
-
-        point = offset([line, column])
-        matches: list[tuple[int, str, int]] = []
-        for entry in mapping['ranges']:
-            start, end = offset(entry['start']), offset(entry['end'])
-            source = entry['source']
-            name, source_line = source['file'], source['line']
-            if (end < start or not isinstance(name, str) or not name or
-                    '\n' in name or '\r' in name or
-                    type(source_line) is not int or source_line < 1):
+        code, comment = rows[line - 1]
+        if comment is None or not code[:comment].strip():
+            return None
+        body = code[comment + 2:]
+        # Two spaces reserve the delimiter after an existing ordinary comment.
+        marker = re.search(rb'(?:^[ \t]*|[ \t]{2,})(?P<marker>@erl)(?=$|[ \t+])', body)
+        if marker is None:
+            return None
+        marker_offset = comment + 2 + marker.start('marker')
+        entries = [source_annotation(body[marker.start('marker'):])]
+        for following, next_comment in rows[line:]:
+            if next_comment is None:
+                break
+            next_body = following[next_comment + 2:]
+            if re.search(rb'(?<!\S)@erl\+', next_body) is None:
+                break
+            if following[:next_comment].strip() or next_comment != marker_offset - 3:
                 return None
-            if start <= point < end:
-                matches.append((end - start, name, source_line))
-        if not matches:
+            entries.append(source_annotation(next_body.lstrip(b' \t'), continuation=True))
+        first = len(code[:comment]) - len(code[:comment].lstrip()) + 1
+        last = len(code[:comment].rstrip()) + 1
+        if not first <= column < last:
             return None
-        smallest = min(length for length, _, _ in matches)
-        origins = {(name, source_line) for length, name, source_line in matches if length == smallest}
-        # Equal-sized conflicting annotations cannot choose a truthful source.
-        return next(iter(origins)) if len(origins) == 1 else None
-    except (OSError, ValueError, KeyError, TypeError):
+        ranges = []
+        for start, end, name, source_line in entries:
+            if start is None:
+                if len(entries) != 1:
+                    return None
+                start, end = first, last
+            if end is None or not first <= start < end <= last:
+                return None
+            ranges.append((start, end, name, source_line))
+        ordered = sorted(ranges)
+        if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+            return None
+        for start, end, name, source_line in ordered:
+            if start <= column < end:
+                return name, source_line
+        return None
+    except (OSError, ValueError, TypeError):
         return None
 
 
@@ -616,9 +671,7 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
         if "optimizer_pipeline.txtpb" in asset_files or "optimizer_pipeline.txtpb" in sources:
             raise ValueError("reserved optimizer pipeline asset name")
         asset_files["optimizer_pipeline.txtpb"] = Path(optimizer_pipeline).resolve()
-    source_maps = {name + ".map.json": path.with_name(path.name + ".map.json")
-                   for name, path in sources.items() if path.with_name(path.name + ".map.json").is_file()}
-    files = {**sources, **source_maps, **stdlib_files,
+    files = {**sources, **stdlib_files,
              **{f"assets/{asset}": path for asset, path in asset_files.items()}}
     prepared: dict[str, Any] = {}
 
@@ -686,7 +739,7 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
             if asset in selected or asset == f"{name}.build.json":
                 raise ValueError(f"asset shadows generated output: {asset}")
             selected[asset] = "assets/" + asset
-        selected.update({"sources/" + path: path for path in [*sources, *source_maps]})
+        selected.update({"sources/" + path: path for path in sources})
         selected.update({"stdlib/" + str(Path(path).relative_to("_stdlib")): path for path in stdlib_files})
         return {"manifest_name": f"{name}.build.json", "manifest": manifest, "files": selected}
 
