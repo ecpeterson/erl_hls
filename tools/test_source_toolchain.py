@@ -28,6 +28,57 @@ def snapshot(directory: Path) -> dict[str, tuple[bytes, int]]:
 class SourceToolchainTests(unittest.TestCase):
     """Check actual Erlang lowering, portable artifacts and controlled external failures."""
 
+    def test_moved_topology_command(self) -> None:
+        """The generic command packages a source project using config-relative paths and survives relocation."""
+        with tempfile.TemporaryDirectory(prefix='topology toolchain ') as temporary:
+            stage = Path(temporary).resolve()
+            release = stage/'compiler release'
+            shutil.copytree(ROOT/'_build/default/rel/erl_hls', release)
+            project = stage/'source project'
+            shutil.copytree(ROOT/'src/examples/telemetry', project)
+            forbidden = stage/'forbidden'
+            forbidden.mkdir()
+            for name in ('python3', 'rebar3'):
+                path = forbidden/name
+                path.write_text('#!/bin/sh\nexit 99\n')
+                path.chmod(0o755)
+            env = {**os.environ, 'PATH': str(forbidden)+os.pathsep+os.environ['PATH'], 'ERL_AFLAGS': ''}
+            emitted = stage/'emitted'
+            result = subprocess.run([release/'bin/hlsc', 'topology', '--config', stage/'absent',
+                                     '--config', project/'topology.config', '--output', emitted],
+                                    cwd=stage, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            manifest = json.loads((emitted/'source-build.json').read_text())
+            self.assertEqual(manifest['metadata']['kind'], 'topology')
+            unit, = manifest['units']
+            self.assertEqual(unit['source'], 'topology.x')
+            self.assertEqual(unit['module'], 'telemetry_top')
+            self.assertEqual(unit['output'], 'telemetry_top.v')
+            self.assertIn('--pipeline_stages=2', unit['codegen_flags'])
+            self.assertIn('--worst_case_throughput=1', unit['codegen_flags'])
+            self.assertTrue((emitted/'actors/telemetry_calibrator.x.json').is_file())
+            moved = stage/'moved bundle'
+            emitted.rename(moved)
+            shutil.rmtree(project)
+            # The real RTL regression uses this command too; these tools check only detached packaging.
+            xls = stage/'stub xls'
+            (xls/'xls/dslx/stdlib').mkdir(parents=True)
+            for name in ('ir_converter_main', 'opt_main', 'codegen_main'):
+                path = xls/name
+                path.write_text('#!/bin/sh\nprintf "stub product\\n"\n')
+                path.chmod(0o755)
+            subprocess.run([sys.executable, release/'bin/compile-source-build', xls, moved],
+                           cwd=stage, env=env, capture_output=True, check=True, timeout=30)
+            published = (moved/'compiled').resolve()
+            self.assertEqual(json.loads((published/'source-build.json').read_text()), manifest)
+            compiled = json.loads((published/'compiled.json').read_text())
+            self.assertFalse(compiled['native_measured'])
+            self.assertTrue(all(flag in compiled['units'][0]['commands'][2]['command']
+                                for flag in unit['codegen_flags']))
+            for row in manifest['inputs']:
+                self.assertEqual(hashlib.sha256((published/row['file']).read_bytes()).hexdigest(), row['sha256'])
+                self.assertEqual((published/row['file']).read_bytes(), (moved/row['file']).read_bytes())
+
     def test_moved_compiler_and_bundle(self) -> None:
         """The installed compiler needs no checkout, Python or rebar; the emitted bundle needs no Erlang."""
         with tempfile.TemporaryDirectory(prefix='compiler toolchain ') as temporary:

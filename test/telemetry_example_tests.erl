@@ -49,9 +49,9 @@ portable_bundle() ->
     Root = filename:join("_build", "telemetry-bundle-" ++
         integer_to_list(erlang:unique_integer([positive]))),
     try
-        #{units := [Unit], inputs := Inputs} = telemetry:write_bundle(Root),
-        ?assertMatch(#{source := <<"telemetry_topology.x">>, top := <<"Top">>,
-            module := <<"telemetry_top">>, output := <<"telemetry.v">>}, Unit),
+        #{units := [Unit], inputs := Inputs} = hls_compile:topology("src/examples/telemetry/topology.config", Root),
+        ?assertMatch(#{source := <<"topology.x">>, top := <<"Top">>,
+            module := <<"telemetry_top">>, output := <<"telemetry_top.v">>}, Unit),
         Flags = maps:get(codegen_flags, Unit),
         ?assert(lists:member(<<"--pipeline_stages=2">>, Flags)),
         ?assert(lists:member(<<"--worst_case_throughput=1">>, Flags)),
@@ -60,13 +60,13 @@ portable_bundle() ->
             ?assertEqual(Expected, binary:encode_hex(crypto:hash(sha256, Bytes), lowercase))
         end, Inputs),
         Names = [Name || #{file := Name} <- Inputs],
-        ?assert(lists:member(<<"telemetry_calibrator.x">>, Names)),
-        ?assert(lists:member(<<"telemetry_window.x">>, Names)),
-        ?assert(lists:member(<<"telemetry_topology.x">>, Names)),
+        ?assert(lists:member(<<"actors/telemetry_calibrator.x">>, Names)),
+        ?assert(lists:member(<<"actors/telemetry_window.x">>, Names)),
+        ?assert(lists:member(<<"topology.x">>, Names)),
         AbsoluteRoot = filename:absname(Root),
-        ?assertError({source_output_exists, AbsoluteRoot}, telemetry:write_bundle(Root))
+        ?assertError({source_output_exists, AbsoluteRoot}, hls_compile:topology("src/examples/telemetry/topology.config", Root))
     after
-        ok = file:del_dir_r(Root)
+        _ = file:del_dir_r(Root)
     end.
 
 %% Reserve a configuration slot, reject incomplete input, and delegate field bounds to the codecs.

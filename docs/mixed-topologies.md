@@ -76,7 +76,7 @@ Profile = #{name => telemetry, channel_depth => 1,
             frame_payload_words => 3}.
 ```
 
-`actor_egress_depth` accepts a nonnegative depth or `burst`, which reserves space beyond the producer's own held effect for its largest entry burst. `direct_actor_debug` and `frame_payload_words` are optional, defaulting to `false` and `3`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc. The [telemetry project](../src/examples/telemetry/README.md) supplies an executable source-bundle writer and CPU launcher. Topology normalization itself neither starts CPU actors nor produces a board transport wrapper.
+`actor_egress_depth` accepts a nonnegative depth or `burst`, which reserves space beyond the producer's own held effect for its largest entry burst. `direct_actor_debug` and `frame_payload_words` are optional, defaulting to `false` and `3`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc. The [standalone compiler](toolchain.md#communicating-topologies) packages these steps through `hlsc topology` or `hls_compile:topology/2`; the [telemetry project](../src/examples/telemetry/README.md) supplies a build configuration and CPU launcher. Topology normalization itself neither starts CPU actors nor produces a board transport wrapper.
 
 Messages follow source routers to recipient lanes. Independent lanes may transfer concurrently; senders targeting the same recipient arbitrate. Each actor's effects retain callback order, including aliased output ports. Queue depth controls buffering, not the application's deadlock behavior.
 

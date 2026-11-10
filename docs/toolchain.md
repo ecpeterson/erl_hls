@@ -10,7 +10,7 @@ _build/default/rel/erl_hls/bin/hlsc emit src/examples/regsvc/regsvc.erl --output
 
 Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application or a distributed Erlang node. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
 
-`hlsc emit SOURCE --output DIRECTORY` lowers one supported `hls_gs` or `hls_statem` actor through `hls_compile:actor/3` and the `xls_parse:to_artifact/2` path. It writes annotated `actor.x`, its `actor.x.json` runtime failure-codebook sidecar and a source bundle. This command does not yet package communicating topologies; those compiler APIs remain available in [actor compilation](actor-compilation.md). Fabric placement, gateways, shared execution and application presets belong to downstream frontends.
+`hlsc emit SOURCE --output DIRECTORY` lowers one supported `hls_gs` or `hls_statem` actor through `hls_compile:actor/3` and the `xls_parse:to_artifact/2` path. It writes annotated `actor.x`, its `actor.x.json` runtime failure-codebook sidecar and a source bundle. Fabric placement, gateways, shared execution and application presets belong to downstream frontends.
 
 Options take separate arguments:
 
@@ -23,6 +23,28 @@ Options take separate arguments:
 Later scalar options take precedence, including `--output`, `--pipeline-stages`, `--frame-payload-words`, `--source-options` and `--diagnostics`. Flags may repeat. Include/import paths accumulate in command-line order; macros use the last definition of each name, with explicit `-D` overriding options-file defaults. Unknown options and missing values fail. `--diagnostics text|json` selects error output on standard error; the default is text. Owned diagnostics identify their `stage`, stable `code`, human `message` and structured `context`. Source preprocessing errors include each originating file, location, formatter module, raw reason and rendered message. For example, an oversized actor message reports its record, source/include location, actual width and the selected frame-payload limit. `HLS_DEBUG=1` adds the original stack, including as a `stack` field in JSON mode. Unexpected exceptions always expose their original class, reason and stack rather than being relabeled as invalid configuration. Existing output is rejected; later failures preserve partial output.
 
 Compiler and downstream owners raise `hls_diagnostic:raise/4`; a caller can add defaults with `with_context/2`. Specific inner context wins, and the original stack is retained. The helper catches only tagged diagnostics: unrelated errors, throws and exits remain unchanged. JSON preserves numbers and UTF-8 binary text; every proper Erlang list remains an array, so numeric index lists never change schema based on their values. Owners use binaries for textual context; compound Erlang evidence uses explicit representations (`$tuple`, `$map` key/value pairs, `$binary_hex` for non-UTF-8 bytes, and `$term` for runtime-only values). This keeps actor identifiers and non-string map keys distinct from display text.
+
+## Communicating topologies
+
+```sh
+_build/default/rel/erl_hls/bin/hlsc topology \
+  --config src/examples/telemetry/topology.config --output /tmp/telemetry-build
+```
+
+`hls_compile:topology(ConfigOrFilename, Output)` is the equivalent Erlang API. The logical graph remains an application module's `topology/0` callback; the build file names its source closure and dedicated-actor compilation policy:
+
+```erlang
+#{sources => [{"calibrator.erl", []}, {"window.erl", []}, {"project_topology.erl", []}],
+  topology => project_topology,
+  profile => #{name => project_top, channel_depth => 1, actor_egress_depth => burst},
+  pipeline_stages => 2}.
+```
+
+Sources are `{Filename, SourceOptions}` pairs, ordered with providers/dependencies before consumers. Every actor and the topology module must be declared; source helpers can be resolved through the existing source-closure rules. This is trusted source compilation: it loads modules and executes their topology/type callbacks in the compiler VM, so use a build process, not a running application. It requires no running application processes, fabric configuration or board shell.
+
+Source files, `-I` include directories and optional `dslx_path` directories are relative to the build file; map configurations use the caller's directory. Each source gets its own include/macro/feature options. The compiler's includes are appended. `profile` has the [dedicated topology options](mixed-topologies.md), including optional frame width and direct observation; `pipeline_stages` defaults to two. Later `--config` and `--output` arguments win. Unknown fields, invalid options, missing actor declarations and existing output paths reject.
+
+The command lowers each actor with the topology's derived requirements and emits `topology.x`, `actors/` with annotated actor/helper modules and runtime failure metadata, support libraries and `source-build.json`. Its recipe compiles `Top` to the profile's module name with a unit-delay model and initiation interval one. The bundle is relocatable; the original Erlang project is not required for XLS execution. This schedule is not a physical timing claim. Fabric shared execution, placement and deployment policy remain downstream.
 
 ## Ordinary actor frames
 

@@ -2,17 +2,12 @@
 
 Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on 2026-11-09. Supported behavior belongs in [docs/](../docs/README.md); implementation notes retain their original evidence. Fabric lowering, application and deployment work belongs in the [hls_fabric roadmap](https://github.com/ecpeterson/hls_fabric/blob/main/yap/README.md); visualization and prediction work belongs in the [hls_spacetime campaign](https://github.com/ecpeterson/hls_spacetime/blob/main/yap/spacetime-visualization.md).
 
-## Awaiting review
-
-- [ ] Merge the qualified source-helper module emission in [PR #36](https://github.com/ecpeterson/erl_hls/pull/36); implementation is complete, including cross-module XLS constant-folding checks.
-
 ## Compiler usability, in priority order
 
 - [x] Map generated DSLX diagnostics to actor/include/imported-helper Erlang origins; [PR #37](https://github.com/ecpeterson/erl_hls/pull/37) and [local qualification](source-diagnostics.md).
 - [x] Extend differential checking to finite actor transitions, with BEAM/RTL witnesses and an injected-defect shrink/replay check; [PR #38](https://github.com/ecpeterson/erl_hls/pull/38) (independent review).
-- [ ] Package a communicating telemetry topology through `hlsc`.
-  - Expose existing compiler topology/bundle APIs through the CLI; keep fabric scheduling and deployment policy downstream.
-  - Finish when the [telemetry project](../src/examples/telemetry/README.md) has one documented packaging command, a relocatable bundle and a focused public-port RTL witness. Small-to-medium toolchain task.
+- [x] Package communicating telemetry through `hlsc topology`, with a relocatable bundle and a focused public-port RTL witness; see [reliability closeout](compiler-reliability.md).
+- [x] Retain latched actor failures across non-reset differential segments, and isolate source-context tests across interrupted runs; [qualification](compiler-reliability.md).
 
 ## Next assessment
 
@@ -34,6 +29,8 @@ Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on
 
 ## Completed foundations
 
+- [x] Emit source helpers as imported DSLX modules with local error adaptation and qualified cross-module constant folding: [PR #36](https://github.com/ecpeterson/erl_hls/pull/36).
+
 - [x] Native compiler CLI, portable source bundles and detachable XLS execution: [toolchain ownership](compiler-toolchain.md).
 - [x] Structured expression emission and source-located failure metadata: [expression IR](../docs/expression-ir.md) and [control-flow failures](../docs/control-flow.md).
 - [x] Source closure, outgoing-message/known-bit facts and phase-value analysis: current `src/backend/xls/analysis/` modules.
@@ -43,6 +40,6 @@ Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on
 
 ## Audit scope and historical notes
 
-This index reconciles main `ba179c3`, the pending PR #36, compiler/runtime guides and source TODOs, and distinct `compiler-message-facts.md` revisions retained in older `.codex/worktrees`. Their unchecked lists are historical proposals, not parallel active roadmaps. Completed message/known-bit/phase work is represented once above; additional ownership or specialization proposals require a current consumer and the [optimization review](../docs/optimization.md).
+This index reconciles main `46eae00` (including merged PRs #36–38), compiler/runtime guides and source TODOs, and distinct `compiler-message-facts.md` revisions retained in older `.codex/worktrees`. Their unchecked lists are historical proposals, not parallel active roadmaps. Completed message/known-bit/phase work is represented once above; additional ownership or specialization proposals require a current consumer and the [optimization review](../docs/optimization.md).
 
 The former working-note links for reductions and debug pointed to absent files. Their current contracts are [actor reductions](../docs/actor-reductions.md), [topology observation](../docs/topology-debug.md) and [debug targets](../docs/debug-targets.md).
