@@ -1,13 +1,11 @@
 -module(telemetry).
 -moduledoc """
-Runnable windowed-telemetry project. Connects telemetry_calibrator to telemetry_window on BEAM, or lowers the same telemetry_topology into a portable source bundle. The actors and message records are application code; compilation, packing and transport come from erl_hls/hls_runtime. No hls_fabric or board shell is required.
+Runnable windowed-telemetry project. Connects telemetry_calibrator to telemetry_window on BEAM; hlsc packages the same telemetry_topology through topology.config. The actors and message records are application code; compilation, packing and transport come from erl_hls/hls_runtime. No hls_fabric or board shell is required.
 """.
 -include("telemetry.hrl").
 
 %% Host-side finite application execution.
 -export([run/1, example_commands/0]).
-%% Portable hardware-source build; external XLS execution is separate.
--export([write_bundle/1]).
 -export_type([command/0, report/0]).
 
 -doc "Configuration changes and signed samples, in one logical sender's order.".
@@ -98,59 +96,3 @@ feed([Command | Rest], Calibrator, Count, Reports) ->
         _ ->
             feed(Rest, Calibrator, NextCount, Reports)
     end.
-
--doc "Writes this project's actors, connected topology, failure-codebook sidecars and compiler support into a fresh directory. Freezes a source-build.json for compile-source-build, with a two-stage unit-delay XLS schedule and three payload words. Source modules come from this installed compiler's src/examples/telemetry (included in its release). Existing output fails and partial output is retained. No external tools run; the resulting RTL still needs a platform clock/reset/transport wrapper before deployment.".
--spec write_bundle(file:filename()) -> map().
-write_bundle(Output) ->
-    Plan = hls_topology:from_module(telemetry_topology),
-    Profile = #{name => telemetry_topology, channel_depth => 1, actor_egress_depth => burst},
-    Requirements = xls_topology_dslx:artifact_requirements(Plan, Profile),
-    Directory = hls_artifact_bundle:open(Output),
-    Sources = filename:join([code:lib_dir(erl_hls), "src", "examples", "telemetry"]),
-    maps:foreach(
-        fun(Module, Options) ->
-            Source = filename:join(Sources, atom_to_list(Module) ++ ".erl"),
-            Artifact = xls_parse:to_artifact(Source, Options#{source_options => [{i, Sources}]}),
-            Name = atom_to_list(Module) ++ ".x",
-            Bytes = xls_emitted:bytes(Artifact),
-            ok = xls_emitted:write(Artifact, filename:join(Directory, Name)),
-            ok = file:write_file(
-                filename:join(Directory, Name ++ ".json"),
-                json:encode(#{
-                    dslx_sha256 => binary:encode_hex(crypto:hash(sha256, Bytes), lowercase),
-                    failure_sites => xls_emitted:sites(Artifact)
-                }),
-                [exclusive]
-            )
-        end,
-        Requirements
-    ),
-    ok = file:write_file(
-        filename:join(Directory, "telemetry_topology.x"),
-        xls_topology_dslx:emit(Plan, Profile),
-        [exclusive]
-    ),
-    Imports = hls_compile:support(Directory, []),
-    Unit = #{
-        role => <<".">>,
-        directory => <<".">>,
-        source => <<"telemetry_topology.x">>,
-        top => <<"Top">>,
-        module => <<"telemetry_top">>,
-        output => <<"telemetry.v">>,
-        dslx_path => [<<".">> | Imports],
-        codegen_flags => [
-            <<"--pipeline_stages=2">>,
-            <<"--delay_model=unit">>,
-            <<"--worst_case_throughput=1">>,
-            <<"--flop_inputs=false">>,
-            <<"--flop_outputs=true">>,
-            <<"--use_system_verilog=false">>,
-            <<"--reset=reset">>,
-            <<"--fifo_module=">>
-        ],
-        rtl => [<<"telemetry.v">>]
-    },
-    hls_artifact_bundle:finish(Directory, [Unit], #{
-        kind => telemetry, frame_abi => hls_frame_layout:descriptor(hls_frame_layout:default())
-    }).

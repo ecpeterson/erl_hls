@@ -1,0 +1,14 @@
+# Compiler reliability closeout
+
+Local qualification on 2026-11-09, based on merged compiler `46eae00`. Build and test receipts are retained under `hls_artifacts/runs/compiler-reliability-2026-11-09`; Actions was not used.
+
+- [x] Reject recovery, state changes, input admission or output effects after failure across non-reset differential segments. The new synthetic negative is accepted by the prior checker and rejected by the repaired checker; explicit reset still permits a fresh state.
+- [x] Make source-context fixtures rerunnable after interruption: random scratch roots own both original and relocated directories, code paths are absolute while working directories change, cleanup restores the caller, and the peer fixture has a 30-second EUnit budget. A deliberately killed VM left a relocated tree/symlink; a new ordinary source-test run passed all 11 tests beside it.
+- [x] Package the communicating telemetry example through `hlsc topology` and `hls_compile:topology/2`. Source/topology callbacks remain application code; the compiler owns loading, derived actor options, support snapshots and publication. The application-specific bundle writer is removed.
+- [x] Exercise the compiler annotations in fabric's relocated build release. The independent fabric PR pins merged compiler main, not this branch; its own note records consumer validation.
+
+Compiler validation: 1,127 EUnit tests, ten actor-generator/checker/shrinker tests, 14 regression-planner tests, five relocated toolchain/consumer tests, 26 source-contract checker tests and four package-auditor tests pass. Dialyzer and formatting pass. The source audit reports 3,332 inherited/current gaps and zero new or changed gaps; 37 runtime modules have no package violations. Documentation presence is not a whole-tree documentation claim.
+
+The telemetry regression called the new command, moved the emitted bundle, ran the real pinned XLS toolchain, checked combinational structure, and simulated public ports against the independent arithmetic oracle and actual BEAM actors. Its finite witness covers eight reports per incarnation, malformed ingress, stalls and reset, completing in 963 simulated cycles. An initial missing Yosys PATH interrupted structural checking; the installed tool was selected and only the remaining structural/simulation steps ran against the retained RTL. No FPGA physical measurement or general equivalence claim follows.
+
+Development failures are retained, including an Erlang source-context attribute placed after ordinary function forms and an overstrict cleanup masking that error. Context attributes now precede functions for BEAM compilation; the same captured context feeds hardware lowering. Failure/reset/retry semantics remain the next separate design task; these changes do not broaden those contracts.

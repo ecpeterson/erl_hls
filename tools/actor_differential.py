@@ -37,12 +37,20 @@ def compare(program: cases.Program, oracle: dict[str, Any], log: str) -> Result 
         values.append(observation(int(word, 16)))
     if len(rows) != len(program["segments"]) or "PASS: actor trace complete" not in log:
         return {"category": "missing_tests"}
+    failed = None
     for index, (segment, expected) in enumerate(zip(program["segments"], oracle["segments"])):
         cycles = rows.get(index, [])
         if len(cycles) != cases.HORIZON:
             return {"category": "invalid_trace", "reason": "horizon", "segment": index}
+        if segment["reset"]:
+            failed = None
         previous = None
         for clock, row in enumerate(cycles):
+            if failed is not None:
+                if any(row[k] != failed[k] for k in ("failure", "phase", "value")) or row["event"] or row["accepted"]:
+                    return {"category": "result_mismatch", "reason": "failure_latch", "segment": index}
+            elif row["failure"]:
+                failed = row
             ready = clock >= 16 or (segment["ready"] >> clock) & 1
             if not ready and row["event"] is not None:
                 return {"category": "result_mismatch", "reason": "stalled_output", "segment": index}
@@ -69,12 +77,6 @@ def compare(program: cases.Program, oracle: dict[str, Any], log: str) -> Result 
             if accepted != len(segment["commands"]) or last["pending"] or last["occupied"] != last["postponed"]:
                 return {"category": "incomplete_tail", "segment": index,
                         "accepted": accepted, "offered": len(segment["commands"]), "last": last}
-        first_failure = next((i for i, row in enumerate(cycles) if row["failure"]), None)
-        if first_failure is not None:
-            failed = cycles[first_failure]
-            for row in cycles[first_failure + 1:]:
-                if any(row[k] != failed[k] for k in ("failure", "phase", "value")) or row["event"] or row["accepted"]:
-                    return {"category": "result_mismatch", "reason": "failure_latch", "segment": index}
     return None
 
 

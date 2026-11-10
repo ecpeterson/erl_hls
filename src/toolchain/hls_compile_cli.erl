@@ -1,6 +1,6 @@
 -module(hls_compile_cli).
 -moduledoc """
-Standalone hlsc entry point for actor and support emission. Uses hls_cli for arguments/diagnostics and hls_compile for the bundle; rebar integration and downstream deployment are separate callers of those APIs.
+Standalone hlsc entry point for actor and topology emission. Uses hls_cli for arguments/diagnostics and hls_compile for the bundle; rebar integration and downstream deployment are separate callers of those APIs.
 """.
 %% Executable and programmatic CLI entry points.
 -export([main/0, run/1]).
@@ -9,12 +9,16 @@ Standalone hlsc entry point for actor and support emission. Uses hls_cli for arg
 -spec main() -> no_return().
 main() -> hls_cli:main("hlsc", fun run/1).
 
--doc "Lowers an actor with explicit preprocessing and external schedule options. Include/import paths accumulate; later -D definitions replace earlier definitions of the same macro. --source-options reads a trusted Erlang list of hls_source options, including feature toggles; explicit CLI macros override these defaults. Values and paths are separate arguments, relative to the caller. Does not invoke XLS or rebar.".
+-doc "Packages an actor (emit) or a declared graph (topology --config FILE). Actor preprocessing and external schedule options are explicit. Include/import paths accumulate; later -D definitions replace earlier definitions of the same macro. --source-options reads a trusted Erlang list of hls_source options, including feature toggles; explicit CLI macros override these defaults. Argument paths are relative to the caller; entries inside a topology config file are relative to that file. Does not invoke XLS or rebar.".
 -spec run([string()]) -> ok.
 run([]) ->
     usage();
 run(["--help"]) ->
     usage();
+run(["topology" | Args]) ->
+    Options = hls_cli:options(Args, [{"--config", config, value}, {"--output", output, value}]),
+    _ = hls_compile:topology(hls_cli:required(config, Options), hls_cli:required(output, Options)),
+    ok;
 run(["emit", Source | Args]) ->
     Options = hls_cli:options(Args, [
         {"--output", output, value},
@@ -125,5 +129,6 @@ usage() ->
         "                 [--source-options FILE] [--dslx-path DIRECTORY]\n"
         "                 [--direct-actor-debug] [--pipeline-stages N] [--frame-payload-words 1..255]\n"
         "                 [--diagnostics text|json]\n"
+        "       hlsc topology --config BUILD_FILE --output FRESH_DIRECTORY\n"
         "Emits DSLX and source-build.json. XLS invocation and hardware qualification are separate.\n"
     ).

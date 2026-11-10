@@ -464,7 +464,7 @@ def state_updates(c: Case) -> None:
 def telemetry(c: Case) -> None:
     """Compile the shipped two-actor example bundle once and compare its stalled/reset RTL to BEAM."""
     c.generate("telemetry_example_fixture")
-    rtl = c.path("compiled/telemetry.v")
+    rtl = c.path("compiled/telemetry_top.v")
     c.command("telemetry-bundle", [sys.executable, c.root / "priv/tools/compile_source_build.py",
         c.xls, c.path("bundle"), "--output", c.path("compiled"), "--cache", c.path("cache")],
         products=(rtl,), timeout=900)

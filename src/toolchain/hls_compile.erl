@@ -1,9 +1,9 @@
 -module(hls_compile).
 -moduledoc """
-Standalone actor-to-bundle API used by hls_compile_cli and build clients. Lowers through xls_parse, retains the xls_emitted failure codebook and publishes source/support with hls_artifact_bundle. It runs no external tools; placement and deployment belong to clients.
+Standalone actor/topology-to-bundle API used by hls_compile_cli and build clients. Lowers through xls_parse, retains the xls_emitted failure codebook and publishes source/support with hls_artifact_bundle. It runs no external tools; placement and deployment belong to clients.
 """.
-%% Standalone actor bundle emission.
--export([actor/3]).
+%% Standalone actor and topology bundle emission.
+-export([actor/3, topology/2]).
 
 %% Shared compiler-support snapshot and configuration.
 -export([support/2, support/3, configure_support/2, support_layout/1]).
@@ -96,6 +96,10 @@ actor(Source, Options, Output) ->
     hls_artifact_bundle:finish(Directory, [Unit], #{
         kind => actor, frame_abi => hls_frame_layout:descriptor(Layout)
     }).
+
+-doc "Packages a declared source topology through hls_compile_topology. Accepts a trusted build map or configuration file; emits a portable dedicated-actor graph without running XLS.".
+-spec topology(hls_compile_topology:config() | file:filename(), file:filename()) -> map().
+topology(Config, Output) -> hls_compile_topology:write(Config, Output).
 
 -doc "Snapshots this compiler's DSLX/RTL support and extra DSLX trees into an open bundle; returns existing relative import directories. Additional imports must exist. Fabric clients may add their own libraries and schedules separately.".
 -spec support(file:filename(), [file:filename()]) -> [binary()].

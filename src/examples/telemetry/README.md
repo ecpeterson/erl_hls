@@ -50,16 +50,15 @@ The helper accepts the records in `telemetry.hrl` (or their Erlang tuple represe
 
 ```sh
 rebar3 release
-erl -noshell -pa _build/default/lib/*/ebin \
-  -eval 'telemetry:write_bundle(hd(init:get_plain_arguments())), halt().' \
-  -extra /tmp/telemetry-build
+_build/default/rel/erl_hls/bin/hlsc topology \
+  --config src/examples/telemetry/topology.config --output /tmp/telemetry-build
 _build/default/rel/erl_hls/bin/compile-source-build \
   /path/to/xls /tmp/telemetry-build
 ```
 
-Choose a fresh output directory. `write_bundle/1` first normalizes `telemetry_topology`, asks `xls_topology_dslx:artifact_requirements/2` for each actor's compilation requirements, lowers the actor sources through `xls_parse:to_artifact/2`, and emits the connected graph through `xls_topology_dslx:emit/2`. It retains actor failure-codebook sidecars, snapshots compiler support and freezes the standard `source-build.json`. This is the same packaging API used by other toolchain clients. `hlsc emit` currently packages individual actors; this project's short build function supplies the composition step.
+Choose a fresh output directory. The [generic topology command](../../../docs/toolchain.md#communicating-topologies) reads `topology.config`: source files and preprocessing options, the `telemetry_topology` callback, and a dedicated-actor buffering/scheduling profile. Paths in that file are relative to its directory. The graph remains application code; compilation and packaging live in `hls_compile:topology/2`. The command retains annotated actor/helper files and failure-codebook sidecars, snapshots compiler support and freezes the standard `source-build.json`.
 
-The optional external driver then converts DSLX to XLS IR, optimizes it and generates `telemetry.v`. The immutable result is published through `/tmp/telemetry-build/compiled`; its `files.f`, logs and `compiled.json` describe the exact products. The bundle can move before compilation. The selected schedule is two stages with a unit-delay model, not a physical clock-frequency estimate. No FPGA synthesis, placement or routing is performed.
+The optional external driver then converts DSLX to XLS IR, optimizes it and generates `telemetry_top.v`. The immutable result is published through `/tmp/telemetry-build/compiled`; its `files.f`, logs and `compiled.json` describe the exact products. The bundle can move before compilation. The selected schedule is two stages with a unit-delay model, not a physical clock-frequency estimate. No FPGA synthesis, placement or routing is performed.
 
 The generated `telemetry_top` module has clock/reset plus one ready/valid command input and one ready/valid report output. Its command value is the XLS flattened `SpatialFrame`: a 64-bit rectangle, two-bit target selector and 128-bit ordinary frame, totaling 194 bits. Target zero and rectangle `[0,0,0,0]` address the calibrator. The ordinary frame has a 32-bit header and three 32-bit payload words; the 83-bit summary fits in that capacity. This native XLS port layout is **not** the canonical serialized byte stream of a board protocol. The regression fixture explicitly packs this boundary using the generated record codecs and selector metadata. A board deployment must add a matching clock/reset and transport wrapper; this project does not imply a live FPGA deployment.
 
@@ -70,6 +69,6 @@ rebar3 eunit --module=telemetry_example_tests
 python3 tools/run_regression.py /path/to/xls /tmp/telemetry-check --cases telemetry
 ```
 
-The local hardware regression invokes `telemetry:write_bundle/1` and the standard external driver, then checks generated RTL structure and simulates the public ports. A separate arithmetic oracle checks the actual CPU actors before their transcript becomes the RTL expectation. The finite witness covers signed extrema and clipping, configuration changes within a window, early-sample postponement, invalid ingress envelopes, input/output stalls, reset during a partial window and reset with a report held. It is a simulation witness, not a universal equivalence or throughput proof. It adds no separate Actions job.
+The local hardware regression invokes the `hlsc topology` entry point, moves the bundle and runs the standard external driver, then checks generated RTL structure and simulates the public ports. A separate arithmetic oracle checks the actual CPU actors before their transcript becomes the RTL expectation. The finite witness covers signed extrema and clipping, configuration changes within a window, early-sample postponement, invalid ingress envelopes, input/output stalls, reset during a partial window and reset with a report held. It is a simulation witness, not a universal equivalence or throughput proof. It adds no separate Actions job.
 
 To experiment, change the gain/saturation policy in the calibrator, extend the summary record with another statistic, or add a new actor and route in the topology. Update the independent oracle when application semantics change. A wider message must still fit the selected frame layout; a larger window needs correspondingly wider counters and a justified accumulator range. Keep device transport and scheduling policy outside the actor callbacks.

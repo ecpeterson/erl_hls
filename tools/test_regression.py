@@ -170,7 +170,7 @@ class DescriptionTests(unittest.TestCase):
         compile_step = next(step for step in commands if step.name == "telemetry-bundle")
         self.assertIn(str(ROOT / "priv/tools/compile_source_build.py"), compile_step.argv)
         self.assertIn("/stage/bundle", compile_step.argv)
-        self.assertEqual((Path("/stage/compiled/telemetry.v"),), compile_step.products)
+        self.assertEqual((Path("/stage/compiled/telemetry_top.v"),), compile_step.products)
         self.assertFalse(any(step.name.endswith(("-convert", "-opt", "-codegen")) for step in commands))
         simulation = next(step for step in commands if step.name == "telemetry-simulate")
         self.assertEqual("PASS: telemetry CPU/RTL windows, malformed ingress, stalls and reset", simulation.completion)

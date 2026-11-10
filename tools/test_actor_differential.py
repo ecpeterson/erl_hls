@@ -114,6 +114,30 @@ class CheckerTests(unittest.TestCase):
         self.rows.append([word(value=3)] * cases.HORIZON)
         self.assertIsNone(differential.compare(self.program, self.oracle, trace(self.rows)))
 
+    def test_failure_latch_crosses_nonreset_segment_boundaries(self) -> None:
+        """A temporary first-row recovery or admission cannot hide behind the failed final snapshot."""
+        failed = word(phase=1, value=23, failure=2)
+        expected = {"phase": 1, "value": 23, "failure": 2, "events": []}
+        self.program["segments"] = [
+            {"reset": True, "ready": 0xFFFF, "commands": []},
+            {"reset": False, "ready": 0xFFFF, "commands": [[2, 1]]}]
+        oracle = {"segments": [expected, expected]}
+        rows = [[failed] * cases.HORIZON, [failed] * cases.HORIZON]
+        self.assertIsNone(differential.compare(self.program, oracle, trace(rows)))
+        for corrupt in (word(phase=1, value=23), word(phase=1, value=24, failure=2),
+                        word(phase=0, value=23, failure=2),
+                        word(phase=1, value=23, failure=2, accepted=1),
+                        word(phase=1, value=23, failure=2, valid=1)):
+            with self.subTest(corrupt=corrupt):
+                rows[1][0] = corrupt
+                self.assertEqual(differential.compare(self.program, oracle, trace(rows))["reason"],
+                                 "failure_latch")
+        # An explicit reset really does end the old incarnation's obligations.
+        self.program["segments"][1].update(reset=True, commands=[])
+        oracle["segments"][1] = {"phase": 0, "value": 3, "failure": 0, "events": [], "postponed": 0}
+        rows[1] = [word(value=3)] * cases.HORIZON
+        self.assertIsNone(differential.compare(self.program, oracle, trace(rows)))
+
 
 class ShrinkerTests(unittest.TestCase):
     """Exercise reduction search separately from expensive compilation."""

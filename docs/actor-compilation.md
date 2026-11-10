@@ -1,6 +1,6 @@
 # Actor compilation
 
-The [standalone `hlsc` command](toolchain.md) packages single-actor lowering without requiring rebar at invocation time.
+The [standalone `hlsc` command](toolchain.md) packages individual actors and dedicated communicating topologies without requiring rebar at invocation time.
 
 `xls_parse:to_xls(Path, Options)` emits a complete DSLX actor module. Supported options are `source_options` (preprocessor configuration), `direct_actor_debug` (committed-state observations) and `frame_payload_words` (ordinary payload capacity, default three words). Each generated service owns its state; state machines also own their declared bounded mailbox. XLS selects the hardware pipeline separately; the Erlang source describes callback behavior.
 

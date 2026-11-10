@@ -63,8 +63,12 @@ captured_context_survives_working_directory_change_test() ->
 
 %% Moving a captured build behind a symlink must preserve preprocessing and
 %% terminate without recursively spawning readers in the physical directory.
--spec relocated_build_context_test() -> ok.
-relocated_build_context_test() ->
+-spec relocated_build_context_test_() -> term().
+relocated_build_context_test_() -> {timeout, 30, fun relocated_build_context/0}.
+
+%% Peer startup belongs inside a bounded integration-test budget, not EUnit's five-second default.
+-spec relocated_build_context() -> ok.
+relocated_build_context() ->
     with_source(fun(Path, Directory) ->
         {ok, OriginalDirectory} = file:get_cwd(),
         Relocated = Directory ++ "-relocated",
@@ -233,3 +237,27 @@ errors(Fun) ->
     catch
         error:{hls_diagnostic, #{stage := source, code := source_errors, context := #{errors := Errors}}} -> Errors
     end.
+
+%% An assertion/relocation failure must not poison the next test's filesystem or loader state.
+-spec fixture_exception_restores_context_test() -> ok.
+fixture_exception_restores_context_test() ->
+    Cwd = file:get_cwd(),
+    Paths = code:get_path(),
+    Root = try with_source(fun(_Path, Directory) ->
+        Relocated = Directory ++ "-relocated",
+        ok = file:rename(Directory, Relocated),
+        ok = file:set_cwd(Relocated),
+        throw({fixture_interrupted, filename:dirname(Directory)})
+    end) of
+        _ -> error(expected_interruption)
+    catch throw:{fixture_interrupted, Scratch} -> Scratch
+    end,
+    ?assertEqual(Cwd, file:get_cwd()),
+    ?assertEqual(Paths, code:get_path()),
+    ?assertNot(filelib:is_dir(Root)),
+    with_source(fun(Path, Directory) ->
+        ?assertNotEqual(Root, filename:dirname(Directory)),
+        compile_actor(Path, options(Directory) ++ [{d, 'CAPACITY', 2}]),
+        ?assertEqual(2, maps:get(mailbox_capacity,
+            hls_actor_interface:from_module(?MODULE_UNDER_TEST)))
+    end).
