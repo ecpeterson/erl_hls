@@ -154,7 +154,7 @@ class DescriptionTests(unittest.TestCase):
         rows = json.loads(output.getvalue())
         inventory = load_inventory()
         self.assertEqual(set(inventory["cases"]), {row["case"] for row in rows})
-        self.assertEqual(29, len(rows))
+        self.assertEqual(30, len(rows))
         self.assertEqual(1, sum(step.get("name") == "beam-compile" for row in rows for step in row["steps"]))
         self.assertTrue(any(step["kind"] == "generated_rows" for row in rows for step in row["steps"]))
         for row in rows:

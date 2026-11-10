@@ -96,7 +96,7 @@ artifact(Filename, Forms0, Layout) ->
         "  spawn axis::Rx(input, req_p); spawn Service(req_c, resp_p); spawn axis::Tx(resp_c, output); ()\n",
         " }\n init { () }\n next(state: ()) { state }\n}\n"
     ],
-    xls_emitted:new(Sites, Body).
+    xls_emitted:new(Sites, [], Body, xls_helpers:modules(Helpers, StateName, Enum)).
 
 %% Callback names share the contract's record grouping.
 -spec callback(call | cast) -> atom().

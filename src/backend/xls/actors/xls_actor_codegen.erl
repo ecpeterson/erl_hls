@@ -35,6 +35,7 @@
     data_width := non_neg_integer(),
     record_declarations := xls_dslx:value(),
     helper_functions := xls_dslx:value(),
+    helper_modules := #{file:filename() => xls_emitted:module_document()},
     init := xls_init:lowered(),
     entries := [entry(), ...],
     max_entry_effects := non_neg_integer(),
@@ -74,7 +75,12 @@ artifact(Spec, RuntimeImports, Body) ->
         xls_statem_event_codegen:functions(Spec),
         Body
     ],
-    xls_emitted:new(maps:get(failure_locations, Spec), preamble(Spec, RuntimeImports), Common).
+    xls_emitted:new(
+        maps:get(failure_locations, Spec),
+        preamble(Spec, RuntimeImports),
+        Common,
+        maps:get(helper_modules, Spec)
+    ).
 
 %%%
 %%% Module declarations

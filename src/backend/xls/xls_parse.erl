@@ -7,11 +7,11 @@
 %% Infer public actor interfaces without rendering an execution body.
 -export([actor_interface/1, actor_interface/2, actor_interface/3]).
 
--doc "Transpiles an Erlang actor into a dedicated XLS service.".
+-doc "Returns the main dedicated-service DSLX module. Use to_artifact and xls_emitted:write for complete output when the actor imports source helpers.".
 -spec to_xls(file:filename()) -> iolist().
 to_xls(Filename) -> to_xls(Filename, #{}).
 
--doc "Transpiles an actor with preprocessing and optional direct-actor observations.".
+-doc "Returns main-module bytes with preprocessing and optional direct-actor observations. Generated source imports remain in to_artifact; this byte-only convenience does not write dependencies.".
 -spec to_xls(file:filename(), #{
     source_options => [hls_source:option()] | hls_source:context(),
     direct_actor_debug => boolean(),
@@ -19,7 +19,7 @@ to_xls(Filename) -> to_xls(Filename, #{}).
 }) -> iolist().
 to_xls(Filename, Options) -> [xls_emitted:bytes(to_artifact(Filename, Options))].
 
--doc "Compiles an actor to final DSLX with its allocated failure codebook and consistency seal.".
+-doc "Compiles an actor to final DSLX and generated source imports with one failure codebook and consistency seal.".
 -spec to_artifact(file:filename()) -> xls_emitted:artifact().
 to_artifact(Filename) -> to_artifact(Filename, #{}).
 

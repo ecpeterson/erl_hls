@@ -12,15 +12,18 @@
 %% Resolve and normalize the reachable helper graph.
 -export([prepare/2]).
 %% Lower prepared helpers into deferred function definitions.
--export([emit/3]).
+-export([emit/3, modules/3, emit_function/3]).
+-export_type([helper/0]).
 
-%% A reachable helper with concrete input/result types and its source clauses.
+-doc "A reachable concrete helper, with optional source-module ownership used only by module emission.".
 -type helper() :: #{
     name := string(),
     clauses := [erl_parse:abstract_clause(), ...],
     arguments := [xls_literal_types:type()],
     argument_records := [none | {record | value, atom()}],
-    result := xls_literal_types:type()
+    result := xls_literal_types:type(),
+    imports := [atom()],
+    owner => xls_helper_modules:owner()
 }.
 
 -doc "Finds reachable local helpers, checks concrete signatures and recursion, and returns rewritten roots plus dependency-ordered helpers.".
@@ -44,7 +47,7 @@ prepare(Forms0, Roots) ->
         local_calls(maps:get(clauses, maps:get(Root, Definitions)))
      || Root <- Roots, maps:is_key(Root, Definitions)
     ]),
-    Helpers = reachable(Calls, Context, #{}),
+    Helpers = xls_helper_modules:qualify(reachable(Calls, Context, #{}), WireForms),
     UsedFunctions = Roots ++ maps:keys(Helpers),
     Relevant = [Form || Form <- WireForms, reachable_form(Form, UsedFunctions)],
     ValueRecords = hls_records:references(Relevant),
@@ -215,7 +218,13 @@ prepare_helper(
         clauses => Clauses,
         arguments => [type(T, Context, Origin) || T <- Args],
         argument_records => [argument_record(T, Context) || T <- Args],
-        result => type(Result, Context, Origin)
+        result => type(Result, Context, Origin),
+        imports => xls_dslx_imports:from_forms([
+            F
+         || F <- Forms,
+            reachable_form(F, [Key]) orelse
+                element(1, F) =:= attribute andalso element(3, F) =:= module
+        ])
     }.
 
 %% Keep tuple fields available to literal lowering; provider types are opaque.
@@ -280,22 +289,28 @@ rewrite(List, Helpers) when is_list(List) -> [rewrite(X, Helpers) || X <- List];
 rewrite(Value, _Helpers) ->
     Value.
 
--doc "Builds dependency-ordered helper definitions with concrete signatures and structured selected failures.".
+-doc "Builds definitions belonging to the actor module. Imported bodies are returned separately by modules/3; calls retain their qualified DSLX names.".
 -spec emit([helper()], atom(), map()) -> xls_dslx:value().
 emit(Helpers, DataName, EnumAtoms) ->
-    [emit_helper(H, DataName, EnumAtoms) || H <- Helpers].
+    [[emit_function(H, DataName, EnumAtoms), "\n"] || H <- Helpers, not maps:is_key(owner, H)].
+
+-doc "Builds separate source-helper module documents for final allocation by xls_emitted. The actor and these dependencies share one artifact-local failure codebook.".
+-spec modules([helper()], atom(), map()) -> #{file:filename() => xls_emitted:module_document()}.
+modules(Helpers, DataName, EnumAtoms) ->
+    xls_helper_modules:emit(Helpers, DataName, EnumAtoms).
 
 %% Keep the common irrefutable helper compact. Patterned or guarded clauses
 %% share callback selection, including function_clause versus body failures.
--spec emit_helper(helper(), atom(), map()) -> xls_dslx:value().
-emit_helper(
+-doc "Lowers one prepared function, including source visibility when emitting an imported module. Callers supply a local definition name and already scoped call expressions.".
+-spec emit_function(helper(), atom(), map()) -> xls_dslx:value().
+emit_function(
     #{
         name := Name,
         clauses := Clauses = [{clause, Line, _, _, _} | _],
         arguments := Types,
         argument_records := Records,
         result := ResultType
-    },
+    } = Helper,
     DataName,
     EnumAtoms
 ) ->
@@ -335,7 +350,10 @@ emit_helper(
                 [Computation, Result]
         end,
     [
-        "fn ",
+        case maps:get(owner, Helper, #{public => false}) of
+            #{public := true} -> "pub fn ";
+            _ -> "fn "
+        end,
         Name,
         "(",
         lists:join(", ", [
@@ -348,7 +366,7 @@ emit_helper(
         integer_to_list(erl_anno:line(Line)),
         "\n",
         xls_dslx:indent(Body, 2),
-        "}\n\n"
+        "}\n"
     ].
 
 plain_head([{clause, _, Parameters, [], _}]) ->

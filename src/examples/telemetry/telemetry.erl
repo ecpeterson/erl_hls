@@ -113,7 +113,7 @@ write_bundle(Output) ->
             Artifact = xls_parse:to_artifact(Source, Options#{source_options => [{i, Sources}]}),
             Name = atom_to_list(Module) ++ ".x",
             Bytes = xls_emitted:bytes(Artifact),
-            ok = file:write_file(filename:join(Directory, Name), Bytes, [exclusive]),
+            ok = xls_emitted:write(Artifact, filename:join(Directory, Name)),
             ok = file:write_file(
                 filename:join(Directory, Name ++ ".json"),
                 json:encode(#{

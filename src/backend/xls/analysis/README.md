@@ -1,6 +1,6 @@
 # Source closure and value facts
 
-Actor preparation uses `xls_hardware_source` to select the local function/type/record closure reachable from hardware callbacks. This mandatory source selection happens before semantic validation; the full original source still identifies the compilation and remains available for BEAM execution.
+Actor preparation uses `xls_hardware_source` to select the local function/type/record closure reachable from hardware callbacks. `xls_source_helpers` closes ordinary exported remote calls using captured source and keeps private helper namespaces distinct. Built-in and explicit providers retain their existing boundary. This mandatory source selection happens before semantic validation; the full original source still identifies the compilation and remains available for BEAM execution.
 
 `xls_type_shape` and `xls_pattern_totality` check source-only shapes for contribution extraction without invoking provider lowering. `xls_known_bits`, `xls_message_bits` and `xls_message_facts` supply conservative facts about already evaluated outgoing values. [Actor entry storage](../actors/README.md) and topology/transport consumers use those facts without dropping source evaluation or failures.
 

@@ -1,7 +1,7 @@
 -module(xls_hardware_source).
--moduledoc "Selects the local-function, record and type closure reachable from hardware callback roots before semantic validation. State-machine/server preparation and interface analysis use this source-only pass without invoking providers; the original module remains authoritative for BEAM compilation and source identity.".
+-moduledoc "Selects the local-function, record and type closure reachable from hardware callback roots, then imports statically named pure source helpers before semantic validation. State-machine/server preparation and interface analysis use this source-only pass without invoking providers; the original actor and captured imports bind source identity, while BEAM compilation retains ordinary module boundaries.".
 %% Select explicit callback roots or the complete state-machine callback surface.
--export([select/2, statem/2]).
+-export([select/2, statem/2, local/2]).
 
 %% Functions and local type aliases are identified by name and arity.
 -type key() :: {atom(), arity()}.
@@ -13,9 +13,14 @@
 statem(Forms, Phases) ->
     select(Forms, [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- Phases]]).
 
--doc "Retains roots, statically called local helpers and required record/type declarations. This is syntactic reachability, not validation: missing definitions, unsupported operations and recursion remain for the normal lowerer to reject. Does not invoke type providers or modify retained forms.".
+-doc "Retains roots, statically called local helpers and required record/type declarations. This is syntactic reachability, not validation: missing definitions, unsupported operations and recursion remain for the normal lowerer to reject. Imports statically named pure remote helpers without invoking source functions or type providers.".
 -spec select([hls_source:form()], [key()]) -> [hls_source:form()].
 select(Forms, Roots) ->
+    xls_source_helpers:expand(local(Forms, Roots), Forms).
+
+-doc "Selects only the actor's own local function/type/record closure. Parse-transform record preparation uses this without reading remote value helpers; full hardware preparation must use select/2.".
+-spec local([hls_source:form()], [key()]) -> [hls_source:form()].
+local(Forms, Roots) ->
     Module = hls_source:find_attribute(Forms, module),
     Definitions = maps:from_list([
         {{Name, Arity}, Clauses}
