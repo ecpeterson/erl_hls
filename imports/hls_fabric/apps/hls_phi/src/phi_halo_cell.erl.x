@@ -401,32 +401,32 @@ pub fn bits_from_phifold(s: Phifold) -> bits[128] {
   hls_bits::from_stream(hls_bits::to_stream(s.value0 as bits[64]) ++ hls_bits::to_stream(s.value1 as bits[64]) ++ zero!<bits[0]>())
 }
 
-fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // L140
-  let v_Mask_1 = argument_1;
-  let v_Random_1 = argument_2;
-  let _0 = phi_direction::select_grid(v_Mask_1, v_Random_1);
-  (_0.0, _0.1)
-}
+fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_failure::Code) {  // @erl "phi_halo_cell.erl":140
+  let v_Mask_1 = argument_1;                                                    // @erl "phi_halo_cell.erl":140
+  let v_Random_1 = argument_2;                                                  // @erl "phi_halo_cell.erl":140
+  let _0 = phi_direction::select_grid(v_Mask_1, v_Random_1);                    // @erl "phi_halo_cell.erl":140
+  (_0.0, _0.1)                                                                  // @erl "phi_halo_cell.erl":140
+}                                                                               // @erl "phi_halo_cell.erl":140
 
-fn hls_local_finish_diffusion__1(argument_1: (Tag, Cell)) -> ((Tag, Cell), hls_failure::Code) {  // L149
-  let v_Cell_1 = argument_1;
-  (v_Cell_1, hls_failure::NONE)
-}
+fn hls_local_finish_diffusion__1(argument_1: (Tag, Cell)) -> ((Tag, Cell), hls_failure::Code) {  // @erl "phi_halo_cell.erl":149
+  let v_Cell_1 = argument_1;                                                    // @erl "phi_halo_cell.erl":149
+  (v_Cell_1, hls_failure::NONE)                                                 // @erl "phi_halo_cell.erl":149
+}                                                                               // @erl "phi_halo_cell.erl":149
 
-fn hls_local_prepare_diffusion__3(argument_1: (Tag, Cell), argument_2: s64, argument_3: s64) -> ((Tag, Cell), hls_failure::Code) {  // L144
-  let v_Cell_1 = argument_1;
-  let v_Sum0_1 = argument_2;
-  let v_Sum1_1 = argument_3;
-  let _0 = v_Cell_1.1.anyon;
-  let _1 = v_Cell_1.1.phi;
-  let _2 = phi_field::relax(_0, _1, v_Sum0_1, v_Sum1_1);
-  let _3 = Cell {
-    phi: _2,
-    ..(v_Cell_1).1
-  };
-  let _4 = (Tag::CELL, _3);
-  (_4, hls_failure::NONE)
-}
+fn hls_local_prepare_diffusion__3(argument_1: (Tag, Cell), argument_2: s64, argument_3: s64) -> ((Tag, Cell), hls_failure::Code) {  // @erl "phi_halo_cell.erl":144
+  let v_Cell_1 = argument_1;                                                    // @erl "phi_halo_cell.erl":144
+  let v_Sum0_1 = argument_2;                                                    // @erl "phi_halo_cell.erl":144
+  let v_Sum1_1 = argument_3;                                                    // @erl "phi_halo_cell.erl":144
+  let _0 = v_Cell_1.1.anyon;                                                    // @erl "phi_halo_cell.erl":145
+  let _1 = v_Cell_1.1.phi;                                                      // @erl "phi_halo_cell.erl":145
+  let _2 = phi_field::relax(_0, _1, v_Sum0_1, v_Sum1_1);                        // @erl "phi_halo_cell.erl":145
+  let _3 = Cell {                                                               // @erl "phi_halo_cell.erl":145
+    phi: _2,                                                                    // @erl "phi_halo_cell.erl":145
+    ..(v_Cell_1).1                                                              // @erl "phi_halo_cell.erl":145
+  };                                                                            // @erl "phi_halo_cell.erl":145
+  let _4 = (Tag::CELL, _3);                                                     // @erl "phi_halo_cell.erl":145
+  (_4, hls_failure::NONE)                                                       // @erl "phi_halo_cell.erl":144
+}                                                                               // @erl "phi_halo_cell.erl":144
 
 enum ReductionStatus : u2 {
   IDLE = u2:0,
@@ -633,26 +633,26 @@ fn reduction_contribution(
       match phase {
         Phase::GATHERING => {
           let built = {
-            let v_Xls_clause_1_Epoch_1 = message.epoch;
-            let v_Xls_clause_1_Phi0_1 = message.values[u32:0 % array_size(message.values)];
-            let v_Xls_clause_1_Phi1_1 = message.values[u32:1 % array_size(message.values)];
-            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+            let v_Xls_clause_1_Epoch_1 = message.epoch;                         // @erl "../include/phi_halo_cell_impl.hrl":294
+            let v_Xls_clause_1_Phi0_1 = message.values[u32:0 % array_size(message.values)];  // @erl "../include/phi_halo_cell_impl.hrl":294
+            let v_Xls_clause_1_Phi1_1 = message.values[u32:1 % array_size(message.values)];  // @erl "../include/phi_halo_cell_impl.hrl":294
+            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":294
             if array_size(message.values) == u32:2 {
-  let _0 = (0 as u32);
-  let _1 = phi_field::accumulate(0, v_Xls_clause_1_Phi0_1);
-  let _2 = phi_field::accumulate(0, v_Xls_clause_1_Phi1_1);
-  let _3 = Phifold {
-    value0: _1,
-    value1: _2,
-    ..zero!<Phifold>()
-  };
-  let _4 = (Tag::PHI_FOLD, _3, bits_from_phifold(_3));
-  let _5 = (v_Xls_clause_1_Epoch_1, _0, _4, );
-  if (bool:false) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _5.0, _5.1, _5.2.1)
-  }
+  let _0 = (0 as u32);                                                          // @erl "../include/phi_halo_cell_impl.hrl":300
+  let _1 = phi_field::accumulate(0, v_Xls_clause_1_Phi0_1);                     // @erl "../include/phi_halo_cell_impl.hrl":301
+  let _2 = phi_field::accumulate(0, v_Xls_clause_1_Phi1_1);                     // @erl "../include/phi_halo_cell_impl.hrl":302
+  let _3 = Phifold {                                                            // @erl "../include/phi_halo_cell_impl.hrl":300
+    value0: _1,                                                                 // @erl "../include/phi_halo_cell_impl.hrl":300
+    value1: _2,                                                                 // @erl "../include/phi_halo_cell_impl.hrl":300
+    ..zero!<Phifold>()                                                          // @erl "../include/phi_halo_cell_impl.hrl":300
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":300
+  let _4 = (Tag::PHI_FOLD, _3, bits_from_phifold(_3));                          // @erl "../include/phi_halo_cell_impl.hrl":300
+  let _5 = (v_Xls_clause_1_Epoch_1, _0, _4, );                                  // @erl "../include/phi_halo_cell_impl.hrl":300
+  if (bool:false) {                                                             // @erl "../include/phi_halo_cell_impl.hrl":294
+    (u1:0, u32:0, u32:0, zero!<Phifold>())                                      // @erl "../include/phi_halo_cell_impl.hrl":294
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":294
+    (u1:1, _5.0, _5.1, _5.2.1)                                                  // @erl "../include/phi_halo_cell_impl.hrl":294
+  }                                                                             // @erl "../include/phi_halo_cell_impl.hrl":294
 } else {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
 }
@@ -673,24 +673,24 @@ fn reduction_contribution(
       match phase {
         Phase::COMPARING => {
           let built = {
-            let v_Xls_clause_1_Step_1 = message.step;
-            let v_Xls_clause_1_Source_1 = message.source;
-            let v_Xls_clause_1_Value_1 = message.value;
-            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-            let _0 = phi_field::accumulate(0, v_Xls_clause_1_Value_1);
-let _1 = (v_Xls_clause_1_Source_1 as s64);
-let _2 = Phifold {
-  value0: _0,
-  value1: _1,
-  ..zero!<Phifold>()
-};
-let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-let _4 = (v_Xls_clause_1_Step_1, v_Xls_clause_1_Source_1, _3, );
-if (bool:false) {
-  (u1:0, u32:0, u32:0, zero!<Phifold>())
-} else {
-  (u1:1, _4.0, _4.1, _4.2.1)
-}
+            let v_Xls_clause_1_Step_1 = message.step;                           // @erl "../include/phi_halo_cell_impl.hrl":373
+            let v_Xls_clause_1_Source_1 = message.source;                       // @erl "../include/phi_halo_cell_impl.hrl":373
+            let v_Xls_clause_1_Value_1 = message.value;                         // @erl "../include/phi_halo_cell_impl.hrl":373
+            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":373
+            let _0 = phi_field::accumulate(0, v_Xls_clause_1_Value_1);          // @erl "../include/phi_halo_cell_impl.hrl":380
+let _1 = (v_Xls_clause_1_Source_1 as s64);                                      // @erl "../include/phi_halo_cell_impl.hrl":381
+let _2 = Phifold {                                                              // @erl "../include/phi_halo_cell_impl.hrl":379
+  value0: _0,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":379
+  value1: _1,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":379
+  ..zero!<Phifold>()                                                            // @erl "../include/phi_halo_cell_impl.hrl":379
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":379
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));                            // @erl "../include/phi_halo_cell_impl.hrl":379
+let _4 = (v_Xls_clause_1_Step_1, v_Xls_clause_1_Source_1, _3, );                // @erl "../include/phi_halo_cell_impl.hrl":379
+if (bool:false) {                                                               // @erl "../include/phi_halo_cell_impl.hrl":373
+  (u1:0, u32:0, u32:0, zero!<Phifold>())                                        // @erl "../include/phi_halo_cell_impl.hrl":373
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":373
+  (u1:1, _4.0, _4.1, _4.2.1)                                                    // @erl "../include/phi_halo_cell_impl.hrl":373
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":373
           };
           ReductionContribution {
             valid: built.0,
@@ -708,31 +708,31 @@ if (bool:false) {
       match phase {
         Phase::FLIPPING => {
           let built = {
-            let v_Xls_clause_1_Step_1 = message.step;
-            let v_Xls_clause_1_PresentWord_1 = message.present;
-            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-            let _0 = (0 as u32);
-let _1 = v_Xls_clause_1_PresentWord_1 & 1;
-let _2 = (_1 as s64);
-let _3 = hls_integer::less(v_Xls_clause_1_PresentWord_1, sN[3]:2);
-let _4 = if _3 {
-  (0, hls_failure::NONE)
-} else {
-  (1, hls_failure::NONE)
-};
-let _5 = (_4.0 as s64);
-let _6 = Phifold {
-  value0: _2,
-  value1: _5,
-  ..zero!<Phifold>()
-};
-let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-let _8 = (v_Xls_clause_1_Step_1, _0, _7, );
-if ((_4.1) != hls_failure::NONE) {
-  (u1:0, u32:0, u32:0, zero!<Phifold>())
-} else {
-  (u1:1, _8.0, _8.1, _8.2.1)
-}
+            let v_Xls_clause_1_Step_1 = message.step;                           // @erl "../include/phi_halo_cell_impl.hrl":474
+            let v_Xls_clause_1_PresentWord_1 = message.present;                 // @erl "../include/phi_halo_cell_impl.hrl":474
+            let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":474
+            let _0 = (0 as u32);                                                // @erl "../include/phi_halo_cell_impl.hrl":480
+let _1 = v_Xls_clause_1_PresentWord_1 & 1;                                      // @erl "../include/phi_halo_cell_impl.hrl":482
+let _2 = (_1 as s64);                                                           // @erl "../include/phi_halo_cell_impl.hrl":481
+let _3 = hls_integer::less(v_Xls_clause_1_PresentWord_1, sN[3]:2);              // @erl "../include/phi_halo_cell_impl.hrl":486
+let _4 = if _3 {                                                                // @erl "../include/phi_halo_cell_impl.hrl":486
+  (0, hls_failure::NONE)                                                        // @erl "../include/phi_halo_cell_impl.hrl":486
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":486
+  (1, hls_failure::NONE)                                                        // @erl "../include/phi_halo_cell_impl.hrl":486
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":486
+let _5 = (_4.0 as s64);                                                         // @erl "../include/phi_halo_cell_impl.hrl":484
+let _6 = Phifold {                                                              // @erl "../include/phi_halo_cell_impl.hrl":480
+  value0: _2,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":480
+  value1: _5,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":480
+  ..zero!<Phifold>()                                                            // @erl "../include/phi_halo_cell_impl.hrl":480
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":480
+let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));                            // @erl "../include/phi_halo_cell_impl.hrl":480
+let _8 = (v_Xls_clause_1_Step_1, _0, _7, );                                     // @erl "../include/phi_halo_cell_impl.hrl":480
+if ((_4.1) != hls_failure::NONE) {                                              // @erl "../include/phi_halo_cell_impl.hrl":474
+  (u1:0, u32:0, u32:0, zero!<Phifold>())                                        // @erl "../include/phi_halo_cell_impl.hrl":474
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":474
+  (u1:1, _8.0, _8.1, _8.2.1)                                                    // @erl "../include/phi_halo_cell_impl.hrl":474
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":474
           };
           ReductionContribution {
             valid: built.0,
@@ -753,106 +753,106 @@ fn reduction_reduce(
     name: ReductionName, left: Phifold, right: Phifold) -> (Phifold, hls_failure::Code) {
   match name {
     ReductionName::DIFFUSION => {
-      let v_Xls_clause_1_Left0_1 = left.value0;
-      let v_Xls_clause_1_Left1_1 = left.value1;
-      let v_Xls_clause_1_Right0_1 = right.value0;
-      let v_Xls_clause_1_Right1_1 = right.value1;
-      let _0 = ((v_Xls_clause_1_Left0_1) + (v_Xls_clause_1_Right0_1));
-let _1 = ((v_Xls_clause_1_Left1_1) + (v_Xls_clause_1_Right1_1));
-let _2 = Phifold {
-  value0: _0,
-  value1: _1,
-  ..zero!<Phifold>()
-};
-let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-if (bool:false) {
-  (zero!<Phifold>(), hls_failure::NONE)
-} else {
-  (_3.1, hls_failure::NONE)
-}
+      let v_Xls_clause_1_Left0_1 = left.value0;                                 // @erl "../include/phi_halo_cell_impl.hrl":530
+      let v_Xls_clause_1_Left1_1 = left.value1;                                 // @erl "../include/phi_halo_cell_impl.hrl":530
+      let v_Xls_clause_1_Right0_1 = right.value0;                               // @erl "../include/phi_halo_cell_impl.hrl":530
+      let v_Xls_clause_1_Right1_1 = right.value1;                               // @erl "../include/phi_halo_cell_impl.hrl":530
+      let _0 = ((v_Xls_clause_1_Left0_1) + (v_Xls_clause_1_Right0_1));          // @erl "../include/phi_halo_cell_impl.hrl":535
+let _1 = ((v_Xls_clause_1_Left1_1) + (v_Xls_clause_1_Right1_1));                // @erl "../include/phi_halo_cell_impl.hrl":535
+let _2 = Phifold {                                                              // @erl "../include/phi_halo_cell_impl.hrl":535
+  value0: _0,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":535
+  value1: _1,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":535
+  ..zero!<Phifold>()                                                            // @erl "../include/phi_halo_cell_impl.hrl":535
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":535
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));                            // @erl "../include/phi_halo_cell_impl.hrl":535
+if (bool:false) {                                                               // @erl "../include/phi_halo_cell_impl.hrl":530
+  (zero!<Phifold>(), hls_failure::NONE)                                         // @erl "../include/phi_halo_cell_impl.hrl":530
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":530
+  (_3.1, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":530
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":530
     },
     ReductionName::COMPARISON => {
-      let v_Xls_clause_1_LeftValue_1 = left.value0;
-      let v_Xls_clause_1_LeftMask_1 = left.value1;
-      let v_Xls_clause_1_RightValue_1 = right.value0;
-      let v_Xls_clause_1_RightMask_1 = right.value1;
-      let _0 = (0 as s64);
-let v_Xls_clause_1_Zero_1 = _0;
-let _5 = {
-  let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);
-  let _3 = if _1 {
-    let _2 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);
-    (_2, hls_failure::NONE)
-  } else {
-    (bool:0, hls_failure::NONE)
-  };
-  if _3.0 {
-    let _4 = (v_Xls_clause_1_Zero_1, v_Xls_clause_1_Zero_1, );
-    (_4, hls_failure::NONE)
-  } else {
-    let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);
-    if _1 {
-      let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );
-      (_2, hls_failure::NONE)
-    } else {
-      let _1 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);
-      if _1 {
-        let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );
-        (_2, hls_failure::NONE)
-      } else {
-        let _1 = hls_integer::less(v_Xls_clause_1_RightValue_1, v_Xls_clause_1_LeftValue_1);
-        if _1 {
-          let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );
-          (_2, hls_failure::NONE)
-        } else {
-          let _1 = hls_integer::less(v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_RightValue_1);
-          if _1 {
-            let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );
-            (_2, hls_failure::NONE)
-          } else {
-            {
-              let _1 = v_Xls_clause_1_LeftMask_1 | v_Xls_clause_1_RightMask_1;
-              let _2 = (v_Xls_clause_1_LeftValue_1, _1, );
-              (_2, hls_failure::NONE)
-            }
-          }
-        }
-      }
-    }
-  }
-};
-let v_Xls_clause_1_BestValue_1 = _5.0.0;
-let v_Xls_clause_1_WinnerMask_1 = _5.0.1;
-let _6 = Phifold {
-  value0: v_Xls_clause_1_BestValue_1,
-  value1: v_Xls_clause_1_WinnerMask_1,
-  ..zero!<Phifold>()
-};
-let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-if ((_5.1) != hls_failure::NONE) {
-  (zero!<Phifold>(), _5.1)
-} else {
-  (_7.1, hls_failure::NONE)
-}
+      let v_Xls_clause_1_LeftValue_1 = left.value0;                             // @erl "../include/phi_halo_cell_impl.hrl":536
+      let v_Xls_clause_1_LeftMask_1 = left.value1;                              // @erl "../include/phi_halo_cell_impl.hrl":536
+      let v_Xls_clause_1_RightValue_1 = right.value0;                           // @erl "../include/phi_halo_cell_impl.hrl":536
+      let v_Xls_clause_1_RightMask_1 = right.value1;                            // @erl "../include/phi_halo_cell_impl.hrl":536
+      let _0 = (0 as s64);                                                      // @erl "../include/phi_halo_cell_impl.hrl":541
+let v_Xls_clause_1_Zero_1 = _0;                                                 // @erl "../include/phi_halo_cell_impl.hrl":541
+let _5 = {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":543
+  let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);              // @erl "../include/phi_halo_cell_impl.hrl":544
+  let _3 = if _1 {                                                              // @erl "../include/phi_halo_cell_impl.hrl":544
+    let _2 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);           // @erl "../include/phi_halo_cell_impl.hrl":544
+    (_2, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":544
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":544
+    (bool:0, hls_failure::NONE)                                                 // @erl "../include/phi_halo_cell_impl.hrl":544
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":544
+  if _3.0 {                                                                     // @erl "../include/phi_halo_cell_impl.hrl":543
+    let _4 = (v_Xls_clause_1_Zero_1, v_Xls_clause_1_Zero_1, );                  // @erl "../include/phi_halo_cell_impl.hrl":544
+    (_4, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":543
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":543
+    let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);            // @erl "../include/phi_halo_cell_impl.hrl":545
+    if _1 {                                                                     // @erl "../include/phi_halo_cell_impl.hrl":543
+      let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );     // @erl "../include/phi_halo_cell_impl.hrl":545
+      (_2, hls_failure::NONE)                                                   // @erl "../include/phi_halo_cell_impl.hrl":543
+    } else {                                                                    // @erl "../include/phi_halo_cell_impl.hrl":543
+      let _1 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);         // @erl "../include/phi_halo_cell_impl.hrl":546
+      if _1 {                                                                   // @erl "../include/phi_halo_cell_impl.hrl":543
+        let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );     // @erl "../include/phi_halo_cell_impl.hrl":546
+        (_2, hls_failure::NONE)                                                 // @erl "../include/phi_halo_cell_impl.hrl":543
+      } else {                                                                  // @erl "../include/phi_halo_cell_impl.hrl":543
+        let _1 = hls_integer::less(v_Xls_clause_1_RightValue_1, v_Xls_clause_1_LeftValue_1);  // @erl "../include/phi_halo_cell_impl.hrl":547
+        if _1 {                                                                 // @erl "../include/phi_halo_cell_impl.hrl":543
+          let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );   // @erl "../include/phi_halo_cell_impl.hrl":547
+          (_2, hls_failure::NONE)                                               // @erl "../include/phi_halo_cell_impl.hrl":543
+        } else {                                                                // @erl "../include/phi_halo_cell_impl.hrl":543
+          let _1 = hls_integer::less(v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_RightValue_1);  // @erl "../include/phi_halo_cell_impl.hrl":548
+          if _1 {                                                               // @erl "../include/phi_halo_cell_impl.hrl":543
+            let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );  // @erl "../include/phi_halo_cell_impl.hrl":548
+            (_2, hls_failure::NONE)                                             // @erl "../include/phi_halo_cell_impl.hrl":543
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":543
+            {                                                                   // @erl "../include/phi_halo_cell_impl.hrl":543
+              let _1 = v_Xls_clause_1_LeftMask_1 | v_Xls_clause_1_RightMask_1;  // @erl "../include/phi_halo_cell_impl.hrl":549
+              let _2 = (v_Xls_clause_1_LeftValue_1, _1, );                      // @erl "../include/phi_halo_cell_impl.hrl":549
+              (_2, hls_failure::NONE)                                           // @erl "../include/phi_halo_cell_impl.hrl":543
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":543
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":543
+        }                                                                       // @erl "../include/phi_halo_cell_impl.hrl":543
+      }                                                                         // @erl "../include/phi_halo_cell_impl.hrl":543
+    }                                                                           // @erl "../include/phi_halo_cell_impl.hrl":543
+  }                                                                             // @erl "../include/phi_halo_cell_impl.hrl":543
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":543
+let v_Xls_clause_1_BestValue_1 = _5.0.0;                                        // @erl "../include/phi_halo_cell_impl.hrl":542
+let v_Xls_clause_1_WinnerMask_1 = _5.0.1;                                       // @erl "../include/phi_halo_cell_impl.hrl":542
+let _6 = Phifold {                                                              // @erl "../include/phi_halo_cell_impl.hrl":551
+  value0: v_Xls_clause_1_BestValue_1,                                           // @erl "../include/phi_halo_cell_impl.hrl":551
+  value1: v_Xls_clause_1_WinnerMask_1,                                          // @erl "../include/phi_halo_cell_impl.hrl":551
+  ..zero!<Phifold>()                                                            // @erl "../include/phi_halo_cell_impl.hrl":551
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":551
+let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));                            // @erl "../include/phi_halo_cell_impl.hrl":551
+if ((_5.1) != hls_failure::NONE) {                                              // @erl "../include/phi_halo_cell_impl.hrl":536
+  (zero!<Phifold>(), _5.1)                                                      // @erl "../include/phi_halo_cell_impl.hrl":536
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":536
+  (_7.1, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":536
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":536
     },
     ReductionName::MOVEMENT => {
-      let v_Xls_clause_1_LeftParity_1 = left.value0;
-      let v_Xls_clause_1_LeftInvalid_1 = left.value1;
-      let v_Xls_clause_1_RightParity_1 = right.value0;
-      let v_Xls_clause_1_RightInvalid_1 = right.value1;
-      let _0 = ((v_Xls_clause_1_LeftParity_1) ^ (v_Xls_clause_1_RightParity_1));
-let _1 = v_Xls_clause_1_LeftInvalid_1 | v_Xls_clause_1_RightInvalid_1;
-let _2 = Phifold {
-  value0: _0,
-  value1: _1,
-  ..zero!<Phifold>()
-};
-let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-if (bool:false) {
-  (zero!<Phifold>(), hls_failure::NONE)
-} else {
-  (_3.1, hls_failure::NONE)
-}
+      let v_Xls_clause_1_LeftParity_1 = left.value0;                            // @erl "../include/phi_halo_cell_impl.hrl":552
+      let v_Xls_clause_1_LeftInvalid_1 = left.value1;                           // @erl "../include/phi_halo_cell_impl.hrl":552
+      let v_Xls_clause_1_RightParity_1 = right.value0;                          // @erl "../include/phi_halo_cell_impl.hrl":552
+      let v_Xls_clause_1_RightInvalid_1 = right.value1;                         // @erl "../include/phi_halo_cell_impl.hrl":552
+      let _0 = ((v_Xls_clause_1_LeftParity_1) ^ (v_Xls_clause_1_RightParity_1));  // @erl "../include/phi_halo_cell_impl.hrl":558
+let _1 = v_Xls_clause_1_LeftInvalid_1 | v_Xls_clause_1_RightInvalid_1;          // @erl "../include/phi_halo_cell_impl.hrl":559
+let _2 = Phifold {                                                              // @erl "../include/phi_halo_cell_impl.hrl":557
+  value0: _0,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":557
+  value1: _1,                                                                   // @erl "../include/phi_halo_cell_impl.hrl":557
+  ..zero!<Phifold>()                                                            // @erl "../include/phi_halo_cell_impl.hrl":557
+};                                                                              // @erl "../include/phi_halo_cell_impl.hrl":557
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));                            // @erl "../include/phi_halo_cell_impl.hrl":557
+if (bool:false) {                                                               // @erl "../include/phi_halo_cell_impl.hrl":552
+  (zero!<Phifold>(), hls_failure::NONE)                                         // @erl "../include/phi_halo_cell_impl.hrl":552
+} else {                                                                        // @erl "../include/phi_halo_cell_impl.hrl":552
+  (_3.1, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":552
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":552
     },
   }
 }
@@ -928,50 +928,50 @@ fn reduction_dispatch_completion(
     match (state.site, phase) {
       (ReductionSite::GATHERING, Phase::GATHERING) => {
         let conclusion = {
-          let v_Xls_clause_1_Epoch_1 = key;
-          let v_Xls_clause_1_Sum0_1 = accumulator.value0;
-          let v_Xls_clause_1_Sum1_1 = accumulator.value1;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
+          let v_Xls_clause_1_Epoch_1 = key;                                     // @erl "../include/phi_halo_cell_impl.hrl":304
+          let v_Xls_clause_1_Sum0_1 = accumulator.value0;                       // @erl "../include/phi_halo_cell_impl.hrl":304
+          let v_Xls_clause_1_Sum1_1 = accumulator.value1;                       // @erl "../include/phi_halo_cell_impl.hrl":304
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":304
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phi_halo_cell_impl.hrl":304
           if v_Xls_clause_1_Epoch_1 == data.diffusion_epoch {
-  let _0 = hls_local_prepare_diffusion__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_Sum0_1, v_Xls_clause_1_Sum1_1);
-  let v_Xls_clause_1_Prepared_1 = _0.0;
-  let _1 = ((v_Xls_clause_1_Epoch_1) + (u32:1));
-  let _2 = _1 & u32:4294967295;
-  let v_Xls_clause_1_NextEpoch_1 = _2;
-  let _3 = Cell {
-    diffusion_epoch: v_Xls_clause_1_NextEpoch_1,
-    ..(v_Xls_clause_1_Prepared_1).1
-  };
-  let _4 = (Tag::CELL, _3);
-  let v_Xls_clause_1_Updated_1 = _4;
-  let _5 = ((v_Xls_clause_1_Step_1) + (1));
-  let _6 = _5 * 12;
-  let _7 = _6 & 4294967295;
-  let v_Xls_clause_1_NextStepEpoch_1 = _7;
-  let _8 = hls_integer::equal(v_Xls_clause_1_NextEpoch_1, v_Xls_clause_1_NextStepEpoch_1);
-  let _13 = if _8 {
-    let _9 = Cell {
-      best_direction: u32:0,
-      ..(v_Xls_clause_1_Updated_1).1
-    };
-    let _10 = (Tag::CELL, _9);
-    let v_Xls_clause_1_Xls_result_0_1 = _10;
-    let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Xls_result_0_1;
-    let _11 = (Phase::COMPARING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
-    let _12 = (_11.0, _11.1, _11.2, _11.3, hls_failure::check(_11.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L318));
-    (_12, hls_failure::NONE)
-  } else {
-    let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Updated_1;
-    let _9 = hls_failure::NONE;
-    let _10 = (Phase::GATHERING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:1, _9, );
-    (_10, hls_failure::NONE)
-  };
-  if ((hls_failure::first_all([_0.1, _13.1])) != hls_failure::NONE) {
-    (phase, data, Directive::FAIL, u1:0, hls_failure::first_all([_0.1, _13.1]))
-  } else {
-    (_13.0.0, _13.0.1.1, _13.0.2, _13.0.3, _13.0.4)
-  }
+  let _0 = hls_local_prepare_diffusion__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_Sum0_1, v_Xls_clause_1_Sum1_1);  // @erl "../include/phi_halo_cell_impl.hrl":309
+  let v_Xls_clause_1_Prepared_1 = _0.0;                                         // @erl "../include/phi_halo_cell_impl.hrl":309
+  let _1 = ((v_Xls_clause_1_Epoch_1) + (u32:1));                                // @erl "../include/phi_halo_cell_impl.hrl":310
+  let _2 = _1 & u32:4294967295;                                                 // @erl "../include/phi_halo_cell_impl.hrl":310
+  let v_Xls_clause_1_NextEpoch_1 = _2;                                          // @erl "../include/phi_halo_cell_impl.hrl":310
+  let _3 = Cell {                                                               // @erl "../include/phi_halo_cell_impl.hrl":311
+    diffusion_epoch: v_Xls_clause_1_NextEpoch_1,                                // @erl "../include/phi_halo_cell_impl.hrl":311
+    ..(v_Xls_clause_1_Prepared_1).1                                             // @erl "../include/phi_halo_cell_impl.hrl":311
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":311
+  let _4 = (Tag::CELL, _3);                                                     // @erl "../include/phi_halo_cell_impl.hrl":311
+  let v_Xls_clause_1_Updated_1 = _4;                                            // @erl "../include/phi_halo_cell_impl.hrl":311
+  let _5 = ((v_Xls_clause_1_Step_1) + (1));                                     // @erl "../include/phi_halo_cell_impl.hrl":312
+  let _6 = _5 * 12;                                                             // @erl "../include/phi_halo_cell_impl.hrl":312
+  let _7 = _6 & 4294967295;                                                     // @erl "../include/phi_halo_cell_impl.hrl":312
+  let v_Xls_clause_1_NextStepEpoch_1 = _7;                                      // @erl "../include/phi_halo_cell_impl.hrl":312
+  let _8 = hls_integer::equal(v_Xls_clause_1_NextEpoch_1, v_Xls_clause_1_NextStepEpoch_1);  // @erl "../include/phi_halo_cell_impl.hrl":314
+  let _13 = if _8 {                                                             // @erl "../include/phi_halo_cell_impl.hrl":314
+    let _9 = Cell {                                                             // @erl "../include/phi_halo_cell_impl.hrl":316
+      best_direction: u32:0,                                                    // @erl "../include/phi_halo_cell_impl.hrl":316
+      ..(v_Xls_clause_1_Updated_1).1                                            // @erl "../include/phi_halo_cell_impl.hrl":316
+    };                                                                          // @erl "../include/phi_halo_cell_impl.hrl":316
+    let _10 = (Tag::CELL, _9);                                                  // @erl "../include/phi_halo_cell_impl.hrl":316
+    let v_Xls_clause_1_Xls_result_0_1 = _10;                                    // @erl "../include/phi_halo_cell_impl.hrl":314
+    let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Xls_result_0_1;              // @erl "../include/phi_halo_cell_impl.hrl":313
+    let _11 = (Phase::COMPARING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":318
+    let _12 = (_11.0, _11.1, _11.2, _11.3, hls_failure::check(_11.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L318));  // @erl "../include/phi_halo_cell_impl.hrl":318
+    (_12, hls_failure::NONE)                                                    // @erl "../include/phi_halo_cell_impl.hrl":314
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":314
+    let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Updated_1;                   // @erl "../include/phi_halo_cell_impl.hrl":313
+    let _9 = hls_failure::NONE;                                                 // @erl "../include/phi_halo_cell_impl.hrl":318
+    let _10 = (Phase::GATHERING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:1, _9, );  // @erl "../include/phi_halo_cell_impl.hrl":318
+    (_10, hls_failure::NONE)                                                    // @erl "../include/phi_halo_cell_impl.hrl":314
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":314
+  if ((hls_failure::first_all([_0.1, _13.1])) != hls_failure::NONE) {           // @erl "../include/phi_halo_cell_impl.hrl":304
+    (phase, data, Directive::FAIL, u1:0, hls_failure::first_all([_0.1, _13.1]))  // @erl "../include/phi_halo_cell_impl.hrl":304
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":304
+    (_13.0.0, _13.0.1.1, _13.0.2, _13.0.3, _13.0.4)                             // @erl "../include/phi_halo_cell_impl.hrl":304
+  }                                                                             // @erl "../include/phi_halo_cell_impl.hrl":304
 } else {
   (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L304)
 }
@@ -989,30 +989,30 @@ fn reduction_dispatch_completion(
       },
       (ReductionSite::COMPARING, Phase::COMPARING) => {
         let conclusion = {
-          let v_Xls_clause_1_Step_1 = key;
-          let v_Xls_clause_1_WinnerMask_1 = accumulator.value1;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Step_1 = key;                                      // @erl "../include/phi_halo_cell_impl.hrl":383
+          let v_Xls_clause_1_WinnerMask_1 = accumulator.value1;                 // @erl "../include/phi_halo_cell_impl.hrl":383
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":383
           if v_Xls_clause_1_Step_1 == data.step {
-  let _0 = v_Xls_clause_1_Cell_1.1.random_state;
-  let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
-  let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
-  let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
-  let v_Xls_clause_1_NextRandom_1 = _3;
-  let _4 = (v_Xls_clause_1_WinnerMask_1 as u32);
-  let _5 = hls_local_choose_direction__2(_4, v_Xls_clause_1_NextRandom_1);
-  let v_Xls_clause_1_BestDirection_1 = _5.0;
-  let _6 = Cell {
-    best_direction: v_Xls_clause_1_BestDirection_1,
-    ..(v_Xls_clause_1_Cell_1).1
-  };
-  let _7 = (Tag::CELL, _6);
-  let _8 = (Phase::FLIPPING, _7, Directive::CONSUME, bool:0, );
-  let _9 = (_8.0, _8.1, _8.2, _8.3, hls_failure::check(_8.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L390));
-  if ((_5.1) != hls_failure::NONE) {
-    (phase, data, Directive::FAIL, u1:0, _5.1)
-  } else {
-    (_9.0, _9.1.1, _9.2, _9.3, _9.4)
-  }
+  let _0 = v_Xls_clause_1_Cell_1.1.random_state;                                // @erl "../include/phi_halo_cell_impl.hrl":388
+  let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;                              // @erl "../include/phi_halo_cell_impl.hrl":388
+  let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;                              // @erl "../include/phi_halo_cell_impl.hrl":388
+  let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;                               // @erl "../include/phi_halo_cell_impl.hrl":388
+  let v_Xls_clause_1_NextRandom_1 = _3;                                         // @erl "../include/phi_halo_cell_impl.hrl":388
+  let _4 = (v_Xls_clause_1_WinnerMask_1 as u32);                                // @erl "../include/phi_halo_cell_impl.hrl":389
+  let _5 = hls_local_choose_direction__2(_4, v_Xls_clause_1_NextRandom_1);      // @erl "../include/phi_halo_cell_impl.hrl":389
+  let v_Xls_clause_1_BestDirection_1 = _5.0;                                    // @erl "../include/phi_halo_cell_impl.hrl":389
+  let _6 = Cell {                                                               // @erl "../include/phi_halo_cell_impl.hrl":390
+    best_direction: v_Xls_clause_1_BestDirection_1,                             // @erl "../include/phi_halo_cell_impl.hrl":390
+    ..(v_Xls_clause_1_Cell_1).1                                                 // @erl "../include/phi_halo_cell_impl.hrl":390
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":390
+  let _7 = (Tag::CELL, _6);                                                     // @erl "../include/phi_halo_cell_impl.hrl":390
+  let _8 = (Phase::FLIPPING, _7, Directive::CONSUME, bool:0, );                 // @erl "../include/phi_halo_cell_impl.hrl":390
+  let _9 = (_8.0, _8.1, _8.2, _8.3, hls_failure::check(_8.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L390));  // @erl "../include/phi_halo_cell_impl.hrl":390
+  if ((_5.1) != hls_failure::NONE) {                                            // @erl "../include/phi_halo_cell_impl.hrl":383
+    (phase, data, Directive::FAIL, u1:0, _5.1)                                  // @erl "../include/phi_halo_cell_impl.hrl":383
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":383
+    (_9.0, _9.1.1, _9.2, _9.3, _9.4)                                            // @erl "../include/phi_halo_cell_impl.hrl":383
+  }                                                                             // @erl "../include/phi_halo_cell_impl.hrl":383
 } else {
   (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L383)
 }
@@ -1030,43 +1030,43 @@ fn reduction_dispatch_completion(
       },
       (ReductionSite::FLIPPING, Phase::FLIPPING) => {
         let conclusion = {
-          let v_Xls_clause_1_Step_1 = key;
-          let v_Xls_clause_1_IncomingParity_1 = accumulator.value0;
-          let v_Xls_clause_1_Invalid_1 = accumulator.value1;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Step_1 = key;                                      // @erl "../include/phi_halo_cell_impl.hrl":492
+          let v_Xls_clause_1_IncomingParity_1 = accumulator.value0;             // @erl "../include/phi_halo_cell_impl.hrl":492
+          let v_Xls_clause_1_Invalid_1 = accumulator.value1;                    // @erl "../include/phi_halo_cell_impl.hrl":492
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":492
           if v_Xls_clause_1_Step_1 == data.step {
-  let _0 = v_Xls_clause_1_Invalid_1 == 0;
-  let _12 = if _0 {
-    let _1 = ((v_Xls_clause_1_Step_1) + (u32:1));
-    let _2 = _1 & u32:4294967295;
-    let v_Xls_clause_1_NextStep_1 = _2;
-    let _3 = v_Xls_clause_1_NextStep_1 * u32:12;
-    let _4 = _3 & u32:4294967295;
-    let _5 = v_Xls_clause_1_Cell_1.1.anyon;
-    let _6 = (v_Xls_clause_1_IncomingParity_1 as u32);
-    let _7 = ((_5) ^ (_6));
-    let _8 = Cell {
-      step: v_Xls_clause_1_NextStep_1,
-      diffusion_epoch: _4,
-      anyon: _7,
-      status_valid: u32:1,
-      ..(v_Xls_clause_1_Cell_1).1
-    };
-    let _9 = (Tag::CELL, _8);
-    let v_Xls_clause_1_Advanced_1 = _9;
-    let _10 = (Phase::MEASURING, v_Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
-    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L511));
-    (_11, hls_failure::NONE)
-  } else {
-    let _1 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L499));
-    (_2, hls_failure::NONE)
-  };
-  if ((_12.1) != hls_failure::NONE) {
-    (phase, data, Directive::FAIL, u1:0, _12.1)
-  } else {
-    (_12.0.0, _12.0.1.1, _12.0.2, _12.0.3, _12.0.4)
-  }
+  let _0 = v_Xls_clause_1_Invalid_1 == 0;                                       // @erl "../include/phi_halo_cell_impl.hrl":497
+  let _12 = if _0 {                                                             // @erl "../include/phi_halo_cell_impl.hrl":497
+    let _1 = ((v_Xls_clause_1_Step_1) + (u32:1));                               // @erl "../include/phi_halo_cell_impl.hrl":501
+    let _2 = _1 & u32:4294967295;                                               // @erl "../include/phi_halo_cell_impl.hrl":501
+    let v_Xls_clause_1_NextStep_1 = _2;                                         // @erl "../include/phi_halo_cell_impl.hrl":501
+    let _3 = v_Xls_clause_1_NextStep_1 * u32:12;                                // @erl "../include/phi_halo_cell_impl.hrl":505
+    let _4 = _3 & u32:4294967295;                                               // @erl "../include/phi_halo_cell_impl.hrl":505
+    let _5 = v_Xls_clause_1_Cell_1.1.anyon;                                     // @erl "../include/phi_halo_cell_impl.hrl":507
+    let _6 = (v_Xls_clause_1_IncomingParity_1 as u32);                          // @erl "../include/phi_halo_cell_impl.hrl":508
+    let _7 = ((_5) ^ (_6));                                                     // @erl "../include/phi_halo_cell_impl.hrl":507
+    let _8 = Cell {                                                             // @erl "../include/phi_halo_cell_impl.hrl":502
+      step: v_Xls_clause_1_NextStep_1,                                          // @erl "../include/phi_halo_cell_impl.hrl":502
+      diffusion_epoch: _4,                                                      // @erl "../include/phi_halo_cell_impl.hrl":502
+      anyon: _7,                                                                // @erl "../include/phi_halo_cell_impl.hrl":502
+      status_valid: u32:1,                                                      // @erl "../include/phi_halo_cell_impl.hrl":502
+      ..(v_Xls_clause_1_Cell_1).1                                               // @erl "../include/phi_halo_cell_impl.hrl":502
+    };                                                                          // @erl "../include/phi_halo_cell_impl.hrl":502
+    let _9 = (Tag::CELL, _8);                                                   // @erl "../include/phi_halo_cell_impl.hrl":502
+    let v_Xls_clause_1_Advanced_1 = _9;                                         // @erl "../include/phi_halo_cell_impl.hrl":502
+    let _10 = (Phase::MEASURING, v_Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":511
+    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L511));  // @erl "../include/phi_halo_cell_impl.hrl":511
+    (_11, hls_failure::NONE)                                                    // @erl "../include/phi_halo_cell_impl.hrl":497
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":497
+    let _1 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":499
+    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L499));  // @erl "../include/phi_halo_cell_impl.hrl":499
+    (_2, hls_failure::NONE)                                                     // @erl "../include/phi_halo_cell_impl.hrl":497
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":497
+  if ((_12.1) != hls_failure::NONE) {                                           // @erl "../include/phi_halo_cell_impl.hrl":492
+    (phase, data, Directive::FAIL, u1:0, _12.1)                                 // @erl "../include/phi_halo_cell_impl.hrl":492
+  } else {                                                                      // @erl "../include/phi_halo_cell_impl.hrl":492
+    (_12.0.0, _12.0.1.1, _12.0.2, _12.0.3, _12.0.4)                             // @erl "../include/phi_halo_cell_impl.hrl":492
+  }                                                                             // @erl "../include/phi_halo_cell_impl.hrl":492
 } else {
   (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_6C4DC4B6_L492)
 }
@@ -1093,46 +1093,46 @@ fn reduction_dispatch_completion(
   }
 }
 
-fn initial_actor_state_outcome() -> (bool, ActorState) {  // L169
-  let _0 = Cell {
-    ..zero!<Cell>()
-  };
-  let _1 = (Tag::CELL, _0);
-  let _2 = (Phase::CONFIGURING, _1, );
-  (bool:false, ActorState {
-    phase: _2.0,
-    entered_from: _2.0,
-    data: _2.1.1,
-    enter_pending: u1:1,
-    ..zero!<ActorState>()
-  })
-}
-const INITIAL_ACTOR_STATE = initial_actor_state_outcome();
-const_assert!(!INITIAL_ACTOR_STATE.0);
+fn initial_actor_state_outcome() -> (bool, ActorState) {                        // @erl "../include/phi_halo_cell_impl.hrl":169
+  let _0 = Cell {                                                               // @erl "../include/phi_halo_cell_impl.hrl":170
+    ..zero!<Cell>()                                                             // @erl "../include/phi_halo_cell_impl.hrl":170
+  };                                                                            // @erl "../include/phi_halo_cell_impl.hrl":170
+  let _1 = (Tag::CELL, _0);                                                     // @erl "../include/phi_halo_cell_impl.hrl":170
+  let _2 = (Phase::CONFIGURING, _1, );                                          // @erl "../include/phi_halo_cell_impl.hrl":170
+  (bool:false, ActorState {                                                     // @erl "../include/phi_halo_cell_impl.hrl":169
+    phase: _2.0,                                                                // @erl "../include/phi_halo_cell_impl.hrl":169
+    entered_from: _2.0,                                                         // @erl "../include/phi_halo_cell_impl.hrl":169
+    data: _2.1.1,                                                               // @erl "../include/phi_halo_cell_impl.hrl":169
+    enter_pending: u1:1,                                                        // @erl "../include/phi_halo_cell_impl.hrl":169
+    ..zero!<ActorState>()                                                       // @erl "../include/phi_halo_cell_impl.hrl":169
+  })                                                                            // @erl "../include/phi_halo_cell_impl.hrl":169
+}                                                                               // @erl "../include/phi_halo_cell_impl.hrl":169
+const INITIAL_ACTOR_STATE = initial_actor_state_outcome();                      // @erl "../include/phi_halo_cell_impl.hrl":169
+const_assert!(!INITIAL_ACTOR_STATE.0);                                          // @erl "../include/phi_halo_cell_impl.hrl":169
 
-fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }
+fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }                // @erl "../include/phi_halo_cell_impl.hrl":169
 
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::CELL, data);
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _0 = ();
-      let _1 = ();
-      let _2 = (v_Xls_entry_0_1, _0, _1, );
-      let _3 = {
-        let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: zero!<ReductionState>(),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[224]>(),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phi_halo_cell_impl.hrl":184
+      let v_Cell_1 = (Tag::CELL, data);                                         // @erl "../include/phi_halo_cell_impl.hrl":184
+      let v_Xls_entry_0_1 = v_Cell_1;                                           // @erl "../include/phi_halo_cell_impl.hrl":185
+      let _0 = ();                                                              // @erl "../include/phi_halo_cell_impl.hrl":185
+      let _1 = ();                                                              // @erl "../include/phi_halo_cell_impl.hrl":185
+      let _2 = (v_Xls_entry_0_1, _0, _1, );                                     // @erl "../include/phi_halo_cell_impl.hrl":185
+      let _3 = {                                                                // @erl "../include/phi_halo_cell_impl.hrl":185
+        let evaluated = _2;                                                     // @erl "../include/phi_halo_cell_impl.hrl":185
+        EntryOutcome {                                                          // @erl "../include/phi_halo_cell_impl.hrl":185
+          data: evaluated.0.1,                                                  // @erl "../include/phi_halo_cell_impl.hrl":185
+          reduction: zero!<ReductionState>(),                                   // @erl "../include/phi_halo_cell_impl.hrl":185
+          failure: hls_failure::NONE,                                           // @erl "../include/phi_halo_cell_impl.hrl":185
+          effects: EntryEffects {                                               // @erl "../include/phi_halo_cell_impl.hrl":185
+            layout: u8:0,                                                       // @erl "../include/phi_halo_cell_impl.hrl":185
+            payloads: zero!<bits[224]>(),                                       // @erl "../include/phi_halo_cell_impl.hrl":185
+          },                                                                    // @erl "../include/phi_halo_cell_impl.hrl":185
+        }                                                                       // @erl "../include/phi_halo_cell_impl.hrl":185
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":185
       if bool:false {
         EntryOutcome {
           data: data,
@@ -1144,80 +1144,80 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       }
     },
     Phase::MEASURING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::CELL, data);
-      let _0 = v_Cell_1.1.status_valid;
-      let _1 = hls_integer::equal(_0, sN[2]:1);
-      let _20 = if _1 {
-        let _2 = v_Cell_1.1.step;
-        let _3 = ((_2) - (u32:1));
-        let _4 = _3 & u32:4294967295;
-        let _5 = v_Cell_1.1.x;
-        let _6 = v_Cell_1.1.y;
-        let _7 = v_Cell_1.1.anyon;
-        let _8 = v_Cell_1.1.noise_quiet;
-        let _9 = hls_integer::shift<true>(_8, u1:1);
-        let _10 = _7 | _9;
-        let _11 = Phistatus {
-          step: _4,
-          x: _5,
-          y: _6,
-          flags: _10,
-          ..zero!<Phistatus>()
-        };
-        let _12 = (Tag::PHI_STATUS, _11, bits_from_phistatus(_11));
-        let v_Status_1 = _12;
-        let v_Xls_entry_0_1 = v_Status_1;
-        let v_Xls_entry_1_1 = v_Cell_1;
-        let _13 = v_Cell_1.1.step;
-        let _14 = Phenomrequest {
-          step: _13,
-          ..zero!<Phenomrequest>()
-        };
-        let _15 = (Tag::PHENOM_REQUEST, _14, bits_from_phenomrequest(_14));
-        let v_Xls_entry_2_1 = _15;
-        let _16 = ();
-        let _17 = (v_Xls_entry_0_1, v_Xls_entry_2_1, );
-        let _18 = (v_Xls_entry_1_1, _16, _17, );
-        let _19 = {
-          let evaluated = _18;
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: zero!<ReductionState>(),
-            failure: hls_failure::NONE,
-            effects: EntryEffects {
-              layout: u8:1,
-              payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]),
-            },
-          }
-        };
-        (_19, hls_failure::NONE)
-      } else {
-        let v_Xls_entry_3_1 = v_Cell_1;
-        let _2 = v_Cell_1.1.step;
-        let _3 = Phenomrequest {
-          step: _2,
-          ..zero!<Phenomrequest>()
-        };
-        let _4 = (Tag::PHENOM_REQUEST, _3, bits_from_phenomrequest(_3));
-        let v_Xls_entry_4_1 = _4;
-        let _5 = ();
-        let _6 = (v_Xls_entry_4_1, );
-        let _7 = (v_Xls_entry_3_1, _5, _6, );
-        let _8 = {
-          let evaluated = _7;
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: zero!<ReductionState>(),
-            failure: hls_failure::NONE,
-            effects: EntryEffects {
-              layout: u8:2,
-              payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]),
-            },
-          }
-        };
-        (_8, hls_failure::NONE)
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phi_halo_cell_impl.hrl":219
+      let v_Cell_1 = (Tag::CELL, data);                                         // @erl "../include/phi_halo_cell_impl.hrl":219
+      let _0 = v_Cell_1.1.status_valid;                                         // @erl "../include/phi_halo_cell_impl.hrl":221
+      let _1 = hls_integer::equal(_0, sN[2]:1);                                 // @erl "../include/phi_halo_cell_impl.hrl":221
+      let _20 = if _1 {                                                         // @erl "../include/phi_halo_cell_impl.hrl":221
+        let _2 = v_Cell_1.1.step;                                               // @erl "../include/phi_halo_cell_impl.hrl":224
+        let _3 = ((_2) - (u32:1));                                              // @erl "../include/phi_halo_cell_impl.hrl":224
+        let _4 = _3 & u32:4294967295;                                           // @erl "../include/phi_halo_cell_impl.hrl":224
+        let _5 = v_Cell_1.1.x;                                                  // @erl "../include/phi_halo_cell_impl.hrl":225
+        let _6 = v_Cell_1.1.y;                                                  // @erl "../include/phi_halo_cell_impl.hrl":226
+        let _7 = v_Cell_1.1.anyon;                                              // @erl "../include/phi_halo_cell_impl.hrl":227
+        let _8 = v_Cell_1.1.noise_quiet;                                        // @erl "../include/phi_halo_cell_impl.hrl":227
+        let _9 = hls_integer::shift<true>(_8, u1:1);                            // @erl "../include/phi_halo_cell_impl.hrl":227
+        let _10 = _7 | _9;                                                      // @erl "../include/phi_halo_cell_impl.hrl":227
+        let _11 = Phistatus {                                                   // @erl "../include/phi_halo_cell_impl.hrl":223
+          step: _4,                                                             // @erl "../include/phi_halo_cell_impl.hrl":223
+          x: _5,                                                                // @erl "../include/phi_halo_cell_impl.hrl":223
+          y: _6,                                                                // @erl "../include/phi_halo_cell_impl.hrl":223
+          flags: _10,                                                           // @erl "../include/phi_halo_cell_impl.hrl":223
+          ..zero!<Phistatus>()                                                  // @erl "../include/phi_halo_cell_impl.hrl":223
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":223
+        let _12 = (Tag::PHI_STATUS, _11, bits_from_phistatus(_11));             // @erl "../include/phi_halo_cell_impl.hrl":223
+        let v_Status_1 = _12;                                                   // @erl "../include/phi_halo_cell_impl.hrl":223
+        let v_Xls_entry_0_1 = v_Status_1;                                       // @erl "../include/phi_halo_cell_impl.hrl":229
+        let v_Xls_entry_1_1 = v_Cell_1;                                         // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _13 = v_Cell_1.1.step;                                              // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _14 = Phenomrequest {                                               // @erl "../include/phi_halo_cell_impl.hrl":233
+          step: _13,                                                            // @erl "../include/phi_halo_cell_impl.hrl":233
+          ..zero!<Phenomrequest>()                                              // @erl "../include/phi_halo_cell_impl.hrl":233
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _15 = (Tag::PHENOM_REQUEST, _14, bits_from_phenomrequest(_14));     // @erl "../include/phi_halo_cell_impl.hrl":233
+        let v_Xls_entry_2_1 = _15;                                              // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _16 = ();                                                           // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _17 = (v_Xls_entry_0_1, v_Xls_entry_2_1, );                         // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _18 = (v_Xls_entry_1_1, _16, _17, );                                // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _19 = {                                                             // @erl "../include/phi_halo_cell_impl.hrl":233
+          let evaluated = _18;                                                  // @erl "../include/phi_halo_cell_impl.hrl":233
+          EntryOutcome {                                                        // @erl "../include/phi_halo_cell_impl.hrl":233
+            data: evaluated.0.1,                                                // @erl "../include/phi_halo_cell_impl.hrl":233
+            reduction: zero!<ReductionState>(),                                 // @erl "../include/phi_halo_cell_impl.hrl":233
+            failure: hls_failure::NONE,                                         // @erl "../include/phi_halo_cell_impl.hrl":233
+            effects: EntryEffects {                                             // @erl "../include/phi_halo_cell_impl.hrl":233
+              layout: u8:1,                                                     // @erl "../include/phi_halo_cell_impl.hrl":233
+              payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.flags as bits[32]), u32:96, evaluated.2.1.1.step as bits[32]),  // @erl "../include/phi_halo_cell_impl.hrl":233
+            },                                                                  // @erl "../include/phi_halo_cell_impl.hrl":233
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":233
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":233
+        (_19, hls_failure::NONE)                                                // @erl "../include/phi_halo_cell_impl.hrl":221
+      } else {                                                                  // @erl "../include/phi_halo_cell_impl.hrl":221
+        let v_Xls_entry_3_1 = v_Cell_1;                                         // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _2 = v_Cell_1.1.step;                                               // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _3 = Phenomrequest {                                                // @erl "../include/phi_halo_cell_impl.hrl":233
+          step: _2,                                                             // @erl "../include/phi_halo_cell_impl.hrl":233
+          ..zero!<Phenomrequest>()                                              // @erl "../include/phi_halo_cell_impl.hrl":233
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _4 = (Tag::PHENOM_REQUEST, _3, bits_from_phenomrequest(_3));        // @erl "../include/phi_halo_cell_impl.hrl":233
+        let v_Xls_entry_4_1 = _4;                                               // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _5 = ();                                                            // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _6 = (v_Xls_entry_4_1, );                                           // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _7 = (v_Xls_entry_3_1, _5, _6, );                                   // @erl "../include/phi_halo_cell_impl.hrl":233
+        let _8 = {                                                              // @erl "../include/phi_halo_cell_impl.hrl":233
+          let evaluated = _7;                                                   // @erl "../include/phi_halo_cell_impl.hrl":233
+          EntryOutcome {                                                        // @erl "../include/phi_halo_cell_impl.hrl":233
+            data: evaluated.0.1,                                                // @erl "../include/phi_halo_cell_impl.hrl":233
+            reduction: zero!<ReductionState>(),                                 // @erl "../include/phi_halo_cell_impl.hrl":233
+            failure: hls_failure::NONE,                                         // @erl "../include/phi_halo_cell_impl.hrl":233
+            effects: EntryEffects {                                             // @erl "../include/phi_halo_cell_impl.hrl":233
+              layout: u8:2,                                                     // @erl "../include/phi_halo_cell_impl.hrl":233
+              payloads: bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]),  // @erl "../include/phi_halo_cell_impl.hrl":233
+            },                                                                  // @erl "../include/phi_halo_cell_impl.hrl":233
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":233
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":233
+        (_8, hls_failure::NONE)                                                 // @erl "../include/phi_halo_cell_impl.hrl":221
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":221
       if (_20.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -1229,49 +1229,49 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       }
     },
     Phase::GATHERING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::CELL, data);
-      let _0 = hls_local_finish_diffusion__1(v_Cell_1);
-      let v_Updated_1 = _0.0;
-      let _1 = v_Cell_1.1.diffusion_epoch;
-      let v_Epoch_1 = _1;
-      let _2 = v_Updated_1.1.phi;
-      let _3 = Phi {
-        epoch: v_Epoch_1,
-        values: _2,
-        ..zero!<Phi>()
-      };
-      let _4 = (Tag::PHI, _3, bits_from_phi(_3));
-      let v_Message_1 = _4;
-      let v_Xls_entry_0_1 = v_Updated_1;
-      let _5 = v_Cell_1.1.diffusion_epoch;
-      let _6 = (_5 as u32);
-      let _7 = Phifold {
-        value0: s64:0,
-        value1: s64:0,
-        ..zero!<Phifold>()
-      };
-      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
-      let _9 = (_6, _8, );
-      let v_Xls_entry_1_1 = _9;
-      let v_Xls_entry_2_1 = v_Message_1;
-      let v_Xls_entry_3_1 = v_Message_1;
-      let v_Xls_entry_4_1 = v_Message_1;
-      let v_Xls_entry_5_1 = v_Message_1;
-      let _10 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
-      let _11 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _10, );
-      let _12 = {
-        let evaluated = _11;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phi_halo_cell_impl.hrl":285
+      let v_Cell_1 = (Tag::CELL, data);                                         // @erl "../include/phi_halo_cell_impl.hrl":285
+      let _0 = hls_local_finish_diffusion__1(v_Cell_1);                         // @erl "../include/phi_halo_cell_impl.hrl":286
+      let v_Updated_1 = _0.0;                                                   // @erl "../include/phi_halo_cell_impl.hrl":286
+      let _1 = v_Cell_1.1.diffusion_epoch;                                      // @erl "../include/phi_halo_cell_impl.hrl":287
+      let v_Epoch_1 = _1;                                                       // @erl "../include/phi_halo_cell_impl.hrl":287
+      let _2 = v_Updated_1.1.phi;                                               // @erl "../include/phi_halo_cell_impl.hrl":288
+      let _3 = Phi {                                                            // @erl "../include/phi_halo_cell_impl.hrl":288
+        epoch: v_Epoch_1,                                                       // @erl "../include/phi_halo_cell_impl.hrl":288
+        values: _2,                                                             // @erl "../include/phi_halo_cell_impl.hrl":288
+        ..zero!<Phi>()                                                          // @erl "../include/phi_halo_cell_impl.hrl":288
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":288
+      let _4 = (Tag::PHI, _3, bits_from_phi(_3));                               // @erl "../include/phi_halo_cell_impl.hrl":288
+      let v_Message_1 = _4;                                                     // @erl "../include/phi_halo_cell_impl.hrl":288
+      let v_Xls_entry_0_1 = v_Updated_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":289
+      let _5 = v_Cell_1.1.diffusion_epoch;                                      // @erl "../include/phi_halo_cell_impl.hrl":290
+      let _6 = (_5 as u32);                                                     // @erl "../include/phi_halo_cell_impl.hrl":290
+      let _7 = Phifold {                                                        // @erl "../include/phi_halo_cell_impl.hrl":291
+        value0: s64:0,                                                          // @erl "../include/phi_halo_cell_impl.hrl":291
+        value1: s64:0,                                                          // @erl "../include/phi_halo_cell_impl.hrl":291
+        ..zero!<Phifold>()                                                      // @erl "../include/phi_halo_cell_impl.hrl":291
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":291
+      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));                      // @erl "../include/phi_halo_cell_impl.hrl":291
+      let _9 = (_6, _8, );                                                      // @erl "../include/phi_halo_cell_impl.hrl":290
+      let v_Xls_entry_1_1 = _9;                                                 // @erl "../include/phi_halo_cell_impl.hrl":289
+      let v_Xls_entry_2_1 = v_Message_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":292
+      let v_Xls_entry_3_1 = v_Message_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":292
+      let v_Xls_entry_4_1 = v_Message_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":292
+      let v_Xls_entry_5_1 = v_Message_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":292
+      let _10 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );  // @erl "../include/phi_halo_cell_impl.hrl":292
+      let _11 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _10, );                      // @erl "../include/phi_halo_cell_impl.hrl":292
+      let _12 = {                                                               // @erl "../include/phi_halo_cell_impl.hrl":292
+        let evaluated = _11;                                                    // @erl "../include/phi_halo_cell_impl.hrl":292
+        EntryOutcome {                                                          // @erl "../include/phi_halo_cell_impl.hrl":292
+          data: evaluated.0.1,                                                  // @erl "../include/phi_halo_cell_impl.hrl":292
+          reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),  // @erl "../include/phi_halo_cell_impl.hrl":292
+          failure: hls_failure::NONE,                                           // @erl "../include/phi_halo_cell_impl.hrl":292
+          effects: EntryEffects {                                               // @erl "../include/phi_halo_cell_impl.hrl":292
+            layout: u8:3,                                                       // @erl "../include/phi_halo_cell_impl.hrl":292
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.epoch as bits[32]), u32:32, evaluated.2.0.1.values as bits[64]),  // @erl "../include/phi_halo_cell_impl.hrl":292
+          },                                                                    // @erl "../include/phi_halo_cell_impl.hrl":292
+        }                                                                       // @erl "../include/phi_halo_cell_impl.hrl":292
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":292
       if (_0.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -1283,69 +1283,69 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       }
     },
     Phase::COMPARING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::CELL, data);
-      let _0 = hls_local_finish_diffusion__1(v_Cell_1);
-      let v_Updated_1 = _0.0;
-      let _1 = v_Updated_1.1.phi;
-      let v_Phi0_1 = _1[u32:0 % array_size(_1)];
-      let _2 = v_Cell_1.1.step;
-      let _3 = Phi0 {
-        step: _2,
-        value: v_Phi0_1,
-        ..zero!<Phi0>()
-      };
-      let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
-      let v_Message_1 = _4;
-      let v_Xls_entry_0_1 = v_Updated_1;
-      let _5 = v_Cell_1.1.step;
-      let _6 = (_5 as u32);
-      let _7 = Phifold {
-        value0: s64:0,
-        value1: s64:0,
-        ..zero!<Phifold>()
-      };
-      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
-      let _9 = (_6, _8, );
-      let v_Xls_entry_1_1 = _9;
-      let _10 = Phi0 {
-        source: u32:8,
-        ..(v_Message_1).1
-      };
-      let _11 = (Tag::PHI0, _10, bits_from_phi0(_10));
-      let v_Xls_entry_2_1 = _11;
-      let _12 = Phi0 {
-        source: u32:4,
-        ..(v_Message_1).1
-      };
-      let _13 = (Tag::PHI0, _12, bits_from_phi0(_12));
-      let v_Xls_entry_3_1 = _13;
-      let _14 = Phi0 {
-        source: u32:2,
-        ..(v_Message_1).1
-      };
-      let _15 = (Tag::PHI0, _14, bits_from_phi0(_14));
-      let v_Xls_entry_4_1 = _15;
-      let _16 = Phi0 {
-        source: u32:1,
-        ..(v_Message_1).1
-      };
-      let _17 = (Tag::PHI0, _16, bits_from_phi0(_16));
-      let v_Xls_entry_5_1 = _17;
-      let _18 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
-      let _19 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _18, );
-      let _20 = {
-        let evaluated = _19;
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:4,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phi_halo_cell_impl.hrl":360
+      let v_Cell_1 = (Tag::CELL, data);                                         // @erl "../include/phi_halo_cell_impl.hrl":360
+      let _0 = hls_local_finish_diffusion__1(v_Cell_1);                         // @erl "../include/phi_halo_cell_impl.hrl":361
+      let v_Updated_1 = _0.0;                                                   // @erl "../include/phi_halo_cell_impl.hrl":361
+      let _1 = v_Updated_1.1.phi;                                               // @erl "../include/phi_halo_cell_impl.hrl":362
+      let v_Phi0_1 = _1[u32:0 % array_size(_1)];                                // @erl "../include/phi_halo_cell_impl.hrl":362
+      let _2 = v_Cell_1.1.step;                                                 // @erl "../include/phi_halo_cell_impl.hrl":364
+      let _3 = Phi0 {                                                           // @erl "../include/phi_halo_cell_impl.hrl":363
+        step: _2,                                                               // @erl "../include/phi_halo_cell_impl.hrl":363
+        value: v_Phi0_1,                                                        // @erl "../include/phi_halo_cell_impl.hrl":363
+        ..zero!<Phi0>()                                                         // @erl "../include/phi_halo_cell_impl.hrl":363
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":363
+      let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));                             // @erl "../include/phi_halo_cell_impl.hrl":363
+      let v_Message_1 = _4;                                                     // @erl "../include/phi_halo_cell_impl.hrl":363
+      let v_Xls_entry_0_1 = v_Updated_1;                                        // @erl "../include/phi_halo_cell_impl.hrl":367
+      let _5 = v_Cell_1.1.step;                                                 // @erl "../include/phi_halo_cell_impl.hrl":368
+      let _6 = (_5 as u32);                                                     // @erl "../include/phi_halo_cell_impl.hrl":368
+      let _7 = Phifold {                                                        // @erl "../include/phi_halo_cell_impl.hrl":369
+        value0: s64:0,                                                          // @erl "../include/phi_halo_cell_impl.hrl":369
+        value1: s64:0,                                                          // @erl "../include/phi_halo_cell_impl.hrl":369
+        ..zero!<Phifold>()                                                      // @erl "../include/phi_halo_cell_impl.hrl":369
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":369
+      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));                      // @erl "../include/phi_halo_cell_impl.hrl":369
+      let _9 = (_6, _8, );                                                      // @erl "../include/phi_halo_cell_impl.hrl":368
+      let v_Xls_entry_1_1 = _9;                                                 // @erl "../include/phi_halo_cell_impl.hrl":367
+      let _10 = Phi0 {                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        source: u32:8,                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        ..(v_Message_1).1                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _11 = (Tag::PHI0, _10, bits_from_phi0(_10));                          // @erl "../include/phi_halo_cell_impl.hrl":370
+      let v_Xls_entry_2_1 = _11;                                                // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _12 = Phi0 {                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        source: u32:4,                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        ..(v_Message_1).1                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _13 = (Tag::PHI0, _12, bits_from_phi0(_12));                          // @erl "../include/phi_halo_cell_impl.hrl":370
+      let v_Xls_entry_3_1 = _13;                                                // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _14 = Phi0 {                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        source: u32:2,                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        ..(v_Message_1).1                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _15 = (Tag::PHI0, _14, bits_from_phi0(_14));                          // @erl "../include/phi_halo_cell_impl.hrl":370
+      let v_Xls_entry_4_1 = _15;                                                // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _16 = Phi0 {                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        source: u32:1,                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+        ..(v_Message_1).1                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _17 = (Tag::PHI0, _16, bits_from_phi0(_16));                          // @erl "../include/phi_halo_cell_impl.hrl":370
+      let v_Xls_entry_5_1 = _17;                                                // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _18 = (v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );  // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _19 = (v_Xls_entry_0_1, v_Xls_entry_1_1, _18, );                      // @erl "../include/phi_halo_cell_impl.hrl":370
+      let _20 = {                                                               // @erl "../include/phi_halo_cell_impl.hrl":370
+        let evaluated = _19;                                                    // @erl "../include/phi_halo_cell_impl.hrl":370
+        EntryOutcome {                                                          // @erl "../include/phi_halo_cell_impl.hrl":370
+          data: evaluated.0.1,                                                  // @erl "../include/phi_halo_cell_impl.hrl":370
+          reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),  // @erl "../include/phi_halo_cell_impl.hrl":370
+          failure: hls_failure::NONE,                                           // @erl "../include/phi_halo_cell_impl.hrl":370
+          effects: EntryEffects {                                               // @erl "../include/phi_halo_cell_impl.hrl":370
+            layout: u8:4,                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.value as bits[32]),  // @erl "../include/phi_halo_cell_impl.hrl":370
+          },                                                                    // @erl "../include/phi_halo_cell_impl.hrl":370
+        }                                                                       // @erl "../include/phi_halo_cell_impl.hrl":370
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":370
       if (hls_failure::first_all([_0.1, hls_failure::check(!(array_size(_1) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_6C4DC4B6_L362)])) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -1357,239 +1357,239 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       }
     },
     Phase::FLIPPING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::CELL, data);
-      let _0 = v_Cell_1.1.random_state;
-      let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
-      let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
-      let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
-      let v_NextRandom_1 = _3;
-      let _53 = {
-        let _4 = v_Cell_1.1.anyon;
-        let _5 = hls_integer::equal(_4, sN[2]:1);
-        let _11 = if _5 {
-          let _6 = v_Cell_1.1.best_direction;
-          let _7 = !(hls_integer::equal(_6, sN[2]:0));
-          let _10 = if _7 {
-            let _8 = hls_integer::shift<false>(v_NextRandom_1, u5:31);
-            let _9 = hls_integer::equal(_8, sN[2]:1);
-            (_9, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
-          (_10.0, _10.1)
-        } else {
-          (bool:0, hls_failure::NONE)
-        };
-        if _11.0 {
-          let v_Present_1 = u32:1;
-          let _12 = v_Cell_1.1.step;
-          let _13 = v_Cell_1.1.x;
-          let _14 = v_Cell_1.1.y;
-          let _15 = v_Cell_1.1.best_direction;
-          let _16 = Phicorrection {
-            step: _12,
-            x: _13,
-            y: _14,
-            direction: _15,
-            ..zero!<Phicorrection>()
-          };
-          let _17 = (Tag::PHI_CORRECTION, _16, bits_from_phicorrection(_16));
-          let v_Xls_entry_0_1 = _17;
-          let _18 = v_Cell_1.1.step;
-          let _19 = Anyonmove {
-            step: _18,
-            ..zero!<Anyonmove>()
-          };
-          let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
-          let v_Message_1 = _20;
-          let _21 = v_Cell_1.1.anyon;
-          let _22 = ((_21) ^ (v_Present_1));
-          let _23 = Cell {
-            anyon: _22,
-            random_state: v_NextRandom_1,
-            ..(v_Cell_1).1
-          };
-          let _24 = (Tag::CELL, _23);
-          let v_Updated_1 = _24;
-          let v_Xls_entry_1_1 = v_Updated_1;
-          let _25 = v_Cell_1.1.step;
-          let _26 = (_25 as u32);
-          let _27 = Phifold {
-            value0: s64:0,
-            value1: s64:0,
-            ..zero!<Phifold>()
-          };
-          let _28 = (Tag::PHI_FOLD, _27, bits_from_phifold(_27));
-          let _29 = (_26, _28, );
-          let v_Xls_entry_2_1 = _29;
-          let _30 = v_Cell_1.1.best_direction;
-          let _31 = hls_integer::equal(_30, sN[2]:1);
-          let _32 = if _31 {
-            (v_Present_1, hls_failure::NONE)
-          } else {
-            (u32:0, hls_failure::NONE)
-          };
-          let _33 = Anyonmove {
-            present: _32.0,
-            ..(v_Message_1).1
-          };
-          let _34 = (Tag::ANYON_MOVE, _33, bits_from_anyonmove(_33));
-          let v_Xls_entry_3_1 = _34;
-          let _35 = v_Cell_1.1.best_direction;
-          let _36 = hls_integer::equal(_35, sN[3]:2);
-          let _37 = if _36 {
-            (v_Present_1, hls_failure::NONE)
-          } else {
-            (u32:0, hls_failure::NONE)
-          };
-          let _38 = Anyonmove {
-            present: _37.0,
-            ..(v_Message_1).1
-          };
-          let _39 = (Tag::ANYON_MOVE, _38, bits_from_anyonmove(_38));
-          let v_Xls_entry_4_1 = _39;
-          let _40 = v_Cell_1.1.best_direction;
-          let _41 = hls_integer::equal(_40, sN[4]:4);
-          let _42 = if _41 {
-            (v_Present_1, hls_failure::NONE)
-          } else {
-            (u32:0, hls_failure::NONE)
-          };
-          let _43 = Anyonmove {
-            present: _42.0,
-            ..(v_Message_1).1
-          };
-          let _44 = (Tag::ANYON_MOVE, _43, bits_from_anyonmove(_43));
-          let v_Xls_entry_5_1 = _44;
-          let _45 = v_Cell_1.1.best_direction;
-          let _46 = hls_integer::equal(_45, sN[5]:8);
-          let _47 = if _46 {
-            (v_Present_1, hls_failure::NONE)
-          } else {
-            (u32:0, hls_failure::NONE)
-          };
-          let _48 = Anyonmove {
-            present: _47.0,
-            ..(v_Message_1).1
-          };
-          let _49 = (Tag::ANYON_MOVE, _48, bits_from_anyonmove(_48));
-          let v_Xls_entry_6_1 = _49;
-          let _50 = (v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, v_Xls_entry_6_1, v_Xls_entry_0_1, );
-          let _51 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _50, );
-          let _52 = {
-            let evaluated = _51;
-            EntryOutcome {
-              data: evaluated.0.1,
-              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:5,
-                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]),
-              },
-            }
-          };
-          (_52, hls_failure::first_all([_32.1, _37.1, _42.1, _47.1]))
-        } else {
-          {
-            let v_Present_1 = u32:0;
-            let _4 = v_Cell_1.1.step;
-            let _5 = Anyonmove {
-              step: _4,
-              ..zero!<Anyonmove>()
-            };
-            let _6 = (Tag::ANYON_MOVE, _5, bits_from_anyonmove(_5));
-            let v_Message_1 = _6;
-            let _7 = v_Cell_1.1.anyon;
-            let _8 = ((_7) ^ (v_Present_1));
-            let _9 = Cell {
-              anyon: _8,
-              random_state: v_NextRandom_1,
-              ..(v_Cell_1).1
-            };
-            let _10 = (Tag::CELL, _9);
-            let v_Updated_1 = _10;
-            let v_Xls_entry_7_1 = v_Updated_1;
-            let _11 = v_Cell_1.1.step;
-            let _12 = (_11 as u32);
-            let _13 = Phifold {
-              value0: s64:0,
-              value1: s64:0,
-              ..zero!<Phifold>()
-            };
-            let _14 = (Tag::PHI_FOLD, _13, bits_from_phifold(_13));
-            let _15 = (_12, _14, );
-            let v_Xls_entry_8_1 = _15;
-            let _16 = v_Cell_1.1.best_direction;
-            let _17 = hls_integer::equal(_16, sN[2]:1);
-            let _18 = if _17 {
-              (v_Present_1, hls_failure::NONE)
-            } else {
-              (u32:0, hls_failure::NONE)
-            };
-            let _19 = Anyonmove {
-              present: _18.0,
-              ..(v_Message_1).1
-            };
-            let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
-            let v_Xls_entry_9_1 = _20;
-            let _21 = v_Cell_1.1.best_direction;
-            let _22 = hls_integer::equal(_21, sN[3]:2);
-            let _23 = if _22 {
-              (v_Present_1, hls_failure::NONE)
-            } else {
-              (u32:0, hls_failure::NONE)
-            };
-            let _24 = Anyonmove {
-              present: _23.0,
-              ..(v_Message_1).1
-            };
-            let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));
-            let v_Xls_entry_10_1 = _25;
-            let _26 = v_Cell_1.1.best_direction;
-            let _27 = hls_integer::equal(_26, sN[4]:4);
-            let _28 = if _27 {
-              (v_Present_1, hls_failure::NONE)
-            } else {
-              (u32:0, hls_failure::NONE)
-            };
-            let _29 = Anyonmove {
-              present: _28.0,
-              ..(v_Message_1).1
-            };
-            let _30 = (Tag::ANYON_MOVE, _29, bits_from_anyonmove(_29));
-            let v_Xls_entry_11_1 = _30;
-            let _31 = v_Cell_1.1.best_direction;
-            let _32 = hls_integer::equal(_31, sN[5]:8);
-            let _33 = if _32 {
-              (v_Present_1, hls_failure::NONE)
-            } else {
-              (u32:0, hls_failure::NONE)
-            };
-            let _34 = Anyonmove {
-              present: _33.0,
-              ..(v_Message_1).1
-            };
-            let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-            let v_Xls_entry_12_1 = _35;
-            let _36 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );
-            let _37 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _36, );
-            let _38 = {
-              let evaluated = _37;
-              EntryOutcome {
-                data: evaluated.0.1,
-                reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-                failure: hls_failure::NONE,
-                effects: EntryEffects {
-                  layout: u8:6,
-                  payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]),
-                },
-              }
-            };
-            (_38, hls_failure::first_all([_18.1, _23.1, _28.1, _33.1]))
-          }
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phi_halo_cell_impl.hrl":432
+      let v_Cell_1 = (Tag::CELL, data);                                         // @erl "../include/phi_halo_cell_impl.hrl":432
+      let _0 = v_Cell_1.1.random_state;                                         // @erl "../include/phi_halo_cell_impl.hrl":433
+      let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;                          // @erl "../include/phi_halo_cell_impl.hrl":433
+      let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;                          // @erl "../include/phi_halo_cell_impl.hrl":433
+      let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;                           // @erl "../include/phi_halo_cell_impl.hrl":433
+      let v_NextRandom_1 = _3;                                                  // @erl "../include/phi_halo_cell_impl.hrl":433
+      let _53 = {                                                               // @erl "../include/phi_halo_cell_impl.hrl":436
+        let _4 = v_Cell_1.1.anyon;                                              // @erl "../include/phi_halo_cell_impl.hrl":437
+        let _5 = hls_integer::equal(_4, sN[2]:1);                               // @erl "../include/phi_halo_cell_impl.hrl":437
+        let _11 = if _5 {                                                       // @erl "../include/phi_halo_cell_impl.hrl":437
+          let _6 = v_Cell_1.1.best_direction;                                   // @erl "../include/phi_halo_cell_impl.hrl":438
+          let _7 = !(hls_integer::equal(_6, sN[2]:0));                          // @erl "../include/phi_halo_cell_impl.hrl":438
+          let _10 = if _7 {                                                     // @erl "../include/phi_halo_cell_impl.hrl":438
+            let _8 = hls_integer::shift<false>(v_NextRandom_1, u5:31);          // @erl "../include/phi_halo_cell_impl.hrl":439
+            let _9 = hls_integer::equal(_8, sN[2]:1);                           // @erl "../include/phi_halo_cell_impl.hrl":439
+            (_9, hls_failure::NONE)                                             // @erl "../include/phi_halo_cell_impl.hrl":438
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":438
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phi_halo_cell_impl.hrl":438
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":438
+          (_10.0, _10.1)                                                        // @erl "../include/phi_halo_cell_impl.hrl":437
+        } else {                                                                // @erl "../include/phi_halo_cell_impl.hrl":437
+          (bool:0, hls_failure::NONE)                                           // @erl "../include/phi_halo_cell_impl.hrl":437
+        };                                                                      // @erl "../include/phi_halo_cell_impl.hrl":437
+        if _11.0 {                                                              // @erl "../include/phi_halo_cell_impl.hrl":436
+          let v_Present_1 = u32:1;                                              // @erl "../include/phi_halo_cell_impl.hrl":436
+          let _12 = v_Cell_1.1.step;                                            // @erl "../include/phi_halo_cell_impl.hrl":442
+          let _13 = v_Cell_1.1.x;                                               // @erl "../include/phi_halo_cell_impl.hrl":443
+          let _14 = v_Cell_1.1.y;                                               // @erl "../include/phi_halo_cell_impl.hrl":444
+          let _15 = v_Cell_1.1.best_direction;                                  // @erl "../include/phi_halo_cell_impl.hrl":445
+          let _16 = Phicorrection {                                             // @erl "../include/phi_halo_cell_impl.hrl":441
+            step: _12,                                                          // @erl "../include/phi_halo_cell_impl.hrl":441
+            x: _13,                                                             // @erl "../include/phi_halo_cell_impl.hrl":441
+            y: _14,                                                             // @erl "../include/phi_halo_cell_impl.hrl":441
+            direction: _15,                                                     // @erl "../include/phi_halo_cell_impl.hrl":441
+            ..zero!<Phicorrection>()                                            // @erl "../include/phi_halo_cell_impl.hrl":441
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":441
+          let _17 = (Tag::PHI_CORRECTION, _16, bits_from_phicorrection(_16));   // @erl "../include/phi_halo_cell_impl.hrl":441
+          let v_Xls_entry_0_1 = _17;                                            // @erl "../include/phi_halo_cell_impl.hrl":440
+          let _18 = v_Cell_1.1.step;                                            // @erl "../include/phi_halo_cell_impl.hrl":451
+          let _19 = Anyonmove {                                                 // @erl "../include/phi_halo_cell_impl.hrl":451
+            step: _18,                                                          // @erl "../include/phi_halo_cell_impl.hrl":451
+            ..zero!<Anyonmove>()                                                // @erl "../include/phi_halo_cell_impl.hrl":451
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":451
+          let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));           // @erl "../include/phi_halo_cell_impl.hrl":451
+          let v_Message_1 = _20;                                                // @erl "../include/phi_halo_cell_impl.hrl":451
+          let _21 = v_Cell_1.1.anyon;                                           // @erl "../include/phi_halo_cell_impl.hrl":453
+          let _22 = ((_21) ^ (v_Present_1));                                    // @erl "../include/phi_halo_cell_impl.hrl":453
+          let _23 = Cell {                                                      // @erl "../include/phi_halo_cell_impl.hrl":452
+            anyon: _22,                                                         // @erl "../include/phi_halo_cell_impl.hrl":452
+            random_state: v_NextRandom_1,                                       // @erl "../include/phi_halo_cell_impl.hrl":452
+            ..(v_Cell_1).1                                                      // @erl "../include/phi_halo_cell_impl.hrl":452
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":452
+          let _24 = (Tag::CELL, _23);                                           // @erl "../include/phi_halo_cell_impl.hrl":452
+          let v_Updated_1 = _24;                                                // @erl "../include/phi_halo_cell_impl.hrl":452
+          let v_Xls_entry_1_1 = v_Updated_1;                                    // @erl "../include/phi_halo_cell_impl.hrl":456
+          let _25 = v_Cell_1.1.step;                                            // @erl "../include/phi_halo_cell_impl.hrl":457
+          let _26 = (_25 as u32);                                               // @erl "../include/phi_halo_cell_impl.hrl":457
+          let _27 = Phifold {                                                   // @erl "../include/phi_halo_cell_impl.hrl":458
+            value0: s64:0,                                                      // @erl "../include/phi_halo_cell_impl.hrl":458
+            value1: s64:0,                                                      // @erl "../include/phi_halo_cell_impl.hrl":458
+            ..zero!<Phifold>()                                                  // @erl "../include/phi_halo_cell_impl.hrl":458
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":458
+          let _28 = (Tag::PHI_FOLD, _27, bits_from_phifold(_27));               // @erl "../include/phi_halo_cell_impl.hrl":458
+          let _29 = (_26, _28, );                                               // @erl "../include/phi_halo_cell_impl.hrl":457
+          let v_Xls_entry_2_1 = _29;                                            // @erl "../include/phi_halo_cell_impl.hrl":456
+          let _30 = v_Cell_1.1.best_direction;                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _31 = hls_integer::equal(_30, sN[2]:1);                           // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _32 = if _31 {                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+            (v_Present_1, hls_failure::NONE)                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":460
+            (u32:0, hls_failure::NONE)                                          // @erl "../include/phi_halo_cell_impl.hrl":460
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _33 = Anyonmove {                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            present: _32.0,                                                     // @erl "../include/phi_halo_cell_impl.hrl":459
+            ..(v_Message_1).1                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _34 = (Tag::ANYON_MOVE, _33, bits_from_anyonmove(_33));           // @erl "../include/phi_halo_cell_impl.hrl":459
+          let v_Xls_entry_3_1 = _34;                                            // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _35 = v_Cell_1.1.best_direction;                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _36 = hls_integer::equal(_35, sN[3]:2);                           // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _37 = if _36 {                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+            (v_Present_1, hls_failure::NONE)                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":460
+            (u32:0, hls_failure::NONE)                                          // @erl "../include/phi_halo_cell_impl.hrl":460
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _38 = Anyonmove {                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            present: _37.0,                                                     // @erl "../include/phi_halo_cell_impl.hrl":459
+            ..(v_Message_1).1                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _39 = (Tag::ANYON_MOVE, _38, bits_from_anyonmove(_38));           // @erl "../include/phi_halo_cell_impl.hrl":459
+          let v_Xls_entry_4_1 = _39;                                            // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _40 = v_Cell_1.1.best_direction;                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _41 = hls_integer::equal(_40, sN[4]:4);                           // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _42 = if _41 {                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+            (v_Present_1, hls_failure::NONE)                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":460
+            (u32:0, hls_failure::NONE)                                          // @erl "../include/phi_halo_cell_impl.hrl":460
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _43 = Anyonmove {                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            present: _42.0,                                                     // @erl "../include/phi_halo_cell_impl.hrl":459
+            ..(v_Message_1).1                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _44 = (Tag::ANYON_MOVE, _43, bits_from_anyonmove(_43));           // @erl "../include/phi_halo_cell_impl.hrl":459
+          let v_Xls_entry_5_1 = _44;                                            // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _45 = v_Cell_1.1.best_direction;                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _46 = hls_integer::equal(_45, sN[5]:8);                           // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _47 = if _46 {                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+            (v_Present_1, hls_failure::NONE)                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":460
+            (u32:0, hls_failure::NONE)                                          // @erl "../include/phi_halo_cell_impl.hrl":460
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":460
+          let _48 = Anyonmove {                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            present: _47.0,                                                     // @erl "../include/phi_halo_cell_impl.hrl":459
+            ..(v_Message_1).1                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _49 = (Tag::ANYON_MOVE, _48, bits_from_anyonmove(_48));           // @erl "../include/phi_halo_cell_impl.hrl":459
+          let v_Xls_entry_6_1 = _49;                                            // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _50 = (v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, v_Xls_entry_6_1, v_Xls_entry_0_1, );  // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _51 = (v_Xls_entry_1_1, v_Xls_entry_2_1, _50, );                  // @erl "../include/phi_halo_cell_impl.hrl":459
+          let _52 = {                                                           // @erl "../include/phi_halo_cell_impl.hrl":459
+            let evaluated = _51;                                                // @erl "../include/phi_halo_cell_impl.hrl":459
+            EntryOutcome {                                                      // @erl "../include/phi_halo_cell_impl.hrl":459
+              data: evaluated.0.1,                                              // @erl "../include/phi_halo_cell_impl.hrl":459
+              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),  // @erl "../include/phi_halo_cell_impl.hrl":459
+              failure: hls_failure::NONE,                                       // @erl "../include/phi_halo_cell_impl.hrl":459
+              effects: EntryEffects {                                           // @erl "../include/phi_halo_cell_impl.hrl":459
+                layout: u8:5,                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]), u32:160, evaluated.2.4.1.x as bits[16]), u32:176, evaluated.2.4.1.y as bits[16]), u32:192, evaluated.2.4.1.direction as bits[32]),  // @erl "../include/phi_halo_cell_impl.hrl":459
+              },                                                                // @erl "../include/phi_halo_cell_impl.hrl":459
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+          (_52, hls_failure::first_all([_32.1, _37.1, _42.1, _47.1]))           // @erl "../include/phi_halo_cell_impl.hrl":436
+        } else {                                                                // @erl "../include/phi_halo_cell_impl.hrl":436
+          {                                                                     // @erl "../include/phi_halo_cell_impl.hrl":436
+            let v_Present_1 = u32:0;                                            // @erl "../include/phi_halo_cell_impl.hrl":436
+            let _4 = v_Cell_1.1.step;                                           // @erl "../include/phi_halo_cell_impl.hrl":451
+            let _5 = Anyonmove {                                                // @erl "../include/phi_halo_cell_impl.hrl":451
+              step: _4,                                                         // @erl "../include/phi_halo_cell_impl.hrl":451
+              ..zero!<Anyonmove>()                                              // @erl "../include/phi_halo_cell_impl.hrl":451
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":451
+            let _6 = (Tag::ANYON_MOVE, _5, bits_from_anyonmove(_5));            // @erl "../include/phi_halo_cell_impl.hrl":451
+            let v_Message_1 = _6;                                               // @erl "../include/phi_halo_cell_impl.hrl":451
+            let _7 = v_Cell_1.1.anyon;                                          // @erl "../include/phi_halo_cell_impl.hrl":453
+            let _8 = ((_7) ^ (v_Present_1));                                    // @erl "../include/phi_halo_cell_impl.hrl":453
+            let _9 = Cell {                                                     // @erl "../include/phi_halo_cell_impl.hrl":452
+              anyon: _8,                                                        // @erl "../include/phi_halo_cell_impl.hrl":452
+              random_state: v_NextRandom_1,                                     // @erl "../include/phi_halo_cell_impl.hrl":452
+              ..(v_Cell_1).1                                                    // @erl "../include/phi_halo_cell_impl.hrl":452
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":452
+            let _10 = (Tag::CELL, _9);                                          // @erl "../include/phi_halo_cell_impl.hrl":452
+            let v_Updated_1 = _10;                                              // @erl "../include/phi_halo_cell_impl.hrl":452
+            let v_Xls_entry_7_1 = v_Updated_1;                                  // @erl "../include/phi_halo_cell_impl.hrl":456
+            let _11 = v_Cell_1.1.step;                                          // @erl "../include/phi_halo_cell_impl.hrl":457
+            let _12 = (_11 as u32);                                             // @erl "../include/phi_halo_cell_impl.hrl":457
+            let _13 = Phifold {                                                 // @erl "../include/phi_halo_cell_impl.hrl":458
+              value0: s64:0,                                                    // @erl "../include/phi_halo_cell_impl.hrl":458
+              value1: s64:0,                                                    // @erl "../include/phi_halo_cell_impl.hrl":458
+              ..zero!<Phifold>()                                                // @erl "../include/phi_halo_cell_impl.hrl":458
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":458
+            let _14 = (Tag::PHI_FOLD, _13, bits_from_phifold(_13));             // @erl "../include/phi_halo_cell_impl.hrl":458
+            let _15 = (_12, _14, );                                             // @erl "../include/phi_halo_cell_impl.hrl":457
+            let v_Xls_entry_8_1 = _15;                                          // @erl "../include/phi_halo_cell_impl.hrl":456
+            let _16 = v_Cell_1.1.best_direction;                                // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _17 = hls_integer::equal(_16, sN[2]:1);                         // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _18 = if _17 {                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+              (v_Present_1, hls_failure::NONE)                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":460
+              (u32:0, hls_failure::NONE)                                        // @erl "../include/phi_halo_cell_impl.hrl":460
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _19 = Anyonmove {                                               // @erl "../include/phi_halo_cell_impl.hrl":459
+              present: _18.0,                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+              ..(v_Message_1).1                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let v_Xls_entry_9_1 = _20;                                          // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _21 = v_Cell_1.1.best_direction;                                // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _22 = hls_integer::equal(_21, sN[3]:2);                         // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _23 = if _22 {                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+              (v_Present_1, hls_failure::NONE)                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":460
+              (u32:0, hls_failure::NONE)                                        // @erl "../include/phi_halo_cell_impl.hrl":460
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _24 = Anyonmove {                                               // @erl "../include/phi_halo_cell_impl.hrl":459
+              present: _23.0,                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+              ..(v_Message_1).1                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let v_Xls_entry_10_1 = _25;                                         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _26 = v_Cell_1.1.best_direction;                                // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _27 = hls_integer::equal(_26, sN[4]:4);                         // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _28 = if _27 {                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+              (v_Present_1, hls_failure::NONE)                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":460
+              (u32:0, hls_failure::NONE)                                        // @erl "../include/phi_halo_cell_impl.hrl":460
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _29 = Anyonmove {                                               // @erl "../include/phi_halo_cell_impl.hrl":459
+              present: _28.0,                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+              ..(v_Message_1).1                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _30 = (Tag::ANYON_MOVE, _29, bits_from_anyonmove(_29));         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let v_Xls_entry_11_1 = _30;                                         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _31 = v_Cell_1.1.best_direction;                                // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _32 = hls_integer::equal(_31, sN[5]:8);                         // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _33 = if _32 {                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+              (v_Present_1, hls_failure::NONE)                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":460
+              (u32:0, hls_failure::NONE)                                        // @erl "../include/phi_halo_cell_impl.hrl":460
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":460
+            let _34 = Anyonmove {                                               // @erl "../include/phi_halo_cell_impl.hrl":459
+              present: _33.0,                                                   // @erl "../include/phi_halo_cell_impl.hrl":459
+              ..(v_Message_1).1                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let v_Xls_entry_12_1 = _35;                                         // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _36 = (v_Xls_entry_9_1, v_Xls_entry_10_1, v_Xls_entry_11_1, v_Xls_entry_12_1, );  // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _37 = (v_Xls_entry_7_1, v_Xls_entry_8_1, _36, );                // @erl "../include/phi_halo_cell_impl.hrl":459
+            let _38 = {                                                         // @erl "../include/phi_halo_cell_impl.hrl":459
+              let evaluated = _37;                                              // @erl "../include/phi_halo_cell_impl.hrl":459
+              EntryOutcome {                                                    // @erl "../include/phi_halo_cell_impl.hrl":459
+                data: evaluated.0.1,                                            // @erl "../include/phi_halo_cell_impl.hrl":459
+                reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),  // @erl "../include/phi_halo_cell_impl.hrl":459
+                failure: hls_failure::NONE,                                     // @erl "../include/phi_halo_cell_impl.hrl":459
+                effects: EntryEffects {                                         // @erl "../include/phi_halo_cell_impl.hrl":459
+                  layout: u8:6,                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+                  payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[224]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.present as bits[32]), u32:64, evaluated.2.1.1.present as bits[32]), u32:96, evaluated.2.2.1.present as bits[32]), u32:128, evaluated.2.3.1.present as bits[32]),  // @erl "../include/phi_halo_cell_impl.hrl":459
+                },                                                              // @erl "../include/phi_halo_cell_impl.hrl":459
+              }                                                                 // @erl "../include/phi_halo_cell_impl.hrl":459
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":459
+            (_38, hls_failure::first_all([_18.1, _23.1, _28.1, _33.1]))         // @erl "../include/phi_halo_cell_impl.hrl":436
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":436
+        }                                                                       // @erl "../include/phi_halo_cell_impl.hrl":436
+      };                                                                        // @erl "../include/phi_halo_cell_impl.hrl":436
       if (_53.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -1817,94 +1817,94 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = phi_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":194
           if message.epoch == 0 {
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":195
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":195
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":194
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":194
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":194
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":194
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":194
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L197);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":196
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":197
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L197);  // @erl "../include/phi_halo_cell_impl.hrl":197
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":196
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":196
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":196
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":196
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":196
           }
         },
         Phase::MEASURING => {
-          let v_Xls_clause_1_Epoch_1 = message.epoch;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = v_Xls_clause_1_Step_1 * 12;
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_Epoch_1, _1);
+          let v_Xls_clause_1_Epoch_1 = message.epoch;                           // @erl "../include/phi_halo_cell_impl.hrl":258
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":258
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phi_halo_cell_impl.hrl":258
+          let _0 = v_Xls_clause_1_Step_1 * 12;                                  // @erl "../include/phi_halo_cell_impl.hrl":262
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phi_halo_cell_impl.hrl":262
+          let _2 = hls_integer::equal(v_Xls_clause_1_Epoch_1, _1);              // @erl "../include/phi_halo_cell_impl.hrl":262
           if _2 {
-            let _3 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-            }
+            let _3 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":263
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":263
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":258
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":258
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":258
+              (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":258
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":258
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L265);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":264
+            let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":265
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L265);  // @erl "../include/phi_halo_cell_impl.hrl":265
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":264
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":264
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":264
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":264
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":264
           }
         },
         Phase::COMPARING => {
-          let v_Xls_clause_1_Epoch_1 = message.epoch;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Epoch_1 = message.epoch;                           // @erl "../include/phi_halo_cell_impl.hrl":391
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":391
           if v_Xls_clause_1_Epoch_1 == data.diffusion_epoch {
-            let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":396
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":396
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":391
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":391
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":391
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":391
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":391
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L398);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":397
+            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":398
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L398);  // @erl "../include/phi_halo_cell_impl.hrl":398
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":397
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":397
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":397
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":397
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":397
           }
         },
         Phase::FLIPPING => {
-          let v_Xls_clause_1_Epoch_1 = message.epoch;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Epoch_1 = message.epoch;                           // @erl "../include/phi_halo_cell_impl.hrl":466
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":466
           if v_Xls_clause_1_Epoch_1 == data.diffusion_epoch {
-            let _0 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":471
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":471
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":466
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":466
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":466
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":466
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":466
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L473);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":472
+            let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":473
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L473);  // @erl "../include/phi_halo_cell_impl.hrl":473
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":472
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":472
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":472
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":472
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":472
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -1914,67 +1914,67 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = anyonmove_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L205);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":204
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":205
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L205);  // @erl "../include/phi_halo_cell_impl.hrl":205
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":204
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":204
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":204
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":204
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":204
         },
         Phase::MEASURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L269);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":268
+          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":269
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L269);  // @erl "../include/phi_halo_cell_impl.hrl":269
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":268
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":268
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":268
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":268
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":268
         },
         Phase::GATHERING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phi_halo_cell_impl.hrl":327
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":327
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":332
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":332
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":327
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":327
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":327
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":327
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":327
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L334);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":333
+            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":334
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L334);  // @erl "../include/phi_halo_cell_impl.hrl":334
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":333
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":333
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":333
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":333
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":333
           }
         },
         Phase::COMPARING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phi_halo_cell_impl.hrl":399
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":399
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":404
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":404
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":399
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":399
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":399
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":399
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":399
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L406);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":405
+            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":406
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L406);  // @erl "../include/phi_halo_cell_impl.hrl":406
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":405
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":405
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":405
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":405
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":405
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -1984,45 +1984,45 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = phi0_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L203);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":202
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":203
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L203);  // @erl "../include/phi_halo_cell_impl.hrl":203
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":202
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":202
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":202
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":202
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":202
         },
         Phase::MEASURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L267);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":266
+          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":267
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L267);  // @erl "../include/phi_halo_cell_impl.hrl":267
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":266
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":266
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":266
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":266
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":266
         },
         Phase::GATHERING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phi_halo_cell_impl.hrl":319
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":319
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":324
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":324
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":319
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":319
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":319
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":319
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":319
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L326);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":325
+            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":326
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L326);  // @erl "../include/phi_halo_cell_impl.hrl":326
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":325
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":325
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":325
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":325
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":325
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -2056,173 +2056,173 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = phenomanyon_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":198
           if message.step == 0 {
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":199
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":199
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":198
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":198
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":198
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":198
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":198
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L201);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":200
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":201
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L201);  // @erl "../include/phi_halo_cell_impl.hrl":201
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":200
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":200
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":200
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":200
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":200
           }
         },
         Phase::MEASURING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Flags_1 = message.flags;
-          let v_Xls_clause_1_X_1 = message.x;
-          let v_Xls_clause_1_Y_1 = message.y;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _9 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);
-            let _8 = if _0 {
-              let _1 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);
-              let _7 = if _1 {
-                let _2 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);
-                let _6 = if _2 {
-                  let _3 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);
-                  let _5 = if _3 {
-                    let _4 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);
-                    (_4, hls_failure::NONE)
-                  } else {
-                    (bool:0, hls_failure::NONE)
-                  };
-                  (_5.0, _5.1)
-                } else {
-                  (bool:0, hls_failure::NONE)
-                };
-                (_6.0, _6.1)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              (_7.0, _7.1)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
-            (_8.0, _8.1)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phi_halo_cell_impl.hrl":236
+          let v_Xls_clause_1_Flags_1 = message.flags;                           // @erl "../include/phi_halo_cell_impl.hrl":236
+          let v_Xls_clause_1_X_1 = message.x;                                   // @erl "../include/phi_halo_cell_impl.hrl":236
+          let v_Xls_clause_1_Y_1 = message.y;                                   // @erl "../include/phi_halo_cell_impl.hrl":236
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":236
+          let _9 = if v_Xls_clause_1_Step_1 == data.step {                      // @erl "../include/phi_halo_cell_impl.hrl":236
+            let _0 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);        // @erl "../include/phi_halo_cell_impl.hrl":241
+            let _8 = if _0 {                                                    // @erl "../include/phi_halo_cell_impl.hrl":241
+              let _1 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);    // @erl "../include/phi_halo_cell_impl.hrl":242
+              let _7 = if _1 {                                                  // @erl "../include/phi_halo_cell_impl.hrl":242
+                let _2 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);  // @erl "../include/phi_halo_cell_impl.hrl":243
+                let _6 = if _2 {                                                // @erl "../include/phi_halo_cell_impl.hrl":243
+                  let _3 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);  // @erl "../include/phi_halo_cell_impl.hrl":244
+                  let _5 = if _3 {                                              // @erl "../include/phi_halo_cell_impl.hrl":244
+                    let _4 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);  // @erl "../include/phi_halo_cell_impl.hrl":245
+                    (_4, hls_failure::NONE)                                     // @erl "../include/phi_halo_cell_impl.hrl":244
+                  } else {                                                      // @erl "../include/phi_halo_cell_impl.hrl":244
+                    (bool:0, hls_failure::NONE)                                 // @erl "../include/phi_halo_cell_impl.hrl":244
+                  };                                                            // @erl "../include/phi_halo_cell_impl.hrl":244
+                  (_5.0, _5.1)                                                  // @erl "../include/phi_halo_cell_impl.hrl":243
+                } else {                                                        // @erl "../include/phi_halo_cell_impl.hrl":243
+                  (bool:0, hls_failure::NONE)                                   // @erl "../include/phi_halo_cell_impl.hrl":243
+                };                                                              // @erl "../include/phi_halo_cell_impl.hrl":243
+                (_6.0, _6.1)                                                    // @erl "../include/phi_halo_cell_impl.hrl":242
+              } else {                                                          // @erl "../include/phi_halo_cell_impl.hrl":242
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phi_halo_cell_impl.hrl":242
+              };                                                                // @erl "../include/phi_halo_cell_impl.hrl":242
+              (_7.0, _7.1)                                                      // @erl "../include/phi_halo_cell_impl.hrl":241
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":241
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phi_halo_cell_impl.hrl":241
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":241
+            (_8.0, _8.1)                                                        // @erl "../include/phi_halo_cell_impl.hrl":236
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":236
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phi_halo_cell_impl.hrl":236
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":236
           if _9.0 {
-            let _10 = v_Xls_clause_1_Flags_1 & u32:1;
-            let v_Xls_clause_1_Present_1 = _10;
-            let _11 = v_Xls_clause_1_Flags_1 & u32:2;
-            let _12 = hls_integer::shift<false>(_11, u1:1);
-            let v_Xls_clause_1_Quiet_1 = _12;
-            let _13 = v_Xls_clause_1_Cell_1.1.anyon;
-            let _14 = ((_13) ^ (v_Xls_clause_1_Present_1));
-            let _15 = Cell {
-              anyon: _14,
-              x: v_Xls_clause_1_X_1,
-              y: v_Xls_clause_1_Y_1,
-              noise_quiet: v_Xls_clause_1_Quiet_1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _16 = (Tag::CELL, _15);
-            let v_Xls_clause_1_Updated_1 = _16;
-            let _17 = (Phase::GATHERING, v_Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
-            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_18.0, _18.1.1, _18.2, _18.3, _18.4)
-            }
+            let _10 = v_Xls_clause_1_Flags_1 & u32:1;                           // @erl "../include/phi_halo_cell_impl.hrl":247
+            let v_Xls_clause_1_Present_1 = _10;                                 // @erl "../include/phi_halo_cell_impl.hrl":247
+            let _11 = v_Xls_clause_1_Flags_1 & u32:2;                           // @erl "../include/phi_halo_cell_impl.hrl":248
+            let _12 = hls_integer::shift<false>(_11, u1:1);                     // @erl "../include/phi_halo_cell_impl.hrl":248
+            let v_Xls_clause_1_Quiet_1 = _12;                                   // @erl "../include/phi_halo_cell_impl.hrl":248
+            let _13 = v_Xls_clause_1_Cell_1.1.anyon;                            // @erl "../include/phi_halo_cell_impl.hrl":250
+            let _14 = ((_13) ^ (v_Xls_clause_1_Present_1));                     // @erl "../include/phi_halo_cell_impl.hrl":250
+            let _15 = Cell {                                                    // @erl "../include/phi_halo_cell_impl.hrl":249
+              anyon: _14,                                                       // @erl "../include/phi_halo_cell_impl.hrl":249
+              x: v_Xls_clause_1_X_1,                                            // @erl "../include/phi_halo_cell_impl.hrl":249
+              y: v_Xls_clause_1_Y_1,                                            // @erl "../include/phi_halo_cell_impl.hrl":249
+              noise_quiet: v_Xls_clause_1_Quiet_1,                              // @erl "../include/phi_halo_cell_impl.hrl":249
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phi_halo_cell_impl.hrl":249
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":249
+            let _16 = (Tag::CELL, _15);                                         // @erl "../include/phi_halo_cell_impl.hrl":249
+            let v_Xls_clause_1_Updated_1 = _16;                                 // @erl "../include/phi_halo_cell_impl.hrl":249
+            let _17 = (Phase::GATHERING, v_Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":255
+            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);          // @erl "../include/phi_halo_cell_impl.hrl":255
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":236
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":236
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":236
+              (_18.0, _18.1.1, _18.2, _18.3, _18.4)                             // @erl "../include/phi_halo_cell_impl.hrl":236
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":236
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L257);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":256
+            let _0 = (Phase::MEASURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":257
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L257);  // @erl "../include/phi_halo_cell_impl.hrl":257
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":256
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":256
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":256
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":256
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":256
           }
         },
         Phase::GATHERING => {
-          let v_Xls_clause_1_EventStep_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = ((v_Xls_clause_1_Step_1) + (1));
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
+          let v_Xls_clause_1_EventStep_1 = message.step;                        // @erl "../include/phi_halo_cell_impl.hrl":335
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":335
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phi_halo_cell_impl.hrl":335
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));                             // @erl "../include/phi_halo_cell_impl.hrl":339
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phi_halo_cell_impl.hrl":339
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);          // @erl "../include/phi_halo_cell_impl.hrl":339
           if _2 {
-            let _3 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-            }
+            let _3 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":340
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":340
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":335
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":335
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":335
+              (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":335
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":335
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L342);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":341
+            let _0 = (Phase::GATHERING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":342
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L342);  // @erl "../include/phi_halo_cell_impl.hrl":342
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":341
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":341
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":341
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":341
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":341
           }
         },
         Phase::COMPARING => {
-          let v_Xls_clause_1_EventStep_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = ((v_Xls_clause_1_Step_1) + (1));
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
+          let v_Xls_clause_1_EventStep_1 = message.step;                        // @erl "../include/phi_halo_cell_impl.hrl":407
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":407
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phi_halo_cell_impl.hrl":407
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));                             // @erl "../include/phi_halo_cell_impl.hrl":411
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phi_halo_cell_impl.hrl":411
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);          // @erl "../include/phi_halo_cell_impl.hrl":411
           if _2 {
-            let _3 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-            }
+            let _3 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":412
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":412
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":407
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":407
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":407
+              (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":407
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":407
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L414);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":413
+            let _0 = (Phase::COMPARING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":414
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L414);  // @erl "../include/phi_halo_cell_impl.hrl":414
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":413
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":413
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":413
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":413
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":413
           }
         },
         Phase::FLIPPING => {
-          let v_Xls_clause_1_EventStep_1 = message.step;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = ((v_Xls_clause_1_Step_1) + (1));
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
+          let v_Xls_clause_1_EventStep_1 = message.step;                        // @erl "../include/phi_halo_cell_impl.hrl":513
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":513
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phi_halo_cell_impl.hrl":513
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));                             // @erl "../include/phi_halo_cell_impl.hrl":517
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phi_halo_cell_impl.hrl":517
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);          // @erl "../include/phi_halo_cell_impl.hrl":517
           if _2 {
-            let _3 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-            }
+            let _3 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":518
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":518
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":513
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":513
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":513
+              (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":513
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":513
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L520);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":519
+            let _0 = (Phase::FLIPPING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":520
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L520);  // @erl "../include/phi_halo_cell_impl.hrl":520
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":519
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":519
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":519
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":519
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":519
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -2238,78 +2238,78 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = phiconfig_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Seed_1 = message.seed;
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
-          let _2 = if _0 {
-            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);
-            (_1, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Seed_1 = message.seed;                             // @erl "../include/phi_halo_cell_impl.hrl":186
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":186
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);           // @erl "../include/phi_halo_cell_impl.hrl":190
+          let _2 = if _0 {                                                      // @erl "../include/phi_halo_cell_impl.hrl":190
+            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);  // @erl "../include/phi_halo_cell_impl.hrl":190
+            (_1, hls_failure::NONE)                                             // @erl "../include/phi_halo_cell_impl.hrl":190
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":190
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phi_halo_cell_impl.hrl":190
+          };                                                                    // @erl "../include/phi_halo_cell_impl.hrl":190
           if _2.0 {
-            let _3 = Cell {
-              random_state: v_Xls_clause_1_Seed_1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _4 = (Tag::CELL, _3);
-            let _5 = (Phase::MEASURING, _4, Directive::CONSUME, bool:0, );
-            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_6.0, _6.1.1, _6.2, _6.3, _6.4)
-            }
+            let _3 = Cell {                                                     // @erl "../include/phi_halo_cell_impl.hrl":191
+              random_state: v_Xls_clause_1_Seed_1,                              // @erl "../include/phi_halo_cell_impl.hrl":191
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phi_halo_cell_impl.hrl":191
+            };                                                                  // @erl "../include/phi_halo_cell_impl.hrl":191
+            let _4 = (Tag::CELL, _3);                                           // @erl "../include/phi_halo_cell_impl.hrl":191
+            let _5 = (Phase::MEASURING, _4, Directive::CONSUME, bool:0, );      // @erl "../include/phi_halo_cell_impl.hrl":191
+            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);               // @erl "../include/phi_halo_cell_impl.hrl":191
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":186
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":186
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":186
+              (_6.0, _6.1.1, _6.2, _6.3, _6.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":186
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":186
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L193);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::CELL, data);                      // @erl "../include/phi_halo_cell_impl.hrl":192
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":193
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L193);  // @erl "../include/phi_halo_cell_impl.hrl":193
+            if (bool:false) {                                                   // @erl "../include/phi_halo_cell_impl.hrl":192
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phi_halo_cell_impl.hrl":192
+            } else {                                                            // @erl "../include/phi_halo_cell_impl.hrl":192
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phi_halo_cell_impl.hrl":192
+            }                                                                   // @erl "../include/phi_halo_cell_impl.hrl":192
           }
         },
         Phase::MEASURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L235);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":234
+          let _0 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":235
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L235);  // @erl "../include/phi_halo_cell_impl.hrl":235
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":234
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":234
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":234
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":234
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":234
         },
         Phase::GATHERING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L344);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":343
+          let _0 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":344
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L344);  // @erl "../include/phi_halo_cell_impl.hrl":344
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":343
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":343
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":343
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":343
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":343
         },
         Phase::COMPARING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L416);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":415
+          let _0 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":416
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L416);  // @erl "../include/phi_halo_cell_impl.hrl":416
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":415
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":415
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":415
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":415
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":415
         },
         Phase::FLIPPING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L522);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);                        // @erl "../include/phi_halo_cell_impl.hrl":521
+          let _0 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phi_halo_cell_impl.hrl":522
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_6C4DC4B6_L522);  // @erl "../include/phi_halo_cell_impl.hrl":522
+          if (bool:false) {                                                     // @erl "../include/phi_halo_cell_impl.hrl":521
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phi_halo_cell_impl.hrl":521
+          } else {                                                              // @erl "../include/phi_halo_cell_impl.hrl":521
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phi_halo_cell_impl.hrl":521
+          }                                                                     // @erl "../include/phi_halo_cell_impl.hrl":521
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
       }

@@ -194,7 +194,8 @@ shared_arithmetic_plan() ->
         ?assertEqual(ok, xls_failure_sites:validate_sites(Locations, maps:get(failure_sites, After))),
         ?assertEqual(64, byte_size(Hash)),
         ?assertEqual(64, byte_size(maps:get(frame_config_sha256, After))),
-        ?assertEqual(Before, maps:without([dslx_sha256, frame_config_sha256, failure_sites], After))
+        ?assertEqual(#{}, maps:get(dslx_dependencies, After)),
+        ?assertEqual(Before, maps:without([dslx_sha256, dslx_dependencies, frame_config_sha256, failure_sites], After))
     end, lists:zip(StaticReceivers, Receivers)).
 
 %% Unsupported reply ownership must reject at preparation, before owner rendering can begin.

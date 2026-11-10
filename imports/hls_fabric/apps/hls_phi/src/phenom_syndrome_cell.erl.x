@@ -418,45 +418,45 @@ struct ActorDispatch {
   phase_boundary: u1,
 }
 
-fn initial_actor_state_outcome() -> (bool, ActorState) {  // L198
-  let _0 = Syndrome {
-    ..zero!<Syndrome>()
-  };
-  let _1 = (Tag::SYNDROME, _0);
-  let _2 = (Phase::CONFIGURING, _1, );
-  (bool:false, ActorState {
-    phase: _2.0,
-    entered_from: _2.0,
-    data: _2.1.1,
-    enter_pending: u1:1,
-    ..zero!<ActorState>()
-  })
-}
-const INITIAL_ACTOR_STATE = initial_actor_state_outcome();
-const_assert!(!INITIAL_ACTOR_STATE.0);
+fn initial_actor_state_outcome() -> (bool, ActorState) {                        // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+  let _0 = Syndrome {                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":199
+    ..zero!<Syndrome>()                                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":199
+  };                                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":199
+  let _1 = (Tag::SYNDROME, _0);                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":199
+  let _2 = (Phase::CONFIGURING, _1, );                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":199
+  (bool:false, ActorState {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+    phase: _2.0,                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+    entered_from: _2.0,                                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+    data: _2.1.1,                                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+    enter_pending: u1:1,                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+    ..zero!<ActorState>()                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+  })                                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+}                                                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+const INITIAL_ACTOR_STATE = initial_actor_state_outcome();                      // @erl "../include/phenom_syndrome_cell_impl.hrl":198
+const_assert!(!INITIAL_ACTOR_STATE.0);                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":198
 
-fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }
+fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }                // @erl "../include/phenom_syndrome_cell_impl.hrl":198
 
 fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Syndrome_1 = (Tag::SYNDROME, data);
-      let v_Xls_entry_0_1 = v_Syndrome_1;
-      let _0 = ();
-      let _1 = ();
-      let _2 = (v_Xls_entry_0_1, _0, _1, );
-      let _3 = {
-        let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[128]>(),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":213
+      let v_Syndrome_1 = (Tag::SYNDROME, data);                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":213
+      let v_Xls_entry_0_1 = v_Syndrome_1;                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+      let _0 = ();                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+      let _1 = ();                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+      let _2 = (v_Xls_entry_0_1, _0, _1, );                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+      let _3 = {                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+        let evaluated = _2;                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+        EntryOutcome {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+          effects: EntryEffects {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+            layout: u8:0,                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+            payloads: zero!<bits[128]>(),                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+          },                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+        }                                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":214
+      };                                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":214
       if bool:false {
         EntryOutcome {
           data: data,
@@ -468,150 +468,150 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       }
     },
     Phase::COLLECTING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Syndrome_1 = (Tag::SYNDROME, data);
-      let _0 = v_Syndrome_1.1.seen_sources;
-      let _29 = {
-        if _0 == 15 {
-          let _1 = v_Syndrome_1.1.step;
-          let _2 = ((_1) + (u32:1));
-          let _3 = _2 & u32:4294967295;
-          let v_NextStep_1 = _3;
-          let _4 = v_Syndrome_1.1.step;
-          let _5 = v_Syndrome_1.1.announcement;
-          let _6 = v_Syndrome_1.1.announcement_quiet;
-          let _7 = hls_integer::shift<true>(_6, u1:1);
-          let _8 = _5 | _7;
-          let _9 = v_Syndrome_1.1.x;
-          let _10 = v_Syndrome_1.1.y;
-          let _11 = Phenomanyon {
-            step: _4,
-            flags: _8,
-            x: _9,
-            y: _10,
-            ..zero!<Phenomanyon>()
-          };
-          let _12 = (Tag::PHENOM_ANYON, _11, bits_from_phenomanyon(_11));
-          let v_Xls_entry_0_1 = _12;
-          let _13 = Phenomquery {
-            step: v_NextStep_1,
-            ..zero!<Phenomquery>()
-          };
-          let _14 = (Tag::PHENOM_QUERY, _13, bits_from_phenomquery(_13));
-          let v_Query_1 = _14;
-          let _15 = Syndrome {
-            step: v_NextStep_1,
-            seen_sources: u32:0,
-            announcement: u32:0,
-            data_quiet: u32:1,
-            announcement_quiet: u32:0,
-            ..(v_Syndrome_1).1
-          };
-          let _16 = (Tag::SYNDROME, _15);
-          let v_Cleared_1 = _16;
-          let v_Xls_entry_1_1 = v_Cleared_1;
-          let _17 = Phenomquery {
-            source: u32:8,
-            ..(v_Query_1).1
-          };
-          let _18 = (Tag::PHENOM_QUERY, _17, bits_from_phenomquery(_17));
-          let v_Xls_entry_2_1 = _18;
-          let _19 = Phenomquery {
-            source: u32:4,
-            ..(v_Query_1).1
-          };
-          let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
-          let v_Xls_entry_3_1 = _20;
-          let _21 = Phenomquery {
-            source: u32:2,
-            ..(v_Query_1).1
-          };
-          let _22 = (Tag::PHENOM_QUERY, _21, bits_from_phenomquery(_21));
-          let v_Xls_entry_4_1 = _22;
-          let _23 = Phenomquery {
-            source: u32:1,
-            ..(v_Query_1).1
-          };
-          let _24 = (Tag::PHENOM_QUERY, _23, bits_from_phenomquery(_23));
-          let v_Xls_entry_5_1 = _24;
-          let _25 = ();
-          let _26 = (v_Xls_entry_0_1, v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );
-          let _27 = (v_Xls_entry_1_1, _25, _26, );
-          let _28 = {
-            let evaluated = _27;
-            EntryOutcome {
-              data: evaluated.0.1,
-              failure: hls_failure::NONE,
-              effects: EntryEffects {
-                layout: u8:1,
-                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]),
-              },
-            }
-          };
-          (_28, hls_failure::NONE)
-        } else {
-          {
-            let _1 = v_Syndrome_1.1.step;
-            let v_NextStep_1 = _1;
-            let _2 = Phenomquery {
-              step: v_NextStep_1,
-              ..zero!<Phenomquery>()
-            };
-            let _3 = (Tag::PHENOM_QUERY, _2, bits_from_phenomquery(_2));
-            let v_Query_1 = _3;
-            let _4 = Syndrome {
-              step: v_NextStep_1,
-              seen_sources: u32:0,
-              announcement: u32:0,
-              data_quiet: u32:1,
-              announcement_quiet: u32:0,
-              ..(v_Syndrome_1).1
-            };
-            let _5 = (Tag::SYNDROME, _4);
-            let v_Cleared_1 = _5;
-            let v_Xls_entry_6_1 = v_Cleared_1;
-            let _6 = Phenomquery {
-              source: u32:8,
-              ..(v_Query_1).1
-            };
-            let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));
-            let v_Xls_entry_7_1 = _7;
-            let _8 = Phenomquery {
-              source: u32:4,
-              ..(v_Query_1).1
-            };
-            let _9 = (Tag::PHENOM_QUERY, _8, bits_from_phenomquery(_8));
-            let v_Xls_entry_8_1 = _9;
-            let _10 = Phenomquery {
-              source: u32:2,
-              ..(v_Query_1).1
-            };
-            let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));
-            let v_Xls_entry_9_1 = _11;
-            let _12 = Phenomquery {
-              source: u32:1,
-              ..(v_Query_1).1
-            };
-            let _13 = (Tag::PHENOM_QUERY, _12, bits_from_phenomquery(_12));
-            let v_Xls_entry_10_1 = _13;
-            let _14 = ();
-            let _15 = (v_Xls_entry_7_1, v_Xls_entry_8_1, v_Xls_entry_9_1, v_Xls_entry_10_1, );
-            let _16 = (v_Xls_entry_6_1, _14, _15, );
-            let _17 = {
-              let evaluated = _16;
-              EntryOutcome {
-                data: evaluated.0.1,
-                failure: hls_failure::NONE,
-                effects: EntryEffects {
-                  layout: u8:2,
-                  payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]),
-                },
-              }
-            };
-            (_17, hls_failure::NONE)
-          }
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":268
+      let v_Syndrome_1 = (Tag::SYNDROME, data);                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":268
+      let _0 = v_Syndrome_1.1.seen_sources;                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+      let _29 = {                                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+        if _0 == 15 {                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+          let _1 = v_Syndrome_1.1.step;                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":272
+          let _2 = ((_1) + (u32:1));                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":272
+          let _3 = _2 & u32:4294967295;                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":272
+          let v_NextStep_1 = _3;                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+          let _4 = v_Syndrome_1.1.step;                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":274
+          let _5 = v_Syndrome_1.1.announcement;                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":276
+          let _6 = v_Syndrome_1.1.announcement_quiet;                           // @erl "../include/phenom_syndrome_cell_impl.hrl":277
+          let _7 = hls_integer::shift<true>(_6, u1:1);                          // @erl "../include/phenom_syndrome_cell_impl.hrl":277
+          let _8 = _5 | _7;                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":276
+          let _9 = v_Syndrome_1.1.x;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":278
+          let _10 = v_Syndrome_1.1.y;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":279
+          let _11 = Phenomanyon {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+            step: _4,                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+            flags: _8,                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+            x: _9,                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+            y: _10,                                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+            ..zero!<Phenomanyon>()                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+          let _12 = (Tag::PHENOM_ANYON, _11, bits_from_phenomanyon(_11));       // @erl "../include/phenom_syndrome_cell_impl.hrl":273
+          let v_Xls_entry_0_1 = _12;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":272
+          let _13 = Phenomquery {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            step: v_NextStep_1,                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            ..zero!<Phenomquery>()                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+          let _14 = (Tag::PHENOM_QUERY, _13, bits_from_phenomquery(_13));       // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+          let v_Query_1 = _14;                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+          let _15 = Syndrome {                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            step: v_NextStep_1,                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            seen_sources: u32:0,                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            announcement: u32:0,                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            data_quiet: u32:1,                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            announcement_quiet: u32:0,                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            ..(v_Syndrome_1).1                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+          let _16 = (Tag::SYNDROME, _15);                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+          let v_Cleared_1 = _16;                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+          let v_Xls_entry_1_1 = v_Cleared_1;                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":293
+          let _17 = Phenomquery {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            source: u32:8,                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            ..(v_Query_1).1                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _18 = (Tag::PHENOM_QUERY, _17, bits_from_phenomquery(_17));       // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let v_Xls_entry_2_1 = _18;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _19 = Phenomquery {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            source: u32:4,                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            ..(v_Query_1).1                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));       // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let v_Xls_entry_3_1 = _20;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _21 = Phenomquery {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            source: u32:2,                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            ..(v_Query_1).1                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _22 = (Tag::PHENOM_QUERY, _21, bits_from_phenomquery(_21));       // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let v_Xls_entry_4_1 = _22;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _23 = Phenomquery {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            source: u32:1,                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            ..(v_Query_1).1                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _24 = (Tag::PHENOM_QUERY, _23, bits_from_phenomquery(_23));       // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let v_Xls_entry_5_1 = _24;                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _25 = ();                                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":293
+          let _26 = (v_Xls_entry_0_1, v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, v_Xls_entry_5_1, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _27 = (v_Xls_entry_1_1, _25, _26, );                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          let _28 = {                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let evaluated = _27;                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            EntryOutcome {                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              data: evaluated.0.1,                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              failure: hls_failure::NONE,                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              effects: EntryEffects {                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                layout: u8:1,                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]),  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              },                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+          (_28, hls_failure::NONE)                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+        } else {                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+          {                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+            let _1 = v_Syndrome_1.1.step;                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":283
+            let v_NextStep_1 = _1;                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+            let _2 = Phenomquery {                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+              step: v_NextStep_1,                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+              ..zero!<Phenomquery>()                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            let _3 = (Tag::PHENOM_QUERY, _2, bits_from_phenomquery(_2));        // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            let v_Query_1 = _3;                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":285
+            let _4 = Syndrome {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              step: v_NextStep_1,                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              seen_sources: u32:0,                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              announcement: u32:0,                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              data_quiet: u32:1,                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              announcement_quiet: u32:0,                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+              ..(v_Syndrome_1).1                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            let _5 = (Tag::SYNDROME, _4);                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            let v_Cleared_1 = _5;                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":286
+            let v_Xls_entry_6_1 = v_Cleared_1;                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":293
+            let _6 = Phenomquery {                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              source: u32:8,                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              ..(v_Query_1).1                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));        // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let v_Xls_entry_7_1 = _7;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _8 = Phenomquery {                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              source: u32:4,                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              ..(v_Query_1).1                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _9 = (Tag::PHENOM_QUERY, _8, bits_from_phenomquery(_8));        // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let v_Xls_entry_8_1 = _9;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _10 = Phenomquery {                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              source: u32:2,                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              ..(v_Query_1).1                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let v_Xls_entry_9_1 = _11;                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _12 = Phenomquery {                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              source: u32:1,                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              ..(v_Query_1).1                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _13 = (Tag::PHENOM_QUERY, _12, bits_from_phenomquery(_12));     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let v_Xls_entry_10_1 = _13;                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _14 = ();                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":293
+            let _15 = (v_Xls_entry_7_1, v_Xls_entry_8_1, v_Xls_entry_9_1, v_Xls_entry_10_1, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _16 = (v_Xls_entry_6_1, _14, _15, );                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            let _17 = {                                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              let evaluated = _16;                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              EntryOutcome {                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                data: evaluated.0.1,                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                failure: hls_failure::NONE,                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                effects: EntryEffects {                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                  layout: u8:2,                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                  payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]),  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+                },                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+              }                                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":295
+            (_17, hls_failure::NONE)                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+          }                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+        }                                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":270
+      };                                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":270
       if (_29.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -623,23 +623,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       }
     },
     Phase::ANNOUNCING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Syndrome_1 = (Tag::SYNDROME, data);
-      let v_Xls_entry_0_1 = v_Syndrome_1;
-      let _0 = ();
-      let _1 = ();
-      let _2 = (v_Xls_entry_0_1, _0, _1, );
-      let _3 = {
-        let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: zero!<bits[128]>(),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":407
+      let v_Syndrome_1 = (Tag::SYNDROME, data);                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":407
+      let v_Xls_entry_0_1 = v_Syndrome_1;                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+      let _0 = ();                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+      let _1 = ();                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+      let _2 = (v_Xls_entry_0_1, _0, _1, );                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+      let _3 = {                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+        let evaluated = _2;                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+        EntryOutcome {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+          effects: EntryEffects {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+            layout: u8:3,                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+            payloads: zero!<bits[128]>(),                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+          },                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+        }                                                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":408
+      };                                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":408
       if bool:false {
         EntryOutcome {
           data: data,
@@ -779,106 +779,106 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       let message = phenomconfig_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Seed_1 = message.seed;
-          let v_Xls_clause_1_Threshold_1 = message.threshold;
-          let v_Xls_clause_1_X_1 = message.x;
-          let v_Xls_clause_1_Y_1 = message.y;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
-          let _14 = if _0 {
-            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);
-            let _13 = if _1 {
-              let _2 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Threshold_1);
-              let _12 = if _2 {
-                let _3 = hls_integer::less_equal(v_Xls_clause_1_Threshold_1, sN[33]:4294967295);
-                let _11 = if _3 {
-                  let _4 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);
-                  let _10 = if _4 {
-                    let _5 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);
-                    let _9 = if _5 {
-                      let _6 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);
-                      let _8 = if _6 {
-                        let _7 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);
-                        (_7, hls_failure::NONE)
-                      } else {
-                        (bool:0, hls_failure::NONE)
-                      };
-                      (_8.0, _8.1)
-                    } else {
-                      (bool:0, hls_failure::NONE)
-                    };
-                    (_9.0, _9.1)
-                  } else {
-                    (bool:0, hls_failure::NONE)
-                  };
-                  (_10.0, _10.1)
-                } else {
-                  (bool:0, hls_failure::NONE)
-                };
-                (_11.0, _11.1)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              (_12.0, _12.1)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
-            (_13.0, _13.1)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Seed_1 = message.seed;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+          let v_Xls_clause_1_Threshold_1 = message.threshold;                   // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+          let v_Xls_clause_1_X_1 = message.x;                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+          let v_Xls_clause_1_Y_1 = message.y;                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);           // @erl "../include/phenom_syndrome_cell_impl.hrl":220
+          let _14 = if _0 {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":220
+            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);  // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+            let _13 = if _1 {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+              let _2 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Threshold_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+              let _12 = if _2 {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+                let _3 = hls_integer::less_equal(v_Xls_clause_1_Threshold_1, sN[33]:4294967295);  // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                let _11 = if _3 {                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                  let _4 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                  let _10 = if _4 {                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                    let _5 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);  // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                    let _9 = if _5 {                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                      let _6 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                      let _8 = if _6 {                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                        let _7 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);  // @erl "../include/phenom_syndrome_cell_impl.hrl":227
+                        (_7, hls_failure::NONE)                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                      } else {                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                        (bool:0, hls_failure::NONE)                             // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                      };                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":226
+                      (_8.0, _8.1)                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                    } else {                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                      (bool:0, hls_failure::NONE)                               // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                    };                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":225
+                    (_9.0, _9.1)                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                  } else {                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                    (bool:0, hls_failure::NONE)                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                  };                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":224
+                  (_10.0, _10.1)                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                } else {                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                  (bool:0, hls_failure::NONE)                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                };                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":223
+                (_11.0, _11.1)                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":222
+              (_12.0, _12.1)                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":221
+            (_13.0, _13.1)                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":220
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":220
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":220
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":220
           if _14.0 {
-            let _15 = Syndrome {
-              seen_sources: u32:0,
-              data_parity: u32:0,
-              announcement: u32:0,
-              data_quiet: u32:1,
-              announcement_quiet: u32:0,
-              random_state: v_Xls_clause_1_Seed_1,
-              threshold: v_Xls_clause_1_Threshold_1,
-              x: v_Xls_clause_1_X_1,
-              y: v_Xls_clause_1_Y_1,
-              ..(v_Xls_clause_1_Syndrome_1).1
-            };
-            let _16 = (Tag::SYNDROME, _15);
-            let v_Xls_clause_1_Configured_1 = _16;
-            let _17 = (Phase::COLLECTING, v_Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
-            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_18.0, _18.1.1, _18.2, _18.3, _18.4)
-            }
+            let _15 = Syndrome {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              seen_sources: u32:0,                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              data_parity: u32:0,                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              announcement: u32:0,                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              data_quiet: u32:1,                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              announcement_quiet: u32:0,                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              random_state: v_Xls_clause_1_Seed_1,                              // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              threshold: v_Xls_clause_1_Threshold_1,                            // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              x: v_Xls_clause_1_X_1,                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              y: v_Xls_clause_1_Y_1,                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+              ..(v_Xls_clause_1_Syndrome_1).1                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+            let _16 = (Tag::SYNDROME, _15);                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+            let v_Xls_clause_1_Configured_1 = _16;                              // @erl "../include/phenom_syndrome_cell_impl.hrl":229
+            let _17 = (Phase::COLLECTING, v_Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":240
+            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);          // @erl "../include/phenom_syndrome_cell_impl.hrl":240
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+              (_18.0, _18.1.1, _18.2, _18.3, _18.4)                             // @erl "../include/phenom_syndrome_cell_impl.hrl":215
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":215
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L242);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":241
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":242
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L242);  // @erl "../include/phenom_syndrome_cell_impl.hrl":242
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":241
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":241
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":241
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":241
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":241
           }
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L298);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":297
+          let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":298
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L298);  // @erl "../include/phenom_syndrome_cell_impl.hrl":298
+          if (bool:false) {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":297
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_syndrome_cell_impl.hrl":297
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":297
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":297
+          }                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":297
         },
         Phase::ANNOUNCING => {
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L410);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":409
+          let _0 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":410
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L410);  // @erl "../include/phenom_syndrome_cell_impl.hrl":410
+          if (bool:false) {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":409
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_syndrome_cell_impl.hrl":409
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":409
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":409
+          }                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":409
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
       }
@@ -887,75 +887,75 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       let message = phenomrequest_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":243
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":243
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":248
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":248
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":243
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":243
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":243
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":243
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":243
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L250);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":249
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":250
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L250);  // @erl "../include/phenom_syndrome_cell_impl.hrl":250
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":249
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":249
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":249
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":249
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":249
           }
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":318
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":318
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::COLLECTING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":323
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":323
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":318
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":318
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":318
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":318
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":318
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L325);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":324
+            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":325
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L325);  // @erl "../include/phenom_syndrome_cell_impl.hrl":325
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":324
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":324
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":324
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":324
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":324
           }
         },
         Phase::ANNOUNCING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":430
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":430
           if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = Syndrome {
-              data_parity: u32:0,
-              ..(v_Xls_clause_1_Syndrome_1).1
-            };
-            let _1 = (Tag::SYNDROME, _0);
-            let v_Xls_clause_1_Collecting_1 = _1;
-            let _2 = (Phase::COLLECTING, v_Xls_clause_1_Collecting_1, Directive::CONSUME, bool:0, );
-            let _3 = (_2.0, _2.1, _2.2, _2.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_3.0, _3.1.1, _3.2, _3.3, _3.4)
-            }
+            let _0 = Syndrome {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+              data_parity: u32:0,                                               // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+              ..(v_Xls_clause_1_Syndrome_1).1                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+            let _1 = (Tag::SYNDROME, _0);                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+            let v_Xls_clause_1_Collecting_1 = _1;                               // @erl "../include/phenom_syndrome_cell_impl.hrl":435
+            let _2 = (Phase::COLLECTING, v_Xls_clause_1_Collecting_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":438
+            let _3 = (_2.0, _2.1, _2.2, _2.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":438
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":430
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":430
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":430
+              (_3.0, _3.1.1, _3.2, _3.3, _3.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":430
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":430
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L440);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":439
+            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":440
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L440);  // @erl "../include/phenom_syndrome_cell_impl.hrl":440
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":439
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":439
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":439
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":439
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":439
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -971,201 +971,201 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       let message = phenomdata_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L252);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":251
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":252
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L252);  // @erl "../include/phenom_syndrome_cell_impl.hrl":252
+          if (bool:false) {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":251
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_syndrome_cell_impl.hrl":251
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":251
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":251
+          }                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":251
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Source_1 = message.source;
-          let v_Xls_clause_1_Flags_1 = message.flags;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let v_Xls_clause_1_Seen_1 = data.seen_sources;
-          let v_Xls_clause_1_Parity_1 = data.data_parity;
-          let v_Xls_clause_1_PreviousMeasurement_1 = data.previous_measurement;
-          let v_Xls_clause_1_RandomState_1 = data.random_state;
-          let v_Xls_clause_1_Threshold_1 = data.threshold;
-          let _12 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
-            let _6 = if _0 {
-              (bool:1, hls_failure::NONE)
-            } else {
-              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
-              let _5 = if _1 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
-                let _4 = if _2 {
-                  (bool:1, hls_failure::NONE)
-                } else {
-                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
-                  (_3, hls_failure::NONE)
-                };
-                (_4.0, _4.1)
-              };
-              (_5.0, _5.1)
-            };
-            let _11 = if _6.0 {
-              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = hls_integer::equal(_7, sN[2]:0);
-              let _10 = if _8 {
-                let _9 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);
-                (_9, hls_failure::NONE)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              (_10.0, _10.1)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
-            (_11.0, hls_failure::first_all([_6.1, _11.1]))
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Source_1 = message.source;                         // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Flags_1 = message.flags;                           // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Seen_1 = data.seen_sources;                        // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Parity_1 = data.data_parity;                       // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_PreviousMeasurement_1 = data.previous_measurement;  // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_RandomState_1 = data.random_state;                 // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let v_Xls_clause_1_Threshold_1 = data.threshold;                      // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          let _12 = if v_Xls_clause_1_Step_1 == data.step {                     // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);      // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            let _6 = if _0 {                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              (bool:1, hls_failure::NONE)                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);    // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              let _5 = if _1 {                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);  // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                let _4 = if _2 {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                  (bool:1, hls_failure::NONE)                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                } else {                                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);  // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                  (_3, hls_failure::NONE)                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                };                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+                (_4.0, _4.1)                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              (_5.0, _5.1)                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            let _11 = if _6.0 {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;         // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+              let _8 = hls_integer::equal(_7, sN[2]:0);                         // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+              let _10 = if _8 {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+                let _9 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);    // @erl "../include/phenom_syndrome_cell_impl.hrl":340
+                (_9, hls_failure::NONE)                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":339
+              (_10.0, _10.1)                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":338
+            (_11.0, hls_failure::first_all([_6.1, _11.1]))                      // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":326
           if _12.0 {
-            let _13 = v_Xls_clause_1_Flags_1 & u32:1;
-            let v_Xls_clause_1_Present_1 = _13;
-            let _14 = v_Xls_clause_1_Flags_1 & u32:2;
-            let _15 = hls_integer::shift<false>(_14, u1:1);
-            let v_Xls_clause_1_Quiet_1 = _15;
-            let _16 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;
-            let v_Xls_clause_1_NewSeen_1 = _16;
-            let _17 = ((v_Xls_clause_1_Parity_1) ^ (v_Xls_clause_1_Present_1));
-            let v_Xls_clause_1_NewParity_1 = _17;
-            let _18 = v_Xls_clause_1_Syndrome_1.1.data_quiet;
-            let _19 = _18 & v_Xls_clause_1_Quiet_1;
-            let v_Xls_clause_1_NewDataQuiet_1 = _19;
-            let _20 = Syndrome {
-              seen_sources: v_Xls_clause_1_NewSeen_1,
-              data_parity: v_Xls_clause_1_NewParity_1,
-              data_quiet: v_Xls_clause_1_NewDataQuiet_1,
-              ..(v_Xls_clause_1_Syndrome_1).1
-            };
-            let _21 = (Tag::SYNDROME, _20);
-            let v_Xls_clause_1_Collected_1 = _21;
-            let _22 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
-            let _46 = if _22 {
-              let _23 = v_Xls_clause_1_Syndrome_1.1.cutoff_armed;
-              let _26 = if _23 {
-                let _24 = v_Xls_clause_1_Syndrome_1.1.cutoff_step;
-                let _25 = hls_integer::less_equal(_24, v_Xls_clause_1_Step_1);
-                (_25, hls_failure::NONE)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              let v_Xls_clause_1_CutoffApplies_1 = _26.0;
-              let _27 = v_Xls_clause_1_Syndrome_1.1.noise_disabled;
-              let _28 = if _27 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                (v_Xls_clause_1_CutoffApplies_1, hls_failure::NONE)
-              };
-              let v_Xls_clause_1_NoiseDisabled_1 = _28.0;
-              let _35 = if v_Xls_clause_1_NoiseDisabled_1 {
-                let _29 = (v_Xls_clause_1_RandomState_1, u32:0, );
-                (_29, hls_failure::NONE)
-              } else {
-                let _29 = (v_Xls_clause_1_RandomState_1 ^ (v_Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
-                let _30 = (_29 ^ (_29 >> u32:17)) & u32:0xffffffff;
-                let _31 = (_30 ^ (_30 << u32:5)) & u32:0xffffffff;
-                let v_Xls_clause_1_Sample_1 = _31;
-                let _33 = {
-                  let _32 = v_Xls_clause_1_Sample_1 < v_Xls_clause_1_Threshold_1;
-                  if _32 {
-                    (u32:1, hls_failure::NONE)
-                  } else {
-                    {
-                      (u32:0, hls_failure::NONE)
-                    }
-                  }
-                };
-                let v_Xls_clause_1_Hit_1 = _33.0;
-                let _34 = (v_Xls_clause_1_Sample_1, v_Xls_clause_1_Hit_1, );
-                (_34, _33.1)
-              };
-              let v_Xls_clause_1_NextRandom_1 = _35.0.0;
-              let v_Xls_clause_1_Measurement_1 = _35.0.1;
-              let _36 = ((v_Xls_clause_1_NewParity_1) ^ (v_Xls_clause_1_Measurement_1));
-              let _37 = ((_36) ^ (v_Xls_clause_1_PreviousMeasurement_1));
-              let v_Xls_clause_1_Detection_1 = _37;
-              let _38 = if v_Xls_clause_1_NoiseDisabled_1 {
-                (v_Xls_clause_1_NewDataQuiet_1, hls_failure::NONE)
-              } else {
-                (u32:0, hls_failure::NONE)
-              };
-              let _39 = v_Xls_clause_1_Syndrome_1.1.cutoff_armed;
-              let _41 = if _39 {
-                let _40 = !v_Xls_clause_1_CutoffApplies_1;
-                (_40, hls_failure::NONE)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              let _42 = Syndrome {
-                previous_measurement: v_Xls_clause_1_Measurement_1,
-                announcement: v_Xls_clause_1_Detection_1,
-                announcement_quiet: _38.0,
-                random_state: v_Xls_clause_1_NextRandom_1,
-                noise_disabled: v_Xls_clause_1_NoiseDisabled_1,
-                cutoff_armed: _41.0,
-                ..(v_Xls_clause_1_Collected_1).1
-              };
-              let _43 = (Tag::SYNDROME, _42);
-              let v_Xls_clause_1_Complete_1 = _43;
-              let v_Xls_clause_1_NextSyndrome_1 = v_Xls_clause_1_Complete_1;
-              let _44 = (Phase::ANNOUNCING, v_Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
-              let _45 = (_44.0, _44.1, _44.2, _44.3, hls_failure::NONE);
-              (_45, hls_failure::first_all([_26.1, _28.1, _35.1, _38.1, _41.1]))
-            } else {
-              let v_Xls_clause_1_NextSyndrome_1 = v_Xls_clause_1_Collected_1;
-              let _23 = (Phase::COLLECTING, v_Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
-              let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::NONE);
-              (_24, hls_failure::NONE)
-            };
-            if ((_46.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _46.1)
-            } else {
-              (_46.0.0, _46.0.1.1, _46.0.2, _46.0.3, _46.0.4)
-            }
+            let _13 = v_Xls_clause_1_Flags_1 & u32:1;                           // @erl "../include/phenom_syndrome_cell_impl.hrl":342
+            let v_Xls_clause_1_Present_1 = _13;                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":342
+            let _14 = v_Xls_clause_1_Flags_1 & u32:2;                           // @erl "../include/phenom_syndrome_cell_impl.hrl":343
+            let _15 = hls_integer::shift<false>(_14, u1:1);                     // @erl "../include/phenom_syndrome_cell_impl.hrl":343
+            let v_Xls_clause_1_Quiet_1 = _15;                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":343
+            let _16 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;          // @erl "../include/phenom_syndrome_cell_impl.hrl":344
+            let v_Xls_clause_1_NewSeen_1 = _16;                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":344
+            let _17 = ((v_Xls_clause_1_Parity_1) ^ (v_Xls_clause_1_Present_1));  // @erl "../include/phenom_syndrome_cell_impl.hrl":345
+            let v_Xls_clause_1_NewParity_1 = _17;                               // @erl "../include/phenom_syndrome_cell_impl.hrl":345
+            let _18 = v_Xls_clause_1_Syndrome_1.1.data_quiet;                   // @erl "../include/phenom_syndrome_cell_impl.hrl":346
+            let _19 = _18 & v_Xls_clause_1_Quiet_1;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":346
+            let v_Xls_clause_1_NewDataQuiet_1 = _19;                            // @erl "../include/phenom_syndrome_cell_impl.hrl":346
+            let _20 = Syndrome {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+              seen_sources: v_Xls_clause_1_NewSeen_1,                           // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+              data_parity: v_Xls_clause_1_NewParity_1,                          // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+              data_quiet: v_Xls_clause_1_NewDataQuiet_1,                        // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+              ..(v_Xls_clause_1_Syndrome_1).1                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+            let _21 = (Tag::SYNDROME, _20);                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+            let v_Xls_clause_1_Collected_1 = _21;                               // @erl "../include/phenom_syndrome_cell_impl.hrl":347
+            let _22 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);   // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+            let _46 = if _22 {                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+              let _23 = v_Xls_clause_1_Syndrome_1.1.cutoff_armed;               // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+              let _26 = if _23 {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+                let _24 = v_Xls_clause_1_Syndrome_1.1.cutoff_step;              // @erl "../include/phenom_syndrome_cell_impl.hrl":359
+                let _25 = hls_integer::less_equal(_24, v_Xls_clause_1_Step_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":359
+                (_25, hls_failure::NONE)                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":358
+              let v_Xls_clause_1_CutoffApplies_1 = _26.0;                       // @erl "../include/phenom_syndrome_cell_impl.hrl":357
+              let _27 = v_Xls_clause_1_Syndrome_1.1.noise_disabled;             // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+              let _28 = if _27 {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+                (v_Xls_clause_1_CutoffApplies_1, hls_failure::NONE)             // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":361
+              let v_Xls_clause_1_NoiseDisabled_1 = _28.0;                       // @erl "../include/phenom_syndrome_cell_impl.hrl":360
+              let _35 = if v_Xls_clause_1_NoiseDisabled_1 {                     // @erl "../include/phenom_syndrome_cell_impl.hrl":364
+                let _29 = (v_Xls_clause_1_RandomState_1, u32:0, );              // @erl "../include/phenom_syndrome_cell_impl.hrl":366
+                (_29, hls_failure::NONE)                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":364
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":364
+                let _29 = (v_Xls_clause_1_RandomState_1 ^ (v_Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;  // @erl "../include/phenom_syndrome_cell_impl.hrl":368
+                let _30 = (_29 ^ (_29 >> u32:17)) & u32:0xffffffff;             // @erl "../include/phenom_syndrome_cell_impl.hrl":368
+                let _31 = (_30 ^ (_30 << u32:5)) & u32:0xffffffff;              // @erl "../include/phenom_syndrome_cell_impl.hrl":368
+                let v_Xls_clause_1_Sample_1 = _31;                              // @erl "../include/phenom_syndrome_cell_impl.hrl":368
+                let _33 = {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                  let _32 = v_Xls_clause_1_Sample_1 < v_Xls_clause_1_Threshold_1;  // @erl "../include/phenom_syndrome_cell_impl.hrl":371
+                  if _32 {                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                    (u32:1, hls_failure::NONE)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                  } else {                                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                    {                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                      (u32:0, hls_failure::NONE)                                // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                    }                                                           // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                  }                                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                };                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":370
+                let v_Xls_clause_1_Hit_1 = _33.0;                               // @erl "../include/phenom_syndrome_cell_impl.hrl":369
+                let _34 = (v_Xls_clause_1_Sample_1, v_Xls_clause_1_Hit_1, );    // @erl "../include/phenom_syndrome_cell_impl.hrl":374
+                (_34, _33.1)                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":364
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":364
+              let v_Xls_clause_1_NextRandom_1 = _35.0.0;                        // @erl "../include/phenom_syndrome_cell_impl.hrl":363
+              let v_Xls_clause_1_Measurement_1 = _35.0.1;                       // @erl "../include/phenom_syndrome_cell_impl.hrl":363
+              let _36 = ((v_Xls_clause_1_NewParity_1) ^ (v_Xls_clause_1_Measurement_1));  // @erl "../include/phenom_syndrome_cell_impl.hrl":376
+              let _37 = ((_36) ^ (v_Xls_clause_1_PreviousMeasurement_1));       // @erl "../include/phenom_syndrome_cell_impl.hrl":376
+              let v_Xls_clause_1_Detection_1 = _37;                             // @erl "../include/phenom_syndrome_cell_impl.hrl":376
+              let _38 = if v_Xls_clause_1_NoiseDisabled_1 {                     // @erl "../include/phenom_syndrome_cell_impl.hrl":381
+                (v_Xls_clause_1_NewDataQuiet_1, hls_failure::NONE)              // @erl "../include/phenom_syndrome_cell_impl.hrl":381
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":381
+                (u32:0, hls_failure::NONE)                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":381
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":381
+              let _39 = v_Xls_clause_1_Syndrome_1.1.cutoff_armed;               // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+              let _41 = if _39 {                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+                let _40 = !v_Xls_clause_1_CutoffApplies_1;                      // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+                (_40, hls_failure::NONE)                                        // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+              } else {                                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":387
+              let _42 = Syndrome {                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                previous_measurement: v_Xls_clause_1_Measurement_1,             // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                announcement: v_Xls_clause_1_Detection_1,                       // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                announcement_quiet: _38.0,                                      // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                random_state: v_Xls_clause_1_NextRandom_1,                      // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                noise_disabled: v_Xls_clause_1_NoiseDisabled_1,                 // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                cutoff_armed: _41.0,                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+                ..(v_Xls_clause_1_Collected_1).1                                // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+              };                                                                // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+              let _43 = (Tag::SYNDROME, _42);                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+              let v_Xls_clause_1_Complete_1 = _43;                              // @erl "../include/phenom_syndrome_cell_impl.hrl":377
+              let v_Xls_clause_1_NextSyndrome_1 = v_Xls_clause_1_Complete_1;    // @erl "../include/phenom_syndrome_cell_impl.hrl":352
+              let _44 = (Phase::ANNOUNCING, v_Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":391
+              let _45 = (_44.0, _44.1, _44.2, _44.3, hls_failure::NONE);        // @erl "../include/phenom_syndrome_cell_impl.hrl":391
+              (_45, hls_failure::first_all([_26.1, _28.1, _35.1, _38.1, _41.1]))  // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+              let v_Xls_clause_1_NextSyndrome_1 = v_Xls_clause_1_Collected_1;   // @erl "../include/phenom_syndrome_cell_impl.hrl":352
+              let _23 = (Phase::COLLECTING, v_Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":391
+              let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::NONE);        // @erl "../include/phenom_syndrome_cell_impl.hrl":391
+              (_24, hls_failure::NONE)                                          // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":353
+            if ((_46.1) != hls_failure::NONE) {                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+              (phase, data, Directive::FAIL, u1:0, _46.1)                       // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+              (_46.0.0, _46.0.1.1, _46.0.2, _46.0.3, _46.0.4)                   // @erl "../include/phenom_syndrome_cell_impl.hrl":326
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":326
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L393);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":392
+            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":393
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L393);  // @erl "../include/phenom_syndrome_cell_impl.hrl":393
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":392
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":392
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":392
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":392
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":392
           }
         },
         Phase::ANNOUNCING => {
-          let v_Xls_clause_1_NextStep_1 = message.step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = ((v_Xls_clause_1_Step_1) + (1));
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_NextStep_1, _1);
+          let v_Xls_clause_1_NextStep_1 = message.step;                         // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));                             // @erl "../include/phenom_syndrome_cell_impl.hrl":445
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":445
+          let _2 = hls_integer::equal(v_Xls_clause_1_NextStep_1, _1);           // @erl "../include/phenom_syndrome_cell_impl.hrl":445
           if _2 {
-            let _3 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-            }
+            let _3 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":446
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":446
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+              (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":441
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":441
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L448);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":447
+            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":448
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L448);  // @erl "../include/phenom_syndrome_cell_impl.hrl":448
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":447
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":447
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":447
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":447
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":447
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -1205,83 +1205,83 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       let message = noisecutoff_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L254);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":253
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":254
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L254);  // @erl "../include/phenom_syndrome_cell_impl.hrl":254
+          if (bool:false) {                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":253
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_syndrome_cell_impl.hrl":253
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":253
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":253
+          }                                                                     // @erl "../include/phenom_syndrome_cell_impl.hrl":253
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
-            (_0, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;       // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {  // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":309
+            (_0, hls_failure::NONE)                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":299
           if _1.0 {
-            let _2 = Syndrome {
-              cutoff_armed: bool:1,
-              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,
-              ..(v_Xls_clause_1_Syndrome_1).1
-            };
-            let _3 = (Tag::SYNDROME, _2);
-            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-            }
+            let _2 = Syndrome {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+              cutoff_armed: bool:1,                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,                     // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+              ..(v_Xls_clause_1_Syndrome_1).1                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+            let _3 = (Tag::SYNDROME, _2);                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":311
+            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_syndrome_cell_impl.hrl":310
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":310
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+              (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":299
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":299
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L317);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":316
+            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":317
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L317);  // @erl "../include/phenom_syndrome_cell_impl.hrl":317
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":316
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":316
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":316
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":316
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":316
           }
         },
         Phase::ANNOUNCING => {
-          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
-          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
-            (_0, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;       // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+          let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);                // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {  // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);  // @erl "../include/phenom_syndrome_cell_impl.hrl":421
+            (_0, hls_failure::NONE)                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+          } else {                                                              // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+          };                                                                    // @erl "../include/phenom_syndrome_cell_impl.hrl":411
           if _1.0 {
-            let _2 = Syndrome {
-              cutoff_armed: bool:1,
-              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,
-              ..(v_Xls_clause_1_Syndrome_1).1
-            };
-            let _3 = (Tag::SYNDROME, _2);
-            let _4 = (Phase::ANNOUNCING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-            }
+            let _2 = Syndrome {                                                 // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+              cutoff_armed: bool:1,                                             // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,                     // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+              ..(v_Xls_clause_1_Syndrome_1).1                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+            };                                                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+            let _3 = (Tag::SYNDROME, _2);                                       // @erl "../include/phenom_syndrome_cell_impl.hrl":423
+            let _4 = (Phase::ANNOUNCING, _3, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_syndrome_cell_impl.hrl":422
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);               // @erl "../include/phenom_syndrome_cell_impl.hrl":422
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+              (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":411
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":411
           } else {
-            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L429);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);              // @erl "../include/phenom_syndrome_cell_impl.hrl":428
+            let _0 = (Phase::ANNOUNCING, v_Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_syndrome_cell_impl.hrl":429
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_FB9AF846_L429);  // @erl "../include/phenom_syndrome_cell_impl.hrl":429
+            if (bool:false) {                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":428
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_syndrome_cell_impl.hrl":428
+            } else {                                                            // @erl "../include/phenom_syndrome_cell_impl.hrl":428
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_syndrome_cell_impl.hrl":428
+            }                                                                   // @erl "../include/phenom_syndrome_cell_impl.hrl":428
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),

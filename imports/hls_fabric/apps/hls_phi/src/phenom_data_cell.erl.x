@@ -381,26 +381,26 @@ pub fn bits_from_datacell(s: Datacell) -> bits[354] {
   hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.seen_sources as bits[32]) ++ hls_bits::to_stream(s.threshold as bits[32]) ++ hls_bits::to_stream(s.event as bits[32]) ++ hls_bits::to_stream(s.random_state as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.accumulated_pauli as bits[32]) ++ hls_bits::to_stream(s.reply_request_id as bits[32]) ++ hls_bits::to_stream(s.reply_anticommutes as bits[32]) ++ hls_bits::to_stream(s.reply_resume as bits[32]) ++ hls_bits::to_stream(s.noise_disabled as bits[1]) ++ hls_bits::to_stream(s.cutoff_armed as bits[1]) ++ hls_bits::to_stream(s.cutoff_step as bits[32]) ++ zero!<bits[0]>())
 }
 
-fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // L604
-  let v_Cell_1 = argument_1;
-  let v_RequestId_1 = argument_2;
-  let v_Measurement_1 = argument_3;
-  let _0 = v_Cell_1.1.accumulated_pauli;
-  let _1 = ((((_0 >> u32:1) & v_Measurement_1) ^ (_0 & (v_Measurement_1 >> u32:1))) & u32:1) == u32:1;
-  let v_Anticommutes_1 = _1;
-  let _2 = if v_Anticommutes_1 {
-    (u32:1, hls_failure::NONE)
-  } else {
-    (u32:0, hls_failure::NONE)
-  };
-  let _3 = Datacell {
-    reply_request_id: v_RequestId_1,
-    reply_anticommutes: _2.0,
-    ..(v_Cell_1).1
-  };
-  let _4 = (Tag::DATA_CELL, _3);
-  (_4, _2.1)
-}
+fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // @erl "../include/phenom_data_cell_impl.hrl":604
+  let v_Cell_1 = argument_1;                                                    // @erl "../include/phenom_data_cell_impl.hrl":604
+  let v_RequestId_1 = argument_2;                                               // @erl "../include/phenom_data_cell_impl.hrl":604
+  let v_Measurement_1 = argument_3;                                             // @erl "../include/phenom_data_cell_impl.hrl":604
+  let _0 = v_Cell_1.1.accumulated_pauli;                                        // @erl "../include/phenom_data_cell_impl.hrl":605
+  let _1 = ((((_0 >> u32:1) & v_Measurement_1) ^ (_0 & (v_Measurement_1 >> u32:1))) & u32:1) == u32:1;  // @erl "../include/phenom_data_cell_impl.hrl":605
+  let v_Anticommutes_1 = _1;                                                    // @erl "../include/phenom_data_cell_impl.hrl":605
+  let _2 = if v_Anticommutes_1 {                                                // @erl "../include/phenom_data_cell_impl.hrl":609
+    (u32:1, hls_failure::NONE)                                                  // @erl "../include/phenom_data_cell_impl.hrl":609
+  } else {                                                                      // @erl "../include/phenom_data_cell_impl.hrl":609
+    (u32:0, hls_failure::NONE)                                                  // @erl "../include/phenom_data_cell_impl.hrl":609
+  };                                                                            // @erl "../include/phenom_data_cell_impl.hrl":609
+  let _3 = Datacell {                                                           // @erl "../include/phenom_data_cell_impl.hrl":606
+    reply_request_id: v_RequestId_1,                                            // @erl "../include/phenom_data_cell_impl.hrl":606
+    reply_anticommutes: _2.0,                                                   // @erl "../include/phenom_data_cell_impl.hrl":606
+    ..(v_Cell_1).1                                                              // @erl "../include/phenom_data_cell_impl.hrl":606
+  };                                                                            // @erl "../include/phenom_data_cell_impl.hrl":606
+  let _4 = (Tag::DATA_CELL, _3);                                                // @erl "../include/phenom_data_cell_impl.hrl":606
+  (_4, _2.1)                                                                    // @erl "../include/phenom_data_cell_impl.hrl":604
+}                                                                               // @erl "../include/phenom_data_cell_impl.hrl":604
 
 pub enum OutputPort : u8 {
   NORTH = u8:0,
@@ -449,45 +449,45 @@ struct ActorDispatch {
   phase_boundary: u1,
 }
 
-fn initial_actor_state_outcome() -> (bool, ActorState) {  // L216
-  let _0 = Datacell {
-    ..zero!<Datacell>()
-  };
-  let _1 = (Tag::DATA_CELL, _0);
-  let _2 = (Phase::CONFIGURING, _1, );
-  (bool:false, ActorState {
-    phase: _2.0,
-    entered_from: _2.0,
-    data: _2.1.1,
-    enter_pending: u1:1,
-    ..zero!<ActorState>()
-  })
-}
-const INITIAL_ACTOR_STATE = initial_actor_state_outcome();
-const_assert!(!INITIAL_ACTOR_STATE.0);
+fn initial_actor_state_outcome() -> (bool, ActorState) {                        // @erl "../include/phenom_data_cell_impl.hrl":216
+  let _0 = Datacell {                                                           // @erl "../include/phenom_data_cell_impl.hrl":217
+    ..zero!<Datacell>()                                                         // @erl "../include/phenom_data_cell_impl.hrl":217
+  };                                                                            // @erl "../include/phenom_data_cell_impl.hrl":217
+  let _1 = (Tag::DATA_CELL, _0);                                                // @erl "../include/phenom_data_cell_impl.hrl":217
+  let _2 = (Phase::CONFIGURING, _1, );                                          // @erl "../include/phenom_data_cell_impl.hrl":217
+  (bool:false, ActorState {                                                     // @erl "../include/phenom_data_cell_impl.hrl":216
+    phase: _2.0,                                                                // @erl "../include/phenom_data_cell_impl.hrl":216
+    entered_from: _2.0,                                                         // @erl "../include/phenom_data_cell_impl.hrl":216
+    data: _2.1.1,                                                               // @erl "../include/phenom_data_cell_impl.hrl":216
+    enter_pending: u1:1,                                                        // @erl "../include/phenom_data_cell_impl.hrl":216
+    ..zero!<ActorState>()                                                       // @erl "../include/phenom_data_cell_impl.hrl":216
+  })                                                                            // @erl "../include/phenom_data_cell_impl.hrl":216
+}                                                                               // @erl "../include/phenom_data_cell_impl.hrl":216
+const INITIAL_ACTOR_STATE = initial_actor_state_outcome();                      // @erl "../include/phenom_data_cell_impl.hrl":216
+const_assert!(!INITIAL_ACTOR_STATE.0);                                          // @erl "../include/phenom_data_cell_impl.hrl":216
 
-fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }
+fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }                // @erl "../include/phenom_data_cell_impl.hrl":216
 
 fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::DATA_CELL, data);
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _0 = ();
-      let _1 = ();
-      let _2 = (v_Xls_entry_0_1, _0, _1, );
-      let _3 = {
-        let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:0,
-            payloads: zero!<bits[96]>(),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_data_cell_impl.hrl":232
+      let v_Cell_1 = (Tag::DATA_CELL, data);                                    // @erl "../include/phenom_data_cell_impl.hrl":232
+      let v_Xls_entry_0_1 = v_Cell_1;                                           // @erl "../include/phenom_data_cell_impl.hrl":233
+      let _0 = ();                                                              // @erl "../include/phenom_data_cell_impl.hrl":233
+      let _1 = ();                                                              // @erl "../include/phenom_data_cell_impl.hrl":233
+      let _2 = (v_Xls_entry_0_1, _0, _1, );                                     // @erl "../include/phenom_data_cell_impl.hrl":233
+      let _3 = {                                                                // @erl "../include/phenom_data_cell_impl.hrl":233
+        let evaluated = _2;                                                     // @erl "../include/phenom_data_cell_impl.hrl":233
+        EntryOutcome {                                                          // @erl "../include/phenom_data_cell_impl.hrl":233
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_data_cell_impl.hrl":233
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_data_cell_impl.hrl":233
+          effects: EntryEffects {                                               // @erl "../include/phenom_data_cell_impl.hrl":233
+            layout: u8:0,                                                       // @erl "../include/phenom_data_cell_impl.hrl":233
+            payloads: zero!<bits[96]>(),                                        // @erl "../include/phenom_data_cell_impl.hrl":233
+          },                                                                    // @erl "../include/phenom_data_cell_impl.hrl":233
+        }                                                                       // @erl "../include/phenom_data_cell_impl.hrl":233
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":233
       if bool:false {
         EntryOutcome {
           data: data,
@@ -499,23 +499,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       }
     },
     Phase::COLLECTING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::DATA_CELL, data);
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _0 = ();
-      let _1 = ();
-      let _2 = (v_Xls_entry_0_1, _0, _1, );
-      let _3 = {
-        let evaluated = _2;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:1,
-            payloads: zero!<bits[96]>(),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_data_cell_impl.hrl":277
+      let v_Cell_1 = (Tag::DATA_CELL, data);                                    // @erl "../include/phenom_data_cell_impl.hrl":277
+      let v_Xls_entry_0_1 = v_Cell_1;                                           // @erl "../include/phenom_data_cell_impl.hrl":278
+      let _0 = ();                                                              // @erl "../include/phenom_data_cell_impl.hrl":278
+      let _1 = ();                                                              // @erl "../include/phenom_data_cell_impl.hrl":278
+      let _2 = (v_Xls_entry_0_1, _0, _1, );                                     // @erl "../include/phenom_data_cell_impl.hrl":278
+      let _3 = {                                                                // @erl "../include/phenom_data_cell_impl.hrl":278
+        let evaluated = _2;                                                     // @erl "../include/phenom_data_cell_impl.hrl":278
+        EntryOutcome {                                                          // @erl "../include/phenom_data_cell_impl.hrl":278
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_data_cell_impl.hrl":278
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_data_cell_impl.hrl":278
+          effects: EntryEffects {                                               // @erl "../include/phenom_data_cell_impl.hrl":278
+            layout: u8:1,                                                       // @erl "../include/phenom_data_cell_impl.hrl":278
+            payloads: zero!<bits[96]>(),                                        // @erl "../include/phenom_data_cell_impl.hrl":278
+          },                                                                    // @erl "../include/phenom_data_cell_impl.hrl":278
+        }                                                                       // @erl "../include/phenom_data_cell_impl.hrl":278
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":278
       if bool:false {
         EntryOutcome {
           data: data,
@@ -527,64 +527,64 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       }
     },
     Phase::REPORTING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::DATA_CELL, data);
-      let _0 = v_Cell_1.1.noise_disabled;
-      let _1 = if _0 {
-        (u32:2, hls_failure::NONE)
-      } else {
-        (u32:0, hls_failure::NONE)
-      };
-      let v_QuietFlag_1 = _1.0;
-      let _2 = v_Cell_1.1.step;
-      let _3 = v_Cell_1.1.event;
-      let _4 = _3 | v_QuietFlag_1;
-      let _5 = Phenomdata {
-        step: _2,
-        flags: _4,
-        ..zero!<Phenomdata>()
-      };
-      let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-      let v_Message_1 = _6;
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let _7 = Phenomdata {
-        source: u32:8,
-        ..(v_Message_1).1
-      };
-      let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
-      let v_Xls_entry_1_1 = _8;
-      let _9 = Phenomdata {
-        source: u32:4,
-        ..(v_Message_1).1
-      };
-      let _10 = (Tag::PHENOM_DATA, _9, bits_from_phenomdata(_9));
-      let v_Xls_entry_2_1 = _10;
-      let _11 = Phenomdata {
-        source: u32:2,
-        ..(v_Message_1).1
-      };
-      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));
-      let v_Xls_entry_3_1 = _12;
-      let _13 = Phenomdata {
-        source: u32:1,
-        ..(v_Message_1).1
-      };
-      let _14 = (Tag::PHENOM_DATA, _13, bits_from_phenomdata(_13));
-      let v_Xls_entry_4_1 = _14;
-      let _15 = ();
-      let _16 = (v_Xls_entry_1_1, v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, );
-      let _17 = (v_Xls_entry_0_1, _15, _16, );
-      let _18 = {
-        let evaluated = _17;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:2,
-            payloads: bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_data_cell_impl.hrl":409
+      let v_Cell_1 = (Tag::DATA_CELL, data);                                    // @erl "../include/phenom_data_cell_impl.hrl":409
+      let _0 = v_Cell_1.1.noise_disabled;                                       // @erl "../include/phenom_data_cell_impl.hrl":411
+      let _1 = if _0 {                                                          // @erl "../include/phenom_data_cell_impl.hrl":411
+        (u32:2, hls_failure::NONE)                                              // @erl "../include/phenom_data_cell_impl.hrl":411
+      } else {                                                                  // @erl "../include/phenom_data_cell_impl.hrl":411
+        (u32:0, hls_failure::NONE)                                              // @erl "../include/phenom_data_cell_impl.hrl":411
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":411
+      let v_QuietFlag_1 = _1.0;                                                 // @erl "../include/phenom_data_cell_impl.hrl":410
+      let _2 = v_Cell_1.1.step;                                                 // @erl "../include/phenom_data_cell_impl.hrl":416
+      let _3 = v_Cell_1.1.event;                                                // @erl "../include/phenom_data_cell_impl.hrl":417
+      let _4 = _3 | v_QuietFlag_1;                                              // @erl "../include/phenom_data_cell_impl.hrl":417
+      let _5 = Phenomdata {                                                     // @erl "../include/phenom_data_cell_impl.hrl":415
+        step: _2,                                                               // @erl "../include/phenom_data_cell_impl.hrl":415
+        flags: _4,                                                              // @erl "../include/phenom_data_cell_impl.hrl":415
+        ..zero!<Phenomdata>()                                                   // @erl "../include/phenom_data_cell_impl.hrl":415
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":415
+      let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));                // @erl "../include/phenom_data_cell_impl.hrl":415
+      let v_Message_1 = _6;                                                     // @erl "../include/phenom_data_cell_impl.hrl":415
+      let v_Xls_entry_0_1 = v_Cell_1;                                           // @erl "../include/phenom_data_cell_impl.hrl":419
+      let _7 = Phenomdata {                                                     // @erl "../include/phenom_data_cell_impl.hrl":420
+        source: u32:8,                                                          // @erl "../include/phenom_data_cell_impl.hrl":420
+        ..(v_Message_1).1                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));                // @erl "../include/phenom_data_cell_impl.hrl":420
+      let v_Xls_entry_1_1 = _8;                                                 // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _9 = Phenomdata {                                                     // @erl "../include/phenom_data_cell_impl.hrl":420
+        source: u32:4,                                                          // @erl "../include/phenom_data_cell_impl.hrl":420
+        ..(v_Message_1).1                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _10 = (Tag::PHENOM_DATA, _9, bits_from_phenomdata(_9));               // @erl "../include/phenom_data_cell_impl.hrl":420
+      let v_Xls_entry_2_1 = _10;                                                // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _11 = Phenomdata {                                                    // @erl "../include/phenom_data_cell_impl.hrl":420
+        source: u32:2,                                                          // @erl "../include/phenom_data_cell_impl.hrl":420
+        ..(v_Message_1).1                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));             // @erl "../include/phenom_data_cell_impl.hrl":420
+      let v_Xls_entry_3_1 = _12;                                                // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _13 = Phenomdata {                                                    // @erl "../include/phenom_data_cell_impl.hrl":420
+        source: u32:1,                                                          // @erl "../include/phenom_data_cell_impl.hrl":420
+        ..(v_Message_1).1                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _14 = (Tag::PHENOM_DATA, _13, bits_from_phenomdata(_13));             // @erl "../include/phenom_data_cell_impl.hrl":420
+      let v_Xls_entry_4_1 = _14;                                                // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _15 = ();                                                             // @erl "../include/phenom_data_cell_impl.hrl":419
+      let _16 = (v_Xls_entry_1_1, v_Xls_entry_2_1, v_Xls_entry_3_1, v_Xls_entry_4_1, );  // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _17 = (v_Xls_entry_0_1, _15, _16, );                                  // @erl "../include/phenom_data_cell_impl.hrl":420
+      let _18 = {                                                               // @erl "../include/phenom_data_cell_impl.hrl":420
+        let evaluated = _17;                                                    // @erl "../include/phenom_data_cell_impl.hrl":420
+        EntryOutcome {                                                          // @erl "../include/phenom_data_cell_impl.hrl":420
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_data_cell_impl.hrl":420
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_data_cell_impl.hrl":420
+          effects: EntryEffects {                                               // @erl "../include/phenom_data_cell_impl.hrl":420
+            layout: u8:2,                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]),  // @erl "../include/phenom_data_cell_impl.hrl":420
+          },                                                                    // @erl "../include/phenom_data_cell_impl.hrl":420
+        }                                                                       // @erl "../include/phenom_data_cell_impl.hrl":420
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":420
       if (_1.1) != hls_failure::NONE {
         EntryOutcome {
           data: data,
@@ -596,37 +596,37 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       }
     },
     Phase::REPLYING => {
-      let _v__OldPhase_1 = old_phase;
-      let v_Cell_1 = (Tag::DATA_CELL, data);
-      let _0 = v_Cell_1.1.reply_request_id;
-      let _1 = v_Cell_1.1.x;
-      let _2 = v_Cell_1.1.y;
-      let _3 = v_Cell_1.1.reply_anticommutes;
-      let _4 = Paulireply {
-        request_id: _0,
-        x: _1,
-        y: _2,
-        anticommutes: _3,
-        ..zero!<Paulireply>()
-      };
-      let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
-      let v_Reply_1 = _5;
-      let v_Xls_entry_0_1 = v_Cell_1;
-      let v_Xls_entry_1_1 = v_Reply_1;
-      let _6 = ();
-      let _7 = (v_Xls_entry_1_1, );
-      let _8 = (v_Xls_entry_0_1, _6, _7, );
-      let _9 = {
-        let evaluated = _8;
-        EntryOutcome {
-          data: evaluated.0.1,
-          failure: hls_failure::NONE,
-          effects: EntryEffects {
-            layout: u8:3,
-            payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.request_id as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.anticommutes as bits[32]),
-          },
-        }
-      };
+      let _v__OldPhase_1 = old_phase;                                           // @erl "../include/phenom_data_cell_impl.hrl":506
+      let v_Cell_1 = (Tag::DATA_CELL, data);                                    // @erl "../include/phenom_data_cell_impl.hrl":506
+      let _0 = v_Cell_1.1.reply_request_id;                                     // @erl "../include/phenom_data_cell_impl.hrl":508
+      let _1 = v_Cell_1.1.x;                                                    // @erl "../include/phenom_data_cell_impl.hrl":509
+      let _2 = v_Cell_1.1.y;                                                    // @erl "../include/phenom_data_cell_impl.hrl":510
+      let _3 = v_Cell_1.1.reply_anticommutes;                                   // @erl "../include/phenom_data_cell_impl.hrl":511
+      let _4 = Paulireply {                                                     // @erl "../include/phenom_data_cell_impl.hrl":507
+        request_id: _0,                                                         // @erl "../include/phenom_data_cell_impl.hrl":507
+        x: _1,                                                                  // @erl "../include/phenom_data_cell_impl.hrl":507
+        y: _2,                                                                  // @erl "../include/phenom_data_cell_impl.hrl":507
+        anticommutes: _3,                                                       // @erl "../include/phenom_data_cell_impl.hrl":507
+        ..zero!<Paulireply>()                                                   // @erl "../include/phenom_data_cell_impl.hrl":507
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":507
+      let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));                // @erl "../include/phenom_data_cell_impl.hrl":507
+      let v_Reply_1 = _5;                                                       // @erl "../include/phenom_data_cell_impl.hrl":507
+      let v_Xls_entry_0_1 = v_Cell_1;                                           // @erl "../include/phenom_data_cell_impl.hrl":513
+      let v_Xls_entry_1_1 = v_Reply_1;                                          // @erl "../include/phenom_data_cell_impl.hrl":513
+      let _6 = ();                                                              // @erl "../include/phenom_data_cell_impl.hrl":513
+      let _7 = (v_Xls_entry_1_1, );                                             // @erl "../include/phenom_data_cell_impl.hrl":513
+      let _8 = (v_Xls_entry_0_1, _6, _7, );                                     // @erl "../include/phenom_data_cell_impl.hrl":513
+      let _9 = {                                                                // @erl "../include/phenom_data_cell_impl.hrl":513
+        let evaluated = _8;                                                     // @erl "../include/phenom_data_cell_impl.hrl":513
+        EntryOutcome {                                                          // @erl "../include/phenom_data_cell_impl.hrl":513
+          data: evaluated.0.1,                                                  // @erl "../include/phenom_data_cell_impl.hrl":513
+          failure: hls_failure::NONE,                                           // @erl "../include/phenom_data_cell_impl.hrl":513
+          effects: EntryEffects {                                               // @erl "../include/phenom_data_cell_impl.hrl":513
+            layout: u8:3,                                                       // @erl "../include/phenom_data_cell_impl.hrl":513
+            payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.request_id as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.anticommutes as bits[32]),  // @erl "../include/phenom_data_cell_impl.hrl":513
+          },                                                                    // @erl "../include/phenom_data_cell_impl.hrl":513
+        }                                                                       // @erl "../include/phenom_data_cell_impl.hrl":513
+      };                                                                        // @erl "../include/phenom_data_cell_impl.hrl":513
       if bool:false {
         EntryOutcome {
           data: data,
@@ -738,51 +738,51 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
       let message = phenomconfig_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Seed_1 = message.seed;
-          let v_Xls_clause_1_Threshold_1 = message.threshold;
-          let v_Xls_clause_1_X_1 = message.x;
-          let v_Xls_clause_1_Y_1 = message.y;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
+          let v_Xls_clause_1_Seed_1 = message.seed;                             // @erl "../include/phenom_data_cell_impl.hrl":234
+          let v_Xls_clause_1_Threshold_1 = message.threshold;                   // @erl "../include/phenom_data_cell_impl.hrl":234
+          let v_Xls_clause_1_X_1 = message.x;                                   // @erl "../include/phenom_data_cell_impl.hrl":234
+          let v_Xls_clause_1_Y_1 = message.y;                                   // @erl "../include/phenom_data_cell_impl.hrl":234
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":234
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);           // @erl "../include/phenom_data_cell_impl.hrl":238
           if _0 {
-            let _1 = u32:0;
-            let _2 = Datacell {
-              threshold: v_Xls_clause_1_Threshold_1,
-              random_state: v_Xls_clause_1_Seed_1,
-              x: v_Xls_clause_1_X_1,
-              y: v_Xls_clause_1_Y_1,
-              accumulated_pauli: _1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _3 = (Tag::DATA_CELL, _2);
-            let v_Xls_clause_1_Configured_1 = _3;
-            let _4 = (Phase::COLLECTING, v_Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-            }
+            let _1 = u32:0;                                                     // @erl "../include/phenom_data_cell_impl.hrl":244
+            let _2 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":239
+              threshold: v_Xls_clause_1_Threshold_1,                            // @erl "../include/phenom_data_cell_impl.hrl":239
+              random_state: v_Xls_clause_1_Seed_1,                              // @erl "../include/phenom_data_cell_impl.hrl":239
+              x: v_Xls_clause_1_X_1,                                            // @erl "../include/phenom_data_cell_impl.hrl":239
+              y: v_Xls_clause_1_Y_1,                                            // @erl "../include/phenom_data_cell_impl.hrl":239
+              accumulated_pauli: _1,                                            // @erl "../include/phenom_data_cell_impl.hrl":239
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":239
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":239
+            let _3 = (Tag::DATA_CELL, _2);                                      // @erl "../include/phenom_data_cell_impl.hrl":239
+            let v_Xls_clause_1_Configured_1 = _3;                               // @erl "../include/phenom_data_cell_impl.hrl":239
+            let _4 = (Phase::COLLECTING, v_Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":246
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":246
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":234
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":234
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":234
+              (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":234
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":234
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L248);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":247
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":248
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L248);  // @erl "../include/phenom_data_cell_impl.hrl":248
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":247
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":247
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":247
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":247
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":247
           }
         },
         Phase::REPLYING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L515);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":514
+          let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":515
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L515);  // @erl "../include/phenom_data_cell_impl.hrl":515
+          if (bool:false) {                                                     // @erl "../include/phenom_data_cell_impl.hrl":514
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":514
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":514
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_data_cell_impl.hrl":514
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":514
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
       }
@@ -797,395 +797,395 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
       let message = phenomquery_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":249
           if message.step == 0 {
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":254
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":254
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":249
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":249
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":249
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":249
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":249
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L256);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":255
+            let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":256
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L256);  // @erl "../include/phenom_data_cell_impl.hrl":256
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":255
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":255
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":255
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":255
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":255
           }
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Source_1 = message.source;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let v_Xls_clause_1_Seen_1 = data.seen_sources;
-          let _10 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
-            let _6 = if _0 {
-              (bool:1, hls_failure::NONE)
-            } else {
-              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
-              let _5 = if _1 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
-                let _4 = if _2 {
-                  (bool:1, hls_failure::NONE)
-                } else {
-                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
-                  (_3, hls_failure::NONE)
-                };
-                (_4.0, _4.1)
-              };
-              (_5.0, _5.1)
-            };
-            let _9 = if _6.0 {
-              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = hls_integer::equal(_7, sN[2]:0);
-              (_8, hls_failure::NONE)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
-            (_9.0, hls_failure::first_all([_6.1, _9.1]))
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_data_cell_impl.hrl":312
+          let v_Xls_clause_1_Source_1 = message.source;                         // @erl "../include/phenom_data_cell_impl.hrl":312
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":312
+          let v_Xls_clause_1_Seen_1 = data.seen_sources;                        // @erl "../include/phenom_data_cell_impl.hrl":312
+          let _10 = if v_Xls_clause_1_Step_1 == data.step {                     // @erl "../include/phenom_data_cell_impl.hrl":312
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);      // @erl "../include/phenom_data_cell_impl.hrl":317
+            let _6 = if _0 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":317
+              (bool:1, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":317
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":317
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);    // @erl "../include/phenom_data_cell_impl.hrl":317
+              let _5 = if _1 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":317
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":317
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":317
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);  // @erl "../include/phenom_data_cell_impl.hrl":317
+                let _4 = if _2 {                                                // @erl "../include/phenom_data_cell_impl.hrl":317
+                  (bool:1, hls_failure::NONE)                                   // @erl "../include/phenom_data_cell_impl.hrl":317
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":317
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);  // @erl "../include/phenom_data_cell_impl.hrl":317
+                  (_3, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":317
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":317
+                (_4.0, _4.1)                                                    // @erl "../include/phenom_data_cell_impl.hrl":317
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":317
+              (_5.0, _5.1)                                                      // @erl "../include/phenom_data_cell_impl.hrl":317
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":317
+            let _9 = if _6.0 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":317
+              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;         // @erl "../include/phenom_data_cell_impl.hrl":318
+              let _8 = hls_integer::equal(_7, sN[2]:0);                         // @erl "../include/phenom_data_cell_impl.hrl":318
+              (_8, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":317
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":317
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":317
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":317
+            (_9.0, hls_failure::first_all([_6.1, _9.1]))                        // @erl "../include/phenom_data_cell_impl.hrl":312
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":312
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_data_cell_impl.hrl":312
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":312
           if _10.0 {
-            let _11 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;
-            let v_Xls_clause_1_NewSeen_1 = _11;
-            let _12 = Datacell {
-              seen_sources: v_Xls_clause_1_NewSeen_1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _13 = (Tag::DATA_CELL, _12);
-            let v_Xls_clause_1_Collected_1 = _13;
-            let _14 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
-            let _41 = if _14 {
-              let _15 = v_Xls_clause_1_Cell_1.1.cutoff_armed;
-              let _18 = if _15 {
-                let _16 = v_Xls_clause_1_Cell_1.1.cutoff_step;
-                let _17 = hls_integer::less_equal(_16, v_Xls_clause_1_Step_1);
-                (_17, hls_failure::NONE)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              let v_Xls_clause_1_CutoffApplies_1 = _18.0;
-              let _19 = v_Xls_clause_1_Cell_1.1.noise_disabled;
-              let _20 = if _19 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                (v_Xls_clause_1_CutoffApplies_1, hls_failure::NONE)
-              };
-              let v_Xls_clause_1_NoiseDisabled_1 = _20.0;
-              let _29 = if v_Xls_clause_1_NoiseDisabled_1 {
-                let _21 = v_Xls_clause_1_Cell_1.1.random_state;
-                let _22 = (_21, u32:0, );
-                (_22, hls_failure::NONE)
-              } else {
-                let _21 = v_Xls_clause_1_Cell_1.1.random_state;
-                let _22 = (_21 ^ (_21 << u32:13)) & u32:0xffffffff;
-                let _23 = (_22 ^ (_22 >> u32:17)) & u32:0xffffffff;
-                let _24 = (_23 ^ (_23 << u32:5)) & u32:0xffffffff;
-                let v_Xls_clause_1_Sample_1 = _24;
-                let _27 = {
-                  let _25 = v_Xls_clause_1_Cell_1.1.threshold;
-                  let _26 = v_Xls_clause_1_Sample_1 < _25;
-                  if _26 {
-                    (u32:1, hls_failure::NONE)
-                  } else {
-                    {
-                      (u32:0, hls_failure::NONE)
-                    }
-                  }
-                };
-                let v_Xls_clause_1_Hit_1 = _27.0;
-                let _28 = (v_Xls_clause_1_Sample_1, v_Xls_clause_1_Hit_1, );
-                (_28, _27.1)
-              };
-              let v_Xls_clause_1_NextRandom_1 = _29.0.0;
-              let v_Xls_clause_1_Event_1 = _29.0.1;
-              let _33 = {
-                if v_Xls_clause_1_Event_1 == 1 {
-                  let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  let _31 = u32:3;
-                  let _32 = (_30 ^ _31);
-                  (_32, hls_failure::NONE)
-                } else {
-                  {
-                    let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-                    (_30, hls_failure::NONE)
-                  }
-                }
-              };
-              let v_Xls_clause_1_AccumulatedPauli_1 = _33.0;
-              let _34 = v_Xls_clause_1_Cell_1.1.cutoff_armed;
-              let _36 = if _34 {
-                let _35 = !v_Xls_clause_1_CutoffApplies_1;
-                (_35, hls_failure::NONE)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
-              let _37 = Datacell {
-                event: v_Xls_clause_1_Event_1,
-                random_state: v_Xls_clause_1_NextRandom_1,
-                accumulated_pauli: v_Xls_clause_1_AccumulatedPauli_1,
-                noise_disabled: v_Xls_clause_1_NoiseDisabled_1,
-                cutoff_armed: _36.0,
-                ..(v_Xls_clause_1_Collected_1).1
-              };
-              let _38 = (Tag::DATA_CELL, _37);
-              let v_Xls_clause_1_Completed_1 = _38;
-              let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Completed_1;
-              let _39 = (Phase::REPORTING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
-              let _40 = (_39.0, _39.1, _39.2, _39.3, hls_failure::NONE);
-              (_40, hls_failure::first_all([_18.1, _20.1, _29.1, _33.1, _36.1]))
-            } else {
-              let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Collected_1;
-              let _15 = (Phase::COLLECTING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
-              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);
-              (_16, hls_failure::NONE)
-            };
-            if ((_41.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _41.1)
-            } else {
-              (_41.0.0, _41.0.1.1, _41.0.2, _41.0.3, _41.0.4)
-            }
+            let _11 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;          // @erl "../include/phenom_data_cell_impl.hrl":320
+            let v_Xls_clause_1_NewSeen_1 = _11;                                 // @erl "../include/phenom_data_cell_impl.hrl":320
+            let _12 = Datacell {                                                // @erl "../include/phenom_data_cell_impl.hrl":321
+              seen_sources: v_Xls_clause_1_NewSeen_1,                           // @erl "../include/phenom_data_cell_impl.hrl":321
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":321
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":321
+            let _13 = (Tag::DATA_CELL, _12);                                    // @erl "../include/phenom_data_cell_impl.hrl":321
+            let v_Xls_clause_1_Collected_1 = _13;                               // @erl "../include/phenom_data_cell_impl.hrl":321
+            let _14 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);   // @erl "../include/phenom_data_cell_impl.hrl":323
+            let _41 = if _14 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":323
+              let _15 = v_Xls_clause_1_Cell_1.1.cutoff_armed;                   // @erl "../include/phenom_data_cell_impl.hrl":328
+              let _18 = if _15 {                                                // @erl "../include/phenom_data_cell_impl.hrl":328
+                let _16 = v_Xls_clause_1_Cell_1.1.cutoff_step;                  // @erl "../include/phenom_data_cell_impl.hrl":329
+                let _17 = hls_integer::less_equal(_16, v_Xls_clause_1_Step_1);  // @erl "../include/phenom_data_cell_impl.hrl":329
+                (_17, hls_failure::NONE)                                        // @erl "../include/phenom_data_cell_impl.hrl":328
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":328
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":328
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":328
+              let v_Xls_clause_1_CutoffApplies_1 = _18.0;                       // @erl "../include/phenom_data_cell_impl.hrl":327
+              let _19 = v_Xls_clause_1_Cell_1.1.noise_disabled;                 // @erl "../include/phenom_data_cell_impl.hrl":331
+              let _20 = if _19 {                                                // @erl "../include/phenom_data_cell_impl.hrl":331
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":331
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":331
+                (v_Xls_clause_1_CutoffApplies_1, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":331
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":331
+              let v_Xls_clause_1_NoiseDisabled_1 = _20.0;                       // @erl "../include/phenom_data_cell_impl.hrl":330
+              let _29 = if v_Xls_clause_1_NoiseDisabled_1 {                     // @erl "../include/phenom_data_cell_impl.hrl":334
+                let _21 = v_Xls_clause_1_Cell_1.1.random_state;                 // @erl "../include/phenom_data_cell_impl.hrl":336
+                let _22 = (_21, u32:0, );                                       // @erl "../include/phenom_data_cell_impl.hrl":336
+                (_22, hls_failure::NONE)                                        // @erl "../include/phenom_data_cell_impl.hrl":334
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":334
+                let _21 = v_Xls_clause_1_Cell_1.1.random_state;                 // @erl "../include/phenom_data_cell_impl.hrl":338
+                let _22 = (_21 ^ (_21 << u32:13)) & u32:0xffffffff;             // @erl "../include/phenom_data_cell_impl.hrl":338
+                let _23 = (_22 ^ (_22 >> u32:17)) & u32:0xffffffff;             // @erl "../include/phenom_data_cell_impl.hrl":338
+                let _24 = (_23 ^ (_23 << u32:5)) & u32:0xffffffff;              // @erl "../include/phenom_data_cell_impl.hrl":338
+                let v_Xls_clause_1_Sample_1 = _24;                              // @erl "../include/phenom_data_cell_impl.hrl":338
+                let _27 = {                                                     // @erl "../include/phenom_data_cell_impl.hrl":340
+                  let _25 = v_Xls_clause_1_Cell_1.1.threshold;                  // @erl "../include/phenom_data_cell_impl.hrl":341
+                  let _26 = v_Xls_clause_1_Sample_1 < _25;                      // @erl "../include/phenom_data_cell_impl.hrl":341
+                  if _26 {                                                      // @erl "../include/phenom_data_cell_impl.hrl":340
+                    (u32:1, hls_failure::NONE)                                  // @erl "../include/phenom_data_cell_impl.hrl":340
+                  } else {                                                      // @erl "../include/phenom_data_cell_impl.hrl":340
+                    {                                                           // @erl "../include/phenom_data_cell_impl.hrl":340
+                      (u32:0, hls_failure::NONE)                                // @erl "../include/phenom_data_cell_impl.hrl":340
+                    }                                                           // @erl "../include/phenom_data_cell_impl.hrl":340
+                  }                                                             // @erl "../include/phenom_data_cell_impl.hrl":340
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":340
+                let v_Xls_clause_1_Hit_1 = _27.0;                               // @erl "../include/phenom_data_cell_impl.hrl":339
+                let _28 = (v_Xls_clause_1_Sample_1, v_Xls_clause_1_Hit_1, );    // @erl "../include/phenom_data_cell_impl.hrl":344
+                (_28, _27.1)                                                    // @erl "../include/phenom_data_cell_impl.hrl":334
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":334
+              let v_Xls_clause_1_NextRandom_1 = _29.0.0;                        // @erl "../include/phenom_data_cell_impl.hrl":333
+              let v_Xls_clause_1_Event_1 = _29.0.1;                             // @erl "../include/phenom_data_cell_impl.hrl":333
+              let _33 = {                                                       // @erl "../include/phenom_data_cell_impl.hrl":347
+                if v_Xls_clause_1_Event_1 == 1 {                                // @erl "../include/phenom_data_cell_impl.hrl":347
+                  let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;          // @erl "../include/phenom_data_cell_impl.hrl":350
+                  let _31 = u32:3;                                              // @erl "../include/phenom_data_cell_impl.hrl":351
+                  let _32 = (_30 ^ _31);                                        // @erl "../include/phenom_data_cell_impl.hrl":349
+                  (_32, hls_failure::NONE)                                      // @erl "../include/phenom_data_cell_impl.hrl":347
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":347
+                  {                                                             // @erl "../include/phenom_data_cell_impl.hrl":347
+                    let _30 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;        // @erl "../include/phenom_data_cell_impl.hrl":354
+                    (_30, hls_failure::NONE)                                    // @erl "../include/phenom_data_cell_impl.hrl":347
+                  }                                                             // @erl "../include/phenom_data_cell_impl.hrl":347
+                }                                                               // @erl "../include/phenom_data_cell_impl.hrl":347
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":347
+              let v_Xls_clause_1_AccumulatedPauli_1 = _33.0;                    // @erl "../include/phenom_data_cell_impl.hrl":346
+              let _34 = v_Xls_clause_1_Cell_1.1.cutoff_armed;                   // @erl "../include/phenom_data_cell_impl.hrl":361
+              let _36 = if _34 {                                                // @erl "../include/phenom_data_cell_impl.hrl":361
+                let _35 = !v_Xls_clause_1_CutoffApplies_1;                      // @erl "../include/phenom_data_cell_impl.hrl":361
+                (_35, hls_failure::NONE)                                        // @erl "../include/phenom_data_cell_impl.hrl":361
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":361
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":361
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":361
+              let _37 = Datacell {                                              // @erl "../include/phenom_data_cell_impl.hrl":356
+                event: v_Xls_clause_1_Event_1,                                  // @erl "../include/phenom_data_cell_impl.hrl":356
+                random_state: v_Xls_clause_1_NextRandom_1,                      // @erl "../include/phenom_data_cell_impl.hrl":356
+                accumulated_pauli: v_Xls_clause_1_AccumulatedPauli_1,           // @erl "../include/phenom_data_cell_impl.hrl":356
+                noise_disabled: v_Xls_clause_1_NoiseDisabled_1,                 // @erl "../include/phenom_data_cell_impl.hrl":356
+                cutoff_armed: _36.0,                                            // @erl "../include/phenom_data_cell_impl.hrl":356
+                ..(v_Xls_clause_1_Collected_1).1                                // @erl "../include/phenom_data_cell_impl.hrl":356
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":356
+              let _38 = (Tag::DATA_CELL, _37);                                  // @erl "../include/phenom_data_cell_impl.hrl":356
+              let v_Xls_clause_1_Completed_1 = _38;                             // @erl "../include/phenom_data_cell_impl.hrl":356
+              let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Completed_1;       // @erl "../include/phenom_data_cell_impl.hrl":322
+              let _39 = (Phase::REPORTING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":365
+              let _40 = (_39.0, _39.1, _39.2, _39.3, hls_failure::NONE);        // @erl "../include/phenom_data_cell_impl.hrl":365
+              (_40, hls_failure::first_all([_18.1, _20.1, _29.1, _33.1, _36.1]))  // @erl "../include/phenom_data_cell_impl.hrl":323
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":323
+              let v_Xls_clause_1_NextCell_1 = v_Xls_clause_1_Collected_1;       // @erl "../include/phenom_data_cell_impl.hrl":322
+              let _15 = (Phase::COLLECTING, v_Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":365
+              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);        // @erl "../include/phenom_data_cell_impl.hrl":365
+              (_16, hls_failure::NONE)                                          // @erl "../include/phenom_data_cell_impl.hrl":323
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":323
+            if ((_41.1) != hls_failure::NONE) {                                 // @erl "../include/phenom_data_cell_impl.hrl":312
+              (phase, data, Directive::FAIL, u1:0, _41.1)                       // @erl "../include/phenom_data_cell_impl.hrl":312
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":312
+              (_41.0.0, _41.0.1.1, _41.0.2, _41.0.3, _41.0.4)                   // @erl "../include/phenom_data_cell_impl.hrl":312
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":312
           } else {
-            let v_Xls_clause_2_QueryStep_1 = message.step;
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let v_Xls_clause_2_Step_1 = data.step;
-            let _0 = ((v_Xls_clause_2_Step_1) + (1));
-            let _1 = _0 & 4294967295;
-            let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
+            let v_Xls_clause_2_QueryStep_1 = message.step;                      // @erl "../include/phenom_data_cell_impl.hrl":366
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":366
+            let v_Xls_clause_2_Step_1 = data.step;                              // @erl "../include/phenom_data_cell_impl.hrl":366
+            let _0 = ((v_Xls_clause_2_Step_1) + (1));                           // @erl "../include/phenom_data_cell_impl.hrl":370
+            let _1 = _0 & 4294967295;                                           // @erl "../include/phenom_data_cell_impl.hrl":370
+            let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);        // @erl "../include/phenom_data_cell_impl.hrl":370
             if _2 {
-              let _3 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
-              let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_4.0, _4.1.1, _4.2, _4.3, _4.4)
-              }
+              let _3 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":371
+              let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);             // @erl "../include/phenom_data_cell_impl.hrl":371
+              if (bool:false) {                                                 // @erl "../include/phenom_data_cell_impl.hrl":366
+                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)         // @erl "../include/phenom_data_cell_impl.hrl":366
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":366
+                (_4.0, _4.1.1, _4.2, _4.3, _4.4)                                // @erl "../include/phenom_data_cell_impl.hrl":366
+              }                                                                 // @erl "../include/phenom_data_cell_impl.hrl":366
             } else {
-              let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
-              let _0 = (Phase::COLLECTING, v_Xls_clause_3_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L373);
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+              let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);               // @erl "../include/phenom_data_cell_impl.hrl":372
+              let _0 = (Phase::COLLECTING, v_Xls_clause_3_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":373
+              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L373);  // @erl "../include/phenom_data_cell_impl.hrl":373
+              if (bool:false) {                                                 // @erl "../include/phenom_data_cell_impl.hrl":372
+                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)         // @erl "../include/phenom_data_cell_impl.hrl":372
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":372
+                (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                // @erl "../include/phenom_data_cell_impl.hrl":372
+              }                                                                 // @erl "../include/phenom_data_cell_impl.hrl":372
             }
           }
         },
         Phase::REPORTING => {
-          let v_Xls_clause_1_QueryStep_1 = message.step;
-          let v_Xls_clause_1_Source_1 = message.source;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _0 = ((v_Xls_clause_1_Step_1) + (1));
-          let _1 = _0 & 4294967295;
-          let _2 = hls_integer::equal(v_Xls_clause_1_QueryStep_1, _1);
-          let _10 = if _2 {
-            let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
-            let _9 = if _3 {
-              (bool:1, hls_failure::NONE)
-            } else {
-              let _4 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
-              let _8 = if _4 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                let _5 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
-                let _7 = if _5 {
-                  (bool:1, hls_failure::NONE)
-                } else {
-                  let _6 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
-                  (_6, hls_failure::NONE)
-                };
-                (_7.0, _7.1)
-              };
-              (_8.0, _8.1)
-            };
-            (_9.0, _9.1)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_QueryStep_1 = message.step;                        // @erl "../include/phenom_data_cell_impl.hrl":455
+          let v_Xls_clause_1_Source_1 = message.source;                         // @erl "../include/phenom_data_cell_impl.hrl":455
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":455
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_data_cell_impl.hrl":455
+          let _0 = ((v_Xls_clause_1_Step_1) + (1));                             // @erl "../include/phenom_data_cell_impl.hrl":460
+          let _1 = _0 & 4294967295;                                             // @erl "../include/phenom_data_cell_impl.hrl":460
+          let _2 = hls_integer::equal(v_Xls_clause_1_QueryStep_1, _1);          // @erl "../include/phenom_data_cell_impl.hrl":460
+          let _10 = if _2 {                                                     // @erl "../include/phenom_data_cell_impl.hrl":460
+            let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);      // @erl "../include/phenom_data_cell_impl.hrl":461
+            let _9 = if _3 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":461
+              (bool:1, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":461
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":461
+              let _4 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);    // @erl "../include/phenom_data_cell_impl.hrl":461
+              let _8 = if _4 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":461
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":461
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":461
+                let _5 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);  // @erl "../include/phenom_data_cell_impl.hrl":461
+                let _7 = if _5 {                                                // @erl "../include/phenom_data_cell_impl.hrl":461
+                  (bool:1, hls_failure::NONE)                                   // @erl "../include/phenom_data_cell_impl.hrl":461
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":461
+                  let _6 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);  // @erl "../include/phenom_data_cell_impl.hrl":461
+                  (_6, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":461
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":461
+                (_7.0, _7.1)                                                    // @erl "../include/phenom_data_cell_impl.hrl":461
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":461
+              (_8.0, _8.1)                                                      // @erl "../include/phenom_data_cell_impl.hrl":461
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":461
+            (_9.0, _9.1)                                                        // @erl "../include/phenom_data_cell_impl.hrl":460
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":460
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_data_cell_impl.hrl":460
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":460
           if _10.0 {
-            let _11 = Datacell {
-              step: v_Xls_clause_1_QueryStep_1,
-              seen_sources: v_Xls_clause_1_Source_1,
-              event: u32:0,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _12 = (Tag::DATA_CELL, _11);
-            let v_Xls_clause_1_Collecting_1 = _12;
-            let _13 = (Phase::COLLECTING, v_Xls_clause_1_Collecting_1, Directive::CONSUME, bool:0, );
-            let _14 = (_13.0, _13.1, _13.2, _13.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_14.0, _14.1.1, _14.2, _14.3, _14.4)
-            }
+            let _11 = Datacell {                                                // @erl "../include/phenom_data_cell_impl.hrl":463
+              step: v_Xls_clause_1_QueryStep_1,                                 // @erl "../include/phenom_data_cell_impl.hrl":463
+              seen_sources: v_Xls_clause_1_Source_1,                            // @erl "../include/phenom_data_cell_impl.hrl":463
+              event: u32:0,                                                     // @erl "../include/phenom_data_cell_impl.hrl":463
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":463
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":463
+            let _12 = (Tag::DATA_CELL, _11);                                    // @erl "../include/phenom_data_cell_impl.hrl":463
+            let v_Xls_clause_1_Collecting_1 = _12;                              // @erl "../include/phenom_data_cell_impl.hrl":463
+            let _13 = (Phase::COLLECTING, v_Xls_clause_1_Collecting_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":468
+            let _14 = (_13.0, _13.1, _13.2, _13.3, hls_failure::NONE);          // @erl "../include/phenom_data_cell_impl.hrl":468
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":455
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":455
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":455
+              (_14.0, _14.1.1, _14.2, _14.3, _14.4)                             // @erl "../include/phenom_data_cell_impl.hrl":455
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":455
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L470);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":469
+            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":470
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L470);  // @erl "../include/phenom_data_cell_impl.hrl":470
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":469
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":469
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":469
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":469
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":469
           }
         },
         Phase::REPLYING => {
-          let v_Xls_clause_1_Step_1 = message.step;
-          let v_Xls_clause_1_Source_1 = message.source;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let v_Xls_clause_1_Seen_1 = data.seen_sources;
-          let _10 = if (v_Xls_clause_1_Step_1 == data.step && data.reply_resume == 1) {
-            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
-            let _6 = if _0 {
-              (bool:1, hls_failure::NONE)
-            } else {
-              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
-              let _5 = if _1 {
-                (bool:1, hls_failure::NONE)
-              } else {
-                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
-                let _4 = if _2 {
-                  (bool:1, hls_failure::NONE)
-                } else {
-                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
-                  (_3, hls_failure::NONE)
-                };
-                (_4.0, _4.1)
-              };
-              (_5.0, _5.1)
-            };
-            let _9 = if _6.0 {
-              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = hls_integer::equal(_7, sN[2]:0);
-              (_8, hls_failure::NONE)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
-            (_9.0, hls_failure::first_all([_6.1, _9.1]))
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_Step_1 = message.step;                             // @erl "../include/phenom_data_cell_impl.hrl":516
+          let v_Xls_clause_1_Source_1 = message.source;                         // @erl "../include/phenom_data_cell_impl.hrl":516
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":516
+          let v_Xls_clause_1_Seen_1 = data.seen_sources;                        // @erl "../include/phenom_data_cell_impl.hrl":516
+          let _10 = if (v_Xls_clause_1_Step_1 == data.step && data.reply_resume == 1) {  // @erl "../include/phenom_data_cell_impl.hrl":516
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);      // @erl "../include/phenom_data_cell_impl.hrl":525
+            let _6 = if _0 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":525
+              (bool:1, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":525
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":525
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);    // @erl "../include/phenom_data_cell_impl.hrl":525
+              let _5 = if _1 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":525
+                (bool:1, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":525
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":525
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);  // @erl "../include/phenom_data_cell_impl.hrl":525
+                let _4 = if _2 {                                                // @erl "../include/phenom_data_cell_impl.hrl":525
+                  (bool:1, hls_failure::NONE)                                   // @erl "../include/phenom_data_cell_impl.hrl":525
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":525
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);  // @erl "../include/phenom_data_cell_impl.hrl":525
+                  (_3, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":525
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":525
+                (_4.0, _4.1)                                                    // @erl "../include/phenom_data_cell_impl.hrl":525
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":525
+              (_5.0, _5.1)                                                      // @erl "../include/phenom_data_cell_impl.hrl":525
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":525
+            let _9 = if _6.0 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":525
+              let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;         // @erl "../include/phenom_data_cell_impl.hrl":526
+              let _8 = hls_integer::equal(_7, sN[2]:0);                         // @erl "../include/phenom_data_cell_impl.hrl":526
+              (_8, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":525
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":525
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":525
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":525
+            (_9.0, hls_failure::first_all([_6.1, _9.1]))                        // @erl "../include/phenom_data_cell_impl.hrl":516
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":516
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_data_cell_impl.hrl":516
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":516
           if _10.0 {
-            let _11 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;
-            let v_Xls_clause_1_NewSeen_1 = _11;
-            let _12 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
-            let _17 = if _12 {
-              let _13 = Datacell {
-                seen_sources: v_Xls_clause_1_NewSeen_1,
-                event: u32:0,
-                ..(v_Xls_clause_1_Cell_1).1
-              };
-              let _14 = (Tag::DATA_CELL, _13);
-              let _15 = (Phase::REPORTING, _14, Directive::CONSUME, bool:0, );
-              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);
-              (_16, hls_failure::NONE)
-            } else {
-              let _13 = Datacell {
-                seen_sources: v_Xls_clause_1_NewSeen_1,
-                ..(v_Xls_clause_1_Cell_1).1
-              };
-              let _14 = (Tag::DATA_CELL, _13);
-              let _15 = (Phase::REPLYING, _14, Directive::CONSUME, bool:0, );
-              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);
-              (_16, hls_failure::NONE)
-            };
-            if ((_17.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _17.1)
-            } else {
-              (_17.0.0, _17.0.1.1, _17.0.2, _17.0.3, _17.0.4)
-            }
+            let _11 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;          // @erl "../include/phenom_data_cell_impl.hrl":528
+            let v_Xls_clause_1_NewSeen_1 = _11;                                 // @erl "../include/phenom_data_cell_impl.hrl":528
+            let _12 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);   // @erl "../include/phenom_data_cell_impl.hrl":529
+            let _17 = if _12 {                                                  // @erl "../include/phenom_data_cell_impl.hrl":529
+              let _13 = Datacell {                                              // @erl "../include/phenom_data_cell_impl.hrl":534
+                seen_sources: v_Xls_clause_1_NewSeen_1,                         // @erl "../include/phenom_data_cell_impl.hrl":534
+                event: u32:0,                                                   // @erl "../include/phenom_data_cell_impl.hrl":534
+                ..(v_Xls_clause_1_Cell_1).1                                     // @erl "../include/phenom_data_cell_impl.hrl":534
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":534
+              let _14 = (Tag::DATA_CELL, _13);                                  // @erl "../include/phenom_data_cell_impl.hrl":534
+              let _15 = (Phase::REPORTING, _14, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":533
+              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);        // @erl "../include/phenom_data_cell_impl.hrl":533
+              (_16, hls_failure::NONE)                                          // @erl "../include/phenom_data_cell_impl.hrl":529
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":529
+              let _13 = Datacell {                                              // @erl "../include/phenom_data_cell_impl.hrl":531
+                seen_sources: v_Xls_clause_1_NewSeen_1,                         // @erl "../include/phenom_data_cell_impl.hrl":531
+                ..(v_Xls_clause_1_Cell_1).1                                     // @erl "../include/phenom_data_cell_impl.hrl":531
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":531
+              let _14 = (Tag::DATA_CELL, _13);                                  // @erl "../include/phenom_data_cell_impl.hrl":531
+              let _15 = (Phase::REPLYING, _14, Directive::CONSUME, bool:0, );   // @erl "../include/phenom_data_cell_impl.hrl":531
+              let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);        // @erl "../include/phenom_data_cell_impl.hrl":531
+              (_16, hls_failure::NONE)                                          // @erl "../include/phenom_data_cell_impl.hrl":529
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":529
+            if ((_17.1) != hls_failure::NONE) {                                 // @erl "../include/phenom_data_cell_impl.hrl":516
+              (phase, data, Directive::FAIL, u1:0, _17.1)                       // @erl "../include/phenom_data_cell_impl.hrl":516
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":516
+              (_17.0.0, _17.0.1.1, _17.0.2, _17.0.3, _17.0.4)                   // @erl "../include/phenom_data_cell_impl.hrl":516
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":516
           } else {
-            let v_Xls_clause_2_QueryStep_1 = message.step;
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let v_Xls_clause_2_Step_1 = data.step;
-            let _3 = if data.reply_resume == 1 {
-              let _0 = ((v_Xls_clause_2_Step_1) + (1));
-              let _1 = _0 & 4294967295;
-              let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
-              (_2, hls_failure::NONE)
-            } else {
-              (bool:0, hls_failure::NONE)
-            };
+            let v_Xls_clause_2_QueryStep_1 = message.step;                      // @erl "../include/phenom_data_cell_impl.hrl":540
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":540
+            let v_Xls_clause_2_Step_1 = data.step;                              // @erl "../include/phenom_data_cell_impl.hrl":540
+            let _3 = if data.reply_resume == 1 {                                // @erl "../include/phenom_data_cell_impl.hrl":540
+              let _0 = ((v_Xls_clause_2_Step_1) + (1));                         // @erl "../include/phenom_data_cell_impl.hrl":547
+              let _1 = _0 & 4294967295;                                         // @erl "../include/phenom_data_cell_impl.hrl":547
+              let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);      // @erl "../include/phenom_data_cell_impl.hrl":547
+              (_2, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":540
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":540
+              (bool:0, hls_failure::NONE)                                       // @erl "../include/phenom_data_cell_impl.hrl":540
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":540
             if _3.0 {
-              let _4 = (Phase::REPLYING, v_Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
-              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-              }
+              let _4 = (Phase::REPLYING, v_Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":548
+              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);             // @erl "../include/phenom_data_cell_impl.hrl":548
+              if (bool:false) {                                                 // @erl "../include/phenom_data_cell_impl.hrl":540
+                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)         // @erl "../include/phenom_data_cell_impl.hrl":540
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":540
+                (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                // @erl "../include/phenom_data_cell_impl.hrl":540
+              }                                                                 // @erl "../include/phenom_data_cell_impl.hrl":540
             } else {
-              let v_Xls_clause_3_QueryStep_1 = message.step;
-              let v_Xls_clause_3_Source_1 = message.source;
-              let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
-              let v_Xls_clause_3_Step_1 = data.step;
-              let _11 = if data.reply_resume == 2 {
-                let _0 = ((v_Xls_clause_3_Step_1) + (1));
-                let _1 = _0 & 4294967295;
-                let _2 = hls_integer::equal(v_Xls_clause_3_QueryStep_1, _1);
-                let _10 = if _2 {
-                  let _3 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[2]:1);
-                  let _9 = if _3 {
-                    (bool:1, hls_failure::NONE)
-                  } else {
-                    let _4 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[3]:2);
-                    let _8 = if _4 {
-                      (bool:1, hls_failure::NONE)
-                    } else {
-                      let _5 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[4]:4);
-                      let _7 = if _5 {
-                        (bool:1, hls_failure::NONE)
-                      } else {
-                        let _6 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[5]:8);
-                        (_6, hls_failure::NONE)
-                      };
-                      (_7.0, _7.1)
-                    };
-                    (_8.0, _8.1)
-                  };
-                  (_9.0, _9.1)
-                } else {
-                  (bool:0, hls_failure::NONE)
-                };
-                (_10.0, _10.1)
-              } else {
-                (bool:0, hls_failure::NONE)
-              };
+              let v_Xls_clause_3_QueryStep_1 = message.step;                    // @erl "../include/phenom_data_cell_impl.hrl":549
+              let v_Xls_clause_3_Source_1 = message.source;                     // @erl "../include/phenom_data_cell_impl.hrl":549
+              let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);               // @erl "../include/phenom_data_cell_impl.hrl":549
+              let v_Xls_clause_3_Step_1 = data.step;                            // @erl "../include/phenom_data_cell_impl.hrl":549
+              let _11 = if data.reply_resume == 2 {                             // @erl "../include/phenom_data_cell_impl.hrl":549
+                let _0 = ((v_Xls_clause_3_Step_1) + (1));                       // @erl "../include/phenom_data_cell_impl.hrl":557
+                let _1 = _0 & 4294967295;                                       // @erl "../include/phenom_data_cell_impl.hrl":557
+                let _2 = hls_integer::equal(v_Xls_clause_3_QueryStep_1, _1);    // @erl "../include/phenom_data_cell_impl.hrl":557
+                let _10 = if _2 {                                               // @erl "../include/phenom_data_cell_impl.hrl":557
+                  let _3 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[2]:1);  // @erl "../include/phenom_data_cell_impl.hrl":558
+                  let _9 = if _3 {                                              // @erl "../include/phenom_data_cell_impl.hrl":558
+                    (bool:1, hls_failure::NONE)                                 // @erl "../include/phenom_data_cell_impl.hrl":558
+                  } else {                                                      // @erl "../include/phenom_data_cell_impl.hrl":558
+                    let _4 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[3]:2);  // @erl "../include/phenom_data_cell_impl.hrl":558
+                    let _8 = if _4 {                                            // @erl "../include/phenom_data_cell_impl.hrl":558
+                      (bool:1, hls_failure::NONE)                               // @erl "../include/phenom_data_cell_impl.hrl":558
+                    } else {                                                    // @erl "../include/phenom_data_cell_impl.hrl":558
+                      let _5 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[4]:4);  // @erl "../include/phenom_data_cell_impl.hrl":558
+                      let _7 = if _5 {                                          // @erl "../include/phenom_data_cell_impl.hrl":558
+                        (bool:1, hls_failure::NONE)                             // @erl "../include/phenom_data_cell_impl.hrl":558
+                      } else {                                                  // @erl "../include/phenom_data_cell_impl.hrl":558
+                        let _6 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[5]:8);  // @erl "../include/phenom_data_cell_impl.hrl":558
+                        (_6, hls_failure::NONE)                                 // @erl "../include/phenom_data_cell_impl.hrl":558
+                      };                                                        // @erl "../include/phenom_data_cell_impl.hrl":558
+                      (_7.0, _7.1)                                              // @erl "../include/phenom_data_cell_impl.hrl":558
+                    };                                                          // @erl "../include/phenom_data_cell_impl.hrl":558
+                    (_8.0, _8.1)                                                // @erl "../include/phenom_data_cell_impl.hrl":558
+                  };                                                            // @erl "../include/phenom_data_cell_impl.hrl":558
+                  (_9.0, _9.1)                                                  // @erl "../include/phenom_data_cell_impl.hrl":557
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":557
+                  (bool:0, hls_failure::NONE)                                   // @erl "../include/phenom_data_cell_impl.hrl":557
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":557
+                (_10.0, _10.1)                                                  // @erl "../include/phenom_data_cell_impl.hrl":549
+              } else {                                                          // @erl "../include/phenom_data_cell_impl.hrl":549
+                (bool:0, hls_failure::NONE)                                     // @erl "../include/phenom_data_cell_impl.hrl":549
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":549
               if _11.0 {
-                let _12 = Datacell {
-                  step: v_Xls_clause_3_QueryStep_1,
-                  seen_sources: v_Xls_clause_3_Source_1,
-                  event: u32:0,
-                  ..(v_Xls_clause_3_Cell_1).1
-                };
-                let _13 = (Tag::DATA_CELL, _12);
-                let v_Xls_clause_3_Collecting_1 = _13;
-                let _14 = (Phase::COLLECTING, v_Xls_clause_3_Collecting_1, Directive::CONSUME, bool:0, );
-                let _15 = (_14.0, _14.1, _14.2, _14.3, hls_failure::NONE);
-                if (bool:false) {
-                  (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-                } else {
-                  (_15.0, _15.1.1, _15.2, _15.3, _15.4)
-                }
+                let _12 = Datacell {                                            // @erl "../include/phenom_data_cell_impl.hrl":560
+                  step: v_Xls_clause_3_QueryStep_1,                             // @erl "../include/phenom_data_cell_impl.hrl":560
+                  seen_sources: v_Xls_clause_3_Source_1,                        // @erl "../include/phenom_data_cell_impl.hrl":560
+                  event: u32:0,                                                 // @erl "../include/phenom_data_cell_impl.hrl":560
+                  ..(v_Xls_clause_3_Cell_1).1                                   // @erl "../include/phenom_data_cell_impl.hrl":560
+                };                                                              // @erl "../include/phenom_data_cell_impl.hrl":560
+                let _13 = (Tag::DATA_CELL, _12);                                // @erl "../include/phenom_data_cell_impl.hrl":560
+                let v_Xls_clause_3_Collecting_1 = _13;                          // @erl "../include/phenom_data_cell_impl.hrl":560
+                let _14 = (Phase::COLLECTING, v_Xls_clause_3_Collecting_1, Directive::CONSUME, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":565
+                let _15 = (_14.0, _14.1, _14.2, _14.3, hls_failure::NONE);      // @erl "../include/phenom_data_cell_impl.hrl":565
+                if (bool:false) {                                               // @erl "../include/phenom_data_cell_impl.hrl":549
+                  (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)       // @erl "../include/phenom_data_cell_impl.hrl":549
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":549
+                  (_15.0, _15.1.1, _15.2, _15.3, _15.4)                         // @erl "../include/phenom_data_cell_impl.hrl":549
+                }                                                               // @erl "../include/phenom_data_cell_impl.hrl":549
               } else {
-                let v_Xls_clause_4_Cell_1 = (Tag::DATA_CELL, data);
-                let _0 = (Phase::REPLYING, v_Xls_clause_4_Cell_1, Directive::FAIL, bool:0, );
-                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L567);
-                if (bool:false) {
-                  (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-                } else {
-                  (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-                }
+                let v_Xls_clause_4_Cell_1 = (Tag::DATA_CELL, data);             // @erl "../include/phenom_data_cell_impl.hrl":566
+                let _0 = (Phase::REPLYING, v_Xls_clause_4_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":567
+                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L567);  // @erl "../include/phenom_data_cell_impl.hrl":567
+                if (bool:false) {                                               // @erl "../include/phenom_data_cell_impl.hrl":566
+                  (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)       // @erl "../include/phenom_data_cell_impl.hrl":566
+                } else {                                                        // @erl "../include/phenom_data_cell_impl.hrl":566
+                  (_1.0, _1.1.1, _1.2, _1.3, _1.4)                              // @erl "../include/phenom_data_cell_impl.hrl":566
+                }                                                               // @erl "../include/phenom_data_cell_impl.hrl":566
               }
             }
           }
@@ -1221,122 +1221,122 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
       let message = pauliquery_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L258);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":257
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":258
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L258);  // @erl "../include/phenom_data_cell_impl.hrl":258
+          if (bool:false) {                                                     // @erl "../include/phenom_data_cell_impl.hrl":257
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":257
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":257
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_data_cell_impl.hrl":257
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":257
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_RequestId_1 = message.request_id;
-          let v_Xls_clause_1_Measurement_1 = message.measurement;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let v_Xls_clause_1_RequestId_1 = message.request_id;                  // @erl "../include/phenom_data_cell_impl.hrl":374
+          let v_Xls_clause_1_Measurement_1 = message.measurement;               // @erl "../include/phenom_data_cell_impl.hrl":374
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":374
           if data.noise_disabled == bool:true {
-            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);
-            let _6 = if _0 {
-              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);
-              let v_Xls_clause_1_Replying_1 = _1.0;
-              let _2 = Datacell {
-                reply_resume: u32:1,
-                ..(v_Xls_clause_1_Replying_1).1
-              };
-              let _3 = (Tag::DATA_CELL, _2);
-              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
-              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-              (_5, _1.1)
-            } else {
-              let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L391);
-              (_2, hls_failure::NONE)
-            };
-            if ((_6.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _6.1)
-            } else {
-              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3, _6.0.4)
-            }
+            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);                   // @erl "../include/phenom_data_cell_impl.hrl":382
+            let _6 = if _0 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":382
+              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);  // @erl "../include/phenom_data_cell_impl.hrl":384
+              let v_Xls_clause_1_Replying_1 = _1.0;                             // @erl "../include/phenom_data_cell_impl.hrl":384
+              let _2 = Datacell {                                               // @erl "../include/phenom_data_cell_impl.hrl":386
+                reply_resume: u32:1,                                            // @erl "../include/phenom_data_cell_impl.hrl":386
+                ..(v_Xls_clause_1_Replying_1).1                                 // @erl "../include/phenom_data_cell_impl.hrl":386
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":386
+              let _3 = (Tag::DATA_CELL, _2);                                    // @erl "../include/phenom_data_cell_impl.hrl":386
+              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_data_cell_impl.hrl":385
+              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);             // @erl "../include/phenom_data_cell_impl.hrl":385
+              (_5, _1.1)                                                        // @erl "../include/phenom_data_cell_impl.hrl":382
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":382
+              let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":391
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L391);  // @erl "../include/phenom_data_cell_impl.hrl":391
+              (_2, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":382
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":382
+            if ((_6.1) != hls_failure::NONE) {                                  // @erl "../include/phenom_data_cell_impl.hrl":374
+              (phase, data, Directive::FAIL, u1:0, _6.1)                        // @erl "../include/phenom_data_cell_impl.hrl":374
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":374
+              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3, _6.0.4)                        // @erl "../include/phenom_data_cell_impl.hrl":374
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":374
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L394);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":393
+            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":394
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L394);  // @erl "../include/phenom_data_cell_impl.hrl":394
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":393
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":393
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":393
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":393
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":393
           }
         },
         Phase::REPORTING => {
-          let v_Xls_clause_1_RequestId_1 = message.request_id;
-          let v_Xls_clause_1_Measurement_1 = message.measurement;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let v_Xls_clause_1_RequestId_1 = message.request_id;                  // @erl "../include/phenom_data_cell_impl.hrl":471
+          let v_Xls_clause_1_Measurement_1 = message.measurement;               // @erl "../include/phenom_data_cell_impl.hrl":471
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":471
           if data.noise_disabled == bool:true {
-            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);
-            let _6 = if _0 {
-              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);
-              let v_Xls_clause_1_Replying_1 = _1.0;
-              let _2 = Datacell {
-                reply_resume: u32:2,
-                ..(v_Xls_clause_1_Replying_1).1
-              };
-              let _3 = (Tag::DATA_CELL, _2);
-              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
-              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-              (_5, _1.1)
-            } else {
-              let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L488);
-              (_2, hls_failure::NONE)
-            };
-            if ((_6.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _6.1)
-            } else {
-              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3, _6.0.4)
-            }
+            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);                   // @erl "../include/phenom_data_cell_impl.hrl":479
+            let _6 = if _0 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":479
+              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);  // @erl "../include/phenom_data_cell_impl.hrl":481
+              let v_Xls_clause_1_Replying_1 = _1.0;                             // @erl "../include/phenom_data_cell_impl.hrl":481
+              let _2 = Datacell {                                               // @erl "../include/phenom_data_cell_impl.hrl":483
+                reply_resume: u32:2,                                            // @erl "../include/phenom_data_cell_impl.hrl":483
+                ..(v_Xls_clause_1_Replying_1).1                                 // @erl "../include/phenom_data_cell_impl.hrl":483
+              };                                                                // @erl "../include/phenom_data_cell_impl.hrl":483
+              let _3 = (Tag::DATA_CELL, _2);                                    // @erl "../include/phenom_data_cell_impl.hrl":483
+              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_data_cell_impl.hrl":482
+              let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);             // @erl "../include/phenom_data_cell_impl.hrl":482
+              (_5, _1.1)                                                        // @erl "../include/phenom_data_cell_impl.hrl":479
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":479
+              let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":488
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L488);  // @erl "../include/phenom_data_cell_impl.hrl":488
+              (_2, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":479
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":479
+            if ((_6.1) != hls_failure::NONE) {                                  // @erl "../include/phenom_data_cell_impl.hrl":471
+              (phase, data, Directive::FAIL, u1:0, _6.1)                        // @erl "../include/phenom_data_cell_impl.hrl":471
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":471
+              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3, _6.0.4)                        // @erl "../include/phenom_data_cell_impl.hrl":471
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":471
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L491);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":490
+            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":491
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L491);  // @erl "../include/phenom_data_cell_impl.hrl":491
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":490
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":490
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":490
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":490
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":490
           }
         },
         Phase::REPLYING => {
-          let v_Xls_clause_1_RequestId_1 = message.request_id;
-          let v_Xls_clause_1_Measurement_1 = message.measurement;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let v_Xls_clause_1_RequestId_1 = message.request_id;                  // @erl "../include/phenom_data_cell_impl.hrl":584
+          let v_Xls_clause_1_Measurement_1 = message.measurement;               // @erl "../include/phenom_data_cell_impl.hrl":584
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":584
           if data.noise_disabled == bool:true {
-            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);
-            let _4 = if _0 {
-              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);
-              let v_Xls_clause_1_Replying_1 = _1.0;
-              let _2 = hls_failure::NONE;
-              let _3 = (Phase::REPLYING, v_Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, _2, );
-              (_3, _1.1)
-            } else {
-              let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L597);
-              (_2, hls_failure::NONE)
-            };
-            if ((_4.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _4.1)
-            } else {
-              (_4.0.0, _4.0.1.1, _4.0.2, _4.0.3, _4.0.4)
-            }
+            let _0 = (v_Xls_clause_1_Measurement_1 <= u32:3);                   // @erl "../include/phenom_data_cell_impl.hrl":592
+            let _4 = if _0 {                                                    // @erl "../include/phenom_data_cell_impl.hrl":592
+              let _1 = hls_local_prepare_reply__3(v_Xls_clause_1_Cell_1, v_Xls_clause_1_RequestId_1, v_Xls_clause_1_Measurement_1);  // @erl "../include/phenom_data_cell_impl.hrl":594
+              let v_Xls_clause_1_Replying_1 = _1.0;                             // @erl "../include/phenom_data_cell_impl.hrl":594
+              let _2 = hls_failure::NONE;                                       // @erl "../include/phenom_data_cell_impl.hrl":595
+              let _3 = (Phase::REPLYING, v_Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, _2, );  // @erl "../include/phenom_data_cell_impl.hrl":595
+              (_3, _1.1)                                                        // @erl "../include/phenom_data_cell_impl.hrl":592
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":592
+              let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":597
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L597);  // @erl "../include/phenom_data_cell_impl.hrl":597
+              (_2, hls_failure::NONE)                                           // @erl "../include/phenom_data_cell_impl.hrl":592
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":592
+            if ((_4.1) != hls_failure::NONE) {                                  // @erl "../include/phenom_data_cell_impl.hrl":584
+              (phase, data, Directive::FAIL, u1:0, _4.1)                        // @erl "../include/phenom_data_cell_impl.hrl":584
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":584
+              (_4.0.0, _4.0.1.1, _4.0.2, _4.0.3, _4.0.4)                        // @erl "../include/phenom_data_cell_impl.hrl":584
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":584
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::REPLYING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L600);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":599
+            let _0 = (Phase::REPLYING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":600
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L600);  // @erl "../include/phenom_data_cell_impl.hrl":600
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":599
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":599
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":599
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":599
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":599
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -1352,94 +1352,94 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
       let message = noisecutoff_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L260);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":259
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":260
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L260);  // @erl "../include/phenom_data_cell_impl.hrl":260
+          if (bool:false) {                                                     // @erl "../include/phenom_data_cell_impl.hrl":259
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":259
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":259
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_data_cell_impl.hrl":259
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":259
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
-            (_0, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;       // @erl "../include/phenom_data_cell_impl.hrl":279
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":279
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_data_cell_impl.hrl":279
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {  // @erl "../include/phenom_data_cell_impl.hrl":279
+            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);  // @erl "../include/phenom_data_cell_impl.hrl":289
+            (_0, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":279
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":279
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_data_cell_impl.hrl":279
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":279
           if _1.0 {
-            let _2 = Datacell {
-              cutoff_armed: bool:1,
-              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _3 = (Tag::DATA_CELL, _2);
-            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-            }
+            let _2 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":291
+              cutoff_armed: bool:1,                                             // @erl "../include/phenom_data_cell_impl.hrl":291
+              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,                     // @erl "../include/phenom_data_cell_impl.hrl":291
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":291
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":291
+            let _3 = (Tag::DATA_CELL, _2);                                      // @erl "../include/phenom_data_cell_impl.hrl":291
+            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_data_cell_impl.hrl":290
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":290
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":279
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":279
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":279
+              (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":279
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":279
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L297);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":296
+            let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":297
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L297);  // @erl "../include/phenom_data_cell_impl.hrl":297
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":296
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":296
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":296
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":296
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":296
           }
         },
         Phase::REPORTING => {
-          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let v_Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
-            (_0, hls_failure::NONE)
-          } else {
-            (bool:0, hls_failure::NONE)
-          };
+          let v_Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;       // @erl "../include/phenom_data_cell_impl.hrl":422
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":422
+          let v_Xls_clause_1_Step_1 = data.step;                                // @erl "../include/phenom_data_cell_impl.hrl":422
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {  // @erl "../include/phenom_data_cell_impl.hrl":422
+            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);  // @erl "../include/phenom_data_cell_impl.hrl":432
+            (_0, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":422
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":422
+            (bool:0, hls_failure::NONE)                                         // @erl "../include/phenom_data_cell_impl.hrl":422
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":422
           if _1.0 {
-            let _2 = Datacell {
-              cutoff_armed: bool:1,
-              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _3 = (Tag::DATA_CELL, _2);
-            let _4 = (Phase::REPORTING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_5.0, _5.1.1, _5.2, _5.3, _5.4)
-            }
+            let _2 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":434
+              cutoff_armed: bool:1,                                             // @erl "../include/phenom_data_cell_impl.hrl":434
+              cutoff_step: v_Xls_clause_1_FirstQuietStep_1,                     // @erl "../include/phenom_data_cell_impl.hrl":434
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":434
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":434
+            let _3 = (Tag::DATA_CELL, _2);                                      // @erl "../include/phenom_data_cell_impl.hrl":434
+            let _4 = (Phase::REPORTING, _3, Directive::CONSUME, bool:0, );      // @erl "../include/phenom_data_cell_impl.hrl":433
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":433
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":422
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":422
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":422
+              (_5.0, _5.1.1, _5.2, _5.3, _5.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":422
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":422
           } else {
-            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
-            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L440);
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+            let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);                 // @erl "../include/phenom_data_cell_impl.hrl":439
+            let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":440
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L440);  // @erl "../include/phenom_data_cell_impl.hrl":440
+            if (bool:false) {                                                   // @erl "../include/phenom_data_cell_impl.hrl":439
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)           // @erl "../include/phenom_data_cell_impl.hrl":439
+            } else {                                                            // @erl "../include/phenom_data_cell_impl.hrl":439
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                  // @erl "../include/phenom_data_cell_impl.hrl":439
+            }                                                                   // @erl "../include/phenom_data_cell_impl.hrl":439
           }
         },
         Phase::REPLYING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L569);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":568
+          let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":569
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L569);  // @erl "../include/phenom_data_cell_impl.hrl":569
+          if (bool:false) {                                                     // @erl "../include/phenom_data_cell_impl.hrl":568
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":568
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":568
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_data_cell_impl.hrl":568
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":568
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
       }
@@ -1448,92 +1448,92 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
       let message = pauliupdate_from_bits(frame.payload);
       match phase {
         Phase::CONFIGURING => {
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L262);
-          if (bool:false) {
-            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-          } else {
-            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-          }
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":261
+          let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":262
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L262);  // @erl "../include/phenom_data_cell_impl.hrl":262
+          if (bool:false) {                                                     // @erl "../include/phenom_data_cell_impl.hrl":261
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)             // @erl "../include/phenom_data_cell_impl.hrl":261
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":261
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)                                    // @erl "../include/phenom_data_cell_impl.hrl":261
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":261
         },
         Phase::COLLECTING => {
-          let v_Xls_clause_1_Pauli_1 = message.pauli;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);
-          let _7 = if _0 {
-            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);
-            let _3 = Datacell {
-              accumulated_pauli: _2,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _4 = (Tag::DATA_CELL, _3);
-            let _5 = (Phase::COLLECTING, _4, Directive::CONSUME, bool:0, );
-            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);
-            (_6, hls_failure::NONE)
-          } else {
-            let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L310);
-            (_2, hls_failure::NONE)
-          };
-          if ((_7.1) != hls_failure::NONE) {
-            (phase, data, Directive::FAIL, u1:0, _7.1)
-          } else {
-            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)
-          }
+          let v_Xls_clause_1_Pauli_1 = message.pauli;                           // @erl "../include/phenom_data_cell_impl.hrl":298
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":298
+          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);                           // @erl "../include/phenom_data_cell_impl.hrl":299
+          let _7 = if _0 {                                                      // @erl "../include/phenom_data_cell_impl.hrl":299
+            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;                 // @erl "../include/phenom_data_cell_impl.hrl":304
+            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);                             // @erl "../include/phenom_data_cell_impl.hrl":303
+            let _3 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":302
+              accumulated_pauli: _2,                                            // @erl "../include/phenom_data_cell_impl.hrl":302
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":302
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":302
+            let _4 = (Tag::DATA_CELL, _3);                                      // @erl "../include/phenom_data_cell_impl.hrl":302
+            let _5 = (Phase::COLLECTING, _4, Directive::CONSUME, bool:0, );     // @erl "../include/phenom_data_cell_impl.hrl":301
+            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":301
+            (_6, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":299
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":299
+            let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":310
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L310);  // @erl "../include/phenom_data_cell_impl.hrl":310
+            (_2, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":299
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":299
+          if ((_7.1) != hls_failure::NONE) {                                    // @erl "../include/phenom_data_cell_impl.hrl":298
+            (phase, data, Directive::FAIL, u1:0, _7.1)                          // @erl "../include/phenom_data_cell_impl.hrl":298
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":298
+            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)                          // @erl "../include/phenom_data_cell_impl.hrl":298
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":298
         },
         Phase::REPORTING => {
-          let v_Xls_clause_1_Pauli_1 = message.pauli;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);
-          let _7 = if _0 {
-            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);
-            let _3 = Datacell {
-              accumulated_pauli: _2,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _4 = (Tag::DATA_CELL, _3);
-            let _5 = (Phase::REPORTING, _4, Directive::CONSUME, bool:0, );
-            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);
-            (_6, hls_failure::NONE)
-          } else {
-            let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L453);
-            (_2, hls_failure::NONE)
-          };
-          if ((_7.1) != hls_failure::NONE) {
-            (phase, data, Directive::FAIL, u1:0, _7.1)
-          } else {
-            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)
-          }
+          let v_Xls_clause_1_Pauli_1 = message.pauli;                           // @erl "../include/phenom_data_cell_impl.hrl":441
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":441
+          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);                           // @erl "../include/phenom_data_cell_impl.hrl":442
+          let _7 = if _0 {                                                      // @erl "../include/phenom_data_cell_impl.hrl":442
+            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;                 // @erl "../include/phenom_data_cell_impl.hrl":447
+            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);                             // @erl "../include/phenom_data_cell_impl.hrl":446
+            let _3 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":445
+              accumulated_pauli: _2,                                            // @erl "../include/phenom_data_cell_impl.hrl":445
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":445
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":445
+            let _4 = (Tag::DATA_CELL, _3);                                      // @erl "../include/phenom_data_cell_impl.hrl":445
+            let _5 = (Phase::REPORTING, _4, Directive::CONSUME, bool:0, );      // @erl "../include/phenom_data_cell_impl.hrl":444
+            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":444
+            (_6, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":442
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":442
+            let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":453
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L453);  // @erl "../include/phenom_data_cell_impl.hrl":453
+            (_2, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":442
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":442
+          if ((_7.1) != hls_failure::NONE) {                                    // @erl "../include/phenom_data_cell_impl.hrl":441
+            (phase, data, Directive::FAIL, u1:0, _7.1)                          // @erl "../include/phenom_data_cell_impl.hrl":441
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":441
+            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)                          // @erl "../include/phenom_data_cell_impl.hrl":441
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":441
         },
         Phase::REPLYING => {
-          let v_Xls_clause_1_Pauli_1 = message.pauli;
-          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);
-          let _7 = if _0 {
-            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;
-            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);
-            let _3 = Datacell {
-              accumulated_pauli: _2,
-              ..(v_Xls_clause_1_Cell_1).1
-            };
-            let _4 = (Tag::DATA_CELL, _3);
-            let _5 = (Phase::REPLYING, _4, Directive::CONSUME, bool:0, );
-            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);
-            (_6, hls_failure::NONE)
-          } else {
-            let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L582);
-            (_2, hls_failure::NONE)
-          };
-          if ((_7.1) != hls_failure::NONE) {
-            (phase, data, Directive::FAIL, u1:0, _7.1)
-          } else {
-            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)
-          }
+          let v_Xls_clause_1_Pauli_1 = message.pauli;                           // @erl "../include/phenom_data_cell_impl.hrl":570
+          let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);                   // @erl "../include/phenom_data_cell_impl.hrl":570
+          let _0 = (v_Xls_clause_1_Pauli_1 <= u32:3);                           // @erl "../include/phenom_data_cell_impl.hrl":571
+          let _7 = if _0 {                                                      // @erl "../include/phenom_data_cell_impl.hrl":571
+            let _1 = v_Xls_clause_1_Cell_1.1.accumulated_pauli;                 // @erl "../include/phenom_data_cell_impl.hrl":576
+            let _2 = (_1 ^ v_Xls_clause_1_Pauli_1);                             // @erl "../include/phenom_data_cell_impl.hrl":575
+            let _3 = Datacell {                                                 // @erl "../include/phenom_data_cell_impl.hrl":574
+              accumulated_pauli: _2,                                            // @erl "../include/phenom_data_cell_impl.hrl":574
+              ..(v_Xls_clause_1_Cell_1).1                                       // @erl "../include/phenom_data_cell_impl.hrl":574
+            };                                                                  // @erl "../include/phenom_data_cell_impl.hrl":574
+            let _4 = (Tag::DATA_CELL, _3);                                      // @erl "../include/phenom_data_cell_impl.hrl":574
+            let _5 = (Phase::REPLYING, _4, Directive::CONSUME, bool:0, );       // @erl "../include/phenom_data_cell_impl.hrl":573
+            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);               // @erl "../include/phenom_data_cell_impl.hrl":573
+            (_6, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":571
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":571
+            let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );  // @erl "../include/phenom_data_cell_impl.hrl":582
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_5DC3A754_L582);  // @erl "../include/phenom_data_cell_impl.hrl":582
+            (_2, hls_failure::NONE)                                             // @erl "../include/phenom_data_cell_impl.hrl":571
+          };                                                                    // @erl "../include/phenom_data_cell_impl.hrl":571
+          if ((_7.1) != hls_failure::NONE) {                                    // @erl "../include/phenom_data_cell_impl.hrl":570
+            (phase, data, Directive::FAIL, u1:0, _7.1)                          // @erl "../include/phenom_data_cell_impl.hrl":570
+          } else {                                                              // @erl "../include/phenom_data_cell_impl.hrl":570
+            (_7.0.0, _7.0.1.1, _7.0.2, _7.0.3, _7.0.4)                          // @erl "../include/phenom_data_cell_impl.hrl":570
+          }                                                                     // @erl "../include/phenom_data_cell_impl.hrl":570
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
       }

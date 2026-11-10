@@ -1,9 +1,11 @@
 """Check packaged Erlang emission and the independent external-tool boundary without real XLS."""
 from pathlib import Path
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -29,7 +31,15 @@ class SourceToolchainTests(unittest.TestCase):
                 path.write_text('#!/bin/sh\necho forbidden-build-tool >&2\nexit 99\n')
                 path.chmod(0o755)
             fixture = stage/'fixture.erl'
-            shutil.copyfile(ROOT/'test/hls_protocol_boundary_fixture.erl', fixture)
+            source = (ROOT/'test/hls_protocol_boundary_fixture.erl').read_text().replace(
+                'C#cell{base=N}', 'C#cell{base=hls_fixture_math:adjust(N)}')
+            fixture.write_text(source)
+            actor_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                              if 'hls_fixture_math:adjust(N)' in line)
+            helper = stage/'hls_fixture_math.erl'
+            helper.write_text('-module(hls_fixture_math).\n-export([adjust/1]).\n'
+                              '-spec adjust(hls_nums:u32()) -> hls_nums:u32().\n'
+                              'adjust(Value) -> Value bxor 1.\n')
             config = stage/'config.erl'
             # JSON string escaping is valid for this fixture's ordinary Erlang filename.
             config.write_text('#{sources=>[{' + json.dumps(str(fixture)) + ',[]}],topology=>'
@@ -87,6 +97,44 @@ class SourceToolchainTests(unittest.TestCase):
             compiler_tools = next(release.glob('lib/erl_hls-*/priv/tools'))
             for name in ('compile_source_build.py', 'compile_xls.py'):
                 shutil.copyfile(compiler_tools/name, stage/name)
+            spec = importlib.util.spec_from_file_location('packaged_xls_consumer', stage/'compile_xls.py')
+            consumer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(consumer)
+            actor, = moved.glob('actors/actor_*.x')
+            generated_helper, = moved.glob('actors/*_helpers/hls_fixture_math.x')
+
+            def location(path: Path, token: str) -> tuple[int, int]:
+                """Pick code rather than annotation text; expected origins come from the input fixture."""
+                for number, line in enumerate(path.read_text().splitlines(), 1):
+                    code = line.split('//', 1)[0]
+                    if token in code:
+                        return number, code.index(token) + 1
+                self.fail(f'missing generated expression {token!r} in {path}')
+
+            wrapper = moved/manifest['units'][0]['source']
+            points = [(actor, location(actor, 'adjust('), (fixture.name, actor_line)),
+                      (generated_helper, location(generated_helper, '^'), (helper.name, 4)),
+                      (wrapper, location(wrapper, 'import '), None)]
+            # Origins are descriptive: attribution must not depend on the original project still existing.
+            fixture.rename(fixture.with_suffix('.retained'))
+            helper.rename(helper.with_suffix('.retained'))
+            for generated, (line, column), origin in points:
+                self.assertEqual(consumer.mapped_source(generated, line, column), origin)
+                raw = f'{generated.relative_to(moved)}:{line}:{column}: TypeInferenceError: injected failure\n'
+                (xls/'ir_converter_main').write_text('#!/bin/sh\nprintf %s ' + shlex.quote(raw) + ' >&2\nexit 7\n')
+                failed = subprocess.run([sys.executable, detached_driver, xls, moved], cwd=stage, env=env,
+                                        capture_output=True, text=True, timeout=30)
+                self.assertNotEqual(failed.returncode, 0)
+                if origin is None:
+                    self.assertNotIn('Erlang source:', failed.stderr)
+                else:
+                    self.assertIn(f'Erlang source: {origin[0]}:{origin[1]} ', failed.stderr)
+                report = json.loads((moved/'compiled.run.json').read_text())
+                self.assertEqual(report['status'], 'failed')
+                self.assertEqual(report['active_stage'], 'unit0.convert')
+                self.assertEqual((Path(report['attempt'])/'stderr.log').read_text(), raw)
+                self.assertFalse((moved/'compiled').exists())
+            (xls/'ir_converter_main').write_text('#!/bin/sh\nprintf "mock product\\n"\n')
             subprocess.run([sys.executable, detached_driver, xls, moved], cwd=stage, env=env, check=True, timeout=30)
             published = (moved/'compiled').resolve()
             compiled = json.loads((published/'compiled.json').read_text())

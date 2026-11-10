@@ -20,7 +20,7 @@ imported_owner_test() ->
         receivers := Receivers} = Plan,
     ?assertEqual([0, 1, 2, 3], [I || #{index := I} <- Receivers]),
     lists:foreach(fun(#{manifest := #{owner_import := Import, inbox := Inbox}}) ->
-        ?assertEqual(#{file => File, dslx_sha256 => Hash}, Import),
+        ?assertEqual(#{file => File, dslx_sha256 => Hash, dslx_dependencies => #{}}, Import),
         ?assert(maps:get(mask_bits, Inbox) > 0)
     end, Receivers).
 

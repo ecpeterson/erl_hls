@@ -48,7 +48,7 @@ receiver_codebooks_test() ->
         ?assertEqual(Sites, ReceiverSites),
         Expected = json:decode(iolist_to_binary(json:encode(xls_actor_debug:failures(ReceiverSites)))),
         ?assertEqual(Expected, maps:get(<<"failures">>, Resource)),
-        ?assertEqual(#{file => OwnerFile, dslx_sha256 => OwnerHash}, maps:get(owner_import, Manifest)),
+        ?assertEqual(#{file => OwnerFile, dslx_sha256 => OwnerHash, dslx_dependencies => #{}}, maps:get(owner_import, Manifest)),
         ?assertEqual(hls_generated_files:hash(maps:get(binary_to_list(File), Files)),
             maps:get(dslx_sha256, Manifest))
     end, lists:zip(Receivers, Resources)).

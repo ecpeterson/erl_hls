@@ -13,3 +13,5 @@ Other experiment notes preserve original hypotheses and results. Their unchecked
 - [Collection communication](collection-communication.md): final placement/receiver probes and the decision to close this performance campaign.
 
 - [Erlang source toolchain](erlang-source-toolchain.md): native source command, standard dependency packaging and independent external compilation.
+
+- [Compiler reliability integration](compiler-reliability.md): merged compiler pin, inline source attribution, generated-source refresh and local qualification.

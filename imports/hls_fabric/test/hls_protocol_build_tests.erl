@@ -76,13 +76,24 @@ static_actor(Actor = #{file := File, manifest := Manifest = #{dslx_sha256 := Has
     ?assertEqual(Hash, digest(maps:get(binary_to_list(File), Files))),
     ConfigFile = filename:join(filename:dirname(binary_to_list(File)), "frame_config.x"),
     ?assertEqual(maps:get(frame_config_sha256, Manifest), digest(maps:get(ConfigFile, Files))),
-    Static = maps:without([dslx_sha256, frame_config_sha256, failure_sites], Manifest),
+    ok = dependency_hashes(Manifest, File, Files),
+    Static = maps:without([dslx_sha256, dslx_dependencies, frame_config_sha256, failure_sites], Manifest),
     case maps:get(owner_import, Static, none) of
         none -> Actor#{manifest := Static};
         Import = #{file := OwnerFile, dslx_sha256 := OwnerHash} ->
             ?assertEqual(OwnerHash, digest(maps:get(binary_to_list(OwnerFile), Files))),
-            Actor#{manifest := Static#{owner_import := maps:remove(dslx_sha256, Import)}}
+            ok = dependency_hashes(Import, OwnerFile, Files),
+            Actor#{manifest := Static#{owner_import := maps:without([dslx_sha256, dslx_dependencies], Import)}}
     end.
+
+%% Helper imports acquire byte identities at emission, just like their enclosing actor.
+-spec dependency_hashes(map(), binary(), hls_generated_files:files()) -> ok.
+dependency_hashes(#{dslx_dependencies := Dependencies}, File, Files) ->
+    Directory = filename:dirname(binary_to_list(File)),
+    maps:foreach(fun(Relative, Hash) ->
+        Path = filename:join(Directory, binary_to_list(Relative)),
+        ?assertEqual(Hash, digest(maps:get(Path, Files)))
+    end, Dependencies).
 
 %% Filename input is a trusted source map; emission has no output side effects and hashes its returned bytes.
 -spec emission_inputs_test() -> ok.
