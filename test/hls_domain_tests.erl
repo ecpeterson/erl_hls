@@ -127,6 +127,7 @@ failure_does_not_publish_computed_effects_or_replay_retained_calls_test() ->
 -spec store_exhaustion_and_exclusive_ownership_test() -> ok.
 store_exhaustion_and_exclusive_ownership_test() ->
     with_domains(fun(Owner, A, B, Store) ->
+        ?assertEqual(undefined, global:whereis_name({hls_domain, filename:absname(Store)})),
         ?assertEqual({error, eexist}, hls_domain:create_store(Store)),
         ?assertMatch({error, activation_store_owned},
             hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store))),

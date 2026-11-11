@@ -27,8 +27,8 @@ Runtime type-provider contract and descriptors shared by actor source and retain
     name :: atom(),
     args :: [arg()]
 }.
--doc "A literal, nested type, or named record field supplied to a type constructor.".
--type arg() :: integer() | atom() | descriptor() | {atom(), descriptor()}.
+-doc "A literal, nested type, named record field or ordered parameter list supplied to a type constructor.".
+-type arg() :: integer() | atom() | descriptor() | {atom(), descriptor()} | [arg()].
 
 %%%
 %%% hls_type behavior
@@ -179,6 +179,8 @@ unpack(Packed, Type = {hls_type, Module, Name, Args}) ->
 -doc "Converts a remote type expression or literal parameter to its provider descriptor or value.".
 descriptor({remote_type, _1, [{atom, _2, Module}, {atom, _3, Name}, Args]}) ->
     {hls_type, Module, Name, [descriptor(Arg) || Arg <- Args]};
+descriptor({hls_enum_type, _Line, Descriptor}) ->
+    Descriptor;
 descriptor({hls_record_type, _Line, Descriptor}) ->
     Descriptor;
 descriptor({integer, _1, Integer}) ->

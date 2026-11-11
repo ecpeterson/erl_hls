@@ -87,6 +87,8 @@ validate_value({xls_bit_size, _, _, Value}) ->
     validate_value(Value);
 validate_value({var, _Line, _Name}) ->
     ok;
+validate_value({xls_typed_integer, _Line, _Type, _Integer}) ->
+    ok;
 validate_value({integer, _Line, _Integer}) ->
     ok;
 validate_value({op, _Line, Sign, Operand}) when Sign =:= '-'; Sign =:= '+' ->

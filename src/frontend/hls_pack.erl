@@ -330,5 +330,11 @@ descriptor_expression({hls_type, Module, Name, Args}, Line) ->
         descriptor_expression(Arg, Line)
      || Arg <- Args
     ]};
+descriptor_expression(Args, Line) when is_list(Args) ->
+    lists:foldr(
+        fun(Arg, Tail) -> {cons, Line, descriptor_expression(Arg, Line), Tail} end,
+        {nil, Line},
+        Args
+    );
 descriptor_expression(Value, Line) ->
     erl_parse:abstract(Value, erl_anno:location(Line)).

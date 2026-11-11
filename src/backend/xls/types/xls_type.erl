@@ -33,6 +33,7 @@
 -spec provider(module()) -> module().
 provider(hls_bits) -> xls_provider_bits;
 provider(hls_bool) -> xls_provider_bool;
+provider(hls_enum) -> xls_provider_enum;
 provider(hls_fixed) -> xls_provider_fixed;
 provider(hls_float) -> xls_provider_float;
 provider(hls_gs) -> xls_provider_gs;

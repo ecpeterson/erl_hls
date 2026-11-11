@@ -3,7 +3,7 @@
 -moduledoc "Propagates expected helper and record types into source literals during xls_helpers preparation. It retains type-directed source annotations consumed by expression lowering; format/1 prints the resolved value type for generated helper signatures rather than inferring a type from emitted DSLX.".
 
 %% Annotate literals in prepared source clauses.
--export([clauses/3]).
+-export([clauses/3, encode_atom/3]).
 %% Render a resolved helper signature type.
 -export([format/1]).
 -export_type([type/0]).
@@ -23,7 +23,7 @@ format({dslx, Text}) -> Text;
 format({provider, Type}) -> xls_type:print_type(Type);
 format({tuple, Fields}) -> ["(", [[format(T), ", "] || T <- Fields], ")"].
 
--doc "Annotates integer literals from helper signatures and record fields through bindings, tuples and branches; does not cast existing values.".
+-doc "Annotates integer and finite-atom literals from helper signatures and record fields through bindings, tuples and branches; does not cast existing values.".
 -spec clauses([erl_parse:abstract_clause()], expected(), [hls_source:form()]) ->
     [erl_parse:abstract_clause()].
 clauses(Clauses, Result, Forms) ->
@@ -45,8 +45,13 @@ clauses(Clauses, Result, Forms) ->
 -spec clause(erl_parse:abstract_clause(), expected(), requirements(), records()) ->
     {erl_parse:abstract_clause(), requirements()}.
 clause({clause, Line, Patterns, Guards, Body}, Result, After, Records) ->
-    {Typed, Before} = sequence(Body, Result, After, Records),
-    {{clause, Line, Patterns, Guards, Typed}, Before}.
+    {Typed, BodyNeeds} = sequence(Body, Result, After, Records),
+    {TypedGuards, Before} = lists:mapfoldl(
+        fun(Guard, Needs) -> sequence(Guard, unknown, Needs, Records) end,
+        BodyNeeds,
+        Guards
+    ),
+    {{clause, Line, Patterns, TypedGuards, Typed}, Before}.
 
 %% Visit consumers before definitions, preserving source evaluation order.
 -spec sequence([erl_parse:abstract_expr()], expected(), requirements(), records()) ->
@@ -70,6 +75,8 @@ expression({xls_expected, _, Type, Value}, _Expected, Needs, Records) ->
     expression(Value, Type, Needs, Records);
 expression({var, _, Name} = Variable, Type, Needs, _Records) when Name =/= '_', Type =/= unknown ->
     {Variable, Needs#{Name => merge_type(Type, maps:get(Name, Needs, unknown))}};
+expression({atom, Line, Atom}, {provider, {hls_type, hls_enum, enum, _} = Type}, Needs, _Records) ->
+    {encode_atom(Line, Atom, Type), Needs};
 expression({integer, Line, Value}, Type, Needs, _Records) when Type =/= unknown ->
     {literal(Line, Value, Type), Needs};
 expression({char, Line, Value}, Type, Needs, _Records) when Type =/= unknown ->
@@ -151,6 +158,19 @@ literal(Line, Value, {provider, Type} = Context) ->
 literal(Line, Value, _Type) ->
     {integer, Line, Value}.
 
+%% Atom values keep their ordinary Erlang representation until this typed boundary.
+-doc "Encodes an atom literal in its declared finite domain, retaining explicit target width.".
+-spec encode_atom(erl_anno:location(), atom(), hls_type:descriptor()) -> tuple().
+encode_atom(Line, Atom, Type) ->
+    try hls_type:pack_exact(Atom, Type) of
+        Bits ->
+            Width = bit_size(Bits),
+            <<Code:Width>> = Bits,
+            {xls_typed_integer, Line, xls_type:print_type(Type), Code}
+    catch
+        error:Reason -> error({xls_literal_type, Line, Atom, Type, Reason})
+    end.
+
 %% A later use constrains an initializer, including selected tuple fields;
 %% unconstrained siblings keep their own inference rules.
 -spec pattern_type(erl_parse:abstract_expr(), expected(), requirements()) -> expected().
@@ -227,6 +247,14 @@ fields(Name, Fields, Needs, Records) ->
 -spec merge_type(expected(), expected()) -> expected().
 merge_type(unknown, Type) ->
     Type;
+merge_type(Type, unknown) ->
+    Type;
+merge_type(
+    {provider, {hls_type, hls_enum, enum, _} = A}, {provider, {hls_type, hls_enum, enum, _} = B}
+) when
+    A =/= B
+->
+    error({incompatible_xls_enum, 0, A, B});
 merge_type({tuple, Left}, {tuple, Right}) when length(Left) =:= length(Right) ->
     {tuple, [merge_type(A, B) || {A, B} <- lists:zip(Left, Right)]};
 merge_type(Type, _Other) ->

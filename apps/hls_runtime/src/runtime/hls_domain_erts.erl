@@ -1,17 +1,26 @@
 -module(hls_domain_erts).
 -moduledoc """
-ERTS backend for one statically closed domain of source state machines.
+ERTS lifecycle backend for one statically closed domain of source state machines.
 
-The deployment owner attaches with an exclusive capability. Lifecycle decisions
-come from hls_domain_lifecycle; linked workers perform acknowledged fencing,
-reset and effect-free setup. Actor PIDs are published only after setup. This
-backend's failure detector is a native local monitor: hardware backends need
-an explicit corresponding disconnect/watchdog mechanism.
+This is a management process, not an actor scheduler or message relay. The
+hls_domain owner calls it to attach, inspect lifecycle state, request replacement
+and resolve an incarnation's actor PID. Its other inputs are phase-worker results
+and actor/owner monitor events. Application callers use resolved PIDs directly;
+source actors send directly to their configured peers and external recipients.
 
-The catalog is trusted build input. Initializers must be finite checked source
-initializers, and setup may update private state but may not publish messages or
-replies. Direct Erlang side effects outside the supported callback interface are
-not intercepted. Ordinary ERTS mailboxes model execution, not physical bandwidth.
+The process owns exclusive control authority and serializes lifecycle/failure
+observations. hls_domain_lifecycle makes the finite decisions; linked workers
+retire old actors and perform effect-free setup before new PIDs are published.
+A native local monitor detects owner loss here. Hardware backends need their own
+explicit disconnect/watchdog mechanism rather than inheriting that detector.
+
+The source catalog is trusted build input. Initializers must be finite; setup may
+update private state but may not publish messages or replies. Direct Erlang side
+effects outside the supported callback interface are not intercepted. Both this
+management mailbox and the source actors' incoming BEAM mailboxes are ordinary,
+unbounded ERTS queues. The finite hls_mailbox inside a source actor constrains its
+modeled admission, not messages already waiting in the outer BEAM mailbox. Native
+simulation therefore does not establish physical bandwidth or bounded backlog.
 """.
 -behaviour(gen_server).
 -behaviour(hls_domain_backend).
@@ -45,7 +54,7 @@ not intercepted. Ordinary ERTS mailboxes model execution, not physical bandwidth
 }.
 
 %% A phase worker is linked so abandoning initialization kills its unadopted actors.
--record(work, {pid :: pid(), reference :: reference(), action :: hls_nums:uN(3)}).
+-record(work, {pid :: pid(), reference :: reference(), action :: hls_domain_lifecycle:action()}).
 %% Host-only ownership and monitoring complement, but never duplicate, the finite kernel state.
 -record(backend, {
     spec :: specification(),
@@ -123,9 +132,9 @@ handle_call(
 ) when is_reference(Authority) ->
     case Input#domain_input.op of
         Operation when
-            Operation =:= ?HLS_DOMAIN_ACTIVATE;
-            Operation =:= ?HLS_DOMAIN_REPLACE;
-            Operation =:= ?HLS_DOMAIN_INSPECT
+            Operation =:= activate;
+            Operation =:= replace;
+            Operation =:= inspect
         ->
             Output = hls_domain_lifecycle:step(Input, State),
             Next = drive(Backend#backend{state = Output#domain_output.state}),
@@ -184,17 +193,17 @@ handle_info(
     Resets =
         Backend#backend.reset_count +
             case Action of
-                ?HLS_DOMAIN_RESET -> 1;
+                reset -> 1;
                 _ -> 0
             end,
     Detail =
         case Action of
-            ?HLS_DOMAIN_RESET -> none;
+            reset -> none;
             _ -> Backend#backend.fault_reason
         end,
     Completed =
         case Action of
-            ?HLS_DOMAIN_FENCE ->
+            fence ->
                 clear_monitors(Backend#backend.monitors),
                 Backend#backend{actors = #{}, monitors = #{}};
             _ ->
@@ -211,7 +220,7 @@ handle_info(
 handle_info({'EXIT', Pid, Reason}, Backend = #backend{worker = #work{pid = Pid, action = Action}}) ->
     Detail =
         case Action of
-            ?HLS_DOMAIN_INITIALIZE -> {initialization, Reason};
+            initialize -> {initialization, Reason};
             _ -> {lifecycle, Action, Reason}
         end,
     {noreply, fail_backend(Detail, Backend#backend{worker = none})};
@@ -225,7 +234,7 @@ handle_info(
 %% Fencing intentionally retires actors; their DOWN observations are not fresh source failures.
 handle_info(
     {'DOWN', Monitor, process, _Pid, _Reason},
-    Backend = #backend{worker = #work{action = ?HLS_DOMAIN_FENCE}}
+    Backend = #backend{worker = #work{action = fence}}
 ) ->
     {noreply, forget_actor(Monitor, Backend)};
 %% Every unexpected member death fails the incarnation and retires the remaining closed group.
@@ -236,7 +245,7 @@ handle_info(
         {ok, Actor} ->
             Detail =
                 case State#domain_state.phase of
-                    ?HLS_DOMAIN_INITIALIZING -> {initialization, {actor, Actor, Reason}};
+                    initializing -> {initialization, {actor, Actor, Reason}};
                     _ -> {actor, Actor, Reason}
                 end,
             {noreply, fail_backend(Detail, forget_actor(Monitor, Backend))};
@@ -304,7 +313,7 @@ destination({external, Pid}, _Actors) when is_pid(Pid) -> ok.
 -spec drive(#backend{}) -> #backend{}.
 drive(Backend = #backend{worker = none, state = State}) ->
     case hls_domain_lifecycle:action(State) of
-        ?HLS_DOMAIN_NONE ->
+        none ->
             Backend;
         Action ->
             Ref = make_ref(),
@@ -316,7 +325,7 @@ drive(Backend) ->
     Backend.
 
 %% Workers keep newly created children linked until the backend adopts the completed setup.
--spec work(pid(), reference(), hls_nums:uN(3), #backend{}) -> ok.
+-spec work(pid(), reference(), hls_domain_lifecycle:action(), #backend{}) -> ok.
 work(Parent, Ref, Action, Backend) ->
     Actors = perform(Parent, Ref, Action, Backend),
     Parent ! {phase_done, Ref},
@@ -327,16 +336,16 @@ work(Parent, Ref, Action, Backend) ->
     end.
 
 %% Fencing waits for actual local termination before its acknowledgement is generated.
--spec perform(pid(), reference(), hls_nums:uN(3), #backend{}) -> #{term() => pid()}.
-perform(_Parent, _Ref, ?HLS_DOMAIN_FENCE, #backend{actors = Actors}) ->
+-spec perform(pid(), reference(), hls_domain_lifecycle:action(), #backend{}) -> #{term() => pid()}.
+perform(_Parent, _Ref, fence, #backend{actors = Actors}) ->
     retire(Actors),
     #{};
 %% All local actors have terminated; the reset phase records only that completed boundary.
-perform(_Parent, _Ref, ?HLS_DOMAIN_RESET, #backend{actors = Actors}) ->
+perform(_Parent, _Ref, reset, #backend{actors = Actors}) ->
     true = map_size(Actors) =:= 0,
     #{};
 %% Start all endpoints before resolving any internal route, then run effect-free setup.
-perform(Parent, Ref, ?HLS_DOMAIN_INITIALIZE, #backend{spec = Spec, state = State}) ->
+perform(Parent, Ref, initialize, #backend{spec = Spec, state = State}) ->
     #{actors := Definitions, routes := Routes, startup := Startup} = Spec,
     Actors = maps:map(
         fun(Id, #{module := Module, mailbox_capacity := Capacity}) ->
@@ -366,13 +375,13 @@ target_pid({actor, Id}, Actors) -> maps:get(Id, Actors);
 target_pid({external, Pid}, _Actors) -> Pid.
 
 %% Phase operations have exactly one corresponding completion indication.
--spec acknowledgement(hls_nums:uN(3)) -> hls_nums:uN(4).
-acknowledgement(?HLS_DOMAIN_FENCE) -> ?HLS_DOMAIN_FENCED;
-acknowledgement(?HLS_DOMAIN_RESET) -> ?HLS_DOMAIN_RESET_DONE;
-acknowledgement(?HLS_DOMAIN_INITIALIZE) -> ?HLS_DOMAIN_INITIALIZED.
+-spec acknowledgement(hls_domain_lifecycle:action()) -> hls_domain_lifecycle:operation().
+acknowledgement(fence) -> fenced;
+acknowledgement(reset) -> reset_done;
+acknowledgement(initialize) -> initialized.
 
 %% Echo the complete transition identity so late acknowledgements cannot advance another request.
--spec transition_input(hls_nums:uN(4), hls_domain_lifecycle:state()) ->
+-spec transition_input(hls_domain_lifecycle:operation(), hls_domain_lifecycle:state()) ->
     hls_domain_lifecycle:input().
 transition_input(Op, #domain_state{previous = Old, target = Target, transition = Id}) ->
     #domain_input{op = Op, expected = Old, target = Target, transition = Id}.
@@ -381,7 +390,7 @@ transition_input(Op, #domain_state{previous = Old, target = Target, transition =
 -spec reconcile_ready(#backend{}) -> #backend{}.
 reconcile_ready(
     Backend = #backend{
-        state = #domain_state{phase = ?HLS_DOMAIN_READY},
+        state = #domain_state{phase = ready},
         actors = Actors,
         monitors = Monitors
     }
@@ -413,14 +422,14 @@ fail_backend(Reason, Backend = #backend{state = State, fault_reason = Detail}) -
     Cause = fault_cause(Reason),
     Input =
         case hls_domain_lifecycle:action(State) of
-            ?HLS_DOMAIN_NONE ->
+            none ->
                 #domain_input{
-                    op = ?HLS_DOMAIN_FAULT,
+                    op = fault,
                     expected = State#domain_state.current,
                     fault = Cause
                 };
             _ ->
-                (transition_input(?HLS_DOMAIN_ABORT, State))#domain_input{fault = Cause}
+                (transition_input(abort, State))#domain_input{fault = Cause}
         end,
     Output = hls_domain_lifecycle:step(Input, State),
     retire(Backend#backend.actors),
@@ -439,11 +448,11 @@ fail_backend(Reason, Backend = #backend{state = State, fault_reason = Detail}) -
     }.
 
 %% A domain cause identifies the observed boundary, never a fabricated source expression.
--spec fault_cause(term()) -> hls_nums:u16().
-fault_cause({actor, _Actor, _Reason}) -> ?HLS_DOMAIN_FAULT_ACTOR;
-fault_cause({owner_down, _Reason}) -> ?HLS_DOMAIN_FAULT_OWNER;
-fault_cause({initialization, _Reason}) -> ?HLS_DOMAIN_FAULT_INITIALIZATION;
-fault_cause({lifecycle, _Action, _Reason}) -> ?HLS_DOMAIN_FAULT_LIFECYCLE.
+-spec fault_cause(term()) -> hls_domain_lifecycle:fault().
+fault_cause({actor, _Actor, _Reason}) -> actor_failure;
+fault_cause({owner_down, _Reason}) -> owner_down;
+fault_cause({initialization, _Reason}) -> initialization_failure;
+fault_cause({lifecycle, _Action, _Reason}) -> lifecycle_failure.
 
 %% Cancelled phase workers are killed, also terminating any not-yet-adopted linked actors.
 -spec cancel_worker(none | #work{}) -> ok.

@@ -1,13 +1,14 @@
 -module(hls_domain).
 -moduledoc """
-Host ownership of fixed actor domains and their non-reused activations.
+Host ownership of fixed actor domains and their non-reused incarnation IDs.
 
 Backends own the finite lifecycle controller and establish physical completion.
 This process attaches without resetting, serializes management, and persists each
-allocated activation before submitting it. A timeout is an unknown outcome, never
+allocated incarnation ID before submitting it. A timeout is an unknown outcome, never
 permission to replay application work. Backend endpoints remain incarnation-specific.
 
-The activation file must be created explicitly for a newly commissioned deployment.
+The activation file stores only an eight-byte identity counter, never actor state.
+It must be created explicitly for a newly commissioned deployment.
 Do not recreate a lost file to recover a running deployment. Its lock excludes other
 owners in this BEAM VM; the backend separately excludes conflicting control sessions.
 Use one durable store per authority and preserve it across software restarts. Storage
@@ -27,7 +28,7 @@ established. After host/storage crash, reconcile identity before reusing this st
 
 -doc "A fixed deployment-local domain name.".
 -type domain() :: atom().
--doc "A nonzero activation which never wraps within one deployment.".
+-doc "A nonzero incarnation ID which never wraps within one deployment.".
 -type activation() :: 1..((1 bsl 64) - 1).
 -doc "An incarnation-specific domain handle, not a mutable stable name.".
 -type handle() :: {domain(), activation()}.
@@ -35,18 +36,18 @@ established. After host/storage crash, reconcile identity before reusing this st
 -type policy() :: manual | automatic.
 -doc "Declared domains and their replacement policy; actor/source layout belongs to the backend.".
 -type catalog() :: #{domain() := policy()}.
--doc "One backend implementation, a distinct existing endpoint for each domain, and a durable activation store.".
+-doc "One backend implementation, a distinct existing endpoint for each domain, and a durable incarnation counter file.".
 -type backend() :: #{
     module := module(), endpoints := #{domain() := pid()}, activation_file := file:filename()
 }.
 -doc "Observed lifecycle state; readiness and a handle refer to the same activation.".
 -type snapshot() :: #{
     domain := domain(),
-    phase := atom(),
+    phase := hls_domain_lifecycle:phase(),
     handle := none | handle(),
     target := non_neg_integer(),
     transition := non_neg_integer(),
-    fault := non_neg_integer(),
+    fault := hls_domain_lifecycle:fault(),
     detail := term(),
     actors := #{term() => pid()}
 }.
@@ -108,9 +109,9 @@ init({Catalog, #{module := Module, endpoints := Endpoints, activation_file := Pa
         false ->
             {stop, invalid_domain_catalog};
         true ->
-            case global:register_name({?MODULE, File}, self()) of
-                no -> {stop, activation_store_owned};
-                yes -> initialize_owner(Catalog, Module, Endpoints, File)
+            case hls_domain_store:claim(File) of
+                {error, owned} -> {stop, activation_store_owned};
+                ok -> initialize_owner(Catalog, Module, Endpoints, File)
             end
     end.
 
@@ -129,11 +130,11 @@ handle_call({status, Domain}, _From, Owner) ->
     {reply, snapshot(Domain, Owner), Owner};
 %% Activation and replacement share durable allocation and request correlation.
 handle_call({activate, Domain}, _From, Owner) ->
-    {Reply, Next} = transition(Domain, 0, ?HLS_DOMAIN_ACTIVATE, Owner),
+    {Reply, Next} = transition(Domain, 0, activate, Owner),
     {reply, Reply, Next};
 %% Compare-and-replace preserves the old handle's retained transition on retry.
 handle_call({replace, Domain, Expected}, _From, Owner) ->
-    {Reply, Next} = transition(Domain, Expected, ?HLS_DOMAIN_REPLACE, Owner),
+    {Reply, Next} = transition(Domain, Expected, replace, Owner),
     {reply, Reply, Next};
 %% The backend checks readiness and authority atomically with resolving an endpoint.
 handle_call({resolve, Identity, Actor}, _From, Owner) ->
@@ -144,7 +145,7 @@ handle_call({resolve, Identity, Actor}, _From, Owner) ->
         end,
     Reply =
         case inspect(Domain, Owner) of
-            {ok, #{state := #domain_state{phase = ?HLS_DOMAIN_READY, current = Current}}} when
+            {ok, #{state := #domain_state{phase = ready, current = Current}}} when
                 Expected =:= any; Expected =:= Current
             ->
                 backend(Owner, Domain, endpoint, [authority(Domain, Owner), Current, Actor]);
@@ -169,7 +170,7 @@ handle_info(_Message, Owner) -> {noreply, Owner}.
 -doc "Releases the local store lock; backend owner monitors implement their declared disconnect behavior.".
 -spec terminate(term(), #owner{}) -> ok.
 terminate(_Reason, #owner{file = File}) ->
-    global:unregister_name({?MODULE, File}),
+    hls_domain_store:release(File),
     ok.
 
 -doc "Preserves the current owner during a host code change; no reset is implied.".
@@ -256,7 +257,7 @@ snapshot(Domain, Owner) ->
 describe_evidence(Domain, #{state := State, actors := Actors, fault_reason := Reason}) ->
     Description = describe(Domain, State, Reason),
     case State#domain_state.phase of
-        ?HLS_DOMAIN_READY -> Description#{actors := Actors};
+        ready -> Description#{actors := Actors};
         _ -> Description
     end.
 
@@ -276,7 +277,7 @@ describe(
         end,
     #{
         domain => Domain,
-        phase => phase(Phase),
+        phase => Phase,
         handle => Handle,
         target => Target,
         transition => Transition,
@@ -285,17 +286,9 @@ describe(
         actors => #{}
     }.
 
-%% Refuse unsupported phase encodings instead of silently advertising readiness.
--spec phase(hls_nums:uN(3)) -> atom().
-phase(?HLS_DOMAIN_UNBOUND) -> unbound;
-phase(?HLS_DOMAIN_READY) -> ready;
-phase(?HLS_DOMAIN_CLOSING) -> closing;
-phase(?HLS_DOMAIN_ISOLATED) -> isolated;
-phase(?HLS_DOMAIN_INITIALIZING) -> initializing;
-phase(?HLS_DOMAIN_FAILED) -> failed.
-
 %% A repeated old handle resolves its retained transition before any new ID is allocated.
--spec transition(domain(), non_neg_integer(), hls_nums:uN(4), #owner{}) -> {term(), #owner{}}.
+-spec transition(domain(), non_neg_integer(), hls_domain_lifecycle:operation(), #owner{}) ->
+    {term(), #owner{}}.
 transition(Domain, Expected, Operation, Owner) ->
     case inspect(Domain, Owner) of
         {ok, #{state := #domain_state{previous = Expected, transition = Id}} = Evidence} when
@@ -303,7 +296,7 @@ transition(Domain, Expected, Operation, Owner) ->
         ->
             {{ok, describe_evidence(Domain, Evidence)}, Owner};
         {ok, #{state := State = #domain_state{current = Expected, phase = Phase}}} when
-            Phase =:= ?HLS_DOMAIN_UNBOUND; Phase =:= ?HLS_DOMAIN_READY; Phase =:= ?HLS_DOMAIN_FAILED
+            Phase =:= unbound; Phase =:= ready; Phase =:= failed
         ->
             allocate_transition(Domain, Operation, State, Owner);
         {ok, _} ->
@@ -313,7 +306,9 @@ transition(Domain, Expected, Operation, Owner) ->
     end.
 
 %% The durable ID is burned before submission, including an uncertain/lost response.
--spec allocate_transition(domain(), hls_nums:uN(4), hls_domain_lifecycle:state(), #owner{}) ->
+-spec allocate_transition(
+    domain(), hls_domain_lifecycle:operation(), hls_domain_lifecycle:state(), #owner{}
+) ->
     {term(), #owner{}}.
 allocate_transition(Domain, Operation, State, Owner = #owner{next = Counter, file = File}) ->
     Previous = State#domain_state.current,
@@ -332,7 +327,7 @@ allocate_transition(Domain, Operation, State, Owner = #owner{next = Counter, fil
                     Reply =
                         case backend(Owner, Domain, request, [authority(Domain, Owner), Input]) of
                             #domain_output{status = Status, state = Result} when
-                                Status =:= ?HLS_DOMAIN_ACCEPTED; Status =:= ?HLS_DOMAIN_REPLAY
+                                Status =:= accepted; Status =:= replay
                             ->
                                 transition_result(Domain, Result, Next);
                             #domain_output{status = Status} ->
@@ -349,7 +344,7 @@ allocate_transition(Domain, Operation, State, Owner = #owner{next = Counter, fil
 %% A synchronous ready reply needs the matching actor evidence before a supervisor can bind.
 -spec transition_result(domain(), hls_domain_lifecycle:state(), #owner{}) ->
     {ok, snapshot()} | {error, term()}.
-transition_result(Domain, #domain_state{phase = ?HLS_DOMAIN_READY}, Owner) ->
+transition_result(Domain, #domain_state{phase = ready}, Owner) ->
     snapshot(Domain, Owner);
 transition_result(Domain, State, _Owner) ->
     {ok, describe(Domain, State, none)}.

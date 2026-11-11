@@ -2,7 +2,7 @@
 -moduledoc """
 Finite lifecycle decisions shared by an ERTS domain owner and compiled control logic.
 
-The owner supplies non-reused activation identities and serializes management. This
+The owner supplies non-reused incarnation identities and serializes management. This
 kernel requests work; the backend establishes the actual fence, reset and setup
 completion. Only matching acknowledgements advance those phases. Cold start is
 unbound, and timeout never supplies an acknowledgement.
@@ -35,7 +35,18 @@ bounded state value.
 -export([new/0, step/2, action/1, admitted/2]).
 
 %% Public finite values exchanged with adapters and generated wrappers.
--export_type([state/0, input/0, output/0]).
+-export_type([state/0, input/0, output/0, phase/0, operation/0, status/0, action/0, fault/0]).
+
+-doc "Named lifecycle phase; only ready admits application traffic.".
+-type phase() :: domain_phase().
+-doc "Management command or correlated completion indication.".
+-type operation() :: domain_operation().
+-doc "Disposition of one management input.".
+-type status() :: domain_status().
+-doc "Outstanding physical work requested from the backend.".
+-type action() :: domain_action().
+-doc "First domain failure cause, separate from source-site diagnostics.".
+-type fault() :: domain_fault().
 
 -doc "One domain's current incarnation, first fault and live/last management transition.".
 -type state() :: #domain_state{}.
@@ -54,38 +65,38 @@ new() -> #domain_state{}.
 -spec step(#domain_input{}, #domain_state{}) -> #domain_output{}.
 step(Input, State) ->
     case Input#domain_input.op of
-        ?HLS_DOMAIN_INSPECT -> output(?HLS_DOMAIN_OK, State);
-        ?HLS_DOMAIN_ACTIVATE -> request(Input, State);
-        ?HLS_DOMAIN_REPLACE -> request(Input, State);
-        ?HLS_DOMAIN_FAULT -> fault(Input, State);
-        ?HLS_DOMAIN_FENCED -> completion(Input, State);
-        ?HLS_DOMAIN_RESET_DONE -> completion(Input, State);
-        ?HLS_DOMAIN_INITIALIZED -> completion(Input, State);
-        ?HLS_DOMAIN_ABORT -> abort(Input, State);
-        _ -> output(?HLS_DOMAIN_INVALID, State)
+        inspect -> output(ok, State);
+        activate -> request(Input, State);
+        replace -> request(Input, State);
+        fault -> fault(Input, State);
+        fenced -> completion(Input, State);
+        reset_done -> completion(Input, State);
+        initialized -> completion(Input, State);
+        abort -> abort(Input, State);
+        _ -> output(invalid, State)
     end.
 
 -doc "Returns the outstanding phase-level backend request; failed/unbound/ready states request no physical action.".
--spec action(#domain_state{}) -> hls_nums:uN(3).
+-spec action(#domain_state{}) -> domain_action().
 action(State) ->
     case State#domain_state.phase of
-        ?HLS_DOMAIN_CLOSING -> ?HLS_DOMAIN_FENCE;
-        ?HLS_DOMAIN_ISOLATED -> ?HLS_DOMAIN_RESET;
-        ?HLS_DOMAIN_INITIALIZING -> ?HLS_DOMAIN_INITIALIZE;
-        _ -> ?HLS_DOMAIN_NONE
+        closing -> fence;
+        isolated -> reset;
+        initializing -> initialize;
+        _ -> none
     end.
 
 -doc "Admits an application event only for the current nonzero ready incarnation.".
 -spec admitted(hls_nums:u64(), #domain_state{}) -> boolean().
 admitted(Activation, State) ->
-    State#domain_state.phase =:= ?HLS_DOMAIN_READY andalso
+    State#domain_state.phase =:= ready andalso
         Activation =/= 0 andalso Activation =:= State#domain_state.current.
 
 %% A repeated transition observes its current result without allocating another successor.
 -spec request(#domain_input{}, #domain_state{}) -> #domain_output{}.
 request(Input, State) ->
     case same_transition(Input, State) of
-        true -> output(?HLS_DOMAIN_REPLAY, State);
+        true -> output(replay, State);
         false -> new_request(Input, State)
     end.
 
@@ -94,10 +105,10 @@ request(Input, State) ->
 new_request(Input, State) ->
     case Input#domain_input.expected =:= State#domain_state.current of
         false ->
-            output(?HLS_DOMAIN_STALE, State);
+            output(stale, State);
         true ->
             case live_phase(State#domain_state.phase) of
-                true -> output(?HLS_DOMAIN_BUSY, State);
+                true -> output(busy, State);
                 false -> admit_request(Input, State)
             end
     end.
@@ -106,59 +117,59 @@ new_request(Input, State) ->
 -spec admit_request(#domain_input{}, #domain_state{}) -> #domain_output{}.
 admit_request(Input, State) ->
     Activate =
-        Input#domain_input.op =:= ?HLS_DOMAIN_ACTIVATE andalso
-            (State#domain_state.phase =:= ?HLS_DOMAIN_UNBOUND orelse
-                (State#domain_state.phase =:= ?HLS_DOMAIN_FAILED andalso
+        Input#domain_input.op =:= activate andalso
+            (State#domain_state.phase =:= unbound orelse
+                (State#domain_state.phase =:= failed andalso
                     State#domain_state.current =:= 0)),
     Replace =
-        Input#domain_input.op =:= ?HLS_DOMAIN_REPLACE andalso
+        Input#domain_input.op =:= replace andalso
             State#domain_state.current =/= 0 andalso
-            (State#domain_state.phase =:= ?HLS_DOMAIN_READY orelse
-                State#domain_state.phase =:= ?HLS_DOMAIN_FAILED),
+            (State#domain_state.phase =:= ready orelse
+                State#domain_state.phase =:= failed),
     Valid =
         Input#domain_input.target > State#domain_state.current andalso
             Input#domain_input.target > State#domain_state.target andalso
             Input#domain_input.transition =/= 0,
     case (Activate orelse Replace) andalso Valid of
         false ->
-            output(?HLS_DOMAIN_INVALID, State);
+            output(invalid, State);
         true ->
             Next = State#domain_state{
-                phase = ?HLS_DOMAIN_CLOSING,
+                phase = closing,
                 previous = State#domain_state.current,
                 target = Input#domain_input.target,
                 transition = Input#domain_input.transition
             },
-            output(?HLS_DOMAIN_ACCEPTED, Next)
+            output(accepted, Next)
     end.
 
 %% Every completion must identify the live operation, including both incarnation endpoints.
 -spec completion(#domain_input{}, #domain_state{}) -> #domain_output{}.
 completion(Input, State) ->
     case same_transition(Input, State) of
-        false -> output(?HLS_DOMAIN_STALE, State);
+        false -> output(stale, State);
         true -> advance(Input#domain_input.op, State)
     end.
 
 %% Fencing is an acknowledgement from the backend, never an elapsed-time inference.
--spec advance(hls_nums:uN(4), #domain_state{}) -> #domain_output{}.
-advance(?HLS_DOMAIN_FENCED, State = #domain_state{phase = ?HLS_DOMAIN_CLOSING}) ->
-    output(?HLS_DOMAIN_OK, State#domain_state{phase = ?HLS_DOMAIN_ISOLATED});
+-spec advance(domain_operation(), #domain_state{}) -> #domain_output{}.
+advance(fenced, State = #domain_state{phase = closing}) ->
+    output(ok, State#domain_state{phase = isolated});
 %% Reset installs the new incarnation but does not open application admission.
-advance(?HLS_DOMAIN_RESET_DONE, State = #domain_state{phase = ?HLS_DOMAIN_ISOLATED}) ->
-    output(?HLS_DOMAIN_OK, State#domain_state{
-        phase = ?HLS_DOMAIN_INITIALIZING,
+advance(reset_done, State = #domain_state{phase = isolated}) ->
+    output(ok, State#domain_state{
+        phase = initializing,
         current = State#domain_state.target,
-        fault = 0
+        fault = none
     });
 %% Only the complete initialization acknowledgement publishes readiness.
-advance(?HLS_DOMAIN_INITIALIZED, State = #domain_state{phase = ?HLS_DOMAIN_INITIALIZING}) ->
-    Next = State#domain_state{phase = ?HLS_DOMAIN_READY},
-    Result = output(?HLS_DOMAIN_COMPLETED, Next),
-    Result#domain_output{action = ?HLS_DOMAIN_PUBLISH};
+advance(initialized, State = #domain_state{phase = initializing}) ->
+    Next = State#domain_state{phase = ready},
+    Result = output(completed, Next),
+    Result#domain_output{action = publish};
 %% A duplicate or out-of-order acknowledgement cannot advance a different phase.
 advance(_Operation, State) ->
-    output(?HLS_DOMAIN_STALE, State).
+    output(stale, State).
 
 %% First current-incarnation fault wins; retiring old actors cannot reopen admission.
 -spec fault(#domain_input{}, #domain_state{}) -> #domain_output{}.
@@ -166,19 +177,19 @@ fault(Input, State) ->
     Current = State#domain_state.current,
     case
         Current =/= 0 andalso Input#domain_input.expected =:= Current andalso
-            Input#domain_input.fault =/= 0
+            valid_fault(Input#domain_input.fault)
     of
         false ->
-            output(?HLS_DOMAIN_STALE, State);
+            output(stale, State);
         true ->
             FirstFault = first_fault(State#domain_state.fault, Input#domain_input.fault),
             Phase =
                 case State#domain_state.phase of
-                    ?HLS_DOMAIN_READY -> ?HLS_DOMAIN_FAILED;
-                    ?HLS_DOMAIN_INITIALIZING -> ?HLS_DOMAIN_FAILED;
+                    ready -> failed;
+                    initializing -> failed;
                     Existing -> Existing
                 end,
-            output(?HLS_DOMAIN_FAILURE, State#domain_state{phase = Phase, fault = FirstFault})
+            output(failure, State#domain_state{phase = Phase, fault = FirstFault})
     end.
 
 %% A failed management operation stays closed; even an expired deadline cannot undo replacement.
@@ -186,16 +197,23 @@ fault(Input, State) ->
 abort(Input, State) ->
     case
         same_transition(Input, State) andalso live_phase(State#domain_state.phase) andalso
-            Input#domain_input.fault =/= 0
+            valid_fault(Input#domain_input.fault)
     of
         false ->
-            output(?HLS_DOMAIN_STALE, State);
+            output(stale, State);
         true ->
             FirstFault = first_fault(State#domain_state.fault, Input#domain_input.fault),
-            output(?HLS_DOMAIN_FAILURE, State#domain_state{
-                phase = ?HLS_DOMAIN_FAILED, fault = FirstFault
+            output(failure, State#domain_state{
+                phase = failed, fault = FirstFault
             })
     end.
+
+%% Raw unused hardware encodings must not become accepted failure causes.
+-spec valid_fault(domain_fault()) -> boolean().
+valid_fault(Cause) ->
+    Cause =:= actor_failure orelse Cause =:= owner_down orelse
+        Cause =:= initialization_failure orelse Cause =:= lifecycle_failure orelse
+        Cause =:= protocol_failure.
 
 %% All fields identify the single retained transition; the all-zero cold record is not one.
 -spec same_transition(#domain_input{}, #domain_state{}) -> boolean().
@@ -206,18 +224,18 @@ same_transition(Input, State) ->
         Input#domain_input.transition =:= State#domain_state.transition.
 
 %% These phases retain a pending physical operation and exclude conflicting requests.
--spec live_phase(hls_nums:uN(3)) -> boolean().
+-spec live_phase(domain_phase()) -> boolean().
 live_phase(Phase) ->
-    Phase =:= ?HLS_DOMAIN_CLOSING orelse Phase =:= ?HLS_DOMAIN_ISOLATED orelse
-        Phase =:= ?HLS_DOMAIN_INITIALIZING.
+    Phase =:= closing orelse Phase =:= isolated orelse
+        Phase =:= initializing.
 
 %% Preserve the first observation until a confirmed reset installs a new incarnation.
--spec first_fault(hls_nums:u16(), hls_nums:u16()) -> hls_nums:u16().
-first_fault(0, Incoming) -> Incoming;
+-spec first_fault(domain_fault(), domain_fault()) -> domain_fault().
+first_fault(none, Incoming) -> Incoming;
 first_fault(Existing, _Incoming) -> Existing.
 
 %% Admission and requested work are derived from one state value rather than cached separately.
--spec output(hls_nums:uN(4), #domain_state{}) -> #domain_output{}.
+-spec output(domain_status(), #domain_state{}) -> #domain_output{}.
 output(Status, State) ->
     #domain_output{
         status = Status,

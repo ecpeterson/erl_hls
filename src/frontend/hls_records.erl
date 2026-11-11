@@ -77,7 +77,7 @@ references(_) ->
 %% Pure defaults equal to the provider's zero share the existing typed-zero lowering.
 -spec resolve_field(tuple(), [hls_source:form()], [atom()]) -> tuple().
 resolve_field({typed_record_field, Field, Type}, Forms, Stack) ->
-    Resolved = resolve_type(Type, Forms, Stack),
+    Resolved = resolve_type(hls_atom_types:resolve(Type, Forms), Forms, Stack),
     {typed_record_field, resolve_default(Field, Resolved, Forms, Stack), Resolved};
 resolve_field(Field, _Forms, _Stack) ->
     Field.
@@ -152,7 +152,7 @@ record_default(
     Stack,
     Values
 ) ->
-    Resolved = resolve_type(Type, Forms, Stack),
+    Resolved = resolve_type(hls_atom_types:resolve(Type, Forms), Forms, Stack),
     case literal_default(maps:get(Name, Explicit, Default), Resolved, Forms, Stack) of
         {ok, Value} -> record_default(Rest, Explicit, Forms, Stack, [Value | Values]);
         not_literal -> not_literal
@@ -162,6 +162,12 @@ record_default(_Fields, _Explicit, _Forms, _Stack, _Values) ->
 
 %% A resolved descriptor is self-contained, so downstream codecs need no source lookup.
 -spec resolve_type(term(), [hls_source:form()], [atom()]) -> term().
+resolve_type(Type = {type, _, union, _}, Forms, _Stack) ->
+    hls_atom_types:resolve(Type, Forms);
+resolve_type(Type = {user_type, _, _, []}, Forms, _Stack) ->
+    hls_atom_types:resolve(Type, Forms);
+resolve_type({hls_enum_type, _, _} = Type, _Forms, _Stack) ->
+    Type;
 resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
     case lists:member(Name, Stack) of
         true -> error({recursive_hls_record, lists:reverse([Name | Stack])});
@@ -174,7 +180,12 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
     {attribute, _, record, {Name, Fields}} = find(Forms, Name),
     Descriptor =
         {hls_type, hls_record, Name, [
-            {field_name(Field), hls_type:descriptor(resolve_type(Type, Forms, [Name | Stack]))}
+            {
+                field_name(Field),
+                hls_type:descriptor(
+                    resolve_type(hls_atom_types:resolve(Type, Forms), Forms, [Name | Stack])
+                )
+            }
          || {typed_record_field, Field, Type} <- Fields
         ]},
     case length(Fields) =:= length(element(4, Descriptor)) of
@@ -188,12 +199,27 @@ resolve_type({hls_record_type, _, _} = Type, _Forms, _Stack) ->
     Type;
 resolve_type({type, L, boolean, []}, _Forms, _Stack) ->
     {remote_type, L, [{atom, L, hls_bool}, {atom, L, bool}, []]};
+resolve_type({remote_type, Line, [Module, Name, Args]}, Forms, Stack) ->
+    Resolved = [resolve_type(A, Forms, Stack) || A <- Args],
+    case contains_enum(Resolved) of
+        true -> error({unsupported_hls_enum_container, Line, Module, Name});
+        false -> {remote_type, Line, [Module, Name, Resolved]}
+    end;
 resolve_type(Tuple, Forms, Stack) when is_tuple(Tuple) ->
     list_to_tuple([resolve_type(X, Forms, Stack) || X <- tuple_to_list(Tuple)]);
 resolve_type(List, Forms, Stack) when is_list(List) ->
     [resolve_type(X, Forms, Stack) || X <- List];
 resolve_type(Value, _Forms, _Stack) ->
     Value.
+
+%% Collection/provider operations need their own enum type-flow contracts;
+%% record nesting is handled explicitly above and remains supported.
+-spec contains_enum(term()) -> boolean().
+contains_enum({hls_enum_type, _, _}) -> true;
+contains_enum({hls_type, hls_enum, enum, _}) -> true;
+contains_enum(Tuple) when is_tuple(Tuple) -> contains_enum(tuple_to_list(Tuple));
+contains_enum(List) when is_list(List) -> lists:any(fun contains_enum/1, List);
+contains_enum(_) -> false.
 
 -doc "Returns dependency-ordered declarations for wire records and reachable internal values.".
 -spec declarations([hls_source:form()], [atom()]) -> [hls_source:record_declaration()].

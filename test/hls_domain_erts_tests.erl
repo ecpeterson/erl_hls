@@ -20,21 +20,21 @@ source_failure_retires_group_test() ->
         _ = hls_statem:info(Left),
         ok = hls_statem:cast(Left, {explode, 0}),
         ?assertMatch({error, {_, Left}}, gen_server:wait_response(Pending, 1000)),
-        Failed = await(A, ?HLS_DOMAIN_FAILED),
+        Failed = await(A, failed),
         ?assertEqual(#{}, maps:get(actors, Failed)),
         ?assertNot(is_process_alive(Left)),
         ?assertNot(is_process_alive(Right)),
         ?assertEqual({report, 0}, hls_statem:call(Independent, {read, 0})),
         ?assertEqual({error, not_ready_or_stale}, hls_domain_erts:endpoint(A, AuthorityA, 1, left)),
-        Replace = #domain_input{op = ?HLS_DOMAIN_REPLACE, expected = 1, target = 2, transition = 2},
-        ?assertMatch(#domain_output{status = ?HLS_DOMAIN_ACCEPTED}, hls_domain_erts:request(A, AuthorityA, Replace)),
-        New = await(A, ?HLS_DOMAIN_READY),
+        Replace = #domain_input{op = replace, expected = 1, target = 2, transition = 2},
+        ?assertMatch(#domain_output{status = accepted}, hls_domain_erts:request(A, AuthorityA, Replace)),
+        New = await(A, ready),
         ?assertEqual(2, (maps:get(state, New))#domain_state.current),
         {ok, NewLeft} = hls_domain_erts:endpoint(A, AuthorityA, 2, left),
         ?assertNotEqual(Left, NewLeft),
         #{mailbox := #{generation := 2}} = hls_statem:info(NewLeft),
         ?assertEqual({report, 0}, hls_statem:call(NewLeft, {read, 0})),
-        ?assertMatch(#domain_output{status = ?HLS_DOMAIN_REPLAY}, hls_domain_erts:request(A, AuthorityA, Replace)),
+        ?assertMatch(#domain_output{status = replay}, hls_domain_erts:request(A, AuthorityA, Replace)),
         {ok, Repeated} = hls_domain_erts:status(A),
         ?assertEqual(2, maps:get(reset_count, Repeated)),
         ?assertEqual({report, 0}, hls_statem:call(Independent, {read, 0}))
@@ -60,7 +60,7 @@ status_before_down_cannot_publish_dead_actor_test() ->
         after 1000 -> error(actor_not_dead) end,
         ok = sys:resume(Backend),
         {reply, {ok, Snapshot}} = gen_server:wait_response(Request, 1000),
-        ?assertEqual(?HLS_DOMAIN_FAILED, (maps:get(state, Snapshot))#domain_state.phase),
+        ?assertEqual(failed, (maps:get(state, Snapshot))#domain_state.phase),
         ?assertEqual(#{}, maps:get(actors, Snapshot)),
         ?assertNot(is_process_alive(Peer)),
         ?assertEqual({error, not_ready_or_stale}, hls_domain_erts:endpoint(Backend, Authority, 1, actor)),
@@ -86,18 +86,18 @@ owner_loss_fences_without_reset_test() ->
         Actor = receive {attached, Owner, Pid} -> Pid after 3000 -> error(owner_start_timeout) end,
         ?assertEqual({error, owned}, hls_domain_erts:attach(Backend, self())),
         exit(Owner, kill),
-        Failed = await(Backend, ?HLS_DOMAIN_FAILED),
+        Failed = await(Backend, failed),
         ?assertEqual(1, maps:get(reset_count, Failed)),
         ?assertNot(is_process_alive(Actor)),
         ?assertEqual(#{}, maps:get(actors, Failed)),
         {ok, ReplacementAuthority} = hls_domain_erts:attach(Backend, self()),
         {ok, Before} = hls_domain_erts:status(Backend),
-        ?assertEqual(?HLS_DOMAIN_FAILED, (maps:get(state, Before))#domain_state.phase),
+        ?assertEqual(failed, (maps:get(state, Before))#domain_state.phase),
         ?assertEqual(1, maps:get(reset_count, Before)),
-        Replace = #domain_input{op = ?HLS_DOMAIN_REPLACE, expected = 1, target = 2, transition = 2},
-        ?assertMatch(#domain_output{status = ?HLS_DOMAIN_ACCEPTED},
+        Replace = #domain_input{op = replace, expected = 1, target = 2, transition = 2},
+        ?assertMatch(#domain_output{status = accepted},
             hls_domain_erts:request(Backend, ReplacementAuthority, Replace)),
-        _ = await(Backend, ?HLS_DOMAIN_READY),
+        _ = await(Backend, ready),
         ok
     after
         exit(Owner, kill),
@@ -110,10 +110,10 @@ owner_cannot_forge_completion_test() ->
     {ok, Backend} = hls_domain_erts:start_link(reply_spec([actor])),
     try
         {ok, Authority} = hls_domain_erts:attach(Backend, self()),
-        Forged = #domain_input{op = ?HLS_DOMAIN_FENCED, target = 1, transition = 1},
+        Forged = #domain_input{op = fenced, target = 1, transition = 1},
         ?assertEqual({error, backend_completion_only}, hls_domain_erts:request(Backend, Authority, Forged)),
         {ok, Snapshot} = hls_domain_erts:status(Backend),
-        ?assertEqual(?HLS_DOMAIN_UNBOUND, (maps:get(state, Snapshot))#domain_state.phase),
+        ?assertEqual(unbound, (maps:get(state, Snapshot))#domain_state.phase),
         Parent = self(),
         spawn(fun() -> Parent ! {unauthorized, hls_domain_erts:request(Backend, Authority, #domain_input{})} end),
         receive {unauthorized, Reply} -> ?assertEqual({error, unauthorized}, Reply)
@@ -128,9 +128,9 @@ setup_effects_reject_before_publication_test() ->
     {ok, Backend} = hls_domain_erts:start_link(Spec),
     try
         {ok, Authority} = hls_domain_erts:attach(Backend, self()),
-        Request = #domain_input{op = ?HLS_DOMAIN_ACTIVATE, target = 1, transition = 1},
-        ?assertMatch(#domain_output{status = ?HLS_DOMAIN_ACCEPTED}, hls_domain_erts:request(Backend, Authority, Request)),
-        Failed = await(Backend, ?HLS_DOMAIN_FAILED),
+        Request = #domain_input{op = activate, target = 1, transition = 1},
+        ?assertMatch(#domain_output{status = accepted}, hls_domain_erts:request(Backend, Authority, Request)),
+        Failed = await(Backend, failed),
         ?assertEqual(#{}, maps:get(actors, Failed)),
         ?assertEqual({error, not_ready_or_stale}, hls_domain_erts:endpoint(Backend, Authority, 1, actor)),
         receive {'$gen_cast', _} -> error(setup_published_effect) after 0 -> ok end
@@ -144,9 +144,9 @@ setup_postponement_is_not_readiness_test() ->
     {ok, Backend} = hls_domain_erts:start_link(Spec),
     try
         {ok, Authority} = hls_domain_erts:attach(Backend, self()),
-        Request = #domain_input{op = ?HLS_DOMAIN_ACTIVATE, target = 1, transition = 1},
-        ?assertMatch(#domain_output{status = ?HLS_DOMAIN_ACCEPTED}, hls_domain_erts:request(Backend, Authority, Request)),
-        Failed = await(Backend, ?HLS_DOMAIN_FAILED),
+        Request = #domain_input{op = activate, target = 1, transition = 1},
+        ?assertMatch(#domain_output{status = accepted}, hls_domain_erts:request(Backend, Authority, Request)),
+        Failed = await(Backend, failed),
         ?assertEqual(#{}, maps:get(actors, Failed))
     after hls_domain_erts:stop(Backend) end.
 
@@ -183,17 +183,17 @@ reply_spec(Ids) ->
 %% Request one cold activation and wait only for actual ready evidence.
 -spec activate(pid(), hls_domain_backend:authority(), hls_nums:u64()) -> ok.
 activate(Backend, Authority, Target) ->
-    Request = #domain_input{op = ?HLS_DOMAIN_ACTIVATE, target = Target, transition = Target},
-    ?assertMatch(#domain_output{status = ?HLS_DOMAIN_ACCEPTED}, hls_domain_erts:request(Backend, Authority, Request)),
-    _ = await(Backend, ?HLS_DOMAIN_READY),
+    Request = #domain_input{op = activate, target = Target, transition = Target},
+    ?assertMatch(#domain_output{status = accepted}, hls_domain_erts:request(Backend, Authority, Request)),
+    _ = await(Backend, ready),
     ok.
 
 %% Bound the test observation interval without treating expiration as completion.
--spec await(pid(), hls_nums:uN(3)) -> hls_domain_erts:snapshot().
+-spec await(pid(), hls_domain_lifecycle:phase()) -> hls_domain_erts:snapshot().
 await(Backend, Phase) -> await(Backend, Phase, erlang:monotonic_time(millisecond) + 3000).
 
 %% Inspect the actual backend until the named phase or the finite test deadline.
--spec await(pid(), hls_nums:uN(3), integer()) -> hls_domain_erts:snapshot().
+-spec await(pid(), hls_domain_lifecycle:phase(), integer()) -> hls_domain_erts:snapshot().
 await(Backend, Phase, Deadline) ->
     {ok, Snapshot = #{state := State}} = hls_domain_erts:status(Backend),
     case State#domain_state.phase of
