@@ -2,10 +2,10 @@
 -define(HLS_DOMAIN_LIFECYCLE_HRL, true).
 
 %% Lifecycle states; only ready admits application traffic.
--type domain_phase() :: unbound | ready | closing | isolated | initializing | failed.
+-type domain_phase() :: unbound | ready | closing | isolated | initializing | failed | stopped.
 
 %% Management commands and correlated completions; adapters may explicitly reject an envelope.
--type domain_operation() :: inspect | activate | replace | fault | fenced | reset_done | initialized | abort | reject.
+-type domain_operation() :: inspect | activate | replace | fault | fenced | reset_done | initialized | abort | reject | stop.
 
 %% Command disposition is distinct from completion of the requested physical work.
 -type domain_status() :: ok | accepted | replay | stale | busy | invalid | failure | completed.

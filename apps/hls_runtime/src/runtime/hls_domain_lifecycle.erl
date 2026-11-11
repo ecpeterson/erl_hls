@@ -68,6 +68,7 @@ step(Input, State) ->
         inspect -> output(ok, State);
         activate -> request(Input, State);
         replace -> request(Input, State);
+        stop -> stop_request(Input, State);
         fault -> fault(Input, State);
         fenced -> completion(Input, State);
         reset_done -> completion(Input, State);
@@ -95,7 +96,12 @@ admitted(Incarnation, State) ->
 %% A repeated transition observes its current result without allocating another successor.
 -spec request(#domain_input{}, #domain_state{}) -> #domain_output{}.
 request(Input, State) ->
-    case same_transition(Input, State) of
+    case
+        same_transition(Input, State) andalso
+            Input#domain_input.target > Input#domain_input.expected andalso
+            ((Input#domain_input.op =:= activate andalso Input#domain_input.expected =:= 0) orelse
+                (Input#domain_input.op =:= replace andalso Input#domain_input.expected =/= 0))
+    of
         true -> output(replay, State);
         false -> new_request(Input, State)
     end.
@@ -125,7 +131,8 @@ admit_request(Input, State) ->
         Input#domain_input.op =:= replace andalso
             State#domain_state.current =/= 0 andalso
             (State#domain_state.phase =:= ready orelse
-                State#domain_state.phase =:= failed),
+                State#domain_state.phase =:= failed orelse
+                State#domain_state.phase =:= stopped),
     Valid =
         Input#domain_input.target > State#domain_state.current andalso
             Input#domain_input.target > State#domain_state.target andalso
@@ -143,6 +150,42 @@ admit_request(Input, State) ->
             output(accepted, Next)
     end.
 
+%% Stop retains the retired identity and needs a fence, not a reset or successor allocation.
+-spec stop_request(#domain_input{}, #domain_state{}) -> #domain_output{}.
+stop_request(Input, State) ->
+    Current = State#domain_state.current,
+    Valid =
+        Current =/= 0 andalso Input#domain_input.expected =:= Current andalso
+            Input#domain_input.target =:= Current andalso Input#domain_input.transition =/= 0,
+    case Valid of
+        false ->
+            output(stale, State);
+        true ->
+            case same_transition(Input, State) of
+                true -> output(replay, State);
+                false -> begin_stop(Input, State)
+            end
+    end.
+
+%% An unresolved replacement keeps its reserved target; stop cannot erase that identity.
+-spec begin_stop(#domain_input{}, #domain_state{}) -> #domain_output{}.
+begin_stop(Input, State) ->
+    Phase = State#domain_state.phase,
+    case
+        State#domain_state.target =:= State#domain_state.current andalso
+            (Phase =:= ready orelse Phase =:= failed orelse Phase =:= stopped)
+    of
+        false ->
+            output(busy, State);
+        true when Phase =:= stopped -> output(replay, State);
+        true ->
+            output(accepted, State#domain_state{
+                phase = closing,
+                previous = State#domain_state.current,
+                transition = Input#domain_input.transition
+            })
+    end.
+
 %% Every completion must identify the live operation, including both incarnation endpoints.
 -spec completion(#domain_input{}, #domain_state{}) -> #domain_output{}.
 completion(Input, State) ->
@@ -153,6 +196,9 @@ completion(Input, State) ->
 
 %% Fencing is an acknowledgement from the backend, never an elapsed-time inference.
 -spec advance(domain_operation(), #domain_state{}) -> #domain_output{}.
+advance(fenced, State = #domain_state{phase = closing, previous = Current, target = Current}) ->
+    output(completed, State#domain_state{phase = stopped});
+%% Replacement continues only after the same confirmed fence.
 advance(fenced, State = #domain_state{phase = closing}) ->
     output(ok, State#domain_state{phase = isolated});
 %% Reset installs the new incarnation but does not open application admission.
@@ -173,6 +219,8 @@ advance(_Operation, State) ->
 
 %% First current-incarnation fault wins; retiring old actors cannot reopen admission.
 -spec fault(#domain_input{}, #domain_state{}) -> #domain_output{}.
+fault(_Input, State = #domain_state{phase = stopped}) ->
+    output(stale, State);
 fault(Input, State) ->
     Current = State#domain_state.current,
     case

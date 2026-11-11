@@ -124,6 +124,53 @@ incarnation_exhaustion_test() ->
         ?assertEqual(Ready, O#domain_output.state)
     end, [0, Maximum - 1, Maximum]).
 
+%% Stop closes admission immediately but becomes terminal only after the exact fence acknowledgement.
+-spec explicit_stop_and_replacement_test() -> ok.
+explicit_stop_and_replacement_test() ->
+    Ready = ready(7),
+    Stop = command(stop, 7, 7, 7),
+    Closing = hls_domain_lifecycle:step(Stop, Ready),
+    ?assertEqual(accepted, Closing#domain_output.status),
+    ?assertEqual(fence, Closing#domain_output.action),
+    ?assertNot(Closing#domain_output.admit),
+    ?assertEqual(7, (Closing#domain_output.state)#domain_state.current),
+    Again = hls_domain_lifecycle:step(Stop, Closing#domain_output.state),
+    ?assertEqual(replay, Again#domain_output.status),
+    ?assertEqual(Closing#domain_output.state, Again#domain_output.state),
+    Premature = hls_domain_lifecycle:step(Stop#domain_input{op = reset_done}, Closing#domain_output.state),
+    ?assertEqual(stale, Premature#domain_output.status),
+    Stopped = complete(fenced, Closing#domain_output.state),
+    ?assertEqual(stopped, Stopped#domain_state.phase),
+    ?assertEqual(none, hls_domain_lifecycle:action(Stopped)),
+    ?assertEqual(Stopped, (hls_domain_lifecycle:step(Stop, Stopped))#domain_output.state),
+    LateFault = hls_domain_lifecycle:step(#domain_input{op = fault, expected = 7, fault = actor_failure}, Stopped),
+    ?assertEqual(stale, LateFault#domain_output.status),
+    ?assertEqual(Stopped, LateFault#domain_output.state),
+    Replacement = hls_domain_lifecycle:step(command(replace, 7, 8, 8), Stopped),
+    ?assertEqual(accepted, Replacement#domain_output.status),
+    NewReady = complete(initialized, complete(reset_done, complete(fenced, Replacement#domain_output.state))),
+    ?assertEqual(8, NewReady#domain_state.current),
+    ?assertEqual(stale, (hls_domain_lifecycle:step(Stop, NewReady))#domain_output.status).
+
+%% A different operation cannot borrow the identity of a retained stop or replacement.
+-spec command_kind_replay_collision_test() -> ok.
+command_kind_replay_collision_test() ->
+    Ready = ready(7),
+    Replace = command(replace, 7, 8, 9),
+    ClosingReplace = (hls_domain_lifecycle:step(Replace, Ready))#domain_output.state,
+    WrongStop = hls_domain_lifecycle:step(Replace#domain_input{op = stop}, ClosingReplace),
+    ?assertEqual(stale, WrongStop#domain_output.status),
+    ?assertEqual(ClosingReplace, WrongStop#domain_output.state),
+    Stop = command(stop, 7, 7, 7),
+    Stopped = complete(fenced, (hls_domain_lifecycle:step(Stop, Ready))#domain_output.state),
+    WrongReplace = hls_domain_lifecycle:step(Stop#domain_input{op = replace}, Stopped),
+    ?assertEqual(invalid, WrongReplace#domain_output.status),
+    ?assertEqual(Stopped, WrongReplace#domain_output.state),
+    Aborted = (hls_domain_lifecycle:step(Replace#domain_input{op = abort, fault = lifecycle_failure}, ClosingReplace))#domain_output.state,
+    RejectedStop = hls_domain_lifecycle:step(Stop, Aborted),
+    ?assertEqual(busy, RejectedStop#domain_output.status),
+    ?assertEqual(8, (RejectedStop#domain_output.state)#domain_state.target).
+
 %% Exhaust every history through eight inputs over this explicit small alphabet, merging equal states.
 %% This is finite Erlang-model exploration, not a proof for all 64-bit inputs or generated hardware.
 -spec eight_input_small_alphabet_test() -> ok.
@@ -180,10 +227,11 @@ ready(Incarnation) ->
 %% Enumerate the precise small input domain explored to the stated eight-step horizon.
 -spec alphabet() -> [hls_domain_lifecycle:input()].
 alphabet() ->
-    Transitions = [{0, 1, 1}, {1, 2, 2}, {2, 3, 3}],
+    Transitions = [{0, 1, 1}, {1, 2, 2}, {2, 3, 3}, {1, 1, 1}, {2, 2, 2}],
     [#domain_input{}] ++
     [command(activate, 0, 1, 1), command(activate, 0, 0, 1),
-     command(replace, 1, 2, 2), command(replace, 2, 3, 3)] ++
+     command(replace, 1, 2, 2), command(replace, 2, 3, 3),
+     command(stop, 1, 1, 1), command(stop, 2, 2, 2)] ++
     [#domain_input{op = fault, expected = E, fault = actor_failure} || E <- [1, 2, 3]] ++
     [command(Op, Old, Target, Id) || {Old, Target, Id} <- Transitions,
         Op <- [fenced, reset_done, initialized]] ++

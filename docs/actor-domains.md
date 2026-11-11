@@ -2,7 +2,7 @@
 
 Replacing a domain starts its actors again from `init([])` and the declared startup configuration. It does not restore their previous data. A **domain** is the fixed group replaced together, including its private mailboxes, pending calls and routes. A **domain incarnation** is one lifetime of that whole group; its actor PIDs and non-reused **incarnation ID** change on replacement.
 
-`activate/2` starts the first incarnation; `replace/2` starts a successor. The **incarnation counter** allocates these IDs; it contains no checkpoint of the application.
+`activate/2` starts the first incarnation; `replace/2` starts a successor. `stop/2` retires an exact incarnation without initializing another. The **incarnation counter** allocates these IDs; it contains no checkpoint of the application.
 
 The implementation separates the actors being replaced from the controller coordinating their replacement. This is similar to keeping a supervisor outside its children's lifetimes. The additional requirement is that a hardware backend can outlive the host process controlling it, and old traffic can remain in a transport after that host process exits.
 
@@ -11,9 +11,10 @@ The implementation separates the actors being replaced from the controller coord
 | Event | Result |
 | --- | --- |
 | Replace the source-actor domain | Old actors and private pending work are retired. Fresh actors run initialization with new PIDs and a new incarnation ID. |
-| Restart its `hls_domain_instance` supervisor child | The new child inspects the surviving controller. It attaches to a healthy incarnation, or requests replacement if failure and the declared policy permit it. |
+| Restart an observing `hls_domain_instance` child | The new child inspects the surviving controller. It attaches to a healthy incarnation, or requests replacement if failure and the declared policy permit it. |
+| Stop or lose an explicitly supervised child | The surviving deployment owner retains retirement intent for that child’s exact lifetime. A replacement child waits for actual retirement before starting a fresh incarnation. |
 | Restart the `hls_domain` deployment owner | The new owner reads its identity counter and attaches to the surviving backend. It does not restore actor data or issue reset merely by attaching. The native backend preserves actors and accepted lifecycle work by default; `owner_loss => fail` explicitly retires the group when its owner dies. |
-| Lose a hardware transport/backend adapter | Reachability and pending results become uncertain. No actor reset follows from connection loss alone. Explicit reattachment requires the same ready incarnation; accepted application work is never replayed. |
+| Lose a hardware transport/backend adapter | Reachability and pending results become uncertain. No actor reset follows from connection loss alone. Explicit reattachment requires the same established incarnation; non-ready states permit management reconciliation only; accepted application work is never replayed. |
 | Restart `hls_domain_erts` itself | Its old actors are retired; a new backend starts `unbound`. No backend state is recovered from the counter file. |
 
 A host restart need not restart the FPGA. Conversely, a new FPGA process or bitstream need not retain the former controller's state. The owner therefore asks the backend what happened rather than guessing from its own restart. Losing reachability leaves the outcome unknown until the backend can be reconciled.
@@ -133,23 +134,40 @@ After a local hardware backend adapter dies, bring up another adapter against th
 
 The owner serializes this operation with management of that domain. It refuses a live old adapter or a candidate already used by another domain. It checks that the candidate reports the supplied nonzero incarnation as `ready`, attaches as the actual owner PID, installs the new binding, and checks that identity and readiness again. No new incarnation is allocated, reset is not requested, and no application input is replayed. A mismatching initial observation leaves the candidate unattached and the old binding unchanged. Attachment or final-response loss remains uncertain; after successful attachment the new binding can remain installed even if confirmation fails. Inspect `status/2` to reconcile it.
 
+A matching non-ready incarnation may be reattached to reconcile an interrupted lifecycle operation; it exposes no application endpoint until ready.
+
 Both adapter PIDs must be local to the owner. Local process death proves the old adapter has ended; an unavailable remote Erlang node would not establish that exclusion. This is not authority election across hosts. The backend must also establish that its controller evidence belongs to the same deployment and transport session; a host-side integer match alone cannot attest hardware continuity. A restarted native `hls_domain_erts` begins `unbound`, so it cannot claim reattachment to its dead actors.
 
 Returned actor PIDs never become a successor incarnation. A replacement host proxy may represent the same surviving hardware actor after explicit reattachment. It is a new observer endpoint: application callers re-resolve and establish new monitors; old pending calls and monitors do not come back to life. Replacing a failed actor domain remains an explicit, separate operation governed by the catalog's `manual` or `automatic` policy.
 
 ## OTP supervision
 
-The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset and reinitialization require application approval. For an explicitly automatic domain, an ordinary supervisor can own:
+The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset and reinitialization require application approval. For an explicitly automatic, reset-safe domain, an ordinary supervisor can own its lifetime:
 
 ```erlang
 #{id => compute,
-  start => {hls_domain_instance, start_link, [Owner, compute]},
+  start => {hls_domain_instance, start_link,
+            [Owner, compute, #{lifetime => supervised}]},
   restart => permanent,
   shutdown => 5000,
   type => worker}
 ```
 
-The child starts promptly and observes readiness asynchronously. It then monitors the exact actor PIDs of its incarnation. Actor failure terminates the child; supervisor restart requests replacement through the surviving owner. Restarting only this representative attaches to the same incarnation if it is healthy. Supervisor intensity and subtree policy remain ordinary OTP policy. A readiness deadline reports an unknown outcome without cancelling or replaying the retained operation. An exact proxy `noconnection` instead leaves an already-bound representative alive with status `{error, noconnection}`. It retires old monitors and checks availability every 100 ms. A failed or timed-out observation leaves it unavailable; neither proves actor death or permits reset. Only explicit owner reattachment yielding the same ready incarnation lets it bind fresh monitors; it does not reconnect adapters or request replacement itself. Other terminal actor reasons retain ordinary supervisor-visible failure behavior.
+The child starts promptly and observes readiness asynchronously. `supervised` claims exclusive lifetime ownership before startup. Competing callers cannot activate or replace that owned domain; an exact-incarnation stop remains available. Its surviving deployment owner retains the exact incarnation or pending initialization target. Supervisor shutdown requests stop and waits for acknowledged retirement. If OTP kills the child before cleanup completes, the owner retains that intent; a replacement child cannot adopt the old healthy incarnation. `one_for_all` and `rest_for_one` therefore retire the affected healthy siblings as well as replacing the failed child. The owner and backend must live outside this subtree. OTP orders representative startup, but hardware readiness remains asynchronous; dependent domains must coordinate readiness explicitly.
+
+Omitting `lifetime`, including the existing `start_link/2`, selects `observed`. Losing an observer preserves a healthy domain; restarting it reattaches rather than resetting. Both modes leave ordinary transport-only `noconnection` unavailable without requesting reset. Old monitors and pending calls do not resume. An explicitly requested shutdown during disconnection remains pending until reattachment supplies actual retirement evidence; elapsed time and death of a local proxy are not acknowledgements.
+
+The supervised retirement record is bounded management state in the owner, not a durable work log. Owner or host loss does not preserve this shutdown intent. The backend's existing default `owner_loss => preserve` still applies. Consequently, this is not a hardware watchdog or a fully transparent remote OTP parent link. Explicit supervision controls a digital domain's lifetime while its management authority survives; external effects and reservations remain outside that lifetime.
+
+## Explicit stop
+
+```erlang
+{ok, Observation} = hls_domain:stop(Owner, Handle).
+```
+
+`closing` acknowledges accepted intent. Only an observed `stopped` phase confirms retirement, including the backend's required output-delivery and endpoint-termination boundary. A failure or missing acknowledgement leaves the outcome unresolved. Stop consumes no fresh incarnation ID, never initializes a successor, and does not wait for every accepted application call to finish. Outputs already committed to delivery retain their ordering before orderly termination. Unfinished work is not replayed and emitted external effects are not reversed.
+
+Repeating stop for the retained stopped incarnation is idempotent. A stale handle cannot stop a successor, and stop does not cancel a previously accepted replacement. Starting again requires an explicit replacement or the explicitly permitted action of an automatic supervisor child. An observer’s own death preserves healthy actors, but an ordinary permanent supervisor can still restart its child after an explicitly stopped actor terminates. The finite lifecycle uses the same stop transition on ERTS and in generated hardware; a future FPGA-resident supervisor can issue it without host filesystem or PID dependencies.
 
 The generic lifecycle neither releases external reservations nor reconstructs previous application state. Initial support excludes arbitrary actor-local reset of shared state and distributed atomic replacement. Management progress still requires a running backend and working control transport.
 

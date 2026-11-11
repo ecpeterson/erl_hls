@@ -89,7 +89,7 @@ status(Backend) -> gen_server:call(Backend, status).
 -spec send_request(pid(), hls_domain_backend:request()) -> gen_server:request_id().
 send_request(Backend, Request) -> gen_server:send_request(Backend, Request).
 
--doc "Submits an authorized activate, replace or inspect input and returns its immediate disposition; backend phase work completes asynchronously. Completion acknowledgements and source faults belong to the backend and cannot be supplied by the owner.".
+-doc "Submits an authorized activate, replace, stop or inspect input and returns its immediate disposition; backend phase work completes asynchronously. Completion acknowledgements and source faults belong to the backend and cannot be supplied by the owner.".
 -spec request(pid(), hls_domain_backend:authority(), hls_domain_lifecycle:input()) ->
     hls_domain_lifecycle:output() | {error, term()}.
 request(Backend, Authority, Input) -> gen_server:call(Backend, {request, Authority, Input}).
@@ -159,6 +159,7 @@ handle_call(
         Operation when
             Operation =:= activate;
             Operation =:= replace;
+            Operation =:= stop;
             Operation =:= inspect
         ->
             Output = hls_domain_lifecycle:step(Input, State),
