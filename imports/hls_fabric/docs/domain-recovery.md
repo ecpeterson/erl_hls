@@ -20,7 +20,40 @@ For an OTP child that owns the domain's lifetime, use `hls_domain_instance:start
 
 The framed backend also requires its promised prior-output frontier and actual endpoint termination before exposing `stopped`. Healthy intentional retirement reports `shutdown`; an already observed source failure keeps its cause. New admission is closed while earlier replies and effects drain. An accepted call which has not produced a reply need not complete, and no application work is replayed. Missing transport or output evidence remains uncertainty.
 
-The lifecycle is an Erlang transition kernel usable by host or compiled controllers. Restart strategy and intensity still live in ERTS in this increment. Static FPGA supervisors, delegated incarnation allocation and independently reset crossing links remain separate work; physical clock/reset isolation is not established by RTL simulation.
+The lifecycle is an Erlang transition kernel usable by host or compiled controllers. The static composition below adds FPGA-local restart policy above independent child domains. Crossing-link ownership and physical clock/reset isolation remain separate contracts.
+
+## Static supervisors on FPGA
+
+`hls_protocol_supervisor:write/2` elaborates a checked subset of an ordinary OTP supervisor declaration and composes its fixed children as independently resettable source-protocol networks. The callback runs at build time; the FPGA does not interpret Erlang child specifications or dynamically allocate circuitry. The same declaration can start native domain representatives under an ordinary ERTS supervisor for comparison.
+
+```erlang
+Config = #{
+    supervisor => {SupervisorModule, {deployment_owner, Flags}},
+    children => #{a => NetworkA, b => NetworkB},
+    clock_hz => 100000000
+},
+Bundle = hls_protocol_supervisor:write(Config, "build/supervised").
+```
+
+The callback must return `one_for_one`, an intensity from zero through sixteen, a positive 32-bit period in seconds, and `auto_shutdown => never` when supplied. Each child must be a permanent worker whose start function is `hls_domain_instance:start_link/3` with `#{lifetime => supervised}` and the same domain name as its child ID. Brutal-kill shutdown and unsupported strategies or child kinds reject during elaboration. The deployment-owner argument is a placeholder at build time and an actual owner PID in the native declaration. The `children` map supplies exactly the networks named by that declaration; it does not select application recovery meaning.
+
+The compiled Erlang supervisor policy lives outside its children's reset regions. It alone issues their lifecycle commands; host requests address the parent boundary rather than competing with it for child ownership. Child source faults close that child's admission independently. Management visits one child per edge, while the other networks and their independent application interfaces continue advancing. This serializes bounded recovery decisions, not ordinary actor messages.
+
+Restart intensity counts replacement attempts within the declared sliding window, excluding initial startup. The generated local divider produces whole-second ticks from `clock_hz`; disconnected or stalled host management does not stop that clock. The deployment must supply the declared hardware frequency. This is neither a physical timing measurement nor an externally synchronized clock. Exhausted restart intensity or incarnation allocation closes the subtree and retires its children before reporting terminal parent failure. An unrelated domain outside that subtree is unaffected.
+
+The parent uses the existing domain lifecycle interface. Its initialization remains pending until an identity grant is accepted and every child is ready. An orderly parent stop disables local recovery, retires its children and waits for completion. Existing lifecycle rules still apply to an already accepted initialization or replacement: stop cannot erase its reserved transition, and a busy response or timeout is not cancellation. Host connection loss alone neither stops the subtree nor resets healthy children. A host supervisor can control this parent through a backend adapter without occupying the local child-recovery path.
+
+### Delegated identities
+
+Before autonomous operation, the deployment durably reserves a finite, non-reused incarnation interval and presents `grant_valid`, `grant_epoch`, `grant_first` and `grant_last` through the public pins. The epoch must match the initializing parent's incarnation; the interval must lie above the controller's retained allocation high-water mark, and its inclusive upper bound must be below the largest 64-bit value. The supervisor consumes a fresh identity before each initial start or replacement; exhausted space fails closed instead of wrapping.
+
+An exact repeated grant observes the same allocation and cannot rewind its cursor. Parent replacement resets child and supervisor execution state while retaining the allocation high-water mark, so a new parent incarnation needs a new interval. Full hardware reset loses that state. The deployment must then establish old-traffic exclusion and supply a fresh durably reserved interval; replaying an old grant is not recovery from lost allocation state. These grants retain no application work history.
+
+### Public boundary and limitations
+
+This composition emits raw parent management, grant and per-child application ports. It does not publish autonomous child incarnations as individual virtual Erlang PIDs through `hls_domain_fabric`. Several local replacements can occur between host observations; the ordinary framed backend's single retirement frontier cannot by itself represent every unseen child lifetime. Extending that publication path requires an explicit ordering and retirement contract rather than silently reusing the host-driven replacement assumption.
+
+The native reference uses ordinary OTP supervision over actual counter/relay source domains. Its public outcomes cover independent progress, fresh source state and identities, intensity exhaustion, window expiry and explicit shutdown. Generated public-pin witnesses compare those outcomes; they do not equate ERTS scheduling with hardware clock counts or establish physical reset isolation. FPGA-to-host supervision and bounded temporary children remain follow-on work. Temporary children will need finite slot admission, retirement before slot reuse and fresh incarnation identities; fixed circuitry does not require every slot to be permanently occupied.
 
 ## Framed hardware backend
 

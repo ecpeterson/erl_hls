@@ -1,0 +1,192 @@
+import axis;
+import hls_bits;
+import parent_controller;
+import supervisor_controller;
+import supervisor_codes;
+
+const CHILDREN = u32:@@COUNT@@;
+const CLOCK_HZ = u32:@@CLOCK_HZ@@;
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Supervisor bookkeeping stays outside every child's separately clocked reset region.
+pub struct State {
+  parent: parent_controller::ServiceState,
+  supervisor: supervisor_controller::ServiceState,
+  children: supervisor_controller::Supervisorchild[CHILDREN],
+  cursor: u16,
+  divider: u32,
+  seconds: u64,
+  clock_failed: bool,
+  grant_epoch: u64,
+  grant_first: u64,
+  grant_last: u64,
+  high_watermark: u64,
+}
+
+// Public observations are for this edge; all state commits together at its end.
+pub struct Tick { state: State, output: Outputs }
+
+// Cold control admits nothing and requires a new explicitly commissioned grant.
+pub fn initial_state() -> State {
+  State {
+    parent: parent_controller::initial_service_state(),
+    supervisor: supervisor_controller::initial_service_state(),
+    children: supervisor_controller::Supervisorchild[CHILDREN]:[
+      supervisor_controller::Supervisorchild {
+        phase: supervisor_codes::CHILD_PHASE_FRESH,
+        ..zero!<supervisor_controller::Supervisorchild>()
+      }, ...],
+    ..zero!<State>()
+  }
+}
+
+// The existing domain lifecycle remains the host-facing parent contract.
+fn parent_tick(state: parent_controller::ServiceState,
+               input: parent_controller::Domaininput) -> parent_controller::ServiceResult {
+  parent_controller::service_step(state,
+    axis::pack(parent_controller::Tag::DOMAIN_INPUT as u8,
+      hls_bits::frame_payload(parent_controller::bits_from_domaininput(input))))
+}
+
+// Restart selection and intensity accounting are the same Erlang transition used natively.
+fn manager_tick(state: supervisor_controller::ServiceState,
+                input: supervisor_controller::Supervisorinput) -> supervisor_controller::ServiceResult {
+  supervisor_controller::service_step(state,
+    axis::pack(supervisor_controller::Tag::SUPERVISOR_INPUT as u8,
+      hls_bits::frame_payload(supervisor_controller::bits_from_supervisorinput(input))))
+}
+
+// One selected management row advances per clock; application lanes never pass through it.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  let parent = s.parent.data.lifecycle;
+  let manager = s.supervisor.data.supervisor;
+  let parent_ready = parent.phase == supervisor_codes::PHASE_READY &&
+    parent.current != u64:0 && s.parent.failure == u32:0 && !io.reset;
+  let application_admitted = parent_ready && manager.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING;
+  let reset_children = io.reset || parent.phase == supervisor_codes::PHASE_ISOLATED;
+  let retired = manager.phase == supervisor_codes::SUPERVISOR_PHASE_UNBOUND ||
+    manager.phase == supervisor_codes::SUPERVISOR_PHASE_STOPPED ||
+    manager.phase == supervisor_codes::SUPERVISOR_PHASE_FAILED;
+  let parent_initializing = parent.phase == supervisor_codes::PHASE_INITIALIZING;
+  let grant_matches = s.grant_epoch == parent.current && s.grant_epoch != u64:0;
+  let same_grant = io.grant_epoch == s.grant_epoch && io.grant_first == s.grant_first &&
+    io.grant_last == s.grant_last && io.grant_epoch == parent.current && io.grant_epoch != u64:0;
+  let fresh_grant = io.grant_epoch == parent.current && io.grant_epoch != u64:0 &&
+    io.grant_first > s.high_watermark && io.grant_first <= io.grant_last &&
+    io.grant_last < u64:0xffff_ffff_ffff_ffff && !grant_matches &&
+    manager.phase == supervisor_codes::SUPERVISOR_PHASE_UNBOUND;
+  let accept_grant = !io.reset && io.grant_valid && parent_initializing &&
+    (same_grant || fresh_grant);
+  let observations = supervisor_controller::Domainstate[CHILDREN]:[
+    @@CHILD_OBSERVATIONS@@
+  ];
+  let begin_manager = parent_initializing && grant_matches && !s.clock_failed &&
+    manager.phase == supervisor_codes::SUPERVISOR_PHASE_UNBOUND;
+  let stop_manager = !parent_initializing && !parent_ready &&
+    (manager.phase == supervisor_codes::SUPERVISOR_PHASE_STARTING ||
+     manager.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING);
+  let manager_input = supervisor_controller::Supervisorinput {
+    op: if begin_manager { supervisor_codes::SUPERVISOR_OPERATION_START }
+      else if stop_manager { supervisor_codes::SUPERVISOR_OPERATION_STOP }
+      else { supervisor_codes::SUPERVISOR_OPERATION_INSPECT },
+    epoch: if begin_manager { parent.current } else { manager.epoch },
+    first: s.grant_first, last: s.grant_last,
+    children: CHILDREN as u16, intensity: u8:@@INTENSITY@@, period: u32:@@PERIOD@@,
+    now: if s.clock_failed { u64:0 } else { s.seconds },
+    slot: s.cursor, child: s.children[s.cursor as u32],
+    observed: observations[s.cursor as u32],
+  };
+  let managed = manager_tick(s.supervisor, manager_input);
+  let manager_reply = supervisor_controller::supervisoroutput_from_bits(managed.response.payload);
+  let failed = manager.phase == supervisor_codes::SUPERVISOR_PHASE_FAILED ||
+    s.supervisor.failure != u32:0 || s.clock_failed;
+  let new_fault = failed && parent.current != u64:0 &&
+    parent.fault == supervisor_codes::FAULT_NONE &&
+    (parent_ready || parent_initializing);
+  let accept_management = io.management_valid && !io.reset && !new_fault;
+  let completion = parent_controller::Domaininput {
+    expected: parent.previous, target: parent.target, transition: parent.transition,
+    ..zero!<parent_controller::Domaininput>()
+  };
+  let indication = if new_fault {
+    parent_controller::Domaininput { op: supervisor_codes::OPERATION_FAULT,
+      expected: parent.current,
+      fault: if parent_initializing { supervisor_codes::FAULT_INITIALIZATION_FAILURE }
+        else { supervisor_codes::FAULT_LIFECYCLE_FAILURE },
+      ..zero!<parent_controller::Domaininput>() }
+  } else if accept_management && io.management_op != supervisor_codes::OPERATION_INSPECT {
+    parent_controller::Domaininput { op: if
+      io.management_op == supervisor_codes::OPERATION_ACTIVATE ||
+      io.management_op == supervisor_codes::OPERATION_REPLACE ||
+      io.management_op == supervisor_codes::OPERATION_STOP ||
+      io.management_op == supervisor_codes::OPERATION_ABORT ||
+      (io.management_op == supervisor_codes::OPERATION_FAULT && io.management_fault == supervisor_codes::FAULT_OWNER_DOWN)
+      { io.management_op } else { supervisor_codes::OPERATION_REJECT },
+      expected: io.expected, target: io.target, transition: io.transition,
+      fault: io.management_fault }
+  } else if parent.phase == supervisor_codes::PHASE_CLOSING && retired {
+    parent_controller::Domaininput {op: supervisor_codes::OPERATION_FENCED, ..completion}
+  } else if parent.phase == supervisor_codes::PHASE_ISOLATED {
+    parent_controller::Domaininput {op: supervisor_codes::OPERATION_RESET_DONE, ..completion}
+  } else if parent_initializing && manager.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING {
+    parent_controller::Domaininput {op: supervisor_codes::OPERATION_INITIALIZED, ..completion}
+  } else { zero!<parent_controller::Domaininput>() };
+  let controlled = parent_tick(s.parent, indication);
+  let parent_reply = parent_controller::domainoutput_from_bits(controlled.response.payload);
+  let second_edge = s.divider == CLOCK_HZ - u32:1;
+  let exhausted_time = second_edge && s.seconds == u64:0xffff_ffff_ffff_ffff;
+  let next = State {
+    parent: controlled.state,
+    supervisor: if reset_children { supervisor_controller::initial_service_state() } else { managed.state },
+    children: if reset_children { initial_state().children }
+      else { update(s.children, s.cursor as u32, manager_reply.child) },
+    cursor: if reset_children || s.cursor == (CHILDREN - u32:1) as u16 { u16:0 } else { s.cursor + u16:1 },
+    divider: if second_edge { u32:0 } else { s.divider + u32:1 },
+    seconds: if second_edge && !exhausted_time { s.seconds + u64:1 } else { s.seconds },
+    clock_failed: s.clock_failed || exhausted_time,
+    grant_epoch: if accept_grant { io.grant_epoch } else { s.grant_epoch },
+    grant_first: if accept_grant { io.grant_first } else { s.grant_first },
+    grant_last: if accept_grant { io.grant_last } else { s.grant_last },
+    high_watermark: if accept_grant && fresh_grant { io.grant_last } else { s.high_watermark },
+  };
+  Tick {
+    state: if io.reset { initial_state() } else { next },
+    output: Outputs {
+      management_ready: !io.reset && !new_fault,
+      management_response_valid: accept_management,
+      domain_status: if accept_management && io.management_op == supervisor_codes::OPERATION_INSPECT
+        { supervisor_codes::STATUS_OK } else { parent_reply.status },
+      domain_action: parent_reply.action, domain_phase: parent.phase,
+      domain_current: parent.current, domain_previous: parent.previous,
+      domain_target: parent.target, domain_transition: parent.transition, domain_fault: parent.fault,
+      domain_admission: application_admitted,
+      domain_initialized: manager.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING,
+      grant_ready: !io.reset && parent_initializing && (same_grant || fresh_grant),
+      grant_accepted: accept_grant,
+      supervisor_phase: manager.phase, supervisor_reason: manager.reason,
+      grant_next: manager.next, supervisor_started: manager.started,
+      supervisor_retired: manager.retired, local_seconds: s.seconds, selected_child: s.cursor,
+      children_reset: reset_children,
+      @@CHILD_COMMANDS@@
+    }
+  }
+}
+
+// Separate always-enabled sampled channels are only the generated core's pin interface.
+pub proc supervisor_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // Physical deployment supplies one fixed clock shared by this controller and its children.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // Global reset discards grants; deployment must commission a fresh reserved interval.
+  init { initial_state() }
+  // Local restart-window time and management scan continue without host traffic.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}
