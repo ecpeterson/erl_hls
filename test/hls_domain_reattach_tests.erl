@@ -125,6 +125,48 @@ instance_waits_for_explicit_reattachment_test() ->
         after stop(Instance), stop(First), stop(Next), exit(FirstProxy, kill), exit(NextProxy, kill) end
     end).
 
+%% Exercise the real owner-call deadline once while the instance is already disconnected.
+-spec unavailable_observer_timeout_test_() -> term().
+unavailable_observer_timeout_test_() ->
+    {timeout, 10, fun unavailable_observer_timeout/0}.
+
+%% A blocked owner cannot turn transport uncertainty into representative death or replacement.
+-spec unavailable_observer_timeout() -> ok.
+unavailable_observer_timeout() ->
+    with_domains(fun(Owner, A, _B, Store) ->
+        {ok, #{handle := {a, Id} = Handle}} = hls_domain:activate(Owner, a),
+        {ok, Evidence} = hls_domain_async_fixture:status(A),
+        FirstProxy = spawn(fun proxy/0),
+        NextProxy = spawn(fun proxy/0),
+        {ok, First} = hls_domain_async_fixture:start_link(self(), Evidence#{actors := #{actor => FirstProxy}}),
+        unlink(First),
+        {ok, Next} = hls_domain_async_fixture:start_link(self(), Evidence#{actors := #{actor => NextProxy}}),
+        unlink(Next),
+        stop(A),
+        {ok, _} = hls_domain:reattach(Owner, Handle, First),
+        {ok, Instance} = hls_domain_instance:start_link(Owner, a), unlink(Instance),
+        try
+            await_instance(Instance, fun(Status) -> is_map(Status) end, 200),
+            ok = hls_domain_async_fixture:hold(First, status),
+            exit(FirstProxy, noconnection),
+            held(First, status, Owner),
+            %% Suspend only after the watcher is waiting, forcing its own call deadline to fire.
+            ok = sys:suspend(Owner),
+            ?assertEqual({error, noconnection}, gen_server:call(Instance, status, 6500)),
+            ?assert(is_process_alive(Instance)),
+            ?assertEqual({ok, <<Id:64>>}, file:read_file(Store)),
+            stop(First),
+            ok = sys:resume(Owner),
+            {ok, _} = hls_domain:reattach(Owner, Handle, Next),
+            await_instance(Instance, fun(Status) -> is_map(Status) end, 200),
+            ?assertEqual({ok, NextProxy}, hls_domain_instance:resolve(Instance, actor)),
+            ?assertEqual({ok, <<Id:64>>}, file:read_file(Store))
+        after
+            catch sys:resume(Owner), stop(Instance), stop(First), stop(Next),
+            exit(FirstProxy, kill), exit(NextProxy, kill)
+        end
+    end).
+
 %% Only identity and process lifetime matter to this host-observer fixture.
 -spec proxy() -> ok.
 proxy() -> receive stop -> ok end.

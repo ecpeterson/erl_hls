@@ -111,13 +111,22 @@ handle_cast(_Message, Instance) -> {noreply, Instance}.
 
 -doc "Tracks pending initialization and turns native endpoint/owner loss into supervisor-visible termination.".
 -spec handle_info(term(), #instance{}) -> {noreply, #instance{}} | {stop, term(), #instance{}}.
+%% A delayed availability observation remains uncertainty, never supervisor reset permission.
+handle_info(
+    observe,
+    Instance = #instance{owner = Owner, domain = Domain, evidence = {error, noconnection}}
+) ->
+    try hls_domain:status(Owner, Domain) of
+        {ok, Evidence} -> observe(Evidence, Instance);
+        {error, _Reason} -> await_connection(Instance)
+    catch
+        exit:{timeout, {gen_server, call, _}} -> await_connection(Instance)
+    end;
 %% Only a retained operation is observed; a poll never allocates a new incarnation.
 handle_info(observe, Instance = #instance{owner = Owner, domain = Domain}) ->
     case hls_domain:status(Owner, Domain) of
         {ok, Evidence} ->
             observe(Evidence, Instance);
-        {error, _Reason} when Instance#instance.evidence =:= {error, noconnection} ->
-            await_connection(Instance);
         {error, Reason} ->
             {stop, {domain_unavailable, Reason}, Instance}
     end;
