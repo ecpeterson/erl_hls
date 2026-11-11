@@ -21,7 +21,9 @@ established. After host/storage crash, reconcile identity before reusing this st
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
 %% Deployment ownership and explicit lifecycle operations.
--export([create_store/1, start_link/2, status/2, activate/2, replace/2, resolve/3, policy/2]).
+-export([
+    create_store/1, start_link/2, status/2, activate/2, replace/2, reattach/3, resolve/3, policy/2
+]).
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 %% Public ownership contracts.
@@ -61,9 +63,10 @@ established. After host/storage crash, reconcile identity before reusing this st
 -type operation() ::
     status
     | {transition, non_neg_integer(), hls_domain_lifecycle:operation()}
-    | {resolve, any | incarnation(), term()}.
+    | {resolve, any | incarnation(), term()}
+    | {reattach, incarnation(), pid()}.
 %% Inspection precedes authenticated resolution/submission; ready submission needs fresh actors.
--type stage() :: inspecting | resolving | submitting | confirming.
+-type stage() :: inspecting | resolving | submitting | confirming | attaching | reattached.
 %% Correlation belongs to this owner, so backends still observe the actual attached caller.
 -record(pending, {
     from :: gen_server:from(),
@@ -121,6 +124,11 @@ activate(Owner, Domain) -> gen_server:call(Owner, {activate, Domain}).
 -spec replace(pid(), handle()) -> {ok, snapshot()} | {error, term()}.
 replace(Owner, {Domain, Incarnation}) -> gen_server:call(Owner, {replace, Domain, Incarnation}).
 
+-doc "Reattaches a surviving incarnation through a new local backend after the old backend process has died. Checks matching ready identity before attachment and again afterward; never resets or replays work. A failed final observation can leave the new binding installed: inspect status to reconcile it.".
+-spec reattach(pid(), handle(), pid()) -> {ok, snapshot()} | {error, term()}.
+reattach(Owner, {Domain, Incarnation}, Backend) ->
+    gen_server:call(Owner, {reattach, Domain, Incarnation, Backend}).
+
 -doc "Returns an actor endpoint only from the currently ready incarnation, in per-domain request order. Previously returned PIDs are never rebound; a full management queue returns busy.".
 -spec resolve(pid(), domain() | handle(), term()) -> {ok, pid()} | {error, term()}.
 resolve(Owner, Domain, Actor) -> gen_server:call(Owner, {resolve, Domain, Actor}).
@@ -163,6 +171,9 @@ handle_call({activate, Domain}, From, Owner) ->
 %% Compare-and-replace preserves the old handle's retained transition on retry.
 handle_call({replace, Domain, Expected}, From, Owner) ->
     enqueue(Domain, {transition, Expected, replace}, From, Owner);
+%% Reconnection shares the domain lane and cannot take over another live backend.
+handle_call({reattach, Domain, Expected, Backend}, From, Owner) ->
+    enqueue(Domain, {reattach, Expected, Backend}, From, Owner);
 %% The backend checks readiness and authority atomically with resolving an endpoint.
 handle_call({resolve, Identity, Actor}, From, Owner) ->
     {Domain, Expected} =
@@ -280,7 +291,55 @@ start_operation(Domain, Operation, From, Owner = #owner{work = Work}) ->
     W = maps:get(Domain, Work),
     Pending = #pending{from = From, operation = Operation},
     Next = Owner#owner{work = Work#{Domain := W#work{active = Pending}}},
-    send_backend(Domain, status, inspecting, Next).
+    case Operation of
+        {reattach, Expected, Backend} ->
+            begin_reattach(Domain, Expected, Backend, Next);
+        _ ->
+            send_backend(Domain, status, inspecting, Next)
+    end.
+
+%% Local process death establishes old transport retirement, not application-actor death.
+-spec begin_reattach(domain(), incarnation(), pid(), #owner{}) -> #owner{}.
+begin_reattach(Domain, Expected, Backend, Owner = #owner{endpoints = Endpoints}) ->
+    Previous = maps:get(Domain, Endpoints),
+    case
+        is_integer(Expected) andalso Expected > 0 andalso Expected < (1 bsl 64) andalso
+            is_pid(Backend) andalso node(Previous) =:= node() andalso
+            node(Backend) =:= node()
+    of
+        false ->
+            complete(Domain, {error, invalid_reattachment}, Owner);
+        true ->
+            case is_process_alive(Previous) of
+                true ->
+                    complete(Domain, {error, backend_still_alive}, Owner);
+                false ->
+                    case backend_reserved(Domain, Backend, Owner) of
+                        true -> complete(Domain, {error, backend_already_bound}, Owner);
+                        false -> send_backend_to(Domain, Backend, status, inspecting, Owner)
+                    end
+            end
+    end.
+
+%% Independent domain lanes may not concurrently claim the same candidate controller.
+-spec backend_reserved(domain(), pid(), #owner{}) -> boolean().
+backend_reserved(Domain, Backend, #owner{endpoints = Endpoints, work = Work}) ->
+    lists:member(Backend, maps:values(Endpoints)) orelse
+        maps:fold(
+            fun(Other, #work{active = Active}, Reserved) ->
+                Reserved orelse
+                    case Active of
+                        #pending{operation = {reattach, _Expected, Backend}} when
+                            Other =/= Domain
+                        ->
+                            true;
+                        _ ->
+                            false
+                    end
+            end,
+            false,
+            Work
+        ).
 
 %% Submission runs in the attached owner process; backend waits never run in its callback.
 -spec send_backend(domain(), hls_domain_backend:request(), stage(), #owner{}) -> #owner{}.
@@ -288,9 +347,20 @@ send_backend(
     Domain,
     Input,
     Stage,
-    Owner = #owner{module = Module, endpoints = Endpoints, work = Work, requests = Requests}
+    Owner = #owner{endpoints = Endpoints}
 ) ->
-    Request = Module:send_request(maps:get(Domain, Endpoints), Input),
+    send_backend_to(Domain, maps:get(Domain, Endpoints), Input, Stage, Owner).
+
+%% Reattachment probes a candidate endpoint before it becomes the domain's binding.
+-spec send_backend_to(domain(), pid(), hls_domain_backend:request(), stage(), #owner{}) -> #owner{}.
+send_backend_to(
+    Domain,
+    Backend,
+    Input,
+    Stage,
+    Owner = #owner{module = Module, work = Work, requests = Requests}
+) ->
+    Request = Module:send_request(Backend, Input),
     Timer = erlang:start_timer(?BACKEND_TIMEOUT, self(), {backend_timeout, Domain, Request}),
     W = #work{active = Pending} = maps:get(Domain, Work),
     Next = Pending#pending{stage = Stage, request = Request, timer = Timer},
@@ -309,11 +379,24 @@ backend_reply(Domain, Reply, Owner = #owner{work = Work}) ->
         inspecting -> inspected(Domain, Operation, Reply, Owner);
         submitting -> submitted(Domain, Reply, Owner);
         confirming -> finish_snapshot(Domain, Reply, Owner);
+        attaching -> attached(Domain, Operation, Reply, Owner);
+        reattached -> confirmed_reattachment(Domain, Operation, Reply, Owner);
         resolving -> complete(Domain, Reply, Owner)
     end.
 
 %% Inspect before allocating or resolving; backend readiness is never inferred from elapsed time.
 -spec inspected(domain(), operation(), term(), #owner{}) -> #owner{}.
+inspected(
+    Domain,
+    {reattach, Expected, Backend},
+    {ok, #{state := #domain_state{phase = ready, current = Expected}}},
+    Owner
+) ->
+    send_backend_to(Domain, Backend, {attach, self()}, attaching, Owner);
+%% A mismatching or non-ready candidate never acquires this owner or becomes its binding.
+inspected(Domain, {reattach, _Expected, _Backend}, {ok, _}, Owner) ->
+    complete(Domain, {error, incarnation_not_ready}, Owner);
+%% Ordinary status preserves the backend's full observation.
 inspected(Domain, status, Reply, Owner) ->
     finish_snapshot(Domain, Reply, Owner);
 inspected(
@@ -348,6 +431,39 @@ inspected(
 inspected(Domain, {transition, _Expected, _Operation}, {ok, _}, Owner) ->
     complete(Domain, {error, stale_or_busy}, Owner);
 inspected(Domain, _Operation, Error, Owner) ->
+    complete(Domain, Error, Owner).
+
+%% Only a matching ready observation permits attachment; the backend checks the actual owner PID.
+-spec attached(domain(), operation(), term(), #owner{}) -> #owner{}.
+attached(
+    Domain,
+    {reattach, _Expected, Backend},
+    {ok, Authority},
+    Owner = #owner{endpoints = Endpoints, authorities = Authorities}
+) when is_reference(Authority) ->
+    Next = Owner#owner{
+        endpoints = Endpoints#{Domain := Backend},
+        authorities = Authorities#{Domain := Authority}
+    },
+    send_backend(Domain, status, reattached, Next);
+%% Refused attachment leaves the old dead binding in place.
+attached(Domain, _Operation, Error, Owner) ->
+    complete(Domain, Error, Owner).
+
+%% A changed or unavailable confirmation is not proof of reconnection; the new binding remains inspectable.
+-spec confirmed_reattachment(domain(), operation(), term(), #owner{}) -> #owner{}.
+confirmed_reattachment(
+    Domain,
+    {reattach, Expected, _Backend},
+    {ok, #{state := #domain_state{phase = ready, current = Expected}}} = Reply,
+    Owner
+) ->
+    finish_snapshot(Domain, Reply, Owner);
+%% Identity or readiness may change while attachment is in flight.
+confirmed_reattachment(Domain, _Operation, {ok, _}, Owner) ->
+    complete(Domain, {error, incarnation_not_ready}, Owner);
+%% A lost confirmation is an unknown outcome, not a cancellation of attachment.
+confirmed_reattachment(Domain, _Operation, Error, Owner) ->
     complete(Domain, Error, Owner).
 
 %% A synchronous ready disposition requires matching actor evidence before binding a supervisor.

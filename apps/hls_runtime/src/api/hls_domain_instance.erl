@@ -6,6 +6,9 @@ The deployment owner and its backend outlive this child. Startup returns promptl
 initialization completes asynchronously and resolve rejects until ready. The deployment
 must explicitly allow automatic replacement. Native endpoint monitors then terminate
 this child on actor loss, leaving retry intensity and subtree policy to its supervisor.
+A transport-only noconnection leaves this representative alive and unavailable. It
+checks every 100 ms for explicit owner reattachment to the same incarnation; it
+never reconnects a backend or requests replacement because a connection was lost.
 No application message is retained or replayed by this wrapper.
 """.
 -behaviour(gen_server).
@@ -32,15 +35,15 @@ No application message is retained or replayed by this wrapper.
     handle = none :: none | hls_domain:handle(),
     actors = #{} :: #{term() => pid()},
     monitors = #{} :: #{reference() => pid()},
-    evidence = starting :: starting | hls_domain:snapshot()
+    evidence = starting :: starting | {error, noconnection} | hls_domain:snapshot()
 }).
 
 -doc "Starts a supervisor child promptly; readiness is asynchronous and automatic replacement must be permitted.".
 -spec start_link(pid(), hls_domain:domain()) -> gen_server:start_ret().
 start_link(Owner, Domain) -> gen_server:start_link(?MODULE, {Owner, Domain}, []).
 
--doc "Returns starting or the last lifecycle observation; it does not assert remote liveness.".
--spec status(pid()) -> starting | hls_domain:snapshot().
+-doc "Returns starting, a transport-unavailable indication, or the last lifecycle observation; it does not assert remote liveness.".
+-spec status(pid()) -> starting | {error, noconnection} | hls_domain:snapshot().
 status(Instance) -> gen_server:call(Instance, status).
 
 -doc "Resolves an endpoint within this child's admitted incarnation; it never follows a stable name into its replacement.".
@@ -92,6 +95,9 @@ handle_call(status, _From, Instance) ->
 %% A fresh child has no endpoint until initialization acknowledges completion.
 handle_call({resolve, _Actor}, _From, Instance = #instance{handle = none}) ->
     {reply, {error, not_ready}, Instance};
+%% A disconnected observer must reconcile the full incarnation before exposing endpoints again.
+handle_call({resolve, _Actor}, _From, Instance = #instance{evidence = {error, noconnection}}) ->
+    {reply, {error, noconnection}, Instance};
 %% The owner's atomic resolution checks the captured incarnation again.
 handle_call({resolve, Actor}, _From, Instance = #instance{owner = Owner, handle = Handle}) ->
     {reply, hls_domain:resolve(Owner, Handle, Actor), Instance};
@@ -105,17 +111,38 @@ handle_cast(_Message, Instance) -> {noreply, Instance}.
 
 -doc "Tracks pending initialization and turns native endpoint/owner loss into supervisor-visible termination.".
 -spec handle_info(term(), #instance{}) -> {noreply, #instance{}} | {stop, term(), #instance{}}.
+%% A delayed availability observation remains uncertainty, never supervisor reset permission.
+handle_info(
+    observe,
+    Instance = #instance{owner = Owner, domain = Domain, evidence = {error, noconnection}}
+) ->
+    try hls_domain:status(Owner, Domain) of
+        {ok, Evidence} -> observe(Evidence, Instance);
+        {error, _Reason} -> await_connection(Instance)
+    catch
+        exit:{timeout, {gen_server, call, _}} -> await_connection(Instance)
+    end;
 %% Only a retained operation is observed; a poll never allocates a new incarnation.
 handle_info(observe, Instance = #instance{owner = Owner, domain = Domain}) ->
     case hls_domain:status(Owner, Domain) of
-        {ok, Evidence} -> observe(Evidence, Instance);
-        {error, Reason} -> {stop, {domain_unavailable, Reason}, Instance}
+        {ok, Evidence} ->
+            observe(Evidence, Instance);
+        {error, Reason} ->
+            {stop, {domain_unavailable, Reason}, Instance}
     end;
 %% Owner loss is distinct from a known source exception.
 handle_info(
     {'DOWN', Ref, process, Owner, Reason}, Instance = #instance{owner = Owner, owner_monitor = Ref}
 ) ->
     {stop, {domain_owner_down, Reason}, Instance};
+%% Connection loss retires observers, not the actor incarnation or already accepted work.
+handle_info(
+    {'DOWN', Ref, process, _Actor, noconnection}, Instance = #instance{monitors = Monitors}
+) when
+    is_map_key(Ref, Monitors)
+->
+    maps:foreach(fun(Monitor, _Pid) -> demonitor(Monitor, [flush]) end, Monitors),
+    await_connection(Instance#instance{monitors = #{}, evidence = {error, noconnection}});
 %% Actor loss retires this instance; replacement policy belongs to its supervisor.
 handle_info({'DOWN', Ref, process, Actor, Reason}, Instance = #instance{monitors = Monitors}) when
     is_map_key(Ref, Monitors)
@@ -139,6 +166,12 @@ code_change(_Old, Instance, _Extra) -> {ok, Instance}.
 begin_transition({ok, Evidence}, Instance) -> observe(Evidence, Instance);
 begin_transition({error, Reason}, Instance) -> {stop, {incarnation_rejected, Reason}, Instance}.
 
+%% Poll availability without allocating identities, reconnecting transports or replaying input.
+-spec await_connection(#instance{}) -> {noreply, #instance{}}.
+await_connection(Instance) ->
+    erlang:send_after(100, self(), observe),
+    {noreply, Instance}.
+
 %% Publish only acknowledged readiness, then bind monitors to those exact endpoint PIDs.
 -spec observe(hls_domain:snapshot(), #instance{}) ->
     {noreply, #instance{}} | {stop, term(), #instance{}}.
@@ -150,6 +183,13 @@ observe(
     {noreply, Instance#instance{
         handle = Handle, actors = Actors, monitors = Monitors, evidence = Evidence
     }};
+%% Explicit owner reattachment may expose new host proxies for the same surviving incarnation.
+observe(
+    #{phase := ready, handle := Handle, actors := Actors} = Evidence,
+    Instance = #instance{handle = Handle, evidence = {error, noconnection}}
+) ->
+    Monitors = maps:from_list([{monitor(process, Pid), Pid} || Pid <- maps:values(Actors)]),
+    {noreply, Instance#instance{actors = Actors, monitors = Monitors, evidence = Evidence}};
 %% Repeated evidence for this incarnation neither duplicates monitors nor follows a stable name.
 observe(
     #{phase := ready, handle := Handle, actors := Actors} = Evidence,

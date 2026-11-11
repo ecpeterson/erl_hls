@@ -11,8 +11,10 @@ source actors send directly to their configured peers and external recipients.
 The process owns exclusive control authority and serializes lifecycle/failure
 observations. hls_domain_lifecycle makes the finite decisions; linked workers
 retire old actors and perform effect-free setup before new PIDs are published.
-A native local monitor detects owner loss here. Hardware backends need their own
-explicit disconnect/watchdog mechanism rather than inheriting that detector.
+A native local monitor revokes control authority when the owner dies. Actors and
+accepted lifecycle work survive by default; owner_loss => fail explicitly retires
+them instead. Stopping this backend still terminates its actors. A hardware backend
+must distinguish management connection loss from actual actor failure too.
 
 The source catalog is trusted build input. Initializers must be finite; setup may
 update private state but may not publish messages or replies. Direct Erlang side
@@ -43,7 +45,8 @@ simulation therefore does not establish physical bandwidth or bounded backlog.
 -type specification() :: #{
     actors := #{term() => actor_specification()},
     routes => #{term() => #{atom() => destination()}},
-    startup => #{term() => [term()]}
+    startup => #{term() => [term()]},
+    owner_loss => hls_domain_backend:owner_loss()
 }.
 -doc "Current finite controller state, private/live actor identities, first native failure and completed reset count.".
 -type snapshot() :: #{
@@ -121,6 +124,24 @@ handle_call({attach, Owner}, {Owner, _}, Backend = #backend{owner = undefined}) 
     {reply, {ok, Authority}, Backend#backend{
         owner = Owner, owner_monitor = Monitor, authority = Authority
     }};
+%% Local death can be reconciled before its queued DOWN, avoiding a restart/attachment race.
+handle_call(
+    {attach, _Owner} = Request,
+    From,
+    Backend = #backend{owner = Previous, owner_monitor = Monitor}
+) when is_pid(Previous) ->
+    case is_process_alive(Previous) of
+        true ->
+            {reply, {error, owned}, Backend};
+        false ->
+            Reason =
+                receive
+                    {'DOWN', Monitor, process, Previous, Cause} -> Cause
+                after 0 -> reason_unavailable
+                end,
+            demonitor(Monitor, [flush]),
+            handle_call(Request, From, owner_lost(Reason, Backend))
+    end;
 %% Observing another PID does not convey permission to replace an attached owner.
 handle_call({attach, _Owner}, _From, Backend) ->
     {reply, {error, owned}, Backend};
@@ -228,13 +249,12 @@ handle_info({'EXIT', Pid, Reason}, Backend = #backend{worker = #work{pid = Pid, 
             _ -> {lifecycle, Action, Reason}
         end,
     {noreply, fail_backend(Detail, Backend#backend{worker = none})};
-%% Local monitor delivery is the declared ERTS disconnect indication, not a remote-clock claim.
+%% Owner loss revokes authority; only an explicit fail policy also retires the actor group.
 handle_info(
     {'DOWN', Monitor, process, _Pid, Reason},
     Backend = #backend{owner_monitor = Monitor}
 ) ->
-    Failed = fail_backend({owner_down, Reason}, Backend),
-    {noreply, Failed#backend{owner = undefined, owner_monitor = undefined, authority = undefined}};
+    {noreply, owner_lost(Reason, Backend)};
 %% Fencing intentionally retires actors; their DOWN observations are not fresh source failures.
 handle_info(
     {'DOWN', Monitor, process, _Pid, _Reason},
@@ -270,7 +290,9 @@ terminate(_Reason, Backend) ->
 %% Check only the runtime catalog shape; source semantic qualification belongs to the build.
 -spec normalize(specification()) -> specification().
 normalize(Spec = #{actors := Actors}) when is_map(Actors), map_size(Actors) > 0 ->
-    [] = maps:keys(Spec) -- [actors, routes, startup],
+    [] = maps:keys(Spec) -- [actors, routes, startup, owner_loss],
+    OwnerLoss = maps:get(owner_loss, Spec, preserve),
+    true = OwnerLoss =:= preserve orelse OwnerLoss =:= fail,
     Routes = maps:get(routes, Spec, #{}),
     Startup = maps:get(startup, Spec, #{}),
     true = is_map(Routes) andalso is_map(Startup),
@@ -304,7 +326,7 @@ normalize(Spec = #{actors := Actors}) when is_map(Actors), map_size(Actors) > 0 
         end,
         Startup
     ),
-    Spec#{routes => Routes, startup => Startup}.
+    Spec#{routes => Routes, startup => Startup, owner_loss => OwnerLoss}.
 
 %% No route can silently escape the domain except through a named external endpoint.
 -spec destination(destination(), #{term() => actor_specification()}) -> ok.
@@ -418,6 +440,16 @@ observed_death(Monitor, Pid) ->
         {'DOWN', Monitor, process, Pid, Reason} -> Reason
     after 0 -> {native_actor_dead, reason_unavailable}
     end.
+
+%% Management authority ends with its owner; accepted actor/lifecycle work survives unless explicitly coupled.
+-spec owner_lost(term(), #backend{}) -> #backend{}.
+owner_lost(Reason, Backend) ->
+    Next =
+        case maps:get(owner_loss, Backend#backend.spec) of
+            preserve -> Backend;
+            fail -> fail_backend({owner_down, Reason}, Backend)
+        end,
+    Next#backend{owner = undefined, owner_monitor = undefined, authority = undefined}.
 
 %% A source or owner fault closes admission before its peers are retired; no reset is inferred.
 -spec fail_backend(term(), #backend{}) -> #backend{}.

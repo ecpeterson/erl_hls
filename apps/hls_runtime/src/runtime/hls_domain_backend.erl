@@ -5,14 +5,17 @@ Host adapter boundary between a deployment owner and a finite domain controller.
 An attachment is exclusive and does not reset application actors. Commands carry
 expected-old/target identities; only a backend establishes fence, reset and setup
 completion. An unavailable transport returns an error, never synthetic readiness.
-Endpoint PIDs represent one incarnation and must be retired rather than rebound.
+Endpoint PIDs represent one incarnation; reconnecting transport must not bind an old
+endpoint to a successor incarnation. Connection loss alone does not establish actor death.
 """.
 
 %% Shared host-side evidence and control-session capability.
--export_type([authority/0, actors/0, snapshot/0, request/0]).
+-export_type([authority/0, owner_loss/0, actors/0, snapshot/0, request/0]).
 
 -doc "An opaque local control-session token held only by its attached owner.".
 -type authority() :: reference().
+-doc "Preserve actors after management-owner loss by default; fail explicitly couples their lifetime to that owner.".
+-type owner_loss() :: preserve | fail.
 -doc "Deployment-local actor identities and their incarnation-specific host endpoints.".
 -type actors() :: #{term() => pid()}.
 -doc "Observed controller state and first backend failure detail; non-ready actor identities are private diagnostics, not admitted endpoints. Reset count is optional instrumentation.".
@@ -39,6 +42,7 @@ Endpoint PIDs represent one incarnation and must be retired rather than rebound.
 -doc "A correlated management operation sent by the attached owner; transport-specific envelopes remain the backend's responsibility.".
 -type request() ::
     status
+    | {attach, pid()}
     | {request, authority(), hls_domain_lifecycle:input()}
     | {endpoint, authority(), hls_nums:u64(), term()}.
 
