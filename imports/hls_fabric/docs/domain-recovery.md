@@ -12,6 +12,16 @@ The first boundary supports a closed whole-network placement, rectangle ingress,
 
 The backend must connect every application ingress and egress through the gates and keep management available independently of application backpressure. A dead physical backend does not establish a successful fence or reset; its owner must retain uncertainty. No distributed reset protocol or crossing-link ownership policy is implied by this single-clock composition.
 
+## Stop and supervised lifetime
+
+The shared lifecycle accepts incarnation-specific `stop`. It closes admission and reaches `stopped` only after the fence acknowledgement, without pulsing reset, running initialization or allocating a successor. A repeated stop is idempotent; a stale command cannot stop a newer incarnation. Replacement from stopped starts a fresh lifetime through the ordinary reset and initialization sequence.
+
+For an OTP child that owns the domain's lifetime, use `hls_domain_instance:start_link(Owner, Domain, #{lifetime => supervised})`. Its surviving deployment owner records retirement intent before a replacement child may claim the domain. Ordinary supervisor shutdown waits for confirmed retirement; killing the representative does not cancel that intent. The default observing representative and transport-only disconnection preserve healthy actors. Keep the deployment owner and backend outside the controlled subtree. Owner/host loss does not persist the representative's shutdown intent, and remote uncertainty must not be reported as successful device retirement.
+
+The framed backend also requires its promised prior-output frontier and actual endpoint termination before exposing `stopped`. Healthy intentional retirement reports `shutdown`; an already observed source failure keeps its cause. New admission is closed while earlier replies and effects drain. An accepted call which has not produced a reply need not complete, and no application work is replayed. Missing transport or output evidence remains uncertainty.
+
+The lifecycle is an Erlang transition kernel usable by host or compiled controllers. Restart strategy and intensity still live in ERTS in this increment. Static FPGA supervisors, delegated incarnation allocation and independently reset crossing links remain separate work; physical clock/reset isolation is not established by RTL simulation.
+
 ## Framed hardware backend
 
 `hls_protocol_domain:write_stream(Config, Directory)` emits the same closed network behind two independently backpressured word streams. Compile its source bundle with the ordinary external XLS driver. The selected top is `domain_stream`, with separate management and application input/output channels. Each channel carries the existing route/header/payload words. `domain/interface.etf` retains actor schemas, call contracts, port identities, control enum codecs and the matching routes. The runtime does not need source modules or compiler applications.
@@ -56,6 +66,14 @@ python3 tools/test_domain_stream.py --scenario reattach --xls /path/to/xls --wor
 
 It withholds an actual reply, kills the host backend, checks remote call/monitor uncertainty and independent-domain progress, rotates the FIFO descriptors, and establishes a new session through sampled public RTL pins. It checks preserved state/incarnation/virtual PID, stale-session rejection, fresh monitoring and subsequent actual source failure. An incomplete old packet is checked against accepted-word traces; focused DSLX tests separately exercise abandoned calls whose source reply has not yet arrived. These are bounded witnesses, not exhaustive native/RTL equivalence.
 
+The shutdown scenario runs the same three-domain application on ERTS and generated RTL through a real distribution peer:
+
+```sh
+python3 tools/test_domain_stream.py --scenario shutdown --xls /path/to/xls --work /fresh/artifact/directory
+```
+
+It exercises healthy child termination, `one_for_all`, `rest_for_one`, fresh identities, duplicate/stale stop requests and an unaffected third domain. An additional RTL schedule withholds already-produced output and requires the earlier reply before orderly shutdown becomes visible. These are finite histories; asynchronous child readiness and physical reset completion remain separate contracts.
+
 ## Focused local witness
 
 After compiling the test profile with the matching compiler checkout, run:
@@ -78,7 +96,7 @@ The compiled kernel can also be checked independently:
 python3 tools/test_domain_formal.py /path/to/xls /emitted/source/bundle /fresh/formal/evidence
 ```
 
-The checker consumes an already emitted source bundle. It checks exact command framing, admission consistency, preservation of state on stale requests and unused control encodings, first-fault closure, and completion requirements for readiness over every finite input/state encoding, plus all eight-command histories from cold state. An intentionally incorrect admission rule must produce a counterexample. These results trust the compiler, XLS and SAT toolchain; they verify controller decisions under the meanings assigned to backend completion signals, not the physical fence or reset wiring. See the compiler's evidence labels when reporting a run.
+The checker consumes an already emitted source bundle. It checks exact command framing, admission consistency, preservation of state on stale requests and unused control encodings, first-fault closure, completion requirements for readiness, and stopped-state exclusion of implicit replacement over every finite input/state encoding, plus all eight-command histories from cold state. An intentionally incorrect admission rule must produce a counterexample. These results trust the compiler, XLS and SAT toolchain; they verify controller decisions under the meanings assigned to backend completion signals, not the physical fence or reset wiring. See the compiler's evidence labels when reporting a run.
 
 ## Device-specific recovery policy
 

@@ -34,7 +34,7 @@ def main() -> None:
     rows = []
     for name in ('command_frame_roundtrip', 'admission_consistent', 'stale_request_preserves_state',
                  'invalid_control_preserves_state', 'current_fault_closes_ready',
-                 'readiness_requires_completion', 'eight_step_history',
+                 'readiness_requires_completion', 'stopped_requires_explicit_replacement', 'eight_step_history',
                  'incorrect_nonzero_admission'):
         directory = args.stage / name
         directory.mkdir()

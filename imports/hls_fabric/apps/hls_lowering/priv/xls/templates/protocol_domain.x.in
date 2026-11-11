@@ -44,7 +44,10 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let setup_output = @@SETUP_OUTPUT@@;
   let fault = @@FAULT@@;
   let protocol_fault = net.output.ingress_fault || io.transport_fault;
-  let new_fault = (fault != u16:0 || protocol_fault) && old.current != u64:0 && old.fault == domain_codes::FAULT_NONE;
+  // A stopped incarnation cannot acquire new faults; stale fault levels must not
+  // monopolize its management lane or prevent explicit replacement.
+  let new_fault = old.phase != domain_codes::PHASE_STOPPED &&
+    (fault != u16:0 || protocol_fault) && old.current != u64:0 && old.fault == domain_codes::FAULT_NONE;
   let accept_management = io.management_valid && !new_fault && !io.reset;
   let completion = domain_controller::Domaininput {
     expected: old.previous, target: old.target, transition: old.transition,
@@ -56,8 +59,13 @@ pub fn tick(s: State, io: Inputs) -> Tick {
         else if fault != u16:0 { domain_codes::FAULT_ACTOR_FAILURE } else { domain_codes::FAULT_PROTOCOL_FAILURE },
       ..zero!<domain_controller::Domaininput>() }
   } else if accept_management && io.management_op != domain_codes::OPERATION_INSPECT {
-    domain_controller::Domaininput { op: if (io.management_op == domain_codes::OPERATION_ACTIVATE || io.management_op == domain_codes::OPERATION_REPLACE) || io.management_op == domain_codes::OPERATION_ABORT ||
-      (io.management_op == domain_codes::OPERATION_FAULT && io.management_fault == domain_codes::FAULT_OWNER_DOWN) { io.management_op } else { domain_codes::OPERATION_REJECT }, expected: io.expected,
+    domain_controller::Domaininput { op: if
+      io.management_op == domain_codes::OPERATION_ACTIVATE ||
+      io.management_op == domain_codes::OPERATION_REPLACE ||
+      io.management_op == domain_codes::OPERATION_STOP ||
+      io.management_op == domain_codes::OPERATION_ABORT ||
+      (io.management_op == domain_codes::OPERATION_FAULT && io.management_fault == domain_codes::FAULT_OWNER_DOWN)
+      { io.management_op } else { domain_codes::OPERATION_REJECT }, expected: io.expected,
       target: io.target, transition: io.transition, fault: io.management_fault }
   } else if old.phase == domain_codes::PHASE_CLOSING {
     // The preceding edge entered closing. Both external directions are now shut.

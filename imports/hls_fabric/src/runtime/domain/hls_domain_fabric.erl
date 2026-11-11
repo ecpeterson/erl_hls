@@ -6,7 +6,7 @@ use the same lifecycle calls as hls_domain_erts; hls_node can publish the return
 incarnation-specific actor endpoints as external Erlang PIDs.
 
 Application traffic is typed by retained codecs. Management polls stay separate
-from application backpressure. An orderly actor failure waits for every output
+from application backpressure. Orderly shutdown and actor failure wait for every output
 promised by the hardware frontier; transport loss instead retires endpoints with
 noconnection. No application operation is replayed. Owner loss preserves actors
 by default; owner_loss => fail explicitly requests digital closure. Neither is a
@@ -556,21 +556,30 @@ observe(
 observe(
     Current, Source, Actor, Frontier, State = #backend{actors = Actors, retirement = Retirement}
 ) ->
-    Reason =
-        case Source of
-            0 ->
-                {domain_retired, Current#domain_state.fault};
-            _ ->
-                {hls_actor_failure, Actor, #{
-                    source_code => Source, source_site => Source bsr 4, kind => Source band 15
-                }}
-        end,
+    Reason = retirement_reason(Current, Source, Actor),
     Next =
         case map_size(Actors) > 0 andalso Retirement =:= none of
             true -> retirement(Reason, Frontier, State);
             false -> State
         end,
     reconcile(Next#backend{lifecycle = Current, fault_reason = Reason}).
+
+%% Explicit stop has ordinary shutdown semantics; existing source failures retain their cause.
+-spec retirement_reason(hls_domain_lifecycle:state(), hls_nums:u16(), hls_nums:u32()) -> term().
+retirement_reason(
+    #domain_state{
+        phase = Phase, current = Current, previous = Current, target = Current, fault = none
+    },
+    0,
+    _Actor
+) when Current =/= 0, Phase =:= closing orelse Phase =:= stopped ->
+    shutdown;
+retirement_reason(#domain_state{fault = Fault}, 0, _Actor) ->
+    {domain_retired, Fault};
+retirement_reason(_Current, Source, Actor) ->
+    {hls_actor_failure, Actor, #{
+        source_code => Source, source_site => Source bsr 4, kind => Source band 15
+    }}.
 
 %% Publication waits for both ordered retirement delivery and observed endpoint death.
 -spec reconcile(#backend{}) -> #backend{}.
@@ -619,12 +628,12 @@ reconcile(
 reconcile(State) ->
     State.
 
-%% A failure observation can remain visible while an orderly output drain is unfinished.
+%% Failures remain observable during drain; ready/stopped completion also requires endpoint retirement.
 -spec status_result(#backend{}) -> {ok, hls_domain_backend:snapshot()} | {error, atom()}.
 status_result(#backend{retiring_owner = true}) ->
     {error, retirement_pending};
-status_result(#backend{lifecycle = #domain_state{phase = ready}, retirement = Retirement}) when
-    Retirement =/= none
+status_result(#backend{lifecycle = #domain_state{phase = Phase}, retirement = Retirement}) when
+    Retirement =/= none, Phase =:= ready orelse Phase =:= stopped
 ->
     {error, delivery_pending};
 status_result(State = #backend{lifecycle = Lifecycle, actors = Actors, retirement = Retirement}) ->
@@ -835,6 +844,10 @@ result(Endpoint, Ref, Value) -> Endpoint ! {domain_result, self(), Ref, Value}.
 %% Only one finite frontier is retained, not every earlier application operation.
 -spec retirement(term(), hls_nums:u32(), #backend{}) -> #backend{}.
 retirement(Reason, Frontier, State = #backend{delivery_ms = Timeout}) ->
+    maps:foreach(
+        fun(_Actor, Endpoint) -> Endpoint ! {domain_closing, self()} end,
+        State#backend.actors
+    ),
     Token = make_ref(),
     Timer = erlang:send_after(Timeout, self(), {delivery_timeout, Token}),
     State#backend{
@@ -866,7 +879,7 @@ owner_retirement_response(
     Kind, State = #backend{retiring_owner = true, lifecycle = #domain_state{phase = Phase}}
 ) when
     (Kind =:= retire_status orelse Kind =:= retire_command) andalso
-        (Phase =:= failed orelse Phase =:= unbound)
+        (Phase =:= failed orelse Phase =:= unbound orelse Phase =:= stopped)
 ->
     State#backend{retiring_owner = false};
 owner_retirement_response(

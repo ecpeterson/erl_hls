@@ -59,6 +59,16 @@ management_frontier_test() ->
     <<Truncated:68/binary,_:4/binary>> = Packet,
     ?assertException(error, _, hls_domain_wire:observation(Truncated, Interface)).
 
+%% Stop occupies a distinct command code while preserving the incarnation at both endpoints.
+-spec stop_roundtrip_test() -> ok.
+stop_roundtrip_test() ->
+    {1, <<41:64/little,9:32/little,9:32/little,7:64/little,7:64/little,7:64/little,0:32/little>>} =
+        hls_domain_wire:management(41, 9, #domain_input{op=stop,expected=7,target=7,transition=7}, interface()),
+    Packet = <<41:64/little,9:32/little,7:32/little,0:32/little,6:32/little,7:64/little,
+        7:64/little,7:64/little,7:64/little,0:32/little,0:32/little,0:32/little,42:32/little>>,
+    ?assertMatch({41,9,#domain_output{status=completed,state=#domain_state{phase=stopped,current=7,target=7}},0,0,42},
+        hls_domain_wire:observation(Packet, interface())).
+
 %% Unknown dispositions and malformed acknowledgement bodies cannot release a call slot.
 -spec application_envelope_test() -> ok.
 application_envelope_test() ->
@@ -84,8 +94,8 @@ actor() ->
 interface() ->
     #{actors=>#{worker=>actor()},frame_payload_words=>4,management_route=>{0,0},application_route=>{0,1},codecs=>maps:from_list([
         {Name,{hls_type,hls_enum,enum,[Members]}} || {Name,Members} <- [
-            {operation,[inspect,activate,replace,fault,fenced,reset_done,initialized,abort,reject]},
-            {phase,[unbound,ready,closing,isolated,initializing,failed]},
+            {operation,[inspect,activate,replace,fault,fenced,reset_done,initialized,abort,reject,stop]},
+            {phase,[unbound,ready,closing,isolated,initializing,failed,stopped]},
             {status,[ok,accepted,replay,stale,busy,invalid,failure,completed]},
             {action,[none,fence,reset,initialize,publish]},
             {fault,[none,actor_failure,owner_down,initialization_failure,lifecycle_failure,protocol_failure]}]])}.

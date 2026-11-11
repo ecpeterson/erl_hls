@@ -412,3 +412,57 @@ fn abandoned_reply_is_consumed_without_publication() {
   assert_eq(drained.calls[0], zero!<stream::Call>());
   assert_eq(drained.core.control.data.lifecycle.phase, domain_codes::PHASE_READY);
 }
+
+// Encode one ordinary lifecycle command with the current transport session.
+fn lifecycle_packet(op: u32, expected: u64, target: u64, transition: u64) -> framing::Packet<PACKET_BITS> {
+  framing::Packet<PACKET_BITS> {
+    route:u32:0, header:framing::header(u32:0,u8:1,u8:11),
+    payload:(u64:1 as bits[PACKET_BITS]) | (u32:1 as bits[PACKET_BITS] << u32:64) |
+      (op as bits[PACKET_BITS] << u32:96) | (expected as bits[PACKET_BITS] << u32:128) |
+      (target as bits[PACKET_BITS] << u32:192) | (transition as bits[PACKET_BITS] << u32:256),
+  }
+}
+
+// Drain only the public management output while allowing the actual core to progress.
+fn settle_management(initial: stream::State) -> stream::State {
+  for (_, state): (u32, stream::State) in u32:0..u32:64 {
+    stream::tick(state, stream::Inputs { management_output_ready:true, ..zero!<stream::Inputs>() }).state
+  }(initial)
+}
+
+// Actual source initialization, stop, duplicate stop and explicit replacement use public packets.
+// A stop never resets or initializes the network, and cannot affect a newer incarnation.
+#[test]
+fn stop_fences_without_replacement() {
+  let bound = stream::tick(zero!<stream::State>(), stream::Inputs {
+    transport_reset:true, transport_session:u64:1, ..zero!<stream::Inputs>() }).state;
+  let ready = settle_management(management_packet<u32:13>(bound,
+    lifecycle_packet(domain_codes::OPERATION_ACTIVATE as u32, u64:0, u64:1, u64:1)));
+  assert_eq(ready.core.control.data.lifecycle.phase, domain_codes::PHASE_READY);
+  let requested = management_packet<u32:13>(ready,
+    lifecycle_packet(domain_codes::OPERATION_STOP as u32, u64:1, u64:1, u64:1));
+  let closing = stream::tick(requested, zero!<stream::Inputs>());
+  assert_eq(closing.state.core.control.data.lifecycle.phase, domain_codes::PHASE_CLOSING);
+  let retired = stream::tick(closing.state, zero!<stream::Inputs>());
+  assert_eq(retired.state.core.control.data.lifecycle.phase, domain_codes::PHASE_STOPPED);
+  assert_eq(retired.state.core.control.data.lifecycle.current, u64:1);
+  assert_eq(retired.state.core.network, closing.state.core.network);
+  let stopped = settle_management(retired.state);
+  assert_eq(stopped.core.network, retired.state.core.network);
+  let late_fault = domain::tick(stopped.core, domain::Inputs {
+    transport_fault:true, management_valid:true, management_op:domain_codes::OPERATION_INSPECT,
+    ..zero!<domain::Inputs>() });
+  assert_eq(late_fault.output.management_ready, true);
+  assert_eq(late_fault.state.control, stopped.core.control);
+  let duplicate = settle_management(management_packet<u32:13>(stopped,
+    lifecycle_packet(domain_codes::OPERATION_STOP as u32, u64:1, u64:1, u64:1)));
+  assert_eq(duplicate.core, stopped.core);
+  let fresh = settle_management(management_packet<u32:13>(duplicate,
+    lifecycle_packet(domain_codes::OPERATION_REPLACE as u32, u64:1, u64:2, u64:2)));
+  assert_eq(fresh.core.control.data.lifecycle.phase, domain_codes::PHASE_READY);
+  assert_eq(fresh.core.control.data.lifecycle.current, u64:2);
+  let stale = settle_management(management_packet<u32:13>(fresh,
+    lifecycle_packet(domain_codes::OPERATION_STOP as u32, u64:1, u64:1, u64:1)));
+  assert_eq(stale.core.control.data.lifecycle, fresh.core.control.data.lifecycle);
+  assert_eq(stale.fault, false);
+}

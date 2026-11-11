@@ -175,7 +175,7 @@ owner(Domain, Policy, Backend, Store) ->
     Owner.
 
 -doc "Pauses or resumes only OS delivery of already accepted RTL bytes on one lane. The bounded queue still applies physical ready backpressure when full; management on the other lane continues. Acknowledgement is simulator transport policy, not a device fence.".
--spec delivery(file:filename(), 0 | 1, management | application, hold | resume) -> ok.
+-spec delivery(file:filename(), 0 | 1 | 2, management | application, hold | resume) -> ok.
 delivery(Stage, Domain, Lane, Action) ->
     Prefix = filename:join(Stage, "domain" ++ integer_to_list(Domain) ++ "_" ++
         atom_to_list(Lane) ++ "_delivery"),

@@ -36,7 +36,7 @@ pub fn admission_consistent(state: domain_controller::Domainstate,
 pub fn stale_request_preserves_state(state: domain_controller::Domainstate,
                                     command: domain_controller::Domaininput) -> bool {
   let result = step(state, command);
-  let request = command.op == domain_codes::OPERATION_ACTIVATE || command.op == domain_codes::OPERATION_REPLACE;
+  let request = command.op == domain_codes::OPERATION_ACTIVATE || command.op == domain_codes::OPERATION_REPLACE || command.op == domain_codes::OPERATION_STOP;
   !request || command.expected == state.current || result.state.data.lifecycle == state
 }
 
@@ -108,4 +108,12 @@ pub fn eight_step_history(inputs: domain_controller::Domaininput[8]) -> bool {
          inputs[i].transition == state.transition)))
   }((zero!<domain_controller::Domainstate>(), true));
   valid
+}
+
+// Stopped state cannot admit work or start initialization without an explicit fresh replacement.
+pub fn stopped_requires_explicit_replacement(state: domain_controller::Domainstate,
+                                            command: domain_controller::Domaininput) -> bool {
+  let next = step(state, command).state.data.lifecycle;
+  state.phase != domain_codes::PHASE_STOPPED || command.op == domain_codes::OPERATION_REPLACE ||
+    (next.phase == domain_codes::PHASE_STOPPED && next.current == state.current)
 }

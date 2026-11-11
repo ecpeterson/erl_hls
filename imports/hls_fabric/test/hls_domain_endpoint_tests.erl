@@ -8,7 +8,10 @@ effect_before_down_test() ->
     Monitor = monitor(process, Endpoint),
     Endpoint ! {domain_effect,self(),self(),{effect,23}},
     Endpoint ! {domain_retire,self(),source_failed},
-    receive First -> ?assertEqual({'$gen_cast',{effect,23}}, First) after 1000 -> error(no_effect) end,
+    receive
+        {'$gen_cast',{effect,23}} -> ok;
+        {'DOWN',Monitor,process,Endpoint,Reason} -> error({retired_before_effect,Reason})
+    after 1000 -> error(no_effect) end,
     receive {'DOWN',Monitor,process,Endpoint,source_failed} -> ok after 1000 -> error(no_retirement) end.
 
 %% Bounded pending observers reject before submission while the old request remains owned.
@@ -63,6 +66,33 @@ rejected_submit_has_no_admission_test() ->
     ?assertEqual({reply,{error,invalid_message}},gen_server:receive_response(C,1000)),
     receive {hls_admitted,E,T}->error(false_admission) after 0->ok end,
     gen_server:stop(E).
+
+%% Ordered closure suppresses only late cast rejection, while prior calls still receive their result.
+-spec closing_preserves_prior_reply_test() -> ok.
+closing_preserves_prior_reply_test() ->
+    {ok,E}=hls_domain_endpoint:start(self(),worker,7,#{cast=>1,call=>1}),
+    Monitor=monitor(process,E),
+    Call=gen_server:send_request(E,{sample,3}), CallRef=submitted(E,call),
+    gen_server:cast(E,release), CastRef=submitted(E,cast),
+    E!{domain_closing,self()},
+    E!{domain_result,self(),CastRef,{error,not_ready_or_stale}},
+    gen_server:cast(E,late_release),
+    ?assertEqual({error,not_ready_or_stale},gen_server:call(E,{sample,4})),
+    receive {'$gen_cast',{application,E,_,_,_,_,_}} -> error(submitted_after_closing)
+    after 0 -> ok end,
+    E!{domain_result,self(),CallRef,{answer,6}},
+    E!{domain_retire,self(),shutdown},
+    ?assertEqual({reply,{answer,6}},gen_server:receive_response(Call,1000)),
+    receive {'DOWN',Monitor,process,E,shutdown}->ok after 1000->error(no_shutdown) end.
+
+%% Outside ordered retirement, an unacknowledged cast rejection remains a real endpoint failure.
+-spec unreported_cast_rejection_test() -> ok.
+unreported_cast_rejection_test() ->
+    {ok,E}=hls_domain_endpoint:start(self(),worker,7,#{cast=>1,call=>1}),
+    Monitor=monitor(process,E), gen_server:cast(E,release), Ref=submitted(E,cast),
+    E!{domain_result,self(),Ref,{error,invalid_message}},
+    receive {'DOWN',Monitor,process,E,{cast_not_admitted,{error,invalid_message}}}->ok
+    after 1000->error(no_cast_failure) end.
 
 %% Requests reach the backend exactly once; hardware observations are supplied separately.
 -spec submitted(pid(),call|cast) -> reference().

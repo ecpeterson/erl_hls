@@ -1,4 +1,4 @@
-"""Run one supervised profile application unchanged on ERTS and two framed RTL domains."""
+"""Run matched recovery scenarios on ERTS and independent framed RTL domains."""
 from pathlib import Path
 import argparse
 import json
@@ -19,18 +19,20 @@ def compile_host(stage: Path) -> Path:
         'hls_recovery_actuator_fixture.erl', 'hls_recovery_policy_fixture.erl',
         'hls_recovery_device_model.erl', 'hls_recovery_supervisor.erl',
         'hls_recovery_application.erl', 'hls_recovery_application_tests.erl',
-        'hls_recovery_stream_live.erl', 'hls_domain_reattach_live.erl', 'hls_test_nodes.erl',
+        'hls_recovery_stream_live.erl', 'hls_domain_reattach_live.erl',
+        'hls_domain_shutdown_live.erl', 'hls_shutdown_supervisor.erl', 'hls_test_nodes.erl',
     ]]
     run(['erlc', *[value for path in erlang_paths('test') for value in ('-pa', path)],
          '+debug_info', '-Werror', '-o', ebin, *sources], stage, 'host-compile')
     return ebin
 
 
-def native(stage: Path, ebin: Path) -> Path:
+def native(stage: Path, ebin: Path, scenario: str) -> Path:
     """Retain a separate native expected history before any RTL simulation starts."""
     target = stage / 'native'
+    module = 'hls_domain_shutdown_live' if scenario == 'shutdown' else 'hls_recovery_stream_live'
     expression = ('[Stage]=init:get_plain_arguments(), '
-                  'ok=hls_recovery_stream_live:native(Stage),halt().')
+                  f'ok={module}:native(Stage),halt().')
     run(['erl', '+S', '2:2', '-noshell', '-pa', *erlang_paths('test'), ebin,
          '-eval', expression, '-extra', target], stage, 'native', timeout=60)
     assert json.loads((target / 'result.json').read_text())['passed']
@@ -123,21 +125,24 @@ def reuse_binary(binary: Path) -> tuple[Path, Path]:
     return binary, Path(manifest['interface'])
 
 
-def witness(binary: Path, interface: Path, stage: Path, ebin: Path, native_result: Path | None) -> None:
-    """Drive both actual RTL cores through shipped brokers/backend and the same remote application."""
+def witness(binary: Path, interface: Path, stage: Path, ebin: Path,
+            native_result: Path | None, scenario: str) -> None:
+    """Drive independent actual RTL cores through shipped brokers/backend and the selected remote application."""
     live = stage / 'rtl'
     live.mkdir()
     shutil.copyfile(interface, live / 'interface.etf')
     with (live / 'simulation.log').open('x') as log:
-        simulator = subprocess.Popen([binary, live], stdout=log, stderr=subprocess.STDOUT)
+        count = 3 if scenario == 'shutdown' else 2
+        simulator = subprocess.Popen([binary, live, str(count)], stdout=log, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 10
-            while not (live / 'domain1_application_rx').exists():
+            while not (live / f'domain{count - 1}_application_rx').exists():
                 if simulator.poll() is not None or time.monotonic() >= deadline:
                     raise RuntimeError('domain stream simulator did not initialize')
                 time.sleep(.02)
+            module = 'hls_domain_shutdown_live' if scenario == 'shutdown' else 'hls_recovery_stream_live'
             expression = ('[Stage,Native]=init:get_plain_arguments(), '
-                          'ok=hls_recovery_stream_live:run(Stage,Native),halt().') if native_result else (
+                          f'ok={module}:run(Stage,Native),halt().') if native_result else (
                           '[Stage]=init:get_plain_arguments(),ok=hls_domain_reattach_live:run(Stage),halt().')
             run(['erl', '+S', '2:2', '-noshell', '-pa', *erlang_paths('test'), ebin,
                  '-eval', expression, '-extra', live, *([native_result] if native_result else [])], live, 'host', timeout=60)
@@ -169,8 +174,8 @@ def main() -> None:
                           help='Reuse a simulator with its unchanged build manifest; no hardware rebuild.')
     parser.add_argument('--native-result', type=lambda value: Path(value).resolve(),
                         help='Reuse an already successful result.etf for this same application.')
-    parser.add_argument('--scenario', choices=['application', 'reattach'], default='application',
-                        help='Select the matched application history or actual transport replacement witness.')
+    parser.add_argument('--scenario', choices=['application', 'reattach', 'shutdown'], default='application',
+                        help='Select matched application/shutdown histories or actual transport replacement.')
     args = parser.parse_args()
     if args.xls is None and args.binary is None:
         parser.error('supply --xls for a build or --binary to reuse qualified hardware')
@@ -180,7 +185,8 @@ def main() -> None:
         'test/hls_recovery_policy_fixture.erl', 'test/hls_recovery_device_model.erl',
         'test/hls_recovery_supervisor.erl', 'test/hls_recovery_application.erl',
         'test/hls_recovery_application_tests.erl', 'test/hls_recovery_stream_live.erl',
-        'test/hls_domain_reattach_live.erl', 'test/hls_test_nodes.erl', 'test/rtl/domain_stream_sim.cpp',
+        'test/hls_domain_reattach_live.erl', 'test/hls_domain_shutdown_live.erl',
+        'test/hls_shutdown_supervisor.erl', 'test/hls_test_nodes.erl', 'test/rtl/domain_stream_sim.cpp',
         'test/rtl/framed_fifo_stream.h', 'src/runtime/domain/hls_domain_fabric.erl',
         'src/runtime/domain/hls_domain_endpoint.erl', 'src/wire/hls_domain_wire.erl',
         'tools/test_domain_stream.py', 'test/domain_stream_semantics.x.in',
@@ -188,13 +194,13 @@ def main() -> None:
     inputs = {str(path): digest(path) for path in tracked}
     (args.work / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     ebin = compile_host(args.work)
-    expected = (args.native_result or native(args.work, ebin)) if args.scenario == 'application' else None
+    expected = (args.native_result or native(args.work, ebin, args.scenario)) if args.scenario != 'reattach' else None
     if expected:
         assert json.loads(expected.with_suffix('.json').read_text())['passed']
         inputs[str(expected)] = digest(expected)
     binary, interface = (reuse_binary(args.binary) if args.binary else
                          build(args.xls, args.work, ebin, args.source_bundle))
-    witness(binary, interface, args.work, ebin, expected)
+    witness(binary, interface, args.work, ebin, expected, args.scenario)
     assert inputs == {name: digest(Path(name)) for name in inputs}
     products = ([expected.with_suffix('.json')] if expected else []) + [args.work / 'rtl/result.json', binary]
     result = {

@@ -3,7 +3,8 @@
 An ordinary ERTS endpoint for one actor in one hardware-domain incarnation.
 Created by hls_domain_fabric, it preserves admission, reply and termination ordering
 for local clients and hls_node. Calls and casts have independent finite capacity,
-so held callers cannot prevent a release cast. It never follows a replacement.
+so held callers cannot prevent a release cast. During retirement it rejects new
+calls and ignores new casts while delivering retained output. It never follows a replacement.
 """.
 -behaviour(gen_server).
 %% Backend-owned endpoint lifetime.
@@ -24,6 +25,7 @@ so held callers cannot prevent a release cast. It never follows a replacement.
     monitor :: reference(),
     actor :: term(),
     incarnation :: hls_nums:u64(),
+    retiring = false :: boolean(),
     limits :: limits(),
     pending = #{} :: #{reference() => pending()},
     capacity_waiters = #{} :: hls_admission:waiters()
@@ -65,8 +67,12 @@ handle_call({'$hls_domain_cast', Message}, From, State) ->
 handle_call(Message, From, State) ->
     issue(call, Message, From, none, State).
 
--doc "Submits ordinary casts; an unreported rejection terminates this endpoint rather than silently losing work.".
+-doc "Submits ordinary casts; an unreported rejection terminates the endpoint unless ordered retirement has already closed admission.".
 -spec handle_cast(term(), #endpoint{}) -> {noreply, #endpoint{}} | {stop, term(), #endpoint{}}.
+%% A logically closed actor ignores new unacknowledged traffic while prior output drains.
+handle_cast(_Message, State = #endpoint{retiring = true}) ->
+    {noreply, State};
+%% Open endpoints submit casts and surface otherwise unreported admission failures.
 handle_cast(Message, State) ->
     case issue(cast, Message, none, none, State) of
         {reply, Reason, Next} -> {stop, {cast_not_admitted, Reason}, Next};
@@ -75,6 +81,9 @@ handle_cast(Message, State) ->
 
 -doc "Delivers ordered admission/results/effects and retirement; abandons capacity observers whose callers died.".
 -spec handle_info(term(), #endpoint{}) -> {noreply, #endpoint{}} | {stop, term(), #endpoint{}}.
+%% Closure precedes late rejection/results from the same backend; only old work may finish.
+handle_info({domain_closing, Backend}, State = #endpoint{backend = Backend}) ->
+    {noreply, State#endpoint{retiring = true}};
 %% Hardware admission frees transport credit while a call still owns its reply slot.
 handle_info(
     {domain_admitted, Backend, Ref}, State = #endpoint{backend = Backend, pending = Pending}
@@ -103,7 +112,8 @@ handle_info(
                 )
             },
             case From of
-                none when Result =/= ok -> {stop, {cast_not_admitted, Result}, Ready};
+                none when Result =/= ok, not Ready#endpoint.retiring ->
+                    {stop, {cast_not_admitted, Result}, Ready};
                 none ->
                     {noreply, Ready};
                 _ ->
@@ -135,12 +145,16 @@ handle_info(_Message, State) ->
 
 %% Count each mode independently so a full reply book cannot strand a release cast.
 -spec available(call | cast, #endpoint{}) -> boolean().
+available(_Mode, #endpoint{retiring = true}) ->
+    false;
 available(Mode, #endpoint{pending = Pending, limits = Limits}) ->
     length([ok || #{mode := M} <- maps:values(Pending), M =:= Mode]) < maps:get(Mode, Limits).
 
 %% Busy is strictly pre-submission: no backend write exists to replay.
 -spec issue(call | cast, term(), gen_server:from() | none, reference() | none, #endpoint{}) ->
     {reply, term(), #endpoint{}} | {noreply, #endpoint{}}.
+issue(_Mode, _Message, _From, _Token, State = #endpoint{retiring = true}) ->
+    {reply, {error, not_ready_or_stale}, State};
 issue(
     Mode,
     Message,

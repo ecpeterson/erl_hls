@@ -1,4 +1,6 @@
 #include "Vdomain_stream.h"
+#include <memory>
+#include <vector>
 #include "verilated.h"
 #include "framed_fifo_stream.h"
 #include <chrono>
@@ -221,19 +223,22 @@ public:
     }
 };
 
-// Both independent cores advance on every edge; one paused byte stream cannot
+// All independent cores advance on every edge; one paused byte stream cannot
 // stop its peer or management lane. Limits bound this finite simulation witness.
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
-    if (argc != 2) return 2;
+    if (argc != 2 && argc != 3) return 2;
     const std::string directory = argv[1];
     try {
-        Domain a(directory + "/domain0"), b(directory + "/domain1");
+        const unsigned count = argc == 3 ? std::stoul(argv[2]) : 2;
+        if (count < 2 || count > 3) throw std::runtime_error("domain count outside witness bound");
+        std::vector<std::unique_ptr<Domain>> domains;
+        for (unsigned index = 0; index < count; ++index)
+            domains.emplace_back(std::make_unique<Domain>(directory + "/domain" + std::to_string(index)));
         auto start = std::chrono::steady_clock::now();
         uint64_t finish = 0;
         for (uint64_t cycle = 0; cycle < 50000000; ++cycle) {
-            a.tick(cycle);
-            b.tick(cycle);
+            for (auto& domain : domains) domain->tick(cycle);
             if (cycle % 256 == 0) {
                 if (!finish && access((directory + "/finished").c_str(), F_OK) == 0)
                     finish = cycle + 256;
@@ -242,14 +247,16 @@ int main(int argc, char** argv) {
                 std::this_thread::sleep_for(std::chrono::microseconds(500));
             }
             if (finish && cycle >= finish) {
-                printf("PASS domain stream RTL: cycles=%llu; "
-                       "A management=%llu/%llu application=%llu/%llu; "
-                       "B management=%llu/%llu application=%llu/%llu\n",
-                    (unsigned long long)cycle,
-                    (unsigned long long)a.management_inputs(), (unsigned long long)a.management_outputs(),
-                    (unsigned long long)a.application_inputs(), (unsigned long long)a.application_outputs(),
-                    (unsigned long long)b.management_inputs(), (unsigned long long)b.management_outputs(),
-                    (unsigned long long)b.application_inputs(), (unsigned long long)b.application_outputs());
+                printf("PASS domain stream RTL: cycles=%llu; domains=%u\n",
+                    (unsigned long long)cycle, count);
+                for (unsigned index = 0; index < count; ++index) {
+                    const auto& domain = domains[index];
+                    printf("domain%u management=%llu/%llu application=%llu/%llu\n", index,
+                        (unsigned long long)domain->management_inputs(),
+                        (unsigned long long)domain->management_outputs(),
+                        (unsigned long long)domain->application_inputs(),
+                        (unsigned long long)domain->application_outputs());
+                }
                 return 0;
             }
         }

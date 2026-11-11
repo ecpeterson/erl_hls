@@ -30,6 +30,60 @@ frontier_drains_before_successor_test() ->
         ?assertNotEqual(Endpoint, Successor)
     end).
 
+%% Stop completion waits for already-produced replies/effects and actual endpoint death.
+-spec stopped_waits_for_frontier_and_endpoint_test() -> ok.
+stopped_waits_for_frontier_and_endpoint_test() ->
+    with_backend(fun(Backend, Management, Application, Authority, Endpoint) ->
+        Monitor = monitor(process, Endpoint),
+        Call = gen_server:send_request(Endpoint, {sample, 3}),
+        {_, <<41:64/little,1:64/little,3:32/little,Request:32/little,1:32/little,0:32/little,_/binary>>} =
+            sent(Application, 2),
+        deliver(Backend, {0,1}, 2, response(1, 1, Request, 0, <<>>)),
+        Stop = gen_server:send_request(Backend, {request, Authority,
+            #domain_input{op=stop,expected=1,target=1,transition=1}}),
+        {Route, <<41:64/little,Sequence:32/little,9:32/little,1:64/little,1:64/little,1:64/little,0:32/little>>} =
+            sent(Management, 1),
+        deliver(Backend, Route, 1, stop_snapshot(Sequence, accepted, closing, 1, 3)),
+        ?assertMatch({reply,#domain_output{status=accepted,state=#domain_state{phase=closing}}},
+            gen_server:receive_response(Stop, 1000)),
+        ?assertEqual({error,delivery_pending}, status(Backend, Management, stopped, 1, 3)),
+        %% Cached PIDs may still receive traffic, but it cannot overtake old output retirement.
+        gen_server:cast(Endpoint, {sample, 4}),
+        ?assertEqual({error,not_ready_or_stale}, gen_server:call(Endpoint, {sample, 5})),
+        ?assertMatch(#{actors:=#{worker:=Endpoint},pending:=1,received:=1},
+            hls_domain_fabric:info(Backend)),
+        deliver(Backend, {0,1}, 3, response(2, 1, Request, 16#02000001, <<6:3,0:29>>)),
+        ?assertEqual({reply,{answer,6}}, gen_server:receive_response(Call, 1000)),
+        deliver(Backend, {0,1}, 4, response(3, 1, 0, 16#02000001, <<7:3,0:29>>)),
+        receive
+            {'$gen_cast',{answer,7}} -> ok;
+            {'DOWN',Monitor,process,Endpoint,_} -> error(shutdown_before_effect)
+        after 1000 -> error(effect_missing) end,
+        receive {'DOWN',Monitor,process,Endpoint,shutdown} -> ok
+        after 1000 -> error(shutdown_missing) end,
+        stopped(Backend, Management, 1, 3, 100),
+        ?assertEqual({error,not_ready_or_stale}, hls_domain_fabric:endpoint(Backend, Authority, 1, worker))
+    end).
+
+%% A stopped device with missing promised output is still an uncertain host shutdown.
+-spec stopped_missing_frontier_is_uncertain_test() -> ok.
+stopped_missing_frontier_is_uncertain_test() ->
+    with_backend(#{delivery_timeout_ms=>100}, fun(Backend, Management, _Application, _Authority, Endpoint) ->
+        Monitor = monitor(process, Endpoint),
+        ?assertEqual({error,delivery_pending}, status(Backend, Management, stopped, 1, 1)),
+        receive {'DOWN',Monitor,process,Endpoint,noconnection} -> ok
+        after 1000 -> error(uncertainty_missing) end
+    end).
+
+%% Different monitors deliver independently; a stopped status requires this backend's own DOWN.
+-spec stopped(pid(), pid(), pos_integer(), non_neg_integer(), non_neg_integer()) -> ok.
+stopped(_Backend, _Management, _Incarnation, _Frontier, 0) -> error(stop_completion_missing);
+stopped(Backend, Management, Incarnation, Frontier, Attempts) ->
+    case status(Backend, Management, stopped, Incarnation, Frontier) of
+        {ok,#{state:=#domain_state{phase=stopped,current=Incarnation},actors:=Actors}} when map_size(Actors) =:= 0 -> ok;
+        {error,delivery_pending} -> stopped(Backend, Management, Incarnation, Frontier, Attempts-1)
+    end.
+
 %% A reply without its earlier in-band admission record is corrupt evidence, not completion.
 -spec unadmitted_reply_closes_backend_test() -> ok.
 unadmitted_reply_closes_backend_test() ->
@@ -215,10 +269,20 @@ status(Backend, Management, Phase, Incarnation, Frontier) ->
 
 %% Lifecycle enum values below are independently specified wire fixtures.
 -spec snapshot(non_neg_integer(), hls_domain_lifecycle:phase(), non_neg_integer(), non_neg_integer()) -> binary().
+snapshot(Sequence, stopped, Incarnation, Frontier) ->
+    stop_snapshot(Sequence, ok, stopped, Incarnation, Frontier);
 snapshot(Sequence, Phase, Incarnation, Frontier) ->
     {Code, Fault, Source} = case Phase of unbound -> {0,0,0}; ready -> {1,0,0}; failed -> {5,1,17} end,
     <<41:64/little,Sequence:32/little,0:32/little,0:32/little,Code:32/little,Incarnation:64/little,
         0:64/little,Incarnation:64/little,0:64/little,Fault:32/little,Source:32/little,3:32/little,Frontier:32/little>>.
+
+%% Stop uses its existing incarnation as both transition endpoints and allocates no successor.
+-spec stop_snapshot(non_neg_integer(), ok | accepted, closing | stopped, pos_integer(), non_neg_integer()) -> binary().
+stop_snapshot(Sequence, Status, Phase, Incarnation, Frontier) ->
+    Code = case Phase of closing -> 2; stopped -> 6 end,
+    Disposition = case Status of ok -> 0; accepted -> 1 end,
+    <<41:64/little,Sequence:32/little,Disposition:32/little,0:32/little,Code:32/little,Incarnation:64/little,
+        Incarnation:64/little,Incarnation:64/little,Incarnation:64/little,0:32/little,0:32/little,3:32/little,Frontier:32/little>>.
 
 %% Reply/effect frame headers use the established op/flags/txid/length order.
 -spec response(pos_integer(), pos_integer(), non_neg_integer(), non_neg_integer(), binary()) -> binary().
@@ -247,8 +311,8 @@ interface() ->
         outputs=>#{effect=>[answer]},ports=>#{effect=>0}}},frame_payload_words=>4,
       management_route=>{0,0},application_route=>{0,1},codecs=>maps:from_list([
         {Name,{hls_type,hls_enum,enum,[Members]}} || {Name,Members} <- [
-            {operation,[inspect,activate,replace,fault,fenced,reset_done,initialized,abort,reject]},
-            {phase,[unbound,ready,closing,isolated,initializing,failed]},
+            {operation,[inspect,activate,replace,fault,fenced,reset_done,initialized,abort,reject,stop]},
+            {phase,[unbound,ready,closing,isolated,initializing,failed,stopped]},
             {status,[ok,accepted,replay,stale,busy,invalid,failure,completed]},
             {action,[none,fence,reset,initialize,publish]},
             {fault,[none,actor_failure,owner_down,initialization_failure,lifecycle_failure,protocol_failure]}]])}.
