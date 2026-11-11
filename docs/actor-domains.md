@@ -12,7 +12,8 @@ The implementation separates the actors being replaced from the controller coord
 | --- | --- |
 | Replace the source-actor domain | Old actors and private pending work are retired. Fresh actors run initialization with new PIDs and a new incarnation ID. |
 | Restart its `hls_domain_instance` supervisor child | The new child inspects the surviving controller. It attaches to a healthy incarnation, or requests replacement if failure and the declared policy permit it. |
-| Restart the `hls_domain` deployment owner | The new owner reads its identity counter and attaches to the surviving backend. It does not restore actor data or issue reset merely by attaching. The native backend observes owner death and retires that owner's domain; a hardware backend needs its own declared owner-loss mechanism. |
+| Restart the `hls_domain` deployment owner | The new owner reads its identity counter and attaches to the surviving backend. It does not restore actor data or issue reset merely by attaching. The native backend preserves actors and accepted lifecycle work by default; `owner_loss => fail` explicitly retires the group when its owner dies. |
+| Lose a hardware transport/backend adapter | Reachability and pending results become uncertain. No actor reset follows from connection loss alone. Explicit reattachment requires the same ready incarnation; accepted application work is never replayed. |
 | Restart `hls_domain_erts` itself | Its old actors are retired; a new backend starts `unbound`. No backend state is recovered from the counter file. |
 
 A host restart need not restart the FPGA. Conversely, a new FPGA process or bitstream need not retain the former controller's state. The owner therefore asks the backend what happened rather than guessing from its own restart. Losing reachability leaves the outcome unknown until the backend can be reconciled.
@@ -58,15 +59,16 @@ There is one `hls_domain_erts` process per domain. It owns that domain's control
 | --- | --- |
 | `attach`, `status`, `request`, `endpoint` calls | Claim exclusive control, inspect state, request creation or replacement, or resolve a ready incarnation's actor. |
 | Phase-worker messages | Register provisional actors and acknowledge completed retirement or initialization. |
-| Actor/owner monitor messages and linked-worker exits | Detect failure, retain its reason, and retire the affected domain. |
+| Actor monitors and linked-worker exits | Detect failure, retain its reason, and retire the affected domain. |
+| Owner monitor messages | Revoke control authority. Retire actors only when the backend explicitly declares `owner_loss => fail`. |
 
 The process serializes competing lifecycle requests and failure observations. It also provides a concrete lifetime to which actors and temporary workers can be linked. Normal phase work runs in a worker so initialization need not occupy the backend's callback; fault cleanup still waits for actual member termination. `hls_domain_lifecycle` remains a pure finite transition function: it requests a fence, reset or initialization, while the backend performs the operation and reports completion. Compiling that kernel does not compile this host `gen_server`, its process monitors or its filesystem access into hardware.
 
 One `hls_domain` owner may manage several domains, but that is a deployment choice, not a global scheduler requirement. Backend waits are asynchronous and independently ordered per domain: a slow status, replacement or endpoint lookup in one domain does not block management of another. Each domain admits one active operation and at most eight waiting calls; further calls return `{error, busy}` without allocating an identity or submitting work. All stages of an admitted operation finish before the next operation in that domain begins. Policy lookup does not wait for a backend. These limits bound retained requests, not messages arriving in the owner's ordinary BEAM mailbox.
 
-The owner remains the exclusive backend authority and the sole identity allocator. Backend attachment occurs during owner startup; every later request still originates from that owner PID. Counter writes and their storage synchronization remain serialized across the catalog, so slow storage can delay all its domains. Owner death also affects every attached domain. Use separate owners and stores where independent storage latency or owner failure scope is required. Application traffic continues to bypass these owners. This is not a distributed consensus or automatic authority-failover service.
+The owner remains the exclusive backend authority and the sole identity allocator. Backend attachment occurs during owner startup; every later request still originates from that owner PID. Counter writes and their storage synchronization remain serialized across the catalog, so slow storage can delay all its domains. Owner death removes management authority for every attached domain. Actors and already accepted backend work survive under the default `preserve` owner-loss policy. An explicit `owner_loss => fail` backend option instead couples the group to its owner's lifetime. Use separate owners and stores where independent storage latency or management availability is required. Application traffic continues to bypass these owners. This is not a distributed consensus or automatic authority-failover service.
 
-Each backend response has a five-second deadline. Expiry retires that response alias and reports an unknown outcome; it does not cancel already submitted work or replay it. A timed-out client call likewise does not withdraw an admitted management operation. Later same-domain requests inspect the backend before allocating a new identity, and the retained transition handles replacement retries. Late responses cannot complete a different operation. Stopping the owner rejects its queued calls, retires pending response aliases and lets existing backend owner-loss handling close its domains.
+Each backend response has a five-second deadline. Expiry retires that response alias and reports an unknown outcome; it does not cancel already submitted work or replay it. A timed-out client call likewise does not withdraw an admitted management operation. Later same-domain requests inspect the backend before allocating a new identity, and the retained transition handles replacement retries. Late responses cannot complete a different operation. Stopping the owner rejects its queued calls, retires pending response aliases and revokes backend authority; it does not cancel accepted work or reset actors under the default owner-loss policy.
 
 The native backend uses normal ERTS mailboxes. The bounded `hls_mailbox` inside a source actor models finite hardware admission, but incoming messages can already be waiting in the actor's unbounded BEAM mailbox before that model examines them. The management processes likewise have ordinary BEAM mailboxes. `admit_cast/2` and bounded outstanding requests help the caller respect admission; they do not turn an ERTS simulation into a physical bandwidth or globally bounded-memory guarantee.
 
@@ -119,6 +121,22 @@ A failed callback publishes none of its returned effects and commits no proposed
 
 `status` separates the finite domain cause from its `detail`: native source exceptions retain their Erlang reason; hardware adapters can retain actor/site diagnostics. A disconnected backend returns an unavailable error instead of inventing reset or readiness. A failed initial incarnation before reset acknowledgement remains unresolved through the owner API; it needs reconciliation rather than automatic allocation of another identity.
 
+## Transport loss and explicit reattachment
+
+A management connection is not an actor incarnation. Losing it establishes neither actor death nor cancellation of work already accepted. A failed call may have had effects; neither the owner nor the endpoint automatically resends it. Old monitors and reply aliases belong to the failed connection and do not resume after reconnecting. This follows ERTS distribution's uncertainty boundary, not a transparent exactly-once session promise.
+
+After a local hardware backend adapter dies, bring up another adapter against the surviving controller and explicitly request:
+
+```erlang
+{ok, Evidence} = hls_domain:reattach(Owner, Handle, NewBackend).
+```
+
+The owner serializes this operation with management of that domain. It refuses a live old adapter or a candidate already used by another domain. It checks that the candidate reports the supplied nonzero incarnation as `ready`, attaches as the actual owner PID, installs the new binding, and checks that identity and readiness again. No new incarnation is allocated, reset is not requested, and no application input is replayed. A mismatching initial observation leaves the candidate unattached and the old binding unchanged. Attachment or final-response loss remains uncertain; after successful attachment the new binding can remain installed even if confirmation fails. Inspect `status/2` to reconcile it.
+
+Both adapter PIDs must be local to the owner. Local process death proves the old adapter has ended; an unavailable remote Erlang node would not establish that exclusion. This is not authority election across hosts. The backend must also establish that its controller evidence belongs to the same deployment and transport session; a host-side integer match alone cannot attest hardware continuity. A restarted native `hls_domain_erts` begins `unbound`, so it cannot claim reattachment to its dead actors.
+
+Returned actor PIDs never become a successor incarnation. A replacement host proxy may represent the same surviving hardware actor after explicit reattachment. It is a new observer endpoint: application callers re-resolve and establish new monitors; old pending calls and monitors do not come back to life. Replacing a failed actor domain remains an explicit, separate operation governed by the catalog's `manual` or `automatic` policy.
+
 ## OTP supervision
 
 The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset and reinitialization require application approval. For an explicitly automatic domain, an ordinary supervisor can own:
@@ -131,7 +149,7 @@ The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset
   type => worker}
 ```
 
-The child starts promptly and observes readiness asynchronously. It then monitors the exact actor PIDs of its incarnation. Actor failure terminates the child; supervisor restart requests replacement through the surviving owner. Restarting only this representative attaches to the same incarnation if it is healthy. Supervisor intensity and subtree policy remain ordinary OTP policy. A readiness deadline reports an unknown outcome without cancelling or replaying the retained operation.
+The child starts promptly and observes readiness asynchronously. It then monitors the exact actor PIDs of its incarnation. Actor failure terminates the child; supervisor restart requests replacement through the surviving owner. Restarting only this representative attaches to the same incarnation if it is healthy. Supervisor intensity and subtree policy remain ordinary OTP policy. A readiness deadline reports an unknown outcome without cancelling or replaying the retained operation. An exact proxy `noconnection` instead leaves an already-bound representative alive with status `{error, noconnection}`. It retires old monitors and checks availability every 100 ms. Only explicit owner reattachment yielding the same ready incarnation lets it bind fresh monitors; it does not reconnect adapters or request replacement itself. Other terminal actor reasons retain ordinary supervisor-visible failure behavior.
 
 The generic lifecycle neither releases external reservations nor reconstructs previous application state. Initial support excludes arbitrary actor-local reset of shared state and distributed atomic replacement. Management progress still requires a running backend and working control transport.
 

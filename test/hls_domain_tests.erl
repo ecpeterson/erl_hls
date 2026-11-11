@@ -141,6 +141,29 @@ store_exhaustion_and_exclusive_ownership_test() ->
         after stop(NextOwner) end
     end).
 
+%% Replacing the management owner alone preserves actor data, identity, accepted work and the allocation counter.
+-spec owner_restart_attaches_without_replacing_actors_test() -> ok.
+owner_restart_attaches_without_replacing_actors_test() ->
+    with_domains(fun(Owner, A, B, Store) ->
+        {ok, _} = hls_domain:activate(Owner, a),
+        #{handle := Handle} = ready(Owner, a),
+        {ok, Actor} = hls_domain:resolve(Owner, Handle, source),
+        ok = hls_statem:admit_cast(Actor, {add, 23}),
+        ?assertEqual({readout, 23}, hls_statem:call(Actor, {get, 0})),
+        {ok, Before} = hls_domain_erts:status(A),
+        {ok, Counter} = file:read_file(Store),
+        stop(Owner),
+        {ok, NextOwner} = hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store)),
+        unlink(NextOwner),
+        try
+            ?assertEqual({ok, Actor}, hls_domain:resolve(NextOwner, Handle, source)),
+            ?assertEqual({readout, 23}, hls_statem:call(Actor, {get, 0})),
+            {ok, After} = hls_domain_erts:status(A),
+            ?assertEqual(maps:get(reset_count, Before), maps:get(reset_count, After)),
+            ?assertEqual({ok, Counter}, file:read_file(Store))
+        after stop(NextOwner) end
+    end).
+
 %% Aliasing automatic and manual domain names cannot bypass either isolation or reset policy.
 -spec duplicate_domain_controllers_reject_test() -> ok.
 duplicate_domain_controllers_reject_test() ->

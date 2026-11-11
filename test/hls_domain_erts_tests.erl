@@ -70,10 +70,10 @@ status_before_down_cannot_publish_dead_actor_test() ->
         hls_domain_erts:stop(Backend)
     end.
 
-%% Losing control authority retires endpoints without silently resetting or replacing their incarnation.
--spec owner_loss_fences_without_reset_test() -> ok.
-owner_loss_fences_without_reset_test() ->
-    {ok, Backend} = hls_domain_erts:start_link(reply_spec([actor])),
+%% Explicit fail policy retires endpoints without silently resetting or replacing their incarnation.
+-spec owner_loss_fail_policy_fences_without_reset_test() -> ok.
+owner_loss_fail_policy_fences_without_reset_test() ->
+    {ok, Backend} = hls_domain_erts:start_link((reply_spec([actor]))#{owner_loss => fail}),
     Parent = self(),
     Owner = spawn(fun() ->
         {ok, Authority} = hls_domain_erts:attach(Backend, self()),
@@ -102,6 +102,52 @@ owner_loss_fences_without_reset_test() ->
     after
         exit(Owner, kill),
         hls_domain_erts:stop(Backend)
+    end.
+
+%% Management-owner loss preserves live actors, accepted application work and the incarnation by default.
+-spec owner_loss_preserves_actor_state_and_pending_call_test() -> ok.
+owner_loss_preserves_actor_state_and_pending_call_test() ->
+    {ok, Backend} = hls_domain_erts:start_link(reply_spec([actor])),
+    Parent = self(),
+    Owner = spawn(fun() ->
+        {ok, Authority} = hls_domain_erts:attach(Backend, self()),
+        activate(Backend, Authority, 1),
+        {ok, Pid} = hls_domain_erts:endpoint(Backend, Authority, 1, actor),
+        Parent ! {attached, self(), Pid, Authority},
+        receive stop -> ok end
+    end),
+    try
+        {Actor, OldAuthority} = receive {attached, Owner, Pid, Authority} -> {Pid, Authority}
+            after 3000 -> error(owner_start_timeout) end,
+        Pending = gen_server:send_request(Actor, {wait, 17}),
+        _ = hls_statem:info(Actor),
+        ?assertEqual({error, owned}, hls_domain_erts:attach(Backend, self())),
+        exit(Owner, kill),
+        NewAuthority = await_authority(Backend, 200),
+        ?assertNotEqual(OldAuthority, NewAuthority),
+        ?assertEqual({error, unauthorized},
+            hls_domain_erts:endpoint(Backend, OldAuthority, 1, actor)),
+        ?assertEqual({ok, Actor}, hls_domain_erts:endpoint(Backend, NewAuthority, 1, actor)),
+        ?assertEqual(timeout, gen_server:wait_response(Pending, 0)),
+        ok = hls_statem:cast(Actor, {release, 0}),
+        ?assertEqual({reply, {report, 17}}, gen_server:receive_response(Pending, 1000)),
+        ?assertEqual({report, 17}, hls_statem:call(Actor, {read, 0})),
+        {ok, After} = hls_domain_erts:status(Backend),
+        ?assertEqual(1, maps:get(reset_count, After)),
+        ?assertEqual(ready, (maps:get(state, After))#domain_state.phase),
+        ?assertEqual(1, (maps:get(state, After))#domain_state.current)
+    after
+        exit(Owner, kill),
+        hls_domain_erts:stop(Backend)
+    end.
+
+%% Owner monitor delivery may follow a different sender's attachment request.
+-spec await_authority(pid(), non_neg_integer()) -> hls_domain_backend:authority().
+await_authority(_Backend, 0) -> error(owner_not_detached);
+await_authority(Backend, Left) ->
+    case hls_domain_erts:attach(Backend, self()) of
+        {ok, Authority} -> Authority;
+        {error, owned} -> receive after 1 -> await_authority(Backend, Left - 1) end
     end.
 
 %% Authority cannot be transferred to another caller or used to manufacture a physical completion acknowledgement.
