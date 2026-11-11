@@ -9,7 +9,7 @@ Endpoint PIDs represent one incarnation and must be retired rather than rebound.
 """.
 
 %% Shared host-side evidence and control-session capability.
--export_type([authority/0, actors/0, snapshot/0]).
+-export_type([authority/0, actors/0, snapshot/0, request/0]).
 
 -doc "An opaque local control-session token held only by its attached owner.".
 -type authority() :: reference().
@@ -35,3 +35,12 @@ Endpoint PIDs represent one incarnation and must be retired rather than rebound.
 
 -doc "Resolves an actor only if authority, nonzero incarnation and readiness agree at this boundary.".
 -callback endpoint(pid(), authority(), hls_nums:u64(), term()) -> {ok, pid()} | {error, term()}.
+
+-doc "A correlated management operation sent by the attached owner; transport-specific envelopes remain the backend's responsibility.".
+-type request() ::
+    status
+    | {request, authority(), hls_domain_lifecycle:input()}
+    | {endpoint, authority(), hls_nums:u64(), term()}.
+
+-doc "Starts a nonblocking OTP request from the attached owner process and returns its response identifier. It must not transfer caller identity or authority to a worker; responses use gen_server request aliases and failures remain unknown outcomes.".
+-callback send_request(pid(), request()) -> gen_server:request_id().

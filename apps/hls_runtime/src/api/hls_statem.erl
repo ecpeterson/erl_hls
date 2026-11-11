@@ -250,7 +250,8 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
     continuation_names = [] :: [atom()],
     calls = #{} :: #{atom() => [atom()]},
     reply_book = none :: none | hls_reply_book:book(),
-    call_messages = #{} :: #{non_neg_integer() => gen_server:from()}
+    call_messages = #{} :: #{non_neg_integer() => gen_server:from()},
+    capacity_waiters = #{} :: hls_admission:waiters()
 }).
 
 %%%
@@ -283,8 +284,8 @@ setup(Pid, Outputs, Messages) ->
         false -> error(badarg)
     end.
 
--doc "Admits one cast through the bounded private mailbox and acknowledges callback processing; full or disconnected machines return busy without accepting it. A source failure exits the call. The reserved wire request is {'$hls_domain_cast', Message}; transports may use gen_server:send_request/2 with bounded outstanding requests. The preceding ERTS mailbox remains unbounded.".
--spec admit_cast(pid(), term()) -> ok | {error, busy}.
+-doc "Admits one cast through the bounded private mailbox and acknowledges callback processing; full machines return busy and disconnected machines return not_ready without accepting it. A source failure exits the call. The reserved wire request is {'$hls_domain_cast', Message}; transports may use gen_server:send_request/2 with bounded outstanding requests. The preceding ERTS mailbox remains unbounded.".
+-spec admit_cast(pid(), term()) -> ok | {error, busy | not_ready}.
 admit_cast(Pid, Message) -> gen_server:call(Pid, {'$hls_domain_cast', Message}).
 
 -spec stop(pid()) -> ok.
@@ -356,20 +357,23 @@ init({Module, Arg, Capacity, Outputs, Generation}) ->
 
 -doc "Handles domain setup/admission, connects outputs or queues a declared call for phase-sensitive dispatch.".
 -spec handle_call(term(), gen_server:from(), #runtime{}) -> term().
+%% One transport contract separates queue admission from the eventual typed call reply.
+handle_call({'$hls_submit', Token, Mode, Message}, From, Runtime) when
+    is_reference(Token), (Mode =:= call orelse Mode =:= cast)
+->
+    submit(Mode, Message, From, Token, Runtime);
+%% Capacity observations carry no message and are not permission to replay accepted work.
+handle_call(
+    '$hls_capacity', From, Runtime = #runtime{lifecycle = connected, capacity_waiters = Waiters}
+) ->
+    Next = hls_admission:wait(From, capacity_available(Runtime), Waiters),
+    {noreply, Runtime#runtime{capacity_waiters = Next}};
+%% A disconnected actor cannot promise future application capacity.
+handle_call('$hls_capacity', _From, Runtime) ->
+    {reply, {error, not_ready}, Runtime};
 %% Managed transports reserve actual private capacity rather than treating a cast send as acceptance.
-handle_call({'$hls_domain_cast', Message}, _From, Runtime = #runtime{lifecycle = connected}) ->
-    case enqueue(Message, Runtime) of
-        {error, full} ->
-            {reply, {error, busy}, Runtime};
-        {ok, Queued} ->
-            case process_messages(Queued) of
-                {ok, Processed} -> {reply, ok, Processed};
-                {stop, Reason, Failed} -> {stop, Reason, Failed}
-            end
-    end;
-%% A disconnected incarnation has no published readiness, regardless of free queue capacity.
-handle_call({'$hls_domain_cast', _Message}, _From, Runtime) ->
-    {reply, {error, busy}, Runtime};
+handle_call({'$hls_domain_cast', Message}, From, Runtime) ->
+    submit(cast, Message, From, none, Runtime);
 %% Domain setup is isolated from ordinary admission and does not publish callback effects.
 handle_call(
     {'$hls_domain_setup', Outputs, Messages},
@@ -422,6 +426,17 @@ handle_call(
 handle_cast(Message, Runtime0) ->
     admit_and_process(Message, Runtime0).
 
+-doc "Releases capacity observers whose callers died; unrelated messages remain unsupported.".
+-spec handle_info(term(), #runtime{}) -> {noreply, #runtime{}} | {stop, term(), #runtime{}}.
+%% Capacity waits have no application state and can be discarded when their observer exits.
+handle_info(
+    {'DOWN', Ref, process, _Pid, _Reason} = Message, Runtime = #runtime{capacity_waiters = Waiters}
+) ->
+    case hls_admission:down(Ref, Waiters) of
+        {true, Rest} -> {noreply, Runtime#runtime{capacity_waiters = Rest}};
+        {false, _} -> {stop, {unsupported_hls_statem_info, Message}, Runtime}
+    end;
+%% Source actors have no generic application info-message handler.
 handle_info(Message, Runtime) ->
     {stop, {unsupported_hls_statem_info, Message}, Runtime}.
 
@@ -483,6 +498,58 @@ enqueue(
             }}
     end.
 
+%% Admission is checked before callbacks; held reply handles never consume cast capacity.
+-spec submit(call | cast, term(), gen_server:from(), reference() | none, #runtime{}) -> term().
+submit(_Mode, _Message, _From, _Token, Runtime = #runtime{lifecycle = disconnected}) ->
+    {reply, {error, not_ready}, Runtime};
+submit(
+    call,
+    Message,
+    From,
+    Token,
+    Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}
+) ->
+    case
+        is_tuple(Message) andalso tuple_size(Message) > 0 andalso
+            maps:is_key(element(1, Message), Calls)
+    of
+        true ->
+            submit_message(
+                call,
+                Message,
+                From,
+                Token,
+                Runtime#runtime{call_messages = Messages#{Id => From}},
+                Runtime
+            );
+        false ->
+            {reply, {error, unsupported_call}, Runtime}
+    end;
+submit(cast, Message, From, Token, Runtime) ->
+    submit_message(cast, Message, From, Token, Runtime, Runtime).
+
+%% Notifications originate here before processing can produce a reply or failure.
+-spec submit_message(
+    call | cast, term(), gen_server:from(), reference() | none, #runtime{}, #runtime{}
+) -> term().
+submit_message(Mode, Message, From, Token, Candidate, Original) ->
+    case enqueue(Message, Candidate) of
+        {error, full} ->
+            {reply, {error, busy}, Original};
+        {ok, Queued} ->
+            hls_admission:notify(From, Token),
+            case process_messages(Queued) of
+                {ok, Processed} when Mode =:= cast -> {reply, ok, Processed};
+                {ok, Processed} -> {noreply, Processed};
+                {stop, Reason, Failed} -> {stop, Reason, Failed}
+            end
+    end.
+
+%% Only private-mailbox room governs casts; deferred callers have separate storage.
+-spec capacity_available(#runtime{}) -> boolean().
+capacity_available(#runtime{mailbox = Mailbox}) ->
+    maps:get(available, hls_mailbox:info(Mailbox)) > 0.
+
 %% Internal steps have priority without creating a phase or mailbox boundary.
 -spec process_messages(#runtime{}) -> {ok, #runtime{}} | {stop, term(), #runtime{}}.
 process_messages(Runtime = #runtime{gather_completion = Completion}) when Completion =/= none ->
@@ -500,7 +567,11 @@ process_messages(
     end,
     case hls_mailbox:select([Eligible], Mailbox) of
         none ->
-            {ok, Runtime};
+            {ok, Runtime#runtime{
+                capacity_waiters = hls_admission:ready(
+                    capacity_available(Runtime), Runtime#runtime.capacity_waiters
+                )
+            }};
         {ok, Selection, 1, Entry} ->
             process_message(Selection, Entry, Runtime)
     end.

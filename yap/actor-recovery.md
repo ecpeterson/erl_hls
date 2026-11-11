@@ -23,3 +23,12 @@ Lifecycle phase, operation, disposition, action and cause are ordinary atom unio
 ## Incarnation terminology
 
 The fixed actor group is a domain; one lifetime is a domain incarnation, identified by a non-reused incarnation ID. Runtime types, counter configuration and diagnostics now use that vocabulary. `activate/2` remains the operation that creates the first incarnation. This is a naming change with unchanged lifecycle rules and counter format. The 32 focused recovery tests, Dialyzer, formatting and source contracts pass; earlier broad compiler and finite enum checks remain retained.
+
+## Admission and independent management
+
+- [x] Separate native actor admission from call completion, sharing bounded capacity observations with downstream hardware endpoints.
+- [x] Keep one ordered management lane per domain, with asynchronous backend waits and one durable incarnation allocator in the actual owner process.
+
+The serialization follow-on is retained at `runs/recovery-serialization-2026-11-11/`. Its 58 focused runtime tests cover held calls, capacity notification, dead observers, independently stalled domain inspection/resolution/submission, queue bounds, backend loss, abandoned responses and timeout reconciliation. Native admission acknowledges private-queue acceptance before any effects or final reply; it does not promise successful dispatch. Only explicit pre-admission rejection permits resubmission. Capacity wakeups reserve nothing.
+
+Formatting, Dialyzer, source contracts and runtime package boundaries pass. The contract audit reports 3,303 remaining gaps and zero new/changed gaps. Backend waits no longer block other domains; initial attachment and counter persistence remain shared operations. Ordinary ERTS mailboxes remain unbounded. The implementation introduces no work history or transparent replay.

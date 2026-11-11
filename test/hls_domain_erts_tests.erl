@@ -155,7 +155,7 @@ setup_postponement_is_not_readiness_test() ->
 acknowledged_private_capacity_test() ->
     {ok, Actor} = hls_statem:start_link(hls_statem_event_fixture, [], [{mailbox_capacity, 1}, {generation, 7}]),
     try
-        ?assertEqual({error, busy}, hls_statem:admit_cast(Actor, {later, 1})),
+        ?assertEqual({error, not_ready}, hls_statem:admit_cast(Actor, {later, 1})),
         ok = hls_statem:setup(Actor, #{out => self()}, []),
         ?assertEqual(ok, hls_statem:admit_cast(Actor, {later, 1})),
         ?assertEqual({error, busy}, hls_statem:admit_cast(Actor, {later, 2})),
