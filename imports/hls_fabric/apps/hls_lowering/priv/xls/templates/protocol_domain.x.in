@@ -1,0 +1,112 @@
+import axis;
+import hls_bits;
+import domain_controller;
+import domain_codes;
+import network;
+@@IMPORTS@@
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Each domain owns its controller, every actor and every private transport slot.
+pub struct State {
+  control: domain_controller::ServiceState,
+  network: network::State,
+  source_fault: u16,
+  source_actor: u32,
+}
+
+// Observations describe this edge; the state is committed at its end.
+pub struct Tick { state: State, output: Outputs }
+
+// The lifecycle algorithm is compiled from hls_domain_lifecycle, including
+// replay, stale-transition checks, identity retirement and first-fault retention.
+fn control_tick(state: domain_controller::ServiceState,
+                input: domain_controller::Domaininput) -> domain_controller::ServiceResult {
+  domain_controller::service_step(state,
+    axis::pack(domain_controller::Tag::DOMAIN_INPUT as u8,
+      hls_bits::frame_payload(domain_controller::bits_from_domaininput(input))))
+}
+
+// Gate the complete static network at its ownership boundary. A fenced edge
+// certifies no later external transfer; it cannot revoke earlier accepted output.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  let old = s.control.data.lifecycle;
+  let ready = old.phase == domain_codes::PHASE_READY && old.current != u64:0 && s.control.failure == u32:0 && !io.reset;
+  let admitted = ready && io.incarnation == old.current;
+  let reset_network = io.reset || old.phase == domain_codes::PHASE_ISOLATED || old.phase == domain_codes::PHASE_UNBOUND;
+  let advance = old.phase == domain_codes::PHASE_INITIALIZING || old.phase == domain_codes::PHASE_READY || reset_network;
+  let net = network::tick(s.network, network::Inputs {
+    reset: reset_network,
+    @@NETWORK_INPUTS@@
+  });
+  let initialized = @@INITIALIZED@@;
+  let setup_output = @@SETUP_OUTPUT@@;
+  let fault = @@FAULT@@;
+  let protocol_fault = net.output.ingress_fault;
+  let new_fault = (fault != u16:0 || protocol_fault) && old.current != u64:0 && old.fault == domain_codes::FAULT_NONE;
+  let accept_management = io.management_valid && !new_fault && !io.reset;
+  let completion = domain_controller::Domaininput {
+    expected: old.previous, target: old.target, transition: old.transition,
+    ..zero!<domain_controller::Domaininput>()
+  };
+  let indication = if new_fault {
+    domain_controller::Domaininput { op: domain_codes::OPERATION_FAULT, expected: old.current,
+      fault: if old.phase == domain_codes::PHASE_INITIALIZING { domain_codes::FAULT_INITIALIZATION_FAILURE }
+        else if fault != u16:0 { domain_codes::FAULT_ACTOR_FAILURE } else { domain_codes::FAULT_PROTOCOL_FAILURE },
+      ..zero!<domain_controller::Domaininput>() }
+  } else if accept_management && io.management_op != domain_codes::OPERATION_INSPECT {
+    domain_controller::Domaininput { op: if (io.management_op == domain_codes::OPERATION_ACTIVATE || io.management_op == domain_codes::OPERATION_REPLACE) || io.management_op == domain_codes::OPERATION_ABORT ||
+      (io.management_op == domain_codes::OPERATION_FAULT && io.management_fault == domain_codes::FAULT_OWNER_DOWN) { io.management_op } else { domain_codes::OPERATION_REJECT }, expected: io.expected,
+      target: io.target, transition: io.transition, fault: io.management_fault }
+  } else if old.phase == domain_codes::PHASE_CLOSING {
+    // The preceding edge entered closing. Both external directions are now shut.
+    domain_controller::Domaininput { op: domain_codes::OPERATION_FENCED, ..completion }
+  } else if old.phase == domain_codes::PHASE_ISOLATED {
+    // This edge actually resets every network actor and private transport owner.
+    domain_controller::Domaininput { op: domain_codes::OPERATION_RESET_DONE, ..completion }
+  } else if old.phase == domain_codes::PHASE_INITIALIZING && setup_output {
+    // This first boundary supports silent setup only; output is never leaked.
+    domain_controller::Domaininput { op: domain_codes::OPERATION_ABORT, fault: domain_codes::FAULT_INITIALIZATION_FAILURE, ..completion }
+  } else if old.phase == domain_codes::PHASE_INITIALIZING && initialized {
+    domain_controller::Domaininput { op: domain_codes::OPERATION_INITIALIZED, ..completion }
+  } else { zero!<domain_controller::Domaininput>() };
+  let result = control_tick(s.control, indication);
+  let reply = domain_controller::domainoutput_from_bits(result.response.payload);
+  let control = if io.reset { domain_controller::initial_service_state() } else { result.state };
+  Tick {
+    state: State { control, network: if advance { net.state } else { s.network },
+      source_fault: if reset_network { u16:0 } else if new_fault { fault } else { s.source_fault },
+      source_actor: if reset_network { u32:0 } else if new_fault { @@FAULT_ACTOR@@ } else { s.source_actor },
+    },
+    output: Outputs {
+      management_response_valid: accept_management, management_ready: !new_fault && !io.reset,
+      domain_status: if accept_management && io.management_op == domain_codes::OPERATION_INSPECT { domain_codes::STATUS_OK } else { reply.status }, domain_action: reply.action,
+      domain_phase: old.phase, domain_current: old.current, domain_previous: old.previous,
+      domain_target: old.target, domain_transition: old.transition, domain_fault: old.fault,
+      domain_source_fault: s.source_fault, domain_source_actor: s.source_actor,
+      domain_rejected: io.ingress_valid && !admitted && !io.reset,
+      domain_admission: admitted, domain_initialized: initialized && !reset_network,
+      @@NETWORK_OUTPUTS@@
+    },
+  }
+}
+
+// Sampled channels always transfer; private payload backpressure stays in Inputs.
+pub proc domain_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // The pin adapter keeps both channels enabled on every hardware clock.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) {
+    (commands, observations)
+  }
+  // Cold hardware is unbound and cannot dispatch application traffic.
+  init { zero!<State>() }
+  // All actors, links and lifecycle state advance on this shared clock edge.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

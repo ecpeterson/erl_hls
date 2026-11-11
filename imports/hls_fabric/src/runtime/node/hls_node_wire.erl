@@ -104,7 +104,7 @@ digest(Cookie, Challenge) ->
     erlang:md5([atom_to_binary(Cookie, latin1), integer_to_binary(Challenge)]).
 
 %% External PIDs are real Erlang terms, but never name a host process. Creation
-%% is obtained from EPMD once per node activation, not once per connection.
+%% is obtained from EPMD once per node incarnation, not once per connection.
 -doc "Constructs an external PID for a node incarnation; it never names a local host process.".
 -spec pid(node(), non_neg_integer(), non_neg_integer()) -> pid().
 pid(Name, Creation, ID) ->

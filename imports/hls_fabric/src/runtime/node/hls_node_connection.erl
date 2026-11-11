@@ -82,11 +82,9 @@ handle_call(info, _From, State = #{clients := Clients, queues := Queues, channel
         #{
             carrier => carrier(State),
             queued => queued(Queues),
+            domain_pending => maps:get(domain_pending, State, 0),
             clients => maps:map(
-                fun(_, C) ->
-                    #{channel := Key} = C,
-                    maps:with([route, pending, transmitting], maps:get(Key, Channels))
-                end,
+                fun(_, C) -> client_info(C, Channels) end,
                 Clients
             )
         },
@@ -95,6 +93,12 @@ handle_call(info, _From, State = #{clients := Clients, queues := Queues, channel
 %% is alive even while device admission pauses the distribution data stream.
 -doc "Services local heartbeats and acknowledges device frames after processing.".
 -spec handle_cast(term(), map()) -> {noreply, map()}.
+%% Publication waits for actual old endpoint DOWN signals, preserving preceding replies.
+handle_cast({domain_publish, Ref, Old, Targets}, State = #{domain_publication := none}) ->
+    {noreply,
+        install_domain(State#{
+            domain_publication := #{reference => Ref, old => Old, targets => Targets}
+        })};
 %% A serviced local heartbeat establishes that this adapter is alive.
 handle_cast(local_tick, State = #{received := N}) ->
     {noreply, State#{received := N + 1}};
@@ -121,6 +125,13 @@ handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{owner_monitor := R
 %% The central source owner cannot be replaced while this incarnation is live.
 handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{source_monitor := Ref}) ->
     {stop, {source_owner_down, Reason}, State};
+%% A managed endpoint's native monitor retires only that virtual actor and its remote monitors.
+handle_info({'DOWN', Ref, process, _Endpoint, Reason}, State = #{domain_monitors := Monitors}) when
+    is_map_key(Ref, Monitors)
+->
+    Pid = maps:get(Ref, Monitors),
+    Next = retire_domain(Pid, Reason, State#{domain_monitors := maps:remove(Ref, Monitors)}),
+    continue(install_domain(Next));
 %% Consume one local distribution packet under the same queue bound as TCP.
 handle_info(dist_data, State = #{socket := {local, Handle}, sent := Sent}) ->
     case erlang:dist_ctrl_get_data(Handle) of
@@ -170,6 +181,9 @@ handle_info(Message, State = #{sends := Sends}) ->
     case gen_server:check_response(Message, Sends, true) of
         {{reply, Result}, Label, Remaining} ->
             continue(written(Label, Result, State#{sends := Remaining}));
+        {{error, {_Reason, _}}, {domain_request, _Pid, _Mode, _From}, Remaining} ->
+            %% The endpoint's own DOWN is authoritative; never turn death into an ordinary reply.
+            continue(domain_completed(State#{sends := Remaining}));
         {{error, {Reason, _}}, _, _} ->
             {stop, {broker_down, Reason}, State};
         _ ->
@@ -230,6 +244,9 @@ attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
         peer => Peer,
         kernel_pid => hls_node_wire:pid(Name, Creation, 0),
         clients => Clients,
+        domain_monitors => monitor_domains(Actors),
+        domain_pending => 0,
+        domain_publication => none,
         channels => Channels,
         routes => Routes,
         names => Names,
@@ -260,7 +277,7 @@ channel({Kind, Endpoint}, Brokers, Source) ->
     }.
 
 %% Monitor signals are handled separately from the FPGA's data-plane queue.
-%% PIDs belong to the node activation; monitors belong to this connection.
+%% PIDs belong to the node incarnation; monitors belong to this connection.
 %% Dispatch negotiated distribution signals; reject unsupported operations.
 -spec signal(tuple(), none | {message, term()}, map()) -> map().
 signal({19, From, To, Ref}, none, State = #{monitors := Monitors}) ->
@@ -344,6 +361,34 @@ deliver(To, Message, State) ->
 -spec operation(pid(), term(), map()) -> map().
 operation(
     Pid,
+    {'$gen_call', From = {Caller, _}, '$hls_fabric_info'},
+    State = #{clients := Clients, peer := Peer, domain_pending := Pending}
+) when
+    node(Caller) =:= Peer,
+    map_get(kind, map_get(Pid, Clients)) =:= domain
+->
+    #{incarnation := Incarnation, identity := Actor} = maps:get(Pid, Clients),
+    send(
+        State,
+        hls_node_wire:reply(Pid, From, #{
+            domain => Incarnation, actor => Actor, connection_pending => Pending
+        })
+    );
+operation(
+    Pid,
+    {'$gen_call', From = {Caller, _}, Request},
+    State = #{clients := Clients, peer := Peer}
+) when
+    node(Caller) =:= Peer,
+    map_get(kind, map_get(Pid, Clients)) =:= domain
+->
+    issue_domain(Pid, call, From, Request, State);
+operation(Pid, {'$gen_cast', Request}, State = #{clients := Clients}) when
+    map_get(kind, map_get(Pid, Clients)) =:= domain
+->
+    issue_domain(Pid, cast, none, {'$hls_domain_cast', Request}, State);
+operation(
+    Pid,
     {'$gen_call', From, '$hls_fabric_info'},
     State = #{clients := Clients, channels := Channels, queues := Queues}
 ) ->
@@ -397,7 +442,7 @@ arm(
         config := #{queue_limit := Limit}
     }
 ) ->
-    case queued(Queues) < Limit of
+    case queued(Queues) + maps:get(domain_pending, State, 0) < Limit of
         true ->
             ok = erlang:dist_ctrl_get_data_notification(Handle),
             State#{armed := true};
@@ -407,7 +452,7 @@ arm(
 arm(
     State = #{armed := false, socket := Socket, queues := Queues, config := #{queue_limit := Limit}}
 ) ->
-    case queued(Queues) < Limit of
+    case queued(Queues) + maps:get(domain_pending, State, 0) < Limit of
         true ->
             ok = inet:setopts(Socket, [{active, once}]),
             State#{armed := true, last_received := now_ms()};
@@ -512,8 +557,24 @@ slot(Tx, Capacity, Pending) ->
 
 %% Release send admission, or retry only when the broker proves the operation was not sent.
 -spec written(
-    source_handoff | {channel_key(), byte(), reference(), pid(), operation()}, term(), map()
+    source_handoff
+    | {domain_request, pid(), call | cast, gen_server:from() | none}
+    | {channel_key(), byte(), reference(), pid(), operation()},
+    term(),
+    map()
 ) -> map().
+written({domain_request, Pid, call, From}, Reply, State = #{clients := Clients}) ->
+    Next = domain_completed(State),
+    case maps:is_key(Pid, Clients) of
+        true -> send(Next, hls_node_wire:reply(Pid, From, Reply));
+        false -> Next
+    end;
+written({domain_request, _Pid, cast, none}, ok, State) ->
+    domain_completed(State);
+written({domain_request, _Pid, cast, none}, Result, _State) ->
+    %% A cast has no return channel. Refused admission must become visible as connection loss.
+    %% No replay is attempted: the remote sender can only regard its work as uncertain.
+    error({domain_cast_admission, Result});
 written(source_handoff, ok, State = #{source_pending := true}) ->
     State#{source_pending := false};
 written({Key, _Tx, _ID, _Pid, _Op}, ok, State = #{channels := Channels}) ->
@@ -598,3 +659,85 @@ carrier(#{socket := _}) -> tcp.
 %% Use monotonic milliseconds for peer liveness deadlines.
 -spec now_ms() -> integer().
 now_ms() -> erlang:monotonic_time(millisecond).
+
+%% Domain observations expose endpoint identity instead of pretending there is a legacy wire route.
+-spec client_info(map(), map()) -> map().
+client_info(#{kind := domain, endpoint := Endpoint, incarnation := Incarnation}, _Channels) ->
+    #{domain => Incarnation, endpoint => Endpoint};
+client_info(#{channel := Key}, Channels) ->
+    maps:with([route, pending, transmitting], maps:get(Key, Channels)).
+
+%% Local managed actors have one monitor per peer adapter; endpoint death leaves unrelated actors up.
+-spec monitor_domains([map()]) -> #{reference() => pid()}.
+monitor_domains(Targets) ->
+    maps:from_list([
+        {monitor(process, Endpoint), Pid}
+     || #{kind := domain, endpoint := Endpoint, pid := Pid} <- Targets
+    ]).
+
+%% Forward directly from this adapter so source replies and endpoint DOWN retain ERTS signal ordering.
+-spec issue_domain(pid(), call | cast, gen_server:from() | none, term(), map()) -> map().
+issue_domain(
+    Pid,
+    Mode,
+    From,
+    Request,
+    State = #{
+        clients := Clients,
+        sends := Sends,
+        domain_pending := Pending,
+        config := #{queue_limit := Limit},
+        queues := Queues
+    }
+) ->
+    true = Pending + queued(Queues) < Limit,
+    #{endpoint := Endpoint} = maps:get(Pid, Clients),
+    RequestId = gen_server:send_request(Endpoint, Request),
+    Label = {domain_request, Pid, Mode, From},
+    State#{domain_pending := Pending + 1, sends := gen_server:reqids_add(RequestId, Label, Sends)}.
+
+%% Every acknowledged or failed request releases exactly one connection-owned admission slot.
+-spec domain_completed(map()) -> map().
+domain_completed(State = #{domain_pending := Pending}) when Pending > 0 ->
+    State#{domain_pending := Pending - 1}.
+
+%% Only actual monitor delivery emits terminal actor signals; management never manufactures source death.
+-spec retire_domain(pid(), term(), map()) -> map().
+retire_domain(Pid, Reason, State = #{clients := Clients, monitors := Monitors}) ->
+    {Kept, Sent} = maps:fold(
+        fun(Ref, {From, To} = Entry, {Rest, Acc}) ->
+            case To =:= Pid of
+                true -> {Rest, send(Acc, hls_node_wire:encode({21, To, From, Ref, Reason}))};
+                false -> {Rest#{Ref => Entry}, Acc}
+            end
+        end,
+        {#{}, State},
+        Monitors
+    ),
+    Sent#{clients := maps:remove(Pid, Clients), monitors := Kept}.
+
+%% The manager has checked physical endpoint death, but its signal may still be queued here.
+%% Delay replacement until local DOWN consumption has emitted all corresponding remote monitor exits.
+-spec install_domain(map()) -> map().
+install_domain(
+    State = #{
+        domain_publication := #{reference := Ref, old := Old, targets := Targets},
+        clients := Clients,
+        manager := Manager,
+        domain_monitors := Monitors
+    }
+) ->
+    case lists:any(fun(Pid) -> maps:is_key(Pid, Clients) end, Old) of
+        true ->
+            State;
+        false ->
+            Fresh = maps:from_list([{Pid, Target} || Target = #{pid := Pid} <- Targets]),
+            Manager ! {domain_published, Ref, self()},
+            State#{
+                clients := maps:merge(Clients, Fresh),
+                domain_monitors := maps:merge(Monitors, monitor_domains(Targets)),
+                domain_publication := none
+            }
+    end;
+install_domain(State) ->
+    State.

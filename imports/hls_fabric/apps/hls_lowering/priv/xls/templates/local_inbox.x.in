@@ -48,6 +48,15 @@ pub fn local_inbox_startup_done(s: LocalInboxState, reset: bool) -> bool {
   !reset && s.started && (s.startup_consumed & STARTUP_VALID) == STARTUP_VALID
 }
 
+// Recovery readiness requires successful source entry and no pending private work.
+// It is intentionally stronger than startup_done; it assumes silent setup.
+pub fn local_inbox_initialized(s: LocalInboxState, reset: bool) -> bool {
+  let observation = local_observe(s.owner.machine, u32:0);
+  local_inbox_startup_done(s, reset) && !observation.pending &&
+    observation.failure == u16:0 && !s.owner.action_valid &&
+    s.owner.outbox.index == s.owner.outbox.count
+}
+
 // Pair-local age filtering precedes cross-sender choice. Keep the head pending
 // through entry stalls; consume only at commit, then release after last read.
 pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxTick {

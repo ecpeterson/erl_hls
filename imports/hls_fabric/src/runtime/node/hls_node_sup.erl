@@ -24,7 +24,7 @@ child(Sup, ID) ->
 -spec init({node(), hls_node:brokers(), [hls_node:service()], hls_node:options()}) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init({Name, Brokers, Services, Options}) ->
-    %% No child may restart behind a live node incarnation. A new activation
+    %% No child may restart behind a live node incarnation. A new incarnation
     %% obtains a new creation and fresh return routes; hardware is not reset.
     {ok,
         {#{strategy => one_for_one, auto_shutdown => any_significant}, [

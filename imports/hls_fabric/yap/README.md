@@ -15,3 +15,4 @@ Other experiment notes preserve original hypotheses and results. Their unchecked
 - [Erlang source toolchain](erlang-source-toolchain.md): native source command, standard dependency packaging and independent external compilation.
 
 - [Compiler reliability integration](compiler-reliability.md): merged compiler pin, inline source attribution, generated-source refresh and local qualification.
+- [Closed-domain recovery](actor-recovery.md): shared lifecycle kernel, native/RTL/remote-peer witnesses and explicit deployment limits.

@@ -93,7 +93,7 @@ run(Stage) ->
         FirstPid = maps:get(First, Pids),
         Ref = monitor(process, FirstPid),
         %% Distribution disconnect does not restart scheduler state or change
-        %% the node activation's PIDs. Reacquire the debug session afterward.
+        %% the node incarnation's PIDs. Reacquire the debug session afterward.
         true = erlang:disconnect_node(Name),
         receive {'DOWN', Ref, process, FirstPid, noconnection} -> ok
         after 5000 -> error(no_noconnection) end,

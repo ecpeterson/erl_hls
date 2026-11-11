@@ -7,3 +7,5 @@ Network, boundary, application, bridge, deployment and mixed builders compose la
 Preserve emitted failure codebooks when composing actors. Planning and emission do not attach host sessions; runtime clients consume the resulting descriptors separately.
 
 The optional [observation application](../../../../../hls_spacetime_observer/README.md) binds passive simulator taps to an exact emitted build; its capture adapter produces cycle events for offline consumers. See [passive capture](../../../../../../docs/spacetime-capture.md). These diagnostic observers generate no synthesized trace hardware and make no physical timing claim.
+
+`hls_protocol_domain` composes one complete network with the compiled runtime lifecycle kernel, incarnation gates and actual reset/initialization completion. See [closed-domain recovery](../../../../../../docs/domain-recovery.md). The runtime kernel supplies its own compilable service entry, so hardware and ERTS share the same lifecycle decisions.

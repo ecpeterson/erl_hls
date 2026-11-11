@@ -6,20 +6,21 @@ A virtual FPGA distribution node hosted inside the existing BEAM.
 """.
 -behaviour(gen_server).
 %% Public virtual-node lifecycle and inventory.
--export([start_link/4, stop/1, info/1, services/1]).
+-export([start_link/4, stop/1, info/1, services/1, publish_domain/2]).
 %% Supervisor and local-carrier entry points.
 -export([start_manager/5, local_manager/1]).
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
 -export_type([brokers/0, service/0, options/0]).
--doc "Distinct local application and debug transport brokers.".
--type brokers() :: #{application := pid(), debug := pid()}.
--doc "A named standalone/scheduled service, or one exclusive source partition. Source owner and senders are exact local PIDs; targets map logical identities to owner-validated destination terms. The owner must handle source_bind once and source_attach once, then bounded source_send calls. A source connection loss ends this node incarnation; hardware reset and transport retirement remain external obligations.".
+-doc "Distinct local application and debug brokers, or an empty map for managed-domain-only nodes.".
+-type brokers() :: #{} | #{application := pid(), debug := pid()}.
+-doc "A named standalone/scheduled service, a managed domain, or one exclusive source partition. Managed domains enroll already-ready local incarnation endpoints; publication of replacements is explicit. Source owner and senders are exact local PIDs; targets map logical identities to owner-validated destination terms. The owner must handle source_bind once and source_attach once, then bounded source_send calls. A source connection loss ends this node incarnation; hardware reset and transport retirement remain external obligations.".
 -type service() ::
     #{name := atom(), module := module(), endpoint := 0..((1 bsl 16) - 1)}
     | #{name := atom(), topology := map(), debug_endpoint := 0..((1 bsl 16) - 1)}
-    | #{name := atom(), source := #{owner := pid(), senders := [pid()], targets := map()}}.
+    | #{name := atom(), source := #{owner := pid(), senders := [pid()], targets := map()}}
+    | #{name := atom(), domain := #{owner := pid(), id := hls_domain:domain()}}.
 -doc "Listener address, connection/queue bounds, return-route range and heartbeat interval in milliseconds.".
 -type options() :: #{
     ip => inet:ip_address(),
@@ -44,6 +45,10 @@ info(Node) -> gen_server:call(hls_node_sup:child(Node, node), info).
 -doc "Returns named application/debug PIDs or topology actor handles for this incarnation.".
 -spec services(pid()) -> #{atom() => map()}.
 services(Node) -> maps:get(services, info(Node)).
+-doc "Publishes a declared managed domain's ready incarnation after its old endpoints have died. Duplicate publication is idempotent; this does not activate, reset or replay work. Completion waits for each connected peer adapter to consume the old endpoints' DOWN signals before it installs fresh virtual PIDs.".
+-spec publish_domain(pid(), atom()) -> {ok, map()} | {error, term()}.
+publish_domain(Node, Name) ->
+    gen_server:call(hls_node_sup:child(Node, node), {publish_domain, Name}).
 -doc "Starts the node manager under its qualified local registration name.".
 -spec start_manager(node(), brokers(), [service()], options(), pid()) -> gen_server:start_ret().
 start_manager(Name, Brokers, Services, Options, NodeSup) ->
@@ -123,7 +128,7 @@ init({Name, Brokers, Services, Options, NodeSup}) ->
     ]),
     {ok, {_, ActualPort}} = inet:sockname(Listen),
     {Epmd, Creation} = hls_node_wire:register(Name, ActualPort, EpmdPort),
-    {Actors, Handles, _NextId} = lists:foldl(
+    {Actors, Handles, NextId} = lists:foldl(
         fun({_ServiceName, Service}, {Targets, Named, Next}) ->
             {More, Handle, After} = activate(Name, Creation, Service, Next),
             {More ++ Targets, Named#{maps:get(name, Service) => Handle}, After}
@@ -143,6 +148,9 @@ init({Name, Brokers, Services, Options, NodeSup}) ->
         brokers => Brokers,
         actors => Actors,
         services => Handles,
+        domain_services => maps:from_list([{maps:get(name, S), S} || S = #{domain := _} <- Services]),
+        next_id => NextId,
+        publication => none,
         connections => #{},
         node_sup => NodeSup,
         monitors => Monitors,
@@ -166,6 +174,9 @@ actor(Node, Creation, #{endpoint := Endpoint} = Service, Kind) ->
 %% Create service handles while keeping scheduled actors in a separate dense PID namespace.
 -spec activate(node(), non_neg_integer(), service(), non_neg_integer()) ->
     {[map()], map(), non_neg_integer()}.
+activate(Node, Creation, Service = #{name := Name, domain := _}, Next) ->
+    {ok, Snapshot} = hls_node_domain:snapshot(Service),
+    hls_node_domain:allocate(Node, Creation, Name, Snapshot, Next);
 activate(
     Node,
     Creation,
@@ -208,7 +219,15 @@ activate(Node, Creation, Service, Next) ->
     {[App, Debug], #{application => AppPid, debug => DebugPid}, Next}.
 
 -doc "Serves node discovery, handshake identity and connection attachment requests.".
--spec handle_call(term(), gen_server:from(), map()) -> {reply, term(), map()}.
+-spec handle_call(term(), gen_server:from(), map()) -> {reply, term(), map()} | {noreply, map()}.
+%% A single bounded publication transaction updates all existing connections.
+handle_call({publish_domain, _Name}, _From, State = #{publication := Pending}) when
+    Pending =/= none
+->
+    {reply, {error, publication_in_progress}, State};
+%% New identities are allocated only from current readiness and actual old endpoint retirement.
+handle_call({publish_domain, Name}, From, State) ->
+    publish(Name, From, State);
 %% Create an adapter for a distribution connection inside this BEAM.
 handle_call({local_connection, Owner}, _From, State = #{node_sup := Sup}) ->
     Identity = maps:with([name, creation], State),
@@ -245,6 +264,9 @@ handle_call(
 %% Reconnection and foreign peers cannot inherit pending source traffic or hardware credits.
 handle_call({attach, _, _}, _From, State = #{sealed_source := true}) ->
     {reply, {error, source_incarnation_sealed}, State};
+%% A peer must not attach halfway through an incarnation publication transaction.
+handle_call({attach, _, _}, _From, State = #{publication := Pending}) when Pending =/= none ->
+    {reply, {error, publication_in_progress}, State};
 %% Reserve fresh return routes for an authenticated peer, enforcing connection limits.
 handle_call(
     {attach, Peer, Carrier},
@@ -278,7 +300,7 @@ handle_call(
                      || {Kind, Endpoint} <- lists:usort([C || #{channel := C} <- Actors])
                     ],
                     case lists:usort(Results) of
-                        [ok] ->
+                        Success when Success =:= []; Success =:= [ok] ->
                             Ref = monitor(process, Owner),
                             Entry = #{
                                 peer => Peer, source => Source, monitor => Ref, carrier => Carrier
@@ -296,6 +318,12 @@ handle_call(
 handle_cast(_, State) -> {noreply, State}.
 -doc "Removes dead connections and stops the node if a broker or EPMD connection fails.".
 -spec handle_info(term(), map()) -> {noreply, map()} | {stop, term(), map()}.
+%% Connections acknowledge only after their actual endpoint monitors have retired old identities.
+handle_info(
+    {domain_published, Ref, Connection}, State = #{publication := #{reference := Ref} = Pending}
+) ->
+    Waiting = maps:remove(Connection, maps:get(waiting, Pending)),
+    {noreply, finish_publication(State#{publication := Pending#{waiting := Waiting}})};
 %% A departed source connection ends the virtual incarnation; it must never reconnect to live hardware state.
 handle_info(
     {'DOWN', Ref, process, Pid, Reason},
@@ -311,7 +339,7 @@ handle_info(
 ) ->
     case lists:member(Ref, Monitors) of
         true -> {stop, {shutdown, {broker_down, Reason}}, State};
-        false -> {noreply, State#{connections := maps:remove(Pid, Connections)}}
+        false -> {noreply, departed(Pid, State#{connections := maps:remove(Pid, Connections)})}
     end;
 %% Loss of the EPMD registration ends the advertised incarnation.
 handle_info({tcp_closed, Epmd}, State = #{epmd := Epmd}) ->
@@ -325,6 +353,7 @@ handle_info(_, State) ->
 
 %% Allocate a fresh application/debug return-route pair beyond all used broker endpoints.
 -spec source(brokers(), {pos_integer(), pos_integer()}) -> pos_integer() | exhausted.
+source(Brokers, _Range) when map_size(Brokers) =:= 0 -> 1;
 source(Brokers, {First, Last}) ->
     Used = lists:append([
         begin
@@ -344,19 +373,12 @@ source(Brokers, {First, Last}) ->
 offset(application) -> 0;
 offset(debug) -> 1.
 
-%% Reject ambiguous names, nonlocal brokers and overlapping physical endpoints before activation.
+%% Reject ambiguous names, nonlocal brokers and overlapping physical endpoints before node startup.
 -spec validate(node(), brokers(), [service()]) -> ok.
-validate(Name, #{application := App, debug := Debug} = Brokers, Services) when
-    is_atom(Name),
-    is_pid(App),
-    is_pid(Debug),
-    App =/= Debug,
-    node(App) =:= node(),
-    node(Debug) =:= node(),
-    map_size(Brokers) =:= 2,
-    is_list(Services),
-    Services =/= []
+validate(Name, Brokers, Services) when
+    is_atom(Name), is_map(Brokers), is_list(Services), Services =/= []
 ->
+    ok = validate_brokers(Brokers, Services),
     [Short, Host] = binary:split(atom_to_binary(Name), <<"@">>),
     true = byte_size(Short) > 0 andalso byte_size(Host) > 0 andalso Name =/= node(),
     Names = [N || #{name := N} <- Services],
@@ -374,6 +396,11 @@ validate(Name, #{application := App, debug := Debug} = Brokers, Services) when
 
 %% Validate one service and enumerate the physical channels it reserves.
 -spec service_channels(service()) -> [{application | debug, 0..((1 bsl 16) - 1)}].
+service_channels(#{name := _, domain := #{owner := Owner, id := Domain} = Binding} = Service) when
+    map_size(Service) =:= 2, map_size(Binding) =:= 2
+->
+    true = is_pid(Owner) andalso node(Owner) =:= node() andalso is_atom(Domain),
+    [];
 service_channels(
     #{name := _, source := Source = #{owner := Owner, senders := Senders, targets := Targets}} = S
 ) when
@@ -396,3 +423,102 @@ service_channels(
 service_channels(#{name := _, module := M, endpoint := E} = S) when map_size(S) =:= 3, is_atom(M) ->
     {ok, _Contract} = hls_service_schema:from_module(M),
     [{application, E}, {debug, E}].
+
+%% Only managed domains bypass the physical application/debug brokers.
+-spec validate_brokers(brokers(), [service()]) -> ok.
+validate_brokers(Brokers, Services) when map_size(Brokers) =:= 0 ->
+    true = lists:all(fun(S) -> maps:is_key(domain, S) end, Services),
+    ok;
+validate_brokers(#{application := App, debug := Debug} = Brokers, _Services) when
+    is_pid(App),
+    is_pid(Debug),
+    App =/= Debug,
+    node(App) =:= node(),
+    node(Debug) =:= node(),
+    map_size(Brokers) =:= 2
+->
+    ok.
+
+%% Readiness never overrides live old endpoints; replacing them is the domain owner's responsibility.
+-spec publish(atom(), gen_server:from(), map()) -> {reply, term(), map()} | {noreply, map()}.
+publish(Name, From, State = #{domain_services := Declared, services := Handles, actors := Actors}) ->
+    case maps:find(Name, Declared) of
+        error ->
+            {reply, {error, unknown_managed_domain}, State};
+        {ok, Service} ->
+            Old = [A || A = #{kind := domain, service := N} <- Actors, N =:= Name],
+            Handle = maps:get(Name, Handles),
+            case hls_node_domain:replacement(Service, Old, Handle) of
+                unchanged -> {reply, {ok, Handle}, State};
+                {error, Reason} -> {reply, {error, Reason}, State};
+                {ok, Snapshot} -> begin_publication(Name, From, Old, Snapshot, State)
+            end
+    end.
+
+%% A fresh monotonically allocated PID set is installed only after every connection acknowledges retirement.
+-spec begin_publication(atom(), gen_server:from(), [map()], hls_domain:snapshot(), map()) ->
+    {noreply, map()} | {reply, term(), map()}.
+begin_publication(_Name, _From, _Old, #{actors := Actors}, State = #{next_id := Next}) when
+    Next + map_size(Actors) > (1 bsl 32)
+->
+    {reply, {error, virtual_pids_exhausted}, State};
+begin_publication(
+    Name,
+    From,
+    Old,
+    Snapshot,
+    State = #{name := Node, creation := Creation, next_id := Next, connections := Connections}
+) ->
+    {Targets, Handle, After} = hls_node_domain:allocate(Node, Creation, Name, Snapshot, Next),
+    Ref = make_ref(),
+    Waiting = maps:map(fun(_, _) -> true end, Connections),
+    maps:foreach(
+        fun(Connection, _) ->
+            gen_server:cast(Connection, {domain_publish, Ref, [P || #{pid := P} <- Old], Targets})
+        end,
+        Waiting
+    ),
+    Pending = #{
+        reference => Ref,
+        from => From,
+        service => Name,
+        targets => Targets,
+        handle => Handle,
+        waiting => Waiting
+    },
+    {noreply, finish_publication(State#{next_id := After, publication := Pending})}.
+
+%% Losing a whole peer connection is independent of actor retirement; its ERTS observers see noconnection.
+-spec departed(pid(), map()) -> map().
+departed(Pid, State = #{publication := Pending = #{waiting := Waiting}}) ->
+    finish_publication(State#{publication := Pending#{waiting := maps:remove(Pid, Waiting)}});
+departed(_Pid, State) ->
+    State.
+
+%% Commit one complete publication and reply without exposing a partially replaced service inventory.
+-spec finish_publication(map()) -> map().
+finish_publication(
+    State = #{
+        publication := #{
+            waiting := Waiting,
+            from := From,
+            service := Name,
+            targets := Targets,
+            handle := Handle
+        },
+        actors := Actors,
+        services := Handles
+    }
+) when map_size(Waiting) =:= 0 ->
+    Kept = [
+        A
+     || A <- Actors,
+        case A of
+            #{kind := domain, service := Name} -> false;
+            _ -> true
+        end
+    ],
+    gen_server:reply(From, {ok, Handle}),
+    State#{actors := Kept ++ Targets, services := Handles#{Name := Handle}, publication := none};
+finish_publication(State) ->
+    State.

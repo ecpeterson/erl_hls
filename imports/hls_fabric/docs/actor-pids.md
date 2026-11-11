@@ -8,7 +8,7 @@ The constructor describes a deployment; it does not synthesize an ingress connec
 
 ## Identity and messaging
 
-`hls_node:services/1` returns `#{actors => #{LogicalId => Pid}, debug => DebugPid}` for each topology declaration. Logical IDs use the existing `{actor, Id}` or `{family, Id, Coordinates}` forms. There is no local proxy process for each actor. Actor PID numbers use a namespace disjoint from standalone application/debug services and follow sorted deployment/logical identity order within an activation.
+`hls_node:services/1` returns `#{actors => #{LogicalId => Pid}, debug => DebugPid}` for each topology declaration. Logical IDs use the existing `{actor, Id}` or `{family, Id, Coordinates}` forms. There is no local proxy process for each actor. Actor PID numbers use a namespace disjoint from standalone application/debug services and follow sorted deployment/logical identity order within an incarnation.
 
 `hls_statem:cast/2` sends an actor record through ordinary distribution. The connection validates its schema and packs it using the generated module. A valid cast returning `ok` does not promise that hardware has accepted or executed it. ERTS sender suspension can still occur under distribution saturation. Actor effects go to the topology's declared recipients and outputs; they are not replies to the most recent sender.
 
@@ -16,7 +16,7 @@ Synchronous application calls return `{error, unsupported_call}`. This control-p
 
 Per-connection queueing belongs to a physical ingress endpoint. Casts to actors sharing that endpoint preserve the order in which their distribution connection received them, including broker admission retries. A blocked actor can therefore hold up later traffic through that shared ingress. Distinct endpoints have separate queues, subject to shared transport and distribution admission. The connection-wide waiting limit can pause later debug requests arriving on that same distribution connection; an independent peer connection can still use the physical debug stream.
 
-Disconnecting a peer retires its return routes and pending host requests. It leaves actor RAM and node-activation PIDs intact and does not replay accepted casts. Restarting the virtual node creates new PIDs, so old identities cannot reach the replacement. Monitors currently describe availability of that virtual identity/connection; a terminal hardware actor failure does not yet emit an Erlang `DOWN` signal independently of the connection.
+Disconnecting a peer retires its return routes and pending host requests. It leaves actor RAM and node-incarnation PIDs intact and does not replay accepted casts. Restarting the virtual node creates new PIDs, so old identities cannot reach the replacement. Monitors currently describe availability of that virtual identity/connection; a terminal hardware actor failure does not yet emit an Erlang `DOWN` signal independently of the connection.
 
 ## Addressed cast envelope
 

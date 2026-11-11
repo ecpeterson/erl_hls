@@ -5,6 +5,7 @@ Begin with [building the backend](building.md). The [Phi source-to-runtime walkt
 - [Actor execution](execution/README.md): shared placement, compiler boundary and observations.
 - [Indexed collections](indexed-collections.md): typed member snapshots, storage ownership and placement assertions.
 - [Virtual nodes](device-sessions.md): messages, lifetimes, admission and recovery.
+- [Closed recovery domains](domain-recovery.md): source-network reset, lifecycle observations and independent management.
 - [Actor PIDs](actor-pids.md): logical addressing and hardware inspection.
 - [Return contexts](return-contexts.md): request/reply ownership at the device boundary.
 - [Device bridge](device-bridge.md), then [clock domains](clock-domains.md): partitioning, link contract and physical CDC obligations.
