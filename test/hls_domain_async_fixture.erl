@@ -5,7 +5,7 @@
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
 %% Test controls and the production backend interface.
--export([start_link/1, start_link/2, hold/2, release/1, attach/2, status/1, request/3, endpoint/4, send_request/2]).
+-export([start_link/1, start_link/2, hold/2, release/1, pause/2, advance/1, reject/1, attach/2, status/1, request/3, endpoint/4, send_request/2]).
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
@@ -17,6 +17,8 @@
     authority = undefined :: undefined | reference(),
     state = #domain_state{} :: hls_domain_lifecycle:state(),
     actors = #{} :: hls_domain_backend:actors(),
+    reject = false :: boolean(),
+    pause = none :: none | fence | reset | initialize,
     hold = none :: none | status | endpoint | request | attach,
     delayed = none :: none | {gen_server:from(), term()}
 }).
@@ -38,6 +40,18 @@ hold(Backend, Kind) -> gen_server:call(Backend, {hold, Kind}).
 -doc "Sends the retained response, including after its caller has retired the alias.".
 -spec release(pid()) -> ok.
 release(Backend) -> gen_server:call(Backend, release).
+
+-doc "Withholds the named backend completion while retaining the kernel's pending action.".
+-spec pause(pid(), fence | reset | initialize) -> ok.
+pause(Backend, Action) -> gen_server:call(Backend, {pause, Action}).
+
+-doc "Allows retained phase work to complete; this is fixture evidence, not a physical acknowledgement.".
+-spec advance(pid()) -> ok.
+advance(Backend) -> gen_server:call(Backend, advance).
+
+-doc "Rejects the next management command with unchanged controller state.".
+-spec reject(pid()) -> ok.
+reject(Backend) -> gen_server:call(Backend, reject).
 
 -doc "Attaches only the actual calling owner and monitors that same PID.".
 -spec attach(pid(), pid()) -> {ok, hls_domain_backend:authority()} | {error, term()}.
@@ -70,6 +84,14 @@ init({Observer, #{state := State, actors := Actors}}) ->
 -doc "Applies management requests and optionally delays exactly one response.".
 -spec handle_call(term(), gen_server:from(), #fixture{}) ->
     {reply, term(), #fixture{}} | {noreply, #fixture{}}.
+%% Withheld backend acknowledgements must remain distinguishable from status-response delivery.
+handle_call(reject, _From, S) -> {reply, ok, S#fixture{reject = true}};
+%% Hold one selected acknowledgement without rejecting its operation.
+handle_call({pause, Action}, _From, S) -> {reply, ok, S#fixture{pause = Action}};
+%% Advancing acknowledges the already requested phase, rather than issuing another command.
+handle_call(advance, _From, S = #fixture{state = State}) ->
+    Output = #domain_output{state = State, action = hls_domain_lifecycle:action(State)},
+    {reply, ok, S#fixture{state = finish(Output), pause = none}};
 %% Fixture controls remain available while a response is delayed.
 handle_call({hold, Kind}, _From, S = #fixture{hold = none}) ->
     {reply, ok, S#fixture{hold = Kind}};
@@ -86,11 +108,16 @@ handle_call({attach, Owner}, From = {Owner, _}, S = #fixture{owner = undefined})
 handle_call(status, From, S = #fixture{state = State, actors = Actors}) ->
     deliver(status, From, {ok, #{state => State, actors => Actors,
         fault_reason => none}}, S);
+%% A definitive command rejection supplies unchanged controller evidence, unlike a lost transport response.
+handle_call({request, Authority, _Input}, From = {Owner, _},
+    S = #fixture{owner = Owner, authority = Authority, state = State, reject = true}) ->
+    Output = #domain_output{status = invalid, state = State, action = hls_domain_lifecycle:action(State)},
+    deliver(request, From, Output, S#fixture{reject = false});
 %% Complete the kernel's real phases but preserve the request's accepted/replay disposition.
 handle_call({request, Authority, Input}, From = {Owner, _},
     S = #fixture{owner = Owner, authority = Authority, state = State}) ->
     Output = hls_domain_lifecycle:step(Input, State),
-    Result = finish(Output),
+    Result = finish(Output, S#fixture.pause),
     deliver(request, From, Output#domain_output{state = Result, action = none}, S#fixture{state = Result});
 %% The supplied incarnation, actual caller and authority must all agree.
 handle_call({endpoint, Authority, Incarnation, actor}, From = {Owner, _},
@@ -127,10 +154,15 @@ deliver(_Kind, _From, Reply, S) -> {reply, Reply, S}.
 
 %% This models management completion only, not native actor initialization or hardware progress.
 -spec finish(hls_domain_lifecycle:output()) -> hls_domain_lifecycle:state().
-finish(#domain_output{action = Action, state = State})
+finish(Output) -> finish(Output, none).
+
+%% A paused physical phase remains pending until the test explicitly supplies completion.
+-spec finish(hls_domain_lifecycle:output(), none | fence | reset | initialize) -> hls_domain_lifecycle:state().
+finish(#domain_output{action = Action, state = State}, Action) when Action =/= none -> State;
+finish(#domain_output{action = Action, state = State}, _Pause)
     when Action =:= none; Action =:= publish -> State;
-finish(#domain_output{action = Action, state = State}) ->
+finish(#domain_output{action = Action, state = State}, Pause) ->
     Operation = case Action of fence -> fenced; reset -> reset_done; initialize -> initialized end,
     Input = #domain_input{op = Operation, expected = State#domain_state.previous,
         target = State#domain_state.target, transition = State#domain_state.transition},
-    finish(hls_domain_lifecycle:step(Input, State)).
+    finish(hls_domain_lifecycle:step(Input, State), Pause).

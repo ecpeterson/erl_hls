@@ -14,7 +14,12 @@ No application message is retained or replayed by this wrapper.
 -behaviour(gen_server).
 
 %% Supervisor entry point and incarnation-specific endpoint access.
--export([start_link/2, status/1, resolve/2]).
+-export([start_link/2, start_link/3, status/1, resolve/2]).
+%% Explicit distinction between observing and owning a domain lifetime.
+-export_type([options/0]).
+
+-doc "Observed representatives preserve the domain on local death; supervised representatives retire it through the surviving owner.".
+-type options() :: #{lifetime => observed | supervised}.
 %% gen_server callbacks.
 -export([
     init/1,
@@ -29,6 +34,7 @@ No application message is retained or replayed by this wrapper.
 %% Endpoint monitors belong to this instance, not to a future replacement.
 -record(instance, {
     owner :: pid(),
+    lifetime = observed :: observed | supervised,
     owner_monitor :: reference(),
     domain :: hls_domain:domain(),
     deadline :: integer(),
@@ -40,7 +46,15 @@ No application message is retained or replayed by this wrapper.
 
 -doc "Starts a supervisor child promptly; readiness is asynchronous and automatic replacement must be permitted.".
 -spec start_link(pid(), hls_domain:domain()) -> gen_server:start_ret().
-start_link(Owner, Domain) -> gen_server:start_link(?MODULE, {Owner, Domain}, []).
+start_link(Owner, Domain) -> start_link(Owner, Domain, #{}).
+
+-doc "Starts an observer by default, or an explicitly supervised lifetime. Supervised shutdown waits for confirmed retirement; if OTP kills this child, its surviving deployment owner retains that exact retirement intent.".
+-spec start_link(pid(), hls_domain:domain(), options()) -> gen_server:start_ret().
+start_link(Owner, Domain, Options) ->
+    [] = maps:keys(Options) -- [lifetime],
+    Lifetime = maps:get(lifetime, Options, observed),
+    true = Lifetime =:= observed orelse Lifetime =:= supervised,
+    gen_server:start_link(?MODULE, {Owner, Domain, Lifetime}, []).
 
 -doc "Returns starting, a transport-unavailable indication, or the last lifecycle observation; it does not assert remote liveness.".
 -spec status(pid()) -> starting | {error, noconnection} | hls_domain:snapshot().
@@ -51,12 +65,15 @@ status(Instance) -> gen_server:call(Instance, status).
 resolve(Instance, Actor) -> gen_server:call(Instance, {resolve, Actor}).
 
 -doc "Monitors the owner before scheduling initialization, without blocking supervisor startup.".
--spec init({pid(), hls_domain:domain()}) -> {ok, #instance{}, {continue, activate}}.
-init({Owner, Domain}) ->
+-spec init({pid(), hls_domain:domain(), observed | supervised}) ->
+    {ok, #instance{}, {continue, activate}}.
+init({Owner, Domain, Lifetime}) ->
+    process_flag(trap_exit, Lifetime =:= supervised),
     Monitor = monitor(process, Owner),
     {ok,
         #instance{
             owner = Owner,
+            lifetime = Lifetime,
             owner_monitor = Monitor,
             domain = Domain,
             deadline = erlang:monotonic_time(millisecond) + 5000
@@ -66,26 +83,46 @@ init({Owner, Domain}) ->
 -doc "Applies explicit automatic policy once, then observes the retained lifecycle operation.".
 -spec handle_continue(activate, #instance{}) ->
     {noreply, #instance{}} | {stop, term(), #instance{}}.
+handle_continue(
+    activate, Instance = #instance{lifetime = supervised, owner = Owner, domain = Domain}
+) ->
+    case hls_domain:supervise(Owner, Domain) of
+        {ok, Evidence} ->
+            start_incarnation(Evidence, Instance#instance{
+                deadline = erlang:monotonic_time(millisecond) + 5000, evidence = starting
+            });
+        {error, retiring} ->
+            erlang:send_after(50, self(), claim),
+            {noreply, Instance#instance{evidence = starting}};
+        {error, Reason} ->
+            {stop, {domain_unavailable, Reason}, Instance}
+    end;
 handle_continue(activate, Instance = #instance{owner = Owner, domain = Domain}) ->
     case hls_domain:policy(Owner, Domain) of
         {ok, automatic} ->
             case hls_domain:status(Owner, Domain) of
-                {ok, #{phase := unbound}} ->
-                    begin_transition(hls_domain:activate(Owner, Domain), Instance);
-                {ok, #{phase := failed, handle := none}} ->
-                    {stop, initial_incarnation_failed, Instance};
-                {ok, #{phase := failed, handle := Handle}} ->
-                    begin_transition(hls_domain:replace(Owner, Handle), Instance);
-                {ok, Evidence} ->
-                    observe(Evidence, Instance);
-                {error, Reason} ->
-                    {stop, {domain_unavailable, Reason}, Instance}
+                {ok, Evidence} -> start_incarnation(Evidence, Instance);
+                {error, Reason} -> {stop, {domain_unavailable, Reason}, Instance}
             end;
         {ok, manual} ->
             {stop, manual_replacement_required, Instance};
         {error, Reason} ->
             {stop, Reason, Instance}
     end.
+
+%% A successor requires actual retirement; merely replacing a representative is observation in default mode.
+-spec start_incarnation(hls_domain:snapshot(), #instance{}) ->
+    {noreply, #instance{}} | {stop, term(), #instance{}}.
+start_incarnation(#{phase := unbound}, Instance = #instance{owner = Owner, domain = Domain}) ->
+    begin_transition(hls_domain:activate(Owner, Domain), Instance);
+start_incarnation(#{phase := failed, handle := none}, Instance) ->
+    {stop, initial_incarnation_failed, Instance};
+start_incarnation(#{phase := Phase, handle := Handle}, Instance = #instance{owner = Owner}) when
+    Phase =:= failed; Phase =:= stopped
+->
+    begin_transition(hls_domain:replace(Owner, Handle), Instance);
+start_incarnation(Evidence, Instance) ->
+    observe(Evidence, Instance).
 
 -doc "Exposes observations and endpoints without changing the instance's incarnation.".
 -spec handle_call(term(), gen_server:from(), #instance{}) -> {reply, term(), #instance{}}.
@@ -111,6 +148,9 @@ handle_cast(_Message, Instance) -> {noreply, Instance}.
 
 -doc "Tracks pending initialization and turns native endpoint/owner loss into supervisor-visible termination.".
 -spec handle_info(term(), #instance{}) -> {noreply, #instance{}} | {stop, term(), #instance{}}.
+%% A new owning child waits for its predecessor's retained stop before claiming any incarnation.
+handle_info(claim, Instance = #instance{lifetime = supervised}) ->
+    handle_continue(activate, Instance);
 %% A delayed availability observation remains uncertainty, never supervisor reset permission.
 handle_info(
     observe,
@@ -152,9 +192,13 @@ handle_info({'DOWN', Ref, process, Actor, Reason}, Instance = #instance{monitors
 handle_info(_Message, Instance) ->
     {noreply, Instance}.
 
--doc "Leaves domain lifecycle with its owner; terminating a host representative does not silently reset hardware.".
+-doc "Observed children leave actors intact. A supervised child requests retirement through its surviving owner and waits; a forced kill cannot cancel that owner-held intent.".
 -spec terminate(term(), #instance{}) -> ok.
-terminate(_Reason, _Instance) -> ok.
+terminate(_Reason, #instance{lifetime = supervised, owner = Owner, domain = Domain}) ->
+    _ = catch hls_domain:release(Owner, Domain),
+    ok;
+terminate(_Reason, _Instance) ->
+    ok.
 
 -doc "Preserves incarnation identity over a host code change.".
 -spec code_change(term(), #instance{}, term()) -> {ok, #instance{}}.
