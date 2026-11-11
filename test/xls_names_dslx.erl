@@ -38,14 +38,12 @@ expected(A, B) ->
 %% Emits a mixed-case server and reply checks, rendering lowered callback syntax at the file boundary.
 -spec gs() -> iodata().
 gs() ->
-    {ok, Forms} = hls_source:parse_file("test/xls_names_gs_fixture.erl"),
     [xls_parse:to_xls("test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
-        "  let state_record = (Tag::SERVER_DATA, ServerData { Value: value });\n",
+        "  let state = ServiceState { data: ServerData { Value: value }, failure: u32:0 };\n",
         "  let frame = axis::pack(Tag::GET_VALUE as u8, u32:0);\n",
-        "  let (response, state) = match frame.header.op as Tag {\n",
-        xls_dslx:render(xls_gs_lower:callback_arms(Forms, 'Server_Data')), "};\n",
-        "  replyvalue_from_bits(response.payload).Value\n}\n",
+        "  let result = service_step(state, frame);\n",
+        "  replyvalue_from_bits(result.response.payload).Value\n}\n",
         "#[test]\nfn server_reply() {\n",
         [begin
             {reply, Reply, _} = xls_names_gs_fixture:handle_call({'Get_Value', 0}, {'Server_Data', V}),

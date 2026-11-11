@@ -4,6 +4,8 @@ Application sources declare `hls_gs` servers or `hls_statem` state machines, use
 
 `hls_type` dispatches host defaults, widths, normalization and codecs. `hls_record` composes ordered fields, and `hls_record_codec` retains their encoding contract for later host use without actor callbacks. `hls_continuation` checks the finite event vocabulary. `hls_service_schema` reads the service contract embedded by the compiler without revisiting its source.
 
+`hls_domain` owns fixed deployment domains and non-reused activations. `hls_domain_instance` is an ordinary OTP supervisor child representing one admitted incarnation; it delegates replacement to the surviving owner. The shared lifecycle kernel and ERTS backend live in `runtime/`. See [actor domains](../../../../docs/actor-domains.md).
+
 `hls_field_layout` derives typed field widths and offsets. `hls_frame_layout` owns ordinary-frame packing, selected capacity and bounds; debug and explicit bridge envelopes have separate layouts. The compiler consumes these facts to render support code through `xls_struct_codec` and `xls_frame_layout`.
 
 Source preprocessing, record discovery and `hls_pack` belong to the compiler's [frontend](../../../../src/frontend/README.md). Built-in DSLX callbacks live in [backend/xls](../../../../src/backend/xls/README.md) behind `xls_type`; they are absent from the runtime provider modules. Read [type-provider extensions](../../../../docs/type-providers.md) for the distinct host and compiler callback contracts.

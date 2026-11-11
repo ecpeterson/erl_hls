@@ -11,7 +11,7 @@ Contexts are build-local metadata, not artifact fingerprints. Includes and
 `include_lib` dependencies are resolved again on every read. Deterministic
 BEAM builds omit this metadata, as they omit the compiler's source path.
 
-hls_pack captures this context during BEAM compilation; hls_compile, xls_parse and interface queries use it to preprocess sources before analysis.
+hls_pack captures this context during BEAM compilation; hls_compile, xls_parse and interface queries use it to preprocess sources before analysis. Builders compiling an installed library's own source use `library_file/2`, which locates its packaged source independently of the original BEAM build directory.
 """.
 
 %% Build context construction and capture.
@@ -19,6 +19,9 @@ hls_pack captures this context during BEAM compilation; hls_compile, xls_parse a
 
 %% Source preprocessing.
 -export([read/2, parse_file/1, parse_file/2]).
+
+%% Installed source lookup for compiler/build clients.
+-export([library_file/2]).
 
 %% Preprocessed form queries.
 -export([find_attribute/2, find_optional_attribute/2, find_function/3, find_spec/3]).
@@ -67,6 +70,40 @@ hls_pack captures this context during BEAM compilation; hls_compile, xls_parse a
     features := [{feature, atom(), enable | disable}],
     origins => [file:filename()]
 }.
+
+-doc "Returns an installed application's source file below its src directory. RelativeSource is a nonempty relative path without dot or parent components. Missing applications or packaged sources raise a source diagnostic; there is no fallback to BEAM build-machine paths. Build releases must include source; deployed runtime-only packages need not.".
+-spec library_file(atom(), file:filename()) -> file:filename().
+library_file(Application, RelativeSource) ->
+    Parts = filename:split(RelativeSource),
+    case
+        filename:pathtype(RelativeSource) =:= relative andalso Parts =/= [] andalso
+            not lists:any(fun(Part) -> Part =:= "." orelse Part =:= ".." end, Parts)
+    of
+        true -> ok;
+        false -> error({invalid_library_source, RelativeSource})
+    end,
+    case code:lib_dir(Application) of
+        {error, bad_name} ->
+            hls_diagnostic:raise(
+                source,
+                library_unavailable,
+                <<"Source library is not on the Erlang code path">>,
+                #{application => Application}
+            );
+        Directory ->
+            Path = filename:absname(filename:join([Directory, "src", RelativeSource])),
+            case filelib:is_regular(Path) of
+                true ->
+                    Path;
+                false ->
+                    hls_diagnostic:raise(
+                        source,
+                        library_source_missing,
+                        <<"Library source is not packaged; use a build release with source included">>,
+                        #{application => Application, source => unicode:characters_to_binary(Path)}
+                    )
+            end
+    end.
 
 -doc "Creates a preprocessing context anchored to the current directory; rejects unsupported options.".
 -spec options(file:filename(), [option()]) -> context().

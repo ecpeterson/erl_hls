@@ -55,7 +55,9 @@ Passing `{outputs, Map}` to `start_link/3` connects and enters immediately.
 Cyclic CPU topologies may start disconnected, then call `connect/2`. Inputs
 received before connection occupy the bounded queue without running callbacks.
 The ordinary BEAM mailbox precedes this queue, so it models scheduling rather
-than host admission guarantees.
+than host admission guarantees. Domain owners can instead use setup/3 for
+effect-free startup and admit_cast/2 for acknowledged private-queue admission.
+The generation option seeds mailbox tokens for the newly admitted incarnation.
 
 Callback exceptions, invalid results and overflow terminate the CPU adapter.
 Hardware latches failure until coordinated reset. Retained-call hardware also
@@ -69,6 +71,9 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
 
 %% CPU actor lifecycle, messages and inspection.
 -export([start_link/3, connect/2, stop/1, cast/2, call/2, call/3, info/1, info/2]).
+
+%% Domain-owned initialization before publishing incarnation endpoints.
+-export([setup/3, admit_cast/2]).
 
 %% gen_server implementation callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -197,7 +202,8 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
 %% CPU adapter mailbox bound and output-port routing.
 -type start_option() ::
     {mailbox_capacity, 1..((1 bsl 8) - 1)}
-    | {outputs, #{output_port() := pid()}}.
+    | {outputs, #{output_port() := pid()}}
+    | {generation, 0..((1 bsl 64) - 1)}.
 
 -callback init(term()) ->
     {
@@ -230,6 +236,7 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
 -record(runtime, {
     module :: module(),
     lifecycle = disconnected :: lifecycle(),
+    setup = false :: boolean(),
     phase :: phase(),
     data :: data(),
     outputs = #{} :: #{output_port() := pid()},
@@ -250,12 +257,12 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
 %%% Client interface
 %%%
 
--doc "Starts a machine with a required mailbox capacity and optional outputs.".
+-doc "Starts a machine with a required mailbox capacity, optional outputs, and an optional mailbox incarnation generation (default zero).".
 -spec start_link(module(), term(), [start_option()]) ->
     gen_server:start_ret().
 start_link(Module, Arg, Options) ->
-    {Capacity, Outputs} = start_options(Options),
-    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Outputs}, []).
+    {Capacity, Outputs, Generation} = start_options(Options),
+    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Outputs, Generation}, []).
 
 -doc "Connects deferred outputs and enters the initial phase.".
 %% TODO: Define topology ownership and reconnection after a supervised restart;
@@ -267,6 +274,18 @@ connect(PID, Outputs) ->
         true -> gen_server:call(PID, {connect, Outputs});
         false -> error(badarg)
     end.
+
+-doc "Connects a disconnected domain actor and executes its initial entry and at most 255 startup casts before returning. Setup rejects queued application inputs, postponed startup, and returned sends/replies before they are emitted. Callback failures terminate the actor. Only trusted domain owners should use this initialization boundary.".
+-spec setup(pid(), #{output_port() := pid()}, [term()]) -> ok | {error, term()}.
+setup(Pid, Outputs, Messages) ->
+    case valid_outputs(Outputs) andalso is_list(Messages) andalso length(Messages) =< 255 of
+        true -> gen_server:call(Pid, {'$hls_domain_setup', Outputs, Messages});
+        false -> error(badarg)
+    end.
+
+-doc "Admits one cast through the bounded private mailbox and acknowledges callback processing; full or disconnected machines return busy without accepting it. A source failure exits the call. The reserved wire request is {'$hls_domain_cast', Message}; transports may use gen_server:send_request/2 with bounded outstanding requests. The preceding ERTS mailbox remains unbounded.".
+-spec admit_cast(pid(), term()) -> ok | {error, busy}.
+admit_cast(Pid, Message) -> gen_server:call(Pid, {'$hls_domain_cast', Message}).
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
@@ -299,9 +318,9 @@ info(PID, Timeout) ->
 
 -doc "Initializes a CPU state machine and enters its initial phase when connected.".
 %% Initialize callback data and enter only when outputs are connected.
--spec init({module(), term(), pos_integer(), undefined | map()}) ->
+-spec init({module(), term(), pos_integer(), undefined | map(), non_neg_integer()}) ->
     {ok, #runtime{}} | {stop, term()}.
-init({Module, Arg, Capacity, Outputs}) ->
+init({Module, Arg, Capacity, Outputs, Generation}) ->
     {ok, Phase, Data} = Module:init(Arg),
     ok = validate_phase(Phase),
     {Lifecycle, OutputMap} =
@@ -320,7 +339,7 @@ init({Module, Arg, Capacity, Outputs}) ->
         phase = Phase,
         data = Data,
         outputs = OutputMap,
-        mailbox = hls_mailbox:new(Capacity),
+        mailbox = hls_mailbox:new(Capacity, Generation),
         continuation_names = hls_continuation:names(Module),
         calls = Calls,
         reply_book = Book
@@ -335,8 +354,38 @@ init({Module, Arg, Capacity, Outputs}) ->
             end
     end.
 
--doc "Connects outputs or queues a declared call for phase-sensitive dispatch.".
+-doc "Handles domain setup/admission, connects outputs or queues a declared call for phase-sensitive dispatch.".
 -spec handle_call(term(), gen_server:from(), #runtime{}) -> term().
+%% Managed transports reserve actual private capacity rather than treating a cast send as acceptance.
+handle_call({'$hls_domain_cast', Message}, _From, Runtime = #runtime{lifecycle = connected}) ->
+    case enqueue(Message, Runtime) of
+        {error, full} ->
+            {reply, {error, busy}, Runtime};
+        {ok, Queued} ->
+            case process_messages(Queued) of
+                {ok, Processed} -> {reply, ok, Processed};
+                {stop, Reason, Failed} -> {stop, Reason, Failed}
+            end
+    end;
+%% A disconnected incarnation has no published readiness, regardless of free queue capacity.
+handle_call({'$hls_domain_cast', _Message}, _From, Runtime) ->
+    {reply, {error, busy}, Runtime};
+%% Domain setup is isolated from ordinary admission and does not publish callback effects.
+handle_call(
+    {'$hls_domain_setup', Outputs, Messages},
+    _From,
+    Runtime = #runtime{lifecycle = disconnected, next_message_id = 0, phase = Phase}
+) ->
+    Initial = enter_phase(Phase, Runtime#runtime{
+        lifecycle = connected, setup = true, outputs = Outputs
+    }),
+    case setup_messages(Messages, Initial) of
+        {ok, Ready} -> {reply, ok, Ready#runtime{setup = false}};
+        {stop, Reason, Failed} -> {stop, Reason, {error, Reason}, Failed}
+    end;
+%% Setup cannot reinterpret already admitted application traffic or reconnect a live actor.
+handle_call({'$hls_domain_setup', _Outputs, _Messages}, _From, Runtime) ->
+    {reply, {error, setup_not_idle}, Runtime};
 %% Deferred connections enter before dispatching any queued application input.
 handle_call(
     {connect, Outputs},
@@ -738,6 +787,9 @@ event_result(Result, _Names) ->
 -spec complete_reply(none | {reply, non_neg_integer(), term()}, #runtime{}) -> #runtime{}.
 complete_reply(none, Runtime) ->
     Runtime;
+%% Domain setup cannot complete a previously retained external caller.
+complete_reply(_Reply, #runtime{setup = true}) ->
+    error(hls_domain_setup_reply);
 complete_reply(Reply, Runtime = #runtime{reply_book = Book}) when Book =/= none ->
     Runtime#runtime{reply_book = hls_reply_book:complete(Reply, Book)};
 complete_reply(_Reply, _Runtime) ->
@@ -825,6 +877,7 @@ enter_phase(
     Result = Module:Phase(enter, OldPhase, Data),
     {NextData, Actions} = enter_result(Result),
     {Prepared, Casts} = prepare_entry_actions(Module, Actions, Outputs, Runtime),
+    ok = setup_effects(Runtime#runtime.setup, Casts),
     lists:foreach(
         fun({cast, Port, Message}) ->
             gen_server:cast(maps:get(Port, Outputs), Message)
@@ -835,6 +888,31 @@ enter_phase(
 
 enter_result({NextData, Casts}) -> {NextData, Casts};
 enter_result(Result) -> error({bad_hls_statem_enter_result, Result}).
+
+%% Each setup message must finish before another is admitted, so queue exhaustion is not readiness.
+-spec setup_messages([term()], #runtime{}) -> {ok, #runtime{}} | {stop, term(), #runtime{}}.
+setup_messages(Messages, Runtime) ->
+    case process_messages(Runtime) of
+        {stop, _, _} = Failure ->
+            Failure;
+        {ok, Processed = #runtime{postponed = Postponed}} when map_size(Postponed) > 0 ->
+            {stop, hls_domain_setup_postponed, Processed};
+        {ok, Processed} ->
+            case Messages of
+                [] ->
+                    {ok, Processed};
+                [Message | Rest] ->
+                    case enqueue(Message, Processed) of
+                        {ok, Queued} -> setup_messages(Rest, Queued);
+                        {error, full} -> {stop, hls_domain_setup_full, Processed}
+                    end
+            end
+    end.
+
+%% Returned effects are validated as a batch before any source-level publication.
+-spec setup_effects(boolean(), list()) -> ok.
+setup_effects(true, [_ | _]) -> error(hls_domain_setup_effects);
+setup_effects(_Setup, _Casts) -> ok.
 
 %% Accept bounded state conclusions; indexed contributions use the same state-preserving rule.
 -spec validate_conclusion(term(), term()) -> ok.
@@ -1008,25 +1086,31 @@ format_info(#runtime{
         gather => gather_status(Gather)
     }.
 
+%% Validate optional incarnation identity before creating any mailbox.
+-spec start_options([start_option()]) ->
+    {pos_integer(), undefined | #{output_port() := pid()}, non_neg_integer()}.
 start_options(Options) ->
     Known = lists:all(
         fun
             ({mailbox_capacity, _Capacity}) -> true;
             ({outputs, _Outputs}) -> true;
+            ({generation, _Generation}) -> true;
             (_Option) -> false
         end,
         Options
     ),
     Capacity = proplists:get_value(mailbox_capacity, Options),
     Outputs = proplists:get_value(outputs, Options, undefined),
+    Generation = proplists:get_value(generation, Options, 0),
     ValidOutputs = Outputs =:= undefined orelse valid_outputs(Outputs),
     case
         Known andalso
             is_integer(Capacity) andalso
             Capacity > 0 andalso Capacity =< 255 andalso
-            ValidOutputs
+            is_integer(Generation) andalso Generation >= 0 andalso
+            Generation < (1 bsl 64) andalso ValidOutputs
     of
-        true -> {Capacity, Outputs};
+        true -> {Capacity, Outputs, Generation};
         false -> error(badarg)
     end.
 

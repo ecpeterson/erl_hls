@@ -2,6 +2,7 @@
 // worker has no access to wire transaction IDs. Tokens never wrap per reset.
 import axis;
 import hls_reply;
+import hls_failure;
 
 // One callback invocation; initialization and continuation consume no input frame.
 pub struct Invocation<S: u32> {
@@ -55,7 +56,7 @@ pub proc Driver<S: u32, N: u32, C0: u64, C1: u64, C2: u64, C3: u64> {
       let exhausted = state.sequence == u64:0x0100000000000000;
       let protocol = call && (duplicate || frame.header.txid == u8:255);
       if protocol || (call && exhausted) {
-        let code = if protocol { u32:18 } else { u32:17 };
+        let code = hls_failure::runtime_error(if protocol { u32:18 } else { u32:17 });
         // Existing ownership receives one failure per transaction, never a duplicate completion.
         let _done = send_if(tok, output, !duplicate, hls_reply::error_frame(frame.header.txid, code));
         State<S, N> { failure: code, ..state }
@@ -72,19 +73,28 @@ pub proc Driver<S: u32, N: u32, C0: u64, C1: u64, C2: u64, C3: u64> {
         let (reply, reply_index) = hls_reply::lookup(slots, result.from);
         let contract_fault = reply && result.reply.header.op != u8:0 && !result.reply_allowed;
         let error = if result.error != u32:0 { result.error }
-          else if contract_fault { u32:15 } else { u32:0 };
+          else if contract_fault { hls_failure::source_error(hls_failure::REPLY_CONTRACT) } else { u32:0 };
+        let terminal = hls_failure::wire_terminal(error);
+        let rejected = error != u32:0 && !terminal;
         let reply = reply && result.reply.header.op != u8:0 && error == u32:0;
         let response = axis::Frame { header: axis::Header {
           txid: slots[reply_index].txid, ..result.reply.header }, ..result.reply };
         let tok = send_if(tok, output, reply, response);
-        // A failed cast has no retained slot; its reserved transaction gets the fault too.
-        let _done = send_if(tok, output, error != u32:0 && external && !call,
-          hls_reply::error_frame(frame.header.txid, error));
+        let (owned, _) = hls_reply::first(slots, true);
+        // Internal failure after the last reply still terminates the remote endpoint.
+        // Emit this notification only on the failing transition, with the reserved cast ID.
+        let notify = terminal && !external && !owned;
+        let txid = if notify { u8:255 } else { frame.header.txid };
+        // A failed cast has no retained slot. Admission rejection releases only this request.
+        let _done = send_if(tok, output, notify || (error != u32:0 && external && (!call || rejected)),
+          hls_reply::error_frame(txid, error));
         State<S, N> {
           data: if error == u32:0 { result.state } else { state.data },
-          slots: if reply { update(slots, reply_index, zero!<hls_reply::Slot>()) } else { slots },
-          sequence: state.sequence + call as u64, initialized: true,
-          continuation: result.continuation, failure: error,
+          slots: if reply { update(slots, reply_index, zero!<hls_reply::Slot>()) }
+            else if rejected && call { update(slots, index, zero!<hls_reply::Slot>()) } else { slots },
+          sequence: state.sequence + (call && !rejected) as u64, initialized: true,
+          continuation: if error == u32:0 { result.continuation } else { u8:0 },
+          failure: if terminal { error } else { u32:0 },
         }
       }
     }

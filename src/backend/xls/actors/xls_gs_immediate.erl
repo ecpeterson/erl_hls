@@ -73,49 +73,50 @@ artifact(Filename, Forms0, Layout) ->
     Body = [
         xls_helpers:emit(Helpers, StateName, #{}),
         xls_gs_lower:initial_state(Forms, StateName),
-        """
-        proc Service {
-          req_in:   chan<axis::Frame> in;
-          resp_out: chan<axis::Frame> out;
-        """,
-        "\n",
-        [
-            "  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {\n",
-            "    (req_in, resp_out)\n",
-            "  }\n\n"
-        ],
-        "  init { initial_state() }\n\n",
-        [
-            "  next(state: ",
-            StateStructName,
-            ") {\n",
-            """
-                let (tok1, frame) = recv(join(), req_in);
-            """,
-            "\n",
-            [
-                "    let state_record = (Tag::",
-                xls_names:enum_member(StateName),
-                ", state);\n\n"
-            ],
-            """
-                // cognate to {reply, Reply, State}
-                let (resp, new_state) = match frame.header.op as Tag {
-
-            """
-        ],
+        "pub struct ServiceState { data: ",
+        StateStructName,
+        ", failure: u32 }\n",
+        "pub struct ServiceResult { response: axis::Frame, state: ServiceState }\n",
+        "struct CallbackResult { response: axis::Frame, data: ",
+        StateStructName,
+        ", error: u32 }\n\n",
+        "pub fn initial_service_state() -> ServiceState {\n",
+        "  ServiceState { data: initial_state(), failure: u32:0 }\n}\n\n",
+        "pub fn service_step(state: ServiceState, frame: axis::Frame) -> ServiceResult {\n",
+        "  let state_record = (Tag::",
+        xls_names:enum_member(StateName),
+        ", state.data);\n",
+        "  let outcome = if state.failure != u32:0 {\n",
+        "    CallbackResult { data: state.data, error: state.failure, ..zero!<CallbackResult>() }\n",
+        "  } else { match frame.header.op {\n",
         xls_gs_lower:callback_arms(Forms, StateName, Layout),
+        "\n  } };\n",
         """
-
-            };
-
-            let txid = frame.header.txid;
-            let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-            send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-            new_state.1
+          let response = if outcome.error != u32:0 {
+            axis::pack(Tag::ERROR as u8, outcome.error)
+          } else { outcome.response };
+          ServiceResult {
+            response: axis::Frame { header: axis::Header { txid: frame.header.txid,
+              ..response.header }, ..response },
+            state: ServiceState { data: outcome.data,
+              failure: if hls_failure::wire_terminal(outcome.error) { outcome.error } else { u32:0 } },
           }
         }
 
+        proc Service {
+          req_in: chan<axis::Frame> in;
+          resp_out: chan<axis::Frame> out;
+          config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
+            (req_in, resp_out)
+          }
+          init { initial_service_state() }
+          next(state: ServiceState) {
+            let (tok, frame) = recv(join(), req_in);
+            let result = service_step(state, frame);
+            send_if(tok, resp_out, result.response.header.op != (Tag::NONE as u8), result.response);
+            result.state
+          }
+        }
 
         """,
         """

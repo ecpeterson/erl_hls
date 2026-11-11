@@ -29,7 +29,10 @@ initialization and reset contract.
 
 Fabric calls have 255 transaction slots; casts use a reserved ID. Timeouts do
 not cancel device work. See `docs/host-transactions.md` for ownership, failure,
-inspection, and session recovery.
+inspection, and session recovery. A terminal hardware failure retires this
+proxy, so calls exit as they do when the CPU actor dies. Ordinary admission
+rejections remain replies; an explicit low-level codec can inspect the failure
+without starting an actor endpoint.
 
 hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book own CPU retained calls. Source preparation is separate in hls_pack and hls_service_contract.
 """.
@@ -81,6 +84,13 @@ hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book o
 -doc "An activation-local reply handle; retain and return it unchanged, never construct or reuse it.".
 -type from() :: hls_nums:u64().
 
+%% A terminal diagnostic carries either a generic runtime reason or an actor-local source code.
+-type remote_failure() :: #{
+    reason := atom() | {unknown_error, non_neg_integer()},
+    source_code => 1..((1 bsl 16) - 1),
+    source_site => 0..((1 bsl 12) - 1)
+}.
+
 %% A callback step emits at most one reply, optionally followed by one continuation.
 -type action() :: {reply, from(), tuple()} | {continue, atom()}.
 
@@ -126,6 +136,9 @@ stop(PID) ->
 -define(ERROR_BADARITH, 13).
 -define(ERROR_BADARG, 14).
 -define(ERROR_REPLY_CONTRACT, 15).
+%% The wire distinguishes terminal actor faults from ordinary request rejection.
+-define(ERROR_TERMINAL, (1 bsl 31)).
+-define(ERROR_SOURCE, (1 bsl 30)).
 
 %% Failed casts can emit ERROR replies. Never lend their ID to a call.
 -define(CAST_TX_ID, 255).
@@ -210,15 +223,20 @@ handle_cast(
     ok = check_cast(Message, Contract),
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
-%% A credited physical reply completes its existing host transaction.
+%% A credited frame completes its request or retires this actor on terminal failure.
 handle_cast(
     {?FABRIC_RX, Receipt, Route, Header, Payload},
-    GS = #state{fabric = Client}
+    GS = #state{module = Module, fabric = Client}
 ) ->
-    Next = hls_fabric_client:receive_frame(
-        Receipt, Route, Header, Payload, fun decode_reply/3, Client
-    ),
-    {noreply, GS#state{fabric = Next}};
+    Fault = fun(Tag, Bits) -> terminal_failure(Module, Tag, Bits) end,
+    case
+        hls_fabric_client:receive_actor_frame(
+            Receipt, Route, Header, Payload, fun decode_reply/3, Fault, Client
+        )
+    of
+        {ok, Next} -> {noreply, GS#state{fabric = Next}};
+        {stop, Reason, Next} -> {stop, Reason, GS#state{fabric = Next}}
+    end;
 %% Outgoing casts retain the dedicated non-call transaction ID.
 handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Contract}) ->
     ok = check_cast(Message, Contract),
@@ -251,6 +269,9 @@ handle_info(Message, GS = #state{fabric = Client}) when
 handle_info(_Message, GS) ->
     {noreply, GS}.
 
+-doc "Decodes a validated reply as data, including terminal remote_failure diagnostics. Actor endpoints separately retire on terminal failure; this codec never exits a process.".
+-spec decode_reply(hls_nums:u8(), binary(), {module(), none | [atom()]}) ->
+    ignore | {reply, term()}.
 decode_reply(TagID, Payload, {Module, Replies}) ->
     %% Keep the allowed set with the slot, including abandoned calls. A known
     %% but unrelated record is no more evidence of completion than an unknown tag.
@@ -334,8 +355,15 @@ transport(Options) ->
             end
     end.
 
+%% Preserve diagnostic decoding while the actor-frame path handles termination.
+-spec unpack_reply(module(), atom(), binary()) -> {term(), bitstring()}.
 unpack_reply(_Module, error, <<ErrorCode:32/little-unsigned-integer>>) ->
-    {{error, {remote_error, error_reason(ErrorCode)}}, <<>>};
+    Reply =
+        case wire_error(ErrorCode) of
+            {reject, Reason} -> {error, {remote_error, Reason}};
+            {terminal, Failure} -> {error, {remote_failure, Failure}}
+        end,
+    {Reply, <<>>};
 unpack_reply(_Module, error, _Payload) ->
     error(invalid_error_payload);
 unpack_reply(Module, Tag, Payload) ->
@@ -343,6 +371,43 @@ unpack_reply(Module, Tag, Payload) ->
     true = bit_size(Payload) =:= ((Width + 31) div 32) * 32,
     {Record, _Padding} = hls_codec:split(Payload, Width),
     Module:unpack(Tag, Record).
+
+%% Terminal actor status is independent of request ownership, including cast ID 255.
+-spec terminal_failure(module(), hls_nums:u8(), binary()) -> none | {failure, term()}.
+terminal_failure(Module, TagID, <<ErrorCode:32/little-unsigned-integer>>) ->
+    try
+        error = Module:unpack_tag(TagID),
+        case wire_error(ErrorCode) of
+            {terminal, Failure} -> {failure, {hls_actor_failure, Module, Failure}};
+            {reject, _} -> none
+        end
+    catch
+        error:_ -> none
+    end;
+terminal_failure(_Module, _TagID, _Payload) ->
+    none.
+
+%% Bits 31/30 declare terminal/source-code respectively; bits 16..29 are reserved.
+%% Source codes retain their actor-local site; generic bookkeeping faults have no site.
+-spec wire_error(hls_nums:u32()) -> {reject, term()} | {terminal, remote_failure()}.
+wire_error(Word) when Word band 16#3fff0000 =:= 0 ->
+    Code = Word band 16#ffff,
+    case {Word band ?ERROR_TERMINAL =/= 0, Word band ?ERROR_SOURCE =/= 0} of
+        {false, false} ->
+            {reject, error_reason(Code)};
+        {true, false} when Code =/= 0 ->
+            {terminal, #{reason => error_reason(Code)}};
+        {true, true} when Code band 15 =/= 0 ->
+            {terminal, #{
+                reason => error_reason(Code band 15),
+                source_code => Code,
+                source_site => Code bsr 4
+            }};
+        _ ->
+            error(invalid_error_payload)
+    end;
+wire_error(_Word) ->
+    error(invalid_error_payload).
 
 %% Decode generic callback faults and bounded-server admission failures.
 -spec error_reason(non_neg_integer()) -> term().
@@ -354,6 +419,13 @@ error_reason(?ERROR_MATCH_FAILURE) -> match_failure;
 error_reason(?ERROR_REQUEST_LENGTH) -> request_length;
 error_reason(?ERROR_CASE_CLAUSE) -> case_clause;
 error_reason(?ERROR_IF_CLAUSE) -> if_clause;
+error_reason(6) -> explicit_fail;
+error_reason(7) -> invalid_message;
+error_reason(8) -> invalid_repeat;
+error_reason(9) -> reduction_mismatch;
+error_reason(10) -> reduction_protocol;
+error_reason(11) -> invalid_effect;
+error_reason(12) -> internal;
 error_reason(?ERROR_BADARITH) -> badarith;
 error_reason(?ERROR_BADARG) -> badarg;
 error_reason(?ERROR_REPLY_CONTRACT) -> reply_contract;

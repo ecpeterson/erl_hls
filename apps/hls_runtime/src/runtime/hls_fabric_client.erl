@@ -9,7 +9,7 @@ Request bookkeeping embedded in hls_gs and hls_debug clients. Uses hls_fabric fo
 -export([new/4, request/5, cast/4]).
 
 %% Broker/caller completions and inspection.
--export([receive_frame/6, handle_info/2, info/1]).
+-export([receive_frame/6, receive_actor_frame/7, handle_info/2, info/1]).
 %% Shared type contracts.
 -export_type([state/0]).
 
@@ -124,6 +124,39 @@ receive_frame(Receipt, Route, Header, Payload, Decode, Client = #client{broker =
     hls_fabric:ack(Broker, Receipt),
     Next.
 
+-doc "Receives an actor frame, recognizing route-valid terminal faults even on a cast or abandoned transaction. Acknowledges the broker before returning stop; the owner must exit without replying to pending calls. Does not stop the shared broker.".
+-spec receive_actor_frame(
+    reference(),
+    tuple(),
+    tuple(),
+    binary(),
+    fun((byte(), binary(), term()) -> ignore | {reply, term()}),
+    fun((byte(), binary()) -> none | {failure, term()}),
+    state()
+) -> {ok, state()} | {stop, term(), state()}.
+receive_actor_frame(
+    Receipt,
+    Route,
+    Header,
+    Payload,
+    Decode,
+    Fault,
+    Client = #client{broker = Broker, route = {Local, Peer}, status = Status}
+) ->
+    Failure =
+        case {Status, Route, Header} of
+            {up, {Peer, Local}, {Tag, _TxID, 0}} -> Fault(Tag, Payload);
+            _ -> none
+        end,
+    Result =
+        case Failure of
+            {failure, Reason} -> {stop, Reason, Client};
+            none -> {ok, receive_reply(Route, Header, Payload, Decode, Client)}
+        end,
+    hls_fabric:ack(Broker, Receipt),
+    Result.
+
+%% A normal reply may release only its own live request slot.
 receive_reply(
     {Peer, Local},
     {Tag, TxID, 0},
