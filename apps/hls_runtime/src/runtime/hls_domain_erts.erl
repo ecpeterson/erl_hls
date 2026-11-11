@@ -27,7 +27,7 @@ simulation therefore does not establish physical bandwidth or bounded backlog.
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
 %% Deployment backend lifecycle and incarnation-specific endpoint access.
--export([start_link/1, attach/2, status/1, request/3, endpoint/4, stop/1]).
+-export([start_link/1, attach/2, status/1, request/3, endpoint/4, send_request/2, stop/1]).
 
 %% gen_server implementation callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
@@ -81,6 +81,10 @@ attach(Backend, Owner) -> gen_server:call(Backend, {attach, Owner}).
 -doc "Returns the actual controller state; only ready actors are usable as application endpoints.".
 -spec status(pid()) -> {ok, snapshot()}.
 status(Backend) -> gen_server:call(Backend, status).
+
+-doc "Starts a correlated management call without waiting; the backend authenticates the calling owner exactly as for synchronous requests.".
+-spec send_request(pid(), hls_domain_backend:request()) -> gen_server:request_id().
+send_request(Backend, Request) -> gen_server:send_request(Backend, Request).
 
 -doc "Submits an authorized activate, replace or inspect input and returns its immediate disposition; backend phase work completes asynchronously. Completion acknowledgements and source faults belong to the backend and cannot be supplied by the owner.".
 -spec request(pid(), hls_domain_backend:authority(), hls_domain_lifecycle:input()) ->
