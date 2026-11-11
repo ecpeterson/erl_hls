@@ -26,7 +26,18 @@ Host admission is bounded per actor. `pending_limit` bounds unacknowledged casts
 
 Management observations include the count of application outputs accepted by the generated transport. Those buffers and counters survive ordinary domain replacement. On source failure, the host backend waits for that frontier, sends prior replies and effects through the incarnation endpoint, and then retires it. The same endpoint sends effects to their recipient before its `DOWN` signal. A successor is not exposed while predecessor delivery or endpoint retirement remains pending. A missing frontier, malformed response, broker loss or cold-device identity regression produces `noconnection`, not evidence of a completed reset.
 
-The backend must attach exclusively to a fresh response stream and remain alive across domain-owner restarts. Restarting the backend over an arbitrary live stream is not transparent reattachment: deployment must first establish transport retirement. Likewise, a host process monitor alone cannot establish physical quiescence. The stream implementation is reusable generated logic and runtime code; its simulation qualification is not live-device admission.
+Connection loss does not reset the actor network or fault its lifecycle. By default, owner loss also preserves actors and revokes only that owner's authority; `owner_loss => fail` explicitly selects retirement instead. A backend failure terminates its disposable host proxies with `noconnection`. Accepted work may still finish. Existing monitors remain terminal, and interrupted calls are never transparently resumed or replayed.
+
+To reconnect, the deployment must:
+
+1. Stop the old brokers and isolate their physical paths. Confirm actual descriptor closure and prevent buffered old bytes from reaching a new parser. A host process `DOWN` alone does not establish this.
+2. Drive a fresh, strictly greater nonzero `transport_session` and pulse `transport_reset`. Wait for `transport_attached` with matching `transport_session_observed`. These pins reset packet buffers, correlation counters and observers, while preserving actor/network state, lifecycle and incarnation. Cold `reset` remains a separate full reset. An equal session is idempotent; zero or a lower session cannot establish a connection.
+3. Open independent fresh brokers and start `hls_domain_fabric` with `#{management => M, application => A, session => Session}`. Every payload begins with that 64-bit session; complete old-session packets are discarded before admission or sequence accounting. The deployment must not reuse sessions across cold resets unless all old transport paths have been irreversibly isolated. This identity check is not authentication. The deployment must bind the new backend to the same physical domain and matching emitted interface; a matching numeric incarnation alone cannot identify a different device.
+4. Call `hls_domain:reattach(Owner, Handle, FreshBackend)` and, for a surviving virtual node, `hls_node:reattach_domain(Node, Service)`. Both check the same incarnation; the node retains its existing virtual PIDs. A different incarnation requires replacement and new PIDs. Callers establish fresh monitors and decide what new work to issue.
+
+A partial packet cannot safely carry its own reset command, hence the separate sideband boundary. A disconnected call's hardware slot remains occupied until its actual source reply arrives; that abandoned reply is discarded and the slot then becomes reusable. A call that never replies can retain its bounded slot indefinitely. Casts and independent actors can still progress; selecting domain replacement is application policy, not automatic transport cleanup. Fresh host calls rotate slot choices after explicit pre-admission rejection; this never retries accepted or uncertain work. Effects emitted after reattachment may arise from work admitted before the disconnect.
+
+This is a generated stream and host-runtime contract. Its finite simulations do not establish live-device admission, failure detection deadlines or physical reset isolation.
 
 The maintained shared-application witness is:
 
@@ -36,6 +47,14 @@ python3 tools/test_domain_stream.py --xls /path/to/xls --work /fresh/artifact/di
 ```
 
 It runs the same profile actuator, host policy, ordinary OTP supervisor and surviving device model on ERTS and on two independent generated cores. Both use the custom distribution node and a real second ERTS node for typed calls, casts, monitors and fresh virtual PIDs. The C++ simulator moves public word beats only; it neither interprets recovery commands nor manufactures replies, acknowledgements or frontiers. Native and RTL histories are checked against explicit application expectations. Device effect history and resource reservations live in the application-side model and deliberately survive controller replacement.
+
+The transport replacement witness uses the same generated actuator core:
+
+```sh
+python3 tools/test_domain_stream.py --scenario reattach --xls /path/to/xls --work /fresh/artifact/directory
+```
+
+It withholds an actual reply, kills the host backend, checks remote call/monitor uncertainty and independent-domain progress, rotates the FIFO descriptors, and establishes a new session through sampled public RTL pins. It checks preserved state/incarnation/virtual PID, stale-session rejection, fresh monitoring and subsequent actual source failure. An incomplete old packet is checked against accepted-word traces; focused DSLX tests separately exercise abandoned calls whose source reply has not yet arrived. These are bounded witnesses, not exhaustive native/RTL equivalence.
 
 ## Focused local witness
 

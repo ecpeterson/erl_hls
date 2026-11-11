@@ -52,6 +52,33 @@ public:
     // Count buffered bytes separately from the public word already removed from the queue.
     size_t pending_input_bytes() const { return rx.size(); }
 
+    // Deployment calls this only after retiring both old FIFO owners. Discard
+    // kernel bytes as well as local partial words before the RTL session boundary.
+    // This is transport isolation, not a source-domain reset or replay operation.
+    void discard() {
+        uint8_t bytes[4096];
+        for (int fd : {input, output}) {
+            size_t drained = 0;
+            for (;;) {
+                ssize_t n = read(fd, bytes, sizeof(bytes));
+                if (n > 0) {
+                    drained += size_t(n);
+                    if (drained > capacity)
+                        throw std::runtime_error("transport isolation exceeded bounded FIFO");
+                } else if (n == 0 || errno == EAGAIN) {
+                    break;
+                } else if (errno != EINTR) {
+                    throw std::runtime_error("transport isolation read");
+                }
+            }
+        }
+        rx.clear();
+        tx.clear();
+        word = prior = 0;
+        phase = remaining = 0;
+        valid = last = blocked = prior_last = false;
+    }
+
     // Partial OS reads/writes never change the held public beat; queues stay at most 64 KiB.
     // Optional delivery pause retains already accepted output bytes while input and RTL continue.
     void pump(bool deliver = true) {

@@ -3,7 +3,7 @@
 -include("hls_recovery_profile.hrl").
 
 %% External-tool entry points and explicit transport scheduling controls.
--export([native/1, run/2, delivery/4]).
+-export([native/1, run/2, delivery/4, session/2, backend/4]).
 
 -doc "Runs the shared native application first and retains its independent expected public history in a fresh directory.".
 -spec native(file:filename()) -> ok.
@@ -149,11 +149,17 @@ wait_observation(Observe, Deadline) ->
 %% Only deployment-specific stream ownership belongs here; requests remain ordinary typed actor messages.
 -spec backend(file:filename(), file:filename(), pid()) -> {pid(), [pid()]}.
 backend(Prefix, Interface, Device) ->
+    ok = session(Prefix, 1),
+    backend(Prefix, Interface, Device, 1).
+
+-doc "Opens fresh deployment FIFO lanes only after the caller has observed the actual session acknowledgement.".
+-spec backend(file:filename(), file:filename(), pid(), pos_integer()) -> {pid(), [pid()]}.
+backend(Prefix, Interface, Device, Session) ->
     {ok, Management} = hls_fabric:start_link(Prefix ++ "_management_tx", Prefix ++ "_management_rx", #{rx_route_limit => 1}),
     unlink(Management),
     {ok, Application} = hls_fabric:start_link(Prefix ++ "_application_tx", Prefix ++ "_application_rx", #{rx_route_limit => 1}),
     unlink(Application),
-    {ok, Backend} = hls_domain_fabric:start_link(#{management => Management, application => Application},
+    {ok, Backend} = hls_domain_fabric:start_link(#{management => Management, application => Application, session => Session},
         Interface, #{recipients => #{{actuator, effect} => Device},
             management_timeout_ms => 3000, delivery_timeout_ms => 3000}),
     unlink(Backend),
@@ -188,3 +194,12 @@ delivery_ack(Path, Value, Deadline) ->
             true = erlang:monotonic_time(millisecond) < Deadline,
             receive after 1 -> delivery_ack(Path, Value, Deadline) end
     end.
+
+-doc "Requests a public transport reset and waits for the simulator to observe matching actual RTL session outputs. Actor reset is untouched.".
+-spec session(file:filename(),pos_integer()) -> ok.
+session(Prefix,Session)->
+    Value=integer_to_binary(Session),Path=Prefix++"_session",
+    ok=file:write_file(Path++".next",Value),ok=file:rename(Path++".next",Path++".control"),
+    wait_observation(fun()->case file:read_file(Path++".ack") of
+        {ok,Bytes}->case string:trim(Bytes)=:=Value of true->{ok,ok};false->wait end;
+        _->wait end end).

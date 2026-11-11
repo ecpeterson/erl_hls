@@ -2,6 +2,7 @@
 // These are structural/state witnesses, not an ERTS, routed-RTL or device test.
 import domain_stream as stream;
 import domain;
+import domain_codes;
 import domain_frames as framing;
 
 const PACKET_BITS = u32:@@PACKET_BITS@@;
@@ -9,6 +10,9 @@ const CALL_SLOTS = u32:@@SLOTS@@;
 const STATUS_BITS = u32:@@STATUS_BITS@@;
 const ACTION_BITS = u32:@@ACTION_BITS@@;
 const STATE_BUDGET = u32:@@STATE_BUDGET@@;
+const SELECT_TAG = u8:@@SELECT_TAG@@;
+const SELECT_WORDS = u8:@@SELECT_WORDS@@;
+const SELECT_PACKET_WORDS = u32:11 + SELECT_WORDS as u32;
 
 // Packet assembly retains a prefix until the declared final payload beat arrives.
 #[test]
@@ -73,7 +77,7 @@ fn blocked_output_stable() {
     payload: u64:0x1122334455667788 as bits[PACKET_BITS],
   };
   let initial = stream::State { management_tx: management, management_tx_valid: true,
-    application_tx: application, application_tx_valid: true, ..zero!<stream::State>() };
+    application_tx: application, application_tx_valid: true, session: u64:1, attached: true, ..zero!<stream::State>() };
   let held = for (_, state): (u32, stream::State) in u32:0..u32:8 {
     let next = stream::tick(state, zero!<stream::Inputs>());
     assert_eq(next.output.management_output_valid, true);
@@ -111,28 +115,30 @@ fn management_beat(state: stream::State, word: u32, last: bool) -> stream::Tick 
 // The lifecycle core stays unbound; no lifecycle result or actor output is fabricated.
 #[test]
 fn partial_application_allows_inspection() {
-  let route = stream::tick(zero!<stream::State>(), stream::Inputs {
+  let route = stream::tick(stream::State { session:u64:1, attached:true, ..zero!<stream::State>() }, stream::Inputs {
     application_word: u32:1, application_valid: true, ..zero!<stream::Inputs>()
   });
   let prefix = stream::tick(route.state, stream::Inputs {
-    application_word: framing::header(u32:0, u8:2, u8:7), application_valid: true,
+    application_word: framing::header(u32:0, u8:2, u8:9), application_valid: true,
     ..zero!<stream::Inputs>()
   });
   assert_eq(prefix.state.application_rx.full, false);
   assert_eq(prefix.state.application_rx.stage, u2:2);
   let request_route = management_beat(prefix.state, u32:0, false);
-  let request_header = management_beat(request_route.state, framing::header(u32:0, u8:0, u8:1), false);
-  let request = management_beat(request_header.state, u32:77, true);
+  let request_header = management_beat(request_route.state, framing::header(u32:0, u8:0, u8:3), false);
+  let session_low = management_beat(request_header.state, u32:1, false);
+  let session_high = management_beat(session_low.state, u32:0, false);
+  let request = management_beat(session_high.state, u32:77, true);
   let pending = stream::tick(request.state, zero!<stream::Inputs>());
   assert_eq(pending.state.management_pending, true);
   let captured = stream::tick(pending.state, zero!<stream::Inputs>());
   assert_eq(captured.state.management_tx_valid, true);
   assert_eq(captured.state.management_tx.route, u32:0);
-  assert_eq(captured.state.management_tx.header, framing::header(u32:0, u8:1, u8:16));
-  assert_eq(captured.state.management_tx.payload as u32, u32:77);
+  assert_eq(captured.state.management_tx.header, framing::header(u32:0, u8:1, u8:18));
+  assert_eq((captured.state.management_tx.payload >> u32:64) as u32, u32:77);
   assert_eq(captured.state.application_rx, prefix.state.application_rx);
   let packet = captured.state.management_tx;
-  let drained = for (i, state): (u32, stream::State) in u32:0..u32:18 {
+  let drained = for (i, state): (u32, stream::State) in u32:0..u32:20 {
     let next = stream::tick(state, stream::Inputs {
       management_output_ready: true, ..zero!<stream::Inputs>()
     });
@@ -147,18 +153,28 @@ fn partial_application_allows_inspection() {
   assert_eq(drained.application_rx.full, false);
 }
 
-// A malformed management packet poisons the transport until a cold device reset.
+// A malformed current-session management packet closes only its transport.
+// A fresh sideband session clears that fault without resetting the core.
 #[test]
-fn malformed_management_is_sticky() {
-  let early_end = management_beat(zero!<stream::State>(), u32:0, true);
-  assert_eq(early_end.state.management_rx.bad && early_end.state.management_rx.full, true);
-  let detected = stream::tick(early_end.state, zero!<stream::Inputs>());
+fn malformed_management_closes_transport() {
+  let initial = stream::State {
+    session:u64:1, attached:true,
+    management_rx: framing::Receive<PACKET_BITS> { full:true, bad:true,
+      packet: framing::Packet<PACKET_BITS> { payload:u32:1 as bits[PACKET_BITS],
+        ..zero!<framing::Packet<PACKET_BITS>>() },
+      ..zero!<framing::Receive<PACKET_BITS>>() },
+    ..zero!<stream::State>() };
+  let detected = stream::tick(initial, zero!<stream::Inputs>());
   assert_eq(detected.state.fault, true);
+  assert_eq(detected.state.attached, false);
   let held = stream::tick(detected.state, zero!<stream::Inputs>());
   assert_eq(held.output.wire_fault, true);
-  let reset = stream::tick(held.state, stream::Inputs { reset: true, ..zero!<stream::Inputs>() });
+  assert_eq(held.output.management_ready, false);
+  let reset = stream::tick(held.state, stream::Inputs {
+    transport_reset:true, transport_session:u64:2, ..zero!<stream::Inputs>() });
   assert_eq(reset.state.fault, false);
-  assert_eq(stream::tick(reset.state, zero!<stream::Inputs>()).output.wire_fault, false);
+  assert_eq(reset.state.attached, true);
+  assert_eq(reset.state.core, stream::tick(held.state, zero!<stream::Inputs>()).state.core);
 }
 
 // Count actual typed storage independently of the renderer's conservative transport ceiling.
@@ -167,7 +183,7 @@ fn malformed_management_is_sticky() {
 #[test]
 fn transport_storage_budget() {
   let actual = bit_count<stream::State>() - bit_count<domain::State>();
-  let exact = u32:4 * PACKET_BITS + u32:652 + STATUS_BITS + ACTION_BITS + u32:33 * CALL_SLOTS;
+  let exact = u32:4 * PACKET_BITS + u32:717 + STATUS_BITS + ACTION_BITS + u32:34 * CALL_SLOTS;
   assert_eq(actual, exact);
   assert_eq(actual <= STATE_BUDGET, true);
 }
@@ -211,19 +227,19 @@ fn ingress_capture_stall_and_refill() {
   let pending = framing::Receive<PACKET_BITS> {
     full: true,
     packet: framing::Packet<PACKET_BITS> {
-      route: u32:1, header: framing::header(u32:0, u8:2, u8:7),
-      payload: (u32:42 as bits[PACKET_BITS]) << u32:96,
+      route: u32:1, header: framing::header(u32:0, u8:2, u8:9),
+      payload: ((u32:42 as bits[PACKET_BITS]) << u32:160) | u32:1 as bits[PACKET_BITS],
     },
     ..zero!<framing::Receive<PACKET_BITS>>()
   };
-  let initial = stream::State { application_rx: pending, ..zero!<stream::State>() };
+  let initial = stream::State { application_rx: pending, session:u64:1, attached:true, ..zero!<stream::State>() };
   let accepted = stream::tick(initial, zero!<stream::Inputs>());
   assert_eq(accepted.state.application_rx.full, false);
   assert_eq(accepted.state.sequence, u32:1);
   assert_eq(accepted.state.cursor, u32:0);
   assert_eq(accepted.state.application_tx_valid, true);
-  assert_eq(accepted.state.application_tx.header, framing::header(u32:0, u8:2, u8:8));
-  assert_eq((accepted.state.application_tx.payload >> u32:160) as u32, u32:1);
+  assert_eq(accepted.state.application_tx.header, framing::header(u32:0, u8:2, u8:10));
+  assert_eq((accepted.state.application_tx.payload >> u32:224) as u32, u32:1);
   let queued = stream::State { application_rx: pending, ..accepted.state };
   let stalled = for (_, state): (u32, stream::State) in u32:0..u32:6 {
     let blocked = stream::tick(state, zero!<stream::Inputs>());
@@ -234,7 +250,7 @@ fn ingress_capture_stall_and_refill() {
     blocked.state
   }(queued);
   // The second ACK replaces the first on its final accepted word, with no gap.
-  let final_beat = stream::State { application_position: u32:9, ..stalled };
+  let final_beat = stream::State { application_position: u32:11, ..stalled };
   let refilled = stream::tick(final_beat, stream::Inputs {
     application_output_ready: true, ..zero!<stream::Inputs>()
   });
@@ -244,5 +260,155 @@ fn ingress_capture_stall_and_refill() {
   assert_eq(refilled.state.application_position, u32:0);
   assert_eq(refilled.state.application_rx.full, false);
   assert_eq(refilled.state.sequence, u32:2);
-  assert_eq(refilled.state.application_tx.payload as u32, u32:2);
+  assert_eq((refilled.state.application_tx.payload >> u32:64) as u32, u32:2);
+}
+
+// A fresh session is a framing boundary, not an actor-domain restart. It abandons
+// observers but retains occupied call slots, including across repeated resets.
+#[test]
+fn transport_replacement_preserves_calls() {
+  let prefix = framing::Receive<PACKET_BITS> { stage:u2:2, seen:u32:1,
+    ..zero!<framing::Receive<PACKET_BITS>>() };
+  let initial = stream::State { session:u64:7, attached:true, sequence:u32:99,
+    last_request:u32:42, management_rx:prefix, application_rx:prefix,
+    management_tx_valid:true, application_tx_valid:true, management_pending:true,
+    calls:update(zero!<stream::Call[CALL_SLOTS]>(), u32:0,
+      stream::Call { valid:true, abandoned:false, request:u32:37 }),
+    ..zero!<stream::State>() };
+  let edge = stream::Inputs { transport_reset:true, transport_session:u64:8,
+    ..zero!<stream::Inputs>() };
+  let replaced = stream::tick(initial, edge);
+  assert_eq(replaced.output.management_ready || replaced.output.application_ready, false);
+  assert_eq(replaced.output.management_output_valid || replaced.output.application_output_valid, false);
+  assert_eq(replaced.output.transport_session, u64:7);
+  assert_eq(replaced.state.session, u64:8);
+  assert_eq(replaced.state.attached, true);
+  assert_eq(replaced.state.management_rx, zero!<framing::Receive<PACKET_BITS>>());
+  assert_eq(replaced.state.application_rx, zero!<framing::Receive<PACKET_BITS>>());
+  assert_eq(replaced.state.management_tx_valid || replaced.state.application_tx_valid, false);
+  assert_eq(replaced.state.management_pending, false);
+  assert_eq(replaced.state.sequence, u32:0);
+  assert_eq(replaced.state.last_request, u32:0);
+  assert_eq(replaced.state.calls[0], stream::Call { valid:true, abandoned:true, request:u32:37 });
+  assert_eq(replaced.state.core, stream::tick(initial, zero!<stream::Inputs>()).state.core);
+  let advanced = stream::State { sequence:u32:9, last_request:u32:12, ..replaced.state };
+  let same = stream::tick(advanced, edge);
+  assert_eq(same.output.transport_session, u64:8);
+  assert_eq(same.output.transport_attached, true);
+  assert_eq(same.state.sequence, u32:9);
+  assert_eq(same.state.last_request, u32:12);
+  assert_eq(same.state.calls, replaced.state.calls);
+  for (session, _): (u64, ()) in u64:0..u64:8 {
+    let stale = stream::tick(advanced, stream::Inputs {
+      transport_reset:true, transport_session:session, ..zero!<stream::Inputs>() });
+    assert_eq(stale.state.session, u64:8);
+    assert_eq(stale.state.sequence, u32:9);
+    ()
+  }(());
+  let cold = stream::tick(advanced, stream::Inputs { reset:true, ..edge });
+  assert_eq(cold.state, zero!<stream::State>());
+}
+
+// Old-session complete commands disappear without current-session ACKs, sequence
+// changes or management effects, even if their old framing was malformed.
+#[test]
+fn stale_session_packets_are_discarded() {
+  let stale = framing::Receive<PACKET_BITS> { full:true, bad:true,
+    packet:framing::Packet<PACKET_BITS> { payload:u32:1 as bits[PACKET_BITS],
+      ..zero!<framing::Packet<PACKET_BITS>>() },
+    ..zero!<framing::Receive<PACKET_BITS>>() };
+  let initial = stream::State { session:u64:2, attached:true,
+    management_rx:stale, application_rx:stale, ..zero!<stream::State>() };
+  let next = stream::tick(initial, zero!<stream::Inputs>());
+  assert_eq(next.state.management_rx.full || next.state.application_rx.full, false);
+  assert_eq(next.state.management_tx_valid || next.state.application_tx_valid, false);
+  assert_eq(next.state.sequence, u32:0);
+  assert_eq(next.state.fault, false);
+  assert_eq(next.state.attached, true);
+  let empty = stream::State { session:u64:2, attached:true, ..zero!<stream::State>() };
+  assert_eq(next.state.core, stream::tick(empty, zero!<stream::Inputs>()).state.core);
+}
+
+// Exhaustion is connection-scoped: it blocks new transfers but leaves the actor
+// lifecycle unchanged until an explicit source-level recovery request says otherwise.
+#[test]
+fn sequence_exhaustion_preserves_domain() {
+  let initial = stream::State { session:u64:1, attached:true, sequence:u32:0xffffffff,
+    ..zero!<stream::State>() };
+  let next = stream::tick(initial, zero!<stream::Inputs>());
+  assert_eq(next.state.fault, true);
+  assert_eq(next.state.attached, false);
+  assert_eq(next.state.core, stream::tick(zero!<stream::State>(), zero!<stream::Inputs>()).state.core);
+}
+
+// Send one whole public management packet; no internal controller state is installed.
+fn management_packet<N:u32>(initial: stream::State, packet: framing::Packet<PACKET_BITS>) -> stream::State {
+  assert_eq(N, packet.header[0+:u8] as u32 + u32:2);
+  for (i, state): (u32, stream::State) in u32:0..N {
+    let edge = stream::tick(state, stream::Inputs {
+      management_word:framing::word(packet,i), management_valid:true,
+      management_last:framing::last(packet,i), ..zero!<stream::Inputs>() });
+    assert_eq(edge.output.management_ready, true);
+    edge.state
+  }(initial)
+}
+
+// A real source reply waits behind its blocked admission ACK. Reattachment drops
+// the ACK, abandons its observer, and retires the source slot only on that reply.
+// The zero-valued select is an ordinary typed rejection, not fabricated hardware output.
+#[test]
+fn abandoned_reply_is_consumed_without_publication() {
+  let bound = stream::tick(zero!<stream::State>(), stream::Inputs {
+    transport_reset:true, transport_session:u64:1, ..zero!<stream::Inputs>() }).state;
+  let activation = framing::Packet<PACKET_BITS> {
+    route:u32:0, header:framing::header(u32:0,u8:1,u8:11),
+    payload:(u64:1 as bits[PACKET_BITS]) |
+      (u32:1 as bits[PACKET_BITS] << u32:64) |
+      (domain_codes::OPERATION_ACTIVATE as bits[PACKET_BITS] << u32:96) |
+      (u64:1 as bits[PACKET_BITS] << u32:192) |
+      (u64:1 as bits[PACKET_BITS] << u32:256),
+  };
+  let requested = management_packet<u32:13>(bound, activation);
+  let ready = for (_, state): (u32, stream::State) in u32:0..u32:64 {
+    stream::tick(state, stream::Inputs {
+      management_output_ready:true, ..zero!<stream::Inputs>() }).state
+  }(requested);
+  assert_eq(ready.core.control.data.lifecycle.phase, domain_codes::PHASE_READY);
+  assert_eq(ready.core.control.data.lifecycle.current, u64:1);
+  let request = framing::Packet<PACKET_BITS> {
+    route:u32:1, header:framing::header(u32:0,u8:2,u8:9+SELECT_WORDS),
+    payload:(u64:1 as bits[PACKET_BITS]) |
+      (u64:1 as bits[PACKET_BITS] << u32:64) |
+      (u32:42 as bits[PACKET_BITS] << u32:160) |
+      (u32:1 as bits[PACKET_BITS] << u32:192) |
+      (framing::header(u32:0,SELECT_TAG,SELECT_WORDS) as bits[PACKET_BITS] << u32:256),
+  };
+  let received = for (i, state): (u32, stream::State) in u32:0..SELECT_PACKET_WORDS {
+    let edge = stream::tick(state, stream::Inputs {
+      application_word:framing::word(request,i), application_valid:true,
+      application_last:framing::last(request,i), ..zero!<stream::Inputs>() });
+    assert_eq(edge.output.application_ready, true);
+    edge.state
+  }(ready);
+  let held = for (_, state): (u32, stream::State) in u32:0..u32:64 {
+    stream::tick(state, zero!<stream::Inputs>()).state
+  }(received);
+  assert_eq(held.calls[0], stream::Call { valid:true, abandoned:false, request:u32:42 });
+  assert_eq(held.application_tx_valid, true);
+  assert_eq(held.sequence, u32:1);
+  let renewed = stream::tick(held, stream::Inputs {
+    transport_reset:true, transport_session:u64:2, ..zero!<stream::Inputs>() }).state;
+  assert_eq(renewed.calls[0], stream::Call { valid:true, abandoned:true, request:u32:42 });
+  assert_eq(renewed.application_tx_valid, false);
+  let drained = for (_, state): (u32, stream::State) in u32:0..u32:64 {
+    let edge = stream::tick(state, stream::Inputs {
+      application_output_ready:true, ..zero!<stream::Inputs>() });
+    assert_eq(edge.output.application_output_valid, false);
+    assert_eq(edge.state.sequence, u32:0);
+    assert_eq(edge.state.fault, false);
+    assert_eq(edge.state.core.control.data.lifecycle.current, u64:1);
+    edge.state
+  }(renewed);
+  assert_eq(drained.calls[0], zero!<stream::Call>());
+  assert_eq(drained.core.control.data.lifecycle.phase, domain_codes::PHASE_READY);
 }

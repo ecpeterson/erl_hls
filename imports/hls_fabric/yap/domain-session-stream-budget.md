@@ -1,0 +1,8 @@
+# Domain session stream budget
+
+Preregistered before the session implementation: retain actor state and incarnation across transport replacement. One explicit out-of-band boundary establishes a strictly greater nonzero 64-bit session; cold reset remains distinct. Every complete packet carries the session. No uncertain command is replayed.
+
+- Storage: four packet buffers gain 64 bits each; one retained session gains 64 bits; attached gains one bit; each fixed call slot gains one abandoned bit. The packet payload ceiling becomes `max(18, 10 + frame_payload_words)` words. Preserve the existing conservative 512-bit metadata allowance, adding the 65 session bits and increasing each slot from 33 to 34 bits.
+- Access: one selected application transfer per edge, one committed actor-network tick, one call-slot allocation or reply retirement per selected transfer. The transport boundary marks every live slot abandoned once; it never clears ownership. Session comparisons gate admission before validation. No new payload-wide arbitration or source replication is intended.
+- Behavior: a dropped observer leaves its call slot busy until the actual reply arrives; abandoned replies are consumed without publication or sequence advancement. Framing/sequence faults close only the transport. Internal actor/network faults retain their existing domain lifecycle.
+- Qualification: finite DSLX witnesses cover session establishment, stale-session rejection, partial-parser clearing, idempotence, preserved core identity, abandoned ownership, and storage bounds. The public RTL witness must exercise a fresh session and surviving work. Optimized IR is a structural check, not mapped area or physical timing evidence.

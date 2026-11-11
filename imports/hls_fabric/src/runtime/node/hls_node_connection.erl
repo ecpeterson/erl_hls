@@ -94,10 +94,15 @@ handle_call(info, _From, State = #{clients := Clients, requests := Requests, cha
 -doc "Services local heartbeats and acknowledges device frames after processing.".
 -spec handle_cast(term(), map()) -> {noreply, map()}.
 %% Publication waits for actual old endpoint DOWN signals, preserving preceding replies.
-handle_cast({domain_publish, Ref, Old, Targets}, State = #{domain_publication := none}) ->
+handle_cast({domain_publish, Ref, Kind, Old, Targets}, State = #{domain_publication := none}) ->
     {noreply,
         install_domain(State#{
-            domain_publication := #{reference => Ref, old => Old, targets => Targets}
+            domain_publication := #{
+                reference => Ref,
+                old => Old,
+                targets => Targets,
+                fresh_monitors => monitor_domains(Targets, Kind)
+            }
         })};
 %% A serviced local heartbeat establishes that this adapter is alive.
 handle_cast(local_tick, State = #{received := N}) ->
@@ -125,13 +130,42 @@ handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{owner_monitor := R
 %% The central source owner cannot be replaced while this incarnation is live.
 handle_info({'DOWN', Ref, process, _Owner, Reason}, State = #{source_monitor := Ref}) ->
     {stop, {source_owner_down, Reason}, State};
-%% A managed endpoint's native monitor retires only that virtual actor and its remote monitors.
+%% Connection loss ends existing observations; only an actual actor exit retires its virtual identity.
 handle_info({'DOWN', Ref, process, _Endpoint, Reason}, State = #{domain_monitors := Monitors}) when
     is_map_key(Ref, Monitors)
 ->
-    Pid = maps:get(Ref, Monitors),
-    Next = retire_domain(Pid, Reason, State#{domain_monitors := maps:remove(Ref, Monitors)}),
+    {Pid, Kind} = maps:get(Ref, Monitors),
+    Retired = State#{domain_monitors := maps:remove(Ref, Monitors)},
+    Next =
+        case endpoint_reason(Reason, Kind) of
+            noconnection -> disconnect_domain(Pid, Retired);
+            _ -> retire_domain(Pid, Reason, Retired)
+        end,
     continue(install_domain(Next));
+%% Fresh proxies are monitored during the old-DOWN barrier; their exit reasons must not collapse into later noproc.
+handle_info(
+    {'DOWN', Ref, process, _Endpoint, Reason},
+    State = #{domain_publication := Publication = #{fresh_monitors := Monitors, targets := Targets}}
+) when
+    is_map_key(Ref, Monitors)
+->
+    {Pid, Kind} = maps:get(Ref, Monitors),
+    Observed = endpoint_reason(Reason, Kind),
+    Updated = [
+        case Target of
+            #{pid := Pid} -> Target#{endpoint_status := {down, Observed}};
+            _ -> Target
+        end
+     || Target <- Targets
+    ],
+    continue(
+        install_domain(State#{
+            domain_publication := Publication#{
+                targets := Updated,
+                fresh_monitors := maps:remove(Ref, Monitors)
+            }
+        })
+    );
 %% Consume one local distribution packet under the same queue bound as TCP.
 handle_info(dist_data, State = #{socket := {local, Handle}, sent := Sent}) ->
     case erlang:dist_ctrl_get_data(Handle) of
@@ -238,7 +272,10 @@ attach_mode(
         last_received => now_ms()
     };
 attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
-    Clients = maps:from_list([{Pid, Actor} || #{pid := Pid} = Actor <- Actors]),
+    Clients = maps:from_list([
+        {Pid, Actor}
+     || #{pid := Pid} = Actor <- Actors, visible_domain(Actor)
+    ]),
     Channels = maps:from_list([
         {Key, channel(Key, Brokers, Source)}
      || Key <- lists:usort(
@@ -260,6 +297,7 @@ attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
         clients => Clients,
         domain_monitors => monitor_domains(Actors),
         domain_publication => none,
+        domain_withdrawn => #{},
         channels => Channels,
         routes => Routes,
         names => Names,
@@ -295,6 +333,7 @@ channel({Kind, Endpoint}, Brokers, Source) ->
 signal({19, From, To, Ref}, none, State = #{monitors := Monitors}) ->
     case target(To, State) of
         none -> send(State, hls_node_wire:encode({21, To, From, Ref, noproc}));
+        disconnected -> send(State, hls_node_wire:encode({21, To, From, Ref, noconnection}));
         _ -> State#{monitors := Monitors#{Ref => {From, To}}}
     end;
 signal({20, _From, _To, Ref}, none, State = #{monitors := Monitors}) ->
@@ -347,12 +386,19 @@ source_message(_, _, _, _) ->
     error(unauthenticated_source_message).
 
 %% Resolve a current-incarnation PID or advertised name; stale targets are absent.
--spec target(pid() | atom(), map()) -> pid() | none.
-target(net_kernel, #{kernel_pid := Pid}) -> Pid;
-target(Pid, #{kernel_pid := Pid}) -> Pid;
-target(To, #{clients := Clients}) when is_pid(To), is_map_key(To, Clients) -> To;
+-spec target(pid() | atom(), map()) -> pid() | none | disconnected.
+target(net_kernel, #{kernel_pid := Pid}) ->
+    Pid;
+target(Pid, #{kernel_pid := Pid}) ->
+    Pid;
+target(To, #{clients := Clients}) when is_pid(To), is_map_key(To, Clients) ->
+    case maps:get(To, Clients) of
+        #{endpoint_status := {down, noconnection}} -> disconnected;
+        _ -> To
+    end;
 target(Name, #{names := Names}) when is_atom(Name) -> maps:get(Name, Names, none);
-target(_, _) -> none.
+target(_, _) ->
+    none.
 
 %% Answer node authentication probes or dispatch messages to known services.
 -spec deliver(pid() | atom(), term(), map()) -> map().
@@ -366,6 +412,7 @@ deliver(To, Message, State) ->
     case target(To, State) of
         % Ordinary sends to absent processes are discarded.
         none -> State;
+        disconnected -> State;
         Pid -> operation(Pid, Message, State)
     end.
 
@@ -614,7 +661,7 @@ written({domain_request, Token}, Reply, State = #{requests := Requests}) ->
                 {{error, busy}, submitting} -> wait_capacity(Token, Pid, State);
                 {ok, _} -> complete(Token, ok, State);
                 _ when From =/= none -> complete(Token, Reply, State);
-                _ -> retire_domain(Pid, noconnection, State)
+                _ -> withdraw_domain(Pid, State)
             end;
         {ok, _} ->
             complete(Token, Reply, State);
@@ -626,7 +673,7 @@ written({domain_capacity, Token}, ok, State = #{requests := Requests}) ->
 written({domain_capacity, Token}, Failure, State = #{requests := Requests}) ->
     case hls_node_requests:find(Token, Requests) of
         {ok, #{operation := {cast, From, _}}} when From =/= none -> complete(Token, Failure, State);
-        {ok, #{target := Pid}} -> retire_domain(Pid, noconnection, State);
+        {ok, #{target := Pid}} -> withdraw_domain(Pid, State);
         error -> State
     end;
 written(source_handoff, ok, State = #{source_pending := true}) ->
@@ -750,12 +797,22 @@ client_info(#{channel := Key}, Channels) ->
     maps:with([route, pending, transmitting], maps:get(Key, Channels)).
 
 %% Local managed actors have one monitor per peer adapter; endpoint death leaves unrelated actors up.
--spec monitor_domains([map()]) -> #{reference() => pid()}.
-monitor_domains(Targets) ->
+-spec monitor_domains([map()]) -> #{reference() => {pid(), replacement | reattach}}.
+monitor_domains(Targets) -> monitor_domains(Targets, replacement).
+
+%% Preserve which monitors cover a connection candidate rather than a newly allocated actor identity.
+-spec monitor_domains([map()], replacement | reattach) ->
+    #{reference() => {pid(), replacement | reattach}}.
+monitor_domains(Targets, Kind) ->
     maps:from_list([
-        {monitor(process, Endpoint), Pid}
-     || #{kind := domain, endpoint := Endpoint, pid := Pid} <- Targets
+        {monitor(process, Endpoint), {Pid, Kind}}
+     || #{kind := domain, endpoint := Endpoint, pid := Pid, endpoint_status := connected} <- Targets
     ]).
+
+%% A reconnect candidate which died before monitor setup cannot establish death of the surviving hardware actor.
+-spec endpoint_reason(term(), replacement | reattach) -> term().
+endpoint_reason(noproc, reattach) -> noconnection;
+endpoint_reason(Reason, _) -> Reason.
 
 %% Bound unfinished calls per actor, independently of its cast admission and other actors' progress.
 -spec issue_domain(pid(), call | cast, gen_server:from() | none, term(), map()) -> map().
@@ -776,12 +833,32 @@ issue_domain(
             State#{requests := Next}
     end.
 
-%% Endpoint death forwards its actual reason; irrecoverable cast rejection withdraws only this peer binding.
-%% A local noconnection does not claim that the source actor died or that accepted work was cancelled.
+%% Irrecoverable raw-cast rejection remains a permanent withdrawal for this peer, even after proxy reattachment.
+-spec withdraw_domain(pid(), map()) -> map().
+withdraw_domain(Pid, State = #{domain_withdrawn := Withdrawn}) ->
+    Retired = retire_domain(Pid, noconnection, State),
+    Retired#{domain_withdrawn := Withdrawn#{Pid => true}}.
+
+%% A terminal actor exit removes the binding; a replacement will receive a distinct virtual PID.
 -spec retire_domain(pid(), term(), map()) -> map().
-retire_domain(
-    Pid, Reason, State = #{clients := Clients, monitors := Monitors, requests := Requests}
-) ->
+retire_domain(Pid, Reason, State = #{clients := Clients}) ->
+    Sent = finish_domain_observers(Pid, Reason, State),
+    Sent#{clients := maps:remove(Pid, Clients)}.
+
+%% A dead host proxy does not imply dead hardware. Keep only its identity, never pending work or monitors.
+-spec disconnect_domain(pid(), map()) -> map().
+disconnect_domain(Pid, State = #{clients := Clients}) ->
+    Sent = finish_domain_observers(Pid, noconnection, State),
+    case maps:find(Pid, Clients) of
+        {ok, Target} ->
+            Sent#{clients := Clients#{Pid := Target#{endpoint_status := {down, noconnection}}}};
+        error ->
+            Sent
+    end.
+
+%% Deliver one terminal event to each installed monitor and forget every uncertain queued or admitted request.
+-spec finish_domain_observers(pid(), term(), map()) -> map().
+finish_domain_observers(Pid, Reason, State = #{monitors := Monitors, requests := Requests}) ->
     {Kept, Sent} = maps:fold(
         fun(Ref, {From, To} = Entry, {Rest, Acc}) ->
             case To =:= Pid of
@@ -792,33 +869,60 @@ retire_domain(
         {#{}, State},
         Monitors
     ),
-    Sent#{
-        clients := maps:remove(Pid, Clients),
-        monitors := Kept,
-        requests := hls_node_requests:remove_target(Pid, Requests)
-    }.
+    Sent#{monitors := Kept, requests := hls_node_requests:remove_target(Pid, Requests)}.
+
+%% Peers created after a disconnect retain its noconnection meaning; genuine terminated actors remain absent.
+-spec visible_domain(map()) -> boolean().
+visible_domain(#{endpoint_status := {down, Reason}}) -> Reason =:= noconnection;
+visible_domain(_) -> true.
 
 %% The manager has checked physical endpoint death, but its signal may still be queued here.
 %% Delay replacement until local DOWN consumption has emitted all corresponding remote monitor exits.
 -spec install_domain(map()) -> map().
 install_domain(
     State = #{
-        domain_publication := #{reference := Ref, old := Old, targets := Targets},
+        domain_publication := #{
+            reference := Ref, old := Old, targets := Targets, fresh_monitors := FreshMonitors
+        },
         clients := Clients,
         manager := Manager,
-        domain_monitors := Monitors
+        domain_monitors := Monitors,
+        domain_withdrawn := Withdrawn
     }
 ) ->
-    case lists:any(fun(Pid) -> lists:member(Pid, maps:values(Monitors)) end, Old) of
+    case
+        lists:any(fun(Pid) -> lists:member(Pid, [P || {P, _} <- maps:values(Monitors)]) end, Old)
+    of
         true ->
             State;
         false ->
-            Fresh = maps:from_list([{Pid, Target} || Target = #{pid := Pid} <- Targets]),
+            NewIds = [Pid || #{pid := Pid} <- Targets],
+            KeptWithdrawn = maps:without(Old -- NewIds, Withdrawn),
+            Allowed = [
+                Target
+             || Target = #{pid := Pid} <- Targets,
+                visible_domain(Target),
+                not maps:is_key(Pid, KeptWithdrawn)
+            ],
+            Fresh = maps:from_list([{Pid, Target} || Target = #{pid := Pid} <- Allowed]),
+            KeptMonitors = maps:filter(
+                fun(Monitor, {Pid, _}) ->
+                    case maps:is_key(Pid, Fresh) of
+                        true ->
+                            true;
+                        false ->
+                            demonitor(Monitor, [flush]),
+                            false
+                    end
+                end,
+                FreshMonitors
+            ),
             Manager ! {domain_published, Ref, self()},
             State#{
-                clients := maps:merge(Clients, Fresh),
-                domain_monitors := maps:merge(Monitors, monitor_domains(Targets)),
-                domain_publication := none
+                clients := maps:merge(maps:without(Old, Clients), Fresh),
+                domain_monitors := maps:merge(Monitors, KeptMonitors),
+                domain_publication := none,
+                domain_withdrawn := KeptWithdrawn
             }
     end;
 install_domain(State) ->

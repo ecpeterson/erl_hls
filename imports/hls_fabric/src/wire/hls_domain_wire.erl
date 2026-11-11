@@ -7,9 +7,9 @@ owns the matching framing, incarnation admission and output sequence frontier.
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
 %% Trusted emitted interface and ordinary record conversion.
--export([load/1, check/1, request/6, message/3]).
+-export([load/1, check/1, request/7, message/3]).
 %% Management and application envelope conversion.
--export([management/3, observation/2, application/2]).
+-export([management/4, observation/2, application/2]).
 -export_type([actor/0, interface/0, response/0]).
 
 -doc "One source actor's retained public request, reply and effect vocabulary.".
@@ -32,6 +32,7 @@ owns the matching framing, incarnation admission and output sequence frontier.
 -doc "One ordered application-lane observation before its record is decoded.".
 -type response() :: #{
     kind := accepted | reply | effect,
+    session := hls_nums:u64(),
     sequence := hls_nums:u32(),
     incarnation := hls_nums:u64(),
     actor := hls_nums:u32(),
@@ -60,7 +61,7 @@ check(#{
     management_route := ManagementRoute,
     application_route := ApplicationRoute
 }) when
-    map_size(Actors) > 0, is_integer(Words), Words > 0, Words =< 247
+    map_size(Actors) > 0, is_integer(Words), Words > 0, Words =< 245
 ->
     ok = check_route(ManagementRoute),
     ok = check_route(ApplicationRoute),
@@ -126,18 +127,21 @@ check_route({Source, Destination}) when
 ->
     ok.
 
--doc "Encodes one typed call/cast before transmission. Slot is the bounded call slot or envelope sentinel 255 for a cast; cast frames retain txid zero. Request is a non-reused backend-lifetime identity.".
--spec request(actor(), call | cast, tuple(), hls_nums:u64(), hls_nums:u32(), byte()) ->
+-doc "Encodes one typed call/cast before transmission. Slot is the bounded call slot or envelope sentinel 255 for a cast; cast frames retain txid zero. Session is the deployment-attested nonzero transport identity; Request is never reused within it.".
+-spec request(
+    actor(), call | cast, tuple(), hls_nums:u64(), hls_nums:u64(), hls_nums:u32(), byte()
+) ->
     {binary(), [atom()]}.
 request(
     #{index := Actor, schemas := Schemas, contract := Contract},
     Mode,
     Message,
+    Session,
     Incarnation,
     Request,
     Slot
 ) when
-    is_tuple(Message), tuple_size(Message) > 0
+    is_tuple(Message), tuple_size(Message) > 0, Session > 0, Session < (1 bsl 64)
 ->
     Tag = element(1, Message),
     Replies =
@@ -169,11 +173,11 @@ request(
         end,
     Header = (Selector bsl 24) bor (Transaction bsl 8) bor (byte_size(Payload) div 4),
     {
-        <<Incarnation:64/little, Actor:32/little, Request:32/little, Kind:32/little, Slot:32/little,
-            Header:32/little, Payload/binary>>,
+        <<Session:64/little, Incarnation:64/little, Actor:32/little, Request:32/little,
+            Kind:32/little, Slot:32/little, Header:32/little, Payload/binary>>,
         Replies
     };
-request(_Actor, Mode, Message, _Incarnation, _Request, _Slot) ->
+request(_Actor, Mode, Message, _Session, _Incarnation, _Request, _Slot) ->
     error({invalid_request, Mode, Message}).
 
 -doc "Decodes a canonical record from its ordinary frame. Rejects unknown tags, flags, lengths and nonzero padding.".
@@ -195,11 +199,12 @@ message(#{schemas := Schemas}, Header, Payload) ->
     {Tag, Slot, Message}.
 
 -doc "Encodes inspect or a shared lifecycle command with an independent management correlation identity.".
--spec management(hls_nums:u32(), none | hls_domain_lifecycle:input(), interface()) ->
+-spec management(hls_nums:u64(), hls_nums:u32(), none | hls_domain_lifecycle:input(), interface()) ->
     {0 | 1, binary()}.
-management(Sequence, none, _Interface) ->
-    {0, <<Sequence:32/little>>};
+management(Session, Sequence, none, _Interface) when Session > 0, Session < (1 bsl 64) ->
+    {0, <<Session:64/little, Sequence:32/little>>};
 management(
+    Session,
     Sequence,
     #domain_input{
         op = Op,
@@ -209,22 +214,29 @@ management(
         fault = Fault
     },
     #{codecs := Codecs}
-) ->
+) when Session > 0, Session < (1 bsl 64) ->
     Operation = code(operation, Op, Codecs),
     Cause = code(fault, Fault, Codecs),
     {1,
-        <<Sequence:32/little, Operation:32/little, Expected:64/little, Target:64/little,
-            Transition:64/little, Cause:32/little>>}.
+        <<Session:64/little, Sequence:32/little, Operation:32/little, Expected:64/little,
+            Target:64/little, Transition:64/little, Cause:32/little>>}.
 
 -doc "Decodes a complete management snapshot including its accepted-output frontier; missing or malformed evidence rejects.".
 -spec observation(binary(), interface()) ->
-    {hls_nums:u32(), hls_domain_lifecycle:output(), hls_nums:u16(), hls_nums:u32(), hls_nums:u32()}.
+    {
+        hls_nums:u64(),
+        hls_nums:u32(),
+        hls_domain_lifecycle:output(),
+        hls_nums:u16(),
+        hls_nums:u32(),
+        hls_nums:u32()
+    }.
 observation(
-    <<Sequence:32/little, Status:32/little, Action:32/little, Phase:32/little, Current:64/little,
-        Previous:64/little, Target:64/little, Transition:64/little, Fault:32/little,
-        Source:32/little, Actor:32/little, Frontier:32/little>>,
+    <<Session:64/little, Sequence:32/little, Status:32/little, Action:32/little, Phase:32/little,
+        Current:64/little, Previous:64/little, Target:64/little, Transition:64/little,
+        Fault:32/little, Source:32/little, Actor:32/little, Frontier:32/little>>,
     #{codecs := Codecs}
-) when Source < (1 bsl 16) ->
+) when Session > 0, Source < (1 bsl 16) ->
     P = value(phase, Phase, Codecs),
     State = #domain_state{
         phase = P,
@@ -234,7 +246,7 @@ observation(
         transition = Transition,
         fault = value(fault, Fault, Codecs)
     },
-    {Sequence,
+    {Session, Sequence,
         #domain_output{
             status = value(status, Status, Codecs),
             action = value(action, Action, Codecs),
@@ -247,10 +259,10 @@ observation(
 -spec application(2 | 3 | 4, binary()) -> response().
 application(
     Tag,
-    <<Sequence:32/little, Incarnation:64/little, Actor:32/little, Request:32/little,
-        Disposition:32/little, Port:32/little, Header:32/little, Payload/binary>>
+    <<Session:64/little, Sequence:32/little, Incarnation:64/little, Actor:32/little,
+        Request:32/little, Disposition:32/little, Port:32/little, Header:32/little, Payload/binary>>
 ) when
-    Sequence > 0, Tag >= 2, Tag =< 4
+    Session > 0, Sequence > 0, Tag >= 2, Tag =< 4
 ->
     Kind =
         case Tag of
@@ -279,6 +291,7 @@ application(
     end,
     #{
         kind => Kind,
+        session => Session,
         sequence => Sequence,
         incarnation => Incarnation,
         actor => Actor,

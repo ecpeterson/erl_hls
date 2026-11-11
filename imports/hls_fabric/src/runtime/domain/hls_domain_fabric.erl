@@ -8,13 +8,18 @@ incarnation-specific actor endpoints as external Erlang PIDs.
 Application traffic is typed by retained codecs. Management polls stay separate
 from application backpressure. An orderly actor failure waits for every output
 promised by the hardware frontier; transport loss instead retires endpoints with
-noconnection. No application operation is replayed. Owner loss requests digital
-closure only after it is observed; this host process is not a physical watchdog.
+noconnection. No application operation is replayed. Owner loss preserves actors
+by default; owner_loss => fail explicitly requests digital closure. Neither is a
+physical watchdog.
 
 Brokers, endpoint exclusion and transport retirement belong to the deployment.
-Attachment requires an exclusive fresh response stream starting at sequence one;
-restarting this backend is not a transparent reconnect to an arbitrary old stream.
-An owner may restart while the backend itself survives and reconciles closure.
+Before attachment, isolate the old brokers and establish a fresh nonzero session
+through the generated transport-reset/acknowledgement pins. This clears only
+packet state; surviving actors keep their incarnation and state. Every frame
+carries the session, so delayed old frames cannot impersonate fresh requests.
+The deployment owns session non-reuse, including across cold hardware resets.
+Host proxies are disposable; hls_domain and hls_node explicitly reattach the
+same surviving incarnation after transport loss.
 """.
 -behaviour(gen_server).
 -behaviour(hls_domain_backend).
@@ -30,11 +35,13 @@ An owner may restart while the backend itself survives and reconciles closure.
 -type transport() :: #{
     management := pid(),
     application := pid(),
+    session := hls_nums:u64(),
     management_route => hls_fabric:route(),
     application_route => hls_fabric:route()
 }.
 -doc "External effect recipients and finite bounds. pending_limit bounds unacknowledged casts per actor; declared call slots are independent. Timeouts mean uncertainty, never successful fencing.".
 -type options() :: #{
+    owner_loss => hls_domain_backend:owner_loss(),
     recipients => #{{term(), atom()} => pid()},
     pending_limit => pos_integer(),
     poll_ms => pos_integer(),
@@ -74,6 +81,9 @@ An owner may restart while the backend itself survives and reconciles closure.
         sent := boolean()
     }.
 -record(backend, {
+    session :: hls_nums:u64(),
+    owner_loss = preserve :: hls_domain_backend:owner_loss(),
+    slot_cursor = #{} :: #{term() => byte()},
     management :: pid(),
     application :: pid(),
     management_route :: hls_fabric:route(),
@@ -146,6 +156,7 @@ stop(Backend) -> gen_server:stop(Backend).
 -doc "Returns bounded counters and public lifecycle identity, without retaining application work history.".
 -spec info(pid()) ->
     #{
+        session := hls_nums:u64(),
         state := hls_domain_lifecycle:state(),
         actors := hls_domain_backend:actors(),
         pending := non_neg_integer(),
@@ -161,7 +172,14 @@ info(Backend) -> gen_server:call(Backend, info).
 -doc "Registers distinct management/application return routes and monitors both deployment-owned brokers.".
 -spec init({transport(), hls_domain_wire:interface() | file:filename(), options()}) ->
     {ok, #backend{}}.
-init({#{management := Management, application := Application} = Transport, Interface0, Options}) ->
+init({
+    #{management := Management, application := Application, session := Session} = Transport,
+    Interface0,
+    Options
+}) ->
+    true = is_integer(Session) andalso Session > 0 andalso Session < (1 bsl 64),
+    OwnerLoss = maps:get(owner_loss, Options, preserve),
+    true = OwnerLoss =:= preserve orelse OwnerLoss =:= fail,
     true = Management =/= Application,
     Interface =
         #{
@@ -195,6 +213,8 @@ init({#{management := Management, application := Application} = Transport, Inter
     Monitors = maps:from_list([{monitor(process, Pid), Pid} || Pid <- [Management, Application]]),
     erlang:send_after(Poll, self(), poll),
     {ok, #backend{
+        session = Session,
+        owner_loss = OwnerLoss,
         management = Management,
         application = Application,
         management_route = ManagementRoute,
@@ -265,6 +285,7 @@ handle_call({endpoint, _, _, _}, _From, State) ->
 handle_call(info, _From, State) ->
     {reply,
         #{
+            session => State#backend.session,
             state => State#backend.lifecycle,
             actors => State#backend.actors,
             pending => map_size(State#backend.pending),
@@ -314,8 +335,17 @@ handle_info(poll, State = #backend{poll_ms = Poll, exchange = Exchange, queue = 
             false -> State
         end,
     {noreply, Next};
-%% Local owner death is only a detection event; hardware closure needs its own acknowledged command.
-handle_info({'DOWN', Ref, process, _Owner, _Reason}, State = #backend{owner_monitor = Ref}) ->
+%% Owner authority is revocable independently of actor lifetime or outstanding work.
+handle_info(
+    {'DOWN', Ref, process, _Owner, _Reason},
+    State = #backend{owner_monitor = Ref, owner_loss = preserve}
+) ->
+    {noreply, State#backend{owner = undefined, owner_monitor = undefined, authority = undefined}};
+%% Explicit owner-loss failure policy requires an acknowledged hardware command.
+handle_info(
+    {'DOWN', Ref, process, _Owner, _Reason},
+    State = #backend{owner_monitor = Ref, owner_loss = fail}
+) ->
     Next = retire_now(noconnection, State#backend{
         owner = undefined, owner_monitor = undefined, authority = undefined
     }),
@@ -335,10 +365,8 @@ handle_info(
         #{sent := true} ->
             {noreply, reconcile(Next)};
         _ ->
-            {noreply,
-                begin_owner_retirement(
-                    retire_now({endpoint_down, Reason}, Next#backend{retiring_owner = true})
-                )}
+            %% A disposable host proxy is not evidence that its remote actor failed.
+            {stop, {endpoint_down, Reason}, Next}
     end;
 %% A timeout does not cancel transmitted work or cause retransmission as a new command.
 handle_info(
@@ -424,7 +452,9 @@ pump(
             State;
         {{value, Entry = #{input := Input, kind := Kind}}, Rest} ->
             true = Sequence < (1 bsl 32),
-            {Tag, Payload} = hls_domain_wire:management(Sequence, Input, Interface),
+            {Tag, Payload} = hls_domain_wire:management(
+                State#backend.session, Sequence, Input, Interface
+            ),
             Attempts =
                 State#backend.attempts +
                     case Kind of
@@ -446,13 +476,31 @@ pump(State) ->
 
 %% Each lane is independently registered and can only carry its declared message families.
 -spec frame(hls_fabric:route(), byte(), binary(), #backend{}) -> #backend{}.
-frame(Route, 1, Payload, State = #backend{management_route = Route, interface = Interface}) ->
-    {Sequence, Output, Source, Actor, Frontier} = hls_domain_wire:observation(Payload, Interface),
+%% A complete foreign-session frame cannot update counters, readiness or pending calls.
+frame(_Route, _Tag, <<Session:64/little, _/binary>>, State = #backend{session = Current}) when
+    Session =/= Current
+->
+    ignored(State);
+frame(
+    Route,
+    1,
+    Payload,
+    State = #backend{management_route = Route, interface = Interface, session = Session}
+) ->
+    {Session, Sequence, Output, Source, Actor, Frontier} = hls_domain_wire:observation(
+        Payload, Interface
+    ),
     management_response(Sequence, Output, Source, Actor, Frontier, State);
-frame(Route, Tag, Payload, State = #backend{application_route = Route, received = Received}) when
+frame(
+    Route,
+    Tag,
+    Payload,
+    State = #backend{application_route = Route, received = Received, session = Session}
+) when
     Tag >= 2, Tag =< 4
 ->
-    Response = #{sequence := Sequence} = hls_domain_wire:application(Tag, Payload),
+    Response =
+        #{session := Session, sequence := Sequence} = hls_domain_wire:application(Tag, Payload),
     true = Sequence =:= Received + 1,
     reconcile(application_response(Response, State#backend{received = Sequence})).
 
@@ -632,13 +680,17 @@ admit(
     State = #backend{interface = #{actors := Actors}, pending = Pending, request_next = Request}
 ) ->
     Binding = maps:get(Actor, Actors),
-    case slot(Actor, Mode, Binding, Pending) of
+    case slot(Actor, Mode, Binding, Pending, maps:get(Actor, State#backend.slot_cursor, 0)) of
         busy ->
             result(Endpoint, Ref, {error, busy}),
             State;
         Slot ->
             Encoded =
-                try hls_domain_wire:request(Binding, Mode, Message, Incarnation, Request, Slot) of
+                try
+                    hls_domain_wire:request(
+                        Binding, Mode, Message, State#backend.session, Incarnation, Request, Slot
+                    )
+                of
                     {Payload0, Replies0} -> {ok, Payload0, Replies0}
                 catch
                     error:Reason -> {error, Reason}
@@ -661,7 +713,20 @@ admit(
                         2,
                         Payload,
                         State#backend{
-                            request_next = Request + 1, pending = Pending#{Request => Entry}
+                            request_next = Request + 1,
+                            pending = Pending#{Request => Entry},
+                            slot_cursor =
+                                case Mode of
+                                    call ->
+                                        (State#backend.slot_cursor)#{
+                                            Actor => (Slot + 1) rem
+                                                maps:get(
+                                                    pending_calls, maps:get(contract, Binding), 1
+                                                )
+                                        };
+                                    cast ->
+                                        State#backend.slot_cursor
+                                end
                         }
                     );
                 {error, Failure} ->
@@ -670,14 +735,16 @@ admit(
             end
     end.
 
-%% Casts have no retained reply handle; calls reuse a slot only after their accepted reply.
--spec slot(term(), call | cast, hls_domain_wire:actor(), #{hls_nums:u32() => pending()}) ->
+%% Rotate among host-free slots so repeated pre-admission busy rejections can pass an abandoned hardware slot. Never retry an uncertain request.
+-spec slot(term(), call | cast, hls_domain_wire:actor(), #{hls_nums:u32() => pending()}, byte()) ->
     byte() | busy.
-slot(_Actor, cast, _Binding, _Pending) ->
+slot(_Actor, cast, _Binding, _Pending, _Cursor) ->
     255;
-slot(Actor, call, #{contract := Contract}, Pending) ->
+slot(Actor, call, #{contract := Contract}, Pending, Cursor) ->
     Used = [S || #{actor := A, mode := call, slot := S} <- maps:values(Pending), A =:= Actor],
-    case lists:seq(0, maps:get(pending_calls, Contract, 1) - 1) -- Used of
+    Bound = maps:get(pending_calls, Contract, 1),
+    Slots = [(Cursor + Offset) rem Bound || Offset <- lists:seq(0, Bound - 1)],
+    case Slots -- Used of
         [Free | _] -> Free;
         [] -> busy
     end.

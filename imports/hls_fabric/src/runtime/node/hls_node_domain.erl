@@ -6,7 +6,7 @@ state. A binding names one fixed local deployment owner and domain.
 """.
 
 %% Internal node-manager binding and publication validation.
--export([snapshot/1, allocate/5, replacement/3]).
+-export([snapshot/1, allocate/5, replacement/3, reattachment/3]).
 
 -doc "Reads one declared domain's ready local endpoints. Owner loss and non-ready state remain errors, never replacement permission.".
 -spec snapshot(hls_node:service()) -> {ok, hls_domain:snapshot()} | {error, term()}.
@@ -48,6 +48,7 @@ allocate(Node, Creation, Name, #{handle := Handle, actors := Actors}, Next) ->
             service => Name,
             identity => Id,
             endpoint => Endpoint,
+            endpoint_status => connected,
             incarnation => Handle,
             pid => hls_node_wire:pid(Node, Creation, Next + Offset)
         }
@@ -88,4 +89,53 @@ replacement(Service, Old, #{domain := {Domain, Previous}}) ->
             end;
         Error ->
             Error
+    end.
+
+-doc "Rebinds a surviving ready incarnation to fresh local proxies while preserving virtual PIDs. Only prior noconnection exits permit reattachment; terminal actor exits and changed actor sets cannot revive an identity.".
+-spec reattachment(hls_node:service(), [map()], map()) ->
+    unchanged | {ok, [map()]} | {error, term()}.
+reattachment(Service, Old, #{domain := Handle}) ->
+    case snapshot(Service) of
+        {ok, #{handle := Handle, actors := Actors}} ->
+            Existing = maps:from_list([
+                {Id, Endpoint}
+             || #{identity := Id, endpoint := Endpoint} <- Old
+            ]),
+            case Actors of
+                Existing -> unchanged;
+                _ -> reattach_endpoints(Old, Existing, Actors)
+            end;
+        {ok, _} ->
+            {error, changed_incarnation};
+        Error ->
+            Error
+    end.
+
+%% The same authoritative incarnation must have lost only its host connection, never its actor lifetime.
+-spec reattach_endpoints([map()], #{term() => pid()}, #{term() => pid()}) ->
+    {ok, [map()]} | {error, term()}.
+reattach_endpoints(Old, Existing, Actors) ->
+    case lists:sort(maps:keys(Existing)) =:= lists:sort(maps:keys(Actors)) of
+        false ->
+            {error, changed_domain_actors};
+        true ->
+            case
+                lists:all(
+                    fun
+                        (#{endpoint_status := {down, noconnection}, endpoint := Endpoint}) ->
+                            not is_process_alive(Endpoint);
+                        (_) ->
+                            false
+                    end,
+                    Old
+                )
+            of
+                false ->
+                    {error, old_endpoints_not_disconnected};
+                true ->
+                    {ok, [
+                        Target#{endpoint := maps:get(Id, Actors), endpoint_status := connected}
+                     || Target = #{identity := Id} <- Old
+                    ]}
+            end
     end.

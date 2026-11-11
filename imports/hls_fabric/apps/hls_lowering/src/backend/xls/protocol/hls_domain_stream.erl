@@ -146,11 +146,22 @@ ingress(Index, #{targets := Targets}) ->
     #{
         files := #{string() => iodata()},
         state_bit_budget := pos_integer(),
-        packet_words := pos_integer()
+        packet_words := pos_integer(),
+        session := #{
+            bits := 64,
+            establishment := out_of_band,
+            ordering := strictly_increasing,
+            prefix_words := 2,
+            input := string(),
+            reset := string(),
+            observed := string(),
+            attached := string(),
+            preserves := [actor_state | incarnation]
+        }
     }.
 emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
     #{actors := Actors, call_slots := Slots, streams := Outputs} = Stream,
-    PacketWords = max(16, 8 + Words),
+    PacketWords = max(18, 10 + Words),
     true = PacketWords =< 255,
     {ok, Template} = file:read_file(
         filename:join(code:priv_dir(hls_lowering), "xls/templates/domain_stream.x.in")
@@ -190,8 +201,19 @@ emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
                 Inputs, Pins, "domain_stream", "domain_stream_core"
             )
         },
-        state_bit_budget => 4 * (PacketWords + 2) * 32 + Slots * 33 + 512,
-        packet_words => PacketWords
+        state_bit_budget => 4 * (PacketWords + 2) * 32 + Slots * 34 + 512 + 65,
+        packet_words => PacketWords,
+        session => #{
+            bits => 64,
+            establishment => out_of_band,
+            ordering => strictly_increasing,
+            prefix_words => 2,
+            input => "transport_session",
+            reset => "transport_reset",
+            observed => "transport_session_observed",
+            attached => "transport_attached",
+            preserves => [actor_state, incarnation]
+        }
     }.
 
 %% Runtime records keep their ordinary source selectors and canonical payload lengths.
@@ -286,11 +308,11 @@ output_select(Outputs) ->
         "_ => zero!<Output>(),}"
     ].
 
--doc "Named sampled pin buses for two independent routed word streams; each ready/valid transfer accepts one complete word.".
+-doc "Named sampled pin buses for two independent word streams and an out-of-band session boundary. transport_session_observed is the hardware acknowledgement; reset alone is the cold domain reset.".
 -spec ports() -> {[{string(), pos_integer()}], [{string(), pos_integer()}]}.
 ports() ->
     {
-        [{"reset", 1}] ++
+        [{"reset", 1}, {"transport_reset", 1}, {"transport_session", 64}] ++
             lists:append([
                 [
                     {P ++ "_word", 32},
@@ -308,7 +330,7 @@ ports() ->
                 {P ++ "_output_last", 1}
             ]
          || P <- ["management", "application"]
-        ]) ++ [{"wire_fault", 1}]
+        ]) ++ [{"wire_fault", 1}, {"transport_session_observed", 64}, {"transport_attached", 1}]
     }.
 
 %% Decimal text is used only at statically elaborated wiring boundaries.

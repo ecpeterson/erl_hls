@@ -20,14 +20,14 @@ type Cursor = uN[std::clog2(SOURCE_COUNT) as u32 + (SOURCE_COUNT == u32:1) as u3
 type Packet = framing::Packet<PACKET_BITS>;
 type Receive = framing::Receive<PACKET_BITS>;
 // One live source call owns an outer request identity until its reply is accepted.
-struct Call { valid: bool, request: u32 }
+pub struct Call { valid: bool, abandoned: bool, request: u32 }
 // Source-checked command address; out-of-range values never reach the actor network.
 struct Command { valid: bool, call: bool, slot: u32, target: u2, x: u16, y: u16 }
 // One selected external source stream. Reply slots are local to that source actor.
 struct Output { valid: bool, actor: u32, port: u32, reply: bool, base: u32, count: u32, frame: axis::Frame }
 // External pin ABI; application backpressure never owns management's parser or output.
 pub struct Inputs {
-  reset: bool,
+  reset: bool, transport_reset: bool, transport_session: u64,
   management_word: u32, management_valid: bool, management_last: bool, management_output_ready: bool,
   application_word: u32, application_valid: bool, application_last: bool, application_output_ready: bool,
 }
@@ -35,9 +35,10 @@ pub struct Inputs {
 pub struct Outputs {
   management_ready: bool, management_output_word: u32, management_output_valid: bool, management_output_last: bool,
   application_ready: bool, application_output_word: u32, application_output_valid: bool, application_output_last: bool,
-  wire_fault: bool,
+  wire_fault: bool, transport_session: u64, transport_attached: bool,
 }
-// Transport state survives ordinary domain replacement; only cold device reset clears it.
+// A transport boundary replaces framing and observers while preserving the actor network.
+// Session identity survives stream faults; only cold reset permits its counter to restart.
 pub struct State {
   core: domain::State,
   management_rx: Receive, application_rx: Receive,
@@ -46,7 +47,7 @@ pub struct State {
   management_pending: bool, management_request: u32, management_header: u32, management_route: u32,
   management_status: Status, management_action: Action,
   calls: Call[SLOT_COUNT], incarnation: u64, last_request: u32,
-  sequence: u32, cursor: u32, fault: bool,
+  sequence: u32, cursor: u32, fault: bool, session: u64, attached: bool,
 }
 // One clock's immutable observation and its complete successor state.
 pub struct Tick { state: State, output: Outputs }
@@ -73,9 +74,9 @@ fn word(packet: Packet, index: u32) -> u32 { (packet.payload >> (index*u32:32)) 
 // Counter fields use two complete words; they are never narrowed on transport.
 fn pair(packet: Packet, index: u32) -> u64 { word(packet,index+u32:1) ++ word(packet,index) }
 // Acknowledgements, replies and effects share one ordered nonwrapping output sequence.
-fn response(sequence: u32, incarnation: u64, actor: u32, request: u32, disposition: u32,
+fn response(session: u64, sequence: u32, incarnation: u64, actor: u32, request: u32, disposition: u32,
             port: u32, frame: axis::Frame, operation: u8, original: u32) -> Packet {
-  let payload = (sequence as bits[PACKET_BITS]) |
+  let body = (sequence as bits[PACKET_BITS]) |
     (incarnation as bits[PACKET_BITS] << u32:32) |
     (actor as bits[PACKET_BITS] << u32:96) |
     (request as bits[PACKET_BITS] << u32:128) |
@@ -83,11 +84,12 @@ fn response(sequence: u32, incarnation: u64, actor: u32, request: u32, dispositi
     (port as bits[PACKET_BITS] << u32:192) |
     (axis::bits_from_header(frame.header) as bits[PACKET_BITS] << u32:224) |
     (frame.payload as bits[PACKET_BITS] << u32:256);
-  Packet { route: u32:1, header: framing::header(original, operation, u8:8+frame.header.payload_words), payload }
+  let payload = (body << u32:64) | session as bits[PACKET_BITS];
+  Packet { route: u32:1, header: framing::header(original, operation, u8:10+frame.header.payload_words), payload }
 }
 // Management captures a committed lifecycle snapshot and every previously accepted application output.
 fn snapshot(s: State, observed: domain::Outputs) -> Packet {
-  let payload = (s.management_request as bits[PACKET_BITS]) |
+  let body = (s.management_request as bits[PACKET_BITS]) |
     (s.management_status as bits[PACKET_BITS] << u32:32) |
     (s.management_action as bits[PACKET_BITS] << u32:64) |
     (observed.domain_phase as bits[PACKET_BITS] << u32:96) |
@@ -99,27 +101,43 @@ fn snapshot(s: State, observed: domain::Outputs) -> Packet {
     (observed.domain_source_fault as bits[PACKET_BITS] << u32:416) |
     (observed.domain_source_actor as bits[PACKET_BITS] << u32:448) |
     (s.sequence as bits[PACKET_BITS] << u32:480);
-  Packet { route: s.management_route, header: framing::header(s.management_header,u8:1,u8:16), payload }
+  let payload = (body << u32:64) | s.session as bits[PACKET_BITS];
+  Packet { route: s.management_route, header: framing::header(s.management_header,u8:1,u8:18), payload }
 }
 // Advance only a completed stream transfer. A blocked beat is stable until accepted.
-pub fn tick(s: State, io: Inputs) -> Tick {
-  let mgmt_done = s.management_tx_valid && io.management_output_ready && framing::last(s.management_tx,s.management_position);
-  let app_done = s.application_tx_valid && io.application_output_ready && framing::last(s.application_tx,s.application_position);
+pub fn tick(previous: State, io: Inputs) -> Tick {
+  let establish = io.transport_reset && io.transport_session != u64:0 && io.transport_session > previous.session && !io.reset;
+  // A reply still owns its source slot after its observer disappears. Reuse waits
+  // for that actual reply, even if another transport boundary intervenes.
+  let abandoned = unroll_for! (i, calls): (u32, Call[SLOT_COUNT]) in u32:0..SLOT_COUNT {
+    update(calls, i, Call { abandoned: calls[i].valid, ..calls[i] })
+  }(previous.calls);
+  let s = if establish {
+    State { core: previous.core, incarnation: previous.incarnation, calls: abandoned,
+      session: io.transport_session, attached: true, ..zero!<State>() }
+  } else { previous };
+  let connected = s.attached && !s.fault && !io.reset && !establish;
+  let mgmt_done = connected && s.management_tx_valid && io.management_output_ready && framing::last(s.management_tx,s.management_position);
+  let app_done = connected && s.application_tx_valid && io.application_output_ready && framing::last(s.application_tx,s.application_position);
   let mgmt_space = !s.management_tx_valid || mgmt_done;
   let app_space = !s.application_tx_valid || app_done;
-  let management_ready = !s.management_rx.full && !io.reset;
-  let application_ready = !s.application_rx.full && !io.reset && !s.fault;
+  let management_ready = !s.management_rx.full && connected;
+  let application_ready = !s.application_rx.full && connected;
   let mgmt_rx = if management_ready && io.management_valid { framing::receive(s.management_rx,io.management_word,io.management_last) } else { s.management_rx };
   let app_rx = if application_ready && io.application_valid { framing::receive(s.application_rx,io.application_word,io.application_last) } else { s.application_rx };
-  let management = s.management_rx.packet;
-  let management_inspect = management.header[24+:u8] == u8:0 && management.header[0+:u8] == u8:1;
-  let management_request = management.header[24+:u8] == u8:1 && management.header[0+:u8] == u8:9;
+  let management_packet = s.management_rx.packet;
+  let management_session = pair(management_packet,u32:0) == s.session && s.attached;
+  let management = Packet { payload: management_packet.payload >> u32:64, ..management_packet };
+  let management_inspect = management.header[24+:u8] == u8:0 && management.header[0+:u8] == u8:3;
+  let management_request = management.header[24+:u8] == u8:1 && management.header[0+:u8] == u8:11;
   let management_envelope_valid = management.route == u32:0 && (management.header & u32:0x00ffff00) == u32:0;
   let management_codes_valid = (word(management,u32:1) >> bit_count<Operation>()) == u32:0 &&
     (word(management,u32:8) >> bit_count<Fault>()) == u32:0;
-  let management_valid = s.management_rx.full && !s.management_rx.bad && management_envelope_valid &&
+  let management_valid = connected && management_session && s.management_rx.full && !s.management_rx.bad && management_envelope_valid &&
     (management_inspect || (management_request && management_codes_valid)) && !s.management_pending && mgmt_space;
-  let app = s.application_rx.packet;
+  let application_packet = s.application_rx.packet;
+  let application_session = pair(application_packet,u32:0) == s.session && s.attached;
+  let app = Packet { payload: application_packet.payload >> u32:64, ..application_packet };
   let incarnation = pair(app,u32:0);
   let actor = word(app,u32:2);
   let request = word(app,u32:3);
@@ -132,7 +150,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let last_request = if current == s.incarnation { s.last_request } else { u32:0 };
   let stale = incarnation == u64:0 || incarnation != current || s.core.control.data.lifecycle.phase != domain_codes::PHASE_READY || request <= last_request || request == u32:0;
   let malformed = s.application_rx.bad || app.route != u32:1 || app.header[24+:u8] != u8:2 || (app.header & u32:0x00ffff00) != u32:0 ||
-    app.header[0+:u8] as u32 != u32:7 + frame.header.payload_words as u32 ||
+    app.header[0+:u8] as u32 != u32:9 + frame.header.payload_words as u32 ||
     !selection.valid || frame.header.txid as u32 != (if kind == u32:1 {slot} else {u32:0}) || frame.header.flags != u8:0;
   let occupied = selection.call && live_calls[selection.slot].valid;
   let exhausted = s.sequence == u32:0xffffffff;
@@ -140,7 +158,8 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let spatial = selection.x ++ selection.y ++ selection.x ++ selection.y ++ selection.target ++
     frame.header.payload_words ++ frame.header.txid ++ frame.header.flags ++ frame.header.op ++ frame.payload;
   let control = domain::Inputs {
-    reset: io.reset, transport_fault: s.fault || exhausted,
+    // Loss of the host connection does not imply failure of the actor network.
+    reset: io.reset, transport_fault: false,
     management_valid: management_valid && management_request,
     management_op: word(management,u32:1) as Operation,
     expected: pair(management,u32:2), target: pair(management,u32:4), transition: pair(management,u32:6),
@@ -150,9 +169,9 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   // Availability is a pre-edge observation, independent of application handshakes.
   // Only these narrow output fields survive this preview; its successor is unused.
   let observation = domain::tick(s.core, control).output;
-  let ingress = s.application_rx.full && (reject || observation.app_ingress_ready);
+  let ingress = application_session && s.application_rx.full && (reject || observation.app_ingress_ready);
   let (available, grant) = arbitrate(observation, ingress, s.cursor);
-  let granted = available && app_space && !io.reset && !s.fault && !exhausted;
+  let granted = available && app_space && connected && !exhausted;
   let input_turn = grant == OUTPUT_COUNT;
   let offer = granted && input_turn;
   // Commit the actor/link network once, with exactly one selected external transfer.
@@ -166,34 +185,36 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let reply_index = selected.base + selected.frame.header.txid as u32;
   let valid_reply = !selected.reply || (selected.frame.header.txid as u32 < selected.count && live_calls[reply_index].valid);
   let output_good = output_take && valid_reply;
+  let output_emit = output_good && !(selected.reply && live_calls[reply_index].abandoned);
   let input_take = offer && (reject || core.output.app_ingress_ready);
-  let new_sequence = s.sequence + (input_take || output_good) as u32;
+  let new_sequence = s.sequence + (input_take || output_emit) as u32;
   let disposition = if stale { u32:1 } else if malformed { u32:2 } else if occupied { u32:3 } else if exhausted { u32:4 } else { u32:0 };
   let accepted_calls = if input_take && !reject && selection.call {
-    update(live_calls,selection.slot,Call {valid:true,request})
+    update(live_calls,selection.slot,Call {valid:true,abandoned:false,request})
   } else { live_calls };
   let calls = if output_good && selected.reply { update(accepted_calls,reply_index,zero!<Call>()) } else { accepted_calls };
   let application_tx = if input_take {
-    response(new_sequence,incarnation,actor,request,disposition,u32:0,zero!<axis::Frame>(),u8:2,app.header)
-  } else if output_good {
-    response(new_sequence,current,selected.actor,if selected.reply {live_calls[reply_index].request} else {u32:0},u32:0,
+    response(s.session,new_sequence,incarnation,actor,request,disposition,u32:0,zero!<axis::Frame>(),u8:2,app.header)
+  } else if output_emit {
+    response(s.session,new_sequence,current,selected.actor,if selected.reply {live_calls[reply_index].request} else {u32:0},u32:0,
       selected.port,selected.frame,if selected.reply {u8:3} else {u8:4},u32:0)
   } else { s.application_tx };
   let management_take = management_valid && (management_inspect || core.output.management_response_valid);
-  let management_capture = s.management_pending && mgmt_space;
+  let management_capture = connected && s.management_pending && mgmt_space;
+  let wire_fault = s.fault || (output_take && !valid_reply) || exhausted ||
+    (connected && management_session && s.management_rx.full && (s.management_rx.bad || !(management_inspect || management_request) || !management_envelope_valid || (management_request && !management_codes_valid)));
   let next = State {
     core:core.state, incarnation:current, calls,
     last_request:if input_take && !stale {request} else {last_request}, sequence:new_sequence,
     cursor:if input_take || output_good {arbitration::successor<SOURCE_COUNT>(grant as Cursor) as u32} else {s.cursor},
-    fault:s.fault || (output_take && !valid_reply) || exhausted ||
-      (s.management_rx.full && (s.management_rx.bad || !(management_inspect || management_request) || !management_envelope_valid || (management_request && !management_codes_valid))),
-    management_rx:if management_take {zero!<Receive>()} else {mgmt_rx},
-    application_rx:if input_take {zero!<Receive>()} else {app_rx},
+    fault:wire_fault, session:s.session, attached:s.attached && !wire_fault,
+    management_rx:if management_take || (connected && s.management_rx.full && !management_session) {zero!<Receive>()} else {mgmt_rx},
+    application_rx:if input_take || (connected && s.application_rx.full && !application_session) {zero!<Receive>()} else {app_rx},
     management_tx:if management_capture {snapshot(State{sequence:new_sequence,..s},core.output)} else {s.management_tx},
     management_tx_valid:management_capture || (s.management_tx_valid && !mgmt_done),
-    management_position:if mgmt_done || management_capture {u32:0} else {s.management_position+(s.management_tx_valid && io.management_output_ready) as u32},
-    application_tx, application_tx_valid:input_take || output_good || (s.application_tx_valid && !app_done),
-    application_position:if app_done || input_take || output_good {u32:0} else {s.application_position+(s.application_tx_valid && io.application_output_ready) as u32},
+    management_position:if mgmt_done || management_capture {u32:0} else {s.management_position+(connected && s.management_tx_valid && io.management_output_ready) as u32},
+    application_tx, application_tx_valid:input_take || output_emit || (s.application_tx_valid && !app_done),
+    application_position:if app_done || input_take || output_emit {u32:0} else {s.application_position+(connected && s.application_tx_valid && io.application_output_ready) as u32},
     management_pending:management_take || (s.management_pending && !management_capture),
     management_request:if management_take {word(management,u32:0)} else {s.management_request},
     management_header:if management_take {management.header} else {s.management_header},
@@ -203,12 +224,13 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   };
   Tick { state:if io.reset {zero!<State>()} else {next}, output:Outputs {
     management_ready, application_ready,
-    management_output_valid:s.management_tx_valid && !io.reset,
+    management_output_valid:s.management_tx_valid && connected,
     management_output_word:framing::word(s.management_tx,s.management_position),
     management_output_last:framing::last(s.management_tx,s.management_position),
-    application_output_valid:s.application_tx_valid && !io.reset,
+    application_output_valid:s.application_tx_valid && connected,
     application_output_word:framing::word(s.application_tx,s.application_position),
-    application_output_last:framing::last(s.application_tx,s.application_position),wire_fault:s.fault,
+    application_output_last:framing::last(s.application_tx,s.application_position),wire_fault:previous.fault,
+    transport_session:previous.session, transport_attached:previous.attached && !io.reset,
   }}
 }
 // The physical adapter transfers one sampled command/observation on every clock.

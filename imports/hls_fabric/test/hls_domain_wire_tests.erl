@@ -7,8 +7,8 @@
 typed_call_roundtrip_test() ->
     Actor = actor(),
     ok = hls_domain_wire:check(interface()),
-    {Packet, [answer]} = hls_domain_wire:request(Actor, call, {sample, 5}, 17, 23, 0),
-    <<17:64/little, 3:32/little, 23:32/little, 1:32/little, 0:32/little,
+    {Packet, [answer]} = hls_domain_wire:request(Actor, call, {sample, 5}, 41, 17, 23, 0),
+    <<41:64/little,17:64/little, 3:32/little, 23:32/little, 1:32/little, 0:32/little,
         Header:32/little, Payload/binary>> = Packet,
     ?assertEqual({sample, 0, {sample, 5}}, hls_domain_wire:message(Actor, Header, Payload)),
     ?assertEqual(4, byte_size(Payload)).
@@ -16,13 +16,13 @@ typed_call_roundtrip_test() ->
 %% Known schemas do not imply a legal request family or valid field value.
 -spec request_contract_test() -> ok.
 request_contract_test() ->
-    ?assertError({invalid_request, call, trigger}, hls_domain_wire:request(actor(), call, {trigger, 1}, 1, 1, 0)),
-    ?assertError({invalid_request, cast, sample}, hls_domain_wire:request(actor(), cast, {sample, 1}, 1, 1, 255)),
-    ?assertException(error, _, hls_domain_wire:request(actor(), call, {sample, 1}, 1, 1, 1)),
-    ?assertException(error, _, hls_domain_wire:request(actor(), cast, {trigger, 1}, 1, 1, 0)),
-    ?assertError(badarg, hls_domain_wire:request(actor(), call, {sample, 8}, 1, 1, 0)),
-    {<<1:64/little,3:32/little,2:32/little,0:32/little,255:32/little,Header:32/little,Payload/binary>>, []} =
-        hls_domain_wire:request(actor(), cast, {trigger, 1}, 1, 2, 255),
+    ?assertError({invalid_request, call, trigger}, hls_domain_wire:request(actor(), call, {trigger, 1}, 41, 1, 1, 0)),
+    ?assertError({invalid_request, cast, sample}, hls_domain_wire:request(actor(), cast, {sample, 1}, 41, 1, 1, 255)),
+    ?assertException(error, _, hls_domain_wire:request(actor(), call, {sample, 1}, 41, 1, 1, 1)),
+    ?assertException(error, _, hls_domain_wire:request(actor(), cast, {trigger, 1}, 41, 1, 1, 0)),
+    ?assertError(badarg, hls_domain_wire:request(actor(), call, {sample, 8}, 41, 1, 1, 0)),
+    {<<41:64/little,1:64/little,3:32/little,2:32/little,0:32/little,255:32/little,Header:32/little,Payload/binary>>, []} =
+        hls_domain_wire:request(actor(), cast, {trigger, 1}, 41, 1, 2, 255),
     ?assertEqual({trigger, 0, {trigger, 1}}, hls_domain_wire:message(actor(), Header, Payload)).
 
 %% Assert the established axis header byte order independently of the decoder.
@@ -30,17 +30,17 @@ request_contract_test() ->
 canonical_header_test() ->
     Actor0 = #{contract := Contract} = actor(),
     Actor = Actor0#{contract := Contract#{pending_calls := 32}},
-    {<<_:192, 1, 17, 0, 1, _Payload/binary>>, [answer]} =
-        hls_domain_wire:request(Actor, call, {sample, 2}, 1, 1, 17),
-    {<<_:160, 255:32/little, 1, 0, 0, 3, _CastPayload/binary>>, []} =
-        hls_domain_wire:request(Actor, cast, {trigger, 2}, 1, 2, 255),
+    {<<_:256, 1, 17, 0, 1, _Payload/binary>>, [answer]} =
+        hls_domain_wire:request(Actor, call, {sample, 2}, 41, 1, 1, 17),
+    {<<_:224, 255:32/little, 1, 0, 0, 3, _CastPayload/binary>>, []} =
+        hls_domain_wire:request(Actor, cast, {trigger, 2}, 41, 1, 2, 255),
     {_, _, {sample, 2}} = hls_domain_wire:message(Actor, 16#01001101, <<2:3, 0:29>>),
     ok.
 
 %% Padding, flags and exact physical lengths are part of the record boundary.
 -spec noncanonical_frame_test() -> ok.
 noncanonical_frame_test() ->
-    {<<_:192, Header:32/little, Payload/binary>>, _} = hls_domain_wire:request(actor(), call, {sample, 2}, 1, 1, 0),
+    {<<_:256, Header:32/little, Payload/binary>>, _} = hls_domain_wire:request(actor(), call, {sample, 2}, 41, 1, 1, 0),
     <<Head:8, Rest/binary>> = Payload,
     ?assertException(error, _, hls_domain_wire:message(actor(), Header, <<(Head bor 1):8, Rest/binary>>)),
     ?assertException(error, _, hls_domain_wire:message(actor(), Header bor (1 bsl 16), Payload)),
@@ -50,24 +50,24 @@ noncanonical_frame_test() ->
 -spec management_frontier_test() -> ok.
 management_frontier_test() ->
     Interface = interface(),
-    {1, <<9:32/little,2:32/little,7:64/little,8:64/little,10:64/little,0:32/little>>} =
-        hls_domain_wire:management(9, #domain_input{op=replace,expected=7,target=8,transition=10}, Interface),
-    Packet = <<9:32/little,1:32/little,0:32/little,1:32/little,8:64/little,7:64/little,8:64/little,
+    {1, <<41:64/little,9:32/little,2:32/little,7:64/little,8:64/little,10:64/little,0:32/little>>} =
+        hls_domain_wire:management(41, 9, #domain_input{op=replace,expected=7,target=8,transition=10}, Interface),
+    Packet = <<41:64/little,9:32/little,1:32/little,0:32/little,1:32/little,8:64/little,7:64/little,8:64/little,
         10:64/little,0:32/little,0:32/little,3:32/little,42:32/little>>,
-    {9, #domain_output{status=accepted,state=#domain_state{phase=ready,current=8}},0,3,42} =
+    {41, 9, #domain_output{status=accepted,state=#domain_state{phase=ready,current=8}},0,3,42} =
         hls_domain_wire:observation(Packet, Interface),
-    <<Truncated:60/binary,_:4/binary>> = Packet,
+    <<Truncated:68/binary,_:4/binary>> = Packet,
     ?assertException(error, _, hls_domain_wire:observation(Truncated, Interface)).
 
 %% Unknown dispositions and malformed acknowledgement bodies cannot release a call slot.
 -spec application_envelope_test() -> ok.
 application_envelope_test() ->
-    Packet = <<1:32/little,7:64/little,3:32/little,4:32/little,0:32/little,0:32/little,0:32/little>>,
-    ?assertMatch(#{kind:=accepted,sequence:=1,incarnation:=7,request:=4,disposition:=accepted},
+    Packet = <<41:64/little,1:32/little,7:64/little,3:32/little,4:32/little,0:32/little,0:32/little,0:32/little>>,
+    ?assertMatch(#{kind:=accepted,session:=41,sequence:=1,incarnation:=7,request:=4,disposition:=accepted},
         hls_domain_wire:application(2, Packet)),
     ?assertException(error, _, hls_domain_wire:application(2, <<Packet/binary,0:32>>)),
     ?assertException(error, _, hls_domain_wire:application(2,
-        <<1:32/little,7:64/little,3:32/little,4:32/little,99:32/little,0:32/little,0:32/little>>)).
+        <<41:64/little,1:32/little,7:64/little,3:32/little,4:32/little,99:32/little,0:32/little,0:32/little>>)).
 
 %% Every exported schema has a checked record descriptor and a unique actor-local selector.
 -spec actor() -> hls_domain_wire:actor().

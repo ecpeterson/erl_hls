@@ -6,7 +6,7 @@ A virtual FPGA distribution node hosted inside the existing BEAM.
 """.
 -behaviour(gen_server).
 %% Public virtual-node lifecycle and inventory.
--export([start_link/4, stop/1, info/1, services/1, publish_domain/2]).
+-export([start_link/4, stop/1, info/1, services/1, publish_domain/2, reattach_domain/2]).
 %% Supervisor and local-carrier entry points.
 -export([start_manager/5, local_manager/1]).
 %% gen_server callbacks.
@@ -49,6 +49,10 @@ services(Node) -> maps:get(services, info(Node)).
 -spec publish_domain(pid(), atom()) -> {ok, map()} | {error, term()}.
 publish_domain(Node, Name) ->
     gen_server:call(hls_node_sup:child(Node, node), {publish_domain, Name}).
+-doc "Reconnects a declared domain's surviving incarnation to fresh host proxies without changing its virtual PIDs. The owner must already attest readiness for the same incarnation; old proxies must have exited with noconnection. Previously delivered monitor exits and uncertain requests are never replayed or revived.".
+-spec reattach_domain(pid(), atom()) -> {ok, map()} | {error, term()}.
+reattach_domain(Node, Name) ->
+    gen_server:call(hls_node_sup:child(Node, node), {reattach_domain, Name}).
 -doc "Starts the node manager under its qualified local registration name.".
 -spec start_manager(node(), brokers(), [service()], options(), pid()) -> gen_server:start_ret().
 start_manager(Name, Brokers, Services, Options, NodeSup) ->
@@ -148,6 +152,7 @@ init({Name, Brokers, Services, Options, NodeSup}) ->
         brokers => Brokers,
         actors => Actors,
         services => Handles,
+        domain_monitors => monitor_domains(Actors),
         domain_services => maps:from_list([{maps:get(name, S), S} || S = #{domain := _} <- Services]),
         next_id => NextId,
         publication => none,
@@ -228,6 +233,12 @@ handle_call({publish_domain, _Name}, _From, State = #{publication := Pending}) w
 %% New identities are allocated only from current readiness and actual old endpoint retirement.
 handle_call({publish_domain, Name}, From, State) ->
     publish(Name, From, State);
+%% Reattachment changes host endpoints, not the distributed actor identity.
+handle_call({reattach_domain, _}, _From, State = #{publication := Pending}) when Pending =/= none ->
+    {reply, {error, publication_in_progress}, State};
+%% A ready surviving incarnation may explicitly replace its disconnected host proxies.
+handle_call({reattach_domain, Name}, From, State) ->
+    reattach(Name, From, State);
 %% Create an adapter for a distribution connection inside this BEAM.
 handle_call({local_connection, Owner}, _From, State = #{node_sup := Sup}) ->
     Identity = maps:with([name, creation], State),
@@ -279,10 +290,18 @@ handle_call(
     }
 ) ->
     Live = maps:filter(fun(Pid, _) -> is_process_alive(Pid) end, Connections),
-    case {map_size(Live) >= Max, lists:member(Peer, [N || #{peer := N} <- maps:values(Live)])} of
-        {true, _} ->
+    case
+        {
+            awaiting_domain_down(Actors),
+            map_size(Live) >= Max,
+            lists:member(Peer, [N || #{peer := N} <- maps:values(Live)])
+        }
+    of
+        {true, _, _} ->
+            {reply, {error, domain_status_pending}, State};
+        {false, true, _} ->
             {reply, {error, connection_limit}, State#{connections := Live}};
-        {_, true} ->
+        {false, _, true} ->
             {reply, {error, already_connected}, State#{connections := Live}};
         _ ->
             case source(Brokers, maps:get(source_range, Config)) of
@@ -324,6 +343,17 @@ handle_info(
 ) ->
     Waiting = maps:remove(Connection, maps:get(waiting, Pending)),
     {noreply, finish_publication(State#{publication := Pending#{waiting := Waiting}})};
+%% Retain endpoint failure classification for peers which connect after the proxy has died.
+handle_info({'DOWN', Ref, process, _Endpoint, Reason}, State = #{domain_monitors := Monitors}) when
+    is_map_key(Ref, Monitors)
+->
+    {Pid, Kind} = maps:get(Ref, Monitors),
+    Observed =
+        case {Reason, Kind} of
+            {noproc, reattach} -> noconnection;
+            _ -> Reason
+        end,
+    {noreply, domain_down(Pid, Observed, State#{domain_monitors := maps:remove(Ref, Monitors)})};
 %% A departed source connection ends the virtual incarnation; it must never reconnect to live hardware state.
 handle_info(
     {'DOWN', Ref, process, Pid, Reason},
@@ -455,6 +485,22 @@ publish(Name, From, State = #{domain_services := Declared, services := Handles, 
             end
     end.
 
+%% Explicit reattachment permits only disconnected identities whose authoritative incarnation survived.
+-spec reattach(atom(), gen_server:from(), map()) -> {reply, term(), map()} | {noreply, map()}.
+reattach(Name, From, State = #{domain_services := Declared, services := Handles, actors := Actors}) ->
+    case maps:find(Name, Declared) of
+        error ->
+            {reply, {error, unknown_managed_domain}, State};
+        {ok, Service} ->
+            Old = [A || A = #{kind := domain, service := N} <- Actors, N =:= Name],
+            Handle = maps:get(Name, Handles),
+            case hls_node_domain:reattachment(Service, Old, Handle) of
+                unchanged -> {reply, {ok, Handle}, State};
+                {error, Reason} -> {reply, {error, Reason}, State};
+                {ok, Targets} -> publish_targets(reattach, Name, From, Old, Targets, Handle, State)
+            end
+    end.
+
 %% A fresh monotonically allocated PID set is installed only after every connection acknowledges retirement.
 -spec begin_publication(atom(), gen_server:from(), [map()], hls_domain:snapshot(), map()) ->
     {noreply, map()} | {reply, term(), map()}.
@@ -467,14 +513,32 @@ begin_publication(
     From,
     Old,
     Snapshot,
-    State = #{name := Node, creation := Creation, next_id := Next, connections := Connections}
+    State = #{name := Node, creation := Creation, next_id := Next}
 ) ->
     {Targets, Handle, After} = hls_node_domain:allocate(Node, Creation, Name, Snapshot, Next),
+    publish_targets(replacement, Name, From, Old, Targets, Handle, State#{next_id := After}).
+
+%% Both publication modes await each peer's old DOWN signals before exposing any fresh endpoint.
+-spec publish_targets(
+    replacement | reattach, atom(), gen_server:from(), [map()], [map()], map(), map()
+) -> {noreply, map()}.
+publish_targets(
+    Kind,
+    Name,
+    From,
+    Old,
+    Targets,
+    Handle,
+    State = #{connections := Connections, domain_monitors := Monitors}
+) ->
+    FreshMonitors = monitor_domains(Targets, Kind),
     Ref = make_ref(),
     Waiting = maps:map(fun(_, _) -> true end, Connections),
     maps:foreach(
         fun(Connection, _) ->
-            gen_server:cast(Connection, {domain_publish, Ref, [P || #{pid := P} <- Old], Targets})
+            gen_server:cast(
+                Connection, {domain_publish, Ref, Kind, [P || #{pid := P} <- Old], Targets}
+            )
         end,
         Waiting
     ),
@@ -486,7 +550,11 @@ begin_publication(
         handle => Handle,
         waiting => Waiting
     },
-    {noreply, finish_publication(State#{next_id := After, publication := Pending})}.
+    {noreply,
+        finish_publication(State#{
+            publication := Pending,
+            domain_monitors := maps:merge(Monitors, FreshMonitors)
+        })}.
 
 %% Losing a whole peer connection is independent of actor retirement; its ERTS observers see noconnection.
 -spec departed(pid(), map()) -> map().
@@ -522,3 +590,45 @@ finish_publication(
     State#{actors := Kept ++ Targets, services := Handles#{Name := Handle}, publication := none};
 finish_publication(State) ->
     State.
+
+%% Local monitors classify proxy loss once for future peer connections and explicit reattachment.
+-spec monitor_domains([map()]) -> #{reference() => {pid(), replacement | reattach}}.
+monitor_domains(Targets) -> monitor_domains(Targets, replacement).
+
+%% Reattachment candidates already gone before monitor setup represent a failed connection attempt, not actor death.
+-spec monitor_domains([map()], replacement | reattach) ->
+    #{reference() => {pid(), replacement | reattach}}.
+monitor_domains(Targets, Kind) ->
+    maps:from_list([
+        {monitor(process, Endpoint), {Pid, Kind}}
+     || #{kind := domain, endpoint := Endpoint, pid := Pid, endpoint_status := connected} <- Targets
+    ]).
+
+%% A new connection must not infer noproc from a proxy death whose authoritative reason is still queued.
+-spec awaiting_domain_down([map()]) -> boolean().
+awaiting_domain_down(Targets) ->
+    lists:any(
+        fun
+            (#{kind := domain, endpoint := Endpoint, endpoint_status := connected}) ->
+                not is_process_alive(Endpoint);
+            (_) ->
+                false
+        end,
+        Targets
+    ).
+
+%% Endpoint failure can arrive while peers still acknowledge publication; retain its classification in both inventories.
+-spec domain_down(pid(), term(), map()) -> map().
+domain_down(Pid, Reason, State = #{actors := Actors, publication := Publication}) ->
+    Mark = fun(Target) ->
+        case Target of
+            #{pid := Pid} -> Target#{endpoint_status := {down, Reason}};
+            _ -> Target
+        end
+    end,
+    Pending =
+        case Publication of
+            none -> none;
+            #{targets := Targets} -> Publication#{targets := lists:map(Mark, Targets)}
+        end,
+    State#{actors := lists:map(Mark, Actors), publication := Pending}.
