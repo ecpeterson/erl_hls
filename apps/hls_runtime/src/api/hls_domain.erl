@@ -23,6 +23,7 @@ established. After host/storage crash, reconcile identity before reusing this st
 %% Deployment ownership and explicit lifecycle operations.
 -export([
     create_store/1,
+    reserve_incarnations/2,
     start_link/2,
     status/2,
     activate/2,
@@ -132,6 +133,11 @@ create_store(Path) ->
             Error
     end.
 
+-doc "Durably consumes a nonempty interval of fresh incarnation IDs for a delegated authority. Reservation transfers no backend control, and unused or uncertain grants are never reclaimed. The caller must bind the interval to one supervisor incarnation and exclude competing child control; retry after a lost reply reserves another interval. Counter synchronization is shared with ordinary domain allocation. This operation trusts an intact or independently reconciled persisted high-water mark. Backend attachment/status is not grant reconciliation: current incarnation snapshots cannot recover unused reserved ranges.".
+-spec reserve_incarnations(pid(), pos_integer()) ->
+    {ok, {incarnation(), incarnation()}} | {error, term()}.
+reserve_incarnations(Owner, Count) -> gen_server:call(Owner, {reserve_incarnations, Count}).
+
 -doc "Attaches to existing domain controllers without resetting or activating their actors.".
 -spec start_link(catalog(), backend()) -> gen_server:start_ret().
 start_link(Catalog, Backend) -> gen_server:start_link(?MODULE, {Catalog, Backend}, []).
@@ -190,6 +196,23 @@ init({Catalog, #{module := Module, endpoints := Endpoints, incarnation_file := P
 -doc "Orders each domain's management independently; retains at most one active operation and eight waiting calls per domain. Policy lookup never waits for backend evidence.".
 -spec handle_call(term(), gen_server:from(), #owner{}) ->
     {reply, term(), #owner{}} | {noreply, #owner{}}.
+%% A grant consumes its entire interval before acknowledgement, independently of child availability.
+handle_call({reserve_incarnations, Count}, _From, Owner = #owner{next = Counter, file = File}) when
+    is_integer(Count), Count > 0, Count =< ((1 bsl 64) - 1)
+->
+    case Counter =< ((1 bsl 64) - 1) - Count of
+        false ->
+            {reply, {error, incarnation_exhausted}, Owner};
+        true ->
+            Last = Counter + Count,
+            case persist(File, Last) of
+                ok -> {reply, {ok, {Counter + 1, Last}}, Owner#owner{next = Last}};
+                {error, Reason} -> {reply, {error, {incarnation_store, Reason}}, Owner}
+            end
+    end;
+%% Reject malformed untyped counts before touching the store or allocating an ID.
+handle_call({reserve_incarnations, _Count}, _From, Owner) ->
+    {reply, {error, invalid_incarnation_count}, Owner};
 %% Policy is host configuration, not a remote readiness claim.
 handle_call({policy, Domain}, _From, Owner = #owner{catalog = Catalog}) ->
     Reply =

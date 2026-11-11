@@ -1,6 +1,28 @@
 -module(hls_domain_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Reserved intervals never overlap ordinary allocation and survive management-owner replacement.
+-spec delegated_identity_intervals_are_consumed_test() -> ok.
+delegated_identity_intervals_are_consumed_test() ->
+    with_domains(fun(Owner, A, B, Store) ->
+        ?assertEqual({ok, {1, 8}}, hls_domain:reserve_incarnations(Owner, 8)),
+        ?assertEqual({ok, <<8:64>>}, file:read_file(Store)),
+        {ok, _} = hls_domain:activate(Owner, a),
+        ?assertMatch(#{handle := {a, 9}}, ready(Owner, a)),
+        ?assertEqual({ok, {10, 12}}, hls_domain:reserve_incarnations(Owner, 3)),
+        ?assertEqual({error, invalid_incarnation_count}, hls_domain:reserve_incarnations(Owner, 0)),
+        ?assertEqual({ok, <<12:64>>}, file:read_file(Store)),
+        stop(Owner),
+        {ok, NextOwner} = hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store)),
+        unlink(NextOwner),
+        try
+            ?assertEqual({ok, {13, 14}}, hls_domain:reserve_incarnations(NextOwner, 2)),
+            ?assertEqual({error, incarnation_exhausted},
+                hls_domain:reserve_incarnations(NextOwner, (1 bsl 64) - 1)),
+            ?assertEqual({ok, <<14:64>>}, file:read_file(Store))
+        after stop(NextOwner) end
+    end).
+
 %% Whole-domain replacement reconnects source routes and preserves an independent domain.
 -spec explicit_incarnation_and_independent_replacement_test() -> ok.
 explicit_incarnation_and_independent_replacement_test() ->
