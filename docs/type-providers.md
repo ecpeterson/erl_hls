@@ -36,3 +36,35 @@ Import discovery visits only the selected hardware source and nested type argume
 `xls_struct_codec` renders those layouts using `xls_type` conversions. `hls_frame_layout` owns the ordinary header schema and host capacity checks; `xls_frame_layout` emits the matching per-build DSLX configuration. Neither renderer owns a second copy of the layout or host codec policy.
 
 Compiler provider dispatch, built-in companions and typed codec renderers live together in [backend/xls/types](../src/backend/xls/types/README.md); see the [backend directory map](../src/backend/xls/README.md) for their expression, actor and emission collaborators.
+
+## Finite atom unions
+
+Typed actor fields and concrete local helper signatures can use ordinary Erlang
+unions such as `-type fault() :: none | actor | backend.`. These are native atom
+values in co-simulation. The compiler resolves a finite union (including
+zero-argument local aliases) to an `hls_enum` descriptor and lowers its atoms at
+typed fields, helper calls/results, patterns and equality comparisons.
+
+The source declaration order defines codes starting at zero; repeated union
+members retain their first occurrence. The first atom is the zero/default value,
+so `fault = none :: fault()` is a legal field default. Reordering a union changes
+its wire encoding. Generated record descriptors retain this complete codebook;
+consumers should use those descriptors with `hls_type:pack/2` and `unpack/2` rather
+than repeat numerical assignments. An explicit host descriptor is
+`hls_enum:enum([none, actor, backend])`.
+
+Unlisted atoms and unused codes reject in host codecs. XLS fields use the minimum
+positive bit width, retaining unused integer codes so hardware wildcard clauses
+can reject malformed input without an invalid enum cast. A generated bits decoder
+does not by itself validate an application protocol: validate external codes before
+acting on them. Exact equality/inequality are supported. Bare enum-valued guards, arithmetic, and
+passing enum values to providers without atom-domain argument contracts are rejected. Atom ordering is rejected
+because lexical Erlang ordering differs from declaration-code ordering.
+
+Two distinct codebooks cannot be used interchangeably even if their widths or
+members overlap. This slice diagnoses such uses, including a variable consumed by
+two codebooks; it does not insert implicit enum conversions. Boolean atoms retain their separate canonical `boolean()` / `hls_bool:bool()`
+type; explicit finite unions containing `true` or `false` are rejected rather than
+interpreting declaration order as truth. Enums nested under collection/provider types are rejected until those operations
+carry enum type-flow contracts; nested record fields are supported. Parameterized aliases
+and imported source helpers' local aliases remain outside this supported slice.

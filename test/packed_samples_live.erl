@@ -1,6 +1,8 @@
 -module(packed_samples_live).
 -export([run/1]).
 
+-doc "Compares packed-sample histories over the public RTL streams, including a terminal callback failure and independent debug access.".
+-spec run(file:filename()) -> ok.
 run(Stage) ->
     {ok, App} = hls_fabric:start_link(filename:join(Stage, "app_tx"), filename:join(Stage, "app_rx")),
     {ok, Management} = hls_fabric:start_link(filename:join(Stage, "debug_tx"), filename:join(Stage, "debug_rx")),
@@ -25,28 +27,34 @@ run(Stage) ->
         end, Inputs),
         {ok, _} = hls_debug:get_trace(Debug, 10000),
         Before = gen_server:call(Hardware, Read, 10000),
-        {error, {remote_error, function_clause}} = gen_server:call(Hardware, {sample, <<0:24>>}, 10000),
-        %% hls_gs clears hardware state on callback failure. Check that policy
-        %% rather than accidentally committing the failed callback outcome.
-        Cleared = {receipt, <<0:24>>, 0, 0},
-        Cleared = gen_server:call(Hardware, Read, 10000),
+        unlink(Hardware),
+        Monitor = monitor(process, Hardware),
+        Failure = try gen_server:call(Hardware, {sample, <<0:24>>}, 10000) of
+            Returned -> error({terminal_failure_returned, Returned})
+        catch
+            exit:{{hls_actor_failure, packed_samples, Detail}, {gen_server, call, _}} -> Detail
+        end,
+        #{reason := function_clause, source_site := Site} = Failure,
+        true = Site > 0,
+        receive {'DOWN', Monitor, process, Hardware, {hls_actor_failure, packed_samples, Failure}} -> ok
+        after 1000 -> error(proxy_survived_source_failure) end,
+        true = is_process_alive(App),
+        true = is_process_alive(Debug),
         {ok, #{events := Events, observation_drops := 0, dropped := 0} = Trace} =
             hls_debug:get_trace(Debug, 10000),
         ExpectedTags = [packed_samples:pack_tag(read), packed_samples:pack_tag(receipt),
-            packed_samples:pack_tag(sample), packed_samples:pack_tag(error),
-            packed_samples:pack_tag(read), packed_samples:pack_tag(receipt)],
+            packed_samples:pack_tag(sample), packed_samples:pack_tag(error)],
         ExpectedTags = [Op || #{op := Op} <- Events],
-        [application_rx, application_tx, application_rx, application_tx, application_rx, application_tx] =
+        [application_rx, application_tx, application_rx, application_tx] =
             [Kind || #{kind := Kind} <- Events],
-        [#{tx_id := BeforeTx}, #{tx_id := BeforeTx}, #{tx_id := BadTx},
-            #{tx_id := BadTx}, #{tx_id := AfterTx}, #{tx_id := AfterTx}] = Events,
-        ok = save(Stage, "failed-decode.term", #{before_failure => Before, after_failure => Cleared, trace => Trace}),
-        {ok, #{app_rx_frames := 284, app_tx_frames := 284, observation_drops := 0} = Final} =
+        [#{tx_id := BeforeTx}, #{tx_id := BeforeTx}, #{tx_id := BadTx}, #{tx_id := BadTx}] = Events,
+        ok = save(Stage, "failed-decode.term", #{before_failure => Before, failure => Failure, trace => Trace}),
+        {ok, #{app_rx_frames := 283, app_tx_frames := 283, observation_drops := 0} = Final} =
             hls_debug:get_counters(Debug, 10000),
         ok = save(Stage, "completed.term", Final),
-        io:format("PASS: 280 BEAM/RTL packed samples, stalled reply diagnosed with counters, failed decode diagnosed with trace and cleared state~n")
+        io:format("PASS: 280 BEAM/RTL packed samples, stalled reply diagnosed with counters, terminal failed decode retires proxy while public debug remains live~n")
     after
-        hls_debug:stop(Debug), hls_gs:stop(Hardware), hls_gs:stop(CPU),
+        hls_debug:stop(Debug), catch hls_gs:stop(Hardware), hls_gs:stop(CPU),
         hls_fabric:stop(App), hls_fabric:stop(Management)
     end,
     file:write_file(filename:join(Stage, "done"), <<>>).

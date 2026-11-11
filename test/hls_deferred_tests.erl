@@ -57,6 +57,21 @@ callback_failure_test() ->
         ?assertMatch({error, {_, Pid}}, gen_server:receive_response(B, 1000))
     end).
 
+%% A final reply does not keep an actor alive when its following continuation fails.
+-spec failure_after_last_reply_test() -> ok.
+failure_after_last_reply_test() ->
+    with_server(fun(Pid) ->
+        unlink(Pid),
+        Monitor = monitor(process, Pid),
+        Last = gen_server:send_request(Pid, {wait, 7}),
+        gen_server:cast(Pid, {release, 1}),
+        ?assertEqual({reply, {report, 7}}, gen_server:receive_response(Last, 1000)),
+        receive
+            {'DOWN', Monitor, process, Pid, Reason} -> ?assertNotEqual(normal, Reason)
+        after 1000 -> error(missing_terminal_failure)
+        end
+    end).
+
 %% Compile the exact fixture exercised by CPU tests, with all native source annotations.
 -spec lowering_test() -> ok.
 lowering_test() ->

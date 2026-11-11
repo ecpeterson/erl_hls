@@ -33,7 +33,7 @@ prepare(Forms0, Roots) ->
     Selected = xls_hardware_source:select(Forms0, Roots),
     Module = hls_source:find_attribute(Selected, module),
     WireForms = xls_comparison:prepare(
-        localize(xls_binary_lower:prepare(hls_records:resolve(Selected)), Module)
+        localize(xls_binary_lower:prepare(hls_records:resolve(Selected)), Module), Roots
     ),
     Definitions = definitions(WireForms, undefined, #{}),
     Context = #{
@@ -272,8 +272,11 @@ type({remote_type, _, _} = Type, _Context, Origin) ->
     catch
         error:Reason -> error({unsupported_xls_helper_type, Origin, Type, Reason})
     end;
-type(Type, _Context, Origin) ->
-    error({unsupported_xls_helper_type, Origin, Type}).
+type(Type, #{forms := Forms}, Origin) ->
+    case hls_atom_types:descriptor(Type, Forms) of
+        {ok, Descriptor} -> {provider, Descriptor};
+        none -> error({unsupported_xls_helper_type, Origin, Type})
+    end.
 
 %% Attach argument contracts before flattening can separate literals from uses.
 -spec rewrite(term(), #{{atom(), arity()} => helper()}) -> term().

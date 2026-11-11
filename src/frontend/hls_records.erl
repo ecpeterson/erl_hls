@@ -8,7 +8,7 @@ Source record analysis used by hls_pack and XLS lowering. Resolves declarations,
 %% Record fields, values and defaults.
 -export([values/2, fields/1, width/1, field_name/1, validate_defaults/1, is_zero_default/1]).
 
--doc "Resolves wire layouts and explicit typed zeros, leaving unrelated host records alone.".
+-doc "Resolves wire layouts and normalizes zero-valued literal defaults, leaving unrelated host records alone.".
 -spec resolve([hls_source:form()]) -> [hls_source:form()].
 resolve(Forms) -> resolve(Forms, []).
 
@@ -74,15 +74,100 @@ references(List) when is_list(List) -> lists:usort(lists:append([references(X) |
 references(_) ->
     [].
 
-%% Only field types change; source expressions and their annotations remain intact.
+%% Pure defaults equal to the provider's zero share the existing typed-zero lowering.
 -spec resolve_field(tuple(), [hls_source:form()], [atom()]) -> tuple().
 resolve_field({typed_record_field, Field, Type}, Forms, Stack) ->
-    {typed_record_field, Field, resolve_type(Type, Forms, Stack)};
+    Resolved = resolve_type(hls_atom_types:resolve(Type, Forms), Forms, Stack),
+    {typed_record_field, resolve_default(Field, Resolved, Forms, Stack), Resolved};
 resolve_field(Field, _Forms, _Stack) ->
     Field.
 
+%% Nonzero and executable defaults remain unchanged so validation still rejects them.
+-spec resolve_default(tuple(), term(), [hls_source:form()], [atom()]) -> tuple().
+resolve_default({record_field, Line, Name, Default} = Field, Type, Forms, Stack) ->
+    case is_zero_default(Default) of
+        true ->
+            Field;
+        false ->
+            case literal_default(Default, Type, Forms, Stack) of
+                {ok, Value} ->
+                    case Value =:= hls_type:zero(hls_type:descriptor(Type)) of
+                        true ->
+                            {record_field, Line, Name,
+                                {call, Line,
+                                    {remote, Line, {atom, Line, hls_type}, {atom, Line, zero}},
+                                    []}};
+                        false ->
+                            Field
+                    end;
+                not_literal ->
+                    Field
+            end
+    end;
+resolve_default(Field, _Type, _Forms, _Stack) ->
+    Field.
+
+%% Evaluate only literal syntax and record construction; never execute source calls.
+-spec literal_default(term(), term(), [hls_source:form()], [atom()]) -> {ok, term()} | not_literal.
+literal_default({record, _, Name, Overrides}, _Type, Forms, Stack) ->
+    case lists:member(Name, Stack) of
+        true ->
+            not_literal;
+        false ->
+            {attribute, _, record, {Name, Fields}} = find(Forms, Name),
+            Explicit = [{N, V} || {record_field, _, {atom, _, N}, V} <- Overrides],
+            Names = [field_name(F) || {typed_record_field, F, _} <- Fields],
+            case
+                length(Explicit) =:= length(Overrides) andalso
+                    length(lists:usort([N || {N, _} <- Explicit])) =:= length(Explicit) andalso
+                    ([N || {N, _} <- Explicit] -- Names) =:= []
+            of
+                false ->
+                    not_literal;
+                true ->
+                    record_default(Fields, maps:from_list(Explicit), Forms, [Name | Stack], [Name])
+            end
+    end;
+literal_default(Default, Type, _Forms, _Stack) ->
+    case is_zero_default(Default) of
+        true ->
+            {ok, hls_type:zero(hls_type:descriptor(Type))};
+        false ->
+            try
+                {ok, erl_parse:normalise(Default)}
+            catch
+                error:_ -> not_literal
+            end
+    end.
+
+%% Defaults obey ordinary Erlang field order and explicit constructor overrides.
+-spec record_default([tuple()], map(), [hls_source:form()], [atom()], [term()]) ->
+    {ok, tuple()} | not_literal.
+record_default([], _Explicit, _Forms, _Stack, Values) ->
+    {ok, list_to_tuple(lists:reverse(Values))};
+record_default(
+    [{typed_record_field, {record_field, _, {atom, _, Name}, Default}, Type} | Rest],
+    Explicit,
+    Forms,
+    Stack,
+    Values
+) ->
+    Resolved = resolve_type(hls_atom_types:resolve(Type, Forms), Forms, Stack),
+    case literal_default(maps:get(Name, Explicit, Default), Resolved, Forms, Stack) of
+        {ok, Value} -> record_default(Rest, Explicit, Forms, Stack, [Value | Values]);
+        not_literal -> not_literal
+    end;
+record_default(_Fields, _Explicit, _Forms, _Stack, _Values) ->
+    not_literal.
+
 %% A resolved descriptor is self-contained, so downstream codecs need no source lookup.
 -spec resolve_type(term(), [hls_source:form()], [atom()]) -> term().
+resolve_type(Type = {type, _, union, _}, Forms, _Stack) ->
+    hls_atom_types:resolve(Type, Forms);
+resolve_type(Type = {user_type, _, _, []}, Forms, _Stack) ->
+    hls_atom_types:resolve(Type, Forms);
+resolve_type({hls_enum_type, _, _} = Type, _Forms, _Stack) ->
+    Type;
 resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
     case lists:member(Name, Stack) of
         true -> error({recursive_hls_record, lists:reverse([Name | Stack])});
@@ -95,7 +180,12 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
     {attribute, _, record, {Name, Fields}} = find(Forms, Name),
     Descriptor =
         {hls_type, hls_record, Name, [
-            {field_name(Field), hls_type:descriptor(resolve_type(Type, Forms, [Name | Stack]))}
+            {
+                field_name(Field),
+                hls_type:descriptor(
+                    resolve_type(hls_atom_types:resolve(Type, Forms), Forms, [Name | Stack])
+                )
+            }
          || {typed_record_field, Field, Type} <- Fields
         ]},
     case length(Fields) =:= length(element(4, Descriptor)) of
@@ -107,12 +197,29 @@ resolve_type({type, _, record, _} = Type, _Forms, _Stack) ->
     error({unsupported_hls_record_type, Type});
 resolve_type({hls_record_type, _, _} = Type, _Forms, _Stack) ->
     Type;
+resolve_type({type, L, boolean, []}, _Forms, _Stack) ->
+    {remote_type, L, [{atom, L, hls_bool}, {atom, L, bool}, []]};
+resolve_type({remote_type, Line, [Module, Name, Args]}, Forms, Stack) ->
+    Resolved = [resolve_type(A, Forms, Stack) || A <- Args],
+    case contains_enum(Resolved) of
+        true -> error({unsupported_hls_enum_container, Line, Module, Name});
+        false -> {remote_type, Line, [Module, Name, Resolved]}
+    end;
 resolve_type(Tuple, Forms, Stack) when is_tuple(Tuple) ->
     list_to_tuple([resolve_type(X, Forms, Stack) || X <- tuple_to_list(Tuple)]);
 resolve_type(List, Forms, Stack) when is_list(List) ->
     [resolve_type(X, Forms, Stack) || X <- List];
 resolve_type(Value, _Forms, _Stack) ->
     Value.
+
+%% Collection/provider operations need their own enum type-flow contracts;
+%% record nesting is handled explicitly above and remains supported.
+-spec contains_enum(term()) -> boolean().
+contains_enum({hls_enum_type, _, _}) -> true;
+contains_enum({hls_type, hls_enum, enum, _}) -> true;
+contains_enum(Tuple) when is_tuple(Tuple) -> contains_enum(tuple_to_list(Tuple));
+contains_enum(List) when is_list(List) -> lists:any(fun contains_enum/1, List);
+contains_enum(_) -> false.
 
 -doc "Returns dependency-ordered declarations for wire records and reachable internal values.".
 -spec declarations([hls_source:form()], [atom()]) -> [hls_source:record_declaration()].
@@ -234,7 +341,7 @@ width(Record = {attribute, _, record, {Name, _}}) ->
 field_name({record_field, _, {atom, _, Name}}) -> Name;
 field_name({record_field, _, {atom, _, Name}, _}) -> Name.
 
--doc "Requires a type and hls_type:zero() default on every translated record field. Reports missing or explicit defaults with their record, field and source line.".
+-doc "Checks resolved declarations for a type and canonical hls_type:zero() default on every translated field. Run resolve first to normalize equivalent literal defaults. Reports invalid defaults with their record, field and source line.".
 -spec validate_defaults(hls_source:record_declaration()) -> ok.
 validate_defaults({attribute, _, record, {RecordName, Fields}}) ->
     lists:foreach(

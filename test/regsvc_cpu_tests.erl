@@ -23,6 +23,8 @@ bulk_bounds_do_not_wrap_test() ->
         ?assertError(function_clause, regsvc:handle_call({bulk_get, Start, Count}, State))
     end, [{16, 1}, {16#ffffffff, 1}, {16#fffffffe, 3}]).
 
+%% Runs the attached RTL fixture when configured; the final scenario retires its application proxy.
+-spec simulated_rtl_test_() -> term().
 simulated_rtl_test_() ->
     case os:getenv("ERL_HLS_SIM_DIR") of
         false ->
@@ -45,6 +47,8 @@ simulated_rtl_test_() ->
                     {ok, PidOne} = hls_gs:start_link(regsvc, [], [
                         {fabric, AppFabric, 1}
                     ]),
+                    %% The final scenario deliberately terminates this actor.
+                    unlink(PidOne),
                     {ok, PidTwo} = hls_gs:start_link(regsvc, [], [
                         {fabric, AppFabric, 2}
                     ]),
@@ -74,7 +78,7 @@ simulated_rtl_test_() ->
                     hls_debug:stop(DebugPidTwo),
                     hls_debug:stop(DebugPidOne),
                     regsvc:stop(PidTwo),
-                    regsvc:stop(PidOne),
+                    catch regsvc:stop(PidOne),
                     hls_fabric:stop(DebugFabric),
                     hls_fabric:stop(AppFabric),
                     hls_fabric:stop(DebugDevice),
@@ -92,8 +96,8 @@ simulated_rtl_test_() ->
                         debug_scenario_(PidOne, DebugPidOne) ++
                         routed_pair_scenario_(PidOne, PidTwo) ++
                         routed_debug_scenario_(DebugPidTwo) ++
-                        rtl_error_scenario_(PidOne) ++
-                        transaction_scenario_(PidOne, DebugPidOne)
+                        transaction_scenario_(PidOne, DebugPidOne) ++
+                        rtl_error_scenario_(PidOne)
                 end}
     end.
 
@@ -108,6 +112,8 @@ target_test_(Start, Scenario) ->
         end,
         fun(Pid) -> Scenario(Pid) end}.
 
+%% Exercises transaction reuse and casts without introducing a terminal source fault before later checks.
+-spec transaction_scenario_(pid(), pid()) -> [tuple()].
 transaction_scenario_(Pid, DebugPid) ->
     [{timeout, 60, ?_test(begin
         {ok, _} = hls_debug:get_trace(DebugPid),
@@ -124,13 +130,13 @@ transaction_scenario_(Pid, DebugPid) ->
             [?assertEqual({reply, {ack, Value}}, gen_server:wait_response(Request, 30000))
                 || {Value, Request} <- Requests]
         end, lists:seq(1, 3)),
-        %% A cast rejected by RTL has an error reply, isolated on ID 255.
+        %% A masked cast remains a valid no-op, isolated on ID 255.
         Ignored = maps:get(ignored_replies, hls_fabric:client_info(Pid)),
-        ok = regsvc:set(Pid, 16, 0, 1),
+        ok = regsvc:set(Pid, 16, 0, 0),
         ?assertEqual(123, regsvc:ping(Pid, 123)),
         ?assertMatch(#{status := up, pending := 0, available := 255},
             hls_fabric:client_info(Pid)),
-        ?assertEqual(Ignored + 1, maps:get(ignored_replies, hls_fabric:client_info(Pid))),
+        ?assertEqual(Ignored, maps:get(ignored_replies, hls_fabric:client_info(Pid))),
         DebugRequests = [gen_server:send_request(DebugPid, get_counters) || _ <- lists:seq(1, 32)],
         [?assertMatch({reply, {ok, #{version := 5, observation_drops := 0}}},
             gen_server:wait_response(Request, 30000)) || Request <- DebugRequests],
@@ -252,34 +258,27 @@ debug_scenario_(Pid, DebugPid) ->
         end)
     ].
 
+%% Valid no-op and host admission rejection precede a terminal hardware fault.
+-spec rtl_error_scenario_(pid()) -> [term()].
 rtl_error_scenario_(Pid) ->
     [
         ?_test(begin
+            Before = regsvc:get(Pid, 0),
             ok = regsvc:set(Pid, 16, 16#ffffffff, 0),
-            ?assertEqual(3, regsvc:get(Pid, 0))
+            ?assertEqual(Before, regsvc:get(Pid, 0))
         end),
         ?_assertEqual([], regsvc:bulk_get(Pid, 16, 0)),
-        ?_assertEqual(
-            {error, {remote_error, function_clause}},
-            gen_server:call(Pid, {bulk_get, 16, 1})
-        ),
-        ?_assertEqual(
-            {error, {remote_error, function_clause}},
-            gen_server:call(Pid, {bulk_get, 16#ffffffff, 1})
-        ),
-        ?_assertEqual(
-            {error, {remote_error, function_clause}},
-            gen_server:call(Pid, {bulk_get, 16#fffffffe, 3})
-        ),
-        ?_assertEqual(
-            {error, {remote_error, function_clause}},
-            gen_server:call(Pid, {get, 16})
-        ),
         ?_assertEqual(
             {error, {invalid_request, call, ack}},
             gen_server:call(Pid, {ack, 0})
         ),
-        ?_assertEqual(0, regsvc:get(Pid, 0))
+        ?_test(begin
+            Monitor = monitor(process, Pid),
+            ?assertExit({{hls_actor_failure, regsvc, #{reason := function_clause}}, _},
+                gen_server:call(Pid, {get, 16})),
+            receive {'DOWN', Monitor, process, Pid, {hls_actor_failure, regsvc, _}} -> ok
+            after 1000 -> error(proxy_survived_callback_failure) end
+        end)
     ].
 
 guarded_cast_clause_scenario_(Pid) ->

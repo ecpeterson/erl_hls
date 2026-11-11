@@ -1,5 +1,6 @@
 // Activation-local caller ownership. A completed token cannot name a reused transaction.
 import axis;
+import hls_failure;
 
 // A live token owns one wire transaction; zero is an unallocated slot.
 pub struct Slot { handle: u64, txid: u8 }
@@ -54,8 +55,8 @@ pub fn admit<N: u32>(book: Book<N>, frame: axis::Frame) -> (Book<N>, u64, u32) {
   let duplicate = for (i, found): (u32, bool) in u32:0..N {
     found || (book.slots[i].handle != u64:0 && book.slots[i].txid == frame.header.txid)
   }(false);
-  let error = if duplicate || frame.header.txid == u8:255 { u32:18 }
-    else if book.sequence >= u64:0x0100000000000000 { u32:17 }
+  let error = if duplicate || frame.header.txid == u8:255 { hls_failure::runtime_error(u32:18) }
+    else if book.sequence >= u64:0x0100000000000000 { hls_failure::runtime_error(u32:17) }
     else if !free { u32:16 } else { u32:0 };
   let handle = (book.sequence << u32:8) | frame.header.op as u64;
   if error == u32:0 {
@@ -68,8 +69,8 @@ pub fn admit<N: u32>(book: Book<N>, frame: axis::Frame) -> (Book<N>, u64, u32) {
 pub fn complete<N: u32>(book: Book<N>, handle: u64, frame: axis::Frame,
     allowed: bool, failure: u32) -> (Book<N>, axis::Frame, bool) {
   let (live, index) = lookup(book.slots, handle);
-  let error = if failure != u32:0 { failure }
-    else if live && frame.header.op != u8:0 && !allowed { u32:15 } else { u32:0 };
+  let error = if failure != u32:0 { hls_failure::source_error(failure as hls_failure::Code) }
+    else if live && frame.header.op != u8:0 && !allowed { hls_failure::source_error(hls_failure::REPLY_CONTRACT) } else { u32:0 };
   let valid = live && frame.header.op != u8:0 && error == u32:0;
   (Book<N> { slots: if valid { update(book.slots, index, zero!<Slot>()) } else { book.slots }, failure: error, ..book },
     axis::Frame { header: axis::Header { txid: book.slots[index].txid, ..frame.header }, ..frame }, valid)
@@ -109,8 +110,8 @@ fn full_and_failure_drain_test() {
   assert_eq((unchanged, missing, error), (book, u64:0, u32:16));
   let (failed, _, valid) = complete(book, handle, axis::pack(u8:9, u32:0), false, u32:0);
   assert_eq(valid, false);
-  assert_eq(failed.failure, u32:15);
+  assert_eq(failed.failure, hls_failure::source_error(hls_failure::REPLY_CONTRACT));
   let (empty, reply, valid) = drain(failed);
-  assert_eq((valid, reply.header.txid, reply.payload as u32), (true, u8:1, u32:15));
+  assert_eq((valid, reply.header.txid, reply.payload as u32), (true, u8:1, hls_failure::source_error(hls_failure::REPLY_CONTRACT)));
   assert_eq(first(empty.slots, true).0, false);
 }

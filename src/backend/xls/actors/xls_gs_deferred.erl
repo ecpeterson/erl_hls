@@ -79,14 +79,14 @@ artifact(Filename, Forms0, Layout) ->
         "(initial_state()), reply_allowed: true, ..zero!<Outcome>() } }\n",
         "  else if inv.continuation != u8:0 {\n",
         continuation(Forms, StateName, Enum),
-        "\n  } else { match inv.frame.header.op as Tag {\n",
+        "\n  } else { match inv.frame.header.op {\n",
         [
             arm(Kind, Group, Forms, StateName, Enum, Layout)
          || Kind <- [call, cast],
             Group <- hls_service_contract:groups(Forms, callback(Kind))
         ],
         "_ => ",
-        failure("u32:1"),
+        rejection("u32:1"),
         ",\n  } }\n}\n",
         service(N, Mask),
         "pub proc Top {\n",
@@ -160,13 +160,24 @@ arm(Kind, {Tag, Clauses}, Forms, StateName, Enum, Layout) ->
             end ++
             [state_argument(StateName)],
     [
-        "Tag::",
-        xls_names:enum_member(Tag),
-        " => {\n",
+        "u8:",
+        integer_to_list(
+            maps:get(
+                Tag,
+                maps:from_list([
+                    {Name, I}
+                 || {I, Name} <-
+                        lists:enumerate([error, StateName | hls_actor_source:tags(Forms)])
+                ])
+            )
+        ),
+        " => { // ",
+        atom_to_list(Tag),
+        "\n",
         " if inv.frame.header.payload_words != u8:",
         integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)),
         " { ",
-        failure("u32:3"),
+        rejection("u32:3"),
         " } else {\n",
         " let request = ",
         xls_names:record_codec(Tag),
@@ -200,6 +211,7 @@ state_argument(Name) -> xls_pattern_lower:record_argument(Name, "state_record.1"
     map()
 ) -> xls_dslx:value().
 lower(Clauses, Args, Kind, StateName, Enum) ->
+    {clause, Line, _, _, _} = hd(Clauses),
     Normalized = [
         xls_callback_result:map_actions(C, fun(R) -> result(R, Kind, Enum) end)
      || C <- Clauses
@@ -225,15 +237,19 @@ lower(Clauses, Args, Kind, StateName, Enum) ->
                 ".4, error: u32:0 }"
             ]
         end,
-        failure("u32:1"),
-        fun(Code) -> failure(["hls_failure::kind(", Code, ") as u32"]) end,
+        failure(xls_failure_sites:at(function_clause, Line)),
+        fun failure/1,
         Enum
     ),
     [Body, Value].
 
 %% A callback fault preserves its input data and emits no successful action.
 -spec failure(xls_dslx:value()) -> xls_dslx:value().
-failure(Code) -> ["Outcome { state: inv.state, error: ", Code, ", ..zero!<Outcome>() }"].
+failure(Code) -> rejection(["hls_failure::source_error((", Code, ") as hls_failure::Code)"]).
+
+%% Malformed external requests do not fail or mutate the actor incarnation.
+-spec rejection(xls_dslx:value()) -> xls_dslx:value().
+rejection(Code) -> ["Outcome { state: inv.state, error: ", Code, ", ..zero!<Outcome>() }"].
 
 %% Source result forms deliberately bound each step to one reply and one continuation.
 -spec result(term(), call | cast | continue, map()) -> term().

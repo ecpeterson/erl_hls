@@ -7,7 +7,7 @@
 -hls_tags([wait, release, read, duplicate, explode, report, wrong]).
 -hls_replies([{wait, [report]}, {read, [report]}]).
 -hls_pending_calls(2).
--hls_continuations([drain]).
+-hls_continuations([drain, reply_then_fail, fail_after_reply]).
 
 %% Two waiters are retained in application state; the runtime owns their actual callers.
 -record(state, {handles = hls_type:zero() :: hls_lists:list(hls_gs:from(), 2),
@@ -44,6 +44,8 @@ handle_call(#read{}, _From, State) -> {reply, #report{value = State#state.total}
 -spec handle_cast(#release{} | #duplicate{} | #explode{}, #state{}) -> hls_gs:async_result(#state{}).
 %% Empty releases need no continuation.
 handle_cast(#release{}, State = #state{count = 0}) -> {noreply, State};
+%% This witness completes its last caller before an internal continuation fails.
+handle_cast(#release{unused = 1}, State) -> {noreply, State, {continue, reply_then_fail}};
 %% A nonempty batch advances one response at a time without an outbox list.
 handle_cast(#release{}, State) -> {noreply, State#state{cursor = 0}, {continue, drain}};
 %% A previous completed handle must not address a newly allocated caller.
@@ -57,8 +59,8 @@ handle_cast(#explode{}, State) ->
     true = State#state.count =:= 0,
     {noreply, State}.
 
--doc "Replies to one waiter and repeats until the accepted batch has drained.".
--spec handle_continue(drain, #state{}) -> hls_gs:async_result(#state{}).
+-doc "Drains retained callers, or fails a later continuation after the final reply has been published.".
+-spec handle_continue(drain | reply_then_fail | fail_after_reply, #state{}) -> hls_gs:async_result(#state{}).
 handle_continue(drain, State = #state{cursor = Cursor, count = Count}) ->
     From = hls_lists:nth(Cursor + 1, State#state.handles),
     Value = hls_lists:nth(Cursor + 1, State#state.values),
@@ -69,4 +71,14 @@ handle_continue(drain, State = #state{cursor = Cursor, count = Count}) ->
             Result = {noreply, Next#state{count = 0}, Actions},
             Result;
         false -> {noreply, Next, [{reply, From, #report{value = Value}}, {continue, drain}]}
-    end.
+    end;
+%% Release the sole caller first; no external input will trigger the next callback.
+handle_continue(reply_then_fail, State) ->
+    From = hls_lists:nth(1, State#state.handles),
+    Value = hls_lists:nth(1, State#state.values),
+    {noreply, State#state{count = 0, total = State#state.total + Value},
+        [{reply, From, #report{value = Value}}, {continue, fail_after_reply}]};
+%% The remote proxy must learn this terminal failure without sending another request.
+handle_continue(fail_after_reply, State) ->
+    true = State#state.count =/= 0,
+    {noreply, State}.

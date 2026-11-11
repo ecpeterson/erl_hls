@@ -1,14 +1,21 @@
-%%%% Classify integer comparisons before source values become untyped DSLX text.
+%%%% Classify comparisons and finite atom domains before values become DSLX text.
 -module(xls_comparison).
--moduledoc "Classifies supported Erlang comparisons during helper preparation, then lowers their operands through xls_clause_lower. Integer comparisons retain source signedness and independently sized literals in structured hls_integer calls; xls_dslx renders the target syntax without deciding Erlang comparison semantics.".
+-moduledoc "Classifies supported Erlang comparisons and finite atom domains during helper preparation, then lowers their operands through xls_clause_lower. Integer comparisons retain source signedness and independently sized literals in structured hls_integer calls; xls_dslx renders the target syntax without deciding Erlang comparison semantics.".
 %% Annotate comparison semantics before expression lowering.
--export([prepare/1]).
+-export([prepare/1, prepare/2]).
 %% Lower a prepared comparison using the current clause state.
 -export([lower/2]).
 
 %% Only proven integer values select widening comparison. Unknown providers and
 %% structural equality remain XLS's responsibility; this is not type inference.
--type shape() :: integer | other | unknown | {tuple, [shape()]} | {array, shape()}.
+-type shape() ::
+    integer
+    | other
+    | unknown
+    | {atom, atom()}
+    | {enum, hls_type:descriptor()}
+    | {tuple, [shape()]}
+    | {array, shape()}.
 %% Proven shapes of variables visible at one source point.
 -type bindings() :: #{atom() => shape()}.
 %% Declaration facts shared by all function bodies in one source module.
@@ -17,20 +24,27 @@
     signatures := #{{atom(), arity()} => {[shape()], shape()}}
 }.
 
--doc "Marks comparisons of proven integers without changing arithmetic widths or structural equality.".
+-doc "Marks proven integer comparisons and finite atom-domain boundaries without changing arithmetic widths or encoding atoms outside a declared domain.".
 -spec prepare([hls_source:form()]) -> [hls_source:form()].
-prepare(Forms) ->
+prepare(Forms) -> prepare(Forms, []).
+
+-doc "Also preserves framework-owned callback tags; only record fields and concrete helper types gain finite-atom encodings.".
+-spec prepare([hls_source:form()], [{atom(), arity()}]) -> [hls_source:form()].
+prepare(Forms, Roots) ->
     Context = #{
         records => maps:from_list([
             {Name,
                 maps:from_list([
-                    {hls_records:field_name(Field), shape(Type)}
+                    {hls_records:field_name(Field), shape(Type, Forms)}
                  || {typed_record_field, Field, Type} <- Fields
                 ])}
          || {attribute, _, record, {Name, Fields}} <- Forms
         ]),
         signatures => maps:from_list([
-            {Key, {[shape(A) || A <- Args], shape(Result)}}
+            {Key,
+                callback_signature(
+                    Key, {[shape(A, Forms) || A <- Args], shape(Result, Forms)}, Roots
+                )}
          || {attribute, _, spec, {Key, [{type, _, 'fun', [{type, _, product, Args}, Result]}]}} <-
                 Forms
         ])
@@ -38,9 +52,13 @@ prepare(Forms) ->
     [
         case Form of
             {function, Line, Name, Arity, Clauses} ->
-                {Types, _} = signature({Name, Arity}, Context),
+                {Types, Result} = signature({Name, Arity}, Context),
                 {function, Line, Name, Arity, [
-                    element(1, clause(C, Types, #{}, Context))
+                    begin
+                        {Typed, Actual, _} = clause(C, Types, #{}, Context),
+                        compatible(Result, Actual, Line),
+                        Typed
+                    end
                  || C <- Clauses
                 ]};
             _ ->
@@ -48,6 +66,34 @@ prepare(Forms) ->
         end
      || Form <- Forms
     ].
+
+%% Callback tag/phase encodings belong to their behaviour lowerer, not to a
+%% source atom union's compact codebook. Typed record fields remain independent.
+-spec callback_signature({atom(), arity()}, {[shape()], shape()}, [{atom(), arity()}]) ->
+    {[shape()], shape()}.
+callback_signature(Key, {Args, Result} = Signature, Roots) ->
+    case lists:member(Key, Roots) of
+        true -> {[callback_shape(A) || A <- Args], callback_shape(Result)};
+        false -> Signature
+    end.
+
+%% Erase only framework-owned atom encodings, retaining numeric comparison facts.
+-spec callback_shape(shape()) -> shape().
+callback_shape({enum, _}) -> unknown;
+callback_shape({tuple, Fields}) -> {tuple, [callback_shape(T) || T <- Fields]};
+callback_shape(Type) -> Type.
+
+%% Enum domains come from source declarations, never from a module-global atom map.
+-spec shape(term(), [hls_source:form()]) -> shape().
+shape({ann_type, _, [_, Type]}, Forms) ->
+    shape(Type, Forms);
+shape({type, _, tuple, Fields}, Forms) when is_list(Fields) ->
+    {tuple, [shape(T, Forms) || T <- Fields]};
+shape(Type, Forms) ->
+    case hls_atom_types:descriptor(Type, Forms) of
+        {ok, Descriptor} -> {enum, Descriptor};
+        none -> shape(Type)
+    end.
 
 %% Concrete provider declarations identify integer values without inspecting
 %% emitted type strings. Other providers may have noninteger live values.
@@ -92,9 +138,22 @@ clause({clause, Line, Patterns, Guards, Body}, Types, Outer, Context) ->
         Outer,
         lists:zip(Patterns, Types)
     ),
-    TypedGuards = [element(1, expressions(G, Bound, Context)) || G <- Guards],
+    TypedPatterns = [typed_pattern(P, T, Context) || {P, T} <- lists:zip(Patterns, Types)],
+    TypedGuards = [
+        [
+            begin
+                {TypedGuard, GuardType, _} = expression(G, Bound, Context),
+                case contains_enum(GuardType) of
+                    true -> error({unsupported_xls_enum_guard, Line});
+                    false -> TypedGuard
+                end
+            end
+         || G <- Alternative
+        ]
+     || Alternative <- Guards
+    ],
     {TypedBody, Result, After} = expressions(Body, Bound, Context),
-    {{clause, Line, Patterns, TypedGuards, TypedBody}, Result, After}.
+    {{clause, Line, TypedPatterns, TypedGuards, TypedBody}, Result, After}.
 
 %% Bindings take effect left to right; the last expression supplies the result.
 -spec expressions([term()], bindings(), context()) -> {[term()], shape(), bindings()}.
@@ -115,22 +174,37 @@ expressions(Values, Env, Context) ->
 expression({var, _, Name} = E, Env, _) ->
     {E, maps:get(Name, Env, unknown), Env};
 expression({Kind, _, _} = E, Env, _) when Kind =:= integer; Kind =:= char -> {E, integer, Env};
-expression({atom, _, _} = E, Env, _) ->
-    {E, other, Env};
+expression({atom, _, Atom} = E, Env, _) ->
+    {E, {atom, Atom}, Env};
 expression({match, Line, Pattern, Value}, Env, Context) ->
     {Typed, Type, Bound} = expression(Value, Env, Context),
-    {{match, Line, Pattern, Typed}, Type, pattern(Pattern, Type, Bound, Context)};
+    {
+        {match, Line, typed_pattern(Pattern, Type, Context), Typed},
+        Type,
+        pattern(Pattern, Type, Bound, Context)
+    };
 expression({op, Line, Op, Left, Right}, Env, Context) ->
     {A, AT, AE} = expression(Left, Env, Context),
     {B, BT, BE} = expression(Right, AE, Context),
+    HasEnums = contains_enum(AT) orelse contains_enum(BT),
     Node =
         case {comparison(Op), AT, BT} of
+            _ when HasEnums ->
+                enum_operator(Op, Line),
+                compatible(AT, BT, Line),
+                {op, Line, Op, comparison_expected(A, BT, Line), comparison_expected(B, AT, Line)};
             {true, integer, integer} ->
                 {xls_integer_compare, Line, Op, A, B};
             {true, integer, Known} when Known =/= unknown ->
-                error({unsupported_xls_comparison, Line, Op, AT, BT});
+                error(
+                    {unsupported_xls_comparison, Line, Op, diagnostic_shape(AT),
+                        diagnostic_shape(BT)}
+                );
             {true, Known, integer} when Known =/= unknown ->
-                error({unsupported_xls_comparison, Line, Op, AT, BT});
+                error(
+                    {unsupported_xls_comparison, Line, Op, diagnostic_shape(AT),
+                        diagnostic_shape(BT)}
+                );
             _ ->
                 {op, Line, Op, A, B}
         end,
@@ -143,7 +217,11 @@ expression({op, Line, Op, Left, Right}, Env, Context) ->
         end,
     {Node, operator_shape(Op), After};
 expression({op, Line, Op, Value}, Env, Context) ->
-    {Typed, _, After} = expression(Value, Env, Context),
+    {Typed, Type, After} = expression(Value, Env, Context),
+    case contains_enum(Type) of
+        true -> error({unsupported_xls_enum_operator, Line, Op});
+        false -> ok
+    end,
     {{op, Line, Op, Typed}, operator_shape(Op), After};
 expression({tuple, Line, Values}, Env, Context) ->
     {Pairs, After} = lists:mapfoldl(
@@ -166,11 +244,39 @@ expression({'case', Line, Subject, Clauses}, Env, Context) ->
 expression({'if', Line, Clauses}, Env, Context) ->
     {Branches, Result, After} = branches(Clauses, [], Env, Context),
     {{'if', Line, Branches}, Result, After};
+expression({record, Line, Name, Fields}, Env, Context) ->
+    {Typed, After} = record_fields(Name, Fields, Env, Context),
+    {{record, Line, Name, Typed}, unknown, After};
+expression({record, Line, Base, Name, Fields}, Env, Context) ->
+    {Input, _, Before} = expression(Base, Env, Context),
+    {Typed, After} = record_fields(Name, Fields, Before, Context),
+    {{record, Line, Input, Name, Typed}, unknown, After};
 expression({record_field, Line, Value, Name, Field = {atom, _, Slot}}, Env, Context) ->
     {Typed, _, After} = expression(Value, Env, Context),
     {{record_field, Line, Typed, Name, Field}, field(Name, Slot, Context), After};
 expression({call, Line, Target, Args}, Env, Context) ->
-    {Typed, _, After} = expressions(Args, Env, Context),
+    Expected =
+        case Target of
+            {atom, _, Name} -> element(1, signature({Name, length(Args)}, Context));
+            _ -> lists:duplicate(length(Args), unknown)
+        end,
+    {Typed, After} = lists:mapfoldl(
+        fun({Arg, Type}, Before) ->
+            {Value, Actual, Bound} = expression(Arg, Before, Context),
+            case Target of
+                {remote, _, _, _} ->
+                    case contains_enum(Actual) of
+                        true -> error({unsupported_xls_enum_provider_call, Line, Target});
+                        false -> ok
+                    end;
+                _ ->
+                    ok
+            end,
+            {expected(Value, Type, Actual, Line), Bound}
+        end,
+        Env,
+        lists:zip(Args, Expected)
+    ),
     {{call, Line, Target, Typed}, call_shape(Target, Args, Context), After};
 expression({xls_bit_size, Line, Name, Value}, Env, Context) ->
     {Typed, _, After} = expression(Value, Env, Context),
@@ -183,6 +289,106 @@ expression(List, Env, Context) when is_list(List) ->
     {Typed, unknown, After};
 expression(Value, Env, _) ->
     {Value, unknown, Env}.
+
+%% A field assignment is a typed boundary just like a helper argument.
+-spec record_fields(atom(), [tuple()], bindings(), context()) -> {[tuple()], bindings()}.
+record_fields(Name, Fields, Env, Context) ->
+    lists:mapfoldl(
+        fun({record_field, Line, Field = {atom, _, Slot}, Value}, Before) ->
+            {Typed, Actual, After} = expression(Value, Before, Context),
+            Checked = expected(Typed, field(Name, Slot, Context), Actual, Line),
+            {{record_field, Line, Field, Checked}, After}
+        end,
+        Env,
+        Fields
+    ).
+
+%% Preserve existing numeric diagnostics for known noninteger atom values.
+-spec diagnostic_shape(shape()) -> shape().
+diagnostic_shape({atom, _}) -> other;
+diagnostic_shape(Type) -> Type.
+
+%% Atom equality uses the declared domain. Erlang atom ordering is lexical and
+%% must not accidentally become declaration-code ordering.
+-spec contains_enum(shape()) -> boolean().
+contains_enum({enum, _}) -> true;
+contains_enum({tuple, Fields}) -> lists:any(fun contains_enum/1, Fields);
+contains_enum({array, Element}) -> contains_enum(Element);
+contains_enum(_) -> false.
+
+%% Structural equality may contain enum fields; context reaches corresponding
+%% tuple literals without changing unrelated numeric literal-width inference.
+-spec comparison_expected(term(), shape(), erl_anno:location()) -> term().
+comparison_expected(Value, Shape, Line) ->
+    case contains_enum(Shape) of
+        true -> {xls_expected, Line, literal_context(Shape), Value};
+        false -> Value
+    end.
+
+%% Carry only enum requirements into matching tuple literal positions.
+-spec literal_context(shape()) -> unknown | xls_literal_types:type() | {tuple, [term()]}.
+literal_context({enum, Descriptor}) -> {provider, Descriptor};
+literal_context({tuple, Fields}) -> {tuple, [literal_context(T) || T <- Fields]};
+literal_context(_) -> unknown.
+
+%% Bits are an encoding only; arithmetic and lexical ordering remain unsupported.
+-spec enum_operator(atom(), erl_anno:location()) -> ok.
+enum_operator(Op, _) when Op =:= '=:='; Op =:= '=/=' -> ok;
+enum_operator(Op, Line) when Op =:= '<'; Op =:= '=<'; Op =:= '>'; Op =:= '>=' ->
+    error({unsupported_xls_enum_ordering, Line, Op});
+enum_operator(Op, Line) ->
+    error({unsupported_xls_enum_operator, Line, Op}).
+
+%% An expected domain also reaches earlier atom bindings in literal typing.
+-spec expected(term(), shape(), shape(), erl_anno:location()) -> term().
+expected(Value, Type = {enum, Descriptor}, Actual, Line) ->
+    compatible(Type, Actual, Line),
+    {xls_expected, Line, {provider, Descriptor}, Value};
+expected(Value, Expected, Actual, Line) ->
+    compatible(Expected, Actual, Line),
+    Value.
+
+%% Different codebooks are not interchangeable merely because their widths fit.
+-spec compatible(shape(), shape(), erl_anno:location()) -> ok.
+compatible({tuple, Expected}, {tuple, Actual}, Line) when length(Expected) =:= length(Actual) ->
+    lists:foreach(fun({E, A}) -> compatible(E, A, Line) end, lists:zip(Expected, Actual));
+compatible({enum, Type}, {enum, Type}, _) ->
+    ok;
+compatible({enum, Type}, {atom, Atom}, Line) ->
+    _ = xls_literal_types:encode_atom(Line, Atom, Type),
+    ok;
+compatible({atom, Atom}, {enum, Type}, Line) ->
+    _ = xls_literal_types:encode_atom(Line, Atom, Type),
+    ok;
+compatible({enum, _}, unknown, _) ->
+    ok;
+compatible({enum, Type}, Actual, Line) ->
+    error({incompatible_xls_enum, Line, Type, Actual});
+compatible(unknown, {enum, _}, _) ->
+    ok;
+compatible(Expected, {enum, Type}, Line) ->
+    error({incompatible_xls_enum, Line, Expected, Type});
+compatible(_, _, _) ->
+    ok.
+
+%% Patterns have no later expression consumer; their declared subject types
+%% supply the encoding directly, including nested record and tuple fields.
+-spec typed_pattern(term(), shape(), context()) -> term().
+typed_pattern({atom, Line, Atom}, {enum, Type}, _) ->
+    xls_literal_types:encode_atom(Line, Atom, Type);
+typed_pattern({match, Line, A, B}, Type, Context) ->
+    {match, Line, typed_pattern(A, Type, Context), typed_pattern(B, Type, Context)};
+typed_pattern({record, Line, Name, Fields}, _, Context) ->
+    {record, Line, Name, [
+        {record_field, FL, Field, typed_pattern(P, field(Name, Slot, Context), Context)}
+     || {record_field, FL, Field = {atom, _, Slot}, P} <- Fields
+    ]};
+typed_pattern({tuple, Line, Patterns}, {tuple, Types}, Context) when
+    length(Patterns) =:= length(Types)
+->
+    {tuple, Line, [typed_pattern(P, T, Context) || {P, T} <- lists:zip(Patterns, Types)]};
+typed_pattern(Pattern, _, _) ->
+    Pattern.
 
 %% Integer operations require integer operands; Boolean operators yield atoms.
 -spec operator_shape(atom()) -> shape().
@@ -238,20 +444,34 @@ branches(Clauses, Types, Env, Context) ->
     ),
     Result = element(2, First),
     Joined =
-        case lists:all(fun({_, T, _}) -> T =:= Result end, Rest) of
-            true -> Result;
-            false -> unknown
-        end,
+        lists:foldl(fun({_, T, _}, Acc) -> join_shape(Acc, T) end, Result, Rest),
     {[C || {C, _, _} <- Results], Joined, After}.
+
+%% Branches with distinct enum codebooks are unsafe even when their bit widths
+%% happen to agree. Literal atoms may join a compatible declared enum domain.
+-spec join_shape(shape(), shape()) -> shape().
+join_shape(Type, Type) ->
+    Type;
+join_shape({enum, _} = Type, Other) ->
+    compatible(Type, Other, 0),
+    Type;
+join_shape(Other, {enum, _} = Type) ->
+    compatible(Type, Other, 0),
+    Type;
+join_shape(_, _) ->
+    unknown.
 
 %% Pattern projections use declared fields even without a callback signature.
 -spec pattern(term(), shape(), bindings(), context()) -> bindings().
 pattern({var, _, '_'}, _, Env, _) ->
     Env;
-pattern({var, _, Name}, Type, Env, _) ->
-    case maps:is_key(Name, Env) of
-        true -> Env;
-        false -> Env#{Name => Type}
+pattern({var, Line, Name}, Type, Env, _) ->
+    case maps:find(Name, Env) of
+        {ok, Existing} ->
+            compatible(Type, Existing, Line),
+            Env;
+        error ->
+            Env#{Name => Type}
     end;
 pattern({match, _, A, B}, Type, Env, Context) ->
     pattern(B, Type, pattern(A, Type, Env, Context), Context);

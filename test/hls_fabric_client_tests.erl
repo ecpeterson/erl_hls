@@ -304,8 +304,8 @@ per_request_reply_sets_test() ->
         expect(Read, {small, 7}),
         Error = async(fun() -> gen_server:call(Client, {query, 2, 99}) end),
         [_, _, {_, {_, ErrorTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 3, 1000),
-        deliver(Fabric, Tag(error), ErrorTx, <<15:32/little>>),
-        expect(Error, {error, {remote_error, reply_contract}}),
+        deliver(Fabric, Tag(error), ErrorTx, <<3:32/little>>),
+        expect(Error, {error, {remote_error, request_length}}),
         Small = async(fun() -> gen_server:call(Client, {query, 0, 101}) end),
         [_, _, _, {_, {_, SmallTx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 4, 1000),
         deliver(Fabric, Tag(small), SmallTx, <<101:32/little>>),
@@ -328,6 +328,88 @@ dense_application_payload_test() ->
         expect(Ref, {result, true, 7, -129}),
         ?assertMatch(#{pending := 0}, synced_info(Client, Fabric))
     end).
+
+%% A terminal callback failure invalidates every caller, including retained calls,
+%% without stopping other endpoints on the same transport.
+-spec terminal_actor_failure_test_() -> [term()].
+terminal_actor_failure_test_() ->
+    [{atom_to_list(Module), fun() ->
+        {ok, Fabric} = hls_fabric_test_wire:start_link(),
+        {ok, Failed} = hls_gs:start_link(Module, [], [{fabric, Fabric, 1}]),
+        {ok, Other} = hls_gs:start_link(regsvc, [], [{fabric, Fabric, 2}]),
+        unlink(Failed),
+        Monitor = monitor(process, Failed),
+        try
+            {Request, Reply, ReplyTag} = case Module of
+                regsvc -> {{ping, 7}, {ack, 7}, ack};
+                hls_deferred_fixture -> {{read, 0}, {report, 7}, report}
+            end,
+            Before = gen_server:send_request(Failed, Request),
+            [{{0, 1}, {_, BeforeTx, 0}, _}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
+            deliver(Fabric, Module:pack_tag(ReplyTag), BeforeTx, <<7:32/little>>),
+            ?assertEqual({reply, Reply}, gen_server:receive_response(Before, 1000)),
+            Waiting = case Module of regsvc -> {ping, 8}; hls_deferred_fixture -> {wait, 8} end,
+            A = gen_server:send_request(Failed, Waiting),
+            B = gen_server:send_request(Failed, Waiting),
+            _ = hls_fabric_test_wire:await_sends(Fabric, 3, 1000),
+            %% Faulting casts have no request slot. They must still retire the endpoint.
+            Code = (9 bsl 4) bor 2,
+            Failure = {hls_actor_failure, Module,
+                #{reason => match_failure, source_code => Code, source_site => 9}},
+            deliver(Fabric, Module:pack_tag(error), 255, <<(16#c0000000 bor Code):32/little>>),
+            [?assertEqual({error, {Failure, Failed}}, gen_server:receive_response(R, 1000))
+                || R <- [A, B]],
+            receive {'DOWN', Monitor, process, Failed, Failure} -> ok
+            after 1000 -> error(failed_actor_still_alive) end,
+            ?assertExit({noproc, _}, gen_server:call(Failed, Waiting)),
+            ?assert(is_process_alive(Fabric)),
+            Live = gen_server:send_request(Other, {ping, 99}),
+            Frames = hls_fabric_test_wire:await_sends(Fabric, 4, 1000),
+            {{0, 2}, {_, LiveTx, 0}, _} = lists:last(Frames),
+            ok = hls_fabric_test_wire:deliver(Fabric, {2, 0},
+                {regsvc:pack_tag(ack), LiveTx, 0}, <<99:32/little>>),
+            ?assertEqual({reply, {ack, 99}}, gen_server:receive_response(Live, 1000))
+        after
+            catch hls_gs:stop(Failed),
+            hls_gs:stop(Other),
+            hls_fabric_test_wire:stop(Fabric)
+        end
+    end} || Module <- [regsvc, hls_deferred_fixture]].
+
+%% Terminal flags cannot bypass route, frame-size or reserved-bit validation.
+-spec invalid_terminal_frames_test() -> ok.
+invalid_terminal_frames_test() ->
+    with_client(application, fun(Client, Fabric) ->
+        {Ref, Frame = {_, {_, Tx, _}, _}} = send_one(application, Client, Fabric, 55, infinity),
+        Tag = regsvc:pack_tag(error),
+        Fault = <<16#c000001d:32/little>>,
+        gen_server:cast(Client, {'$hls_fabric_frame', make_ref(), {2, 0}, {Tag, Tx, 0}, Fault}),
+        gen_server:cast(Client, {'$hls_fabric_frame', make_ref(), {1, 0}, {Tag, Tx, 1}, Fault}),
+        [deliver(Fabric, Tag, Tx, Bits) || Bits <- [<<>>, <<1, 2>>, <<Fault/binary, 0:32>>,
+            <<16#4000001d:32/little>>, <<16#c001001d:32/little>>, <<16#c0000010:32/little>>]],
+        ?assertMatch(#{pending := 1, ignored_replies := 8}, synced_info(Client, Fabric)),
+        ?assert(is_process_alive(Client)),
+        reply(application, Fabric, Frame),
+        expect(Ref, {ack, 55})
+    end).
+
+%% A generic terminal bookkeeping failure has no invented source-site identity.
+-spec terminal_bookkeeping_failure_test() -> ok.
+terminal_bookkeeping_failure_test() ->
+    {ok, Fabric} = hls_fabric_test_wire:start_link(),
+    {ok, Client} = hls_gs:start_link(hls_deferred_fixture, [], [{fabric, Fabric, 1}]),
+    unlink(Client),
+    try
+        Request = gen_server:send_request(Client, {wait, 1}),
+        [{_, {_, Tx, _}, _}] = hls_fabric_test_wire:await_sends(Fabric, 1, 1000),
+        deliver(Fabric, hls_deferred_fixture:pack_tag(error), Tx, <<16#80000011:32/little>>),
+        ?assertEqual({error, {{hls_actor_failure, hls_deferred_fixture,
+            #{reason => reply_handle_exhausted}}, Client}},
+            gen_server:receive_response(Request, 1000))
+    after
+        catch hls_gs:stop(Client),
+        hls_fabric_test_wire:stop(Fabric)
+    end.
 
 %% Owns a test client and its broker for one scenario.
 -spec with_client(application | debug | {application, module()}, fun((pid(), pid()) -> T)) -> T.

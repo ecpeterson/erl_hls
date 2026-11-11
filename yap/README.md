@@ -1,6 +1,6 @@
 # Compiler and runtime roadmap
 
-Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on 2026-11-09. Supported behavior belongs in [docs/](../docs/README.md); implementation notes retain their original evidence. Fabric lowering, application and deployment work belongs in the [hls_fabric roadmap](https://github.com/ecpeterson/hls_fabric/blob/main/yap/README.md); visualization and prediction work belongs in the [hls_spacetime campaign](https://github.com/ecpeterson/hls_spacetime/blob/main/yap/spacetime-visualization.md).
+Maintained task index for `erl_hls` and its `hls_runtime` library, updated on 2026-11-10. Supported behavior belongs in [docs/](../docs/README.md); implementation notes retain their original evidence. Fabric lowering, application and deployment work belongs in the [hls_fabric roadmap](https://github.com/ecpeterson/hls_fabric/blob/main/yap/README.md); visualization and prediction work belongs in the [hls_spacetime campaign](https://github.com/ecpeterson/hls_spacetime/blob/main/yap/spacetime-visualization.md).
 
 ## Compiler usability, in priority order
 
@@ -9,10 +9,10 @@ Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on
 - [x] Package communicating telemetry through `hlsc topology`, with a relocatable bundle and a focused public-port RTL witness; see [reliability closeout](compiler-reliability.md).
 - [x] Retain latched actor failures across non-reset differential segments, and isolate source-context tests across interrupted runs; [qualification](compiler-reliability.md).
 
-## Next assessment
+## Recovery boundary
 
-- [ ] Define failure, reset and retry semantics after the remaining low-hanging compiler usability work has been assessed.
-  - Start with concrete actor/runtime ownership and observable failure cases; coordinate fabric transport and deployment semantics downstream. Do not silently broaden reset, replay or progress guarantees while improving compiler tests.
+- [x] Define terminal actor failure and fixed-domain replacement without transparent replay; [contract](../docs/actor-domains.md).
+- [x] Implement native replacement and ordinary OTP supervision with a shared compilable lifecycle kernel; [qualification](actor-recovery.md).
 
 ## Deferred or gated work
 
@@ -20,8 +20,8 @@ Maintained task index for `erl_hls` and its `hls_runtime` library, reconciled on
   - Coordinate the arithmetic consumer with hls_fabric. Grid arithmetic has additional handwritten implementation choices; eliminating every geometry conditional is not the acceptance target.
 - [ ] Extend field/effect/state-demand analysis when a consumer names the storage or dependency it will remove.
   - Message facts, known-bit compaction and phase-value analysis already exist. Additional analysis must preserve evaluated failures, effect order and unknown-provider behavior.
-- [ ] Add structural callback helpers, actor parameterization, timeouts or supervised topology reconnection when an application requires their semantics.
-  - Avoid runtime geometry branches or superset state solely to erase source conditionals. CPU restart ownership is a separate runtime contract.
+- [ ] Add structural callback helpers, actor parameterization or timeouts when an application requires their semantics.
+  - Avoid runtime geometry branches or superset state solely to erase source conditionals. Fixed-domain topology reconnection now belongs to the recovery contract; broader actor-local restart requires separately checked ownership.
 - [ ] Recheck retained XLS workarounds during a deliberate pinned-toolchain refresh.
   - The signed-remainder fix ([#4978](https://github.com/google/xls/pull/4978)) and XOR cancellation ([#5190](https://github.com/google/xls/pull/5190)) are merged upstream; verify pinned-binary adoption rather than reimplementing them. RAM reservations ([#4952](https://github.com/google/xls/pull/4952)) remain open and Darwin subprocess support ([#4951](https://github.com/google/xls/pull/4951)) closed without merge. Retain the generic-struct mangling and signed-remainder reproducers when qualifying a refresh.
 - [ ] Complete inherited source contracts and generated API documentation as modules are maintained.

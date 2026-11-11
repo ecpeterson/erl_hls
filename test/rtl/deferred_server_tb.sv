@@ -7,6 +7,7 @@ module deferred_server_tb;
     wire request_ready, reply_valid;
     wire [32:0] reply;
     reg [32:0] expected [0:255];
+    reg [32:0] expected_mask [0:255];
     integer expected_count = 0, received = 0, cycles = 0;
     reg [32:0] held;
     reg stalled = 0;
@@ -21,7 +22,7 @@ module deferred_server_tb;
         if (stalled && (!reply_valid || reply !== held)) $fatal(1, "reply changed while stalled");
         held = reply; stalled = reply_valid && !reply_ready;
         if (reply_valid && reply_ready) begin
-            if (received >= expected_count || reply !== expected[received])
+            if (received >= expected_count || (reply & expected_mask[received]) !== (expected[received] & expected_mask[received]))
                 $fatal(1, "beat %0d got %h expected %h", received, reply, expected[received]);
             received = received + 1;
         end
@@ -41,6 +42,16 @@ module deferred_server_tb;
         begin
             expected[expected_count] = {1'b0, tag, 8'd0, txid, 8'd1};
             expected[expected_count+1] = {1'b1, value};
+            expected_mask[expected_count] = 33'h1ffffffff;
+            expected_mask[expected_count+1] = 33'h1ffffffff;
+            if (tag == 1 && value != 16) begin
+                if (value == 17 || value == 18)
+                    expected[expected_count+1] = {1'b1, 32'h80000000 | value};
+                else begin
+                    expected[expected_count+1] = {1'b1, 32'hc0000000 | value};
+                    expected_mask[expected_count+1] = 33'h1ffff000f;
+                end
+            end
             expected_count = expected_count + 2;
         end
     endtask
@@ -90,6 +101,14 @@ module deferred_server_tb;
         restart();
         expect_reply(8, 40, 0); packet(5, 40, 0); drained();
         expect_reply(1, 40, 13); packet(5, 40, 1); drained();
+        restart();
+        // The last reply completes before its continuation fails, with no next request.
+        expect_reply(8, 10, 7); expect_reply(1, 255, 2);
+        packet(3, 10, 7); packet(4, 255, 1); drained();
+        // Exactly one unsolicited notice was emitted; later calls see the sticky failure.
+        expect_reply(1, 40, 2); packet(5, 40, 0); drained();
+        restart();
+        expect_reply(8, 40, 0); packet(5, 40, 0); drained();
         $display("PASS: retained replies, bounded admission, continuations, stale handles, stalls and failure drain");
         $finish;
     end

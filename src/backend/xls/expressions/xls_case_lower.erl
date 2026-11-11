@@ -116,12 +116,17 @@ case_shape(Clauses) ->
         Clauses
     ).
 
+%% Head shape chooses record projection versus an untagged scalar subject.
+-spec pattern_shape(term()) ->
+    any | bits | scalar | array | {tuple, non_neg_integer()} | {record, term()}.
 pattern_shape({bin, _, _}) ->
     bits;
 pattern_shape({var, _Line, _Name}) ->
     any;
 pattern_shape({match, Line, Left, Right}) ->
     merge_shape(pattern_shape(Left), pattern_shape(Right), Line);
+pattern_shape({xls_typed_integer, _Line, _Type, _Integer}) ->
+    scalar;
 pattern_shape({integer, _Line, _Integer}) ->
     scalar;
 pattern_shape({atom, _Line, _Atom}) ->

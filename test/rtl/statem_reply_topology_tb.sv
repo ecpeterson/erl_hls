@@ -9,6 +9,7 @@ module statem_reply_topology_tb;
     wire [127:0] reply;
     integer cycles = 0, pending = 0, received = 0;
     reg [40:0] expected [0:254];
+    reg [39:0] expected_mask [0:254];
     reg [127:0] held;
     reg stalled = 0;
     integer i;
@@ -24,7 +25,8 @@ module statem_reply_topology_tb;
             if (reply[119:112] == 255 || !expected[reply[119:112]][40])
                 $fatal(1, "unexpected transaction: %h", reply);
             if (reply[127:120] !== 1 || reply[111:104] !== 0 || reply[95:32] !== 0 ||
-                {reply[103:96], reply[31:0]} !== expected[reply[119:112]][39:0])
+                ({reply[103:96], reply[31:0]} & expected_mask[reply[119:112]]) !==
+                (expected[reply[119:112]][39:0] & expected_mask[reply[119:112]]))
                 $fatal(1, "wrong response: %h", reply);
             expected[reply[119:112]][40] = 0;
             pending = pending - 1; received = received + 1;
@@ -45,6 +47,11 @@ module statem_reply_topology_tb;
         begin
             if (expected[txid][40]) $fatal(1, "test reused a live transaction");
             expected[txid] = {1'b1, tag, value}; pending = pending + 1;
+            expected_mask[txid] = 40'hffffffffff;
+            if (tag == 1 && value != 16) begin
+                expected[txid] = {1'b1, tag, 32'hc0000000 | value};
+                expected_mask[txid] = 40'hffffff000f;
+            end
         end
     endtask
     task automatic drained;

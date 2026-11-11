@@ -361,6 +361,9 @@ runtime(hls_gs) ->
     [
         "Tag",
         "Service",
+        "ServiceState",
+        "ServiceResult",
+        "CallbackResult",
         "Top",
         "N",
         "NOREPLY",

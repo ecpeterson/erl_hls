@@ -13,34 +13,40 @@ non_reduction_statem_codegen_retains_artifact_bytes_test() ->
         ?assertNotEqual(nomatch, binary:match(Generated, <<"pub enum OutputPort">>))
     end, ["test/hls_data_cell_fixture.erl", "test/hls_query_cell_fixture.erl"]).
 
+%% Service recurrence retains typed data and failure state without serializing passive observation.
+-spec passive_state_observation_is_not_emitted_test() -> ok.
 passive_state_observation_is_not_emitted_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
     %% State serialization remains part of the generated API, but the live
-    %% Service recurrence carries only the tagged struct and never packs it.
+    %% Service recurrence carries typed data plus failure status and never packs it.
     ?assertMatch({_, _}, binary:match(Xls, <<"fn bits_from_state(s: State)">>)),
     ?assertEqual(1, length(binary:matches(Xls, <<"bits_from_state">>))),
-    ?assertMatch({_, _}, binary:match(Xls, <<"let state_record = (Tag::STATE, state);">>)),
-    ?assertMatch({_, _}, binary:match(Xls, <<"new_state.1">>)),
+    ?assertMatch({_, _}, binary:match(Xls, <<"let state_record = (Tag::STATE, state.data);">>)),
+    ?assertMatch({_, _}, binary:match(Xls, <<"result.state">>)),
 
     ?assertEqual(nomatch, re:run(Xls, <<"\\b(state_out|ext_state)\\b">>)).
 
+%% Each source request tag owns one numeric dispatch arm, regardless of clause count.
+-spec ordered_gs_clauses_share_one_tag_arm_test() -> ok.
 ordered_gs_clauses_share_one_tag_arm_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
     %% Multiple cast and call clauses each share one wire-tag dispatch arm.
-    ?assertEqual(1, length(binary:matches(Xls, <<"Tag::SET =>">>))),
-    ?assertEqual(1, length(binary:matches(Xls, <<"Tag::BULK_GET =>">>))).
+    ?assertEqual(1, length(binary:matches(Xls, <<"=> { // set">>))),
+    ?assertEqual(1, length(binary:matches(Xls, <<"=> { // bulk_get">>))).
 
+%% Include-expanded declaration order is shared by numeric dispatch and runtime codecs.
+-spec repeated_hls_tags_follow_include_expanded_source_order_test() -> ok.
 repeated_hls_tags_follow_include_expanded_source_order_test() ->
     Path = "test_data/hls_tags_fixture.erl",
     Xls = iolist_to_binary(xls_parse:to_xls(Path)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"LAST = u8:5">>)),
-    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::FIRST =>">>)),
-    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::SHARED =>">>)),
-    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::LAST =>">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"=> { // first">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"=> { // shared">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"=> { // last">>)),
 
     {ok, Module, Binary} = compile:file(Path, [binary]),
     {module, Module} = code:load_binary(Module, Path, Binary),
@@ -695,8 +701,8 @@ hls_gs_callback_body_accepts_if_test() ->
     ok = file:write_file(Path, Source),
     try
         XLS = iolist_to_binary(xls_parse:to_xls(Path)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::MESSAGE =>">>)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"=> { // message">>)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"=> { // query">>)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(sN[2]:0, v_Xls_clause_1_Value_1)">>))
     after
         ok = file:delete(Path)
@@ -708,8 +714,8 @@ hls_gs_callback_bodies_accept_general_case_test() ->
     XLS = iolist_to_binary(xls_parse:to_xls(
         "test_data/xls_case_fixture.erl"
     )),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::UPDATE =>">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"=> { // query">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"=> { // update">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(v_Xls_clause_1_Choice_1, sN[5]:8)">>)),
     ?assertNotEqual(
         nomatch,

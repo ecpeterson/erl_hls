@@ -21,7 +21,7 @@ pub enum Kind : u4 {
 
 // Zero is success. Codes 1..15 are generic reasons; source-located codes are
 // allocated by the actor compiler and decoded with that artifact's source map.
-// Bits 3:0 retain the reason so GS error replies need no source lookup circuit.
+// Bits 3:0 retain the reason; wire status also distinguishes terminal failures from rejected requests.
 pub type Code = u16;
 pub const NONE = Code:0;
 pub const FUNCTION_CLAUSE = Code:1;
@@ -88,3 +88,33 @@ pub fn completion(dispatched: bool, invalid_repeat: bool, callback: Code) -> Cod
 }
 
 pub fn kind(code: Code) -> Kind { (code as u4) as Kind }
+
+// Wire errors use one u32 word. The upper flags distinguish terminal actor
+// lifetime from recoverable admission, and source codes from runtime reasons.
+pub const WIRE_TERMINAL = u32:1 << u32:31;
+pub const WIRE_SOURCE = u32:1 << u32:30;
+
+// Preserve the complete source code; zero remains successful, not a fault.
+pub fn source_error(code: Code) -> u32 {
+    if code == NONE { u32:0 } else { WIRE_TERMINAL | WIRE_SOURCE | code as u32 }
+}
+
+// Runtime ownership faults have no fabricated source position.
+pub fn runtime_error(reason: u32) -> u32 {
+    if reason == u32:0 { u32:0 } else { WIRE_TERMINAL | reason }
+}
+
+// Admission rejections leave both terminal flags clear.
+pub fn wire_terminal(error: u32) -> bool { (error & WIRE_TERMINAL) != u32:0 }
+
+// A source code can share its low bits with a runtime reason without aliasing it.
+#[test]
+fn wire_failure_categories_test() {
+    assert_eq(source_error(NONE), u32:0);
+    assert_eq(runtime_error(u32:0), u32:0);
+    assert_eq(source_error(Code:17), u32:0xc0000011);
+    assert_eq(runtime_error(u32:17), u32:0x80000011);
+    assert_eq(wire_terminal(u32:16), false);
+    assert_eq(wire_terminal(source_error(Code:17)), true);
+    assert_eq(wire_terminal(runtime_error(u32:17)), true);
+}

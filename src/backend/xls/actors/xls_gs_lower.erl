@@ -35,7 +35,7 @@ callback_arms(Forms, StateName, Layout) ->
         ],
         [callback_arm(cast, Group, StateName, Forms, Layout) || Group <- CastGroups],
         "\n_ => {\n",
-        xls_dslx:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
+        xls_dslx:indent(rejection("ERROR_FUNCTION_CLAUSE"), 2),
         "}\n"
     ].
 
@@ -60,7 +60,9 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
             "state_record"
         )
     ],
-    {Postprocessor, NoClauseFailure, BodyFailure} = callbacks(Kind, StateName),
+    {clause, Line, _, _, _} = hd(Clauses),
+    {Postprocessor, BodyFailure} = callbacks(Kind),
+    NoClauseFailure = failure(xls_failure_sites:at(function_clause, Line)),
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
@@ -71,13 +73,25 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
         #{}
     ),
     [
-        "\nTag::",
-        xls_names:enum_member(Tag),
-        " => {\n",
+        "\nu8:",
+        integer_to_list(
+            maps:get(
+                Tag,
+                maps:from_list([
+                    {Name, I}
+                 || {I, Name} <-
+                        lists:enumerate([error, StateName | hls_actor_source:tags(Forms)])
+                ])
+            )
+        ),
+        " => { // ",
+        atom_to_list(Tag),
+        "\n",
         "  if frame.header.payload_words != u8:",
         integer_to_list(hls_actor_source:message_words(Forms, Tag, Layout)),
         " {\n",
-        "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
+        xls_dslx:indent(rejection("ERROR_REQUEST_LENGTH"), 4),
+        "\n",
         "  } else {\n",
         "    let request = ",
         xls_names:record_codec(Tag),
@@ -89,11 +103,9 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms, Layout) ->
     ].
 
 %% Calls enforce their reply vocabulary; casts carry only the proposed state.
--spec callbacks(cast | {call, [atom(), ...]}, atom()) ->
-    {fun((xls_dslx:value()) -> xls_dslx:value()), xls_dslx:value(), fun(
-        (xls_dslx:value()) -> xls_dslx:value()
-    )}.
-callbacks({call, Replies}, StateName) ->
+-spec callbacks(cast | {call, [atom(), ...]}) ->
+    {fun((xls_dslx:value()) -> xls_dslx:value()), fun((xls_dslx:value()) -> xls_dslx:value())}.
+callbacks({call, Replies}) ->
     {
         fun(R) ->
             [
@@ -103,42 +115,42 @@ callbacks({call, Replies}, StateName) ->
                  || Tag <- Replies
                 ]),
                 " {\n",
-                "  (axis::pack(",
+                "  CallbackResult { response: axis::pack(",
                 R,
                 ".1.0 as u8, hls_bits::frame_payload(",
                 R,
-                ".1.2)), ",
+                ".1.2)), data: ",
                 R,
-                ".2)\n",
+                ".2.1, error: u32:0 }\n",
                 "} else {\n",
-                xls_dslx:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
+                xls_dslx:indent(failure("hls_failure::REPLY_CONTRACT"), 2),
                 "\n}"
             ]
         end,
-        failure("ERROR_FUNCTION_CLAUSE", StateName),
-        fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end
+        fun failure/1
     };
-callbacks(cast, StateName) ->
+callbacks(cast) ->
     {
-        fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end,
-        failure("ERROR_FUNCTION_CLAUSE", StateName),
-        fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end
+        fun(R) -> ["CallbackResult { data: ", R, ".1.1, ..zero!<CallbackResult>() }"] end,
+        fun failure/1
     }.
 
-failure(Code, StateName) ->
-    Struct = xls_names:record_type(StateName),
+%% Failed callbacks preserve committed data and retain their complete source code.
+-spec failure(xls_dslx:value()) -> xls_dslx:value().
+failure(Code) ->
+    rejection(["hls_failure::source_error(", Code, ")"]).
+
+%% Rejections carry a wire status without manufacturing a callback result.
+-spec rejection(xls_dslx:value()) -> xls_dslx:value().
+rejection(Code) ->
     [
-        "let s = zero!<",
-        Struct,
-        ">();\n",
-        "(axis::pack(Tag::ERROR as u8, ",
+        "CallbackResult { data: state_record.1, error: ",
         Code,
-        "), ",
-        "(Tag::",
-        xls_names:enum_member(StateName),
-        ", s))"
+        ", ..zero!<CallbackResult>() }"
     ].
 
+%% A public record value retains its tag and canonical packed payload.
+-spec public_record_value(atom(), xls_dslx:value()) -> xls_dslx:value().
 public_record_value(Tag, Raw) ->
     [
         "(Tag::",

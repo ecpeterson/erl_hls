@@ -6,7 +6,7 @@ XLS evaluates the initializer at compile time. The generated module retains both
 
 Initialization uses the same expression lowering and [numeric contract](numeric-contract.md) as callbacks. Compile-time checking does not establish equivalence for arbitrary Erlang arithmetic or exceptions: intermediate widths, overflow, rounding, and supported operator domains still apply. Use type-directed constructors and explicit conversions where a value's width matters.
 
-Every translated record field must have an explicit `hls_type:zero()` default and a supported type. `hls_pack` supplies the corresponding BEAM default, and DSLX supplies the same type's zero. Other defaults, missing defaults, and untyped fields are rejected. Assign nonzero values in the initializer's record construction or update:
+Every translated record field must have a supported type and an explicit default equal to that type's zero. `hls_type:zero()` with the `hls_pack` transform is the usual spelling. Pure literals such as `0` and `false`, or nested record constructions whose fields are all zero, also work; the compiler verifies their value before normalizing them to the same typed zero. This lets a shared native Erlang module remain independent of the compiler's parse transform. Executable defaults, nonzero defaults, missing defaults, and untyped fields are rejected. Assign nonzero values in the initializer's record construction or update:
 
 ```erlang
 -record(state, {

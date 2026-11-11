@@ -156,11 +156,14 @@ pub fn bits_from_state(s: State) -> bits[512] {
   hls_bits::from_stream(hls_bits::to_stream(hls_bits::from_stream(({ let codec_input = s.registers; for (codec_index, codec_output): (u32, bits[32][16]) in u32:0..u32:16 { update(codec_output, codec_index, hls_bits::to_stream(codec_input[u32:15 - codec_index] as bits[32])) } (zero!<bits[32][16]>()) }) as bits[512])) ++ zero!<bits[0]>())
 }
 
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L113 = u16:30; // regsvc.erl:L113
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L115 = u16:46; // regsvc.erl:L115
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L123 = u16:62; // regsvc.erl:L123
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L132 = u16:78; // regsvc.erl:L132
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L138 = u16:94; // regsvc.erl:L138
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L108 = u16:17; // regsvc.erl:L108
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L113 = u16:46; // regsvc.erl:L113
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L115 = u16:62; // regsvc.erl:L115
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L120 = u16:65; // regsvc.erl:L120
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L123 = u16:94; // regsvc.erl:L123
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L125 = u16:97; // regsvc.erl:L125
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L132 = u16:126; // regsvc.erl:L132
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L138 = u16:142; // regsvc.erl:L138
 fn initial_state_outcome() -> (bool, State) {                                   // @erl "regsvc.erl":105
   let _0 = State {                                                              // @erl "regsvc.erl":106
     ..zero!<State>()                                                            // @erl "regsvc.erl":106
@@ -173,25 +176,24 @@ const_assert!(!INITIAL_STATE.0);                                                
 
 fn initial_state() -> State { INITIAL_STATE.1 }                                 // @erl "regsvc.erl":105
 
-proc Service {
-  req_in:   chan<axis::Frame> in;
-  resp_out: chan<axis::Frame> out;
-  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
-    (req_in, resp_out)
-  }
+pub struct ServiceState { data: State, failure: u32 }
+pub struct ServiceResult { response: axis::Frame, state: ServiceState }
+struct CallbackResult { response: axis::Frame, data: State, error: u32 }
 
-  init { initial_state() }
+pub fn initial_service_state() -> ServiceState {
+  ServiceState { data: initial_state(), failure: u32:0 }
+}
 
-  next(state: State) {
-    let (tok1, frame) = recv(join(), req_in);
-    let state_record = (Tag::STATE, state);
+pub fn service_step(state: ServiceState, frame: axis::Frame) -> ServiceResult {
+  let state_record = (Tag::STATE, state.data);
+  let outcome = if state.failure != u32:0 {
+    CallbackResult { data: state.data, error: state.failure, ..zero!<CallbackResult>() }
+  } else { match frame.header.op {
 
-    // cognate to {reply, Reply, State}
-    let (resp, new_state) = match frame.header.op as Tag {
-
-Tag::PING => {
+u8:5 => { // ping
   if frame.header.payload_words != u8:1 {
-    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+    CallbackResult { data: state_record.1, error: ERROR_REQUEST_LENGTH, ..zero!<CallbackResult>() }
+
   } else {
     let request = ping_from_bits(frame.payload);
     let v_Xls_clause_1_Value_1 = request.value;                                 // @erl "regsvc.erl":118
@@ -203,22 +205,21 @@ Tag::PING => {
     let _1 = (Tag::ACK, _0, bits_from_ack(_0));                                 // @erl "regsvc.erl":119
     let _2 = (REPLY, _1, v_Xls_clause_1_State_1, );                             // @erl "regsvc.erl":119
     if (bool:false) {                                                           // @erl "regsvc.erl":118
-      let s = zero!<State>();                                                   // @erl "regsvc.erl":118
-      (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":118
+      CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::NONE), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":118
     } else {                                                                    // @erl "regsvc.erl":118
       if _2.1.0 == Tag::ACK {                                                   // @erl "regsvc.erl":118
-        (axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), _2.2)       // @erl "regsvc.erl":118
+        CallbackResult { response: axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), data: _2.2.1, error: u32:0 }  // @erl "regsvc.erl":118
       } else {                                                                  // @erl "regsvc.erl":118
-        let s = zero!<State>();                                                 // @erl "regsvc.erl":118
-        (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))   // @erl "regsvc.erl":118
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::REPLY_CONTRACT), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":118
       }                                                                         // @erl "regsvc.erl":118
     }                                                                           // @erl "regsvc.erl":118
   }
 },
 
-Tag::GET => {
+u8:4 => { // get
   if frame.header.payload_words != u8:1 {
-    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+    CallbackResult { data: state_record.1, error: ERROR_REQUEST_LENGTH, ..zero!<CallbackResult>() }
+
   } else {
     let request = get_from_bits(frame.payload);
     let v_Xls_clause_1_Register_1 = request.register;                           // @erl "regsvc.erl":120
@@ -236,26 +237,24 @@ Tag::GET => {
       let _5 = (Tag::READ, _4, bits_from_read(_4));                             // @erl "regsvc.erl":124
       let _6 = (REPLY, _5, v_Xls_clause_1_State_1, );                           // @erl "regsvc.erl":124
       if ((hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L123)) != hls_failure::NONE) {  // @erl "regsvc.erl":120
-        let s = zero!<State>();                                                 // @erl "regsvc.erl":120
-        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L123)) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":120
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L123)), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":120
       } else {                                                                  // @erl "regsvc.erl":120
         if _6.1.0 == Tag::READ {                                                // @erl "regsvc.erl":120
-          (axis::pack(_6.1.0 as u8, hls_bits::frame_payload(_6.1.2)), _6.2)     // @erl "regsvc.erl":120
+          CallbackResult { response: axis::pack(_6.1.0 as u8, hls_bits::frame_payload(_6.1.2)), data: _6.2.1, error: u32:0 }  // @erl "regsvc.erl":120
         } else {                                                                // @erl "regsvc.erl":120
-          let s = zero!<State>();                                               // @erl "regsvc.erl":120
-          (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))  // @erl "regsvc.erl":120
+          CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::REPLY_CONTRACT), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":120
         }                                                                       // @erl "regsvc.erl":120
       }                                                                         // @erl "regsvc.erl":120
     } else {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+      CallbackResult { data: state_record.1, error: hls_failure::source_error(XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L120), ..zero!<CallbackResult>() }
     }
   }
 },
 
-Tag::BULK_GET => {
+u8:6 => { // bulk_get
   if frame.header.payload_words != u8:2 {
-    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+    CallbackResult { data: state_record.1, error: ERROR_REQUEST_LENGTH, ..zero!<CallbackResult>() }
+
   } else {
     let request = bulkget_from_bits(frame.payload);
     let v_Xls_clause_1_State_1 = state_record;                                  // @erl "regsvc.erl":125
@@ -266,14 +265,12 @@ Tag::BULK_GET => {
       let _1 = (Tag::BULK_READ, _0, bits_from_bulkread(_0));                    // @erl "regsvc.erl":126
       let _2 = (REPLY, _1, v_Xls_clause_1_State_1, );                           // @erl "regsvc.erl":126
       if (bool:false) {                                                         // @erl "regsvc.erl":125
-        let s = zero!<State>();                                                 // @erl "regsvc.erl":125
-        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":125
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::NONE), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":125
       } else {                                                                  // @erl "regsvc.erl":125
         if _2.1.0 == Tag::BULK_READ {                                           // @erl "regsvc.erl":125
-          (axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), _2.2)     // @erl "regsvc.erl":125
+          CallbackResult { response: axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), data: _2.2.1, error: u32:0 }  // @erl "regsvc.erl":125
         } else {                                                                // @erl "regsvc.erl":125
-          let s = zero!<State>();                                               // @erl "regsvc.erl":125
-          (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))  // @erl "regsvc.erl":125
+          CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::REPLY_CONTRACT), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":125
         }                                                                       // @erl "regsvc.erl":125
       }                                                                         // @erl "regsvc.erl":125
     } else {
@@ -308,27 +305,25 @@ Tag::BULK_GET => {
         let _11 = (Tag::BULK_READ, _10, bits_from_bulkread(_10));               // @erl "regsvc.erl":144
         let _12 = (REPLY, _11, v_Xls_clause_2_State_1, );                       // @erl "regsvc.erl":144
         if ((hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L132), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L138)])) != hls_failure::NONE) {  // @erl "regsvc.erl":127
-          let s = zero!<State>();                                               // @erl "regsvc.erl":127
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L132), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L138)])) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":127
+          CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L132), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L138)])), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":127
         } else {                                                                // @erl "regsvc.erl":127
           if _12.1.0 == Tag::BULK_READ {                                        // @erl "regsvc.erl":127
-            (axis::pack(_12.1.0 as u8, hls_bits::frame_payload(_12.1.2)), _12.2)  // @erl "regsvc.erl":127
+            CallbackResult { response: axis::pack(_12.1.0 as u8, hls_bits::frame_payload(_12.1.2)), data: _12.2.1, error: u32:0 }  // @erl "regsvc.erl":127
           } else {                                                              // @erl "regsvc.erl":127
-            let s = zero!<State>();                                             // @erl "regsvc.erl":127
-            (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))  // @erl "regsvc.erl":127
+            CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::REPLY_CONTRACT), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":127
           }                                                                     // @erl "regsvc.erl":127
         }                                                                       // @erl "regsvc.erl":127
       } else {
-        let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L125), ..zero!<CallbackResult>() }
       }
     }
   }
 },
 
-Tag::SET => {
+u8:3 => { // set
   if frame.header.payload_words != u8:3 {
-    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+    CallbackResult { data: state_record.1, error: ERROR_REQUEST_LENGTH, ..zero!<CallbackResult>() }
+
   } else {
     let request = set_from_bits(frame.payload);
     let v_Xls_clause_1_Mask_1 = request.mask;                                   // @erl "regsvc.erl":108
@@ -337,10 +332,9 @@ Tag::SET => {
     if _0 {
       let _1 = (NOREPLY, v_Xls_clause_1_State_1, );                             // @erl "regsvc.erl":109
       if (bool:false) {                                                         // @erl "regsvc.erl":108
-        let s = zero!<State>();                                                 // @erl "regsvc.erl":108
-        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":108
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::NONE), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":108
       } else {                                                                  // @erl "regsvc.erl":108
-        (zero!<axis::Frame>(), _1.1)                                            // @erl "regsvc.erl":108
+        CallbackResult { data: _1.1.1, ..zero!<CallbackResult>() }              // @erl "regsvc.erl":108
       }                                                                         // @erl "regsvc.erl":108
     } else {
       let v_Xls_clause_2_Register_1 = request.register;                         // @erl "regsvc.erl":110
@@ -369,33 +363,47 @@ Tag::SET => {
         let _12 = (Tag::STATE, _11);                                            // @erl "regsvc.erl":116
         let _13 = (NOREPLY, _12, );                                             // @erl "regsvc.erl":116
         if ((hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L113), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L115)])) != hls_failure::NONE) {  // @erl "regsvc.erl":110
-          let s = zero!<State>();                                               // @erl "regsvc.erl":110
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L113), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L115)])) as u32), (Tag::STATE, s))  // @erl "regsvc.erl":110
+          CallbackResult { data: state_record.1, error: hls_failure::source_error(hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L113), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L115)])), ..zero!<CallbackResult>() }  // @erl "regsvc.erl":110
         } else {                                                                // @erl "regsvc.erl":110
-          (zero!<axis::Frame>(), _13.1)                                         // @erl "regsvc.erl":110
+          CallbackResult { data: _13.1.1, ..zero!<CallbackResult>() }           // @erl "regsvc.erl":110
         }                                                                       // @erl "regsvc.erl":110
       } else {
-        let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+        CallbackResult { data: state_record.1, error: hls_failure::source_error(XLS_FAILURE_SITE_FUNCTION_CLAUSE_3A68C26C_L108), ..zero!<CallbackResult>() }
       }
     }
   }
 },
 
 _ => {
-  let s = zero!<State>();
-  (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+  CallbackResult { data: state_record.1, error: ERROR_FUNCTION_CLAUSE, ..zero!<CallbackResult>() }
 }
 
-    };
-
-    let txid = frame.header.txid;
-    let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-    send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-    new_state.1
+  } };
+  let response = if outcome.error != u32:0 {
+    axis::pack(Tag::ERROR as u8, outcome.error)
+  } else { outcome.response };
+  ServiceResult {
+    response: axis::Frame { header: axis::Header { txid: frame.header.txid,
+      ..response.header }, ..response },
+    state: ServiceState { data: outcome.data,
+      failure: if hls_failure::wire_terminal(outcome.error) { outcome.error } else { u32:0 } },
   }
 }
 
+proc Service {
+  req_in: chan<axis::Frame> in;
+  resp_out: chan<axis::Frame> out;
+  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
+    (req_in, resp_out)
+  }
+  init { initial_service_state() }
+  next(state: ServiceState) {
+    let (tok, frame) = recv(join(), req_in);
+    let result = service_step(state, frame);
+    send_if(tok, resp_out, result.response.header.op != (Tag::NONE as u8), result.response);
+    result.state
+  }
+}
 proc Top {
   ext_recv:  chan<axis::Beat> in;
   ext_send:  chan<axis::Beat> out;

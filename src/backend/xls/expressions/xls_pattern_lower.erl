@@ -176,6 +176,10 @@ compile_pattern(Binary = {bin, _, _}, #{raw := Raw}, Context) ->
         add_condition(Predicate, Line, Context),
         Parts
     );
+compile_pattern({xls_typed_integer, Line, Type, Integer}, Subject, Context) ->
+    add_condition(
+        [maps:get(raw, Subject), " == ", Type, ":", integer_to_list(Integer)], Line, Context
+    );
 compile_pattern({integer, Line, Integer}, #{raw := Raw}, Context = #{comparison := integer}) ->
     add_condition(equality(Raw, xls_binary_lower:integer_literal(Integer), Context), Line, Context);
 compile_pattern({char, Line, Integer}, Subject, Context) ->
