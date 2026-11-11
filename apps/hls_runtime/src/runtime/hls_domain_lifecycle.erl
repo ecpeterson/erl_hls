@@ -61,7 +61,7 @@ bounded state value.
 -spec new() -> #domain_state{}.
 new() -> #domain_state{}.
 
--doc "Applies one management input; rejected or stale commands leave state unchanged. Identity fields are trusted unsigned 64-bit values; zero targets/transitions and non-increasing activation targets reject. Completion indications must echo all three accepted identity fields.".
+-doc "Applies one management input; rejected or stale commands leave state unchanged. Identity fields are trusted unsigned 64-bit values; zero targets/transitions and non-increasing incarnation targets reject. Completion indications must echo all three accepted identity fields.".
 -spec step(#domain_input{}, #domain_state{}) -> #domain_output{}.
 step(Input, State) ->
     case Input#domain_input.op of
@@ -88,9 +88,9 @@ action(State) ->
 
 -doc "Admits an application event only for the current nonzero ready incarnation.".
 -spec admitted(hls_nums:u64(), #domain_state{}) -> boolean().
-admitted(Activation, State) ->
+admitted(Incarnation, State) ->
     State#domain_state.phase =:= ready andalso
-        Activation =/= 0 andalso Activation =:= State#domain_state.current.
+        Incarnation =/= 0 andalso Incarnation =:= State#domain_state.current.
 
 %% A repeated transition observes its current result without allocating another successor.
 -spec request(#domain_input{}, #domain_state{}) -> #domain_output{}.
@@ -113,7 +113,7 @@ new_request(Input, State) ->
             end
     end.
 
-%% Only cold activation or explicit replacement of a ready/failed incarnation can start work.
+%% Only first-incarnation creation or explicit replacement of a ready/failed incarnation can start work.
 -spec admit_request(#domain_input{}, #domain_state{}) -> #domain_output{}.
 admit_request(Input, State) ->
     Activate =

@@ -2,8 +2,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% Whole-domain replacement reconnects source routes and preserves an independent domain.
--spec explicit_activation_and_independent_replacement_test() -> ok.
-explicit_activation_and_independent_replacement_test() ->
+-spec explicit_incarnation_and_independent_replacement_test() -> ok.
+explicit_incarnation_and_independent_replacement_test() ->
     with_domains(fun(Owner, A, _B, _Store) ->
         ?assertMatch({ok, #{phase := unbound}}, hls_domain:status(Owner, a)),
         ?assertEqual({error, not_ready}, hls_domain:resolve(Owner, a, source)),
@@ -86,9 +86,9 @@ instance_does_not_follow_replacement_test() ->
 lost_reply_does_not_repeat_reset_test() ->
     with_domains(fun(Owner, A, _B, _Store) ->
         {ok, _} = hls_domain:activate(Owner, a),
-        #{handle := {a, Activation} = Old} = ready(Owner, a),
+        #{handle := {a, Incarnation} = Old} = ready(Owner, a),
         {ok, Before} = hls_domain_erts:status(A),
-        _ = catch gen_server:call(Owner, {replace, a, Activation}, 0),
+        _ = catch gen_server:call(Owner, {replace, a, Incarnation}, 0),
         {ok, Retried} = hls_domain:replace(Owner, Old),
         #{handle := {a, Target}} = ready(Owner, a),
         ?assertEqual(Target, maps:get(target, Retried)),
@@ -129,7 +129,7 @@ store_exhaustion_and_exclusive_ownership_test() ->
     with_domains(fun(Owner, A, B, Store) ->
         ?assertEqual(undefined, global:whereis_name({hls_domain, filename:absname(Store)})),
         ?assertEqual({error, eexist}, hls_domain:create_store(Store)),
-        ?assertMatch({error, activation_store_owned},
+        ?assertMatch({error, incarnation_store_owned},
             hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store))),
         {ok, _} = hls_domain:activate(Owner, a),
         #{handle := Old} = ready(Owner, a),
@@ -137,7 +137,7 @@ store_exhaustion_and_exclusive_ownership_test() ->
         ok = file:write_file(Store, <<((1 bsl 64) - 1):64>>),
         {ok, NextOwner} = hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store)),
         unlink(NextOwner),
-        try ?assertEqual({error, activation_exhausted}, hls_domain:replace(NextOwner, Old))
+        try ?assertEqual({error, incarnation_exhausted}, hls_domain:replace(NextOwner, Old))
         after stop(NextOwner) end
     end).
 
@@ -243,7 +243,7 @@ with_domains(Fun) ->
 %% Both domains use the same backend API, with distinct mutable actor state.
 -spec backend(pid(), pid(), file:filename()) -> hls_domain:backend().
 backend(A, B, Store) ->
-    #{module => hls_domain_erts, endpoints => #{a => A, b => B}, activation_file => Store}.
+    #{module => hls_domain_erts, endpoints => #{a => A, b => B}, incarnation_file => Store}.
 
 %% Connect the source to its sink and the sink's output to the test observer.
 -spec spec() -> hls_domain_erts:specification().

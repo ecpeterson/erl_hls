@@ -3,7 +3,7 @@
 An ordinary OTP supervisor child representing one admitted domain incarnation.
 
 The deployment owner and its backend outlive this child. Startup returns promptly;
-activation completes asynchronously and resolve rejects until ready. The deployment
+initialization completes asynchronously and resolve rejects until ready. The deployment
 must explicitly allow automatic replacement. Native endpoint monitors then terminate
 this child on actor loss, leaving retry intensity and subtree policy to its supervisor.
 No application message is retained or replayed by this wrapper.
@@ -47,7 +47,7 @@ status(Instance) -> gen_server:call(Instance, status).
 -spec resolve(pid(), term()) -> {ok, pid()} | {error, term()}.
 resolve(Instance, Actor) -> gen_server:call(Instance, {resolve, Actor}).
 
--doc "Monitors the owner before scheduling activation, without blocking supervisor startup.".
+-doc "Monitors the owner before scheduling initialization, without blocking supervisor startup.".
 -spec init({pid(), hls_domain:domain()}) -> {ok, #instance{}, {continue, activate}}.
 init({Owner, Domain}) ->
     Monitor = monitor(process, Owner),
@@ -68,11 +68,11 @@ handle_continue(activate, Instance = #instance{owner = Owner, domain = Domain}) 
         {ok, automatic} ->
             case hls_domain:status(Owner, Domain) of
                 {ok, #{phase := unbound}} ->
-                    begin_activation(hls_domain:activate(Owner, Domain), Instance);
+                    begin_transition(hls_domain:activate(Owner, Domain), Instance);
                 {ok, #{phase := failed, handle := none}} ->
-                    {stop, initial_activation_failed, Instance};
+                    {stop, initial_incarnation_failed, Instance};
                 {ok, #{phase := failed, handle := Handle}} ->
-                    begin_activation(hls_domain:replace(Owner, Handle), Instance);
+                    begin_transition(hls_domain:replace(Owner, Handle), Instance);
                 {ok, Evidence} ->
                     observe(Evidence, Instance);
                 {error, Reason} ->
@@ -84,7 +84,7 @@ handle_continue(activate, Instance = #instance{owner = Owner, domain = Domain}) 
             {stop, Reason, Instance}
     end.
 
--doc "Exposes observations and endpoints without changing the instance's activation.".
+-doc "Exposes observations and endpoints without changing the instance's incarnation.".
 -spec handle_call(term(), gen_server:from(), #instance{}) -> {reply, term(), #instance{}}.
 %% Status is explicit so a successfully started child is not mistaken for a ready device.
 handle_call(status, _From, Instance) ->
@@ -105,7 +105,7 @@ handle_cast(_Message, Instance) -> {noreply, Instance}.
 
 -doc "Tracks pending initialization and turns native endpoint/owner loss into supervisor-visible termination.".
 -spec handle_info(term(), #instance{}) -> {noreply, #instance{}} | {stop, term(), #instance{}}.
-%% Only a retained operation is observed; a poll never allocates a new activation.
+%% Only a retained operation is observed; a poll never allocates a new incarnation.
 handle_info(observe, Instance = #instance{owner = Owner, domain = Domain}) ->
     case hls_domain:status(Owner, Domain) of
         {ok, Evidence} -> observe(Evidence, Instance);
@@ -134,10 +134,10 @@ terminate(_Reason, _Instance) -> ok.
 code_change(_Old, Instance, _Extra) -> {ok, Instance}.
 
 %% A known rejected operation stops the child rather than hiding an internal retry loop.
--spec begin_activation({ok, hls_domain:snapshot()} | {error, term()}, #instance{}) ->
+-spec begin_transition({ok, hls_domain:snapshot()} | {error, term()}, #instance{}) ->
     {noreply, #instance{}} | {stop, term(), #instance{}}.
-begin_activation({ok, Evidence}, Instance) -> observe(Evidence, Instance);
-begin_activation({error, Reason}, Instance) -> {stop, {activation_rejected, Reason}, Instance}.
+begin_transition({ok, Evidence}, Instance) -> observe(Evidence, Instance);
+begin_transition({error, Reason}, Instance) -> {stop, {incarnation_rejected, Reason}, Instance}.
 
 %% Publish only acknowledged readiness, then bind monitors to those exact endpoint PIDs.
 -spec observe(hls_domain:snapshot(), #instance{}) ->
@@ -163,12 +163,12 @@ observe(
     NewHandle =/= OldHandle
 ->
     {stop, {domain_replaced, OldHandle, NewHandle}, Instance#instance{evidence = Evidence}};
-%% A backend may not change endpoint identity while retaining the same activation.
+%% A backend may not change endpoint identity while retaining the same incarnation.
 observe(#{phase := ready} = Evidence, Instance) ->
     {stop, {domain_endpoints_changed, Evidence}, Instance#instance{evidence = Evidence}};
 %% Failure never recycles the old handle or generates another reset in this child.
 observe(#{phase := failed} = Evidence, Instance) ->
-    {stop, {activation_failed, Evidence}, Instance#instance{evidence = Evidence}};
+    {stop, {incarnation_failed, Evidence}, Instance#instance{evidence = Evidence}};
 %% Loss of readiness retires a bound representative; it cannot wait into a successor.
 observe(Evidence, Instance = #instance{handle = Handle}) when Handle =/= none ->
     {stop, {domain_no_longer_ready, Handle, Evidence}, Instance#instance{evidence = Evidence}};
@@ -179,5 +179,5 @@ observe(Evidence, Instance = #instance{deadline = Deadline}) ->
             erlang:send_after(10, self(), observe),
             {noreply, Instance#instance{evidence = Evidence}};
         false ->
-            {stop, {activation_outcome_unknown, Evidence}, Instance#instance{evidence = Evidence}}
+            {stop, {incarnation_outcome_unknown, Evidence}, Instance#instance{evidence = Evidence}}
     end.

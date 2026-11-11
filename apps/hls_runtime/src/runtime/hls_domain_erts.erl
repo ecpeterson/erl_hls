@@ -90,14 +90,14 @@ request(Backend, Authority, Input) -> gen_server:call(Backend, {request, Authori
 -doc "Resolves a ready actor only for the current authority and nonzero incarnation; stale handles are never rebound.".
 -spec endpoint(pid(), hls_domain_backend:authority(), hls_nums:u64(), term()) ->
     {ok, pid()} | {error, term()}.
-endpoint(Backend, Authority, Activation, Actor) ->
-    gen_server:call(Backend, {endpoint, Authority, Activation, Actor}).
+endpoint(Backend, Authority, Incarnation, Actor) ->
+    gen_server:call(Backend, {endpoint, Authority, Incarnation, Actor}).
 
 -doc "Stops the backend and forcibly retires its actors and any unfinished initialization worker.".
 -spec stop(pid()) -> ok.
 stop(Backend) -> gen_server:stop(Backend).
 
--doc "Creates only management state; actor creation requires an explicit activation.".
+-doc "Creates only management state; actor creation requires an explicit `activate/2` request.".
 -spec init(specification()) -> {ok, #backend{}}.
 init(Spec) ->
     process_flag(trap_exit, true),
@@ -144,14 +144,14 @@ handle_call(
     end;
 %% Ready incarnation identity is checked before returning a raw local actor PID.
 handle_call(
-    {endpoint, Authority, Activation, Actor},
+    {endpoint, Authority, Incarnation, Actor},
     {Owner, _},
     Previous = #backend{authority = Authority, owner = Owner}
 ) when is_reference(Authority) ->
     Backend = reconcile_ready(Previous),
     #backend{state = State, actors = Actors} = Backend,
     Reply =
-        case hls_domain_lifecycle:admitted(Activation, State) of
+        case hls_domain_lifecycle:admitted(Incarnation, State) of
             true ->
                 case maps:find(Actor, Actors) of
                     {ok, Pid} -> {ok, Pid};

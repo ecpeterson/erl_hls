@@ -5,7 +5,7 @@ Host adapter boundary between a deployment owner and a finite domain controller.
 An attachment is exclusive and does not reset application actors. Commands carry
 expected-old/target identities; only a backend establishes fence, reset and setup
 completion. An unavailable transport returns an error, never synthetic readiness.
-Endpoint PIDs represent one activation and must be retired rather than rebound.
+Endpoint PIDs represent one incarnation and must be retired rather than rebound.
 """.
 
 %% Shared host-side evidence and control-session capability.
@@ -33,5 +33,5 @@ Endpoint PIDs represent one activation and must be retired rather than rebound.
 -callback request(pid(), authority(), hls_domain_lifecycle:input()) ->
     hls_domain_lifecycle:output() | {error, term()}.
 
--doc "Resolves an actor only if authority, nonzero activation and readiness agree at this boundary.".
+-doc "Resolves an actor only if authority, nonzero incarnation and readiness agree at this boundary.".
 -callback endpoint(pid(), authority(), hls_nums:u64(), term()) -> {ok, pid()} | {error, term()}.

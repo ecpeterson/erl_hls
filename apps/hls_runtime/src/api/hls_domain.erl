@@ -7,7 +7,7 @@ This process attaches without resetting, serializes management, and persists eac
 allocated incarnation ID before submitting it. A timeout is an unknown outcome, never
 permission to replay application work. Backend endpoints remain incarnation-specific.
 
-The activation file stores only an eight-byte identity counter, never actor state.
+The incarnation file stores only an eight-byte identity counter, never actor state.
 It must be created explicitly for a newly commissioned deployment.
 Do not recreate a lost file to recover a running deployment. Its lock excludes other
 owners in this BEAM VM; the backend separately excludes conflicting control sessions.
@@ -24,23 +24,23 @@ established. After host/storage crash, reconcile identity before reusing this st
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 %% Public ownership contracts.
--export_type([catalog/0, backend/0, handle/0, activation/0, domain/0, policy/0, snapshot/0]).
+-export_type([catalog/0, backend/0, handle/0, incarnation/0, domain/0, policy/0, snapshot/0]).
 
 -doc "A fixed deployment-local domain name.".
 -type domain() :: atom().
 -doc "A nonzero incarnation ID which never wraps within one deployment.".
--type activation() :: 1..((1 bsl 64) - 1).
+-type incarnation() :: 1..((1 bsl 64) - 1).
 -doc "An incarnation-specific domain handle, not a mutable stable name.".
--type handle() :: {domain(), activation()}.
+-type handle() :: {domain(), incarnation()}.
 -doc "Automatic replacement is permitted only when the deployment declares it acceptable.".
 -type policy() :: manual | automatic.
 -doc "Declared domains and their replacement policy; actor/source layout belongs to the backend.".
 -type catalog() :: #{domain() := policy()}.
 -doc "One backend implementation, a distinct existing endpoint for each domain, and a durable incarnation counter file.".
 -type backend() :: #{
-    module := module(), endpoints := #{domain() := pid()}, activation_file := file:filename()
+    module := module(), endpoints := #{domain() := pid()}, incarnation_file := file:filename()
 }.
--doc "Observed lifecycle state; readiness and a handle refer to the same activation.".
+-doc "Observed lifecycle state; readiness and a handle refer to the same incarnation.".
 -type snapshot() :: #{
     domain := domain(),
     phase := hls_domain_lifecycle:phase(),
@@ -85,13 +85,13 @@ start_link(Catalog, Backend) -> gen_server:start_link(?MODULE, {Catalog, Backend
 -spec status(pid(), domain()) -> {ok, snapshot()} | {error, term()}.
 status(Owner, Domain) -> gen_server:call(Owner, {status, Domain}).
 
--doc "Requests first activation of an unbound domain; repeating an in-flight request observes its transition.".
+-doc "Creates the first incarnation of an unbound domain; repeating an in-flight request observes its transition.".
 -spec activate(pid(), domain()) -> {ok, snapshot()} | {error, term()}.
 activate(Owner, Domain) -> gen_server:call(Owner, {activate, Domain}).
 
 -doc "Replaces exactly the supplied incarnation. Repetition retrieves its retained successor; older handles reject.".
 -spec replace(pid(), handle()) -> {ok, snapshot()} | {error, term()}.
-replace(Owner, {Domain, Activation}) -> gen_server:call(Owner, {replace, Domain, Activation}).
+replace(Owner, {Domain, Incarnation}) -> gen_server:call(Owner, {replace, Domain, Incarnation}).
 
 -doc "Returns an actor endpoint only from the currently ready incarnation. Previously returned PIDs are never rebound.".
 -spec resolve(pid(), domain() | handle(), term()) -> {ok, pid()} | {error, term()}.
@@ -103,14 +103,14 @@ policy(Owner, Domain) -> gen_server:call(Owner, {policy, Domain}).
 
 -doc "Claims one durable counter and each backend's control session; no actor starts here.".
 -spec init({catalog(), backend()}) -> {ok, #owner{}} | {stop, term()}.
-init({Catalog, #{module := Module, endpoints := Endpoints, activation_file := Path}}) ->
+init({Catalog, #{module := Module, endpoints := Endpoints, incarnation_file := Path}}) ->
     File = filename:absname(Path),
     case validate(Catalog, Endpoints) of
         false ->
             {stop, invalid_domain_catalog};
         true ->
             case hls_domain_store:claim(File) of
-                {error, owned} -> {stop, activation_store_owned};
+                {error, owned} -> {stop, incarnation_store_owned};
                 ok -> initialize_owner(Catalog, Module, Endpoints, File)
             end
     end.
@@ -128,7 +128,7 @@ handle_call({policy, Domain}, _From, Owner = #owner{catalog = Catalog}) ->
 %% Status always comes from the controller instead of a stale host mirror.
 handle_call({status, Domain}, _From, Owner) ->
     {reply, snapshot(Domain, Owner), Owner};
-%% Activation and replacement share durable allocation and request correlation.
+%% Initial creation and replacement share durable allocation and request correlation.
 handle_call({activate, Domain}, _From, Owner) ->
     {Reply, Next} = transition(Domain, 0, activate, Owner),
     {reply, Reply, Next};
@@ -218,9 +218,9 @@ initialize_owner(Catalog, Module, Endpoints, File) ->
                 Class:Reason -> {stop, {domain_attach_failed, Class, Reason}}
             end;
         {ok, _} ->
-            {stop, invalid_activation_store};
+            {stop, invalid_incarnation_store};
         {error, Reason} ->
-            {stop, {activation_store, Reason}}
+            {stop, {incarnation_store, Reason}}
     end.
 
 %% Inspect validates the stable domain name before using its backend.
@@ -315,7 +315,7 @@ allocate_transition(Domain, Operation, State, Owner = #owner{next = Counter, fil
     Last = max(Counter, max(Previous, State#domain_state.target)),
     case Last < (1 bsl 64) - 1 of
         false ->
-            {{error, activation_exhausted}, Owner};
+            {{error, incarnation_exhausted}, Owner};
         true ->
             Target = Last + 1,
             case persist(File, Target) of
@@ -337,7 +337,7 @@ allocate_transition(Domain, Operation, State, Owner = #owner{next = Counter, fil
                         end,
                     {Reply, Next};
                 {error, Reason} ->
-                    {{error, {activation_store, Reason}}, Owner}
+                    {{error, {incarnation_store, Reason}}, Owner}
             end
     end.
 
@@ -350,7 +350,7 @@ transition_result(Domain, State, _Owner) ->
     {ok, describe(Domain, State, none)}.
 
 %% Atomic replacement preserves the previous valid counter if writing fails before rename.
--spec persist(file:filename(), activation()) -> ok | {error, term()}.
+-spec persist(file:filename(), incarnation()) -> ok | {error, term()}.
 persist(Path, Counter) ->
     Temporary = Path ++ "." ++ integer_to_list(erlang:unique_integer([positive, monotonic])),
     case file:open(Temporary, [write, binary, raw, exclusive]) of

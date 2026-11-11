@@ -1,8 +1,8 @@
 # Actor domains and replacement
 
-Replacing a domain starts its actors again from `init([])` and the declared startup configuration. It does not restore their previous data. A **domain** is the fixed group replaced together, including its private mailboxes, pending calls and routes. An **incarnation** is one lifetime of that whole group; its actor PIDs and numeric incarnation ID change on replacement.
+Replacing a domain starts its actors again from `init([])` and the declared startup configuration. It does not restore their previous data. A **domain** is the fixed group replaced together, including its private mailboxes, pending calls and routes. A **domain incarnation** is one lifetime of that whole group; its actor PIDs and non-reused **incarnation ID** change on replacement.
 
-The current API calls that ID an **activation**. `activate/2` starts the first incarnation; `replace/2` starts a successor. “Activation” does not mean a scheduled actor invocation, a clock cycle, or a checkpoint of the application.
+`activate/2` starts the first incarnation; `replace/2` starts a successor. The **incarnation counter** allocates these IDs; it contains no checkpoint of the application.
 
 The implementation separates the actors being replaced from the controller coordinating their replacement. This is similar to keeping a supervisor outside its children's lifetimes. The additional requirement is that a hardware backend can outlive the host process controlling it, and old traffic can remain in a transport after that host process exits.
 
@@ -17,9 +17,9 @@ The implementation separates the actors being replaced from the controller coord
 
 A host restart need not restart the FPGA. Conversely, a new FPGA process or bitstream need not retain the former controller's state. The owner therefore asks the backend what happened rather than guessing from its own restart. Losing reachability leaves the outcome unknown until the backend can be reconciled.
 
-## The activation store contains only a counter
+## The incarnation counter
 
-The file named by `activation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `create_store/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
+The counter file named by `incarnation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `create_store/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
 
 It contains no actor data, mailbox contents, application results, route table, native PIDs, or completed-command history. The backend separately holds its current lifecycle phase, incarnation and one live/last management transition in memory. That small transition record lets a repeated `replace(Owner, OldHandle)` observe its original successor after a lost reply; it is not an application replay log, and it does not survive loss of the backend itself.
 
@@ -56,7 +56,7 @@ There is one `hls_domain_erts` process per domain. It owns that domain's control
 
 | Input | Purpose |
 | --- | --- |
-| `attach`, `status`, `request`, `endpoint` calls | Claim exclusive control, inspect state, request activation/replacement, or resolve a ready incarnation's actor. |
+| `attach`, `status`, `request`, `endpoint` calls | Claim exclusive control, inspect state, request creation or replacement, or resolve a ready incarnation's actor. |
 | Phase-worker messages | Register provisional actors and acknowledge completed retirement or initialization. |
 | Actor/owner monitor messages and linked-worker exits | Detect failure, retain its reason, and retire the affected domain. |
 
@@ -71,7 +71,7 @@ The native backend uses normal ERTS mailboxes. The bounded `hls_mailbox` inside 
 Create the store once. This example assumes `worker` is a supported `hls_statem` source actor and `Observer` is an external recipient:
 
 ```erlang
-ok = hls_domain:create_store("deployment.activations"),
+ok = hls_domain:create_store("deployment.incarnations"),
 {ok, Backend} = hls_domain_erts:start_link(#{
     actors => #{worker => #{module => worker, mailbox_capacity => 4}},
     routes => #{worker => #{out => {external, Observer}}},
@@ -80,7 +80,7 @@ ok = hls_domain:create_store("deployment.activations"),
 {ok, Owner} = hls_domain:start_link(#{compute => manual}, #{
     module => hls_domain_erts,
     endpoints => #{compute => Backend},
-    activation_file => "deployment.activations"
+    incarnation_file => "deployment.incarnations"
 }),
 {ok, _Pending} = hls_domain:activate(Owner, compute).
 ```

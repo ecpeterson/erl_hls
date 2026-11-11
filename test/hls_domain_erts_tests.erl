@@ -180,7 +180,7 @@ reply_spec(Ids) ->
     #{actors => maps:from_list([{Id, #{module => hls_statem_reply_fixture, mailbox_capacity => 4}} || Id <- Ids]),
       routes => maps:from_list([{Id, #{reply => {external, self()}}} || Id <- Ids]), startup => #{}}.
 
-%% Request one cold activation and wait only for actual ready evidence.
+%% Request the first incarnation and wait only for actual ready evidence.
 -spec activate(pid(), hls_domain_backend:authority(), hls_nums:u64()) -> ok.
 activate(Backend, Authority, Target) ->
     Request = #domain_input{op = activate, target = Target, transition = Target},

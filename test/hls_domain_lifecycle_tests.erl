@@ -2,7 +2,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
-%% Cold reset leaves every activation unbound and admission closed.
+%% Cold reset leaves the domain unbound and admission closed.
 -spec cold_start_test() -> ok.
 cold_start_test() ->
     S = hls_domain_lifecycle:new(),
@@ -11,9 +11,9 @@ cold_start_test() ->
     ?assertNot(hls_domain_lifecycle:admitted(1, S)),
     ?assertEqual(none, hls_domain_lifecycle:action(S)).
 
-%% Only matching fence, reset and initialization acknowledgements publish the requested activation.
--spec acknowledged_activation_test() -> ok.
-acknowledged_activation_test() ->
+%% Only matching fence, reset and initialization acknowledgements publish the requested incarnation.
+-spec acknowledged_incarnation_test() -> ok.
+acknowledged_incarnation_test() ->
     I = command(activate, 0, 7, 11),
     O1 = hls_domain_lifecycle:step(I, hls_domain_lifecycle:new()),
     ?assertEqual(accepted, O1#domain_output.status),
@@ -95,8 +95,8 @@ stale_and_conflicting_transition_test() ->
     ?assertEqual(Newer, Old#domain_output.state).
 
 %% An abandoned target remains reserved even if its external effects are uncertain.
--spec abort_does_not_reuse_uncertain_activation_test() -> ok.
-abort_does_not_reuse_uncertain_activation_test() ->
+-spec abort_does_not_reuse_uncertain_incarnation_test() -> ok.
+abort_does_not_reuse_uncertain_incarnation_test() ->
     Request = command(activate, 0, 1, 1),
     Closing = (hls_domain_lifecycle:step(Request, hls_domain_lifecycle:new()))#domain_output.state,
     Abort = Request#domain_input{op = abort, fault = lifecycle_failure},
@@ -114,8 +114,8 @@ abort_does_not_reuse_uncertain_activation_test() ->
     ?assertEqual(fence, New#domain_output.action).
 
 %% The largest representable identity cannot wrap or be replaced with a smaller one.
--spec activation_exhaustion_test() -> ok.
-activation_exhaustion_test() ->
+-spec incarnation_exhaustion_test() -> ok.
+incarnation_exhaustion_test() ->
     Maximum = (1 bsl 64) - 1,
     Ready = ready(Maximum),
     lists:foreach(fun(Target) ->
@@ -171,8 +171,8 @@ complete(Op, State) ->
 
 %% Construct a ready state through the real acknowledgement sequence.
 -spec ready(hls_nums:u64()) -> hls_domain_lifecycle:state().
-ready(Activation) ->
-    First = (hls_domain_lifecycle:step(command(activate, 0, Activation, 1),
+ready(Incarnation) ->
+    First = (hls_domain_lifecycle:step(command(activate, 0, Incarnation, 1),
         hls_domain_lifecycle:new()))#domain_output.state,
     complete(initialized,
         complete(reset_done, complete(fenced, First))).
