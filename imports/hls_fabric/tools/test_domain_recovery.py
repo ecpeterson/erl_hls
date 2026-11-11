@@ -74,7 +74,7 @@ def main() -> None:
     ebin.mkdir()
     sources = [ROOT / 'test' / name for name in
                ['hls_domain_counter.erl', 'hls_domain_relay.erl',
-                'hls_domain_rtl_backend.erl', 'hls_domain_rtl_endpoint.erl',
+                'hls_domain_rtl_backend.erl',
                 'hls_domain_recovery_live.erl', 'hls_test_nodes.erl']]
     run(['erlc', *[v for p in erlang_paths('test') for v in ('-pa', p)],
          '+debug_info', '-Werror', '-o', ebin, *sources], args.stage, 'host-compile')

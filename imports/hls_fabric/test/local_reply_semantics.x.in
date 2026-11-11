@@ -1,0 +1,60 @@
+// A caller's wire transaction is independent of the actor's private retained handle.
+fn call_frame(txid: u8) -> bits[axis::FRAME_BITS] {
+  let frame = axis::pack(Tag::READ as u8, u32:0);
+  axis::bits_from_frame(axis::Frame {
+    header: axis::Header { txid, ..frame.header }, ..frame
+  })
+}
+
+// Idle clocks drain only when the enclosing transport grants output acceptance.
+fn owner_idle(state: LocalOwnerState, ready: bool) -> LocalOwnerTick {
+  local_owner_tick(state, LocalOwnerInputs { output_ready: ready, ..zero!<LocalOwnerInputs>() })
+}
+
+// The registered owner preserves reply identity/order while an older reply blocks publication.
+#[test]
+fn reply_backpressure() {
+  let init_action = owner_idle(local_owner_initial(), false);
+  let initialized = owner_idle(init_action.state, false);
+  let first = local_owner_tick(initialized.state, LocalOwnerInputs {
+    received: true, frame: call_frame(u8:7), ..zero!<LocalOwnerInputs>()
+  });
+  assert_eq(first.output.input_ready, true);
+  assert_eq(first.output.head_done, false);
+  let first_commit = owner_idle(first.state, false);
+  assert_eq(first_commit.output.head_done, true);
+  let second = local_owner_tick(first_commit.state, LocalOwnerInputs {
+    received: true, frame: call_frame(u8:19), ..zero!<LocalOwnerInputs>()
+  });
+  assert_eq(second.output.input_ready, true);
+  assert_eq(second.output.output_valid, true);
+  let original = axis::frame_from_bits(second.output.effect.frame);
+  assert_eq(original.header.op, Tag::REPORT as u8);
+  assert_eq(original.header.txid, u8:7);
+  let stalled = owner_idle(second.state, false);
+  assert_eq(stalled.output.head_done, false);
+  assert_eq(stalled.output.effect, second.output.effect);
+  assert_eq(stalled.state.action, second.state.action);
+  assert_eq(stalled.state.machine, second.state.machine);
+  let drained = owner_idle(stalled.state, true);
+  assert_eq(drained.output.head_done, false);
+  assert_eq(drained.output.effect, second.output.effect);
+  let second_commit = owner_idle(drained.state, true);
+  assert_eq(second_commit.output.head_done, true);
+  assert_eq(second_commit.output.output_valid, false);
+  let reply = owner_idle(second_commit.state, true);
+  assert_eq(reply.output.output_valid, true);
+  assert_eq(axis::frame_from_bits(reply.output.effect.frame).header.txid, u8:19);
+  assert_eq(owner_idle(reply.state, true).output.output_valid, false);
+}
+
+// The split action API preserves the atomic reference on either side of publication admission.
+#[test]
+fn atomic_reply_reference() {
+  let boot = local_step(local_initial(), bits[axis::FRAME_BITS]:0, false, true);
+  let frame = call_frame(u8:7);
+  assert_eq(local_slow_step_at(boot.machine, frame, true, false, u32:0),
+    local_step_at(boot.machine, frame, true, false, u32:0));
+  assert_eq(local_slow_step_at(boot.machine, frame, true, true, u32:0),
+    local_step_at(boot.machine, frame, true, true, u32:0));
+}

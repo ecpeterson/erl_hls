@@ -1,9 +1,9 @@
 [{<<"erl_hls">>,
   {git,"https://github.com/ecpeterson/erl_hls.git",
-       {ref,"5c6f325c436eca0269a8d6cfcd791e9062e8bd55"}},
+       {ref,"674f7be327029230380cbaba82ff639d20a15e5a"}},
   0},
  {<<"hls_runtime">>,
   {git_subdir,"https://github.com/ecpeterson/erl_hls.git",
-              {ref,"5c6f325c436eca0269a8d6cfcd791e9062e8bd55"},
+              {ref,"674f7be327029230380cbaba82ff639d20a15e5a"},
               "apps/hls_runtime"},
   0}].

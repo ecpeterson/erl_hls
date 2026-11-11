@@ -53,7 +53,8 @@ public:
     size_t pending_input_bytes() const { return rx.size(); }
 
     // Partial OS reads/writes never change the held public beat; queues stay at most 64 KiB.
-    void pump() {
+    // Optional delivery pause retains already accepted output bytes while input and RTL continue.
+    void pump(bool deliver = true) {
         uint8_t bytes[4096];
         if (rx.size() + sizeof(bytes) <= capacity) {
             ssize_t n = read(input, bytes, sizeof(bytes));
@@ -61,7 +62,7 @@ public:
             else if (n < 0 && errno != EAGAIN && errno != EINTR)
                 throw std::runtime_error("FIFO read");
         }
-        size_t count = std::min(tx.size(), sizeof(bytes));
+        size_t count = deliver ? std::min(tx.size(), sizeof(bytes)) : 0;
         for (size_t i = 0; i < count; i++) bytes[i] = tx[i];
         if (count) {
             ssize_t n = write(output, bytes, count);

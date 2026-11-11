@@ -14,8 +14,8 @@ hls_node_connections owns one worker per distribution peer. The worker uses hls_
     gen_tcp:socket() | {local, pid(), #{name := node(), creation := non_neg_integer()}}.
 %% Physical service channel shared by its logical actor PIDs.
 -type channel_key() :: {application | debug, 0..((1 bsl 16) - 1)}.
-%% Calls carry their reply destination; casts need no reply slot.
--type operation() :: {call, gen_server:from(), term()} | {cast, none, term()}.
+%% Acknowledged casts carry a reply destination without reserving an application call slot.
+-type operation() :: hls_node_requests:operation().
 
 -doc "Starts an adapter for a TCP socket or local distribution owner. TCP ownership must transfer before connected is sent.".
 -spec start_link(pid(), carrier()) -> gen_server:start_ret().
@@ -77,12 +77,12 @@ handle_call(info, _From, State = #{source_pending := Pending, clients := Clients
     {reply, #{carrier => carrier(State), source_pending => Pending, clients => map_size(Clients)},
         State};
 %% Expose per-channel pending and transmitting observations.
-handle_call(info, _From, State = #{clients := Clients, queues := Queues, channels := Channels}) ->
+handle_call(info, _From, State = #{clients := Clients, requests := Requests, channels := Channels}) ->
     {reply,
         #{
             carrier => carrier(State),
-            queued => queued(Queues),
-            domain_pending => maps:get(domain_pending, State, 0),
+            queued => hls_node_requests:waiting(Requests),
+            domain_pending => hls_node_requests:pending(domain, Requests),
             clients => maps:map(
                 fun(_, C) -> client_info(C, Channels) end,
                 Clients
@@ -155,9 +155,22 @@ handle_info({tcp_closed, Socket}, State = #{socket := Socket}) ->
 %% Surface a TCP transport error.
 handle_info({tcp_error, Socket, Reason}, State = #{socket := Socket}) ->
     {stop, {tcp, Reason}, State};
-%% Retry operations previously refused without transmission.
-handle_info(retry, State) ->
-    continue(State#{retry := false});
+%% An endpoint separates admission from eventual completion, freeing peer input credit once.
+handle_info({hls_admitted, Endpoint, Token}, State = #{clients := Clients, requests := Requests}) ->
+    case hls_node_requests:find(Token, Requests) of
+        {ok, #{target := Pid, group := {domain, Pid}}} ->
+            case maps:find(Pid, Clients) of
+                {ok, #{endpoint := Endpoint}} ->
+                    continue(State#{requests := hls_node_requests:admit(Token, Requests)});
+                _ ->
+                    {noreply, State}
+            end;
+        _ ->
+            {noreply, State}
+    end;
+%% Only this legacy channel waits; independent channels continue admitting work.
+handle_info({retry, Token}, State = #{requests := Requests}) ->
+    continue(State#{requests := hls_node_requests:retry(Token, Requests)});
 %% Probe TCP liveness, excluding intervals when local admission pauses reads.
 handle_info(
     tick,
@@ -181,9 +194,11 @@ handle_info(Message, State = #{sends := Sends}) ->
     case gen_server:check_response(Message, Sends, true) of
         {{reply, Result}, Label, Remaining} ->
             continue(written(Label, Result, State#{sends := Remaining}));
-        {{error, {_Reason, _}}, {domain_request, _Pid, _Mode, _From}, Remaining} ->
+        {{error, {_Reason, _}}, {Kind, Token}, Remaining} when
+            Kind =:= domain_request; Kind =:= domain_capacity
+        ->
             %% The endpoint's own DOWN is authoritative; never turn death into an ordinary reply.
-            continue(domain_completed(State#{sends := Remaining}));
+            continue(forget(Token, State#{sends := Remaining}));
         {{error, {Reason, _}}, _, _} ->
             {stop, {broker_down, Reason}, State};
         _ ->
@@ -211,7 +226,7 @@ attach_mode(
         names => #{},
         channels => #{},
         routes => #{},
-        queues => #{},
+        requests => hls_node_requests:new(),
         sends => gen_server:reqids_new(),
         monitors => #{},
         config => Config,
@@ -220,7 +235,6 @@ attach_mode(
         source_senders => maps:from_list([{P, true} || P <- Senders]),
         source_pending => false,
         armed => false,
-        retry => false,
         last_received => now_ms()
     };
 attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
@@ -245,17 +259,15 @@ attach_mode({ok, Brokers, Actors, Source, Config}, Peer, Identity, State) ->
         kernel_pid => hls_node_wire:pid(Name, Creation, 0),
         clients => Clients,
         domain_monitors => monitor_domains(Actors),
-        domain_pending => 0,
         domain_publication => none,
         channels => Channels,
         routes => Routes,
         names => Names,
-        queues => #{},
+        requests => hls_node_requests:new(),
         sends => gen_server:reqids_new(),
         monitors => #{},
         config => Config,
         armed => false,
-        retry => false,
         last_received => now_ms()
     }.
 
@@ -362,7 +374,7 @@ deliver(To, Message, State) ->
 operation(
     Pid,
     {'$gen_call', From = {Caller, _}, '$hls_fabric_info'},
-    State = #{clients := Clients, peer := Peer, domain_pending := Pending}
+    State = #{clients := Clients, peer := Peer, requests := Requests}
 ) when
     node(Caller) =:= Peer,
     map_get(kind, map_get(Pid, Clients)) =:= domain
@@ -371,9 +383,20 @@ operation(
     send(
         State,
         hls_node_wire:reply(Pid, From, #{
-            domain => Incarnation, actor => Actor, connection_pending => Pending
+            domain => Incarnation,
+            actor => Actor,
+            connection_pending => hls_node_requests:pending(domain, Requests)
         })
     );
+operation(
+    Pid,
+    {'$gen_call', From = {Caller, _}, {'$hls_domain_cast', Request}},
+    State = #{clients := Clients, peer := Peer}
+) when
+    node(Caller) =:= Peer,
+    map_get(kind, map_get(Pid, Clients)) =:= domain
+->
+    issue_domain(Pid, cast, From, Request, State);
 operation(
     Pid,
     {'$gen_call', From = {Caller, _}, Request},
@@ -386,22 +409,24 @@ operation(
 operation(Pid, {'$gen_cast', Request}, State = #{clients := Clients}) when
     map_get(kind, map_get(Pid, Clients)) =:= domain
 ->
-    issue_domain(Pid, cast, none, {'$hls_domain_cast', Request}, State);
+    issue_domain(Pid, cast, none, Request, State);
 operation(
     Pid,
     {'$gen_call', From, '$hls_fabric_info'},
-    State = #{clients := Clients, channels := Channels, queues := Queues}
+    State = #{clients := Clients, channels := Channels, requests := Requests}
 ) ->
     #{channel := Key} = maps:get(Pid, Clients),
     #{pending := Pending, route := {Endpoint, Source}, ignored_replies := Ignored} = maps:get(
         Key, Channels
     ),
     Reply = #{
-        pending => length([ok || #{pid := Owner} <- maps:values(Pending), Owner =:= Pid]),
-        queued => length([
+        pending => length([
             ok
-         || {Owner, _} <- queue:to_list(maps:get(Key, Queues, queue:new())), Owner =:= Pid
+         || #{token := Token} <- maps:values(Pending),
+            {ok, #{target := Owner}} <- [hls_node_requests:find(Token, Requests)],
+            Owner =:= Pid
         ]),
+        queued => hls_node_requests:waiting_target(Pid, Requests),
         route => {Source, Endpoint},
         ignored_replies => Ignored
     },
@@ -418,19 +443,19 @@ operation(Pid, {'$gen_cast', Request}, State) ->
 operation(_Pid, _Message, _State) ->
     error(unsupported_actor_message).
 
-%% Append an operation to its physical channel's ordered queue.
+%% Both adapters retain caller ownership in the same ordered admission ledger.
 -spec enqueue(pid(), operation(), map()) -> map().
-enqueue(Pid, Op, State = #{clients := Clients, queues := Queues}) ->
+enqueue(Pid, Op, State = #{clients := Clients, requests := Requests}) ->
     #{channel := Key} = maps:get(Pid, Clients),
-    Q = maps:get(Key, Queues, queue:new()),
-    State#{queues := Queues#{Key => queue:in({Pid, Op}, Q)}}.
+    {_, Next} = hls_node_requests:enqueue(Key, Pid, Op, Requests),
+    State#{requests := Next}.
 
 %% Submit available work before rearming distribution input.
 -spec continue(map()) -> {noreply, map()}.
 continue(State) ->
     Next = pump(State),
     {noreply, arm(Next)}.
-%% Request one more distribution packet only while queued operations remain below the limit.
+%% Only work awaiting admission consumes connection-wide input credit.
 -spec arm(map()) -> map().
 arm(State = #{source_pending := true}) ->
     State;
@@ -438,11 +463,11 @@ arm(
     State = #{
         armed := false,
         socket := {local, Handle},
-        queues := Queues,
+        requests := Requests,
         config := #{queue_limit := Limit}
     }
 ) ->
-    case queued(Queues) + maps:get(domain_pending, State, 0) < Limit of
+    case hls_node_requests:waiting(Requests) < Limit of
         true ->
             ok = erlang:dist_ctrl_get_data_notification(Handle),
             State#{armed := true};
@@ -450,9 +475,14 @@ arm(
             State
     end;
 arm(
-    State = #{armed := false, socket := Socket, queues := Queues, config := #{queue_limit := Limit}}
+    State = #{
+        armed := false,
+        socket := Socket,
+        requests := Requests,
+        config := #{queue_limit := Limit}
+    }
 ) ->
-    case queued(Queues) + maps:get(domain_pending, State, 0) < Limit of
+    case hls_node_requests:waiting(Requests) < Limit of
         true ->
             ok = inet:setopts(Socket, [{active, once}]),
             State#{armed := true, last_received := now_ms()};
@@ -461,46 +491,59 @@ arm(
     end;
 arm(State) ->
     State.
-%% Count queued operations across channels for connection-wide admission.
--spec queued(#{channel_key() => queue:queue()}) -> non_neg_integer().
-queued(Queues) -> lists:sum([queue:len(Q) || Q <- maps:values(Queues)]).
 
-%% Attempt one send on each queued channel unless waiting for a retry timer.
+%% Attempt one admission per waiting group; held replies never exclude another actor.
 -spec pump(map()) -> map().
-pump(State = #{retry := true}) -> State;
-pump(State = #{queues := Queues}) -> lists:foldl(fun pump_channel/2, State, maps:keys(Queues)).
-%% Send the head operation when the channel and transaction space permit it.
--spec pump_channel(channel_key(), map()) -> map().
-pump_channel(Key = {Kind, _Endpoint}, State = #{queues := Queues, channels := Channels}) ->
-    #{Key := Q} = Queues,
-    #{Key := #{transmitting := Busy, pending := Pending} = Channel} = Channels,
+pump(State = #{requests := Requests}) ->
+    lists:foldl(fun pump_group/2, State, hls_node_requests:groups(Requests)).
+
+%% Managed actors and legacy channels share eligibility while retaining their distinct wire adapters.
+-spec pump_group(hls_node_requests:group(), map()) -> map().
+pump_group(Group, State = #{requests := Requests}) ->
+    case hls_node_requests:head(Group, Requests) of
+        none -> State;
+        {Token, Entry} -> pump_entry(Token, Entry, State)
+    end.
+
+%% A managed endpoint acknowledges admission before its final call result or cast response.
+-spec pump_entry(reference(), hls_node_requests:entry(), map()) -> map().
+pump_entry(
+    Token,
+    #{target := Pid, group := {domain, Pid}, operation := {Mode, _, Request}},
+    State = #{clients := Clients, requests := Requests, sends := Sends}
+) ->
+    #{endpoint := Endpoint} = maps:get(Pid, Clients),
+    RequestId = gen_server:send_request(Endpoint, {'$hls_submit', Token, Mode, Request}),
+    State#{
+        requests := hls_node_requests:submit(Token, Requests),
+        sends := gen_server:reqids_add(RequestId, {domain_request, Token}, Sends)
+    };
+pump_entry(
+    Token,
+    #{target := Pid, group := Key = {Kind, _}, operation := Op = {Mode, _, _}},
+    State = #{channels := Channels}
+) ->
+    #{transmitting := Busy, pending := Pending} = Channel = maps:get(Key, Channels),
     Capacity =
         case Kind of
             application -> 255;
             debug -> 256
         end,
-    case {Busy, queue:peek(Q), map_size(Pending) < Capacity} of
-        {false, {value, {Pid, {cast, _, _} = Op}}, _} -> issue(Key, Pid, Op, Channel, State);
-        {false, {value, {Pid, Op}}, true} -> issue(Key, Pid, Op, Channel, State);
-        _ -> State
+    case not Busy andalso (Mode =:= cast orelse map_size(Pending) < Capacity) of
+        true -> issue(Key, Token, Pid, Op, Channel, State);
+        false -> State
     end.
 
-%% Pack one operation, reserve its reply slot and track asynchronous broker admission.
--spec issue(channel_key(), pid(), operation(), map(), map()) -> map().
+%% Pack a legacy operation and retain only its wire correlation and decode context in the channel.
+-spec issue(channel_key(), reference(), pid(), operation(), map(), map()) -> map().
 issue(
     Key = {Kind, _},
+    Token,
     Pid,
-    Op = {Mode, From, Request},
-    Channel = #{
-        broker := Broker,
-        route := {Endpoint, Source},
-        pending := Pending,
-        next := Next
-    },
-    State = #{queues := Queues, clients := Clients, channels := Channels, sends := Sends}
+    {Mode, _From, Request},
+    Channel = #{broker := Broker, route := {Endpoint, Source}, pending := Pending, next := Next},
+    State = #{requests := Requests, clients := Clients, channels := Channels, sends := Sends}
 ) ->
-    {_, Q} = queue:out(maps:get(Key, Queues)),
-    Base = State#{queues := Queues#{Key := Q}},
     {Tag, Flags, Payload, Context} = encode(maps:get(Pid, Clients), Mode, Request),
     Capacity =
         case Kind of
@@ -513,15 +556,16 @@ issue(
             cast -> 255
         end,
     ID = make_ref(),
-    Entry = #{id => ID, pid => Pid, from => From, context => Context},
+    Entry = #{id => ID, token => Token, context => Context},
     Updated =
         case Mode of
             call -> Pending#{Tx => Entry};
             cast -> Pending
         end,
     Req = hls_fabric:send_request(Broker, {Source, Endpoint}, {Tag, Tx, Flags}, Payload, infinity),
-    Label = {Key, Tx, ID, Pid, Op},
-    Base#{
+    Label = {channel_request, Key, Tx, ID, Token},
+    State#{
+        requests := hls_node_requests:submit(Token, Requests),
         channels := Channels#{
             Key := Channel#{
                 pending := Updated,
@@ -555,35 +599,56 @@ slot(Tx, Capacity, Pending) ->
         false -> Tx
     end.
 
-%% Release send admission, or retry only when the broker proves the operation was not sent.
+%% Final responses retire shared ownership; only proven non-admission permits a retry.
 -spec written(
     source_handoff
-    | {domain_request, pid(), call | cast, gen_server:from() | none}
-    | {channel_key(), byte(), reference(), pid(), operation()},
+    | {domain_request | domain_capacity, reference()}
+    | {channel_request, channel_key(), byte(), reference(), reference()},
     term(),
     map()
 ) -> map().
-written({domain_request, Pid, call, From}, Reply, State = #{clients := Clients}) ->
-    Next = domain_completed(State),
-    case maps:is_key(Pid, Clients) of
-        true -> send(Next, hls_node_wire:reply(Pid, From, Reply));
-        false -> Next
+written({domain_request, Token}, Reply, State = #{requests := Requests}) ->
+    case hls_node_requests:find(Token, Requests) of
+        {ok, #{target := Pid, operation := {cast, From, _}, phase := Phase}} ->
+            case {Reply, Phase} of
+                {{error, busy}, submitting} -> wait_capacity(Token, Pid, State);
+                {ok, _} -> complete(Token, ok, State);
+                _ when From =/= none -> complete(Token, Reply, State);
+                _ -> retire_domain(Pid, noconnection, State)
+            end;
+        {ok, _} ->
+            complete(Token, Reply, State);
+        error ->
+            State
     end;
-written({domain_request, _Pid, cast, none}, ok, State) ->
-    domain_completed(State);
-written({domain_request, _Pid, cast, none}, Result, _State) ->
-    %% A cast has no return channel. Refused admission must become visible as connection loss.
-    %% No replay is attempted: the remote sender can only regard its work as uncertain.
-    error({domain_cast_admission, Result});
+written({domain_capacity, Token}, ok, State = #{requests := Requests}) ->
+    State#{requests := hls_node_requests:retry(Token, Requests)};
+written({domain_capacity, Token}, Failure, State = #{requests := Requests}) ->
+    case hls_node_requests:find(Token, Requests) of
+        {ok, #{operation := {cast, From, _}}} when From =/= none -> complete(Token, Failure, State);
+        {ok, #{target := Pid}} -> retire_domain(Pid, noconnection, State);
+        error -> State
+    end;
 written(source_handoff, ok, State = #{source_pending := true}) ->
     State#{source_pending := false};
-written({Key, _Tx, _ID, _Pid, _Op}, ok, State = #{channels := Channels}) ->
-    Channel = maps:get(Key, Channels),
-    State#{channels := Channels#{Key := Channel#{transmitting := false}}};
 written(
-    {Key, Tx, ID, Pid, Op},
+    {channel_request, Key, _Tx, _ID, Token},
+    ok,
+    State = #{channels := Channels, requests := Requests}
+) ->
+    Channel = maps:get(Key, Channels),
+    Next = State#{
+        channels := Channels#{Key := Channel#{transmitting := false}},
+        requests := hls_node_requests:admit(Token, Requests)
+    },
+    case hls_node_requests:find(Token, Requests) of
+        {ok, #{operation := {cast, _, _}}} -> complete(Token, ok, Next);
+        _ -> Next
+    end;
+written(
+    {channel_request, Key, Tx, ID, Token},
     {error, {not_sent, Reason}},
-    State = #{channels := Channels, queues := Queues}
+    State = #{channels := Channels}
 ) ->
     true = retryable(Reason),
     #{pending := Pending} = Channel = maps:get(Key, Channels),
@@ -592,20 +657,37 @@ written(
             #{Tx := #{id := ID}} -> maps:remove(Tx, Pending);
             _ -> Pending
         end,
-    Q = queue:in_r({Pid, Op}, maps:get(Key, Queues)),
-    %% The broker has proved non-delivery, so retrying cannot duplicate work.
-    %% Keep this operation ahead of later sends to the same actor.
-    case maps:get(retry, State) of
-        false -> erlang:send_after(5, self(), retry);
-        true -> ok
-    end,
-    State#{
-        channels := Channels#{Key := Channel#{pending := Remaining, transmitting := false}},
-        queues := Queues#{Key := Q},
-        retry := true
-    };
+    %% The ledger retains this head while only this channel waits for known-unsent retry.
+    erlang:send_after(5, self(), {retry, Token}),
+    State#{channels := Channels#{Key := Channel#{pending := Remaining, transmitting := false}}};
 written(_Label, Result, _State) ->
     error({transport_failed, Result}).
+
+%% A rejected cast stays at its actor's queue head until explicit capacity notification.
+-spec wait_capacity(reference(), pid(), map()) -> map().
+wait_capacity(Token, Pid, State = #{clients := Clients, sends := Sends}) ->
+    #{endpoint := Endpoint} = maps:get(Pid, Clients),
+    RequestId = gen_server:send_request(Endpoint, '$hls_capacity'),
+    State#{sends := gen_server:reqids_add(RequestId, {domain_capacity, Token}, Sends)}.
+
+%% Caller/result ownership is identical for legacy decoded replies and managed endpoint replies.
+-spec complete(reference(), term(), map()) -> map().
+complete(Token, Reply, State = #{requests := Requests, clients := Clients}) ->
+    {Entry, Next} = hls_node_requests:finish(Token, Requests),
+    Base = State#{requests := Next},
+    case Entry of
+        #{target := Pid, operation := {_, From, _}} when From =/= none, is_map_key(Pid, Clients) ->
+            send(Base, hls_node_wire:reply(Pid, From, Reply));
+        _ ->
+            Base
+    end.
+
+%% Dropping a local observer never manufactures an application response or cancels device work.
+-spec forget(reference(), map()) -> map().
+forget(Token, State = #{requests := Requests}) ->
+    {_, Next} = hls_node_requests:finish(Token, Requests),
+    State#{requests := Next}.
+
 %% Recognize admission limits for which a delayed retry is safe.
 -spec retryable(term()) -> boolean().
 retryable(tx_limit) -> true;
@@ -617,7 +699,7 @@ retryable(_) -> false.
 frame(Key = {Kind, _}, {Tag, Tx, 0}, Payload, State = #{channels := Channels}) ->
     #{pending := Pending} = Channel = maps:get(Key, Channels),
     case Pending of
-        #{Tx := #{pid := Pid, from := From, context := Context}} ->
+        #{Tx := #{token := Token, context := Context}} ->
             Decoded =
                 case Kind of
                     application -> hls_gs:decode_reply(Tag, Payload, Context);
@@ -625,7 +707,7 @@ frame(Key = {Kind, _}, {Tag, Tx, 0}, Payload, State = #{channels := Channels}) -
                 end,
             case Decoded of
                 {reply, Reply} ->
-                    Sent = send(State, hls_node_wire:reply(Pid, From, Reply)),
+                    Sent = complete(Token, Reply, State),
                     Sent#{
                         channels := Channels#{Key := Channel#{pending := maps:remove(Tx, Pending)}}
                     };
@@ -675,35 +757,31 @@ monitor_domains(Targets) ->
      || #{kind := domain, endpoint := Endpoint, pid := Pid} <- Targets
     ]).
 
-%% Forward directly from this adapter so source replies and endpoint DOWN retain ERTS signal ordering.
+%% Bound unfinished calls per actor, independently of its cast admission and other actors' progress.
 -spec issue_domain(pid(), call | cast, gen_server:from() | none, term(), map()) -> map().
 issue_domain(
     Pid,
     Mode,
     From,
     Request,
-    State = #{
-        clients := Clients,
-        sends := Sends,
-        domain_pending := Pending,
-        config := #{queue_limit := Limit},
-        queues := Queues
-    }
+    State = #{requests := Requests, config := #{queue_limit := Limit}}
 ) ->
-    true = Pending + queued(Queues) < Limit,
-    #{endpoint := Endpoint} = maps:get(Pid, Clients),
-    RequestId = gen_server:send_request(Endpoint, Request),
-    Label = {domain_request, Pid, Mode, From},
-    State#{domain_pending := Pending + 1, sends := gen_server:reqids_add(RequestId, Label, Sends)}.
+    case Mode =:= call andalso hls_node_requests:calls(Pid, Requests) >= Limit of
+        true ->
+            send(State, hls_node_wire:reply(Pid, From, {error, busy}));
+        false ->
+            {_, Next} = hls_node_requests:enqueue(
+                {domain, Pid}, Pid, {Mode, From, Request}, Requests
+            ),
+            State#{requests := Next}
+    end.
 
-%% Every acknowledged or failed request releases exactly one connection-owned admission slot.
--spec domain_completed(map()) -> map().
-domain_completed(State = #{domain_pending := Pending}) when Pending > 0 ->
-    State#{domain_pending := Pending - 1}.
-
-%% Only actual monitor delivery emits terminal actor signals; management never manufactures source death.
+%% Endpoint death forwards its actual reason; irrecoverable cast rejection withdraws only this peer binding.
+%% A local noconnection does not claim that the source actor died or that accepted work was cancelled.
 -spec retire_domain(pid(), term(), map()) -> map().
-retire_domain(Pid, Reason, State = #{clients := Clients, monitors := Monitors}) ->
+retire_domain(
+    Pid, Reason, State = #{clients := Clients, monitors := Monitors, requests := Requests}
+) ->
     {Kept, Sent} = maps:fold(
         fun(Ref, {From, To} = Entry, {Rest, Acc}) ->
             case To =:= Pid of
@@ -714,7 +792,11 @@ retire_domain(Pid, Reason, State = #{clients := Clients, monitors := Monitors}) 
         {#{}, State},
         Monitors
     ),
-    Sent#{clients := maps:remove(Pid, Clients), monitors := Kept}.
+    Sent#{
+        clients := maps:remove(Pid, Clients),
+        monitors := Kept,
+        requests := hls_node_requests:remove_target(Pid, Requests)
+    }.
 
 %% The manager has checked physical endpoint death, but its signal may still be queued here.
 %% Delay replacement until local DOWN consumption has emitted all corresponding remote monitor exits.
@@ -727,7 +809,7 @@ install_domain(
         domain_monitors := Monitors
     }
 ) ->
-    case lists:any(fun(Pid) -> maps:is_key(Pid, Clients) end, Old) of
+    case lists:any(fun(Pid) -> lists:member(Pid, maps:values(Monitors)) end, Old) of
         true ->
             State;
         false ->

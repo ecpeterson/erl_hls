@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% Helpers executed by the separate ERTS peer, with its real distribution monitors.
--export([failure_sequence/2, watch/2, stale/1, batch/2, saturate/2]).
+-export([failure_sequence/2, watch/2, stale/1, batch/2, saturate/2, independent_calls/2]).
 
 %% Exercise the actual lifecycle owner, source actors and external PID connection together.
 -spec managed_domain_peer_test_() -> term().
@@ -82,9 +82,24 @@ bounded_pending_peer_test_() -> {timeout, 30, fun() -> with_domains(fun(Owner) -
         {ok, #{actors := #{worker := NewA}}} = hls_node:publish_domain(Device, a),
         receive {drained, Worker, Results} ->
             ?assertEqual(5, length(Results)),
-            ?assert(lists:all(fun(Result) -> case Result of {error, _} -> true; _ -> false end end, Results))
+            ?assert(lists:all(fun(Result) -> case Result of {error, _} -> true; {reply, {error, busy}} -> true; _ -> false end end, Results))
         after 5000 -> error(pending_calls_survived_retirement) end,
         ?assertEqual({report, 0}, erpc:call(Remote, gen_server, call, [NewA, {read, 0}]))
+    after peer:stop(Peer), catch hls_node:stop(Device) end
+end) end}.
+
+%% Unfinished calls consume their actor's slots, never another actor's admission or a release cast.
+-spec independent_completion_peer_test_() -> term().
+independent_completion_peer_test_() -> {timeout, 30, fun() -> with_domains(fun(Owner) ->
+    [{ok, _} = hls_domain:activate(Owner, D) || D <- [a, b]],
+    [phase(Owner, D, ready) || D <- [a, b]],
+    Services = [#{name => D, domain => #{owner => Owner, id => D}} || D <- [a, b]],
+    {ok, Device} = hls_node:start_link(name(), #{}, Services, #{queue_limit => 2}), unlink(Device),
+    {Peer, Remote} = hls_test_nodes:start_peer(),
+    try
+        #{a := #{actors := #{worker := A}}, b := #{actors := #{worker := B}}} = hls_node:services(Device),
+        ?assertEqual({{report, 0}, [{reply, {report, 7}}, {reply, {report, 11}}], {report, 18}},
+            erpc:call(Remote, ?MODULE, independent_calls, [A, B], 10000))
     after peer:stop(Peer), catch hls_node:stop(Device) end
 end) end}.
 
@@ -172,6 +187,17 @@ saturate(Pid, Parent) -> spawn(fun() ->
     Results = [gen_server:receive_response(Request, 5000) || Request <- Requests],
     Parent ! {drained, self(), Results}
 end).
+
+-doc "Retains both A callers, checks excess rejection and independent B progress, then releases A through the same peer.".
+-spec independent_calls(pid(), pid()) -> tuple().
+independent_calls(A, B) ->
+    Requests = [gen_server:send_request(A, {wait, N}) || N <- [7, 11]],
+    ?assertEqual({error, busy}, gen_server:call(A, {read, 0}, 3000)),
+    Other = gen_server:call(B, {read, 0}, 3000),
+    %% The acknowledgement belongs to cast admission, not either occupied retained-call slot.
+    ok = gen_server:call(A, {'$hls_domain_cast', {release, 0}}, 3000),
+    Results = [gen_server:receive_response(R, 3000) || R <- Requests],
+    {Other, Results, gen_server:call(A, {read, 0}, 3000)}.
 
 %% Each source domain is independently controlled; the finite callback fixture belongs to this repository.
 -spec with_domains(fun((pid()) -> term())) -> term().

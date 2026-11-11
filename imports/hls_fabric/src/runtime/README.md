@@ -10,6 +10,7 @@ Runtime modules attach retained application descriptors to already-created broke
 | `hls_protocol_mixed_stream`, `hls_protocol_mixed_host` | Actual BEAM actors coupled to retained RTL roles |
 | `hls_protocol_mixed_admission`, `hls_protocol_mixed_queue` | Pending source-event admission and per-sender delivery state |
 | `hls_protocol_relay_queue`, `hls_protocol_routing` | Bounded role relay queues and routing descriptions |
+| [domain](domain/README.md) | Framed recovery backend and incarnation-specific actor endpoints |
 | [inspection](inspection/README.md) | Public observation decoding and profiling |
 | [node](node/README.md) | ERTS distribution endpoint and local carrier |
 

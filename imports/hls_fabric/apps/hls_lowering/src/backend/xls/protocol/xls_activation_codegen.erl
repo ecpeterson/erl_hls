@@ -10,7 +10,7 @@ The caller supplies mailbox ordering, state/effect storage and a clock owner. Fa
 %% The public facade accepts only the compiler artifact and a checked instance-zero projection.
 -type spec() :: xls_actor_codegen:spec().
 
--doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies and physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization. Returns only the main module bytes; use artifact/1 with xls_emitted:write/2 when generated helper imports must be published.".
+-doc "Emits the ordinary source-derived activation semantics without a RAM owner, loader or topology. Accepts a closed actor artifact with an optional source-validated constant projection for instance zero; retained replies use the common bounded caller book; physical service options are rejected. Callers must reserve state/effect storage and preserve mailbox order. This reference boundary does not establish a local protocol specialization. Returns only the main module bytes; use artifact/1 with xls_emitted:write/2 when generated helper imports must be published.".
 -spec emit(xls_actor_codegen:spec()) -> binary().
 emit(Closed) -> xls_emitted:bytes(artifact(Closed)).
 
@@ -50,10 +50,6 @@ artifact(Closed) ->
         Unknown -> error({local_execution_requires_closed_artifact, Unknown})
     end,
     Spec = Closed#{shared_service => ordinary},
-    case maps:get(retained_calls, Spec) of
-        none -> ok;
-        _ -> error(local_execution_retained_calls_unsupported)
-    end,
     case maps:find(state_projection, Spec) of
         {ok, #{rows := Rows}} ->
             case lists:usort([I || #{instance := I} <- Rows]) of

@@ -198,16 +198,16 @@ shared_arithmetic_plan() ->
         ?assertEqual(Before, maps:without([dslx_sha256, dslx_dependencies, frame_config_sha256, failure_sites], After))
     end, lists:zip(StaticReceivers, Receivers)).
 
-%% Unsupported reply ownership must reject at preparation, before owner rendering can begin.
--spec local_reply_rejection_test() -> ok.
-local_reply_rejection_test() ->
-    {ok, Calls} = trace_renderers(fun() ->
-        ?assertError({hls_diagnostic, #{stage := source, code := local_execution_retained_calls_unsupported,
-            context := #{source := <<"test/hls_protocol_call_fixture.erl">>, capability := retained_calls}}},
-            hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", [])),
-        ok
+%% Bounded caller ownership is retained at preparation without generating an owner.
+-spec local_reply_preparation_test() -> ok.
+local_reply_preparation_test() ->
+    {Source, Calls} = trace_renderers(fun() ->
+        hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", [])
     end),
-    ?assertEqual(#{}, Calls).
+    ?assertEqual(#{}, Calls),
+    #{retained_calls := #{pending_calls := 1, port := reply}} =
+        hls_local_actor:descriptor(Source),
+    ok.
 
 %% Every outer builder owns a checked plan; changing its files cannot change retained semantics.
 -spec retained_outer_plans_test_() -> term().

@@ -17,6 +17,31 @@ schema_domain_test() ->
     ?assertError({hls_diagnostic, #{code := undeclared_protocol_schema, context := #{schema := other}}},
         hls_protocol_schema:domains(Artifact, [other])).
 
+%% Compact finite atoms retain their exact codec width without pretending to be integers.
+-spec finite_atom_domain_test() -> ok.
+finite_atom_domain_test() ->
+    Artifact = hls_protocol_schema_test_source:compile(
+        [{status, [{value, "ready | busy | failed"}]}]),
+    [#{mask := Mask, value := Value}] = hls_protocol_schema:domains(Artifact, [status]),
+    [Ready, Busy, Failed] = hls_protocol_schema:frames(Artifact,
+        [{status, ready}, {status, busy}, {status, failed}]),
+    ?assertEqual(3, length(lists:usort([Ready, Busy, Failed]))),
+    ?assertEqual([Value, Value, Value], [Frame band Mask || Frame <- [Ready, Busy, Failed]]).
+
+%% Declared calls preserve their bounded wire slot; ordinary casts still require transaction zero.
+-spec call_transaction_domain_test() -> ok.
+call_transaction_domain_test() ->
+    Source = hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", []),
+    [#{mask := Mask, value := Value}] = hls_protocol_schema:domains(Source, [read]),
+    Frame = Value,
+    ?assertError({hls_diagnostic, #{code := unsupported_startup_call, context := #{schema := read}}},
+        hls_protocol_schema:frames(Source, [{read, 0}])),
+    Transaction = 16#ff bsl hls_frame_layout:header_offset(txid),
+    ?assertEqual(0, Mask band Transaction),
+    ?assertEqual(Value, (Frame bor Transaction) band Mask),
+    [#{mask := CastMask}] = hls_protocol_schema:domains(artifact([work], u8), [work]),
+    ?assertEqual(Transaction, CastMask band Transaction).
+
 %% One shared command covers all selected actor identities without duplicating frames.
 -spec binding_test() -> ok.
 binding_test() ->

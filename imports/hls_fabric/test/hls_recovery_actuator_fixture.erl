@@ -13,7 +13,7 @@
 -hls_replies([{select_profile, [profile_status]}, {query_profile, [profile_status]}]).
 
 %% Source callbacks; the same actor runs under the ERTS domain backend.
--export([init/1, active/3]).
+-export([init/1, active/3, topology/0]).
 
 %% Only one pending/last transition is stored; the older physical profile is not a command log.
 -record(cell, {
@@ -114,3 +114,15 @@ profile_mask(Profile) ->
 report(Status, Request, Cell) ->
     #profile_status{status = Status, request = Request, epoch = Cell#cell.epoch,
         profile = Cell#cell.profile, enabled = profile_mask(Cell#cell.profile)}.
+
+-doc "Declares one closed actuator with generated host calls/casts and separate reply/effect outputs; no test-specific command translation is permitted.".
+-spec topology() -> map().
+topology() ->
+    #{version => 1, actors => #{actuator => ?MODULE}, families => #{}, startup => [],
+      route_relations => [],
+      ingresses => [{commands, {rectangle, [1, 1]},
+          [{all, [select_profile, query_profile, apply_profile, controller_failure],
+              [{actor, actuator, {at, [0, 0]}}]}]}],
+      externals => [{effects, out, [profile_applied]}, {replies, out, [profile_status]}],
+      routes => [{{actuator, effect}, [{external, effects}]},
+          {{actuator, reply}, [{external, replies}]}]}.

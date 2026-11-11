@@ -12,6 +12,31 @@ The first boundary supports a closed whole-network placement, rectangle ingress,
 
 The backend must connect every application ingress and egress through the gates and keep management available independently of application backpressure. A dead physical backend does not establish a successful fence or reset; its owner must retain uncertainty. No distributed reset protocol or crossing-link ownership policy is implied by this single-clock composition.
 
+## Framed hardware backend
+
+`hls_protocol_domain:write_stream(Config, Directory)` emits the same closed network behind two independently backpressured word streams. Compile its source bundle with the ordinary external XLS driver. The selected top is `domain_stream`, with separate management and application input/output channels. Each channel carries the existing route/header/payload words. `domain/interface.etf` retains actor schemas, call contracts, port identities, control enum codecs and the matching routes. The runtime does not need source modules or compiler applications.
+
+Attach `hls_domain_fabric` to two deployment-owned `hls_fabric` brokers and that interface, with external output recipients keyed by `{ActorId, Port}`. Configure the domain owner with `module => hls_domain_fabric`; its policies, incarnation counter, supervisor child and `hls_node` service declaration are otherwise the same as for `hls_domain_erts`. The generated interface fixes the routes; incompatible host overrides reject before route acquisition. The backend does not close brokers owned by its deployment.
+
+Each addressed host request selects one actor. Ordinary source calls reuse the compiler's bounded caller/reply machinery. Each declared reply port must have one external destination; internal calls, call-tag startup messages and dynamic internal reply routes reject. A reply keeps its caller identity while publication is blocked. Casts retain their ordinary zero transaction field; only the outer request envelope uses the no-call-slot sentinel.
+
+Hardware owns incarnation admission, bounded request-to-call-slot correlation and the output sequence. Each receive/transmit direction retains one finite packet. A round-robin arbiter skips empty sources and advances only when it captures an application input or output; management has its own parser and response buffer. Persistent eligible sources share accepted transfers fairly, but receiver stalls can take arbitrarily long. One physical application stream still serializes packets: a blocked transmitter prevents new command admission, and a blocked receive head prevents later input packets from passing it. There is no retry history or transparent application replay. The 32-bit request and output counters do not wrap; exhaustion closes further admission instead of reusing an identity.
+
+Host admission is bounded per actor. `pending_limit` bounds unacknowledged casts for each actor; its declared `pending_calls` separately bounds retained calls. A long call therefore does not consume the room needed for a release cast or another actor's request. Hardware and native endpoints implement the same admission notification and capacity-wait contract. The distribution bridge releases input credit on admission, retains bounded completion ownership per actor, and preserves sender order for operations awaiting admission. Only an explicitly unadmitted busy cast can wait and try admission again; uncertain writes and accepted operations are never replayed. Shared finite links and full ingress queues can still impose head-of-line blocking.
+
+Management observations include the count of application outputs accepted by the generated transport. Those buffers and counters survive ordinary domain replacement. On source failure, the host backend waits for that frontier, sends prior replies and effects through the incarnation endpoint, and then retires it. The same endpoint sends effects to their recipient before its `DOWN` signal. A successor is not exposed while predecessor delivery or endpoint retirement remains pending. A missing frontier, malformed response, broker loss or cold-device identity regression produces `noconnection`, not evidence of a completed reset.
+
+The backend must attach exclusively to a fresh response stream and remain alive across domain-owner restarts. Restarting the backend over an arbitrary live stream is not transparent reattachment: deployment must first establish transport retirement. Likewise, a host process monitor alone cannot establish physical quiescence. The stream implementation is reusable generated logic and runtime code; its simulation qualification is not live-device admission.
+
+The maintained shared-application witness is:
+
+```sh
+rebar3 as test compile
+python3 tools/test_domain_stream.py --xls /path/to/xls --work /fresh/artifact/directory
+```
+
+It runs the same profile actuator, host policy, ordinary OTP supervisor and surviving device model on ERTS and on two independent generated cores. Both use the custom distribution node and a real second ERTS node for typed calls, casts, monitors and fresh virtual PIDs. The C++ simulator moves public word beats only; it neither interprets recovery commands nor manufactures replies, acknowledgements or frontiers. Native and RTL histories are checked against explicit application expectations. Device effect history and resource reservations live in the application-side model and deliberately survive controller replacement.
+
 ## Focused local witness
 
 After compiling the test profile with the matching compiler checkout, run:
@@ -22,11 +47,11 @@ python3 tools/test_domain_recovery.py /path/to/xls /fresh/artifact/directory
 
 The witness compiles two ordinary source actors, counter then relay, into a complete network; two independent instances communicate with actual Erlang owners and incarnation-specific actor endpoints through separate management/application FIFO pairs. A second build makes initial source entry fail. Test-only stale-wire injections are labeled separately from actual source-generated responses. The simulator touches only public clock, management, ingress and egress ports, and never forces internal actor state.
 
-The fixture transport sequences application responses and puts the accepted-response frontier in each management snapshot. A fault closes admission immediately, but orderly endpoint termination waits until every promised prior response reaches the adapter. The endpoint processes those replies before its in-band retirement message. Missing, malformed or timed-out delivery evidence yields connection uncertainty instead of an invented orderly source failure. A deterministic witness stalls delivery after hardware acceptance, observes the fault independently, then checks the reply precedes `DOWN` when delivery resumes. This transport frontier belongs to the fixture adapter; a production bridge needs its own corresponding ordered lane or frontier contract.
+The fixture transport sequences application responses and puts the accepted-response frontier in each management snapshot. A fault closes admission immediately, but orderly endpoint termination waits until every promised prior response reaches the adapter. The endpoint processes those replies before its in-band retirement message. Missing, malformed or timed-out delivery evidence yields connection uncertainty instead of an invented orderly source failure. A deterministic witness stalls delivery after hardware acceptance, observes the fault independently, then checks the reply precedes `DOWN` when delivery resumes. This older witness puts the frontier in its fixture adapter; `write_stream/2` above implements that responsibility in generated hardware.
 
 This is finite simulation evidence. It establishes neither arbitrary progress nor board admission, physical timing or exhaustive source/RTL equivalence. The controller retains one lifecycle transition and first fault, not an application work history. Local test generation and simulation are serialized; neither Vivado nor a whole-application performance sweep is needed for this contract witness.
 
-The fixture implements requests as source-level request-ID/cast/report messages. It does not add general synchronous calls to the source-protocol lowering. Its stale acknowledgement case covers application admission; it is not an exhaustive proof of private credit handling.
+The fixture implements requests as source-level request-ID/cast/report messages. It predates the bounded host-call support used by the framed endpoint above. Its stale acknowledgement case covers application admission; it is not an exhaustive proof of private credit handling.
 
 The compiled kernel can also be checked independently:
 

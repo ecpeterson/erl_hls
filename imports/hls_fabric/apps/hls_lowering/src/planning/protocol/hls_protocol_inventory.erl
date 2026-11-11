@@ -26,6 +26,7 @@ inspect(Topology = #{actors := Actors, routes := Routes}, Artifacts) ->
     Channels = lists:append([channels(R, ActorModules, Modules) || R <- Routes]),
     Diagnostics =
         topology_diagnostics(Topology, ActorModules, Modules) ++
+            internal_calls(Channels, ActorModules, Modules) ++
             lists:append([maps:get(diagnostics, M) || M <- maps:values(Modules)]),
     Rows = [actor(A, Topology, Modules) || A <- Actors],
     #{
@@ -40,9 +41,25 @@ inspect(Topology = #{actors := Actors, routes := Routes}, Artifacts) ->
         eligible => false
     }.
 
+%% Ordinary internal casts have no host transaction owner and cannot create calls.
+-spec internal_calls([map()], map(), map()) -> [map()].
+internal_calls(Channels, Actors, Modules) ->
+    [
+        diagnostic(
+            unsupported_internal_call,
+            #{source => {Source, Port}, destination => {actor, Destination}, schema => Tag},
+            <<"Retained calls require a host caller owner; internal protocol sends are casts.">>
+        )
+     || #{source := Source, port := Port, destination := {actor, Destination}, tag := Tag} <-
+            Channels,
+        {ok, Module} <- [maps:find(Destination, Actors)],
+        #{retained_calls := #{calls := Calls}} <- [maps:get(Module, Modules, #{})],
+        is_map_key(Tag, Calls)
+    ].
+
 %% Keep source identities and complete families, not just a successful receive arm.
 -spec module(module(), map()) -> map().
-module(Name, #{program := Program}) ->
+module(_Name, #{program := Program}) ->
     Spec = xls_actor_program:spec(Program),
     Plan = xls_actor_program:plan(Program),
     Callbacks = xls_statem_plan:callbacks(Plan),
@@ -76,19 +93,8 @@ module(Name, #{program := Program}) ->
         families => Families,
         collections => collections(Spec),
         failure_locations => maps:get(failure_locations, Spec),
-        diagnostics =>
-            case maps:get(retained_calls, Spec) of
-                none ->
-                    [];
-                _ ->
-                    [
-                        diagnostic(
-                            retained_calls,
-                            #{module => Name},
-                            <<"Declare and check a bounded request/reply adapter; retained callers are not closed entry producers.">>
-                        )
-                    ]
-            end
+        retained_calls => maps:get(retained_calls, Spec),
+        diagnostics => []
     }.
 
 %% The inventory is a display projection; storage consumers use the full compiler effects.
@@ -129,7 +135,8 @@ collections(Spec) ->
 %% Variable equality in a head is a candidate key relation, not an invariant across actors.
 -spec callback(map()) -> map().
 callback(#{ordinal := Ordinal, clause := Clause = {clause, Anno, Args, Guards, Body}}) ->
-    [Message, _Phase, State] = Args,
+    %% The compiler appends a caller pattern only for retained-call callbacks.
+    [Message, _Phase, State | _Caller] = Args,
     MessageFields = pattern_fields(Message),
     StateFields = pattern_fields(State),
     Equalities = [
@@ -186,6 +193,7 @@ actions({tuple, Anno, [{atom, _, Name} | Args]} = Node) when
     Name =:= gather;
     Name =:= contribute;
     Name =:= cast;
+    Name =:= reply;
     Name =:= open_gather;
     Name =:= open_reduction;
     Name =:= next_event

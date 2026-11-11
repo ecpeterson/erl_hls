@@ -43,7 +43,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let initialized = @@INITIALIZED@@;
   let setup_output = @@SETUP_OUTPUT@@;
   let fault = @@FAULT@@;
-  let protocol_fault = net.output.ingress_fault;
+  let protocol_fault = net.output.ingress_fault || io.transport_fault;
   let new_fault = (fault != u16:0 || protocol_fault) && old.current != u64:0 && old.fault == domain_codes::FAULT_NONE;
   let accept_management = io.management_valid && !new_fault && !io.reset;
   let completion = domain_controller::Domaininput {

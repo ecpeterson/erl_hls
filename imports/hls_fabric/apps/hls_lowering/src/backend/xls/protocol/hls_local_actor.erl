@@ -54,6 +54,7 @@
     source_imports := [atom()],
     output_ports := [atom()],
     message_schemas := [atom()],
+    retained_calls := none | map(),
     completion_sites := [#{id := non_neg_integer(), phase := atom()}],
     phase_names := [atom()],
     function_ports := [atom()],
@@ -106,11 +107,11 @@
     owner_import => owner_import()
 }.
 
--doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Rejects retained synchronous calls; no application names select behavior.".
+-doc "Compiles all source callback families once with ordinary failure and collection semantics and a clocked DSLX owner. Retained calls use the ordinary bounded caller book; no application names select behavior.".
 -spec compile(file:filename(), [hls_source:option()] | hls_source:context()) -> artifact().
 compile(Source, Options) -> render(prepare(Source, Options)).
 
--doc "Lowers one source snapshot and rejects retained synchronous calls before any owner or port DSLX is rendered. The returned source is reusable across placements; source constructors and compiler codecs remain trusted build code.".
+-doc "Lowers one source snapshot before any owner or port DSLX is rendered. The returned source is reusable across placements; source constructors and compiler codecs remain trusted build code.".
 -spec prepare(file:filename(), [hls_source:option()] | hls_source:context()) -> source().
 prepare(Source, Options) -> prepare(Source, Options, hls_frame_layout:default()).
 
@@ -120,18 +121,6 @@ prepare(Source, Options) -> prepare(Source, Options, hls_frame_layout:default())
 ) -> source().
 prepare(Source, Options, FrameLayout) ->
     Program = xls_actor_program:from_file(Source, Options, FrameLayout),
-    Spec = xls_actor_program:spec(Program),
-    case maps:get(retained_calls, Spec) of
-        none ->
-            ok;
-        _ ->
-            hls_diagnostic:raise(
-                source,
-                local_execution_retained_calls_unsupported,
-                <<"The local protocol owner does not support retained call replies.">>,
-                #{source => unicode:characters_to_binary(Source), capability => retained_calls}
-            )
-    end,
     #{source => Source, program => Program}.
 
 -doc "Renders the checked source's ordinary functions and selected clock-owner ABI without rereading source. Templates are read here. Inbox attachment and imported-owner wiring belong to the enclosing transport emission.".
@@ -267,7 +256,7 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
     Layout = xls_machine_layout:from_spec(Spec),
     #{width := EventWidth} = xls_machine_layout:field(Layout, next_event),
     PayloadWidth = lists:max([
-        1
+        reply_payload_width(Spec)
         | [
             xls_entry_storage:width(Storage)
          || #{layouts := Layouts} <- Entries, #{storage := Storage} <- Layouts
@@ -291,6 +280,7 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
         source_imports => maps:get(imports, Spec),
         output_ports => maps:get(output_names, Spec),
         message_schemas => maps:get(message_names, Spec),
+        retained_calls => maps:get(retained_calls, Spec),
         completion_sites =>
             case Gathers of
                 none -> [];
@@ -322,7 +312,11 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
             startup => one_masked_clock_for_source_initialization,
             schedule => one_stage_no_io_flops_always_enabled_channels
         },
-        action_result_fields => [private_machine, dispatched, directive, phase_boundary],
+        action_result_fields => [private_machine, dispatched, directive, phase_boundary] ++
+            case xls_statem_reply_codegen:enabled(Spec) of
+                true -> [reply, reply_valid];
+                false -> []
+            end,
         action_obligations => [
             intercept_handled_receipts,
             suppress_receive_while_pending,
@@ -361,10 +355,14 @@ descriptor(Artifact = #{program := Program, source := Source}) ->
             gather,
             failure_priority,
             ordered_effects
-        ],
+        ] ++
+            case xls_statem_reply_codegen:enabled(Spec) of
+                true -> [retained_calls];
+                false -> []
+            end,
         physical_locality_established => false,
         excluded => [
-            retained_calls,
+            internal_dynamic_calls,
             protocol_fusion,
             network_runtime,
             functional_equivalence_proof,
@@ -404,3 +402,8 @@ safe(Value) ->
 -spec safe_key(term()) -> atom() | binary().
 safe_key(Key) when is_atom(Key); is_binary(Key) -> Key;
 safe_key(Key) -> iolist_to_binary(io_lib:format("~p", [Key])).
+
+%% Replies retain the complete canonical frame, including the caller transaction ID.
+-spec reply_payload_width(xls_actor_codegen:spec()) -> pos_integer().
+reply_payload_width(#{retained_calls := none}) -> 1;
+reply_payload_width(#{frame_layout := Layout}) -> hls_frame_layout:frame_bits(Layout).

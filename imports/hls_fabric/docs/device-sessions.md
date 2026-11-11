@@ -41,7 +41,7 @@ Enroll an already-ready `hls_domain` owned by a local deployment process:
 #{workers := #{domain := Handle, actors := Actors}} = hls_node:services(Node).
 ```
 
-The returned actor PIDs accept the endpoints' ordinary `gen_server` calls and casts from another ERTS node. A cast is forwarded through the endpoint's reserved `{'$hls_domain_cast', Message}` admission request. The endpoint acknowledges accepted work, rejects full admission before accepting, or dies on terminal failure. This interface is implemented by `hls_statem` and must be implemented by a hardware-domain endpoint adapter; a raw legacy broker service is not such an adapter. The domain owner and lifecycle backend remain responsible for readiness, physical fencing, reset completion and application setup. Node enrollment never resets or starts actors.
+The returned actor PIDs accept the endpoints' ordinary `gen_server` calls and casts from another ERTS node. Calls and casts use the shared `{'$hls_submit', Token, Mode, Message}` endpoint request. The endpoint separately reports `{hls_admitted, Endpoint, Token}` before its eventual reply or termination, so accepting a call does not require completing it. The acknowledged-cast helper `hls_statem:admit_cast/2` remains available to callers. This interface is implemented by `hls_statem` and must be implemented by a hardware-domain endpoint adapter; a raw legacy broker service is not such an adapter. The domain owner and lifecycle backend remain responsible for readiness, physical fencing, reset completion and application setup. Node enrollment never resets or starts actors.
 
 Each virtual PID binds one exact local endpoint and domain incarnation. An endpoint's actual `DOWN` signal retires that PID, completes its existing remote monitors with the same reason, and leaves unrelated domains and the distribution connection alive. Pending calls fail through those ERTS monitors, rather than returning an ordinary error value. Replies sent before the endpoint died retain their ordering before its monitor exits. The adapter issues requests directly; there is no intermediary reply-forwarding process that could reorder a late reply after death. Connection loss still produces ERTS `noconnection` and does not itself imply source failure or permission to replay work.
 
@@ -55,9 +55,9 @@ Managed-only nodes use an empty broker map. Mixed managed/legacy services retain
 
 Each physical endpoint/connection has 255 application call slots or 256 debug slots. Application casts use ID 255 and need no reply slot. Logical actors sharing an endpoint share an ordered queue and one outstanding host write; blocked work can delay later actors. Separate endpoints still share transport and connection admission.
 
-Managed requests reserve one connection-owned admission slot until an endpoint replies or dies; casts also reserve a slot until their admission acknowledgement. At `queue_limit`, the sum of these pending requests and legacy queued operations pauses distribution intake; ordinary ERTS flow control applies, including sender suspension at `+zdbbl`. Receipts and replies continue to drain. Admission retries can temporarily exceed the waiting threshold by one operation per destination. This limit does not bound remote mailboxes, monitors or all distribution/socket buffers.
+Both legacy wire channels and managed endpoints use one request ledger. Work awaiting admission consumes connection input credit; admitted managed calls retain completion ownership bounded separately by `queue_limit` per actor. Full call capacity returns busy without blocking a later release cast. At the connection waiting limit, distribution intake pauses and ordinary ERTS flow control applies, including sender suspension at `+zdbbl`. Replies and capacity notifications continue to drain. These bounds do not bound remote mailboxes, monitors or all distribution/socket buffers; a flood of unadmitted work on one ordered input can still delay later traffic.
 
-A managed cast whose endpoint refuses admission closes that peer connection: casts have no application reply channel, so failure must not be silently discarded while monitors report success. The adapter does not automatically replay either refused or uncertain casts. This finite connection bound does not imply globally bounded ERTS mailboxes.
+A managed cast explicitly refused as busy before admission stays at its actor's queue head and waits for `'$hls_capacity'` to report room before another admission attempt. It never retries an accepted or uncertain operation. An irrecoverable unacknowledged-cast failure withdraws only that peer's target binding with `noconnection`; other actors and the connection remain usable. This does not assert source death or cancel previously accepted work. Publication still requires actual old endpoint termination.
 
 Only legacy `tx_limit`/`route_tx_limit` rejections that prove non-transmission permit retries, at the same queue head after five milliseconds. Ambiguous failures close the connection. Broker writes have no deadline; caller timeouts retain normal ERTS semantics.
 
@@ -73,7 +73,7 @@ Application and debug use separate physical streams but share the peer connectio
 | `epmd_port` | `4369` | Local EPMD endpoint |
 | `max_connections` | `8` | Active authenticated peers |
 | `source_range` | `{1,65535}` | Fresh return addresses; two per connection |
-| `queue_limit` | `32` | Legacy queued plus managed pending operation threshold |
+| `queue_limit` | `32` | Shared waiting-admission threshold; also the managed unfinished-call bound per actor |
 | `tick_ms` | `15000` | TCP tick interval; inactivity limit is four intervals; match peer `net_ticktime` |
 
 Packets are capped at 1 MiB; handshake reads and socket writes time out after five seconds. Broker bounds are configured separately.

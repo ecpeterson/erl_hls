@@ -74,6 +74,7 @@ public:
     explicit Domain(const std::string& prefix):
         core(prefix.c_str()), management(prefix + "_management"), application(prefix + "_application") {
         core.clk = 0; core.reset = 1;
+        core.transport_fault = 0; // This legacy fixture has no external transport-fault injector.
         core.management_valid = 0; core.ingress_valid = 0;
         core.boundary_1_0_ready = 0;
         core.eval();

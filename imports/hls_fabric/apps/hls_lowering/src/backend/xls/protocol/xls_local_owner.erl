@@ -7,7 +7,7 @@
 %% Composition with an existing actor artifact.
 -export([import_owner/2]).
 
--doc "Emits receipt, callback-action, entry/publication and clock-owner DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained calls are unsupported.".
+-doc "Emits receipt, callback-action, entry/publication and clock-owner DSLX beside the ordinary activation reference. Handled receipts either finish an effect-free activation or retain the final gather head for deferred completion. The slow port composes local_action_at with local_enter_at and requires receipt interception and no received frame during pending internal work. A separated caller must retain the complete action and its actor slot through blocked publication, with no intervening activation or mailbox retirement. Retained replies are part of the registered action and publish before any following entry.".
 -spec ports(xls_actor_codegen:spec()) -> iodata().
 ports(Spec) -> ports(Spec, local).
 
@@ -22,7 +22,6 @@ ports(
     },
     Mode
 ) ->
-    false = xls_statem_reply_codegen:enabled(Spec),
     Tag = xls_actor_codegen:input_tag_ok(Spec, Names, Words),
     [
         template("local_protocol", [
@@ -31,26 +30,13 @@ ports(
             {<<"@@TAG_OK@@">>, Tag}
         ]),
         template("local_slow", [
-            {<<"@@TAG_OK@@">>, Tag},
-            {<<"@@BINDINGS@@">>,
-                xls_reduction_service_codegen:shared_dispatch_bindings(none, ordinary, Spec)},
-            {<<"@@EFFECTIVE@@">>,
-                xls_reduction_service_codegen:shared_dispatch_effective_binding(
-                    Reductions, ordinary, Spec
-                )},
-            {<<"@@FAILED@@">>,
-                xls_reduction_service_codegen:shared_dispatch_failed_binding(
-                    Reductions, ordinary, Spec
-                )},
-            {<<"@@NEXT_EVENT@@">>,
-                xls_statem_event_codegen:optional(
-                    Spec,
-                    "      next_event: if effective && !failed { next_event } else { u8:0 },"
-                )},
-            {<<"@@DISPATCHED@@">>,
-                xls_reduction_service_codegen:shared_dispatch_dispatched_field(
-                    Reductions, ordinary, Spec
-                )},
+            {<<"@@PLAIN_FUNCTION@@">>, plain_dispatch(Spec, Tag)},
+            {<<"@@REPLY_FIELDS@@">>, reply(Spec, fields)},
+            {<<"@@REPLY_CAPTURE@@">>, reply(Spec, capture)},
+            {<<"@@REPLY_ENTER@@">>, reply(Spec, enter)},
+            {<<"@@REPLY_ENTER_END@@">>, reply(Spec, enter_end)},
+            {<<"@@ATOMIC_REPLY@@">>, reply(Spec, atomic)},
+            {<<"@@ATOMIC_REPLY_END@@">>, reply(Spec, atomic_end)},
             {<<"@@SELECTED@@">>, dispatch(Spec)}
         ]),
         template("local_owner", [
@@ -155,3 +141,70 @@ dispatch(Spec = #{reductions := Reductions, gathers := Gathers}) ->
 shared(local, _) -> [];
 shared(shared, inputs) -> "  completion_granted: bool,\n  completion_action: LocalAction,\n";
 shared(shared, completion) -> template("local_arithmetic_owner", []).
+
+%% Retained calls reuse the common admission/reply implementation unchanged.
+-spec plain_dispatch(xls_actor_codegen:spec(), iodata()) -> iodata().
+plain_dispatch(Spec = #{reductions := Reductions}, Tag) ->
+    case xls_statem_reply_codegen:enabled(Spec) of
+        true ->
+            "// Common dispatch owns bounded call handles and validates replies.\n"
+            "fn local_plain_dispatch(machine: ActorState, frame: axis::Frame, received: bool)\n"
+            "    -> ActorDispatch {\n"
+            "  if hls_failure::failed(machine.failure) { actor_reply_failure(machine, frame, received) }\n"
+            "  else { shared_machine_dispatch(machine, frame, received) }\n"
+            "}\n";
+        false ->
+            template("local_plain", [
+                {<<"@@TAG_OK@@">>, Tag},
+                {<<"@@BINDINGS@@">>,
+                    xls_reduction_service_codegen:shared_dispatch_bindings(none, ordinary, Spec)},
+                {<<"@@EFFECTIVE@@">>,
+                    xls_reduction_service_codegen:shared_dispatch_effective_binding(
+                        Reductions, ordinary, Spec
+                    )},
+                {<<"@@FAILED@@">>,
+                    xls_reduction_service_codegen:shared_dispatch_failed_binding(
+                        Reductions, ordinary, Spec
+                    )},
+                {<<"@@NEXT_EVENT@@">>,
+                    xls_statem_event_codegen:optional(
+                        Spec,
+                        "      next_event: if effective && !failed { next_event } else { u8:0 },"
+                    )},
+                {<<"@@DISPATCHED@@">>,
+                    xls_reduction_service_codegen:shared_dispatch_dispatched_field(
+                        Reductions, ordinary, Spec
+                    )}
+            ])
+    end.
+
+%% The bounded reply is reserved with its callback action until output storage exists.
+-spec reply(xls_actor_codegen:spec(), fields | capture | enter | enter_end | atomic | atomic_end) ->
+    iodata().
+reply(#{retained_calls := none}, _) ->
+    [];
+reply(_Spec, fields) ->
+    "  reply: axis::Frame,\n  reply_valid: bool,\n";
+reply(_Spec, capture) ->
+    "    reply: dispatched.reply, reply_valid: dispatched.reply_valid,\n";
+reply(Spec, enter) ->
+    [
+        "  if action.reply_valid {\n",
+        "    LocalStepResult { machine: action.private_machine,\n",
+        "      effect_payload: axis::bits_from_frame(action.reply) as bits[ENTRY_EFFECT_PAYLOAD_BITS],\n",
+        "      effect_layout: u8:",
+        integer_to_list(xls_statem_reply_codegen:layout(Spec)),
+        ", effect_count: u8:1, effects_valid: effects_reserved,\n",
+        "      dispatched: action.dispatched, directive: action.directive,\n",
+        "      phase_boundary: action.phase_boundary, egress_blocked: !effects_reserved }\n",
+        "  } else {\n"
+    ];
+reply(_Spec, enter_end) ->
+    "  }\n";
+reply(_Spec, atomic) ->
+    "  // The atomic reference cannot retain an uncommitted reply action.\n"
+    "  if action.reply_valid && !effects_reserved {\n"
+    "    local_step_at(raw, frame, received, effects_reserved, slot)\n"
+    "  } else {\n";
+reply(_Spec, atomic_end) ->
+    "  }\n".

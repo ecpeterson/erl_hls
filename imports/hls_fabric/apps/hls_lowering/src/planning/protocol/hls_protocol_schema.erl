@@ -4,18 +4,19 @@
 %% Startup encoding and receiver domains.
 -export([frames/2, domains/2]).
 
--doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the canonical frame layout retained by its compiler program. Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs raise schema diagnostics. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
+-doc "Encodes startup records in declared sender order, including duplicates. Requires the receiving hls_local_actor source snapshot from the same fresh source build. Checks record identity/arity and exact host packing, then uses the canonical frame layout retained by its compiler program. Supports built-in numeric/boolean codecs and full-width integer bit-cast providers; other codecs raise schema diagnostics. Startup calls reject because no host owns their transaction. Source callbacks still determine consume, postpone or failure. This is not a startup progress proof.".
 -spec frames(hls_local_actor:source() | hls_local_actor:artifact(), [tuple()]) ->
     [non_neg_integer()].
 frames(#{program := Program}, Messages) ->
-    #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
+    Spec = #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
+    ok = lists:foreach(fun(Message) -> startup_call(Message, Spec) end, Messages),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     [frame(Message, Names, Records, FrameLayout) || Message <- Messages].
 
--doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the complete ordinary header and zero padding, leaving every represented payload value arbitrary. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond the selected frame capacity reject; invalid tags and unsupported codecs raise schema diagnostics; semantic invalid values must still reach the source callback.".
+-doc "Returns canonical mask/value domains for a nonempty list of declared message tags. Uses the ordinary header and zero padding, leaving represented payload values arbitrary; declared calls also retain their transaction ID. Also binds ordered field names and exact provider/type descriptors, so equal masks cannot hide incompatible record layouts. Requires the same checked source snapshot as the receiving actor. Unsupported codecs, duplicate/unknown tags and payloads beyond the selected frame capacity reject; invalid tags and unsupported codecs raise schema diagnostics; semantic invalid values must still reach the source callback.".
 -spec domains(hls_local_actor:source() | hls_local_actor:artifact(), [atom()]) -> [map()].
 domains(#{program := Program}, Tags) ->
-    #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
+    Spec = #{message_names := Names, frame_layout := FrameLayout} = xls_actor_program:spec(Program),
     Records = xls_statem_plan:records(xls_actor_program:plan(Program)),
     case Tags =/= [] andalso length(Tags) =:= length(lists:usort(Tags)) of
         true ->
@@ -36,12 +37,16 @@ domains(#{program := Program}, Tags) ->
             ]}
         of
             {[Op], [Fields]} ->
-                (maps:with(
-                    [mask, value],
-                    xls_message_bits:frame(
-                        Op,
-                        [#{type => field_type(F), domain => unknown} || F <- Fields],
-                        FrameLayout
+                (call_domain(
+                    Tag,
+                    Spec,
+                    maps:with(
+                        [mask, value],
+                        xls_message_bits:frame(
+                            Op,
+                            [#{type => field_type(F), domain => unknown} || F <- Fields],
+                            FrameLayout
+                        )
                     )
                 ))#{
                     tag => Tag, schema_sha256 => schema_hash(Fields)
@@ -117,21 +122,19 @@ field_type({typed_record_field, _, Type}) ->
 wire_scalar(Descriptor) ->
     Printed = iolist_to_binary(xls_type:print_type(Descriptor)),
     Width = hls_type:width(Descriptor),
+    Bits = integer_to_binary(Width),
+    ScalarTypes = [
+        <<"u", Bits/binary>>,
+        <<"s", Bits/binary>>,
+        <<"uN[", Bits/binary, "]">>,
+        <<"sN[", Bits/binary, "]">>
+    ],
     case
-        {
-            xls_type:dslx_codec(Descriptor),
-            re:run(Printed, "^[us]([1-9][0-9]*)$", [{capture, [1], binary}])
-        }
+        xls_type:dslx_codec(Descriptor) =:= bit_cast andalso Width > 0 andalso
+            hls_type:value_width(Descriptor) =:= Width andalso lists:member(Printed, ScalarTypes)
     of
-        {bit_cast, {match, [Bits]}} when Width > 0 ->
-            case
-                binary_to_integer(Bits) =:= Width andalso hls_type:value_width(Descriptor) =:= Width
-            of
-                true -> Descriptor;
-                false -> unsupported_codec(Descriptor)
-            end;
-        _ ->
-            unsupported_codec(Descriptor)
+        true -> Descriptor;
+        false -> unsupported_codec(Descriptor)
     end.
 
 %% Custom providers must expose the scalar bit-cast ABI required by ordinary protocol frames.
@@ -143,3 +146,28 @@ unsupported_codec(Descriptor) ->
         <<"Protocol fields require a supported numeric/boolean codec or a full-width scalar bit-cast provider.">>,
         #{type => Descriptor}
     ).
+
+%% Host call slots are bounded by the caller book; preserve their wire identity.
+%% Cast and startup headers remain canonical zero-transaction frames.
+-spec call_domain(atom(), xls_actor_codegen:spec(), map()) -> map().
+call_domain(Tag, #{retained_calls := #{calls := Calls}}, Domain = #{mask := Mask}) when
+    is_map_key(Tag, Calls)
+->
+    Transaction = 16#ff bsl hls_frame_layout:header_offset(txid),
+    Domain#{mask := Mask band bnot (Transaction)};
+call_domain(_Tag, _Spec, Domain) ->
+    Domain.
+
+%% Startup entries have no caller to own a retained reply, even for transaction zero.
+-spec startup_call(tuple(), xls_actor_codegen:spec()) -> ok.
+startup_call(Message, #{retained_calls := #{calls := Calls}}) when
+    is_tuple(Message), tuple_size(Message) > 0, is_map_key(element(1, Message), Calls)
+->
+    hls_diagnostic:raise(
+        schema,
+        unsupported_startup_call,
+        <<"Startup messages cannot request retained replies without a host caller owner.">>,
+        #{schema => element(1, Message)}
+    );
+startup_call(_Message, _Spec) ->
+    ok.

@@ -8,7 +8,7 @@ cores for independent domains; crossing links require a separate recovery policy
 """.
 
 %% Checked source composition and portable external-tool input.
--export([emit/1, write/2]).
+-export([emit/1, write/2, write_stream/2]).
 -export_type([result/0, codecs/0]).
 
 -doc "Retained lifecycle field descriptors resolved from the compiled kernel; host codecs need no compiler or source lookup.".
@@ -23,6 +23,7 @@ cores for independent domains; crossing links require a separate recovery policy
 -doc "Named clock ports and the exact underlying network. This boundary establishes neither native fit nor distributed progress.".
 -type result() :: #{
     network := hls_protocol_network:manifest(),
+    stream => hls_domain_stream:plan(),
     inputs := [{string(), pos_integer()}],
     outputs := [{string(), pos_integer()}],
     codecs := codecs(),
@@ -34,7 +35,12 @@ cores for independent domains; crossing links require a separate recovery policy
 
 -doc "Renders a closed whole-network recovery domain. Requires rectangle ingress, automatic network execution, no crossing placement and no declared startup messages. Initialization may not publish effects; an attempted setup publication fails closed in hardware. Readiness waits for successful init/entry/internal callbacks. Application incarnation identities gate ingress; egress is tagged by the current incarnation. Accepted prior output is irrevocable. This first composition uses at least ten frame payload words for the compiled control adapter; no host framing or distributed reset is implied.".
 -spec emit(hls_source_config:network() | file:filename()) -> hls_generated_files:output(result()).
-emit(Config0) when is_map(Config0) ->
+emit(Config) -> compose(Config, raw).
+
+%% Framed endpoints add addressing restrictions only when explicitly requested.
+-spec compose(hls_source_config:network() | file:filename(), raw | stream) ->
+    hls_generated_files:output(result()).
+compose(Config0, Mode) when is_map(Config0) ->
     Config = hls_source_config:validate(network, Config0#{
         frame_payload_words => max(10, maps:get(frame_payload_words, Config0, 3))
     }),
@@ -42,6 +48,11 @@ emit(Config0) when is_map(Config0) ->
     false = maps:is_key(native_actors, Config),
     Build = hls_protocol_transport:plan(Config),
     #{bundle := #{topology := #{startup := []}}} = hls_protocol_transport:descriptor(Build),
+    Framing =
+        case Mode of
+            raw -> #{};
+            stream -> #{stream => hls_domain_stream:bind(hls_protocol_transport:descriptor(Build))}
+        end,
     NetworkPlan = hls_protocol_network:plan(Build, #{activation => automatic, inspection => none}),
     #{files := NetworkFiles, result := #{network := Network}} = hls_protocol_network:emit(
         NetworkPlan
@@ -75,7 +86,7 @@ emit(Config0) when is_map(Config0) ->
     ]),
     #{
         files => Files,
-        result => #{
+        result => Framing#{
             network => Network,
             inputs => Inputs,
             outputs => Outputs,
@@ -86,14 +97,32 @@ emit(Config0) when is_map(Config0) ->
             eligible => false
         }
     };
-emit(Filename) ->
-    emit(hls_source_config:read(Filename)).
+compose(Filename, Mode) ->
+    compose(hls_source_config:read(Filename), Mode).
 
 -doc "Writes a fresh portable domain source bundle for the ordinary external XLS driver. Source compilation precedes output creation; support snapshot or I/O failures retain partial evidence. No simulation, synthesis or hardware attachment runs here.".
 -spec write(hls_source_config:network() | file:filename(), file:filename()) -> map().
-write(Config, Directory) ->
-    Generated = #{result := Result = #{frame_payload_words := Words}} = emit(Config),
-    _ = hls_generated_files:write(Generated, Directory),
+write(Config, Directory) -> write_bundle(Config, Directory, raw).
+
+-doc "Writes the closed network with independent framed management/application lanes and retained runtime actor schemas. Ordinary source calls use bounded reply slots; the generated endpoint preserves incarnation admission and output-retirement order without simulator protocol logic.".
+-spec write_stream(hls_source_config:network() | file:filename(), file:filename()) -> map().
+write_stream(Config, Directory) -> write_bundle(Config, Directory, stream).
+
+%% Both entry points retain the same raw domain; only the selected physical endpoint differs.
+-spec write_bundle(hls_source_config:network() | file:filename(), file:filename(), raw | stream) ->
+    map().
+write_bundle(Config, Directory, Mode) ->
+    Generated = #{result := Result = #{frame_payload_words := Words}} = compose(Config, Mode),
+    {Extra, StreamInfo} =
+        case Mode of
+            raw ->
+                {#{}, #{}};
+            stream ->
+                #{files := SF} = SG = hls_domain_stream:emit(Result),
+                {SF, maps:without([files], SG)}
+        end,
+    Final = Generated#{files := hls_generated_files:merge([maps:get(files, Generated), Extra])},
+    _ = hls_generated_files:write(Final, Directory),
     #{libraries := Libraries, imports := Support} = hls_build_support:layout([]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
     ok = hls_compile:configure_support(Directory, hls_frame_layout:new(Words)),
@@ -113,8 +142,32 @@ write(Config, Directory) ->
         codegen_flags => hls_build_profile:flags(Profile, sampled_clock),
         rtl => [<<"domain/core.v">>, <<"domain/protocol_domain.sv">>]
     },
-    ok = file:write_file(filename:join(Directory, "domain/interface.etf"), term_to_binary(Result)),
-    hls_artifact_bundle:finish(Directory, [Unit], #{kind => domain, backend => source_protocol}).
+    Runtime =
+        case Mode of
+            raw ->
+                Result;
+            stream ->
+                maps:merge(maps:get(stream, Result), #{
+                    codecs => maps:get(codecs, Result),
+                    frame_payload_words => Words,
+                    transport => StreamInfo
+                })
+        end,
+    ok = file:write_file(filename:join(Directory, "domain/interface.etf"), term_to_binary(Runtime)),
+    Selected =
+        case Mode of
+            raw ->
+                Unit;
+            stream ->
+                Unit#{
+                    source := <<"domain/domain_stream.x">>,
+                    top := <<"domain_stream_clock">>,
+                    module := <<"domain_stream_core">>,
+                    output := <<"domain/stream_core.v">>,
+                    rtl := [<<"domain/stream_core.v">>, <<"domain/domain_stream.sv">>]
+                }
+        end,
+    hls_artifact_bundle:finish(Directory, [Selected], #{kind => domain, backend => source_protocol}).
 
 %% Public management is separate from the incarnation-tagged application input.
 -spec ports([xls_protocol_network:packed_port()], [xls_protocol_network:packed_port()], codecs()) ->
@@ -122,6 +175,7 @@ write(Config, Directory) ->
 ports(Inputs, Outputs, Codecs) ->
     Management = [
         {"reset", 1},
+        {"transport_fault", 1},
         {"management_valid", 1},
         {"management_op", hls_type:width(maps:get(operation, Codecs))},
         {"expected", 64},

@@ -79,7 +79,7 @@
     provenance := source_manifest()
 }.
 
--doc "Joins every entry-effect layout across all phases of each internal producer's opaque compiler program. Omits only whole fields constant in every matching send; state-dependent and partially known fields stay whole. Rejects retained-call replies, whose sends are outside entry layouts. Programs must come from the same preparation as the actor emitters; no source reads or compilation occur here. Channel bindings are explicit caller input, not validated topology. Supplied alternatives or source/spec maps are not accepted; this does not admit mailbox replacement or network progress.".
+-doc "Joins every entry-effect layout across all phases of each internal producer's opaque compiler program. Omits only whole fields constant in every matching send; state-dependent and partially known fields stay whole. Rejects internal retained-call replies, whose destinations require dynamic caller ownership; ordinary entry sends from those actors remain capturable. Programs must come from the same preparation as the actor emitters; no source reads or compilation occur here. Channel bindings are explicit caller input, not validated topology. Supplied alternatives or source/spec maps are not accepted; this does not admit mailbox replacement or network progress.".
 -spec plan(
     #{channels := [binding()], atom() => term()},
     #{hls_protocol_topology:id() => xls_actor_program:program()}
@@ -87,6 +87,16 @@
 plan(#{channels := Channels}, Programs) ->
     FrameLayout = common_layout(Programs),
     Internal = [C || C = #{destination := {actor, _}} <- Channels],
+    lists:foreach(
+        fun(#{source := Source, port := Port}) ->
+            Spec = xls_actor_program:spec(maps:get(Source, Programs)),
+            case maps:get(retained_calls, Spec) of
+                #{port := Port} -> error({unsupported_capture_replies, maps:get(source, Spec)});
+                _ -> ok
+            end
+        end,
+        Internal
+    ),
     Producers = lists:usort([S || #{source := S} <- Internal]),
     Sources = maps:from_list([{S, source(maps:get(S, Programs))} || S <- Producers]),
     Rows = [
@@ -129,13 +139,7 @@ common_layout(Programs) ->
 %% Only the compiler constructor creates programs; there is no selected-alternative input.
 -spec source(xls_actor_program:program()) -> source().
 source(Program) ->
-    #{source := File, retained_calls := Calls, message_names := Names} = xls_actor_program:spec(
-        Program
-    ),
-    case Calls of
-        none -> ok;
-        _ -> error({unsupported_capture_replies, File})
-    end,
+    #{message_names := Names} = xls_actor_program:spec(Program),
     Alternatives = [
         maps:with([phase, layout, order, port, tag, fields], Effect)
      || Effect <- xls_actor_program:entry_effects(Program)

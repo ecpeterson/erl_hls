@@ -8,12 +8,14 @@ closed_artifact_test() ->
     ?assertError({local_execution_requires_closed_artifact, [shared_service]},
         xls_activation_codegen:emit(Spec#{shared_service => aggregate_only})).
 
-%% A retained reply needs additional ownership that this API deliberately does not supply.
+%% The reference owner reuses the same bounded caller book as the scheduler owner.
 -spec retained_reply_test() -> ok.
 retained_reply_test() ->
-    Spec = xls_parse:actor_artifact("test/hls_local_actor_fixture.erl", []),
-    ?assertError(local_execution_retained_calls_unsupported,
-        xls_activation_codegen:emit(Spec#{retained_calls => #{}})).
+    Spec = xls_parse:actor_artifact("test/hls_protocol_call_fixture.erl", []),
+    Local = xls_emitted:bytes(xls_activation_codegen:artifact(Spec)),
+    ?assertNotEqual(nomatch, binary:match(Local, <<"type ReplyBook = hls_reply::Book<REPLY_CAPACITY>">>)),
+    ?assertNotEqual(nomatch, binary:match(Local, <<"hls_reply::admit(machine.replies, frame)">>)),
+    ?assertEqual(nomatch, binary:match(Local, <<"pub proc SharedExecutor">>)).
 
 %% Slot selection must not silently decode constants from a different projection instance.
 -spec projection_instance_test() -> ok.

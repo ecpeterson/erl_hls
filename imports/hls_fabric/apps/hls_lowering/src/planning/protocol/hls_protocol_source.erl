@@ -1,17 +1,17 @@
 -module(hls_protocol_source).
--moduledoc "Plans complete source entry batches and independent recipient outputs for transport preparation. Combines retained transactions, capture layouts and bit projections for the transport renderer; connected receive, capacity and progress qualification remain separate.".
+-moduledoc "Plans complete source entry batches, retained host replies and independent recipient outputs for transport preparation. Combines retained transactions, capture layouts and bit projections for the transport renderer; connected receive, capacity and progress qualification remain separate.".
 
 %% Source publication planning.
 -export([plan/3]).
 -export_type([row/0, output/0, source/0, plan/0]).
 
--doc "One selected source effect projected to a recipient, with its layout, sequence position and checked constant omissions.".
+-doc "One selected effect projected to a recipient. A reply carries its declared schema union and the complete runtime frame; ordinary entries retain checked constant omissions.".
 -type row() :: #{
     layout := non_neg_integer(),
     sequence := non_neg_integer(),
     source_order := non_neg_integer(),
     port := atom(),
-    tag := atom(),
+    tag := atom() | {reply, [atom()]},
     bits := [hls_protocol_projection:bit()],
     capture_slot := non_neg_integer(),
     constant_requirements := [{{payload, non_neg_integer()}, 0 | 1}]
@@ -67,7 +67,7 @@
     port_number := non_neg_integer()
 }.
 
--doc "Binds every source batch to exact ordinary frame projections and declared typed capture channels. Outputs to one recipient keep their source order across ports; separate recipients have independent backpressure. Internal constant omissions retain explicit source-invariant requirements. This plan does not authorize eliminating receipt guards or establish a safe whole-network capacity.".
+-doc "Binds source entry batches to exact ordinary frame projections and declared typed capture channels, and retained host replies to their complete runtime frames. Outputs to one recipient keep their source order across ports; separate recipients have independent backpressure. Internal constant omissions retain explicit source-invariant requirements. This plan does not authorize eliminating receipt guards or establish a safe whole-network capacity.".
 -spec plan(
     #{
         topology := #{
@@ -78,6 +78,7 @@
                     atom() => term()
                 }
             ],
+            routes := [hls_protocol_topology:route()],
             atom() => term()
         },
         modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
@@ -87,7 +88,7 @@
     hls_protocol_capture:plan()
 ) -> plan().
 plan(
-    #{topology := #{actors := Actors}, modules := Modules},
+    #{topology := #{actors := Actors, routes := Routes}, modules := Modules},
     #{actors := Transactions},
     Capture = #{frame_layout := FrameLayout}
 ) ->
@@ -97,7 +98,7 @@ plan(
             [Transaction] = [T || T = #{actor := A} <- Transactions, A =:= Id],
             #{program := Program} = maps:get(M, Modules),
             Spec = xls_actor_program:spec(Program),
-            actor(I, Id, Spec, Transaction, Capture, Pairs)
+            reply_output(actor(I, Id, Spec, Transaction, Capture, Pairs), Spec, Routes)
         end
      || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors)
     ],
@@ -282,3 +283,69 @@ projection(
             _ -> [lists:nth(J + 1, Frame) || J <- Positions]
         end,
     #{bits => Bits, capture_slot => Index, constant_requirements => lists:usort(Requirements)}.
+
+%% A retained reply is a complete dynamic frame, not an entry-field projection.
+%% The reply port has one dedicated external recipient so caller identity never
+%% passes through static internal capture slots or mixes with ordinary effects.
+-spec reply_output(source(), xls_actor_codegen:spec(), [hls_protocol_topology:route()]) -> source().
+reply_output(Source, #{retained_calls := none}, _Routes) ->
+    Source;
+reply_output(
+    Source = #{
+        actor := Id,
+        outputs := Outputs,
+        payload_width := Payload,
+        output_width := OutputWidth,
+        sequence_slots := Slots,
+        masks := Masks
+    },
+    Spec = #{retained_calls := #{port := Port, calls := Calls}, frame_layout := FrameLayout},
+    Routes
+) ->
+    Recipients = [R || #{source := S, recipients := R} <- Routes, S =:= {Id, Port}],
+    Destination =
+        case Recipients of
+            [[D = {external, _}]] -> D;
+            _ -> error({unsupported_protocol_reply_route, Id, Port, Recipients})
+        end,
+    case [O || O = #{destination := D} <- Outputs, D =:= Destination] of
+        [] -> ok;
+        _ -> error({shared_protocol_reply_destination, Id, Port, Destination})
+    end,
+    FrameBits = hls_frame_layout:frame_bits(FrameLayout),
+    Width = max(Payload, FrameBits),
+    Layout = xls_statem_reply_codegen:layout(Spec),
+    Index = length(Outputs),
+    Offset =
+        case Outputs of
+            [] -> 0;
+            _ -> OutputWidth
+        end,
+    Tags = lists:usort(lists:append(maps:values(Calls))),
+    Output = #{
+        index => Index,
+        destination => Destination,
+        offset => Offset,
+        width => FrameBits,
+        rows => [
+            #{
+                layout => Layout,
+                sequence => 0,
+                source_order => 0,
+                port => Port,
+                tag => {reply, Tags},
+                bits => [{payload, J} || J <- lists:seq(0, FrameBits - 1)],
+                capture_slot => 0,
+                constant_requirements => []
+            }
+        ]
+    },
+    Source#{
+        payload_width := Width,
+        snapshot_width := Width + 8,
+        destinations := Index + 1,
+        logical_destinations := Index + 1,
+        outputs := Outputs ++ [Output],
+        output_width := Offset + FrameBits,
+        masks := Masks ++ [#{layout => Layout, mask => 1 bsl (Index * Slots)}]
+    }.

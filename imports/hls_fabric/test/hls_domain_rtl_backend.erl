@@ -1,10 +1,11 @@
 -module(hls_domain_rtl_backend).
 -moduledoc "Local RTL witness backend. Lifecycle state is decoded from the compiled hardware kernel; this adapter supplies no lifecycle algorithm or application replay.".
 -behaviour(gen_server).
+-behaviour(hls_domain_backend).
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 
 %% The same deployment-owner backend contract as hls_domain_erts.
--export([start_link/2, attach/2, status/1, request/3, endpoint/4, stop/1]).
+-export([start_link/2, attach/2, status/1, request/3, endpoint/4, send_request/2, stop/1]).
 %% Explicit test-only transport controls and bounded observations.
 -export([control/3, info/1, drop_next_request_reply/1, delivery/2, write_codes/2]).
 %% gen_server callbacks.
@@ -19,6 +20,9 @@ attach(Pid, Owner) -> gen_server:call(Pid, {attach, Owner}).
 -doc "Requests a fresh hardware snapshot, including currently published local actor endpoints.".
 -spec status(pid()) -> {ok, map()} | {error, term()}.
 status(Pid) -> gen_server:call(Pid, status).
+-doc "Starts a nonblocking management request from the actual attached owner; retained response aliases never transfer authority to workers.".
+-spec send_request(pid(), hls_domain_backend:request()) -> gen_server:request_id().
+send_request(Pid, Request) -> gen_server:send_request(Pid, Request).
 -doc "Submits an authorized finite management input, awaiting its matching hardware response.".
 -spec request(pid(), reference(), hls_domain_lifecycle:input()) -> hls_domain_lifecycle:output() | {error, term()}.
 request(Pid, Authority, Input) -> gen_server:call(Pid, {request, Authority, Input}).
@@ -120,8 +124,8 @@ handle_cast({'$hls_fabric_frame', Receipt, {0, 0}, {Tag, _Tx, 0}, Payload}, Stat
     hls_fabric:ack(Broker, Receipt),
     {noreply, pump(Next)};
 %% Only current published proxies may ask the fixture driver to admit source work.
-handle_cast({application, Endpoint, Ref, Incarnation, Mode, Request}, State) ->
-    {noreply, application(Endpoint, Ref, Incarnation, Mode, Request, State)}.
+handle_cast({application, Endpoint, Ref, Actor, Incarnation, Mode, Request}, State) ->
+    {noreply, application(Endpoint, Ref, Actor, Incarnation, Mode, Request, State)}.
 
 -doc "Observes source faults, correlates transport writes, and fences on local owner death.".
 -spec handle_info(term(), map()) -> term().
@@ -289,7 +293,7 @@ reconcile(State = #{retirement := #{frontier := Frontier, reason := Reason}, del
 reconcile(State = #{retirement := Retirement}) when Retirement =/= none -> State;
 reconcile(State = #{state := #domain_state{phase = ready, current = Incarnation}, actors := Actors,
     owner := Owner, retiring_owner := false, ready_incarnations := Resets, last_ready := Last}) when is_pid(Owner), map_size(Actors) =:= 0 ->
-    {ok, Endpoint} = hls_domain_rtl_endpoint:start(self(), Incarnation),
+    {ok, Endpoint} = hls_domain_endpoint:start(self(), counter, Incarnation, #{cast => 8, call => 8}),
     State#{actors := #{counter => Endpoint}, actor_incarnation := Incarnation,
         actor_monitor := monitor(process, Endpoint),
         last_ready := Incarnation, ready_incarnations := Resets + case Last =:= Incarnation of true -> 0; false -> 1 end,
@@ -304,18 +308,42 @@ status_result(#{state := #domain_state{phase = ready}, retirement := Retirement}
 status_result(State) -> {ok, snapshot(State)}.
 
 %% Application ownership is checked before submission and again on every return frame.
--spec application(pid(), reference(), pos_integer(), call | cast, term(), map()) -> map().
-application(Endpoint, Ref, Incarnation, Mode, Request, State = #{actors := Actors, pending := Pending,
-    app_next := Id, state := #domain_state{phase = Phase, current = Current}, application := Broker}) ->
-    case Phase =:= ready andalso Incarnation =:= Current andalso maps:get(counter, Actors, none) =:= Endpoint of
-        false -> Endpoint ! {rtl_result, Ref, {error, not_ready_or_stale}}, State;
-        true when map_size(Pending) >= 8 -> Endpoint ! {rtl_result, Ref, {error, busy}}, State;
+-spec application(pid(), reference(), term(), pos_integer(), call | cast, term(), map()) -> map().
+application(Endpoint, Ref, Actor, Incarnation, Mode, Request,
+    State = #{actors := Actors, pending := Pending,
+        state := #domain_state{phase = Phase, current = Current}}) ->
+    case Actor =:= counter andalso Phase =:= ready andalso Incarnation =:= Current andalso
+        maps:get(counter, Actors, none) =:= Endpoint of
+        false -> result(Endpoint, Ref, {error, not_ready_or_stale}), State;
         true ->
-            true = Id < (1 bsl 32),
-            {Tag, Value} = case Request of {add, V} -> {3, V}; read -> {4, 0}; explode -> {5, 0} end,
-            Entry = #{endpoint => Endpoint, reference => Ref, incarnation => Incarnation, mode => Mode, admitted => false},
-            transmit(Broker, 2, words(split(Incarnation) ++ [Tag, Id, Value]), State#{app_next := Id + 1, pending := Pending#{Id => Entry}})
+            Count = length([ok || #{mode := M} <- maps:values(Pending), M =:= Mode]),
+            case {Count < 8, command(Request)} of
+                {false, _} -> result(Endpoint, Ref, {error, busy}), State;
+                {true, error} -> result(Endpoint, Ref, {error, unsupported_request}), State;
+                {true, {ok, Tag, Value}} ->
+                    submit(Endpoint, Ref, Incarnation, Mode, Tag, Value, State)
+            end
     end.
+
+%% The fixture's source vocabulary stays local; malformed requests never reach the wire.
+-spec command(term()) -> {ok, 3..5, hls_nums:u32()} | error.
+command({add, Value}) when is_integer(Value), Value >= 0, Value < (1 bsl 32) -> {ok, 3, Value};
+command(read) -> {ok, 4, 0};
+command(explode) -> {ok, 5, 0};
+command(_) -> error.
+
+%% Calls and casts have independent ownership, matching the reusable endpoint's declared bounds.
+-spec submit(pid(), reference(), pos_integer(), call | cast, 3..5, hls_nums:u32(), map()) -> map().
+submit(Endpoint, Ref, Incarnation, Mode, Tag, Value,
+    State = #{pending := Pending, app_next := Id, application := Broker}) ->
+    true = Id < (1 bsl 32),
+    Entry = #{endpoint => Endpoint, reference => Ref, incarnation => Incarnation, mode => Mode, admitted => false},
+    transmit(Broker, 2, words(split(Incarnation) ++ [Tag, Id, Value]),
+        State#{app_next := Id + 1, pending := Pending#{Id => Entry}}).
+
+%% The production endpoint owns typed-result/termination ordering for this fixture too.
+-spec result(pid(), reference(), term()) -> term().
+result(Endpoint, Ref, Value) -> Endpoint ! {domain_result, self(), Ref, Value}.
 
 %% A stale admission acknowledgement or report cannot acknowledge/remove a new incarnation's request, even with a matching request ID.
 -spec app_response(ack | report, non_neg_integer(), non_neg_integer(), non_neg_integer(), map()) -> map().
@@ -324,11 +352,13 @@ app_response(Kind, Incarnation, Id, Value, State = #{pending := Pending, actor_i
         {ok, Entry = #{incarnation := Incarnation, endpoint := Endpoint, reference := Ref, mode := Mode}} ->
             case {Kind, Value, Mode} of
                 {ack, Rejected, _} when Rejected =/= 0 ->
-                    Endpoint ! {rtl_result, Ref, {error, rejected_incarnation}},
+                    result(Endpoint, Ref, {error, rejected_incarnation}),
                     State#{pending := maps:remove(Id, Pending), rejected := maps:get(rejected, State) + 1};
-                {ack, 0, cast} -> Endpoint ! {rtl_result, Ref, ok}, State#{pending := maps:remove(Id, Pending)};
-                {ack, 0, call} -> State#{pending := Pending#{Id := Entry#{admitted := true}}};
-                {report, _, call} -> Endpoint ! {rtl_result, Ref, {value, Value}}, State#{pending := maps:remove(Id, Pending)};
+                {ack, 0, cast} -> result(Endpoint, Ref, ok), State#{pending := maps:remove(Id, Pending)};
+                {ack, 0, call} ->
+                    Endpoint ! {domain_admitted, self(), Ref},
+                    State#{pending := Pending#{Id := Entry#{admitted := true}}};
+                {report, _, call} -> result(Endpoint, Ref, {value, Value}), State#{pending := maps:remove(Id, Pending)};
                 _ -> ignored(State)
             end;
         error -> ignored(State)
@@ -341,7 +371,7 @@ retire(Reason, State = #{actors := Actors, actor_monitor := Monitor, retirement 
     case Retirement of none -> ok; #{timer := Timer} -> erlang:cancel_timer(Timer) end,
     case Monitor of undefined -> ok; _ -> demonitor(Monitor, [flush]) end,
     maps:foreach(fun(_Id, Pid) ->
-        Ref = monitor(process, Pid), Pid ! {rtl_retire, self(), Reason},
+        Ref = monitor(process, Pid), Pid ! {domain_retire, self(), Reason},
         receive {'DOWN', Ref, process, Pid, _} -> ok after 1000 -> error(proxy_retirement_timeout) end
     end, Actors),
     State#{actors := #{}, actor_incarnation := 0, actor_monitor := undefined, pending := #{}, retirement := none}.
@@ -349,7 +379,8 @@ retire(Reason, State = #{actors := Actors, actor_monitor := Monitor, retirement 
 %% Physical write completion is distinct from the hardware's application acknowledgement.
 -spec transmit(pid(), byte(), binary(), map()) -> map().
 transmit(Broker, Tag, Payload, State = #{sends := Sends}) ->
-    true = gen_server:reqids_size(Sends) < 16,
+    %% Eight calls, eight casts and one independent management write may coexist.
+    true = gen_server:reqids_size(Sends) < 17,
     Id = hls_fabric:send_request(Broker, {0, 0}, {Tag, 0, 0}, Payload, 1000),
     State#{sends := gen_server:reqids_add(Id, Tag, Sends)}.
 

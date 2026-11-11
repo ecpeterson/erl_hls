@@ -1,0 +1,248 @@
+// Finite framing and clock-transition checks against the generated domain stream.
+// These are structural/state witnesses, not an ERTS, routed-RTL or device test.
+import domain_stream as stream;
+import domain;
+import domain_frames as framing;
+
+const PACKET_BITS = u32:@@PACKET_BITS@@;
+const CALL_SLOTS = u32:@@SLOTS@@;
+const STATUS_BITS = u32:@@STATUS_BITS@@;
+const ACTION_BITS = u32:@@ACTION_BITS@@;
+const STATE_BUDGET = u32:@@STATE_BUDGET@@;
+
+// Packet assembly retains a prefix until the declared final payload beat arrives.
+#[test]
+fn partial_packet() {
+  let route = framing::receive(zero!<framing::Receive<u32:64>>(), u32:17, false);
+  assert_eq(route.stage, u2:1);
+  assert_eq(route.full, false);
+  let header = framing::receive(route, framing::header(u32:0, u8:4, u8:2), false);
+  let first = framing::receive(header, u32:0x12345678, false);
+  assert_eq(first.full, false);
+  assert_eq(first.bad, false);
+  assert_eq(first.seen, u32:1);
+  let complete = framing::receive(first, u32:0xabcdef01, true);
+  assert_eq(complete.full, true);
+  assert_eq(complete.bad, false);
+  assert_eq(complete.seen, u32:2);
+  assert_eq(complete.packet.route, u32:17);
+  assert_eq(complete.packet.payload, u64:0xabcdef0112345678);
+}
+
+// Early TLAST is malformed at every prefix; late TLAST drains without overwriting or wrapping.
+#[test]
+fn malformed_tlast() {
+  let initial = zero!<framing::Receive<u32:64>>();
+  let ended_route = framing::receive(initial, u32:1, true);
+  assert_eq(ended_route.bad && ended_route.full, true);
+  let route = framing::receive(initial, u32:1, false);
+  let ended_header = framing::receive(route, framing::header(u32:0, u8:2, u8:2), true);
+  assert_eq(ended_header.bad && ended_header.full, true);
+  let header = framing::receive(route, framing::header(u32:0, u8:2, u8:2), false);
+  let ended_payload = framing::receive(header, u32:99, true);
+  assert_eq(ended_payload.bad && ended_payload.full, true);
+  assert_eq(ended_payload.seen, u32:1);
+  let one_word = framing::receive(route, framing::header(u32:0, u8:2, u8:1), false);
+  let late = framing::receive(one_word, u32:99, false);
+  assert_eq(late.bad, true);
+  assert_eq(late.full, false);
+  let drained = for (i, state): (u32, framing::Receive<u32:64>) in u32:0..u32:8 {
+    let next = framing::receive(state, u32:1000+i, i == u32:7);
+    assert_eq(next.seen, u32:1);
+    assert_eq(next.packet.payload, u64:99);
+    assert_eq(next.bad, true);
+    next
+  }(late);
+  assert_eq(drained.full, true);
+  let oversized = framing::receive(route, framing::header(u32:0, u8:2, u8:3), false);
+  assert_eq(oversized.bad, true);
+  let oversized_end = framing::receive(oversized, u32:9, true);
+  assert_eq(oversized_end.bad && oversized_end.full, true);
+  assert_eq(oversized_end.seen, u32:0);
+}
+
+// This arbitrary-state test isolates the transmit hold property; it does not simulate actor work.
+#[test]
+fn blocked_output_stable() {
+  let management = framing::Packet<PACKET_BITS> {
+    route: u32:5, header: framing::header(u32:0, u8:1, u8:2),
+    payload: u64:0x123456789abcdef0 as bits[PACKET_BITS],
+  };
+  let application = framing::Packet<PACKET_BITS> {
+    route: u32:7, header: framing::header(u32:0, u8:4, u8:2),
+    payload: u64:0x1122334455667788 as bits[PACKET_BITS],
+  };
+  let initial = stream::State { management_tx: management, management_tx_valid: true,
+    application_tx: application, application_tx_valid: true, ..zero!<stream::State>() };
+  let held = for (_, state): (u32, stream::State) in u32:0..u32:8 {
+    let next = stream::tick(state, zero!<stream::Inputs>());
+    assert_eq(next.output.management_output_valid, true);
+    assert_eq(next.output.management_output_word, management.route);
+    assert_eq(next.output.management_output_last, false);
+    assert_eq(next.output.application_output_valid, true);
+    assert_eq(next.output.application_output_word, application.route);
+    assert_eq(next.output.application_output_last, false);
+    assert_eq(next.state.management_tx, management);
+    assert_eq(next.state.application_tx, application);
+    assert_eq(next.state.management_position, u32:0);
+    assert_eq(next.state.application_position, u32:0);
+    assert_eq(next.state.cursor, initial.cursor);
+    next.state
+  }(initial);
+  let moved = stream::tick(held, stream::Inputs {
+    management_output_ready: true, ..zero!<stream::Inputs>()
+  });
+  let blocked = stream::tick(moved.state, zero!<stream::Inputs>());
+  assert_eq(blocked.output.management_output_word, management.header);
+  assert_eq(blocked.output.application_output_word, application.route);
+  assert_eq(blocked.state.management_position, u32:1);
+  assert_eq(blocked.state.application_position, u32:0);
+}
+
+// One accepted management beat leaves the independently owned application parser untouched.
+fn management_beat(state: stream::State, word: u32, last: bool) -> stream::Tick {
+  stream::tick(state, stream::Inputs {
+    management_word: word, management_valid: true, management_last: last,
+    ..zero!<stream::Inputs>()
+  })
+}
+
+// Drive real inspect handling while an application packet remains deliberately incomplete.
+// The lifecycle core stays unbound; no lifecycle result or actor output is fabricated.
+#[test]
+fn partial_application_allows_inspection() {
+  let route = stream::tick(zero!<stream::State>(), stream::Inputs {
+    application_word: u32:1, application_valid: true, ..zero!<stream::Inputs>()
+  });
+  let prefix = stream::tick(route.state, stream::Inputs {
+    application_word: framing::header(u32:0, u8:2, u8:7), application_valid: true,
+    ..zero!<stream::Inputs>()
+  });
+  assert_eq(prefix.state.application_rx.full, false);
+  assert_eq(prefix.state.application_rx.stage, u2:2);
+  let request_route = management_beat(prefix.state, u32:0, false);
+  let request_header = management_beat(request_route.state, framing::header(u32:0, u8:0, u8:1), false);
+  let request = management_beat(request_header.state, u32:77, true);
+  let pending = stream::tick(request.state, zero!<stream::Inputs>());
+  assert_eq(pending.state.management_pending, true);
+  let captured = stream::tick(pending.state, zero!<stream::Inputs>());
+  assert_eq(captured.state.management_tx_valid, true);
+  assert_eq(captured.state.management_tx.route, u32:0);
+  assert_eq(captured.state.management_tx.header, framing::header(u32:0, u8:1, u8:16));
+  assert_eq(captured.state.management_tx.payload as u32, u32:77);
+  assert_eq(captured.state.application_rx, prefix.state.application_rx);
+  let packet = captured.state.management_tx;
+  let drained = for (i, state): (u32, stream::State) in u32:0..u32:18 {
+    let next = stream::tick(state, stream::Inputs {
+      management_output_ready: true, ..zero!<stream::Inputs>()
+    });
+    assert_eq(next.output.management_output_valid, true);
+    assert_eq(next.output.management_output_word, framing::word(packet, i));
+    assert_eq(next.output.management_output_last, framing::last(packet, i));
+    assert_eq(next.output.wire_fault, false);
+    assert_eq(next.state.application_rx, prefix.state.application_rx);
+    next.state
+  }(captured.state);
+  assert_eq(drained.management_tx_valid, false);
+  assert_eq(drained.application_rx.full, false);
+}
+
+// A malformed management packet poisons the transport until a cold device reset.
+#[test]
+fn malformed_management_is_sticky() {
+  let early_end = management_beat(zero!<stream::State>(), u32:0, true);
+  assert_eq(early_end.state.management_rx.bad && early_end.state.management_rx.full, true);
+  let detected = stream::tick(early_end.state, zero!<stream::Inputs>());
+  assert_eq(detected.state.fault, true);
+  let held = stream::tick(detected.state, zero!<stream::Inputs>());
+  assert_eq(held.output.wire_fault, true);
+  let reset = stream::tick(held.state, stream::Inputs { reset: true, ..zero!<stream::Inputs>() });
+  assert_eq(reset.state.fault, false);
+  assert_eq(stream::tick(reset.state, zero!<stream::Inputs>()).output.wire_fault, false);
+}
+
+// Count actual typed storage independently of the renderer's conservative transport ceiling.
+// Exclude the actor network/lifecycle core; the remaining fields are the four packet buffers,
+// two parser cursors, two transmit cursors, management metadata, call ownership and sequence state.
+#[test]
+fn transport_storage_budget() {
+  let actual = bit_count<stream::State>() - bit_count<domain::State>();
+  let exact = u32:4 * PACKET_BITS + u32:652 + STATUS_BITS + ACTION_BITS + u32:33 * CALL_SLOTS;
+  assert_eq(actual, exact);
+  assert_eq(actual <= STATE_BUDGET, true);
+}
+
+// The profile fixture has two external streams; a lone ready producer wins
+// immediately for every cursor, including when an unready ingress head is skipped.
+#[test]
+fn sparse_producer_has_no_empty_turns() {
+  let observation = domain::Outputs {
+    app_boundary_0_1_valid: true, ..zero!<domain::Outputs>()
+  };
+  for (cursor, _): (u32, ()) in u32:0..u32:3 {
+    assert_eq(stream::arbitrate(observation, false, cursor), (true, u32:1));
+    ()
+  }(());
+  assert_eq(stream::arbitrate(zero!<domain::Outputs>(), false, u32:2), (false, u32:0));
+  assert_eq(stream::arbitrate(zero!<domain::Outputs>(), true, u32:0), (true, u32:2));
+}
+
+// Persistent ingress and both producers each win exactly once in three accepted
+// transfers. Empty clocks and stalled packets do not count toward this bound.
+#[test]
+fn ingress_and_outputs_share_accepted_turns() {
+  let observation = domain::Outputs {
+    app_boundary_0_0_valid: true, app_boundary_0_1_valid: true,
+    ..zero!<domain::Outputs>()
+  };
+  let cursor = for (transfer, cursor): (u32, u32) in u32:0..u32:9 {
+    let (valid, selected) = stream::arbitrate(observation, true, cursor);
+    assert_eq(valid, true);
+    assert_eq(selected, transfer % u32:3);
+    if selected == u32:2 { u32:0 } else { selected + u32:1 }
+  }(u32:0);
+  assert_eq(cursor, u32:0);
+}
+
+// A complete stale request needs only an ACK; it must not wait for empty output
+// turns. This arbitrary transport state never fabricates an accepted actor action.
+#[test]
+fn ingress_capture_stall_and_refill() {
+  let pending = framing::Receive<PACKET_BITS> {
+    full: true,
+    packet: framing::Packet<PACKET_BITS> {
+      route: u32:1, header: framing::header(u32:0, u8:2, u8:7),
+      payload: (u32:42 as bits[PACKET_BITS]) << u32:96,
+    },
+    ..zero!<framing::Receive<PACKET_BITS>>()
+  };
+  let initial = stream::State { application_rx: pending, ..zero!<stream::State>() };
+  let accepted = stream::tick(initial, zero!<stream::Inputs>());
+  assert_eq(accepted.state.application_rx.full, false);
+  assert_eq(accepted.state.sequence, u32:1);
+  assert_eq(accepted.state.cursor, u32:0);
+  assert_eq(accepted.state.application_tx_valid, true);
+  assert_eq(accepted.state.application_tx.header, framing::header(u32:0, u8:2, u8:8));
+  assert_eq((accepted.state.application_tx.payload >> u32:160) as u32, u32:1);
+  let queued = stream::State { application_rx: pending, ..accepted.state };
+  let stalled = for (_, state): (u32, stream::State) in u32:0..u32:6 {
+    let blocked = stream::tick(state, zero!<stream::Inputs>());
+    assert_eq(blocked.state.application_rx, pending);
+    assert_eq(blocked.state.application_tx, accepted.state.application_tx);
+    assert_eq(blocked.state.sequence, u32:1);
+    assert_eq(blocked.state.cursor, queued.cursor);
+    blocked.state
+  }(queued);
+  // The second ACK replaces the first on its final accepted word, with no gap.
+  let final_beat = stream::State { application_position: u32:9, ..stalled };
+  let refilled = stream::tick(final_beat, stream::Inputs {
+    application_output_ready: true, ..zero!<stream::Inputs>()
+  });
+  assert_eq(refilled.output.application_output_valid, true);
+  assert_eq(refilled.output.application_output_last, true);
+  assert_eq(refilled.state.application_tx_valid, true);
+  assert_eq(refilled.state.application_position, u32:0);
+  assert_eq(refilled.state.application_rx.full, false);
+  assert_eq(refilled.state.sequence, u32:2);
+  assert_eq(refilled.state.application_tx.payload as u32, u32:2);
+}
