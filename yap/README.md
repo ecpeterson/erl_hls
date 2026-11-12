@@ -1,45 +1,25 @@
-# Compiler and runtime roadmap
+# Compiler and runtime working material
 
-Maintained task index for `erl_hls` and its `hls_runtime` library, updated on 2026-11-10. Supported behavior belongs in [docs/](../docs/README.md); implementation notes retain their original evidence. Fabric lowering, application and deployment work belongs in the [hls_fabric roadmap](https://github.com/ecpeterson/hls_fabric/blob/main/yap/README.md); visualization and prediction work belongs in the [hls_spacetime campaign](https://github.com/ecpeterson/hls_spacetime/blob/main/yap/spacetime-visualization.md).
+This directory retains compiler/runtime design rationale and qualification history. Supported behavior belongs in [docs/](../docs/README.md). The private cross-repository roadmap in `Notes/erl_xls/Roadmap.md` owns the sole active task list; this index and older experiment checklists are references, not additional campaigns. The private roadmap is a maintainer note, not a compiler dependency.
 
-## Compiler usability, in priority order
+Compiler extensions and typed-plan work are tracked under G2, pinned-toolchain qualification under G6, and source-contract/documentation maintenance under G8. Recovery relationship policy and physical qualification belong to G1 and P6. Those identifiers refer to the master list rather than duplicating its scope or priority here.
 
-- [x] Map generated DSLX diagnostics to actor/include/imported-helper Erlang origins; [PR #37](https://github.com/ecpeterson/erl_hls/pull/37) and [local qualification](source-diagnostics.md).
-- [x] Extend differential checking to finite actor transitions, with BEAM/RTL witnesses and an injected-defect shrink/replay check; [PR #38](https://github.com/ecpeterson/erl_hls/pull/38) (independent review).
-- [x] Package communicating telemetry through `hlsc topology`, with a relocatable bundle and a focused public-port RTL witness; see [reliability closeout](compiler-reliability.md).
-- [x] Retain latched actor failures across non-reset differential segments, and isolate source-context tests across interrupted runs; [qualification](compiler-reliability.md).
+## Contracts and retained evidence
 
-## Recovery boundary
+| Area | Current contract | Qualification or design history |
+| --- | --- | --- |
+| Standalone compilation and portable bundles | [Toolchain](../docs/toolchain.md) | [Toolchain ownership](compiler-toolchain.md), [reliability closeout](compiler-reliability.md) |
+| Source selection, snapshots and imported helpers | [Actor compilation](../docs/actor-compilation.md), [source context](../docs/source-context.md), [local helpers](../docs/local-helpers.md) | [Helper module emission](source-helper-modules.md) |
+| Structured emission and source attribution | [Expression representation](../docs/expression-ir.md), [tool diagnostics](../docs/toolchain.md#optional-xls-invocation) | [Source diagnostics](source-diagnostics.md) |
+| Finite compiler and actor comparisons | [Differential checks](../docs/compiler-differential.md) | [Actor transition qualification](actor-transition-differential.md) |
+| Integer and provider semantics | [Numeric contract](../docs/numeric-contract.md), [provider extensions](../docs/type-providers.md) | [Static integer qualification](static-integer-semantics.md) |
+| Actor lifetimes and supervision | [Actor domains](../docs/actor-domains.md) | [Recovery qualification](actor-recovery.md) |
+| Documentation and package boundaries | [Source quality](../docs/source-quality.md), [source map](../src/README.md) | [Documentation audit](documentation-audit.md) |
 
-- [x] Define terminal actor failure and fixed-domain replacement without transparent replay; [contract](../docs/actor-domains.md).
-- [x] Implement native replacement and ordinary OTP supervision with a shared compilable lifecycle kernel; [qualification](actor-recovery.md).
+The digital recovery campaign is complete, including the downstream [framed-crossing closeout](https://github.com/ecpeterson/hls_fabric/blob/main/yap/actor-recovery.md#framed-crossing-closeout). Its finite witnesses do not establish physical exclusion, live-device operation or application retry validity. Compiler/runtime contracts remain application-neutral.
 
-## Deferred or gated work
+## Evidence boundaries
 
-- [ ] Support concrete source-helper type aliases, then qualify source-only Phi line arithmetic with explicit widths and rounding.
-  - Coordinate the arithmetic consumer with hls_fabric. Grid arithmetic has additional handwritten implementation choices; eliminating every geometry conditional is not the acceptance target.
-- [ ] Extend field/effect/state-demand analysis when a consumer names the storage or dependency it will remove.
-  - Message facts, known-bit compaction and phase-value analysis already exist. Additional analysis must preserve evaluated failures, effect order and unknown-provider behavior.
-- [ ] Add structural callback helpers, actor parameterization or timeouts when an application requires their semantics.
-  - Avoid runtime geometry branches or superset state solely to erase source conditionals. Fixed-domain topology reconnection now belongs to the recovery contract; broader actor-local restart requires separately checked ownership.
-- [ ] Recheck retained XLS workarounds during a deliberate pinned-toolchain refresh.
-  - The signed-remainder fix ([#4978](https://github.com/google/xls/pull/4978)) and XOR cancellation ([#5190](https://github.com/google/xls/pull/5190)) are merged upstream; verify pinned-binary adoption rather than reimplementing them. RAM reservations ([#4952](https://github.com/google/xls/pull/4952)) remain open and Darwin subprocess support ([#4951](https://github.com/google/xls/pull/4951)) closed without merge. Retain the generic-struct mangling and signed-remainder reproducers when qualifying a refresh.
-- [ ] Complete inherited source contracts and generated API documentation as modules are maintained.
-  - The source audit still reports migration gaps; presence checks do not establish documentation quality.
+Historical notes retain their tested revisions, rejected alternatives and failed attempts. Their test counts, physical results and remaining limitations describe those recorded configurations, not a new qualification of current source. Older worktrees and external artifacts are not branch bases or active work queues.
 
-## Completed foundations
-
-- [x] Emit source helpers as imported DSLX modules with local error adaptation and qualified cross-module constant folding: [PR #36](https://github.com/ecpeterson/erl_hls/pull/36).
-
-- [x] Native compiler CLI, portable source bundles and detachable XLS execution: [toolchain ownership](compiler-toolchain.md).
-- [x] Structured expression emission and source-located failure metadata: [expression IR](../docs/expression-ir.md) and [control-flow failures](../docs/control-flow.md).
-- [x] Source closure, outgoing-message/known-bit facts and phase-value analysis: current `src/backend/xls/analysis/` modules.
-- [x] Static integer semantics and the maintained compiler-only telemetry example: [qualification note](static-integer-semantics.md).
-- [x] Public documentation currency review: [audit](documentation-audit.md).
-- [x] Move the XOR-equality optimization to XLS: [upstream #5190](https://github.com/google/xls/pull/5190) merged; this does not establish adoption by our pinned binary.
-
-## Audit scope and historical notes
-
-This index reconciles main `46eae00` (including merged PRs #36–38), compiler/runtime guides and source TODOs, and distinct `compiler-message-facts.md` revisions retained in older `.codex/worktrees`. Their unchecked lists are historical proposals, not parallel active roadmaps. Completed message/known-bit/phase work is represented once above; additional ownership or specialization proposals require a current consumer and the [optimization review](../docs/optimization.md).
-
-The former working-note links for reductions and debug pointed to absent files. Their current contracts are [actor reductions](../docs/actor-reductions.md), [topology observation](../docs/topology-debug.md) and [debug targets](../docs/debug-targets.md).
+Current source-helper type limits are documented in [local helpers](../docs/local-helpers.md), and provider/enum limits in [type providers](../docs/type-providers.md). Additional analysis or representation changes need a concrete consumer and the [optimization review](../docs/optimization.md). Retained upstream reproducers establish behavior of their pinned tools; an upstream merge does not establish adoption by the installed binary. The source audit still reports inherited contract gaps, and no generated HTML documentation build is supplied.
