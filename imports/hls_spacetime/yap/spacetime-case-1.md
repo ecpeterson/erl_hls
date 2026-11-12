@@ -2,7 +2,7 @@
 
 2026-11-06. **S1 complete.** The first case is the smallest supported whole-device source-protocol repetition application. Fresh source emission and its independent ordinary-BEAM reference succeeded. This registers an executable case; continuous capture, compiled RTL, physical correspondence and the viewer remain unimplemented campaign tasks.
 
-The [campaign](spacetime-visualization.md) remains authoritative. The [result and evidence hashes](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/result.json), [original preregistration](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/preregistration.json) and [recorded commands](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/attempt-2/phases.json) live in the separate artifact archive. No primary implementation files changed. No XLS, RTL simulation, native implementation or remote command ran during S1.
+The [campaign evidence index](spacetime-visualization.md) places this completed case in context and points to the sole active task list. The [result and evidence hashes](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/result.json), [original preregistration](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/preregistration.json) and [recorded commands](/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-06/case-1/attempt-2/phases.json) live in the separate artifact archive. No primary implementation files changed. No XLS, RTL simulation, native implementation or remote command ran during S1.
 
 ## Case and exact source selection
 
