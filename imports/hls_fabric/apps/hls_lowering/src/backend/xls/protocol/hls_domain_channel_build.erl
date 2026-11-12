@@ -110,6 +110,8 @@ ports(FrameBits, StatusBits) ->
             {"credit_ready", 1},
             {"credit_drop", 1},
             {"generation", 64},
+            {"bound_source_incarnation", 64},
+            {"bound_destination_incarnation", 64},
             {"packet_sequence", 32},
             {"status", StatusBits},
             {"active", 1},

@@ -2,7 +2,7 @@
 -moduledoc "Binds source-domain actor schemas to a reusable framed hardware endpoint. hls_protocol_domain writes this composition; hls_domain_fabric consumes its retained interface without compiler access. Separate management and application lanes keep lifecycle observations independent of incomplete application frames.".
 
 %% Source binding and emitted stream composition.
--export([bind/1, emit/1, emit_supervised/1, ports/0, supervised_ports/1]).
+-export([bind/1, emit/1, emit_supervised/1, emit_partition/1, ports/0, supervised_ports/1]).
 -export_type([plan/0, result/0]).
 
 %% A source-checked rectangle address selects exactly one physical actor.
@@ -41,6 +41,8 @@
 -type result() ::
     #{
         files := #{string() => iodata()},
+        inputs := [{string(), pos_integer()}],
+        outputs := [{string(), pos_integer()}],
         state_bit_budget := pos_integer(),
         packet_words := pos_integer(),
         supervision := host | local,
@@ -72,7 +74,7 @@ bind(#{
             Spec = xls_actor_program:spec(Program),
             Names = maps:get(output_names, Spec),
             Ports = maps:from_list(lists:zip(Names, lists:seq(0, length(Names) - 1))),
-            {ok, Contract} = hls_service_schema:from_module(Module),
+            Contract = service_contract(Spec),
             Retained = maps:get(retained_calls, Spec, none),
             Count =
                 case Retained of
@@ -100,7 +102,7 @@ bind(#{
             }
         end,
         0,
-        Actors
+        [Actor || Actor = #{id := Id} <- Actors, maps:is_key(Id, Indexed)]
     ),
     ByIndex = maps:from_list([{maps:get(index, B), B} || {_, B} <- Bindings]),
     Outputs = [
@@ -125,6 +127,13 @@ bind(#{
         management_route => {0, 0},
         application_route => {0, 1}
     }.
+
+%% The retained program owns request kinds; cast-only actors need no artificial caller slots.
+-spec service_contract(xls_actor_codegen:spec()) -> hls_service_schema:contract().
+service_contract(#{retained_calls := none, casts := Casts}) ->
+    #{calls => #{}, casts => lists:usort([Tag || #{tag := Tag} <- Casts])};
+service_contract(#{retained_calls := Contract}) ->
+    maps:with([calls, casts, pending_calls, continuations], Contract).
 
 %% Every retained command address selects one actor, even when other targets broadcast.
 -spec ingress(non_neg_integer(), hls_protocol_control:plan()) -> #{atom() => address()}.
@@ -163,15 +172,24 @@ ingress(Index, #{targets := Targets}) ->
 
 -doc "Emits the framed top around the checked raw domain. Per-call request storage is bounded by declared pending_calls; each stream retains at most one packet. No live-device timing or safety guarantee is inferred.".
 -spec emit(hls_protocol_domain:result()) -> result().
-emit(Result) -> emit_mode(Result, false).
+emit(Result) -> emit_mode(Result, false, false).
 
 -doc "Emits the same bounded stream with supervisor-owned lifecycle pins. Host commands can only watch one ready incarnation or acknowledge its retained retirement receipt; they cannot reset a child. A fresh transport session discards observer evidence, never actor state.".
 -spec emit_supervised(hls_protocol_domain:result()) -> result().
-emit_supervised(Result) -> emit_mode(Result, true).
+emit_supervised(Result) -> emit_mode(Result, true, false).
+
+-doc "Emits host-managed framing for a checked partition while carrying its raw crossings and lifecycle observations to an enclosing incarnation-bound owner. Crossings run independently of host session/framing stalls. domain_reset resets only the core, preserving accepted host-output evidence; reset remains the global cold boundary.".
+-spec emit_partition(hls_protocol_domain:result()) -> result().
+emit_partition(Result) -> emit_mode(Result, false, true).
 
 %% The stream mode changes authority and observation shape, not application framing.
--spec emit_mode(hls_protocol_domain:result(), boolean()) -> result().
-emit_mode(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}, Supervised) ->
+-spec emit_mode(hls_protocol_domain:result(), boolean(), boolean()) -> result().
+emit_mode(
+    Result = #{frame_payload_words := Words, codecs := Codecs, stream := Stream},
+    Supervised,
+    Partition
+) ->
+    {CrossInputs, CrossOutputs} = crossing_ports(Result, Partition),
     #{actors := Actors, call_slots := Slots, streams := Outputs} = Stream,
     PacketWords = max(
         case Supervised of
@@ -199,7 +217,17 @@ emit_mode(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}, S
                 {<<"@@SUPERVISED@@">>, atom_to_list(Supervised)},
                 {<<"@@EXTERNAL_INPUTS@@">>, external_inputs(Supervised, Codecs)},
                 {<<"@@EXTERNAL_OUTPUTS@@">>, external_outputs(Supervised, Codecs)},
-                {<<"@@EXTERNAL_CONTROL@@">>, external_control(Supervised)},
+                {<<"@@EXTERNAL_CONTROL@@">>, external_control(Supervised, Partition)},
+                {<<"@@CROSSING_INPUTS@@">>, struct_fields(CrossInputs)},
+                {<<"@@CROSSING_OUTPUTS@@">>, struct_fields(CrossOutputs)},
+                {<<"@@CROSSING_CONTROL@@">>, [
+                    [N, ": io.", N, ",\n"]
+                 || {N, _} <- CrossInputs, N =/= "domain_reset"
+                ]},
+                {<<"@@CROSSING_OBSERVATIONS@@">>, [
+                    [N, ": core.output.", N, ",\n"]
+                 || {N, _} <- CrossOutputs
+                ]},
                 {<<"@@MANAGEMENT_CONTROL@@">>, management_control(Supervised)},
                 {<<"@@EXTERNAL_OBSERVATIONS@@">>, external_observations(Supervised)},
                 {<<"@@SLOTS@@">>, integer_to_binary(Slots)},
@@ -217,12 +245,16 @@ emit_mode(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}, S
                 ]}
             ]
     ),
-    {Inputs, Pins} =
+    {BaseInputs, BaseOutputs} =
         case Supervised of
             true -> supervised_ports(Codecs);
             false -> ports()
         end,
+    Inputs = BaseInputs ++ CrossInputs,
+    Pins = BaseOutputs ++ CrossOutputs,
     #{
+        inputs => Inputs,
+        outputs => Pins,
         files => #{
             "domain/domain_stream.x" => Text,
             "domain/domain_stream.sv" => sv_protocol_ports:emit(
@@ -410,16 +442,31 @@ supervisor_outputs(Codecs) ->
 external_inputs(false, _) -> [];
 external_inputs(true, Codecs) -> struct_fields(supervisor_inputs(Codecs)).
 
+%% Only the explicit partition composition exposes these pins; standalone stream ABI is unchanged.
+-spec crossing_ports(hls_protocol_domain:result(), boolean()) ->
+    {[{string(), pos_integer()}], [{string(), pos_integer()}]}.
+crossing_ports(_, false) ->
+    {[], []};
+crossing_ports(#{inputs := Inputs, outputs := Outputs}, true) ->
+    {[{"domain_reset", 1} | [P || P = {N, _} <- Inputs, lists:prefix("remote_", N)]], [
+        P
+     || P = {N, _} <- Outputs,
+        lists:prefix("app_remote_", N) orelse
+            N =:= "domain_phase" orelse N =:= "domain_current"
+    ]}.
+
 %% Supervisor observations have no application payload or shared transport buffer.
 -spec external_outputs(boolean(), hls_protocol_domain:codecs()) -> iodata().
 external_outputs(false, _) -> [];
 external_outputs(true, Codecs) -> struct_fields(supervisor_outputs(Codecs)).
 
 %% One authority supplies management; the unselected source is absent after constant folding.
--spec external_control(boolean()) -> iodata().
-external_control(false) ->
+-spec external_control(boolean(), boolean()) -> iodata().
+external_control(false, false) ->
     "let core_reset = io.reset; let parent_admission = true;";
-external_control(true) ->
+external_control(false, true) ->
+    "let core_reset = io.reset || io.domain_reset; let parent_admission = true;";
+external_control(true, false) ->
     "let core_reset = io.reset || io.supervisor_reset; let parent_admission = io.supervisor_admission;".
 
 %% Lifecycle observations and transport retirement clearance feed the parent's bounded scanner.

@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <deque>
 #include <fcntl.h>
+#include <functional>
+#include <vector>
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
@@ -44,7 +46,13 @@ public:
     ~FramedFifoStream() { close_files(); }
 
     // Preserve the witnesses' original output headroom before asserting public ready.
-    bool output_ready() const { return tx.size() < capacity - word_bytes; }
+    bool output_ready() const { return tx.size() + filtered.size()*word_bytes < capacity - word_bytes; }
+
+    // Optional test transport loss policy sees complete accepted packets, never alters words.
+    void filter_output(std::function<bool(const std::vector<uint32_t>&)> keep) {
+        if (!filtered.empty()) throw std::runtime_error("filter changed within packet");
+        output_filter = std::move(keep);
+    }
 
     // An accepted partial frame remains pending even without a currently held word.
     bool input_pending() const { return valid || !rx.empty() || phase != 0; }
@@ -74,6 +82,7 @@ public:
         }
         rx.clear();
         tx.clear();
+        filtered.clear();
         word = prior = 0;
         phase = remaining = 0;
         valid = last = blocked = prior_last = false;
@@ -128,13 +137,27 @@ public:
         if (valid && in_ready) {
             fprintf(trace, "I %llu %08x %u\n", (unsigned long long)cycle, word, last);
             inputs++;
+            if (last) fflush(trace);
             valid = false;
         }
         if (out_valid && out_ready) {
             if (tx.size() > capacity - word_bytes) throw std::runtime_error("output capacity");
             fprintf(trace, "O %llu %08x %u\n", (unsigned long long)cycle, out_word, out_last);
             outputs++;
-            for (unsigned i = 0; i < word_bytes; i++) tx.push_back(uint8_t(out_word >> (8 * i)));
+            if (output_filter) {
+                filtered.push_back(out_word);
+                if (filtered.size() > 257) throw std::runtime_error("oversize filtered frame");
+                if (out_last) {
+                    if (output_filter(filtered)) {
+                        for (auto accepted : filtered)
+                            for (unsigned i=0;i<word_bytes;i++) tx.push_back(uint8_t(accepted >> (8*i)));
+                    } else fprintf(trace, "D %llu %zu\n", (unsigned long long)cycle, filtered.size());
+                    filtered.clear();
+                }
+            } else {
+                for (unsigned i=0;i<word_bytes;i++) tx.push_back(uint8_t(out_word >> (8*i)));
+            }
+            if (out_last) fflush(trace);
         }
     }
 
@@ -142,6 +165,8 @@ private:
     static constexpr size_t capacity = 65536, word_bytes = 4;
     int input = -1, output = -1;
     std::deque<uint8_t> rx, tx;
+    std::vector<uint32_t> filtered;
+    std::function<bool(const std::vector<uint32_t>&)> output_filter;
     unsigned phase = 0, remaining = 0;
     uint32_t prior = 0;
     bool blocked = false, prior_last = false;

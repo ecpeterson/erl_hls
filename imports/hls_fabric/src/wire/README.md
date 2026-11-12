@@ -4,6 +4,8 @@ These modules translate complete Erlang values and checked descriptors to or fro
 
 | Entry points | Contract |
 | --- | --- |
+| `hls_domain_channel_wire` | Session-bound inspect, exact-pair bind and generation fence for mailbox crossings |
+| `hls_supervisor_wire` | Parent lifecycle, delegated incarnation grants and bounded child admission |
 | `hls_domain_wire` | Retained actor codecs and independent domain lifecycle/application envelopes |
 | `hls_host_codec` | Retained service/actor request and reply codec catalogs and structural checks |
 | `hls_node_binding` | Retained scheduled-node deployment validation and addressed casts |

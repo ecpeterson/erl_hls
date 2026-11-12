@@ -6,6 +6,51 @@
 -spec composition_test_() -> term().
 composition_test_() -> {timeout, 120, fun composition/0}.
 
+%% Framing preserves each partition's actor catalog and gives channel control its own session.
+-spec stream_composition_test_() -> term().
+stream_composition_test_() -> {timeout, 120, fun stream_composition/0}.
+
+%% A placement without cut edges needs no channel-management parser and rejects explicitly.
+-spec stream_composition() -> ok.
+stream_composition() ->
+    Config = config(),
+    Uncut = #{domains => [{ab, [0, 1]}, {c, [2]}], restart_groups => [[ab], [c]]},
+    ?assertError({domain_composition, no_crossings}, hls_protocol_domains:emit_stream(Config, Uncut)),
+    #{files := Files, result := #{domains := Domains, inputs := Inputs, outputs := Outputs,
+        channel_stream := #{interface := Management, state_bit_budget := StateBits}}} =
+        hls_protocol_domains:emit_stream(Config, placement()),
+    ?assertEqual([a, b, c], [Only || #{interface := #{runtime_interface := #{actors := Actors}}} <- Domains,
+        Only <- maps:keys(Actors)]),
+    lists:foreach(fun(#{interface := #{runtime_interface := #{actors := Actors}}}) ->
+        lists:foreach(fun(#{contract := #{calls := Calls, casts := Casts}, pending_calls := Pending}) ->
+            ?assertEqual(#{}, Calls),
+            ?assert(Casts =/= []),
+            ?assertEqual(0, Pending)
+        end, maps:values(Actors))
+    end, Domains),
+    ?assertMatch(#{kind := domain_channel_management, channels := [0], management_route := {0, 0}}, Management),
+    ?assertEqual(1159, StateBits),
+    ?assert(lists:member({"channel_transport_session", 64}, Inputs)),
+    ?assert(lists:member({"channel_management_output_valid", 1}, Outputs)),
+    ?assertNot(lists:keymember("ch_0_bind_request", 1, Inputs)),
+    ?assert(lists:keymember("ch_0_data_valid", 1, Inputs)),
+    ?assert(lists:keymember("ch_0_bound_source_incarnation", 1, Outputs)),
+    lists:foreach(fun(I) ->
+        Prefix = "domain_" ++ integer_to_list(I) ++ "_",
+        ?assert(lists:member({Prefix ++ "domain_reset", 1}, Inputs)),
+        ?assert(lists:member({Prefix ++ "transport_reset", 1}, Inputs)),
+        ?assertNot(lists:keymember(Prefix ++ "reset", 1, Inputs)),
+        ?assertNot(lists:keymember(Prefix ++ "domain_current", 1, Outputs))
+    end, [0, 1, 2]),
+    Raw = iolist_to_binary(maps:get("channel/protocol_domains.sv", Files)),
+    includes(Raw, ".source_live((!reset && !domain_0_domain_reset && "),
+    includes(Raw, ".destination_live((!reset && !domain_1_domain_reset && "),
+    Top = iolist_to_binary(maps:get("channel_management/protocol_domains_stream.sv", Files)),
+    includes(Top, "module protocol_domains_stream(input wire clk,"),
+    includes(Top, ".observed_ch_0_current_source(domain_0_domain_current)"),
+    includes(Top, ".observed_ch_0_source(ch_0_bound_source_incarnation)"),
+    ok.
+
 %% All negative cases reuse the same small source declarations and never write bundles.
 -spec composition() -> ok.
 composition() ->

@@ -41,9 +41,9 @@ The public `domain_N_` pins retain each domain's lifecycle, host ingress and ext
 
 Channel state lives outside the endpoint reset regions. Either endpoint losing readiness or changing incarnation closes the binding; explicit fencing has the same admission priority. `domain_N_reset` also closes that endpoint's channel handshakes on the reset edge. Global `reset` reaches every domain and channel, clearing channel tombstones, so cold reset requires the deployment to exclude the former transport namespace before admission. No delay or timeout establishes that exclusion. All interfaces use one clock; this builder supplies neither clock-domain crossing nor physical reset isolation.
 
-`hls_protocol_domain:emit_partition/1` and `write_partition/2` are the lower-level escape hatch for another checked crossing owner. They require explicit `native_actors` and an external owner that excludes old data and credits; connecting their bare wires does not support independent reset. Ordinary `emit/1`, `write/2` and framed domain builders continue to reject partition selection.
+`hls_protocol_domain:emit_partition/1` and `write_partition/2` are the lower-level escape hatch for another checked crossing owner. They require explicit `native_actors` and an external owner that excludes old data and credits; connecting their bare wires does not support independent reset. The single-domain entry points continue to reject partition selection. The checked multi-domain builder supplies the [framed composition](#framed-crossing-management) below.
 
-The native test uses real source actors under an ordinary OTP `one_for_all` supervisor for A/B, with independent C. Its generated-RTL counterpart drives the public lifecycle and transport pins directly, including delayed old packets and credits. These are separate finite witnesses of source behavior and hardware ownership, not a host supervisor operating a framed multi-domain bridge. This composition does not yet supply that framed integration or establish board operation, physical timing or unrestricted progress.
+The raw native test uses real source actors under an ordinary OTP `one_for_all` supervisor for A/B, with independent C. Its generated-RTL counterpart drives the public lifecycle and transport pins directly, including delayed old packets and credits. Those checks witness source behavior and hardware ownership; exercising host supervision through the framed bridge is a separate integration check. Neither establishes board operation, physical timing or unrestricted progress.
 
 Run the finite native/public-pin witness and the separate compiled-channel checks locally:
 
@@ -54,6 +54,39 @@ python3 tools/test_domain_channel_formal.py /path/to/xls /fresh/mailbox-evidence
 ```
 
 The RTL schedule retains old data across replacement, replays old data and credits against a fresh packet with the same sequence number, stalls acknowledgements while C advances, and checks same-edge endpoint reset. The channel checker runs six finite schedules, two single-edge finite-state propositions and a rejecting stale-generation negative control. The state-budget check measures source/optimized-IR storage; it does not infer mapped area or timing.
+
+### Framed crossing management
+
+`hls_protocol_domains:write_stream(Source, Placement, Directory)` uses the same placement and channel kernel, adding independent management/application streams around each domain and one shared management stream for the declared channels. `emit_stream/2` returns these generated files without writing them. The top is `protocol_domains_stream`. Each `domain_N/domain/interface.etf` supplies its own `hls_domain_fabric` interface; `channel_management/interface.etf` supplies the channel adapter. Application payloads and returned credits still use the crossing's separate ready/valid lanes. They never travel through the channel-management parser or a host management process.
+
+Establish each domain's transport session and the independent channel-management session before attaching brokers. `hls_domain_channel_fabric:start_link(#{management => Broker, session => Session}, Interface, Options)` registers the latter route. It has one receive/transmit exchange and a bounded queue, with a separate owner capability for each declared channel. The stream accepts only inspection, exact-pair binding and exact-generation fencing. A successful bind acknowledges channel ownership, not execution or completion of a source callback. The optional `name => crossing_control` registers an ordinary local OTP name suitable for a supervisor child specification that must survive replacement of this adapter.
+
+An ordinary host OTP supervisor coordinates the dependent restart group. Keep domain owners, transport brokers and the channel backend outside that subtree. Put the supervised domain representatives before their channel worker in startup order; OTP then stops the channel worker first during subtree shutdown. For the A/B example, a supervisor callback can return:
+
+```erlang
+init({OwnerA, OwnerB, ChannelIndex}) ->
+    Domains = [
+        #{id => Id,
+          start => {hls_domain_instance, start_link,
+                    [Owner, Id, #{lifetime => supervised}]},
+          restart => permanent, shutdown => 5000, type => worker}
+        || {Id, Owner} <- [{a, OwnerA}, {b, OwnerB}]
+    ],
+    Channel = #{id => crossing,
+        start => {hls_domain_channel_instance, start_link,
+                  [crossing_control, ChannelIndex, {OwnerA, a}, {OwnerB, b}, #{}]},
+        restart => permanent, shutdown => 5000, type => worker},
+    {ok, {#{strategy => one_for_all, intensity => 3, period => 60},
+          Domains ++ [Channel]}}.
+```
+
+Child startup is asynchronous: a successful `start_link` is not domain or channel readiness. `hls_domain_channel_instance:status/1` reports `phase => ready` only after the device confirms an active binding of the two observed ready incarnations. The worker resolves its adapter name at startup and pins that exact process; it does not automatically follow later registration changes. It observes domain owners and manages the binding, neither forwarding application messages nor replacing actors itself. Actual member failure terminates its supervised representative, and OTP's `one_for_all` policy retires and replaces the dependent group. Unrelated C belongs outside this subtree. A placement's `restart_groups` field checks static membership; it does not construct this supervisor or enforce the deployment's chosen OTP declaration.
+
+A timed-out binding request has an unknown outcome. The worker retains the requested pair and inspects the channel to determine whether that binding exists. If ordered evidence proves the prior inactive binding is unchanged, it may retry that exact management request once after fresh owner observations; a second uncertain attempt stays unavailable. A timeout alone never authorizes another actor incarnation or application replay. Owner death revokes channel authority and leaves a fencing obligation in the surviving channel backend. A successor cannot acquire the channel while that obligation is unresolved. Fencing cancels retained crossing ownership without waiting for a failed peer's credit; it does not retract a destination effect or waive either domain backend's promised-output retirement frontier.
+
+Transport replacement remains separate from actor replacement. A fresh channel-management session clears only its framing state; it preserves channel generation, endpoint bindings and retained data/credit ownership. Domain session replacement likewise preserves actors and their incarnations. After isolating the old transport, explicitly reattach the surviving channel worker to a fresh backend and reconcile the observed binding. A lost connection is not permission to restart healthy actors, silently adopt a changed pair or replay application work. Cold reset, session non-reuse, correct physical-device identity and exclusion of old transport paths retain the [deployment obligations](#framed-hardware-backend) below.
+
+This composition is host-managed and single-clock. The separately generated FPGA supervisor supports its documented closed-child composition; the two builders do not imply arbitrary combinations of local supervision and crossing topology. Physical reset isolation, clock-domain crossing and live-device qualification remain separate work.
 
 ## Stop and supervised lifetime
 

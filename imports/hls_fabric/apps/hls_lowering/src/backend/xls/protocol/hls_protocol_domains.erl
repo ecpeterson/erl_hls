@@ -5,11 +5,11 @@ Source topology owns actor routes and crossing codecs. This builder checks place
 restart-group closure; hls_domain_channel_build supplies the shared channel policy and
 sv_domain_channels connects only named ports. A group declaration is not an FPGA supervisor:
 the host must retire its old endpoints and replace both crossing incarnations before rebinding.
-Cold reset requires deployment exclusion of old transport. No framed deployment is supplied.
+Cold reset requires deployment exclusion of old transport. Optional framing gives each domain independent host lanes and keeps channel control on a separate management lane.
 """.
 
 %% Checked composition and portable source publication.
--export([emit/2, write/3]).
+-export([emit/2, emit_stream/2, write/3, write_stream/3]).
 -export_type([placement/0, domain/0, crossing/0, result/0]).
 
 -doc "At least two nonempty domains cover global actor indices exactly once; restart groups partition their atom IDs. Every crossing must remain inside one declared group.".
@@ -22,7 +22,8 @@ Cold reset requires deployment exclusion of old transport. No framed deployment 
     id := atom(),
     index := non_neg_integer(),
     actors := [non_neg_integer(), ...],
-    interface := hls_protocol_domain:result()
+    interface := hls_protocol_domain:result(),
+    mode => raw | stream
 }.
 -doc "A directed source crossing and its two owning domain indices; the retained link uses outgoing orientation.".
 -type crossing() :: #{
@@ -41,15 +42,26 @@ Cold reset requires deployment exclusion of old transport. No framed deployment 
     codecs := hls_protocol_domain:codecs(),
     channel := hls_domain_channel_build:result(),
     frame_payload_words := hls_frame_layout:words(),
-    eligible := false
+    eligible := false,
+    channel_stream => hls_domain_channels_stream:result()
 }.
 
 -doc "Prepares one source snapshot and splits its topology by global actor indices. Invokes the topology constructor once and renders every role from the retained programs. Validates disjoint coverage and restart-group closure before partition emission. Each real crossing uses one independent shared-policy channel; host ingress, lifecycle and effects remain separate per domain. Public channel transport ports require ordered, bounded deployment ownership. Rebinding requires both endpoint incarnations to be fresh; declarations do not automatically restart a group.".
 -spec emit(hls_source_config:network() | file:filename(), placement()) ->
     hls_generated_files:output(result()).
-emit(Filename, Placement) when is_list(Filename); is_binary(Filename) ->
-    emit(hls_source_config:read(Filename), Placement);
-emit(Config0, Placement) when is_map(Config0) ->
+emit(Config, Placement) -> compose(Config, Placement, raw).
+
+-doc "Emits the same checked domain placement behind independent framed host endpoints and one channel-management stream. Requires at least one crossing. Channel data/credit ports retain their ordered external transport contract. Session changes preserve domain and channel ownership; this supplies no CDC or automatic group supervisor.".
+-spec emit_stream(hls_source_config:network() | file:filename(), placement()) ->
+    hls_generated_files:output(result()).
+emit_stream(Config, Placement) -> compose(Config, Placement, stream).
+
+%% Both public forms retain one prepared application and differ only at their external interfaces.
+-spec compose(hls_source_config:network() | file:filename(), placement(), raw | stream) ->
+    hls_generated_files:output(result()).
+compose(Filename, Placement, Mode) when is_list(Filename); is_binary(Filename) ->
+    compose(hls_source_config:read(Filename), Placement, Mode);
+compose(Config0, Placement, Mode) when is_map(Config0) ->
     require(not maps:is_key(native_actors, Config0), complete_source_required),
     Words = max(20, maps:get(frame_payload_words, Config0, 3)),
     Config = hls_source_config:validate(network, Config0#{frame_payload_words => Words}),
@@ -60,17 +72,27 @@ emit(Config0, Placement) when is_map(Config0) ->
     #{bundle := #{topology := #{actors := Actors}}, fabric := #{links := Links}} =
         hls_protocol_transport:descriptor(Build),
     {Definitions, Groups, Owners} = placement(Placement, length(Actors), Links),
+    require(
+        Mode =:= raw orelse
+            lists:any(
+                fun(#{source_index := S, destination_index := D}) ->
+                    maps:get(S, Owners) =/= maps:get(D, Owners)
+                end,
+                Links
+            ),
+        no_crossings
+    ),
     Generated = [
         begin
             Ids = [maps:get(id, lists:nth(I + 1, Actors)) || I <- Indices],
             Partition = hls_protocol_transport:plan(Program, Options#{native_actors => Ids}),
-            GeneratedDomain = hls_protocol_domain:emit_partition_plan(Partition),
+            GeneratedDomain = domain_emit(Partition, Mode),
             {Id, Index, Indices, GeneratedDomain}
         end
      || {Index, {Id, Indices}} <- lists:enumerate(0, Definitions)
     ],
     Domains = [
-        #{id => Id, index => Index, actors => Indices, interface => Interface}
+        #{id => Id, index => Index, actors => Indices, interface => Interface, mode => Mode}
      || {Id, Index, Indices, #{result := Interface}} <- Generated
     ],
     [#{interface := #{codecs := Codecs}} | _] = Domains,
@@ -92,11 +114,65 @@ emit(Config0, Placement) when is_map(Config0) ->
         eligible => false
     },
     Files = hls_generated_files:merge([
-        domain_files(Generated),
+        domain_files(Generated, Mode),
         ChannelFiles,
-        #{"channel/protocol_domains.sv" => sv_domain_channels:emit(Domains, Crossings, Channel)}
+        #{
+            "channel/protocol_domains.sv" => sv_domain_channels:emit(
+                Domains,
+                Crossings,
+                Channel,
+                case Mode of
+                    raw -> "protocol_domains";
+                    stream -> "protocol_domains_stream_raw"
+                end
+            )
+        }
     ]),
-    #{files => Files, result => Result}.
+    case Mode of
+        raw ->
+            #{files => Files, result => Result};
+        stream ->
+            Management =
+                #{files := ManagementFiles, inputs := FramedInputs, outputs := FramedOutputs} =
+                hls_domain_channels_stream:emit(Result),
+            #{
+                files => hls_generated_files:merge([Files, ManagementFiles]),
+                result => Result#{
+                    inputs := FramedInputs,
+                    outputs := FramedOutputs,
+                    channel_stream => maps:remove(files, Management)
+                }
+            }
+    end.
+
+%% Framing wraps the same partition core; host schemas contain only that core's native actors.
+-spec domain_emit(hls_protocol_transport:build(), raw | stream) ->
+    hls_generated_files:output(hls_protocol_domain:result()).
+domain_emit(Build, raw) ->
+    hls_protocol_domain:emit_partition_plan(Build);
+domain_emit(Build, stream) ->
+    #{
+        files := Files,
+        result := Domain = #{stream := Plan, codecs := Codecs, frame_payload_words := Words}
+    } =
+        hls_protocol_domain:emit_partition_stream_plan(Build),
+    Stream =
+        #{files := StreamFiles, inputs := Inputs, outputs := Outputs} = hls_domain_stream:emit_partition(
+            Domain
+        ),
+    Transport = maps:remove(files, Stream),
+    Runtime = maps:merge(Plan, #{
+        codecs => Codecs, frame_payload_words => Words, transport => Transport
+    }),
+    #{
+        files => hls_generated_files:merge([Files, StreamFiles]),
+        result => Domain#{
+            inputs := Inputs,
+            outputs := Outputs,
+            transport => Transport,
+            runtime_interface => Runtime
+        }
+    }.
 
 %% Source membership and explicit restart policy are checked independently of HDL names.
 -spec placement(placement(), non_neg_integer(), [hls_protocol_fabric:link()]) ->
@@ -177,20 +253,28 @@ crossings(Domains, Owners) ->
     ].
 
 %% Checked numeric domain indices name HDL modules; source atom names remain in metadata.
--spec domain_files([
-    {
-        atom(),
-        non_neg_integer(),
-        [non_neg_integer()],
-        hls_generated_files:output(hls_protocol_domain:result())
-    }
-]) -> hls_generated_files:files().
-domain_files(Generated) ->
+-spec domain_files(
+    [
+        {
+            atom(),
+            non_neg_integer(),
+            [non_neg_integer()],
+            hls_generated_files:output(hls_protocol_domain:result())
+        }
+    ],
+    raw | stream
+) -> hls_generated_files:files().
+domain_files(Generated, Mode) ->
     hls_generated_files:merge([
         begin
             Prefix = domain_name(Index),
+            Wrapper =
+                case Mode of
+                    raw -> "domain/protocol_domain.sv";
+                    stream -> "domain/domain_stream.sv"
+                end,
             Renamed = Files#{
-                "domain/protocol_domain.sv" =>
+                Wrapper =>
                     sv_protocol_ports:emit(Inputs, Outputs, Prefix, Prefix ++ "_core")
             },
             hls_generated_files:prefix(Prefix, Renamed)
@@ -201,10 +285,21 @@ domain_files(Generated) ->
 
 -doc "Writes a fresh portable composite bundle with one XLS unit per domain and one shared channel unit. Support imports are snapshotted independently for each source namespace; top-level RTL is mechanical wiring. Does not run tools, establish transport exclusion or start any domain.".
 -spec write(hls_source_config:network() | file:filename(), placement(), file:filename()) -> map().
-write(Config, Placement, Directory) ->
+write(Config, Placement, Directory) -> write_bundle(Config, Placement, Directory, raw).
+
+-doc "Writes the framed composition and matching per-domain runtime interfaces plus channel_management/interface.etf. Builds one independent XLS unit per domain, one shared channel implementation and one management parser. Does not attach brokers or start recovery.".
+-spec write_stream(hls_source_config:network() | file:filename(), placement(), file:filename()) ->
+    map().
+write_stream(Config, Placement, Directory) -> write_bundle(Config, Placement, Directory, stream).
+
+%% The source snapshot and physical unit inventory follow the selected external interface.
+-spec write_bundle(
+    hls_source_config:network() | file:filename(), placement(), file:filename(), raw | stream
+) -> map().
+write_bundle(Config, Placement, Directory, Mode) ->
     Generated =
-        #{result := Result = #{domains := Domains, frame_payload_words := Words}} = emit(
-            Config, Placement
+        #{result := Result = #{domains := Domains, frame_payload_words := Words}} = compose(
+            Config, Placement, Mode
         ),
     _ = hls_generated_files:write(Generated, Directory),
     #{libraries := Libraries, imports := Support} = hls_build_support:layout([]),
@@ -217,18 +312,28 @@ write(Config, Placement, Directory) ->
             ok = hls_artifact_bundle:snapshot(Root, Libraries),
             ok = hls_compile:configure_support(Root, hls_frame_layout:new(Words)),
             ok = file:write_file(
-                filename:join([Root, "domain", "interface.etf"]), term_to_binary(Interface), [
+                filename:join([Root, "domain", "interface.etf"]),
+                term_to_binary(maps:get(runtime_interface, Interface, Interface)),
+                [
                     exclusive
                 ]
             ),
+            {Source, Top, Output, Wrapper} =
+                case Mode of
+                    raw ->
+                        {"domain.x", "domain_clock", "core.v", "protocol_domain.sv"};
+                    stream ->
+                        {"domain_stream.x", "domain_stream_clock", "stream_core.v",
+                            "domain_stream.sv"}
+                end,
             unit(
                 Prefix ++ "/domain",
-                Prefix ++ "/domain/domain.x",
-                "domain_clock",
+                Prefix ++ "/domain/" ++ Source,
+                Top,
                 Prefix ++ "_core",
-                Prefix ++ "/domain/core.v",
+                Prefix ++ "/domain/" ++ Output,
                 [Prefix ++ "/" ++ P || P <- ["domain", "network", "actors", "dslx"] ++ Support],
-                [Prefix ++ "/domain/core.v", Prefix ++ "/domain/protocol_domain.sv"],
+                [Prefix ++ "/domain/" ++ Output, Prefix ++ "/domain/" ++ Wrapper],
                 Words
             )
         end
@@ -247,9 +352,23 @@ write(Config, Placement, Directory) ->
     ok = file:write_file(filename:join(Directory, "interface.etf"), term_to_binary(Result), [
         exclusive
     ]),
+    ManagementUnits =
+        case Mode of
+            raw ->
+                [];
+            stream ->
+                #{channel_stream := #{interface := ManagementInterface, unit := ManagementUnit}} =
+                    Result,
+                ok = file:write_file(
+                    filename:join([Directory, "channel_management", "interface.etf"]),
+                    term_to_binary(ManagementInterface),
+                    [exclusive]
+                ),
+                [ManagementUnit]
+        end,
     hls_artifact_bundle:finish(
         Directory,
-        Units ++ [ChannelUnit],
+        Units ++ [ChannelUnit] ++ ManagementUnits,
         #{kind => domain_composition, backend => source_protocol}
     ).
 

@@ -11,7 +11,7 @@ incarnation-fenced crossing owner; bare crossing wires do not support independen
 %% Checked source composition and portable external-tool input.
 -export([emit/1, emit/2, emit_partition/1, write/2, write_stream/2, write_partition/2]).
 %% Internal compiler composition from one retained source snapshot.
--export([emit_partition_plan/1]).
+-export([emit_partition_plan/1, emit_partition_stream_plan/1]).
 -export_type([result/0, codecs/0]).
 
 -doc "Retained lifecycle field descriptors resolved from the compiled kernel; host codecs need no compiler or source lookup.".
@@ -60,6 +60,14 @@ emit_partition_plan(Build) ->
     ok = placement(partition, maps:is_key(crossings, Fabric)),
     compose_build(Build, partition).
 
+-doc "Internal compiler-facing framed partition using the same retained source and external crossing-owner obligations as emit_partition_plan/1. Keeps host-managed lifecycle authority and binds only this partition's actor schemas. The enclosing composer must wire its raw crossings and lifecycle observations privately.".
+-spec emit_partition_stream_plan(hls_protocol_transport:build()) ->
+    hls_generated_files:output(result()).
+emit_partition_stream_plan(Build) ->
+    #{fabric := Fabric} = hls_protocol_transport:descriptor(Build),
+    ok = placement(partition, maps:is_key(crossings, Fabric)),
+    compose_build(Build, partition_stream).
+
 %% Partition admission is an explicit API boundary; ordinary framed domains remain closed.
 -spec compose(hls_source_config:network() | file:filename(), raw | stream | partition) ->
     hls_generated_files:output(result()).
@@ -75,7 +83,7 @@ compose(Filename, Mode) ->
     compose(hls_source_config:read(Filename), Mode).
 
 %% All roles render their retained actor programs; lifecycle support is identical across source placements.
--spec compose_build(hls_protocol_transport:build(), raw | stream | partition) ->
+-spec compose_build(hls_protocol_transport:build(), raw | stream | partition | partition_stream) ->
     hls_generated_files:output(result()).
 compose_build(Build, Mode) ->
     Descriptor =
@@ -85,8 +93,10 @@ compose_build(Build, Mode) ->
     true = Words >= 10,
     Framing =
         case Mode of
-            stream -> #{stream => hls_domain_stream:bind(Descriptor)};
-            _ -> #{}
+            M when M =:= stream; M =:= partition_stream ->
+                #{stream => hls_domain_stream:bind(Descriptor)};
+            _ ->
+                #{}
         end,
     NetworkPlan = hls_protocol_network:plan(Build, #{activation => automatic, inspection => none}),
     #{files := NetworkFiles, result := #{network := Network}} = hls_protocol_network:emit(

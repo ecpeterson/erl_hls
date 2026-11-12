@@ -1,0 +1,118 @@
+import domain_frames as framing;
+
+// Only the finite source-defined disposition uses its compact internal width.
+type Status = bits[@@STATUS_BITS@@];
+const OK = @@OK@@;
+const INVALID = @@INVALID@@;
+const STALE = @@STALE@@;
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Current endpoint observations are distinct from the channel's retained binding.
+pub struct Observation {
+  known: bool, current_source: u64, current_destination: u64,
+  generation: u64, source: u64, destination: u64, packet_sequence: u32,
+  status: Status, active: bool, fault: bool,
+}
+// The largest response has fourteen payload words; neither buffer contains application data.
+type Packet = framing::Packet<u32:448>;
+type Receive = framing::Receive<u32:448>;
+// An independent transport session never resets a domain or its mailbox channel.
+pub struct State {
+  rx: Receive, tx: Packet, tx_valid: bool, position: u32,
+  session: u64, attached: bool, fault: bool,
+}
+// All observations and commands belong to this edge; only state is committed afterward.
+pub struct Tick { state: State, output: Outputs }
+
+// Selection reads narrow lifecycle/channel metadata, never an application payload.
+fn observation(io: Inputs, channel: u32) -> Observation {
+  @@OBSERVATION@@
+}
+// Counter words are transported little-endian without narrowing identities.
+fn word(packet: Packet, index: u32) -> u32 { (packet.payload >> (index * u32:32)) as u32 }
+// Every incarnation and generation retains both complete words.
+fn pair(packet: Packet, index: u32) -> u64 { word(packet, index + u32:1) ++ word(packet, index) }
+// Capture the actual result on the issue edge, before subsequent channel ticks can change it.
+fn response(packet: Packet, status: Status, observed: Observation) -> Packet {
+  let payload = pair(packet, u32:0) as bits[448] |
+    (word(packet, u32:2) as bits[448] << u32:64) |
+    (word(packet, u32:3) as bits[448] << u32:96) |
+    (status as bits[448] << u32:128) |
+    (observed.generation as bits[448] << u32:160) |
+    (observed.source as bits[448] << u32:224) |
+    (observed.destination as bits[448] << u32:288) |
+    (observed.packet_sequence as bits[448] << u32:352) |
+    (observed.active as bits[448] << u32:384) |
+    (observed.fault as bits[448] << u32:416);
+  Packet { route: packet.route, header: framing::header(packet.header, u8:1, u8:14), payload }
+}
+// One bounded command may issue when its immutable response has storage. Loss of this lane is uncertainty, not a fence.
+pub fn tick(previous: State, io: Inputs) -> Tick {
+  let establish = io.channel_transport_reset && !io.reset &&
+    io.channel_transport_session != u64:0 && io.channel_transport_session > previous.session;
+  let s = if establish { State { session: io.channel_transport_session, attached: true, ..zero!<State>() } }
+    else { previous };
+  let connected = s.attached && !s.fault && !io.reset && !establish;
+  let done = connected && s.tx_valid && io.channel_management_output_ready && framing::last(s.tx, s.position);
+  let space = !s.tx_valid || done;
+  let ready = connected && !s.rx.full;
+  let received = if ready && io.channel_management_valid {
+    framing::receive(s.rx, io.channel_management_word, io.channel_management_last)
+  } else { s.rx };
+  let packet = s.rx.packet;
+  let session_matches = pair(packet, u32:0) == s.session;
+  let tag = packet.header[24+:u8];
+  let words = packet.header[0+:u8];
+  let inspect = tag == u8:0 && words == u8:4;
+  let bind_request = tag == u8:1 && words == u8:10;
+  let fence = tag == u8:2 && words == u8:6;
+  let canonical = packet.route == u32:0 && (packet.header & u32:0x00ffff00) == u32:0 &&
+    word(packet, u32:2) != u32:0 && (inspect || bind_request || fence) && !s.rx.bad;
+  let issue = connected && s.rx.full && session_matches && canonical && space;
+  let channel = word(packet, u32:3);
+  let observed = observation(io, channel);
+  let exact_pair = pair(packet, u32:6) == observed.current_source &&
+    pair(packet, u32:8) == observed.current_destination;
+  let bind_enabled = issue && observed.known && bind_request && exact_pair;
+  let fence_enabled = issue && observed.known && fence;
+  let status = if !observed.known { INVALID } else if bind_request && !exact_pair { STALE }
+    else if inspect { OK } else { observed.status };
+  let fault = s.fault || (connected && s.rx.full && session_matches && !canonical);
+  Tick {
+    state: if io.reset { zero!<State>() } else { State {
+      rx: if issue || (connected && s.rx.full && !session_matches) { zero!<Receive>() } else { received },
+      tx: if issue { response(packet, status, observed) } else { s.tx },
+      tx_valid: issue || (s.tx_valid && !done),
+      position: if issue || done { u32:0 } else { s.position + (connected && s.tx_valid && io.channel_management_output_ready) as u32 },
+      session: s.session, attached: s.attached && !fault, fault,
+    } },
+    output: Outputs {
+      channel_management_ready: ready,
+      channel_management_output_word: framing::word(s.tx, s.position),
+      channel_management_output_valid: connected && s.tx_valid,
+      channel_management_output_last: framing::last(s.tx, s.position),
+      channel_transport_session_observed: previous.session,
+      channel_transport_attached: previous.attached && !io.reset,
+      channel_wire_fault: previous.fault,
+      @@COMMANDS@@
+    },
+  }
+}
+// This parser is an independent always-sampled management unit.
+pub proc channel_management_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // The outer pin adapter carries stream backpressure in the sampled structs.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // Cold management has no transport session or retained request.
+  init { zero!<State>() }
+  // Channel state is external and cannot be reset by this proc's transport boundary.
+  next(s: State) {
+    let (tok, io) = recv(join(), commands);
+    let result = tick(s, io);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

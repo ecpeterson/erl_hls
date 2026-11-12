@@ -2,7 +2,7 @@
 -moduledoc "Stateless wiring for separate source domains and incarnation-bound mailbox channels. hls_protocol_domains owns placement and restart-group checks; source-generated domain and channel cores own every state transition. Host lifecycle/effect pins and bounded channel transport pins remain public.".
 
 %% Checked composite pin layout and mechanical RTL.
--export([ports/3, emit/3]).
+-export([ports/3, emit/3, emit/4]).
 
 %% Field order is the sampled pin order retained by each independent generated unit.
 -type ports() :: [{string(), pos_integer()}].
@@ -16,8 +16,8 @@ ports(Domains, Crossings, #{inputs := ChannelInputs, outputs := ChannelOutputs})
     Inputs =
         [{"reset", 1}] ++
             lists:append([
-                [{domain(Index) ++ N, W} || {N, W} <- Ps, not remote_input(N)]
-             || #{index := Index, interface := #{inputs := Ps}} <- Domains
+                [{domain(Index) ++ N, W} || {N, W} <- Ps, public_input(N, D)]
+             || D = #{index := Index, interface := #{inputs := Ps}} <- Domains
             ]) ++
             lists:append([
                 [{channel(Index) ++ N, W} || {N, W} <- ChannelInputs, not private_input(N)]
@@ -39,17 +39,31 @@ ports(Domains, Crossings, #{inputs := ChannelInputs, outputs := ChannelOutputs})
 -doc "Renders only module instances, constant comparisons and port connections. Child readiness and current incarnation feed each private channel endpoint; canonical payload/class bits connect unchanged. No application queue, restart decision or frame translation is implemented in Verilog.".
 -spec emit([hls_protocol_domains:domain()], [hls_protocol_domains:crossing()], channel()) ->
     iodata().
-emit(Domains, Crossings, Channel) ->
+emit(Domains, Crossings, Channel) -> emit(Domains, Crossings, Channel, "protocol_domains").
+
+-doc "Renders the same mechanical composition under a compiler-controlled top name. Framed domain instances receive global cold reset separately from their core-only domain_reset pin.".
+-spec emit([hls_protocol_domains:domain()], [hls_protocol_domains:crossing()], channel(), string()) ->
+    iodata().
+emit(Domains, Crossings, Channel, Top) ->
+    match = re:run(Top, "^[a-zA-Z_][a-zA-Z0-9_]*$", [{capture, none}]),
     {Inputs, Outputs} = ports(Domains, Crossings, Channel),
     [
         "// Mechanical source-domain/channel composition; ownership policy is compiled Erlang.\n",
-        "module protocol_domains(input wire clk,\n",
+        "module ",
+        Top,
+        "(input wire clk,\n",
         lists:join(",\n", [port("input", P) || P <- Inputs] ++ [port("output", P) || P <- Outputs]),
         "\n);\n",
         [domain_instance(D) || D <- Domains],
         [channel_instance(C, Domains, Channel) || C <- Crossings],
         "endmodule\n"
     ].
+
+%% A framed core's cold reset belongs to the enclosing deployment, not its per-domain reset pin.
+-spec public_input(string(), hls_protocol_domains:domain()) -> boolean().
+public_input(Name, Domain) ->
+    not remote_input(Name) andalso
+        not (Name =:= "reset" andalso maps:get(mode, Domain, raw) =:= stream).
 
 %% Crossing ports are compiler-controlled names, never application-provided module fragments.
 -spec remote_input(string()) -> boolean().
@@ -83,7 +97,7 @@ private_output(Name) ->
 
 %% Every domain retains its own reset; only explicit global cold reset also reaches the channel.
 -spec domain_instance(hls_protocol_domains:domain()) -> iodata().
-domain_instance(#{index := Index, interface := #{inputs := Inputs, outputs := Outputs}}) ->
+domain_instance(Domain = #{index := Index, interface := #{inputs := Inputs, outputs := Outputs}}) ->
     Prefix = domain(Index),
     [
         [wire({Prefix ++ N, W}) || {N, W} <- Inputs, remote_input(N)],
@@ -99,8 +113,13 @@ domain_instance(#{index := Index, interface := #{inputs := Inputs, outputs := Ou
                 connect(
                     N,
                     case N of
-                        "reset" -> ["(reset || ", Prefix, "reset)"];
-                        _ -> Prefix ++ N
+                        "reset" ->
+                            case maps:get(mode, Domain, raw) of
+                                stream -> "reset";
+                                raw -> ["(reset || ", Prefix, "reset)"]
+                            end;
+                        _ ->
+                            Prefix ++ N
                     end
                 )
              || {N, _} <- Inputs
@@ -117,17 +136,26 @@ channel_instance(
     Domains,
     #{inputs := Inputs, outputs := Outputs}
 ) ->
-    [#{interface := #{codecs := Codecs}}] = [D || D = #{index := I} <- Domains, I =:= Source],
+    [SourceDomain = #{interface := #{codecs := Codecs}}] = [
+        D
+     || D = #{index := I} <- Domains, I =:= Source
+    ],
+    [DestinationDomain] = [D || D = #{index := I} <- Domains, I =:= Destination],
     #{phase := Phase} = Codecs,
     Width = hls_type:width(Phase),
     <<Ready:Width>> = hls_type:pack(ready, Phase),
+    SourceLive = live(SourceDomain, Width, Ready),
+    DestinationLive = live(DestinationDomain, Width, Ready),
     [
         "domain_channel crossing_",
         integer_to_list(Link),
         "(.clk(clk),\n",
         lists:join(
             ",\n",
-            [connect(N, input(N, Link, Source, Destination, Width, Ready)) || {N, _} <- Inputs] ++
+            [
+                connect(N, input(N, Link, Source, Destination, SourceLive, DestinationLive))
+             || {N, _} <- Inputs
+            ] ++
                 [connect(N, output(N, Link, Source, Destination)) || {N, _} <- Outputs]
         ),
         "\n);\n"
@@ -139,8 +167,8 @@ channel_instance(
     non_neg_integer(),
     non_neg_integer(),
     non_neg_integer(),
-    pos_integer(),
-    non_neg_integer()
+    iodata(),
+    iodata()
 ) -> iodata().
 input("reset", _, _, _, _, _) ->
     "reset";
@@ -148,10 +176,10 @@ input("source_incarnation", _, Source, _, _, _) ->
     domain(Source) ++ "domain_current";
 input("destination_incarnation", _, _, Destination, _, _) ->
     domain(Destination) ++ "domain_current";
-input("source_live", _, Source, _, Width, Ready) ->
-    live(Source, Width, Ready);
-input("destination_live", _, _, Destination, Width, Ready) ->
-    live(Destination, Width, Ready);
+input("source_live", _, _, _, SourceLive, _) ->
+    SourceLive;
+input("destination_live", _, _, _, _, DestinationLive) ->
+    DestinationLive;
 input("source_valid", Link, Source, _, _, _) ->
     domain(Source) ++ remote(Link, "valid", output);
 input("source_slot", Link, Source, _, _, _) ->
@@ -177,13 +205,19 @@ output(Name, Link, _, _) ->
     channel(Link) ++ Name.
 
 %% A public lifecycle observation, not host ingress selection, establishes local endpoint liveness.
--spec live(non_neg_integer(), pos_integer(), non_neg_integer()) -> iodata().
-live(Index, Width, Ready) ->
+-spec live(hls_protocol_domains:domain(), pos_integer(), non_neg_integer()) -> iodata().
+live(Domain = #{index := Index}, Width, Ready) ->
     Prefix = domain(Index),
+    Reset =
+        case maps:get(mode, Domain, raw) of
+            stream -> "domain_reset";
+            raw -> "reset"
+        end,
     [
         "(!reset && !",
         Prefix,
-        "reset && ",
+        Reset,
+        " && ",
         Prefix,
         "domain_phase == ",
         integer_to_list(Width),

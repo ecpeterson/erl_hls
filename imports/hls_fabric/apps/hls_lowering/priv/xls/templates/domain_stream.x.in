@@ -32,6 +32,7 @@ pub struct Inputs {
   management_word: u32, management_valid: bool, management_last: bool, management_output_ready: bool,
   application_word: u32, application_valid: bool, application_last: bool, application_output_ready: bool,
   @@EXTERNAL_INPUTS@@
+  @@CROSSING_INPUTS@@
 }
 // All transfer indications describe the current edge, before committing State.
 pub struct Outputs {
@@ -39,6 +40,7 @@ pub struct Outputs {
   application_ready: bool, application_output_word: u32, application_output_valid: bool, application_output_last: bool,
   wire_fault: bool, transport_session: u64, transport_attached: bool,
   @@EXTERNAL_OUTPUTS@@
+  @@CROSSING_OUTPUTS@@
 }
 // One immutable record belongs to the watched incarnation until the host acknowledges delivery.
 // Local recovery may skip any number of unobserved incarnations without growing this record.
@@ -188,6 +190,7 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     // Loss of the host connection does not imply failure of the actor network.
     reset: core_reset, transport_fault: false,
     @@MANAGEMENT_CONTROL@@
+    @@CROSSING_CONTROL@@
     incarnation, ingress_data: spatial, ..zero!<domain::Inputs>()
   };
   // Availability is a pre-edge observation, independent of application handshakes.
@@ -274,6 +277,7 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   };
   Tick { state:if io.reset {zero!<State>()} else {next}, output:Outputs {
     @@EXTERNAL_OBSERVATIONS@@
+    @@CROSSING_OBSERVATIONS@@
     management_ready, application_ready,
     management_output_valid:s.management_tx_valid && connected,
     management_output_word:framing::word(s.management_tx,s.management_position),

@@ -42,7 +42,10 @@ pub fn tick(s: State, io: Inputs) -> Tick {
       destination_valid:live && observed.destination_valid, destination_slot:io.data_slot, destination_frame:io.data_frame,
       ack_valid:live && observed.ack_valid, ack_generation:observed.generation, ack_sequence:observed.sequence,
       credit_ready:live && observed.credit_ready, credit_drop:live && observed.credit_drop,
-      generation:observed.generation, packet_sequence:observed.sequence, status:observed.status,
+      generation:observed.generation,
+      bound_source_incarnation:observed.state.source_incarnation,
+      bound_destination_incarnation:observed.state.destination_incarnation,
+      packet_sequence:observed.sequence, status:observed.status,
       active:live && observed.state.active, fault:!io.reset && result.state.failure != u32:0,
     },
   }

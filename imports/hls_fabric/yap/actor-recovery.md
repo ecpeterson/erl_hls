@@ -82,6 +82,13 @@ The deployment must isolate old paths, attest the new public session ACK and bin
 
 Final local formatting, Dialyzer, source-contract, application-boundary and runtime-package checks pass. The contract audit retains 289 inherited gaps with zero new gaps; package checks cover 294 library modules and 83 runtime modules. A missing dispatcher comment and an audit attempted before its required default build were corrected; both unsuccessful check attempts remain retained. The fabric pins the reviewed commit from [compiler/runtime PR #43](https://github.com/ecpeterson/erl_hls/pull/43).
 
+## Digital campaign finish line
+
+- [x] Close production framed cross-domain recovery: ordinary OTP supervision replaces a dependent A/B group, the management-only channel worker binds the exact fresh pair, and independent C continues. Qualify lost acknowledgements, stale traffic and endpoint retirement through the real bridge.
+- [x] Audit the supported digital recovery contract against the retained native/RTL witnesses, reconcile the compiler and fabric roadmaps, and document remaining deployment assumptions.
+
+Those two items complete this digital/co-simulation campaign. The framed closeout below is the current downstream disposition of the crossing-domain item in the compiler’s older `yap/actor-recovery.md`; the qualified compiler checkout and unchanged dependency pin are preserved. Physical session exclusion and live-device qualification remain a separate deployment milestone. Dynamic Erlang links and logical resource exhaustion remain a subsequent design task; they are not silently included in this finish line. Application-specific recovery meaning and quantum-code deformation remain outside the compiler/runtime contract.
+
 ## Supervised shutdown and mixed placement
 
 - [x] Qualify explicit stop and OTP subtree shutdown through the existing framed backend with three independent generated domains and a real ERTS peer. Require actual prior-output delivery and endpoint retirement before reporting stopped; retain connection uncertainty when evidence is absent.
@@ -89,7 +96,7 @@ Final local formatting, Dialyzer, source-contract, application-boundary and runt
 - [x] Connect autonomous supervisors to the production framed bridge with bounded retirement acknowledgement before publishing independently replaced child PIDs; preserve prior replies and distinguish connection uncertainty across unseen child incarnations.
 - [x] Exercise bounded temporary children through the production bridge: explicit compiled templates, finite occupancy, no automatic restart, confirmed retirement before reuse and fresh incarnation identities.
 - [x] Add cross-domain mailbox and credit retirement with explicit dependent restart groups; stale traffic must not enter replacements and an unrelated domain must continue.
-- [ ] Integrate crossing-domain binding and dependent restart coordination with the production framed bridge; retain the same shared channel kernel and identity exclusions.
+- [x] Integrate crossing-domain binding and dependent restart coordination with the production framed bridge; retain the same shared channel kernel and identity exclusions.
 - [ ] Revisit dynamic Erlang links and logical resource exhaustion: an attempted link must not be silently rejected on exhaustion. Distinguish logical mailbox/relationship limits from ordinary transport stalls; decide terminal admission behavior and preserve explicit failure relationships.
 - [ ] Implement and physically qualify deployment session exclusion and lifecycle reconciliation; do not equate host process termination with device retirement.
 
@@ -148,3 +155,21 @@ Nine kernel EUnit cases and four partition/composition cases pass, including pla
 Formatting, Dialyzer, source contracts and package/application boundaries pass: 289 inherited contract gaps, zero new gaps; 304 library modules have no example dependencies and 87 runtime modules have no compiler/lowering dependency violations. The compiler checkout is tree-identical to the unchanged pinned dependency. Failed attempts (an invalid duplicate-port fixture, missing tool paths and reserved HDL identifiers) remain retained. No Actions, EC2 or board work ran. Framed cross-domain deployment, CDC and physical namespace exclusion remain separate tasks.
 
 Erlang link/1, monitor propagation and the agreed link-exhaustion discussion remain deferred. This boundary uses mailbox channels, not failure links. A resource-exhausted link attempt must not silently leave its caller believing a relationship exists; the exact fatal behavior remains design work. Ordinary ready/valid congestion remains backpressure.
+
+
+## Framed crossing closeout
+
+- [x] Connect the checked crossing composition to production framed brokers, domain owners, the virtual distribution node and ordinary OTP dependent-group supervision.
+- [x] Retain component and aggregate state/access bounds, final generated-input identity and local source-quality evidence.
+
+Evidence is retained under `runs/recovery-cross-domain-bridge-2026-11-12/`. `hls_protocol_domains:write_stream/3` emits one independent endpoint per domain and a management-only channel stream. `hls_domain_channel_instance` follows two supervised domain representatives under ordinary OTP `one_for_all`; it binds exact ready incarnations without routing application messages or restarting actors itself. Its adapter retains bounded ownership and retirement obligations, while management transport loss remains uncertainty. Successful OTP startup is distinct from a ready channel.
+
+The public-pin framed RTL witness completed 142,592 clocks. It matches the retained native source history of 17 reports, reconciles one actually dropped accepted bind response without another generation, and replaces A/B after B fails with crossing traffic held. B’s promised output precedes its old endpoint’s death. Both endpoint incarnations and the channel generation change; stale data and credit are rejected even with otherwise eligible matching sequence numbers. Old virtual PIDs, session and incarnation envelopes cannot target replacements. Independent C retains its PID, incarnation and state and progresses during retirement. Ordinary application traffic and monitors use a real ERTS peer; the deliberately blocked B lane requires a supplemental local production-endpoint caller to trigger its source failure. All descriptor leases close.
+
+Seventeen focused runtime tests separately exercise authority, fair owner-death fencing, lost mutation responses, ordered inspection, explicit adapter reattachment and its races. Two composition checks and seven finite generated-parser witnesses pass. The prior source-actor/native and shared channel-kernel evidence is reused unchanged. The full RTL schedule does not claim to exercise adapter replacement or every runtime unit-test interleaving.
+
+Optimized state totals 15,664 bits against 32,000: domains 4,545/4,744/4,458; channel 909; manager 1,008. The source channel retains one 672-bit frame and one credit in 941 bits against 1,064; the manager uses 1,159 bits against 2,048 and two 14-word payload buffers against 16 each. Each domain’s declared transport ceiling is 5,219 bits, matching its preregistered four-buffer/one-slot formula. The manager selects one metadata row per command edge and never receives application payload. These are source/IR counts, not mapped area or timing measurements.
+
+Final emission matches all 307 DSLX/SV inputs and all five compilation units used by the successful checks. Formatting, Dialyzer, source contracts and application/runtime release boundaries pass; the contract audit retains 289 inherited gaps and zero new gaps. Failed emission/fixture attempts, the first RTL test’s missing hold-arming barrier and corrected release/audit invocations remain retained. The corrected transport waits for the hold control to be armed before producing the packet and requires actual held/drop observations. No Actions, EC2, Vivado or live-board work ran.
+
+This closes the digital/co-simulation campaign: host and compiled supervision, bounded temporary children, accepted-output retirement, transport reattachment and crossing ownership all have retained finite witnesses. Deployment must still supply ordered bounded crossing transport, physical reset/session exclusion and any CDC. It must not infer device retirement from host death. Dynamic Erlang links and logical resource exhaustion remain the separate design task above; application resource validity, quantum-code deformation and replay policy remain outside the generic runtime.

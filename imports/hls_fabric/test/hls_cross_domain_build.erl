@@ -2,18 +2,14 @@
 -moduledoc "Builds the finite A-to-B retirement fixture and exports public-pin stimulus metadata. Native observations supply expected source reports; compiler-owned codecs and rectangle bindings supply every numeric frame.".
 
 %% External fixture generation; running XLS or RTL remains the driver boundary.
--export([write/2]).
+-export([write/2, write_stream/1]).
 
 -doc "Writes a fresh three-domain bundle and fixture.json using NativeStage/native-history.etf. Requires compiled fixture modules and a successful native witness. Returns the JSON-ready metadata; does not invoke external tools.".
 -spec write(file:filename(), file:filename()) -> map().
 write(Bundle, NativeStage) ->
     {ok, NativeBytes} = file:read_file(filename:join(NativeStage, "native-history.etf")),
     #{passed := true, history := History} = binary_to_term(NativeBytes, [safe]),
-    Config = #{sources => [{"test/hls_cross_domain_producer.erl", []},
-        {"test/hls_cross_domain_consumer.erl", []}, {"test/hls_domain_counter.erl", []}],
-        topology => {hls_cross_domain_producer, topology, []}, actor_limit => 3,
-        control => rectangle, activation => automatic, frame_payload_words => 20},
-    Placement = #{domains => [{a, [0]}, {b, [1]}, {c, [2]}], restart_groups => [[a, b], [c]]},
+    {Config, Placement} = configuration(),
     _ = hls_protocol_domains:write(Config, Placement, Bundle),
     {ok, InterfaceBytes} = file:read_file(filename:join(Bundle, "interface.etf")),
     Interface = #{domains := Domains, crossings := [Crossing], channel := Channel,
@@ -150,3 +146,33 @@ ports(Ports) -> [#{name => b(Name), width => Width} || {Name, Width} <- Ports].
 %% All generated paths and field names use UTF-8 JSON strings.
 -spec b(string()) -> binary().
 b(Text) -> unicode:characters_to_binary(Text).
+
+-doc "Writes the same source fixture through the production framed composition. Exports only pin widths, the source-derived accepted tag and bounded state metadata for the external test driver.".
+-spec write_stream(file:filename()) -> ok.
+write_stream(Bundle) ->
+    {Config, Placement} = configuration(),
+    _ = hls_protocol_domains:write_stream(Config, Placement, Bundle),
+    {ok, Bytes} = file:read_file(filename:join(Bundle, "interface.etf")),
+    #{channel := #{codecs := #{status := Type}, storage_bits := ChannelBits}, channel_stream := Management,
+      domains := Domains, frame_payload_words := Words} = binary_to_term(Bytes),
+    Width = hls_type:width(Type),
+    <<Accepted:Width>> = hls_type:pack(accepted, Type),
+    Codes = maps:from_list([begin <<V:Width>> = hls_type:pack(K, Type), {K, V} end || K <- [ok, invalid, stale, accepted]]),
+    Metadata = #{accepted => Accepted, status_codes => Codes, frame_bits => hls_frame_layout:frame_bits(hls_frame_layout:new(Words)),
+      management_state_bits => maps:get(state_bit_budget, Management),
+      management_packet_words => maps:get(packet_words, Management),
+      channel_storage_bits => ChannelBits,
+      domains => [#{index => Index, call_slots => Slots,
+          transport => maps:with([packet_words, state_bit_budget], Transport)} ||
+          #{index := Index, interface := #{stream := #{call_slots := Slots}, transport := Transport}} <- Domains]},
+    ok = file:write_file(filename:join(Bundle, "stream-fixture.json"), json:encode(Metadata), [exclusive]).
+
+%% Both finite witnesses retain the identical source topology, placement and codec capacity.
+-spec configuration() -> {hls_source_config:network(), hls_protocol_domains:placement()}.
+configuration() ->
+    Config = #{sources => [{"test/hls_cross_domain_producer.erl", []},
+        {"test/hls_cross_domain_consumer.erl", []}, {"test/hls_domain_counter.erl", []}],
+        topology => {hls_cross_domain_producer, topology, []}, actor_limit => 3,
+        control => rectangle, activation => automatic, frame_payload_words => 20},
+    Placement = #{domains => [{a, [0]}, {b, [1]}, {c, [2]}], restart_groups => [[a, b], [c]]},
+    {Config, Placement}.
