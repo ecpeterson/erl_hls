@@ -101,6 +101,7 @@ def build(xls: Path | None, stage: Path, ebin: Path,
     inputs = {str(path.resolve()): digest(path) for path in [
         *rtl, interface, bundle / 'source-build.json', bundle / 'compiled.run.json',
         ROOT / 'test/rtl/domain_stream_sim.cpp', ROOT / 'test/rtl/framed_fifo_stream.h',
+        ROOT / 'test/rtl/framed_fifo_control.h',
         ROOT / 'test/domain_stream_semantics.x.in', checks,
     ]}
     run(['verilator', '--cc', '--exe', '--build', '--top-module', 'domain_stream',

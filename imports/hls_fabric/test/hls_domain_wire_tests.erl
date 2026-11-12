@@ -99,3 +99,24 @@ interface() ->
             {status,[ok,accepted,replay,stale,busy,invalid,failure,completed]},
             {action,[none,fence,reset,initialize,publish]},
             {fault,[none,actor_failure,owner_down,initialization_failure,lifecycle_failure,protocol_failure]}]])}.
+
+%% Child publication commands cannot be confused with lifecycle operations or other incarnations.
+-spec publication_envelope_test() -> ok.
+publication_envelope_test() ->
+    ?assertEqual({2,<<41:64/little,9:32/little,7:64/little>>},hls_domain_wire:publication(41,9,{watch,7})),
+    ?assertEqual({3,<<41:64/little,10:32/little,7:64/little>>},hls_domain_wire:publication(41,10,{retire_ack,7})),
+    ?assertException(error,_,hls_domain_wire:publication(41,11,{watch,0})).
+
+%% The prior failure belongs to watched epoch seven even while current epoch nine is healthy.
+-spec retained_retirement_test() -> ok.
+retained_retirement_test() ->
+    I=(interface())#{supervision=>local},
+    Base= <<41:64/little,9:32/little,0:32/little,0:32/little,1:32/little,9:64/little,8:64/little,9:64/little,
+        10:64/little,0:32/little,0:32/little,3:32/little,42:32/little>>,
+    Suffix= <<7:64/little,1:32/little,7:64/little,5:32/little,1:32/little,17:32/little,3:32/little,40:32/little>>,
+    ?assertMatch({{41,9,#domain_output{state=#domain_state{current=9}},0,3,42},
+        #{watched:=7,retirement:=#{incarnation:=7,phase:=failed,fault:=actor_failure,source:=17,frontier:=40}}},
+        hls_domain_wire:supervision(<<Base/binary,Suffix/binary>>,I)),
+    ?assertException(error,_,hls_domain_wire:supervision(Base,I)),
+    <<_:64,Rest/binary>>=Suffix,
+    ?assertException(error,_,hls_domain_wire:supervision(<<Base/binary,8:64/little,Rest/binary>>,I)).

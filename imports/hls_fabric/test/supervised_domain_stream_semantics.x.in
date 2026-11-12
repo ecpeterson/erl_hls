@@ -1,0 +1,157 @@
+// Finite supervised observer histories through the real generated domain stream.
+// These are DSLX witnesses, not exhaustive history or physical-reset proofs.
+import domain_stream as stream;
+import domain;
+import domain_codes;
+import domain_frames as framing;
+
+const PACKET_BITS = u32:@@PACKET_BITS@@;
+const STATE_BUDGET = u32:@@STATE_BUDGET@@;
+
+// Local authority stays admitted while each test controls only public supervisor pins.
+fn inputs() -> stream::Inputs {
+  stream::Inputs {supervisor_admission:true, ..zero!<stream::Inputs>()}
+}
+
+// Complete initialization uses actual actor callbacks and controller completion wiring.
+fn settle(initial:stream::State) -> stream::State {
+  for (_,state):(u32,stream::State) in u32:0..u32:64 {stream::tick(state,inputs()).state}(initial)
+}
+
+// The local parent starts the first incarnation; no host lifecycle command is involved.
+fn ready() -> stream::State {
+  let initial = stream::State{session:u64:1,attached:true,..zero!<stream::State>()};
+  let started = stream::tick(initial, stream::Inputs{supervisor_valid:true,
+    supervisor_op:domain_codes::OPERATION_ACTIVATE, supervisor_target:u64:1,
+    supervisor_transition:u64:1,..inputs()});
+  let state = settle(started.state);
+  assert_eq(state.core.control.data.lifecycle.phase,domain_codes::PHASE_READY);
+  assert_eq(state.core.control.data.lifecycle.current,u64:1);
+  state
+}
+
+// State-level packet injection isolates the observer ABI; integration exercises actual word beats.
+fn observer(state:stream::State, tag:u8, epoch:u64) -> stream::State {
+  let payload = state.session as bits[PACKET_BITS] |
+    (u32:1 as bits[PACKET_BITS] << u32:64) |
+    (epoch as bits[PACKET_BITS] << u32:96);
+  let packet = framing::Packet<PACKET_BITS>{route:u32:0,
+    header:framing::header(u32:0,tag,u8:5),payload};
+  stream::tick(stream::State{management_rx:framing::Receive<PACKET_BITS>{
+    packet,full:true,..zero!<framing::Receive<PACKET_BITS>>()},
+    management_tx_valid:false,management_pending:false,..state},inputs()).state
+}
+
+// The local parent's explicit stop creates a receipt before the child can be reset.
+fn stopped(state:stream::State) -> stream::State {
+  let command = stream::tick(state,stream::Inputs{supervisor_valid:true,
+    supervisor_op:domain_codes::OPERATION_STOP,supervisor_expected:u64:1,
+    supervisor_target:u64:1,supervisor_transition:u64:1,..inputs()});
+  settle(command.state)
+}
+
+// The only watched lifetime is exact, ready and nonzero; a duplicate cannot rewind state.
+#[test]
+fn watch_identity() {
+  let first = observer(ready(),u8:2,u64:1);
+  assert_eq(first.management_status,domain_codes::STATUS_ACCEPTED);
+  assert_eq(first.watched,u64:1);
+  let replay = observer(first,u8:2,u64:1);
+  assert_eq(replay.management_status,domain_codes::STATUS_REPLAY);
+  let stale = observer(replay,u8:2,u64:2);
+  assert_eq(stale.management_status,domain_codes::STATUS_STALE);
+  assert_eq(stale.watched,u64:1);
+  let zero = observer(ready(),u8:2,u64:0);
+  assert_eq(zero.management_status,domain_codes::STATUS_STALE);
+  assert_eq(zero.watched,u64:0);
+}
+
+// Later local lifetimes cannot overwrite the predecessor's finite terminal evidence.
+#[test]
+fn receipt_survives_replacement_and_ack_is_exact() {
+  let watched = observer(ready(),u8:2,u64:1);
+  let retired = stopped(stream::State{sequence:u32:7,..watched});
+  assert_eq(retired.retirement.valid,true);
+  assert_eq(retired.retirement.epoch,u64:1);
+  assert_eq(retired.retirement.frontier,u32:7);
+  let replaced = stream::tick(retired,stream::Inputs{supervisor_valid:true,
+    supervisor_op:domain_codes::OPERATION_REPLACE,supervisor_expected:u64:1,
+    supervisor_target:u64:2,supervisor_transition:u64:2,..inputs()});
+  let fresh = settle(replaced.state);
+  assert_eq(fresh.core.control.data.lifecycle.phase,domain_codes::PHASE_READY);
+  assert_eq(fresh.core.control.data.lifecycle.current,u64:2);
+  assert_eq(fresh.retirement,retired.retirement);
+  let denied = observer(fresh,u8:2,u64:2);
+  assert_eq(denied.management_status,domain_codes::STATUS_STALE);
+  let wrong = observer(denied,u8:3,u64:2);
+  assert_eq(wrong.retirement,retired.retirement);
+  let ack = observer(wrong,u8:3,u64:1);
+  assert_eq(ack.management_status,domain_codes::STATUS_ACCEPTED);
+  assert_eq(ack.retirement.valid,false);
+  assert_eq(ack.watched,u64:0);
+  let successor = observer(ack,u8:2,u64:2);
+  assert_eq(successor.management_status,domain_codes::STATUS_ACCEPTED);
+  let duplicate = observer(successor,u8:3,u64:1);
+  assert_eq(duplicate.management_status,domain_codes::STATUS_REPLAY);
+  assert_eq(duplicate.watched,u64:2);
+}
+
+// Parent closure immediately prevents publication while previously accepted packets remain held.
+#[test]
+fn parent_closure_retains_pending_output() {
+  let watched = observer(ready(),u8:2,u64:1);
+  let packet = framing::Packet<PACKET_BITS>{route:u32:1,
+    header:framing::header(u32:0,u8:3,u8:10),payload:bits[PACKET_BITS]:17};
+  let pending = stream::State{application_tx:packet,application_tx_valid:true,
+    sequence:u32:9,..watched};
+  let edge = stream::tick(pending,stream::Inputs{supervisor_admission:false,..inputs()});
+  assert_eq(edge.state.retirement.valid,true);
+  assert_eq(edge.state.retirement.phase,domain_codes::PHASE_CLOSING as u32);
+  assert_eq(edge.state.retirement.frontier,u32:9);
+  assert_eq(edge.state.application_tx,packet);
+  assert_eq(edge.state.application_tx_valid,true);
+  // Subtree reset cannot erase transport-side frontier or packet evidence.
+  let reset = stream::tick(edge.state,stream::Inputs{supervisor_admission:false,
+    supervisor_reset:true,..inputs()});
+  assert_eq(reset.state.retirement,edge.state.retirement);
+  assert_eq(reset.state.application_tx,packet);
+}
+
+// Session replacement abandons observer history without restarting surviving application state.
+#[test]
+fn transport_session_discards_only_observer_history() {
+  let watched = observer(ready(),u8:2,u64:1);
+  let connected = stream::tick(watched,stream::Inputs{transport_reset:true,
+    transport_session:u64:2,..inputs()});
+  assert_eq(connected.state.session,u64:2);
+  assert_eq(connected.state.watched,u64:0);
+  assert_eq(connected.state.retirement.valid,false);
+  assert_eq(connected.state.core.control.data.lifecycle.current,u64:1);
+  assert_eq(connected.state.core.control.data.lifecycle.phase,domain_codes::PHASE_READY);
+}
+
+// Mutation packets never compete with FPGA authority even when they name the current child.
+#[test]
+fn host_cannot_stop_child() {
+  let state = ready();
+  let payload = u64:1 as bits[PACKET_BITS] |
+    (u32:1 as bits[PACKET_BITS] << u32:64) |
+    (domain_codes::OPERATION_STOP as bits[PACKET_BITS] << u32:96) |
+    (u64:1 as bits[PACKET_BITS] << u32:128) |
+    (u64:1 as bits[PACKET_BITS] << u32:192) |
+    (u64:1 as bits[PACKET_BITS] << u32:256);
+  let packet = framing::Packet<PACKET_BITS>{route:u32:0,
+    header:framing::header(u32:0,u8:1,u8:11),payload};
+  let edge = stream::tick(stream::State{management_rx:framing::Receive<PACKET_BITS>{
+    packet,full:true,..zero!<framing::Receive<PACKET_BITS>>()},..state},inputs());
+  assert_eq(edge.state.management_status,domain_codes::STATUS_INVALID);
+  assert_eq(edge.state.core.control.data.lifecycle,state.core.control.data.lifecycle);
+}
+
+// The declared transport budget includes four packet arrays and one bounded observer record.
+#[test]
+fn bounded_transport_storage() {
+  let total = bit_count<stream::State>();
+  let core = bit_count<domain::State>();
+  assert_eq(total - core <= STATE_BUDGET, true);
+}

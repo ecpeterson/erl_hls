@@ -8,7 +8,7 @@ cores for independent domains; crossing links require a separate recovery policy
 """.
 
 %% Checked source composition and portable external-tool input.
--export([emit/1, write/2, write_stream/2]).
+-export([emit/1, emit/2, write/2, write_stream/2]).
 -export_type([result/0, codecs/0]).
 
 -doc "Retained lifecycle field descriptors resolved from the compiled kernel; host codecs need no compiler or source lookup.".
@@ -24,6 +24,8 @@ cores for independent domains; crossing links require a separate recovery policy
 -type result() :: #{
     network := hls_protocol_network:manifest(),
     stream => hls_domain_stream:plan(),
+    transport => map(),
+    runtime_interface => map(),
     inputs := [{string(), pos_integer()}],
     outputs := [{string(), pos_integer()}],
     codecs := codecs(),
@@ -36,6 +38,11 @@ cores for independent domains; crossing links require a separate recovery policy
 -doc "Renders a closed whole-network recovery domain. Requires rectangle ingress, automatic network execution, no crossing placement and no declared startup messages. Initialization may not publish effects; an attempted setup publication fails closed in hardware. Readiness waits for successful init/entry/internal callbacks. Application incarnation identities gate ingress; egress is tagged by the current incarnation. Accepted prior output is irrevocable. This first composition uses at least ten frame payload words for the compiled control adapter; no host framing or distributed reset is implied.".
 -spec emit(hls_source_config:network() | file:filename()) -> hls_generated_files:output(result()).
 emit(Config) -> compose(Config, raw).
+
+-doc "Renders the raw domain and optionally retains checked framed actor bindings for a surrounding composer. The stream mode checks unique addressed ingress and external ports without introducing a second actor network.".
+-spec emit(hls_source_config:network() | file:filename(), raw | stream) ->
+    hls_generated_files:output(result()).
+emit(Config, Mode) -> compose(Config, Mode).
 
 %% Framed endpoints add addressing restrictions only when explicitly requested.
 -spec compose(hls_source_config:network() | file:filename(), raw | stream) ->

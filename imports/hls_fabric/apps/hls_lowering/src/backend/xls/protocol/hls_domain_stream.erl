@@ -2,8 +2,8 @@
 -moduledoc "Binds source-domain actor schemas to a reusable framed hardware endpoint. hls_protocol_domain writes this composition; hls_domain_fabric consumes its retained interface without compiler access. Separate management and application lanes keep lifecycle observations independent of incomplete application frames.".
 
 %% Source binding and emitted stream composition.
--export([bind/1, emit/1, ports/0]).
--export_type([plan/0]).
+-export([bind/1, emit/1, emit_supervised/1, ports/0, supervised_ports/1]).
+-export_type([plan/0, result/0]).
 
 %% A source-checked rectangle address selects exactly one physical actor.
 -type address() :: #{target := 0..3, x := hls_nums:u16(), y := hls_nums:u16()}.
@@ -36,6 +36,26 @@
     management_route := {0, 0},
     application_route := {0, 1}
 }.
+
+-doc "Emitted files, bounded transport storage, lifecycle authority and deployment session pins.".
+-type result() ::
+    #{
+        files := #{string() => iodata()},
+        state_bit_budget := pos_integer(),
+        packet_words := pos_integer(),
+        supervision := host | local,
+        session := #{
+            bits := 64,
+            establishment := out_of_band,
+            ordering := strictly_increasing,
+            prefix_words := 2,
+            input := string(),
+            reset := string(),
+            observed := string(),
+            attached := string(),
+            preserves := [actor_state | incarnation]
+        }
+    }.
 
 -doc "Derives addressed actor schemas, call slots and external stream identities from one checked transport descriptor. Each framed command must select exactly one actor; ambiguous rectangle points and external outputs shared by indistinguishable source ports reject.".
 -spec bind(hls_protocol_transport:descriptor()) -> plan().
@@ -142,26 +162,24 @@ ingress(Index, #{targets := Targets}) ->
     ).
 
 -doc "Emits the framed top around the checked raw domain. Per-call request storage is bounded by declared pending_calls; each stream retains at most one packet. No live-device timing or safety guarantee is inferred.".
--spec emit(hls_protocol_domain:result()) ->
-    #{
-        files := #{string() => iodata()},
-        state_bit_budget := pos_integer(),
-        packet_words := pos_integer(),
-        session := #{
-            bits := 64,
-            establishment := out_of_band,
-            ordering := strictly_increasing,
-            prefix_words := 2,
-            input := string(),
-            reset := string(),
-            observed := string(),
-            attached := string(),
-            preserves := [actor_state | incarnation]
-        }
-    }.
-emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
+-spec emit(hls_protocol_domain:result()) -> result().
+emit(Result) -> emit_mode(Result, false).
+
+-doc "Emits the same bounded stream with supervisor-owned lifecycle pins. Host commands can only watch one ready incarnation or acknowledge its retained retirement receipt; they cannot reset a child. A fresh transport session discards observer evidence, never actor state.".
+-spec emit_supervised(hls_protocol_domain:result()) -> result().
+emit_supervised(Result) -> emit_mode(Result, true).
+
+%% The stream mode changes authority and observation shape, not application framing.
+-spec emit_mode(hls_protocol_domain:result(), boolean()) -> result().
+emit_mode(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}, Supervised) ->
     #{actors := Actors, call_slots := Slots, streams := Outputs} = Stream,
-    PacketWords = max(18, 10 + Words),
+    PacketWords = max(
+        case Supervised of
+            true -> 28;
+            false -> 18
+        end,
+        10 + Words
+    ),
     true = PacketWords =< 255,
     {ok, Template} = file:read_file(
         filename:join(code:priv_dir(hls_lowering), "xls/templates/domain_stream.x.in")
@@ -178,6 +196,12 @@ emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
         Widths ++
             [
                 {<<"@@PACKET_BITS@@">>, integer_to_binary(PacketWords * 32)},
+                {<<"@@SUPERVISED@@">>, atom_to_list(Supervised)},
+                {<<"@@EXTERNAL_INPUTS@@">>, external_inputs(Supervised, Codecs)},
+                {<<"@@EXTERNAL_OUTPUTS@@">>, external_outputs(Supervised, Codecs)},
+                {<<"@@EXTERNAL_CONTROL@@">>, external_control(Supervised)},
+                {<<"@@MANAGEMENT_CONTROL@@">>, management_control(Supervised)},
+                {<<"@@EXTERNAL_OBSERVATIONS@@">>, external_observations(Supervised)},
                 {<<"@@SLOTS@@">>, integer_to_binary(Slots)},
                 {<<"@@OUTPUTS@@">>, integer_to_binary(length(Outputs))},
                 {<<"@@COMMANDS@@">>, commands(Actors)},
@@ -193,7 +217,11 @@ emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
                 ]}
             ]
     ),
-    {Inputs, Pins} = ports(),
+    {Inputs, Pins} =
+        case Supervised of
+            true -> supervised_ports(Codecs);
+            false -> ports()
+        end,
     #{
         files => #{
             "domain/domain_stream.x" => Text,
@@ -201,7 +229,13 @@ emit(#{frame_payload_words := Words, codecs := Codecs, stream := Stream}) ->
                 Inputs, Pins, "domain_stream", "domain_stream_core"
             )
         },
-        state_bit_budget => 4 * (PacketWords + 2) * 32 + Slots * 34 + 512 + 65,
+        state_bit_budget => 4 * (PacketWords + 2) * 32 + Slots * 34 + 512 + 65 +
+            512,
+        supervision =>
+            case Supervised of
+                true -> local;
+                false -> host
+            end,
         packet_words => PacketWords,
         session => #{
             bits => 64,
@@ -336,3 +370,91 @@ ports() ->
 %% Decimal text is used only at statically elaborated wiring boundaries.
 -spec n(integer()) -> string().
 n(N) -> integer_to_list(N).
+
+-doc "Adds private supervisor commands and lifecycle observations to the ordinary stream pins. reset is cold reset; supervisor_reset resets only the enclosed domain, preserving accepted packet/frontier evidence.".
+-spec supervised_ports(hls_protocol_domain:codecs()) ->
+    {[{string(), pos_integer()}], [{string(), pos_integer()}]}.
+supervised_ports(Codecs) ->
+    {Inputs, Outputs} = ports(),
+    {Inputs ++ supervisor_inputs(Codecs), Outputs ++ supervisor_outputs(Codecs)}.
+
+%% Private pins are driven only by the compiled parent, never by host packets.
+-spec supervisor_inputs(hls_protocol_domain:codecs()) -> [{string(), pos_integer()}].
+supervisor_inputs(Codecs) ->
+    [
+        {"supervisor_reset", 1},
+        {"supervisor_admission", 1},
+        {"supervisor_valid", 1},
+        {"supervisor_op", hls_type:width(maps:get(operation, Codecs))},
+        {"supervisor_expected", 64},
+        {"supervisor_target", 64},
+        {"supervisor_transition", 64},
+        {"supervisor_fault", hls_type:width(maps:get(fault, Codecs))}
+    ].
+
+%% The same raw lifecycle snapshots drive local recovery independently of host observation.
+-spec supervisor_outputs(hls_protocol_domain:codecs()) -> [{string(), pos_integer()}].
+supervisor_outputs(Codecs) ->
+    [
+        {"domain_phase", hls_type:width(maps:get(phase, Codecs))},
+        {"domain_current", 64},
+        {"domain_previous", 64},
+        {"domain_target", 64},
+        {"domain_transition", 64},
+        {"domain_fault", hls_type:width(maps:get(fault, Codecs))}
+    ].
+
+%% Empty fields keep the existing standalone public pin ABI unchanged.
+-spec external_inputs(boolean(), hls_protocol_domain:codecs()) -> iodata().
+external_inputs(false, _) -> [];
+external_inputs(true, Codecs) -> struct_fields(supervisor_inputs(Codecs)).
+
+%% Supervisor observations have no application payload or shared transport buffer.
+-spec external_outputs(boolean(), hls_protocol_domain:codecs()) -> iodata().
+external_outputs(false, _) -> [];
+external_outputs(true, Codecs) -> struct_fields(supervisor_outputs(Codecs)).
+
+%% One authority supplies management; the unselected source is absent after constant folding.
+-spec external_control(boolean()) -> iodata().
+external_control(false) ->
+    "let core_reset = io.reset; let parent_admission = true;";
+external_control(true) ->
+    "let core_reset = io.reset || io.supervisor_reset; let parent_admission = io.supervisor_admission;".
+
+%% Lifecycle fields are copied verbatim to the parent's bounded scanner.
+-spec external_observations(boolean()) -> iodata().
+external_observations(false) ->
+    [];
+external_observations(true) ->
+    [
+        [N, ": core.output.", N, ",\n"]
+     || N <- [
+            "domain_phase",
+            "domain_current",
+            "domain_previous",
+            "domain_target",
+            "domain_transition",
+            "domain_fault"
+        ]
+    ].
+
+%% Struct order is the sampled hardware interface order.
+-spec struct_fields([{string(), pos_integer()}]) -> iodata().
+struct_fields(Fields) -> [[N, ": bits[", integer_to_list(W), "],\n"] || {N, W} <- Fields].
+
+%% Management of a supervised child is exclusively local; the stream accepts only observer commands.
+-spec management_control(boolean()) -> iodata().
+management_control(false) ->
+    [
+        "management_valid: management_valid && management_request,\n",
+        "management_op: word(management,u32:1) as Operation,\n",
+        "expected: pair(management,u32:2), target: pair(management,u32:4),\n",
+        "transition: pair(management,u32:6),\n",
+        "management_fault: word(management,u32:8) as Fault,"
+    ];
+management_control(true) ->
+    [
+        "management_valid: io.supervisor_valid, management_op: io.supervisor_op,\n",
+        "expected: io.supervisor_expected, target: io.supervisor_target,\n",
+        "transition: io.supervisor_transition, management_fault: io.supervisor_fault,"
+    ].

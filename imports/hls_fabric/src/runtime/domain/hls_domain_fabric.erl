@@ -20,6 +20,12 @@ carries the session, so delayed old frames cannot impersonate fresh requests.
 The deployment owns session non-reuse, including across cold hardware resets.
 Host proxies are disposable; hls_domain and hls_node explicitly reattach the
 same surviving incarnation after transport loss.
+
+Locally supervised child interfaces acquire an exact-incarnation watch before
+exposing endpoints. One immutable hardware retirement record preserves the old
+cause and output frontier across autonomous restarts. Acknowledgement follows
+ordered output delivery and endpoint death; only then can a successor be watched.
+Host lifecycle commands are rejected for these children.
 """.
 -behaviour(gen_server).
 -behaviour(hls_domain_backend).
@@ -39,7 +45,7 @@ same surviving incarnation after transport loss.
     management_route => hls_fabric:route(),
     application_route => hls_fabric:route()
 }.
--doc "External effect recipients and finite bounds. pending_limit bounds unacknowledged casts per actor; declared call slots are independent. Timeouts mean uncertainty, never successful fencing.".
+-doc "External effect recipients and finite bounds. pending_limit bounds unacknowledged casts per actor; declared call slots are independent. Timeouts mean uncertainty, never successful fencing. Locally supervised children require owner_loss => preserve.".
 -type options() :: #{
     owner_loss => hls_domain_backend:owner_loss(),
     recipients => #{{term(), atom()} => pid()},
@@ -50,11 +56,14 @@ same surviving incarnation after transport loss.
 }.
 
 %% Management serialization retains only a bounded queue and one transmitted command.
--type management_kind() :: status | request | retire_status | retire_command.
+-type management_kind() :: status | request | retire_status | retire_command | watch | retire_ack.
+%% Publication commands name an exact observed identity; they never reset or start actors.
+-type management_input() ::
+    none | hls_domain_lifecycle:input() | {watch | retire_ack, hls_nums:u64()}.
 %% A queued or transmitted command retains one caller and, after transmission, its correlation timer.
 -type exchange() :: #{
     kind := management_kind(),
-    input := none | hls_domain_lifecycle:input(),
+    input := management_input(),
     from := gen_server:from() | none,
     sequence => pos_integer(),
     timer => reference()
@@ -80,8 +89,27 @@ same surviving incarnation after transport loss.
         timer := reference(),
         sent := boolean()
     }.
+%% One broker-owned application frame may arrive before its independent watch acknowledgement.
+-type deferred() ::
+    none
+    | #{
+        route := hls_fabric:route(),
+        tag := byte(),
+        payload := binary(),
+        receipt := reference(),
+        incarnation := hls_nums:u64(),
+        timer := reference(),
+        token := reference()
+    }.
 -record(backend, {
     session :: hls_nums:u64(),
+    supervised = false :: boolean(),
+    incarnation_floor = 0 :: hls_nums:u64(),
+    reset_seen = false :: boolean(),
+    watch_target = 0 :: hls_nums:u64(),
+    retired_epoch = 0 :: hls_nums:u64(),
+    deferred = none :: deferred(),
+    publication = #{watched => 0, retirement => none} :: hls_domain_wire:publication(),
     owner_loss = preserve :: hls_domain_backend:owner_loss(),
     slot_cursor = #{} :: #{term() => byte()},
     management :: pid(),
@@ -135,11 +163,11 @@ send_request(Backend, Request) -> gen_server:send_request(Backend, Request).
 -spec attach(pid(), pid()) -> {ok, reference()} | {error, term()}.
 attach(Backend, Owner) -> gen_server:call(Backend, {attach, Owner}).
 
--doc "Obtains a fresh device snapshot. A response may expose failure while accepted output is still draining.".
+-doc "Obtains a fresh device snapshot. A response may expose failure while accepted output is still draining; locally supervised readiness also waits for a confirmed incarnation watch.".
 -spec status(pid()) -> {ok, hls_domain_backend:snapshot()} | {error, term()}.
 status(Backend) -> gen_server:call(Backend, status).
 
--doc "Submits an authorized transition once. Timeout leaves its outcome unknown; the owner reconciles its existing transition identity.".
+-doc "Submits an authorized transition once. Timeout leaves its outcome unknown; the owner reconciles its existing transition identity. Locally supervised child interfaces reject lifecycle commands with supervised_child.".
 -spec request(pid(), reference(), hls_domain_lifecycle:input()) ->
     hls_domain_lifecycle:output() | {error, term()}.
 request(Backend, Authority, Input) -> gen_server:call(Backend, {request, Authority, Input}).
@@ -157,6 +185,9 @@ stop(Backend) -> gen_server:stop(Backend).
 -spec info(pid()) ->
     #{
         session := hls_nums:u64(),
+        supervised := boolean(),
+        publication := hls_domain_wire:publication(),
+        deferred := boolean(),
         state := hls_domain_lifecycle:state(),
         actors := hls_domain_backend:actors(),
         pending := non_neg_integer(),
@@ -188,6 +219,8 @@ init({
             application_route := ApplicationRoute
         } =
         hls_domain_wire:load(Interface0),
+    Supervised = maps:get(supervision, Interface, none) =:= local,
+    true = not Supervised orelse OwnerLoss =:= preserve,
     ManagementRoute = maps:get(management_route, Transport, ManagementRoute),
     ApplicationRoute = maps:get(application_route, Transport, ApplicationRoute),
     true = ManagementRoute =/= ApplicationRoute,
@@ -214,6 +247,7 @@ init({
     erlang:send_after(Poll, self(), poll),
     {ok, #backend{
         session = Session,
+        supervised = Supervised,
         owner_loss = OwnerLoss,
         management = Management,
         application = Application,
@@ -253,6 +287,15 @@ handle_call({attach, _Owner}, _From, State) ->
 %% Status uses the separate management lane, never a cached ready assertion.
 handle_call(status, From, State) ->
     enqueue(status, none, From, State);
+%% The compiled supervisor alone owns child lifecycle; host attachment grants observation only.
+handle_call(
+    {request, Authority, _Input},
+    {Owner, _},
+    State = #backend{owner = Owner, authority = Authority, supervised = true}
+) when
+    is_reference(Authority)
+->
+    {reply, {error, supervised_child}, State};
 %% Only the caller which owns this exact capability may mutate the device lifecycle.
 handle_call(
     {request, Authority, Input},
@@ -286,6 +329,9 @@ handle_call(info, _From, State) ->
     {reply,
         #{
             session => State#backend.session,
+            supervised => State#backend.supervised,
+            publication => State#backend.publication,
+            deferred => State#backend.deferred =/= none,
             state => State#backend.lifecycle,
             actors => State#backend.actors,
             pending => map_size(State#backend.pending),
@@ -307,10 +353,13 @@ handle_call(_Request, _From, State) ->
 handle_cast({'$hls_fabric_frame', Receipt, Route, Header, Payload}, State) ->
     try
         {Tag, 0, 0} = Header,
-        frame(Route, Tag, Payload, State)
+        receive_frame(Receipt, Route, Tag, Payload, State)
     of
-        Next ->
-            hls_fabric:ack(lane_broker(Route, State), Receipt),
+        {Next, Acknowledge} ->
+            case Acknowledge of
+                true -> hls_fabric:ack(lane_broker(Route, State), Receipt);
+                false -> ok
+            end,
             {noreply, pump(Next)}
     catch
         Class:Reason ->
@@ -381,6 +430,9 @@ handle_info(
         _ ->
             {noreply, pump(Next)}
     end;
+%% A missing watch acknowledgement cannot leave an accepted application frame retained forever.
+handle_info({watch_delivery_timeout, Token}, State = #backend{deferred = #{token := Token}}) ->
+    {stop, watch_delivery_timeout, State};
 %% A missing frontier cannot be replaced with an orderly source-failure notification.
 handle_info({delivery_timeout, Token}, State = #backend{retirement = #{token := Token}}) ->
     {stop, delivery_frontier_timeout, State};
@@ -388,7 +440,7 @@ handle_info({delivery_timeout, Token}, State = #backend{retirement = #{token := 
 handle_info(Message, State = #backend{sends = Sends}) ->
     case gen_server:check_response(Message, Sends, true) of
         {{reply, ok}, Tag, Rest} ->
-            Writing = State#backend.management_writing andalso Tag =:= 2,
+            Writing = State#backend.management_writing andalso Tag =/= management,
             {noreply, pump(State#backend{sends = Rest, management_writing = Writing})};
         {{reply, Failure}, _Label, Rest} ->
             {stop, {write_failed, Failure}, State#backend{sends = Rest}};
@@ -416,7 +468,7 @@ positive(Name, Options, Default) ->
 
 %% Queue overflow is a pre-transmission rejection, not a backend crash or hidden retry.
 -spec enqueue(
-    management_kind(), none | hls_domain_lifecycle:input(), gen_server:from(), #backend{}
+    management_kind(), management_input(), gen_server:from(), #backend{}
 ) -> {reply, term(), #backend{}} | {noreply, #backend{}}.
 enqueue(Kind, Input, From, State = #backend{queue = Queue}) ->
     case queue:len(Queue) < 8 of
@@ -426,7 +478,7 @@ enqueue(Kind, Input, From, State = #backend{queue = Queue}) ->
 
 %% Internal management work obeys the same bound and is never an unbounded background queue.
 -spec queue_management(
-    management_kind(), none | hls_domain_lifecycle:input(), gen_server:from() | none, #backend{}
+    management_kind(), management_input(), gen_server:from() | none, #backend{}
 ) -> #backend{}.
 queue_management(Kind, Input, From, State = #backend{queue = Queue}) ->
     true = queue:len(Queue) < 8,
@@ -452,9 +504,15 @@ pump(
             State;
         {{value, Entry = #{input := Input, kind := Kind}}, Rest} ->
             true = Sequence < (1 bsl 32),
-            {Tag, Payload} = hls_domain_wire:management(
-                State#backend.session, Sequence, Input, Interface
-            ),
+            {Tag, Payload} =
+                case Input of
+                    {Operation, _Epoch} when Operation =:= watch; Operation =:= retire_ack ->
+                        hls_domain_wire:publication(State#backend.session, Sequence, Input);
+                    _ ->
+                        hls_domain_wire:management(
+                            State#backend.session, Sequence, Input, Interface
+                        )
+                end,
             Attempts =
                 State#backend.attempts +
                     case Kind of
@@ -474,6 +532,78 @@ pump(
 pump(State) ->
     State.
 
+%% Independent brokers can deliver a new watched effect before the management acknowledgement.
+-spec receive_frame(reference(), hls_fabric:route(), byte(), binary(), #backend{}) ->
+    {#backend{}, boolean()}.
+receive_frame(
+    Receipt,
+    Route,
+    4,
+    Payload = <<Session:64/little, _/binary>>,
+    State = #backend{
+        supervised = true,
+        application_route = Route,
+        session = Session,
+        actors = Actors,
+        watch_target = Target,
+        received = Received,
+        deferred = Held
+    }
+) when
+    map_size(Actors) =:= 0, Target > 0
+->
+    Response = hls_domain_wire:application(4, Payload),
+    case Response of
+        #{incarnation := Target, sequence := Sequence} ->
+            true = Held =:= none,
+            true = Sequence =:= Received + 1,
+            Token = make_ref(),
+            Timer = erlang:send_after(
+                State#backend.delivery_ms, self(), {watch_delivery_timeout, Token}
+            ),
+            {
+                State#backend{
+                    deferred = #{
+                        route => Route,
+                        tag => 4,
+                        payload => Payload,
+                        receipt => Receipt,
+                        incarnation => Target,
+                        token => Token,
+                        timer => Timer
+                    }
+                },
+                false
+            };
+        _ ->
+            {flush_deferred(frame(Route, 4, Payload, State)), true}
+    end;
+receive_frame(_Receipt, Route, Tag, Payload, State) ->
+    {flush_deferred(frame(Route, Tag, Payload, State)), true}.
+
+%% The held broker receipt is released only after the exact lifetime has a delivery endpoint.
+-spec flush_deferred(#backend{}) -> #backend{}.
+flush_deferred(
+    State = #backend{
+        incarnation = Epoch,
+        actors = Actors,
+        deferred = #{
+            incarnation := Epoch,
+            route := Route,
+            tag := Tag,
+            payload := Payload,
+            receipt := Receipt,
+            timer := Timer
+        }
+    }
+) when map_size(Actors) > 0 ->
+    erlang:cancel_timer(Timer),
+    Next = frame(Route, Tag, Payload, State#backend{deferred = none}),
+    hls_fabric:ack(lane_broker(Route, State), Receipt),
+    Next;
+flush_deferred(State) ->
+    State.
+
 %% Each lane is independently registered and can only carry its declared message families.
 -spec frame(hls_fabric:route(), byte(), binary(), #backend{}) -> #backend{}.
 %% A complete foreign-session frame cannot update counters, readiness or pending calls.
@@ -481,6 +611,17 @@ frame(_Route, _Tag, <<Session:64/little, _/binary>>, State = #backend{session = 
     Session =/= Current
 ->
     ignored(State);
+frame(
+    Route,
+    1,
+    Payload,
+    State = #backend{
+        management_route = Route, interface = Interface, session = Session, supervised = true
+    }
+) ->
+    {{Session, Sequence, Output, Source, Actor, Frontier}, Publication} =
+        hls_domain_wire:supervision(Payload, Interface),
+    supervised_response(Sequence, Output, Source, Actor, Frontier, Publication, State);
 frame(
     Route,
     1,
@@ -541,6 +682,240 @@ management_response(
 management_response(_Sequence, _Output, _Source, _Actor, _Frontier, State) ->
     ignored(State).
 
+%% Only the matching management exchange can install a publication receipt or acknowledge it.
+-spec supervised_response(
+    hls_nums:u32(),
+    hls_domain_lifecycle:output(),
+    hls_nums:u16(),
+    hls_nums:u32(),
+    hls_nums:u32(),
+    hls_domain_wire:publication(),
+    #backend{}
+) -> #backend{}.
+supervised_response(
+    Sequence,
+    Output = #domain_output{state = Current, status = Status},
+    _Source,
+    _Actor,
+    Frontier,
+    Publication,
+    State = #backend{
+        exchange = #{
+            sequence := Sequence,
+            timer := Timer,
+            kind := Kind,
+            input := Input,
+            from := From
+        },
+        frontier = Previous,
+        publication = Before
+    }
+) ->
+    true = Frontier >= Previous,
+    ok = publication_response(Kind, Input, Status, Before, Publication),
+    Checked = supervised_identity(Current, State#backend{publication = Publication}),
+    erlang:cancel_timer(Timer),
+    Next = observe_publication(Publication, Checked#backend{
+        lifecycle = Current, frontier = Frontier, exchange = none
+    }),
+    answer(
+        From,
+        case Kind of
+            status -> status_result(Next);
+            _ -> Output
+        end
+    ),
+    Next;
+supervised_response(_Sequence, _Output, _Source, _Actor, _Frontier, _Publication, State) ->
+    ignored(State).
+
+%% A parent-owned child reset may show zero while its old receipt survives. It never lowers the identity floor.
+-spec supervised_identity(hls_domain_lifecycle:state(), #backend{}) -> #backend{}.
+supervised_identity(
+    #domain_state{current = 0, phase = Phase},
+    State = #backend{incarnation_floor = Floor, actors = Actors, publication = Publication}
+) when
+    Phase =/= ready
+->
+    #{retirement := Receipt} = Publication,
+    true = map_size(Actors) =:= 0 orelse Receipt =/= none,
+    State#backend{reset_seen = Floor > 0};
+supervised_identity(
+    #domain_state{current = Epoch},
+    State = #backend{incarnation_floor = Floor, reset_seen = Reset}
+) when
+    Epoch > 0, Epoch >= Floor, not Reset orelse Epoch > Floor
+->
+    State#backend{incarnation_floor = Epoch, reset_seen = false};
+supervised_identity(_Current, _State) ->
+    error(incarnation_regression).
+
+%% An immutable receipt may disappear only in response to its exact acknowledgement.
+-spec publication_response(
+    management_kind(),
+    management_input(),
+    hls_domain_lifecycle:status(),
+    hls_domain_wire:publication(),
+    hls_domain_wire:publication()
+) -> ok.
+publication_response(
+    retire_ack,
+    {retire_ack, Epoch},
+    Status,
+    #{retirement := #{incarnation := Epoch}},
+    #{watched := 0, retirement := none}
+) when
+    Status =:= accepted; Status =:= replay
+->
+    ok;
+publication_response(retire_ack, _Input, _Status, _Before, _After) ->
+    error(invalid_retirement_acknowledgement);
+publication_response(
+    watch,
+    {watch, Epoch},
+    Status,
+    #{retirement := none},
+    #{watched := Epoch}
+) when Status =:= accepted; Status =:= replay ->
+    ok;
+publication_response(
+    watch,
+    {watch, _Epoch},
+    stale,
+    #{retirement := none},
+    #{watched := 0, retirement := none}
+) ->
+    ok;
+publication_response(watch, _Input, _Status, _Before, _After) ->
+    error(invalid_watch_acknowledgement);
+publication_response(_Kind, _Input, _Status, #{retirement := Before}, #{retirement := After}) ->
+    true = Before =:= none orelse Before =:= After,
+    ok.
+
+%% A skipped incarnation never supplies a guessed terminal cause for a published endpoint.
+-spec observe_publication(hls_domain_wire:publication(), #backend{}) -> #backend{}.
+observe_publication(
+    #{retirement := Receipt = #{incarnation := Epoch, frontier := Frontier}},
+    State = #backend{incarnation = Epoch, actors = Actors, retirement = none}
+) when
+    map_size(Actors) > 0
+->
+    Reason = receipt_reason(Receipt),
+    reconcile(retirement(Reason, Frontier, State#backend{fault_reason = Reason}));
+observe_publication(
+    #{retirement := Receipt = #{incarnation := Epoch, frontier := Frontier}},
+    State = #backend{watch_target = Epoch, actors = Actors, retirement = none}
+) when
+    map_size(Actors) =:= 0
+->
+    Reason = receipt_reason(Receipt),
+    Closing = create_endpoints(Epoch, State),
+    reconcile(retirement(Reason, Frontier, Closing#backend{fault_reason = Reason}));
+observe_publication(
+    #{watched := Epoch, retirement := none},
+    State = #backend{
+        incarnation = Epoch,
+        actors = Actors,
+        lifecycle = #domain_state{current = Epoch, phase = ready}
+    }
+) when map_size(Actors) > 0 ->
+    State;
+observe_publication(
+    #{retirement := #{incarnation := Epoch}},
+    State = #backend{incarnation = Epoch, retirement = Retirement}
+) when Retirement =/= none ->
+    reconcile(State);
+observe_publication(_Publication, State = #backend{actors = Actors}) when map_size(Actors) =:= 0 ->
+    reconcile(State);
+observe_publication(_Publication, _State) ->
+    error(missing_retirement_evidence).
+
+%% The cause belongs to the departed lifetime, never the latest replacement snapshot.
+-spec receipt_reason(hls_domain_wire:retirement()) -> term().
+receipt_reason(#{
+    incarnation := Epoch,
+    phase := Phase,
+    fault := Fault,
+    source := Source,
+    actor := Actor
+}) ->
+    retirement_reason(
+        #domain_state{
+            current = Epoch,
+            previous = Epoch,
+            target = Epoch,
+            phase = Phase,
+            fault = Fault
+        },
+        Source,
+        Actor
+    ).
+
+%% One receipt and one exact watch command bound publication independently of application work.
+-spec publication_progress(#backend{}) -> #backend{}.
+publication_progress(
+    State = #backend{
+        retired_epoch = Epoch,
+        publication = #{retirement := #{incarnation := Epoch}}
+    }
+) ->
+    publication_command(retire_ack, Epoch, State);
+publication_progress(#backend{publication = #{retirement := Receipt}}) when Receipt =/= none ->
+    error(unowned_retirement_evidence);
+publication_progress(
+    State = #backend{
+        retired_epoch = Retired,
+        publication = #{watched := 0, retirement := none},
+        lifecycle = #domain_state{phase = ready, current = Epoch}
+    }
+) when Epoch =< Retired ->
+    State;
+publication_progress(#backend{
+    retired_epoch = Retired,
+    publication = #{watched := Epoch, retirement := none}
+}) when Epoch > 0, Epoch =< Retired ->
+    error(retired_incarnation_reused);
+publication_progress(
+    State = #backend{
+        publication = #{watched := Epoch, retirement := none},
+        lifecycle = #domain_state{phase = ready, current = Epoch}
+    }
+) when Epoch > 0 ->
+    publish_endpoints(State);
+publication_progress(
+    State = #backend{
+        publication = #{watched := 0, retirement := none},
+        lifecycle = #domain_state{phase = ready, current = Epoch},
+        owner = Owner
+    }
+) when
+    Epoch > 0, is_pid(Owner)
+->
+    publication_command(watch, Epoch, State);
+publication_progress(State) ->
+    State.
+
+%% Queued calls cannot create duplicate internal commands or exceed the existing finite queue.
+-spec publication_command(watch | retire_ack, hls_nums:u64(), #backend{}) -> #backend{}.
+publication_command(Kind, Epoch, State = #backend{exchange = Exchange, queue = Queue}) ->
+    Pending =
+        case Exchange of
+            #{kind := Kind} -> true;
+            _ -> false
+        end orelse
+            lists:any(fun(#{kind := K}) -> K =:= Kind end, queue:to_list(Queue)),
+    case not Pending andalso queue:len(Queue) < 8 of
+        true ->
+            Next =
+                case Kind of
+                    watch -> State#backend{watch_target = Epoch};
+                    retire_ack -> State
+                end,
+            queue_management(Kind, {Kind, Epoch}, none, Next);
+        false ->
+            State
+    end.
+
 %% A newly observed phase starts an ordered retirement but cannot overtake promised outputs.
 -spec observe(
     hls_domain_lifecycle:state(), hls_nums:u16(), hls_nums:u32(), hls_nums:u32(), #backend{}
@@ -598,18 +973,34 @@ reconcile(State = #backend{retirement = #{sent := true, timer := Timer}, actors 
     map_size(Actors) =:= 0
 ->
     erlang:cancel_timer(Timer),
-    reconcile(State#backend{retirement = none, incarnation = 0});
+    reconcile(State#backend{
+        retirement = none,
+        retired_epoch = State#backend.incarnation,
+        incarnation = 0
+    });
 reconcile(State = #backend{retirement = Retirement}) when Retirement =/= none -> State;
-reconcile(
+reconcile(State = #backend{supervised = true}) ->
+    publication_progress(State);
+reconcile(State) ->
+    publish_endpoints(State).
+
+%% All publication paths share the same bounded immutable incarnation endpoints.
+-spec publish_endpoints(#backend{}) -> #backend{}.
+publish_endpoints(
     State = #backend{
         lifecycle = #domain_state{phase = ready, current = Incarnation},
         owner = Owner,
         retiring_owner = false,
-        actors = Actors,
-        interface = #{actors := Bindings},
-        limit = Limit
+        actors = Actors
     }
 ) when is_pid(Owner), map_size(Actors) =:= 0 ->
+    create_endpoints(Incarnation, State);
+publish_endpoints(State) ->
+    State.
+
+%% Private closing endpoints can deliver an accepted watch's output without publishing a dead lifetime.
+-spec create_endpoints(hls_nums:u64(), #backend{}) -> #backend{}.
+create_endpoints(Incarnation, State = #backend{interface = #{actors := Bindings}, limit = Limit}) ->
     {Endpoints, Monitors} = maps:fold(
         fun(Id, #{contract := Contract}, {Ps, Ms}) ->
             Limits = #{cast => Limit, call => maps:get(pending_calls, Contract, 0)},
@@ -623,10 +1014,9 @@ reconcile(
         actors = Endpoints,
         actor_monitors = Monitors,
         incarnation = Incarnation,
+        watch_target = 0,
         fault_reason = none
-    };
-reconcile(State) ->
-    State.
+    }.
 
 %% Failures remain observable during drain; ready/stopped completion also requires endpoint retirement.
 -spec status_result(#backend{}) -> {ok, hls_domain_backend:snapshot()} | {error, atom()}.
@@ -636,6 +1026,13 @@ status_result(#backend{lifecycle = #domain_state{phase = Phase}, retirement = Re
     Retirement =/= none, Phase =:= ready orelse Phase =:= stopped
 ->
     {error, delivery_pending};
+status_result(#backend{
+    supervised = true,
+    owner = Owner,
+    actors = Actors,
+    lifecycle = #domain_state{phase = ready}
+}) when is_pid(Owner), map_size(Actors) =:= 0 ->
+    {error, publication_pending};
 status_result(State = #backend{lifecycle = Lifecycle, actors = Actors, retirement = Retirement}) ->
     Visible =
         case Lifecycle#domain_state.phase =:= ready andalso Retirement =:= none of
@@ -830,7 +1227,12 @@ application_response(
 transmit(Broker, Route, Tag, Payload, State = #backend{sends = Sends, send_limit = Limit}) ->
     true = gen_server:reqids_size(Sends) < Limit,
     Id = hls_fabric:send_request(Broker, Route, {Tag, 0, 0}, Payload, 1000),
-    State#backend{sends = gen_server:reqids_add(Id, Tag, Sends)}.
+    Lane =
+        case Broker =:= State#backend.management of
+            true -> management;
+            false -> application
+        end,
+    State#backend{sends = gen_server:reqids_add(Id, Lane, Sends)}.
 
 %% Identify the broker solely through this backend's exclusive return routes.
 -spec lane_broker(hls_fabric:route(), #backend{}) -> pid().

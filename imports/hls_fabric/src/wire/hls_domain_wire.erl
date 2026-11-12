@@ -9,8 +9,8 @@ owns the matching framing, incarnation admission and output sequence frontier.
 %% Trusted emitted interface and ordinary record conversion.
 -export([load/1, check/1, request/7, message/3]).
 %% Management and application envelope conversion.
--export([management/4, observation/2, application/2]).
--export_type([actor/0, interface/0, response/0]).
+-export([management/4, observation/2, application/2, publication/3, supervision/2]).
+-export_type([actor/0, interface/0, response/0, publication/0, retirement/0]).
 
 -doc "One source actor's retained public request, reply and effect vocabulary.".
 -type actor() :: #{
@@ -23,12 +23,31 @@ owns the matching framing, incarnation admission and output sequence frontier.
 -doc "Trusted build output; concrete descriptor providers remain runtime dependencies.".
 -type interface() :: #{
     actors := #{term() => actor()},
+    supervision => local,
     codecs := #{atom() => hls_type:descriptor()},
     frame_payload_words := pos_integer(),
     management_route := hls_fabric:route(),
     application_route := hls_fabric:route(),
     atom() => term()
 }.
+%% Parent-only adapters need lifecycle codecs; full interfaces may carry other fields.
+-type control_interface() :: #{
+    codecs := #{atom() => hls_type:descriptor()},
+    atom() => term()
+}.
+
+-doc "One watched child lifetime's immutable terminal observation, retained until host delivery and endpoint retirement are acknowledged.".
+-type retirement() :: #{
+    incarnation := hls_nums:u64(),
+    phase := hls_domain_lifecycle:phase(),
+    fault := hls_domain_lifecycle:fault(),
+    source := hls_nums:u16(),
+    actor := hls_nums:u32(),
+    frontier := hls_nums:u32()
+}.
+-doc "Bounded publication evidence for a locally supervised child; no intermediate incarnation history is retained.".
+-type publication() :: #{watched := hls_nums:u64(), retirement := none | retirement()}.
+
 -doc "One ordered application-lane observation before its record is decoded.".
 -type response() :: #{
     kind := accepted | reply | effect,
@@ -199,7 +218,9 @@ message(#{schemas := Schemas}, Header, Payload) ->
     {Tag, Slot, Message}.
 
 -doc "Encodes inspect or a shared lifecycle command with an independent management correlation identity.".
--spec management(hls_nums:u64(), hls_nums:u32(), none | hls_domain_lifecycle:input(), interface()) ->
+-spec management(
+    hls_nums:u64(), hls_nums:u32(), none | hls_domain_lifecycle:input(), control_interface()
+) ->
     {0 | 1, binary()}.
 management(Session, Sequence, none, _Interface) when Session > 0, Session < (1 bsl 64) ->
     {0, <<Session:64/little, Sequence:32/little>>};
@@ -222,7 +243,7 @@ management(
             Target:64/little, Transition:64/little, Cause:32/little>>}.
 
 -doc "Decodes a complete management snapshot including its accepted-output frontier; missing or malformed evidence rejects.".
--spec observation(binary(), interface()) ->
+-spec observation(binary(), control_interface()) ->
     {
         hls_nums:u64(),
         hls_nums:u32(),
@@ -254,6 +275,61 @@ observation(
             state = State
         },
         Source, Actor, Frontier}.
+
+-doc "Encodes a child watch or retirement acknowledgement for one exact incarnation. These commands confer observation rights, never lifecycle authority.".
+-spec publication(hls_nums:u64(), hls_nums:u32(), {watch | retire_ack, hls_nums:u64()}) ->
+    {2 | 3, binary()}.
+publication(Session, Sequence, {Operation, Incarnation}) when
+    Session > 0,
+    Session < (1 bsl 64),
+    Sequence > 0,
+    Sequence < (1 bsl 32),
+    Incarnation > 0,
+    Incarnation < (1 bsl 64)
+->
+    Tag =
+        case Operation of
+            watch -> 2;
+            retire_ack -> 3
+        end,
+    {Tag, <<Session:64/little, Sequence:32/little, Incarnation:64/little>>}.
+
+-doc "Decodes a supervised child's complete snapshot and retained retirement evidence. Missing suffixes, mismatched watched identities and oversized enum values reject.".
+-spec supervision(binary(), interface()) ->
+    {
+        {
+            hls_nums:u64(),
+            hls_nums:u32(),
+            hls_domain_lifecycle:output(),
+            hls_nums:u16(),
+            hls_nums:u32(),
+            hls_nums:u32()
+        },
+        publication()
+    }.
+supervision(
+    <<Base:72/binary, Watched:64/little, Valid:32/little, Incarnation:64/little, Phase:32/little,
+        Fault:32/little, Source:32/little, Actor:32/little, Frontier:32/little>>,
+    Interface = #{supervision := local, codecs := Codecs}
+) when (Valid =:= 0 orelse Valid =:= 1), Source < (1 bsl 16) ->
+    Observation = {_, _, _, _, _, CurrentFrontier} = observation(Base, Interface),
+    Receipt =
+        case Valid of
+            0 ->
+                none;
+            1 ->
+                true = Incarnation > 0 andalso Incarnation =:= Watched,
+                true = Frontier =< CurrentFrontier,
+                #{
+                    incarnation => Incarnation,
+                    phase => value(phase, Phase, Codecs),
+                    fault => value(fault, Fault, Codecs),
+                    source => Source,
+                    actor => Actor,
+                    frontier => Frontier
+                }
+        end,
+    {Observation, #{watched => Watched, retirement => Receipt}}.
 
 -doc "Decodes the common response envelope; typed payload interpretation and current-incarnation checks belong to the backend.".
 -spec application(2 | 3 | 4, binary()) -> response().

@@ -164,6 +164,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
       domain_admission: application_admitted,
       domain_initialized: manager.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING,
       grant_ready: !io.reset && parent_initializing && (same_grant || fresh_grant),
+      grant_response_valid: io.grant_valid && !io.reset,
       grant_accepted: accept_grant,
       supervisor_phase: manager.phase, supervisor_reason: manager.reason,
       grant_next: manager.next, supervisor_started: manager.started,

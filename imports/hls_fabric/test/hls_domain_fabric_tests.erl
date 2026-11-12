@@ -443,3 +443,222 @@ busy_orphan_slot_does_not_starve_free_slots_test() ->
         deliver(Backend,{0,1},3,response(3,1,Q2,16#02000101,<<5:3,0:29>>)),
         ?assertEqual({reply,{answer,5}},gen_server:receive_response(Second,1000))
     end).
+
+%% Local restart may precede host observation, but old replies must precede terminal DOWN and acknowledgement.
+-spec supervised_receipt_orders_publication_test() -> ok.
+supervised_receipt_orders_publication_test() ->
+    with_supervised(fun(Backend, Management, Application, Authority, Endpoint) ->
+        Monitor = monitor(process, Endpoint),
+        Call = gen_server:send_request(Endpoint, {sample, 3}),
+        {_, <<41:64/little,1:64/little,3:32/little,Request:32/little,_/binary>>} = sent(Application, 2),
+        deliver(Backend, {0,1}, 2, response(1, 1, Request, 0, <<>>)),
+        Receipt = #{incarnation=>1, phase=>failed, fault=>actor_failure, source=>17, actor=>3, frontier=>2},
+        ?assertEqual({error,delivery_pending}, supervised_status(Backend, Management, 3, 2, 1, Receipt)),
+        ?assertMatch(#{actors:=#{worker:=Endpoint}, received:=1,
+            publication:=#{watched:=1,retirement:=Receipt}}, hls_domain_fabric:info(Backend)),
+        ?assertEqual({error,not_ready_or_stale}, hls_domain_fabric:endpoint(Backend, Authority, 3, worker)),
+        receive {wire,Management,_,3,_}->error(ack_before_delivery) after 10->ok end,
+        deliver(Backend, {0,1}, 3, response(2, 1, Request, 16#02000001, <<6:3,0:29>>)),
+        ?assertEqual({reply,{answer,6}}, gen_server:receive_response(Call, 1000)),
+        receive {'DOWN',Monitor,process,Endpoint,{hls_actor_failure,3,#{source_code:=17}}}->ok
+        after 1000->error(old_endpoint_survived) end,
+        {Route,<<41:64/little,Ack:32/little,1:64/little>>} = sent(Management,3),
+        ?assertNot(is_process_alive(Endpoint)),
+        ?assertEqual({error,not_ready_or_stale}, hls_domain_fabric:endpoint(Backend, Authority, 3, worker)),
+        deliver(Backend,Route,1,supervised_snapshot(Ack,accepted,3,2,0,none)),
+        {Route,<<41:64/little,Watch:32/little,3:64/little>>} = sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(Watch,accepted,3,2,3,none)),
+        Successor = endpoint(Backend,Authority,3,100),
+        ?assertNotEqual(Endpoint,Successor),
+        %% A late old-incarnation effect advances the ordered wire but never reaches the new actor.
+        deliver(Backend,{0,1},4,response(3,1,0,16#02000001,<<4:3,0:29>>)),
+        ?assertMatch(#{received:=3,ignored:=1,actors:=#{worker:=Successor}}, hls_domain_fabric:info(Backend)),
+        receive {'$gen_cast',{answer,4}}->error(old_effect_rebound) after 10->ok end
+    end).
+
+%% No receipt means connection uncertainty even if a newer ready snapshot looks plausible.
+-spec supervised_missing_receipt_is_uncertain_test() -> ok.
+supervised_missing_receipt_is_uncertain_test() ->
+    with_supervised(fun(Backend,Management,_Application,_Authority,Endpoint)->
+        M=monitor(process,Endpoint),
+        Request=gen_server:send_request(Backend,status),
+        {Route,<<41:64/little,Sequence:32/little>>}=sent(Management,0),
+        deliver(Backend,Route,1,supervised_snapshot(Sequence,ok,2,0,1,none)),
+        receive {'DOWN',M,process,Endpoint,Reason}->?assertEqual(noconnection,Reason)
+        after 1000->error(missing_uncertainty) end,
+        ?assertMatch({error,_},gen_server:receive_response(Request,1000))
+    end).
+
+%% Supervisor authority cannot be bypassed by an attached host owner.
+-spec supervised_child_rejects_lifecycle_test() -> ok.
+supervised_child_rejects_lifecycle_test() ->
+    with_supervised(fun(Backend,Management,_Application,Authority,_Endpoint)->
+        ?assertEqual({error,supervised_child},hls_domain_fabric:request(Backend,Authority,
+            #domain_input{op=replace,expected=1,target=2,transition=2})),
+        receive {wire,Management,_,1,_}->error(host_mutated_child) after 10->ok end
+    end).
+
+%% A watch race skips an unseen lifetime without producing a PID or a terminal source claim for it.
+-spec supervised_watch_race_test() -> ok.
+supervised_watch_race_test() ->
+    with_transport((interface())#{supervision=>local},#{},fun(Backend,Management,_Application)->
+        {ok,Authority}=hls_domain_fabric:attach(Backend,self()),
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,1,0,0,none)),
+        {Route,<<41:64/little,First:32/little,1:64/little>>}=sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(First,stale,2,0,0,none)),
+        {Route,<<41:64/little,Next:32/little,2:64/little>>}=sent(Management,2),
+        ?assertEqual({error,not_ready_or_stale},hls_domain_fabric:endpoint(Backend,Authority,1,worker)),
+        deliver(Backend,Route,1,supervised_snapshot(Next,accepted,2,0,2,none)),
+        ?assert(is_pid(endpoint(Backend,Authority,2,100)))
+    end).
+
+%% A retained record cannot quietly change after it has promised a particular output frontier.
+-spec supervised_receipt_is_immutable_test() -> ok.
+supervised_receipt_is_immutable_test() ->
+    with_supervised(fun(Backend,Management,_Application,_Authority,Endpoint)->
+        M=monitor(process,Endpoint),
+        Receipt=#{incarnation=>1,phase=>failed,fault=>actor_failure,source=>17,actor=>3,frontier=>1},
+        ?assertEqual({error,delivery_pending},supervised_status(Backend,Management,2,1,1,Receipt)),
+        Request=gen_server:send_request(Backend,status),
+        {Route,<<41:64/little,Sequence:32/little>>}=sent(Management,0),
+        deliver(Backend,Route,1,supervised_snapshot(Sequence,ok,3,2,1,Receipt#{frontier:=2})),
+        receive {'DOWN',M,process,Endpoint,Reason}->?assertEqual(noconnection,Reason)
+        after 1000->error(mutable_receipt_accepted) end,
+        ?assertMatch({error,_},gen_server:receive_response(Request,1000))
+    end).
+
+%% An independent management handshake watches the ready lifetime before its endpoint is exposed.
+-spec with_supervised(fun((pid(),pid(),pid(),reference(),pid())->term())) -> ok.
+with_supervised(Test) ->
+    with_transport((interface())#{supervision=>local},#{},fun(Backend,Management,Application)->
+        {ok,Authority}=hls_domain_fabric:attach(Backend,self()),
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,1,0,0,none)),
+        {Route,<<41:64/little,Sequence:32/little,1:64/little>>}=sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(Sequence,accepted,1,0,1,none)),
+        Endpoint=endpoint(Backend,Authority,1,100),
+        Test(Backend,Management,Application,Authority,Endpoint)
+    end).
+
+%% The fixture supplies each explicit device observation through the ordinary broker frame callback.
+-spec supervised_status(pid(),pid(),non_neg_integer(),non_neg_integer(),non_neg_integer(),none|map()) -> term().
+supervised_status(Backend,Management,Current,Frontier,Watched,Receipt) ->
+    Request=gen_server:send_request(Backend,status),
+    {Route,<<41:64/little,Sequence:32/little>>}=sent(Management,0),
+    deliver(Backend,Route,1,supervised_snapshot(Sequence,ok,Current,Frontier,Watched,Receipt)),
+    {reply,Result}=gen_server:receive_response(Request,1000),Result.
+
+%% Wire literals are deliberately independent of the production encoder and hardware implementation.
+-spec supervised_snapshot(pos_integer(),ok|accepted|stale,non_neg_integer(),non_neg_integer(),non_neg_integer(),none|map()) -> binary().
+supervised_snapshot(Sequence,Status,Current,Frontier,Watched,Receipt) ->
+    <<Prefix:12/binary,_Status:32/little,Rest/binary>>=snapshot(Sequence,ready,Current,Frontier),
+    Code=case Status of ok->0;accepted->1;stale->3 end,
+    Suffix=case Receipt of
+        none-><<Watched:64/little,0:32,0:64,0:160>>;
+        #{incarnation:=Epoch,phase:=failed,fault:=actor_failure,source:=Source,actor:=Actor,frontier:=End}->
+            <<Watched:64/little,1:32/little,Epoch:64/little,5:32/little,1:32/little,Source:32/little,Actor:32/little,End:32/little>>
+    end,
+    <<Prefix/binary,Code:32/little,Rest/binary,Suffix/binary>>.
+
+%% Parent reset clears a child core but preserves its terminal receipt and the host's incarnation floor.
+-spec supervised_parent_reset_test() -> ok.
+supervised_parent_reset_test() ->
+    with_supervised(fun(Backend,Management,_Application,Authority,Endpoint)->
+        Monitor=monitor(process,Endpoint),
+        Receipt=#{incarnation=>1,phase=>failed,fault=>actor_failure,source=>17,actor=>3,frontier=>0},
+        Query=gen_server:send_request(Backend,status),
+        {Route,<<41:64/little,Sequence:32/little>>}=sent(Management,0),
+        deliver(Backend,Route,1,supervised_phase_snapshot(Sequence,ok,unbound,0,0,1,Receipt)),
+        ?assertMatch({reply,{ok,#{state:=#domain_state{phase=unbound,current=0}}}},
+            gen_server:receive_response(Query,1000)),
+        receive {'DOWN',Monitor,process,Endpoint,{hls_actor_failure,3,_}}->ok
+        after 1000->error(reset_receipt_not_delivered) end,
+        {Route,<<41:64/little,Ack:32/little,1:64/little>>}=sent(Management,3),
+        deliver(Backend,Route,1,supervised_phase_snapshot(Ack,accepted,unbound,0,0,0,none)),
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,5,0,0,none)),
+        {Route,<<41:64/little,Watch:32/little,5:64/little>>}=sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(Watch,accepted,5,0,5,none)),
+        ?assertNotEqual(Endpoint,endpoint(Backend,Authority,5,100))
+    end).
+
+%% A reset cannot justify recycling an earlier incarnation, even after every old endpoint has died.
+-spec supervised_reset_rejects_identity_reuse_test() -> ok.
+supervised_reset_rejects_identity_reuse_test() ->
+    with_transport((interface())#{supervision=>local},#{},fun(Backend,Management,_Application)->
+        %% No attached observer is needed to retain the authoritative high-water observation.
+        ?assertMatch({ok,#{state:=#domain_state{current=7}}},
+            supervised_status(Backend,Management,7,0,0,none)),
+        Query=gen_server:send_request(Backend,status),
+        {Route,<<41:64/little,Reset:32/little>>}=sent(Management,0),
+        deliver(Backend,Route,1,supervised_phase_snapshot(Reset,ok,unbound,0,0,0,none)),
+        ?assertMatch({reply,{ok,#{state:=#domain_state{current=0}}}},gen_server:receive_response(Query,1000)),
+        Monitor=monitor(process,Backend),
+        Again=gen_server:send_request(Backend,status),
+        {Route,<<41:64/little,Reuse:32/little>>}=sent(Management,0),
+        deliver(Backend,Route,1,supervised_snapshot(Reuse,ok,7,0,0,none)),
+        receive {'DOWN',Monitor,process,Backend,{invalid_domain_frame,error,incarnation_regression}}->ok
+        after 1000->error(reused_incarnation_accepted) end,
+        ?assertMatch({error,_},gen_server:receive_response(Again,1000))
+    end).
+
+%% Reset observations vary only the current lifecycle fields; receipt evidence is independently retained.
+-spec supervised_phase_snapshot(pos_integer(),ok|accepted|stale,unbound|ready,
+    non_neg_integer(),non_neg_integer(),non_neg_integer(),none|map()) -> binary().
+supervised_phase_snapshot(Sequence,Status,Phase,Current,Frontier,Watched,Receipt) ->
+    <<Prefix:20/binary,_OldPhase:32/little,Rest/binary>>=
+        supervised_snapshot(Sequence,Status,Current,Frontier,Watched,Receipt),
+    Code=case Phase of unbound->0;ready->1 end,
+    <<Prefix/binary,Code:32/little,Rest/binary>>.
+
+%% Independent application delivery may win the race with a successful management watch response.
+-spec supervised_effect_before_watch_response_test() -> ok.
+supervised_effect_before_watch_response_test() ->
+    with_transport((interface())#{supervision=>local},#{},fun(Backend,Management,_Application)->
+        {ok,Authority}=hls_domain_fabric:attach(Backend,self()),
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,1,0,0,none)),
+        {Route,<<41:64/little,Watch:32/little,1:64/little>>}=sent(Management,2),
+        deliver(Backend,{0,1},4,response(1,1,0,16#02000001,<<5:3,0:29>>)),
+        ?assertMatch(#{received:=0,deferred:=true,actors:=#{}},hls_domain_fabric:info(Backend)),
+        receive {'$gen_cast',{answer,5}}->error(effect_before_watch_confirmation) after 10->ok end,
+        deliver(Backend,Route,1,supervised_snapshot(Watch,accepted,1,1,1,none)),
+        receive {'$gen_cast',{answer,5}}->ok after 1000->error(watched_effect_lost) end,
+        ?assert(is_pid(endpoint(Backend,Authority,1,100))),
+        ?assertMatch(#{received:=1,deferred:=false},hls_domain_fabric:info(Backend))
+    end).
+
+%% Even a watch that ends before confirmation must deliver accepted effects before its receipt is released.
+-spec supervised_effect_and_failure_before_watch_response_test() -> ok.
+supervised_effect_and_failure_before_watch_response_test() ->
+    with_transport((interface())#{supervision=>local},#{},fun(Backend,Management,_Application)->
+        {ok,Authority}=hls_domain_fabric:attach(Backend,self()),
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,1,0,0,none)),
+        {Route,<<41:64/little,Watch:32/little,1:64/little>>}=sent(Management,2),
+        deliver(Backend,{0,1},4,response(1,1,0,16#02000001,<<6:3,0:29>>)),
+        Receipt=#{incarnation=>1,phase=>failed,fault=>actor_failure,source=>17,actor=>3,frontier=>1},
+        deliver(Backend,Route,1,supervised_snapshot(Watch,accepted,2,1,1,Receipt)),
+        receive {'$gen_cast',{answer,6}}->ok after 1000->error(terminal_watch_effect_lost) end,
+        {Route,<<41:64/little,Ack:32/little,1:64/little>>}=sent(Management,3),
+        ?assertEqual({error,not_ready_or_stale},hls_domain_fabric:endpoint(Backend,Authority,1,worker)),
+        deliver(Backend,Route,1,supervised_snapshot(Ack,accepted,2,1,0,none)),
+        {Route,<<41:64/little,Next:32/little,2:64/little>>}=sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(Next,accepted,2,1,2,none)),
+        ?assert(is_pid(endpoint(Backend,Authority,2,100)))
+    end).
+
+%% A still-ready raw child after parent closure cannot reacquire its retired host identity.
+-spec supervised_terminal_identity_not_republished_test() -> ok.
+supervised_terminal_identity_not_republished_test() ->
+    with_supervised(fun(Backend,Management,_Application,Authority,Endpoint)->
+        Monitor=monitor(process,Endpoint),
+        Receipt=#{incarnation=>1,phase=>failed,fault=>actor_failure,source=>17,actor=>3,frontier=>0},
+        ?assertEqual({error,delivery_pending},supervised_status(Backend,Management,1,0,1,Receipt)),
+        receive {'DOWN',Monitor,process,Endpoint,{hls_actor_failure,3,_}}->ok
+        after 1000->error(old_endpoint_survived) end,
+        {Route,<<41:64/little,Ack:32/little,1:64/little>>}=sent(Management,3),
+        deliver(Backend,Route,1,supervised_snapshot(Ack,accepted,1,0,0,none)),
+        ?assertEqual({error,not_ready_or_stale},hls_domain_fabric:endpoint(Backend,Authority,1,worker)),
+        receive {wire,Management,_,2,_}->error(retired_incarnation_watched) after 10->ok end,
+        ?assertEqual({error,publication_pending},supervised_status(Backend,Management,2,0,0,none)),
+        {Route,<<41:64/little,Watch:32/little,2:64/little>>}=sent(Management,2),
+        deliver(Backend,Route,1,supervised_snapshot(Watch,accepted,2,0,2,none)),
+        ?assertNotEqual(Endpoint,endpoint(Backend,Authority,2,100))
+    end).

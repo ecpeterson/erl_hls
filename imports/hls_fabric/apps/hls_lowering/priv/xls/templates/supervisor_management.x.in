@@ -1,0 +1,132 @@
+import domain_frames as framing;
+import supervisor_codes as codes;
+
+// Lifecycle operation codes retain the compiled Erlang enum width.
+type Operation = bits[@@OPERATION_BITS@@];
+// Fault codes remain a distinct source-defined enum namespace.
+type Fault = bits[@@FAULT_BITS@@];
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Two fixed buffers hold one incoming command and one outgoing observation.
+type Packet = framing::Packet<u32:1024>;
+type Receive = framing::Receive<u32:1024>;
+// The selected command waits for actual acceptance; snapshot capture follows the committed edge.
+pub struct State {
+  rx: Receive, tx: Packet, tx_valid: bool, position: u32,
+  stage: u3, request: u32, header: u32, route: u32, grant: bool,
+  status: u32, action: u32, accepted: bool,
+  session: u64, attached: bool, fault: bool,
+}
+// Outputs describe one sampled edge; only the returned state advances packet ownership.
+pub struct Tick { state: State, output: Outputs }
+
+// Counter words are little-endian in every management family.
+fn word(p: Packet, i: u32) -> u32 { (p.payload >> (i * u32:32)) as u32 }
+// Identity fields retain all 64 bits through the packet boundary.
+fn pair(p: Packet, i: u32) -> u64 { word(p, i + u32:1) ++ word(p, i) }
+
+// Management snapshots have the ordinary domain prefix and a compact supervisor suffix.
+fn snapshot(s: State, io: Inputs) -> Packet {
+  let payload = s.session as bits[1024] |
+    (s.request as bits[1024] << u32:64) |
+    (s.status as bits[1024] << u32:96) |
+    (s.action as bits[1024] << u32:128) |
+    (io.observed_domain_phase as bits[1024] << u32:160) |
+    (io.observed_domain_current as bits[1024] << u32:192) |
+    (io.observed_domain_previous as bits[1024] << u32:256) |
+    (io.observed_domain_target as bits[1024] << u32:320) |
+    (io.observed_domain_transition as bits[1024] << u32:384) |
+    (io.observed_domain_fault as bits[1024] << u32:448) |
+    (s.accepted as bits[1024] << u32:576) |
+    (io.observed_supervisor_phase as bits[1024] << u32:608) |
+    (io.observed_supervisor_reason as bits[1024] << u32:640) |
+    (io.observed_grant_next as bits[1024] << u32:672);
+  Packet { route: s.route, header: framing::header(s.header, u8:1, u8:23), payload }
+}
+
+// A fresh deployment-attested transport session discards packets, never hardware state.
+pub fn tick(previous: State, io: Inputs) -> Tick {
+  let establish = io.parent_transport_reset && !io.reset &&
+    io.parent_transport_session != u64:0 && io.parent_transport_session > previous.session;
+  let s = if establish { State { session: io.parent_transport_session,
+    attached: true, ..zero!<State>() } } else { previous };
+  let connected = s.attached && !s.fault && !io.reset && !establish;
+  let done = connected && s.tx_valid && io.parent_management_output_ready && framing::last(s.tx,s.position);
+  let space = !s.tx_valid || done;
+  let ready = connected && !s.rx.full && s.stage == u3:0;
+  let received = if ready && io.parent_management_valid {
+    framing::receive(s.rx, io.parent_management_word, io.parent_management_last)
+  } else { s.rx };
+  let packet = s.rx.packet;
+  let session_matches = pair(packet, u32:0) == s.session;
+  let tag = packet.header[24+:u8];
+  let words = packet.header[0+:u8];
+  let inspect = tag == u8:0 && words == u8:3;
+  let command = tag == u8:1 && words == u8:11;
+  let grant = tag == u8:5 && words == u8:9;
+  let codes_valid = !command ||
+    ((word(packet,u32:3) >> bit_count<Operation>()) == u32:0 &&
+     (word(packet,u32:10) >> bit_count<Fault>()) == u32:0);
+  let canonical = packet.route == u32:0 && (packet.header & u32:0x00ffff00) == u32:0 &&
+    word(packet,u32:2) != u32:0 && (inspect || command || grant) && codes_valid && !s.rx.bad;
+  let take = connected && s.stage == u3:0 && s.rx.full && session_matches && canonical;
+  let issue = connected && s.stage == u3:1;
+  let response = issue &&
+    (if s.grant { io.observed_grant_response_valid } else { io.observed_management_response_valid });
+  let capture = connected && s.stage == u3:3 && space;
+  let next = State {
+    rx: if capture || (connected && s.stage == u3:0 && s.rx.full && !session_matches)
+      { zero!<Receive>() } else { received },
+    tx: if capture { snapshot(s,io) } else { s.tx },
+    tx_valid: capture || (s.tx_valid && !done),
+    position: if capture || done { u32:0 } else {
+      s.position + (connected && s.tx_valid && io.parent_management_output_ready) as u32 },
+    stage: if capture { u3:0 } else if response { u3:3 }
+      else if take { if inspect { u3:3 } else { u3:1 } } else { s.stage },
+    request: if take { word(packet,u32:2) } else { s.request },
+    header: if take { packet.header } else { s.header },
+    route: if take { packet.route } else { s.route },
+    grant: if take { grant } else { s.grant },
+    status: if take { codes::STATUS_OK as u32 } else if response && !s.grant {
+      io.observed_domain_status as u32 } else { s.status },
+    action: if take { codes::ACTION_NONE as u32 } else if response && !s.grant {
+      io.observed_domain_action as u32 } else { s.action },
+    accepted: if take { false } else if response && s.grant { io.observed_grant_accepted } else { s.accepted },
+    session: s.session, attached: s.attached,
+    fault: s.fault || (connected && s.stage == u3:0 && s.rx.full && session_matches && !canonical),
+  };
+  Tick { state: if io.reset { zero!<State>() } else { next }, output: Outputs {
+    parent_management_ready: ready,
+    parent_management_output_word: framing::word(s.tx,s.position),
+    parent_management_output_valid: connected && s.tx_valid,
+    parent_management_output_last: connected && s.tx_valid && framing::last(s.tx,s.position),
+    parent_transport_session_observed: s.session,
+    parent_transport_attached: connected,
+    parent_wire_fault: s.fault,
+    command_management_valid: issue && !s.grant && io.observed_management_ready,
+    command_management_op: word(packet,u32:3) as Operation,
+    command_expected: pair(packet,u32:4), command_target: pair(packet,u32:6),
+    command_transition: pair(packet,u32:8), command_management_fault: word(packet,u32:10) as Fault,
+    command_grant_valid: issue && s.grant, command_grant_epoch: pair(packet,u32:3),
+    command_grant_first: pair(packet,u32:5), command_grant_last: pair(packet,u32:7),
+  }}
+}
+
+// This always-enabled sampled channel carries only parent management; child lanes bypass it.
+pub proc supervisor_management_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // Deployment supplies one shared core clock and independent FIFO pins.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // A cold or unattached parser cannot issue any lifecycle command.
+  init { zero!<State>() }
+  // Handshakes and counters advance on each physical clock, including host silence.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

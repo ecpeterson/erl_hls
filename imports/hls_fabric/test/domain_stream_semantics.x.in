@@ -180,10 +180,11 @@ fn malformed_management_closes_transport() {
 // Count actual typed storage independently of the renderer's conservative transport ceiling.
 // Exclude the actor network/lifecycle core; the remaining fields are the four packet buffers,
 // two parser cursors, two transmit cursors, management metadata, call ownership and sequence state.
+// The shared source type includes a 353-bit observer record; standalone optimization removes it.
 #[test]
 fn transport_storage_budget() {
   let actual = bit_count<stream::State>() - bit_count<domain::State>();
-  let exact = u32:4 * PACKET_BITS + u32:717 + STATUS_BITS + ACTION_BITS + u32:34 * CALL_SLOTS;
+  let exact = u32:4 * PACKET_BITS + u32:717 + u32:353 + STATUS_BITS + ACTION_BITS + u32:34 * CALL_SLOTS;
   assert_eq(actual, exact);
   assert_eq(actual <= STATE_BUDGET, true);
 }

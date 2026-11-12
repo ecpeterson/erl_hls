@@ -11,6 +11,7 @@ type Status = bits[@@STATUS_BITS@@];
 type Action = bits[@@ACTION_BITS@@];
 type Fault = bits[@@FAULT_BITS@@];
 
+const SUPERVISED = @@SUPERVISED@@;
 const PACKET_BITS = u32:@@PACKET_BITS@@;
 const SLOT_COUNT = u32:@@SLOTS@@;
 const OUTPUT_COUNT = u32:@@OUTPUTS@@;
@@ -30,12 +31,19 @@ pub struct Inputs {
   reset: bool, transport_reset: bool, transport_session: u64,
   management_word: u32, management_valid: bool, management_last: bool, management_output_ready: bool,
   application_word: u32, application_valid: bool, application_last: bool, application_output_ready: bool,
+  @@EXTERNAL_INPUTS@@
 }
 // All transfer indications describe the current edge, before committing State.
 pub struct Outputs {
   management_ready: bool, management_output_word: u32, management_output_valid: bool, management_output_last: bool,
   application_ready: bool, application_output_word: u32, application_output_valid: bool, application_output_last: bool,
   wire_fault: bool, transport_session: u64, transport_attached: bool,
+  @@EXTERNAL_OUTPUTS@@
+}
+// One immutable record belongs to the watched incarnation until the host acknowledges delivery.
+// Local recovery may skip any number of unobserved incarnations without growing this record.
+pub struct Retirement {
+  valid: bool, epoch: u64, phase: u32, fault: u32, source: u32, actor: u32, frontier: u32,
 }
 // A transport boundary replaces framing and observers while preserving the actor network.
 // Session identity survives stream faults; only cold reset permits its counter to restart.
@@ -48,6 +56,7 @@ pub struct State {
   management_status: Status, management_action: Action,
   calls: Call[SLOT_COUNT], incarnation: u64, last_request: u32,
   sequence: u32, cursor: u32, fault: bool, session: u64, attached: bool,
+  watched: u64, acknowledged: u64, retirement: Retirement,
 }
 // One clock's immutable observation and its complete successor state.
 pub struct Tick { state: State, output: Outputs }
@@ -101,11 +110,24 @@ fn snapshot(s: State, observed: domain::Outputs) -> Packet {
     (observed.domain_source_fault as bits[PACKET_BITS] << u32:416) |
     (observed.domain_source_actor as bits[PACKET_BITS] << u32:448) |
     (s.sequence as bits[PACKET_BITS] << u32:480);
-  let payload = (body << u32:64) | s.session as bits[PACKET_BITS];
-  Packet { route: s.management_route, header: framing::header(s.management_header,u8:1,u8:18), payload }
+  let receipt = s.retirement;
+  // The suffix typechecks even when standalone packets are narrower and omit it.
+  let extra = (s.watched as bits[896] << u32:576) |
+    (receipt.valid as bits[896] << u32:640) |
+    (receipt.epoch as bits[896] << u32:672) |
+    (receipt.phase as bits[896] << u32:736) |
+    (receipt.fault as bits[896] << u32:768) |
+    (receipt.source as bits[896] << u32:800) |
+    (receipt.actor as bits[896] << u32:832) |
+    (receipt.frontier as bits[896] << u32:864);
+  let payload = (body << u32:64) | s.session as bits[PACKET_BITS] |
+    (if SUPERVISED { extra as bits[PACKET_BITS] } else { bits[PACKET_BITS]:0 });
+  Packet { route: s.management_route, header: framing::header(s.management_header,u8:1,
+    if SUPERVISED {u8:28} else {u8:18}), payload }
 }
 // Advance only a completed stream transfer. A blocked beat is stable until accepted.
 pub fn tick(previous: State, io: Inputs) -> Tick {
+  @@EXTERNAL_CONTROL@@
   let establish = io.transport_reset && io.transport_session != u64:0 && io.transport_session > previous.session && !io.reset;
   // A reply still owns its source slot after its observer disappears. Reuse waits
   // for that actual reply, even if another transport boundary intervenes.
@@ -130,11 +152,15 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let management = Packet { payload: management_packet.payload >> u32:64, ..management_packet };
   let management_inspect = management.header[24+:u8] == u8:0 && management.header[0+:u8] == u8:3;
   let management_request = management.header[24+:u8] == u8:1 && management.header[0+:u8] == u8:11;
+  let management_watch = SUPERVISED && management.header[24+:u8] == u8:2 && management.header[0+:u8] == u8:5;
+  let management_ack = SUPERVISED && management.header[24+:u8] == u8:3 && management.header[0+:u8] == u8:5;
+  let management_observer = management_watch || management_ack;
+  let management_epoch = pair(management,u32:1);
   let management_envelope_valid = management.route == u32:0 && (management.header & u32:0x00ffff00) == u32:0;
   let management_codes_valid = (word(management,u32:1) >> bit_count<Operation>()) == u32:0 &&
     (word(management,u32:8) >> bit_count<Fault>()) == u32:0;
   let management_valid = connected && management_session && s.management_rx.full && !s.management_rx.bad && management_envelope_valid &&
-    (management_inspect || (management_request && management_codes_valid)) && !s.management_pending && mgmt_space;
+    (management_inspect || management_observer || (management_request && management_codes_valid)) && !s.management_pending && mgmt_space;
   let application_packet = s.application_rx.packet;
   let application_session = pair(application_packet,u32:0) == s.session && s.attached;
   let app = Packet { payload: application_packet.payload >> u32:64, ..application_packet };
@@ -148,7 +174,8 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let current = s.core.control.data.lifecycle.current;
   let live_calls = if current == s.incarnation { s.calls } else { zero!<Call[SLOT_COUNT]>() };
   let last_request = if current == s.incarnation { s.last_request } else { u32:0 };
-  let stale = incarnation == u64:0 || incarnation != current || s.core.control.data.lifecycle.phase != domain_codes::PHASE_READY || request <= last_request || request == u32:0;
+  let stale = incarnation == u64:0 || incarnation != current || s.core.control.data.lifecycle.phase != domain_codes::PHASE_READY || request <= last_request || request == u32:0 ||
+    (SUPERVISED && (!parent_admission || s.watched != current || s.retirement.valid));
   let malformed = s.application_rx.bad || app.route != u32:1 || app.header[24+:u8] != u8:2 || (app.header & u32:0x00ffff00) != u32:0 ||
     app.header[0+:u8] as u32 != u32:9 + frame.header.payload_words as u32 ||
     !selection.valid || frame.header.txid as u32 != (if kind == u32:1 {slot} else {u32:0}) || frame.header.flags != u8:0;
@@ -159,18 +186,38 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     frame.header.payload_words ++ frame.header.txid ++ frame.header.flags ++ frame.header.op ++ frame.payload;
   let control = domain::Inputs {
     // Loss of the host connection does not imply failure of the actor network.
-    reset: io.reset, transport_fault: false,
-    management_valid: management_valid && management_request,
-    management_op: word(management,u32:1) as Operation,
-    expected: pair(management,u32:2), target: pair(management,u32:4), transition: pair(management,u32:6),
-    management_fault: word(management,u32:8) as Fault,
+    reset: core_reset, transport_fault: false,
+    @@MANAGEMENT_CONTROL@@
     incarnation, ingress_data: spatial, ..zero!<domain::Inputs>()
   };
   // Availability is a pre-edge observation, independent of application handshakes.
   // Only these narrow output fields survive this preview; its successor is unused.
   let observation = domain::tick(s.core, control).output;
+  let watch_ready = parent_admission && observation.domain_phase == domain_codes::PHASE_READY &&
+    observation.domain_current != u64:0 && !core_reset;
+  let watch_match = management_epoch == observation.domain_current && management_epoch != u64:0;
+  let watch_accept = management_watch && watch_ready && watch_match && !s.retirement.valid && s.watched == u64:0;
+  let watch_replay = management_watch && watch_ready && watch_match && !s.retirement.valid && s.watched == management_epoch;
+  let ack_accept = management_ack && s.retirement.valid && management_epoch == s.retirement.epoch && management_epoch != u64:0;
+  let ack_replay = management_ack && !s.retirement.valid && management_epoch == s.acknowledged && management_epoch != u64:0;
+  let observer_status = if watch_accept || ack_accept {domain_codes::STATUS_ACCEPTED}
+    else if watch_replay || ack_replay {domain_codes::STATUS_REPLAY} else {domain_codes::STATUS_STALE};
+  let watch_departed = SUPERVISED && s.watched != u64:0 && !s.retirement.valid &&
+    (!watch_ready || observation.domain_current != s.watched);
+  let receipt = if watch_departed {
+    Retirement { valid:true, epoch:s.watched,
+      phase:if observation.domain_current == s.watched && parent_admission {
+        observation.domain_phase as u32 } else {domain_codes::PHASE_CLOSING as u32},
+      fault:if observation.domain_current == s.watched {observation.domain_fault as u32} else {domain_codes::FAULT_NONE as u32},
+      source:if observation.domain_current == s.watched {observation.domain_source_fault as u32} else {u32:0},
+      actor:if observation.domain_current == s.watched {observation.domain_source_actor} else {u32:0},
+      frontier:s.sequence }
+  } else {s.retirement};
   let ingress = application_session && s.application_rx.full && (reject || observation.app_ingress_ready);
-  let (available, grant) = arbitrate(observation, ingress, s.cursor);
+  // An unobserved successor may hold an effect, but cannot monopolize stale-request rejection.
+  let output_enabled = !SUPERVISED || (parent_admission && s.watched == current && !receipt.valid);
+  let eligible = if output_enabled {observation} else {zero!<domain::Outputs>()};
+  let (available, grant) = arbitrate(eligible, ingress, s.cursor);
   let granted = available && app_space && connected && !exhausted;
   let input_turn = grant == OUTPUT_COUNT;
   let offer = granted && input_turn;
@@ -199,18 +246,21 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     response(s.session,new_sequence,current,selected.actor,if selected.reply {live_calls[reply_index].request} else {u32:0},u32:0,
       selected.port,selected.frame,if selected.reply {u8:3} else {u8:4},u32:0)
   } else { s.application_tx };
-  let management_take = management_valid && (management_inspect || core.output.management_response_valid);
+  let management_take = management_valid && (management_inspect || management_observer || SUPERVISED || core.output.management_response_valid);
   let management_capture = connected && s.management_pending && mgmt_space;
   let wire_fault = s.fault || (output_take && !valid_reply) || exhausted ||
-    (connected && management_session && s.management_rx.full && (s.management_rx.bad || !(management_inspect || management_request) || !management_envelope_valid || (management_request && !management_codes_valid)));
+    (connected && management_session && s.management_rx.full && (s.management_rx.bad || !(management_inspect || management_request || management_observer) || !management_envelope_valid || (management_request && !management_codes_valid)));
   let next = State {
     core:core.state, incarnation:current, calls,
+    watched:if management_take && ack_accept {u64:0} else if management_take && watch_accept {management_epoch} else {s.watched},
+    acknowledged:if management_take && ack_accept {management_epoch} else {s.acknowledged},
+    retirement:if management_take && ack_accept {zero!<Retirement>()} else {receipt},
     last_request:if input_take && !stale {request} else {last_request}, sequence:new_sequence,
     cursor:if input_take || output_good {arbitration::successor<SOURCE_COUNT>(grant as Cursor) as u32} else {s.cursor},
     fault:wire_fault, session:s.session, attached:s.attached && !wire_fault,
     management_rx:if management_take || (connected && s.management_rx.full && !management_session) {zero!<Receive>()} else {mgmt_rx},
     application_rx:if input_take || (connected && s.application_rx.full && !application_session) {zero!<Receive>()} else {app_rx},
-    management_tx:if management_capture {snapshot(State{sequence:new_sequence,..s},core.output)} else {s.management_tx},
+    management_tx:if management_capture {snapshot(State{sequence:new_sequence,retirement:receipt,..s},core.output)} else {s.management_tx},
     management_tx_valid:management_capture || (s.management_tx_valid && !mgmt_done),
     management_position:if mgmt_done || management_capture {u32:0} else {s.management_position+(connected && s.management_tx_valid && io.management_output_ready) as u32},
     application_tx, application_tx_valid:input_take || output_emit || (s.application_tx_valid && !app_done),
@@ -219,10 +269,11 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     management_request:if management_take {word(management,u32:0)} else {s.management_request},
     management_header:if management_take {management.header} else {s.management_header},
     management_route:if management_take {management.route} else {s.management_route},
-    management_status:if management_take {if management_inspect {domain_codes::STATUS_OK} else {core.output.domain_status}} else {s.management_status},
-    management_action:if management_take {if management_inspect {domain_codes::ACTION_NONE} else {core.output.domain_action}} else {s.management_action},
+    management_status:if management_take {if management_inspect {domain_codes::STATUS_OK} else if management_observer {observer_status} else if SUPERVISED {domain_codes::STATUS_INVALID} else {core.output.domain_status}} else {s.management_status},
+    management_action:if management_take {if management_inspect || management_observer || SUPERVISED {domain_codes::ACTION_NONE} else {core.output.domain_action}} else {s.management_action},
   };
   Tick { state:if io.reset {zero!<State>()} else {next}, output:Outputs {
+    @@EXTERNAL_OBSERVATIONS@@
     management_ready, application_ready,
     management_output_valid:s.management_tx_valid && connected,
     management_output_word:framing::word(s.management_tx,s.management_position),

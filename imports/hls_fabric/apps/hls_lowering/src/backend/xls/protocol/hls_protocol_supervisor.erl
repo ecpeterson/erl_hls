@@ -4,11 +4,12 @@ Elaborates a static one-for-one supervisor above independently resettable domain
 The ordinary OTP declaration selects restart policy; explicit child bindings supply
 hardware networks. Both lifecycle policies are compiled Erlang. This composer owns
 only bounded observation selection, a local clock and physical completion wiring.
-Children expose raw incarnation-tagged pins, not individually published virtual PIDs.
+Raw emission exposes incarnation-tagged child pins. Stream emission connects independently
+framed child observers with bounded retirement records and a framed parent control port.
 """.
 
 %% Checked source composition and portable tool input.
--export([plan/1, emit/1, write/2]).
+-export([plan/1, emit/1, emit_stream/1, write/2, write_stream/2]).
 -export_type([config/0, plan/0, result/0]).
 
 -doc "Ordinary supervisor callback and exact child-to-network bindings. The declared clock rate supplies local restart-window time; deployment must meet it.".
@@ -35,6 +36,7 @@ Children expose raw incarnation-tagged pins, not individually published virtual 
     plan := plan(),
     frame_payload_words := hls_frame_layout:words(),
     control_state_bits := pos_integer(),
+    parent_stream => map(),
     eligible := false
 }.
 
@@ -101,10 +103,27 @@ require(false, Reason) -> error({supervisor_declaration, Reason}).
 
 -doc "Produces independent domain units, a compiled supervisor controller and stateless wiring. Grants are accepted only for the initializing parent incarnation, above every earlier grant retained by this hardware lifetime. A global reset requires a fresh externally reserved grant; no transport signal implies reset. Child application lanes run independently of the one-slot-per-clock management scan.".
 -spec emit(config()) -> hls_generated_files:output(result()).
-emit(Config) ->
+emit(Config) -> emit_mode(Config, raw).
+
+-doc "Emits independent framed child observers and parent management/grant framing. Local FPGA policy retains exclusive child lifecycle authority; host watch/acknowledgement controls publication, never local recovery.".
+-spec emit_stream(config()) -> hls_generated_files:output(result()).
+emit_stream(Config) ->
+    #{files := Files, result := Result} = emit_mode(Config, stream),
+    #{files := ParentFiles, inputs := Inputs, outputs := Outputs} =
+        Parent = hls_supervisor_stream:emit(Result),
+    #{
+        files => hls_generated_files:merge([Files, ParentFiles]),
+        result => Result#{
+            inputs := Inputs, outputs := Outputs, parent_stream => maps:remove(files, Parent)
+        }
+    }.
+
+%% Raw and framed emission share the same source-defined supervisor and each child core.
+-spec emit_mode(config(), raw | stream) -> hls_generated_files:output(result()).
+emit_mode(Config, Mode) ->
     Plan = #{children := Children} = plan(Config),
     Generated = [
-        {Id, I, hls_protocol_domain:emit(C)}
+        {Id, I, child_emit(C, Mode)}
      || {I, {Id, C}} <- lists:enumerate(0, Children)
     ],
     [#{result := #{codecs := DomainCodecs}} | _] = [G || {_, _, G} <- Generated],
@@ -140,9 +159,13 @@ emit(Config) ->
     Count = length(Children),
     {ControlInputs, ControlOutputs} = control_ports(Count, Codecs),
     Interfaces = [#{id => Id, index => I, interface => R} || {Id, I, #{result := R}} <- Generated],
-    {Inputs, Outputs} = sv_domain_supervisor:ports(Interfaces, ControlInputs, ControlOutputs),
+    {Inputs, Outputs} =
+        case Mode of
+            raw -> sv_domain_supervisor:ports(Interfaces, ControlInputs, ControlOutputs);
+            stream -> sv_domain_supervisor:stream_ports(Interfaces, ControlInputs, ControlOutputs)
+        end,
     Files = hls_generated_files:merge([
-        child_files(Generated),
+        child_files(Generated, Mode),
         hls_generated_files:prefix("supervisor", xls_emitted:dependencies(Supervisor)),
         hls_generated_files:prefix("supervisor", xls_emitted:dependencies(Parent)),
         #{
@@ -156,11 +179,16 @@ emit(Config) ->
                 "supervisor_control",
                 "supervisor_control_core"
             ),
-            "supervisor/protocol_supervisor.sv" => sv_domain_supervisor:emit(
-                Interfaces,
-                ControlInputs,
-                ControlOutputs
-            )
+            case Mode of
+                raw -> "supervisor/protocol_supervisor.sv";
+                stream -> "supervisor/protocol_supervisor_stream_raw.sv"
+            end =>
+                case Mode of
+                    raw ->
+                        sv_domain_supervisor:emit(Interfaces, ControlInputs, ControlOutputs);
+                    stream ->
+                        sv_domain_supervisor:emit_stream(Interfaces, ControlInputs, ControlOutputs)
+                end
         }
     ]),
     StateBits = hls_records:width(hls_records:find(Forms, supervisor_state)),
@@ -186,16 +214,24 @@ emit(Config) ->
 fields(Forms, Name) -> maps:from_list(hls_records:fields(hls_records:find(Forms, Name))).
 
 %% Each child keeps its own DSLX namespace and frame layout; only RTL module names differ.
--spec child_files([
-    {atom(), non_neg_integer(), hls_generated_files:output(hls_protocol_domain:result())}
-]) -> #{string() => iodata()}.
-child_files(Generated) ->
+-spec child_files(
+    [
+        {atom(), non_neg_integer(), hls_generated_files:output(hls_protocol_domain:result())}
+    ],
+    raw | stream
+) -> #{string() => iodata()}.
+child_files(Generated, Mode) ->
     hls_generated_files:merge([
         begin
             Prefix = child_prefix(I),
-            G = maps:remove("domain/protocol_domain.sv", Files),
+            Wrapper =
+                case Mode of
+                    raw -> "domain/protocol_domain.sv";
+                    stream -> "domain/domain_stream.sv"
+                end,
+            G = maps:without(["domain/protocol_domain.sv", "domain/domain_stream.sv"], Files),
             hls_generated_files:prefix(Prefix, G#{
-                "domain/protocol_domain.sv" =>
+                Wrapper =>
                     sv_protocol_ports:emit(Inputs, Outputs, Prefix, Prefix ++ "_core")
             })
         end
@@ -204,9 +240,21 @@ child_files(Generated) ->
 
 -doc "Writes a fresh portable source bundle with separate child/control XLS units and retained interface.etf. Does not run tools or attach a deployment. Startup failures retain partial evidence; a physical reset or lost allocation state requires host exclusion and a newly reserved identity grant.".
 -spec write(config(), file:filename()) -> map().
-write(Config, Directory) ->
+write(Config, Directory) -> write_bundle(Config, Directory, raw).
+
+-doc "Writes a fresh portable supervised stream bundle, per-child runtime interfaces and parent framing interface. Independent child application/management lanes preserve bounded reply ownership; deployment owns physical session isolation.".
+-spec write_stream(config(), file:filename()) -> map().
+write_stream(Config, Directory) -> write_bundle(Config, Directory, stream).
+
+%% Each source module is compiled once; only the selected wrapper and physical pins differ.
+-spec write_bundle(config(), file:filename(), raw | stream) -> map().
+write_bundle(Config, Directory, Mode) ->
     Generated =
-        #{result := Result = #{children := Children, frame_payload_words := Words}} = emit(Config),
+        #{result := Result = #{children := Children, frame_payload_words := Words}} =
+        case Mode of
+            raw -> emit(Config);
+            stream -> emit_stream(Config)
+        end,
     _ = hls_generated_files:write(Generated, Directory),
     #{libraries := Libraries, imports := Support} = hls_build_support:layout([]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
@@ -218,15 +266,23 @@ write(Config, Directory) ->
             #{frame_payload_words := ChildWords} = Interface,
             ok = hls_artifact_bundle:snapshot(ChildDir, Libraries),
             ok = hls_compile:configure_support(ChildDir, hls_frame_layout:new(ChildWords)),
+            {Source, Top, Output, Wrapper} =
+                case Mode of
+                    raw ->
+                        {"domain.x", "domain_clock", "core.v", "protocol_domain.sv"};
+                    stream ->
+                        {"domain_stream.x", "domain_stream_clock", "stream_core.v",
+                            "domain_stream.sv"}
+                end,
             unit(
                 Prefix ++ "/domain",
-                Prefix ++ "/domain/domain.x",
-                "domain_clock",
+                Prefix ++ "/domain/" ++ Source,
+                Top,
                 Prefix ++ "_core",
-                Prefix ++ "/domain/core.v",
+                Prefix ++ "/domain/" ++ Output,
                 [Prefix ++ "/domain", Prefix ++ "/network", Prefix ++ "/actors", Prefix ++ "/dslx"] ++
                     [Prefix ++ "/" ++ P || P <- Support],
-                [Prefix ++ "/domain/core.v", Prefix ++ "/domain/protocol_domain.sv"],
+                [Prefix ++ "/domain/" ++ Output, Prefix ++ "/domain/" ++ Wrapper],
                 ChildWords
             )
         end
@@ -239,7 +295,14 @@ write(Config, Directory) ->
         "supervisor_control_core",
         "supervisor/core.v",
         ["supervisor" | Support],
-        ["supervisor/core.v", "supervisor/controller.sv", "supervisor/protocol_supervisor.sv"],
+        [
+            "supervisor/core.v",
+            "supervisor/controller.sv",
+            case Mode of
+                raw -> "supervisor/protocol_supervisor.sv";
+                stream -> "supervisor/protocol_supervisor_stream_raw.sv"
+            end
+        ],
         Words
     ),
     ok = file:write_file(filename:join(Directory, "interface.etf"), term_to_binary(Result), [
@@ -247,7 +310,11 @@ write(Config, Directory) ->
     ]),
     hls_artifact_bundle:finish(
         Directory,
-        ChildUnits ++ [SupervisorUnit],
+        ChildUnits ++ [SupervisorUnit] ++
+            case Mode of
+                raw -> [];
+                stream -> [maps:get(unit, maps:get(parent_stream, Result))]
+            end,
         #{kind => static_supervisor, backend => source_protocol}
     ).
 
@@ -317,6 +384,7 @@ control_ports(Count, Codecs) ->
         {"domain_initialized", 1},
         {"grant_ready", 1},
         {"grant_accepted", 1},
+        {"grant_response_valid", 1},
         {"supervisor_phase", Width(supervisor_phase)},
         {"supervisor_reason", Width(supervisor_reason)},
         {"grant_next", 64},
@@ -447,3 +515,36 @@ constant(Kind, Member, Descriptor) ->
         integer_to_list(Code),
         ";\n"
     ].
+
+%% Supervised framing reuses the checked raw domain and gives each child its own transport storage.
+-spec child_emit(hls_source_config:network() | file:filename(), raw | stream) ->
+    hls_generated_files:output(hls_protocol_domain:result()).
+child_emit(Config, raw) ->
+    hls_protocol_domain:emit(Config);
+child_emit(Config, stream) ->
+    #{
+        files := RawFiles,
+        result := Raw = #{codecs := Codecs, stream := Bindings, frame_payload_words := Words}
+    } = hls_protocol_domain:emit(Config, stream),
+    #{files := StreamFiles} = Stream = hls_domain_stream:emit_supervised(Raw),
+    Transport = maps:remove(files, Stream),
+    Runtime = Bindings#{
+        codecs => Codecs,
+        frame_payload_words => Words,
+        transport => Transport,
+        supervision => local
+    },
+    {Inputs, Outputs} = hls_domain_stream:supervised_ports(Codecs),
+    #{
+        files => hls_generated_files:merge([
+            RawFiles,
+            StreamFiles,
+            #{"domain/interface.etf" => term_to_binary(Runtime)}
+        ]),
+        result => Raw#{
+            inputs := Inputs,
+            outputs := Outputs,
+            transport => Transport,
+            runtime_interface => Runtime
+        }
+    }.
