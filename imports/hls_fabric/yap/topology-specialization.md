@@ -1,12 +1,12 @@
 # Topology specialization campaign
 
-Updated 2026-10-04. **This campaign is closed.** Indexed snapshots, compact control representation, one-hot admission and parallel publication produced a retained complete-application improvement. Later ownership, phase-control, continuation and placement probes do not justify extending the small-optimization campaign. [Architecture options](physical-architecture-options.md) owns the approved next plan; physical ownership and area budgeting are active. [Decoder service investigations](decoder-service-investigations.md) owns workload selection and acceptance.
+This campaign is closed. `Notes/erl_xls/Roadmap.md` is the sole active task list: G5 owns selected decoder/performance work, G2/G3 cover compiler and collection contracts, G4 covers observations, and P6/G7 cover selected deployment and alternative tools. Indexed snapshots, compact control, one-hot admission and parallel publication retain their measured improvement. Later ownership, phase-control, continuation and placement probes did not justify extending the small-optimization campaign. [Architecture options](physical-architecture-options.md) preserves its original hypotheses and cost policy, not another active plan.
 
-Preserve ordinary Erlang source, logical actor identity, ordered effects, failure behavior, finite admission and coherent debug observations. Target sustained 1 MHz resolved sheets with bounded backlog, then reduce area. Application placement and shared execution remain private; generic public compiler changes require separate review.
+The campaign preserved ordinary Erlang source, logical actor identity, ordered effects, failure behavior, finite admission and coherent debug observations. Its target was sustained 1 MHz resolved sheets with bounded backlog, followed by area reduction; the finite results below do not establish that target. New work is selected only in the master.
 
 ## Retained baseline and comparison scope
 
-The selected #65 configuration is [indexed-snapshots.json](../experiments/snowflake/actors/configurations/indexed-snapshots.json): full D3/H3 Snowflake actor decoder, 36 vertices, six shared executors, tree acknowledgments, local phase advancement, exclusive transfer/acknowledgment collectors, indexed snapshots and width-two publication. The 128-sheet p = 0.005 phenomenological cohort checks all 1,125 corrections.
+The historical #65 configuration is `experiments/snowflake/actors/configurations/indexed-snapshots.json` (see [artifact lookup](../docs/artifacts.md#historical-reports)): full D3/H3 Snowflake actor decoder, 36 vertices, six shared executors, tree acknowledgments, local phase advancement, exclusive transfer/acknowledgment collectors, indexed snapshots and width-two publication. The 128-sheet p = 0.005 phenomenological cohort checks all 1,125 corrections.
 
 | Retained stage | Mean round clocks | Routed period | Mean-round proxy | Routed LUTs |
 | --- | ---: | ---: | ---: | ---: |
@@ -33,14 +33,11 @@ Original source roots and intermediate commits identify historical evidence, not
 
 The final grouping probe reduces mean round clocks by 2.18%, to 226.055; its area and routed period are unmeasured. It would lose against #65 above 9.582 ns. The continuation fold saves 6.55% of its parent's clocks but worsens round time by 2.76%. Neither is evidence that a larger scheduling gain was overlooked.
 
-## Remaining obligations, not another micro-optimization queue
+## Acceptance constraints for selected future work
 
-- [ ] Execute the [approved architecture plan](physical-architecture-options.md), starting with physical ownership and area/access budgets; its task list is authoritative.
-- [ ] Compile a shared protocol summary for tag ownership, membership, phase/key successors and reader lifetimes; discharge optimized-placement assertions where possible and report the rest explicitly.
-- [ ] Establish independently offered sustained-load and burst/backlog qualification on the surviving complete configuration; strengthen independent decoder validity separately.
-- [ ] Complete controller-commit causes, transfer ancestry and producer/consumer feedback only where a proposed service-model comparison needs them. The balanced receiver capture currently fails exact write replay, so it supplies no accepted counterfactuals.
-- [ ] Preserve coherent logical debug across alternative storage/compute ownership; share lifecycle and observation contracts with phi without serializing its geometric lanes.
-- [ ] Reassess wider actor-lowered windows against a specified commit/halo/time geometry and a demonstrated service/area need. Keep QEC port PRs paused.
+G5 requires independent offered-load and burst/backlog measurement on the actual selected implementation, with wider windows justified by explicit commit/halo/time geometry and service/area need. G2/G3 cover source-derived tag ownership, membership, phase/key successors and reader lifetimes where a consumer needs stronger eligibility or reuse guarantees. G4 covers missing controller causes, transfer ancestry and feedback only for a concrete diagnostic or predictive comparison. The balanced receiver capture failed exact write replay and supplies no accepted counterfactuals.
+
+Alternative storage/compute ownership must preserve coherent logical debug and application behavior without serializing Phi’s geometric lanes. These are acceptance constraints, not instructions to reopen the historical campaign or keep application work paused.
 
 The current snapshot placement still asserts reserved-tag ownership, uniform keys, bounded live versions and generation-safe reuse. Runtime failures and adversarial simulations do not establish those properties for arbitrary source. A missing active member remains an obligation; inactive padding is not arrival. Monoid reductions and fixed-order gathers have different algebraic contracts. See [indexed collections](../docs/indexed-collections.md), [exclusive collections](../docs/exclusive-collections.md) and [workload acceptance](decoder-service-investigations.md).
 
@@ -55,15 +52,12 @@ Narrower fields, extra banks, another pipeline cut and callback folding remain p
 
 Retained evidence is under `hls_artifacts/runs/`: `indexed-snapshots-2026-10-01/`, `indexed-admission-state-2026-10-02/`, `one-hot-admission-2026-10-02/`, `collector-delivery-2026-10-02/`, `collector-ownership-2026-10-03/`, `phase-control-2026-10-03/`, `phase-protocols-2026-10-03/` and `collection-communication-2026-10-04/`. The original detailed campaign log is preserved by Git at `4c9ff19:yap/topology-specialization.md`; executable reports and controls remain external. Historical counts/settings retain their own scope.
 
-## TE0715 deployment follow-ons
+## TE0715 deployment evidence
 
-The reusable DMA lifecycle, split repetition-memory coordinator and passive packet/stage/private-link decoders now live outside the board runner. The remaining board work is:
+The [partition link](../platforms/xc7/docs/partition-link.md#physical-witness) completed two attached 4,096-exchange hardware passes. The [3+3 repetition images](../platforms/xc7/docs/repetition-link.md#physical-result-and-packaging) completed a local status round on each board, and paired PS reboot was physically exercised. These establish bounded actor/DMA/packet-link operation, not general timing, BER, sustained-load or recovery qualification. The [72-bit inferred-memory probe](../platforms/xc7/docs/bram-sdp72.md) also passed its physical patterns; the Yosys mapping correction is upstream.
 
-- [ ] Complete `check_repetition_link --memory` on the physical pair, requiring both hosts to apply local and forwarded corrections, agree on a quiet/empty step and report the six-cell logical-X result.
-- [ ] Add a paired activation epoch/reset protocol that retires stale frames and credits, resets both actor graphs and gateways and reattaches BEAM without rebooting either PS. Exercise interrupted work and mismatched peers.
-- [ ] Expose packet, scheduler-stage and private-link counters, faults and traces through a standard `hls_debug` target with selectable source tags, explicit clearing, non-destructive snapshots and drop/overflow/gap accounting.
-  - One failure-capture command should retain both roles' deployment identities, DMA status and boundary evidence while the application lane is blocked.
-- [ ] Raise the 3+3 application clock from the 12.5-MHz diagnostic setting and rerun the demo and logical-memory acceptance at each qualified rate before rebuilding the full-debug 4+4 workload.
-- [ ] Qualify the platform and link beyond bounded witnesses with DDR stress, measured FCLK, CDC/timing signoff, sustained bidirectional traffic and a stated PRBS/BER interval.
-- [ ] Add the missing `GTX_INT_INTERFACE` frame/segbits mapping to the open XC7 database, reassemble the known-good link images and audit every enabled GTX feature against the physical control.
-- [ ] Contribute the SDP72 hardware confirmation and an independent-upper-parity structural regression to Yosys issue 5409; the implementation fix is already present from release 0.65.
+P6 owns any selected next hardware slice. Its acceptance may require actual six-cell logical-memory readout (`check_repetition_link --memory`, still unqualified on the pair), safe warm lifecycle/transport replacement without PS reboot, interrupted-work and mismatched-peer handling, independent debug during blocked application traffic, and exact image/clock identities. The newer digital recovery contract does not silently qualify this older board bridge. The separate [routed regsvc image](../platforms/xc7/docs/te0715-regsvc.md) likewise retains its own uncompleted board acceptance.
+
+Measured FCLK, DDR stress, physical CDC/reset/timing constraints and stated bidirectional load/PRBS/BER intervals remain distinct requirements. Raising the 12.5-MHz diagnostic application clock needs matched application acceptance at the new qualified rate; do not infer it from a nominal frequency or an out-of-context route.
+
+G4 owns public packet/stage/private-link diagnostics when needed. G6/G7 own a selected tool/platform refresh, including missing `GTX_INT_INTERFACE` frame/segbits data, audited enabled features, and any upstream SDP72 hardware/structural evidence contribution. These are conditional prerequisites, not an automatic board or upstream campaign.

@@ -1,10 +1,13 @@
-# CI consolidation
+# CI consolidation evidence
+
+`Notes/erl_xls/Roadmap.md` is the sole active task list; G8 owns CI maintenance and its resource policy. This record describes the reduced-suite qualification and its original trigger settings, not current permission to run or enable Actions.
 
 - [x] Replace overlapping workflows and parameter grids with one serial local/Actions entry point; automatic triggers remain disabled.
 - [x] Qualify exactly one scheduler/Phi and one protocol/Snowflake integration locally, recording host runtime and failures.
 - [x] Retain small mechanism tests for framing/reset, selective receive, publication, collections and source-action semantics; record dropped size/area coverage honestly.
 - [x] Qualify the full reduced suite on Linux Actions and record per-tier cost.
-- [ ] Decide when to restore a pull-request trigger from the measured cost; avoid a duplicate main-push run.
+
+Any trigger change is a separate user/resource decision under G8; the intended policy avoids duplicate pull-request and main-push suites.
 
 Evidence lives in `hls_artifacts/runs/erlang-local-cells-2026-10-16/post-campaign-cleanup-6/`. Every local heavy run is serial and bounded by a six-GiB aggregate-RSS guard; original logs and failed attempts remain retained. Local macOS measurements do not establish Linux runner cost or hardware throughput.
 

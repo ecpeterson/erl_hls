@@ -1,5 +1,7 @@
 # Closed-domain recovery qualification
 
+`Notes/erl_xls/Roadmap.md` is the sole active task list. This file retains the completed digital campaign’s evidence; P5 owns application recovery meaning, P6 physical deployment, and G1 additional links/exhaustion/collective semantics. Historical stage limitations below describe their original evidence and are resolved only where a later section explicitly says so.
+
 The implementation composes whole source-protocol networks around the shared Erlang lifecycle kernel and exposes incarnation-specific endpoints through the virtual node. [Domain recovery](../docs/domain-recovery.md) and [device sessions](../docs/device-sessions.md) specify the supported interfaces. The older scoped-recovery note is design history, not authority for additional work-history or replay guarantees.
 
 - [x] Compile the lifecycle kernel around a complete source network with independent management, closed admission during replacement and successful-entry readiness.
@@ -97,8 +99,8 @@ Those two items complete this digital/co-simulation campaign. The framed closeou
 - [x] Exercise bounded temporary children through the production bridge: explicit compiled templates, finite occupancy, no automatic restart, confirmed retirement before reuse and fresh incarnation identities.
 - [x] Add cross-domain mailbox and credit retirement with explicit dependent restart groups; stale traffic must not enter replacements and an unrelated domain must continue.
 - [x] Integrate crossing-domain binding and dependent restart coordination with the production framed bridge; retain the same shared channel kernel and identity exclusions.
-- [ ] Revisit dynamic Erlang links and logical resource exhaustion: an attempted link must not be silently rejected on exhaustion. Distinguish logical mailbox/relationship limits from ordinary transport stalls; decide terminal admission behavior and preserve explicit failure relationships.
-- [ ] Implement and physically qualify deployment session exclusion and lifecycle reconciliation; do not equate host process termination with device retirement.
+
+G1 retains dynamic Erlang links and logical resource exhaustion as a separate design boundary: a link cannot silently disappear on exhaustion, and mailbox/relationship limits are distinct from ordinary transport stalls. P6 retains physical session exclusion and lifecycle reconciliation; host process termination is not device retirement. These obligations are tracked only in the master.
 
 Host-to-FPGA supervision comes first. FPGA-to-host supervision remains deferred. Local digital recovery does not establish external-resource validity or undo an emitted effect. A domain's lifecycle interface must remain usable by a compiled supervisor without host filesystem or PID assumptions; host authority and identity allocation are adapters above that interface.
 
