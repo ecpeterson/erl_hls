@@ -43,7 +43,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let initialized = @@INITIALIZED@@;
   let setup_output = @@SETUP_OUTPUT@@;
   let fault = @@FAULT@@;
-  let protocol_fault = net.output.ingress_fault || io.transport_fault;
+  let protocol_fault = net.output.ingress_fault || io.transport_fault || @@CROSSING_FAULT@@;
   // A stopped incarnation cannot acquire new faults; stale fault levels must not
   // monopolize its management lane or prevent explicit replacement.
   let new_fault = old.phase != domain_codes::PHASE_STOPPED &&

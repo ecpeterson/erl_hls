@@ -1,4 +1,4 @@
-# Closed source-protocol recovery domains
+# Source-protocol recovery domains
 
 `hls_protocol_domain:write/2` compiles one complete source-protocol network behind an incarnation boundary. It takes the ordinary network configuration and writes a portable source bundle for the existing external XLS driver. A domain is the fixed group of actors, private links, pending publications and host ingress that are reset together; a domain incarnation is one lifetime of that group. Separate emitted core instances have independent lifecycle and network state.
 
@@ -11,6 +11,49 @@ Management and application traffic are separate interfaces. Only management requ
 The first boundary supports a closed whole-network placement, rectangle ingress, automatic internal execution, no declared startup messages and silent initialization. A source initializer/entry failure closes admission. An initialization publication attempt also fails closed; it is not released to the application. Source failures retain actor index and full finite failure code separately from the domain cause. The generated control adapter currently requires ten frame payload words, so the builder selects at least that capacity. This is an internal composition constraint, not a promise that every deployment frame is ten words.
 
 The backend must connect every application ingress and egress through the gates and keep management available independently of application backpressure. A dead physical backend does not establish a successful fence or reset; its owner must retain uncertainty. No distributed reset protocol or crossing-link ownership policy is implied by this single-clock composition.
+
+## Mailboxes between reset domains
+
+`hls_protocol_domains:emit/2` splits one source topology into independently resettable partitions and inserts an incarnation-bound channel at every directed cut. `write/3` writes the same composition as a portable XLS bundle. For the repository's three-actor fixture, run from the repository root with the test modules available:
+
+```erlang
+Source = #{
+    sources => [{"test/hls_cross_domain_producer.erl", []},
+                {"test/hls_cross_domain_consumer.erl", []},
+                {"test/hls_domain_counter.erl", []}],
+    topology => {hls_cross_domain_producer, topology, []},
+    actor_limit => 3,
+    control => rectangle
+},
+Placement = #{
+    domains => [{a, [0]}, {b, [1]}, {c, [2]}],
+    restart_groups => [[a, b], [c]]
+},
+#{files := Files, result := Interface} = hls_protocol_domains:emit(Source, Placement),
+Bundle = hls_protocol_domains:write(Source, Placement, "build/cross-domain").
+```
+
+Actor indices follow the source topology. The builder prepares one source snapshot and invokes its trusted topology constructor once; all partitions render from that retained program. Domains must cover every actor exactly once; restart groups must partition domain IDs, and every crossing must stay within one group. The example routes A to B while C remains independent. The source constraints remain automatic execution, rectangle ingress, silent initialization and no declared startup messages. The channel controller raises the shared frame capacity to at least twenty payload words. The result retains domain membership, crossing schemas, enum codecs and pin widths; each `domain_N/domain/interface.etf` describes its local boundary. The RTL top is `protocol_domains`.
+
+A **domain incarnation** identifies an actor group's lifetime. A separate **channel generation** identifies one binding of two exact endpoint incarnations, and a packet sequence identifies the single retained packet within that binding. Binding requires both endpoints to be ready and both incarnation IDs to exceed those retained from the previous binding. Replacing only B cannot reconnect A: A's old, unversioned publication could otherwise be relabelled as work for the new B. Recovery must retire and replace both members of this dependency group before binding again. A group declaration checks that policy's static scope; it does not instantiate a supervisor, issue resets or retry work. The deployment coordinates lifecycle commands and exact-generation `ch_N_bind_request`/`ch_N_fence` requests. This is mailbox ownership, not Erlang `link/1` signaling.
+
+The public `domain_N_` pins retain each domain's lifecycle, host ingress and external effects. Raw peer pins are private to the composer. Each `ch_N_` interface exposes outgoing data (`tx_valid`, `tx_generation`, `tx_sequence`, `tx_slot`, `tx_frame`), incoming data and readiness, outgoing acknowledgements, returned credits, and management/status. `generation` and `packet_sequence` report current channel ownership; packet lanes retain their own `tx_sequence`, `data_sequence`, `ack_sequence` and `credit_sequence` fields. The external transport preserves metadata and payload together and holds each offer stable until its ready/valid handshake. One source publication occupies the channel until the destination's actual capture accepts it, its acknowledgement is sent and its exact credit returns. Capture acceptance is not completion of the destination callback. Stale, duplicate and premature data/credits cannot grant a destination delivery or release current credit; an abandoned packet is not replayed. These checks assume payload integrity: matching tags cannot detect corrupted or forged current payloads.
+
+Channel state lives outside the endpoint reset regions. Either endpoint losing readiness or changing incarnation closes the binding; explicit fencing has the same admission priority. `domain_N_reset` also closes that endpoint's channel handshakes on the reset edge. Global `reset` reaches every domain and channel, clearing channel tombstones, so cold reset requires the deployment to exclude the former transport namespace before admission. No delay or timeout establishes that exclusion. All interfaces use one clock; this builder supplies neither clock-domain crossing nor physical reset isolation.
+
+`hls_protocol_domain:emit_partition/1` and `write_partition/2` are the lower-level escape hatch for another checked crossing owner. They require explicit `native_actors` and an external owner that excludes old data and credits; connecting their bare wires does not support independent reset. Ordinary `emit/1`, `write/2` and framed domain builders continue to reject partition selection.
+
+The native test uses real source actors under an ordinary OTP `one_for_all` supervisor for A/B, with independent C. Its generated-RTL counterpart drives the public lifecycle and transport pins directly, including delayed old packets and credits. These are separate finite witnesses of source behavior and hardware ownership, not a host supervisor operating a framed multi-domain bridge. This composition does not yet supply that framed integration or establish board operation, physical timing or unrestricted progress.
+
+Run the finite native/public-pin witness and the separate compiled-channel checks locally:
+
+```sh
+rebar3 as test compile
+python3 tools/test_cross_domain_mailboxes.py /path/to/xls /fresh/mailbox-evidence
+python3 tools/test_domain_channel_formal.py /path/to/xls /fresh/mailbox-evidence/build/source /fresh/channel-evidence --yosys /path/to/yosys
+```
+
+The RTL schedule retains old data across replacement, replays old data and credits against a fresh packet with the same sequence number, stalls acknowledgements while C advances, and checks same-edge endpoint reset. The channel checker runs six finite schedules, two single-edge finite-state propositions and a rejecting stale-generation negative control. The state-budget check measures source/optimized-IR storage; it does not infer mapped area or timing.
 
 ## Stop and supervised lifetime
 

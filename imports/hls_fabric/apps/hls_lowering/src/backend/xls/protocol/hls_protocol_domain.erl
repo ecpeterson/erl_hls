@@ -1,14 +1,17 @@
 -module(hls_protocol_domain).
 -moduledoc """
-Compiles one closed source-protocol network behind a reset/incarnation boundary.
+Compiles a source-protocol network behind a reset/incarnation boundary.
 The runtime lifecycle kernel is ordinary Erlang compiled through its own
 service adapter. This composer adds physical completion observations and
-whole-network gates, not another lifecycle algorithm. Instantiate separate emitted
-cores for independent domains; crossing links require a separate recovery policy.
+local-network gates, not another lifecycle algorithm. Instantiate separate emitted
+cores for independent domains. Explicit partition emission requires an external
+incarnation-fenced crossing owner; bare crossing wires do not support independent reset.
 """.
 
 %% Checked source composition and portable external-tool input.
--export([emit/1, emit/2, write/2, write_stream/2]).
+-export([emit/1, emit/2, emit_partition/1, write/2, write_stream/2, write_partition/2]).
+%% Internal compiler composition from one retained source snapshot.
+-export([emit_partition_plan/1]).
 -export_type([result/0, codecs/0]).
 
 -doc "Retained lifecycle field descriptors resolved from the compiled kernel; host codecs need no compiler or source lookup.".
@@ -23,6 +26,7 @@ cores for independent domains; crossing links require a separate recovery policy
 -doc "Named clock ports and the exact underlying network. This boundary establishes neither native fit nor distributed progress.".
 -type result() :: #{
     network := hls_protocol_network:manifest(),
+    crossings := [xls_protocol_network:crossing()],
     stream => hls_domain_stream:plan(),
     transport => map(),
     runtime_interface => map(),
@@ -42,23 +46,47 @@ emit(Config) -> compose(Config, raw).
 -doc "Renders the raw domain and optionally retains checked framed actor bindings for a surrounding composer. The stream mode checks unique addressed ingress and external ports without introducing a second actor network.".
 -spec emit(hls_source_config:network() | file:filename(), raw | stream) ->
     hls_generated_files:output(result()).
-emit(Config, Mode) -> compose(Config, Mode).
+emit(Config, Mode) when Mode =:= raw; Mode =:= stream -> compose(Config, Mode).
 
-%% Framed endpoints add addressing restrictions only when explicitly requested.
--spec compose(hls_source_config:network() | file:filename(), raw | stream) ->
+-doc "Renders a raw native_actors partition with local lifecycle management, canonical crossing ports and retained crossing descriptors. Requires an external owner which binds both endpoint incarnations, excludes old data/credits and retires retained crossing ownership before reuse. Bare wires are not an independent-reset protocol. Incoming transfers and reverse readiness close outside ready; crossing faults enter domain failure. Host ingress and silent initialization follow emit/1; framed partition emission is unsupported.".
+-spec emit_partition(hls_source_config:network() | file:filename()) ->
+    hls_generated_files:output(result()).
+emit_partition(Config) -> compose(Config, partition).
+
+-doc "Internal compiler-facing partition emission from an unchanged opaque transport build. The caller must derive native placement from one prepared source snapshot, retain its source modules, and provide an external incarnation-fenced crossing owner. Requires a proper partition, at least ten frame payload words, rectangle ingress and silent initialization. Execution is automatic; this does not accept saved or caller-edited plan maps.".
+-spec emit_partition_plan(hls_protocol_transport:build()) -> hls_generated_files:output(result()).
+emit_partition_plan(Build) ->
+    #{fabric := Fabric} = hls_protocol_transport:descriptor(Build),
+    ok = placement(partition, maps:is_key(crossings, Fabric)),
+    compose_build(Build, partition).
+
+%% Partition admission is an explicit API boundary; ordinary framed domains remain closed.
+-spec compose(hls_source_config:network() | file:filename(), raw | stream | partition) ->
     hls_generated_files:output(result()).
 compose(Config0, Mode) when is_map(Config0) ->
+    ok = placement(Mode, maps:is_key(native_actors, Config0)),
     Config = hls_source_config:validate(network, Config0#{
         frame_payload_words => max(10, maps:get(frame_payload_words, Config0, 3))
     }),
     automatic = maps:get(activation, Config, automatic),
-    false = maps:is_key(native_actors, Config),
     Build = hls_protocol_transport:plan(Config),
-    #{bundle := #{topology := #{startup := []}}} = hls_protocol_transport:descriptor(Build),
+    compose_build(Build, Mode);
+compose(Filename, Mode) ->
+    compose(hls_source_config:read(Filename), Mode).
+
+%% All roles render their retained actor programs; lifecycle support is identical across source placements.
+-spec compose_build(hls_protocol_transport:build(), raw | stream | partition) ->
+    hls_generated_files:output(result()).
+compose_build(Build, Mode) ->
+    Descriptor =
+        #{frame_layout := FrameLayout, bundle := #{topology := #{startup := []}}} =
+        hls_protocol_transport:descriptor(Build),
+    Words = hls_frame_layout:payload_words(FrameLayout),
+    true = Words >= 10,
     Framing =
         case Mode of
-            raw -> #{};
-            stream -> #{stream => hls_domain_stream:bind(hls_protocol_transport:descriptor(Build))}
+            stream -> #{stream => hls_domain_stream:bind(Descriptor)};
+            _ -> #{}
         end,
     NetworkPlan = hls_protocol_network:plan(Build, #{activation => automatic, inspection => none}),
     #{files := NetworkFiles, result := #{network := Network}} = hls_protocol_network:emit(
@@ -66,12 +94,12 @@ compose(Config0, Mode) when is_map(Config0) ->
     ),
     #{
         native_indices := Actors,
+        crossings := Crossings,
         ingress := Ingress,
         inputs := NetworkInputs,
         outputs := NetworkOutputs
     } = Network,
     true = Ingress =/= none,
-    Words = maps:get(frame_payload_words, Config),
     Source = hls_source:library_file(hls_runtime, "runtime/hls_domain_lifecycle.erl"),
     Codecs = codecs(Source),
     Controller = xls_parse:to_artifact(Source, #{frame_payload_words => Words}),
@@ -82,7 +110,9 @@ compose(Config0, Mode) when is_map(Config0) ->
         #{
             "domain/domain_controller.x" => xls_emitted:bytes(Controller),
             "domain/domain_codes.x" => constants(Codecs),
-            "domain/domain.x" => render(Actors, Inputs, Outputs, NetworkInputs, NetworkOutputs),
+            "domain/domain.x" => render(
+                Actors, Crossings, Inputs, Outputs, NetworkInputs, NetworkOutputs
+            ),
             "domain/protocol_domain.sv" => sv_protocol_ports:emit(
                 Inputs,
                 Outputs,
@@ -95,6 +125,7 @@ compose(Config0, Mode) when is_map(Config0) ->
         files => Files,
         result => Framing#{
             network => Network,
+            crossings => Crossings,
             inputs => Inputs,
             outputs => Outputs,
             codecs => Codecs,
@@ -103,9 +134,28 @@ compose(Config0, Mode) when is_map(Config0) ->
             fence => no_future_external_transfer,
             eligible => false
         }
-    };
-compose(Filename, Mode) ->
-    compose(hls_source_config:read(Filename), Mode).
+    }.
+
+%% A caller cannot accidentally acquire raw crossings through the closed-domain entry points.
+-spec placement(raw | stream | partition, boolean()) -> ok.
+placement(partition, true) ->
+    ok;
+placement(partition, false) ->
+    hls_diagnostic:raise(
+        domain,
+        partition_selection_required,
+        <<"Partition domains require native_actors and an external incarnation-fenced crossing owner.">>,
+        #{path => [native_actors]}
+    );
+placement(_, false) ->
+    ok;
+placement(_, true) ->
+    hls_diagnostic:raise(
+        domain,
+        crossing_owner_required,
+        <<"Use emit_partition/1 or write_partition/2 with an external incarnation-fenced crossing owner; framed partition domains are unsupported.">>,
+        #{path => [native_actors]}
+    ).
 
 -doc "Writes a fresh portable domain source bundle for the ordinary external XLS driver. Source compilation precedes output creation; support snapshot or I/O failures retain partial evidence. No simulation, synthesis or hardware attachment runs here.".
 -spec write(hls_source_config:network() | file:filename(), file:filename()) -> map().
@@ -115,18 +165,24 @@ write(Config, Directory) -> write_bundle(Config, Directory, raw).
 -spec write_stream(hls_source_config:network() | file:filename(), file:filename()) -> map().
 write_stream(Config, Directory) -> write_bundle(Config, Directory, stream).
 
-%% Both entry points retain the same raw domain; only the selected physical endpoint differs.
--spec write_bundle(hls_source_config:network() | file:filename(), file:filename(), raw | stream) ->
+-doc "Writes emit_partition/1's raw portable bundle, retaining crossing codecs and descriptors in domain/interface.etf. Does not supply the external crossing owner or certify transport retirement; independent reset requires that owner before connecting the emitted ports.".
+-spec write_partition(hls_source_config:network() | file:filename(), file:filename()) -> map().
+write_partition(Config, Directory) -> write_bundle(Config, Directory, partition).
+
+%% Every writer retains the same raw domain; optional framing is a separate outer endpoint.
+-spec write_bundle(
+    hls_source_config:network() | file:filename(), file:filename(), raw | stream | partition
+) ->
     map().
 write_bundle(Config, Directory, Mode) ->
     Generated = #{result := Result = #{frame_payload_words := Words}} = compose(Config, Mode),
     {Extra, StreamInfo} =
         case Mode of
-            raw ->
-                {#{}, #{}};
             stream ->
                 #{files := SF} = SG = hls_domain_stream:emit(Result),
-                {SF, maps:without([files], SG)}
+                {SF, maps:without([files], SG)};
+            _ ->
+                {#{}, #{}}
         end,
     Final = Generated#{files := hls_generated_files:merge([maps:get(files, Generated), Extra])},
     _ = hls_generated_files:write(Final, Directory),
@@ -151,20 +207,18 @@ write_bundle(Config, Directory, Mode) ->
     },
     Runtime =
         case Mode of
-            raw ->
-                Result;
             stream ->
                 maps:merge(maps:get(stream, Result), #{
                     codecs => maps:get(codecs, Result),
                     frame_payload_words => Words,
                     transport => StreamInfo
-                })
+                });
+            _ ->
+                Result
         end,
     ok = file:write_file(filename:join(Directory, "domain/interface.etf"), term_to_binary(Runtime)),
     Selected =
         case Mode of
-            raw ->
-                Unit;
             stream ->
                 Unit#{
                     source := <<"domain/domain_stream.x">>,
@@ -172,7 +226,9 @@ write_bundle(Config, Directory, Mode) ->
                     module := <<"domain_stream_core">>,
                     output := <<"domain/stream_core.v">>,
                     rtl := [<<"domain/stream_core.v">>, <<"domain/domain_stream.sv">>]
-                }
+                };
+            _ ->
+                Unit
         end,
     hls_artifact_bundle:finish(Directory, [Selected], #{kind => domain, backend => source_protocol}).
 
@@ -217,24 +273,32 @@ ports(Inputs, Outputs, Codecs) ->
 %% Heterogeneous actor fields are the only template specialization; transitions stay compiled Erlang.
 -spec render(
     [non_neg_integer()],
+    [xls_protocol_network:crossing()],
     [{string(), pos_integer()}],
     [{string(), pos_integer()}],
     [xls_protocol_network:packed_port()],
     [xls_protocol_network:packed_port()]
 ) -> binary().
-render(Actors, Inputs, Outputs, NetworkInputs, NetworkOutputs) ->
+render(Actors, Crossings, Inputs, Outputs, NetworkInputs, NetworkOutputs) ->
     {ok, Template} = file:read_file(
         filename:join(
             code:priv_dir(hls_lowering),
             "xls/templates/protocol_domain.x.in"
         )
     ),
+    Incoming = [
+        xls_protocol_partition:name(I)
+     || #{index := I, direction := incoming} <- Crossings
+    ],
+    IncomingValid = [Name ++ "_valid" || Name <- Incoming],
     xls_template:render(Template, [
+        {<<"@@CROSSING_FAULT@@">>,
+            lists:join(" || ", ["false" | ["net.output." ++ Name ++ "_fault" || Name <- Incoming]])},
         {<<"@@IMPORTS@@">>, [["import receiver_", integer_to_list(I), ";\n"] || I <- Actors]},
         {<<"@@INPUTS@@">>, structure("Inputs", Inputs)},
         {<<"@@OUTPUTS@@">>, structure("Outputs", Outputs)},
         {<<"@@NETWORK_INPUTS@@">>, [
-            network_input(binary_to_list(N), W)
+            network_input(binary_to_list(N), W, IncomingValid)
          || #{name := N, width := W} <- NetworkInputs, N =/= <<"reset">>
         ]},
         {<<"@@NETWORK_OUTPUTS@@">>, [
@@ -340,13 +404,13 @@ structure(Name, Fields) ->
         "}\n"
     ].
 
-%% Commands require a matching incarnation; downstream readiness is closed during replacement.
--spec network_input(string(), pos_integer()) -> iodata().
-network_input("ingress_valid", _) ->
+%% Host commands require their incarnation; crossing owners check peer epochs. Both crossing directions close outside local readiness.
+-spec network_input(string(), pos_integer(), [string()]) -> iodata().
+network_input("ingress_valid", _, _) ->
     "ingress_valid: admitted && io.ingress_valid,\n";
-network_input(Name, Width) ->
+network_input(Name, Width, IncomingValid) ->
     Value =
-        case lists:suffix("_ready", Name) of
+        case lists:suffix("_ready", Name) orelse lists:member(Name, IncomingValid) of
             true -> ["if ready { io.", Name, " } else { bits[", integer_to_list(Width), "]:0 }"];
             false -> ["io.", Name]
         end,
