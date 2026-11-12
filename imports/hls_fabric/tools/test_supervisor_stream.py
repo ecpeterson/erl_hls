@@ -11,23 +11,28 @@ from backend_paths import ROOT, erlang_environment, erlang_paths
 from protocol_test_build import compile_build
 
 
-def native(stage: Path) -> Path:
+def native(stage: Path, scenario: str = 'permanent') -> Path:
     """Retain the shared native source/supervisor scenario once before hardware testing."""
+    module = 'hls_temporary_supervisor_live' if scenario == 'temporary' else 'hls_supervisor_stream_live'
     expression = ('[Stage]=init:get_plain_arguments(),'
-                  'ok=hls_supervisor_stream_live:native(Stage),halt().')
+                  f'ok={module}:native(Stage),halt().')
     run(['erl', '+S', '2:2', '-noshell', '-pa', *erlang_paths('test'), '-eval',
          expression, '-extra', stage / 'native'], stage, 'native', timeout=60)
     assert json.loads((stage / 'native/result.json').read_text())['passed']
     return stage / 'native/result.etf'
 
 
-def emit(stage: Path) -> Path:
+def emit(stage: Path, scenario: str = 'permanent') -> Path:
     """Emit source-defined supervision of two copies of the same typed actuator."""
     child = ('#{sources=>[{"test/hls_recovery_actuator_fixture.erl",[]}],'
              'topology=>{hls_recovery_actuator_fixture,topology,[]},actor_limit=>1,control=>rectangle}')
+    declaration = ('supervisor=>{hls_temporary_supervisor_otp,[]},'
+                   'templates=>hls_temporary_supervisor_otp:templates(unbound_owner),'
+                   if scenario == 'temporary' else
+                   'supervisor=>{hls_fpga_supervisor_otp,{unbound_owner,'
+                   '#{strategy=>one_for_one,intensity=>8,period=>60}}},')
     expression = ('[Output]=init:get_plain_arguments(),Child=' + child + ','
-                  'Config=#{supervisor=>{hls_fpga_supervisor_otp,{unbound_owner,'
-                  '#{strategy=>one_for_one,intensity=>8,period=>60}}},'
+                  'Config=#{' + declaration +
                   'children=>#{a=>Child,b=>Child},clock_hz=>10000},'
                   '_=hls_protocol_supervisor:write_stream(Config,Output),halt().')
     bundle = stage / 'source'
@@ -36,7 +41,7 @@ def emit(stage: Path) -> Path:
     return bundle
 
 
-def checks(xls: Path, bundle: Path, stage: Path) -> Path:
+def checks(xls: Path, bundle: Path, stage: Path, scenario: str = 'permanent') -> Path:
     """Exercise finite supervised observer histories using the same emitted source as RTL."""
     target = stage / 'stream-checks'
     target.mkdir()
@@ -46,10 +51,13 @@ def checks(xls: Path, bundle: Path, stage: Path) -> Path:
     expression = (
         '[Interface,Template,Output]=init:get_plain_arguments(),'
         '{ok,B}=file:read_file(Interface),'
-        '#{transport:=#{packet_words:=Words,state_bit_budget:=Budget}}=binary_to_term(B),'
+        '#{transport:=#{packet_words:=Words,state_bit_budget:=Budget},'
+        'actors:=#{actuator:=#{schemas:=Schemas}}}=binary_to_term(B),'
+        '#{selector:=SelectTag,width:=SelectWidth}=maps:get(select_profile,Schemas),'
         '{ok,T}=file:read_file(Template),'
-        'Text=binary:replace(binary:replace(T,<<"@@PACKET_BITS@@">>,integer_to_binary(Words*32),[global]),'
-        '<<"@@STATE_BUDGET@@">>,integer_to_binary(Budget),[global]),'
+        'Pairs=[{<<"@@PACKET_BITS@@">>,Words*32},{<<"@@STATE_BUDGET@@">>,Budget},'
+        '{<<"@@SELECT_TAG@@">>,SelectTag},{<<"@@SELECT_WORDS@@">>,(SelectWidth+31) div 32}],'
+        'Text=lists:foldl(fun({K,V},A)->binary:replace(A,K,integer_to_binary(V),[global]) end,T,Pairs),'
         'ok=file:write_file(Output,Text,[exclusive]),halt().')
     run(['erl', '+S', '2:2', '-noshell', '-eval', expression, '-extra',
          interface, template, source], target, 'prepare', env=erlang_environment('test'))
@@ -60,9 +68,19 @@ def checks(xls: Path, bundle: Path, stage: Path) -> Path:
          '--max_ticks=1000', '--warnings_as_errors=false',
          '--dslx_path=' + ':'.join(map(str, imports)),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), source], target, 'witness')
+    if scenario == 'temporary':
+        temporary = ROOT / 'test/supervisor_temporary_semantics.x'
+        units = json.loads((bundle / 'source-build.json').read_text())['units']
+        paths = next(u['dslx_path'] for u in units if u['top'] == 'supervisor_clock')
+        run([xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none',
+             '--max_ticks=1000', '--warnings_as_errors=false',
+             '--dslx_path=' + ':'.join(str(bundle / p) for p in paths),
+             '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), temporary], target, 'temporary')
     result = target / 'result.json'
-    result.write_text(json.dumps({'passed': True, 'evidence': 'Six finite DSLX observer witnesses.',
-        'inputs': {str(path): digest(path) for path in [template, interface, source]},
+    result.write_text(json.dumps({'passed': True, 'evidence': 'Finite supervised observer and selected temporary-controller witnesses.',
+        'inputs': {str(path): digest(path) for path in [template, interface, source,
+            *([ROOT / 'test/supervisor_temporary_semantics.x'] if scenario == 'temporary' else [])]},
+        'controller_inputs': {str(path): digest(path) for path in (bundle / 'supervisor').glob('*.x')},
         'output': digest(target / 'witness.log'), 'child_inputs': child_inputs(bundle),
         'interpreter': digest(xls / 'interpreter_main')}, indent=2)+'\n')
     return result
@@ -83,15 +101,15 @@ def checked(result: Path, xls: Path, bundle: Path) -> Path:
                                if name != 'child_0/transport.etf'}
     assert previous['passed'] and relevant(previous['child_inputs']) == relevant(child_inputs(bundle))
     assert previous['interpreter'] == digest(xls / 'interpreter_main')
-    for name, expected in previous['inputs'].items():
+    for name, expected in (previous['inputs'] | previous['controller_inputs']).items():
         assert digest(Path(name)) == expected, name
     return result
 
 
-def build(xls: Path, stage: Path, source: Path | None = None, checks_result: Path | None = None) -> tuple[Path, Path]:
+def build(xls: Path, stage: Path, source: Path | None = None, checks_result: Path | None = None, scenario: str = 'permanent') -> tuple[Path, Path]:
     """Compile independent control/child units and stateless wiring from their emitted manifest."""
-    bundle = source or emit(stage)
-    semantic_checks = checked(checks_result, xls, bundle) if checks_result else checks(xls, bundle, stage)
+    bundle = source or emit(stage, scenario)
+    semantic_checks = checked(checks_result, xls, bundle) if checks_result else checks(xls, bundle, stage, scenario)
     compiled = compile_build(xls, bundle, profile='test')
     manifest = json.loads((bundle / 'source-build.json').read_text())
     rtl = [compiled / name for name in dict.fromkeys(
@@ -120,7 +138,7 @@ def reuse(binary: Path) -> tuple[Path, Path]:
     return binary, Path(manifest['bundle'])
 
 
-def witness(binary: Path, bundle: Path, reference: Path, stage: Path) -> None:
+def witness(binary: Path, bundle: Path, reference: Path, stage: Path, scenario: str = 'permanent') -> None:
     """Transport only public word beats; Erlang drives ordinary typed application traffic."""
     live = stage / 'rtl'
     live.mkdir()
@@ -135,8 +153,9 @@ def witness(binary: Path, bundle: Path, reference: Path, stage: Path) -> None:
                 if process.poll() is not None or time.monotonic() >= deadline:
                     raise RuntimeError('supervisor simulation did not create FIFOs')
                 time.sleep(.02)
+            module = 'hls_temporary_supervisor_live' if scenario == 'temporary' else 'hls_supervisor_stream_live'
             expression = ('[Stage,Native]=init:get_plain_arguments(),'
-                          'ok=hls_supervisor_stream_live:run(Stage,Native),halt().')
+                          f'ok={module}:run(Stage,Native),halt().')
             run(['erl', '+S', '2:2', '-noshell', '-pa', *erlang_paths('test'),
                  '-eval', expression, '-extra', live, reference], live, 'host', timeout=90)
             assert process.wait(timeout=10) == 0
@@ -152,6 +171,7 @@ def witness(binary: Path, bundle: Path, reference: Path, stage: Path) -> None:
 def main() -> None:
     """Keep each attempt separate and reuse only explicitly verified successful artifacts."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--scenario', choices=['permanent', 'temporary'], default='permanent')
     parser.add_argument('--stage', required=True, type=lambda p: Path(p).resolve())
     parser.add_argument('--xls', type=lambda p: Path(p).resolve())
     parser.add_argument('--checks-result', type=lambda p: Path(p).resolve())
@@ -164,12 +184,12 @@ def main() -> None:
     if not args.native_only and not args.xls and not args.binary:
         parser.error('supply --xls or --binary')
     args.stage.mkdir()
-    reference = args.native_result or native(args.stage)
+    reference = args.native_result or native(args.stage, args.scenario)
     if args.native_only:
         return
-    binary, bundle = reuse(args.binary) if args.binary else build(args.xls, args.stage, args.source_bundle, args.checks_result)
+    binary, bundle = reuse(args.binary) if args.binary else build(args.xls, args.stage, args.source_bundle, args.checks_result, args.scenario)
     if not args.build_only:
-        witness(binary, bundle, reference, args.stage)
+        witness(binary, bundle, reference, args.stage, args.scenario)
     (args.stage / 'result.json').write_text(json.dumps({
         'passed': True, 'binary': str(binary), 'bundle': str(bundle),
         'native_reference': str(reference), 'build_only': args.build_only,

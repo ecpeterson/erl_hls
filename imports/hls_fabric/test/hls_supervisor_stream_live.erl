@@ -3,6 +3,8 @@
 -include("hls_recovery_profile.hrl").
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
 -export([native/1, run/2, watch/2, delayed/3, outcome/2]).
+%% Shared public-pin and real-peer fixture operations.
+-export([device/0, native_backend/1, owner/4, rtl_child/3, lease/1, with_peer/3, watched/2, down/1, call/3, apply_profile/3, applied/3, initial/2, publish/2, virtual/2, ready/2, wait/1, save/2]).
 
 -doc "Runs the shared replacement/publication scenario on native actors under an ordinary OTP supervisor.".
 -spec native(file:filename()) -> ok.
@@ -107,13 +109,13 @@ run(Stage, NativeFile) ->
         [catch hls_fabric:stop(P) || P <- Brokers]
     end.
 
-%% Separate devices retain external effects across all digital domain replacements.
+-doc "Separate devices retain external effects across all digital domain replacements.".
 -spec device() -> pid().
 device() ->
     {ok, P} = hls_recovery_device_model:start_link(),
     unlink(P),
     P.
-%% The native network and hardware network use exactly the same source callbacks.
+-doc "The native network and hardware network use exactly the same source callbacks.".
 -spec native_backend(pid()) -> pid().
 native_backend(Device) ->
     Spec = #{
@@ -124,7 +126,7 @@ native_backend(Device) ->
     {ok, P} = hls_domain_erts:start_link(Spec),
     unlink(P),
     P.
-%% Child owners observe externally managed lifetimes; only the parent owner allocates replacements in RTL.
+-doc "Child owners observe externally managed lifetimes; only the parent owner allocates replacements in RTL.".
 -spec owner(atom(), map(), module(), file:filename()) -> pid().
 owner(Name, Backends, Module, Stage) ->
     Store = filename:join(Stage, atom_to_list(Name) ++ ".incarnations"),
@@ -135,7 +137,7 @@ owner(Name, Backends, Module, Stage) ->
     ),
     unlink(P),
     P.
-%% Independent brokers own each child's physical lanes, with only effects sent to its external device.
+-doc "Independent brokers own each child's physical lanes, with only effects sent to its external device.".
 -spec rtl_child(atom(), non_neg_integer(), file:filename()) -> map().
 rtl_child(Id, Index, Stage) ->
     Device = device(),
@@ -153,13 +155,13 @@ rtl_child(Id, Index, Stage) ->
         interface => Interface,
         prefix => Prefix
     }.
-%% Keep a lease before stopping its broker so descriptor closure is independently observable.
+-doc "Keep a lease before stopping its broker so descriptor closure is independently observable.".
 -spec lease(pid()) -> term().
 lease(Broker) ->
     #{io := #{lease := Lease}} = hls_fabric:info(Broker),
     Lease.
 
-%% The same remote callers and virtual-node publication API are used for both deployments.
+-doc "The same remote callers and virtual-node publication API are used for both deployments.".
 -spec with_peer(pid(), pid(), fun((pid(), node()) -> term())) -> term().
 with_peer(OA, OB, Fun) ->
     hls_test_nodes:distribution(),
@@ -410,7 +412,7 @@ delayed(Actor, Parent, Ref) ->
         after 5000 -> error(down_timeout)
         end
     end).
-%% Ready acknowledgement closes the race between remote monitor installation and the requested fault.
+-doc "Ready acknowledgement closes the race between remote monitor installation and the requested fault.".
 -spec watched(node(), pid()) -> pid().
 watched(Remote, Actor) ->
     W = erpc:call(Remote, ?MODULE, watch, [Actor, self()]),
@@ -418,17 +420,17 @@ watched(Remote, Actor) ->
         {watching, W} -> W
     after 5000 -> error(monitor_timeout)
     end.
-%% This monitor was installed before the failure stimulus.
+-doc "This monitor was installed before the failure stimulus.".
 -spec down(pid()) -> term().
 down(W) ->
     receive
         {down, W, Reason} -> Reason
     after 5000 -> error(down_timeout)
     end.
-%% Compiler-generated typed call plumbing is exercised through a different real ERTS node.
+-doc "Compiler-generated typed call plumbing is exercised through a different real ERTS node.".
 -spec call(node(), pid(), tuple()) -> tuple().
 call(Remote, Actor, Message) -> erpc:call(Remote, hls_statem, call, [Actor, Message]).
-%% Applying a profile leaves a marker that detects accidental sibling reset.
+-doc "Applying a profile leaves a marker that detects accidental sibling reset.".
 -spec apply_profile(node(), pid(), pos_integer()) -> ok.
 apply_profile(Remote, Actor, Request) ->
     #profile_status{status = ?PROFILE_PENDING} = call(Remote, Actor, #select_profile{
@@ -436,31 +438,31 @@ apply_profile(Remote, Actor, Request) ->
     }),
     ok = erpc:call(Remote, gen_server, cast, [Actor, #apply_profile{request = Request, epoch = 0}]),
     applied(Remote, Actor, Request).
-%% An actual successful query must retain the selected source state.
+-doc "An actual successful query must retain the selected source state.".
 -spec applied(node(), pid(), pos_integer()) -> ok.
 applied(Remote, Actor, Request) ->
     #profile_status{status = ?PROFILE_APPLIED, epoch = 1} = call(Remote, Actor, #query_profile{
         request = Request, epoch = 0
     }),
     ok.
-%% A successor contains fresh digital state rather than replayed predecessor history.
+-doc "A successor contains fresh digital state rather than replayed predecessor history.".
 -spec initial(node(), pid()) -> ok.
 initial(Remote, Actor) ->
     #profile_status{status = ?PROFILE_UNKNOWN, epoch = 0} = call(Remote, Actor, #query_profile{
         request = 1, epoch = 0
     }),
     ok.
-%% Publication uses the already existing per-connection predecessor-retirement acknowledgement.
+-doc "Publication uses the already existing per-connection predecessor-retirement acknowledgement.".
 -spec publish(pid(), atom()) -> pid().
 publish(Node, Domain) ->
     {ok, #{actors := #{actuator := Actor}}} = hls_node:publish_domain(Node, Domain),
     Actor.
-%% Stable service names locate the current published PID without reviving earlier PIDs.
+-doc "Stable service names locate the current published PID without reviving earlier PIDs.".
 -spec virtual(pid(), atom()) -> pid().
 virtual(Node, Domain) ->
     #{actors := #{actuator := Actor}} = maps:get(Domain, hls_node:services(Node)),
     Actor.
-%% Endpoint presence is required in addition to the controller's ready phase.
+-doc "Endpoint presence is required in addition to the controller's ready phase.".
 -spec ready(pid(), atom()) -> hls_domain:snapshot().
 ready(Owner, Domain) ->
     wait(fun() ->
@@ -482,7 +484,7 @@ changed(Owner, Domain, Old) ->
                 wait
         end
     end).
-%% Timeouts bound the witness; no elapsed deadline manufactures retirement evidence.
+-doc "Timeouts bound the witness; no elapsed deadline manufactures retirement evidence.".
 -spec wait(fun(() -> wait | {ok, term()})) -> term().
 wait(Fun) -> wait(Fun, erlang:monotonic_time(millisecond) + 10000).
 %% Repeated observations never replay source requests or lifecycle mutations.
@@ -497,7 +499,7 @@ wait(Fun, End) ->
             after 1 -> wait(Fun, End)
             end
     end.
-%% Evidence records explicitly distinguish a finite observed history from a general guarantee.
+-doc "Evidence records explicitly distinguish a finite observed history from a general guarantee.".
 -spec save(file:filename(), map()) -> ok.
 save(Stage, Result) ->
     ok = file:write_file(filename:join(Stage, "result.etf"), term_to_binary(Result), [exclusive]),

@@ -213,6 +213,86 @@ explicit_stop_retires_observer_test() ->
         ?assertEqual({error, unauthorized}, hls_supervisor_fabric:endpoint(B, A, 9, supervisor))
     end).
 
+%% Only the resolved exact-parent endpoint may submit bounded slot commands; replies name the allocated occupant.
+-spec child_endpoint_admission_test() -> ok.
+child_endpoint_admission_test() ->
+    with_backend(#{}, fun(B, M) ->
+        {ok, _} = hls_supervisor_fabric:attach(B, self()),
+        {ok, #{actors := #{supervisor := Endpoint}}} = status(B, M, ready, 9),
+        ?assertEqual({error, unauthorized}, gen_server:call(B, {child, 9, start, a, 0})),
+        ?assertEqual({error, unknown_child}, hls_supervisor_fabric:child_status(Endpoint, missing)),
+        Start = gen_server:send_request(Endpoint, {child, start, a, 0}),
+        {_, <<41:64/little, Q:32/little, 9:64/little, 0:32/little, 0:64/little>>} = sent(M, 6),
+        deliver(B, 1, child_snapshot(Q, 1, 0, 7, 101)),
+        ?assertEqual({reply, {ok, #{id => a, incarnation => 101, phase => admitting}}},
+                     gen_server:receive_response(Start, 1000)),
+        Repeat = gen_server:send_request(Endpoint, {child, start, a, 0}),
+        {_, <<41:64/little, Q2:32/little, 9:64/little, 0:32/little, 0:64/little>>} = sent(M, 6),
+        deliver(B, 1, child_snapshot(Q2, 5, 0, 7, 101)),
+        ?assertEqual({reply, {error, {busy, #{id => a, incarnation => 101, phase => admitting}}}},
+                     gen_server:receive_response(Repeat, 1000)),
+        Inspect = gen_server:send_request(Endpoint, {child, inspect, b, 0}),
+        {_, <<41:64/little, Q3:32/little, 9:64/little, 1:32/little, 0:64/little>>} = sent(M, 8),
+        deliver(B, 1, child_snapshot(Q3, 0, 1, 6, 88)),
+        ?assertEqual({reply, {ok, #{id => b, incarnation => 88, phase => vacant}}},
+                     gen_server:receive_response(Inspect, 1000)),
+        Stop = gen_server:send_request(Endpoint, {child, stop, a, 100}),
+        {_, <<41:64/little, Q4:32/little, 9:64/little, 0:32/little, 100:64/little>>} = sent(M, 7),
+        deliver(B, 1, child_snapshot(Q4, 3, 0, 2, 101)),
+        ?assertEqual({reply, {error, {stale, #{id => a, incarnation => 101, phase => running}}}},
+                     gen_server:receive_response(Stop, 1000))
+    end).
+
+%% Pending admissions remain uncertain when their endpoint retires; no wait follows a replacement endpoint.
+-spec child_timeout_does_not_replay_test() -> ok.
+child_timeout_does_not_replay_test() ->
+    with_backend(#{management_timeout_ms => 50}, fun(B, M) ->
+        {ok, _} = hls_supervisor_fabric:attach(B, self()),
+        {ok, #{actors := #{supervisor := Endpoint}}} = status(B, M, ready, 9),
+        Monitor = monitor(process, Endpoint),
+        Start = gen_server:send_request(Endpoint, {child, start, a, 0}),
+        _ = sent(M, 6),
+        ?assertEqual({reply, {error, noconnection}}, gen_server:receive_response(Start, 1000)),
+        receive {'DOWN', Monitor, process, Endpoint, noconnection} -> ok
+        after 1000 -> error(endpoint_retained_after_uncertain_start) end,
+        receive {wire, M, _, _, _} -> error(uncertain_admission_replayed)
+        after 10 -> ok end
+    end).
+
+%% Correlation cannot substitute for slot identity; a malformed current reply closes with uncertainty.
+-spec mismatched_child_reply_closes_parent_test() -> ok.
+mismatched_child_reply_closes_parent_test() ->
+    with_backend(#{}, fun(B, M) ->
+        {ok, _} = hls_supervisor_fabric:attach(B, self()),
+        {ok, #{actors := #{supervisor := Endpoint}}} = status(B, M, ready, 9),
+        Start = gen_server:send_request(Endpoint, {child, start, a, 0}),
+        {_, <<41:64/little, Q:32/little, _/binary>>} = sent(M, 6),
+        deliver(B, 1, child_snapshot(Q, 1, 1, 7, 101)),
+        ?assertEqual({reply, {error, noconnection}}, gen_server:receive_response(Start, 1000))
+    end).
+
+%% Nine retained callers cover the transmitted operation and eight queue positions; excess remains unsent.
+-spec child_endpoint_capacity_test() -> ok.
+child_endpoint_capacity_test() ->
+    with_backend(#{}, fun(B, M) ->
+        {ok, _} = hls_supervisor_fabric:attach(B, self()),
+        {ok, #{actors := #{supervisor := Endpoint}}} = status(B, M, ready, 9),
+        Requests = [gen_server:send_request(Endpoint, {child, inspect, a, 0}) || _ <- lists:seq(1, 10)],
+        ?assertEqual({reply, {error, busy}}, gen_server:receive_response(lists:last(Requests), 1000)),
+        lists:foreach(fun(Request) ->
+            {_, <<41:64/little, Q:32/little, _/binary>>} = sent(M, 8),
+            deliver(B, 1, child_snapshot(Q, 0, 0, 6, 0)),
+            ?assertEqual({reply, {ok, #{id => a, incarnation => 0, phase => vacant}}},
+                         gen_server:receive_response(Request, 1000))
+        end, lists:sublist(Requests, 9))
+    end).
+
+%% Slot outcomes are deliberately specified as independent wire values, not encoded by production helpers.
+-spec child_snapshot(non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> binary().
+child_snapshot(Sequence, Status, Slot, Phase, Epoch) ->
+    <<Prefix:92/binary, _/binary>> = snapshot(Sequence, ready, 9, false),
+    <<Prefix/binary, Status:32/little, Slot:32/little, Phase:32/little, Epoch:64/little>>.
+
 %% Every case owns an isolated broker and backend; no timed poll races an explicit exchange.
 -spec with_backend(map(), fun((pid(), pid()) -> term())) -> ok.
 with_backend(Options, Fun) ->
@@ -293,7 +373,7 @@ snapshot(Sequence, Phase, Epoch, Accepted) ->
         end,
     <<41:64/little, Sequence:32/little, 0:32/little, 0:32/little, Code:32/little, Epoch:64/little,
         0:64/little, Epoch:64/little, 0:64/little, Fault:32/little, 0:96, A:32/little,
-        Manager:32/little, Reason:32/little, 101:64/little>>.
+        Manager:32/little, Reason:32/little, 101:64/little, 0:32/little, 0:32/little, 0:32/little, 0:64/little>>.
 
 %% Retained enum order is source-independent runtime metadata.
 -spec interface() -> hls_supervisor_wire:interface().
@@ -301,6 +381,7 @@ interface() ->
     #{
         kind => supervisor_management,
         management_route => {0, 0},
+        slots => #{a => 0, b => 1},
         codecs => maps:from_list([
             {Name, {hls_type, hls_enum, enum, [Members]}}
          || {Name, Members} <- [
@@ -328,6 +409,8 @@ interface() ->
                     protocol_failure
                 ]},
                 {supervisor_phase, [unbound, starting, running, stopping, stopped, failed]},
+                {supervisor_status, [ok, accepted, replay, stale, invalid, busy, exhausted]},
+                {child_phase, [fresh, starting, running, restarting, retiring, retired, vacant, admitting]},
                 {supervisor_reason, [
                     none,
                     requested,

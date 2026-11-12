@@ -11,10 +11,13 @@
 %% Named finite unsigned hardware fields in sampled struct order.
 -type ports() :: [{string(), pos_integer()}].
 
--doc "Returns parent management/grant pins and independent namespaced child application pins. Child management inputs are owned exclusively by the compiled supervisor and never exposed as host controls.".
+-doc "Returns parent management/grant pins and independent namespaced child application pins. Child management inputs are owned exclusively by the compiled supervisor. Raw deployments must supply each child_observed_reusable input only after excluding old traffic.".
 -spec ports(children(), ports(), ports()) -> {ports(), ports()}.
 ports(Children, Inputs, Outputs) ->
-    ParentInputs = [{N, W} || {N, W} <- Inputs, not child_name(N)],
+    ParentInputs = [
+        {N, W}
+     || {N, W} <- Inputs, not child_name(N) orelse lists:suffix("_observed_reusable", N)
+    ],
     ParentOutputs = [{N, W} || {N, W} <- Outputs, not child_name(N)],
     ChildInputs = lists:append([
         [{prefix(I) ++ N, W} || {N, W} <- Ps, application_input(N)]
@@ -218,7 +221,7 @@ stream_control_input(Name) ->
     case
         re:run(
             Name,
-            "^(child_[0-9]+_)observed_(phase|current|previous|target|transition|fault)$",
+            "^(child_[0-9]+_)observed_(phase|current|previous|target|transition|fault|reusable)$",
             [{capture, [1, 2], list}]
         )
     of

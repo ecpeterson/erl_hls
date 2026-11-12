@@ -13,7 +13,8 @@ emit(#{
     codecs := Codecs,
     inputs := RawInputs,
     outputs := RawOutputs,
-    frame_payload_words := Words
+    frame_payload_words := Words,
+    children := Children
 }) ->
     {ExternalInputs, ExternalOutputs} = external_ports(),
     {Commands, Observations} = core_ports(Codecs),
@@ -32,6 +33,12 @@ emit(#{
     Text = xls_template:render(Template, [
         {<<"@@OPERATION_BITS@@">>, integer_to_binary(hls_type:width(maps:get(operation, Codecs)))},
         {<<"@@FAULT_BITS@@">>, integer_to_binary(hls_type:width(maps:get(fault, Codecs)))},
+        {<<"@@STATUS_BITS@@">>, integer_to_binary(hls_type:width(maps:get(status, Codecs)))},
+        {<<"@@ACTION_BITS@@">>, integer_to_binary(hls_type:width(maps:get(action, Codecs)))},
+        {<<"@@SLOT_STATUS_BITS@@">>,
+            integer_to_binary(hls_type:width(maps:get(supervisor_status, Codecs)))},
+        {<<"@@CHILD_PHASE_BITS@@">>,
+            integer_to_binary(hls_type:width(maps:get(child_phase, Codecs)))},
         {<<"@@INPUTS@@">>, structure("Inputs", ParserInputs)},
         {<<"@@OUTPUTS@@">>, structure("Outputs", ParserOutputs)}
     ]),
@@ -59,8 +66,19 @@ emit(#{
         },
         inputs => Inputs,
         outputs => Outputs,
-        interface => #{kind => supervisor_management, management_route => {0, 0}, codecs => Codecs},
-        state_bit_budget => 2 * 32 * 32 + 512,
+        interface => #{
+            kind => supervisor_management,
+            management_route => {0, 0},
+            codecs => Codecs,
+            slots => maps:from_list([{Id, Index} || #{id := Id, index := Index} <- Children])
+        },
+        %% Packet/receive metadata, fixed command/result fields and session state; no child payload storage.
+        state_bit_budget => 2 * (64 + 1024) + (2 + 32 + 2) + 1 + 32 + 3 +
+            3 * 32 + 2 + 1 + 32 + 64 + 64 + 2 +
+            lists:sum([
+                hls_type:width(maps:get(K, Codecs))
+             || K <- [status, action, supervisor_status, child_phase]
+            ]),
         unit => #{
             role => <<".">>,
             directory => <<"supervisor_management">>,
@@ -120,7 +138,12 @@ core_ports(Codecs) ->
             {"grant_valid", 1},
             {"grant_epoch", 64},
             {"grant_first", 64},
-            {"grant_last", 64}
+            {"grant_last", 64},
+            {"slot_valid", 1},
+            {"slot_operation", 2},
+            {"slot_epoch", 64},
+            {"slot_index", 32},
+            {"slot_expected", 64}
         ],
         [
             {"management_ready", 1},
@@ -137,7 +160,13 @@ core_ports(Codecs) ->
             {"grant_accepted", 1},
             {"supervisor_phase", W(supervisor_phase)},
             {"supervisor_reason", W(supervisor_reason)},
-            {"grant_next", 64}
+            {"grant_next", 64},
+            {"slot_ready", 1},
+            {"slot_response_valid", 1},
+            {"slot_status", W(supervisor_status)},
+            {"slot_result_index", 32},
+            {"slot_phase", W(child_phase)},
+            {"slot_target", 64}
         ]
     }.
 

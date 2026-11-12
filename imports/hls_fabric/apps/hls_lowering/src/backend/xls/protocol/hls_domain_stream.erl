@@ -401,7 +401,8 @@ supervisor_outputs(Codecs) ->
         {"domain_previous", 64},
         {"domain_target", 64},
         {"domain_transition", 64},
-        {"domain_fault", hls_type:width(maps:get(fault, Codecs))}
+        {"domain_fault", hls_type:width(maps:get(fault, Codecs))},
+        {"domain_reusable", 1}
     ].
 
 %% Empty fields keep the existing standalone public pin ABI unchanged.
@@ -421,20 +422,23 @@ external_control(false) ->
 external_control(true) ->
     "let core_reset = io.reset || io.supervisor_reset; let parent_admission = io.supervisor_admission;".
 
-%% Lifecycle fields are copied verbatim to the parent's bounded scanner.
+%% Lifecycle observations and transport retirement clearance feed the parent's bounded scanner.
 -spec external_observations(boolean()) -> iodata().
 external_observations(false) ->
     [];
 external_observations(true) ->
     [
-        [N, ": core.output.", N, ",\n"]
-     || N <- [
-            "domain_phase",
-            "domain_current",
-            "domain_previous",
-            "domain_target",
-            "domain_transition",
-            "domain_fault"
+        "domain_reusable: s.watched == u64:0 && !s.retirement.valid && !s.application_tx_valid,\n",
+        [
+            [N, ": core.output.", N, ",\n"]
+         || N <- [
+                "domain_phase",
+                "domain_current",
+                "domain_previous",
+                "domain_target",
+                "domain_transition",
+                "domain_fault"
+            ]
         ]
     ].
 

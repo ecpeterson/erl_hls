@@ -28,6 +28,7 @@ pub fn stale_stop_preserves_state(state: supervisor_controller::Supervisorstate,
                                  child: supervisor_controller::Supervisorchild) -> bool {
   let result = step(state, supervisor_controller::Supervisorinput {
     op: supervisor_codes::SUPERVISOR_OPERATION_STOP, epoch, child,
+    policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
     ..zero!<supervisor_controller::Supervisorinput>()
   });
   let reply = supervisor_controller::supervisoroutput_from_bits(result.response.payload);
@@ -43,6 +44,7 @@ pub fn exact_start_replay_preserves_state(state: supervisor_controller::Supervis
     op: supervisor_codes::SUPERVISOR_OPERATION_START, epoch: state.epoch,
     first: state.first, last: state.last, children: state.children,
     intensity: state.intensity, period: state.period, child,
+    policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
     ..zero!<supervisor_controller::Supervisorinput>()
   });
   let reply = supervisor_controller::supervisoroutput_from_bits(result.response.payload);
@@ -80,7 +82,8 @@ pub fn initial_allocation_consumes_one(epoch: u64, first: u64, last: u64,
     supervisor_controller::Supervisorinput {
       op: supervisor_codes::SUPERVISOR_OPERATION_START, epoch, first, last,
       children, intensity, period, now,
-      ..zero!<supervisor_controller::Supervisorinput>()
+      policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
+    ..zero!<supervisor_controller::Supervisorinput>()
     });
   let result = step(installed.state.data.supervisor, supervisor_controller::Supervisorinput {
     op: supervisor_codes::SUPERVISOR_OPERATION_INSPECT, now, slot: u16:0,
@@ -92,6 +95,7 @@ pub fn initial_allocation_consumes_one(epoch: u64, first: u64, last: u64,
       phase: supervisor_codes::PHASE_UNBOUND,
       ..zero!<supervisor_controller::Domainstate>()
     },
+    policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
     ..zero!<supervisor_controller::Supervisorinput>()
   });
   let reply = supervisor_controller::supervisoroutput_from_bits(result.response.payload);
@@ -129,6 +133,7 @@ pub fn pending_retry_preserves_allocation(previous: u64, target: u64,
       transition: previous, fault: supervisor_codes::FAULT_ACTOR_FAILURE,
       ..zero!<supervisor_controller::Domainstate>()
     },
+    policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
     ..zero!<supervisor_controller::Supervisorinput>()
   });
   let reply = supervisor_controller::supervisoroutput_from_bits(result.response.payload);
@@ -146,7 +151,8 @@ pub fn incorrect_start_is_running(epoch: u64) -> bool {
     supervisor_controller::Supervisorinput {
       op: supervisor_codes::SUPERVISOR_OPERATION_START, epoch,
       first: u64:1, last: u64:3, children: u16:2, intensity: u8:2, period: u32:1,
-      ..zero!<supervisor_controller::Supervisorinput>()
+      policy: supervisor_codes::CHILD_POLICY_PERMANENT, dormant: false, reusable: true,
+    ..zero!<supervisor_controller::Supervisorinput>()
     });
   epoch == u64:0 || result.state.data.supervisor.phase == supervisor_codes::SUPERVISOR_PHASE_RUNNING
 }

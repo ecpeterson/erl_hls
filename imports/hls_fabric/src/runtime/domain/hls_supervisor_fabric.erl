@@ -3,7 +3,8 @@
 Production parent-management backend for a compiled FPGA supervisor. A normal
 hls_domain owner and host OTP representative control the parent through one existing
 broker. Each child uses its own hls_domain_fabric application/management lanes;
-no child payload passes through this process.
+no child payload passes through this process. The resolved parent endpoint also
+accepts explicit admission, inspection and termination of compiled temporary slots.
 
 A deployment supplies an already persisted finite incarnation interval. This adapter
 submits that exact grant once when the parent is observed initializing. It allocates
@@ -18,9 +19,11 @@ old-path exclusion remain deployment obligations.
 
 %% Deployment and ordinary domain-backend interface.
 -export([start_link/3, attach/2, status/1, request/3, endpoint/4, send_request/2, stop/1, info/1]).
+%% Operations addressed to one resolved parent-incarnation endpoint.
+-export([start_child/3, terminate_child/3, child_status/2]).
 %% OTP callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
--export_type([transport/0, options/0]).
+-export_type([transport/0, options/0, child/0, child_result/0]).
 
 -doc "One existing independent management broker, after a deployment-attested nonzero transport session.".
 -type transport() :: #{management := pid(), session := hls_nums:u64()}.
@@ -30,6 +33,12 @@ old-path exclusion remain deployment obligations.
     poll_ms => pos_integer(),
     management_timeout_ms => pos_integer()
 }.
+-doc "An observation or admission result for one compiled slot; admission does not imply initialization or endpoint publication.".
+-type child() :: #{
+    id := atom(), incarnation := hls_nums:u64(), phase := hls_supervisor_lifecycle:child_phase()
+}.
+-doc "Definite slot outcomes retain the observed occupant; connection uncertainty supplies no admission or retirement evidence.".
+-type child_result() :: {ok, child()} | {error, {atom(), child()}} | {error, atom()}.
 %% Eight queued requests and one transmitted exchange bound retained management callers.
 -type exchange() :: #{
     input := hls_supervisor_wire:command(),
@@ -94,6 +103,19 @@ stop(Pid) -> gen_server:stop(Pid).
 -doc "Returns bounded management diagnostics, including the outcome of the one attempted grant for the observed parent incarnation.".
 -spec info(pid()) -> map().
 info(Pid) -> gen_server:call(Pid, info).
+
+-doc "Admits one temporary occupant into a vacant compiled slot. Pass the last observed occupant (zero for an unused slot); a concurrent or stale request cannot acquire someone else's child. The result names the reserved incarnation, not readiness. Never automatically retry an uncertain result.".
+-spec start_child(pid(), atom(), hls_nums:u64()) -> child_result().
+start_child(Endpoint, Slot, Expected) ->
+    gen_server:call(Endpoint, {child, start, Slot, Expected}, infinity).
+-doc "Requests retirement of exactly one temporary occupant, without allocating a replacement. Accepted intent is not completion; inspect the slot until vacant. The source program's normal completion can be followed by this explicit OTP-style termination.".
+-spec terminate_child(pid(), atom(), hls_domain:incarnation()) -> child_result().
+terminate_child(Endpoint, Slot, Epoch) ->
+    gen_server:call(Endpoint, {child, stop, Slot, Epoch}, infinity).
+-doc "Inspects one compiled slot through the exact parent endpoint. Vacant means both core and transport retirement were confirmed; it does not promise the slot remains free until a later admission.".
+-spec child_status(pid(), atom()) -> child_result().
+child_status(Endpoint, Slot) ->
+    gen_server:call(Endpoint, {child, inspect, Slot, 0}, infinity).
 
 -doc "Validates the retained interface, session and grant before registering its exclusive broker route.".
 -spec init({transport(), hls_supervisor_wire:interface() | map() | file:filename(), options()}) ->
@@ -160,6 +182,31 @@ handle_call(
     }
 ) when is_reference(Authority), is_pid(Endpoint) ->
     {reply, {ok, Endpoint}, State};
+%% Possession of a resolved parent endpoint permits management, as with an ordinary OTP supervisor PID.
+handle_call(
+    {child, Epoch, Operation, Id, Expected},
+    {Endpoint, _} = From,
+    State = #backend{
+        endpoint = Endpoint,
+        incarnation = Epoch,
+        lifecycle = #domain_state{phase = ready, current = Epoch},
+        retiring = false,
+        owner = Owner,
+        interface = #{slots := Slots}
+    }
+) when
+    is_pid(Endpoint),
+    is_pid(Owner),
+    (Operation =:= start orelse Operation =:= stop orelse Operation =:= inspect),
+    is_atom(Id),
+    is_integer(Expected),
+    Expected >= 0,
+    Expected < (1 bsl 64)
+->
+    case maps:find(Id, Slots) of
+        {ok, Slot} -> enqueue({child, Operation, Epoch, Slot, Expected}, From, State);
+        error -> {reply, {error, unknown_child}, State}
+    end;
 %% Introspection retains counters and current evidence rather than work history.
 handle_call(info, _From, State) ->
     {reply,
@@ -351,7 +398,7 @@ response(
         output := Output = #domain_output{state = Current},
         grant_accepted := GrantAccepted,
         supervisor_reason := Reason
-    },
+    } = Observation,
     State = #backend{
         exchange = #{sequence := Sequence, timer := Timer, from := From, input := Input}
     }
@@ -376,12 +423,43 @@ response(
         From,
         case Input of
             none -> snapshot(Next);
+            {child, _, _, _, _} -> child_result(Input, Observation, Next#backend.interface);
             _ -> Output
         end
     ),
     Next;
 response(_Observation, State) ->
     State#backend{ignored = State#backend.ignored + 1}.
+
+%% Correlation and slot identity must agree before an admission result reaches its caller.
+-spec child_result(
+    hls_supervisor_wire:command(),
+    hls_supervisor_wire:observation(),
+    hls_supervisor_wire:interface()
+) -> child_result().
+child_result(
+    {child, Operation, _Parent, Slot, Expected},
+    #{
+        child_slot := Slot,
+        child_status := Status,
+        child_phase := Phase,
+        child_incarnation := Epoch
+    },
+    #{slots := Slots}
+) ->
+    [Id] = [Name || {Name, Index} <- maps:to_list(Slots), Index =:= Slot],
+    Child = #{id => Id, incarnation => Epoch, phase => Phase},
+    case {Operation, Status} of
+        {inspect, ok} ->
+            {ok, Child};
+        {start, accepted} when Epoch > Expected -> {ok, Child};
+        {stop, S} when Expected > 0, Epoch =:= Expected, (S =:= accepted orelse S =:= replay) ->
+            {ok, Child};
+        {_, S} when S =:= ok; S =:= accepted; S =:= replay ->
+            error(invalid_child_result);
+        _ ->
+            {error, {Status, Child}}
+    end.
 
 %% Observe initialization before binding a pre-reserved interval; a rejected/lost grant is never silently reallocated.
 -spec prepare_grant(#backend{}) -> #backend{}.
@@ -443,25 +521,61 @@ reconcile(
     State = #backend{owner = Owner, lifecycle = #domain_state{phase = ready, current = Epoch}}
 ) when is_pid(Owner), Epoch > 0 ->
     Backend = self(),
-    {Endpoint, Monitor} = spawn_monitor(fun() -> observer(Backend, monitor(process, Backend)) end),
+    {Endpoint, Monitor} = spawn_monitor(fun() ->
+        observer(Backend, monitor(process, Backend), Epoch, gen_server:reqids_new())
+    end),
     State#backend{endpoint = Endpoint, endpoint_monitor = Monitor, incarnation = Epoch};
 reconcile(State) ->
     State.
 
-%% This lifetime-only endpoint gives OTP a monitor target without forwarding application calls.
--spec observer(pid(), reference()) -> no_return().
-observer(Backend, Monitor) ->
+%% The exact-lifetime endpoint retains at most nine pending management replies and never blocks retirement.
+-spec observer(pid(), reference(), hls_nums:u64(), gen_server:request_id_collection()) ->
+    no_return().
+observer(Backend, Monitor, Epoch, Requests) ->
     receive
         {retire, Backend, Reason} ->
+            observer_retire(Requests),
             exit(Reason);
         {'DOWN', Monitor, process, Backend, _} ->
+            observer_retire(Requests),
             exit(noconnection);
+        {'$gen_call', From, {child, Operation, Slot, Expected}} ->
+            case gen_server:reqids_size(Requests) < 9 of
+                true ->
+                    Request = gen_server:send_request(
+                        Backend, {child, Epoch, Operation, Slot, Expected}
+                    ),
+                    observer(
+                        Backend, Monitor, Epoch, gen_server:reqids_add(Request, From, Requests)
+                    );
+                false ->
+                    gen_server:reply(From, {error, busy}),
+                    observer(Backend, Monitor, Epoch, Requests)
+            end;
         {'$gen_call', From, _Request} ->
             gen_server:reply(From, {error, lifecycle_only}),
-            observer(Backend, Monitor);
-        _ ->
-            observer(Backend, Monitor)
+            observer(Backend, Monitor, Epoch, Requests);
+        Message ->
+            case gen_server:check_response(Message, Requests, true) of
+                {{reply, Reply}, From, Rest} ->
+                    gen_server:reply(From, Reply),
+                    observer(Backend, Monitor, Epoch, Rest);
+                {{error, _}, From, Rest} ->
+                    gen_server:reply(From, {error, noconnection}),
+                    observer(Backend, Monitor, Epoch, Rest);
+                _ ->
+                    observer(Backend, Monitor, Epoch, Requests)
+            end
     end.
+
+%% An endpoint's death must not leave callers waiting for a response from a future incarnation.
+-spec observer_retire(gen_server:request_id_collection()) -> ok.
+observer_retire(Requests) ->
+    [
+        gen_server:reply(From, {error, noconnection})
+     || {_Request, From} <- gen_server:reqids_to_list(Requests)
+    ],
+    ok.
 
 %% Polls and delegated-grant exchanges have no waiting application caller.
 -spec answer(none | gen_server:from(), term()) -> ok.

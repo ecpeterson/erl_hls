@@ -7,6 +7,8 @@ import domain_frames as framing;
 
 const PACKET_BITS = u32:@@PACKET_BITS@@;
 const STATE_BUDGET = u32:@@STATE_BUDGET@@;
+const SELECT_TAG = u8:@@SELECT_TAG@@;
+const SELECT_WORDS = u8:@@SELECT_WORDS@@;
 
 // Local authority stays admitted while each test controls only public supervisor pins.
 fn inputs() -> stream::Inputs {
@@ -154,4 +156,60 @@ fn bounded_transport_storage() {
   let total = bit_count<stream::State>();
   let core = bit_count<domain::State>();
   assert_eq(total - core <= STATE_BUDGET, true);
+}
+
+// Reuse evidence excludes an observer, its unacknowledged departure, and any retained output.
+#[test]
+fn reuse_waits_for_observer_and_output_retirement() {
+  let ready_state = ready();
+  assert_eq(stream::tick(ready_state,inputs()).output.domain_reusable,true);
+  let watched = observer(ready_state,u8:2,u64:1);
+  assert_eq(stream::tick(watched,inputs()).output.domain_reusable,false);
+  let retired = stopped(watched);
+  assert_eq(stream::tick(retired,inputs()).output.domain_reusable,false);
+  let acknowledged = observer(retired,u8:3,u64:1);
+  assert_eq(stream::tick(acknowledged,inputs()).output.domain_reusable,true);
+  let pending = stream::State{application_tx_valid:true,..acknowledged};
+  assert_eq(stream::tick(pending,inputs()).output.domain_reusable,false);
+}
+
+// A canonical source call uses the retained schema; only its incarnation differs between controls.
+fn select_packet(epoch:u64) -> framing::Packet<PACKET_BITS> {
+  framing::Packet<PACKET_BITS>{route:u32:1,
+    header:framing::header(u32:0,u8:2,u8:9+SELECT_WORDS),
+    payload:u64:1 as bits[PACKET_BITS] |
+      (epoch as bits[PACKET_BITS] << u32:64) |
+      (u32:42 as bits[PACKET_BITS] << u32:160) |
+      (u32:1 as bits[PACKET_BITS] << u32:192) |
+      (framing::header(u32:0,SELECT_TAG,SELECT_WORDS) as bits[PACKET_BITS] << u32:256)}
+}
+
+// Finite parser-state injection models a delayed complete packet after real retirement/replacement.
+// The same packet for the new incarnation is accepted, excluding a vacuous malformed-input test.
+#[test]
+fn old_application_packet_cannot_enter_reused_slot() {
+  let watched = observer(ready(),u8:2,u64:1);
+  let acknowledged = observer(stopped(watched),u8:3,u64:1);
+  let replaced = stream::tick(acknowledged,stream::Inputs{supervisor_valid:true,
+    supervisor_op:domain_codes::OPERATION_REPLACE,supervisor_expected:u64:1,
+    supervisor_target:u64:2,supervisor_transition:u64:2,..inputs()});
+  let fresh = observer(settle(replaced.state),u8:2,u64:2);
+  assert_eq(fresh.watched,u64:2);
+  assert_eq(fresh.core.control.data.lifecycle.current,u64:2);
+  let idle = stream::tick(fresh,inputs());
+  let old = stream::tick(stream::State{application_rx:framing::Receive<PACKET_BITS>{
+    packet:select_packet(u64:1),full:true,..zero!<framing::Receive<PACKET_BITS>>()},..fresh},inputs());
+  assert_eq(old.state.application_rx.full,false);
+  assert_eq(old.state.core,idle.state.core);
+  assert_eq(old.state.calls,idle.state.calls);
+  assert_eq(old.state.last_request,idle.state.last_request);
+  assert_eq(old.state.application_tx_valid,true);
+  assert_eq(old.state.application_tx.header,framing::header(u32:0,u8:2,u8:10));
+  assert_eq((old.state.application_tx.payload >> u32:96) as u64,u64:1);
+  assert_eq((old.state.application_tx.payload >> u32:224) as u32,u32:1);
+  let current = stream::tick(stream::State{application_rx:framing::Receive<PACKET_BITS>{
+    packet:select_packet(u64:2),full:true,..zero!<framing::Receive<PACKET_BITS>>()},..fresh},inputs());
+  assert_eq((current.state.application_tx.payload >> u32:224) as u32,u32:0);
+  assert_eq(current.state.calls[u32:0],stream::Call{valid:true,abandoned:false,request:u32:42});
+  assert_eq(current.state.last_request,u32:42);
 }

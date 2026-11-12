@@ -12,15 +12,18 @@ framed child observers with bounded retirement records and a framed parent contr
 -export([plan/1, emit/1, emit_stream/1, write/2, write_stream/2]).
 -export_type([config/0, plan/0, result/0]).
 
--doc "Ordinary supervisor callback and exact child-to-network bindings. The declared clock rate supplies local restart-window time; deployment must meet it.".
+-doc "Ordinary supervisor callback, optional dormant temporary child templates and exact network bindings. The declared clock rate supplies local restart-window time; deployment must meet it.".
 -type config() :: #{
     supervisor := {module(), term()},
     children := #{atom() := hls_source_config:network() | file:filename()},
-    clock_hz := 1..((1 bsl 32) - 1)
+    clock_hz := 1..((1 bsl 32) - 1),
+    templates => [supervisor:child_spec()]
 }.
--doc "Checked permanent child order and bounded one-for-one policy, before source lowering.".
+-doc "Checked slot order, initial child count and per-slot restart policy before source lowering. Dormant templates follow the ordinary initial children.".
 -type plan() :: #{
     children := [{atom(), hls_source_config:network() | file:filename()}],
+    policies := #{atom() := permanent | temporary},
+    initial := non_neg_integer(),
     intensity := 0..16,
     period := 1..((1 bsl 32) - 1),
     clock_hz := 1..((1 bsl 32) - 1)
@@ -40,10 +43,14 @@ framed child observers with bounded retirement records and a framed parent contr
     eligible := false
 }.
 
--doc "Checks an ordinary supervisor:init/1 declaration: one_for_one, one to 65535 permanent domain children, intensity at most sixteen and finite positive period/clock rate. Child starts must be supervised hls_domain_instance starts; supplied hardware bindings replace only their owner argument. Unsupported policy, duplicate IDs or unmatched bindings reject before emission.".
+-doc "Checks one_for_one with one to 65535 compiled domain slots, bounded intensity and positive period/clock rate. Ordinary permanent and temporary children start with the parent; optional temporary templates remain dormant until requested. All starts must be supervised hls_domain_instance starts. Supplied hardware bindings exactly cover both sets and replace only their owner argument.".
 -spec plan(config()) -> plan().
 plan(#{supervisor := {Module, Args}, children := Bindings, clock_hz := Hz} = Config) ->
-    require(lists:sort(maps:keys(Config)) =:= [children, clock_hz, supervisor], unknown_option),
+    require(
+        (maps:keys(Config) -- [children, clock_hz, supervisor, templates]) =:= [], unknown_option
+    ),
+    Templates = maps:get(templates, Config, []),
+    require(is_list(Templates), templates),
     require(is_integer(Hz) andalso Hz > 0 andalso Hz < (1 bsl 32), clock_hz),
     case Module:init(Args) of
         {ok, {Flags, Specs}} when is_map(Flags), is_list(Specs) ->
@@ -59,13 +66,23 @@ plan(#{supervisor := {Module, Args}, children := Bindings, clock_hz := Hz} = Con
                 is_integer(Intensity) andalso Intensity >= 0 andalso Intensity =< 16, intensity
             ),
             require(is_integer(Period) andalso Period > 0 andalso Period < (1 bsl 32), period),
-            Ids = [child_id(S) || S <- Specs],
+            AllSpecs = Specs ++ Templates,
+            Ids = [child_id(S) || S <- AllSpecs],
+            require(
+                lists:all(fun(S) -> maps:get(restart, S, permanent) =:= temporary end, Templates),
+                template_policy
+            ),
             require(Ids =/= [] andalso length(Ids) < (1 bsl 16), children),
             require(length(Ids) =:= length(lists:usort(Ids)), duplicate_child),
-            require(supervisor:check_childspecs(Specs) =:= ok, child_spec),
+            require(supervisor:check_childspecs(AllSpecs) =:= ok, child_spec),
             require(lists:sort(Ids) =:= lists:sort(maps:keys(Bindings)), child_bindings),
             #{
                 children => [{Id, maps:get(Id, Bindings)} || Id <- Ids],
+                policies => maps:from_list([
+                    {maps:get(id, S), maps:get(restart, S, permanent)}
+                 || S <- AllSpecs
+                ]),
+                initial => length(Specs),
                 intensity => Intensity,
                 period => Period,
                 clock_hz => Hz
@@ -84,7 +101,7 @@ child_id(
     } = Spec
 ) when is_atom(Id) ->
     require(maps:keys(Options) =:= [lifetime], child_options),
-    require(maps:get(restart, Spec, permanent) =:= permanent, restart),
+    require(lists:member(maps:get(restart, Spec, permanent), [permanent, temporary]), restart),
     require(maps:get(type, Spec, worker) =:= worker, child_type),
     require(maps:get(significant, Spec, false) =:= false, significant_child),
     require(maps:get(shutdown, Spec, 5000) =/= brutal_kill, brutal_kill),
@@ -105,7 +122,7 @@ require(false, Reason) -> error({supervisor_declaration, Reason}).
 -spec emit(config()) -> hls_generated_files:output(result()).
 emit(Config) -> emit_mode(Config, raw).
 
--doc "Emits independent framed child observers and parent management/grant framing. Local FPGA policy retains exclusive child lifecycle authority; host watch/acknowledgement controls publication, never local recovery.".
+-doc "Emits independent framed child observers and parent management/grant framing. Local FPGA policy retains exclusive child lifecycle authority; host watch/acknowledgement controls publication and completion of temporary-slot retirement, without acquiring child lifecycle authority.".
 -spec emit_stream(config()) -> hls_generated_files:output(result()).
 emit_stream(Config) ->
     #{files := Files, result := Result} = emit_mode(Config, stream),
@@ -139,7 +156,8 @@ emit_mode(Config, Mode) ->
         supervisor_phase => maps:get(phase, StateFields),
         supervisor_reason => maps:get(reason, StateFields),
         supervisor_status => maps:get(status, OutputFields),
-        child_phase => maps:get(phase, ChildFields)
+        child_phase => maps:get(phase, ChildFields),
+        child_policy => maps:get(policy, InputFields)
     },
     Words = max(
         10,
@@ -203,7 +221,7 @@ emit_mode(Config, Mode) ->
             codecs => Codecs,
             plan => Plan,
             frame_payload_words => Words,
-            control_state_bits => StateBits + Count * ChildBits + ParentBits + 16 + 32 + 64 + 1 +
+            control_state_bits => StateBits + Count * ChildBits + ParentBits + 16 + 1 + 32 + 64 + 1 +
                 4 * 64 + 64,
             eligible => false
         }
@@ -367,7 +385,12 @@ control_ports(Count, Codecs) ->
         {"grant_valid", 1},
         {"grant_epoch", 64},
         {"grant_first", 64},
-        {"grant_last", 64}
+        {"grant_last", 64},
+        {"slot_valid", 1},
+        {"slot_operation", 2},
+        {"slot_epoch", 64},
+        {"slot_index", 32},
+        {"slot_expected", 64}
     ],
     ParentOutputs = [
         {"management_ready", 1},
@@ -392,7 +415,13 @@ control_ports(Count, Codecs) ->
         {"supervisor_retired", 16},
         {"local_seconds", 64},
         {"selected_child", 16},
-        {"children_reset", 1}
+        {"children_reset", 1},
+        {"slot_ready", 1},
+        {"slot_response_valid", 1},
+        {"slot_status", Width(supervisor_status)},
+        {"slot_result_index", 32},
+        {"slot_phase", Width(child_phase)},
+        {"slot_target", 64}
     ],
     ChildInputs = lists:append([
         [
@@ -404,7 +433,8 @@ control_ports(Count, Codecs) ->
                     {"previous", 64},
                     {"target", 64},
                     {"transition", 64},
-                    {"fault", Width(fault)}
+                    {"fault", Width(fault)},
+                    {"reusable", 1}
                 ]
         ]
      || I <- lists:seq(0, Count - 1)
@@ -429,7 +459,14 @@ control_ports(Count, Codecs) ->
 %% Only static topology/pin shape is specialized; restart decisions stay in compiled Erlang.
 -spec render(plan(), [{string(), pos_integer()}], [{string(), pos_integer()}]) -> binary().
 render(
-    #{children := Children, intensity := Intensity, period := Period, clock_hz := Hz},
+    #{
+        children := Children,
+        policies := Policies,
+        initial := Initial,
+        intensity := Intensity,
+        period := Period,
+        clock_hz := Hz
+    },
     Inputs,
     Outputs
 ) ->
@@ -439,6 +476,18 @@ render(
     Count = length(Children),
     xls_template:render(Template, [
         {<<"@@COUNT@@">>, integer_to_binary(Count)},
+        {<<"@@INITIAL@@">>, integer_to_binary(Initial)},
+        {<<"@@CHILD_POLICIES@@">>,
+            lists:join(",", [
+                "supervisor_codes::CHILD_POLICY_" ++
+                    string:uppercase(atom_to_list(maps:get(Id, Policies)))
+             || {Id, _} <- Children
+            ])},
+        {<<"@@CHILD_REUSABLE@@">>,
+            lists:join(",", [
+                "io." ++ child_prefix(I) ++ "_observed_reusable"
+             || I <- lists:seq(0, Count - 1)
+            ])},
         {<<"@@INTENSITY@@">>, integer_to_binary(Intensity)},
         {<<"@@PERIOD@@">>, integer_to_binary(Period)},
         {<<"@@CLOCK_HZ@@">>, integer_to_binary(Hz)},
@@ -479,7 +528,7 @@ command_fields(I) ->
     [
         [
             Prefix,
-            "_management_valid: !io.reset && s.cursor == u16:",
+            "_management_valid: !io.reset && selected == u16:",
             integer_to_list(I),
             " && manager_reply.command_valid,\n"
         ],

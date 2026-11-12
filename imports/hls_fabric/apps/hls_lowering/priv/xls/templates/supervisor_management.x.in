@@ -5,6 +5,14 @@ import supervisor_codes as codes;
 type Operation = bits[@@OPERATION_BITS@@];
 // Fault codes remain a distinct source-defined enum namespace.
 type Fault = bits[@@FAULT_BITS@@];
+// Internal enum storage keeps source widths; the packet boundary expands each to a full word.
+type Status = bits[@@STATUS_BITS@@];
+// Parent lifecycle actions share the retained source codec.
+type Action = bits[@@ACTION_BITS@@];
+// Slot request outcomes remain distinct from parent lifecycle outcomes.
+type SlotStatus = bits[@@SLOT_STATUS_BITS@@];
+// The selected row phase is captured before the autonomous scanner can change it.
+type ChildPhase = bits[@@CHILD_PHASE_BITS@@];
 
 @@INPUTS@@
 @@OUTPUTS@@
@@ -15,8 +23,9 @@ type Receive = framing::Receive<u32:1024>;
 // The selected command waits for actual acceptance; snapshot capture follows the committed edge.
 pub struct State {
   rx: Receive, tx: Packet, tx_valid: bool, position: u32,
-  stage: u3, request: u32, header: u32, route: u32, grant: bool,
-  status: u32, action: u32, accepted: bool,
+  stage: u3, request: u32, header: u32, route: u32, grant: bool, slot: bool,
+  status: Status, action: Action, accepted: bool,
+  slot_status: SlotStatus, slot_index: u32, slot_phase: ChildPhase, slot_target: u64,
   session: u64, attached: bool, fault: bool,
 }
 // Outputs describe one sampled edge; only the returned state advances packet ownership.
@@ -42,8 +51,12 @@ fn snapshot(s: State, io: Inputs) -> Packet {
     (s.accepted as bits[1024] << u32:576) |
     (io.observed_supervisor_phase as bits[1024] << u32:608) |
     (io.observed_supervisor_reason as bits[1024] << u32:640) |
-    (io.observed_grant_next as bits[1024] << u32:672);
-  Packet { route: s.route, header: framing::header(s.header, u8:1, u8:23), payload }
+    (io.observed_grant_next as bits[1024] << u32:672) |
+    (s.slot_status as bits[1024] << u32:736) |
+    (s.slot_index as bits[1024] << u32:768) |
+    (s.slot_phase as bits[1024] << u32:800) |
+    (s.slot_target as bits[1024] << u32:832);
+  Packet { route: s.route, header: framing::header(s.header, u8:1, u8:28), payload }
 }
 
 // A fresh deployment-attested transport session discards packets, never hardware state.
@@ -66,15 +79,18 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let inspect = tag == u8:0 && words == u8:3;
   let command = tag == u8:1 && words == u8:11;
   let grant = tag == u8:5 && words == u8:9;
+  let slot = tag >= u8:6 && tag <= u8:8 && words == u8:8;
   let codes_valid = !command ||
     ((word(packet,u32:3) >> bit_count<Operation>()) == u32:0 &&
      (word(packet,u32:10) >> bit_count<Fault>()) == u32:0);
   let canonical = packet.route == u32:0 && (packet.header & u32:0x00ffff00) == u32:0 &&
-    word(packet,u32:2) != u32:0 && (inspect || command || grant) && codes_valid && !s.rx.bad;
+    word(packet,u32:2) != u32:0 && (inspect || command || grant || slot) && codes_valid && !s.rx.bad;
   let take = connected && s.stage == u3:0 && s.rx.full && session_matches && canonical;
   let issue = connected && s.stage == u3:1;
   let response = issue &&
-    (if s.grant { io.observed_grant_response_valid } else { io.observed_management_response_valid });
+    (if s.grant { io.observed_grant_response_valid }
+      else if s.slot { io.observed_slot_response_valid }
+      else { io.observed_management_response_valid });
   let capture = connected && s.stage == u3:3 && space;
   let next = State {
     rx: if capture || (connected && s.stage == u3:0 && s.rx.full && !session_matches)
@@ -89,10 +105,20 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     header: if take { packet.header } else { s.header },
     route: if take { packet.route } else { s.route },
     grant: if take { grant } else { s.grant },
-    status: if take { codes::STATUS_OK as u32 } else if response && !s.grant {
-      io.observed_domain_status as u32 } else { s.status },
-    action: if take { codes::ACTION_NONE as u32 } else if response && !s.grant {
-      io.observed_domain_action as u32 } else { s.action },
+    slot: if take { slot } else { s.slot },
+    // Freeze the exact accepted row result before autonomous scanning can advance it.
+    slot_status: if response && s.slot { io.observed_slot_status }
+      else if take { codes::SUPERVISOR_STATUS_OK } else { s.slot_status },
+    slot_index: if response && s.slot { io.observed_slot_result_index }
+      else if take { u32:0 } else { s.slot_index },
+    slot_phase: if response && s.slot { io.observed_slot_phase }
+      else if take { codes::CHILD_PHASE_FRESH } else { s.slot_phase },
+    slot_target: if response && s.slot { io.observed_slot_target }
+      else if take { u64:0 } else { s.slot_target },
+    status: if take { codes::STATUS_OK } else if response && !s.grant && !s.slot {
+      io.observed_domain_status } else { s.status },
+    action: if take { codes::ACTION_NONE } else if response && !s.grant && !s.slot {
+      io.observed_domain_action } else { s.action },
     accepted: if take { false } else if response && s.grant { io.observed_grant_accepted } else { s.accepted },
     session: s.session, attached: s.attached,
     fault: s.fault || (connected && s.stage == u3:0 && s.rx.full && session_matches && !canonical),
@@ -105,12 +131,16 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     parent_transport_session_observed: s.session,
     parent_transport_attached: connected,
     parent_wire_fault: s.fault,
-    command_management_valid: issue && !s.grant && io.observed_management_ready,
+    command_management_valid: issue && !s.grant && !s.slot && io.observed_management_ready,
     command_management_op: word(packet,u32:3) as Operation,
     command_expected: pair(packet,u32:4), command_target: pair(packet,u32:6),
     command_transition: pair(packet,u32:8), command_management_fault: word(packet,u32:10) as Fault,
     command_grant_valid: issue && s.grant, command_grant_epoch: pair(packet,u32:3),
     command_grant_first: pair(packet,u32:5), command_grant_last: pair(packet,u32:7),
+    command_slot_valid: issue && s.slot && io.observed_slot_ready,
+    command_slot_operation: (tag - u8:6) as u2,
+    command_slot_epoch: pair(packet,u32:3), command_slot_index: word(packet,u32:5),
+    command_slot_expected: pair(packet,u32:6),
   }}
 }
 

@@ -23,11 +23,11 @@ rejected_policy_test_() ->
             {intensity,-1,intensity},{period,0,period},{auto_shutdown,all_significant,auto_shutdown},
             {unsupported,true,supervisor_flags}]].
 
-%% The native declaration must describe permanent supervised domain instances.
+%% Unsupported restart modes and non-domain starts reject before source generation.
 -spec rejected_child_test_() -> [term()].
 rejected_child_test_() ->
     [?_assertError({supervisor_declaration,Reason},hls_protocol_supervisor:plan(with_specs([Spec]))) ||
-        {Spec,Reason} <- [{(child(a))#{restart=>temporary},restart},
+        {Spec,Reason} <- [{(child(a))#{restart=>transient},restart},
             {(child(a))#{start=>{hls_domain_instance,start_link,[symbolic_owner,a]}},child_start},
             {(child(a))#{shutdown=>brutal_kill},brutal_kill},
             {(child(a))#{type=>supervisor},child_type},
@@ -60,3 +60,39 @@ child(Id) -> #{id=>Id,start=>{hls_domain_instance,start_link,[symbolic_owner,Id,
 duplicate_control_port_test() ->
     ?assertError({duplicate_supervisor_ports,["child_0_target"]},
         sv_domain_supervisor:emit([], [{"reset",1},{"child_0_target",64}], [{"child_0_target",64}])).
+
+%% Initial temporary children preserve OTP startup; compiled templates reserve dormant slots.
+-spec temporary_templates_test() -> ok.
+temporary_templates_test() ->
+    Initial = (child(a))#{restart => temporary},
+    Template = (child(b))#{restart => temporary},
+    Config = (with_specs([Initial]))#{templates => [Template], children => #{a => #{}, b => #{}}},
+    Plan = hls_protocol_supervisor:plan(Config),
+    ?assertEqual([a,b], [Id || {Id,_} <- maps:get(children, Plan)]),
+    ?assertEqual(1, maps:get(initial, Plan)),
+    ?assertEqual(#{a => temporary,b => temporary}, maps:get(policies, Plan)),
+    Empty = hls_protocol_supervisor:plan(Config#{supervisor => {?MODULE,{#{},[]}},
+        templates => [Initial,Template]}),
+    ?assertEqual(0, maps:get(initial, Empty)).
+
+%% Dormant slots cannot introduce hidden permanent children or duplicate an initial binding.
+-spec rejected_templates_test() -> ok.
+rejected_templates_test() ->
+    Config = config(#{},[a]),
+    ?assertError({supervisor_declaration,template_policy}, hls_protocol_supervisor:plan(
+        Config#{templates => [child(b)],children => #{a => #{},b => #{}}})),
+    ?assertError({supervisor_declaration,duplicate_child}, hls_protocol_supervisor:plan(
+        Config#{templates => [(child(a))#{restart => temporary}]})),
+    ?assertError({supervisor_declaration,templates}, hls_protocol_supervisor:plan(
+        Config#{templates => invalid})),
+    ?assertError({supervisor_declaration,child_bindings}, hls_protocol_supervisor:plan(
+        Config#{templates => [(child(b))#{restart => temporary}]})).
+
+%% Raw composition requires explicit deployment evidence instead of inventing retirement.
+-spec raw_reuse_evidence_port_test() -> ok.
+raw_reuse_evidence_port_test() ->
+    Inputs = [{"reset",1},{"child_0_observed_reusable",1}],
+    {Public,[]} = sv_domain_supervisor:ports([],Inputs,[]),
+    ?assertEqual(Inputs,Public),
+    Text = iolist_to_binary(sv_domain_supervisor:emit([],Inputs,[])),
+    ?assertNotEqual(nomatch,binary:match(Text,<<".child_0_observed_reusable(child_0_observed_reusable)">>)).
