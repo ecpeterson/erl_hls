@@ -11,7 +11,10 @@ incarnation-fenced crossing owner; bare crossing wires do not support independen
 %% Checked source composition and portable external-tool input.
 -export([emit/1, emit/2, emit_partition/1, write/2, write_stream/2, write_partition/2]).
 %% Internal compiler composition from one retained source snapshot.
--export([emit_partition_plan/1, emit_partition_stream_plan/1]).
+-export([
+    emit_partition_plan/1, emit_partition_plan/2,
+    emit_partition_stream_plan/1, emit_partition_stream_plan/2
+]).
 -export_type([result/0, codecs/0]).
 
 -doc "Retained lifecycle field descriptors resolved from the compiled kernel; host codecs need no compiler or source lookup.".
@@ -39,7 +42,7 @@ incarnation-fenced crossing owner; bare crossing wires do not support independen
     eligible := false
 }.
 
--doc "Renders a closed whole-network recovery domain. Requires rectangle ingress, automatic network execution, no crossing placement and no declared startup messages. Initialization may not publish effects; an attempted setup publication fails closed in hardware. Readiness waits for successful init/entry/internal callbacks. Application incarnation identities gate ingress; egress is tagged by the current incarnation. Accepted prior output is irrevocable. This first composition uses at least ten frame payload words for the compiled control adapter; no host framing or distributed reset is implied.".
+-doc "Renders a closed whole-network recovery domain. Requires rectangle ingress, automatic network execution, no crossing placement and no declared startup messages. Initialization may not publish effects; an attempted setup publication fails closed in hardware. Optional process inspection exposes global inspect_address and expected inspect_incarnation pins; app_inspect_value is a passive pre-edge snapshot only for the matching ready incarnation and native actor, otherwise zero. Readiness waits for successful init/entry/internal callbacks. Application incarnation identities gate ingress; egress is tagged by the current incarnation. Accepted prior output is irrevocable. This first composition uses at least ten frame payload words for the compiled control adapter; no host framing or distributed reset is implied.".
 -spec emit(hls_source_config:network() | file:filename()) -> hls_generated_files:output(result()).
 emit(Config) -> compose(Config, raw).
 
@@ -55,18 +58,28 @@ emit_partition(Config) -> compose(Config, partition).
 
 -doc "Internal compiler-facing partition emission from an unchanged opaque transport build. The caller must derive native placement from one prepared source snapshot, retain its source modules, and provide an external incarnation-fenced crossing owner. Requires a proper partition, at least ten frame payload words, rectangle ingress and silent initialization. Execution is automatic; this does not accept saved or caller-edited plan maps.".
 -spec emit_partition_plan(hls_protocol_transport:build()) -> hls_generated_files:output(result()).
-emit_partition_plan(Build) ->
+emit_partition_plan(Build) -> emit_partition_plan(Build, none).
+
+-doc "Emits a retained partition with none or process inspection. The passive address uses global actor IDs; an exact ready inspect_incarnation is required before app_inspect_value can expose local process metadata. Unknown and nonlocal addresses return zero. No additional actor state or debug packet transport is supplied.".
+-spec emit_partition_plan(hls_protocol_transport:build(), none | process) ->
+    hls_generated_files:output(result()).
+emit_partition_plan(Build, Inspection) ->
     #{fabric := Fabric} = hls_protocol_transport:descriptor(Build),
     ok = placement(partition, maps:is_key(crossings, Fabric)),
-    compose_build(Build, partition).
+    compose_build(Build, partition, Inspection).
 
--doc "Internal compiler-facing framed partition using the same retained source and external crossing-owner obligations as emit_partition_plan/1. Keeps host-managed lifecycle authority and binds only this partition's actor schemas. The enclosing composer must wire its raw crossings and lifecycle observations privately.".
+-doc "Internal compiler-facing framed partition using the same retained source and external crossing-owner obligations as emit_partition_plan/1. Keeps host-managed lifecycle authority and binds only this partition's actor schemas. The enclosing composer must wire its raw crossings and lifecycle observations privately, and connect fabric_fault to physical crossing failure rather than host-session loss or reset.".
 -spec emit_partition_stream_plan(hls_protocol_transport:build()) ->
     hls_generated_files:output(result()).
-emit_partition_stream_plan(Build) ->
+emit_partition_stream_plan(Build) -> emit_partition_stream_plan(Build, none).
+
+-doc "Emits the same framed partition plan with explicit none or process inspection. Process metadata remains on dedicated passive pins, outside application/session packet handling; the outer wrapper must bind queries to the intended incarnation and emitted catalog.".
+-spec emit_partition_stream_plan(hls_protocol_transport:build(), none | process) ->
+    hls_generated_files:output(result()).
+emit_partition_stream_plan(Build, Inspection) ->
     #{fabric := Fabric} = hls_protocol_transport:descriptor(Build),
     ok = placement(partition, maps:is_key(crossings, Fabric)),
-    compose_build(Build, partition_stream).
+    compose_build(Build, partition_stream, Inspection).
 
 %% Partition admission is an explicit API boundary; ordinary framed domains remain closed.
 -spec compose(hls_source_config:network() | file:filename(), raw | stream | partition) ->
@@ -78,14 +91,17 @@ compose(Config0, Mode) when is_map(Config0) ->
     }),
     automatic = maps:get(activation, Config, automatic),
     Build = hls_protocol_transport:plan(Config),
-    compose_build(Build, Mode);
+    compose_build(Build, Mode, maps:get(inspection, Config, none));
 compose(Filename, Mode) ->
     compose(hls_source_config:read(Filename), Mode).
 
 %% All roles render their retained actor programs; lifecycle support is identical across source placements.
--spec compose_build(hls_protocol_transport:build(), raw | stream | partition | partition_stream) ->
-    hls_generated_files:output(result()).
-compose_build(Build, Mode) ->
+-spec compose_build(
+    hls_protocol_transport:build(),
+    raw | stream | partition | partition_stream,
+    none | process
+) -> hls_generated_files:output(result()).
+compose_build(Build, Mode, Inspection) ->
     Descriptor =
         #{frame_layout := FrameLayout, bundle := #{topology := #{startup := []}}} =
         hls_protocol_transport:descriptor(Build),
@@ -98,7 +114,9 @@ compose_build(Build, Mode) ->
             _ ->
                 #{}
         end,
-    NetworkPlan = hls_protocol_network:plan(Build, #{activation => automatic, inspection => none}),
+    NetworkPlan = hls_protocol_network:plan(Build, #{
+        activation => automatic, inspection => Inspection
+    }),
     #{files := NetworkFiles, result := #{network := Network}} = hls_protocol_network:emit(
         NetworkPlan
     ),
@@ -167,7 +185,7 @@ placement(_, true) ->
         #{path => [native_actors]}
     ).
 
--doc "Writes a fresh portable domain source bundle for the ordinary external XLS driver. Source compilation precedes output creation; support snapshot or I/O failures retain partial evidence. No simulation, synthesis or hardware attachment runs here.".
+-doc "Writes a fresh portable domain source bundle, including configured dslx_path providers, for the ordinary external XLS driver. Source compilation and support-directory checks precede output creation; snapshot or I/O failures retain partial evidence. No simulation, synthesis or hardware attachment runs here.".
 -spec write(hls_source_config:network() | file:filename(), file:filename()) -> map().
 write(Config, Directory) -> write_bundle(Config, Directory, raw).
 
@@ -179,12 +197,14 @@ write_stream(Config, Directory) -> write_bundle(Config, Directory, stream).
 -spec write_partition(hls_source_config:network() | file:filename(), file:filename()) -> map().
 write_partition(Config, Directory) -> write_bundle(Config, Directory, partition).
 
-%% Every writer retains the same raw domain; optional framing is a separate outer endpoint.
+%% Normalize file inputs once and retain provider directories beside the same raw domain.
 -spec write_bundle(
     hls_source_config:network() | file:filename(), file:filename(), raw | stream | partition
 ) ->
     map().
-write_bundle(Config, Directory, Mode) ->
+write_bundle(Filename, Directory, Mode) when is_list(Filename); is_binary(Filename) ->
+    write_bundle(hls_source_config:read(Filename), Directory, Mode);
+write_bundle(Config, Directory, Mode) when is_map(Config) ->
     Generated = #{result := Result = #{frame_payload_words := Words}} = compose(Config, Mode),
     {Extra, StreamInfo} =
         case Mode of
@@ -195,8 +215,10 @@ write_bundle(Config, Directory, Mode) ->
                 {#{}, #{}}
         end,
     Final = Generated#{files := hls_generated_files:merge([maps:get(files, Generated), Extra])},
+    #{libraries := Libraries, imports := Support} = hls_build_support:layout(
+        maps:get(dslx_path, Config, [])
+    ),
     _ = hls_generated_files:write(Final, Directory),
-    #{libraries := Libraries, imports := Support} = hls_build_support:layout([]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
     ok = hls_compile:configure_support(Directory, hls_frame_layout:new(Words)),
     Profile = hls_build_profile:owner(hls_frame_layout:new(Words)),
@@ -276,6 +298,7 @@ ports(Inputs, Outputs, Codecs) ->
     ],
     {
         Management ++
+            [{"inspect_incarnation", 64} || #{name := <<"inspect_address">>} <- Inputs] ++
             [{binary_to_list(N), W} || #{name := N, width := W} <- Inputs, N =/= <<"reset">>],
         Status ++ [{"app_" ++ binary_to_list(N), W} || #{name := N, width := W} <- Outputs]
     }.
@@ -430,6 +453,8 @@ network_input(Name, Width, IncomingValid) ->
 -spec network_output(string(), pos_integer()) -> iodata().
 network_output("ingress_ready", _) ->
     "app_ingress_ready: !io.reset && (!admitted || net.output.ingress_ready),\n";
+network_output("inspect_value", _) ->
+    "app_inspect_value: if ready && io.inspect_incarnation == old.current { net.output.inspect_value } else { bits[128]:0 },\n";
 network_output(Name, Width) ->
     [
         "app_",

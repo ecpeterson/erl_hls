@@ -2,6 +2,8 @@
 // frame store and generated PCS/MAC. The boundary breaks the combinational
 // ready path observed in the integrated DMA route; frame semantics are those
 // of ethernet_packet_endpoint. This does not replace the reusable endpoint.
+// tx_loss_event/rx_loss_event pulse in their respective eth_*_clk domains.
+// They include store loss and RX integrity failure, even without delivered bytes.
 module ethernet_dma_packet_endpoint(
     input wire eth_tx_clk, eth_tx_rst, eth_rx_clk, eth_rx_rst,
     input wire [9:0] tbi_rx,
@@ -16,7 +18,8 @@ module ethernet_dma_packet_endpoint(
     output wire [1:0] tx_queued, rx_queued,
     output wire [31:0] tx_accepted, tx_dropped, tx_overflowed, tx_aborted,
     output wire [31:0] rx_accepted, rx_dropped, rx_overflowed, rx_aborted,
-    output wire [31:0] preamble_errors, crc_errors
+    output wire [31:0] preamble_errors, crc_errors,
+    output wire tx_loss_event, rx_loss_event
 );
     wire stored_valid, stored_last, stored_ready;
     wire [7:0] stored_data;
@@ -47,13 +50,18 @@ module ethernet_dma_packet_endpoint(
         default: pipe_count<=pipe_count;
         endcase
     end
+    wire tx_drop_event, tx_abort_event, rx_drop_event, rx_abort_event;
+    wire preamble_error, crc_error;
+    assign tx_loss_event = tx_drop_event || tx_abort_event;
+    assign rx_loss_event = rx_drop_event || rx_abort_event || preamble_error || crc_error;
     ethernet_frame_store tx_store(
         .clk(eth_tx_clk), .rst(eth_tx_rst), .flush(!link_tx), .abort_partial(1'b0),
         .in_valid(tx_valid), .in_ready(tx_ready), .in_data(tx_data),
         .in_last(tx_last), .in_error(1'b0), .out_valid(stored_valid),
         .out_ready(stored_ready), .out_data(stored_data), .out_last(stored_last),
         .queued(tx_queued), .accepted(tx_accepted), .dropped(tx_dropped),
-        .overflowed(tx_overflowed), .aborted(tx_aborted)
+        .overflowed(tx_overflowed), .aborted(tx_aborted),
+        .drop_event(tx_drop_event), .abort_event(tx_abort_event)
     );
 
     reg from_mac_valid, from_mac_last, from_mac_error;
@@ -69,7 +77,8 @@ module ethernet_dma_packet_endpoint(
         .in_last(from_mac_last), .in_error(from_mac_error), .out_valid(rx_valid),
         .out_ready(rx_ready), .out_data(rx_data), .out_last(rx_last),
         .queued(rx_queued), .accepted(rx_accepted), .dropped(rx_dropped),
-        .overflowed(rx_overflowed), .aborted(rx_aborted)
+        .overflowed(rx_overflowed), .aborted(rx_aborted),
+        .drop_event(rx_drop_event), .abort_event(rx_abort_event)
     );
     liteeth_packet_core core(
         .eth_tx_clk(eth_tx_clk), .eth_tx_rst(eth_tx_rst),
@@ -78,11 +87,13 @@ module ethernet_dma_packet_endpoint(
         .restart(restart), .align(align), .tx_valid(pipe_count!=0),
         .tx_ready(core_tx_ready), .tx_data(pipe_data_0), .tx_last(pipe_last_0),
         .rx_valid(mac_valid), .rx_data(mac_data), .rx_last(mac_last),
-        .rx_error(mac_error), .preamble_errors(preamble_errors), .crc_errors(crc_errors)
+        .rx_error(mac_error), .preamble_errors(preamble_errors), .crc_errors(crc_errors),
+        .preamble_error(preamble_error), .crc_error(crc_error)
     );
 endmodule
 
 // Adapt the pipelined packet endpoint to the proven raw 20-bit GTX mapping.
+// Directional loss pulses retain the full-rate eth_tx_clk/eth_rx_clk ownership.
 module ethernet_dma_gtx_packet_endpoint(
     input wire eth_tx_clk, eth_tx_rst, eth_rx_clk, eth_rx_rst,
     input wire eth_tx_half_clk, eth_tx_half_rst, eth_rx_half_clk, eth_rx_half_rst,
@@ -101,7 +112,8 @@ module ethernet_dma_gtx_packet_endpoint(
     output wire [1:0] tx_queued, rx_queued,
     output wire [31:0] tx_accepted, tx_dropped, tx_overflowed, tx_aborted,
     output wire [31:0] rx_accepted, rx_dropped, rx_overflowed, rx_aborted,
-    output wire [31:0] preamble_errors, crc_errors
+    output wire [31:0] preamble_errors, crc_errors,
+    output wire tx_loss_event, rx_loss_event
 );
     wire [9:0] tbi_tx, tbi_rx;
     wire [19:0] tx_word, rx_word;
@@ -137,11 +149,14 @@ module ethernet_dma_gtx_packet_endpoint(
         .tx_overflowed(tx_overflowed), .tx_aborted(tx_aborted),
         .rx_accepted(rx_accepted), .rx_dropped(rx_dropped),
         .rx_overflowed(rx_overflowed), .rx_aborted(rx_aborted),
-        .preamble_errors(preamble_errors), .crc_errors(crc_errors)
+        .preamble_errors(preamble_errors), .crc_errors(crc_errors),
+        .tx_loss_event(tx_loss_event), .rx_loss_event(rx_loss_event)
     );
 endmodule
 
 // Run the pipelined endpoint under the existing hard-GTX startup controller.
+// physical_loss is control_clk-synchronized and cold-reset-only sticky; reset_n
+// must be the shared cold reset, never a host session or native-domain reset.
 module ethernet_dma_supervised_endpoint #(
     parameter BOOT_CYCLES=32, RESET_CYCLES=8, SETTLE_CYCLES=1024,
     parameter TIMEOUT_CYCLES=25000, CLOCK_TIMEOUT=1024
@@ -166,7 +181,8 @@ module ethernet_dma_supervised_endpoint #(
     output wire [1:0] tx_queued, rx_queued,
     output wire [31:0] tx_accepted, tx_dropped, tx_overflowed, tx_aborted,
     output wire [31:0] rx_accepted, rx_dropped, rx_overflowed, rx_aborted,
-    output wire [31:0] preamble_errors, crc_errors
+    output wire [31:0] preamble_errors, crc_errors,
+    output wire physical_loss, tx_physical_loss, rx_physical_loss
 );
     wire control_reset_n, tx_fresh, rx_fresh, physical_ready;
     zynq_probe_reset cr(control_clk,reset_n,control_reset_n);
@@ -187,6 +203,15 @@ module ethernet_dma_supervised_endpoint #(
     zynq_probe_reset th(eth_tx_half_clk,packet_reset_n,tx_half_reset_n);
     zynq_probe_reset rh(eth_rx_half_clk,packet_reset_n,rx_half_reset_n);
     wire raw_tx_ready, raw_rx_valid, raw_link_tx, raw_link_rx, raw_restart, raw_align;
+    wire tx_loss_event, rx_loss_event;
+    ethernet_packet_loss loss(
+        .control_clk(control_clk), .cold_reset_n(reset_n),
+        .tx_clock(eth_tx_clk), .rx_clock(eth_rx_clk),
+        .tx_active(link_tx), .rx_active(link_rx),
+        .tx_loss_event(tx_loss_event), .rx_loss_event(rx_loss_event),
+        .physical_loss(physical_loss),
+        .tx_lost(tx_physical_loss), .rx_lost(rx_physical_loss)
+    );
     assign tx_ready=tx_reset_n && raw_tx_ready;
     assign rx_valid=rx_reset_n && raw_rx_valid;
     assign link_tx=tx_reset_n && raw_link_tx;
@@ -208,6 +233,45 @@ module ethernet_dma_supervised_endpoint #(
         .tx_overflowed(tx_overflowed),.tx_aborted(tx_aborted),
         .rx_accepted(rx_accepted),.rx_dropped(rx_dropped),
         .rx_overflowed(rx_overflowed),.rx_aborted(rx_aborted),
-        .preamble_errors(preamble_errors),.crc_errors(crc_errors)
+        .preamble_errors(preamble_errors),.crc_errors(crc_errors),
+        .tx_loss_event(tx_loss_event),.rx_loss_event(rx_loss_event)
     );
+endmodule
+
+// Capture qualified whole-frame loss before crossing clocks. Twelve state bits:
+// two local sticky bits, four status synchronizer bits and six reset-release bits.
+// Exposed local bits may only drive same-direction logic; physical_loss is the
+// separate control-clock observation.
+// Link-active errors are conservatively fatal even before carrier arming. Only
+// the shared cold reset clears history; directional resets cannot clear it.
+// Existing physical clock watchers supply active/reset policy. This module
+// adds no watchdog, packet retry or physical CDC/reset qualification claim.
+module ethernet_packet_loss(
+    input wire control_clk, cold_reset_n, tx_clock, rx_clock,
+    input wire tx_active, rx_active, tx_loss_event, rx_loss_event,
+    output wire physical_loss,
+    output reg tx_lost, rx_lost
+);
+    wire control_cold_n, tx_cold_n, rx_cold_n;
+    zynq_probe_reset control_cold(control_clk, cold_reset_n, control_cold_n);
+    zynq_probe_reset tx_cold(tx_clock, cold_reset_n, tx_cold_n);
+    zynq_probe_reset rx_cold(rx_clock, cold_reset_n, rx_cold_n);
+    (* ASYNC_REG="TRUE" *) reg tx_loss_meta, tx_loss_sync, rx_loss_meta, rx_loss_sync;
+    always @(posedge tx_clock or negedge tx_cold_n) begin
+        if (!tx_cold_n) tx_lost <= 0;
+        else if (tx_active && tx_loss_event) tx_lost <= 1;
+    end
+    always @(posedge rx_clock or negedge rx_cold_n) begin
+        if (!rx_cold_n) rx_lost <= 0;
+        else if (rx_active && rx_loss_event) rx_lost <= 1;
+    end
+    always @(posedge control_clk or negedge control_cold_n) begin
+        if (!control_cold_n) begin
+            tx_loss_meta <= 0; tx_loss_sync <= 0; rx_loss_meta <= 0; rx_loss_sync <= 0;
+        end else begin
+            tx_loss_meta <= tx_lost; tx_loss_sync <= tx_loss_meta;
+            rx_loss_meta <= rx_lost; rx_loss_sync <= rx_loss_meta;
+        end
+    end
+    assign physical_loss = tx_loss_sync || rx_loss_sync;
 endmodule

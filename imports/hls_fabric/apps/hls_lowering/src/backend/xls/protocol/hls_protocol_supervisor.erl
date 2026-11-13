@@ -6,6 +6,7 @@ hardware networks. Both lifecycle policies are compiled Erlang. This composer ow
 only bounded observation selection, a local clock and physical completion wiring.
 Raw emission exposes incarnation-tagged child pins. Stream emission connects independently
 framed child observers with bounded retirement records and a framed parent control port.
+Process inspection is rejected until the parent lifetime is part of its query boundary.
 """.
 
 %% Checked source composition and portable tool input.
@@ -568,6 +569,15 @@ constant(Kind, Member, Descriptor) ->
 %% Supervised framing reuses the checked raw domain and gives each child its own transport storage.
 -spec child_emit(hls_source_config:network() | file:filename(), raw | stream) ->
     hls_generated_files:output(hls_protocol_domain:result()).
+child_emit(Filename, Mode) when is_list(Filename); is_binary(Filename) ->
+    child_emit(hls_source_config:read(Filename), Mode);
+child_emit(#{inspection := process}, _) ->
+    hls_diagnostic:raise(
+        supervisor,
+        supervised_inspection_unavailable,
+        <<"Compiled supervisors do not bind process inspection across parent admission; use host-managed domain inspection.">>,
+        #{path => [children, inspection], value => process}
+    );
 child_emit(Config, raw) ->
     hls_protocol_domain:emit(Config);
 child_emit(Config, stream) ->

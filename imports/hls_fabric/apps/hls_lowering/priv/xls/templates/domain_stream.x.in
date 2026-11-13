@@ -187,8 +187,9 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let spatial = selection.x ++ selection.y ++ selection.x ++ selection.y ++ selection.target ++
     frame.header.payload_words ++ frame.header.txid ++ frame.header.flags ++ frame.header.op ++ frame.payload;
   let control = domain::Inputs {
-    // Loss of the host connection does not imply failure of the actor network.
-    reset: core_reset, transport_fault: false,
+    // A partition's crossing-fabric fault is independent of its host session.
+    // Standalone domains have no external crossing fabric and bind this false.
+    reset: core_reset, transport_fault: @@FABRIC_FAULT@@,
     @@MANAGEMENT_CONTROL@@
     @@CROSSING_CONTROL@@
     incarnation, ingress_data: spatial, ..zero!<domain::Inputs>()

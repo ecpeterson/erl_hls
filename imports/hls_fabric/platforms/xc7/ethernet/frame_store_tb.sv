@@ -10,6 +10,7 @@ module frame_store_tb;
     wire [7:0] out_data;
     wire [1:0] queued;
     wire [31:0] accepted, dropped, overflowed, aborted;
+    wire drop_event, abort_event;
     ethernet_frame_store #(.DROP_WHEN_FULL(1), .MIN_BYTES(1)) dut(.*);
     integer expect_length[0:15], expect_tag[0:15];
     integer expected=0, received=0, offset=0;

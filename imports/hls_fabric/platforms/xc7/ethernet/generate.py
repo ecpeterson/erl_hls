@@ -72,10 +72,17 @@ class PacketCore(LiteXModule):
         self.rx_pipeline = stream.Pipeline(self.pcs.source, self.rx_preamble, self.rx_crc, self.rx)
         self.preamble_errors = Signal(32)
         self.crc_errors = Signal(32)
+        # Export exact RX-domain loss events, including preamble drops which
+        # never produce a downstream packet byte. Sticky capture belongs to
+        # the cold-reset board boundary, not these link-reset MAC blocks.
+        self.preamble_error = Signal()
+        self.crc_error = Signal()
+        self.comb += [self.preamble_error.eq(self.rx_preamble.error & self.link_rx),
+                      self.crc_error.eq(self.rx_crc.error & self.link_rx)]
         self.sync.eth_rx += [
             # Counters survive link loss; only the external reset clears them.
-            self.preamble_errors.eq(self.preamble_errors + (self.rx_preamble.error & self.link_rx)),
-            self.crc_errors.eq(self.crc_errors + (self.rx_crc.error & self.link_rx)),
+            self.preamble_errors.eq(self.preamble_errors + self.preamble_error),
+            self.crc_errors.eq(self.crc_errors + self.crc_error),
         ]
 
     def ports(self) -> set[Signal]:
@@ -83,7 +90,8 @@ class PacketCore(LiteXModule):
         pins = dict(tbi_tx=self.pcs.tbi_tx, tbi_rx=self.pcs.tbi_rx,
                     link_tx=self.link_tx, link_rx=self.link_rx,
                     restart=self.pcs.restart, align=self.pcs.align,
-                    preamble_errors=self.preamble_errors, crc_errors=self.crc_errors)
+                    preamble_errors=self.preamble_errors, crc_errors=self.crc_errors,
+                    preamble_error=self.preamble_error, crc_error=self.crc_error)
         for name, endpoint in (("tx", self.tx), ("rx", self.rx)):
             for field in ("valid", "data", "last"):
                 pins[f"{name}_{field}"] = getattr(endpoint, field)

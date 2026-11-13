@@ -2,8 +2,8 @@
 # Finite host-versus-generated-RTL checks; the stage must not already exist.
 set -euo pipefail
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-xls_root=${1:?usage: test_protocol_codecs.sh XLS_ROOT FRESH_STAGE [default|layouts]}
-stage=${2:?usage: test_protocol_codecs.sh XLS_ROOT FRESH_STAGE [default|layouts]}
+xls_root=${1:?usage: test_protocol_codecs.sh XLS_ROOT FRESH_STAGE [default|layouts|wide]}
+stage=${2:?usage: test_protocol_codecs.sh XLS_ROOT FRESH_STAGE [default|layouts|wide]}
 cd "$project_root"
 rebar3 as test compile
 source tools/backend_env.sh test
@@ -14,12 +14,17 @@ case "$mode" in
         directories=("$stage")
         names=(unaligned full constant small)
         ;;
+    wide)
+        erl -noshell -eval 'ok = hls_protocol_codec_validation:prepare_wide(hd(init:get_plain_arguments())), halt().' -extra "$stage"
+        directories=("$stage")
+        names=(unaligned full constant small)
+        ;;
     layouts)
         erl -noshell -eval 'ok = hls_protocol_codec_validation:prepare_layouts(hd(init:get_plain_arguments())), halt().' -extra "$stage"
         directories=("$stage/words1" "$stage/words3")
         names=(narrow constant small)
         ;;
-    *) echo "mode must be default or layouts" >&2; exit 2 ;;
+    *) echo "mode must be default, layouts or wide" >&2; exit 2 ;;
 esac
 for directory in "${directories[@]}"; do
     for name in "${names[@]}"; do

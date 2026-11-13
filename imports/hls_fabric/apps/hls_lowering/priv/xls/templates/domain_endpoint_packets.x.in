@@ -1,0 +1,108 @@
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Every source application frame retains its native twenty-word payload and header.
+pub type Frame = bits[672];
+type Cursor = bits[@@CURSOR_BITS@@];
+const COUNT = u4:@@COUNT@@;
+// Native record fields preserve complete nonwrapping binding identities.
+pub struct Binding { @@BINDING_FIELDS@@ }
+// The selected endpoint supplies one immutable publication or acknowledgement.
+pub struct Offer { kind: u8, channel: u32, binding: Binding, sequence: u32, slot: u8, frame: Frame }
+// Arbitration inspects valid bits before reading the selected wide offer.
+pub struct Selection { valid: bool, index: Cursor }
+// Static direction and local native readiness select incoming ownership.
+pub struct Route { known: bool, kind: u8, ready: bool }
+// One source-defined class supplies the fixed-bit canonical predicate.
+pub struct Class { known: bool, mask: Frame, value: Frame }
+// No endpoint or carrier payload register is duplicated in the router.
+pub struct State { cursor: Cursor, fault: bool }
+// All handshakes describe this edge; only cursor and fault commit afterward.
+pub struct Tick { state: State, output: Outputs }
+
+// Only the source-selected valid bit participates in the arbitration chain.
+fn offer_valid(io: Inputs, index: Cursor) -> bool { @@VALID_OFFERS@@ }
+// Round-robin selection has at most eight narrow alternatives.
+fn select(io: Inputs, cursor: Cursor) -> Selection {
+  for (offset, selected): (u4, Selection) in u4:0..COUNT {
+    let sum = (cursor as u4) + offset;
+    let index = (if sum >= COUNT { sum - COUNT } else { sum }) as Cursor;
+    if !selected.valid && offer_valid(io, index) { Selection { valid: true, index } } else { selected }
+  }(Selection { valid: false, index: cursor })
+}
+// Payload selection occurs once, after the narrow valid-bit arbitration.
+fn offer(io: Inputs, index: Cursor) -> Offer { @@SELECT_OFFER@@ }
+// Unknown channel IDs cannot select native receive or credit pins.
+fn route(io: Inputs, channel: u32) -> Route { @@RX_ROUTE@@ }
+// Classes retain the exact masks/values of the source crossing codec plans.
+fn source_class(channel: u32, slot: u8) -> Class { @@CLASSES@@ }
+// One wide comparison follows class selection; no frame restoration precedes it.
+fn canonical(channel: u32, slot: u8, frame: Frame) -> bool {
+  let selected = source_class(channel, slot);
+  selected.known && (frame & selected.mask) == selected.value
+}
+// The packed native binding uses little-word order in the atomic carrier vector.
+fn unpack_binding(value: bits[256]) -> Binding { Binding { @@DECODE_BINDING@@ } }
+// Selection precedes packing this complete identity exactly once for the outgoing packet.
+fn pack_binding(value: Binding) -> bits[256] { @@PACK_BINDING@@ }
+// DATA uses all words; ACK retains a zero unused frame tail and zero slot.
+fn pack(value: Offer) -> bits[1024] {
+  let control = (value.slot as u32 << u32:8) | value.kind as u32;
+  value.frame ++ value.sequence ++ pack_binding(value.binding) ++ value.channel ++ control
+}
+// Cold reset alone releases a sticky fault; host sessions and local domain resets are absent.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  let selected = select(io, s.cursor);
+  let outgoing = offer(io, selected.index);
+  let tx_shape = if outgoing.kind == u8:1 {
+    canonical(outgoing.channel, outgoing.slot, outgoing.frame)
+  } else { outgoing.kind == u8:2 && outgoing.slot == u8:0 && outgoing.frame == Frame:0 };
+  let bad_tx = selected.valid && !tx_shape;
+  let rx_control = io.packet_rx[0+:u32];
+  let rx_kind = rx_control[0+:u8];
+  let rx_slot = rx_control[8+:u8];
+  let rx_channel = io.packet_rx[32+:u32];
+  let rx_binding = unpack_binding(io.packet_rx[64+:bits[256]]);
+  let rx_sequence = io.packet_rx[320+:u32];
+  let rx_frame = io.packet_rx[352+:Frame];
+  let destination = route(io, rx_channel);
+  let rx_shape = destination.known && rx_kind == destination.kind && rx_control[16+:u16] == u16:0 &&
+    (if rx_kind == u8:1 { io.packet_rx_words == u6:32 && canonical(rx_channel, rx_slot, rx_frame) }
+    else { rx_kind == u8:2 && io.packet_rx_words == u6:11 && rx_slot == u8:0 && rx_frame == Frame:0 });
+  let bad_rx = io.packet_rx_valid && !rx_shape;
+  // RX admission must not depend on same-edge TX validity: TX native validation can itself depend on an incoming credit.
+  // A valid RX transfer may therefore complete on a TX-fault detection edge before the retained fault closes both paths.
+  let live = !io.reset && !s.fault && !io.carrier_fault && !bad_rx;
+  let tx_valid = live && selected.valid && tx_shape;
+  let tx_take = tx_valid && io.packet_tx_ready;
+  let rx_live = live && io.packet_rx_valid && rx_shape;
+  let following = (selected.index as u4) + u4:1;
+  let cursor = if tx_take { (if following == COUNT { u4:0 } else { following }) as Cursor }
+    else if tx_valid { selected.index } else { s.cursor };
+  Tick {
+    state: if io.reset { zero!<State>() } else { State { cursor, fault: s.fault || io.carrier_fault || bad_rx || bad_tx } },
+    output: Outputs {
+      packet_tx: pack(outgoing), packet_tx_words: if outgoing.kind == u8:1 { u6:32 } else { u6:11 },
+      packet_tx_valid: tx_valid, packet_rx_ready: rx_live && destination.ready,
+      // Expose the retained fault to lifecycle wiring, never a same-edge endpoint-valid feedback path.
+      router_fault: !io.reset && s.fault,
+      @@ENDPOINT_OUTPUTS@@
+    },
+  }
+}
+// This sampled router shares only its role's local application clock.
+pub proc endpoint_packets_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // The mechanical adapter carries atomic packet readiness in the sampled structs.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // Cold state starts arbitration at the first static endpoint and has no fault.
+  init { zero!<State>() }
+  // Each edge updates only bounded cursor/fault state; payload ownership remains outside.
+  next(s: State) {
+    let (tok, io) = recv(join(), commands);
+    let result = tick(s, io);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

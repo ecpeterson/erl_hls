@@ -83,10 +83,10 @@ def compare(grid: dict, fasm: str, donor: dict[str, bytes]) -> dict:
             "encodings_validated_on_zynq": False, "hardware_qualified": False}
 
 
-def audit(database: Path, fasm: Path, output: Path) -> dict:
-    """Check logical tile compatibility and retain a reproducible, read-only audit."""
+def audit(database: Path, fasm: Path, output: Path, *, offline: bool = False) -> dict:
+    """Check logical tile compatibility; offline mode requires every pinned donor cached."""
     lock = json.loads(Path(__file__).with_name("configuration.lock.json").read_text())
-    donor = {name: fetch(source, output / "sources") for name, source in lock.items()}
+    donor = {name: fetch(source, output / "sources", offline=offline) for name, source in lock.items()}
     compatibility = {}
     for name, data in donor.items():
         if not name.startswith("tile_type_"):

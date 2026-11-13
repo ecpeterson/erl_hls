@@ -1,0 +1,210 @@
+`timescale 1ns/1ps
+// Finite parser witness. Endpoint observations are controlled native-reference inputs,
+// selected combinationally on each actual bind/fence edge; no endpoint RTL is modeled here.
+module domain_endpoint_management_tb;
+  localparam integer META_BITS = @@META_BITS@@;
+  localparam integer COMMAND_BITS = @@COMMAND_BITS@@;
+  localparam integer ACTIONS = @@ACTIONS@@;
+  localparam integer MUTATIONS = @@MUTATIONS@@;
+  localparam integer WORDS = @@WORDS@@;
+  reg clock = 0, reset = 0, endpoint_transport_reset = 0;
+  reg [63:0] endpoint_transport_session = 0;
+  reg [31:0] endpoint_management_word = 0;
+  reg endpoint_management_valid = 0, endpoint_management_last = 0;
+  reg endpoint_management_output_ready = 0;
+  reg [META_BITS-1:0] retained_metadata = @@META_BITS@@'h@@INITIAL_METADATA@@;
+  reg [META_BITS-1:0] before_metadata [0:MUTATIONS-1];
+  reg [META_BITS-1:0] issue_metadata [0:MUTATIONS-1];
+  reg [META_BITS-1:0] after_metadata [0:MUTATIONS-1];
+  reg [COMMAND_BITS-1:0] expected_commands [0:MUTATIONS-1];
+  reg [31:0] words [0:WORDS-1];
+  integer mutation_index = 0, steps = 0, responses = 0, discarded = 0;
+  wire [META_BITS-1:0] controlled_metadata;
+  @@WIRING@@
+  assign controlled_metadata = mutation_any && mutation_index < MUTATIONS
+      ? issue_metadata[mutation_index] : retained_metadata;
+
+  reg held = 0;
+  reg [31:0] held_word;
+  reg held_last;
+  integer action_row, action_kind, arg_b, arg_c, handle, scanned, i;
+  reg [63:0] arg_a;
+  string actions_path, words_path, mutations_path, trailing;
+
+  // Every edge checks all command pins and stalled output stability before state commits.
+  task step;
+    reg mutate;
+    reg [META_BITS-1:0] successor;
+    begin
+      #2;
+      if (^command_outputs === 1'bx) $fatal(1, "unknown command pins action=%0d step=%0d", action_row, steps);
+      mutate = mutation_any;
+      if (mutate) begin
+        if (mutation_index >= MUTATIONS) $fatal(1, "unexpected extra endpoint mutation action=%0d", action_row);
+        if (command_outputs !== expected_commands[mutation_index])
+          $fatal(1, "command mismatch action=%0d mutation=%0d actual=%h expected=%h", action_row,
+                 mutation_index, command_outputs, expected_commands[mutation_index]);
+        if (retained_metadata !== before_metadata[mutation_index])
+          $fatal(1, "metadata model predecessor mismatch mutation=%0d", mutation_index);
+        successor = after_metadata[mutation_index];
+      end else if (command_outputs !== {COMMAND_BITS{1'b0}})
+        $fatal(1, "nonzero unissued endpoint command action=%0d pins=%h", action_row, command_outputs);
+      if ((reset || endpoint_transport_reset) && mutate)
+        $fatal(1, "parser bootstrap mutated endpoint action=%0d", action_row);
+      if (held && !reset && !endpoint_transport_reset &&
+          (endpoint_management_output_valid !== 1'b1 || endpoint_management_output_word !== held_word ||
+           endpoint_management_output_last !== held_last))
+        $fatal(1, "response changed while stalled action=%0d step=%0d", action_row, steps);
+      held = !reset && !endpoint_transport_reset && endpoint_management_output_valid && !endpoint_management_output_ready;
+      held_word = endpoint_management_output_word;
+      held_last = endpoint_management_output_last;
+      clock = 1;
+      #1;
+      if (mutate) begin retained_metadata = successor; mutation_index = mutation_index + 1; end
+      clock = 0;
+      #1;
+      steps = steps + 1;
+      if (steps > 50000) $fatal(1, "finite parser edge budget exceeded");
+    end
+  endtask
+
+  // Bootstrap touches parser storage only; repeated session IDs cannot clear a latched fault.
+  task bootstrap(input [63:0] session, input integer expected_fault, input integer expected_attached);
+    reg [META_BITS-1:0] saved;
+    integer prior_mutations;
+    begin
+      saved = retained_metadata; prior_mutations = mutation_index;
+      endpoint_transport_session = session; endpoint_transport_reset = 1;
+      endpoint_management_valid = 0; endpoint_management_output_ready = 0;
+      step(); endpoint_transport_reset = 0; step();
+      if (endpoint_transport_session_observed !== session || endpoint_wire_fault !== expected_fault[0] ||
+          endpoint_transport_attached !== expected_attached[0])
+        $fatal(1, "session boundary mismatch action=%0d session=%h observed=%h fault=%b attached=%b",
+               action_row, session, endpoint_transport_session_observed, endpoint_wire_fault, endpoint_transport_attached);
+      if (retained_metadata !== saved || mutation_index != prior_mutations)
+        $fatal(1, "session reset changed endpoint metadata action=%0d", action_row);
+    end
+  endtask
+
+  // Gaps test payload-valid stalls; a presented word stays unchanged until actual acceptance.
+  task send_packet(input integer offset, input integer count);
+    integer position, gap, waited;
+    begin
+      for (position = 0; position < count; position = position + 1) begin
+        endpoint_management_valid = 0;
+        for (gap = 0; gap < position % 3; gap = gap + 1) step();
+        endpoint_management_word = words[offset + position];
+        endpoint_management_last = position == count - 1;
+        endpoint_management_valid = 1;
+        #1; waited = 0;
+        while (endpoint_management_ready !== 1'b1) begin
+          step(); waited = waited + 1;
+          if (waited > 128) $fatal(1, "command admission timeout action=%0d word=%0d", action_row, position);
+        end
+        step();
+      end
+      endpoint_management_valid = 0; endpoint_management_last = 0;
+    end
+  endtask
+
+  // Every response word and TLAST is checked even when its delivery is discarded by the caller model.
+  task receive_packet(input integer offset, input integer count, input integer discard_reply);
+    integer position, stall, waited;
+    begin
+      endpoint_management_output_ready = 0;
+      for (position = 0; position < count; position = position + 1) begin
+        waited = 0;
+        while (endpoint_management_output_valid !== 1'b1) begin
+          step(); waited = waited + 1;
+          if (waited > 128) $fatal(1, "response timeout action=%0d word=%0d", action_row, position);
+        end
+        for (stall = 0; stall <= position % 3; stall = stall + 1) step();
+        if (endpoint_management_output_word !== words[offset + position] ||
+            endpoint_management_output_last !== (position == count - 1))
+          $fatal(1, "response mismatch action=%0d word=%0d actual=%h expected=%h last=%b",
+                 action_row, position, endpoint_management_output_word, words[offset + position], endpoint_management_output_last);
+        endpoint_management_output_ready = 1; step(); endpoint_management_output_ready = 0;
+      end
+      responses = responses + 1;
+      discarded = discarded + discard_reply;
+    end
+  endtask
+
+  // A full response slot and a separately full command slot must retain distinct backpressure.
+  task hold_response(input integer cycles, input integer expected_ready);
+    integer elapsed, waited;
+    begin
+      endpoint_management_output_ready = 0; waited = 0;
+      while (endpoint_management_output_valid !== 1'b1) begin
+        step(); waited = waited + 1;
+        if (waited > 128) $fatal(1, "missing response to hold action=%0d", action_row);
+      end
+      for (elapsed = 0; elapsed < cycles; elapsed = elapsed + 1) begin
+        #1;
+        if (endpoint_management_output_valid !== 1'b1 || endpoint_management_ready !== expected_ready[0])
+          $fatal(1, "independent slot backpressure mismatch action=%0d", action_row);
+        step();
+      end
+    end
+  endtask
+
+  // The first edge permits the final received packet to issue, drop or close the parser.
+  task quiet(input integer cycles, input integer expected_fault, input integer expected_attached);
+    integer elapsed;
+    begin
+      endpoint_management_valid = 0; endpoint_management_output_ready = 0;
+      for (elapsed = 0; elapsed < cycles; elapsed = elapsed + 1) begin
+        step();
+        if (endpoint_management_output_valid !== 1'b0 || endpoint_wire_fault !== expected_fault[0] ||
+            endpoint_transport_attached !== expected_attached[0])
+          $fatal(1, "quiet status mismatch action=%0d output=%b fault=%b attached=%b", action_row,
+                 endpoint_management_output_valid, endpoint_wire_fault, endpoint_transport_attached);
+      end
+    end
+  endtask
+
+  // The finite script and native metadata transitions are independent retained inputs.
+  initial begin
+    if (!$value$plusargs("actions=%s", actions_path) || !$value$plusargs("words=%s", words_path) ||
+        !$value$plusargs("mutations=%s", mutations_path)) $fatal(1, "missing witness vectors");
+    $readmemh(words_path, words);
+    handle = $fopen(mutations_path, "r");
+    if (!handle) $fatal(1, "cannot open mutation vectors");
+    for (i = 0; i < MUTATIONS; i = i + 1) begin
+      scanned = $fscanf(handle, "%h %h %h %h", expected_commands[i], before_metadata[i], issue_metadata[i], after_metadata[i]);
+      if (scanned != 4) $fatal(1, "incomplete mutation row=%0d", i);
+    end
+    scanned = $fscanf(handle, "%s", trailing);
+    if (scanned == 1) $fatal(1, "extra mutation rows");
+    $fclose(handle);
+    handle = $fopen(actions_path, "r");
+    if (!handle) $fatal(1, "cannot open script");
+    for (action_row = 0; action_row < ACTIONS; action_row = action_row + 1) begin
+      scanned = $fscanf(handle, "%d %h %d %d", action_kind, arg_a, arg_b, arg_c);
+      if (scanned != 4) $fatal(1, "incomplete script row=%0d", action_row);
+      case (action_kind)
+        0: begin reset = 1; step(); reset = 0; step(); end
+        1: bootstrap(arg_a, arg_b, arg_c);
+        2: send_packet(arg_a, arg_b);
+        3: receive_packet(arg_a, arg_b, arg_c);
+        4: hold_response(arg_a, arg_b);
+        5: quiet(arg_a, arg_b, arg_c);
+        default: $fatal(1, "unknown action=%0d", action_kind);
+      endcase
+    end
+    scanned = $fscanf(handle, "%s", trailing);
+    if (scanned == 1) $fatal(1, "extra script rows");
+    $fclose(handle);
+    if (mutation_index != MUTATIONS || responses == 0 || discarded == 0)
+      $fatal(1, "incomplete parser witness mutations=%0d", mutation_index);
+    $display("DOMAIN_ENDPOINT_MANAGEMENT_PASS actions=%0d mutations=%0d responses=%0d discarded=%0d steps=%0d",
+             ACTIONS, mutation_index, responses, discarded, steps);
+    $finish;
+  end
+
+  // This independent simulation horizon is additional to the runner's subprocess timeout.
+  initial begin
+    #@@TIMEOUT@@;
+    $fatal(1, "management parser witness timeout");
+  end
+endmodule

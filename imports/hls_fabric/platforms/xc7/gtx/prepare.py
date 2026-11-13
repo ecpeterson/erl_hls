@@ -16,12 +16,14 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def fetch(source: dict[str, str], cache: Path) -> bytes:
-    """Read/download one pinned source, rejecting modified cached bytes."""
+def fetch(source: dict[str, str], cache: Path, *, offline: bool = False) -> bytes:
+    """Read one pinned source; offline callers reject missing cache entries without networking."""
     target = cache / source["sha256"]
     if target.exists():
         data = target.read_bytes()
     else:
+        if offline:
+            raise ValueError(f"missing offline source: {target}")
         with urllib.request.urlopen(source["url"], timeout=60) as response:
             data = response.read()
     if digest(data) != source["sha256"]:

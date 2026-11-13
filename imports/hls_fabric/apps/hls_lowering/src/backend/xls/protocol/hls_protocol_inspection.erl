@@ -27,18 +27,22 @@ mode(Other) -> error({unsupported_protocol_inspection, Other}).
 write(Plan, Directory) ->
     hls_generated_files:write_into(emit(Plan), Directory).
 
--doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. Requires finalized receiver manifests from the same transport emission so allocated failures match the emitted owners. The result is the same bound manifest; no output files are created or read back.".
+-doc "Returns passive observation DSLX, fingerprinted JSON and the trusted ETF catalog in memory. Requires finalized receiver manifests from the same transport emission so allocated failures match the emitted owners. A partition catalog contains only native receivers, retaining global actor IDs; nonlocal addresses have no resource. The result is the same bound manifest; no output files are created or read back.".
 -spec emit(hls_protocol_transport:descriptor() | xls_protocol_network:input()) ->
     hls_generated_files:output(manifest()).
 emit(#{bundle := #{topology := #{actors := Actors}, modules := Modules}, receivers := Receivers}) ->
     Rows = [
-        #{index => I, id => Id, module => M}
-     || {I, #{id := Id, module := M}} <- lists:enumerate(0, Actors)
+        begin
+            #{id := Id, module := M} = lists:nth(I + 1, Actors),
+            #{index => I, id => Id, module => M}
+        end
+     || #{index := I, module := M} <- Receivers
     ],
     ReceiverManifests = maps:from_list([
         {I, Manifest}
      || #{index := I, manifest := Manifest} <- Receivers
     ]),
+    true = length(Rows) =:= map_size(ReceiverManifests),
     Resources = [
         resource(A, maps:get(M, Modules), maps:get(I, ReceiverManifests))
      || A = #{index := I, module := M} <- Rows
@@ -53,7 +57,7 @@ emit(#{bundle := #{topology := #{actors := Actors}, modules := Modules}, receive
             scope => process,
             coherence => one_process_pre_edge,
             history => unavailable,
-            sampling => query_service_acceptance_edge,
+            sampling => addressed_pre_edge,
             transport_stalls => excluded
         },
         source_identities => hls_protocol_identity:source_modules(Modules),

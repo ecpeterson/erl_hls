@@ -54,9 +54,9 @@ def sources(generated: Path, application: Path, ram_wrapper: Path | None = None)
 
 
 def inspect(path: Path, role: str, private_link_debug: bool, stage_debug: bool,
-            packet_debug: bool) -> dict:
-    """Require the expected hard physical boundary in the flattened netlist."""
-    module = json.loads(path.read_text())["modules"][TOP]
+            packet_debug: bool, *, top: str = TOP) -> dict:
+    """Require the same hard physical boundary for an explicit flattened top."""
+    module = json.loads(path.read_text())["modules"][top]
     cells = module["cells"]
 
     def by_type(kind: str) -> list[dict]:
@@ -79,7 +79,7 @@ def inspect(path: Path, role: str, private_link_debug: bool, stage_debug: bool,
     for port in ("TX8B10BEN", "RX8B10BEN", "TXPRBSSEL", "RXPRBSSEL", "TXCHARISK"):
         assert set(connection[port]) == {"0"}, port
     return {
-        "top": TOP,
+        "top": top,
         "role": role,
         "ps7": 1,
         "gtx_channels": 1,

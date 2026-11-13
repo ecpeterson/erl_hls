@@ -88,6 +88,20 @@ Transport replacement remains separate from actor replacement. A fresh channel-m
 
 This composition is host-managed and single-clock. The separately generated FPGA supervisor supports its documented closed-child composition; the two builders do not imply arbitrary combinations of local supervision and crossing topology. Physical reset isolation, clock-domain crossing and live-device qualification remain separate work.
 
+### Independently clocked endpoints
+
+The common-clock channel has one controller for both ends. A physical board crossing instead uses `hls_domain_channel_tx` and `hls_domain_channel_rx`, compiled from their Erlang kernels by `hls_domain_endpoint_build`. Each endpoint sees only its local domain's readiness and incarnation. There is no asynchronous wire that samples the other board's lifecycle.
+
+One binding contains a deployment namespace, a generation, and both domain incarnations. The transmitter retains one accepted publication until its exact acknowledgment arrives; the receiver acknowledges only after native destination capture. Packet identity includes the complete binding and a nonwrapping sequence. Well-formed stale packets drain without affecting a new binding. Invalid current traffic fails closed. Neither endpoint stores a retry history or replays an application operation.
+
+Place one `hls_domain_endpoint_pair` child per directed crossing after both domain-instance children under an ordinary `one_for_all` supervisor. Management adapters and deployment owners outlive that subtree. The worker retires old endpoint ownership, requires both current domain incarnations to exceed both endpoints' retained histories, chooses a generation above both retained generations, and confirms RX before admitting TX. Generation gaps are necessary when a previous attempt reached RX but not TX. A lost mutation reply triggers ordered inspection; one exact management retry is allowed only when that inspection establishes the unchanged pre-state. This is not permission to retry application work.
+
+The worker carries only management requests. Its `status/1` is a last-observed readiness record, not a continuously true guarantee about a remote peer. Failed ordered reads quarantine that transport for the worker's lifetime and fence the reachable peer. Recovery requires explicit deployment reconciliation and a fresh supervised worker; a replacement registered process is not silently adopted. Surviving adapters fence a dead worker's owned endpoints independently.
+
+`hls_domain_endpoint_role` mechanically connects a source partition to its local endpoints. `hls_domain_endpoint_packets` uses the retained source crossing classes to validate and route complete packets, and `hls_domain_endpoints_stream` supplies metadata-only host management. `hls_domain_endpoint_network` joins these components without adding state. Its physical carrier/router fault input reaches the domain's native failure transition, preserving incarnation and fault history while leaving host management available. A host parser/session fault remains a connection failure and does not become an actor-network failure.
+
+Cold reset is a separate deployment boundary: it forgets endpoint identity history. The deployment must exclude the old namespace before admitting a fresh one. Domain replacement and host-session changes must not reset endpoints or the carrier. The current physical packet emitter supports twenty application payload words, carries all identity fields, and requires a bounded atomic packet carrier; the board-specific carrier owns its clock crossings and integrity checks. Finite kernel and RTL witnesses establish only their tested histories, not physical CDC safety or unbounded distributed progress.
+
 ## Stop and supervised lifetime
 
 The shared lifecycle accepts incarnation-specific `stop`. It closes admission and reaches `stopped` only after the fence acknowledgement, without pulsing reset, running initialization or allocating a successor. A repeated stop is idempotent; a stale command cannot stop a newer incarnation. Replacement from stopped starts a fresh lifetime through the ordinary reset and initialization sequence.

@@ -1,6 +1,6 @@
 -module(hls_protocol_codec_validation).
 -moduledoc "Finite RTL witnesses for source-bound frame permutations and canonical-frame rejection.".
--export([prepare/1, prepare_layouts/1]).
+-export([prepare/1, prepare_layouts/1, prepare_wide/1]).
 
 -doc "Compiles the complete two-phase fixture, derives captures from that program and writes four codec modules and self-checking benches to a fresh directory. Checks payload bit bases, extremes, all five-bit payloads, every forbidden fixed-bit flip and every valid/ready combination. This is a finite source-to-RTL witness, not a connected-protocol proof.".
 -spec prepare(file:filename()) -> ok.
@@ -29,6 +29,20 @@ prepare_layouts(Stage) ->
             write_case(Directory, atom_to_list(Tag), Channel, hls_protocol_frame_fixture)
         end, Captures)
     end, [1, 3]).
+
+-doc "Writes 672-bit frame witnesses for the domain-channel capacity. Exercises unaligned and full source payload bases, constants, every fixed-bit rejection and all handshake combinations against independent record packing. This finite witness also guards practical compilation of wide padding.".
+-spec prepare_wide(file:filename()) -> ok.
+prepare_wide(Stage) ->
+    ok = file:make_dir(Stage),
+    Layout = hls_frame_layout:new(20),
+    ok = file:write_file(filename:join(Stage, "frame_config.x"), xls_frame_layout:config(Layout), [exclusive]),
+    Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
+        || Tag <- [unaligned, full, constant, small]],
+    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", [], Layout),
+    #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
+    lists:foreach(fun(Channel = #{port := Tag}) ->
+        write_case(Stage, atom_to_list(Tag), Channel, hls_protocol_capture_fixture)
+    end, Captures).
 
 %% RTL and host codecs are checked against independent record packing and explicit physical header bytes.
 -spec write_case(file:filename(), string(), map(), module()) -> ok.

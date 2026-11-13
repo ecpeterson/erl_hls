@@ -6,7 +6,9 @@
 // abort_partial discards only an unfinished input frame (upstream must also
 // abandon its remainder); flush additionally discards queued/output bytes.
 // Require 1 <= MIN_BYTES <= MAX_BYTES <= 2048. Memory is not reset.
-// Counters wrap modulo 2^32 and clear only on rst.
+// Counters wrap modulo 2^32 and clear only on rst. drop_event/abort_event are
+// same-clock pulses for a nonzero loss update; flush may discard multiple frames
+// in one abort_event. Pulses have no retention across resets.
 module ethernet_frame_store #(
     parameter DROP_WHEN_FULL = 0,
     parameter MIN_BYTES = 14,
@@ -21,7 +23,8 @@ module ethernet_frame_store #(
     output reg out_last,
     output reg [7:0] out_data,
     output reg [1:0] queued,
-    output reg [31:0] accepted, dropped, overflowed, aborted
+    output reg [31:0] accepted, dropped, overflowed, aborted,
+    output wire drop_event, abort_event
 );
     reg [7:0] memory [0:4095];
     reg [11:0] lengths [0:1];
@@ -33,6 +36,11 @@ module ethernet_frame_store #(
     wire unavailable = no_space || (length == 0 && queued == 2);
     wire invalid = bad || in_error || length >= MAX_BYTES || unavailable;
     wire commit = take && in_last && !invalid && length + 1 >= MIN_BYTES;
+    // Same-edge loss pulses share clk with the exact counter updates below.
+    // No multi-bit counter comparison or payload forwarding is needed downstream.
+    assign drop_event = !rst && !flush && !abort_partial && take && in_last && !commit;
+    assign abort_event = !rst && ((flush && (queued != 0 || length != 0)) ||
+                        (!flush && abort_partial && length != 0));
     wire release_slot = out_valid && out_ready && out_last;
     wire read_enable = queued != 0 && (!out_valid || out_ready) && !release_slot;
     assign in_ready = !rst && !flush && !abort_partial &&

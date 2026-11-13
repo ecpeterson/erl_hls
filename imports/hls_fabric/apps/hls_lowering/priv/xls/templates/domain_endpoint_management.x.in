@@ -1,0 +1,124 @@
+import domain_frames as framing;
+
+// Native status encoding is retained by the endpoint emitter.
+type Status = bits[@@STATUS_BITS@@];
+const INVALID = @@INVALID@@;
+const ROUTE = u32:@@ROUTE@@;
+@@INPUTS@@
+@@OUTPUTS@@
+
+// Field order and offsets come from the retained native record descriptor.
+pub struct Binding { @@BINDING_FIELDS@@ }
+// Selection reads only metadata; payload ownership remains inside each endpoint.
+pub struct Observation {
+  known: bool, binding: Binding, sequence: u32, status: Status, active: bool, fault: bool,
+}
+// Fourteen payload words plus route/header fit one bounded response slot.
+type Packet = framing::Packet<u32:448>;
+type Receive = framing::Receive<u32:448>;
+// Transport replacement owns this parser only, never endpoint state or a link namespace.
+pub struct State {
+  rx: Receive, tx: Packet, tx_valid: bool, position: u32,
+  session: u64, attached: bool, fault: bool,
+}
+// Outputs act on this edge; the single parser state commits afterward.
+pub struct Tick { state: State, output: Outputs }
+
+// The enclosing board wires observations from each endpoint's sampled output.
+fn observation(io: Inputs, endpoint: u32) -> Observation { @@OBSERVATION@@ }
+// The physical stream transmits little-endian words and complete 64-bit identities.
+fn word(packet: Packet, index: u32) -> u32 { (packet.payload >> (index * u32:32)) as u32 }
+// Session identities retain both words even when the command is malformed.
+fn pair(packet: Packet, index: u32) -> u64 { word(packet, index + u32:1) ++ word(packet, index) }
+// Retain the session prefix even after a malformed header, using the same RX slot.
+// A truncated packet without both session words cannot assert current-session authority.
+fn receive_word(s: Receive, value: u32, last: bool) -> Receive {
+  let next = framing::receive(s, value, last);
+  let prefix = s.stage == u2:2 && s.seen < u32:2;
+  Receive {
+    packet: if prefix { Packet { payload: bit_slice_update(next.packet.payload, s.seen*u32:32, value), ..next.packet } }
+      else { next.packet },
+    seen: if prefix { s.seen + u32:1 } else { next.seen },
+    ..next
+  }
+}
+// Binding decoding is generated from the same descriptor as host record packing.
+fn binding(value: bits[256]) -> Binding { Binding { @@DECODE_BINDING@@ } }
+// Pack the selected row once, after selection rather than once per endpoint.
+fn response(packet: Packet, observed: Observation) -> Packet {
+  let status = if observed.known { observed.status } else { INVALID };
+  let flags = status as u32 | ((observed.active as u32) << u32:8) | ((observed.fault as u32) << u32:9);
+  let packed_binding = @@PACK_BINDING@@;
+  let payload = pair(packet, u32:0) as bits[448] |
+    ((word(packet, u32:2) as bits[448]) << u32:64) |
+    ((word(packet, u32:3) as bits[448]) << u32:96) |
+    ((flags as bits[448]) << u32:128) |
+    ((packed_binding as bits[448]) << u32:160) |
+    ((observed.sequence as bits[448]) << u32:416);
+  Packet { route: ROUTE, header: framing::header(packet.header, u8:129, u8:14), payload }
+}
+// A command issues only when its immutable response has storage. Lost replies require inspection.
+pub fn tick(previous: State, io: Inputs) -> Tick {
+  let establish = io.endpoint_transport_reset && !io.reset &&
+    io.endpoint_transport_session != u64:0 && io.endpoint_transport_session > previous.session;
+  let s = if establish { State { session: io.endpoint_transport_session, attached: true, ..zero!<State>() } }
+    else { previous };
+  let connected = s.attached && !s.fault && !io.reset && !establish;
+  let done = connected && s.tx_valid && io.endpoint_management_output_ready && framing::last(s.tx, s.position);
+  let space = !s.tx_valid || done;
+  let ready = connected && !s.rx.full;
+  let received = if ready && io.endpoint_management_valid {
+    receive_word(s.rx, io.endpoint_management_word, io.endpoint_management_last)
+  } else { s.rx };
+  let packet = s.rx.packet;
+  let session_matches = s.rx.seen >= u32:2 && pair(packet, u32:0) == s.session;
+  let tag = packet.header[24+:u8];
+  let words = packet.header[0+:u8];
+  let inspect = tag == u8:0 && words == u8:4;
+  let bind_request = tag == u8:1 && words == u8:12;
+  let fence = tag == u8:2 && words == u8:12;
+  let canonical = packet.route == ROUTE && (packet.header & u32:0x00ffff00) == u32:0 &&
+    word(packet, u32:2) != u32:0 && (inspect || bind_request || fence) && !s.rx.bad;
+  let issue = connected && s.rx.full && session_matches && canonical && space;
+  let endpoint = word(packet, u32:3);
+  let observed = observation(io, endpoint);
+  let requested = binding(packet.payload[128+:bits[256]]);
+  let bind_enabled = issue && observed.known && bind_request;
+  let fence_enabled = issue && observed.known && fence;
+  let fault = s.fault || (connected && s.rx.full && session_matches && !canonical);
+  Tick {
+    state: if io.reset { zero!<State>() } else { State {
+      rx: if issue || (connected && s.rx.full && !session_matches) { zero!<Receive>() } else { received },
+      tx: if issue { response(packet, observed) } else { s.tx },
+      tx_valid: issue || (s.tx_valid && !done),
+      position: if issue || done { u32:0 } else { s.position + (connected && s.tx_valid && io.endpoint_management_output_ready) as u32 },
+      session: s.session, attached: s.attached && !fault, fault,
+    } },
+    output: Outputs {
+      endpoint_management_ready: ready,
+      endpoint_management_output_word: framing::word(s.tx, s.position),
+      endpoint_management_output_valid: connected && s.tx_valid,
+      endpoint_management_output_last: framing::last(s.tx, s.position),
+      endpoint_transport_session_observed: previous.session,
+      endpoint_transport_attached: previous.attached && !io.reset,
+      endpoint_wire_fault: previous.fault,
+      @@COMMANDS@@
+    },
+  }
+}
+// This independently sampled management proc contains no application or endpoint storage.
+pub proc endpoint_management_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // The mechanical pin adapter carries backpressure in the sampled structs.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // Cold parser state has no transport authority; endpoint reset is a separate board connection.
+  init { zero!<State>() }
+  // Every accepted edge updates only parser storage and selected command pins.
+  next(s: State) {
+    let (tok, io) = recv(join(), commands);
+    let result = tick(s, io);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

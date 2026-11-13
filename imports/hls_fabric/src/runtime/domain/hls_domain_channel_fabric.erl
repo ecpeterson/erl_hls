@@ -1,6 +1,6 @@
 -module(hls_domain_channel_fabric).
 -moduledoc """
-Shared framed management adapter for fixed reset-domain mailbox channels.
+Shared framed management adapter for fixed channels and independent-clock endpoints.
 
 Each channel has one local owner capability. The bounded shared queue carries only
 inspect/bind/fence commands; application frames and credits never pass through this
@@ -12,15 +12,17 @@ session; a local capability is not distributed hardware ownership arbitration.
 
 Owner death revokes its capability, discards unsent requests and retains a fence
 obligation. A transmitted bind must be observed before fencing its resulting
-exact generation. New attachment waits until the channel is observed inactive.
+exact identity: generation for shared channels, full binding for independent endpoints.
+New attachment waits until the channel is observed inactive.
 This obligation survives the owner's death, but not loss of this adapter itself;
 reattachment to a fresh transport must explicitly reconcile the surviving device.
 """.
+-include("hls_domain_channel_endpoints.hrl").
 -behaviour(gen_server).
 
 %% Deployment, exclusive per-channel authority and asynchronous request interface.
 -export([start_link/3, attach/3, status/2, request/4, send_request/2, stop/1, info/1]).
--export_type([transport/0, options/0, request/0, info/0]).
+-export_type([transport/0, options/0, interface/0, command/0, snapshot/0, request/0, info/0]).
 %% OTP callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
@@ -28,17 +30,32 @@ reattachment to a fresh transport must explicitly reconcile the surviving device
 -type transport() :: #{management := pid(), session := hls_nums:u64()}.
 -doc "Finite control response deadline and optional ordinary local process name; expiration means uncertainty, not successful fencing.".
 -type options() :: #{management_timeout_ms => pos_integer(), name => atom()}.
+-doc "Trusted retained management metadata selects shared-channel or independent-endpoint framing.".
+-type interface() :: hls_domain_channel_wire:interface() | hls_domain_endpoint_wire:interface().
+-doc "Protocol-specific inspect, bind or fence; independent mutations retain the complete binding record.".
+-type command() :: hls_domain_channel_wire:command() | hls_domain_endpoint_wire:command().
+-doc "An ordered shared-channel or independent-endpoint observation; this is not remote-liveness evidence.".
+-type snapshot() :: hls_domain_channel_wire:snapshot() | hls_domain_endpoint_wire:snapshot().
+%% Queue correlation has one local key regardless of the wire protocol's channel/endpoint spelling.
+-type observation() :: #{
+    session := hls_nums:u64(),
+    request := hls_nums:u32(),
+    channel := hls_nums:u32(),
+    snapshot := snapshot()
+}.
+%% Owner-death fencing retains the exact observed identity for the selected protocol.
+-type retirement() :: inspect | {fence, hls_nums:u64() | #endpoint_binding{}}.
 -doc "Messages accepted by the asynchronous API without changing the calling owner identity.".
 -type request() ::
     {attach, hls_nums:u32(), pid()}
     | {status, hls_nums:u32()}
-    | {request, reference(), hls_nums:u32(), hls_domain_channel_wire:command()}.
+    | {request, reference(), hls_nums:u32(), command()}.
 -doc "Bounded management metadata; absence of a pending exchange is not evidence of remote liveness.".
 -type info() :: #{
     session := hls_nums:u64(),
-    observed := #{hls_nums:u32() => hls_domain_channel_wire:snapshot()},
-    retiring := #{hls_nums:u32() => inspect | {fence, hls_nums:u64()}},
-    uncertain := #{hls_nums:u32() => hls_domain_channel_wire:command()},
+    observed := #{hls_nums:u32() => snapshot()},
+    retiring := #{hls_nums:u32() => retirement()},
+    uncertain := #{hls_nums:u32() => command()},
     queued := non_neg_integer(),
     ignored := non_neg_integer()
 }.
@@ -47,7 +64,7 @@ reattachment to a fresh transport must explicitly reconcile the surviving device
 %% A current exchange retains the exact command even if its submitting owner dies.
 -type exchange() :: #{
     channel := hls_nums:u32(),
-    command := hls_domain_channel_wire:command(),
+    command := command(),
     from := none | gen_server:from(),
     retirement := boolean(),
     sequence => hls_nums:u32(),
@@ -59,11 +76,11 @@ reattachment to a fresh transport must explicitly reconcile the surviving device
     broker_monitor :: reference(),
     route :: hls_fabric:route(),
     session :: hls_nums:u64(),
-    interface :: hls_domain_channel_wire:interface(),
+    interface :: interface(),
     owners = #{} :: #{hls_nums:u32() => owner()},
-    retiring = #{} :: #{hls_nums:u32() => inspect | {fence, hls_nums:u64()}},
-    uncertain = #{} :: #{hls_nums:u32() => hls_domain_channel_wire:command()},
-    observed = #{} :: #{hls_nums:u32() => hls_domain_channel_wire:snapshot()},
+    retiring = #{} :: #{hls_nums:u32() => retirement()},
+    uncertain = #{} :: #{hls_nums:u32() => command()},
+    observed = #{} :: #{hls_nums:u32() => snapshot()},
     queue = queue:new() :: queue:queue(exchange()),
     exchange = none :: none | exchange(),
     sequence = 1 :: pos_integer(),
@@ -77,7 +94,7 @@ reattachment to a fresh transport must explicitly reconcile the surviving device
 
 -doc "Registers one management route without resetting channels or acquiring per-channel authority. Optional name uses ordinary local OTP registration for stable supervisor child specifications.".
 -spec start_link(
-    transport(), hls_domain_channel_wire:interface() | map() | file:filename(), options()
+    transport(), interface() | map() | file:filename(), options()
 ) -> gen_server:start_ret().
 start_link(Transport, Interface, Options) ->
     Args = {Transport, Interface, Options},
@@ -89,11 +106,11 @@ start_link(Transport, Interface, Options) ->
 -spec attach(pid(), hls_nums:u32(), pid()) -> {ok, reference()} | {error, atom()}.
 attach(Backend, Channel, Owner) -> gen_server:call(Backend, {attach, Channel, Owner}).
 -doc "Obtains ordered device evidence; a status response can resolve a previously lost mutation reply.".
--spec status(pid(), hls_nums:u32()) -> {ok, hls_domain_channel_wire:snapshot()} | {error, term()}.
+-spec status(pid(), hls_nums:u32()) -> {ok, snapshot()} | {error, term()}.
 status(Backend, Channel) -> gen_server:call(Backend, {status, Channel}, infinity).
 -doc "Submits one capability-authorized command. An outcome_unknown error retains its exact identity; inspect before making another decision.".
--spec request(pid(), reference(), hls_nums:u32(), hls_domain_channel_wire:command()) ->
-    {ok, hls_domain_channel_wire:snapshot()} | {error, term()}.
+-spec request(pid(), reference(), hls_nums:u32(), command()) ->
+    {ok, snapshot()} | {error, term()}.
 request(Backend, Authority, Channel, Command) ->
     gen_server:call(Backend, {request, Authority, Channel, Command}, infinity).
 -doc "Starts a correlated request from the same owner process; no temporary worker gains mutation authority.".
@@ -107,14 +124,14 @@ stop(Backend) -> gen_server:stop(Backend).
 info(Backend) -> gen_server:call(Backend, info).
 
 -doc "Checks the retained interface and establishes exclusive broker-route delivery.".
--spec init({transport(), hls_domain_channel_wire:interface() | map() | file:filename(), options()}) ->
+-spec init({transport(), interface() | map() | file:filename(), options()}) ->
     {ok, #backend{}}.
 init({#{management := Broker, session := Session}, Interface0, Options}) ->
     true = is_integer(Session) andalso Session > 0 andalso Session < (1 bsl 64),
     [] = maps:keys(Options) -- [management_timeout_ms, name],
     Timeout = maps:get(management_timeout_ms, Options, 1000),
     true = is_integer(Timeout) andalso Timeout > 0,
-    Interface = #{management_route := Route} = hls_domain_channel_wire:load(Interface0),
+    Interface = #{management_route := Route} = load_interface(Interface0),
     ok = hls_fabric:register_route(Broker, Route, self()),
     {ok, #backend{
         broker = Broker,
@@ -174,10 +191,7 @@ handle_cast(
     {'$hls_fabric_frame', Receipt, Route, Header, Payload},
     State = #backend{broker = Broker, route = Route}
 ) ->
-    try
-        {Tag, 0, 0} = Header,
-        frame(Tag, Payload, State)
-    of
+    try frame(Header, Payload, State) of
         Next ->
             hls_fabric:ack(Broker, Receipt),
             {noreply, pump(Next)}
@@ -257,9 +271,9 @@ terminate(_Reason, State) ->
 attach_channel(
     Channel,
     Owner,
-    State = #backend{interface = #{channels := Channels}, owners = Owners, retiring = Retiring}
+    State = #backend{interface = Interface, owners = Owners, retiring = Retiring}
 ) ->
-    case lists:member(Channel, Channels) of
+    case lists:member(Channel, channels(Interface)) of
         false ->
             {reply, {error, unknown_channel}, State};
         true ->
@@ -287,16 +301,16 @@ attach_channel(
     end.
 
 %% One active and at most eight waiting caller requests bound shared control storage.
--spec enqueue(hls_nums:u32(), hls_domain_channel_wire:command(), gen_server:from(), #backend{}) ->
+-spec enqueue(hls_nums:u32(), command(), gen_server:from(), #backend{}) ->
     {reply, term(), #backend{}} | {noreply, #backend{}}.
 enqueue(
-    Channel, Command, From, State = #backend{interface = #{channels := Channels}, queue = Queue}
+    Channel, Command, From, State = #backend{interface = Interface, queue = Queue}
 ) ->
-    case lists:member(Channel, Channels) of
+    case lists:member(Channel, channels(Interface)) of
         false ->
             {reply, {error, unknown_channel}, State};
         true ->
-            case {valid_command(Command), queue:len(Queue) < 8} of
+            case {valid_command(Command, Interface), queue:len(Queue) < 8} of
                 {false, _} ->
                     {reply, {error, invalid}, State};
                 {true, false} ->
@@ -363,16 +377,29 @@ pump_caller(State = #backend{queue = Queue}) ->
             end
     end.
 
-%% Validate public mutation fields before they can reach the shared packet encoder.
--spec valid_command(term()) -> boolean().
-valid_command(inspect) ->
+%% Validate public mutation fields under the retained protocol before entering the shared queue.
+-spec valid_command(term(), interface()) -> boolean().
+valid_command(inspect, _) ->
     true;
-valid_command({fence, Expected}) ->
+valid_command({fence, Expected}, #{kind := domain_channel_management}) ->
     u64(Expected);
-valid_command({bind, Expected, Source, Destination}) ->
+valid_command({bind, Expected, Source, Destination}, #{kind := domain_channel_management}) ->
     u64(Expected) andalso u64(Source) andalso Source > 0 andalso u64(Destination) andalso
         Destination > 0;
-valid_command(_) ->
+valid_command(
+    {Operation, #endpoint_binding{
+        namespace = Namespace,
+        generation = Generation,
+        source_incarnation = Source,
+        destination_incarnation = Destination
+    }},
+    #{kind := domain_endpoint_management}
+) when Operation =:= bind; Operation =:= fence ->
+    lists:all(
+        fun(Value) -> u64(Value) andalso Value > 0 end,
+        [Namespace, Generation, Source, Destination]
+    );
+valid_command(_, _) ->
     false.
 
 %% Untyped messages cannot silently truncate fixed-width generations or incarnations.
@@ -385,7 +412,7 @@ transmit(Entry = #{channel := Channel, command := Command}, State) ->
     Sequence = State#backend.sequence,
     true = Sequence < (1 bsl 32),
     true = gen_server:reqids_size(State#backend.sends) =:= 0,
-    {Tag, Payload} = hls_domain_channel_wire:command(
+    {Tag, Payload} = wire_command(
         State#backend.session, Sequence, Channel, Command, State#backend.interface
     ),
     Timer = erlang:send_after(State#backend.timeout_ms, self(), {management_timeout, Sequence}),
@@ -400,16 +427,17 @@ transmit(Entry = #{channel := Channel, command := Command}, State) ->
     }.
 
 %% Old sessions are discardable even after a transport reconnect; malformed current evidence is not.
--spec frame(byte(), binary(), #backend{}) -> #backend{}.
-frame(_Tag, <<Session:64/little, _/binary>>, State = #backend{session = Current}) when
+-spec frame(hls_fabric:header(), binary(), #backend{}) -> #backend{}.
+frame(_Header, <<Session:64/little, _/binary>>, State = #backend{session = Current}) when
     Session =/= Current
 ->
     State#backend{ignored = State#backend.ignored + 1};
-frame(1, Payload, State) ->
-    response(hls_domain_channel_wire:observation(Payload, State#backend.interface), State).
+frame(Header, Payload, State) ->
+    {_, 0, 0} = Header,
+    response(wire_observation(Header, Payload, State#backend.interface), State).
 
 %% An ordered inspection resolves whether an earlier pulse reached this same transport session.
--spec response(hls_domain_channel_wire:observation(), #backend{}) -> #backend{}.
+-spec response(observation(), #backend{}) -> #backend{}.
 response(
     #{session := Session, request := Sequence, channel := Channel, snapshot := Snapshot},
     State = #backend{
@@ -425,8 +453,9 @@ response(
     }
 ) ->
     erlang:cancel_timer(Timer),
+    ok = validate_snapshot(Snapshot),
     case maps:find(Channel, State#backend.observed) of
-        {ok, #{generation := Previous}} -> true = maps:get(generation, Snapshot) >= Previous;
+        {ok, Previous} -> monotonic(Previous, Snapshot);
         error -> ok
     end,
     Unknown =
@@ -442,15 +471,11 @@ response(
     answer(From, {ok, Snapshot}),
     case Retirement of
         true ->
-            case Snapshot of
-                #{active := false, fault := false} ->
+            case retirement(Snapshot) of
+                complete ->
                     Next#backend{retiring = maps:remove(Channel, Next#backend.retiring)};
-                #{active := true, generation := Generation} ->
-                    Next#backend{
-                        retiring = (Next#backend.retiring)#{Channel => {fence, Generation}}
-                    };
-                _ ->
-                    Next#backend{retiring = (Next#backend.retiring)#{Channel => inspect}}
+                Obligation ->
+                    Next#backend{retiring = (Next#backend.retiring)#{Channel => Obligation}}
             end;
         false ->
             Next
@@ -475,3 +500,103 @@ retire_owner(Channel, State) ->
 -spec answer(none | gen_server:from(), term()) -> ok.
 answer(none, _) -> ok;
 answer(From, Reply) -> gen_server:reply(From, Reply).
+
+%% Trusted ETF metadata is decoded once, then the declared kind selects its native validator.
+-spec load_interface(interface() | map() | file:filename()) -> interface().
+load_interface(Path) when is_list(Path); is_binary(Path) ->
+    {ok, Bytes} = file:read_file(Path),
+    load_interface(binary_to_term(Bytes));
+load_interface(#{kind := domain_endpoint_management} = Interface) ->
+    hls_domain_endpoint_wire:load(Interface);
+load_interface(Interface) ->
+    hls_domain_channel_wire:load(Interface).
+
+%% Endpoint IDs share the queue's channel key without inventing a second owner registry.
+-spec channels(interface()) -> [hls_nums:u32()].
+channels(#{kind := domain_channel_management, channels := Channels}) ->
+    Channels;
+channels(#{kind := domain_endpoint_management, endpoints := Endpoints}) ->
+    [Id || #{id := Id} <- Endpoints].
+
+%% Both protocols use the same ordered broker lane and retain their exact mutation values.
+-spec wire_command(hls_nums:u64(), hls_nums:u32(), hls_nums:u32(), command(), interface()) ->
+    {0 | 1 | 2, binary()}.
+wire_command(Session, Sequence, Channel, Command, #{kind := domain_channel_management} = Interface) ->
+    hls_domain_channel_wire:command(Session, Sequence, Channel, Command, Interface);
+wire_command(
+    Session, Sequence, Channel, Command, #{kind := domain_endpoint_management} = Interface
+) ->
+    hls_domain_endpoint_wire:command(Session, Sequence, Channel, Command, Interface).
+
+%% Full headers reach the endpoint decoder; only the local correlation key is normalized.
+-spec wire_observation(hls_fabric:header(), binary(), interface()) -> observation().
+wire_observation({1, 0, 0}, Payload, #{kind := domain_channel_management} = Interface) ->
+    hls_domain_channel_wire:observation(Payload, Interface);
+wire_observation(Header, Payload, #{kind := domain_endpoint_management} = Interface) ->
+    Observation =
+        #{endpoint := Id} = hls_domain_endpoint_wire:observation(Header, Payload, Interface),
+    (maps:remove(endpoint, Observation))#{channel => Id}.
+
+%% Only an entirely unbound initial identity may contain zero fields.
+-spec validate_snapshot(snapshot()) -> ok.
+validate_snapshot(#{
+    binding := Binding = #endpoint_binding{
+        namespace = Namespace,
+        generation = Generation,
+        source_incarnation = Source,
+        destination_incarnation = Destination
+    }
+}) ->
+    true =
+        Binding =:= #endpoint_binding{} orelse
+            (Namespace > 0 andalso Generation > 0 andalso Source > 0 andalso Destination > 0),
+    ok;
+validate_snapshot(#{generation := _}) ->
+    ok.
+
+%% Ordered endpoint evidence cannot silently adopt a cold-reset namespace or regressed identity.
+-spec monotonic(snapshot(), snapshot()) -> ok.
+monotonic(#{generation := Previous}, #{generation := Generation}) ->
+    true = Generation >= Previous,
+    ok;
+monotonic(
+    #{binding := #endpoint_binding{} = Previous, packet_sequence := OldSequence},
+    #{binding := #endpoint_binding{} = Binding, packet_sequence := Sequence}
+) ->
+    case Previous of
+        #endpoint_binding{
+            namespace = 0,
+            generation = 0,
+            source_incarnation = 0,
+            destination_incarnation = 0
+        } ->
+            ok;
+        #endpoint_binding{
+            namespace = Namespace,
+            generation = OldGeneration,
+            source_incarnation = OldSource,
+            destination_incarnation = OldDestination
+        } ->
+            #endpoint_binding{
+                namespace = Namespace,
+                generation = Generation,
+                source_incarnation = Source,
+                destination_incarnation = Destination
+            } = Binding,
+            true = Generation >= OldGeneration,
+            case Generation =:= OldGeneration of
+                true ->
+                    Previous = Binding,
+                    true = Sequence >= OldSequence;
+                false ->
+                    true = Source > OldSource andalso Destination > OldDestination
+            end
+    end,
+    ok.
+
+%% A live independent endpoint must be fenced by its complete observed binding.
+-spec retirement(snapshot()) -> complete | retirement().
+retirement(#{active := false, fault := false}) -> complete;
+retirement(#{active := true, binding := Binding}) -> {fence, Binding};
+retirement(#{active := true, generation := Generation}) -> {fence, Generation};
+retirement(_) -> inspect.

@@ -41,7 +41,7 @@ ports(Domains, Crossings, #{inputs := ChannelInputs, outputs := ChannelOutputs})
     iodata().
 emit(Domains, Crossings, Channel) -> emit(Domains, Crossings, Channel, "protocol_domains").
 
--doc "Renders the same mechanical composition under a compiler-controlled top name. Framed domain instances receive global cold reset separately from their core-only domain_reset pin.".
+-doc "Renders the same mechanical composition under a compiler-controlled top name. Framed domain instances receive global cold reset separately from their core-only domain_reset pin. This common-clock composition has no external physical carrier: fabric_fault is tied low; channel protocol faults still reach the native lifecycle through crossing pins.".
 -spec emit([hls_protocol_domains:domain()], [hls_protocol_domains:crossing()], channel(), string()) ->
     iodata().
 emit(Domains, Crossings, Channel, Top) ->
@@ -59,11 +59,12 @@ emit(Domains, Crossings, Channel, Top) ->
         "endmodule\n"
     ].
 
-%% A framed core's cold reset belongs to the enclosing deployment, not its per-domain reset pin.
+%% Common-clock channels have no external carrier; their own faults remain on crossing pins.
 -spec public_input(string(), hls_protocol_domains:domain()) -> boolean().
 public_input(Name, Domain) ->
     not remote_input(Name) andalso
-        not (Name =:= "reset" andalso maps:get(mode, Domain, raw) =:= stream).
+        not (lists:member(Name, ["reset", "fabric_fault"]) andalso
+            maps:get(mode, Domain, raw) =:= stream).
 
 %% Crossing ports are compiler-controlled names, never application-provided module fragments.
 -spec remote_input(string()) -> boolean().
@@ -118,6 +119,8 @@ domain_instance(Domain = #{index := Index, interface := #{inputs := Inputs, outp
                                 stream -> "reset";
                                 raw -> ["(reset || ", Prefix, "reset)"]
                             end;
+                        "fabric_fault" ->
+                            "1'b0";
                         _ ->
                             Prefix ++ N
                     end

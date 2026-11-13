@@ -43,10 +43,11 @@ reusable_program_test() ->
         ?assertEqual({ok, Bytes}, file:read_file(filename:join(First, File))),
         ?assertEqual({ok, Bytes}, file:read_file(filename:join(Second, File)))
     end, FilesWritten),
-    %% Inspection restriction follows the actual planned cut, not a second native_actors flag.
-    ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
-        hls_protocol_network:write(South, #{inspection => process}, filename:join(Root, "inspection"))),
-    ?assertEqual(false, filelib:is_dir(filename:join(Root, "inspection"))),
+    %% Inspection follows retained native ownership after the original source files are gone.
+    #{network := #{native_indices := [1], inspection := Inspection}} =
+        hls_protocol_network:write(South, #{inspection => process}, filename:join(Root, "inspection")),
+    ?assertMatch([#{<<"id">> := 1, <<"owner_index">> := 1}], maps:get(<<"resources">>, Inspection)),
+    ?assertEqual(true, filelib:is_file(filename:join([Root, "inspection", "network", "inspection.etf"]))),
     Override = filename:join(Root, "override"),
     ?assertError({hls_diagnostic, #{stage := network, code := unsupported_network_options, context := #{options := [native_actors]}}},
         hls_protocol_network:write(South, #{native_actors => [left]}, Override)),

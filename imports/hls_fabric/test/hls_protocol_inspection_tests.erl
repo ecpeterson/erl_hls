@@ -52,3 +52,18 @@ receiver_codebooks_test() ->
         ?assertEqual(hls_generated_files:hash(maps:get(binary_to_list(File), Files)),
             maps:get(dslx_sha256, Manifest))
     end, lists:zip(Receivers, Resources)).
+
+
+%% A noncontiguous native subset keeps global addresses and excludes unowned codebooks.
+-spec partition_catalog_test() -> ok.
+partition_catalog_test() ->
+    #{result := #{network := #{inspection := Manifest}, transport := Transport}, files := Files} =
+        hls_protocol_network:emit(#{sources => [{"test/hls_protocol_boundary_fixture.erl", []}],
+            topology => {hls_protocol_boundary_fixture, topology, []}, actor_limit => 4,
+            native_actors => [a, c], inspection => process}),
+    ?assertEqual([0, 2], [I || #{<<"id">> := I} <- maps:get(<<"resources">>, Manifest)]),
+    #{actors := Actors} = binary_to_term(iolist_to_binary(maps:get("network/inspection.etf", Files))),
+    ?assertEqual([{0, a}, {2, c}], [{I, Id} || #{index := I, id := Id} <- Actors]),
+    #{receivers := [First | _] = Receivers} = Transport,
+    ?assertError({badmatch, false}, hls_protocol_inspection:emit(Transport#{receivers := [First | Receivers]})),
+    ?assertException(error, _, hls_protocol_inspection:emit(Transport#{receivers := [First#{module := mismatched_source_module} | tl(Receivers)]})).

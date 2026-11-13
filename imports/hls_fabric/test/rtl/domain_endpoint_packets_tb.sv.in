@@ -1,0 +1,55 @@
+`timescale 1ns/1ps
+// Finite standalone router witness: endpoint offers and opaque carrier packets are
+// controlled vectors. Endpoint ownership, physical framing and CDC are outside it.
+module domain_endpoint_packets_tb;
+  localparam integer IN_BITS = @@IN_BITS@@;
+  localparam integer OUT_BITS = @@OUT_BITS@@;
+  localparam integer ROWS = @@ROWS@@;
+  @@WIRING@@
+  @@CONTROLS@@
+  reg [IN_BITS-1:0] command;
+  reg [OUT_BITS-1:0] expected, mask;
+  integer row, delay_cycles, scanned, handle, checked_steps = 0, tx = 0, rx = 0;
+  reg held = 0;
+  reg [1023:0] held_packet;
+  reg [5:0] held_words;
+  string vectors_path, trailing;
+
+  // Each row checks the settled same-edge outputs before clocking cursor/fault state.
+  initial begin
+    if (!$value$plusargs("vectors=%s", vectors_path)) $fatal(1, "missing router vectors");
+    handle = $fopen(vectors_path, "r");
+    if (!handle) $fatal(1, "cannot open router vectors");
+    for (row = 0; row < ROWS; row = row + 1) begin
+      scanned = $fscanf(handle, "%h %h %h %d", command, expected, mask, delay_cycles);
+      if (scanned != 4) $fatal(1, "incomplete router row=%0d", row);
+      router_inputs = command;
+      #(delay_cycles);
+      if ((router_outputs & mask) !== (expected & mask))
+        $fatal(1, "router mismatch row=%0d actual=%h expected=%h mask=%h", row, router_outputs, expected, mask);
+      if (held && !reset && (packet_tx_valid !== 1'b1 || packet_tx !== held_packet || packet_tx_words !== held_words))
+        $fatal(1, "router changed selected packet during stall row=%0d", row);
+      held = !reset && packet_tx_valid && !packet_tx_ready;
+      held_packet = packet_tx;
+      held_words = packet_tx_words;
+      checked_steps = checked_steps + 1;
+      if (packet_tx_valid && packet_tx_ready) tx = tx + 1;
+      if (packet_rx_valid && packet_rx_ready) rx = rx + 1;
+      router_clk = 1;
+      #1;
+      router_clk = 0;
+      #1;
+    end
+    scanned = $fscanf(handle, "%s", trailing);
+    if (scanned == 1) $fatal(1, "extra router vector rows");
+    $fclose(handle);
+    $display("DOMAIN_ENDPOINT_PACKETS_PASS steps=%0d checked_steps=%0d tx=%0d rx=%0d", ROWS, checked_steps, tx, rx);
+    $finish;
+  end
+
+  // This finite simulation horizon is additional to the runner's subprocess timeout.
+  initial begin
+    #@@TIMEOUT@@;
+    $fatal(1, "packet router witness timeout");
+  end
+endmodule

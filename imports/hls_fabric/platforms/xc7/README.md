@@ -24,6 +24,7 @@ The native flow checks whether the open-source Xilinx 7-series toolchain can bui
 - a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
 - an optional [packet DMA test fixture](docs/ethernet-dma.md), carrying arbitrary Linux frames through the PCS/MAC with independent clock-domain ownership;
+- an [independent recovery-domain board composition](docs/domain-board.md), consuming frozen compiler bundles with bounded endpoint ownership and separate whole-image qualification;
 - a [two-board partition actor link](docs/partition-link.md), with typed serial-credit framing, independent DMA debug and a bounded 4,096-exchange physical soak;
 - an [N=6 repetition-link application](docs/repetition-link.md), with three schedulers per role, host-visible corrections and checked paired restart;
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;

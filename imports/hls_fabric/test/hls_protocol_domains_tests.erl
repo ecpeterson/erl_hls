@@ -1,6 +1,14 @@
 -module(hls_protocol_domains_tests).
--moduledoc "Source placement admission and mechanical domain/channel wiring. One real three-actor emission checks the public boundary; these tests do not establish RTL execution or recovery progress.".
+-moduledoc "Source placement admission, domain/channel wiring and provider packaging use a three-actor fixture. These tests do not establish RTL execution or recovery progress.".
 -include_lib("eunit/include/eunit.hrl").
+
+%% Fresh source emission for the separate finite DSLX inspection witness.
+-export([write_inspection/1]).
+
+-doc "Writes the three-domain source fixture with process inspection and actual framing. The standalone DSLX witness imports domain_2's emitted counter core; no external tools or semantic tests run here.".
+-spec write_inspection(file:filename()) -> map().
+write_inspection(Directory) ->
+    hls_protocol_domains:write_stream((config())#{inspection => process}, placement(), Directory).
 
 %% Invalid placement stops before partition generation; only one case emits complete source units.
 -spec composition_test_() -> term().
@@ -9,6 +17,86 @@ composition_test_() -> {timeout, 120, fun composition/0}.
 %% Framing preserves each partition's actor catalog and gives channel control its own session.
 -spec stream_composition_test_() -> term().
 stream_composition_test_() -> {timeout, 120, fun stream_composition/0}.
+
+%% Portable raw and framed writers retain caller providers in every domain namespace.
+-spec provider_snapshot_test_() -> term().
+provider_snapshot_test_() -> {timeout, 120, fun provider_snapshot/0}.
+
+%% The existing three-actor fixture checks packaging only; no external compiler runs.
+-spec provider_snapshot() -> ok.
+provider_snapshot() ->
+    Root = filename:join("_build", "domains-provider-" ++
+        integer_to_list(erlang:system_time(nanosecond)) ++ "-" ++
+        integer_to_list(erlang:unique_integer([positive]))),
+    Provider = filename:join(Root, "provider"),
+    Bytes = <<"// A provider type retained by source packaging.\npub type Word = u32;\n">>,
+    ok = filelib:ensure_dir(filename:join(Provider, "provider_word.x")),
+    try
+        ok = file:write_file(filename:join(Provider, "provider_word.x"), Bytes),
+        Config = (config())#{dslx_path => [Provider]},
+        ConfigFile = filename:join(Root, "config.erl"),
+        ok = file:write_file(ConfigFile, io_lib:format("~tp.~n", [Config])),
+        lists:foreach(fun({Name, Input, Write}) ->
+            Output = filename:join(Root, Name),
+            #{units := Units, inputs := Inputs} = Write(Input, placement(), Output),
+            lists:foreach(fun(Index) ->
+                Prefix = "domain_" ++ integer_to_list(Index),
+                Import = unicode:characters_to_binary(Prefix ++ "/support/import0"),
+                Directory = unicode:characters_to_binary(Prefix ++ "/domain"),
+                [Imports] = [Paths || #{directory := D, dslx_path := Paths} <- Units,
+                    D =:= Directory],
+                Relative = <<Import/binary, "/provider_word.x">>,
+                ?assert(lists:member(Import, Imports)),
+                ?assertEqual({ok, Bytes}, file:read_file(filename:join(Output, Relative))),
+                ?assertEqual([hls_generated_files:hash(Bytes)],
+                    [Hash || #{file := File, sha256 := Hash} <- Inputs, File =:= Relative])
+            end, [0, 1, 2])
+        end, [{"raw", Config, fun hls_protocol_domains:write/3},
+            {"stream", unicode:characters_to_binary(ConfigFile),
+                fun hls_protocol_domains:write_stream/3}]),
+        ok
+    after
+        file:del_dir_r(Root)
+    end.
+
+
+%% Both raw and framed forms expose the same epoch-qualified passive observation.
+-spec inspection_composition_test_() -> term().
+inspection_composition_test_() -> {timeout, 120, fun inspection_composition/0}.
+
+%% Sparse native catalogs never renumber global actors or expose another domain's state.
+-spec inspection_composition() -> ok.
+inspection_composition() ->
+    lists:foreach(fun(Emit) ->
+        #{files := Files, result := #{domains := Domains, inputs := Inputs, outputs := Outputs}} =
+            Emit((config())#{inspection => process}, placement()),
+        lists:foreach(fun(#{index := I, interface := #{network := Network}}) ->
+            Prefix = "domain_" ++ integer_to_list(I),
+            #{inspection := Manifest} = Network,
+            ?assertMatch([#{<<"id">> := I, <<"owner_index">> := I}],
+                maps:get(<<"resources">>, Manifest)),
+            ?assertEqual(Manifest, json:decode(iolist_to_binary(
+                maps:get(Prefix ++ "/network/inspection.json", Files)))),
+            #{actors := [#{index := I}]} = binary_to_term(
+                iolist_to_binary(maps:get(Prefix ++ "/network/inspection.etf", Files))),
+            ?assert(lists:member({Prefix ++ "_inspect_address", 32}, Inputs)),
+            ?assert(lists:member({Prefix ++ "_inspect_incarnation", 64}, Inputs)),
+            ?assert(lists:member({Prefix ++ "_app_inspect_value", 128}, Outputs)),
+            Domain = iolist_to_binary(maps:get(Prefix ++ "/domain/domain.x", Files)),
+            includes(Domain, "if ready && io.inspect_incarnation == old.current"),
+            NetworkText = iolist_to_binary(maps:get(Prefix ++ "/network/network.x", Files)),
+            includes(NetworkText, ["u32:", integer_to_list(I), " => inspection::observe_", integer_to_list(I)]),
+            includes(NetworkText, "_ => bits[128]:0"),
+            case maps:find(Prefix ++ "/domain/domain_stream.x", Files) of
+                {ok, Text} ->
+                    includes(iolist_to_binary(Text), "inspect_address: io.inspect_address"),
+                    includes(iolist_to_binary(Text), "inspect_incarnation: io.inspect_incarnation"),
+                    includes(iolist_to_binary(Text), "app_inspect_value: core.output.app_inspect_value");
+                error -> ok
+            end
+        end, Domains)
+    end, [fun hls_protocol_domains:emit/2, fun hls_protocol_domains:emit_stream/2]),
+    ok.
 
 %% A placement without cut edges needs no channel-management parser and rejects explicitly.
 -spec stream_composition() -> ok.
@@ -40,9 +128,18 @@ stream_composition() ->
         ?assert(lists:member({Prefix ++ "domain_reset", 1}, Inputs)),
         ?assert(lists:member({Prefix ++ "transport_reset", 1}, Inputs)),
         ?assertNot(lists:keymember(Prefix ++ "reset", 1, Inputs)),
+        ?assertNot(lists:keymember(Prefix ++ "fabric_fault", 1, Inputs)),
         ?assertNot(lists:keymember(Prefix ++ "domain_current", 1, Outputs))
     end, [0, 1, 2]),
+    lists:foreach(fun(#{index := I, interface := #{inputs := DomainInputs}}) ->
+        ?assert(lists:member({"fabric_fault", 1}, DomainInputs)),
+        Stream = iolist_to_binary(maps:get("domain_" ++ integer_to_list(I) ++
+            "/domain/domain_stream.x", Files)),
+        includes(Stream, "transport_fault: io.fabric_fault"),
+        ?assertEqual(nomatch, binary:match(Stream, <<"fabric_fault: io.fabric_fault">>))
+    end, Domains),
     Raw = iolist_to_binary(maps:get("channel/protocol_domains.sv", Files)),
+    ?assertEqual(3, length(binary:matches(Raw, <<".fabric_fault(1'b0)">>))),
     includes(Raw, ".source_live((!reset && !domain_0_domain_reset && "),
     includes(Raw, ".destination_live((!reset && !domain_1_domain_reset && "),
     Top = iolist_to_binary(maps:get("channel_management/protocol_domains_stream.sv", Files)),
@@ -112,6 +209,7 @@ check_composition(Files, #{domains := Domains, crossings := [Crossing],
     ?assertEqual(false, Eligible),
     ?assertEqual(20, Words),
     ?assertEqual(Words, maps:get(frame_payload_words, Channel)),
+    ?assertNot(lists:any(fun({Name, _}) -> string:find(Name, "inspect_") =/= nomatch end, Inputs ++ Outputs)),
     #{index := Link, source_domain := Source, destination_domain := Destination,
         link := #{direction := outgoing, source_index := From, destination_index := To}} = Crossing,
     ?assertEqual({0, 1, 0, 1}, {Source, Destination, From, To}),

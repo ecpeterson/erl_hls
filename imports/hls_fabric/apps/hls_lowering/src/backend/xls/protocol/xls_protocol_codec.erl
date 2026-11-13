@@ -60,18 +60,18 @@ emit(
         end,
         ";\n",
         "let encoded = ",
-        concat(
+        wiring(
             case Positions of
-                [] -> ["u1:0"];
-                _ -> [["frame[", n(J), "+:u1]"] || J <- lists:reverse(Positions)]
+                [] -> [{constant, 0}];
+                _ -> [{source, frame, J} || J <- lists:reverse(Positions)]
             end
         ),
         ";\n",
         "let decoded = ",
-        concat([
+        wiring([
             case maps:find(J, Inverse) of
-                {ok, I} -> ["payload[", n(I), "+:u1]"];
-                error -> ["u1:", n((Value bsr J) band 1)]
+                {ok, I} -> {source, payload, I};
+                error -> {constant, (Value bsr J) band 1}
             end
          || J <- lists:seq(FrameBits - 1, 0, -1)
         ]),
@@ -80,9 +80,45 @@ emit(
         " decoded_ready && payload_canonical, payload_valid && payload_canonical, payload_valid && !payload_canonical) }\n"
     ].
 
-%% Static wiring concatenations contain no runtime index or selection logic.
--spec concat([iolist()]) -> iolist().
-concat(Parts) -> ["(", lists:join(" ++ ", Parts), ")"].
+%% Wiring bits are listed most-significant first; source indices name unchanged input bits.
+-type wiring_bit() :: {source, frame | payload, non_neg_integer()} | {constant, 0 | 1}.
+%% A chunk preserves one descending source slice or a complete constant bitstring.
+-type chunk() ::
+    {slice, frame | payload, non_neg_integer(), pos_integer()}
+    | {literal, pos_integer(), non_neg_integer()}.
+
+%% Coalesce fixed spans and use a balanced tree: wide frame padding must not create
+%% hundreds of nested parametric concat widths for the DSLX type checker.
+-spec wiring([wiring_bit(), ...]) -> iodata().
+wiring(Bits) -> concat([fragment(Chunk) || Chunk <- chunks(Bits, [])]).
+
+%% Only descending adjacent indices can become a slice; byte-bit reversals stay explicit.
+-spec chunks([wiring_bit()], [chunk()]) -> [chunk()].
+chunks([{source, Name, Index} | Rest], [{slice, Name, Low, Width} | Acc]) when Index + 1 =:= Low ->
+    chunks(Rest, [{slice, Name, Index, Width + 1} | Acc]);
+chunks([{constant, Bit} | Rest], [{literal, Width, Value} | Acc]) ->
+    chunks(Rest, [{literal, Width + 1, (Value bsl 1) bor Bit} | Acc]);
+chunks([{source, Name, Index} | Rest], Acc) ->
+    chunks(Rest, [{slice, Name, Index, 1} | Acc]);
+chunks([{constant, Bit} | Rest], Acc) ->
+    chunks(Rest, [{literal, 1, Bit} | Acc]);
+chunks([], Acc) ->
+    lists:reverse(Acc).
+
+%% Every emitted fragment is constant wiring; no runtime shift, index or selection is added.
+-spec fragment(chunk()) -> iodata().
+fragment({slice, Name, Low, Width}) ->
+    [atom_to_list(Name), "[", n(Low), "+:bits[", n(Width), "]]"];
+fragment({literal, Width, Value}) ->
+    ["bits[", n(Width), "]:0x", integer_to_list(Value, 16)].
+
+%% Parenthesization changes type-inference depth, not concatenation order.
+-spec concat([iodata(), ...]) -> iodata().
+concat([Part]) ->
+    Part;
+concat(Parts) ->
+    {Left, Right} = lists:split(length(Parts) div 2, Parts),
+    ["(", concat(Left), " ++ ", concat(Right), ")"].
 
 %% Decimal dimensions do not carry runtime data into generated source.
 -spec n(integer()) -> string().

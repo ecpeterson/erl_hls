@@ -5,7 +5,7 @@ Source topology owns actor routes and crossing codecs. This builder checks place
 restart-group closure; hls_domain_channel_build supplies the shared channel policy and
 sv_domain_channels connects only named ports. A group declaration is not an FPGA supervisor:
 the host must retire its old endpoints and replace both crossing incarnations before rebinding.
-Cold reset requires deployment exclusion of old transport. Optional framing gives each domain independent host lanes and keeps channel control on a separate management lane.
+Cold reset requires deployment exclusion of old transport. Optional framing gives each domain independent host lanes and keeps channel control on a separate management lane. Optional process inspection preserves global actor IDs on dedicated incarnation-checked pins in either mode.
 """.
 
 %% Checked composition and portable source publication.
@@ -86,7 +86,7 @@ compose(Config0, Placement, Mode) when is_map(Config0) ->
         begin
             Ids = [maps:get(id, lists:nth(I + 1, Actors)) || I <- Indices],
             Partition = hls_protocol_transport:plan(Program, Options#{native_actors => Ids}),
-            GeneratedDomain = domain_emit(Partition, Mode),
+            GeneratedDomain = domain_emit(Partition, Mode, maps:get(inspection, Config, none)),
             {Id, Index, Indices, GeneratedDomain}
         end
      || {Index, {Id, Indices}} <- lists:enumerate(0, Definitions)
@@ -146,16 +146,16 @@ compose(Config0, Placement, Mode) when is_map(Config0) ->
     end.
 
 %% Framing wraps the same partition core; host schemas contain only that core's native actors.
--spec domain_emit(hls_protocol_transport:build(), raw | stream) ->
+-spec domain_emit(hls_protocol_transport:build(), raw | stream, none | process) ->
     hls_generated_files:output(hls_protocol_domain:result()).
-domain_emit(Build, raw) ->
-    hls_protocol_domain:emit_partition_plan(Build);
-domain_emit(Build, stream) ->
+domain_emit(Build, raw, Inspection) ->
+    hls_protocol_domain:emit_partition_plan(Build, Inspection);
+domain_emit(Build, stream, Inspection) ->
     #{
         files := Files,
         result := Domain = #{stream := Plan, codecs := Codecs, frame_payload_words := Words}
     } =
-        hls_protocol_domain:emit_partition_stream_plan(Build),
+        hls_protocol_domain:emit_partition_stream_plan(Build, Inspection),
     Stream =
         #{files := StreamFiles, inputs := Inputs, outputs := Outputs} = hls_domain_stream:emit_partition(
             Domain
@@ -283,7 +283,7 @@ domain_files(Generated, Mode) ->
             Generated
     ]).
 
--doc "Writes a fresh portable composite bundle with one XLS unit per domain and one shared channel unit. Support imports are snapshotted independently for each source namespace; top-level RTL is mechanical wiring. Does not run tools, establish transport exclusion or start any domain.".
+-doc "Writes a fresh portable composite bundle with one XLS unit per domain and one shared channel unit. Configured dslx_path providers and support imports are checked before output creation and snapshotted independently for each source namespace; top-level RTL is mechanical wiring. Does not run tools, establish transport exclusion or start any domain.".
 -spec write(hls_source_config:network() | file:filename(), placement(), file:filename()) -> map().
 write(Config, Placement, Directory) -> write_bundle(Config, Placement, Directory, raw).
 
@@ -292,17 +292,21 @@ write(Config, Placement, Directory) -> write_bundle(Config, Placement, Directory
     map().
 write_stream(Config, Placement, Directory) -> write_bundle(Config, Placement, Directory, stream).
 
-%% The source snapshot and physical unit inventory follow the selected external interface.
+%% Normalize file inputs once; every namespace retains the configured provider snapshot.
 -spec write_bundle(
     hls_source_config:network() | file:filename(), placement(), file:filename(), raw | stream
 ) -> map().
-write_bundle(Config, Placement, Directory, Mode) ->
+write_bundle(Filename, Placement, Directory, Mode) when is_list(Filename); is_binary(Filename) ->
+    write_bundle(hls_source_config:read(Filename), Placement, Directory, Mode);
+write_bundle(Config, Placement, Directory, Mode) when is_map(Config) ->
     Generated =
         #{result := Result = #{domains := Domains, frame_payload_words := Words}} = compose(
             Config, Placement, Mode
         ),
+    #{libraries := Libraries, imports := Support} = hls_build_support:layout(
+        maps:get(dslx_path, Config, [])
+    ),
     _ = hls_generated_files:write(Generated, Directory),
-    #{libraries := Libraries, imports := Support} = hls_build_support:layout([]),
     ok = hls_artifact_bundle:snapshot(Directory, Libraries),
     ok = hls_compile:configure_support(Directory, hls_frame_layout:new(Words)),
     Units = [

@@ -114,12 +114,13 @@ def run(argv: list[str], log: Path, cwd: Path | None = None) -> None:
 
 
 def assemble(database: Path, fasm: Path, reference: Path, profile: str, tools: Path, output: Path,
-             source_cache: Path | None = None) -> dict:
+             source_cache: Path | None = None, *, offline: bool = False) -> dict:
     """Create one fresh candidate and report only after independent GTX and round-trip checks.
 
     The reference must be the retained Vivado image for the named profile. This
     proves neither complete configuration semantics nor timing/hardware operation.
     Failed attempts retain logs but never a successfully published candidate.bit.
+    Offline mode rejects absent cached donors rather than fetching them.
     """
     if output.exists():
         raise ValueError(f"output already exists: {output}")
@@ -139,7 +140,7 @@ def assemble(database: Path, fasm: Path, reference: Path, profile: str, tools: P
     fasm = output / "input.fasm"
     vendor = output / "reference.bit"
     vendor.write_bytes(reference_data)
-    coverage = audit(database, fasm, output / "coverage")
+    coverage = audit(database, fasm, output / "coverage", offline=offline)
     donor = {name: (output / "coverage/sources" / pin["sha256"]).read_bytes()
              for name, pin in coverage["sources"].items()}
     clock_data, clock_evidence = prepare_clock_cascades(database)

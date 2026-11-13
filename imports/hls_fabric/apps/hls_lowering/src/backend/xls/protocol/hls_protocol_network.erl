@@ -32,7 +32,7 @@
 -doc "The emitted network manifest and its finalized transport descriptor. Consumers retain the descriptor in memory rather than reading transport.etf back.".
 -type result() :: #{network := manifest(), transport := hls_protocol_transport:descriptor()}.
 
--doc "Builds a sampled-clock DSLX network from hls_protocol_transport's trusted fresh-source config. Connects ordinary owners, whole entry batches, captures, declared startup and optional rectangle host input. Host commands retire only on source consume; malformed accepted commands fault until reset. Optional activation => explicit_start holds internal receives until a registered start handshake. Startup and host setup continue while stopped; start requires their consumption, no offered host command and no observed fault. Setup requiring internal feedback belongs after start. automatic is the default. inspection => process exposes a passive addressed metadata port; none is the default. native_actors selects a nonempty proper subset and exposes canonical raw crossing ports, retaining global identities. These require common clock/reset, ordered lossless delivery and stable offers until handshake; no framed network or independent reset protocol is supplied. Process inspection with a partition is currently rejected. arithmetic_groups selects disjoint source-compatible native scalar-completion groups through the fresh transport builder; omitted groups keep local completion. Each group has one combinational source callback and a round-robin cursor, feeding the existing registered owner action. External streams have no cross-source order. An unchanged composition plan may also be written directly. Returns an executable manifest with capacity/progress eligibility false. Requires a fresh directory. Generation failures create no output; I/O failures retain partial output.".
+-doc "Builds a sampled-clock DSLX network from hls_protocol_transport's trusted fresh-source config. Connects ordinary owners, whole entry batches, captures, declared startup and optional rectangle host input. Host commands retire only on source consume; malformed accepted commands fault until reset. Optional activation => explicit_start holds internal receives until a registered start handshake. Startup and host setup continue while stopped; start requires their consumption, no offered host command and no observed fault. Setup requiring internal feedback belongs after start. automatic is the default. inspection => process exposes a passive addressed metadata port; none is the default. native_actors selects a nonempty proper subset and exposes canonical raw crossing ports, retaining global identities. These require common clock/reset, ordered lossless delivery and stable offers until handshake; no framed network or independent reset protocol is supplied. Partition inspection retains global actor addresses and returns zero for nonlocal or uninitialized actors. arithmetic_groups selects disjoint source-compatible native scalar-completion groups through the fresh transport builder; omitted groups keep local completion. Each group has one combinational source callback and a round-robin cursor, feeding the existing registered owner action. External streams have no cross-source order. An unchanged composition plan may also be written directly. Returns an executable manifest with capacity/progress eligibility false. Requires a fresh directory. Generation failures create no output; I/O failures retain partial output.".
 -spec write(hls_source_config:network() | file:filename() | plan(), file:filename()) -> manifest().
 write(Config, Directory) ->
     #{network := Network} = hls_generated_files:write(emit(Config), Directory),
@@ -55,18 +55,16 @@ emit(#plan{transport = Build, layout = Layout}) ->
         result => #{transport => Transport, network => Network}
     };
 emit(Config) when is_map(Config) ->
-    Options = #{inspection := Inspection} = modes(maps:with([activation, inspection], Config)),
-    ok = inspection(maps:is_key(native_actors, Config), Inspection),
+    Options = modes(maps:with([activation, inspection], Config)),
     emit(hls_protocol_transport:plan(Config), Options);
 emit(Filename) ->
     emit(hls_source_config:read(Filename)).
 
--doc "Checks network wiring and packed ports for an unchanged transport build. Options accepts activation and inspection only. Rejects unsupported modes, partition inspection and inconsistent receiver/link spans before rendering transport or composition hardware. Does not read templates or emit observation artifacts; the transport build retains checked source snapshots and receiver layouts.".
+-doc "Checks network wiring and packed ports for an unchanged transport build. Options accepts activation and inspection only. Rejects unsupported modes and inconsistent receiver/link spans before rendering transport or composition hardware; process inspection follows the native receiver set. Does not read templates or emit observation artifacts; the transport build retains checked source snapshots and receiver layouts.".
 -spec plan(hls_protocol_transport:build(), options()) -> plan().
 plan(Build, Options) ->
-    Modes = #{inspection := Inspection} = modes(Options),
-    Transport = #{fabric := Fabric} = hls_protocol_transport:descriptor(Build),
-    ok = inspection(maps:is_key(crossings, Fabric), Inspection),
+    Modes = modes(Options),
+    Transport = hls_protocol_transport:descriptor(Build),
     #plan{transport = Build, layout = xls_protocol_network:plan(maps:merge(Transport, Modes))}.
 
 -doc "Returns the checked static network interface, including ports, endpoints, state costs and inspection mode (none or process). It contains no generated-byte hashes or inspection catalog; emit/1 adds those to its final manifest. Treat this descriptor as read-only.".
@@ -84,18 +82,6 @@ transport(#plan{transport = Build}) -> Build.
 -doc "Plans and emits a connected network from an unchanged transport build. Options accepts activation/inspection only. Equivalent to emit(plan(Build, Options)); returns relative files and final network/transport descriptors. Template reads occur only after composition checks.".
 -spec emit(hls_protocol_transport:build(), options()) -> output().
 emit(Build, Options) -> emit(plan(Build, Options)).
-
-%% Check configuration before source work, then check the actual cut at the emission boundary.
--spec inspection(boolean(), none | process) -> ok.
-inspection(true, process) ->
-    hls_diagnostic:raise(
-        network,
-        partition_inspection_unavailable,
-        <<"Process inspection is unavailable for a native partition; select inspection => none.">>,
-        #{path => [inspection], value => process, capability => partition_inspection}
-    );
-inspection(_, _) ->
-    ok.
 
 %% Reject renderer options that could imply changing the already planned source or placement.
 -spec modes(options()) -> #{activation := activation(), inspection := none | process}.

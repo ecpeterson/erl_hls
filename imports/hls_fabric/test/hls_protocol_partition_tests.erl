@@ -16,8 +16,7 @@ selection_test() ->
         ingress:=#{actors:=3,targets:=[#{recipients:=[#{index:=0},#{index:=2}]}]}}=
         hls_protocol_partition:plan(#{native_actors=>[c,a]},Bundle,#{},Fabric,Ingress),ok.
 
-%% Unsupported framed application and inspection paths cannot drop crossing pins.
+%% The whole-application gateway still cannot silently drop crossing pins.
 -spec unsupported_outer_boundary_test() -> ok.
 unsupported_outer_boundary_test() ->
-    ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},hls_protocol_network:write(#{native_actors=>[a],inspection=>process},"unused")),
     ?assertException(error, {hls_diagnostic, #{code := partition_application_gateway_unavailable}},hls_protocol_application:write(#{native_actors=>[a],device=>board,host=>1},"unused")).

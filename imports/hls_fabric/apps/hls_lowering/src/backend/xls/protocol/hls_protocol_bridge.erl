@@ -138,6 +138,7 @@ plan(Build, Config = #{host := Host, service := Service, control := _}) ->
     } = hls_protocol_transport:descriptor(Build),
     Cross = maps:get(crossings, Fabric, []),
     Hardware = hls_protocol_control:framed(Control, Config),
+    ok = inspection(maps:get(inspection, Config, none)),
     BoundaryPlan = hls_protocol_boundary:plan(Build, (maps:with([inspection], Config))#{
         activation => explicit_start
     }),
@@ -203,6 +204,21 @@ plan(Build, Config = #{host := Host, service := Service, control := _}) ->
             eligible => false
         }
     }.
+
+%% This older packet bridge has no inspection lane; never discard native debug ports.
+-spec inspection(none | process) -> ok.
+inspection(none) ->
+    ok;
+inspection(process) ->
+    hls_diagnostic:raise(
+        bridge,
+        bridge_inspection_unavailable,
+        <<"This framed bridge has no process-inspection lane; use explicit domain inspection pins.">>,
+        #{path => [inspection], value => process}
+    );
+inspection(Other) ->
+    _ = hls_protocol_inspection:mode(Other),
+    ok.
 
 -doc "Returns checked bridge endpoints, actor ownership, crossing classes and external groups. There is no identity or library inventory until emit/1 reads support and hashes emitted bytes. Treat the descriptor as read-only; it is suitable for routing and host-layout checks, not attachment.".
 -spec descriptor(plan()) -> descriptor().

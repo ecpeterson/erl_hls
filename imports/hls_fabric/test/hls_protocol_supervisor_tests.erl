@@ -96,3 +96,16 @@ raw_reuse_evidence_port_test() ->
     ?assertEqual(Inputs,Public),
     Text = iolist_to_binary(sv_domain_supervisor:emit([],Inputs,[])),
     ?assertNotEqual(nomatch,binary:match(Text,<<".child_0_observed_reusable(child_0_observed_reusable)">>)).
+
+
+%% Unsupported observation must fail before child source work, not disappear from a wrapper.
+-spec supervised_inspection_rejected_test() -> ok.
+supervised_inspection_rejected_test() ->
+    Config = (config(#{}, [a]))#{children := #{a => #{inspection => process}}},
+    lists:foreach(fun(Emit) ->
+        ?assertException(error, {hls_diagnostic, #{stage := supervisor,
+            code := supervised_inspection_unavailable}}, Emit(Config))
+    end, [fun hls_protocol_supervisor:emit/1, fun hls_protocol_supervisor:emit_stream/1]),
+    ?assertException(error, {hls_diagnostic, #{stage := domain,
+        code := supervised_inspection_unavailable}},
+        hls_domain_stream:emit_supervised(#{network => #{inspection => #{}}})).

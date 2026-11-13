@@ -1,0 +1,200 @@
+#include "Vprotocol_domains_stream.h"
+#include "framed_fifo_endpoint.h"
+#include <array>
+#include <chrono>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <thread>
+
+// Generated bindings name only public pins; the finite transport never sees actor state.
+constexpr unsigned frame_words = @@FRAME_WORDS@@;
+struct CrossingPins {
+    CData &tx_ready, &data_valid, &data_slot, &data_ready, &data_drop;
+    CData &tx_valid, &tx_slot, &ack_ready, &credit_valid, &credit_ready, &credit_drop, &ack_valid, &fault;
+    IData &data_sequence, &tx_sequence, &credit_sequence, &ack_sequence;
+    QData &data_generation, &tx_generation, &credit_generation, &ack_generation;
+    VlWide<frame_words> &data_frame, &tx_frame;
+};
+#define CROSSING(P) CrossingPins{core.P##_data_tx_ready,core.P##_data_valid,core.P##_data_slot,core.P##_data_ready,core.P##_data_drop,core.P##_tx_valid,core.P##_tx_slot,core.P##_ack_tx_ready,core.P##_credit_valid,core.P##_credit_ready,core.P##_credit_drop,core.P##_ack_valid,core.P##_fault,core.P##_data_sequence,core.P##_tx_sequence,core.P##_credit_sequence,core.P##_ack_sequence,core.P##_data_generation,core.P##_tx_generation,core.P##_credit_generation,core.P##_ack_generation,core.P##_data_frame,core.P##_tx_frame}
+struct DataBeat { uint64_t generation; uint32_t sequence; uint8_t slot; std::array<uint32_t,frame_words> frame; };
+struct CreditBeat { uint64_t generation; uint32_t sequence; };
+
+// One beat per direction models a bounded ordered external channel. Diagnostic
+// copies inject one validly shaped old-generation beat only after fresh work exists.
+class Crossing {
+    CrossingPins p;
+    unsigned index;
+    std::optional<DataBeat> data, oldest_data;
+    std::optional<CreditBeat> credit, oldest_credit;
+    uint64_t data_after=0,credit_after=0;
+    bool inject_data=false,inject_credit=false,data_done=false,credit_done=false;
+    uint64_t transmitted=0,delivered=0,acknowledged=0,returned=0,data_stalls=0,credit_stalls=0;
+    std::map<uint64_t,uint64_t> generations;
+public:
+    Crossing(CrossingPins pins,unsigned index):p(pins),index(index) {}
+    // Independent finite delay schedules preserve every offered beat until handshake.
+    void drive(uint64_t cycle) {
+        p.tx_ready=!data && (cycle+index)%7!=2;
+        p.ack_ready=!credit && (cycle+3*index)%11!=4;
+        if(data && oldest_data && !data_done && data->generation>oldest_data->generation)
+            inject_data=true;
+        if(credit && oldest_credit && !credit_done && credit->generation>oldest_credit->generation)
+            inject_credit=true;
+        p.data_valid=data.has_value() && cycle>=data_after;
+        if(data) {
+            const auto& beat=inject_data?*oldest_data:*data;
+            p.data_generation=beat.generation;p.data_sequence=beat.sequence;p.data_slot=beat.slot;
+            for(unsigned i=0;i<frame_words;i++) p.data_frame[i]=beat.frame[i];
+        }
+        p.credit_valid=credit.has_value() && cycle>=credit_after;
+        if(credit) {
+            const auto& beat=inject_credit?*oldest_credit:*credit;
+            p.credit_generation=beat.generation;p.credit_sequence=beat.sequence;
+        }
+    }
+    // Only old-edge public acceptances change transport ownership or coverage counters.
+    void sample(uint64_t cycle) {
+        if(p.fault) throw std::runtime_error("channel kernel fault");
+        if(p.tx_valid&&!p.tx_ready) data_stalls++;
+        if(p.ack_valid&&!p.ack_ready) credit_stalls++;
+        if(p.data_valid&&p.data_ready) {
+            if(inject_data) {
+                if(!p.data_drop) throw std::runtime_error("stale data admitted");
+                data_done=true;inject_data=false;data_after=cycle+2;
+            } else {if(!p.data_drop) delivered++;data.reset();}
+        }
+        if(p.credit_valid&&p.credit_ready) {
+            if(inject_credit) {
+                if(!p.credit_drop) throw std::runtime_error("stale credit admitted");
+                credit_done=true;inject_credit=false;credit_after=cycle+3;
+            } else {if(!p.credit_drop) returned++;credit.reset();}
+        }
+        if(p.tx_valid&&p.tx_ready) {
+            if(data) throw std::runtime_error("data transport capacity");
+            DataBeat beat{p.tx_generation,p.tx_sequence,p.tx_slot,{}};
+            for(unsigned i=0;i<frame_words;i++) beat.frame[i]=p.tx_frame[i];
+            data=beat;if(!oldest_data) oldest_data=beat;
+            data_after=cycle+2+(index*3+transmitted)%13;
+            transmitted++;generations[beat.generation]++;
+        }
+        if(p.ack_valid&&p.ack_ready) {
+            if(credit) throw std::runtime_error("credit transport capacity");
+            CreditBeat beat{p.ack_generation,p.ack_sequence};
+            credit=beat;if(!oldest_credit) oldest_credit=beat;
+            credit_after=cycle+3+(index*5+acknowledged)%17;acknowledged++;
+        }
+    }
+    // Successful runs must exercise fresh transport and both stale-identity exclusions per cut.
+    void result(FILE* out) const {
+        if(generations.size()!=2 || !transmitted || !delivered || !returned || !data_done || !credit_done)
+            throw std::runtime_error("incomplete crossing coverage");
+        fprintf(out,"{\"index\":%u,\"tx\":%llu,\"delivered\":%llu,\"ack\":%llu,\"returned\":%llu,\"data_stalls\":%llu,\"credit_stalls\":%llu,\"stale_data_dropped\":true,\"stale_credit_dropped\":true}",index,
+            (unsigned long long)transmitted,(unsigned long long)delivered,(unsigned long long)acknowledged,
+            (unsigned long long)returned,(unsigned long long)data_stalls,(unsigned long long)credit_stalls);
+    }
+};
+
+// A passive selected observation must reject wrong lifetime and nonlocal addresses.
+class Inspection {
+    IData& address;QData& incarnation;VlWide<4>& value;
+    std::vector<unsigned> actors;
+    std::string control;
+    unsigned foreign;
+    uint64_t epoch=0;
+    bool reject=true;
+    std::map<uint64_t,uint64_t> observed;
+public:
+    Inspection(IData& address,QData& incarnation,VlWide<4>& value,
+        std::vector<unsigned> actors,unsigned foreign,std::string control):
+        address(address),incarnation(incarnation),value(value),actors(actors),control(control),foreign(foreign) {}
+    // The expected incarnation comes from the host's real ready handle, never private RTL state.
+    void drive(uint64_t cycle) {
+        if(cycle%256==0) {std::ifstream input(control);uint64_t next;if(input>>next) epoch=next;}
+        unsigned mode=cycle%8;
+        address=actors[(cycle/8)%actors.size()];incarnation=epoch;reject=!epoch;
+        if(mode==1) {incarnation=epoch?epoch-1:0;reject=true;}
+        if(mode==2) {address=0xffffffffu;reject=true;}
+        if(mode==3) {address=foreign;reject=true;}
+    }
+    // Presence is only a sampled observation; no completeness or event-history claim is made.
+    void sample() {
+        bool nonzero=false;for(unsigned i=0;i<4;i++) nonzero|=value[i]!=0;
+        if(reject&&nonzero) throw std::runtime_error("invalid process inspection exposed state");
+        if(!reject&&(value[0]&(1u<<25))) observed[epoch]++;
+    }
+    void result(FILE* out) const {
+        if(observed.size()!=2) throw std::runtime_error("inspection did not observe both lifetimes");
+        fprintf(out,"{");bool first=true;for(const auto& [epoch,count]:observed) {
+            if(!first) fprintf(out,",");first=false;
+            fprintf(out,"\"%llu\":%llu",(unsigned long long)epoch,(unsigned long long)count);
+        }fprintf(out,"}");
+    }
+};
+
+// Host runtime and ordinary OTP own lifecycle; this adapter supplies only sampled clock and public transport.
+int main(int argc,char** argv) {
+    Verilated::commandArgs(argc,argv);
+    if(argc!=2) return 2;
+    try {
+        std::string directory=argv[1];
+        Vprotocol_domains_stream core;core.clk=0;core.reset=1;
+        core.domain_0_domain_reset=core.domain_1_domain_reset=0;
+        Endpoint channel(SESSION(channel),directory+"/channel");
+        channel.add(LANE(channel,management),"management");
+        Endpoint a(SESSION(domain_0),directory+"/domain0");
+        a.add(LANE(domain_0,management),"management");a.add(LANE(domain_0,application),"application");
+        Endpoint b(SESSION(domain_1),directory+"/domain1");
+        b.add(LANE(domain_1,management),"management");b.add(LANE(domain_1,application),"application");
+        std::vector<Endpoint*> endpoints={&channel,&a,&b};
+        std::vector<Crossing> crossings;
+        @@CROSSINGS@@
+        std::vector<Inspection> inspections;
+        @@INSPECTIONS@@
+        uint64_t finish=0,host_stalls=0;
+        auto start=std::chrono::steady_clock::now();
+        for(uint64_t cycle=0;cycle<200000000;++cycle) {
+            core.reset=cycle<4;
+            for(unsigned i=0;i<endpoints.size();i++) {
+                auto* endpoint=endpoints[i];endpoint->drive(cycle);
+                for(unsigned j=0;j<endpoint->lanes.size();j++) {
+                    auto& p=endpoint->lanes[j]->pins;
+                    p.output_ready=p.output_ready && (cycle+7*i+3*j)%19>=3;
+                }
+            }
+            for(auto& crossing:crossings) crossing.drive(cycle);
+            for(auto& inspection:inspections) inspection.drive(cycle);
+            core.clk=0;core.eval();
+            for(auto* endpoint:endpoints) {
+                for(const auto& lane:endpoint->lanes)
+                    if(lane->pins.output_valid&&!lane->pins.output_ready) host_stalls++;
+                endpoint->sample(cycle);
+            }
+            for(auto& crossing:crossings) crossing.sample(cycle);
+            for(auto& inspection:inspections) inspection.sample();
+            core.clk=1;core.eval();
+            for(auto* endpoint:endpoints) endpoint->observe();
+            if(cycle%256==0) {
+                if(!finish&&access((directory+"/finished").c_str(),F_OK)==0) finish=cycle+256;
+                if(std::chrono::steady_clock::now()-start>std::chrono::seconds(600))
+                    throw std::runtime_error("bounded repetition transport timeout");
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+            if(finish&&cycle>=finish) {
+                if(!host_stalls) throw std::runtime_error("host stalls not exercised");
+                FILE* out=fopen((directory+"/transport.json").c_str(),"wx");
+                if(!out) throw std::runtime_error("transport result");
+                fprintf(out,"{\"cycles\":%llu,\"host_stalls\":%llu,\"channels\":[",
+                    (unsigned long long)cycle,(unsigned long long)host_stalls);
+                for(unsigned i=0;i<crossings.size();i++) {if(i) fprintf(out,",");crossings[i].result(out);}
+                fprintf(out,"],\"inspection\":[");
+                for(unsigned i=0;i<inspections.size();i++) {if(i) fprintf(out,",");inspections[i].result(out);}
+                fprintf(out,"]}\n");fclose(out);
+                printf("PASS Phi domain repetition: cycles=%llu\n",(unsigned long long)cycle);return 0;
+            }
+        }
+        throw std::runtime_error("bounded repetition transport clocks");
+    } catch(const std::exception& failure) {
+        fprintf(stderr,"FAIL Phi domain repetition: %s\n",failure.what());return 1;
+    }
+}

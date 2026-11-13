@@ -79,16 +79,17 @@ bridge_plan() ->
     ?assertEqual(Interface, maps:without([identity, libraries], Bridge)),
     ?assertEqual(32, byte_size(maps:get(identity, Bridge))).
 
-%% Unsupported observation cannot trigger a partial transport render through any parent.
+%% Raw partition observation is available before rendering; the old packet bridge still rejects it.
 -spec partition_inspection_test() -> ok.
 partition_inspection_test() ->
     Build = hls_protocol_transport:plan(partition()),
     {ok, Calls} = trace_renderers(fun() ->
-        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
-            hls_protocol_network:plan(Build, #{inspection => process})),
-        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
-            hls_protocol_boundary:plan(Build, #{inspection => process})),
-        ?assertError({hls_diagnostic, #{stage := network, code := partition_inspection_unavailable}},
+        Network = hls_protocol_network:plan(Build, #{inspection => process}),
+        ?assertMatch(#{native_indices := [0, 2], inspection := process},
+            hls_protocol_network:descriptor(Network)),
+        Boundary = hls_protocol_boundary:plan(Build, #{inspection => process}),
+        ?assertMatch(#{inspection := process}, hls_protocol_boundary:descriptor(Boundary)),
+        ?assertError({hls_diagnostic, #{stage := bridge, code := bridge_inspection_unavailable}},
             hls_protocol_bridge:plan(Build, #{host => 2, service => 29,
                 control => rectangle, inspection => process})),
         ok

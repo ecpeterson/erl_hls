@@ -170,15 +170,23 @@ ingress(Index, #{targets := Targets}) ->
         Targets
     ).
 
--doc "Emits the framed top around the checked raw domain. Per-call request storage is bounded by declared pending_calls; each stream retains at most one packet. No live-device timing or safety guarantee is inferred.".
+-doc "Emits the framed top around the checked raw domain. Per-call request storage is bounded by declared pending_calls; each stream retains at most one packet. Optional process inspection remains on dedicated inspect_address/inspect_incarnation/app_inspect_value pins, independent of session packet lanes. No live-device timing or safety guarantee is inferred.".
 -spec emit(hls_protocol_domain:result()) -> result().
 emit(Result) -> emit_mode(Result, false, false).
 
--doc "Emits the same bounded stream with supervisor-owned lifecycle pins. Host commands can only watch one ready incarnation or acknowledge its retained retirement receipt; they cannot reset a child. A fresh transport session discards observer evidence, never actor state.".
+-doc "Emits the same bounded stream with supervisor-owned lifecycle pins. Host commands can only watch one ready incarnation or acknowledge its retained retirement receipt; they cannot reset a child. A fresh transport session discards observer evidence, never actor state. Process inspection rejects until its queries are bound to the parent lifetime.".
 -spec emit_supervised(hls_protocol_domain:result()) -> result().
-emit_supervised(Result) -> emit_mode(Result, true, false).
+emit_supervised(Result = #{network := #{inspection := none}}) ->
+    emit_mode(Result, true, false);
+emit_supervised(_) ->
+    hls_diagnostic:raise(
+        domain,
+        supervised_inspection_unavailable,
+        <<"Supervised process inspection requires a parent-bound query interface.">>,
+        #{path => [inspection], value => process}
+    ).
 
--doc "Emits host-managed framing for a checked partition while carrying its raw crossings and lifecycle observations to an enclosing incarnation-bound owner. Crossings run independently of host session/framing stalls. domain_reset resets only the core, preserving accepted host-output evidence; reset remains the global cold boundary.".
+-doc "Emits host-managed framing for a checked partition while carrying its raw crossings and lifecycle observations to an enclosing incarnation-bound owner. fabric_fault reports failure of that crossing fabric through the native lifecycle; it neither resets the core nor disconnects host management. Crossings run independently of host session/framing stalls. domain_reset resets only the core, preserving accepted host-output evidence; reset remains the global cold boundary.".
 -spec emit_partition(hls_protocol_domain:result()) -> result().
 emit_partition(Result) -> emit_mode(Result, false, true).
 
@@ -190,6 +198,9 @@ emit_mode(
     Partition
 ) ->
     {CrossInputs, CrossOutputs} = crossing_ports(Result, Partition),
+    {InspectInputs, InspectOutputs} = inspection_ports(Result),
+    SideInputs = CrossInputs ++ InspectInputs,
+    SideOutputs = CrossOutputs ++ InspectOutputs,
     #{actors := Actors, call_slots := Slots, streams := Outputs} = Stream,
     PacketWords = max(
         case Supervised of
@@ -218,15 +229,20 @@ emit_mode(
                 {<<"@@EXTERNAL_INPUTS@@">>, external_inputs(Supervised, Codecs)},
                 {<<"@@EXTERNAL_OUTPUTS@@">>, external_outputs(Supervised, Codecs)},
                 {<<"@@EXTERNAL_CONTROL@@">>, external_control(Supervised, Partition)},
-                {<<"@@CROSSING_INPUTS@@">>, struct_fields(CrossInputs)},
-                {<<"@@CROSSING_OUTPUTS@@">>, struct_fields(CrossOutputs)},
+                {<<"@@CROSSING_INPUTS@@">>, struct_fields(SideInputs)},
+                {<<"@@CROSSING_OUTPUTS@@">>, struct_fields(SideOutputs)},
+                {<<"@@FABRIC_FAULT@@">>,
+                    case Partition of
+                        true -> "io.fabric_fault";
+                        false -> "false"
+                    end},
                 {<<"@@CROSSING_CONTROL@@">>, [
                     [N, ": io.", N, ",\n"]
-                 || {N, _} <- CrossInputs, N =/= "domain_reset"
+                 || {N, _} <- SideInputs, not lists:member(N, ["domain_reset", "fabric_fault"])
                 ]},
                 {<<"@@CROSSING_OBSERVATIONS@@">>, [
                     [N, ": core.output.", N, ",\n"]
-                 || {N, _} <- CrossOutputs
+                 || {N, _} <- SideOutputs
                 ]},
                 {<<"@@MANAGEMENT_CONTROL@@">>, management_control(Supervised)},
                 {<<"@@EXTERNAL_OBSERVATIONS@@">>, external_observations(Supervised)},
@@ -250,8 +266,8 @@ emit_mode(
             true -> supervised_ports(Codecs);
             false -> ports()
         end,
-    Inputs = BaseInputs ++ CrossInputs,
-    Pins = BaseOutputs ++ CrossOutputs,
+    Inputs = BaseInputs ++ SideInputs,
+    Pins = BaseOutputs ++ SideOutputs,
     #{
         inputs => Inputs,
         outputs => Pins,
@@ -448,12 +464,30 @@ external_inputs(true, Codecs) -> struct_fields(supervisor_inputs(Codecs)).
 crossing_ports(_, false) ->
     {[], []};
 crossing_ports(#{inputs := Inputs, outputs := Outputs}, true) ->
-    {[{"domain_reset", 1} | [P || P = {N, _} <- Inputs, lists:prefix("remote_", N)]], [
-        P
-     || P = {N, _} <- Outputs,
-        lists:prefix("app_remote_", N) orelse
-            N =:= "domain_phase" orelse N =:= "domain_current"
-    ]}.
+    {
+        [
+            {"domain_reset", 1},
+            {"fabric_fault", 1}
+            | [P || P = {N, _} <- Inputs, lists:prefix("remote_", N)]
+        ],
+        [
+            P
+         || P = {N, _} <- Outputs,
+            lists:prefix("app_remote_", N) orelse
+                N =:= "domain_phase" orelse N =:= "domain_current"
+        ]
+    }.
+
+%% Inspection uses the raw domain's epoch gate and contributes no packet or actor storage.
+-spec inspection_ports(hls_protocol_domain:result()) ->
+    {[{string(), pos_integer()}], [{string(), pos_integer()}]}.
+inspection_ports(#{network := #{inspection := none}}) ->
+    {[], []};
+inspection_ports(#{inputs := Inputs, outputs := Outputs}) ->
+    true = lists:member({"inspect_address", 32}, Inputs),
+    true = lists:member({"inspect_incarnation", 64}, Inputs),
+    true = lists:member({"app_inspect_value", 128}, Outputs),
+    {[{"inspect_address", 32}, {"inspect_incarnation", 64}], [{"app_inspect_value", 128}]}.
 
 %% Supervisor observations have no application payload or shared transport buffer.
 -spec external_outputs(boolean(), hls_protocol_domain:codecs()) -> iodata().
