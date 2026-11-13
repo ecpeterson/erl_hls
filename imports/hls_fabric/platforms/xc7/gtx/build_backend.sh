@@ -14,6 +14,7 @@ for fix in nextpnr-refclk nextpnr-unused-clkin nextpnr-mmcm-power; do
     patch -d "$stage/nextpnr-xilinx-$revision" -p1 < "$root/gtx/$fix.patch"
 done
 patch -d "$stage/nextpnr-xilinx-$revision" -p1 < "$root/bram/nextpnr-ramb36-sdp72.patch"
+patch -d "$stage/nextpnr-xilinx-$revision" -p1 < "$root/gtx/nextpnr-carry-constant-head.patch"
 cmake --build "$stage/native-build" --parallel 4 > "$stage/build-gtx.log" 2>&1
 ctest --test-dir "$stage/native-build" --output-on-failure > "$stage/ctest-gtx.log" 2>&1
 cp "$stage/native-build/nextpnr-xilinx" "$stage/bin/nextpnr-gtx"

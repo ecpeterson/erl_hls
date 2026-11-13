@@ -14,6 +14,8 @@ The SD boot chain is BootROM → FSBL → PL configuration → U-Boot → Linux 
 | Device tree | Vendor PS description with its PL register bank replaced by the probe's UIO page |
 | Host diagnostic | Existing probe C source, statically linked against source-built musl 1.2.5 |
 
+The shared FSBL staging omits Trenz's optional `te_read_IDCODE()` handoff diagnostic. In the pinned implementation, stale completion status can let its PCAP readback return with DMA still pending against temporary buffers, leaving Linux FPGA Manager unable to accept another image. Board-specific initialization and the custom handoff hook remain intact. The staging check rejects an unexpected vendor-call shape; `test_fsbl_staging.py` exercises this adaptation without rebuilding firmware.
+
 The four-partition `BOOT.bin` carries FSBL, PL, U-Boot and the device tree. Linux's `image.ub` contains the same device tree, the original kernel and original RAM filesystem. `boot.scr` selects that FIT from SD partition 1. No script formats storage, programs hardware or writes QSPI.
 
 ## Build

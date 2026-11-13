@@ -1,0 +1,78 @@
+{
+  "schema": "hls-native-gtx-offline-build-v1",
+  "upstream_revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+  "source_directory": "nextpnr-xilinx-68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+  "archives": [
+    {
+      "name": "nextpnr.tar.gz",
+      "path": "cache/nextpnr.tar.gz",
+      "sha256": "5652a7356b1c8ae67355c9bdcd96d88e5592d9eface9ea4b60584a9460824439"
+    },
+    {
+      "name": "eigen.tar.gz",
+      "path": "cache/eigen.tar.gz",
+      "sha256": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72"
+    }
+  ],
+  "patches": [
+    {
+      "name": "nextpnr-output-pin.patch",
+      "path": "../lut_legality/nextpnr-output-pin.patch",
+      "sha256": "af4f322db2fb581ecc695ab289e1708743f0234d54dbc546d910ade8e5cf21ad"
+    },
+    {
+      "name": "nextpnr-pin-origins.patch",
+      "path": "../lut_legality/nextpnr-pin-origins.patch",
+      "sha256": "61541440af12696957cf46aa64082f535e46d34b7727c2c140ca241a2791b865"
+    },
+    {
+      "name": "nextpnr-refclk.patch",
+      "path": "../gtx/nextpnr-refclk.patch",
+      "sha256": "bf7d7733016121b900f29ce48077eec88851608a86bc052c7b5e0fe7a2723e44"
+    },
+    {
+      "name": "nextpnr-unused-clkin.patch",
+      "path": "../gtx/nextpnr-unused-clkin.patch",
+      "sha256": "1421f5a093d20e235bc8b14fc6926a8e2d6dbafbbb00deb18b266e108f57adc8"
+    },
+    {
+      "name": "nextpnr-mmcm-power.patch",
+      "path": "../gtx/nextpnr-mmcm-power.patch",
+      "sha256": "2ac2fa985b221d1129fadb69ac68706ae4ad60b9993568fe7988c8fec815490d"
+    },
+    {
+      "name": "nextpnr-ramb36-sdp72.patch",
+      "path": "../bram/nextpnr-ramb36-sdp72.patch",
+      "sha256": "b7cb3f7d8226fa66b2aabcd6f733724234e6955443750acffe75db2e4456ec15"
+    },
+    {
+      "name": "nextpnr-carry-constant-head.patch",
+      "path": "../gtx/nextpnr-carry-constant-head.patch",
+      "sha256": "fb62708e734b1c1fcb09ed5f3b1d55e78390f35aec3e12fc337ac32b4cba3ac0"
+    }
+  ],
+  "patched_sources": [
+    "xilinx/arch_place.cc",
+    "xilinx/fasm.cc",
+    "xilinx/pack_clocking_xc7.cc",
+    "xilinx/pins.cc",
+    "xilinx/pack_carry_xc7.cc"
+  ],
+  "tools": {
+    "cmake": "/path/to/cmake",
+    "make": "/path/to/make",
+    "patch": "/path/to/patch",
+    "cc": "/path/to/cc",
+    "cxx": "/path/to/cxx",
+    "pkg_config": "/path/to/pkg_config",
+    "boost": "/path/to/boost"
+  },
+  "execution": {
+    "outer_process_tree_guard_required": true,
+    "max_tree_physical_footprint_bytes": 6442450944,
+    "compiler_jobs": 1,
+    "network": false,
+    "historical_variants": false,
+    "tests": false
+  }
+}

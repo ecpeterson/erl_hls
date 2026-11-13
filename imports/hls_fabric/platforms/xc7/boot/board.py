@@ -98,7 +98,7 @@ def bsp_parameters(template: str, frequencies: dict[str, int]) -> str:
 
 
 def prepare_fsbl(amd: Path, vendor: Path, xsa: Path) -> Path:
-    """Stage the vendor FSBL hooks and exact PS initialization in AMD's build tree."""
+    """Stage checked PS initialization and hooks without the optional PCAP diagnostic."""
     frequencies = check_profile(
         (vendor / "board_files/TE0715_board_files.csv").read_text(),
         (xsa / "zsys.hwh").read_text(), (xsa / "ps7_init.h").read_text())
@@ -112,6 +112,13 @@ def prepare_fsbl(amd: Path, vendor: Path, xsa: Path) -> Path:
     parameters.write_text(bsp_parameters(parameters.read_text(), frequencies))
     drivers = board / "drivers.txt"
     drivers.write_text(drivers.read_text().rstrip() + "\niicps\n")
+    # The optional PCAP readback can return with DMA still owning stack buffers.
+    # Keep it out of every boot profile so Linux inherits an idle controller.
+    general_hooks = fsbl / "src/te_fsbl_hooks.c"
+    general_hooks.write_text(replace_once(
+        general_hooks.read_text(),
+        "  Status = te_read_IDCODE(); // general include to display Device ID of the zynq",
+        "  /* Keep PCAP idle for Linux: omit the optional diagnostic IDCODE read. */"))
     hooks = fsbl / "src/te_fsbl_hooks_te0715.c"
     hooks.write_text(replace_once(hooks.read_text(), '#include "te_fsbl_hooks_te0715.h"',
                                  '#include "te_fsbl_hooks_te0715.h"\n#include "te_iic_platform.h"'))
