@@ -397,11 +397,7 @@ service_retirement(Spec, Reductions, SharedService) ->
                 Spec,
                 " || stepped.machine.next_event != u8:0"
             ),
-            xls_statem_reply_codegen:optional(
-                Spec,
-                " || (hls_failure::failed(stepped.machine.failure) && "
-                "hls_reply::first(stepped.machine.replies.slots, true).0)"
-            )
+            pending_reply_drain(Spec)
         ]},
         {<<"@@INDEXED_RETIREMENT_READY@@">>,
             xls_indexed_memory_codegen:optional(
@@ -565,3 +561,10 @@ issue_ownership(Spec) ->
             "        let cursor = scheduler::advance_cursor<ACTOR_COUNT>(\n"
             "          state.cursor, issue_valid, read_slot);\n"
     end.
+
+%% Only retained callers need follow-up scheduling after failure; immediate origins are not stored.
+-spec pending_reply_drain(spec()) -> iodata().
+pending_reply_drain(#{retained_calls := #{pending_calls := _}}) ->
+    " || (hls_failure::failed(stepped.machine.failure) && hls_reply::first(stepped.machine.replies.slots, true).0)";
+pending_reply_drain(_) ->
+    [].

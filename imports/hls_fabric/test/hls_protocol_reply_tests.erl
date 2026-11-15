@@ -9,7 +9,7 @@ complete_reply_projection_test() ->
     #{sources := #{sources := [Source]}, actor_functions := [#{manifest := Manifest}]} =
         hls_protocol_transport:descriptor(Build),
     FrameBits = hls_frame_layout:frame_bits(hls_frame_layout:default()),
-    #{retained_calls := #{port := reply, pending_calls := 1},
+    #{retained_calls := #{port := reply, mode := immediate},
         effect_payload_bits := FrameBits, action_result_fields := Fields} = Manifest,
     ?assert(lists:member(reply, Fields)),
     ?assert(lists:member(reply_valid, Fields)),
@@ -42,3 +42,13 @@ internal_call_rejected_test() ->
 config(Function) ->
     #{sources => [{"test/hls_protocol_call_fixture.erl", []}],
         topology => {hls_protocol_call_fixture, Function, []}, actor_limit => 1}.
+
+%% Immediate actors have no retained table, but the bridge owns one in-flight wire identity.
+-spec immediate_domain_binding_test() -> ok.
+immediate_domain_binding_test() ->
+    Plan = hls_protocol_transport:plan(config(topology)),
+    #{call_slots := 1, actors := #{cell := Actor}} =
+        hls_domain_stream:bind(hls_protocol_transport:descriptor(Plan)),
+    #{pending_calls := 1, contract := Contract} = Actor,
+    ?assertEqual(#{read => [report]}, maps:get(calls, Contract)),
+    ?assertNot(maps:is_key(pending_calls, Contract)).

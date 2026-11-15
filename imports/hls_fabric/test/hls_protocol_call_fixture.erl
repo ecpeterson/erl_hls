@@ -1,18 +1,14 @@
 -module(hls_protocol_call_fixture).
 -moduledoc "Minimal bounded synchronous reply source for local protocol ownership and framing.".
--behaviour(hls_statem).
+-behaviour(hls_gs).
 -compile({parse_transform, hls_pack}).
 %% Source actor callbacks.
--export([init/1, ready/3]).
+-export([init/1, handle_call/2, handle_cast/2]).
 %% Exact positive and rejected reply-route fixtures.
 -export([topology/0, internal_reply/0, internal_call/0]).
 -hls_data(cell).
 -hls_tags([read, report]).
--hls_phases([ready]).
--hls_outputs([reply]).
--hls_reply_port(reply).
 -hls_mailbox_capacity(2).
--hls_pending_calls(1).
 -hls_replies([{read, [report]}]).
 
 %% Ordinary actor state remains independent of caller ownership.
@@ -22,18 +18,17 @@
 %% The reply carries the current local value.
 -record(report, {value = hls_type:zero() :: hls_nums:u8()}).
 
--doc "Initializes the reply-capable source without pending work.".
--spec init([]) -> {ok, ready, #cell{}}.
-init([]) -> {ok, ready, #cell{}}.
+-doc "Initializes an immediate server without a retained caller table.".
+-spec init([]) -> #cell{}.
+init([]) -> #cell{}.
 
--doc "Replies immediately to the supplied caller; no ordinary actor publication is needed.".
--spec ready(enter, hls_statem:phase(), #cell{}) -> hls_statem:enter_result(#cell{});
-    ({call, hls_gs:from()}, #read{}, #cell{}) -> hls_statem:call_result(#cell{});
-    (cast, #report{}, #cell{}) -> hls_statem:cast_result(#cell{}).
-ready(enter, _, Cell) -> {Cell, []};
-ready({call, From}, #read{}, Cell) ->
-    {ready, Cell, consume, [{reply, From, #report{value = Cell#cell.value}}]};
-ready(cast, #report{}, Cell) -> {ready, Cell, consume}.
+-doc "Returns the current local value to the implicit caller.".
+-spec handle_call(#read{}, #cell{}) -> {reply, #report{}, #cell{}}.
+handle_call(#read{}, Cell) -> {reply, #report{value = Cell#cell.value}, Cell}.
+
+-doc "Accepts a report as a no-op cast for routing admission checks.".
+-spec handle_cast(#report{}, #cell{}) -> {noreply, #cell{}}.
+handle_cast(#report{}, Cell) -> {noreply, Cell}.
 
 -doc "Binds a host call to one actor and a dedicated external reply stream.".
 -spec topology() -> map().

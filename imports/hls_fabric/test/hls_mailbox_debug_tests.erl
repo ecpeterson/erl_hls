@@ -73,8 +73,9 @@ diagnostic_profile_is_explicit_test() ->
     ?assertError({mailbox_debug, yes}, xls_fabric_topology_dslx:emit(Plan, Profile#{mailbox_debug => yes})),
     ?assertError(mailbox_debug_requires_shared_schedulers,
         xls_fabric_topology_dslx:emit(Plan, Profile#{scheduler_groups => #{}, mailbox_debug => true})),
-    ?assertError(mailbox_debug_requires_hls_statem,
-        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true})).
+    ?assertNotEqual(nomatch, binary:match(
+        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true}),
+        <<"scheduler_observation">>)).
 
 
 %% Checks direct reservations wire contract.

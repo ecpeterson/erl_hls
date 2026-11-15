@@ -206,7 +206,7 @@ local_reply_preparation_test() ->
         hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", [])
     end),
     ?assertEqual(#{}, Calls),
-    #{retained_calls := #{pending_calls := 1, port := reply}} =
+    #{retained_calls := #{mode := immediate, port := reply}} =
         hls_local_actor:descriptor(Source),
     ok.
 

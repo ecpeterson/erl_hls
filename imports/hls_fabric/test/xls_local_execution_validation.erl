@@ -19,7 +19,7 @@ prepare(Stage, CompilerRoot) ->
         _ = hls_local_actor:write(filename:join(Dependency, File), [], filename:join(Stage, Name ++ ".x"))
     end, [{"reduction", "hls_statem_reduction_lower_fixture.erl"}, {"gather", "xls_statem_gather_fixture.erl"}]).
 
--doc "Writes only the finite retained-call owner witness to a fresh directory, for focused reply/backpressure qualification.".
+-doc "Writes only the finite immediate-server owner witness to a fresh directory, for focused reply/backpressure qualification.".
 -spec prepare_replies(file:filename()) -> ok.
 prepare_replies(Stage) ->
     ok = file:make_dir(Stage),

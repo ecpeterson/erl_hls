@@ -1,6 +1,6 @@
 -module(hls_statem_reply_dslx).
 -moduledoc "Builds singleton and two-actor retained-call regression designs.".
--export([write/1]).
+-export([write/1, write_server/1]).
 
 -doc "Writes both designs and a wrapper using the production state/mailbox RAMs.".
 -spec write(file:filename()) -> ok.
@@ -15,8 +15,20 @@ write(Stage) ->
     ok = save(Stage, "hls_statem_reply_fixture.x", Actor),
     {ok, ReplyTests} = file:read_file("test_data/xls_statem_reply_semantics.inc.x"),
     ok = save(Stage, "statem_direct.x", [Actor, ReplyTests]),
+    write_shared(Stage, hls_statem_reply_fixture).
+
+-doc "Writes the server form of the same shared-RAM workload.".
+-spec write_server(file:filename()) -> ok.
+write_server(Stage) ->
+    Actor = xls_scheduler_actor:to_xls("test/hls_server_reply_fixture.erl"),
+    ok = save(Stage, "hls_server_reply_fixture.x", Actor),
+    write_shared(Stage, hls_server_reply_fixture).
+
+%% Both public callback styles use identical scheduler storage and external framing.
+-spec write_shared(file:filename(), module()) -> ok.
+write_shared(Stage, Module) ->
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
-        families => #{cells => #{module => hls_statem_reply_fixture, shape => [2, 1]}},
+        families => #{cells => #{module => Module, shape => [2, 1]}},
         ingresses => [{commands, {rectangle, [2, 1]}, [{all,
             [wait, read, release, duplicate, explode], [{family, cells, {embed, [1, 1], [0, 0]}}]}]}],
         externals => [{replies, out, [report]}], routes => [],

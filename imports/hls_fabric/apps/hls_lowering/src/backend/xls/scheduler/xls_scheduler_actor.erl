@@ -46,67 +46,34 @@ to_artifact(Filename, Options) ->
     end,
     Path = source(Filename),
     Layout = hls_frame_layout:new(maps:get(frame_payload_words, Options, 3)),
-    try xls_parse:actor_artifact(Path, maps:get(source_options, Options, []), Layout) of
-        Spec ->
-            ok = validate_shared_service(Mode, maps:get(reductions, Spec)),
-            ok = xls_collection_codegen:validate(Spec, Options),
-            ok = xls_direct_collection_codegen:validate(Spec, Options),
-            ok = xls_indexed_collection_codegen:validate(Spec, Options),
-            Specialized =
-                case maps:find(state_projection, Options) of
-                    error ->
-                        Spec;
-                    {ok, Projection} ->
-                        Context =
-                            case maps:get(source_options, Options, []) of
-                                C when is_map(C) -> C;
-                                Os -> hls_source:options(Path, Os)
-                            end,
-                        ok = xls_state_projection:validate(
-                            Spec, Projection, hls_source:read(Path, Context)
-                        ),
-                        Spec#{state_projection => Projection}
-                end,
-            xls_scheduler_codegen:artifact(Specialized#{
-                shared_service => Mode,
-                admission_reductions => maps:get(admission_reductions, Options, false),
-                gather_collection => maps:get(gather_collection, Options, false),
-                direct_collection => maps:get(direct_collection, Options, false),
-                mailbox_debug => xls_scheduler_observation:enabled(Options),
-                direct_actor_debug => xls_actor_observation:enabled(Options)
-            })
-    catch
-        error:{unsupported_actor_artifact, _, hls_gs} ->
-            case maps:get(direct_collection, Options, false) of
-                false -> ok;
-                _ -> error(direct_collection_requires_reduced_statem)
-            end,
-            case maps:get(admission_reductions, Options, false) of
-                false -> ok;
-                _ -> error(admission_reductions_require_ordinary_reduced_actor)
-            end,
-            case maps:get(gather_collection, Options, false) of
-                false -> ok;
-                _ -> error(gather_collection_requires_hls_statem)
-            end,
-            case maps:is_key(state_projection, Options) of
-                true -> error(state_projection_requires_hls_statem);
-                false -> ok
-            end,
-            case {Mode, xls_scheduler_observation:enabled(Options)} of
-                {ordinary, false} ->
-                    xls_parse:to_artifact(
-                        Path,
-                        maps:with(
-                            [source_options, direct_actor_debug, frame_payload_words], Options
-                        )
-                    );
-                {ordinary, true} ->
-                    error(mailbox_debug_requires_hls_statem);
-                _ ->
-                    error({unsupported_hls_gs_shared_service, Mode})
-            end
-    end.
+    Spec = xls_parse:actor_artifact(Path, maps:get(source_options, Options, []), Layout),
+    ok = validate_shared_service(Mode, maps:get(reductions, Spec)),
+    ok = xls_collection_codegen:validate(Spec, Options),
+    ok = xls_direct_collection_codegen:validate(Spec, Options),
+    ok = xls_indexed_collection_codegen:validate(Spec, Options),
+    Specialized =
+        case maps:find(state_projection, Options) of
+            error ->
+                Spec;
+            {ok, Projection} ->
+                Context =
+                    case maps:get(source_options, Options, []) of
+                        C when is_map(C) -> C;
+                        Os -> hls_source:options(Path, Os)
+                    end,
+                ok = xls_state_projection:validate(
+                    Spec, Projection, hls_source:read(Path, Context)
+                ),
+                Spec#{state_projection => Projection}
+        end,
+    xls_scheduler_codegen:artifact(Specialized#{
+        shared_service => Mode,
+        admission_reductions => maps:get(admission_reductions, Options, false),
+        gather_collection => maps:get(gather_collection, Options, false),
+        direct_collection => maps:get(direct_collection, Options, false),
+        mailbox_debug => xls_scheduler_observation:enabled(Options),
+        direct_actor_debug => xls_actor_observation:enabled(Options)
+    }).
 
 %% Requires unambiguous state-independent contributions for aggregate-only delivery.
 -spec validate_shared_service('aggregate_only' | 'ordinary', 'none' | map()) -> 'ok'.

@@ -21,6 +21,7 @@ artifact(Closed) ->
         maps:keys(Closed) --
             [
                 source,
+                source_kind,
                 failure_locations,
                 imports,
                 capacity,

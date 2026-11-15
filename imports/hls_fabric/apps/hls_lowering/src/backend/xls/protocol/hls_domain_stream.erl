@@ -79,6 +79,9 @@ bind(#{
             Count =
                 case Retained of
                     none -> 0;
+                    #{mode := immediate, calls := Calls} when map_size(Calls) =:= 0 -> 0;
+                    %% Wire routing retains one caller until its same-callback reply arrives.
+                    #{mode := immediate} -> 1;
                     #{pending_calls := N} -> N
                 end,
             Index = maps:get(Id, Indexed),

@@ -135,6 +135,8 @@ machine_value(_Spec, reduction, Raw) ->
     ["reduction_state_from_bits(", Raw, ")"];
 machine_value(Spec, gather, Raw) ->
     xls_gather_codegen:decode(Spec, Raw);
+machine_value(#{retained_calls := #{mode := immediate}}, replies, Raw) ->
+    ["ReplyBook { failure: ", Raw, " }"];
 machine_value(_Spec, replies, Raw) ->
     ["hls_reply::from_bits<REPLY_CAPACITY>(", Raw, ")"];
 machine_value(_Spec, _Name, Raw) ->
@@ -148,6 +150,8 @@ machine_bits(_Spec, reduction) ->
     "bits_from_reduction_state(machine.reduction)";
 machine_bits(Spec, gather) ->
     xls_gather_codegen:encode(Spec, "machine.gather");
+machine_bits(#{retained_calls := #{mode := immediate}}, replies) ->
+    "machine.replies.failure";
 machine_bits(_Spec, replies) ->
     "hls_reply::to_bits(machine.replies)";
 machine_bits(_Spec, Name) when Name =:= phase; Name =:= entered_from ->

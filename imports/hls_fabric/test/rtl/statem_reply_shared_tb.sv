@@ -7,7 +7,7 @@ module statem_reply_shared_tb;
     reg request_valid = 0, reply_ready = 0;
     wire request_ready, reply_valid;
     wire [127:0] reply;
-    integer cycles = 0, pending = 0, received = 0;
+    integer cycles = 0, pending = 0, received = 0, fault_notices = 0;
     reg [40:0] expected [0:254];
     reg [127:0] held;
     reg stalled = 0;
@@ -21,6 +21,14 @@ module statem_reply_shared_tb;
         if (stalled && (!reply_valid || reply !== held)) $fatal(1, "unstable stalled reply");
         held = reply; stalled = reply_valid && !reply_ready;
         if (reply_valid && reply_ready) begin
+`ifdef SERVER_CALLBACKS
+            // Server casts publish a terminal notice before the outstanding-call drain.
+            if (reply[119:112] == 255) begin
+                fault_notices = fault_notices + 1;
+                if (reply[103:96] !== 1 || reply[31:0] !== 32'hc000000f)
+                    $fatal(1, "wrong server fault notice: %h", reply);
+            end else begin
+`endif
             if (reply[119:112] == 255 || !expected[reply[119:112]][40])
                 $fatal(1, "unexpected transaction: %h", reply);
             if (reply[127:120] !== 1 || reply[111:104] !== 0 || reply[95:32] !== 0 ||
@@ -28,6 +36,9 @@ module statem_reply_shared_tb;
                 $fatal(1, "wrong response: %h", reply);
             expected[reply[119:112]][40] = 0;
             pending = pending - 1; received = received + 1;
+`ifdef SERVER_CALLBACKS
+            end
+`endif
         end
     end else stalled = 0;
 
@@ -80,14 +91,17 @@ module statem_reply_shared_tb;
         expect_reply(2, 8, 7); packet(0, 4, 255, 0); drained();
         // Failing one actor must not lose queued callers or stop its healthy neighbour.
         packet(0, 3, 1, 1); packet(1, 3, 11, 30);
-        expect_reply(1, 1, 15); expect_reply(11, 8, 30); expect_reply(4, 1, 15);
+        expect_reply(1, 1, 32'hc000000f); expect_reply(11, 8, 30); expect_reply(4, 1, 32'hc000000f);
         packet(0, 7, 255, 1); packet(0, 5, 4, 0); packet(1, 4, 255, 0);
         drained();
-        expect_reply(4, 1, 15); expect_reply(14, 8, 333);
+        expect_reply(4, 1, 32'hc000000f); expect_reply(14, 8, 333);
         packet(0, 5, 4, 0); packet(1, 5, 14, 0); drained();
         restart();
         expect_reply(4, 8, 0); expect_reply(14, 8, 0);
         packet(0, 5, 4, 0); packet(1, 5, 14, 0); drained();
+`ifdef SERVER_CALLBACKS
+        if (fault_notices != 1) $fatal(1, "expected one server fault notice, got %0d", fault_notices);
+`endif
         $display("PASS: shared retained calls, independent actors, stalled replies, failure and RAM reset (%0d replies)", received);
         $finish;
     end

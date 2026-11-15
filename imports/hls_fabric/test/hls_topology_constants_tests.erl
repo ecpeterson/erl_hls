@@ -110,7 +110,7 @@ projection_source_identity_test() ->
 %% Unsupported execution protocols must not silently ignore a requested physical layout.
 -spec unsupported_protocol_test() -> ok.
 unsupported_protocol_test() ->
-    ?assertError(state_projection_requires_hls_statem,
+    ?assertError(state_projection_protocol,
         xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{state_projection => #{}})),
     ?assertError(state_projection_protocol,
         xls_state_projection:validate(#{retained_calls => #{}}, #{}, [])).

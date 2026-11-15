@@ -36,7 +36,7 @@ shared_service_options_are_exact_and_validated_test() ->
         xls_scheduler_actor:to_xls(Path, #{shared_service_mode => ordinary})
     ),
     ?assertError(
-        {unsupported_hls_gs_shared_service, aggregate_only},
+        aggregate_only_requires_reductions,
         xls_scheduler_actor:to_xls(Path, #{shared_service => aggregate_only})
     ).
 

@@ -8,13 +8,13 @@ closed_artifact_test() ->
     ?assertError({local_execution_requires_closed_artifact, [shared_service]},
         xls_activation_codegen:emit(Spec#{shared_service => aggregate_only})).
 
-%% The reference owner reuses the same bounded caller book as the scheduler owner.
--spec retained_reply_test() -> ok.
-retained_reply_test() ->
+%% Both owners use immediate replies without allocating a retained caller table.
+-spec immediate_reply_test() -> ok.
+immediate_reply_test() ->
     Spec = xls_parse:actor_artifact("test/hls_protocol_call_fixture.erl", []),
     Local = xls_emitted:bytes(xls_activation_codegen:artifact(Spec)),
-    ?assertNotEqual(nomatch, binary:match(Local, <<"type ReplyBook = hls_reply::Book<REPLY_CAPACITY>">>)),
-    ?assertNotEqual(nomatch, binary:match(Local, <<"hls_reply::admit(machine.replies, frame)">>)),
+    ?assertNotEqual(nomatch, binary:match(Local, <<"type ReplyBook = hls_reply::Immediate">>)),
+    ?assertNotEqual(nomatch, binary:match(Local, <<"hls_reply::immediate_admit(machine.replies, frame)">>)),
     ?assertEqual(nomatch, binary:match(Local, <<"pub proc SharedExecutor">>)).
 
 %% Slot selection must not silently decode constants from a different projection instance.

@@ -29,6 +29,8 @@ Select the backend in the build request. The application declares actor semantic
 
 These are different checked execution models. A scheduler placement is not a source-protocol configuration, and choosing a backend does not translate unsupported constructs. `source_protocol` accepts kinds `transport`, `network`, `boundary`, `application` (default), `bridge`, `deployment` and `mixed`. `channel_scheduler` has one topology boundary and rejects `--kind`.
 
+Both backends consume the compiler's common actor artifact for `hls_statem` and bounded `hls_gs` sources. Server calls, casts and continuations normalize into one inert phase; connect their implicit `reply` output to an external caller-facing stream. Immediate servers have no retained-caller table in the actor. A framed domain still reserves one bridge caller slot until the reply arrives; this routes an in-flight request rather than enabling deferred application replies. Retained servers use their declared caller bound. Internal casts into call schemas remain rejected.
+
 The two-counter example uses the same actor and topology with both backends. Run from the repository root after `rebar3 release -n hls`; choose fresh output directories:
 
 ```sh

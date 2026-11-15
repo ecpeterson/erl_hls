@@ -25,7 +25,7 @@ fn bad_reply_does_not_commit_data_test() {
   let retained = shared_machine_dispatch(entered, wait, true).machine;
   let failure = shared_machine_dispatch(retained, axis::pack(Tag::EXPLODE as u8, u32:1), true);
   assert_eq(failure.machine.data, retained.data);
-  assert_eq(failure.machine.replies.failure, u32:15);
+  assert_eq(failure.machine.replies.failure, hls_failure::source_error(hls_failure::REPLY_CONTRACT));
   assert_eq(failure.reply_valid, false);
   assert_eq(hls_reply::first(failure.machine.replies.slots, true).0, true);
 }

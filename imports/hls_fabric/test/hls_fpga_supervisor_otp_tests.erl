@@ -22,6 +22,7 @@ run(Stage) ->
 native_reference_test_() ->
     {timeout, 30, fun() ->
         Stage = filename:join("_build", "fpga-supervisor-otp-" ++
+            integer_to_list(erlang:system_time(nanosecond)) ++ "-" ++
             integer_to_list(erlang:unique_integer([positive]))),
         #{passed := true} = run(Stage)
     end}.
