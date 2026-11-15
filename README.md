@@ -21,10 +21,13 @@ Use OTP 28 and rebar3. The [standalone toolchain](docs/toolchain.md) packages `h
 ```sh
 rebar3 release
 _build/default/rel/erl_hls/bin/hlsc --help
+# Complete local CI coverage (native audits, packaging, XLS and RTL):
+python3 tools/check.py /path/to/xls
+# For a quick native-only iteration:
 rebar3 eunit
-python3 tools/check_source_contracts.py
-rebar3 dialyzer
 ```
+
+EUnit alone does not run generated DSLX, XLS conversion/JIT, RTL, installed-toolchain or transport checks. The [shared qualification command](docs/ci.md) runs the same recipes as CI, serially, and retains per-command logs.
 
 After changing translation, prepare a fresh stage with `tools/prepare_xls_sim.sh STAGE`, then use `tools/xls_goldens.sh check STAGE` to compare the checked register-service DSLX. Use `update` instead of `check` only after reviewing an intended change. This requires Erlang, not XLS. Other fixture and project writers regenerate their sources in their own tests. Generated source comparisons check reproducibility; hardware behavior has separate RTL tests.
 
