@@ -79,7 +79,7 @@ functions(Spec = #{data_name := DataName, internal_steps := Steps, reductions :=
         "  let effective = !invalid && !incomplete;\n",
         "  let failure = hls_failure::dispatch(false, invalid, incomplete, effective, callback_failure);\n",
         xls_statem_reply_codegen:optional(Spec, [
-            "  let (reply_book, response, response_valid) = hls_reply::complete(\n",
+            "  let (reply_book, response, response_valid) = complete_reply(\n",
             "    machine.replies, reply_from, reply_frame, reply_allowed, failure as u32);\n",
             "  let contract_fault = failure == hls_failure::NONE && reply_book.failure == hls_failure::source_error(hls_failure::REPLY_CONTRACT);\n",
             "  let failure = hls_failure::first(failure, if reply_book.failure != u32:0 { hls_failure::REPLY_CONTRACT } else { hls_failure::NONE });\n"

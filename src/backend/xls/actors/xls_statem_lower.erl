@@ -160,6 +160,11 @@ compile_artifact(Filename, Source, PhaseNames, Mode, Layout) ->
     ],
     Spec = #{
         source => Filename,
+        source_kind =>
+            case hls_source:find_optional_attribute(Source, hls_server_contract) of
+                none -> statem;
+                _ -> server
+            end,
         frame_layout => Layout,
         failure_locations => Locations,
         imports => xls_dslx_imports:from_forms(Forms),
@@ -232,6 +237,23 @@ declarations(Forms, PhaseNames) ->
 %% Retained replies leave through one declared output; it must route back to the owning host.
 -spec retained_calls([hls_source:form()], [atom()]) -> none | map().
 retained_calls(Forms, Outputs) ->
+    case hls_source:find_optional_attribute(Forms, hls_server_contract) of
+        {ok, Contract} ->
+            Contract#{
+                port => reply,
+                mode =>
+                    case maps:is_key(pending_calls, Contract) of
+                        true -> retained;
+                        false -> immediate
+                    end
+            };
+        none ->
+            statem_calls(Forms, Outputs)
+    end.
+
+%% Native state-machine declarations retain their explicit caller-storage bound.
+-spec statem_calls([hls_source:form()], [atom()]) -> none | map().
+statem_calls(Forms, Outputs) ->
     case hls_source:find_optional_attribute(Forms, hls_pending_calls) of
         none ->
             none;
@@ -405,6 +427,17 @@ interface_from_prepared(Prepared) ->
 
 %% Finite event state is private scheduler storage, separate from application data.
 -spec with_continuation_width(map(), map()) -> map().
+with_continuation_width(Interface, #{
+    retained_calls := #{mode := immediate, port := Port, calls := Calls}
+}) ->
+    Interface#{
+        continuation_width => 8,
+        reply_storage_width => 32,
+        reply_effects => [
+            #{port => Port, schema => Tag}
+         || Tag <- lists:usort(lists:append(maps:values(Calls)))
+        ]
+    };
 with_continuation_width(Interface, #{
     retained_calls := #{pending_calls := N, port := Port, calls := Calls}
 }) ->

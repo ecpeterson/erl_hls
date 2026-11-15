@@ -42,7 +42,11 @@ abandoned_call_test() ->
         gen_server:cast(Pid, {release, 0}),
         ?assertEqual({reply, {report, 2}}, gen_server:receive_response(B, 1000)),
         ?assertEqual({report, 3}, gen_server:call(Pid, {read, 0})),
-        receive Unexpected -> error({late_reply, Unexpected}) after 0 -> ok end
+        %% Only this abandoned request's alias/monitor can constitute a late response.
+        receive
+            {[alias | A], Reply} -> error({late_reply, Reply});
+            {'DOWN', A, process, Pid, Reason} -> error({late_monitor, Reason})
+        after 0 -> ok end
     end).
 
 %% Actual callback failure releases all ERTS request monitors, including retained calls.
@@ -76,7 +80,7 @@ failure_after_last_reply_test() ->
 -spec lowering_test() -> ok.
 lowering_test() ->
     X = iolist_to_binary(xls_parse:to_xls("test/hls_deferred_fixture.erl")),
-    ?assertNotEqual(nomatch, binary:match(X, <<"hls_server::Driver">>)),
+    ?assertNotEqual(nomatch, binary:match(X, <<"fn actor_next_event">>)),
     ?assertNotEqual(nomatch, binary:match(X, <<"reply_allowed">>)),
     ok.
 
@@ -104,12 +108,9 @@ declaration_bounds_test() ->
 %% A handle counter at its limit fails instead of silently reusing the first activation handle.
 -spec handle_exhaustion_test() -> ok.
 handle_exhaustion_test() ->
-    {ok, Contract} = hls_service_schema:from_module(hls_deferred_fixture),
-    Initial = #{book := Book} = hls_gs_deferred:new(Contract),
-    Pending = Initial#{book := Book#{next := 1 bsl 56}},
+    Book = hls_reply_book:new(2),
     ?assertError(reply_handle_exhausted,
-        hls_gs_deferred:dispatch(call, hls_deferred_fixture, {wait, 1},
-            {{self(), make_ref()}, [report]}, hls_deferred_fixture:init([]), Pending)).
+        hls_reply_book:admit(3, {self(), make_ref()}, [report], Book#{next := 1 bsl 56})).
 
 %% Mutate one fixture declaration while preserving its record/callback syntax.
 -spec attribute([hls_source:form()], atom(), term()) -> [hls_source:form()].
@@ -119,5 +120,5 @@ attribute(Forms, Name, Value) ->
 %% Competing failures in reply/state expressions retain Erlang's left-to-right precedence.
 -spec reply_evaluation_order_test() -> ok.
 reply_evaluation_order_test() ->
-    {ok, State} = hls_gs:init({hls_deferred_fixture, [], []}),
-    ?assertError(badarith, hls_gs:handle_call({read, 1}, {self(), make_ref()}, State)).
+    {ok, State} = hls_statem:init({hls_deferred_fixture, [], 1, #{}, 0, server}),
+    ?assertError(badarith, hls_statem:handle_call({read, 1}, {self(), make_ref()}, State)).

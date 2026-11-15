@@ -250,3 +250,41 @@ await(Backend, Phase, Deadline) ->
                 false -> error({domain_phase_timeout, Phase, Snapshot})
             end
     end.
+
+
+%% Both server callback vocabularies share one incarnation with a state-function actor.
+-spec mixed_server_incarnation_test() -> ok.
+mixed_server_incarnation_test() ->
+    Modules = #{immediate => hls_reply_fixture, retained => hls_deferred_fixture,
+                statem => hls_statem_reply_fixture},
+    Spec = #{actors => maps:map(fun(_, M) -> #{module => M, mailbox_capacity => 2} end, Modules)},
+    {ok, Backend} = hls_domain_erts:start_link(Spec),
+    try
+        {ok, Authority} = hls_domain_erts:attach(Backend, self()),
+        activate(Backend, Authority, 1),
+        Pids = maps:map(fun(Id, _) ->
+            {ok, Pid} = hls_domain_erts:endpoint(Backend, Authority, 1, Id), Pid
+        end, Modules),
+        #{immediate := Immediate, retained := Retained, statem := Statem} = Pids,
+        ?assertEqual({small, 7}, gen_server:call(Immediate, {read, 0})),
+        Pending = gen_server:send_request(Retained, {wait, 17}),
+        gen_server:cast(Retained, {release, 0}),
+        ?assertEqual({reply, {report, 17}}, gen_server:receive_response(Pending, 1000)),
+        Lost = gen_server:send_request(Retained, {wait, 23}),
+        _ = hls_statem:info(Retained),
+        Other = gen_server:send_request(Statem, {wait, 1}),
+        _ = hls_statem:info(Statem),
+        gen_server:cast(Statem, {explode, 0}),
+        _ = await(Backend, failed),
+        ?assertMatch({error, {_, Retained}}, gen_server:receive_response(Lost, 1000)),
+        ?assertMatch({error, {_, Statem}}, gen_server:receive_response(Other, 1000)),
+        [?assertNot(is_process_alive(P)) || P <- maps:values(Pids)],
+        Replace = #domain_input{op = replace, expected = 1, target = 2, transition = 2},
+        ?assertMatch(#domain_output{status = accepted}, hls_domain_erts:request(Backend, Authority, Replace)),
+        _ = await(Backend, ready),
+        {ok, Fresh} = hls_domain_erts:endpoint(Backend, Authority, 2, retained),
+        ?assertNotEqual(Fresh, Retained),
+        ?assertEqual({report, 0}, gen_server:call(Fresh, {read, 0})),
+        #{mailbox := #{generation := 2}} = hls_statem:info(Fresh),
+        ok
+    after hls_domain_erts:stop(Backend) end.

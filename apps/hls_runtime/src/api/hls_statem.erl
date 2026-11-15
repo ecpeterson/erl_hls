@@ -4,7 +4,10 @@
 
 -module(hls_statem).
 -moduledoc """
-A bounded CPU reference scheduler for HLS state machines.
+A bounded CPU reference scheduler for HLS actors.
+
+The hls_gs facade uses this scheduler with one inert phase;
+hls_actor_callback adapts its call, cast and continuation results.
 
 Callbacks separate finite-control `Phase` from typed `Data`. `init/1` returns
 `{ok, Phase, Data}`; each `Phase/3` handles entry, casts, declared calls and
@@ -73,7 +76,7 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
 -export([start_link/3, connect/2, stop/1, cast/2, call/2, call/3, info/1, info/2]).
 
 %% Domain-owned initialization before publishing incarnation endpoints.
--export([setup/3, admit_cast/2]).
+-export([setup/3, admit_cast/2, start_server/3]).
 
 %% gen_server implementation callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -248,8 +251,14 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
     gather_completion = none :: none | gather_complete(),
     continuation = none :: none | atom(),
     continuation_names = [] :: [atom()],
+    kind = statem :: hls_actor_callback:kind(),
+    contract = none :: none | hls_service_schema:contract(),
     calls = #{} :: #{atom() => [atom()]},
-    reply_book = none :: none | hls_reply_book:book(),
+    reply_book = none ::
+        none
+        | immediate
+        | {immediate, gen_server:from(), none | [atom()], term()}
+        | hls_reply_book:book(),
     call_messages = #{} :: #{non_neg_integer() => gen_server:from()},
     capacity_waiters = #{} :: hls_admission:waiters()
 }).
@@ -263,7 +272,15 @@ The CPU controller delegates mailbox selection, reduction/gather accumulation an
     gen_server:start_ret().
 start_link(Module, Arg, Options) ->
     {Capacity, Outputs, Generation} = start_options(Options),
-    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Outputs, Generation}, []).
+    gen_server:start_link(
+        ?MODULE, {Module, Arg, Capacity, Outputs, Generation, hls_actor_callback:kind(Module)}, []
+    ).
+
+-doc "Starts the server facade on the same scheduler with connected empty outputs and a bounded native mailbox; domain startup uses start_link/3 with inferred callback kind.".
+-spec start_server(module(), term(), [start_option()]) -> gen_server:start_ret().
+start_server(Module, Arg, Options) ->
+    {C, Outputs, Generation} = start_options([{mailbox_capacity, 1}, {outputs, #{}} | Options]),
+    gen_server:start_link(?MODULE, {Module, Arg, C, Outputs, Generation, server}, []).
 
 -doc "Connects deferred outputs and enters the initial phase.".
 %% TODO: Define topology ownership and reconnection after a supervised restart;
@@ -319,23 +336,34 @@ info(PID, Timeout) ->
 
 -doc "Initializes a CPU state machine and enters its initial phase when connected.".
 %% Initialize callback data and enter only when outputs are connected.
--spec init({module(), term(), pos_integer(), undefined | map(), non_neg_integer()}) ->
+-spec init({
+    module(), term(), pos_integer(), undefined | map(), non_neg_integer(), hls_actor_callback:kind()
+}) ->
     {ok, #runtime{}} | {stop, term()}.
-init({Module, Arg, Capacity, Outputs, Generation}) ->
-    {ok, Phase, Data} = Module:init(Arg),
+init({Module, Arg, Capacity, Outputs, Generation, Kind}) ->
+    {ok, Phase, Data} = hls_actor_callback:initialize(Kind, Module, Arg),
     ok = validate_phase(Phase),
     {Lifecycle, OutputMap} =
         case Outputs of
             undefined -> {disconnected, #{}};
             _ -> {connected, Outputs}
         end,
-    {Calls, Book} =
+    Contract =
         case hls_service_schema:from_module(Module) of
-            {ok, #{calls := C, pending_calls := N}} -> {C, hls_reply_book:new(N)};
+            {ok, C0} -> C0;
+            none -> none
+        end,
+    {Calls, Book} =
+        case {Kind, Contract} of
+            {_, #{calls := C, pending_calls := N}} -> {C, hls_reply_book:new(N)};
+            {server, #{calls := C}} -> {C, immediate};
+            {server, none} -> {#{}, immediate};
             _ -> {#{}, none}
         end,
     Runtime0 = #runtime{
         module = Module,
+        kind = Kind,
+        contract = Contract,
         lifecycle = Lifecycle,
         phase = Phase,
         data = Data,
@@ -408,25 +436,28 @@ handle_call(
 %% A second connection cannot replace a live output map.
 handle_call({connect, _Outputs}, _From, Runtime) ->
     {reply, {error, already_connected}, Runtime};
+%% The public server facade remains inspectable as a native, non-fabric endpoint.
+handle_call('$hls_fabric_info', _From, Runtime = #runtime{kind = server}) ->
+    {reply, none, Runtime};
 %% Actors without a call declaration retain their existing unsupported-call failure.
 handle_call(Request, _From, Runtime = #runtime{reply_book = none}) ->
     {stop, {unsupported_hls_statem_call, Request}, {error, unsupported_call}, Runtime};
 %% Calls occupy the same ordered input queue as casts; caller ownership begins at dispatch.
 handle_call(
-    Request, From, Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}
+    Request, From, Runtime = #runtime{next_message_id = Id, call_messages = Messages}
 ) ->
-    case
-        is_tuple(Request) andalso tuple_size(Request) > 0 andalso
-            maps:is_key(element(1, Request), Calls)
-    of
+    case valid_call(Request, Runtime) of
         true -> admit_and_process(Request, Runtime#runtime{call_messages = Messages#{Id => From}});
-        false -> {reply, {error, unsupported_call}, Runtime}
+        false -> {reply, invalid_call(Request, Runtime), Runtime}
     end.
 
+-doc "Admits a declared cast to the common bounded queue and advances runnable work.".
+-spec handle_cast(term(), #runtime{}) -> term().
 handle_cast(Message, Runtime0) ->
+    ok = validate_cast(Message, Runtime0),
     admit_and_process(Message, Runtime0).
 
--doc "Releases capacity observers whose callers died; unrelated messages remain unsupported.".
+-doc "Releases capacity observers whose callers died. Servers retain their ignored-info policy; state machines reject other messages.".
 -spec handle_info(term(), #runtime{}) -> {noreply, #runtime{}} | {stop, term(), #runtime{}}.
 %% Capacity waits have no application state and can be discarded when their observer exits.
 handle_info(
@@ -434,11 +465,16 @@ handle_info(
 ) ->
     case hls_admission:down(Ref, Waiters) of
         {true, Rest} -> {noreply, Runtime#runtime{capacity_waiters = Rest}};
-        {false, _} -> {stop, {unsupported_hls_statem_info, Message}, Runtime}
+        {false, _} -> unhandled_info(Message, Runtime)
     end;
 %% Source actors have no generic application info-message handler.
 handle_info(Message, Runtime) ->
-    {stop, {unsupported_hls_statem_info, Message}, Runtime}.
+    unhandled_info(Message, Runtime).
+
+%% Server info messages have never invoked application callbacks; preserve that facade policy.
+-spec unhandled_info(term(), #runtime{}) -> {noreply, #runtime{}} | {stop, term(), #runtime{}}.
+unhandled_info(_Message, Runtime = #runtime{kind = server}) -> {noreply, Runtime};
+unhandled_info(Message, Runtime) -> {stop, {unsupported_hls_statem_info, Message}, Runtime}.
 
 terminate(Reason, #runtime{
     module = Module,
@@ -507,12 +543,9 @@ submit(
     Message,
     From,
     Token,
-    Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}
+    Runtime = #runtime{next_message_id = Id, call_messages = Messages}
 ) ->
-    case
-        is_tuple(Message) andalso tuple_size(Message) > 0 andalso
-            maps:is_key(element(1, Message), Calls)
-    of
+    case valid_call(Message, Runtime) of
         true ->
             submit_message(
                 call,
@@ -526,6 +559,7 @@ submit(
             {reply, {error, unsupported_call}, Runtime}
     end;
 submit(cast, Message, From, Token, Runtime) ->
+    ok = validate_cast(Message, Runtime),
     submit_message(cast, Message, From, Token, Runtime, Runtime).
 
 %% Notifications originate here before processing can produce a reply or failure.
@@ -691,7 +725,9 @@ process_internal(
         data = Data
     }
 ) ->
-    RawResult = Module:Phase(internal, Event, Data),
+    RawResult = hls_actor_callback:invoke(
+        Runtime#runtime.kind, Module, Phase, internal, Event, Data
+    ),
     {Result, Continue, Reply} = event_result(RawResult, Runtime#runtime.continuation_names),
     ok = validate_completion_reply(Event, Reply),
     {NextPhase, NextData, Directive, Repeat} =
@@ -861,15 +897,29 @@ complete_reply(none, Runtime) ->
 %% Domain setup cannot complete a previously retained external caller.
 complete_reply(_Reply, #runtime{setup = true}) ->
     error(hls_domain_setup_reply);
-complete_reply(Reply, Runtime = #runtime{reply_book = Book}) when Book =/= none ->
+complete_reply({reply, 0, Reply}, Runtime = #runtime{reply_book = {immediate, From, Allowed, Tag}}) ->
+    case
+        Allowed =:= none orelse
+            (is_tuple(Reply) andalso tuple_size(Reply) > 0 andalso
+                lists:member(element(1, Reply), Allowed))
+    of
+        true ->
+            gen_server:reply(From, Reply),
+            Runtime#runtime{reply_book = immediate};
+        false ->
+            error({reply_contract, Tag, Reply, Allowed})
+    end;
+complete_reply(Reply, Runtime = #runtime{reply_book = Book}) when is_map(Book) ->
     Runtime#runtime{reply_book = hls_reply_book:complete(Reply, Book)};
 complete_reply(_Reply, _Runtime) ->
     error(hls_statem_calls_not_declared).
 
 %% Allocate only at dispatch so delayed connection and phase entry preserve arrival order.
 -spec invoke_message(non_neg_integer(), term(), #runtime{}) ->
-    {term(), none | hls_reply_book:book(), boolean()}.
+    {term(), none | immediate | tuple() | hls_reply_book:book(), boolean()}.
 invoke_message(Id, Message, #runtime{
+    kind = Kind,
+    contract = Contract,
     module = Module,
     phase = Phase,
     data = Data,
@@ -879,12 +929,32 @@ invoke_message(Id, Message, #runtime{
 }) ->
     case maps:find(Id, Messages) of
         error ->
-            {Module:Phase(cast, Message, Data), Book, false};
+            {hls_actor_callback:invoke(Kind, Module, Phase, cast, Message, Data), Book, false};
+        {ok, From} when Book =:= immediate ->
+            Tag = request_tag(Message),
+            Allowed =
+                case Contract of
+                    none -> none;
+                    _ -> maps:get(Tag, Calls)
+                end,
+            {
+                hls_actor_callback:invoke(Kind, Module, Phase, {call, 0}, Message, Data),
+                {immediate, From, Allowed, Tag},
+                true
+            };
         {ok, From} ->
             Tag = element(1, Message),
             case hls_reply_book:admit(Module:pack_tag(Tag), From, maps:get(Tag, Calls), Book) of
-                full -> {{Phase, Data, consume}, Book, true};
-                {ok, Token, Next} -> {Module:Phase({call, Token}, Message, Data), Next, true}
+                full ->
+                    {{Phase, Data, consume}, Book, true};
+                {ok, Token, Next} ->
+                    {
+                        hls_actor_callback:invoke(
+                            Kind, Module, Phase, {call, Token}, Message, Data
+                        ),
+                        Next,
+                        true
+                    }
             end
     end.
 
@@ -945,7 +1015,7 @@ enter_phase(
         outputs = Outputs
     }
 ) ->
-    Result = Module:Phase(enter, OldPhase, Data),
+    Result = hls_actor_callback:invoke(Runtime#runtime.kind, Module, Phase, enter, OldPhase, Data),
     {NextData, Actions} = enter_result(Result),
     {Prepared, Casts} = prepare_entry_actions(Module, Actions, Outputs, Runtime),
     ok = setup_effects(Runtime#runtime.setup, Casts),
@@ -1160,7 +1230,8 @@ format_info(#runtime{
 %% Validate optional incarnation identity before creating any mailbox.
 -spec start_options([start_option()]) ->
     {pos_integer(), undefined | #{output_port() := pid()}, non_neg_integer()}.
-start_options(Options) ->
+start_options(Options0) ->
+    Options = lists:reverse(Options0),
     Known = lists:all(
         fun
             ({mailbox_capacity, _Capacity}) -> true;
@@ -1198,3 +1269,36 @@ valid_outputs(_Outputs) ->
 
 output_names(Outputs) ->
     lists:sort(maps:keys(Outputs)).
+
+%% Contract-free native server initialization remains available for CPU-only helpers.
+-spec valid_call(term(), #runtime{}) -> boolean().
+valid_call(_, #runtime{kind = server, contract = none}) ->
+    true;
+valid_call(Request, #runtime{calls = Calls}) ->
+    is_tuple(Request) andalso tuple_size(Request) > 0 andalso
+        is_map_key(element(1, Request), Calls).
+
+%% Servers preserve call/cast separation before source dispatch.
+-spec validate_cast(term(), #runtime{}) -> ok.
+validate_cast(Message, #runtime{kind = server, contract = #{casts := Casts}}) ->
+    case
+        is_tuple(Message) andalso tuple_size(Message) > 0 andalso
+            lists:member(element(1, Message), Casts)
+    of
+        true -> ok;
+        false -> error({invalid_request, cast, request_tag(Message)})
+    end;
+validate_cast(_, _) ->
+    ok.
+
+%% Keep facade errors stable without duplicating admission or callback scheduling.
+-spec invalid_call(term(), #runtime{}) -> {error, term()}.
+invalid_call(Request, #runtime{kind = server}) ->
+    {error, {invalid_request, call, request_tag(Request)}};
+invalid_call(_, _) ->
+    {error, unsupported_call}.
+
+%% Invalid non-record requests retain their diagnostic value instead of crashing inspection.
+-spec request_tag(term()) -> term().
+request_tag(Value) when is_tuple(Value), tuple_size(Value) > 0 -> element(1, Value);
+request_tag(Value) -> Value.

@@ -270,7 +270,17 @@ actor_interface_attributes(Forms, ModuleAttr) ->
                 error:_Reason -> []
             end;
         none ->
-            []
+            case has_server_callbacks(Forms) of
+                false ->
+                    [];
+                true ->
+                    try hls_server_source:normalize(Forms) of
+                        {ActorForms, _Phases} ->
+                            actor_interface_attributes(ActorForms, ModuleAttr)
+                    catch
+                        error:_ -> []
+                    end
+            end
     end.
 
 %% Expand typed zeros without changing the source-level record type annotations.

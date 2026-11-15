@@ -190,7 +190,8 @@ class SourceToolchainTests(unittest.TestCase):
             source.write_text('-module(wide).\n-behaviour(hls_gs).\n-hls_data(cell).\n-hls_tags([message]).\n'
                               '-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n'
                               '-record(message, {value = hls_type:zero() :: hls_bits:bits(128)}).\n'
-                              'init([]) -> #cell{}.\nhandle_call(#message{}, State) -> {reply, #message{}, State}.\n')
+                              'init([]) -> #cell{}.\nhandle_call(#message{}, State) -> {reply, #message{}, State}.\n'
+                              '-hls_replies([{message, [message]}]).\n')
             command = [release/'bin/hlsc', 'emit', source, '--output', stage/'unused']
             human = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics', 'text'],
                                    env=env, capture_output=True, text=True, timeout=30)
@@ -206,6 +207,10 @@ class SourceToolchainTests(unittest.TestCase):
             self.assertEqual(report['context']['location'], 6)
             self.assertEqual(report['context']['width'], 128)
             self.assertFalse((stage/'unused').exists())
+            # With enough frame capacity, this source must have no other admission errors.
+            admitted = subprocess.run([*command, '--frame-payload-words', '4'], env=env,
+                                      capture_output=True, text=True, timeout=30)
+            self.assertEqual(admitted.returncode, 0, admitted.stdout+admitted.stderr)
             invalid = subprocess.run([*command, '--diagnostics', 'json', '--diagnostics', 'invalid'],
                                      env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(invalid.returncode, 1)

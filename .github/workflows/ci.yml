@@ -96,89 +96,10 @@ jobs:
           fi
           "$XLS_ROOT/codegen_main" --version
 
-      - name: Check build-artifact compaction safeguards
-        run: |
-          python3 tools/test_compact_build.py
-          python3 tools/test_hls_profile.py
-
-      - name: Check the DSLX golden workflow
-        run: python3 tools/test_xls_goldens.py
-
-      - name: Run Erlang tests
-        run: rebar3 eunit
-
-      - name: Check standalone compiler packaging
-        run: |
-          rebar3 release
-          python3 tools/test_source_toolchain.py
-          python3 -m unittest tools.test_source_build_executor
-          python3 tools/test_source_diagnostics.py
-          erl -noshell -pa _build/test/lib/erl_hls/ebin -pa _build/test/lib/hls_runtime/ebin -pa _build/test/lib/erl_hls/test \
-            -eval 'ok = xls_source_map_dslx:write("_build/source-maps"), halt().'
-          python3 tools/test_source_maps.py --xls "$RUNNER_TEMP/xls" --stage _build/source-maps
-          python3 tools/test_xls_ir_census.py
-          python3 tools/test_regression.py
-
-      - name: Prepare simulation inputs
-        run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
-
-      - name: Check generated DSLX before RTL compilation
-        run: bash tools/xls_goldens.sh check "$PWD/_build/xls_sim/regsvc"
-
-      - name: Check differential compiler runner and shrinking
-        run: |
-          python3 tools/test_compiler_differential.py
-          python3 tools/test_actor_differential.py
-          python3 tools/test_compiler_differential.py --xls-root "$RUNNER_TEMP/xls"
-
-      - name: Compare generated Erlang functions with DSLX, JIT, and RTL
-        run: |
-          python3 tools/compiler_differential.py "$RUNNER_TEMP/xls" \
-            --count 16 --depth 3 --inputs 20 --rtl-batches 2 --shrink-budget 40
-          python3 tools/actor_differential.py "$RUNNER_TEMP/xls" \
-            --count 1 --skip-compile --shrink-budget 0
-
-      - name: Check localized compiler regressions
+      - name: Run shared compiler qualification
         env:
           REGRESSION_CASES: ${{ needs.select.outputs.test_cases }}
-        run: python3 tools/run_regression.py "$RUNNER_TEMP/xls" --cases-json "$REGRESSION_CASES"
-
-      - name: Fault-inject the VPI transport
-        run: python3 tools/test_sim_bridge.py
-
-      - name: Check topology query protocol and discovery
-        run: |
-          python3 tools/test_topology_debug.py
-          python3 tools/test_direct_actor_debug.py
-
-      - name: Preserve RAM attributes, write ports, and behavior through debug export
-        run: python3 tools/test_debug_memories.py
-
-      - name: Check bounded actor snapshot equivalence
-        run: python3 tools/test_actor_snapshot_formal.py
-
-      - name: Check incremental compilation, failure recovery, and regsvc RTL identity
-        run: python3 tools/test_compile_xls.py --xls-root "$RUNNER_TEMP/xls"
-
-      - name: Prove round-robin selection and grant fairness
-        run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
-
-      - name: Check configurable routed streams and prove packet conservation
-        run: python3 tools/test_fabric_router.py
-
-      - name: Run generated RTL and bridged EUnit regressions
-        env:
-          XLS_ROOT: ${{ runner.temp }}/xls
-        run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
-
-      - name: Exercise configurable local services and public stall diagnostics
-        run: python3 tools/test_fabric_services.py _build/xls_sim/regsvc
-
-      - name: Diagnose dropped observations through the debug endpoint
-        run: python3 tools/test_debug_trace_integration.py _build/xls_sim/regsvc
-
-      - name: Prove continuous passive sampling under arbitrary debug traffic
-        run: python3 tools/test_debug_sampling.py _build/xls_sim/regsvc
+        run: python3 tools/check.py "$RUNNER_TEMP/xls" --group test --stage _build/checks/ci --cases-json "$REGRESSION_CASES"
 
       - name: Upload decoded debug observations
         if: failure() || inputs.diagnostics == true
@@ -218,19 +139,13 @@ jobs:
             _build/aggregate-debug/**/actors-*.term
             _build/aggregate-debug/**/scc.log
 
-      - name: Query an instrumented generated topology under backpressure
-        run: |
-          python3 tools/test_topology_debug_integration.py \
-            --top __ordered_egress_topology__Top_0_next \
-            --stage _build/topology-debug-queries/ordered \
-            _build/xls_sim/regsvc/ordered_egress_topology.v
-
       - name: Upload simulation diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics
         with:
           name: xls-simulation-diagnostics
           paths: |
+            _build/checks/**
             _build/topology-debug-queries/**/*.log
             _build/topology-debug-queries/**/manifest.json
             _build/topology-debug-queries/**/blocked.json
@@ -330,7 +245,7 @@ jobs:
         run: |
           placement=direct
           if [[ "$WORKLOAD" == ingress ]]; then placement=ingress_direct; fi
-          bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed-topology "$placement"
+          python3 tools/check.py "$RUNNER_TEMP/xls" --group topology --stage _build/checks/ci --placements "$placement"
 
       - name: Upload mixed topology diagnostics
         if: failure() || inputs.diagnostics == true
@@ -338,6 +253,7 @@ jobs:
         with:
           name: mixed-topology-${{ matrix.workload }}-reports
           paths: |
+            _build/checks/**
             _build/mixed-topology/**/*.log
             _build/mixed-topology/**/logs/**
             _build/mixed-topology/**/regression.json

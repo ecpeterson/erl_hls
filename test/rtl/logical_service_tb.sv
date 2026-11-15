@@ -10,6 +10,7 @@ module logical_service_tb;
     reg [32:0] held, word;
     reg stalled = 0;
     integer count = 0, received = 0, sent = 0, cycles = 0, fd, fields;
+    integer incarnations = 1, incarnation;
     string requests, replies;
     __service__Top_0_next dut(.clk(clk), .reset(reset),
         ._ext_recv(request), ._ext_recv_vld(request_valid), ._ext_recv_rdy(request_ready),
@@ -41,22 +42,29 @@ module logical_service_tb;
         end
         $fclose(fd);
         if (!count) $fatal(1, "empty replies");
-        repeat (5) @(negedge clk); reset = 0;
-        fd = $fopen(requests, "r");
-        if (!fd) $fatal(1, "cannot read requests");
-        while (!$feof(fd)) begin
-            fields = $fscanf(fd, "%h\n", word);
-            if (fields != 1) $fatal(1, "invalid requests");
-            repeat (sent % 3) @(negedge clk);
-            @(negedge clk); request = word; request_valid = 1;
-            do @(posedge clk); while (!request_ready);
-            request_valid <= 0;
-            sent = sent + 1;
+        // Optional replay checks that a terminal actor becomes fresh only after reset.
+        if ($test$plusargs("repeat_after_reset")) incarnations = 2;
+        for (incarnation = 0; incarnation < incarnations; incarnation = incarnation + 1) begin
+            @(negedge clk); reset = 1; request_valid = 0;
+            received = 0; sent = 0; cycles = 0; stalled = 0;
+            repeat (5) @(negedge clk); reset = 0;
+            fd = $fopen(requests, "r");
+            if (!fd) $fatal(1, "cannot read requests");
+            while (!$feof(fd)) begin
+                fields = $fscanf(fd, "%h\n", word);
+                if (fields != 1) $fatal(1, "invalid requests");
+                repeat (sent % 3) @(negedge clk);
+                @(negedge clk); request = word; request_valid = 1;
+                do @(posedge clk); while (!request_ready);
+                request_valid <= 0;
+                sent = sent + 1;
+            end
+            $fclose(fd);
+            wait(received == count);
+            repeat (100) @(posedge clk);
+            $display("PASS: incarnation %0d: %0d request beats, %0d BEAM/RTL reply beats with stalls",
+                incarnation, sent, received);
         end
-        $fclose(fd);
-        wait(received == count);
-        repeat (100) @(posedge clk);
-        $display("PASS: %0d request beats, %0d BEAM/RTL reply beats with stalls", sent, received);
         $finish;
     end
     initial begin #2000000; $fatal(1, "timeout: received %0d/%0d", received, count); end

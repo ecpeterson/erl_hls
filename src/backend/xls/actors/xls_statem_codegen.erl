@@ -503,23 +503,29 @@ egress_demux(#{output_names := OutputNames}) ->
         "}\n\n"
     ].
 
+%% Preserve the public stream names while framing the common actor service.
+-spec top(xls_actor_codegen:spec()) -> iodata().
 top(Spec = #{output_names := OutputNames}) ->
     [
         "pub proc Top {\n",
-        "  ext_recv: chan<axis::Beat> in;\n",
+        "  ",
+        input_name(Spec),
+        ": chan<axis::Beat> in;\n",
         [
-            ["  ", name(Port), "_send: chan<axis::Beat> out;\n"]
+            ["  ", stream_name(Spec, Port), ": chan<axis::Beat> out;\n"]
          || Port <- OutputNames
         ],
         xls_actor_observation:proc_field(Spec),
-        "\n  config(ext_recv: chan<axis::Beat> in,\n",
+        "\n  config(",
+        input_name(Spec),
+        ": chan<axis::Beat> in,\n",
         [
-            ["         ", name(Port), "_send: chan<axis::Beat> out,\n"]
+            ["         ", stream_name(Spec, Port), ": chan<axis::Beat> out,\n"]
          || Port <- lists:droplast(OutputNames)
         ],
         "         ",
-        name(lists:last(OutputNames)),
-        "_send: chan<axis::Beat> out",
+        stream_name(Spec, lists:last(OutputNames)),
+        ": chan<axis::Beat> out",
         xls_actor_observation:config_parameter(Spec),
         ") {\n",
         "    let (req_p, req_c) = chan<axis::Frame, u32:1>(\"req\");\n",
@@ -538,7 +544,9 @@ top(Spec = #{output_names := OutputNames}) ->
             ]
          || Port <- OutputNames
         ],
-        "    spawn axis::ReservedRx(ext_recv, req_p, admit_c);\n",
+        "    spawn axis::ReservedRx(",
+        input_name(Spec),
+        ", req_p, admit_c);\n",
         "    spawn Service(req_c, egress_p, admit_p",
         xls_actor_observation:spawn_argument(Spec, "actor_debug_out"),
         ");\n",
@@ -550,13 +558,15 @@ top(Spec = #{output_names := OutputNames}) ->
                 "    spawn axis::Tx(",
                 name(Port),
                 "_c, ",
-                name(Port),
-                "_send);\n"
+                stream_name(Spec, Port),
+                ");\n"
             ]
          || Port <- OutputNames
         ],
-        "    (ext_recv, ",
-        join_with(", ", [[name(Port), "_send"] || Port <- OutputNames]),
+        "    (",
+        input_name(Spec),
+        ", ",
+        join_with(", ", [[stream_name(Spec, Port), ""] || Port <- OutputNames]),
         xls_actor_observation:config_value(Spec),
         ")\n",
         "  }\n\n",
@@ -615,3 +625,14 @@ direct_failure_step(#{retained_calls := #{port := Port}}) ->
     ];
 direct_failure_step(_) ->
     "    MachineStep { machine, ..zero!<MachineStep>() }\n".
+
+%% The server facade keeps its existing external stream ABI.
+-spec stream_name(map(), atom()) -> string().
+stream_name(#{source_kind := server, retained_calls := #{pending_calls := _}}, reply) -> "output";
+stream_name(#{source_kind := server}, reply) -> "ext_send";
+stream_name(_, Port) -> name(Port) ++ "_send".
+
+%% Keep the retained-server stream spelling while sharing the execution body.
+-spec input_name(map()) -> string().
+input_name(#{source_kind := server, retained_calls := #{pending_calls := _}}) -> "input";
+input_name(_) -> "ext_recv".

@@ -83,11 +83,16 @@ topology() ->
 -spec semantics('gs' | 'statem') -> [1 .. ((1 bsl 8) - 1),...].
 semantics(gs) ->
     "\n#[test]\nfn initialized_state() {\n"
-    "  assert_eq(initial_state(), Ledger {value: u32:42, default: u32:0});\n"
+    "  assert_eq(initial_actor_state().data, Ledger {value: u32:42, default: u32:0});\n"
     "}\n"
+    "proc DrainCredits { input: chan<u1> in; config(input: chan<u1> in) { (input,) }\n"
+    "init { () } next(state: ()) { let (_, _) = recv(join(), input); state } }\n"
     "pub proc FrameTop {\n"
     "  config(request: chan<axis::Frame> in, report: chan<axis::Frame> out) {\n"
-    "    spawn Service(request, report); ()\n"
+    "    let (eg_p, eg_c) = chan<Egress, u32:1>(\"egress\");\n"
+    "    let (admit_p, admit_c) = chan<u1, u32:1>(\"credits\");\n"
+    "    spawn Service(request, eg_p, admit_p); spawn EgressDemux(eg_c, report);\n"
+    "    spawn DrainCredits(admit_c); ()\n"
     "  }\n  init { () }\n  next(state: ()) { state }\n}\n";
 semantics(statem) ->
     "\n#[test]\nfn initialized_machine() {\n"

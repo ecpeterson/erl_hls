@@ -7,7 +7,7 @@
 -moduledoc "Normalizes callback result constructors for server and state-machine preparation before expression lowering. Rewriting follows aliases and structural branches without reevaluating captured fields; it retains Erlang forms so actor-specific consumers can interpret their own result and action contracts.".
 
 %% Rewrite result leaves while preserving source evaluation.
--export([map/2, map_actions/2]).
+-export([map/2, map_actions/2, map_evaluated_actions/2]).
 %% Inspect normalized result alternatives without rendering.
 -export([results/1]).
 
@@ -24,6 +24,13 @@ map_actions(Clause, Leaf) ->
     {Program, _Results} = normalize(Clause, Leaf, true),
     Program.
 
+-doc "Rewrites result/action constructors after evaluating their fields in source order; suitable when normalization reorders fields.".
+-spec map_evaluated_actions(erl_parse:abstract_clause(), fun((term()) -> term())) ->
+    erl_parse:abstract_clause().
+map_evaluated_actions(Clause, Leaf) ->
+    {Program, _Results} = normalize(Clause, Leaf, evaluated),
+    Program.
+
 -doc "Returns resolved callback result constructors in source order; rejects more than 256 result paths.".
 -spec results(erl_parse:abstract_clause()) -> [term()].
 results(Clause) ->
@@ -31,20 +38,26 @@ results(Clause) ->
     Results.
 
 %% List actions have separate binding semantics in state machines; only bounded servers opt into list capture.
--spec normalize(erl_parse:abstract_clause(), fun((term()) -> term()), boolean()) ->
+-spec normalize(erl_parse:abstract_clause(), fun((term()) -> term()), boolean() | evaluated) ->
     {erl_parse:abstract_clause(), [term()]}.
 normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf, Lists) ->
     State0 = #{
         next => 0,
         used => variables(Clause),
-        needed => needed(Body, Lists),
-        lists => Lists,
+        needed => needed(Body, Lists =/= false),
+        lists => Lists =/= false,
         results => []
     },
     Continue = fun(Value, _Bindings, State = #{results := Results}) ->
         case length(Results) < 256 of
-            true -> {Leaf(Value), State#{results => [Value | Results]}};
-            false -> error({too_many_callback_result_paths, 256})
+            true ->
+                Next = State#{results => [Value | Results]},
+                case Lists of
+                    evaluated -> capture_value(Value, fun(V, S) -> {Leaf(V), S} end, Next);
+                    _ -> {Leaf(Value), Next}
+                end;
+            false ->
+                error({too_many_callback_result_paths, 256})
         end
     end,
     Bindings = maps:map(fun(_, _) -> ordinary end, variables(Patterns)),

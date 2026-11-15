@@ -1,11 +1,11 @@
 %%%% hls_actor_interface
 %%%%
-%%%% Queries the provisional interface summary emitted for hls_statem actors.
+%%%% Queries the provisional interface summary emitted for bounded actors.
 
 -module(hls_actor_interface).
 -moduledoc """
 Reads the narrow, version-3 interface summary emitted by `hls_pack` for an
-`hls_statem` module.
+`hls_statem` or `hls_gs` module.
 
 When the compiling source remains available, the query re-derives the summary
 with the current analyzer and the captured build directory, include paths,
@@ -63,7 +63,7 @@ hls_topology and topology backends acquire these summaries before planning. Sour
 -type summary() :: map().
 
 -spec from_module(module()) -> summary().
--doc "Loads and validates the interface emitted with one hls_statem module.".
+-doc "Loads and validates the interface emitted with one bounded actor module.".
 from_module(Module) when is_atom(Module) ->
     case code:ensure_loaded(Module) of
         {module, Module} ->
@@ -330,11 +330,13 @@ validate_state(#{name := Name, fields := [_ | _] = Fields}) when
 validate_state(State) ->
     error({state, State}).
 
+%% Both bounded callback APIs expose the same normalized interface.
+-spec validate_behavior(module(), [{atom(), term()}]) -> ok.
 validate_behavior(Module, Attributes) ->
     Behaviors =
         proplists:get_all_values(behavior, Attributes) ++
             proplists:get_all_values(behaviour, Attributes),
-    case lists:member(hls_statem, lists:append(Behaviors)) of
+    case lists:any(fun(B) -> lists:member(B, [hls_statem, hls_gs]) end, lists:append(Behaviors)) of
         true -> ok;
         false -> error({not_an_hls_statem_actor, Module})
     end.

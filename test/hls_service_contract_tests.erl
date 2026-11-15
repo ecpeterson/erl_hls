@@ -34,12 +34,14 @@ declarations_accumulate_test() ->
     ?assertError({duplicate_hls_reply_request, query}, hls_service_contract:from_forms(
         Declared ++ [{attribute, 3, hls_replies, [{query, [small]}]}])).
 
+%% BEAM metadata and hardware normalization share request-contract validation.
+-spec both_compilers_validate_test() -> ok.
 both_compilers_validate_test() ->
     Forms = replies([{query, [small]}]),
     ?assertError({hls_reply_requests, #{missing := [read], extra := []}},
         hls_pack:parse_transform(Forms, [])),
     ?assertError({hls_reply_requests, #{missing := [read], extra := []}},
-        xls_gs_lower:callback_arms(Forms, ledger)).
+        hls_server_source:normalize(Forms)).
 
 cpu_contract_test() ->
     {ok, Actor} = hls_gs:start_link(hls_reply_fixture, []),
@@ -52,16 +54,18 @@ cpu_contract_test() ->
         ?assertEqual({small, 23}, gen_server:call(Actor, {read, 0}))
     after hls_gs:stop(Actor) end.
 
+%% Invalid completion fails before publishing effects or state.
+-spec cpu_bad_reply_test() -> ok.
 cpu_bad_reply_test() ->
     %% Exercise the adapter directly to inspect the error without spawning an
     %% expected crashing process. The callback result must pass through it.
-    {ok, State} = hls_gs:init({hls_reply_fixture, [], []}),
+    {ok, State} = hls_statem:init({hls_reply_fixture, [], 1, #{}, 0, server}),
     ?assertError({reply_contract, query, {wrong, 99}, [small, large]},
-        hls_gs:handle_call({query, 2, 99}, {self(), make_ref()}, State)),
+        hls_statem:handle_call({query, 2, 99}, {self(), make_ref()}, State)),
     ?assertError({badmatch, false},
-        hls_gs:handle_call({query, 3, 99}, {self(), make_ref()}, State)),
+        hls_statem:handle_call({query, 3, 99}, {self(), make_ref()}, State)),
     ?assertError({invalid_request, cast, query},
-        hls_gs:handle_cast({query, 0, 99}, State)).
+        hls_statem:handle_cast({query, 0, 99}, State)).
 
 missing_proxy_contract_test() ->
     ?assertEqual({stop, {missing_hls_service_contract, ?MODULE}},

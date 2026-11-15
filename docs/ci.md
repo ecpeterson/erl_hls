@@ -1,6 +1,23 @@
 # Compiler regressions and CI
 
-After installing the [toolchain prerequisites](toolchain.md), run a feature case from the repository root:
+After installing the [toolchain prerequisites](toolchain.md), run complete routine CI coverage locally from the repository root:
+
+```sh
+python3 tools/check.py /path/to/xls
+```
+
+The command runs source contracts, formatting, Dialyzer and package boundaries; EUnit and installed compiler/bundle checks; all routine DSLX/JIT/RTL feature cases; differential compiler checks; VPI, debug and formal checks; and both closed/ingress mixed-topology placements. It uses installed local tools, never a remote host. CI invokes these same `quality`, `test` and `topology` recipes, with its existing change-based feature selection and per-placement jobs. EUnit remains a useful quick iteration, but is not compiler qualification. Tool versions still matter: local success with another XLS build does not establish success with CI's pinned Linux build.
+
+Checks run serially and stop on failure. A unique `_build/checks/` directory holds `regression.json`, per-command logs and timing records for each group, plus generated simulation/source-map/feature inputs. Commands inherit the existing executor's process-group timeouts; they do not impose a total memory limit. Keep memory-intensive work serial and use a host memory guard when needed. Missing local tools reject before compilation. `--stage DIR` selects an explicit output root; each selected group directory must be fresh. There is no silent reuse of a previous success.
+
+```sh
+python3 tools/check.py /path/to/xls --dry-run # list the exact commands without writes
+python3 tools/check.py --group quality       # no XLS needed
+python3 tools/check.py /path/to/xls --group test
+python3 tools/check.py /path/to/xls --group topology
+```
+
+Use `--base REV` for the source-contract comparison. CI's `--cases-json` only narrows compiler feature cases; packaging, differential, transport and debug checks still run. The default includes every routine feature, even those unrelated to the current diff. Local-only experiments remain available through the narrower feature runner:
 
 ```sh
 python3 tools/run_regression.py /path/to/xls --cases comparisons helpers
@@ -10,7 +27,7 @@ python3 tools/run_regression.py /path/to/xls --changed-since origin/main
 
 When selected cases need Erlang fixtures, the runner compiles them once before executing the cases serially. Fixture writers still produce DSLX and BEAM-derived expectations. The shared external executor handles commands, process-group timeouts and per-step diagnostics; case recipes specify conversions, schedules, simulations, expected compiler diagnostics and SAT checks. An expected rejection must fail with its specified diagnostic: a crash or unrelated tool error is not a passing negative test.
 
-Without a stage argument, each case creates a fresh run directory below its inventory's `_build/` directory. An explicit stage is used directly for one case, or contains one subdirectory per case when several are selected. Each selected case directory must be absent or empty. Fresh directories prevent stale generated files from satisfying a later check and retain failed runs for inspection. The existing `tools/test_*.sh XLS_ROOT [STAGE]` entry points delegate to the same runner. Use `--list` for the inventory and `--all` for every case, including explicitly local-only cases. This feature runner does not replace EUnit, source-quality checks or the separate debug/formal drivers.
+Without a stage argument, each case creates a fresh run directory below its inventory's `_build/` directory. An explicit stage is used directly for one case, or contains one subdirectory per case when several are selected. Each selected case directory must be absent or empty. Fresh directories prevent stale generated files from satisfying a later check and retain failed runs for inspection. The existing `tools/test_*.sh XLS_ROOT [STAGE]` entry points delegate to the same runner. Use `--list` for the inventory and `--all` for every case, including explicitly local-only cases. This feature runner alone does not replace the complete `tools/check.py` qualification.
 
 Add a localized regression by keeping its Erlang fixture/oracle writer, defining a case in `tools/regression_cases.py` with the shared execution primitives, and recording its name, default stage, CI group and exact fixture dependencies in `tools/regression_inventory.json`. Do not copy a shell pipeline or add another CI command. A dependency may narrow selection only when every affected case is listed; shared compiler inputs and unknown paths require full coverage.
 

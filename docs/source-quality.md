@@ -2,7 +2,7 @@
 
 Use OTP 28.0.2 and rebar3 3.24.0. Production Erlang under `src/` and `apps/*/src/`, and headers under `include/` use the pinned erlfmt project plugin (v1.8.0) with a 100-column limit. Run `rebar3 fmt` before review and `rebar3 fmt --check` to check the canonical form. Test and semantic fixture layout is outside that formatting scope.
 
-Run the source-contract and type checks as well:
+The [shared qualification command](ci.md) runs these checks locally and in CI. For only this group, use `python3 tools/check.py --group quality`. The individual source-contract and type checks remain available:
 
 ```sh
 python3 tools/test_source_contracts.py

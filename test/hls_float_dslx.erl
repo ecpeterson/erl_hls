@@ -138,6 +138,8 @@ collections(Type = {hls_type, _, Name, []}) ->
                 [3*W, Raw, Start, Count, 3*W, Expected])
          end || {Start, Count} <- [{1, 2}, {2, 1}, {3, 1}]], "}\n"].
 
+%% Generate float actor, packed-state checks and BEAM-derived public-port vectors.
+-spec write_actor(file:filename(), float16 | float32 | float64, hls_type:descriptor()) -> ok.
 write_actor(Stage, Name, Type) ->
     W = hls_type:width(Type),
     Options = [{d, 'FLOAT_TYPE', Name}] ++ case W of 16 -> [{d, 'HALF'}]; _ -> [] end,
@@ -182,7 +184,7 @@ write_actor(Stage, Name, Type) ->
     Actor = xls_parse:to_xls(Source, #{source_options => Options}),
     ok = file:write_file(filename:join(Stage, atom_to_list(Name) ++ "_actor.x"),
         [Actor, "\n#[test]\nfn record_codecs() {\n", StateChecks,
-            io_lib:format("assert_eq(bits_from_ledger(initial_state()), uN[~p]:~p);\n}\n",
+            io_lib:format("assert_eq(bits_from_ledger(initial_actor_state().data), uN[~p]:~p);\n}\n",
                 [5 * W, InitialBits])]).
 
 actor_oracle(Type, Mode, A, B) ->

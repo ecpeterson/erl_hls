@@ -34,7 +34,7 @@ proxy, so calls exit as they do when the CPU actor dies. Ordinary admission
 rejections remain replies; an explicit low-level codec can inspect the failure
 without starting an actor endpoint.
 
-hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book own CPU retained calls. Source preparation is separate in hls_pack and hls_service_contract.
+hls_fabric_client owns remote transactions; hls_actor_callback and hls_reply_book own CPU retained calls. Source preparation is separate in hls_pack and hls_service_contract.
 """.
 
 %% Adapter lifecycle.
@@ -45,7 +45,6 @@ hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book o
     init/1,
     handle_call/3,
     handle_cast/2,
-    handle_continue/2,
     handle_info/2,
     terminate/2,
     code_change/3
@@ -106,9 +105,7 @@ hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book o
 -record(state, {
     module :: module(),
     contract = none :: none | hls_service_schema:contract(),
-    fabric = none :: none | hls_fabric_client:state(),
-    state :: state(),
-    pending = none :: none | hls_gs_deferred:pending()
+    fabric = none :: none | hls_fabric_client:state()
 }).
 
 %%%
@@ -117,8 +114,13 @@ hls_fabric_client owns remote transactions; hls_gs_deferred and hls_reply_book o
 
 start_link(Module, Arg) ->
     start_link(Module, Arg, []).
+-doc "Starts the bounded native actor or an explicitly selected fabric proxy.".
+-spec start_link(module(), term(), list()) -> gen_server:start_ret().
 start_link(Module, Arg, Options) ->
-    gen_server:start_link(?MODULE, {Module, Arg, Options}, []).
+    case transport(Options) of
+        cpu -> hls_statem:start_server(Module, Arg, Options);
+        _ -> gen_server:start_link(?MODULE, {Module, Arg, Options}, [])
+    end.
 
 stop(PID) ->
     gen_server:stop(PID).
@@ -143,24 +145,10 @@ stop(PID) ->
 %% Failed casts can emit ERROR replies. Never lend their ID to a call.
 -define(CAST_TX_ID, 255).
 
--doc "Initializes the CPU callback or a checked hardware proxy with optional bounded reply ownership.".
+-doc "Initializes a checked hardware proxy; native actors start through hls_statem.".
 -spec init({module(), term(), list()}) -> {ok, #state{}} | {stop, term()}.
 init({Module, Arg, Options}) ->
     case {transport(Options), Arg} of
-        {cpu, _} ->
-            Contract =
-                case hls_service_schema:from_module(Module) of
-                    {ok, Value} -> Value;
-                    none -> none
-                end,
-            Pending =
-                case Contract of
-                    #{pending_calls := _} -> hls_gs_deferred:new(Contract);
-                    _ -> none
-                end,
-            {ok, #state{
-                state = Module:init(Arg), module = Module, contract = Contract, pending = Pending
-            }};
         {{fabric, Broker, LocalEndpoint, PeerEndpoint}, []} ->
             case hls_service_schema:from_module(Module) of
                 none ->
@@ -183,9 +171,6 @@ init({Module, Arg, Options}) ->
 
 -doc "Serves proxy inspection and dispatches validated application calls.".
 -spec handle_call(term(), gen_server:from(), #state{}) -> term().
-%% CPU servers have no physical fabric session to inspect.
-handle_call('$hls_fabric_info', _From, GS = #state{fabric = none}) ->
-    {reply, none, GS};
 %% Inspect proxy admission independently of application reply completion.
 handle_call('$hls_fabric_info', _From, GS = #state{fabric = Client}) ->
     {reply, hls_fabric_client:info(Client), GS};
@@ -196,33 +181,15 @@ handle_call(Message, From, GS = #state{contract = Contract}) ->
         Replies -> call(Message, From, Replies, GS)
     end.
 
-%% Select bounded CPU execution, immediate CPU execution or the existing physical proxy.
+%% Allocate the host request route before transmission; the actor replies asynchronously.
 -spec call(term(), gen_server:from(), none | [atom()], #state{}) -> term().
-call(Message, From, Replies, GS = #state{pending = Pending}) when Pending =/= none ->
-    deferred(call, Message, {From, Replies}, GS);
-call(Message, _From, Replies, GS = #state{module = Module, state = State, fabric = none}) ->
-    {reply, Reply, NewState} = Module:handle_call(Message, State),
-    ok = check_reply(Message, Reply, Replies),
-    {reply, Reply, GS#state{state = NewState}};
 call(Message, From, Replies, GS = #state{module = Module, fabric = Client}) ->
     {Tag, Payload, Context} = encode(Module, Message, Replies),
     Next = hls_fabric_client:request(Tag, Payload, Context, From, Client),
     {noreply, GS#state{fabric = Next}}.
 
--doc "Dispatches CPU casts, completed fabric frames and outgoing proxy casts.".
+-doc "Dispatches completed fabric frames and outgoing proxy casts.".
 -spec handle_cast(term(), #state{}) -> term().
-%% Bounded CPU casts can finish retained calls without acquiring another reply slot.
-handle_cast(Message, GS = #state{pending = Pending, contract = Contract}) when Pending =/= none ->
-    ok = check_cast(Message, Contract),
-    deferred(cast, Message, none, GS);
-%% Immediate CPU servers preserve their existing callback contract.
-handle_cast(
-    Message,
-    GS = #state{module = Module, state = State, fabric = none, contract = Contract}
-) ->
-    ok = check_cast(Message, Contract),
-    {noreply, NewState} = Module:handle_cast(Message, State),
-    {noreply, GS#state{state = NewState}};
 %% A credited frame completes its request or retires this actor on terminal failure.
 handle_cast(
     {?FABRIC_RX, Receipt, Route, Header, Payload},
@@ -244,30 +211,11 @@ handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Co
     Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
     {noreply, GS#state{fabric = Next}}.
 
--doc "Runs bounded internal work before selecting another mailbox request.".
--spec handle_continue(atom(), #state{}) ->
-    {noreply, #state{}} | {noreply, #state{}, {continue, atom()}}.
-handle_continue(Name, GS) -> deferred(continue, Name, none, GS).
-
-%% gen_server continuations preserve callback ordering without recursive drains.
--spec deferred(call | cast | continue, term(), term(), #state{}) ->
-    {noreply, #state{}} | {noreply, #state{}, {continue, atom()}}.
-deferred(Kind, Message, From, GS = #state{module = Module, state = State, pending = Pending}) ->
-    {Next, Replies, Continue} = hls_gs_deferred:dispatch(
-        Kind, Module, Message, From, State, Pending
-    ),
-    Updated = GS#state{state = Next, pending = Replies},
-    case Continue of
-        none -> {noreply, Updated};
-        {continue, Name} -> {noreply, Updated, {continue, Name}}
-    end.
-
-handle_info(Message, GS = #state{fabric = Client}) when
-    Client =/= none
-->
-    {noreply, GS#state{fabric = hls_fabric_client:handle_info(Message, Client)}};
-handle_info(_Message, GS) ->
-    {noreply, GS}.
+-doc "Passes transport completion and monitoring messages to the proxy client.".
+-spec handle_info(term(), #state{}) -> {noreply, #state{}}.
+handle_info(Message, GS = #state{fabric = Client}) ->
+    %% The client owns send receipts and route failure notifications.
+    {noreply, GS#state{fabric = hls_fabric_client:handle_info(Message, Client)}}.
 
 -doc "Decodes a validated reply as data, including terminal remote_failure diagnostics. Actor endpoints separately retire on terminal failure; this codec never exits a process.".
 -spec decode_reply(hls_nums:u8(), binary(), {module(), none | [atom()]}) ->
@@ -311,17 +259,6 @@ encode(Module, Message, Replies) ->
 
 call_replies(_Message, none) -> none;
 call_replies(Message, #{calls := Calls}) -> maps:get(element(1, Message), Calls, invalid).
-
-check_reply(_Request, _Reply, none) ->
-    ok;
-check_reply(Request, Reply, Replies) ->
-    case
-        is_tuple(Reply) andalso tuple_size(Reply) > 0 andalso
-            lists:member(element(1, Reply), Replies)
-    of
-        true -> ok;
-        false -> error({reply_contract, element(1, Request), Reply, Replies})
-    end.
 
 check_cast(_Message, none) ->
     ok;
