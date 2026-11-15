@@ -30,12 +30,13 @@ def vector_case(c: Case, name: str, module: str, tb: str, defines: list, *, time
     c.simulate(name, tb, [bench(c, tb), c.path(name + ".v")], flags=defines, timeout=timeout)
 
 
-def service_probe(c: Case) -> None:
-    """Exercise the generated scalar suite's framed service with its original request/reply files."""
+def service_probe(c: Case, *, repeat_after_reset: bool = False) -> None:
+    """Replay framed BEAM vectors under stalls, optionally repeating the complete history after reset."""
     c.convert("service", "Top")
     c.codegen("service", flags=pipeline(2))
     c.simulate("service", "logical_service_tb", [bench(c, "logical_service_tb"), c.path("service.v")],
-        arguments=["+requests=" + str(c.path("requests.mem")), "+replies=" + str(c.path("replies.mem"))])
+        arguments=["+requests=" + str(c.path("requests.mem")), "+replies=" + str(c.path("replies.mem"))]
+        + (["+repeat_after_reset"] if repeat_after_reset else []))
 
 
 def source_context(c: Case) -> None:
@@ -146,7 +147,7 @@ def serial(c: Case) -> None:
         vector_case(c, name, "serial_probe", "hls_serial_tb", [f"-DSERIAL_WIDTH={width}",
             FileText(c.path(name + ".count"), "-DSERIAL_COUNT="),
             '-DSERIAL_VECTORS="' + str(c.path(name + ".mem")) + '"'])
-    service_probe(c)
+    service_probe(c, repeat_after_reset=True)
 
 
 def collections(c: Case) -> None:

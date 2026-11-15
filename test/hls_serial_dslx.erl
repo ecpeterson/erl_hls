@@ -98,32 +98,38 @@ boundaries(W) ->
         Modulus, Modulus + 1, 2 * Modulus - 1]),
     [{A, B} || A <- lists:usort([-Modulus - 1, -Modulus, -1 | Values]), B <- Values].
 
-%% Drive the actual framed actor through rollover, skipped faults and recovery.
+%% Replay BEAM callbacks until failure, then require sticky source errors until reset.
 -spec write_actor(file:filename()) -> ok.
 write_actor(Stage) ->
-    ok = file:write_file(filename:join(Stage, "service.x"),
-        xls_parse:to_xls("test/hls_serial_fixture.erl")),
+    Artifact = xls_parse:to_artifact("test/hls_serial_fixture.erl"),
+    ok = file:write_file(filename:join(Stage, "service.x"), xls_emitted:bytes(Artifact)),
+    %% The ambiguous comparison fails at difference/3, before the later before/3.
+    [FirstBadarg | _] = [Code || #{kind := badarg, code := Code} <- xls_emitted:sites(Artifact)],
+    SourceFault = 16#c0000000 bor FirstBadarg,
     Requests = [{inspect, 0, true}, {advance, 1}, {advance, 1}, {advance, 1},
         {inspect, 16#fffffffe, true}, {advance, -3}, {inspect, 1, true},
         {inspect, 16#7ffffffe, false}, {inspect, 16#7ffffffe, true},
         {load, 16#fffffffe}, {advance, 3}, {inspect, 1, true},
         {inspect, 2, true}, {inspect, 0, true}],
-    {_, In, Out, _} = lists:foldl(fun(Request, {State, Inputs, Outputs, Tx}) ->
-        {Reply, Next} = case element(1, Request) of
-            load -> {noreply, Loaded} = hls_serial_fixture:handle_cast(Request, State),
-                {none, Loaded};
-            _ -> try hls_serial_fixture:handle_call(Request, State) of
-                {reply, Response, Updated} -> {Response, Updated}
-            catch error:badarg -> {badarg, {clock, 0}}
-            end
+    {_, _, In, Out, _} = lists:foldl(fun(Request, {State, Failure, Inputs, Outputs, Tx}) ->
+        {Reply, Next, NextFailure} = case {Failure, element(1, Request)} of
+            {0, load} ->
+                {noreply, Loaded} = hls_serial_fixture:handle_cast(Request, State),
+                {none, Loaded, 0};
+            {0, _} ->
+                try hls_serial_fixture:handle_call(Request, State) of
+                    {reply, Response, Updated} -> {Response, Updated, 0}
+                catch error:badarg -> {{fault, SourceFault}, State, SourceFault}
+                end;
+            {_, _} -> {{fault, Failure}, State, Failure}
         end,
         Expected = case Reply of
             none -> [];
-            badarg -> frame(1, <<14:32/little>>, Tx);
+            {fault, Status} -> frame(1, <<Status:32/little>>, Tx);
             _ -> frame(Reply, Tx)
         end,
-        {Next, [Inputs, frame(Request, Tx)], [Outputs, Expected], Tx + 1}
-    end, {hls_serial_fixture:init([]), [], [], 0}, Requests),
+        {Next, NextFailure, [Inputs, frame(Request, Tx)], [Outputs, Expected], Tx + 1}
+    end, {hls_serial_fixture:init([]), 0, [], [], 0}, Requests),
     ok = file:write_file(filename:join(Stage, "requests.mem"), In),
     file:write_file(filename:join(Stage, "replies.mem"), Out).
 

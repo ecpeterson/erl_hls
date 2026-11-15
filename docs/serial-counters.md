@@ -21,4 +21,4 @@ Declare fields as, for example, `step = hls_type:zero() :: hls_serial:counter(32
 
 `difference/3` produces an XLS signed W-bit result; the antipodal minimum value is excluded. `add/3` accepts negative offsets without requiring callers to negate an unsigned counter. As with other HLS operations, argument expressions must have enough intermediate width before they reach the provider.
 
-`bash tools/test_serial.sh XLS_ROOT` compares BEAM, the DSLX interpreter/JIT, and optimized RTL at 1, 3, 8, 9, 32, 64, and 65 bits. It exhausts byte-sized pairs, checks unequal signed/unsigned operand widths, and exercises rollover, selected/skipped ambiguity failures, and stalled replies through a framed actor.
+`bash tools/test_serial.sh XLS_ROOT` compares BEAM, the DSLX interpreter/JIT, and optimized RTL at 1, 3, 8, 9, 32, 64, and 65 bits. It exhausts byte-sized pairs, checks unequal signed/unsigned operand widths, and exercises rollover, selected/skipped ambiguity failures, sticky source faults, stalled replies and explicit reset recovery through a framed actor.
