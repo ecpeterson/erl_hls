@@ -17,3 +17,9 @@ All external work was serial, with OTP 28.0.2 and the pinned local XLS installat
 These are finite witnesses and structural/type checks, not all-input proofs or area/timing/board qualification. Earlier failures remain in their separate logs. Initial memory accounting covered only the launcher process group and undercounted external-tool descendant sessions; subsequent runs tracked descendants and their groups under the 6 GiB guard. The final native/type runs peaked below 0.7 GiB and hit no guard.
 
 The paired fabric change supplies packed-state codecs and bridge caller accounting for the immediate strategy, removes the scheduler's server fallback, and qualifies source-protocol owners and shared-RAM servers. Application migration remains a separate master-roadmap milestone.
+
+## CI diagnostic-fixture repair
+
+Run 43756018378 passed all 1,268 EUnit tests, source-quality checks and both mixed-topology cases, then rejected the standalone diagnostic fixture for its missing `hls_replies` declaration before checking message width. The fixture now declares its reply contract and also compiles with a four-word frame, isolating the intended three-word overflow diagnostic. No compiler/runtime behavior changed.
+
+`ci49-packaging-1` passed the installed CLI/relocation, build-executor, source-diagnostic, IR-census and regression-runner suites (42 tests). `ci49-preflight-1` passed the real XLS source-attribution witnesses, simulation-input generation, the regsvc DSLX golden, formatting and contract checks (3,285 inherited gaps; zero new/changed). Both serial local checks stayed below 0.15 GiB under the 6 GiB guard. The push reruns the existing CI workflow; no separate workflow dispatch.
