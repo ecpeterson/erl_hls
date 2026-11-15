@@ -294,13 +294,11 @@ fn entry_effects_valid(effects: EntryEffects) -> u1 {
 }
 
 fn request_error(frame: axis::Frame) -> u32 {
-  match frame.header.op as Tag {
-    Tag::BULK_GET => if frame.header.payload_words == u8:2 { u32:0 } else { u32:3 },
-    Tag::GET => if frame.header.payload_words == u8:1 { u32:0 } else { u32:3 },
-    Tag::PING => if frame.header.payload_words == u8:1 { u32:0 } else { u32:3 },
-    Tag::SET => if frame.header.payload_words == u8:3 { u32:0 } else { u32:3 },
-    _ => u32:1,
-  }
+  if frame.header.op == Tag::BULK_GET as u8 { if frame.header.payload_words == u8:2 { u32:0 } else { u32:3 } } else
+  if frame.header.op == Tag::GET as u8 { if frame.header.payload_words == u8:1 { u32:0 } else { u32:3 } } else
+  if frame.header.op == Tag::PING as u8 { if frame.header.payload_words == u8:1 { u32:0 } else { u32:3 } } else
+  if frame.header.op == Tag::SET as u8 { if frame.header.payload_words == u8:3 { u32:0 } else { u32:3 } } else
+  { u32:1 }
 }
 fn is_call(tag: u8) -> bool { false || tag == Tag::GET as u8 || tag == Tag::PING as u8 || tag == Tag::BULK_GET as u8 }
 fn reply_allowed(from: u64, tag: u8) -> bool { false || ((from as u8) == Tag::GET as u8 && (tag == Tag::READ as u8)) || ((from as u8) == Tag::PING as u8 && (tag == Tag::ACK as u8)) || ((from as u8) == Tag::BULK_GET as u8 && (tag == Tag::BULK_READ as u8)) }

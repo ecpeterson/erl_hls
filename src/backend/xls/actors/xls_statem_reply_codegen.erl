@@ -213,6 +213,7 @@ effect(Spec) ->
         ", payloads: axis::bits_from_frame(dispatched.reply) as bits[ENTRY_EFFECT_PAYLOAD_BITS] }"
     ].
 
+%% Validate raw wire tags before any enum cast: the interpreter rejects unnamed values.
 %% Server wire rejections precede callback ownership and do not fail the actor.
 -spec request_validation(map()) -> xls_dslx:value().
 request_validation(#{
@@ -221,18 +222,18 @@ request_validation(#{
     message_words := Words
 }) ->
     [
-        "fn request_error(frame: axis::Frame) -> u32 {\n  match frame.header.op as Tag {\n",
+        "fn request_error(frame: axis::Frame) -> u32 {\n",
         [
             [
-                "    Tag::",
+                "  if frame.header.op == Tag::",
                 xls_names:enum_member(Tag),
-                " => if frame.header.payload_words == u8:",
+                " as u8 { if frame.header.payload_words == u8:",
                 integer_to_list(maps:get(Tag, Words)),
-                " { u32:0 } else { u32:3 },\n"
+                " { u32:0 } else { u32:3 } } else\n"
             ]
          || Tag <- lists:usort(maps:keys(Calls) ++ Casts)
         ],
-        "    _ => u32:1,\n  }\n}\n"
+        "  { u32:1 }\n}\n"
     ];
 request_validation(_) ->
     "fn request_error(frame: axis::Frame) -> u32 { u32:0 }\n".
