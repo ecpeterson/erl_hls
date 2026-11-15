@@ -24,6 +24,7 @@
 -type spec() :: #{
     failure_locations := [xls_failure_sites:location()],
     source := file:filename(),
+    source_kind => statem | server,
     imports := [atom()],
     capacity := 1..((1 bsl 8) - 1),
     phases := [atom(), ...],
@@ -501,7 +502,15 @@ dispatch_function(
         ") {\n",
         xls_statem_reply_codegen:optional(
             Spec,
-            "  if call_error != u32:0 { (phase, data, if call_error == u32:16 { Directive::CONSUME } else { Directive::FAIL }, false, if call_error == u32:16 { hls_failure::NONE } else { hls_failure::INTERNAL }, u8:0, u64:0, zero!<axis::Frame>(), true) } else {\n"
+            [
+                "  if call_error != u32:0 {\n",
+                "    let transient = call_error == u32:16",
+                case maps:get(source_kind, Spec, statem) of
+                    server -> " || call_error == u32:1 || call_error == u32:3";
+                    statem -> []
+                end,
+                ";\n    (phase, data, if transient { Directive::CONSUME } else { Directive::FAIL }, false, if transient { hls_failure::NONE } else { hls_failure::INTERNAL }, u8:0, u64:0, zero!<axis::Frame>(), true)\n  } else {\n"
+            ]
         ),
         "  match frame.header.op as Tag {\n",
         [dispatch_tag_arm(Name, Casts, Spec) || Name <- MessageNames],
@@ -614,6 +623,8 @@ reply_failure_binding(Spec) ->
 %% Known calls reserve ownership before length validation, allowing their failure to complete them.
 -doc "Renders accepted message selectors, including retained-call reply handling.".
 -spec input_tag_ok(map(), [atom()], map()) -> xls_dslx:value().
+input_tag_ok(#{source_kind := server}, _Names, _Words) ->
+    "true";
 input_tag_ok(Spec, Names, Words) ->
     case xls_statem_reply_codegen:enabled(Spec) of
         false ->

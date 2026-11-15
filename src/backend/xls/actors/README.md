@@ -1,6 +1,6 @@
 # Actor and server compilation
 
-The parent `xls_parse` facade selects the state-machine or server path. `xls_statem_lower` prepares and lowers state machines; `xls_gs_lower`, `xls_gs_immediate` and `xls_gs_deferred` handle server callback and retained-reply contracts. `xls_actor_program` retains a checked spec and `xls_statem_plan` sidecar for consumers sharing one source analysis.
+The parent `xls_parse` facade normalizes bounded server callbacks through `hls_server_source` before the shared `xls_statem_lower` preparation. Both source vocabularies use the same initialization, callback, reply, continuation and execution machinery. `xls_actor_program` retains a checked spec and `xls_statem_plan` sidecar for consumers sharing one source analysis.
 
 | Family | Responsibility |
 | --- | --- |

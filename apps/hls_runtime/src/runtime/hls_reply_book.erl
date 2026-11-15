@@ -1,6 +1,6 @@
 -module(hls_reply_book).
 -moduledoc """
-CPU caller ownership shared by hls_gs_deferred and hls_statem. Allocates bounded retained-reply handles and completes them through gen_server replies; callback dispatch and continuation scheduling remain with those adapters.
+CPU caller ownership shared by hls_actor_callback and hls_statem. Allocates bounded retained-reply handles and completes them through gen_server replies; callback dispatch and continuation scheduling remain with those adapters.
 """.
 %% CPU retained-caller ownership.
 -export([new/1, admit/4, complete/2]).

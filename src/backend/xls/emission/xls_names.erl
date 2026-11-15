@@ -43,18 +43,13 @@ actor(Forms, Kind) ->
     ok = control_names(Forms, Kind),
     ok = wire_tags(Forms),
     Names = [hls_actor_source:state(Forms) | hls_actor_source:tags(Forms)],
-    SymbolKind =
-        case {Kind, hls_source:find_optional_attribute(Forms, hls_pending_calls)} of
-            {hls_gs, {ok, _}} -> hls_gs_deferred;
-            _ -> Kind
-        end,
     Resolved = hls_records:resolve(Forms),
     ValueNames = [
         Name
      || {attribute, _, record, {Name, _}} <-
             hls_records:declarations(Resolved, Names)
     ],
-    ok = records(Resolved, ValueNames, SymbolKind),
+    ok = records(Resolved, ValueNames),
     tags(Forms, Names).
 
 %% State-machine phase and port names must fit their enums and generated channel namespaces.
@@ -124,7 +119,7 @@ reduction(Forms, Accumulator, Opens) ->
         false -> error({too_many_hls_tags_for_reduction, length(Public), 252})
     end,
     Names = [hls_actor_source:state(Forms) | Public] ++ [Accumulator],
-    ok = records(Forms, Names, hls_statem),
+    ok = records(Forms, Names),
     ok = tags(Forms, Names),
     %% The same reducer can be opened by several phases; only distinct
     %% Erlang names occupy distinct enum members.
@@ -149,9 +144,9 @@ count(Kind, Values, Limit) ->
     end.
 
 %% Imports occupy the same module namespace as types and codec functions.
--spec records([hls_source:form()], [atom()], hls_gs | hls_gs_deferred | hls_statem) -> ok.
-records(Forms, Names, Kind) ->
-    Fixed = maps:from_list([{Name, generated(Name)} || Name <- runtime(Kind)]),
+-spec records([hls_source:form()], [atom()]) -> ok.
+records(Forms, Names) ->
+    Fixed = maps:from_list([{Name, generated(Name)} || Name <- runtime()]),
     Runtime = lists:foldl(
         fun(Module, Seen) ->
             claim(module, import_alias(Module), #{kind => import, name => Module}, Seen)
@@ -353,29 +348,8 @@ generated(Name) -> #{kind => generated, name => Name}.
 %% Include fixed parameters: DSLX value bindings can shadow record types.
 %% N is the record codec's width parameter. Other function names cannot
 %% collide with the two codec name forms or the hls_local_ helper prefix.
--spec runtime(hls_gs | hls_gs_deferred | hls_statem) -> [string()].
-runtime(hls_gs_deferred) ->
-    runtime(hls_gs) ++
-        ["STATE_BITS", "Invocation", "Outcome", "Worker", "dispatch", "reply_allowed"];
-runtime(hls_gs) ->
-    [
-        "Tag",
-        "Service",
-        "ServiceState",
-        "ServiceResult",
-        "CallbackResult",
-        "Top",
-        "N",
-        "NOREPLY",
-        "REPLY",
-        "OK",
-        "MAX_PAYLOAD",
-        "ERROR_FUNCTION_CLAUSE",
-        "ERROR_REQUEST_LENGTH",
-        "ERROR_REPLY_CONTRACT",
-        "INITIAL_STATE"
-    ];
-runtime(hls_statem) ->
+-spec runtime() -> [string()].
+runtime() ->
     [
         "Tag",
         "Phase",

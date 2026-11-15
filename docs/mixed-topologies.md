@@ -1,6 +1,6 @@
 # Actor topologies
 
-A topology describes `hls_statem` actors, messages and routes. The public topology frontend rejects `hls_gs` server interfaces; those remain standalone actor compilations. An exact actor is one named instance; a family is a rectangular set of instances. Families reduce repetition in declarations without changing actor semantics.
+A topology describes bounded `hls_statem` and `hls_gs` actors, messages and routes. Server callbacks normalize into one phase of the same actor machine; their implicit `reply` output routes to a caller-facing endpoint. An exact actor is one named instance; a family is a rectangular set of instances. Families reduce repetition in declarations without changing actor semantics.
 
 Each instance compiles to a dedicated actor with register-backed state and a bounded mailbox. It runs when its own input, state and output dependencies permit. Dedicated execution does not imply one-cycle execution: XLS pipeline latency and output backpressure still apply.
 

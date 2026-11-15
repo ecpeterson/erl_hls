@@ -46,7 +46,11 @@ abandon(Pid) ->
     gen_server:cast(Pid, {release, 0}),
     ?assertEqual({reply, {report, 2}}, gen_server:receive_response(B, 1000)),
     ?assertEqual({report, 3}, gen_server:call(Pid, {read, 0})),
-    receive Message -> error({unexpected_late_reply, Message}) after 0 -> ok end.
+    %% Only this abandoned request's alias/monitor can constitute a late response.
+        receive
+            {[alias | A], Reply} -> error({late_reply, Reply});
+            {'DOWN', A, process, Pid, Reason} -> error({late_monitor, Reason})
+        after 0 -> ok end.
 
 %% ERTS monitors notify every waiting caller when the callback violates its reply contract.
 -spec failure(pid()) -> ok.

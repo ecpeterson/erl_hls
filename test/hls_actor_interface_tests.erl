@@ -71,14 +71,12 @@ repeated_tag_blocks_keep_selector_order_test() ->
         hls_actor_interface:output_schemas(Interface, out)
     ).
 
-%% Checks hls gs interface inference is deferred.
--spec hls_gs_interface_inference_is_deferred_test() -> ok.
-hls_gs_interface_inference_is_deferred_test() ->
+%% Immediate servers expose their one-phase actor interface.
+-spec hls_gs_interface_inference_test() -> ok.
+hls_gs_interface_inference_test() ->
     Path = "src/examples/regsvc/regsvc.erl",
-    ?assertError(
-        {unsupported_hls_actor_interface, Path, hls_gs},
-        xls_parse:actor_interface(Path)
-    ).
+    ?assertMatch(#{phases := [hls_server], reply_storage_width := 32},
+        xls_parse:actor_interface(Path)).
 
 %% Checks unsupported interface inference does not narrow cpu compilation.
 -spec unsupported_interface_inference_does_not_narrow_cpu_compilation_test() -> ok.

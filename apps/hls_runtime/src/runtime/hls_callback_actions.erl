@@ -1,6 +1,6 @@
 -module(hls_callback_actions).
 -moduledoc """
-CPU callback action validation shared by hls_statem and hls_gs_deferred. Splits an optional reply from a following internal event and checks the event against hls_continuation; it does not dispatch callbacks or send replies.
+CPU callback action validation shared by hls_statem and hls_actor_callback. Splits an optional reply from a following internal event and checks the event against hls_continuation; it does not dispatch callbacks or send replies.
 """.
 %% CPU callback action validation.
 -export([split/3]).

@@ -8,6 +8,26 @@ pub struct Slot { handle: u64, txid: u8 }
 // Bounded ownership and a nonwrapping token sequence. Failure is sticky until reset.
 pub struct Book<N: u32> { slots: Slot[N], sequence: u64, failure: u32 }
 
+// Immediate callbacks own no retained handles or transaction table. Only failure persists.
+pub struct Immediate { failure: u32 }
+
+// Encode a callback-local origin; the low byte is the request tag for reply checking.
+pub fn immediate_admit(book: Immediate, frame: axis::Frame) -> (Immediate, u64, u32) {
+  (book, ((frame.header.txid as u64) << u32:8) | frame.header.op as u64, u32:0)
+}
+
+// Commit a same-callback reply only after the entire result succeeds.
+pub fn immediate_complete(book: Immediate, from: u64, frame: axis::Frame,
+    allowed: bool, failure: u32) -> (Immediate, axis::Frame, bool) {
+  let present = from != u64:0 && frame.header.op != u8:0;
+  let error = if failure != u32:0 { hls_failure::source_error(failure as hls_failure::Code) }
+    else if present && !allowed { hls_failure::source_error(hls_failure::REPLY_CONTRACT) }
+    else { book.failure };
+  (Immediate { failure: error },
+    axis::Frame { header: axis::Header { txid: (from >> u32:8) as u8, ..frame.header }, ..frame },
+    present && error == u32:0)
+}
+
 // Finds the first slot with the requested occupancy; found gates the index.
 pub fn first<N: u32>(slots: Slot[N], live: bool) -> (bool, u32) {
   for (i, found): (u32, (bool, u32)) in u32:0..N {

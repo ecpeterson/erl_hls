@@ -1,6 +1,6 @@
 # CPU execution and host runtime
 
-The application-facing CPU adapters are `hls_gs` and `hls_statem` in [api](../api/README.md). Here, `hls_mailbox`, `hls_reduction`, `hls_indexed_gather`, `hls_callback_actions`, `hls_gs_deferred` and `hls_reply_book` own their bounded reference state and reply bookkeeping. They are independent of hardware scheduling policy. `hls_codec` supplies shared bitstream primitives, and `hls_diagnostic` carries structured failures without a compiler dependency.
+The application-facing CPU adapters are `hls_gs` and `hls_statem` in [api](../api/README.md). Here, `hls_mailbox`, `hls_reduction`, `hls_indexed_gather`, `hls_callback_actions`, `hls_actor_callback` and `hls_reply_book` own their bounded reference state and reply bookkeeping. They are independent of hardware scheduling policy. `hls_codec` supplies shared bitstream primitives, and `hls_diagnostic` carries structured failures without a compiler dependency.
 
 `hls_domain_lifecycle` is the finite management transition shared with compiled control logic. `hls_domain_erts` supplies real process retirement, setup and completion observations for the API's deployment owner. Completion evidence belongs to the backend; a kernel action or host timeout alone does not establish a fence or reset.
 

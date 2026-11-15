@@ -145,7 +145,7 @@ translation_and_interface_validate_before_callbacks_test() ->
         xls_statem_lower:interface(Forms, [waiting])
     end)),
     ?assertMatch({xls_name_collision, module, "Foobar", _, _}, reason(fun() ->
-        xls_gs_immediate:emit("names.erl", Forms)
+        xls_statem_lower:lower("names.erl", Forms, [waiting])
     end)).
 
 %% Checks runtime declarations remain reserved.

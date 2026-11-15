@@ -40,10 +40,10 @@ expected(A, B) ->
 gs() ->
     [xls_parse:to_xls("test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
-        "  let state = ServiceState { data: ServerData { Value: value }, failure: u32:0 };\n",
+        "  let state = Machine { data: ServerData { Value: value }, enter_pending: false, ..initial_machine() };\n",
         "  let frame = axis::pack(Tag::GET_VALUE as u8, u32:0);\n",
-        "  let result = service_step(state, frame);\n",
-        "  replyvalue_from_bits(result.response.payload).Value\n}\n",
+        "  let result = machine_step(state, frame, true, true);\n",
+        "  replyvalue_from_bits(result.egress.frame.payload).Value\n}\n",
         "#[test]\nfn server_reply() {\n",
         [begin
             {reply, Reply, _} = xls_names_gs_fixture:handle_call({'Get_Value', 0}, {'Server_Data', V}),

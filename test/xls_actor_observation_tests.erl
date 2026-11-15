@@ -24,8 +24,8 @@ diagnostic_outputs_are_explicit_test() ->
             xls_topology_dslx:emit(Plan, Profile#{direct_actor_debug => yes}))
     end, [scalar, rectangle]),
     ?assertError({direct_actor_debug, yes}, xls_parse:to_xls(Source, #{direct_actor_debug => yes})),
-    ?assertError(direct_actor_debug_requires_hls_statem,
-        xls_parse:to_xls("src/examples/regsvc/regsvc.erl", #{direct_actor_debug => true})).
+    Server = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl", #{direct_actor_debug => true})),
+    ?assertNotEqual(nomatch, binary:match(Server, <<"actor_debug_out">>)).
 
 observation_boundary_name_collisions_test() ->
     lists:foreach(fun({Kind, Boundary, Port}) ->

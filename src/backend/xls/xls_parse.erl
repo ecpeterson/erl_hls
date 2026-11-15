@@ -1,8 +1,8 @@
 -module(xls_parse).
--moduledoc "File-level compiler facade used by build tools and backend consumers. hls_source preprocesses Erlang forms; xls_statem_lower checks state machines and xls_gs_immediate/xls_gs_deferred compile server contracts. actor_artifact exposes a checked semantic spec, whereas to_artifact returns final DSLX plus failure metadata. XLS conversion, optimization and RTL generation happen outside this Erlang backend.".
+-moduledoc "File-level compiler facade used by build tools and backend consumers. hls_source preprocesses Erlang forms; hls_server_source normalizes bounded servers before xls_statem_lower checks the shared actor contract. actor_artifact exposes a checked semantic spec, whereas to_artifact returns final DSLX plus failure metadata. XLS conversion, optimization and RTL generation happen outside this Erlang backend.".
 %% Compile dedicated services to final artifacts or bytes.
 -export([to_artifact/1, to_artifact/2, to_xls/1, to_xls/2]).
-%% Expose checked state-machine semantics to other execution backends.
+%% Expose checked actor semantics to other execution backends.
 -export([actor_artifact/2, actor_artifact/3]).
 %% Infer public actor interfaces without rendering an execution body.
 -export([actor_interface/1, actor_interface/2, actor_interface/3]).
@@ -32,28 +32,17 @@ to_artifact(Filename) -> to_artifact(Filename, #{}).
 to_artifact(Filename, Options0) ->
     Options = validate_xls_options(Options0),
     {ok, Forms} = hls_source:parse_file(Filename, maps:get(source_options, Options)),
-    case hls_source:find_optional_attribute(Forms, hls_phases) of
-        none ->
-            case maps:get(direct_actor_debug, Options) of
-                true -> error(direct_actor_debug_requires_hls_statem);
-                false -> server(Filename, Forms, maps:get(frame_layout, Options))
-            end;
-        {ok, Phases} ->
-            Spec = xls_statem_lower:artifact(
-                Filename, Forms, Phases, maps:get(frame_layout, Options)
-            ),
-            xls_statem_codegen:artifact(Spec#{
-                direct_actor_debug => maps:get(direct_actor_debug, Options)
-            })
-    end.
+    {ActorForms, Phases} = hls_server_source:normalize(Forms),
+    Spec = xls_statem_lower:artifact(Filename, ActorForms, Phases, maps:get(frame_layout, Options)),
+    xls_statem_codegen:artifact(Spec#{direct_actor_debug => maps:get(direct_actor_debug, Options)}).
 
--doc "Returns validated state-machine callback semantics for a backend, using explicit source context.".
+-doc "Returns validated actor callback semantics for a backend, using explicit source context.".
 -spec actor_artifact(file:filename(), [hls_source:option()] | hls_source:context()) ->
     xls_actor_codegen:spec().
 actor_artifact(Filename, SourceOptions) ->
     actor_artifact(Filename, SourceOptions, hls_frame_layout:default()).
 
--doc "Returns checked state-machine semantics under the explicit ordinary-frame capacity.".
+-doc "Returns checked actor semantics under the explicit ordinary-frame capacity.".
 -spec actor_artifact(
     file:filename(),
     [hls_source:option()] | hls_source:context(),
@@ -61,10 +50,8 @@ actor_artifact(Filename, SourceOptions) ->
 ) -> xls_actor_codegen:spec().
 actor_artifact(Filename, SourceOptions, Layout) ->
     {ok, Forms} = hls_source:parse_file(Filename, SourceOptions),
-    case hls_source:find_optional_attribute(Forms, hls_phases) of
-        {ok, Phases} -> xls_statem_lower:artifact(Filename, Forms, Phases, Layout);
-        none -> error({unsupported_actor_artifact, Filename, hls_gs})
-    end.
+    {ActorForms, Phases} = hls_server_source:normalize(Forms),
+    xls_statem_lower:artifact(Filename, ActorForms, Phases, Layout).
 
 %% Reject physical execution options at the dedicated-service boundary.
 -doc "Validates source and dedicated-actor options; rejects unknown physical settings.".
@@ -84,7 +71,7 @@ validate_xls_options(Options) ->
     error({invalid_xls_options, Options}).
 
 -spec actor_interface(file:filename()) -> map().
--doc "Returns the include-expanded interface inferred for one hls_statem file.".
+-doc "Returns the include-expanded interface inferred for one bounded actor file.".
 actor_interface(Filename) ->
     actor_interface(Filename, []).
 
@@ -96,12 +83,8 @@ actor_interface(Filename) ->
 -doc "Infers an interface using explicit preprocessing options or a captured context.".
 actor_interface(Filename, SourceOptions) ->
     {ok, Forms} = hls_source:parse_file(Filename, SourceOptions),
-    case hls_source:find_optional_attribute(Forms, hls_phases) of
-        {ok, PhaseNames} ->
-            xls_statem_lower:interface(Forms, PhaseNames);
-        none ->
-            error({unsupported_hls_actor_interface, Filename, hls_gs})
-    end.
+    {ActorForms, Phases} = hls_server_source:normalize(Forms),
+    xls_statem_lower:interface(ActorForms, Phases).
 
 -doc "Infers an interface and checks every public schema against an explicit ordinary-frame capacity.".
 -spec actor_interface(
@@ -111,16 +94,5 @@ actor_interface(Filename, SourceOptions) ->
 ) -> map().
 actor_interface(Filename, SourceOptions, Layout) ->
     {ok, Forms} = hls_source:parse_file(Filename, SourceOptions),
-    case hls_source:find_optional_attribute(Forms, hls_phases) of
-        {ok, Phases} -> xls_statem_lower:interface(Forms, Phases, Layout);
-        none -> error({unsupported_hls_actor_interface, Filename, hls_gs})
-    end.
-
-%% Select the server emitter after checking its callback contract.
--spec server(file:filename(), [hls_source:form()], hls_frame_layout:layout()) ->
-    xls_emitted:artifact().
-server(Filename, Forms, Layout) ->
-    case hls_service_contract:call_arity(Forms) of
-        3 -> xls_gs_deferred:artifact(Filename, Forms, Layout);
-        2 -> xls_gs_immediate:artifact(Filename, Forms, Layout)
-    end.
+    {ActorForms, Phases} = hls_server_source:normalize(Forms),
+    xls_statem_lower:interface(ActorForms, Phases, Layout).
