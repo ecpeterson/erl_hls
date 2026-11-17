@@ -331,10 +331,14 @@ import_function(
                     {ok, Value} -> Value;
                     error -> error({undefined_xls_source_helper, Key, Line})
                 end,
-            validate_function(Key, Definition, SourceForms),
+            Specs = [
+                hls_records:resolve_type(Spec, SourceForms)
+             || Spec <- maps:get(specs, Definition)
+            ],
+            validate_function(Key, Definition#{specs := Specs}, SourceForms),
             {Local, State1} = fresh(Key, State0),
             State2 = State1#{helpers := Helpers#{Key => Local}},
-            #{form := Function, specs := Specs, file := File} = Definition,
+            #{form := Function, file := File} = Definition,
             {function, A, Name, Arity, Clauses} = prepare_function(Function, SourceForms),
             {Rewritten, State3} = rewrite(Clauses, Source, imported, State2),
             RenamedSpecs = [

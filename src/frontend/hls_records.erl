@@ -4,6 +4,7 @@ Source record analysis used by hls_pack and XLS lowering. Resolves declarations,
 """.
 %% Source declaration resolution and dependency queries.
 -export([resolve/1, resolve/2, references/1, declarations/2, used/1, wire_names/1, find/2]).
+-export([resolve_type/2]).
 
 %% Record fields, values and defaults.
 -export([values/2, fields/1, width/1, field_name/1, validate_defaults/1, is_zero_default/1]).
@@ -75,7 +76,7 @@ references(_) ->
     [].
 
 %% Pure defaults equal to the provider's zero share the existing typed-zero lowering.
--spec resolve_field(tuple(), [hls_source:form()], [atom()]) -> tuple().
+-spec resolve_field(tuple(), [hls_source:form()], [atom() | {type, atom()}]) -> tuple().
 resolve_field({typed_record_field, Field, Type}, Forms, Stack) ->
     Resolved = resolve_type(hls_atom_types:resolve(Type, Forms), Forms, Stack),
     {typed_record_field, resolve_default(Field, Resolved, Forms, Stack), Resolved};
@@ -83,7 +84,7 @@ resolve_field(Field, _Forms, _Stack) ->
     Field.
 
 %% Nonzero and executable defaults remain unchanged so validation still rejects them.
--spec resolve_default(tuple(), term(), [hls_source:form()], [atom()]) -> tuple().
+-spec resolve_default(tuple(), term(), [hls_source:form()], [atom() | {type, atom()}]) -> tuple().
 resolve_default({record_field, Line, Name, Default} = Field, Type, Forms, Stack) ->
     case is_zero_default(Default) of
         true ->
@@ -108,7 +109,8 @@ resolve_default(Field, _Type, _Forms, _Stack) ->
     Field.
 
 %% Evaluate only literal syntax and record construction; never execute source calls.
--spec literal_default(term(), term(), [hls_source:form()], [atom()]) -> {ok, term()} | not_literal.
+-spec literal_default(term(), term(), [hls_source:form()], [atom() | {type, atom()}]) ->
+    {ok, term()} | not_literal.
 literal_default({record, _, Name, Overrides}, _Type, Forms, Stack) ->
     case lists:member(Name, Stack) of
         true ->
@@ -141,7 +143,7 @@ literal_default(Default, Type, _Forms, _Stack) ->
     end.
 
 %% Defaults obey ordinary Erlang field order and explicit constructor overrides.
--spec record_default([tuple()], map(), [hls_source:form()], [atom()], [term()]) ->
+-spec record_default([tuple()], map(), [hls_source:form()], [atom() | {type, atom()}], [term()]) ->
     {ok, tuple()} | not_literal.
 record_default([], _Explicit, _Forms, _Stack, Values) ->
     {ok, list_to_tuple(lists:reverse(Values))};
@@ -161,11 +163,25 @@ record_default(_Fields, _Explicit, _Forms, _Stack, _Values) ->
     not_literal.
 
 %% A resolved descriptor is self-contained, so downstream codecs need no source lookup.
--spec resolve_type(term(), [hls_source:form()], [atom()]) -> term().
+-doc "Resolves concrete local aliases, enums and nested record descriptors in their defining source namespace. Parameterized aliases remain unsupported.".
+-spec resolve_type(term(), [hls_source:form()]) -> term().
+resolve_type(Type, Forms) -> resolve_type(Type, Forms, []).
+
+%% Alias expansion is bounded by its declaration stack, including record cycles.
+-spec resolve_type(term(), [hls_source:form()], [atom() | {type, atom()}]) -> term().
 resolve_type(Type = {type, _, union, _}, Forms, _Stack) ->
     hls_atom_types:resolve(Type, Forms);
-resolve_type(Type = {user_type, _, _, []}, Forms, _Stack) ->
-    hls_atom_types:resolve(Type, Forms);
+resolve_type(Type = {user_type, _, Name, []}, Forms, Stack) ->
+    Key = {type, Name},
+    case lists:member(Key, Stack) of
+        true ->
+            error({recursive_hls_type, Name});
+        false ->
+            case [Body || {attribute, _, type, {N, Body, []}} <- Forms, N =:= Name] of
+                [Body] -> resolve_type(Body, Forms, [Key | Stack]);
+                _ -> hls_atom_types:resolve(Type, Forms)
+            end
+    end;
 resolve_type({hls_enum_type, _, _} = Type, _Forms, _Stack) ->
     Type;
 resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
@@ -173,7 +189,7 @@ resolve_type({type, L, record, [{atom, _, Name}]}, Forms, Stack) ->
         true -> error({recursive_hls_record, lists:reverse([Name | Stack])});
         false -> ok
     end,
-    case lists:member(Name, wire_names(Forms)) of
+    case tagged_record(Name, Forms) of
         true -> error({nested_hls_wire_record, Name});
         false -> ok
     end,
@@ -201,7 +217,8 @@ resolve_type({type, L, boolean, []}, _Forms, _Stack) ->
     {remote_type, L, [{atom, L, hls_bool}, {atom, L, bool}, []]};
 resolve_type({remote_type, Line, [Module, Name, Args]}, Forms, Stack) ->
     Resolved = [resolve_type(A, Forms, Stack) || A <- Args],
-    case contains_enum(Resolved) of
+    Collection = enum_collection(Module, Name),
+    case contains_enum(Resolved) andalso not Collection of
         true -> error({unsupported_hls_enum_container, Line, Module, Name});
         false -> {remote_type, Line, [Module, Name, Resolved]}
     end;
@@ -212,8 +229,23 @@ resolve_type(List, Forms, Stack) when is_list(List) ->
 resolve_type(Value, _Forms, _Stack) ->
     Value.
 
-%% Collection/provider operations need their own enum type-flow contracts;
-%% record nesting is handled explicitly above and remains supported.
+%% A pure helper module has no actor wire namespace; its record types still
+%% resolve so import validation can reject them with the owning function name.
+-spec tagged_record(atom(), [hls_source:form()]) -> boolean().
+tagged_record(Name, Forms) ->
+    case hls_source:find_optional_attribute(Forms, hls_tags) of
+        none -> false;
+        {ok, _} -> lists:member(Name, wire_names(Forms))
+    end.
+
+%% These providers preserve element identities through checked access and update.
+-spec enum_collection(term(), term()) -> boolean().
+enum_collection({atom, _, hls_vec}, {atom, _, vector}) -> true;
+enum_collection({atom, _, hls_lists}, {atom, _, list}) -> true;
+enum_collection(_, _) -> false.
+
+%% Only fixed collections have checked element-domain propagation in XLS.
+%% Other providers must not silently consume an enum's numerical encoding.
 -spec contains_enum(term()) -> boolean().
 contains_enum({hls_enum_type, _, _}) -> true;
 contains_enum({hls_type, hls_enum, enum, _}) -> true;

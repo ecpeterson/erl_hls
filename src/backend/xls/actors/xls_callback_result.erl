@@ -52,8 +52,8 @@ normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf, Lists) ->
         case length(Results) < 256 of
             true ->
                 Next = State#{results => [Value | Results]},
-                case Lists of
-                    evaluated -> capture_value(Value, fun(V, S) -> {Leaf(V), S} end, Next);
+                case {Lists, terminal_error(Value)} of
+                    {evaluated, false} -> capture_value(Value, fun(V, S) -> {Leaf(V), S} end, Next);
                     _ -> {Leaf(Value), Next}
                 end;
             false ->
@@ -63,6 +63,14 @@ normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf, Lists) ->
     Bindings = maps:map(fun(_, _) -> ordinary end, variables(Patterns)),
     {Program, #{results := Results}} = body(Body, Bindings, Continue, State0),
     {{clause, Line, Patterns, Guards, Program}, lists:reverse(Results)}.
+
+%% A non-returning callback leaf has no value to capture or reorder. Qualified
+%% calls avoid confusing a source helper named error/1 with the Erlang BIF.
+-spec terminal_error(term()) -> boolean().
+terminal_error({call, _, {remote, _, {atom, _, erlang}, {atom, _, error}}, [{atom, _, _}]}) ->
+    true;
+terminal_error(_) ->
+    false.
 
 %% Thread captured constructors through a body, applying the caller's rewrite only to final results.
 -spec body([term()], map(), fun((term(), map(), map()) -> {term(), map()}), map()) ->

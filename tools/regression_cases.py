@@ -189,6 +189,9 @@ def helpers(c: Case) -> None:
 def source_helpers(c: Case) -> None:
     """Check BEAM-selected values and XLS folding through compiler-emitted helper modules."""
     c.stage_import = True
+    c.erl("ok = hls_enum_collection_dslx:write(hd(init:get_plain_arguments())), halt().",
+        name="enum-collection-fixtures")
+    scalar(c, "enum_collection", top="collection_probe", module="enum_collection")
     c.generate("xls_source_helper_optimization")
     c.erl("ok = xls_remote_values_dslx:write(hd(init:get_plain_arguments())), halt().",
         name="remote-values-fixtures")

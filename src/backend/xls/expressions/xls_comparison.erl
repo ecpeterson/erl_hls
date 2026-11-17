@@ -89,6 +89,11 @@ shape({ann_type, _, [_, Type]}, Forms) ->
     shape(Type, Forms);
 shape({type, _, tuple, Fields}, Forms) when is_list(Fields) ->
     {tuple, [shape(T, Forms) || T <- Fields]};
+shape({remote_type, _, [{atom, _, M}, {atom, _, F}, [Element, _]]}, Forms) when
+    (M =:= hls_vec andalso F =:= vector);
+    (M =:= hls_lists andalso F =:= list)
+->
+    {array, shape(Element, Forms)};
 shape(Type, Forms) ->
     case hls_atom_types:descriptor(Type, Forms) of
         {ok, Descriptor} -> {enum, Descriptor};
@@ -254,6 +259,10 @@ expression({record, Line, Base, Name, Fields}, Env, Context) ->
 expression({record_field, Line, Value, Name, Field = {atom, _, Slot}}, Env, Context) ->
     {Typed, _, After} = expression(Value, Env, Context),
     {{record_field, Line, Typed, Name, Field}, field(Name, Slot, Context), After};
+expression({call, Line, Target = {remote, _, {atom, _, M}, {atom, _, F}}, Args}, Env, Context) when
+    (M =:= hls_vec orelse M =:= hls_lists), (F =:= nth orelse F =:= set)
+->
+    collection_call(Line, Target, F, Args, Env, Context);
 expression({call, Line, Target, Args}, Env, Context) ->
     Expected =
         case Target of
@@ -289,6 +298,35 @@ expression(List, Env, Context) when is_list(List) ->
     {Typed, unknown, After};
 expression(Value, Env, _) ->
     {Value, unknown, Env}.
+
+%% Collection operations retain the declared element domain rather than treating
+%% its encoded bits as an untyped provider argument or result.
+-spec collection_call(erl_anno:location(), term(), nth | set, [term()], bindings(), context()) ->
+    {term(), shape(), bindings()}.
+collection_call(Line, Target, Operation, [Index, Collection | Values], Env, Context) ->
+    {I, IT, IE} = expression(Index, Env, Context),
+    case contains_enum(IT) of
+        true -> error({unsupported_xls_enum_provider_call, Line, Target});
+        false -> ok
+    end,
+    {C, CT, CE} = expression(Collection, IE, Context),
+    Element =
+        case CT of
+            {array, E} -> E;
+            _ -> unknown
+        end,
+    case {Operation, Values} of
+        {nth, []} ->
+            {{call, Line, Target, [I, C]}, Element, CE};
+        {set, [Value]} ->
+            {V, VT, VE} = expression(Value, CE, Context),
+            case Element =:= unknown andalso contains_enum(VT) of
+                true -> error({unsupported_xls_enum_provider_call, Line, Target});
+                false -> ok
+            end,
+            Checked = expected(V, Element, VT, Line),
+            {{call, Line, Target, [I, C, Checked]}, CT, VE}
+    end.
 
 %% A field assignment is a typed boundary just like a helper argument.
 -spec record_fields(atom(), [tuple()], bindings(), context()) -> {[tuple()], bindings()}.
@@ -352,6 +390,8 @@ expected(Value, Expected, Actual, Line) ->
 -spec compatible(shape(), shape(), erl_anno:location()) -> ok.
 compatible({tuple, Expected}, {tuple, Actual}, Line) when length(Expected) =:= length(Actual) ->
     lists:foreach(fun({E, A}) -> compatible(E, A, Line) end, lists:zip(Expected, Actual));
+compatible({array, Expected}, {array, Actual}, Line) ->
+    compatible(Expected, Actual, Line);
 compatible({enum, Type}, {enum, Type}, _) ->
     ok;
 compatible({enum, Type}, {atom, Atom}, Line) ->
@@ -387,6 +427,8 @@ typed_pattern({tuple, Line, Patterns}, {tuple, Types}, Context) when
     length(Patterns) =:= length(Types)
 ->
     {tuple, Line, [typed_pattern(P, T, Context) || {P, T} <- lists:zip(Patterns, Types)]};
+typed_pattern({cons, Line, Head, Tail}, Type = {array, Element}, Context) ->
+    {cons, Line, typed_pattern(Head, Element, Context), typed_pattern(Tail, Type, Context)};
 typed_pattern(Pattern, _, _) ->
     Pattern.
 
@@ -458,6 +500,10 @@ join_shape({enum, _} = Type, Other) ->
 join_shape(Other, {enum, _} = Type) ->
     compatible(Type, Other, 0),
     Type;
+join_shape({array, A}, {array, B}) ->
+    {array, join_shape(A, B)};
+join_shape({tuple, As}, {tuple, Bs}) when length(As) =:= length(Bs) ->
+    {tuple, [join_shape(A, B) || {A, B} <- lists:zip(As, Bs)]};
 join_shape(_, _) ->
     unknown.
 

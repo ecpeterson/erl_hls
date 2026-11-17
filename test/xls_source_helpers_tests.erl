@@ -394,7 +394,29 @@ source_discovery_never_executes_module_test() ->
         ok
     end).
 
-%% The first source-helper slice does not merge module-local record or alias namespaces.
+%% Concrete aliases expand in the defining module, even with a conflicting caller alias.
+-spec imported_concrete_alias_test() -> ok.
+imported_concrete_alias_test() ->
+    with_sources([
+        {"root.erl", [root("typed_math:value(Value)"), "-type sample_number() :: boolean().\n"]},
+        {"typed_math.erl", module(typed_math, ["value/1"], [
+            "-type sample_number() :: hls_nums:u32().\n",
+            "-spec value(sample_number()) -> sample_number().\nvalue(Value) -> Value + 1.\n"])}
+    ], fun(Directory) -> {_, [_]} = prepare(Directory, []), ok end).
+
+%% Recursive declarations fail during bounded source resolution, not tool execution.
+-spec recursive_imported_alias_test() -> ok.
+recursive_imported_alias_test() ->
+    with_sources([
+        {"root.erl", root("typed_math:value(Value)")},
+        {"typed_math.erl", module(typed_math, ["value/1"], [
+            "-type first() :: second().\n-type second() :: first().\n",
+            "-spec value(first()) -> first().\nvalue(Value) -> Value.\n"])}
+    ], fun(Directory) ->
+        ?assertException(error, {recursive_hls_type, _}, prepare(Directory, [])), ok
+    end).
+
+%% Parameterized aliases and module-local records remain outside the imported subset.
 -spec unsupported_imported_types_test_() -> [{string(), fun(() -> ok)}].
 unsupported_imported_types_test_() ->
     [{atom_to_list(Reason), fun() ->
@@ -408,8 +430,8 @@ unsupported_imported_types_test_() ->
             ok
         end)
     end} || {Reason, Body} <- [
-        {local_type_alias, ["-type sample_number() :: hls_nums:u32().\n",
-            "-spec value(sample_number()) -> sample_number().\nvalue(Value) -> Value.\n"]},
+        {local_type_alias, ["-type sample_number(T) :: T.\n",
+            "-spec value(sample_number(hls_nums:u32())) -> sample_number(hls_nums:u32()).\nvalue(Value) -> Value.\n"]},
         {record_values, ["-record(number, {value :: hls_nums:u32()}).\n",
             "-spec value(#number{}) -> hls_nums:u32().\n",
             "value(#number{value = Value}) -> Value.\n"]}

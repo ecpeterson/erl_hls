@@ -88,19 +88,42 @@ clauses(Forms, Name, Arity) ->
     erl_parse:abstract_clause().
 callback(Clause = {clause, L, Args, _, _}, Kind, Arity) ->
     From = fresh_from(Clause, 0),
+    Data = fresh_from({Clause, From}, 0),
     {Head, Handle} =
         case {Kind, Args} of
-            {call, [Request, Data]} ->
-                {[{tuple, L, [{atom, L, call}, From]}, Request, Data], From};
-            {call, [Request, Token, Data]} ->
-                {[{tuple, L, [{atom, L, call}, Token]}, Request, Data], Token};
-            {_, [Message, Data]} ->
-                {[{atom, L, Kind}, Message, Data], none}
+            {call, [Request, Pattern]} ->
+                {[{tuple, L, [{atom, L, call}, From]}, Request, {match, L, Data, Pattern}], From};
+            {call, [Request, Token, Pattern]} ->
+                {
+                    [
+                        {tuple, L, [{atom, L, call}, {match, L, From, Token}]},
+                        Request,
+                        {match, L, Data, Pattern}
+                    ],
+                    From
+                };
+            {_, [Message, Pattern]} ->
+                {[{atom, L, Kind}, Message, {match, L, Data, Pattern}], none}
         end,
     {clause, L, _, Guards, Body} = xls_callback_result:map_evaluated_actions(
-        Clause, fun(Value) -> checked_result(Value, Handle, Kind, Arity) end
+        Clause, fun(Value) -> terminal_result(Value, Data, Handle, Kind, Arity) end
     ),
     {clause, L, Head, Guards, Body}.
+
+%% Literal callback-tail errors terminate the hardware actor at the source site.
+%% ERTS retains the atom reason; hardware reports explicit_fail plus that site.
+%% Error expressions in helpers or other value positions remain unsupported.
+-spec terminal_result(term(), term(), term(), call | cast | internal, 2 | 3) -> term().
+terminal_result(
+    {call, L, {remote, _, {atom, _, erlang}, {atom, _, error}}, [{atom, _, _}]},
+    Data,
+    _,
+    _,
+    _
+) ->
+    {tuple, L, [{atom, L, hls_server}, Data, {atom, L, fail}]};
+terminal_result(Value, _, From, Kind, Arity) ->
+    checked_result(Value, From, Kind, Arity).
 
 %% Synthetic reply arguments must never capture a source variable.
 -spec fresh_from(term(), non_neg_integer()) -> {var, 0, atom()}.
