@@ -35,6 +35,8 @@ def main() -> None:
         (args.stage / 'times.json').write_text(json.dumps(times, indent=2) + '\n')
 
     # Shared public-port FIFO mechanics need no generated hardware or decoder workload.
+    command('clocked-controllers', [sys.executable, 'tools/test_clocked_controllers.py',
+        args.xls, args.stage / 'clocked-controllers'])
     fifo_test = args.stage / 'fifo-stream-test'
     command('fifo-stream-compile', ['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
         ROOT / 'test/rtl/framed_fifo_stream_test.cpp', '-o', fifo_test])

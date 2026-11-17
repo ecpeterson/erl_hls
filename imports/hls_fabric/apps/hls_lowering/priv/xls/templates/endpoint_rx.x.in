@@ -12,14 +12,14 @@ type Binding = control::@@BINDING_TYPE@@;
 pub type Frame = bits[@@FRAME_BITS@@];
 
 // One payload/slot and all metadata survive local domain reset; cold reset alone clears them.
-pub struct State { controller: control::ServiceState, frame: Frame, slot: u8 }
+pub struct State { controller: control::ClockState, frame: Frame, slot: u8 }
 
 // Old-state handshakes and one committed successor describe the sampled local edge.
 pub struct Tick { state: State, output: Outputs }
 
 // Binding and capture require explicit later inputs after a cold start.
 pub fn initial_state() -> State {
-  State { controller: control::initial_service_state(), frame: Frame:0, slot: u8:0 }
+  State { controller: control::clock_initial(), frame: Frame:0, slot: u8:0 }
 }
 
 // Network capture, native capture and ACK handoff remain separate native-kernel edges.
@@ -43,7 +43,7 @@ fn tick(s: State, io: Inputs) -> Tick {
     },
     destination_ready: io.destination_ready, ack_tx_ready: io.ack_tx_ready,
   };
-  let result = control::service_step(s.controller,
+  let result = control::clock_step(s.controller,
     axis::pack(control::Tag::@@INPUT_TAG@@ as u8,
       hls_bits::frame_payload(control::bits_from_@@INPUT_CODEC@@(input))));
   let observed = control::@@OUTPUT_CODEC@@_from_bits(result.response.payload);

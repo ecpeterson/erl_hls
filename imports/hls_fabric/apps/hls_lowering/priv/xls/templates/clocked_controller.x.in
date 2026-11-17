@@ -1,0 +1,37 @@
+// An immediate control kernel stores only source data and its sticky failure.
+pub struct ClockState { data: ClockData, failure: u32 }
+
+// One sampled transition and its immediate response; the enclosing clock owns storage.
+pub struct ClockResult { state: ClockState, response: axis::Frame }
+
+// Server entry is silent and statically discharged; it adds no recurring hardware cycle.
+fn clock_machine() -> ActorState {
+  machine_from_bits(local_step(local_initial(), zero!<bits[axis::FRAME_BITS]>(), false, true).machine)
+}
+
+// Initialization and source failures come from the same normalized actor as ordinary services.
+pub fn clock_initial() -> ClockState {
+  let machine = clock_machine();
+  ClockState { data: machine.data, failure: hls_failure::source_error(machine.failure) }
+}
+
+// An immediate call has no retained ownership between sampled transitions.
+// The common actor evaluates callbacks and validates replies; the wrapper only
+// supplies the constant server phase and storage. A failed kernel stays frozen.
+pub fn clock_step(state: ClockState, frame: axis::Frame) -> ClockResult {
+  let initial = clock_machine();
+  let raw = bits_from_machine(ActorState { data: state.data, ..initial });
+  let step = local_step(raw, axis::bits_from_frame(frame), true, true);
+  let machine = machine_from_bits(step.machine);
+  let valid = step.dispatched && step.effects_valid && step.effect_count == u8:1 &&
+    !local_pending(step.machine);
+  let failure = hls_failure::first(machine.failure,
+    if valid { hls_failure::NONE } else { hls_failure::REPLY_CONTRACT });
+  let effect = local_effect(step.effect_layout, step.effect_payload, u8:0);
+  ClockResult {
+    state: if state.failure != u32:0 { state }
+      else { ClockState { data: machine.data, failure: hls_failure::source_error(failure) } },
+    response: if state.failure == u32:0 && valid { axis::frame_from_bits(effect.frame) }
+      else { zero!<axis::Frame>() },
+  }
+}

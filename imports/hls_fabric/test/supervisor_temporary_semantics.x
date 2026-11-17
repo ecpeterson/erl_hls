@@ -8,10 +8,10 @@ import supervisor_codes as codes;
 fn ready() -> supervisor::State {
   let initial = supervisor::initial_state();
   supervisor::State {
-    parent: parent::ServiceState { data: parent::Controllerstate {
+    parent: parent::ClockState { data: parent::Controllerstate {
       lifecycle: parent::Domainstate {phase: codes::PHASE_READY, current: u64:1, target: u64:1, transition: u64:1,
         ..zero!<parent::Domainstate>()}}, ..initial.parent },
-    supervisor: manager::ServiceState {data: manager::Supervisorservice {
+    supervisor: manager::ClockState {data: manager::Supervisorservice {
       supervisor: manager::Supervisorstate {phase: codes::SUPERVISOR_PHASE_RUNNING,
         epoch:u64:1,first:u64:2,last:u64:16,next:u64:2,children:u16:2,started:u16:2,
         intensity:u8:2,period:u32:5,..zero!<manager::Supervisorstate>()}},

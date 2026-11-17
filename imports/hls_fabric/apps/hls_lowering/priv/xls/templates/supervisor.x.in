@@ -13,8 +13,8 @@ const INITIAL_CHILDREN = u32:@@INITIAL@@;
 
 // Supervisor bookkeeping stays outside every child's separately clocked reset region.
 pub struct State {
-  parent: parent_controller::ServiceState,
-  supervisor: supervisor_controller::ServiceState,
+  parent: parent_controller::ClockState,
+  supervisor: supervisor_controller::ClockState,
   children: supervisor_controller::Supervisorchild[CHILDREN],
   cursor: u16,
   scan_turn: bool,
@@ -33,8 +33,8 @@ pub struct Tick { state: State, output: Outputs }
 // Cold control admits nothing and requires a new explicitly commissioned grant.
 pub fn initial_state() -> State {
   State {
-    parent: parent_controller::initial_service_state(),
-    supervisor: supervisor_controller::initial_service_state(),
+    parent: parent_controller::clock_initial(),
+    supervisor: supervisor_controller::clock_initial(),
     children: supervisor_controller::Supervisorchild[CHILDREN]:[
       supervisor_controller::Supervisorchild {
         phase: supervisor_codes::CHILD_PHASE_FRESH,
@@ -45,17 +45,17 @@ pub fn initial_state() -> State {
 }
 
 // The existing domain lifecycle remains the host-facing parent contract.
-fn parent_tick(state: parent_controller::ServiceState,
-               input: parent_controller::Domaininput) -> parent_controller::ServiceResult {
-  parent_controller::service_step(state,
+fn parent_tick(state: parent_controller::ClockState,
+               input: parent_controller::Domaininput) -> parent_controller::ClockResult {
+  parent_controller::clock_step(state,
     axis::pack(parent_controller::Tag::DOMAIN_INPUT as u8,
       hls_bits::frame_payload(parent_controller::bits_from_domaininput(input))))
 }
 
 // Restart selection and intensity accounting are the same Erlang transition used natively.
-fn manager_tick(state: supervisor_controller::ServiceState,
-                input: supervisor_controller::Supervisorinput) -> supervisor_controller::ServiceResult {
-  supervisor_controller::service_step(state,
+fn manager_tick(state: supervisor_controller::ClockState,
+                input: supervisor_controller::Supervisorinput) -> supervisor_controller::ClockResult {
+  supervisor_controller::clock_step(state,
     axis::pack(supervisor_controller::Tag::SUPERVISOR_INPUT as u8,
       hls_bits::frame_payload(supervisor_controller::bits_from_supervisorinput(input))))
 }
@@ -167,7 +167,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   let exhausted_time = second_edge && s.seconds == u64:0xffff_ffff_ffff_ffff;
   let next = State {
     parent: controlled.state,
-    supervisor: if reset_children { supervisor_controller::initial_service_state() } else { managed.state },
+    supervisor: if reset_children { supervisor_controller::clock_initial() } else { managed.state },
     children: if reset_children { initial_state().children }
       else { update(s.children, selected as u32, manager_reply.child) },
     cursor: if reset_children { u16:0 } else if slot_mutation { s.cursor }

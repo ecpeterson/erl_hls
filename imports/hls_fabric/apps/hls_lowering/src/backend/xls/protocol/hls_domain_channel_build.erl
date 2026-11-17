@@ -28,7 +28,7 @@ emit(Words) when Words >= 20 ->
     Codecs = #{operation => maps:get(op, Input), status => maps:get(status, Output)},
     true = hls_records:width(hls_records:find(Forms, channel_input)) =< Words * 32,
     true = hls_records:width(hls_records:find(Forms, channel_output)) =< Words * 32,
-    Artifact = xls_parse:to_artifact(Source, #{frame_payload_words => Words}),
+    Artifact = xls_clocked_controller:artifact(Source, Words),
     FrameBits = 32 + Words * 32,
     {Inputs, Outputs} = ports(FrameBits, hls_type:width(maps:get(status, Codecs))),
     {ok, Template} = file:read_file(

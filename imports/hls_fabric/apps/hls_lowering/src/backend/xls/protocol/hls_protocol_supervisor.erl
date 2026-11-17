@@ -167,13 +167,13 @@ emit_mode(Config, Mode) ->
             hls_records:width(hls_records:find(Forms, supervisor_output))
         ) + 31) div 32
     ),
-    Supervisor = xls_parse:to_artifact(Source, #{frame_payload_words => Words}),
-    Parent = xls_parse:to_artifact(
+    Supervisor = xls_clocked_controller:artifact(Source, Words),
+    Parent = xls_clocked_controller:artifact(
         hls_source:library_file(
             hls_runtime,
             "runtime/hls_domain_lifecycle.erl"
         ),
-        #{frame_payload_words => Words}
+        Words
     ),
     Count = length(Children),
     {ControlInputs, ControlOutputs} = control_ports(Count, Codecs),

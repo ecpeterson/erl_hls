@@ -130,7 +130,7 @@ compose_build(Build, Mode, Inspection) ->
     true = Ingress =/= none,
     Source = hls_source:library_file(hls_runtime, "runtime/hls_domain_lifecycle.erl"),
     Codecs = codecs(Source),
-    Controller = xls_parse:to_artifact(Source, #{frame_payload_words => Words}),
+    Controller = xls_clocked_controller:artifact(Source, Words),
     {Inputs, Outputs} = ports(NetworkInputs, NetworkOutputs, Codecs),
     Files = hls_generated_files:merge([
         NetworkFiles,

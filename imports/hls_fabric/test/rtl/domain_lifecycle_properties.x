@@ -11,8 +11,8 @@ fn command_frame(command: domain_controller::Domaininput) -> axis::Frame {
 
 // Invoke the actual generated source callback, not a handwritten transition model.
 fn step(state: domain_controller::Domainstate,
-        command: domain_controller::Domaininput) -> domain_controller::ServiceResult {
-  domain_controller::service_step(domain_controller::ServiceState {
+        command: domain_controller::Domaininput) -> domain_controller::ClockResult {
+  domain_controller::clock_step(domain_controller::ClockState {
       data: domain_controller::Controllerstate { lifecycle: state }, failure: u32:0 },
     command_frame(command))
 }

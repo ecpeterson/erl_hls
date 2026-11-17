@@ -12,14 +12,14 @@ type Binding = control::@@BINDING_TYPE@@;
 pub type Frame = bits[@@FRAME_BITS@@];
 
 // Only cold reset clears these registers; local retirement retains their bits.
-pub struct State { controller: control::ServiceState, frame: Frame, slot: u8 }
+pub struct State { controller: control::ClockState, frame: Frame, slot: u8 }
 
 // Outputs describe this edge; state commits once on the endpoint's local clock.
 pub struct Tick { state: State, output: Outputs }
 
 // A cold endpoint has neither binding nor publication ownership.
 pub fn initial_state() -> State {
-  State { controller: control::initial_service_state(), frame: Frame:0, slot: u8:0 }
+  State { controller: control::clock_initial(), frame: Frame:0, slot: u8:0 }
 }
 
 // Source admission and every credit/transmit handshake come from the native kernel.
@@ -48,7 +48,7 @@ fn tick(s: State, io: Inputs) -> Tick {
       sequence: io.credit_sequence,
     },
   };
-  let result = control::service_step(s.controller,
+  let result = control::clock_step(s.controller,
     axis::pack(control::Tag::@@INPUT_TAG@@ as u8,
       hls_bits::frame_payload(control::bits_from_@@INPUT_CODEC@@(input))));
   let observed = control::@@OUTPUT_CODEC@@_from_bits(result.response.payload);

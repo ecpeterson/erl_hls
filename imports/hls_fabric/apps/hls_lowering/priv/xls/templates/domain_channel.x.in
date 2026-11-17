@@ -9,7 +9,7 @@ import channel_controller as control;
 pub type Frame = bits[@@FRAME_BITS@@];
 
 // Only the global cold reset may discard this state; endpoint resets cannot.
-pub struct State { controller: control::ServiceState, frame: Frame, slot: u8 }
+pub struct State { controller: control::ClockState, frame: Frame, slot: u8 }
 
 // Each tick returns old-state transfer observations and one committed successor.
 pub struct Tick { state: State, output: Outputs }
@@ -26,14 +26,14 @@ pub fn tick(s: State, io: Inputs) -> Tick {
     destination_ready: io.destination_ready, ack_tx_ready: io.ack_tx_ready,
     credit_valid: io.credit_valid, credit_generation: io.credit_generation, credit_sequence: io.credit_sequence,
   };
-  let result = control::service_step(s.controller,
+  let result = control::clock_step(s.controller,
     axis::pack(control::Tag::CHANNEL_INPUT as u8,
       hls_bits::frame_payload(control::bits_from_channelinput(input))));
   let observed = control::channeloutput_from_bits(result.response.payload);
   let live = !io.reset && result.state.failure == u32:0;
   let take = live && observed.source_take;
   Tick {
-    state: if io.reset { State { controller: control::initial_service_state(), frame: Frame:0, slot:u8:0 } }
+    state: if io.reset { State { controller: control::clock_initial(), frame: Frame:0, slot:u8:0 } }
       else { State { controller:result.state, frame:if take {io.source_frame} else {s.frame}, slot:if take {io.source_slot} else {s.slot} } },
     output: Outputs {
       source_ready:take, tx_valid:live && observed.tx_valid,

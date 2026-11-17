@@ -11,8 +11,8 @@ fn command_frame(command: supervisor_controller::Supervisorinput) -> axis::Frame
 
 // Invoke the actual compiled Erlang transition; no policy is reimplemented here.
 fn step(state: supervisor_controller::Supervisorstate,
-        command: supervisor_controller::Supervisorinput) -> supervisor_controller::ServiceResult {
-  supervisor_controller::service_step(supervisor_controller::ServiceState {
+        command: supervisor_controller::Supervisorinput) -> supervisor_controller::ClockResult {
+  supervisor_controller::clock_step(supervisor_controller::ClockState {
     data: supervisor_controller::Supervisorservice {supervisor: state}, failure: u32:0
   }, command_frame(command))
 }
@@ -78,7 +78,7 @@ fn valid_grant(epoch: u64, first: u64, last: u64, children: u16,
 pub fn initial_allocation_consumes_one(epoch: u64, first: u64, last: u64,
                                       children: u16, intensity: u8,
                                       period: u32, now: u64) -> bool {
-  let installed = step(supervisor_controller::initial_service_state().data.supervisor,
+  let installed = step(supervisor_controller::clock_initial().data.supervisor,
     supervisor_controller::Supervisorinput {
       op: supervisor_codes::SUPERVISOR_OPERATION_START, epoch, first, last,
       children, intensity, period, now,
@@ -147,7 +147,7 @@ pub fn pending_retry_preserves_allocation(previous: u64, target: u64,
 // Deliberately wrong: accepting a valid grant does not mean its children started.
 // The expected counterexample is a legal nonzero epoch from cold state.
 pub fn incorrect_start_is_running(epoch: u64) -> bool {
-  let result = step(supervisor_controller::initial_service_state().data.supervisor,
+  let result = step(supervisor_controller::clock_initial().data.supervisor,
     supervisor_controller::Supervisorinput {
       op: supervisor_codes::SUPERVISOR_OPERATION_START, epoch,
       first: u64:1, last: u64:3, children: u16:2, intensity: u8:2, period: u32:1,

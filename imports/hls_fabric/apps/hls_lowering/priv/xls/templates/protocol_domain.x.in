@@ -10,7 +10,7 @@ import network;
 
 // Each domain owns its controller, every actor and every private transport slot.
 pub struct State {
-  control: domain_controller::ServiceState,
+  control: domain_controller::ClockState,
   network: network::State,
   source_fault: u16,
   source_actor: u32,
@@ -21,9 +21,9 @@ pub struct Tick { state: State, output: Outputs }
 
 // The lifecycle algorithm is compiled from hls_domain_lifecycle, including
 // replay, stale-transition checks, identity retirement and first-fault retention.
-fn control_tick(state: domain_controller::ServiceState,
-                input: domain_controller::Domaininput) -> domain_controller::ServiceResult {
-  domain_controller::service_step(state,
+fn control_tick(state: domain_controller::ClockState,
+                input: domain_controller::Domaininput) -> domain_controller::ClockResult {
+  domain_controller::clock_step(state,
     axis::pack(domain_controller::Tag::DOMAIN_INPUT as u8,
       hls_bits::frame_payload(domain_controller::bits_from_domaininput(input))))
 }
@@ -81,7 +81,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   } else { zero!<domain_controller::Domaininput>() };
   let result = control_tick(s.control, indication);
   let reply = domain_controller::domainoutput_from_bits(result.response.payload);
-  let control = if io.reset { domain_controller::initial_service_state() } else { result.state };
+  let control = if io.reset { domain_controller::clock_initial() } else { result.state };
   Tick {
     state: State { control, network: if advance { net.state } else { s.network },
       source_fault: if reset_network { u16:0 } else if new_fault { fault } else { s.source_fault },

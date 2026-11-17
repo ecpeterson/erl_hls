@@ -113,7 +113,7 @@ build(Direction, DataWords, Requested) ->
         } = declarations(Direction),
     ControllerWords = controller_words(Requested, Minimum),
     ControllerLayout = hls_frame_layout:new(ControllerWords),
-    Artifact = xls_parse:to_artifact(Source, #{frame_payload_words => ControllerWords}),
+    Artifact = xls_clocked_controller:artifact(Source, ControllerWords),
     FrameBits = hls_frame_layout:frame_bits(DataLayout),
     {Inputs, Outputs} = ports(Direction, FrameBits, hls_type:width(maps:get(status, Codecs))),
     Name = "endpoint_" ++ atom_to_list(Direction),
