@@ -1,0 +1,9 @@
+# Explicit supervised startup
+
+A manually controlled deployment may require external preparation between incarnations. An ordinary permanent OTP child must not turn an unexpected death into permission to repeat that preparation or reset again. Keep the generic persistent owner and the trial-local representative separate; remove application-specific lifecycle servers.
+
+`hls_domain:authorize/2` reserves one local grant, observes a retired predecessor through the existing asynchronous domain lane, and binds the grant to it. `supervise/3` consumes the grant before startup, monitors its representative, and allows at most one new incarnation. The already-existing owner-held retirement path survives representative death. Pending grants can be revoked; an old response cannot mint a revoked grant or erase a newer one. Busy admission rolls back its reservation. No new backend protocol, hardware state, application-message relay or persistent work log is introduced.
+
+`retire/3` and `hls_domain_instance:await_ready/2` supply bounded caller-side reconciliation. Caller timeout does not certify cancellation or hardware completion. The application still orders external preparation and successive lifetimes. Owner loss loses local grants and retirement intent; the backend's existing preservation/reconciliation contract remains unchanged.
+
+Validation: 1,279 EUnit tests passed, including eight new finite authorization/lifetime scenarios. The nine-step shared CI quality group passed (contracts, formatting, Dialyzer and package boundaries); inherited source-contract migration gaps remain. Native actor tests check actual PID retirement and fresh state. Controllable backend fixtures check delayed grant revocation, bounded-lane rollback, withheld fences, initialization-time death, independent domain progress and owner restart. These are finite software witnesses, not hardware reset or all-schedule proofs. Logs are in this worktree's `_build/qualification/`.

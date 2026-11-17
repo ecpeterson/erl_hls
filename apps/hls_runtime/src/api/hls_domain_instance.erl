@@ -4,7 +4,7 @@ An ordinary OTP supervisor child representing one admitted domain incarnation.
 
 The deployment owner and its backend outlive this child. Startup returns promptly;
 initialization completes asynchronously and resolve rejects until ready. The deployment
-must explicitly allow automatic replacement. Native endpoint monitors then terminate
+must allow automatic replacement or grant one supervised startup with authorize/2. Native endpoint monitors then terminate
 this child on actor loss, leaving retry intensity and subtree policy to its supervisor.
 A transport-only noconnection leaves this representative alive and unavailable. It
 checks every 100 ms for explicit owner reattachment to the same incarnation; it
@@ -14,12 +14,14 @@ No application message is retained or replayed by this wrapper.
 -behaviour(gen_server).
 
 %% Supervisor entry point and incarnation-specific endpoint access.
--export([start_link/2, start_link/3, status/1, resolve/2]).
+-export([start_link/2, start_link/3, status/1, resolve/2, await_ready/2]).
 %% Explicit distinction between observing and owning a domain lifetime.
 -export_type([options/0]).
 
 -doc "Observed representatives preserve the domain on local death; supervised representatives retire it through the surviving owner.".
--type options() :: #{lifetime => observed | supervised}.
+-type options() :: #{
+    lifetime => observed | supervised, authorization => hls_domain:authorization()
+}.
 %% gen_server callbacks.
 -export([
     init/1,
@@ -35,6 +37,7 @@ No application message is retained or replayed by this wrapper.
 -record(instance, {
     owner :: pid(),
     lifetime = observed :: observed | supervised,
+    authorization = automatic :: automatic | hls_domain:authorization(),
     owner_monitor :: reference(),
     domain :: hls_domain:domain(),
     deadline :: integer(),
@@ -51,10 +54,42 @@ start_link(Owner, Domain) -> start_link(Owner, Domain, #{}).
 -doc "Starts an observer by default, or an explicitly supervised lifetime. Supervised shutdown waits for confirmed retirement; if OTP kills this child, its surviving deployment owner retains that exact retirement intent.".
 -spec start_link(pid(), hls_domain:domain(), options()) -> gen_server:start_ret().
 start_link(Owner, Domain, Options) ->
-    [] = maps:keys(Options) -- [lifetime],
+    [] = maps:keys(Options) -- [lifetime, authorization],
     Lifetime = maps:get(lifetime, Options, observed),
     true = Lifetime =:= observed orelse Lifetime =:= supervised,
-    gen_server:start_link(?MODULE, {Owner, Domain, Lifetime}, []).
+    Authorization = maps:get(authorization, Options, automatic),
+    true = Authorization =:= automatic orelse Lifetime =:= supervised,
+    gen_server:start_link(?MODULE, {Owner, Domain, Lifetime, Authorization}, []).
+
+-doc "Waits up to the supplied milliseconds for this representative's ready observation. Timeout or death returns an error and does not cancel startup or certify retirement; shut down the child and reconcile through its owner.".
+-spec await_ready(pid(), pos_integer()) -> {ok, hls_domain:snapshot()} | {error, term()}.
+await_ready(Instance, Timeout) ->
+    try
+        await_until(Instance, erlang:monotonic_time(millisecond) + Timeout)
+    catch
+        exit:Reason -> {error, Reason}
+    end.
+
+%% The finite caller-side wait never occupies the owner or extends the deadline.
+-spec await_until(pid(), integer()) -> {ok, hls_domain:snapshot()} | {error, term()}.
+await_until(Instance, Deadline) ->
+    Remaining = Deadline - erlang:monotonic_time(millisecond),
+    case Remaining > 0 of
+        false ->
+            {error, timeout};
+        true ->
+            case gen_server:call(Instance, status, Remaining) of
+                #{phase := ready} = Evidence ->
+                    {ok, Evidence};
+                #{phase := Phase} = Evidence when Phase =:= failed; Phase =:= stopped ->
+                    {error, Evidence};
+                {error, _} = Error ->
+                    Error;
+                _ ->
+                    timer:sleep(5),
+                    await_until(Instance, Deadline)
+            end
+    end.
 
 -doc "Returns starting, a transport-unavailable indication, or the last lifecycle observation; it does not assert remote liveness.".
 -spec status(pid()) -> starting | {error, noconnection} | hls_domain:snapshot().
@@ -65,28 +100,42 @@ status(Instance) -> gen_server:call(Instance, status).
 resolve(Instance, Actor) -> gen_server:call(Instance, {resolve, Actor}).
 
 -doc "Monitors the owner before scheduling initialization, without blocking supervisor startup.".
--spec init({pid(), hls_domain:domain(), observed | supervised}) ->
+-spec init({
+    pid(), hls_domain:domain(), observed | supervised, automatic | hls_domain:authorization()
+}) ->
     {ok, #instance{}, {continue, activate}}.
-init({Owner, Domain, Lifetime}) ->
+init({Owner, Domain, Lifetime, Authorization}) ->
     process_flag(trap_exit, Lifetime =:= supervised),
     Monitor = monitor(process, Owner),
     {ok,
         #instance{
             owner = Owner,
             lifetime = Lifetime,
+            authorization = Authorization,
             owner_monitor = Monitor,
             domain = Domain,
             deadline = erlang:monotonic_time(millisecond) + 5000
         },
         {continue, activate}}.
 
--doc "Applies explicit automatic policy once, then observes the retained lifecycle operation.".
+-doc "Claims automatic policy or consumes one explicit startup grant, then observes the retained lifecycle operation.".
 -spec handle_continue(activate, #instance{}) ->
     {noreply, #instance{}} | {stop, term(), #instance{}}.
 handle_continue(
-    activate, Instance = #instance{lifetime = supervised, owner = Owner, domain = Domain}
+    activate,
+    Instance = #instance{
+        lifetime = supervised,
+        owner = Owner,
+        domain = Domain,
+        authorization = Authorization
+    }
 ) ->
-    case hls_domain:supervise(Owner, Domain) of
+    Claim =
+        case Authorization of
+            automatic -> hls_domain:supervise(Owner, Domain);
+            _ -> hls_domain:supervise(Owner, Domain, Authorization)
+        end,
+    case Claim of
         {ok, Evidence} ->
             start_incarnation(Evidence, Instance#instance{
                 deadline = erlang:monotonic_time(millisecond) + 5000, evidence = starting

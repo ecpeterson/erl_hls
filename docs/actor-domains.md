@@ -155,6 +155,22 @@ The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset
 
 The child starts promptly and observes readiness asynchronously. `supervised` claims exclusive lifetime ownership before startup. Competing callers cannot activate or replace that owned domain; an exact-incarnation stop remains available. Its surviving deployment owner retains the exact incarnation or pending initialization target. Supervisor shutdown requests stop and waits for acknowledged retirement. If OTP kills the child before cleanup completes, the owner retains that intent; a replacement child cannot adopt the old healthy incarnation. `one_for_all` and `rest_for_one` therefore retire the affected healthy siblings as well as replacing the failed child. The owner and backend must live outside this subtree. OTP orders representative startup, but hardware readiness remains asynchronous; dependent domains must coordinate readiness explicitly.
 
+A manual domain can instead grant **one** supervised startup. The application coordinator orders external preparation, then obtains the grant and supplies it in the child specification:
+
+```erlang
+ok = hls_domain:retire(Owner, compute, 5000),
+%% Perform any application-owned preparation here.
+{ok, Grant} = hls_domain:authorize(Owner, compute),
+#{id => compute,
+  start => {hls_domain_instance, start_link,
+            [Owner, compute, #{lifetime => supervised, authorization => Grant}]},
+  restart => permanent, shutdown => 5000, type => worker}.
+```
+
+The owner binds the grant to an observed unbound/stopped predecessor, consumes it when admitting the representative, and permits at most one new incarnation. Restarting that child specification with its spent grant fails; the application must complete retirement/preparation and supply a new grant. Grants are local references, not persistent credentials or a replacement for backend authority. Owner restart loses them. Duplicate authorization rejects. If an authorization reply is lost, `retire/3` revokes the uncertain grant before another can be issued. Busy claim admission leaves the grant available. No application data flows through this mechanism.
+
+`hls_domain_instance:await_ready(Child, TimeoutMs)` optionally waits for the representative's ready observation, including its actor identities. `hls_domain:retire(Owner, Domain, TimeoutMs)` revokes unused permission, retains an owned child's stop intent, and waits for exact stopped/unbound evidence and lifetime release. Both waits use finite caller deadlines; timeout or disconnection is an error, never cancellation or retirement evidence. A supervised child's owner continues its retained retirement after a caller times out. Applications must serialize their own preparation/start/retire sequences; this API does not make external effects transactional.
+
 Omitting `lifetime`, including the existing `start_link/2`, selects `observed`. Losing an observer preserves a healthy domain; restarting it reattaches rather than resetting. Both modes leave ordinary transport-only `noconnection` unavailable without requesting reset. Old monitors and pending calls do not resume. An explicitly requested shutdown during disconnection remains pending until reattachment supplies actual retirement evidence; elapsed time and death of a local proxy are not acknowledgements.
 
 The supervised retirement record is bounded management state in the owner, not a durable work log. Owner or host loss does not preserve this shutdown intent. The backend's existing default `owner_loss => preserve` still applies. Consequently, this is not a hardware watchdog or a fully transparent remote OTP parent link. Explicit supervision controls a digital domain's lifetime while its management authority survives; external effects and reservations remain outside that lifetime.

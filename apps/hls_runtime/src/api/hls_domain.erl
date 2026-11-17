@@ -32,13 +32,18 @@ established. After host/storage crash, reconcile identity before reusing this st
     reattach/3,
     resolve/3,
     policy/2,
+    authorize/2,
     supervise/2,
+    supervise/3,
+    retire/3,
     release/2
 ]).
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 %% Public ownership contracts.
--export_type([catalog/0, backend/0, handle/0, incarnation/0, domain/0, policy/0, snapshot/0]).
+-export_type([
+    catalog/0, backend/0, handle/0, incarnation/0, domain/0, policy/0, snapshot/0, authorization/0
+]).
 
 -doc "A fixed deployment-local domain name.".
 -type domain() :: atom().
@@ -48,6 +53,8 @@ established. After host/storage crash, reconcile identity before reusing this st
 -type handle() :: {domain(), incarnation()}.
 -doc "Automatic replacement is permitted only when the deployment declares it acceptable.".
 -type policy() :: manual | automatic.
+-doc "One local owner's single-use permission for supervised startup from an observed retired incarnation; lost on owner death.".
+-opaque authorization() :: reference().
 -doc "Declared domains and their replacement policy; actor/source layout belongs to the backend.".
 -type catalog() :: #{domain() := policy()}.
 -doc "One backend implementation, a distinct existing endpoint for each domain, and a durable incarnation counter file.".
@@ -77,6 +84,8 @@ established. After host/storage crash, reconcile identity before reusing this st
     | {resolve, any | incarnation(), term()}
     | {reattach, incarnation(), pid()}
     | {supervise, pid()}
+    | {supervise, pid(), non_neg_integer()}
+    | {authorize, authorization()}
     | retire.
 %% Internal retirement requests have no external response alias.
 -type caller() :: gen_server:from() | retirement.
@@ -101,12 +110,15 @@ established. After host/storage crash, reconcile identity before reusing this st
     child :: pid(),
     monitor :: reference(),
     incarnation = unknown :: unknown | non_neg_integer(),
+    startup = automatic :: automatic | {authorized, non_neg_integer()} | spent,
     retiring = false :: boolean(),
     waiter = none :: none | gen_server:from(),
     retry = false :: boolean()
 }).
 %% The owner retains authority tokens, never source actor state or an application work log.
 -record(owner, {
+    %% Pending inspection reserves the slot; only confirmed retirement binds its predecessor.
+    authorizations = #{} :: #{domain() => {authorization(), pending | non_neg_integer()}},
     catalog :: catalog(),
     module :: module(),
     endpoints :: #{domain() := pid()},
@@ -161,6 +173,75 @@ stop(Owner, {Domain, Incarnation}) -> gen_server:call(Owner, {stop, Domain, Inca
 -doc "Claims this local caller as the sole supervised representative before startup. Its death retains retirement intent in the surviving owner. Existing retirement must finish before another child can claim the domain.".
 -spec supervise(pid(), domain()) -> {ok, snapshot()} | {error, term()}.
 supervise(Owner, Domain) -> gen_server:call(Owner, {supervise, Domain}).
+
+-doc "Authorizes one supervised startup of a manual domain, only after observed unbound/stopped state and prior lifetime release. Does not start hardware. Duplicate grants reject; an uncertain reply must be reconciled with retire/3 before requesting another. No permission survives owner restart.".
+-spec authorize(pid(), domain()) -> {ok, authorization()} | {error, term()}.
+authorize(Owner, Domain) -> gen_server:call(Owner, {authorize, Domain}).
+
+-doc "Consumes a manual domain's authorization for this local supervised child. Consumption precedes asynchronous startup; a spent, revoked or foreign grant cannot acquire another incarnation. Busy admission leaves an unconsumed grant intact.".
+-spec supervise(pid(), domain(), authorization()) -> {ok, snapshot()} | {error, term()}.
+supervise(Owner, Domain, Authorization) ->
+    gen_server:call(Owner, {supervise, Domain, Authorization}).
+
+-doc "Revokes unused startup permission and retires the observed incarnation within Timeout milliseconds. Confirmed unbound/stopped state succeeds; closing, timeout or transport loss does not. Supervised retirement intent survives the caller; timeout never authorizes replacement. Calls for successive trials must be ordered by their application owner.".
+-spec retire(pid(), domain(), pos_integer()) -> ok | {error, term()}.
+retire(Owner, Domain, Timeout) ->
+    Deadline = erlang:monotonic_time(millisecond) + Timeout,
+    try
+        ok = lifecycle_call(Owner, {retire_domain, Domain}, Deadline),
+        retire_until(Owner, Domain, unknown, Deadline)
+    catch
+        throw:Reason -> {error, Reason};
+        exit:Reason -> {error, {unavailable, Reason}}
+    end.
+
+%% Poll one exact lifetime; startup may install its target before it can accept stop.
+-spec retire_until(pid(), domain(), unknown | non_neg_integer(), integer()) -> ok.
+retire_until(Owner, Domain, Expected, Deadline) ->
+    {ok, #{phase := Phase, handle := Handle, target := Target}} =
+        lifecycle_call(Owner, {status, Domain}, Deadline),
+    Current =
+        case Handle of
+            none -> 0;
+            {Domain, I} -> I
+        end,
+    Observed = max(Current, Target),
+    case Expected =:= unknown orelse Expected =:= Observed of
+        true -> ok;
+        false -> throw({incarnation_changed, Expected, Observed})
+    end,
+    case Phase of
+        Retired when Retired =:= unbound; Retired =:= stopped ->
+            case lifecycle_call(Owner, {retirement_released, Domain}, Deadline) of
+                true -> ok;
+                false -> retire_later(Owner, Domain, Observed, Deadline)
+            end;
+        Live when (Live =:= ready orelse Live =:= failed), Current =/= 0 ->
+            {ok, _} = lifecycle_call(Owner, {stop, Domain, Current}, Deadline),
+            retire_later(Owner, Domain, Observed, Deadline);
+        _ ->
+            retire_later(Owner, Domain, Observed, Deadline)
+    end.
+
+%% Each observation spends the same finite deadline; elapsed time never certifies retirement.
+-spec retire_later(pid(), domain(), non_neg_integer(), integer()) -> ok.
+retire_later(Owner, Domain, Expected, Deadline) ->
+    timer:sleep(5),
+    retire_until(Owner, Domain, Expected, Deadline).
+
+%% Convert rejected observations into a failure without renewing the caller's timeout.
+-spec lifecycle_call(pid(), term(), integer()) -> term().
+lifecycle_call(Owner, Request, Deadline) ->
+    Remaining = Deadline - erlang:monotonic_time(millisecond),
+    case Remaining > 0 of
+        false ->
+            throw(timeout);
+        true ->
+            case gen_server:call(Owner, Request, Remaining) of
+                {error, Reason} -> throw(Reason);
+                Reply -> Reply
+            end
+    end.
 
 -doc "Requests retirement of this caller's supervised lifetime and waits for backend confirmation. The caller's supervisor supplies the shutdown deadline; killing the caller does not cancel retained intent. Owner or transport failure cannot establish successful retirement.".
 -spec release(pid(), domain()) -> ok | {error, term()}.
@@ -224,6 +305,23 @@ handle_call({policy, Domain}, _From, Owner = #owner{catalog = Catalog}) ->
 %% Status always comes from the controller instead of a stale host mirror.
 handle_call({status, Domain}, From, Owner) ->
     enqueue(Domain, status, From, Owner);
+%% Reserve one grant before inspection so revocation also cancels a delayed authorization.
+handle_call({authorize, Domain}, From, Owner) ->
+    begin_authorization(Domain, From, Owner);
+%% Withdrawal cannot erase an already-owned lifetime's stop intent.
+handle_call(
+    {retire_domain, Domain}, _From, Owner = #owner{catalog = Catalog, authorizations = Grants}
+) ->
+    case maps:is_key(Domain, Catalog) of
+        true ->
+            Next = Owner#owner{authorizations = maps:remove(Domain, Grants)},
+            {reply, ok, retire_supervision(Domain, Next)};
+        false ->
+            {reply, {error, unknown_domain}, Owner}
+    end;
+%% A stopped backend alone does not release a still-owned supervised lifetime.
+handle_call({retirement_released, Domain}, _From, Owner = #owner{supervision = Supervision}) ->
+    {reply, not maps:is_key(Domain, Supervision), Owner};
 %% Initial creation and replacement share durable allocation and request correlation.
 handle_call({activate, Domain}, From, Owner) ->
     enqueue_transition(Domain, {transition, 0, activate}, From, Owner);
@@ -236,6 +334,11 @@ handle_call({stop, Domain, Expected}, From, Owner) ->
 %% Lifetime ownership is explicit; ordinary observers never enter this registry.
 handle_call({supervise, Domain}, From = {Child, _}, Owner) when node(Child) =:= node() ->
     claim_supervision(Domain, Child, From, Owner);
+%% An explicit grant permits supervision without enabling automatic replacement.
+handle_call({supervise, Domain, Authorization}, From = {Child, _}, Owner) when
+    node(Child) =:= node()
+->
+    claim_authorized(Domain, Authorization, Child, From, Owner);
 %% Shutdown intent is retained before waiting, including if OTP later kills this child.
 handle_call({release, Domain}, From = {Child, _}, Owner = #owner{supervision = Supervision}) ->
     case maps:find(Domain, Supervision) of
@@ -503,6 +606,23 @@ inspected(Domain, {reattach, _Expected, _Backend}, {ok, _}, Owner) ->
 %% Ordinary status preserves the backend's full observation.
 inspected(Domain, status, Reply, Owner) ->
     finish_snapshot(Domain, Reply, Owner);
+%% Permission names the retired predecessor; a live or uncertain controller cannot grant it.
+inspected(
+    Domain,
+    {authorize, Token},
+    {ok, #{state := #domain_state{phase = Phase, current = Current}}},
+    Owner = #owner{authorizations = Grants}
+) ->
+    case {maps:find(Domain, Grants), Phase} of
+        {{ok, {Token, pending}}, P} when P =:= unbound; P =:= stopped ->
+            complete(Domain, {ok, Token}, Owner#owner{
+                authorizations = Grants#{Domain := {Token, Current}}
+            });
+        {{ok, {Token, pending}}, _} ->
+            complete(Domain, {error, not_retired}, Owner);
+        _ ->
+            complete(Domain, {error, authorization_revoked}, Owner)
+    end;
 inspected(
     Domain,
     {resolve, Expected, Actor},
@@ -518,6 +638,18 @@ inspected(Domain, {resolve, _Expected, _Actor}, {ok, _}, Owner) ->
 inspected(Domain, {supervise, Child}, {ok, Evidence = #{state := State}}, Owner) ->
     Next = bind_supervision(Domain, Child, observed_incarnation(State), Owner),
     complete(Domain, {ok, describe_evidence(Domain, Evidence)}, Next);
+%% A single-use claim cannot attach to live work or follow a changed predecessor.
+inspected(
+    Domain,
+    {supervise, Child, Expected},
+    {ok, #{state := #domain_state{current = Expected, phase = Phase}}} = Reply,
+    Owner
+) when
+    Phase =:= unbound; Phase =:= stopped
+->
+    inspected(Domain, {supervise, Child}, Reply, Owner);
+inspected(Domain, {supervise, _Child, _Expected}, {ok, _}, Owner) ->
+    complete(Domain, {error, authorization_stale}, Owner);
 %% An acquired lifetime excludes other transition callers while its initial identity observation is unresolved.
 inspected(Domain, retire, {ok, Evidence}, Owner) ->
     retire_evidence(Domain, Evidence, Owner);
@@ -627,9 +759,13 @@ finish_snapshot(Domain, Error, Owner) ->
 %% Replies to abandoned caller aliases are discarded by OTP; they never repeat the operation.
 -spec complete(domain(), term(), #owner{}) -> #owner{}.
 complete(Domain, Reply, Owner = #owner{work = Work}) ->
-    W = #work{active = #pending{from = From, timer = Timer}} = maps:get(Domain, Work),
+    W =
+        #work{active = #pending{from = From, timer = Timer, operation = Operation}} = maps:get(
+            Domain, Work
+        ),
     cancel_timer(Timer),
-    Next = Owner#owner{work = Work#{Domain := W#work{active = none}}},
+    Cleared = finish_authorization(Domain, Operation, Reply, Owner),
+    Next = Cleared#owner{work = Work#{Domain := W#work{active = none}}},
     Replied =
         case From of
             retirement ->
@@ -755,12 +891,20 @@ describe(
     domain(), hls_domain_lifecycle:operation(), hls_domain_lifecycle:state(), #owner{}
 ) -> #owner{}.
 allocate_transition(
+    Domain, _Operation, _State, Owner = #owner{authorizations = Grants}
+) when is_map_key(Domain, Grants) ->
+    complete(Domain, {error, authorized}, Owner);
+allocate_transition(
     Domain, Operation, State, Owner = #owner{work = Work, supervision = Supervision}
 ) ->
     #work{active = #pending{from = From}} = maps:get(Domain, Work),
     case {From, maps:find(Domain, Supervision)} of
-        {{Child, _}, {ok, #supervision{child = Child, retiring = false}}} ->
+        {{Child, _}, {ok, #supervision{child = Child, retiring = false, startup = Startup}}} when
+            Startup =:= automatic; Startup =:= {authorized, State#domain_state.current}
+        ->
             allocate_live_transition(Domain, Operation, State, Owner);
+        {{Child, _}, {ok, #supervision{child = Child, retiring = false}}} ->
+            complete(Domain, {error, authorization_spent}, Owner);
         {_, {ok, _}} ->
             complete(Domain, {error, supervised}, Owner);
         _ ->
@@ -797,6 +941,10 @@ allocate_live_transition(Domain, Operation, State, Owner = #owner{next = Counter
 -spec enqueue_transition(domain(), operation(), gen_server:from(), #owner{}) ->
     {reply, {error, term()}, #owner{}} | {noreply, #owner{}}.
 enqueue_transition(
+    Domain, _Operation, _From, Owner = #owner{authorizations = Grants}
+) when is_map_key(Domain, Grants) ->
+    {reply, {error, authorized}, Owner};
+enqueue_transition(
     Domain, Operation, From = {Caller, _}, Owner = #owner{supervision = Supervision}
 ) ->
     case maps:find(Domain, Supervision) of
@@ -806,6 +954,86 @@ enqueue_transition(
             enqueue(Domain, Operation, From, Owner);
         {ok, _} ->
             {reply, {error, supervised}, Owner}
+    end.
+
+%% Reservation precedes the asynchronous observation; busy admission restores the unreserved owner.
+-spec begin_authorization(domain(), gen_server:from(), #owner{}) ->
+    {reply, {error, term()}, #owner{}} | {noreply, #owner{}}.
+begin_authorization(
+    Domain,
+    From,
+    Owner = #owner{
+        catalog = Catalog,
+        authorizations = Grants,
+        supervision = Supervision
+    }
+) ->
+    case
+        {maps:find(Domain, Catalog), maps:is_key(Domain, Grants), maps:is_key(Domain, Supervision)}
+    of
+        {error, _, _} ->
+            {reply, {error, unknown_domain}, Owner};
+        {{ok, automatic}, _, _} ->
+            {reply, {error, automatic_replacement}, Owner};
+        {_, true, _} ->
+            {reply, {error, already_authorized}, Owner};
+        {_, _, true} ->
+            {reply, {error, supervised}, Owner};
+        {{ok, manual}, false, false} ->
+            Token = make_ref(),
+            Reserved = Owner#owner{authorizations = Grants#{Domain => {Token, pending}}},
+            case enqueue(Domain, {authorize, Token}, From, Reserved) of
+                {reply, Error, _} -> {reply, Error, Owner};
+                Accepted -> Accepted
+            end
+    end.
+
+%% A failed old request cannot erase a newer reservation made after revocation.
+-spec finish_authorization(domain(), operation(), term(), #owner{}) -> #owner{}.
+finish_authorization(_Domain, {authorize, Token}, {ok, Token}, Owner) ->
+    Owner;
+finish_authorization(Domain, {authorize, Token}, _Reply, Owner = #owner{authorizations = Grants}) ->
+    case maps:find(Domain, Grants) of
+        {ok, {Token, _}} -> Owner#owner{authorizations = maps:remove(Domain, Grants)};
+        _ -> Owner
+    end;
+finish_authorization(_Domain, _Operation, _Reply, Owner) ->
+    Owner.
+
+%% Consume exactly once when the claim enters its lane; no other child can reuse the token.
+-spec claim_authorized(domain(), authorization(), pid(), gen_server:from(), #owner{}) ->
+    {reply, {error, term()}, #owner{}} | {noreply, #owner{}}.
+claim_authorized(
+    Domain,
+    Token,
+    Child,
+    From,
+    Owner = #owner{
+        authorizations = Grants,
+        supervision = Supervision
+    }
+) ->
+    case {maps:find(Domain, Grants), maps:is_key(Domain, Supervision)} of
+        {{ok, {Token, Expected}}, false} when is_integer(Expected) ->
+            S = #supervision{
+                child = Child,
+                monitor = monitor(process, Child),
+                incarnation = Expected,
+                startup = {authorized, Expected}
+            },
+            Claimed = Owner#owner{
+                authorizations = maps:remove(Domain, Grants),
+                supervision = Supervision#{Domain => S}
+            },
+            case enqueue(Domain, {supervise, Child, Expected}, From, Claimed) of
+                {reply, Error, _} ->
+                    demonitor(S#supervision.monitor, [flush]),
+                    {reply, Error, Owner};
+                Accepted ->
+                    Accepted
+            end;
+        _ ->
+            {reply, {error, invalid_authorization}, Owner}
     end.
 
 %% Registry ownership is local and exclusive; another live representative cannot steal the lifetime.
@@ -863,7 +1091,19 @@ bind_allocated(Domain, Target, Owner = #owner{work = Work, supervision = Supervi
     #work{active = #pending{from = From}} = maps:get(Domain, Work),
     case {From, maps:find(Domain, Supervision)} of
         {{Child, _}, {ok, S = #supervision{child = Child, retiring = false}}} ->
-            Owner#owner{supervision = Supervision#{Domain := S#supervision{incarnation = Target}}};
+            Startup =
+                case S#supervision.startup of
+                    automatic -> automatic;
+                    _ -> spent
+                end,
+            Owner#owner{
+                supervision = Supervision#{
+                    Domain := S#supervision{
+                        incarnation = Target,
+                        startup = Startup
+                    }
+                }
+            };
         _ ->
             Owner
     end.
