@@ -334,6 +334,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
       match phase {
         Phase::HLS_SERVER => {
           let v_Xls_clause_1_Mask_1 = message.mask;                             // @erl "regsvc.erl":108
+          let v_Xls_clause_1__HlsServerFrom1_1 = (Tag::STATE, data);            // @erl "regsvc.erl":108
           let v_Xls_clause_1_State_1 = (Tag::STATE, data);                      // @erl "regsvc.erl":108
           let _0 = hls_integer::equal(v_Xls_clause_1_Mask_1, sN[2]:0);          // @erl "regsvc.erl":108
           if _0 {
@@ -350,6 +351,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
             let v_Xls_clause_2_Register_1 = message.register;                   // @erl "regsvc.erl":110
             let v_Xls_clause_2_Value_1 = message.value;                         // @erl "regsvc.erl":110
             let v_Xls_clause_2_Mask_1 = message.mask;                           // @erl "regsvc.erl":110
+            let v_Xls_clause_2__HlsServerFrom1_1 = (Tag::STATE, data);          // @erl "regsvc.erl":110
             let v_Xls_clause_2_State_1 = (Tag::STATE, data);                    // @erl "regsvc.erl":110
             let _0 = hls_integer::less(v_Xls_clause_2_Register_1, sN[6]:16);    // @erl "regsvc.erl":111
             if _0 {
@@ -396,6 +398,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
       match phase {
         Phase::HLS_SERVER => {
           let v_Xls_clause_1_Register_1 = message.register;                     // @erl "regsvc.erl":120
+          let v_Xls_clause_1__HlsServerFrom1_1 = (Tag::STATE, data);            // @erl "regsvc.erl":120
           let v_Xls_clause_1_State_1 = (Tag::STATE, data);                      // @erl "regsvc.erl":120
           let v_Xls_clause_1__HlsServerFrom0_1 = call_from;                     // @erl "regsvc.erl":120
           let _0 = hls_integer::less(v_Xls_clause_1_Register_1, sN[6]:16);      // @erl "regsvc.erl":121
@@ -433,6 +436,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
       match phase {
         Phase::HLS_SERVER => {
           let v_Xls_clause_1_Value_1 = message.value;                           // @erl "regsvc.erl":118
+          let v_Xls_clause_1__HlsServerFrom1_1 = (Tag::STATE, data);            // @erl "regsvc.erl":118
           let v_Xls_clause_1_State_1 = (Tag::STATE, data);                      // @erl "regsvc.erl":118
           let v_Xls_clause_1__HlsServerFrom0_1 = call_from;                     // @erl "regsvc.erl":118
           let _0 = Ack {                                                        // @erl "regsvc.erl":119
@@ -460,6 +464,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
       let message = bulkget_from_bits(frame.payload);
       match phase {
         Phase::HLS_SERVER => {
+          let v_Xls_clause_1__HlsServerFrom1_1 = (Tag::STATE, data);            // @erl "regsvc.erl":125
           let v_Xls_clause_1_State_1 = (Tag::STATE, data);                      // @erl "regsvc.erl":125
           let v_Xls_clause_1__HlsServerFrom0_1 = call_from;                     // @erl "regsvc.erl":125
           if message.count == 0 {
@@ -480,6 +485,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: State, call_from: u64, call_
           } else {
             let v_Xls_clause_2_Start_1 = message.start;                         // @erl "regsvc.erl":127
             let v_Xls_clause_2_Count_1 = message.count;                         // @erl "regsvc.erl":127
+            let v_Xls_clause_2__HlsServerFrom1_1 = (Tag::STATE, data);          // @erl "regsvc.erl":127
             let v_Xls_clause_2_State_1 = (Tag::STATE, data);                    // @erl "regsvc.erl":127
             let v_Xls_clause_2__HlsServerFrom0_1 = call_from;                   // @erl "regsvc.erl":127
             let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_2_Count_1);        // @erl "regsvc.erl":128
