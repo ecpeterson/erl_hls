@@ -132,16 +132,34 @@ boolean_union_rejected_test_() ->
         Type <- [begin {ok, Tokens, _} = erl_scan:string("-type value() :: " ++ Source ++ "."),
             {ok, {attribute, _, type, {value, T, []}}} = erl_parse:parse_form(Tokens), T end]].
 
-%% Container-provider operations have not acquired enum type-flow contracts;
-%% reject that source shape instead of silently admitting untyped encoded bits.
--spec collection_domain_rejected_test() -> ok.
-collection_domain_rejected_test() ->
+%% Fixed collections preserve codebooks through access, replacement and helpers.
+-spec collection_domains_test() -> ok.
+collection_domains_test() ->
+    {Forms, _} = collection("root(Cell) -> V = busy, A = hls_vec:set(1, Cell#cell.items, V), case hls_vec:nth(1, A) of busy -> Cell#cell{items=A}; _ -> Cell end."),
+    ?assert(lists:member({<<"uN[2]">>, 1}, typed_literals(hls_source:find_function(Forms, root, 1)))),
+    ?assertException(error, {incompatible_xls_enum, _, _, _},
+        collection("root(Cell) -> hls_vec:set(1, Cell#cell.items, Cell#cell.fault).")),
+    ?assertException(error, {incompatible_xls_enum, _, _, _},
+        collection("root(Cell) -> Cell#cell{items = Cell#cell.errors}.")),
+    ?assertException(error, {unsupported_xls_enum_operator, _, _},
+        collection("root(Cell) -> hls_vec:nth(1, Cell#cell.items) + 1.")),
+    ?assertException(error, {xls_literal_type, _, missing, _, _},
+        collection("root(Cell) -> hls_vec:set(1, Cell#cell.items, missing).")),
+    ?assertException(error, {unsupported_xls_enum_provider_call, _, _},
+        collection("root(Cell) -> hls_vec:nth(Cell#cell.fault, Cell#cell.items).")),
+    ?assertException(error, {incompatible_xls_enum, _, _, _},
+        collection("root(Cell) -> A = case true of true -> Cell#cell.items; false -> Cell#cell.errors end, Cell#cell{items=A}.")),
+    ok.
+
+%% Use public preparation so field resolution and literal propagation participate.
+-spec collection(string()) -> {[hls_source:form()], [map()]}.
+collection(Root) ->
     Texts = ["-module(enum_collection).", "-hls_data(cell).", "-hls_tags([]).",
-        "-type mode() :: idle | busy.",
-        "-record(cell, {items = hls_type:zero() :: hls_vec:vector(mode(), 2)})."],
+        "-type mode() :: idle | busy | done.", "-type fault() :: busy | none | failed.",
+        "-record(cell, {items = hls_type:zero() :: hls_vec:vector(mode(), 2), errors = hls_type:zero() :: hls_vec:vector(fault(), 2), fault = busy :: fault()}).", Root],
     Forms = [begin {ok, Tokens, _} = erl_scan:string(T),
         {ok, Form} = erl_parse:parse_form(Tokens), Form end || T <- Texts],
-    ?assertException(error, {unsupported_hls_enum_container, _, _, _}, hls_records:resolve(Forms)).
+    xls_helpers:prepare(Forms, [{root, 1}]).
 
 %% A two-member enum's bit representation must not become Boolean truth, nor
 %% enter a provider which has no declared atom-domain argument contract.

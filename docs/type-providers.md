@@ -65,6 +65,4 @@ Two distinct codebooks cannot be used interchangeably even if their widths or
 members overlap. This slice diagnoses such uses, including a variable consumed by
 two codebooks; it does not insert implicit enum conversions. Boolean atoms retain their separate canonical `boolean()` / `hls_bool:bool()`
 type; explicit finite unions containing `true` or `false` are rejected rather than
-interpreting declaration order as truth. Enums nested under collection/provider types are rejected until those operations
-carry enum type-flow contracts; nested record fields are supported. Parameterized aliases
-and imported source helpers' local aliases remain outside this supported slice.
+interpreting declaration order as truth. Fixed `hls_vec:vector/2` and `hls_lists:list/2` collections preserve enum domains through `nth/2` and `set/3`, including nested records. Other provider operations still need explicit atom-domain contracts. Concrete zero-argument aliases also resolve in imported helpers; parameterized aliases remain unsupported.
