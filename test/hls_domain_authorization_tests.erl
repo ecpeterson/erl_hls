@@ -46,6 +46,7 @@ one_allocation_per_claim_test() ->
         ?assertMatch({ok, #{handle := Handle}}, hls_domain:activate(Owner, a)),
         ?assertEqual({error, authorization_spent}, hls_domain:replace(Owner, Handle)),
         ?assertEqual({ok, <<1:64>>}, file:read_file(Store)),
+        ok = hls_domain:release(Owner, a),
         ok = hls_domain:retire(Owner, a, 2000),
         ?assertEqual({error, invalid_authorization}, hls_domain:supervise(Owner, a, Grant))
     end).
@@ -63,6 +64,7 @@ delayed_grant_revocation_test() ->
         ?assertEqual({reply, {error, authorization_revoked}}, gen_server:receive_response(Old, 1000)),
         {reply, {ok, Grant}} = gen_server:receive_response(New, 1000),
         {ok, _} = hls_domain:supervise(Owner, a, Grant),
+        ok = hls_domain:release(Owner, a),
         ok = hls_domain:retire(Owner, a, 2000)
     end).
 
@@ -78,6 +80,7 @@ busy_admission_rolls_back_test() ->
         ?assertEqual({error, busy}, hls_domain:supervise(Owner, a, Grant)),
         drain_lane(Backend, More),
         {ok, _} = hls_domain:supervise(Owner, a, Grant),
+        ok = hls_domain:release(Owner, a),
         ok = hls_domain:retire(Owner, a, 2000)
     end).
 
@@ -144,6 +147,33 @@ owner_restart_loses_grant_test() ->
             ?assertEqual({error, invalid_authorization}, hls_domain:supervise(NewOwner, a, Grant)),
             {ok, _} = hls_domain:authorize(NewOwner, a)
         after stop(NewOwner) end
+    end).
+
+%% Retirement before startup must not forget a still-live representative and admit its delayed call.
+-spec delayed_start_after_retirement_test() -> ok.
+delayed_start_after_retirement_test() ->
+    fixture(model, fun(Owner, _Backend, Store) ->
+        {ok, Grant} = hls_domain:authorize(Owner, a),
+        Parent = self(),
+        Child = spawn(fun() ->
+            {ok, _} = hls_domain:supervise(Owner, a, Grant),
+            Parent ! claimed,
+            receive start -> ok end,
+            Parent ! {late_start, hls_domain:activate(Owner, a)},
+            ok = hls_domain:release(Owner, a)
+        end),
+        Monitor = monitor(process, Child),
+        receive claimed -> ok after 1000 -> error(no_claim) end,
+        ok = gen_server:call(Owner, {retire_domain, a}),
+        ?assertMatch({ok, #{phase := unbound}}, hls_domain:status(Owner, a)),
+        ?assertEqual({error, supervised}, hls_domain:authorize(Owner, a)),
+        Child ! start,
+        receive {late_start, Result} -> ?assertEqual({error, supervised}, Result)
+        after 1000 -> error(no_late_start) end,
+        receive {'DOWN', Monitor, process, Child, normal} -> ok after 1000 -> error(child_survived) end,
+        ok = hls_domain:retire(Owner, a, 2000),
+        ?assertEqual({ok, <<0:64>>}, file:read_file(Store)),
+        {ok, _} = hls_domain:authorize(Owner, a)
     end).
 
 %% Start promptly and let the public readiness API establish the actual incarnation.

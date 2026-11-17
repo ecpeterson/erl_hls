@@ -112,6 +112,7 @@ established. After host/storage crash, reconcile identity before reusing this st
     incarnation = unknown :: unknown | non_neg_integer(),
     startup = automatic :: automatic | {authorized, non_neg_integer()} | spent,
     retiring = false :: boolean(),
+    retired = false :: boolean(),
     waiter = none :: none | gen_server:from(),
     retry = false :: boolean()
 }).
@@ -183,7 +184,7 @@ authorize(Owner, Domain) -> gen_server:call(Owner, {authorize, Domain}).
 supervise(Owner, Domain, Authorization) ->
     gen_server:call(Owner, {supervise, Domain, Authorization}).
 
--doc "Revokes unused startup permission and retires the observed incarnation within Timeout milliseconds. Confirmed unbound/stopped state succeeds; closing, timeout or transport loss does not. Supervised retirement intent survives the caller; timeout never authorizes replacement. Calls for successive trials must be ordered by their application owner.".
+-doc "Revokes unused startup permission and retires the observed incarnation within Timeout milliseconds. Confirmed unbound/stopped state succeeds; closing, timeout or transport loss does not. A live representative must release or die before success; this call does not kill it. Supervised retirement intent survives the caller; timeout never authorizes replacement. Calls for successive trials must be ordered by their application owner.".
 -spec retire(pid(), domain(), pos_integer()) -> ok | {error, term()}.
 retire(Owner, Domain, Timeout) ->
     Deadline = erlang:monotonic_time(millisecond) + Timeout,
@@ -780,7 +781,7 @@ complete(Domain, Reply, Owner = #owner{work = Work}) ->
 -spec advance_queue(domain(), #owner{}) -> #owner{}.
 advance_queue(Domain, Owner = #owner{work = Work, supervision = Supervision}) ->
     case maps:find(Domain, Supervision) of
-        {ok, #supervision{retiring = true, retry = false}} ->
+        {ok, #supervision{retiring = true, retired = false, retry = false}} ->
             drive_retirement(Domain, Owner);
         _ ->
             W = #work{waiting = Waiting, queued = Count} = maps:get(Domain, Work),
@@ -1112,6 +1113,8 @@ bind_allocated(Domain, Target, Owner = #owner{work = Work, supervision = Supervi
 -spec retire_supervision(domain(), #owner{}) -> #owner{}.
 retire_supervision(Domain, Owner = #owner{supervision = Supervision}) ->
     case maps:find(Domain, Supervision) of
+        {ok, S = #supervision{retired = true}} ->
+            release_retired(Domain, S, Owner);
         {ok, S} ->
             Next = Owner#owner{
                 supervision = Supervision#{Domain := S#supervision{retiring = true}}
@@ -1164,7 +1167,10 @@ reconcile_rejected_target(Domain, State, Owner = #owner{work = Work, supervision
 -spec drive_retirement(domain(), #owner{}) -> #owner{}.
 drive_retirement(Domain, Owner = #owner{supervision = Supervision, work = Work}) ->
     case {maps:find(Domain, Supervision), maps:find(Domain, Work)} of
-        {{ok, #supervision{retiring = true, retry = false}}, {ok, #work{active = none}}} ->
+        {
+            {ok, #supervision{retiring = true, retired = false, retry = false}},
+            {ok, #work{active = none}}
+        } ->
             start_operation(Domain, retire, retirement, Owner);
         _ ->
             Owner
@@ -1207,21 +1213,35 @@ retire_evidence(Domain, Evidence = #{state := State}, Owner = #owner{supervision
             end
     end.
 
-%% Only an observed retired boundary releases ownership; all other outcomes retain bounded intent.
+%% Remember actual retirement without forgetting a live child's outstanding authority.
 -spec retirement_reply(domain(), term(), #owner{}) -> #owner{}.
 retirement_reply(Domain, Reply, Owner = #owner{supervision = Supervision}) ->
     S = maps:get(Domain, Supervision),
     case Reply of
         retired ->
-            demonitor(S#supervision.monitor, [flush]),
-            case S#supervision.waiter of
-                none -> ok;
-                From -> gen_server:reply(From, ok)
-            end,
-            Owner#owner{supervision = maps:remove(Domain, Supervision)};
+            release_retired(Domain, S#supervision{retired = true}, Owner);
         _ ->
             erlang:send_after(50, self(), {retire_supervision, Domain}),
             Owner#owner{supervision = Supervision#{Domain := S#supervision{retry = true}}}
+    end.
+
+%% A late startup from a live representative stays fenced until that child releases or dies.
+-spec release_retired(domain(), #supervision{}, #owner{}) -> #owner{}.
+release_retired(
+    Domain,
+    S = #supervision{child = Child, waiter = Waiter},
+    Owner = #owner{supervision = Supervision}
+) ->
+    case Waiter =:= none andalso is_process_alive(Child) of
+        true ->
+            Owner#owner{supervision = Supervision#{Domain := S}};
+        false ->
+            demonitor(S#supervision.monitor, [flush]),
+            case Waiter of
+                none -> ok;
+                From -> gen_server:reply(From, ok)
+            end,
+            Owner#owner{supervision = maps:remove(Domain, Supervision)}
     end.
 
 %% Internal observations have no waiting user; external aliases retain ordinary OTP delivery behavior.
