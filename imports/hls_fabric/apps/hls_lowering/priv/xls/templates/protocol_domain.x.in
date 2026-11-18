@@ -2,6 +2,7 @@ import axis;
 import hls_bits;
 import domain_controller;
 import domain_codes;
+import domain_fault;
 import network;
 @@IMPORTS@@
 
@@ -42,7 +43,8 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   });
   let initialized = @@INITIALIZED@@;
   let setup_output = @@SETUP_OUTPUT@@;
-  let fault = @@FAULT@@;
+  let selected_fault = domain_fault::first(@@FAULTS@@);
+  let fault = selected_fault.code;
   let protocol_fault = net.output.ingress_fault || io.transport_fault || @@CROSSING_FAULT@@;
   // A stopped incarnation cannot acquire new faults; stale fault levels must not
   // monopolize its management lane or prevent explicit replacement.
@@ -85,7 +87,7 @@ pub fn tick(s: State, io: Inputs) -> Tick {
   Tick {
     state: State { control, network: if advance { net.state } else { s.network },
       source_fault: if reset_network { u16:0 } else if new_fault { fault } else { s.source_fault },
-      source_actor: if reset_network { u32:0 } else if new_fault { @@FAULT_ACTOR@@ } else { s.source_actor },
+      source_actor: if reset_network { u32:0 } else if new_fault { selected_fault.actor } else { s.source_actor },
     },
     output: Outputs {
       management_response_valid: accept_management, management_ready: !new_fault && !io.reset,

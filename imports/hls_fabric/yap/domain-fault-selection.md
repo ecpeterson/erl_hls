@@ -1,0 +1,7 @@
+# Bounded domain fault selection
+
+The 48-SQM P3 source bank exposed a source-generation scaling failure: two first-fault expressions nested one conditional per actor. The pinned XLS converter exceeded both 240-second and 900-second limits. A three-second sample of a diagnostic build placed all 246 samples under `NotConstantErrorStatus` and recursive conditional formatting. Sharing byte-identical receiver imports did not clear the 240-second conversion limit; that diagnostic was not promoted.
+
+The domain now passes actor/code pairs to `domain_fault::first`. One parametric loop preserves network-order priority, pairs the selected code with its actor, and returns both zero when no actor fails. It adds no retained state and leaves lifecycle, transport and actor callbacks unchanged. Empty input, actor zero, sparse/nonmonotonic IDs, simultaneous faults and all 48 selected positions have finite DSLX witnesses. The framing test driver runs these fixtures with its emitted library snapshot.
+
+A fresh production 48-SQM bundle compiled to RTL in 164.887 seconds at 4,828,224 KiB peak aggregate RSS, under a serial 6 GiB guard. All emitted actor DSLX bytes are unchanged; actor metadata compares equal after JSON decoding. This demonstrates conversion of this finite bank, not a general compilation bound, behavioral equivalence proof or physical area/timing result. Detailed hash-bound evidence is retained with the P3 application qualification.

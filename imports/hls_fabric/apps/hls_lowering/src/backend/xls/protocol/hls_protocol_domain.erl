@@ -360,24 +360,22 @@ render(Actors, Crossings, Inputs, Outputs, NetworkInputs, NetworkOutputs) ->
                 ]
              || I <- Actors
             ])},
-        {<<"@@FAULT_ACTOR@@">>,
-            lists:foldr(
-                fun(I, Rest) ->
-                    Name = "net.output.actor_" ++ integer_to_list(I) ++ "_failure",
-                    ["if ", Name, " != u16:0 { u32:", integer_to_list(I), " } else { ", Rest, " }"]
-                end,
-                "u32:0",
-                Actors
-            )},
-        {<<"@@FAULT@@">>,
-            lists:foldr(
-                fun(I, Rest) ->
-                    Name = "net.output.actor_" ++ integer_to_list(I) ++ "_failure",
-                    ["if ", Name, " != u16:0 { ", Name, " } else { ", Rest, " }"]
-                end,
-                "u16:0",
-                Actors
-            )}
+        {<<"@@FAULTS@@">>, [
+            "domain_fault::Fault[",
+            integer_to_list(length(Actors)),
+            "]:[",
+            lists:join(", ", [
+                [
+                    "domain_fault::Fault { actor: u32:",
+                    integer_to_list(I),
+                    ", code: net.output.actor_",
+                    integer_to_list(I),
+                    "_failure }"
+                ]
+             || I <- Actors
+            ]),
+            "]"
+        ]}
     ]).
 
 %% Resolve the actual record layouts once at source composition, retaining self-contained codecs.

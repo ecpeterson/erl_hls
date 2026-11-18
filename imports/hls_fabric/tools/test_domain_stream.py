@@ -69,9 +69,13 @@ def stream_checks(xls: Path, bundle: Path, stage: Path) -> Path:
          '--max_ticks=1000', '--warnings_as_errors=false',
          '--dslx_path=' + ':'.join(map(str, imports)),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), source], stage, 'witness')
+    faults = ROOT / 'test/domain_fault_semantics.x'
+    run([xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none',
+         '--warnings_as_errors=false', '--dslx_path=' + ':'.join(map(str, imports)),
+         '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), faults], stage, 'fault-selection')
     result = {'passed': True, 'evidence': 'Finite DSLX framing and clock-transition witnesses.',
-              'inputs': {str(path): digest(path) for path in [template, interface, xls / 'interpreter_main']},
-              'outputs': {str(path): digest(path) for path in [source, stage / 'witness.log']}}
+              'inputs': {str(path): digest(path) for path in [template, faults, interface, xls / 'interpreter_main']},
+              'outputs': {str(path): digest(path) for path in [source, stage / 'witness.log', stage / 'fault-selection.log']}}
     report = stage / 'result.json'
     report.write_text(json.dumps(result, indent=2) + '\n')
     return report
