@@ -11,7 +11,7 @@ slow_status_is_independent_test() ->
         ?assertMatch({ok, #{phase := unbound}}, hls_domain:status(Owner, b)),
         ?assertMatch({ok, #{phase := ready}}, hls_domain:activate(Owner, b)),
         ?assertEqual(timeout, gen_server:wait_response(Waiting, 0)),
-        ?assertEqual({ok, manual}, hls_domain:policy(Owner, a)),
+        ?assertEqual({ok, manual}, hls_domain_owner:policy(Owner, a)),
         ok = hls_domain_async_fixture:release(A),
         ?assertMatch({reply, {ok, #{phase := unbound}}}, response(Waiting))
     end).
@@ -80,7 +80,7 @@ backend_failure_is_confined_test() ->
         First = gen_server:send_request(Owner, {status, a}),
         held(A, status, Owner),
         Second = gen_server:send_request(Owner, {status, a}),
-        ?assertEqual({ok, manual}, hls_domain:policy(Owner, a)),
+        ?assertEqual({ok, manual}, hls_domain_owner:policy(Owner, a)),
         exit(A, kill),
         ?assertMatch({reply, {error, {unavailable, _}}}, response(First)),
         ?assertMatch({reply, {error, {unavailable, _}}}, response(Second)),
@@ -96,7 +96,7 @@ owner_shutdown_retires_pending_management_test() ->
         First = gen_server:send_request(Owner, {activate, a}),
         held(A, request, Owner),
         Second = gen_server:send_request(Owner, {status, a}),
-        ?assertEqual({ok, manual}, hls_domain:policy(Owner, a)),
+        ?assertEqual({ok, manual}, hls_domain_owner:policy(Owner, a)),
         {ok, <<Burned:64>>} = file:read_file(Store),
         ok = gen_server:stop(Owner),
         ?assertEqual({reply, {error, {owner_stopped, normal}}}, response(First)),
@@ -157,7 +157,7 @@ with_domains(Fun) ->
     Store = filename:join("/tmp", "hls-domain-async-" ++
         integer_to_list(erlang:system_time(nanosecond)) ++ "-" ++
         integer_to_list(erlang:unique_integer([positive]))),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, A} = hls_domain_async_fixture:start_link(self()), unlink(A),
     {ok, B} = hls_domain_async_fixture:start_link(self()), unlink(B),
     {ok, Owner} = start_owner(A, B, Store), unlink(Owner),

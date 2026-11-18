@@ -2,7 +2,7 @@
 
 Replacing a domain starts its actors again from `init([])` and the declared startup configuration. It does not restore their previous data. A **domain** is the fixed group replaced together, including its private mailboxes, pending calls and routes. A **domain incarnation** is one lifetime of that whole group; its actor PIDs and non-reused **incarnation ID** change on replacement.
 
-`activate/2` starts the first incarnation; `replace/2` starts a successor. `stop/2` retires an exact incarnation without initializing another. The **incarnation counter** allocates these IDs; it contains no checkpoint of the application.
+`activate/2` starts the first incarnation; `replace/2` starts a successor. `stop/3` confirms retirement of a selected lifetime without initializing another. The **incarnation counter** allocates these IDs; it contains no checkpoint of the application.
 
 The implementation separates the actors being replaced from the controller coordinating their replacement. This is similar to keeping a supervisor outside its children's lifetimes. The additional requirement is that a hardware backend can outlive the host process controlling it, and old traffic can remain in a transport after that host process exits.
 
@@ -21,7 +21,7 @@ A host restart need not restart the FPGA. Conversely, a new FPGA process or bits
 
 ## The incarnation counter
 
-The counter file named by `incarnation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `create_store/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
+The counter file named by `incarnation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `hls_domain_ids:create/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
 
 It contains no actor data, mailbox contents, application results, route table, native PIDs, or completed-command history. The backend separately holds its current lifecycle phase, incarnation and one live/last management transition in memory. That small transition record lets a repeated `replace(Owner, OldHandle)` observe its original successor after a lost reply; it is not an application replay log, and it does not survive loss of the backend itself.
 
@@ -73,12 +73,22 @@ Each backend response has a five-second deadline. Expiry retires that response a
 
 The native backend uses normal ERTS mailboxes. The bounded `hls_mailbox` inside a source actor models finite hardware admission, but incoming messages can already be waiting in the actor's unbounded BEAM mailbox before that model examines them. The management processes likewise have ordinary BEAM mailboxes. `admit_cast/2` and bounded outstanding requests help the caller respect admission; they do not turn an ERTS simulation into a physical bandwidth or globally bounded-memory guarantee.
 
+## Application interfaces
+
+| Module | Responsibility |
+| --- | --- |
+| `hls_domain` | Attach an owner; inspect, create, replace or stop an incarnation; resolve endpoints; reattach a surviving incarnation. |
+| `hls_domain_instance` | Represent an incarnation as an OTP child; prepare a single manual startup, await readiness and resolve that child's endpoints. |
+| `hls_domain_ids` | Commission a persistent identity counter once; reserve non-reused ID ranges for delegated static supervisors. |
+
+The internal `hls_domain_owner` implements the existing owner process. Policy lookup, startup tokens, claim and release belong to the OTP adapter protocol, not application code. They are lifecycle coordination rather than user authorization or access control. This separation introduces no extra process or message relay.
+
 ## Starting and using a domain
 
 Create the store once. This example assumes `worker` is a supported `hls_statem` source actor and `Observer` is an external recipient:
 
 ```erlang
-ok = hls_domain:create_store("deployment.incarnations"),
+ok = hls_domain_ids:create("deployment.incarnations"),
 {ok, Backend} = hls_domain_erts:start_link(#{
     actors => #{worker => #{module => worker, mailbox_capacity => 4}},
     routes => #{worker => #{out => {external, Observer}}},
@@ -155,19 +165,38 @@ The catalog chooses `manual` or `automatic` replacement. Use `manual` when reset
 
 The child starts promptly and observes readiness asynchronously. `supervised` claims exclusive lifetime ownership before startup. Competing callers cannot activate or replace that owned domain; an exact-incarnation stop remains available. Its surviving deployment owner retains the exact incarnation or pending initialization target. Supervisor shutdown requests stop and waits for acknowledged retirement. If OTP kills the child before cleanup completes, the owner retains that intent; a replacement child cannot adopt the old healthy incarnation. `one_for_all` and `rest_for_one` therefore retire the affected healthy siblings as well as replacing the failed child. The owner and backend must live outside this subtree. OTP orders representative startup, but hardware readiness remains asynchronous; dependent domains must coordinate readiness explicitly.
 
+A manual domain instead uses a **single-use prepared startup**. The application coordinator stops the previous subtree, waits for retirement, performs external preparation, and passes the opaque descriptor into a child specification:
+
+```erlang
+ok = hls_domain:stop(Owner, compute, 5000),
+%% Perform any application-owned preparation here.
+{ok, Startup} = hls_domain_instance:prepare(Owner, compute),
+#{id => compute,
+  start => {hls_domain_instance, start_link, [Startup]},
+  restart => permanent, shutdown => 5000, type => worker}.
+```
+
+Preparation observes a retired predecessor without starting hardware. The adapter consumes its descriptor when admitting the representative and permits at most one new incarnation. An automatic restart with the same descriptor fails; the application must finish retirement/preparation and supply a new one. Do not put `prepare/2` inside the child's restart function: that would bypass external preparation. Descriptors do not survive owner restart. Duplicate preparation rejects; if its reply is lost, `hls_domain:stop/3` revokes the uncertain startup before another can be prepared. Busy claim admission leaves the descriptor usable. Applications neither construct tokens nor call claim/release themselves.
+
+`hls_domain_instance:await_ready(Child, TimeoutMs)` optionally waits for readiness, including actor identities. Both readiness and stop use finite caller deadlines; timeout or disconnection is an error, never cancellation or retirement evidence. A supervised child's owner continues retained retirement after a caller times out. Applications must serialize preparation/start/stop sequences; the API does not make external effects transactional.
+
 Omitting `lifetime`, including the existing `start_link/2`, selects `observed`. Losing an observer preserves a healthy domain; restarting it reattaches rather than resetting. Both modes leave ordinary transport-only `noconnection` unavailable without requesting reset. Old monitors and pending calls do not resume. An explicitly requested shutdown during disconnection remains pending until reattachment supplies actual retirement evidence; elapsed time and death of a local proxy are not acknowledgements.
 
 The supervised retirement record is bounded management state in the owner, not a durable work log. Owner or host loss does not preserve this shutdown intent. The backend's existing default `owner_loss => preserve` still applies. Consequently, this is not a hardware watchdog or a fully transparent remote OTP parent link. Explicit supervision controls a digital domain's lifetime while its management authority survives; external effects and reservations remain outside that lifetime.
 
-## Explicit stop
+## Confirmed stop
 
 ```erlang
-{ok, Observation} = hls_domain:stop(Owner, Handle).
+ok = hls_domain:stop(Owner, Handle, 5000).
+%% Or select the domain's current lifetime, including unused prepared startup:
+ok = hls_domain:stop(Owner, compute, 5000).
 ```
 
-`closing` acknowledges accepted intent. Only an observed `stopped` phase confirms retirement, including the backend's required output-delivery and endpoint-termination boundary. A failure or missing acknowledgement leaves the outcome unresolved. Stop consumes no fresh incarnation ID, never initializes a successor, and does not wait for every accepted application call to finish. Outputs already committed to delivery retain their ordering before orderly termination. Unfinished work is not replayed and emitted external effects are not reversed.
+An exact handle rejects if the observed current or pending incarnation has changed, before revoking any startup or requesting retirement. A domain name selects its current lifetime and immediately revokes unused preparation. Both forms pin the selected lifetime during the wait; neither follows it into a successor. Stop does not cancel an already accepted replacement.
 
-Repeating stop for the retained stopped incarnation is idempotent. A stale handle cannot stop a successor, and stop does not cancel a previously accepted replacement. Starting again requires an explicit replacement or the explicitly permitted action of an automatic supervisor child. An observer’s own death preserves healthy actors, but an ordinary permanent supervisor can still restart its child after an explicitly stopped actor terminates. The finite lifecycle uses the same stop transition on ERTS and in generated hardware; a future FPGA-resident supervisor can issue it without host filesystem or PID dependencies.
+Only confirmed `stopped`/`unbound` backend evidence **and** supervised lifetime release permit `ok`. Stop the representative through its supervisor first: `stop/3` does not kill it, and a still-live representative must release or die before success. This prevents delayed startup from escaping a retirement fence. `closing` is accepted intent, not completion. Missing acknowledgement, transport loss or timeout returns an error. The internal asynchronous request exists for lifecycle coordination; it is not an application completion API.
+
+Stop consumes no incarnation ID, initializes no successor, and does not wait for every application call to finish. Already committed output delivery precedes orderly endpoint termination. Unfinished work is not replayed; external effects are not reversed. Repeating stop for a retained stopped incarnation is idempotent. Starting again requires explicit replacement or an explicitly automatic supervisor. An observer's death preserves healthy actors; an automatic supervisor can still restart its observer after actor termination. The same finite stop transition runs on ERTS and in generated hardware.
 
 The generic lifecycle neither releases external reservations nor reconstructs previous application state. Initial support excludes arbitrary actor-local reset of shared state and distributed atomic replacement. Management progress still requires a running backend and working control transport.
 
@@ -199,7 +228,7 @@ The supervisor's restart clock is local and independent of host transport. Its a
 
 ### Delegated identities and parent lifetimes
 
-`hls_domain:reserve_incarnations(Owner, Count)` consumes a nonempty interval from the same durable counter used for direct domain replacement. The complete interval is persisted before acknowledgement, including IDs never used by hardware. A lost response may consume a grant: retry reserves a different interval. This function transfers no control authority by itself. The deployment binds that interval to exactly one supervisor incarnation, prevents direct competing child lifecycle requests, and preserves the allocation counter. The finite kernel accepts grant endpoints below the maximum unsigned 64-bit value, reserving that value as an exhaustion sentinel.
+`hls_domain_ids:reserve(Owner, Count)` consumes a nonempty interval from the same durable counter used for direct domain replacement. The complete interval is persisted before acknowledgement, including IDs never used by hardware. A lost response may consume a grant: retry reserves a different interval. This function transfers no control authority by itself. The deployment binds that interval to exactly one supervisor incarnation, prevents direct competing child lifecycle requests, and preserves the allocation counter. The finite kernel accepts grant endpoints below the maximum unsigned 64-bit value, reserving that value as an exhaustion sentinel.
 
 Reservation trusts an intact or independently reconciled persisted high-water mark. Merely attaching to a surviving backend or reading its current incarnation is not grant reconciliation: snapshots cannot reconstruct unused IDs from earlier reserved intervals. After counter rollback or storage loss, the deployment must recover the outstanding allocation bounds or establish retirement of the old identity namespace before issuing another grant. Taking the maximum observed current incarnation alone is insufficient.
 

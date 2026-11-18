@@ -5,20 +5,20 @@
 -spec delegated_identity_intervals_are_consumed_test() -> ok.
 delegated_identity_intervals_are_consumed_test() ->
     with_domains(fun(Owner, A, B, Store) ->
-        ?assertEqual({ok, {1, 8}}, hls_domain:reserve_incarnations(Owner, 8)),
+        ?assertEqual({ok, {1, 8}}, hls_domain_ids:reserve(Owner, 8)),
         ?assertEqual({ok, <<8:64>>}, file:read_file(Store)),
         {ok, _} = hls_domain:activate(Owner, a),
         ?assertMatch(#{handle := {a, 9}}, ready(Owner, a)),
-        ?assertEqual({ok, {10, 12}}, hls_domain:reserve_incarnations(Owner, 3)),
-        ?assertEqual({error, invalid_incarnation_count}, hls_domain:reserve_incarnations(Owner, 0)),
+        ?assertEqual({ok, {10, 12}}, hls_domain_ids:reserve(Owner, 3)),
+        ?assertEqual({error, invalid_incarnation_count}, hls_domain_ids:reserve(Owner, 0)),
         ?assertEqual({ok, <<12:64>>}, file:read_file(Store)),
         stop(Owner),
         {ok, NextOwner} = hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store)),
         unlink(NextOwner),
         try
-            ?assertEqual({ok, {13, 14}}, hls_domain:reserve_incarnations(NextOwner, 2)),
+            ?assertEqual({ok, {13, 14}}, hls_domain_ids:reserve(NextOwner, 2)),
             ?assertEqual({error, incarnation_exhausted},
-                hls_domain:reserve_incarnations(NextOwner, (1 bsl 64) - 1)),
+                hls_domain_ids:reserve(NextOwner, (1 bsl 64) - 1)),
             ?assertEqual({ok, <<14:64>>}, file:read_file(Store))
         after stop(NextOwner) end
     end).
@@ -150,7 +150,7 @@ failure_does_not_publish_computed_effects_or_replay_retained_calls_test() ->
 store_exhaustion_and_exclusive_ownership_test() ->
     with_domains(fun(Owner, A, B, Store) ->
         ?assertEqual(undefined, global:whereis_name({hls_domain, filename:absname(Store)})),
-        ?assertEqual({error, eexist}, hls_domain:create_store(Store)),
+        ?assertEqual({error, eexist}, hls_domain_ids:create(Store)),
         ?assertMatch({error, incarnation_store_owned},
             hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store))),
         {ok, _} = hls_domain:activate(Owner, a),
@@ -192,7 +192,7 @@ duplicate_domain_controllers_reject_test() ->
     Previous = process_flag(trap_exit, true),
     Store = filename:join("/tmp", "hls-domain-alias-" ++ integer_to_list(erlang:system_time(nanosecond)) ++
         "-" ++ integer_to_list(erlang:unique_integer([positive]))),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Controller} = hls_domain_erts:start_link(spec()),
     unlink(Controller),
     Result = hls_domain:start_link(#{a => automatic, b => manual}, backend(Controller, Controller, Store)),
@@ -278,7 +278,7 @@ with_domains(Fun) ->
     Previous = process_flag(trap_exit, true),
     Store = filename:join("/tmp", "hls-domain-" ++ integer_to_list(erlang:system_time(nanosecond)) ++
         "-" ++ integer_to_list(erlang:unique_integer([positive]))),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, A} = hls_domain_erts:start_link(spec()), unlink(A),
     {ok, B} = hls_domain_erts:start_link(spec()), unlink(B),
     {ok, Owner} = hls_domain:start_link(#{a => automatic, b => manual}, backend(A, B, Store)), unlink(Owner),
