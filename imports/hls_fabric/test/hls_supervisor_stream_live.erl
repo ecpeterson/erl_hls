@@ -50,7 +50,7 @@ run(Stage, NativeFile) ->
     ),
     unlink(ParentBackend),
     ParentOwner = owner(parent, #{board => ParentBackend}, hls_supervisor_fabric, Stage),
-    {ok, {1, 128}} = hls_domain:reserve_incarnations(ParentOwner, 128),
+    {ok, {1, 128}} = hls_domain_ids:reserve(ParentOwner, 128),
     {ok, Parent} = hls_shutdown_supervisor:start_link(one_for_one, [{board, ParentOwner}]),
     unlink(Parent),
     _ = ready(ParentOwner, board),
@@ -63,7 +63,7 @@ run(Stage, NativeFile) ->
     try
         #{handle := ChildHandle} = ready(OA, a),
         _ = ready(OB, b),
-        {error, supervised_child} = hls_domain:stop(OA, ChildHandle),
+        {error, supervised_child} = hls_domain:stop(OA, ChildHandle, 5000),
         Result = with_peer(OA, OB, fun(Node, Remote) ->
             Common = common(Node, Remote, OA, OB),
             Common = maps:without([passed, deployment], Native),
@@ -130,7 +130,7 @@ native_backend(Device) ->
 -spec owner(atom(), map(), module(), file:filename()) -> pid().
 owner(Name, Backends, Module, Stage) ->
     Store = filename:join(Stage, atom_to_list(Name) ++ ".incarnations"),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, P} = hls_domain:start_link(
         maps:map(fun(_, _) -> automatic end, Backends),
         #{module => Module, endpoints => Backends, incarnation_file => Store}

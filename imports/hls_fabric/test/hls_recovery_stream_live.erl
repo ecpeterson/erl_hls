@@ -168,7 +168,7 @@ backend(Prefix, Interface, Device, Session) ->
 %% Automatic replacement is explicitly confined to the reset-safe simulated controller.
 -spec owner(atom(), hls_domain:policy(), pid(), file:filename()) -> pid().
 owner(Domain, Policy, Backend, Store) ->
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Owner} = hls_domain:start_link(#{Domain => Policy}, #{module => hls_domain_fabric,
         endpoints => #{Domain => Backend}, incarnation_file => Store}),
     unlink(Owner),

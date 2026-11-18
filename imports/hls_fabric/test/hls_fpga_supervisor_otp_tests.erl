@@ -40,7 +40,7 @@ runtime(Stage, Exercise) ->
     end || Domain <- [a, b, c]]),
     try
         Store = filename:join(Stage, "incarnations"),
-        ok = hls_domain:create_store(Store),
+        ok = hls_domain_ids:create(Store),
         {ok, Owner} = hls_domain:start_link(#{a => automatic, b => automatic, c => manual},
             #{module => hls_domain_erts, endpoints => Backends, incarnation_file => Store}),
         unlink(Owner),

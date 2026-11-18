@@ -277,7 +277,7 @@ with_domains(Fun) ->
     hls_test_nodes:distribution(),
     {ok, _} = application:ensure_all_started(crypto),
     Store = filename:join("/tmp", "hls-node-domain-" ++ integer_to_list(erlang:unique_integer([positive]))),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     Spec = #{actors => #{worker => #{module => hls_statem_reply_fixture, mailbox_capacity => 4}},
         routes => #{worker => #{reply => {external, self()}}}},
     {ok, A} = hls_domain_erts:start_link(Spec), unlink(A),

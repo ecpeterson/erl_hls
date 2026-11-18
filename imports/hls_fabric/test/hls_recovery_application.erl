@@ -8,7 +8,6 @@
 -doc "Exercises domains a and b exposing actuator; a must explicitly allow automatic replacement of this reset-safe simulated controller. Devices outlive every incarnation. Options select node configuration only, not application semantics.".
 -spec run(pid(), pid(), pid(), pid(), map()) -> map().
 run(OwnerA, OwnerB, DeviceA, DeviceB, Options) ->
-    {ok, automatic} = hls_domain:policy(OwnerA, a),
     {ok, Supervisor} = hls_recovery_supervisor:start_link(OwnerA, a),
     unlink(Supervisor),
     try

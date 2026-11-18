@@ -235,7 +235,7 @@ domain(Bundle, Stage, #{id := Id, index := Index}, Actors) ->
     Management = broker(Prefix ++ "_management"),
     Application = broker(Prefix ++ "_application"),
     Store = filename:join(Stage, atom_to_list(Id) ++ ".incarnations"),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     attached_domain(Bundle, #{id => Id, index => Index}, Actors,
         #{management => Management, application => Application, session => 1, incarnation_file => Store}).
 

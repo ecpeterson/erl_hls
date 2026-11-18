@@ -71,7 +71,7 @@ rtl_domain(Domain, Index, Stage, Interface) ->
 -spec owner(atom(), module(), pid(), file:filename()) -> pid().
 owner(Domain, Module, Backend, Stage) ->
     Store = filename:join(Stage, atom_to_list(Domain) ++ ".incarnations"),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Owner} = hls_domain:start_link(#{Domain => automatic},
         #{module => Module, endpoints => #{Domain => Backend}, incarnation_file => Store}),
     unlink(Owner), Owner.
@@ -96,14 +96,14 @@ scenario([A = #{owner := OA}, B = #{owner := OB}, C = #{owner := OC}]) ->
         ok = supervisor:terminate_child(All, a),
         stopped(OA, a, HA),
         shutdown = down(WA),
-        {ok, #{phase := stopped, handle := HA}} = hls_domain:stop(OA, HA),
+        ok = hls_domain:stop(OA, HA, 5000),
         HB = maps:get(handle, ready(OB, b)), HC = maps:get(handle, ready(OC, c)),
         expect_applied(Remote, VB, 1), expect_applied(Remote, VC, 1),
         {ok, _} = supervisor:restart_child(All, a),
         {_, HA1} = child(All, a), true = HA1 =/= HA,
         VA1 = publish(Node, a), true = VA1 =/= VA,
         initial(Remote, VA1),
-        {error, _Protected} = hls_domain:stop(OA, HA),
+        {error, _Protected} = hls_domain:stop(OA, HA, 5000),
         HA1 = maps:get(handle, ready(OA, a)),
         applied(Remote, VA1, 2),
         WB = watched(Remote, VB),
@@ -130,7 +130,7 @@ scenario([A = #{owner := OA}, B = #{owner := OB}, C = #{owner := OC}]) ->
             initial(Remote, publish(Node, a)), initial(Remote, publish(Node, b)),
             HC = maps:get(handle, ready(OC, c)), expect_applied(Remote, VC, 1),
             stop_supervisor(Rest), stopped(OA, a, RA1), stopped(OB, b, RB2),
-            {error, stale} = hls_domain:stop(OA, HA),
+            {error, {incarnation_changed, _, _}} = hls_domain:stop(OA, HA, 5000),
             #{explicit_healthy_stop => true, duplicate_stop_idempotent => true,
                 stale_stop_rejected => true, fresh_endpoint_and_incarnation => true,
                 one_for_all => true, rest_for_one => true, subtree_shutdown => true,
@@ -158,7 +158,7 @@ delayed_stop(Stage, #{owner := Owner, backend := Backend, device := Device}) ->
             #{received := R, frontier := F} = hls_domain_fabric:info(Backend),
             case R =:= Received andalso F >= Received + 4 of true -> {ok, F}; false -> wait end
         end),
-        {ok, _} = hls_domain:stop(Owner, Handle),
+        {error, _Unconfirmed} = hls_domain:stop(Owner, Handle, 100),
         _ = wait(fun() ->
             case hls_domain_fabric:info(Backend) of
                 #{state := #domain_state{phase = stopped}} = Info -> {ok, Info};
@@ -174,6 +174,7 @@ delayed_stop(Stage, #{owner := Owner, backend := Backend, device := Device}) ->
         receive {Ref, down, shutdown} -> ok after 5000 -> error(shutdown_missing) end,
         receive {'DOWN', Monitor, process, Watcher, normal} -> ok
             after 5000 -> error(watcher_failed) end,
+        ok = hls_domain:stop(Owner, Handle, 5000),
         stopped(Owner, c, Handle),
         #{hardware_stopped_before_delivery => true, public_stop_waited_for_delivery => true,
             prior_reply_before_shutdown => true, management_progressed_during_stall => true}

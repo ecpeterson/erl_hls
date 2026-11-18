@@ -44,7 +44,7 @@ run(Bundle, Network, Stage, #{namespace := Namespace, session := Session, first_
     end || Index <- [0, 1]]),
     wait_ready(Stage, erlang:monotonic_time(millisecond) + 30000),
     case Create of
-        true -> [ok = hls_domain:create_store(maps:get(I, Stores)) || I <- [0, 1]];
+        true -> [ok = hls_domain_ids:create(maps:get(I, Stores)) || I <- [0, 1]];
         false -> ok
     end,
     with_roles(Stage, Stores, Phases, Session, First, fun(Roles, Clients) ->

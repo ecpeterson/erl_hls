@@ -143,7 +143,7 @@ stale_packets([Management,Application],Path,{_Domain,Incarnation})->
 %% Each deployment owns an independent native authority and persistent incarnation allocator.
 -spec owner(atom(),pid(),file:filename()) -> pid().
 owner(Domain,Backend,Stage)->
-    Store=filename:join(Stage,atom_to_list(Domain)++".incarnations"),ok=hls_domain:create_store(Store),
+    Store=filename:join(Stage,atom_to_list(Domain)++".incarnations"),ok=hls_domain_ids:create(Store),
     {ok,Owner}=hls_domain:start_link(#{Domain=>manual},#{module=>hls_domain_fabric,
         endpoints=>#{Domain=>Backend},incarnation_file=>Store}),unlink(Owner),Owner.
 

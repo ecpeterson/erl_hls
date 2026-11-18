@@ -47,7 +47,7 @@ run(Stage, NativeFile) ->
     ),
     unlink(Backend),
     ParentOwner = ?S:owner(parent, #{board => Backend}, hls_supervisor_fabric, Stage),
-    {ok, {1, 128}} = hls_domain:reserve_incarnations(ParentOwner, 128),
+    {ok, {1, 128}} = hls_domain_ids:reserve(ParentOwner, 128),
     {ok, Parent} = hls_shutdown_supervisor:start_link(one_for_one, [{board, ParentOwner}]),
     unlink(Parent),
     #{handle := ParentHandle} = ?S:ready(ParentOwner, board),

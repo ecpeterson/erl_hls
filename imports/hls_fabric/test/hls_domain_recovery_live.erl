@@ -12,7 +12,7 @@ run(Stage, Mode) ->
     {ok, B} = hls_domain_rtl_backend:start_link(filename:join(Stage, "domain1"), Interface), unlink(B),
     StoreA = filename:join(Stage, "incarnation-a.bin"),
     StoreB = filename:join(Stage, "incarnation-b.bin"),
-    ok = hls_domain:create_store(StoreA), ok = hls_domain:create_store(StoreB),
+    ok = hls_domain_ids:create(StoreA), ok = hls_domain_ids:create(StoreB),
     OwnerA = owner(a, A, StoreA), OwnerB = owner(b, B, StoreB),
     Leases = lists:append([leases(Backend) || Backend <- [A, B]]),
     try
@@ -310,7 +310,7 @@ native_history(Stage) ->
         routes => #{counter => #{out => {actor, relay}}, relay => #{out => {external, self()}}}},
     {ok, Backend} = hls_domain_erts:start_link(Spec), unlink(Backend),
     Store = filename:join(Stage, "native-incarnation.bin"),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Owner} = hls_domain:start_link(#{native => manual}, #{module => hls_domain_erts,
         endpoints => #{native => Backend}, incarnation_file => Store}), unlink(Owner),
     try

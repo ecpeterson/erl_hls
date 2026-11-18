@@ -81,7 +81,7 @@ domain(Id, Index, Stage) ->
             delivery_timeout_ms => 10000}),
     unlink(Backend),
     Store = filename:join(Stage, atom_to_list(Id) ++ ".incarnations"),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Owner} = hls_domain:start_link(#{Id => automatic},
         #{module => hls_domain_fabric, endpoints => #{Id => Backend}, incarnation_file => Store}),
     unlink(Owner),
