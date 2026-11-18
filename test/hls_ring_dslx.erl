@@ -16,7 +16,7 @@ write_capacity(Stage, N) ->
     Source = ["#![feature(generics)]\nimport hls_ring;\nimport hls_bits;\n",
         "pub fn probe(raw: bits[", n(W), "], op: u4, value: u8) -> bits[", n(W+10), "] {\n",
         "let q = ", Decode("raw"), ";\n",
-        "let (next, read, done, failed) = match op {\n", [arm(O) || O <- lists:seq(0,10)],
+        "let (next, read, done, failed) = match op {\n", [arm(O) || O <- lists:seq(0,13)],
         "_ => { let ((done, next), failed) = hls_ring::insert_step(value, q); (next,u8:0,done,failed) },\n};\n",
         "let next = if failed { q } else { next };\nlet read = if failed { u8:0 } else { read };\n",
         "let done = done && !failed;\n(", Encode("next"), ") ++ read ++ done ++ failed\n}\n",
@@ -34,8 +34,8 @@ write_capacity(Stage, N) ->
 -spec arm(non_neg_integer()) -> iodata().
 arm(Op) ->
     {Name, Kind} = lists:nth(Op+1, [{rewind,queue},{at_end,flag},{next,queue},{current,value},
-        {replace,queue},{full,flag},{begin_insert,queue},{empty,flag},{front,value},{pop,queue},{replace,queue}]),
-    Args = case Name of replace -> "value, q"; _ -> "q" end,
+        {replace,queue},{full,flag},{begin_insert,queue},{empty,flag},{front,value},{pop,queue},{append,queue},{back,value},{replace_back,queue},{replace,queue}]),
+    Args = case Name of F when F =:= replace; F =:= replace_back; F =:= append -> "value, q"; _ -> "q" end,
     Result = case Kind of queue -> "(result,u8:0,false,failed)"; flag -> "(q,u8:0,result,failed)";
         value -> "(q,result,false,failed)" end,
     ["u4:",n(Op)," => { let (result, failed) = hls_ring::",atom_to_list(Name),"(",Args,
@@ -46,7 +46,7 @@ arm(Op) ->
 vectors(_, 0, _, _, Acc) -> lists:reverse(Acc);
 vectors(T, Left, Q, RNG, Acc) ->
     {R, RNG1} = rand:uniform_s(16, RNG), {V, RNG2} = rand:uniform_s(256, RNG1),
-    Op = case R of X when X >= 12 -> 11; _ -> R-1 end,
+    Op = case R of X when X >= 15 -> 14; _ -> R-1 end,
     {Next, Read, Done, Failed} = try operation(Op, Q, V-1) of
         {A,B,C} -> {A,B,C,false}
     catch error:badarg -> {Q,0,false,true} end,
@@ -65,8 +65,11 @@ operation(6,Q,_) -> {hls_ring:begin_insert(Q),0,false};
 operation(7,Q,_) -> {Q,0,hls_ring:empty(Q)};
 operation(8,Q,_) -> {Q,hls_ring:front(Q),false};
 operation(9,Q,_) -> {hls_ring:pop(Q),0,false};
-operation(10,Q,V) -> {hls_ring:replace(V,Q),0,false};
-operation(11,Q,V) -> {Done,Next}=hls_ring:insert_step(V,Q), {Next,0,Done}.
+operation(10,Q,V) -> {hls_ring:append(V,Q),0,false};
+operation(11,Q,_) -> {Q,hls_ring:back(Q),false};
+operation(12,Q,V) -> {hls_ring:replace_back(V,Q),0,false};
+operation(13,Q,V) -> {hls_ring:replace(V,Q),0,false};
+operation(14,Q,V) -> {Done,Next}=hls_ring:insert_step(V,Q), {Next,0,Done}.
 
 %% Serialize using the runtime codec, including physical bit order.
 -spec packed(term(), hls_type:descriptor()) -> non_neg_integer().

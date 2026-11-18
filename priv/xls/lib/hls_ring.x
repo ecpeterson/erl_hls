@@ -70,3 +70,19 @@ pub fn pop<T: type, N: u32>(q: Ring<T,N>) -> (Ring<T,N>, bool) {
   (Ring { head: (q.head + u32:1) % N, size: q.size - u32:1, position: u32:0, ..q },
    q.insertion != u32:0 || q.size == u32:0)
 }
+
+// Append into the free tail slot; structural changes invalidate traversal.
+pub fn append<T: type, N: u32>(value: T, q: Ring<T,N>) -> (Ring<T,N>, bool) {
+  (Ring { values: update(q.values, slot(q, q.size + u32:1), value),
+          size: q.size + u32:1, position: u32:0, ..q },
+   q.insertion != u32:0 || q.size == N)
+}
+// Tail access is independent of traversal, but unavailable during insertion.
+pub fn back<T: type, N: u32>(q: Ring<T,N>) -> (T, bool) {
+  (q.values[slot(q, q.size)], q.insertion != u32:0 || q.size == u32:0)
+}
+// Replacing the tail preserves the cursor, including its exhausted position.
+pub fn replace_back<T: type, N: u32>(value: T, q: Ring<T,N>) -> (Ring<T,N>, bool) {
+  (Ring { values: update(q.values, slot(q, q.size), value), ..q },
+   q.insertion != u32:0 || q.size == u32:0)
+}

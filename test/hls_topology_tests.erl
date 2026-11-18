@@ -148,7 +148,6 @@ invalid_actor_ids_are_rejected_test() ->
         [
             {1.0, 1.0},
             {{}, {}},
-            {{grid, -1}, -1},
             {{grid, 1.0}, 1.0}
         ]
     ).
@@ -1046,3 +1045,22 @@ rename_id(Id, _OldId, _NewId) -> Id.
 %% Counts exact generated fragments for structural assertions.
 -spec count(binary(), binary()) -> non_neg_integer().
 count(Binary, Pattern) -> length(binary:matches(Binary, Pattern)).
+
+%% Signed logical names preserve identity; physical addresses and family indices stay bounded.
+-spec signed_actor_ids_test() -> ok.
+signed_actor_ids_test() ->
+    Base = hls_routing_topology_fixture:topology(),
+    Name = fun(ID) -> {origin,-1,ID} end,
+    Source = fun({ID,Port}) -> {Name(ID),Port} end,
+    Recipient = fun({actor,ID}) -> {actor,Name(ID)}; (Other) -> Other end,
+    Routes = [case R of
+        {S,Rs} -> {Source(S),[Recipient(X) || X <- Rs]};
+        {S,D,Rs} -> {Source(S),D,[Recipient(X) || X <- Rs]}
+    end || R <- maps:get(routes,Base)],
+    Plan = hls_topology:normalize(Base#{
+        actors := maps:from_list([{Name(ID),M} || {ID,M} <- maps:to_list(maps:get(actors,Base))]),
+        routes := Routes,
+        startup := [{Name(ID),Messages} || {ID,Messages} <- maps:get(startup,Base)]}),
+    ?assertEqual([{origin,-1,ID} || ID <- [data,grid,query]],
+        [ID || #{id := ID} <- maps:get(actors,Plan)]),
+    ?assertEqual(length(Routes),length(maps:get(routes,Plan))).
