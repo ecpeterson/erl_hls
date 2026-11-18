@@ -297,7 +297,7 @@ modeled(Fun) ->
 -spec store() -> file:filename().
 store() ->
     Path = filename:join("/tmp", "hls-shutdown-" ++ integer_to_list(erlang:unique_integer([positive, monotonic]))),
-    ok = hls_domain_counter:create(Path), Path.
+    ok = hls_domain_ids:create(Path), Path.
 
 %% Both adapters implement the same public owner contract.
 -spec backend(module(), map(), file:filename()) -> hls_domain:backend().

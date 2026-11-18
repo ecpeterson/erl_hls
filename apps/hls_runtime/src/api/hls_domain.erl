@@ -5,7 +5,7 @@ Application control of fixed actor domains and incarnation-specific endpoints.
 start_link attaches an owner without starting actors. activate creates the first
 incarnation; replace compares an exact handle before creating its successor; stop
 waits for confirmed retirement. Reattachment preserves a surviving incarnation.
-Use hls_domain_instance for OTP children and hls_domain_counter for commissioning.
+Use hls_domain_instance for OTP children and hls_domain_ids for commissioning.
 The internal owner orders management per domain; application messages bypass it.
 Timeout is an unknown outcome, never permission to replay application work.
 """.

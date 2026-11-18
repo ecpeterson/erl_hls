@@ -1,4 +1,4 @@
--module(hls_domain_counter).
+-module(hls_domain_ids).
 -moduledoc """
 Deployment commissioning and delegated incarnation-ID allocation.
 

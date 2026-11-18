@@ -86,7 +86,7 @@ start(Startup) ->
 -spec fixture(fun((pid()) -> term())) -> ok.
 fixture(Fun) ->
     Store = filename:join("/tmp", "hls-domain-api-" ++ integer_to_list(erlang:unique_integer([positive, monotonic]))),
-    ok = hls_domain_counter:create(Store),
+    ok = hls_domain_ids:create(Store),
     {ok, Backend} = hls_domain_erts:start_link(#{actors => #{actor => #{module => hls_domain_actor_fixture, mailbox_capacity => 4}}}),
     unlink(Backend),
     {ok, Owner} = hls_domain:start_link(#{compute => manual}, #{module => hls_domain_erts, endpoints => #{compute => Backend}, incarnation_file => Store}),

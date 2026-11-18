@@ -186,7 +186,7 @@ child(Owner, Grant) ->
 -spec fixture(native | model, fun((pid(), pid(), file:filename()) -> term())) -> ok.
 fixture(Kind, Fun) ->
     Store = filename:join("/tmp", "hls-grant-" ++ integer_to_list(erlang:unique_integer([positive, monotonic]))),
-    ok = hls_domain_counter:create(Store),
+    ok = hls_domain_ids:create(Store),
     {Module, Argument} = case Kind of
         model -> {hls_domain_async_fixture, self()};
         native -> {hls_domain_erts, #{actors => #{actor => #{module => hls_domain_actor_fixture, mailbox_capacity => 4}}}}

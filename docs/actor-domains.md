@@ -21,7 +21,7 @@ A host restart need not restart the FPGA. Conversely, a new FPGA process or bits
 
 ## The incarnation counter
 
-The counter file named by `incarnation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `hls_domain_counter:create/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
+The counter file named by `incarnation_file` is exactly **eight bytes: the highest allocated unsigned 64-bit incarnation number** for that owner's catalog. `hls_domain_ids:create/1` creates it exclusively with value zero. Before requesting an incarnation, the owner writes a fresh number to the file; an unsuccessful or uncertain request can consume a number. The numbers need not be consecutive among successful incarnations, and exhaustion rejects instead of wrapping.
 
 It contains no actor data, mailbox contents, application results, route table, native PIDs, or completed-command history. The backend separately holds its current lifecycle phase, incarnation and one live/last management transition in memory. That small transition record lets a repeated `replace(Owner, OldHandle)` observe its original successor after a lost reply; it is not an application replay log, and it does not survive loss of the backend itself.
 
@@ -79,7 +79,7 @@ The native backend uses normal ERTS mailboxes. The bounded `hls_mailbox` inside 
 | --- | --- |
 | `hls_domain` | Attach an owner; inspect, create, replace or stop an incarnation; resolve endpoints; reattach a surviving incarnation. |
 | `hls_domain_instance` | Represent an incarnation as an OTP child; prepare a single manual startup, await readiness and resolve that child's endpoints. |
-| `hls_domain_counter` | Commission a persistent identity counter once; reserve non-reused ID ranges for delegated static supervisors. |
+| `hls_domain_ids` | Commission a persistent identity counter once; reserve non-reused ID ranges for delegated static supervisors. |
 
 The internal `hls_domain_owner` implements the existing owner process. Policy lookup, startup tokens, claim and release belong to the OTP adapter protocol, not application code. They are lifecycle coordination rather than user authorization or access control. This separation introduces no extra process or message relay.
 
@@ -88,7 +88,7 @@ The internal `hls_domain_owner` implements the existing owner process. Policy lo
 Create the store once. This example assumes `worker` is a supported `hls_statem` source actor and `Observer` is an external recipient:
 
 ```erlang
-ok = hls_domain_counter:create("deployment.incarnations"),
+ok = hls_domain_ids:create("deployment.incarnations"),
 {ok, Backend} = hls_domain_erts:start_link(#{
     actors => #{worker => #{module => worker, mailbox_capacity => 4}},
     routes => #{worker => #{out => {external, Observer}}},
@@ -228,7 +228,7 @@ The supervisor's restart clock is local and independent of host transport. Its a
 
 ### Delegated identities and parent lifetimes
 
-`hls_domain_counter:reserve(Owner, Count)` consumes a nonempty interval from the same durable counter used for direct domain replacement. The complete interval is persisted before acknowledgement, including IDs never used by hardware. A lost response may consume a grant: retry reserves a different interval. This function transfers no control authority by itself. The deployment binds that interval to exactly one supervisor incarnation, prevents direct competing child lifecycle requests, and preserves the allocation counter. The finite kernel accepts grant endpoints below the maximum unsigned 64-bit value, reserving that value as an exhaustion sentinel.
+`hls_domain_ids:reserve(Owner, Count)` consumes a nonempty interval from the same durable counter used for direct domain replacement. The complete interval is persisted before acknowledgement, including IDs never used by hardware. A lost response may consume a grant: retry reserves a different interval. This function transfers no control authority by itself. The deployment binds that interval to exactly one supervisor incarnation, prevents direct competing child lifecycle requests, and preserves the allocation counter. The finite kernel accepts grant endpoints below the maximum unsigned 64-bit value, reserving that value as an exhaustion sentinel.
 
 Reservation trusts an intact or independently reconciled persisted high-water mark. Merely attaching to a surviving backend or reading its current incarnation is not grant reconciliation: snapshots cannot reconstruct unused IDs from earlier reserved intervals. After counter rollback or storage loss, the deployment must recover the outstanding allocation bounds or establish retirement of the old identity namespace before issuing another grant. Taking the maximum observed current incarnation alone is insufficient.
 

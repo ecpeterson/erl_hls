@@ -2,7 +2,7 @@
 
 Manual replacement may require application-owned preparation between incarnations. An automatic OTP restart must not repeat startup without that preparation. `hls_domain_instance:prepare/2` returns an opaque single-use descriptor for `start_link/1`; the adapter owns its token, claim and cleanup. Preparation belongs outside the child's restart function. Pending preparation can be revoked; a late reply cannot restore it or erase a newer one. Busy admission leaves an unused descriptor available.
 
-`hls_domain` has seven application operations, grouped by purpose: attachment/inspection, explicit lifecycle, and endpoint/reconnection access. The same owner process now lives in `hls_domain_owner`; there is no new process, application-message relay or durable work log. Counter commissioning and delegated ID reservation live in `hls_domain_counter`.
+`hls_domain` has seven application operations, grouped by purpose: attachment/inspection, explicit lifecycle, and endpoint/reconnection access. The same owner process now lives in `hls_domain_owner`; there is no new process, application-message relay or durable work log. Counter commissioning and delegated ID reservation live in `hls_domain_ids`.
 
 `stop/3` replaces separate request/retire application operations. It selects either the current domain lifetime or an exact handle and waits for actual backend retirement plus supervised lifetime release. An exact request checks the current/pending incarnation before revoking preparation; stale requests cannot affect a successor. Stop the representative through its supervisor first. Timeout leaves uncertainty and does not cancel retained shutdown intent. Owner loss still loses local preparation/intent; backend preservation and reconciliation are unchanged.
 
