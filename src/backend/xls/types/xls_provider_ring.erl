@@ -38,6 +38,9 @@ transpile(Name, Args, _State) when
     Name =:= insert_step;
     Name =:= empty;
     Name =:= front;
-    Name =:= pop
+    Name =:= pop;
+    Name =:= append;
+    Name =:= back;
+    Name =:= replace_back
 ->
     {fallible, badarg, ["hls_ring::", atom_to_list(Name), "(", lists:join(", ", Args), ")"]}.

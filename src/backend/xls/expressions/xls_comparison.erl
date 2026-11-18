@@ -361,9 +361,11 @@ ring_call(Line, Target, Operation, Args, Env, Context) ->
         case {Operation, Pairs} of
             {current, [_]} ->
                 {[Queue], Element};
-            {front, [_]} ->
+            {Read, [_]} when Read =:= front; Read =:= back ->
                 {[Queue], Element};
-            {replace, [{V, VT}, _]} ->
+            {Write, [{V, VT}, _]} when
+                Write =:= replace; Write =:= replace_back; Write =:= append
+            ->
                 {[ring_value(V, Element, VT, Line, Target), Queue], QT};
             {insert_step, [{V, VT}, _]} ->
                 {[ring_value(V, Element, VT, Line, Target), Queue], {tuple, [other, QT]}};

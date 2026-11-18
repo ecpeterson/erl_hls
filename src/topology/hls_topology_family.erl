@@ -775,7 +775,9 @@ require_family(FamilyId, FamilyIndex, Context) ->
         error -> error({unknown_family, FamilyId, Context})
     end.
 
-validate_id(Id) when is_atom(Id); is_integer(Id), Id >= 0 ->
+%% Logical names are independent of bounded family indices and physical addresses.
+-spec validate_id(term()) -> ok.
+validate_id(Id) when is_atom(Id); is_integer(Id) ->
     ok;
 validate_id(Id) when is_tuple(Id), tuple_size(Id) > 0 ->
     lists:foreach(fun validate_id/1, tuple_to_list(Id));

@@ -27,11 +27,11 @@ active(cast, #request{mode = Mode, flag = Flag}, S) ->
     Sample = #sample{mode = Mode, flag = Flag},
     case hls_ring:empty(Modes) of
         true ->
-            {true, NextModes} = hls_ring:insert_step(Mode, hls_ring:begin_insert(Modes)),
-            {true, NextSamples} = hls_ring:insert_step(Sample, hls_ring:begin_insert(Samples)), true;
+            NextModes = hls_ring:append(Mode, Modes),
+            NextSamples = hls_ring:append(Sample, Samples), true;
         false ->
-            NextModes = hls_ring:replace(Mode, Modes),
-            NextSamples = hls_ring:replace(Sample, Samples), true
+            NextModes = hls_ring:replace_back(Mode, Modes),
+            NextSamples = hls_ring:replace_back(Sample, Samples), true
     end,
     {active, S#cell{modes = NextModes, samples = NextSamples,
-        observed = hls_ring:current(NextModes)}, consume}.
+        observed = hls_ring:back(NextModes)}, consume}.

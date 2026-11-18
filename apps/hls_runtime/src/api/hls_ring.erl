@@ -16,6 +16,8 @@ their hls_type representation; the four cursor words add 128 state bits.
 -export([rewind/1, at_end/1, next/1, current/1, replace/2]).
 %% Incremental insertion and head retirement.
 -export([full/1, begin_insert/1, insert_step/2, empty/1, front/1, pop/1]).
+%% Queue-end operations independent of traversal.
+-export([append/2, back/1, replace_back/2]).
 %% Type constructor and shared codec schema.
 -export([ring/2, fields/2]).
 -export_type([ring/2]).
@@ -103,6 +105,24 @@ front(Q) ->
 pop(Q = #ring{head = H, size = S, values = V}) ->
     require(not empty(Q)),
     Q#ring{head = (H + 1) rem length(V), size = S - 1, position = 0}.
+
+-doc "Appends one entry and invalidates the cursor. Full or unfinished rings raise badarg.".
+-spec append(T, ring(T, N)) -> ring(T, N).
+append(V, Q = #ring{size = S}) ->
+    require(not full(Q)),
+    (write(S + 1, V, Q))#ring{size = S + 1, position = 0}.
+
+-doc "Reads the last entry independently of cursor position. Empty or unfinished rings raise badarg.".
+-spec back(ring(T, _)) -> T.
+back(Q = #ring{size = S}) ->
+    require(not empty(Q)),
+    read(S, Q).
+
+-doc "Replaces the last entry, preserving order and cursor position. Empty or unfinished rings raise badarg.".
+-spec replace_back(T, ring(T, N)) -> ring(T, N).
+replace_back(V, Q = #ring{size = S}) ->
+    require(not empty(Q)),
+    write(S, V, Q).
 
 %% Slots belong to this module; callers only see queue-order traversal.
 -spec slot(pos_integer(), ring(_, _)) -> pos_integer().

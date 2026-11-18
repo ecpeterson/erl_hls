@@ -46,7 +46,7 @@ Erlang data without adding an initializer language. This first compact subset
 has no general expression language, sparse exceptions, or placement rules.
 
 Exact actor declarations are a map from logical instance ID to actor module.
-IDs are atoms, nonnegative integers, or nonempty tuples recursively containing
+IDs are atoms, integers, or nonempty tuples recursively containing
 those values. A family member uses the same representation, such as
 `{phi, X, Y}`, without allocating an atom per instance. Normalized exact
 sections and compact family sections are sorted for deterministic traversal;
@@ -529,7 +529,9 @@ require_actor(ActorId, ActorIndex, Context) ->
         error -> error({unknown_actor, ActorId, Context})
     end.
 
-validate_id(Id) when is_atom(Id); is_integer(Id), Id >= 0 ->
+%% Logical names are independent of bounded family indices and physical addresses.
+-spec validate_id(term()) -> ok.
+validate_id(Id) when is_atom(Id); is_integer(Id) ->
     ok;
 validate_id(Id) when is_tuple(Id), tuple_size(Id) > 0 ->
     lists:foreach(fun validate_id/1, tuple_to_list(Id));

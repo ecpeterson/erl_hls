@@ -79,3 +79,27 @@ compound_codec_test() ->
     ?assertEqual({Q1, <<>>}, hls_type:unpack(hls_type:pack(Q1, T), T)),
     ?assertEqual({sample, warm, true}, hls_ring:front(Q1)),
     ?assertEqual(128 + 2 * hls_type:value_width(E), hls_type:value_width(T)).
+
+%% Tail operations agree with a list under repeated fill/drain and preserve cursor rules.
+-spec queue_ends_test() -> ok.
+queue_ends_test() ->
+    lists:foreach(fun(N) ->
+        Q = hls_type:zero(hls_ring:ring(hls_nums:u8(), N)),
+        ?assertError(badarg, hls_ring:back(Q)),
+        ?assertError(badarg, hls_ring:replace_back(0, Q)),
+        lists:foldl(fun(K, Empty) ->
+            Filled = lists:foldl(fun(V, A) -> hls_ring:append(V, A) end, Empty, lists:seq(1,N)),
+            ?assert(hls_ring:at_end(Filled)),
+            ?assertError(badarg, hls_ring:append(1,Filled)),
+            ?assertEqual(N, hls_ring:back(Filled)),
+            At = hls_ring:rewind(Filled),
+            Updated = hls_ring:replace_back(K, At),
+            ?assertEqual(lists:seq(1,N-1)++[K], contents(Updated)),
+            ?assertEqual(case N of 1 -> K; _ -> 1 end, hls_ring:current(Updated)),
+            lists:foldl(fun(_,A)->hls_ring:pop(A) end, Updated, lists:seq(1,N))
+        end, Q, lists:seq(1,20)),
+        Shifting = hls_ring:begin_insert(hls_ring:rewind(Q)),
+        ?assertError(badarg, hls_ring:back(Shifting)),
+        ?assertError(badarg, hls_ring:append(1,Shifting)),
+        ?assertError(badarg, hls_ring:replace_back(1,Shifting))
+    end,[1,3,4,7]).
