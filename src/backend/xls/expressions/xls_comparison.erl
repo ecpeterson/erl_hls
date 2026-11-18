@@ -15,7 +15,8 @@
     | {atom, atom()}
     | {enum, hls_type:descriptor()}
     | {tuple, [shape()]}
-    | {array, shape()}.
+    | {array, shape()}
+    | {ring, shape()}.
 %% Proven shapes of variables visible at one source point.
 -type bindings() :: #{atom() => shape()}.
 %% Declaration facts shared by all function bodies in one source module.
@@ -94,6 +95,8 @@ shape({remote_type, _, [{atom, _, M}, {atom, _, F}, [Element, _]]}, Forms) when
     (M =:= hls_lists andalso F =:= list)
 ->
     {array, shape(Element, Forms)};
+shape({remote_type, _, [{atom, _, hls_ring}, {atom, _, ring}, [Element, _]]}, Forms) ->
+    {ring, shape(Element, Forms)};
 shape(Type, Forms) ->
     case hls_atom_types:descriptor(Type, Forms) of
         {ok, Descriptor} -> {enum, Descriptor};
@@ -121,6 +124,8 @@ shape({remote_type, _, [{atom, _, Module}, {atom, _, Name}, [Element, _]]}) when
     (Module =:= hls_lists andalso Name =:= list)
 ->
     {array, shape(Element)};
+shape({remote_type, _, [{atom, _, hls_ring}, {atom, _, ring}, [Element, _]]}) ->
+    {ring, shape(Element)};
 shape({type, _, tuple, Elements}) when is_list(Elements) -> {tuple, [shape(T) || T <- Elements]};
 shape({type, _, boolean, []}) ->
     other;
@@ -263,6 +268,12 @@ expression({call, Line, Target = {remote, _, {atom, _, M}, {atom, _, F}}, Args},
     (M =:= hls_vec orelse M =:= hls_lists), (F =:= nth orelse F =:= set)
 ->
     collection_call(Line, Target, F, Args, Env, Context);
+expression(
+    {call, Line, Target = {remote, _, {atom, _, hls_ring}, {atom, _, F}}, Args}, Env, Context
+) when
+    F =/= ring
+->
+    ring_call(Line, Target, F, Args, Env, Context);
 expression({call, Line, Target, Args}, Env, Context) ->
     Expected =
         case Target of
@@ -328,6 +339,50 @@ collection_call(Line, Target, Operation, [Index, Collection | Values], Env, Cont
             {{call, Line, Target, [I, C, Checked]}, CT, VE}
     end.
 
+%% The ring cursor preserves the element's atom domain across movement and insertion.
+-spec ring_call(erl_anno:location(), term(), atom(), [term()], bindings(), context()) ->
+    {term(), shape(), bindings()}.
+ring_call(Line, Target, Operation, Args, Env, Context) ->
+    {Pairs, After} = lists:mapfoldl(
+        fun(Arg, Before) ->
+            {Typed, Actual, Bound} = expression(Arg, Before, Context),
+            {{Typed, Actual}, Bound}
+        end,
+        Env,
+        Args
+    ),
+    {Queue, QT} = lists:last(Pairs),
+    Element =
+        case QT of
+            {ring, E} -> E;
+            _ -> unknown
+        end,
+    {Arguments, Result} =
+        case {Operation, Pairs} of
+            {current, [_]} ->
+                {[Queue], Element};
+            {front, [_]} ->
+                {[Queue], Element};
+            {replace, [{V, VT}, _]} ->
+                {[ring_value(V, Element, VT, Line, Target), Queue], QT};
+            {insert_step, [{V, VT}, _]} ->
+                {[ring_value(V, Element, VT, Line, Target), Queue], {tuple, [other, QT]}};
+            {Query, [_]} when Query =:= empty; Query =:= full; Query =:= at_end -> {[Queue], other};
+            {Move, [_]} when Move =:= rewind; Move =:= next; Move =:= begin_insert; Move =:= pop ->
+                {[Queue], QT};
+            _ ->
+                error({unsupported_xls_enum_provider_call, Line, Target})
+        end,
+    {{call, Line, Target, Arguments}, Result, After}.
+
+%% Do not infer an atom encoding from an untyped collection argument.
+-spec ring_value(term(), shape(), shape(), erl_anno:location(), term()) -> term().
+ring_value(Value, Element, Actual, Line, Target) ->
+    case Element =:= unknown andalso contains_enum(Actual) of
+        true -> error({unsupported_xls_enum_provider_call, Line, Target});
+        false -> expected(Value, Element, Actual, Line)
+    end.
+
 %% A field assignment is a typed boundary just like a helper argument.
 -spec record_fields(atom(), [tuple()], bindings(), context()) -> {[tuple()], bindings()}.
 record_fields(Name, Fields, Env, Context) ->
@@ -352,6 +407,7 @@ diagnostic_shape(Type) -> Type.
 contains_enum({enum, _}) -> true;
 contains_enum({tuple, Fields}) -> lists:any(fun contains_enum/1, Fields);
 contains_enum({array, Element}) -> contains_enum(Element);
+contains_enum({ring, Element}) -> contains_enum(Element);
 contains_enum(_) -> false.
 
 %% Structural equality may contain enum fields; context reaches corresponding
@@ -390,6 +446,8 @@ expected(Value, Expected, Actual, Line) ->
 -spec compatible(shape(), shape(), erl_anno:location()) -> ok.
 compatible({tuple, Expected}, {tuple, Actual}, Line) when length(Expected) =:= length(Actual) ->
     lists:foreach(fun({E, A}) -> compatible(E, A, Line) end, lists:zip(Expected, Actual));
+compatible({ring, Expected}, {ring, Actual}, Line) ->
+    compatible(Expected, Actual, Line);
 compatible({array, Expected}, {array, Actual}, Line) ->
     compatible(Expected, Actual, Line);
 compatible({enum, Type}, {enum, Type}, _) ->

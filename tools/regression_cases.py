@@ -150,6 +150,19 @@ def serial(c: Case) -> None:
     service_probe(c, repeat_after_reset=True)
 
 
+def ring(c: Case) -> None:
+    """Compare bounded cursor transitions with native traces at power/non-power-of-two capacities."""
+    c.generate("hls_ring_dslx")
+    c.imports = ("lib", "runtime")
+    c.erl("ok = hls_ring_source_dslx:write(hd(init:get_plain_arguments())), halt().", name="source-fixtures")
+    scalar(c, "ring_source", top="ring_source_probe", module="ring_source")
+    for capacity in (1, 3, 4, 7):
+        name = f"ring{capacity}"
+        vector_case(c, name, "ring_probe", "hls_ring_tb", [f"-DRING_CAPACITY={capacity}",
+            FileText(c.path(name + ".count"), "-DRING_COUNT="),
+            '-DRING_VECTORS="' + str(c.path(name + ".mem")) + '"'])
+
+
 def collections(c: Case) -> None:
     """Keep constant-wiring assertions plus signed/unsigned collection vector simulation."""
     c.generate("xls_collection_dslx")

@@ -40,6 +40,7 @@ provider(hls_gs) -> xls_provider_gs;
 provider(hls_lists) -> xls_provider_lists;
 provider(hls_nums) -> xls_provider_nums;
 provider(hls_prng) -> xls_provider_prng;
+provider(hls_ring) -> xls_provider_ring;
 provider(hls_record) -> xls_provider_record;
 provider(hls_serial) -> xls_provider_serial;
 provider(hls_type) -> xls_provider_type;
