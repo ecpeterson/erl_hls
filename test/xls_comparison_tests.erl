@@ -70,6 +70,18 @@ guard_test() ->
     _ = xls_guard_lower:predicate(Guards, 1),
     ?assertEqual(2, count(Guards)).
 
+%% Ring operations preserve enum identity and reject an incompatible element domain.
+-spec ring_enum_boundaries_test() -> ok.
+ring_enum_boundaries_test() ->
+    Header = ["-type mode() :: idle | busy.",
+        "-spec f(hls_ring:ring(mode(), 3)) -> mode()."],
+    _ = prepare(Header ++ ["f(Q) -> hls_ring:current(hls_ring:replace(busy, Q))."]),
+    ?assertException(error, _, prepare(Header ++ [
+        "f(Q) -> hls_ring:current(hls_ring:replace(unknown_mode, Q))."])),
+    ?assertException(error, _, prepare(["-type mode() :: idle | busy.",
+        "-spec f(mode(), term()) -> term().", "f(V,Q) -> hls_ring:replace(V,Q)."])),
+    ok.
+
 %% Parse source declarations before applying the production preparation pass.
 -spec prepare([string()]) -> [hls_source:form()].
 prepare(Sources) ->

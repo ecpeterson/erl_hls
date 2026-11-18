@@ -1,7 +1,7 @@
 -module(xls_struct_codec).
 -moduledoc "Generic typed DSLX struct and codec rendering over hls_type field descriptors. xls_record_codegen uses physical-stream packing; generated machine/progress layouts can choose least-significant-field packing. hls_field_layout owns field offsets; xls_type supplies compiler conversions. This renderer owns neither source records nor storage policy.".
 %% Render the declaration and both directions of that same codec.
--export([declaration/2, decoder/3, encoder/3]).
+-export([declaration/2, decoder/3, encoder/3, codec/2]).
 
 -doc "Emits a public struct using provider value types. TypeName and field names must be valid compiler-owned DSLX identifiers; referenced types must already be declared or imported.".
 -spec declaration(string(), hls_field_layout:layout()) -> xls_dslx:value().
@@ -68,16 +68,23 @@ encoder(TypeName, CodecName, #{encoding := Encoding, width := Width, fields := F
 
 %% Convert only the selected field's physical stream before invoking its provider.
 -spec field_bits(hls_field_layout:encoding(), hls_field_layout:field()) -> iodata().
-field_bits(stream, #{prefix := Prefix, width := Width}) ->
+field_bits(stream, Field) ->
+    field_stream_bits(Field, "N");
+field_bits(lsb, #{prefix := Prefix, width := Width}) ->
+    ["raw[", n(Prefix), "+:bits[", n(Width), "]]"].
+
+%% Select a stream field under either a parameterized or a concrete enclosing width.
+-spec field_stream_bits(hls_field_layout:field(), xls_dslx:value()) -> xls_dslx:value().
+field_stream_bits(#{prefix := Prefix, width := Width}, Total) ->
     [
-        "hls_bits::from_stream(stream[N - u32:",
+        "hls_bits::from_stream(stream[",
+        Total,
+        " - u32:",
         n(Prefix + Width),
         "+:bits[",
         n(Width),
         "]])"
-    ];
-field_bits(lsb, #{prefix := Prefix, width := Width}) ->
-    ["raw[", n(Prefix), "+:bits[", n(Width), "]]"].
+    ].
 
 %% The empty concatenation remains a legal zero-width value in either policy.
 -spec packed_fields(hls_field_layout:encoding(), [hls_field_layout:field()]) -> xls_dslx:value().
@@ -97,3 +104,35 @@ packed_field(#{name := Name, type := Type}) ->
 %% Widths and prefixes are static decimal DSLX constants.
 -spec n(non_neg_integer()) -> string().
 n(Value) -> integer_to_list(Value).
+
+-doc "Builds inline conversions for a concrete struct type, including a generic instantiation. Uses the same stream layout as named record codecs; nested providers retain their padding.".
+-spec codec(xls_dslx:value(), hls_field_layout:layout()) -> xls_type:codec().
+codec(TypeName, #{encoding := stream, width := Width, fields := Fields}) ->
+    {
+        fun(Bits) ->
+            [
+                "{ let raw: bits[",
+                n(Width),
+                "] = ",
+                Bits,
+                "; let stream = hls_bits::to_stream(raw); ",
+                TypeName,
+                " { ",
+                lists:join(", ", [
+                    [
+                        atom_to_list(Name),
+                        ": ",
+                        xls_type:dslx_from_bits(
+                            Type,
+                            field_stream_bits(Field, ["u32:", n(Width)])
+                        )
+                    ]
+                 || Field = #{name := Name, type := Type} <- Fields
+                ]),
+                " } }"
+            ]
+        end,
+        fun(Value) ->
+            ["{ let s = ", Value, "; ", packed_fields(stream, Fields), " }"]
+        end
+    }.

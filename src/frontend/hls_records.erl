@@ -240,6 +240,7 @@ tagged_record(Name, Forms) ->
 
 %% These providers preserve element identities through checked access and update.
 -spec enum_collection(term(), term()) -> boolean().
+enum_collection({atom, _, hls_ring}, {atom, _, ring}) -> true;
 enum_collection({atom, _, hls_vec}, {atom, _, vector}) -> true;
 enum_collection({atom, _, hls_lists}, {atom, _, list}) -> true;
 enum_collection(_, _) -> false.

@@ -1,0 +1,11 @@
+# Resumable ring storage
+
+The DQM review asked to remove circular-buffer indices from application decisions without replacing incremental insertion with a combinational whole-array shift. `hls_ring` makes storage, wraparound and a resumable cursor one opaque value. Search predicates stay ordinary Erlang code. The caller owns scheduling; the library adds no implicit continuation, worker or queue of operations.
+
+The collection has one typed vector and four 32-bit cursor words, matching the DQM bookkeeping it replaces. `begin_insert` makes intermediate suffix movement private until the final `insert_step`; reads during that interval fail. Pop invalidates the old cursor. Runtime packing delegates to `hls_record`/`hls_type`; XLS packing uses the same field layout and the generic struct codec. No closures or new callback-result composition rules were added.
+
+Finite qualification: 450 native list-model insertions across capacities 1/2/3/4/7; 3,600 native-derived transitions matched by DSLX, JIT and RTL at capacities 1/3/4/7; 36 source-lowered enum and nested-record histories. The dependent DQM witness keeps 1,206 source bits and 1,991 machine bits per actor, and a finite comparison with its previous source preserves replies, terminal errors and 799 continuation edges across 329 commands. No physical area or timing claim follows. The main DQM RTL witness used a fresh simulator, not the previous layout's executable.
+
+Failed development attempts remain in the local guard/qualification logs: an invalid regression CLI option, a shared-codec slice typo, a fixture with different discarded branch-result types, and DQM source limitations resolved with a concrete record helper and the retained-handle descriptor. Successful checks are retained separately. This is evidence for the active P2 milestone in Notes/erl_xls/Roadmap.md, not another campaign list.
+
+The final local compiler/runtime EUnit suite passes 1,288 tests. The shared quality group passes source contracts (3,283 inherited/current gaps, zero new/changed), canonical formatting, Dialyzer and runtime package boundaries. The largest local guarded process group during DQM XLS compilation used about 1.27 GiB RSS; no memory guard fired.

@@ -262,6 +262,16 @@
       "dependencies": [
         "test/xls_type_shape_dslx.erl"
       ]
+    },
+    "ring": {
+      "group": "test",
+      "default_stage": "_build/ring",
+      "dependencies": [
+        "test/hls_ring_dslx.erl",
+        "test/rtl/hls_ring_tb.sv",
+        "test/hls_ring_fixture.erl",
+        "test/hls_ring_source_dslx.erl"
+      ]
     }
   }
 }
