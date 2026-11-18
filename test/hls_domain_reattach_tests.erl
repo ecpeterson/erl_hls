@@ -196,7 +196,7 @@ with_domains(Fun) ->
     Store = filename:join("/tmp", "hls-domain-reattach-" ++
         integer_to_list(erlang:system_time(nanosecond)) ++ "-" ++
         integer_to_list(erlang:unique_integer([positive]))),
-    ok = hls_domain:create_store(Store),
+    ok = hls_domain_counter:create(Store),
     {ok, A} = hls_domain_async_fixture:start_link(self()), unlink(A),
     {ok, B} = hls_domain_async_fixture:start_link(self()), unlink(B),
     {ok, Owner} = hls_domain:start_link(#{a => automatic, b => manual},

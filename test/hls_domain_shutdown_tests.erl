@@ -15,19 +15,19 @@ stop_retains_identity_until_explicit_replacement_test() ->
         {ok, Before} = hls_domain_erts:status(A),
         {ok, Counter} = file:read_file(Store),
         Monitor = monitor(process, Actor),
-        {ok, _} = hls_domain:stop(Owner, Old),
+        ok = hls_domain:stop(Owner, Old, 2000),
         #{handle := Old, actors := Actors} = phase(Owner, a, stopped),
         ?assertEqual(#{}, Actors),
         receive {'DOWN', Monitor, process, Actor, shutdown} -> ok after 1000 -> error(actor_not_retired) end,
         ?assertEqual({error, not_ready}, hls_domain:resolve(Owner, Old, actor)),
-        ?assertMatch({ok, #{phase := stopped, handle := Old}}, hls_domain:stop(Owner, Old)),
+        ?assertEqual(ok, hls_domain:stop(Owner, Old, 2000)),
         ?assertEqual({ok, Counter}, file:read_file(Store)),
         {ok, Stopped} = hls_domain_erts:status(A),
         ?assertEqual(maps:get(reset_count, Before), maps:get(reset_count, Stopped)),
         {ok, _} = hls_domain:replace(Owner, Old),
         #{handle := New} = phase(Owner, a, ready),
         ?assertNotEqual(Old, New),
-        ?assertEqual({error, stale}, hls_domain:stop(Owner, Old)),
+        ?assertMatch({error, {incarnation_changed, _, _}}, hls_domain:stop(Owner, Old, 2000)),
         {ok, NewActor} = hls_domain:resolve(Owner, New, actor),
         ?assertNotEqual(Actor, NewActor),
         ?assertEqual({readout, 0}, hls_statem:call(NewActor, {get, 0}))
@@ -118,8 +118,8 @@ busy_claim_rolls_back_ownership_test() ->
         First = gen_server:send_request(Owner, {status, a}),
         receive {fixture_held, Backend, status, Owner} -> ok after 1000 -> error(no_held_status) end,
         Waiting = [gen_server:send_request(Owner, {status, a}) || _ <- lists:seq(1, 8)],
-        ?assertEqual({ok, automatic}, hls_domain:policy(Owner, a)),
-        ?assertEqual({error, busy}, hls_domain:supervise(Owner, a)),
+        ?assertEqual({ok, automatic}, hls_domain_owner:policy(Owner, a)),
+        ?assertEqual({error, busy}, hls_domain_owner:claim(Owner, a)),
         ok = hls_domain_async_fixture:release(Backend),
         lists:foreach(fun(Request) -> ?assertMatch({reply, {ok, _}}, gen_server:receive_response(Request, 1000)) end, [First | Waiting]),
         {ok, Child} = hls_domain_instance:start_link(Owner, a, #{lifetime => supervised}),
@@ -133,11 +133,11 @@ death_before_queued_startup_does_not_create_orphan_test() ->
     modeled(fun(Owner, Backend, Store) ->
         Parent = self(),
         Child = spawn(fun() ->
-            {ok, _} = hls_domain:supervise(Owner, a),
+            {ok, _} = hls_domain_owner:claim(Owner, a),
             Parent ! {claimed, self()},
             receive submit -> ok end,
             _ = gen_server:send_request(Owner, {activate, a}),
-            {ok, automatic} = hls_domain:policy(Owner, a),
+            {ok, automatic} = hls_domain_owner:policy(Owner, a),
             Parent ! {startup_queued, self()},
             receive never -> ok end
         end),
@@ -188,7 +188,7 @@ stop_with_exhausted_identity_space_test() ->
         {ok, NextOwner} = hls_domain:start_link(#{a => automatic, b => automatic}, backend(hls_domain_erts, #{a => A, b => B}, Store)),
         unlink(NextOwner),
         try
-            {ok, _} = hls_domain:stop(NextOwner, Old),
+            {ok, _} = hls_domain_owner:request_stop(NextOwner, Old),
             phase(NextOwner, a, stopped),
             ?assertEqual({error, incarnation_exhausted}, hls_domain:replace(NextOwner, Old))
         after stop(NextOwner) end
@@ -201,7 +201,7 @@ nonready_reattachment_reconciles_stop_test() ->
         {ok, _} = hls_domain:activate(Owner, a),
         #{handle := Handle} = phase(Owner, a, ready),
         case Wanted of closing -> ok = hls_domain_async_fixture:pause(Backend, fence); stopped -> ok end,
-        {ok, _} = hls_domain:stop(Owner, Handle),
+        {ok, _} = hls_domain_owner:request_stop(Owner, Handle),
         phase(Owner, a, Wanted),
         {ok, Evidence} = hls_domain_async_fixture:status(Backend),
         {ok, Counter} = file:read_file(Store),
@@ -297,7 +297,7 @@ modeled(Fun) ->
 -spec store() -> file:filename().
 store() ->
     Path = filename:join("/tmp", "hls-shutdown-" ++ integer_to_list(erlang:unique_integer([positive, monotonic]))),
-    ok = hls_domain:create_store(Path), Path.
+    ok = hls_domain_counter:create(Path), Path.
 
 %% Both adapters implement the same public owner contract.
 -spec backend(module(), map(), file:filename()) -> hls_domain:backend().
