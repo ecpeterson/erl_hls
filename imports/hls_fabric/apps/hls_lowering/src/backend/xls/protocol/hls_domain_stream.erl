@@ -6,7 +6,12 @@
 -export_type([plan/0, result/0]).
 
 %% A source-checked rectangle address selects exactly one physical actor.
--type address() :: #{target := 0..3, x := hls_nums:u16(), y := hls_nums:u16()}.
+-type address() :: #{
+    target := 0..3,
+    x := hls_nums:u16(),
+    y := hls_nums:u16(),
+    rectangle => {pos_integer(), pos_integer()}
+}.
 %% Retained runtime schema plus statically allocated caller storage and ingress wiring.
 -type actor() :: #{
     index := hls_nums:u32(),
@@ -108,6 +113,21 @@ bind(#{
         [Actor || Actor = #{id := Id} <- Actors, maps:is_key(Id, Indexed)]
     ),
     ByIndex = maps:from_list([{maps:get(index, B), B} || {_, B} <- Bindings]),
+    RectangleCasts = rectangle_casts(Ingress, ByIndex),
+    Addressed = maps:from_list([
+        {Id, B#{
+            ingress := maps:map(
+                fun(Tag, A = #{target := T}) ->
+                    case maps:find({T, Tag}, RectangleCasts) of
+                        {ok, Shape} -> A#{rectangle => Shape};
+                        error -> A
+                    end
+                end,
+                maps:get(ingress, B)
+            )
+        }}
+     || {Id, B} <- Bindings
+    ]),
     Outputs = [
         begin
             Binding = maps:get(I, ByIndex),
@@ -124,12 +144,37 @@ bind(#{
      || #{source_index := I, output := #{index := D, rows := Rows}} <- Boundaries
     ],
     #{
-        actors => maps:from_list(Bindings),
+        actors => Addressed,
         call_slots => max(1, Slots),
         streams => Outputs,
         management_route => {0, 0},
         application_route => {0, 1}
     }.
+
+%% A multicast cannot allocate reply slots. Every recipient on the declared target must
+%% implement the tag as a cast, including actors on the far edge of the rectangle.
+-spec rectangle_casts(hls_protocol_control:plan(), #{non_neg_integer() => actor()}) ->
+    #{{non_neg_integer(), atom()} => {pos_integer(), pos_integer()}}.
+rectangle_casts(#{targets := Targets, width := W, height := H}, Actors) ->
+    maps:from_list([
+        {{T, Tag}, {W, H}}
+     || #{selector := T, schemas := Tags, recipients := Rs} <- Targets,
+        Rs =/= [],
+        Tag <- Tags,
+        lists:all(
+            fun(#{index := I}) ->
+                case maps:find(I, Actors) of
+                    {ok, #{contract := #{casts := Casts, calls := Calls}, schemas := Schemas}} ->
+                        #{width := Bits} = maps:get(Tag, Schemas),
+                        (Bits + 31) div 32 + 11 =< 255 andalso
+                            lists:member(Tag, Casts) andalso not maps:is_key(Tag, Calls);
+                    error ->
+                        false
+                end
+            end,
+            Rs
+        )
+    ]).
 
 %% The retained program owns request kinds; cast-only actors need no artificial caller slots.
 -spec service_contract(xls_actor_codegen:spec()) -> hls_service_schema:contract().
@@ -205,12 +250,20 @@ emit_mode(
     SideInputs = CrossInputs ++ InspectInputs,
     SideOutputs = CrossOutputs ++ InspectOutputs,
     #{actors := Actors, call_slots := Slots, streams := Outputs} = Stream,
+    %% Preserve the point/reply capacity even when a full-size record cannot fit
+    %% two more coordinate words. Grow the buffer only for eligible multicast tags.
+    RectangleWords = [
+        11 + (Bits + 31) div 32
+     || #{ingress := Ingress, schemas := Schemas} <- maps:values(Actors),
+        {Tag, #{rectangle := _}} <- maps:to_list(Ingress),
+        #{width := Bits} <- [maps:get(Tag, Schemas)]
+    ],
     PacketWords = max(
         case Supervised of
             true -> 28;
             false -> 18
         end,
-        10 + Words
+        lists:max([10 + Words | RectangleWords])
     ),
     true = PacketWords =< 255,
     {ok, Template} = file:read_file(
@@ -332,8 +385,8 @@ commands(Actors) ->
                         n(I),
                         " && tag == u8:",
                         n(Selector),
-                        " && kind == u32:",
-                        n(Kind),
+                        " && ",
+                        command_kind(Kind, Address),
                         " && words == u8:",
                         n((Width + 31) div 32),
                         " && slot ",
@@ -360,6 +413,19 @@ commands(Actors) ->
      || {_, A} <- lists:sort(maps:to_list(Actors))
     ]),
     [Cases, "{zero!<Command>()}"].
+
+%% Only cast-compatible groups accept extended bounds; point packets retain their ABI.
+-spec command_kind(0 | 1, address()) -> iodata().
+command_kind(0, #{rectangle := {W, H}}) ->
+    [
+        "(kind == u32:0 || (kind == u32:2 && x0 <= x1 && y0 <= y1 && x1 as u32 < u32:",
+        n(W),
+        " && y1 as u32 < u32:",
+        n(H),
+        "))"
+    ];
+command_kind(K, _) ->
+    ["kind == u32:", n(K)].
 
 %% Payload selection follows a work-conserving grant over source availability bits.
 -spec output_select([stream()]) -> iodata().

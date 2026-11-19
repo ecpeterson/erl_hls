@@ -25,6 +25,21 @@ request_contract_test() ->
         hls_domain_wire:request(actor(), cast, {trigger, 1}, 41, 1, 2, 255),
     ?assertEqual({trigger, 0, {trigger, 1}}, hls_domain_wire:message(actor(), Header, Payload)).
 
+%% One multicast carries both inclusive corners and the same ordinary cast frame.
+-spec rectangle_cast_test() -> ok.
+rectangle_cast_test() ->
+    Actor = (actor())#{ingress => #{trigger => #{rectangle => {4, 8}}}},
+    Encode = fun(Binding, Bounds) ->
+        hls_domain_wire:request(Binding, {rectangle, Bounds}, {trigger, 5}, 41, 17, 23, 255)
+    end,
+    {<<41:64/little,17:64/little,3:32/little,23:32/little,2:32/little,255:32/little,
+       1:16/little,2:16/little,3:16/little,7:16/little,H:32/little,P/binary>>, []} =
+        Encode(Actor, {1,2,3,7}),
+    ?assertEqual({trigger, 0, {trigger, 5}}, hls_domain_wire:message(Actor, H, P)),
+    [?assertError({invalid_rectangle, B}, Encode(Actor, B)) ||
+        B <- [{0,0,4,7}, {0,0,3,8}, {-1,0,3,7}, {3,2,2,2}, {1,2,1,1}]],
+    ?assertError({unsupported_rectangle_cast, trigger}, Encode(actor(), {0,0,0,0})).
+
 %% Assert the established axis header byte order independently of the decoder.
 -spec canonical_header_test() -> ok.
 canonical_header_test() ->

@@ -10,7 +10,7 @@ owns the matching framing, incarnation admission and output sequence frontier.
 -export([load/1, check/1, request/7, message/3]).
 %% Management and application envelope conversion.
 -export([management/4, observation/2, application/2, publication/3, supervision/2]).
--export_type([actor/0, interface/0, response/0, publication/0, retirement/0]).
+-export_type([actor/0, interface/0, response/0, bounds/0, publication/0, retirement/0]).
 
 -doc "One source actor's retained public request, reply and effect vocabulary.".
 -type actor() :: #{
@@ -18,8 +18,11 @@ owns the matching framing, incarnation admission and output sequence frontier.
     schemas := hls_host_codec:catalog(),
     contract := hls_service_schema:contract(),
     outputs := #{atom() => [atom()]},
-    ports := #{atom() => hls_nums:u32()}
+    ports := #{atom() => hls_nums:u32()},
+    ingress => #{atom() => map()}
 }.
+-doc "Inclusive physical coordinates X0, Y0, X1, Y1 in the source-declared ingress.".
+-type bounds() :: {hls_nums:u16(), hls_nums:u16(), hls_nums:u16(), hls_nums:u16()}.
 -doc "Trusted build output; concrete descriptor providers remain runtime dependencies.".
 -type interface() :: #{
     actors := #{term() => actor()},
@@ -148,9 +151,45 @@ check_route({Source, Destination}) when
 
 -doc "Encodes one typed call/cast before transmission. Slot is the bounded call slot or envelope sentinel 255 for a cast; cast frames retain txid zero. Session is the deployment-attested nonzero transport identity; Request is never reused within it.".
 -spec request(
-    actor(), call | cast, tuple(), hls_nums:u64(), hls_nums:u64(), hls_nums:u32(), byte()
+    actor(),
+    call | cast | {rectangle, bounds()},
+    tuple(),
+    hls_nums:u64(),
+    hls_nums:u64(),
+    hls_nums:u32(),
+    byte()
 ) ->
     {binary(), [atom()]}.
+%% A rectangle is one cast, with one admission at the shared ingress register.
+request(Binding, {rectangle, {X0, Y0, X1, Y1} = Bounds}, Message, Session, Epoch, Request, 255) ->
+    Tag = element(1, Message),
+    Address = maps:get(Tag, maps:get(ingress, Binding, #{}), #{}),
+    case Address of
+        #{rectangle := {W, H}} when
+            is_integer(X0),
+            is_integer(Y0),
+            is_integer(X1),
+            is_integer(Y1),
+            0 =< X0,
+            X0 =< X1,
+            X1 < W,
+            0 =< Y0,
+            Y0 =< Y1,
+            Y1 < H
+        ->
+            {<<Prefix:24/binary, 0:32/little, 255:32/little, Frame/binary>>, []} =
+                request(Binding, cast, Message, Session, Epoch, Request, 255),
+            {
+                <<Prefix/binary, 2:32/little, 255:32/little, X0:16/little, Y0:16/little,
+                    X1:16/little, Y1:16/little, Frame/binary>>,
+                []
+            };
+        #{rectangle := _} ->
+            error({invalid_rectangle, Bounds});
+        _ ->
+            error({unsupported_rectangle_cast, Tag})
+    end;
+%% A point command routes to the addressed actor's source-derived position.
 request(
     #{index := Actor, schemas := Schemas, contract := Contract},
     Mode,

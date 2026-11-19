@@ -102,6 +102,12 @@ The worker carries only management requests. Its `status/1` is a last-observed r
 
 Cold reset is a separate deployment boundary: it forgets endpoint identity history. The deployment must exclude the old namespace before admitting a fresh one. Domain replacement and host-session changes must not reset endpoints or the carrier. The current physical packet emitter supports twenty application payload words, carries all identity fields, and requires a bounded atomic packet carrier; the board-specific carrier owns its clock crossings and integrity checks. Finite kernel and RTL witnesses establish only their tested histories, not physical CDC safety or unbounded distributed progress.
 
+### Casting to a rectangle
+
+A framed endpoint also accepts `hls_domain_fabric:cast_rectangle(Endpoint, {X0,Y0,X1,Y1}, Message)`. The endpoint identifies the incarnation and the ingress target used by this cast tag. The rectangle can include other actors and can exclude the submitting endpoint. The compiler enables this operation only when all recipients of the target accept that record as a cast. The emitted address gives the target's width and height. Both the encoder and hardware check inclusive bounds. Existing point commands retain their encoding.
+
+One request consumes a cast credit at the submitting endpoint. An `ok` reply confirms admission of a shared hardware frame. Each selected actor consumes it independently. The existing pending mask holds subsequent ingress, including a point-addressed barrier, until every selected actor has consumed the frame. Retirement can interrupt a partially consumed broadcast. A timeout leaves its outcome uncertain and replay can duplicate effects.
+
 ## Stop and supervised lifetime
 
 The shared lifecycle accepts incarnation-specific `stop`. It closes admission and reaches `stopped` only after the fence acknowledgement, without pulsing reset, running initialization or allocating a successor. A repeated stop is idempotent; a stale command cannot stop a newer incarnation. Replacement from stopped starts a fresh lifetime through the ordinary reset and initialization sequence.

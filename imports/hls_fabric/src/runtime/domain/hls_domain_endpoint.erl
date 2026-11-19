@@ -19,7 +19,9 @@ calls and ignores new casts while delivering retained output. It never follows a
     mode := call | cast
 }.
 %% Cast capacity is independent of the actor's declared retained-call capacity.
--type limits() :: #{cast := pos_integer(), call := non_neg_integer()}.
+-type limits() :: #{
+    cast := pos_integer(), call := non_neg_integer(), addresses => #{atom() => map()}
+}.
 -record(endpoint, {
     backend :: pid(),
     monitor :: reference(),
@@ -63,6 +65,12 @@ handle_call('$hls_capacity', From, State = #endpoint{capacity_waiters = Waiters}
 %% Acknowledged local casts use the common admission path without a transport observer.
 handle_call({'$hls_domain_cast', Message}, From, State) ->
     issue(cast, Message, From, none, State);
+%% Source addresses are immutable metadata, including during retirement.
+handle_call('$hls_cast_addresses', _, State = #endpoint{limits = Limits}) ->
+    {reply, maps:get(addresses, Limits, #{}), State};
+%% Rectangle casts use this incarnation and one cast credit at the submitting endpoint.
+handle_call({'$hls_rectangle_cast', Bounds, Message}, From, State) ->
+    issue({rectangle, Bounds}, Message, From, none, State);
 %% Ordinary calls complete only with a typed reply, never their ingress acknowledgement.
 handle_call(Message, From, State) ->
     issue(call, Message, From, none, State).
@@ -151,7 +159,13 @@ available(Mode, #endpoint{pending = Pending, limits = Limits}) ->
     length([ok || #{mode := M} <- maps:values(Pending), M =:= Mode]) < maps:get(Mode, Limits).
 
 %% Busy is strictly pre-submission: no backend write exists to replay.
--spec issue(call | cast, term(), gen_server:from() | none, reference() | none, #endpoint{}) ->
+-spec issue(
+    call | cast | {rectangle, hls_domain_wire:bounds()},
+    term(),
+    gen_server:from() | none,
+    reference() | none,
+    #endpoint{}
+) ->
     {reply, term(), #endpoint{}} | {noreply, #endpoint{}}.
 issue(_Mode, _Message, _From, _Token, State = #endpoint{retiring = true}) ->
     {reply, {error, not_ready_or_stale}, State};
@@ -167,13 +181,18 @@ issue(
         pending = Pending
     }
 ) ->
-    case available(Mode, State) of
+    Credit =
+        case Mode of
+            {rectangle, _} -> cast;
+            _ -> Mode
+        end,
+    case available(Credit, State) of
         false ->
             {reply, {error, busy}, State};
         true ->
             Ref = make_ref(),
             gen_server:cast(Backend, {application, self(), Ref, Actor, Incarnation, Mode, Message}),
             {noreply, State#endpoint{
-                pending = Pending#{Ref => #{from => From, token => Token, mode => Mode}}
+                pending = Pending#{Ref => #{from => From, token => Token, mode => Credit}}
             }}
     end.

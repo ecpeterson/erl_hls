@@ -33,6 +33,8 @@ Host lifecycle commands are rejected for these children.
 
 %% Deployment and shared lifecycle backend interface.
 -export([start_link/3, attach/2, status/1, request/3, endpoint/4, stop/1, info/1, send_request/2]).
+%% Application rectangle ingress.
+-export([cast_rectangle/3, cast_addresses/1]).
 %% OTP callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 -export_type([transport/0, options/0]).
@@ -176,6 +178,15 @@ request(Backend, Authority, Input) -> gen_server:call(Backend, {request, Authori
 -spec endpoint(pid(), reference(), hls_nums:u64(), term()) -> {ok, pid()} | {error, term()}.
 endpoint(Backend, Authority, Incarnation, Actor) ->
     gen_server:call(Backend, {endpoint, Authority, Incarnation, Actor}).
+
+-doc "Admit one typed cast to a rectangle on the endpoint's declared target in its current incarnation. Returns ok when the shared ingress accepts the packet. Later ingress waits for every selected actor to consume it. Retirement can interrupt delivery. Timeout or disconnect leaves delivery uncertain.".
+-spec cast_rectangle(pid(), hls_domain_wire:bounds(), tuple()) -> ok | {error, term()}.
+cast_rectangle(Endpoint, Bounds, Message) ->
+    gen_server:call(Endpoint, {'$hls_rectangle_cast', Bounds, Message}).
+
+-doc "Read the cast addresses bound when this endpoint was published. A rectangle entry gives the source target, point and dimensions. Deployment code can compare these with its application coordinates before exposing a broadcast bank.".
+-spec cast_addresses(pid()) -> #{atom() => map()}.
+cast_addresses(Endpoint) -> gen_server:call(Endpoint, '$hls_cast_addresses').
 
 -doc "Stops local endpoints with connection uncertainty. It does not close deployment-owned brokers or certify remote retirement.".
 -spec stop(pid()) -> ok.
@@ -1002,8 +1013,17 @@ publish_endpoints(State) ->
 -spec create_endpoints(hls_nums:u64(), #backend{}) -> #backend{}.
 create_endpoints(Incarnation, State = #backend{interface = #{actors := Bindings}, limit = Limit}) ->
     {Endpoints, Monitors} = maps:fold(
-        fun(Id, #{contract := Contract}, {Ps, Ms}) ->
-            Limits = #{cast => Limit, call => maps:get(pending_calls, Contract, 0)},
+        fun(Id, Binding = #{contract := Contract}, {Ps, Ms}) ->
+            Ingress = maps:get(ingress, Binding, #{}),
+            Addresses = maps:from_list([
+                {Tag, maps:get(Tag, Ingress, #{})}
+             || Tag <- maps:get(casts, Contract)
+            ]),
+            Limits = #{
+                cast => Limit,
+                call => maps:get(pending_calls, Contract, 0),
+                addresses => Addresses
+            },
             {ok, Endpoint} = hls_domain_endpoint:start(self(), Id, Incarnation, Limits),
             {Ps#{Id => Endpoint}, Ms#{monitor(process, Endpoint) => Id}}
         end,
@@ -1042,7 +1062,15 @@ status_result(State = #backend{lifecycle = Lifecycle, actors = Actors, retiremen
     {ok, #{state => Lifecycle, actors => Visible, fault_reason => State#backend.fault_reason}}.
 
 %% Type validation precedes I/O; bounded call slots remain owned until an actual typed reply.
--spec application(pid(), reference(), term(), hls_nums:u64(), call | cast, term(), #backend{}) ->
+-spec application(
+    pid(),
+    reference(),
+    term(),
+    hls_nums:u64(),
+    call | cast | {rectangle, hls_domain_wire:bounds()},
+    term(),
+    #backend{}
+) ->
     #backend{}.
 application(
     Endpoint,
@@ -1069,7 +1097,15 @@ application(
     end.
 
 %% Request identities never wrap or get reused after an uncertain write.
--spec admit(pid(), reference(), term(), hls_nums:u64(), call | cast, term(), #backend{}) ->
+-spec admit(
+    pid(),
+    reference(),
+    term(),
+    hls_nums:u64(),
+    call | cast | {rectangle, hls_domain_wire:bounds()},
+    term(),
+    #backend{}
+) ->
     #backend{}.
 admit(
     Endpoint, Ref, _Actor, _Incarnation, _Mode, _Message, State = #backend{request_next = Next}
@@ -1086,7 +1122,12 @@ admit(
     State = #backend{interface = #{actors := Actors}, pending = Pending, request_next = Request}
 ) ->
     Binding = maps:get(Actor, Actors),
-    case slot(Actor, Mode, Binding, Pending, maps:get(Actor, State#backend.slot_cursor, 0)) of
+    Credit =
+        case Mode of
+            {rectangle, _} -> cast;
+            _ -> Mode
+        end,
+    case slot(Actor, Credit, Binding, Pending, maps:get(Actor, State#backend.slot_cursor, 0)) of
         busy ->
             result(Endpoint, Ref, {error, busy}),
             State;
@@ -1108,7 +1149,7 @@ admit(
                         endpoint => Endpoint,
                         reference => Ref,
                         incarnation => Incarnation,
-                        mode => Mode,
+                        mode => Credit,
                         slot => Slot,
                         replies => Replies,
                         admitted => false
@@ -1122,7 +1163,7 @@ admit(
                             request_next = Request + 1,
                             pending = Pending#{Request => Entry},
                             slot_cursor =
-                                case Mode of
+                                case Credit of
                                     call ->
                                         (State#backend.slot_cursor)#{
                                             Actor => (Slot + 1) rem
