@@ -51,11 +51,13 @@ def stream_checks(xls: Path, bundle: Path, stage: Path) -> Path:
         '#{transport:=#{packet_words:=Words,state_bit_budget:=Budget},'
         'call_slots:=Slots,codecs:=Codecs,actors:=#{actuator:=#{schemas:=Schemas}}}=binary_to_term(B),'
         '#{selector:=SelectTag,width:=SelectWidth}=maps:get(select_profile,Schemas),'
+        '#{selector:=ApplyTag,width:=ApplyWidth}=maps:get(apply_profile,Schemas),'
         '{ok,T}=file:read_file(Template),'
         'Pairs=[{<<"@@PACKET_BITS@@">>,Words*32},{<<"@@SLOTS@@">>,Slots},'
         '{<<"@@STATUS_BITS@@">>,hls_type:width(maps:get(status,Codecs))},'
         '{<<"@@ACTION_BITS@@">>,hls_type:width(maps:get(action,Codecs))},'
         '{<<"@@STATE_BUDGET@@">>,Budget},'
+        '{<<"@@APPLY_TAG@@">>,ApplyTag},{<<"@@APPLY_WORDS@@">>,(ApplyWidth+31) div 32},'
         '{<<"@@SELECT_TAG@@">>,SelectTag},{<<"@@SELECT_WORDS@@">>,(SelectWidth+31) div 32}],'
         'Text=lists:foldl(fun({K,V},A)->binary:replace(A,K,integer_to_binary(V),[global]) end,T,Pairs),'
         'ok=file:write_file(Output,Text,[exclusive]),halt().')

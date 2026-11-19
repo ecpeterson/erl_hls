@@ -64,7 +64,7 @@
         }
     }.
 
--doc "Derives addressed actor schemas, call slots and external stream identities from one checked transport descriptor. Each framed command must select exactly one actor; ambiguous rectangle points and external outputs shared by indistinguishable source ports reject.".
+-doc "Derives addressed actor schemas, call slots and external stream identities from one checked transport descriptor. Each point address must identify exactly one actor. A rectangle may select multiple actors when all members implement the tag as a cast. Ambiguous point addresses and indistinguishable external outputs reject.".
 -spec bind(hls_protocol_transport:descriptor()) -> plan().
 bind(#{
     bundle := #{topology := #{actors := Actors}, modules := Modules},
@@ -397,8 +397,12 @@ commands(Actors) ->
                         " { Command {valid:true,call:",
                         atom_to_list(IsCall),
                         ",slot:u32:",
-                        n(Base),
-                        "+slot,target:u2:",
+                        %% Casts carry sentinel 255 on the wire but own no call slot.
+                        case IsCall of
+                            true -> [n(Base), "+slot"];
+                            false -> "0"
+                        end,
+                        ",target:u2:",
                         n(Target),
                         ",x:u16:",
                         n(X),
@@ -418,7 +422,7 @@ commands(Actors) ->
 -spec command_kind(0 | 1, address()) -> iodata().
 command_kind(0, #{rectangle := {W, H}}) ->
     [
-        "(kind == u32:0 || (kind == u32:2 && x0 <= x1 && y0 <= y1 && x1 as u32 < u32:",
+        "(kind == u32:0 || ((kind == u32:2 || kind == u32:3) && x0 <= x1 && y0 <= y1 && x1 as u32 < u32:",
         n(W),
         " && y1 as u32 < u32:",
         n(H),

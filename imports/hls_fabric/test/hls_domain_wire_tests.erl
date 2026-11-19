@@ -35,6 +35,9 @@ rectangle_cast_test() ->
     {<<41:64/little,17:64/little,3:32/little,23:32/little,2:32/little,255:32/little,
        1:16/little,2:16/little,3:16/little,7:16/little,H:32/little,P/binary>>, []} =
         Encode(Actor, {1,2,3,7}),
+    {<<_:192,3:32/little,255:32/little,1:16/little,2:16/little,3:16/little,7:16/little,
+       H:32/little,P/binary>>, []} =
+        hls_domain_wire:request(Actor, {rectangle, {1,2,3,7}, consumed}, {trigger, 5}, 41, 17, 23, 255),
     ?assertEqual({trigger, 0, {trigger, 5}}, hls_domain_wire:message(Actor, H, P)),
     [?assertError({invalid_rectangle, B}, Encode(Actor, B)) ||
         B <- [{0,0,4,7}, {0,0,3,8}, {-1,0,3,7}, {3,2,2,2}, {1,2,1,1}]],

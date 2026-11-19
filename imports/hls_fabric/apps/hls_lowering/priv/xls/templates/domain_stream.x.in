@@ -51,7 +51,7 @@ pub struct Retirement {
 // Session identity survives stream faults; only cold reset permits its counter to restart.
 pub struct State {
   core: domain::State,
-  management_rx: Receive, application_rx: Receive,
+  management_rx: Receive, application_rx: Receive, awaiting_consumption: bool,
   management_tx: Packet, management_tx_valid: bool, management_position: u32,
   application_tx: Packet, application_tx_valid: bool, application_position: u32,
   management_pending: bool, management_request: u32, management_header: u32, management_route: u32,
@@ -172,7 +172,8 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let kind = word(app,u32:4);
   let slot = word(app,u32:5);
   // Multicast adds two packed coordinate words ahead of the ordinary frame.
-  let rectangle = kind == u32:2;
+  let consumed_receipt = kind == u32:3;
+  let rectangle = kind == u32:2 || consumed_receipt;
   let lo = word(app,u32:6);
   let hi = word(app,u32:7);
   let (x0,y0,x1,y1) = (lo as u16, lo[16+:u16], hi as u16, hi[16+:u16]);
@@ -189,7 +190,6 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     !selection.valid || frame.header.txid as u32 != (if kind == u32:1 {slot} else {u32:0}) || frame.header.flags != u8:0;
   let occupied = selection.call && live_calls[selection.slot].valid;
   let exhausted = s.sequence == u32:0xffffffff;
-  let reject = stale || malformed || occupied || exhausted;
   let bounds = if rectangle {x0 ++ y0 ++ x1 ++ y1} else {selection.x ++ selection.y ++ selection.x ++ selection.y};
   let spatial = bounds ++ selection.target ++
     frame.header.payload_words ++ frame.header.txid ++ frame.header.flags ++ frame.header.op ++ frame.payload;
@@ -224,6 +224,10 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
       actor:if observation.domain_current == s.watched {observation.domain_source_actor} else {u32:0},
       frontier:s.sequence }
   } else {s.retirement};
+  // A reset or fenced core may report ready to discard stale input. Only live
+  // network readiness certifies that the last selected inbox committed take.
+  let fenced = consumed_receipt && !observation.domain_admission;
+  let reject = stale || fenced || malformed || occupied || exhausted;
   let ingress = application_session && s.application_rx.full && (reject || observation.app_ingress_ready);
   // An unobserved successor may hold an effect, but cannot monopolize stale-request rejection.
   let output_enabled = !SUPERVISED || (parent_admission && s.watched == current && !receipt.valid);
@@ -234,7 +238,7 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let offer = granted && input_turn;
   // Commit the actor/link network once, with exactly one selected external transfer.
   let core = domain::tick(s.core,domain::Inputs {
-    ingress_valid: offer && !reject,
+    ingress_valid: offer && !reject && !s.awaiting_consumption,
     @@OUTPUT_READY@@
     ..control
   });
@@ -244,9 +248,12 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
   let valid_reply = !selected.reply || (selected.frame.header.txid as u32 < selected.count && live_calls[reply_index].valid);
   let output_good = output_take && valid_reply;
   let output_emit = output_good && !(selected.reply && live_calls[reply_index].abandoned);
-  let input_take = offer && (reject || core.output.app_ingress_ready);
+  let input_grant = offer && (reject || core.output.app_ingress_ready);
+  // Keep the complete RX packet as the receipt identity. Offer it exactly once.
+  let launch = input_grant && consumed_receipt && !reject && !s.awaiting_consumption;
+  let input_take = input_grant && !launch;
   let new_sequence = s.sequence + (input_take || output_emit) as u32;
-  let disposition = if stale { u32:1 } else if malformed { u32:2 } else if occupied { u32:3 } else if exhausted { u32:4 } else { u32:0 };
+  let disposition = if stale || fenced { u32:1 } else if malformed { u32:2 } else if occupied { u32:3 } else if exhausted { u32:4 } else { u32:0 };
   let accepted_calls = if input_take && !reject && selection.call {
     update(live_calls,selection.slot,Call {valid:true,abandoned:false,request})
   } else { live_calls };
@@ -267,7 +274,8 @@ pub fn tick(previous: State, io: Inputs) -> Tick {
     acknowledged:if management_take && ack_accept {management_epoch} else {s.acknowledged},
     retirement:if management_take && ack_accept {zero!<Retirement>()} else {receipt},
     last_request:if input_take && !stale {request} else {last_request}, sequence:new_sequence,
-    cursor:if input_take || output_good {arbitration::successor<SOURCE_COUNT>(grant as Cursor) as u32} else {s.cursor},
+    awaiting_consumption:launch || (s.awaiting_consumption && !input_take),
+    cursor:if input_grant || output_good {arbitration::successor<SOURCE_COUNT>(grant as Cursor) as u32} else {s.cursor},
     fault:wire_fault, session:s.session, attached:s.attached && !wire_fault,
     management_rx:if management_take || (connected && s.management_rx.full && !management_session) {zero!<Receive>()} else {mgmt_rx},
     application_rx:if input_take || (connected && s.application_rx.full && !application_session) {zero!<Receive>()} else {app_rx},

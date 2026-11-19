@@ -11,7 +11,7 @@ from compiler_paths import compiler_root, compiler_tool
 def main() -> int:
     """Inspect the default build and require examples to remain outside library call/type dependencies."""
     auditor = compiler_tool(compiler_root('default'), 'package_boundaries')
-    generic = {'erl_hls', 'hls_runtime', 'hls_lowering', 'hls_fabric'}
+    generic = {'erl_hls', 'hls_runtime', 'hls_lowering', 'hls_fabric', 'router'}
     paths = auditor.application_files(Path.cwd(), 'default')
     with tempfile.TemporaryDirectory(prefix='application-boundaries-') as temporary:
         request = Path(temporary) / 'request.json'

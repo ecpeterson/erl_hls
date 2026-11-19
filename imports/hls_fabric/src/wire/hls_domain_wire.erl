@@ -10,7 +10,9 @@ owns the matching framing, incarnation admission and output sequence frontier.
 -export([load/1, check/1, request/7, message/3]).
 %% Management and application envelope conversion.
 -export([management/4, observation/2, application/2, publication/3, supervision/2]).
--export_type([actor/0, interface/0, response/0, bounds/0, publication/0, retirement/0]).
+-export_type([
+    actor/0, interface/0, response/0, bounds/0, completion/0, mode/0, publication/0, retirement/0
+]).
 
 -doc "One source actor's retained public request, reply and effect vocabulary.".
 -type actor() :: #{
@@ -23,6 +25,10 @@ owns the matching framing, incarnation admission and output sequence frontier.
 }.
 -doc "Inclusive physical coordinates X0, Y0, X1, Y1 in the source-declared ingress.".
 -type bounds() :: {hls_nums:u16(), hls_nums:u16(), hls_nums:u16(), hls_nums:u16()}.
+-doc "Receipt point for a rectangle in one incarnation.".
+-type completion() :: admitted | consumed.
+-doc "Point calls and casts or one rectangular cast with its requested receipt.".
+-type mode() :: call | cast | {rectangle, bounds(), completion()}.
 -doc "Trusted build output; concrete descriptor providers remain runtime dependencies.".
 -type interface() :: #{
     actors := #{term() => actor()},
@@ -152,7 +158,7 @@ check_route({Source, Destination}) when
 -doc "Encodes one typed call/cast before transmission. Slot is the bounded call slot or envelope sentinel 255 for a cast; cast frames retain txid zero. Session is the deployment-attested nonzero transport identity; Request is never reused within it.".
 -spec request(
     actor(),
-    call | cast | {rectangle, bounds()},
+    mode() | {rectangle, bounds()},
     tuple(),
     hls_nums:u64(),
     hls_nums:u64(),
@@ -160,8 +166,19 @@ check_route({Source, Destination}) when
     byte()
 ) ->
     {binary(), [atom()]}.
-%% A rectangle is one cast, with one admission at the shared ingress register.
-request(Binding, {rectangle, {X0, Y0, X1, Y1} = Bounds}, Message, Session, Epoch, Request, 255) ->
+%% The original rectangle request selects admission at the ingress register.
+request(Binding, {rectangle, Bounds}, Message, Session, Epoch, Request, Slot) ->
+    request(Binding, {rectangle, Bounds, admitted}, Message, Session, Epoch, Request, Slot);
+%% Both rectangle operations carry the same cast frame and inclusive bounds.
+request(
+    Binding,
+    {rectangle, {X0, Y0, X1, Y1} = Bounds, Completion},
+    Message,
+    Session,
+    Epoch,
+    Request,
+    255
+) ->
     Tag = element(1, Message),
     Address = maps:get(Tag, maps:get(ingress, Binding, #{}), #{}),
     case Address of
@@ -179,8 +196,13 @@ request(Binding, {rectangle, {X0, Y0, X1, Y1} = Bounds}, Message, Session, Epoch
         ->
             {<<Prefix:24/binary, 0:32/little, 255:32/little, Frame/binary>>, []} =
                 request(Binding, cast, Message, Session, Epoch, Request, 255),
+            Kind =
+                case Completion of
+                    admitted -> 2;
+                    consumed -> 3
+                end,
             {
-                <<Prefix/binary, 2:32/little, 255:32/little, X0:16/little, Y0:16/little,
+                <<Prefix/binary, Kind:32/little, 255:32/little, X0:16/little, Y0:16/little,
                     X1:16/little, Y1:16/little, Frame/binary>>,
                 []
             };

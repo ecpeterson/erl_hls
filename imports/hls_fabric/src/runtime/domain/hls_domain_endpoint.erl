@@ -69,8 +69,10 @@ handle_call({'$hls_domain_cast', Message}, From, State) ->
 handle_call('$hls_cast_addresses', _, State = #endpoint{limits = Limits}) ->
     {reply, maps:get(addresses, Limits, #{}), State};
 %% Rectangle casts use this incarnation and one cast credit at the submitting endpoint.
-handle_call({'$hls_rectangle_cast', Bounds, Message}, From, State) ->
-    issue({rectangle, Bounds}, Message, From, none, State);
+handle_call({'$hls_rectangle_cast', Bounds, Message, Completion}, From, State) when
+    Completion =:= admitted; Completion =:= consumed
+->
+    issue({rectangle, Bounds, Completion}, Message, From, none, State);
 %% Ordinary calls complete only with a typed reply, never their ingress acknowledgement.
 handle_call(Message, From, State) ->
     issue(call, Message, From, none, State).
@@ -160,7 +162,7 @@ available(Mode, #endpoint{pending = Pending, limits = Limits}) ->
 
 %% Busy is strictly pre-submission: no backend write exists to replay.
 -spec issue(
-    call | cast | {rectangle, hls_domain_wire:bounds()},
+    hls_domain_wire:mode(),
     term(),
     gen_server:from() | none,
     reference() | none,
@@ -183,7 +185,7 @@ issue(
 ) ->
     Credit =
         case Mode of
-            {rectangle, _} -> cast;
+            {rectangle, _, _} -> cast;
             _ -> Mode
         end,
     case available(Credit, State) of

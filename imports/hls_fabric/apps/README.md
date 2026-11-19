@@ -1,5 +1,6 @@
 # Library and example packages
 
+- [router](router/README.md) provides rectangular multicast and ordered barriers to applications on ERTS or managed fabric banks. The caller supervises the routing tree.
 - [hls_lowering](hls_lowering/README.md) owns generic build planning, target lowering and installed hardware support.
 - [hls_phi](hls_phi/README.md) owns the complete Phi/noise application and its build/runtime witnesses.
 - [hls_spacetime_observer](hls_spacetime_observer/README.md) owns optional passive source-protocol capture interpretation for offline tooling.

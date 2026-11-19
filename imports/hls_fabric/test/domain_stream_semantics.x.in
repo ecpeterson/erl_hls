@@ -184,7 +184,7 @@ fn malformed_management_closes_transport() {
 #[test]
 fn transport_storage_budget() {
   let actual = bit_count<stream::State>() - bit_count<domain::State>();
-  let exact = u32:4 * PACKET_BITS + u32:717 + u32:353 + STATUS_BITS + ACTION_BITS + u32:34 * CALL_SLOTS;
+  let exact = u32:4 * PACKET_BITS + u32:718 + u32:353 + STATUS_BITS + ACTION_BITS + u32:34 * CALL_SLOTS;
   assert_eq(actual, exact);
   assert_eq(actual <= STATE_BUDGET, true);
 }
@@ -429,6 +429,50 @@ fn settle_management(initial: stream::State) -> stream::State {
   for (_, state): (u32, stream::State) in u32:0..u32:64 {
     stream::tick(state, stream::Inputs { management_output_ready:true, ..zero!<stream::Inputs>() }).state
   }(initial)
+}
+
+// A complete RX packet uses the actual cast schema and the actuator at (0, 0).
+fn rectangle_cast(ready: stream::State, kind: u32) -> stream::State {
+  let words = u8:@@APPLY_WORDS@@;
+  let packet = framing::Packet<PACKET_BITS> {
+    route:u32:1, header:framing::header(u32:0,u8:2,u8:11+words),
+    payload:(u64:1 as bits[PACKET_BITS]) | (u64:1 as bits[PACKET_BITS] << u32:64) |
+      (u32:42 as bits[PACKET_BITS] << u32:160) | (kind as bits[PACKET_BITS] << u32:192) |
+      (u32:255 as bits[PACKET_BITS] << u32:224) |
+      (framing::header(u32:0,u8:@@APPLY_TAG@@,words) as bits[PACKET_BITS] << u32:320)
+  };
+  stream::State { application_rx: framing::Receive<PACKET_BITS> { full:true, packet,
+    ..zero!<framing::Receive<PACKET_BITS>>() }, ..ready }
+}
+
+// Both modes deliver the same cast. Only the consumption receipt waits for take.
+// Stopping immediately after launch must never turn an abandoned take into success.
+#[test]
+fn rectangle_receipt() {
+  let io = zero!<stream::Inputs>();
+  let attached = stream::tick(zero!<stream::State>(), stream::Inputs {
+    transport_reset:true, transport_session:u64:1, ..io }).state;
+  let ready = settle_management(management_packet<u32:13>(attached,
+    lifecycle_packet(domain_codes::OPERATION_ACTIVATE as u32,u64:0,u64:1,u64:1)));
+  let early = stream::tick(rectangle_cast(ready,u32:2), io).state;
+  let launched = stream::tick(rectangle_cast(ready,u32:3), io).state;
+  assert_eq(early.application_tx_valid, true);
+  assert_eq(early.core, launched.core);
+  assert_eq(launched.awaiting_consumption && launched.application_rx.full, true);
+  assert_eq(launched.application_tx_valid, false);
+  assert_eq(stream::tick(launched,io).state.application_tx_valid, false);
+  let completed = settle_management(launched);
+  assert_eq(completed.awaiting_consumption || completed.application_rx.full, false);
+  assert_eq(completed.application_tx,early.application_tx);
+  assert_eq(completed.application_tx_valid,true);
+  assert_eq(completed.sequence,u32:1);
+  let stopped = settle_management(stream::State {
+    management_rx: framing::Receive<PACKET_BITS> { full:true,
+      packet:lifecycle_packet(domain_codes::OPERATION_STOP as u32,u64:1,u64:1,u64:1),
+      ..zero!<framing::Receive<PACKET_BITS>>() }, ..launched });
+  assert_eq(stopped.application_tx_valid,true);
+  assert_eq((stopped.application_tx.payload >> u32:224) as u32,u32:1);
+  assert_eq(stopped.awaiting_consumption,false);
 }
 
 // Actual source initialization, stop, duplicate stop and explicit replacement use public packets.

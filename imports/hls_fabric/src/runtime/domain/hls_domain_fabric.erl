@@ -34,7 +34,7 @@ Host lifecycle commands are rejected for these children.
 %% Deployment and shared lifecycle backend interface.
 -export([start_link/3, attach/2, status/1, request/3, endpoint/4, stop/1, info/1, send_request/2]).
 %% Application rectangle ingress.
--export([cast_rectangle/3, cast_addresses/1]).
+-export([cast_rectangle/3, cast_rectangle/4, rectangle_request/3, cast_addresses/1]).
 %% OTP callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 -export_type([transport/0, options/0]).
@@ -182,7 +182,18 @@ endpoint(Backend, Authority, Incarnation, Actor) ->
 -doc "Admit one typed cast to a rectangle on the endpoint's declared target in its current incarnation. Returns ok when the shared ingress accepts the packet. Later ingress waits for every selected actor to consume it. Retirement can interrupt delivery. Timeout or disconnect leaves delivery uncertain.".
 -spec cast_rectangle(pid(), hls_domain_wire:bounds(), tuple()) -> ok | {error, term()}.
 cast_rectangle(Endpoint, Bounds, Message) ->
-    gen_server:call(Endpoint, {'$hls_rectangle_cast', Bounds, Message}).
+    cast_rectangle(Endpoint, Bounds, Message, admitted).
+
+-doc "Return ok on ingress admission or after every selected actor consumes the cast. Consumption can precede later effects. Timeout, retirement or disconnect can leave partial delivery.".
+-spec cast_rectangle(pid(), hls_domain_wire:bounds(), tuple(), hls_domain_wire:completion()) ->
+    ok | {error, term()}.
+cast_rectangle(Endpoint, Bounds, Message, Completion) ->
+    gen_server:call(Endpoint, rectangle_request(Bounds, Message, Completion)).
+
+-doc "Build the same endpoint request for gen_server:send_request, so a router can gather receipts while forwarding other work. The endpoint replies ok or an admission error.".
+-spec rectangle_request(hls_domain_wire:bounds(), tuple(), hls_domain_wire:completion()) -> tuple().
+rectangle_request(Bounds, Message, Completion) ->
+    {'$hls_rectangle_cast', Bounds, Message, Completion}.
 
 -doc "Read the cast addresses bound when this endpoint was published. A rectangle entry gives the source target, point and dimensions. Deployment code can compare these with its application coordinates before exposing a broadcast bank.".
 -spec cast_addresses(pid()) -> #{atom() => map()}.
@@ -1067,7 +1078,7 @@ status_result(State = #backend{lifecycle = Lifecycle, actors = Actors, retiremen
     reference(),
     term(),
     hls_nums:u64(),
-    call | cast | {rectangle, hls_domain_wire:bounds()},
+    hls_domain_wire:mode(),
     term(),
     #backend{}
 ) ->
@@ -1102,7 +1113,7 @@ application(
     reference(),
     term(),
     hls_nums:u64(),
-    call | cast | {rectangle, hls_domain_wire:bounds()},
+    hls_domain_wire:mode(),
     term(),
     #backend{}
 ) ->
@@ -1124,7 +1135,7 @@ admit(
     Binding = maps:get(Actor, Actors),
     Credit =
         case Mode of
-            {rectangle, _} -> cast;
+            {rectangle, _, _} -> cast;
             _ -> Mode
         end,
     case slot(Actor, Credit, Binding, Pending, maps:get(Actor, State#backend.slot_cursor, 0)) of
