@@ -1,6 +1,6 @@
 # Completion FIFO inference across synthesis tools
 
-Reviewed 2026-10-01. Completed and integrated. Subsequent full-core replay and physical measurements qualified the completion-storage transform now packaged in `tools/completion_fifo.py`. Pending-measurement wording below belongs to the original isolated investigation; [the campaign plan](topology-specialization.md) owns current status.
+Reviewed 2026-10-01. Completed and integrated. Subsequent full-core replay and physical measurements qualified the completion-storage transform now packaged in `tools/hls_fabric/completion_fifo.py`. Pending-measurement wording below belongs to the original isolated investigation; [the campaign plan](topology-specialization.md) owns current status.
 
 The first six-executor LUTRAM experiment preserved the result FIFO's original `did_push_occur` write predicate and passed bounded and full-width local simulations. Yosys inferred distributed RAM; Vivado did not. The matched full-core Vivado log emits Synth 8-7186 for every `buf__1` row: the `ram_style` attribute is ignored because the object is not inferred as RAM. Its 181,297 LUT / 151,354 FF result therefore does not measure the intended memory implementation.
 

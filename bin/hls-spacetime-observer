@@ -3,5 +3,4 @@
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 exec erl +S 2:2 -noshell -pa "$root"/_build/spacetime/lib/*/ebin \
-  "$root"/_build/spacetime/checkouts/*/ebin \
   -s xls_protocol_spacetime_cli main -extra "$@"

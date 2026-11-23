@@ -45,7 +45,7 @@ def main() -> None:
         assert digest(args.bundle / item['file']) == item['sha256']
     imports = [args.bundle / name for name in unit['dslx_path']]
     kind = 'supervisor' if args.supervisor else 'domain'
-    properties = ROOT / f'test/rtl/{kind}_lifecycle_properties.x'
+    properties = ROOT / f'apps/hls_fabric/test/rtl/{kind}_lifecycle_properties.x'
     source = args.stage / 'properties.x'
     shutil.copyfile(properties, source)
     yosys = Path(shutil.which(args.yosys) or args.yosys).resolve()

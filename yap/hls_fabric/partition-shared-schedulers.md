@@ -16,7 +16,7 @@ Each actor gets its own producer pending slot after its fair incoming-lane merge
 
 - [x] Direct and shared complete D3 witnesses at 6/14 ns clocks, including held link, stopped peer, blocked events and active reset. The shared witness also passes with device clocks reversed to 14/6 ns.
 - [x] Public actor/mailbox snapshots diagnose postponed syndrome work and show recovery; all 54 final actor snapshots report no failure.
-- [x] Complete-device XC7 synthesis with two matched seeds, including debug and crossings. All repeats agree; the pair saves 14.9% LUTs but adds 7.5% FFs and 196 RAMB18-equivalents, with DSPs reduced from 216 to 48. See the [report](../docs/artifacts.md#historical-reports) (`experiments/results/partition-shared-schedulers-2026-09-21.md`).
+- [x] Complete-device XC7 synthesis with two matched seeds, including debug and crossings. All repeats agree; the pair saves 14.9% LUTs but adds 7.5% FFs and 196 RAMB18-equivalents, with DSPs reduced from 216 to 48. See the [report](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/results/partition-shared-schedulers-2026-09-21.md`).
 - [x] Fresh-activation status rounds 8–18 average 26,143.6 ns direct versus 34,324.2 ns shared: 23.8% lower paced step rate, with different executor sharing and remote window traffic together.
 
 Follow-on distributed ownership needs an explicit bounded progress argument and measurements. Recovery remains coordinated abort/restart; this task does not change application failure semantics.

@@ -46,9 +46,9 @@ source_and_compiled_interfaces_agree_test_() ->
             )
         end}
         || {Module, Path} <- [
-            {hls_grid_cell_fixture, "test/hls_grid_cell_fixture.erl"},
-            {hls_data_cell_fixture, "test/hls_data_cell_fixture.erl"},
-            {hls_query_cell_fixture, "test/hls_query_cell_fixture.erl"}
+            {hls_grid_cell_fixture, "apps/erl_hls/test/hls_grid_cell_fixture.erl"},
+            {hls_data_cell_fixture, "apps/erl_hls/test/hls_data_cell_fixture.erl"},
+            {hls_query_cell_fixture, "apps/erl_hls/test/hls_query_cell_fixture.erl"}
         ]
     ].
 
@@ -56,7 +56,7 @@ source_and_compiled_interfaces_agree_test_() ->
 -spec repeated_tag_blocks_keep_selector_order_test() -> ok.
 repeated_tag_blocks_keep_selector_order_test() ->
     Interface = xls_parse:actor_interface(
-        "test_data/hls_tags_statem_fixture.erl"
+        "apps/erl_hls/test_data/hls_tags_statem_fixture.erl"
     ),
     ?assertEqual(waiting, maps:get(initial_phase, Interface)),
     ?assertEqual(
@@ -74,7 +74,7 @@ repeated_tag_blocks_keep_selector_order_test() ->
 %% Immediate servers expose their one-phase actor interface.
 -spec hls_gs_interface_inference_test() -> ok.
 hls_gs_interface_inference_test() ->
-    Path = "src/examples/regsvc/regsvc.erl",
+    Path = "apps/erl_hls/src/examples/regsvc/regsvc.erl",
     ?assertMatch(#{phases := [hls_server], reply_storage_width := 32},
         xls_parse:actor_interface(Path)).
 
@@ -92,7 +92,7 @@ unsupported_interface_inference_does_not_narrow_cpu_compilation_test() ->
 -spec reduction_interface_survives_parse_transform_test() -> 'ok'.
 reduction_interface_survives_parse_transform_test() ->
     Module = hls_statem_reduction_lower_fixture,
-    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    Path = "apps/erl_hls/test_data/hls_statem_reduction_lower_fixture.erl",
     _ = code:purge(Module),
     _ = code:delete(Module),
     {ok, Module, Binary} = compile:file(Path, [binary, debug_info]),

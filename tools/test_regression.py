@@ -168,7 +168,7 @@ class DescriptionTests(unittest.TestCase):
         regression_cases.telemetry(case)
         commands = [step for step in case.steps if isinstance(step, Command)]
         compile_step = next(step for step in commands if step.name == "telemetry-bundle")
-        self.assertIn(str(ROOT / "priv/tools/compile_source_build.py"), compile_step.argv)
+        self.assertIn(str(ROOT / "apps/erl_hls/priv/tools/compile_source_build.py"), compile_step.argv)
         self.assertIn("/stage/bundle", compile_step.argv)
         self.assertEqual((Path("/stage/compiled/telemetry_top.v"),), compile_step.products)
         self.assertFalse(any(step.name.endswith(("-convert", "-opt", "-codegen")) for step in commands))

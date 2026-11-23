@@ -65,12 +65,12 @@ artifacts(Kind) -> artifacts(Kind, #{}).
 -spec artifacts('aggregate' | 'direct_mailbox' | 'direct_reduction' | 'mailbox' | 'mailbox_mixed' | 'phi' | 'reduction' | 'small',term()) -> map().
 artifacts(Kind, Options) ->
     {Directory, Requirements} = case Kind of
-        small -> {"test", #{hls_actor_debug_fixture => #{}}};
+        small -> {"apps/hls_fabric/test", #{hls_actor_debug_fixture => #{}}};
         K when K =:= mailbox; K =:= direct_mailbox; K =:= mailbox_mixed ->
-            {"test", #{hls_mailbox_debug_fixture => #{}}};
-        reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
-        direct_reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
-        aggregate -> {"test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};
+            {"apps/hls_fabric/test", #{hls_mailbox_debug_fixture => #{}}};
+        reduction -> {"apps/hls_fabric/test", #{hls_reduction_failure_fixture => #{}}};
+        direct_reduction -> {"apps/hls_fabric/test", #{hls_reduction_failure_fixture => #{}}};
+        aggregate -> {"apps/hls_fabric/test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};
         phi ->
             {Plan, _} = fixture(phi),
             {filename:join(code:lib_dir(hls_phi), "src"), xls_fabric_topology_dslx:artifact_requirements(Plan,
@@ -125,8 +125,8 @@ write(Kind, Stage, Options0) ->
     end,
     TemplateFile = case Kind of
         K when K =:= reduction; K =:= aggregate; K =:= direct_reduction ->
-            "test/rtl/hls_reduction_debug.template.v";
-        _ -> "test/rtl/xls_init_topology.template.v"
+            "apps/hls_fabric/test/rtl/hls_reduction_debug.template.v";
+        _ -> "apps/hls_fabric/test/rtl/xls_init_topology.template.v"
     end,
     {ok, Template} = file:read_file(TemplateFile),
     Configure = case Kind of

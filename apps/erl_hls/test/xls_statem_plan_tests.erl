@@ -2,8 +2,8 @@
 -moduledoc "Checks planning provenance, complete dispatch families and retained evaluation obligations without changing ordinary actor rendering.".
 -include_lib("eunit/include/eunit.hrl").
 
--define(GATHER, "test_data/xls_statem_gather_fixture.erl").
--define(ENTRY, "test/xls_entry_outcome_fixture.erl").
+-define(GATHER, "apps/erl_hls/test_data/xls_statem_gather_fixture.erl").
+-define(ENTRY, "apps/erl_hls/test/xls_entry_outcome_fixture.erl").
 
 %% Planning must not alter the ordinary emitter's closed input or DSLX output.
 -spec ordinary_rendering_is_unchanged_test() -> ok.

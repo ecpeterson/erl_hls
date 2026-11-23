@@ -1,7 +1,7 @@
 -module(xls_message_facts_tests).
 -moduledoc "Checks conservative message domains, alias joins, freshness and unchanged ordinary rendering.".
 -include_lib("eunit/include/eunit.hrl").
--define(FIXTURE, "test_data/xls_message_facts_fixture.erl").
+-define(FIXTURE, "apps/erl_hls/test_data/xls_message_facts_fixture.erl").
 
 %% Sender literals survive aliases, but data-dependent payloads remain unknown.
 -spec literal_and_dynamic_fields_test() -> ok.
@@ -51,7 +51,7 @@ missing_and_uncovered_effects_test() ->
         xls_message_facts:on_ports(Facts, [silent])),
     ?assertError(empty_message_ports, xls_message_facts:on_ports(Facts, [])),
     ?assertError({unknown_message_ports, [typo]}, xls_message_facts:on_ports(Facts, [typo])),
-    {_, Reply} = xls_message_facts:from_file("test/hls_statem_reply_fixture.erl", []),
+    {_, Reply} = xls_message_facts:from_file("apps/erl_hls/test/hls_statem_reply_fixture.erl", []),
     ?assertMatch(#{closed := false, schemas := unknown, unknown_sources := [retained_reply]},
         xls_message_facts:on_ports(Reply, [reply])).
 
@@ -64,7 +64,7 @@ ordinary_emission_is_unchanged_test() ->
         ?assertEqual(Ordinary, Analyzed),
         ?assertEqual(iolist_to_binary(xls_statem_codegen:emit(Ordinary)),
             iolist_to_binary(xls_statem_codegen:emit(Analyzed)))
-    end, [?FIXTURE, "test/xls_entry_outcome_fixture.erl"]).
+    end, [?FIXTURE, "apps/erl_hls/test/xls_entry_outcome_fixture.erl"]).
 
 %% Finite source-execution witness: both callbacks at every 8-bit cell value.
 %% This checks emitted-message containment, not receiver semantics or XLS execution.

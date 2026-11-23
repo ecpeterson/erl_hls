@@ -6,7 +6,7 @@
 write(Stage) ->
     Inputs = [{request, Index, Mode} || Index <- [1, 2], Mode <- [idle, busy, done]],
     Cases = [witness(A, B) || A <- Inputs, B <- Inputs],
-    Artifact = xls_parse:to_artifact("test/hls_enum_collection_fixture.erl"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/hls_enum_collection_fixture.erl"),
     Bytes = [xls_emitted:bytes(Artifact), probe(),
         "\n#[test]\nfn host_agreement() {\n",
         [io_lib:format("  assert_eq(collection_probe(u8:~p), bits[13]:~p);\n", [In, Out])

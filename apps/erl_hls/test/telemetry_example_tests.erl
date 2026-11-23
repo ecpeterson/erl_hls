@@ -49,7 +49,7 @@ portable_bundle() ->
     Root = filename:join("_build", "telemetry-bundle-" ++
         integer_to_list(erlang:unique_integer([positive]))),
     try
-        #{units := [Unit], inputs := Inputs} = hls_compile:topology("src/examples/telemetry/topology.config", Root),
+        #{units := [Unit], inputs := Inputs} = hls_compile:topology("apps/erl_hls/src/examples/telemetry/topology.config", Root),
         ?assertMatch(#{source := <<"topology.x">>, top := <<"Top">>,
             module := <<"telemetry_top">>, output := <<"telemetry_top.v">>}, Unit),
         Flags = maps:get(codegen_flags, Unit),
@@ -64,7 +64,7 @@ portable_bundle() ->
         ?assert(lists:member(<<"actors/telemetry_window.x">>, Names)),
         ?assert(lists:member(<<"topology.x">>, Names)),
         AbsoluteRoot = filename:absname(Root),
-        ?assertError({source_output_exists, AbsoluteRoot}, hls_compile:topology("src/examples/telemetry/topology.config", Root))
+        ?assertError({source_output_exists, AbsoluteRoot}, hls_compile:topology("apps/erl_hls/src/examples/telemetry/topology.config", Root))
     after
         _ = file:del_dir_r(Root)
     end.

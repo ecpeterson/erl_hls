@@ -79,12 +79,12 @@ class Runner:
             result = execute(["rebar3", "as", "test", "compile"], self.stage, "compile", 180)
             if result["returncode"]:
                 raise RuntimeError(f"rebar3 failed; see {self.stage / 'compile.stderr'}")
-        shutil.copytree(ROOT / "priv/xls/lib", self.library, dirs_exist_ok=True)
+        shutil.copytree(ROOT / "apps/erl_hls/priv/xls/lib", self.library, dirs_exist_ok=True)
         files = [*self.library.glob("*.x"), *self.xls.glob("xls/dslx/stdlib/**/*.x"),
                  *ROOT.glob("_build/test/lib/erl_hls/ebin/*.beam"),
                  *ROOT.glob("_build/test/lib/hls_runtime/ebin/*.beam"),
                  ROOT / "_build/test/lib/erl_hls/test/xls_differential_worker.beam",
-                 Path(__file__), Path(cases.__file__), ROOT / "test/xls_differential_worker.erl"]
+                 Path(__file__), Path(cases.__file__), ROOT / "apps/erl_hls/test/xls_differential_worker.erl"]
         version = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
                                  capture_output=True, check=True).stdout.strip()
         write_json(self.stage / "provenance.json", {"git_head": version,

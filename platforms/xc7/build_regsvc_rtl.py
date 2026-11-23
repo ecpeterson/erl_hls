@@ -21,6 +21,11 @@ HANDWRITTEN = ("test/rtl/regsvc_fabric_fixture.sv", "src/examples/regsvc/regsvc_
                "priv/rtl/fabric/hls_fabric_ingress.v", "priv/rtl/fabric/hls_fabric_egress.v")
 
 
+def runtime_sources(public: Path) -> list[Path]:
+    """List runtime sources beside the selected compiler application."""
+    return sorted((public.parent / "hls_runtime/src").rglob("*.erl"))
+
+
 def sources(directory: Path) -> list[Path]:
     """Reject stale compiler inputs or modified outputs before loading generated RTL."""
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -38,7 +43,7 @@ def sources(directory: Path) -> list[Path]:
 def compiler_context(public: Path | None, profile: str) -> Path:
     """Refresh the selected fabric profile, or require an explicit prebuilt compiler root."""
     # Local script bootstrap is explicit; compiler modules use isolated package names.
-    sys.path.insert(0, str(BACKEND / "tools"))
+    sys.path.insert(0, str(BACKEND / "tools/hls_fabric"))
     from backend_paths import compiler_ebin
     from compiler_paths import compiler_root
     if public is None:
@@ -79,7 +84,7 @@ def build(xls: Path, public: Path | None = None, profile: str = "default") -> Pa
     inputs = [Path(__file__), compiler_source(public, "compile_xls"),
               *(public / name for name in HANDWRITTEN),
               *sorted((public / "src").rglob("*.erl")), *sorted((public / "src").rglob("*.hrl")),
-              *sorted((public / "apps/hls_runtime/src").rglob("*.erl")),
+              *runtime_sources(public),
               *sorted((public / "include").rglob("*.hrl")), *sorted((public / "priv/xls").rglob("*.x"))]
     manifest = {"compiler_root": str(public), "rebar_profile": profile,
                 "inputs": {os.path.relpath(p, public): digest(p) for p in inputs},

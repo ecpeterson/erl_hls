@@ -116,7 +116,7 @@ Use `--transport` on a fresh mesh profile to record transport FIFO handshakes th
 ```sh
 python3 apps/hls_phi/tools/profile_phi_mesh.py _build/phi-mesh --stage _build/transport-profile --transport
 python3 apps/hls_phi/tools/plot_phi_transport.py _build/transport-profile --output _build/transport-profile/transport
-python3 tools/test_credit_service.py "$XLS_ROOT" --stage _build/credit-service
+python3 tools/hls_fabric/test_credit_service.py "$XLS_ROOT" --stage _build/credit-service
 ```
 
 The last command measures saturated, bidirectional opaque traffic with 1/2/4/8 active lanes and 0/2/8/16/64 buffered wire stages in each direction. It isolates lane-credit and latency limits from actor execution; it does not model Ethernet packetization. See the [transport service report](artifacts.md#historical-reports) (`experiments/results/phi-transport-service-2026-09-22.md`).

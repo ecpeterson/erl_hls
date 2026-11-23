@@ -19,7 +19,7 @@ from erl_hls_tools import topology_debug_report as reporting
 
 ROOT = Path(__file__).resolve().parents[1]
 DEBUG_RTL = [
-    ROOT / "priv/rtl/debug" / name
+    ROOT / "apps/erl_hls/priv/rtl/debug" / name
     for name in (
         "hls_debug_frame_rx.v",
         "hls_debug_route.v",
@@ -228,7 +228,7 @@ def run(args):
     ):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
-        shutil.copy(ROOT / "test/rtl" / name, stage)
+        shutil.copy(ROOT / "apps/erl_hls/test/rtl" / name, stage)
     commands = [
         ["iverilog-vpi", "xls_sim_bridge.c"],
         [

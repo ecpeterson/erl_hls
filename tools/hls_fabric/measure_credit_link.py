@@ -14,7 +14,7 @@ from backend_commands import digest, execute
 
 def wrapper(lanes: int) -> str:
     """Bind the symmetric fixture to the requested number of lanes in each direction."""
-    source = (ROOT / "test/xls/credit_link.x").read_text()
+    source = (ROOT / "apps/hls_fabric/test/xls/credit_link.x").read_text()
     return source.replace("[2]", f"[{lanes}]").replace(
         "Bridge<u32:2, u32:2,", f"Bridge<u32:{lanes}, u32:{lanes},")
 
@@ -30,7 +30,7 @@ def measure(args: argparse.Namespace) -> None:
               "tools": {name: digest(args.xls / name)
                         for name in ("ir_converter_main", "opt_main", "codegen_main")},
               "sources": {str(path.relative_to(ROOT)): digest(path) for path in
-                          (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "tools/backend_commands.py", Path(__file__))},
+                          (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "tools/hls_fabric/backend_commands.py", Path(__file__))},
               "compiler_sources": {name: digest(args.erl_hls / "priv/xls/lib" / name)
                                    for name in ("axis.x", "frame_config.x")},
               "configurations": []}

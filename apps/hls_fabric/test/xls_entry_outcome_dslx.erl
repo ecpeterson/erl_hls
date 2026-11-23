@@ -23,9 +23,9 @@ oracle(Phase, Value) ->
 -doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
-    xls_entry_outcome_fixture = xls_codegen_fixture:load("test_data/xls_entry_outcome_fixture.erl"),
-    {ok, Semantics} = file:read_file("test_data/xls_entry_outcome_semantics.inc.x"),
-    Generated = xls_scheduler_actor:to_xls("test_data/xls_entry_outcome_fixture.erl"),
+    xls_entry_outcome_fixture = xls_codegen_fixture:load("apps/hls_fabric/test_data/xls_entry_outcome_fixture.erl"),
+    {ok, Semantics} = file:read_file("apps/hls_fabric/test_data/xls_entry_outcome_semantics.inc.x"),
+    Generated = xls_scheduler_actor:to_xls("apps/hls_fabric/test_data/xls_entry_outcome_fixture.erl"),
     Cases = [{Shared, PhaseIndex, Phase, Value, Ready}
         || Shared <- [false, true],
            {PhaseIndex, Phase} <- lists:enumerate(0, phases()),
@@ -36,9 +36,9 @@ write(Stage) ->
     ok = file:write_file(filename:join(Stage, "xls_entry_outcome_tb.sv"),
         testbench(Cases)),
     {ok, ReductionTests} = file:read_file(
-        "test_data/xls_entry_reduction_semantics.inc.x"),
+        "apps/hls_fabric/test_data/xls_entry_reduction_semantics.inc.x"),
     lists:foreach(fun({Mode, Name}) ->
-        X = xls_scheduler_actor:to_xls("test_data/xls_entry_reduction_fixture.erl",
+        X = xls_scheduler_actor:to_xls("apps/hls_fabric/test_data/xls_entry_reduction_fixture.erl",
             #{shared_service => Mode}),
         ok = file:write_file(filename:join(Stage, Name), [X, ReductionTests])
     end, [{ordinary, "xls_entry_reduction.x"},

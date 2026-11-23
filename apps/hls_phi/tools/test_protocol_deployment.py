@@ -8,7 +8,7 @@ import time
 from backend_paths import ROOT, erlang_paths
 from emit_protocol_repetition import build_application
 from test_protocol_bridge import pair
-from test_protocol_repetition import compare
+from protocol_repetition_result import compare
 from backend_commands import digest, run
 
 
@@ -42,7 +42,7 @@ def qualify(build: Path, stage: Path) -> tuple[Path,list[Path]]:
     run(['erl','+S','2:2','-noshell','-pa',*erlang_paths("default"),ebin,'-eval',expression,'-extra',stage],stage,'oracle')
     roles=[build/'role0',build/'role1']
     wrapper,rtl=pair(roles,stage)
-    source=ROOT/'test/rtl/protocol_bridge_sim.cpp'
+    source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_sim.cpp'
     tracked=[*rtl,wrapper,source,source.with_name('framed_fifo_stream.h'),build/'deployment.etf',stage/'oracle.json']
     hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_pair',

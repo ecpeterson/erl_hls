@@ -1,6 +1,6 @@
 # UltraScale+ comparison
 
-The [retained comparison](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/technology-comparison-2026-09-27.md`) records results and qualifications; the [portable bundle](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/technology-comparison-2026-09-27/README.md`) contains the exact inputs.
+The [retained comparison](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/technology-comparison-2026-09-27.md`) records results and qualifications; the [portable bundle](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/technology-comparison-2026-09-27/README.md`) contains the exact inputs.
 
 Approved to resume on 2026-09-27. Portable replay inputs and their digests are retained in `_build/ultrascale-screen/` and on the authorized EC2 host. One XC7 baseline was started before the review pause and then stopped; it supplies no completed comparison result. UltraScale+ MPSoC support was subsequently installed into Vivado 2024.2 after the user authenticated; fresh Vivado sessions recognize both `xczu7ev-ffvc1156-2-e` and `xczu7ev-ffvc1156-1-e`.
 
@@ -20,7 +20,7 @@ Stage portable Verilog under `inputs/FIXTURE/`, with an explicit clock buffer in
 
 After sourcing Vivado's settings, run `python3 technology_batch.py plan.json --jobs 2 --only JOB_A JOB_B`. The runner defaults to 24 hours per target, adjustable with `--timeout SECONDS`; this covers synthesis and routing together. Run complete tiles serially to preserve memory headroom. The runner caps concurrency, retains failures, and checks input identity before reusing a completed measurement. Missing/changed reports require a new job name. A completion marker says that the flow finished, not that the requested frequency closed.
 
-Copy back statuses and report files under `results/`, omitting checkpoints. `python3 experiments/07-openxc7/timing_chains/technology_report.py RUN_DIRECTORY --output REPORT_DIRECTORY` archives this evidence and feeds the existing `path_report.py` workflow. It generates `summary.md`, `summary.json` and `paths.md`, verifies available execution-time report hashes, and cross-checks routed paths against the timing summary. Older statuses without output hashes are explicitly labeled first-capture evidence. Failed/incomplete runs remain visible. Keep one-placement results separate from frequency-closure and placement-variance studies.
+Statuses and report files were copied back under `results/`, omitting checkpoints. The now-external archive workflow generated `summary.md`, `summary.json` and `paths.md`, verified available execution-time report hashes, and cross-checked routed paths against the timing summary. Older statuses without output hashes are explicitly labeled first-capture evidence. Failed/incomplete runs remain visible. Keep one-placement results separate from frequency-closure and placement-variance studies.
 
 ## Add missing device support
 
@@ -30,4 +30,4 @@ On 2026-09-28 the user authorized substantially longer EC2 runs: unused instance
 
 The serial rerun is staged at `/home/ubuntu/ultrascale-screen-20260928-long` on the authorized EC2 host. Jobs are `full-tile-zu7-24h`, then `full-tile-xc7-24h`; every RTL/constraint digest matches the original attempts. The `Check long tile synthesis` thread follow-up watches completion and will collect compact results before reporting that EC2 can stop.
 
-The [ZU7-2 run is complete](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/full-tile-technology-2026-09-28/README.md`): 145,364 LUTs and a 28.194 ns routed setup-derived period. Source/constraint hashes match the earlier portable bundle. The XC7 run is now active; separate Snowflake scaling jobs also require the instance to remain running.
+The [ZU7-2 run is complete](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/full-tile-technology-2026-09-28/README.md`): 145,364 LUTs and a 28.194 ns routed setup-derived period. Source/constraint hashes match the earlier portable bundle. The XC7 run is now active; separate Snowflake scaling jobs also require the instance to remain running.

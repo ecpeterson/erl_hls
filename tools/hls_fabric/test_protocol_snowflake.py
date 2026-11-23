@@ -41,7 +41,7 @@ def bench(build: Path, stage: Path, vectors: dict) -> Path:
         tables += [f'function [127:0] {name}(input integer index);', 'case(index)']
         tables += [f"{i}: {name}=128'h{f};" for i, f in enumerate(frames)]
         tables += [f"default: {name}=128'bx;", 'endcase', 'endfunction']
-    text = (ROOT / 'test/rtl/protocol_snowflake_tb.sv').read_text()
+    text = (ROOT / 'apps/hls_fabric/test/rtl/protocol_snowflake_tb.sv').read_text()
     replacements = {'@@FAULTS@@': '\n'.join(diagnostics), '@@WIRING@@': '\n'.join(declarations), '@@TABLES@@': '\n'.join(tables),
                     '@@OWNERS@@': str(len(owners)), '@@ROUNDS@@': str(endpoints['rounds']),
                     '@@CORRECTIONS@@': str(endpoints['corrections']), '@@UNEXPECTED@@': str(endpoints['unexpected'])}

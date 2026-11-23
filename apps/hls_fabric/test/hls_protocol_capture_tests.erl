@@ -37,7 +37,7 @@ supplied_alternatives_rejected_test() ->
     Program = fixture_program(),
     Spec = #{entries := [First | _]} = xls_actor_program:spec(Program),
     Invalid = [[#{fields => []}], Spec#{entries := [First]},
-        #{file => "test/hls_protocol_capture_fixture.erl", options => []},
+        #{file => "apps/hls_fabric/test/hls_protocol_capture_fixture.erl", options => []},
         #{spec => Spec, plan => xls_actor_program:plan(Program)}],
     lists:foreach(fun(Supplied) ->
         ?assertError(function_clause, hls_protocol_capture:plan(
@@ -54,7 +54,7 @@ absent_send_rejected_test() ->
 %% Reply effects are outside entry layouts and therefore cannot silently evade the join.
 -spec retained_replies_rejected_test() -> ok.
 retained_replies_rejected_test() ->
-    File = "test/hls_statem_reply_fixture.erl",
+    File = "apps/hls_fabric/test/hls_statem_reply_fixture.erl",
     Program = xls_actor_program:from_file(File, []),
     ?assertError({unsupported_capture_replies, File}, hls_protocol_capture:plan(
         inventory(reply, constant), #{a => Program})).
@@ -70,7 +70,7 @@ external_is_not_internal_slot_test() ->
 %% Existing programs retain their snapshot; constructing a fresh program must read changed source.
 -spec changed_source_is_replanned_test() -> ok.
 changed_source_is_replanned_test() ->
-    {ok, Original} = file:read_file("test/hls_protocol_capture_fixture.erl"),
+    {ok, Original} = file:read_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl"),
     File = filename:join("_build", "capture_changed_" ++ integer_to_list(erlang:unique_integer([positive])) ++ ".erl"),
     try
         ok = file:write_file(File, Original, [exclusive]),
@@ -93,7 +93,7 @@ changed_source_is_replanned_test() ->
 
 %% A fresh compiler program retains all entry alternatives before selecting a channel.
 -spec fixture_program() -> xls_actor_program:program().
-fixture_program() -> xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", []).
+fixture_program() -> xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl", []).
 
 %% Convenience for an independently compiled source case.
 -spec channel(atom(), atom()) -> map().

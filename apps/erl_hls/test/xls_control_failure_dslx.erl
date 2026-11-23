@@ -12,10 +12,12 @@ oracle(Mode, X, Y) ->
         error:badarg -> {14, 0}
     end.
 
+-doc "Writes control-failure DSLX and simulation vectors into the supplied stage.".
+-spec write(file:filename_all()) -> ok.
 write(Stage) ->
-    Source = "test/xls_control_failure_fixture.erl",
+    Source = "apps/erl_hls/test/xls_control_failure_fixture.erl",
     Generated = xls_parse:to_xls(Source),
-    {ok, Semantics} = file:read_file("test_data/xls_control_failure_semantics.inc.x"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/xls_control_failure_semantics.inc.x"),
     Cases = [{M, X, Y, oracle(M, X, Y)} || M <- lists:seq(0, 70),
         X <- [0, 1, 2, 16#ffffffff], Y <- case M < 59 of
             true -> [0, 1, 2]; false -> [0, 1, 128, 255] end],

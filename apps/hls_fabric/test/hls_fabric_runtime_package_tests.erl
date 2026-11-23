@@ -39,7 +39,7 @@ isolated_runtime() ->
 prepare() ->
     {Plan, Specs, Endpoints} = hls_actor_pid_dslx:fixture(),
     Deployment = hls_node_topology:normalize(Plan, Specs, Endpoints),
-    Artifact = xls_scheduler_actor:to_artifact("test/hls_actor_pid_fixture.erl", #{}),
+    Artifact = xls_scheduler_actor:to_artifact("apps/hls_fabric/test/hls_actor_pid_fixture.erl", #{}),
     Projection = xls_scheduler_debug:projection(Plan, Specs, #{hls_actor_pid_fixture => Artifact}),
     Binding = hls_shared_debug_catalog:prepare(Plan, Specs, [], Projection),
     Raw = [A#{<<"kind">> => <<"actor">>, <<"bank">> => Index,

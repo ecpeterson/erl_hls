@@ -2,7 +2,7 @@
 
 A scheduler multiplexes actors over one executor and one state/mailbox RAM pair. An actor has at most one activation in flight. Other actors may advance while its activation waits for memory, execution or publication. Dedicated actors use a separate execution backend.
 
-The XLS code generator must reserve fixed-latency RAM response capacity and gate physical operations on accepted requests. Use the repository's [pinned RAM-safe toolchain](../../tools/xls_ram_codegen/README.md); stock releases without that fix can lose reads under pipeline stalls.
+The XLS code generator must reserve fixed-latency RAM response capacity and gate physical operations on accepted requests. Use the repository's [pinned RAM-safe toolchain](../../../tools/hls_fabric/xls_ram_codegen/README.md); stock releases without that fix can lose reads under pipeline stalls.
 
 | Owner | Holds | Releases when |
 |---|---|---|

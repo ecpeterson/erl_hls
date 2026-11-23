@@ -30,5 +30,3 @@ Use `rebar3 release -n hls` to prepare that driver for an already-emitted bundle
 - [`reference/`](reference/README.md) regenerates finite witnesses from pinned, unchanged localuf. These generators and their Python dependencies are optional reference tooling, not HLS compiler dependencies.
 
 The repository's one Snowflake integration uses `snowflake_source:config/0`, compares eight sheets with the existing BEAM oracle, and checks public RTL under stalls/reset. The application fixtures provide finite agreement evidence; they do not establish a decoder threshold or unrestricted correctness.
-
-Scheduled-actor profiling, publication/FIFO experiments and custom kernel RTL remain in [`experiments/snowflake/`](../../experiments/snowflake/README.md). They consume these sources instead of maintaining separate copies, and their measurements retain their original scope.

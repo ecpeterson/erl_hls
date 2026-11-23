@@ -43,7 +43,7 @@ Artifacts are under `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spaceti
 
 The first report named `replay-fence8-1.json` accidentally selected a step-9 public ID along with the step-8 IDs; its name does not define its scope. Its explicit target list remains authoritative. `replay-final-1.json` and `compare-final-1.json` cover the full intended suffix. The final source-bound input/report are `replay-profile-2.json` and `replay-final-3.json`; `final-schedule-verification-1.json` checks that every schedule, control and accepted word is unchanged from the independently qualified report. An intermediate report conservatively censored a known final-edge commit because its future batch deliveries were incomplete. The corrected boundary stops before admitting those unknown deliveries to the publisher, rather than discarding an independent final public transfer; a regression covers this case. The normalizer's initial variable-shadowing failure occurred before any profile or report was created and required no witness rerun.
 
-Usage and model interfaces are documented in [latency scenarios](../docs/latency-scenarios.md). Small independent fixtures cover missed polling turns, ready-window phase, credit visibility, outbox reuse, held grants, per-sender ordering, postponement, causal host releases, resets, finite tails and changed-order rejection.
+Usage and model interfaces are documented in [latency scenarios](../../docs/hls_spacetime/latency-scenarios.md). Small independent fixtures cover missed polling turns, ready-window phase, credit visibility, outbox reuse, held grants, per-sender ordering, postponement, causal host releases, resets, finite tails and changed-order rejection.
 
 ## Local qualification
 

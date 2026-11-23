@@ -5,7 +5,7 @@ Automatic GitHub Actions runs are suspended. The workflow accepts manual dispatc
 The same entry point runs locally and in Actions, serially with one tool installation:
 
 ```sh
-bash tools/ci.sh all /path/to/xls /absolute/fresh/output
+bash tools/hls_fabric/ci.sh all /path/to/xls /absolute/fresh/output
 ```
 
 Use OTP 28.0.2, rebar3 3.24.0, Python 3, XLS, Icarus 13 with its matching VPI compiler, Yosys and Verilator on `PATH`. See [source quality](source-quality.md) for contracts and Dialyzer. `software` accepts `-` instead of an XLS path. Other selectable tiers are `components`, `phi` and `snowflake`; there is no extended matrix. The output directory must be new. Failed outputs are retained.

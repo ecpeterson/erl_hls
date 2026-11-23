@@ -20,8 +20,8 @@ def native(stage: Path) -> Path:
 
 def build(xls: Path, stage: Path) -> tuple[Path, Path]:
     """Emit one checked supervisor and two independent source domains, then compile once."""
-    child = ('#{sources=>[{"test/hls_domain_counter.erl",[]},'
-             '{"test/hls_domain_relay.erl",[]}],'
+    child = ('#{sources=>[{"apps/hls_fabric/test/hls_domain_counter.erl",[]},'
+             '{"apps/hls_fabric/test/hls_domain_relay.erl",[]}],'
              'topology=>{hls_domain_counter,topology,[]},actor_limit=>2,control=>rectangle}')
     expression = ('[Output]=init:get_plain_arguments(), Child=' + child + ','
                   'Config=#{supervisor=>{hls_fpga_supervisor_otp,{unbound_owner,'
@@ -38,9 +38,9 @@ def build(xls: Path, stage: Path) -> tuple[Path, Path]:
         'supervisor/core.v', 'supervisor/controller.sv', 'supervisor/protocol_supervisor.sv']]
     run(['verilator', '--cc', '--exe', '--build', '--top-module', 'protocol_supervisor',
          '--Mdir', stage / 'obj_dir', '-j', '1', '-Wno-fatal', '-CFLAGS', '-std=c++17',
-         '-o', 'simulation', *rtl, ROOT / 'test/rtl/supervisor_sim.cpp'], stage, 'verilator')
+         '-o', 'simulation', *rtl, ROOT / 'apps/hls_fabric/test/rtl/supervisor_sim.cpp'], stage, 'verilator')
     binary = stage / 'obj_dir/simulation'
-    inputs = [*rtl, bundle / 'interface.etf', ROOT / 'test/rtl/supervisor_sim.cpp',
+    inputs = [*rtl, bundle / 'interface.etf', ROOT / 'apps/hls_fabric/test/rtl/supervisor_sim.cpp',
               bundle / 'source-build.json', bundle / 'compiled.run.json']
     manifest = {'binary_sha256': digest(binary), 'interface': str(bundle / 'interface.etf'),
                 'inputs': {str(p): digest(p) for p in inputs}}

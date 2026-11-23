@@ -67,7 +67,7 @@ startup_and_domain_layout_test() ->
 -spec retained_transport_layout_test() -> ok.
 retained_transport_layout_test() ->
     Layout = hls_frame_layout:new(1),
-    Config = #{sources => [{"test/hls_protocol_inbox_fixture.erl",[]}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],
         topology => {hls_protocol_inbox_fixture,topology,[]}, actor_limit => 3,
         frame_payload_words => 1, native_actors => [left,sink]},
     Build = hls_protocol_transport:plan(Config),

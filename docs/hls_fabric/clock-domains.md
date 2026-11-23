@@ -32,4 +32,4 @@ AMD's [Gray-bus constraint example](https://docs.amd.com/r/en-US/ug903-vivado-us
 
 ## Validation and cost
 
-Digital simulation/formal checks cover ordering, bounds, stalls and reset; they do not establish physical CDC safety. See [qualification procedures](../yap/clock-validation.md) and the [isolated crossing report](artifacts.md#historical-reports) (`experiments/results/clock-crossing-measurements.json`). The measured six-FIFO bundle uses 256 XC7 LUTs and 198 flip-flops, excluding actors, credit endpoints and physical transport.
+Digital simulation/formal checks cover ordering, bounds, stalls and reset; they do not establish physical CDC safety. See [qualification procedures](../../yap/hls_fabric/clock-validation.md) and the [isolated crossing report](artifacts.md#historical-reports) (`experiments/results/clock-crossing-measurements.json`). The measured six-FIFO bundle uses 256 XC7 LUTs and 198 flip-flops, excluding actors, credit endpoints and physical transport.

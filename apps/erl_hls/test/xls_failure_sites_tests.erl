@@ -5,7 +5,7 @@
 %% Preprocessing annotations retain include origins independently of possible failure kinds.
 -spec include_origins_and_real_annotations_test() -> ok.
 include_origins_and_real_annotations_test() ->
-    {ok, Forms} = hls_source:parse_file("test/hls_actor_debug_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("apps/erl_hls/test/hls_actor_debug_fixture.erl"),
     Functions = [F || F = {function, _, _, _, _} <- Forms],
     Annotations = lists:append([erl_parse:fold_anno(fun(A, Acc) -> [A | Acc] end, [], F)
         || F <- Functions]),
@@ -22,7 +22,7 @@ include_origins_and_real_annotations_test() ->
 %% Relative and absolute spellings of the same source produce the same location inventory.
 -spec absolute_source_spelling_keeps_codebook_test() -> ok.
 absolute_source_spelling_keeps_codebook_test() ->
-    Source = "test/hls_actor_debug_fixture.erl",
+    Source = "apps/erl_hls/test/hls_actor_debug_fixture.erl",
     {ok, Relative} = hls_source:parse_file(Source),
     {ok, Absolute} = hls_source:parse_file(filename:absname(Source)),
     {_, Expected} = xls_failure_sites:prepare(Relative),
@@ -32,7 +32,7 @@ absolute_source_spelling_keeps_codebook_test() ->
 %% Selected BEAM exceptions identify the same file, line and kind as retained failures.
 -spec beam_reports_the_same_selected_origins_test() -> ok.
 beam_reports_the_same_selected_origins_test() ->
-    Source = "test/hls_actor_debug_fixture.erl",
+    Source = "apps/erl_hls/test/hls_actor_debug_fixture.erl",
     {ok, Forms} = hls_source:parse_file(Source),
     {_, Locations} = xls_failure_sites:prepare(Forms),
     Sites = xls_emitted:sites(xls_parse:to_artifact(Source), Locations),
@@ -104,11 +104,11 @@ generated_failure_metadata_test_() ->
             ?assertEqual(K, proplists:get_value(C band 15, xls_failure_sites:generic())),
             ?assert(lists:member(#{file => F, line => L}, Locations))
         end, Sites)
-    end} || File <- ["src/examples/regsvc/regsvc.erl",
-        "test/hls_data_cell_fixture.erl",
-        "test/hls_query_cell_fixture.erl",
-        "test_data/hls_statem_reduction_lower_fixture.erl",
-        "test/hls_actor_debug_fixture.erl"]].
+    end} || File <- ["apps/erl_hls/src/examples/regsvc/regsvc.erl",
+        "apps/erl_hls/test/hls_data_cell_fixture.erl",
+        "apps/erl_hls/test/hls_query_cell_fixture.erl",
+        "apps/erl_hls/test_data/hls_statem_reduction_lower_fixture.erl",
+        "apps/erl_hls/test/hls_actor_debug_fixture.erl"]].
 
 %% A large source inventory exhausts the namespace only if more than 4095 sites survive lowering.
 -spec capacity_applies_only_to_retained_sites_test() -> ok.

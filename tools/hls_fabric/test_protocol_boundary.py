@@ -14,7 +14,7 @@ from test_local_protocol import prove
 
 def configuration(path: Path) -> None:
     """Bind four ordinary identified producers to shared, singleton and unused endpoints."""
-    path.write_text('#{sources => [{"test/hls_protocol_boundary_fixture.erl",[]}],topology => '
+    path.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]}],topology => '
         '{hls_protocol_boundary_fixture,topology,[]},actor_limit => 4,activation => explicit_start}.\n')
 
 
@@ -28,7 +28,7 @@ def expected(stage: Path) -> list[list[str]]:
     """Use the fixture's ordinary BEAM codec, independently of emitted DSLX/RTL."""
     output=stage/'expected.json'
     env=erlang_environment('default')
-    expression='{ok,M,B}=compile:file("test/hls_protocol_boundary_fixture.erl",[binary,debug_info,report,warnings_as_errors]),' \
+    expression='{ok,M,B}=compile:file("apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[binary,debug_info,report,warnings_as_errors]),' \
         '{module,M}=code:load_binary(M,"fixture",B),ok=file:write_file('+json.dumps(str(output))+ \
         ',json:encode(M:expected())),halt().'
     with (stage/'oracle.log').open('x') as log:
@@ -56,7 +56,7 @@ def simulate(fixture: Path, stage: Path, frames: list[list[str]],
     oracle=['function [127:0] expected(input integer producer,position);','case(producer*6+position)']
     oracle += [f"{6*i+j}:expected=128'h{frame};" for i,fs in enumerate(frames) for j,frame in enumerate(fs)]
     oracle += ["default:expected=128'bx;",'endcase','endfunction']
-    bench=stage/'bench.sv';bench.write_text((ROOT/'test/rtl/protocol_boundary_tb.sv').read_text()
+    bench=stage/'bench.sv';bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_boundary_tb.sv').read_text()
         .replace('@@WIRING@@','\n'.join(lines)).replace('@@EXPECTED@@','\n'.join(oracle)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,core or fixture/'boundary/core.v',
          fixture/'boundary/protocol_boundary.sv'],stage,'compile')
@@ -93,7 +93,7 @@ def properties(xls: Path, stage: Path) -> None:
     for n in [1,3,8,36]:
         c=max(1,(n-1).bit_length());part=stage/f'properties-{n}';part.mkdir()
         source=part/'properties.x';raw=part/'properties.ir'
-        source.write_text((ROOT/'test/protocol_egress_properties.x.in').read_text()
+        source.write_text((ROOT/'apps/hls_fabric/test/protocol_egress_properties.x.in').read_text()
                           .replace('@@N@@',str(n)).replace('@@C@@',str(c)))
         run([xls/'ir_converter_main',*common,source],part,'convert',raw)
         for name in ['contract','availability','retained']+(['wrong_acceptance'] if n==3 else []):
@@ -145,11 +145,11 @@ def component_area(xls: Path, stage: Path) -> None:
     """Screen mux/arbitration plus only its ownership registers; singleton matches production bypass."""
     for n in [1,3,8,36]:
         c=max(1,(n-1).bit_length());part=stage/f'cost-{n}';part.mkdir();source=part/'cost.x'
-        source.write_text((ROOT/'test/protocol_egress_cost.x.in').read_text()
+        source.write_text((ROOT/'apps/hls_fabric/test/protocol_egress_cost.x.in').read_text()
                           .replace('@@N@@',str(n)).replace('@@C@@',str(c)))
         compile_clock(xls,source,part,'cost_clock','cost',[ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib'])
         adapter=part/'pins.sv'
-        adapter.write_text((ROOT/'test/rtl/protocol_egress_cost.sv.in').read_text()
+        adapter.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_egress_cost.sv.in').read_text()
                            .replace('@@N@@',str(n)).replace('@@FRAME_BITS@@',str(128*n)))
         map_area([part/'core.v',adapter],'cost_pins',part,64*n+64,0 if n==1 else 2*c+1,require_lut=n<=8)
 
@@ -159,7 +159,7 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls',type=lambda p:Path(p).resolve());parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
-    fixture=stage/'fixture';run(['bash','tools/emit_protocol_boundary.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=stage/'fixture';run(['bash','tools/hls_fabric/emit_protocol_boundary.sh',args.xls,config,fixture],stage,'public-build')
     fixture=(fixture/'compiled').resolve()
     frames=expected(stage);simulate(fixture,stage,frames);negative_wiring(args.xls,fixture,stage,frames)
     properties(args.xls,stage);observation_cut(args.xls,fixture,stage)
@@ -169,7 +169,7 @@ def main() -> None:
     from test_protocol_activation import configuration as feedback_configuration
     feedback_config=stage/'feedback.config';feedback_configuration(feedback_config)
     feedback=stage/'feedback'
-    run(['bash','tools/emit_protocol_boundary.sh',args.xls,feedback_config,feedback],stage,'feedback-build')
+    run(['bash','tools/hls_fabric/emit_protocol_boundary.sh',args.xls,feedback_config,feedback],stage,'feedback-build')
     observation_cut(args.xls,(feedback/'compiled').resolve(),feedback)
     (stage/'result.json').write_text(json.dumps({'functional_passed':True,
         'all_capacity_screens_passed':all(json.loads((stage/f'cost-{n}/area.json').read_text())['within_budget'] for n in [1,3,8,36]),

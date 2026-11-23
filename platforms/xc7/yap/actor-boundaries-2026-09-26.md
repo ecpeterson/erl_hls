@@ -23,4 +23,4 @@ Label only `__state_4_0` and `__state_4_1`, the two fixed-point field reads in t
 
 ## Outcome
 
-Local checks and seven routes are complete; [the result report](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/actor-boundaries-2026-09-26.md`) records all misses. Keep production unchanged. The remaining work is the prepared vendor calibration and held-out kernel comparison; no EC2 work ran during this follow-up.
+Local checks and seven routes are complete; [the result report](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/actor-boundaries-2026-09-26.md`) records all misses. Keep production unchanged. The remaining work is the prepared vendor calibration and held-out kernel comparison; no EC2 work ran during this follow-up.

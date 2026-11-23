@@ -13,10 +13,10 @@ from backend_commands import digest, execute
 def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int) -> None:
     """Compile the static transmitter and validate opaque traffic under sparse/saturated loads."""
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [source, ROOT / 'test/xls/credit_arbitration.x',
+    sources = [source, ROOT / 'apps/hls_fabric/test/xls/credit_arbitration.x',
                public / 'priv/xls/lib/axis.x', public / 'priv/xls/lib/frame_config.x']
-    template = ROOT / 'test/rtl/credit_arbitration_tb.sv'
-    tracked = [*sources, template, Path(__file__), ROOT / 'tools/backend_commands.py',
+    template = ROOT / 'apps/hls_fabric/test/rtl/credit_arbitration_tb.sv'
+    tracked = [*sources, template, Path(__file__), ROOT / 'tools/hls_fabric/backend_commands.py',
                *[xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls / 'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}

@@ -83,7 +83,7 @@ included_hardware_dependencies_test_() ->
 %% Interface and value analysis use hardware roots while certificates bind full source.
 -spec interface_facts_and_provenance_test() -> ok.
 interface_facts_and_provenance_test() ->
-    File = "test_data/hls_closure_statem_fixture.erl",
+    File = "apps/erl_hls/test_data/hls_closure_statem_fixture.erl",
     Options = [{d, Flag} || Flag <- host_flags()],
     ?assertEqual(xls_parse:actor_interface(File, []),
         xls_parse:actor_interface(File, Options)),
@@ -151,7 +151,7 @@ selector_retains_nested_local_aliases_test() ->
 -spec selector_is_syntactic_test() -> ok.
 selector_is_syntactic_test() ->
     ?assertEqual([], provider_calls()),
-    {ok, Forms} = hls_source:parse_file("test_data/hls_closure_statem_fixture.erl",
+    {ok, Forms} = hls_source:parse_file("apps/erl_hls/test_data/hls_closure_statem_fixture.erl",
         [{d, 'HOST_PROVIDER'}, {d, 'REACH_PROVIDER'}]),
     Selected = xls_hardware_source:statem(Forms, [waiting]),
     ?assertMatch([_], hls_source:find_function(Selected, host_provider, 1)),
@@ -161,7 +161,7 @@ selector_is_syntactic_test() ->
 %% Hardware selection is a view; hls_pack must retain the host's executable functions.
 -spec parse_transform_keeps_host_function_test() -> ok.
 parse_transform_keeps_host_function_test() ->
-    File = "test_data/hls_closure_statem_fixture.erl",
+    File = "apps/erl_hls/test_data/hls_closure_statem_fixture.erl",
     Module = hls_closure_statem_fixture,
     try
         {ok, Module, Binary} = compile:noenv_file(File,
@@ -213,7 +213,7 @@ modes() -> [statem, immediate, deferred].
 %% Preprocessor flags select source additions without moving hardware source lines.
 -spec generated(mode(), [atom()]) -> binary().
 generated(Mode, Flags) ->
-    File = "test_data/hls_closure_" ++ atom_to_list(Mode) ++ "_fixture.erl",
+    File = "apps/erl_hls/test_data/hls_closure_" ++ atom_to_list(Mode) ++ "_fixture.erl",
     iolist_to_binary(xls_parse:to_xls(File,
         #{source_options => [{d, Flag} || Flag <- Flags]})).
 

@@ -73,7 +73,7 @@ def main() -> None:
         'pub fn arithmetic(a: sN[129], b: uN[65], bias: uN[200]) -> (' + ', '.join(types) + ') {\n'
         '  (' + ',\n   '.join(expressions) + ')\n}\n')
     run([str(args.xls / 'ir_converter_main'), '--warnings_as_errors=false', '--top=arithmetic',
-         '--dslx_path=' + str(ROOT / 'priv/xls/lib'),
+         '--dslx_path=' + str(ROOT / 'apps/erl_hls/priv/xls/lib'),
          '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), 'arithmetic.x'], stage, 'design.ir')
     run([str(args.xls / 'opt_main'), 'design.ir'], stage, 'design.opt.ir')
     run([str(args.xls / 'codegen_main'), '--generator=combinational', '--use_system_verilog=false',

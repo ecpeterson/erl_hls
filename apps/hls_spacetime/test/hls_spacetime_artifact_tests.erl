@@ -4,7 +4,7 @@
 %% A fresh directory exercises the same artifact boundary used by capture producers.
 -spec bundle_workflow_test() -> ok.
 bundle_workflow_test() ->
-    {ok, [Bundle]} = file:consult("test_data/spacetime_example.term"),
+    {ok, [Bundle]} = file:consult(fixture_path()),
     Root = fresh(),
     Output = filename:join(Root, "bundle"),
     Summary = hls_spacetime_artifact:write_bundle(Bundle, Output),
@@ -19,7 +19,7 @@ bundle_workflow_test() ->
 %% A new joined artifact passes the full library validator, preserving the graph.
 -spec join_workflow_test() -> ok.
 join_workflow_test() ->
-    {ok, [Bundle]} = file:consult("test_data/spacetime_example.term"),
+    {ok, [Bundle]} = file:consult(fixture_path()),
     Physical = maps:get(physical, Bundle),
     Catalogue = Physical#{bindings := [], generated := []},
     Claims = maps:with([bindings, generated], Physical),
@@ -36,6 +36,11 @@ join_workflow_test() ->
     ?assertEqual(hls_spacetime:validate(Bundle), Summary),
     ?assertEqual(Bundle, hls_spacetime_artifact:read(filename:join(Output, "bundle.etf"))),
     ok = file:del_dir_r(Root).
+
+%% Umbrella tests run from the repository root; keep the app-owned fixture explicit.
+-spec fixture_path() -> file:filename().
+fixture_path() ->
+    filename:join(["apps", "hls_spacetime", "test_data", "spacetime_example.term"]).
 
 %% Validation occurs before directory creation, so invalid input cannot look complete.
 -spec invalid_bundle_test() -> ok.

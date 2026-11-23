@@ -74,7 +74,7 @@ diagnostic_profile_is_explicit_test() ->
     ?assertError(mailbox_debug_requires_shared_schedulers,
         xls_fabric_topology_dslx:emit(Plan, Profile#{scheduler_groups => #{}, mailbox_debug => true})),
     ?assertNotEqual(nomatch, binary:match(
-        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true}),
+        xls_scheduler_actor:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl", #{mailbox_debug => true}),
         <<"scheduler_observation">>)).
 
 

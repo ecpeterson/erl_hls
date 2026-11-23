@@ -22,7 +22,7 @@ ERL_HLS_PHI_PROFILE_HEIGHT=2 \
 ERL_HLS_PHI_PROFILE_PLANES=x \
 ERL_HLS_PHI_PROFILE_SHARDS=2 \
 ERL_HLS_PHI_PROFILE_TRACE=0 \
-bash tools/run_phi_decoder_profile.sh _build/profile-2x2-x "$XLS_ROOT"
+bash apps/hls_phi/tools/run_phi_decoder_profile.sh _build/profile-2x2-x "$XLS_ROOT"
 ```
 
 Planes are `x`, `z`, or `xz` (the default). Width and height each default to three. The shell runner defaults to three shards; set fewer for populations with fewer than three cells per plane. The Erlang configuration API instead defaults to the smaller of three and the cell count. Empty planes, duplicate planes, nonpositive dimensions, unknown configuration keys, and more shards than cells are rejected.
@@ -36,8 +36,8 @@ The normal runner measures completed external events and RAM-port activity witho
 ## Validate and measure
 
 ```sh
-python3 tools/test_decoder_profiles.py "$XLS_ROOT"
-python3 tools/test_decoder_profiles.py "$XLS_ROOT" --cases d3
+python3 apps/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT"
+python3 apps/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT" --cases d3
 python3 platforms/xc7/measure_decoder_profiles.py \
     _build/decoder-profiles/board-sized \
     _build/decoder-profiles/small-both \
@@ -45,8 +45,8 @@ python3 platforms/xc7/measure_decoder_profiles.py \
     --stage _build/decoder-profile-area
 ```
 
-The integration runner compares actual BEAM actor execution with RTL under always-ready and independently stalled event outputs. It checks complete coordinate/status sets, per-actor event order and content, and stable payloads under backpressure. Cross-actor merge order is intentionally unconstrained. The default matrix covers a 2×1 two-plane population, a 2×2 two-plane population, the same 2×2 X plane alone, and a nondegenerate 2×3 Z plane. Add `--trace` to validate the optional traces and shell runner as well. These are optional profile diagnostics; routine CI uses the two application integrations listed in [CI coverage](../../docs/ci.md).
+The integration runner compares actual BEAM actor execution with RTL under always-ready and independently stalled event outputs. It checks complete coordinate/status sets, per-actor event order and content, and stable payloads under backpressure. Cross-actor merge order is intentionally unconstrained. The default matrix covers a 2×1 two-plane population, a 2×2 two-plane population, the same 2×2 X plane alone, and a nondegenerate 2×3 Z plane. Add `--trace` to validate the optional traces and shell runner as well. These are optional profile diagnostics; routine CI uses the two application integrations listed in [CI coverage](../../docs/hls_fabric/ci.md).
 
 Area measurements reuse the D3 XC7 mapping recipe with two signal-name seeds by default, reporting best, mean, population variance, and worst. They check matched XLS tools, RAM recipe, and codegen settings across configurations. The resulting LUT/FF/BRAM/DSP counts describe the core and its scheduler RAM shell. Mapping delay is not placed-and-routed timing, and the results exclude the physical transport and additional debug gateway. Use the separately qualified D3 timing harness for historical timing comparisons.
 
-The [2026-09-15 population report](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/decoder-populations-2026-09-15.md`) records the first four-phi/eight-phi and plane-removal measurements, functional checks, and comparison with the historical D3 results.
+The [2026-09-15 population report](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/decoder-populations-2026-09-15.md`) records the first four-phi/eight-phi and plane-removal measurements, functional checks, and comparison with the historical D3 results.

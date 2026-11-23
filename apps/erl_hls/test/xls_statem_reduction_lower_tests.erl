@@ -2,7 +2,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(FIXTURE, "test_data/hls_statem_reduction_lower_fixture.erl").
+-define(FIXTURE, "apps/erl_hls/test_data/hls_statem_reduction_lower_fixture.erl").
 
 closed_ir_nests_site_owned_work_test() ->
     #{reduction := Reduction, cast_groups := Ordinary} = analyze(?FIXTURE),
@@ -127,31 +127,37 @@ interface_inference_does_not_lower_reducer_expressions_test() ->
 %% Checks list contribution retains message provenance.
 -spec list_contribution_retains_message_provenance_test() -> 'ok'.
 list_contribution_retains_message_provenance_test() ->
-    Path = "test_data/hls_list_reduction_fixture.erl",
+    Path = "apps/erl_hls/test_data/hls_list_reduction_fixture.erl",
     #{reduction := #{sites := [Site]}} = analyze(Path),
     [Contribution] = maps:get(contributions, Site),
     ?assert(maps:get(source_transportable, Contribution)),
     ?assert(maps:get(source_capture_total, Contribution)),
     ?assert(is_binary(iolist_to_binary(lower(Path, #{})))).
 
+%% Checks app-owned list fixtures reject actor-data reduction origins.
+-spec list_contribution_rejects_actor_data_test() -> ok.
 list_contribution_rejects_actor_data_test() ->
-    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+    with_mutated_fixture("apps/erl_hls/test_data/hls_list_reduction_fixture.erl",
         <<"values = [A, B]}, Cell)">>,
         <<"values = [A, _]}, Cell = #cell{values = [B | _]})">>,
         fun(Path) ->
             ?assertError({invalid_hls_statem_reduction_origin, data, [message]}, analyze(Path))
         end).
 
+%% Checks a list head can provide a typed reduction key.
+-spec list_head_can_supply_a_typed_reduction_key_test() -> ok.
 list_head_can_supply_a_typed_reduction_key_test() ->
-    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+    with_mutated_fixture("apps/erl_hls/test_data/hls_list_reduction_fixture.erl",
         <<"#value{key = Key, values = [A, B]}">>,
         <<"#value{values = [Key = A, B]}">>,
         fun(Path) ->
             ?assert(is_map(analyze(Path)))
         end).
 
+%% Checks list projection does not invent an unsigned 32-bit key type.
+-spec list_projection_does_not_invent_a_u32_type_test() -> ok.
 list_projection_does_not_invent_a_u32_type_test() ->
-    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+    with_mutated_fixture("apps/erl_hls/test_data/hls_list_reduction_fixture.erl",
         <<"#value{key = Key, values = [A, B]}">>,
         <<"#value{values = [A | Key = [B]]}">>,
         fun(Path) ->

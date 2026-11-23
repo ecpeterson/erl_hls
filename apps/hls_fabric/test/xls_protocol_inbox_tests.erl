@@ -10,7 +10,7 @@ retained_receiver_test_() -> {timeout, 30, fun retained_receiver/0}.
 -spec retained_receiver() -> ok.
 retained_receiver() ->
     Build = hls_protocol_transport:plan(#{
-        sources => [{"test/hls_protocol_inbox_fixture.erl", []}],
+        sources => [{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}],
         topology => {hls_protocol_inbox_fixture, topology, []},
         actor_limit => 3, frame_payload_words => 1}),
     #{bundle := #{modules := Modules, topology := #{actors := Actors}},

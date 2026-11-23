@@ -79,7 +79,7 @@ def profile(args: argparse.Namespace) -> None:
         (args.stage / "profile.vvp").symlink_to(cached.resolve())
     else:
         execute(["iverilog", "-g2012", "-s", "phi_bridge_tb", "-DPHI_MEMORY", "-DPHI_PROFILE",
-                 "-I", str(args.build), "-I", str(ROOT / "test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"), "-o", str(args.stage / "profile.vvp"),
+                 "-I", str(args.build), "-I", str(ROOT / "apps/hls_fabric/test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"), "-o", str(args.stage / "profile.vvp"),
                  *map(str, sources)], args.stage, "iverilog", timeout=300)
     if hardware_hashes != {str(p): digest(p) for p in hardware}:
         raise ValueError("hardware sources changed during testbench compilation")

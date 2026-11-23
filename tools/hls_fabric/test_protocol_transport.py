@@ -9,7 +9,7 @@ import subprocess
 from test_protocol_inbox import lower_receivers
 from backend_paths import application_directory
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(command: list[str | Path], stage: Path, name: str, output: Path | None = None, accepted: bool = True, timeout: int = 120) -> None:
@@ -165,9 +165,9 @@ def main() -> None:
     stage = args.stage.resolve()
     stage.mkdir()
     config = stage / 'fixture.config'
-    config.write_text('#{sources => [{"test/hls_protocol_capture_fixture.erl",[]},{"test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
+    config.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_capture_fixture.erl",[]},{"apps/hls_fabric/test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
     fixture = stage / 'fixture'
-    run(['bash','tools/emit_protocol_transport.sh',args.xls,config,fixture], stage, 'emit-fixture', timeout=1000)
+    run(['bash','tools/hls_fabric/emit_protocol_transport.sh',args.xls,config,fixture], stage, 'emit-fixture', timeout=1000)
     compiled=(fixture/'compiled').resolve()
     rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
     run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:prepare(hd(init:get_plain_arguments())),halt().','-extra',fixture], stage, 'prepare-witness')
@@ -188,20 +188,20 @@ def main() -> None:
     original_config = config.read_text()
     negatives = {
         'actor-limit': (original_config.replace('actor_limit => 3', 'actor_limit => 2'), 'actor_limit'),
-        'missing-source': (original_config.replace('{"test/hls_protocol_capture_fixture.erl",[]},', ''), None),
-        'duplicate-source': (original_config.replace('sources => [', 'sources => [{"test/hls_protocol_capture_fixture.erl",[]},'), 'duplicate_transport_source'),
+        'missing-source': (original_config.replace('{"apps/hls_fabric/test/hls_protocol_capture_fixture.erl",[]},', ''), None),
+        'duplicate-source': (original_config.replace('sources => [', 'sources => [{"apps/hls_fabric/test/hls_protocol_capture_fixture.erl",[]},'), 'duplicate_transport_source'),
         'coupled': (original_config.replace('topology,[]}', 'invalid,[coupled]}'), 'unsupported_transport_delivery'),
         'missing-route': (original_config.replace('topology,[]}', 'invalid,[missing_route]}'), 'unrouted_outputs'),
     }
     for name, (text, diagnostic) in negatives.items():
         path, target = stage/(name+'.config'), stage/name
         path.write_text(text)
-        run(['bash','tools/emit_protocol_transport.sh',args.xls,path,target],stage,'reject-'+name,accepted=False)
+        run(['bash','tools/hls_fabric/emit_protocol_transport.sh',args.xls,path,target],stage,'reject-'+name,accepted=False)
         assert not target.exists(), name
         if diagnostic:
             assert diagnostic in (stage/('reject-'+name+'.log')).read_text(), name
     retained = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
-    run(['bash','tools/emit_protocol_transport.sh',args.xls,config,fixture],stage,'reject-existing',accepted=False)
+    run(['bash','tools/hls_fabric/emit_protocol_transport.sh',args.xls,config,fixture],stage,'reject-existing',accepted=False)
     assert retained == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
     run(['rebar3', 'release', '-n', 'hls_examples'], stage, 'prepare-examples', timeout=300)
     example_bin = ROOT/'_build/default/rel/hls_examples/bin'

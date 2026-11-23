@@ -39,7 +39,7 @@ python3 gtx/assemble.py \
   --output build/native-loopback
 ```
 
-Use the matching FASM, reference and `--profile` for `ethernet-external` or `prbs`. The database is the SBG485 overlay prepared by the probe scripts. The [reference report](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/vivado-reference-2026-09-21.json`) identifies the retained archive and accepted vendor images. Output must be new; failures retain diagnostics without publishing `candidate.bit`.
+Use the matching FASM, reference and `--profile` for `ethernet-external` or `prbs`. The database is the SBG485 overlay prepared by the probe scripts. The [reference report](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/vivado-reference-2026-09-21.json`) identifies the retained archive and accepted vendor images. Output must be new; failures retain diagnostics without publishing `candidate.bit`.
 
 Pass `--source-cache DIRECTORY` to seed the coverage step from a retained set of pinned donor files. The assembler parses the generated `.bit` header before replacing only its date and time with fixed values; the result record retains the normalized header and deterministic image hash.
 
@@ -52,7 +52,7 @@ The overlay changes only the measured channel/common tile mappings and the missi
 - The missing 32 bottom-half clock-cascade definitions come from the pinned Artix table. All 2,804 existing Zynq definitions agree, all additions match Zynq's top-half table, and the bottom-half tile graphs match. This is corroborated database reuse, **not an independent measurement of those 32 locations**. No clock-frame addresses or timing estimates are copied from Artix.
 - Every supplied non-ECC frame bit must survive assembly and decoding. This checks serialization, not whether every encoded resource implements its intended function. Ethernet routing separately checks LUT connectivity and emitted truth tables.
 
-The [native results](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/native-gtx-2026-09-21.json`) record three completed images and their limits. Matching GTX settings does not qualify the whole native configuration, generated clocks, CDC constraints, analog channel or DAC. The native Ethernet routes still miss their partial 125-MHz targets.
+The [native results](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/native-gtx-2026-09-21.json`) record three completed images and their limits. Matching GTX settings does not qualify the whole native configuration, generated clocks, CDC constraints, analog channel or DAC. The native Ethernet routes still miss their partial 125-MHz targets.
 
 ## Regression and new configurations
 

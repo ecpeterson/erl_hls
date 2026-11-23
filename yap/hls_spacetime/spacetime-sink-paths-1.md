@@ -1,6 +1,6 @@
 # Per-sink timing inspection — qualified 2026-11-08
 
-This extends the [offline timing explanation](spacetime-timing-report-1.md) in PR #7 using the same retained native/SDF evidence. It does not rerun extraction, simulation, synthesis or routing. [Viewer usage](../docs/viewer.md#inspect-paths-to-a-sink) is the maintained interface documentation.
+This extends the [offline timing explanation](spacetime-timing-report-1.md) in PR #7 using the same retained native/SDF evidence. It does not rerun extraction, simulation, synthesis or routing. [Viewer usage](../../docs/hls_spacetime/viewer.md#inspect-paths-to-a-sink) is the maintained interface documentation.
 
 ## Completed behavior
 

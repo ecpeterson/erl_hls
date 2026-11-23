@@ -4,7 +4,7 @@ This flow combines already compiled source-domain RTL with one independently clo
 
 ## Boundaries
 
-Each board owns its domain incarnation and the local half of each crossing. The host confirms a receiver binding before enabling its transmitter. Bindings include a deployment namespace, generation, both incarnations and a nonwrapping sequence; ordinary domain replacement does not clear carrier failure or replay old work. See [domain recovery](../../../docs/domain-recovery.md#independently-clocked-endpoints) for the generic ownership contract.
+Each board owns its domain incarnation and the local half of each crossing. The host confirms a receiver binding before enabling its transmitter. Bindings include a deployment namespace, generation, both incarnations and a nonwrapping sequence; ordinary domain replacement does not clear carrier failure or replay old work. See [domain recovery](../../../docs/hls_fabric/domain-recovery.md#independently-clocked-endpoints) for the generic ownership contract.
 
 The physical application clock is 25 MHz. The existing MAC/PCS uses independent transmit/receive clocks, packet storage and CDC ownership. DATA carries the complete 672-bit application frame; ACK follows native destination capture. Endpoint management and application traffic are separate host lanes, so observing a failure does not require the failed Ethernet carrier to make progress.
 
@@ -42,7 +42,7 @@ Successful attachment tests require all four close acknowledgements and terminal
 
 ## Local qualification
 
-Before preparing an image, emit the source domain and each independent endpoint network using the [domain build interfaces](../../../docs/domain-recovery.md#independently-clocked-endpoints). Add `hls_domain_board_control:emit/2` to that role's source bundle and compile the ordinary `source-build.json` through the external XLS driver. The image manifest selects compiled units, identifies the board-control bundle and binds their source/compiled manifests and RTL hashes. It also supplies the generated MAC sources and initialization files, platform source hashes, exact native tools, chip database, retained reference bitstream and offline assembly donors. `application/domain_board.py:prepare` is the manifest consumer; `test_domain_board_inputs.py` contains small contract fixtures.
+Before preparing an image, emit the source domain and each independent endpoint network using the [domain build interfaces](../../../docs/hls_fabric/domain-recovery.md#independently-clocked-endpoints). Add `hls_domain_board_control:emit/2` to that role's source bundle and compile the ordinary `source-build.json` through the external XLS driver. The image manifest selects compiled units, identifies the board-control bundle and binds their source/compiled manifests and RTL hashes. It also supplies the generated MAC sources and initialization files, platform source hashes, exact native tools, chip database, retained reference bitstream and offline assembly donors. `application/domain_board.py:prepare` is the manifest consumer; `test_domain_board_inputs.py` contains small contract fixtures.
 
 The native backend input includes the successful `hls-native-gtx-offline-build-v1` receipt and its sibling `recipe.json` and `build-script.py`, not just an executable path. The separate platform repair supplies `gtx/build_offline.py` and its pinned recipe to produce this bundle serially from local archives; an existing reviewed bundle with the same receipt contract is also usable. Preparing an image neither builds nor downloads the backend.
 

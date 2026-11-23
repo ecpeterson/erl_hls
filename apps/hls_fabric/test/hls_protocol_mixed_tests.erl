@@ -5,8 +5,8 @@
 %% The production mixed builder must retain host recipients removed from its native projection.
 -spec whole_control_test() -> ok.
 whole_control_test() ->
-    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []},
-        {"test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []},
+        {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
         topology => {?MODULE, topology, []}, actor_limit => 3,
         native_actors => [left, sink], host => 2, service => 29, control => rectangle},
     #{result := Plan = #{actors := Actors}} = hls_protocol_mixed:emit(Config),
@@ -28,8 +28,8 @@ topology() ->
 %% Host placement preserves startup order and duplicates while separating native and external targets.
 -spec host_binding_test() -> ok.
 host_binding_test() ->
-    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []},
-        {"test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []},
+        {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
         topology => {?MODULE, host_binding, []}, actor_limit => 3,
         native_actors => [left, sink], host => 2, service => 29, control => rectangle},
     #{actors := #{1 := HostActor}, targets := Targets, application := Application} =
@@ -87,8 +87,8 @@ omitted_constant_test() ->
 %% A retained mixed descriptor carries its record schema through an actor-module reload.
 -spec retained_actor_codecs_test() -> ok.
 retained_actor_codecs_test() ->
-    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []},
-        {"test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []},
+        {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}, {?FILE, []}],
         topology => {?MODULE, host_binding, []}, actor_limit => 3,
         native_actors => [left, sink], host => 2, service => 29, control => rectangle},
     Plan = hls_protocol_mixed:descriptor(hls_protocol_mixed:plan(Config)),

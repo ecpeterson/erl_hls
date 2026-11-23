@@ -2,7 +2,7 @@
 
 Check timing coverage before comparing clock estimates. This probe exports **the running backend's** port classifications and clock associations; it does not infer support from primitive names. A required register port classified as `ignore`, lacking a recognized clock, absent, or unplaced fails the audit. Passing is necessary, not sufficient: combinational arcs, delay accuracy, clock relationships, hold and I/O constraints still need qualification.
 
-The pinned XC7 backend omits BRAM endpoints and registered DSPs. The [measured corpus](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/native-timing-coverage-2026-09-24.md`) demonstrates how these omissions hide paths. No new clock frequency is qualified by this experiment.
+The pinned XC7 backend omits BRAM endpoints and registered DSPs. The [measured corpus](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/native-timing-coverage-2026-09-24.md`) demonstrates how these omissions hide paths. No new clock frequency is qualified by this experiment.
 
 ## Build and measure
 

@@ -1,5 +1,44 @@
 {
-  "include": ["*.erl", "*.hrl", "priv/xls/*.x"],
+  "include": ["*.erl", "*.hrl", "apps/*/priv/xls/*.x"],
   "exclude": [],
-  "base_ref": "origin/main"
+  "base_ref": "origin/main",
+  "baseline_moves": {
+    "src/": "apps/erl_hls/src/",
+    "include/": "apps/erl_hls/include/",
+    "priv/": "apps/erl_hls/priv/",
+    "test/": "apps/erl_hls/test/",
+    "test_data/": "apps/erl_hls/test_data/",
+    "attic/": "apps/erl_hls/attic/"
+  },
+  "migration_baselines": [
+    {
+      "revision": "878b44269266d6f2c33f844c4aa5eff4d6dd3936",
+      "moves": {
+        "imports/hls_fabric/src/": "apps/hls_fabric/src/",
+        "imports/hls_fabric/include/": "apps/hls_fabric/include/",
+        "imports/hls_fabric/test/": "apps/hls_fabric/test/",
+        "imports/hls_fabric/test_data/": "apps/hls_fabric/test_data/",
+        "imports/hls_fabric/apps/": "apps/",
+        "imports/hls_fabric/platforms/": "platforms/",
+        "imports/hls_fabric/bin/": "bin/",
+        "imports/hls_fabric/docs/": "docs/hls_fabric/",
+        "imports/hls_fabric/tools/": "tools/hls_fabric/",
+        "imports/hls_fabric/yap/": "yap/hls_fabric/"
+      }
+    },
+    {
+      "revision": "83f19aa922623a5b5bea46176fb0baee1d28c5a4",
+      "moves": {
+        "imports/hls_spacetime/src/": "apps/hls_spacetime/src/",
+        "imports/hls_spacetime/priv/": "apps/hls_spacetime/priv/",
+        "imports/hls_spacetime/test/": "apps/hls_spacetime/test/",
+        "imports/hls_spacetime/test_data/": "apps/hls_spacetime/test_data/",
+        "imports/hls_spacetime/web/": "apps/hls_spacetime/web/",
+        "imports/hls_spacetime/test-js/": "apps/hls_spacetime/test-js/",
+        "imports/hls_spacetime/scripts/": "apps/hls_spacetime/scripts/",
+        "imports/hls_spacetime/docs/": "docs/hls_spacetime/",
+        "imports/hls_spacetime/yap/": "yap/hls_spacetime/"
+      }
+    }
+  ]
 }

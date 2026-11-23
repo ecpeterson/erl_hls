@@ -8,7 +8,7 @@ import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
 from backend_commands import digest, run
 
 
@@ -52,7 +52,8 @@ def main() -> None:
     sources = sorted({source for _, _, rows, _ in fixtures for source in rows})
     iverilog, vvp = executable(args.iverilog), executable(args.vvp)
     inputs = {path: digest(path) for path in [*sources, Path(__file__).resolve(),
-              ROOT / 'tools/backend_commands.py', ROOT / 'tools/backend_paths.py', iverilog, vvp]}
+              ROOT / 'tools/hls_fabric/backend_commands.py',
+              ROOT / 'tools/hls_fabric/backend_paths.py', iverilog, vvp]}
     args.stage.mkdir(parents=True)
     snapshot = args.stage / 'sources'
     snapshot.mkdir()

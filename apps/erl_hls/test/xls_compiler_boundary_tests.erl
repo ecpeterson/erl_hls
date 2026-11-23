@@ -41,16 +41,16 @@ normal_compilation_test_() -> {timeout, 60, fun normal_compilation/0}.
 %% Both source vocabularies share the common actor artifact and execution declarations.
 -spec normal_compilation() -> ok.
 normal_compilation() ->
-    Immediate = iolist_to_binary(xls_parse:to_xls("test/xls_init_gs_fixture.erl")),
-    ?assertEqual(Immediate, xls_emitted:bytes(xls_parse:to_artifact("test/xls_init_gs_fixture.erl"))),
+    Immediate = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/xls_init_gs_fixture.erl")),
+    ?assertEqual(Immediate, xls_emitted:bytes(xls_parse:to_artifact("apps/erl_hls/test/xls_init_gs_fixture.erl"))),
     contains(Immediate, [
         <<"struct ActorState">>,
         <<"proc Service {">>, <<"proc Top {">>, <<"struct Ledger {">>
     ]),
     ?assertEqual(nomatch, binary:match(Immediate, <<"hls_server::Driver">>)),
-    Deferred = iolist_to_binary(xls_parse:to_xls("test/hls_deferred_fixture.erl", #{})),
+    Deferred = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/hls_deferred_fixture.erl", #{})),
     contains(Deferred, [<<"fn actor_next_event">>, <<"fn reply_allowed(">>, <<"pub proc Top {">>]),
-    File = "test/hls_statem_event_fixture.erl",
+    File = "apps/erl_hls/test/hls_statem_event_fixture.erl",
     Machine = iolist_to_binary(xls_parse:to_xls(File, #{})),
     contains(Machine, [<<"enum Phase : u8 {">>, <<"next_event: u8">>]),
     Artifact = xls_parse:actor_artifact(File, []),
@@ -69,7 +69,7 @@ contains(Source, Needles) ->
 %% Preprocess source only; compiler parse transforms are intentionally not executed here.
 -spec source_dependencies(module()) -> [module()].
 source_dependencies(Module) ->
-    Path = filename:join("src/frontend", atom_to_list(Module) ++ ".erl"),
+    Path = filename:join("apps/erl_hls/src/frontend", atom_to_list(Module) ++ ".erl"),
     {ok, Forms} = epp:parse_file(Path, [], []),
     ?assertEqual([], [Error || Error = {error, _} <- Forms]),
     lists:usort(remote_modules(Forms)).

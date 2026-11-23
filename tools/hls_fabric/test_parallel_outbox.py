@@ -8,7 +8,7 @@ import shutil
 from backend_paths import erl_command
 from backend_commands import execute
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
@@ -17,7 +17,7 @@ def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
     execute(erl_command(public, f'[Path] = init:get_plain_arguments(), ok = hls_partition_outbox_tests:write(Path, {lanes}), halt().', stage/'top.x', profile="test"), stage, 'generate')
     for name in ('axis.x', 'frame_config.x'):
         shutil.copy(public/'priv/xls/lib'/name, stage/name)
-    shutil.copy(ROOT/'test/rtl/parallel_outbox_actor.x', stage/'parallel_outbox_actor.x')
+    shutil.copy(ROOT/'apps/hls_fabric/test/rtl/parallel_outbox_actor.x', stage/'parallel_outbox_actor.x')
     for command, name, output in [
         ([str(xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false', '--dslx_path=.',
           f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}', 'top.x'], 'convert', 'top.ir'),
@@ -27,7 +27,7 @@ def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
           '--module_name=parallel_outbox', 'top.opt.ir'], 'codegen', 'top.v')]:
         execute(command, stage, name, timeout=600, output=stage / output)
     ports = [f'._fragment_{i}(fragments[{i}]), ._fragment_{i}_vld(fragment_valid[{i}]), ._fragment_{i}_rdy(fragment_ready[{i}])' for i in range(lanes)]
-    (stage/'test.sv').write_text((ROOT/'test/rtl/parallel_outbox_tb.sv').read_text().replace('@@CONNECTIONS@@', ',\n    '.join(ports)))
+    (stage/'test.sv').write_text((ROOT/'apps/hls_fabric/test/rtl/parallel_outbox_tb.sv').read_text().replace('@@CONNECTIONS@@', ',\n    '.join(ports)))
     execute(['iverilog', '-g2012', '-s', 'parallel_outbox_tb', f'-Pparallel_outbox_tb.LANES={lanes}', '-o', 'test.vvp', 'test.sv', 'top.v'], stage, 'compile', timeout=600)
     execute(['vvp', 'test.vvp'], stage, 'simulate', timeout=600)
     log = (stage/'simulate.log').read_text()

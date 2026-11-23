@@ -37,6 +37,11 @@ def digest(path):
     return result.hexdigest()
 
 
+def current_source(path: str) -> Path:
+    """Resolve a historical compiler-root path through its umbrella application landing."""
+    return ROOT / 'apps/erl_hls' / path
+
+
 def measure(args: argparse.Namespace) -> None:
     """Measure each revision with its own selected-frame support and record copied source hashes."""
     args.stage.mkdir(parents=True, exist_ok=True)
@@ -55,11 +60,12 @@ def measure(args: argparse.Namespace) -> None:
         hashes = {}
         sources = dict(SOURCES)
         axis = (git('show', f'{baseline}:{sources["axis.x"]}') if version == 'baseline'
-                else (ROOT / sources['axis.x']).read_bytes())
+                else current_source(sources['axis.x']).read_bytes())
         if b'import frame_config;' in axis:
             sources['frame_config.x'] = 'priv/xls/lib/frame_config.x'
         for name, path in sources.items():
-            data = git('show', f'{baseline}:{path}') if version == 'baseline' else (ROOT / path).read_bytes()
+            data = (git('show', f'{baseline}:{path}') if version == 'baseline'
+                    else current_source(path).read_bytes())
             (directory / name).write_bytes(data)
             hashes[name] = hashlib.sha256(data).hexdigest()
         for name in ('Raw', 'Reserved', 'Checked', 'regsvc'):
@@ -72,7 +78,7 @@ def measure(args: argparse.Namespace) -> None:
                         subprocess.run(list(map(str, command)), cwd=ROOT, stdout=dest,
                                        stderr=log, check=True)
                 run([args.xls_root / 'ir_converter_main', '--warnings_as_errors=false', f'--top={top}',
-                     f'--dslx_path={directory}:{ROOT / "priv/xls/lib"}',
+                     f'--dslx_path={directory}:{ROOT / "apps/erl_hls/priv/xls/lib"}',
                      f'--dslx_stdlib_path={args.xls_root / "xls/dslx/stdlib"}', source],
                     prefix.with_suffix('.ir'))
                 run([args.xls_root / 'opt_main', prefix.with_suffix('.ir')], prefix.with_suffix('.opt.ir'))

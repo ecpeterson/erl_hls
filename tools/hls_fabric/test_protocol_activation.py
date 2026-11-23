@@ -15,8 +15,8 @@ from test_local_protocol import prove
 
 def configuration(path: Path) -> None:
     """Build real setup recipients and a source relay through the public entry point."""
-    path.write_text('#{sources => [{"test/hls_protocol_activation_fixture.erl",[]},'
-        '{"test/hls_protocol_startup_peer.erl",[]}],topology => '
+    path.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_activation_fixture.erl",[]},'
+        '{"apps/hls_fabric/test/hls_protocol_startup_peer.erl",[]}],topology => '
         '{hls_protocol_activation_fixture,topology,[]},actor_limit => 3,activation => explicit_start}.\n')
 
 
@@ -35,7 +35,7 @@ def simulate(fixture: Path, stage: Path, core: Path | None = None, reject: bool 
         lines += [f'assign {name}_ready=ready[{i}];',f'assign valid[{i}]={name}_valid;',f'assign data[{i}]={name}_data;']
     faults=[p['name'] for p in manifest['outputs'] if p['name'].startswith('actor_')]
     lines += ['wire [50:0] faults={'+','.join(faults)+'};','protocol_network dut('+','.join(connections)+');']
-    bench=stage/'bench.sv';bench.write_text((ROOT/'test/rtl/protocol_activation_tb.sv').read_text().replace('@@WIRING@@','\n'.join(lines)))
+    bench=stage/'bench.sv';bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_activation_tb.sv').read_text().replace('@@WIRING@@','\n'.join(lines)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,core or fixture/'network/core.v',
          fixture/'network/protocol_network.sv'],stage,'compile')
     with (stage/'simulate.log').open('x') as log:
@@ -70,7 +70,7 @@ def properties(xls: Path, fixture: Path, stage: Path) -> None:
     imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     converter=[xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
                '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib')]
-    run([*converter,ROOT/'test/protocol_activation_properties.x'],stage,'properties-convert',raw)
+    run([*converter,ROOT/'apps/hls_fabric/test/protocol_activation_properties.x'],stage,'properties-convert',raw)
     results=[prove(args,stage,raw,'protocol_activation_properties',name,name!='wrong_start')
              for name in ['readiness','transition','registered','masks','wrong_start']]
     cut=stage/'start_cut.x';cut_ir=stage/'start_cut.ir'
@@ -121,7 +121,7 @@ def without_host(xls: Path, stage: Path) -> None:
     """Exercise the second production branch: explicit start with no host ingress or startup records."""
     config=stage/'no-host.config';network_config(config,'topology')
     config.write_text(config.read_text().replace('actor_limit => 3','actor_limit => 3,activation => explicit_start'))
-    fixture=stage/'no-host';run(['bash','tools/emit_protocol_network.sh',xls,config,fixture],stage,'no-host-build')
+    fixture=stage/'no-host';run(['bash','tools/hls_fabric/emit_protocol_network.sh',xls,config,fixture],stage,'no-host-build')
     result=stage/'no-host-witness';result.mkdir();network_simulate((fixture/'compiled').resolve(),result)
 
 
@@ -131,7 +131,7 @@ def main() -> None:
     parser.add_argument('xls',type=lambda p:Path(p).resolve())
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
-    fixture=stage/'fixture';run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=stage/'fixture';run(['bash','tools/hls_fabric/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
     fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage);negative_wiring(args.xls,fixture,stage);properties(args.xls,fixture,stage)
     area(fixture,stage);component_area(args.xls,stage);without_host(args.xls,stage)

@@ -18,4 +18,4 @@ The new side-view figures preserve the same camera, tile extent, action, four-cl
 
 The original first-stage envelope is 8.8635 ns; the candidate numerator envelopes are 3.2460/3.1633 ns. The following Phi-commit envelope is 5.4633 ns before and 5.1228 ns after. No independent stage cost is added across placement runs. Gray spans distinguish readiness/capture annotations and recorded residence; they are not extra logic.
 
-Small audit, local-test, source-patch and screenshot evidence is retained separately in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/arrival-distribution-1`, with a 12 MiB total/4 MiB per-file cap. The full parent archive is referenced, not duplicated. [Viewer semantics](../docs/viewer.md) remain the maintained interface.
+Small audit, local-test, source-patch and screenshot evidence is retained separately in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/arrival-distribution-1`, with a 12 MiB total/4 MiB per-file cap. The full parent archive is referenced, not duplicated. [Viewer semantics](../../docs/hls_spacetime/viewer.md) remain the maintained interface.

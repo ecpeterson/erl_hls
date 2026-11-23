@@ -107,7 +107,7 @@ malformed_declaration_test() ->
 %% Provider types from included records retain their imports and qualified calls in server output.
 -spec included_types_reach_gs_emission_test() -> ok.
 included_types_reach_gs_emission_test() ->
-    Source = "test_data/hls_companion_gs_fixture.erl",
+    Source = "apps/erl_hls/test_data/hls_companion_gs_fixture.erl",
     {ok, Forms} = hls_source:parse_file(Source),
     ?assertEqual([hls_bits, hls_companion_provider, hls_fixed, hls_vec], xls_dslx_imports:from_forms(Forms)),
     Generated = iolist_to_binary(xls_parse:to_xls(Source)),

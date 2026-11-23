@@ -22,7 +22,7 @@ write(Stage) ->
         scheduler_groups => Groups, mailbox_debug => true},
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Options),
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_scheduler_actor:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"),
+        xls_scheduler_actor:to_artifact(filename:join("apps/hls_fabric/test", atom_to_list(Module) ++ ".erl"),
             maps:merge(Requirement, #{mailbox_debug => true}))
     end, Requirements),
     maps:foreach(fun(Module, Actor) ->
@@ -49,7 +49,7 @@ write(Stage) ->
     false = is_map_key(<<"values">>, Fields),
     ok = file:write_file(filename:join(Stage, "small-actors.json"), json:encode(Projection)),
     #{selector := Selector} = hls_actor_interface:schema(Interface, piece),
-    {ok, Template} = file:read_file("test/rtl/hls_indexed_debug.template.v"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/rtl/hls_indexed_debug.template.v"),
     Wrapper = lists:foldl(fun({Pattern, Value}, Acc) ->
         binary:replace(Acc, Pattern, iolist_to_binary(Value), [global])
     end, Template, [{<<"@PIECE@">>, integer_to_list(Selector)},

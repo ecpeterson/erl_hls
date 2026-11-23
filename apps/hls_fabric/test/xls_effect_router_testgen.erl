@@ -48,7 +48,7 @@ write(Mode, Output) when Mode =:= "ordinary"; Mode =:= "prefix"; Mode =:= "paral
     end,
     PrefixArg = case Prefix of true -> "      prefix_out: chan<ProbeReductionBatch> out,\n"; false -> "" end,
     PrefixName = case Prefix of true -> "prefix_out, "; false -> "" end,
-    {ok, Template} = file:read_file("test/rtl/effect_router_top.x.in"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/rtl/effect_router_top.x.in"),
     Wrapper = binary:replace(binary:replace(Template,
         <<"@@PREFIX_ARG@@">>, list_to_binary(PrefixArg)),
         <<"@@PREFIX_NAME@@">>, list_to_binary(PrefixName)),

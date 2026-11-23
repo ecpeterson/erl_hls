@@ -9,7 +9,7 @@ import subprocess
 import time
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools/hls_fabric'))
 from artifacts import archived
 from architecture import sha
 

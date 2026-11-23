@@ -20,7 +20,7 @@ to_dslx() ->
     ],
     Values = [-((1 bsl 100) + 129), -65537, -129, -1, 0, 127, 128,
         255, 256, 65536, (1 bsl 100) + 129],
-    {ok, Semantics} = file:read_file("test_data/hls_numeric_semantics.inc.x"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/hls_numeric_semantics.inc.x"),
     [
         "import hls_failure;\nimport float32;\nimport float64;\nimport hfloat16;\n",
         [function(Name, "value: sN[128]", Type, "Value", Expression, ["value"])

@@ -14,4 +14,4 @@ Runtime modules attach retained application descriptors to already-created broke
 | [inspection](inspection/README.md) | Public observation decoding and profiling |
 | [node](node/README.md) | ERTS distribution endpoint and local carrier |
 
-Sessions consume retained descriptors produced by [hls_lowering planning](../../apps/hls_lowering/src/planning/README.md). They validate runtime structure and attachment identity without invoking those planners or loading the compiler. Setup and shutdown contracts are module-specific: acquiring a lease, retiring a route and resetting hardware are different operations. See [device sessions](../../docs/device-sessions.md) before implementing a new adapter.
+Sessions consume retained descriptors produced by [hls_lowering planning](../../../hls_lowering/src/planning/README.md). They validate runtime structure and attachment identity without invoking those planners or loading the compiler. Setup and shutdown contracts are module-specific: acquiring a lease, retiring a route and resetting hardware are different operations. See [device sessions](../../../../docs/hls_fabric/device-sessions.md) before implementing a new adapter.

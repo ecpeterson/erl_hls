@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import time
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def build(args: argparse.Namespace) -> None:
@@ -39,7 +39,7 @@ def build(args: argparse.Namespace) -> None:
     banks = len(json.loads((source / "actors.json").read_text())["banks"])
     configurations = subprocess.check_output([
         "bash", "-c", 'source "$1"; scheduler_ram_configurations "$2"',
-        "actor-ram-config", str(ROOT / "tools/scheduler_ram_configurations.sh"), str(banks)], text=True).strip()
+        "actor-ram-config", str(ROOT / "tools/hls_fabric/scheduler_ram_configurations.sh"), str(banks)], text=True).strip()
     commands = [
         ("convert", [str(xls / "ir_converter_main"), "--top=Top", "--warnings_as_errors=false",
                      "--dslx_path=.", f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}",
@@ -81,7 +81,7 @@ def build(args: argparse.Namespace) -> None:
         shutil.copy(public / "test/rtl" / name, stage)
     execute(["iverilog-vpi", "xls_sim_bridge.c"], stage, "vpi", timeout=60)
     execute(["iverilog", "-g2012", "-s", "actor_device_tb", "-o", str(stage / "actor.vvp"),
-             str(ROOT / "test/rtl/actor_device_tb.sv"), str(stage / "debug/debug_top.v"),
+             str(ROOT / "apps/hls_fabric/test/rtl/actor_device_tb.sv"), str(stage / "debug/debug_top.v"),
              str(stage / "debug/instrumented.v"), *map(str, debug_rtl(public))], stage, "iverilog")
     if provenance != inputs(args):
         raise RuntimeError("RTL build inputs changed while the build was running")

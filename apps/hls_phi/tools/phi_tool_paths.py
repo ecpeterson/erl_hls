@@ -4,5 +4,5 @@ import sys
 
 TOOLS = Path(__file__).resolve().parent
 ROOT = TOOLS.parents[2] if TOOLS.parts[-3:] == ("apps", "hls_phi", "tools") else None
-if ROOT is not None and str(ROOT / "tools") not in sys.path:
-    sys.path.insert(0, str(ROOT / "tools"))
+if ROOT is not None and str(ROOT / "tools/hls_fabric") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools/hls_fabric"))

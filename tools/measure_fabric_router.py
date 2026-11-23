@@ -93,7 +93,7 @@ def main() -> None:
     for name, ports, before in [('baseline-2', 2, True), ('current-1', 1, False), ('current-2', 2, False), ('current-3', 3, False), ('current-8', 8, False)]:
         directory = stage/name;directory.mkdir(exist_ok=True)
         top = directory/'router_area.v';top.write_text(wrapper(ports, before))
-        inputs = [top, *([old/'ingress.v', old/'egress.v'] if before else sorted((ROOT/'priv/rtl/fabric').glob('*.v')))]
+        inputs = [top, *([old/'ingress.v', old/'egress.v'] if before else sorted((ROOT/'apps/erl_hls/priv/rtl/fabric').glob('*.v')))]
         script = 'read_verilog -sv ' + ' '.join(map(quote, inputs)) + '\n'
         script += f'synth_xilinx -family xc7 -top router_area -flatten -noiopad -noclkbuf\nwrite_json {quote(directory/"netlist.json")}\n'
         (directory/'synth.ys').write_text(script)

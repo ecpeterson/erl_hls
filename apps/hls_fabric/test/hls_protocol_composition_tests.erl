@@ -122,8 +122,8 @@ application_rejection_test_() -> {timeout, 30, fun application_rejection/0}.
 %% A valid application is the positive trace control for the exact rejected build path.
 -spec application_rejection() -> ok.
 application_rejection() ->
-    Collision = #{sources => [{"test/hls_protocol_boundary_fixture.erl", []},
-        {"test/hls_protocol_application_conflict.erl", []}, {"test/hls_protocol_application_tests.erl", []}],
+    Collision = #{sources => [{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl", []},
+        {"apps/hls_fabric/test/hls_protocol_application_conflict.erl", []}, {"apps/hls_fabric/test/hls_protocol_application_tests.erl", []}],
         topology => {hls_protocol_application_tests, collision, []}, actor_limit => 5, device => board, host => 1},
     {ok, RejectedCalls} = trace_renderers(fun() ->
         ?assertError({ambiguous_application_event, shared, 5}, hls_protocol_application:emit(Collision)),
@@ -166,7 +166,7 @@ shared_arithmetic_plan_test_() -> {timeout, 30, fun shared_arithmetic_plan/0}.
 %% Three receivers retain the shared ABI and their startup slots before any hardware is rendered.
 -spec shared_arithmetic_plan() -> ok.
 shared_arithmetic_plan() ->
-    Config = #{sources => [{"test/hls_protocol_arithmetic_fixture.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_arithmetic_fixture.erl", []}],
         topology => {hls_protocol_arithmetic_fixture, topology, [3]}, actor_limit => 3,
         arithmetic_groups => [[0, 1, 2]]},
     {{Plan, Network}, PlanningCalls} = trace_renderers(fun() ->
@@ -203,7 +203,7 @@ shared_arithmetic_plan() ->
 -spec local_reply_preparation_test() -> ok.
 local_reply_preparation_test() ->
     {Source, Calls} = trace_renderers(fun() ->
-        hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", [])
+        hls_local_actor:prepare("apps/hls_fabric/test/hls_protocol_call_fixture.erl", [])
     end),
     ?assertEqual(#{}, Calls),
     #{retained_calls := #{mode := immediate, port := reply}} =
@@ -336,7 +336,7 @@ invalidate_sources([{First, _} | Rest]) ->
 -spec mixed() -> map().
 mixed() ->
     Config = #{sources := Sources} = partition(),
-    Config#{sources := Sources ++ [{"test/hls_protocol_mixed_tests.erl", []}],
+    Config#{sources := Sources ++ [{"apps/hls_fabric/test/hls_protocol_mixed_tests.erl", []}],
         topology := {hls_protocol_mixed_tests, topology, []}}.
 
 %% Both roles share the same two actor modules and one global source topology.
@@ -356,7 +356,7 @@ check_manifest(Interface, Manifest) ->
 
 %% Existing four-producer fixture contains shared, singleton and empty external endpoints.
 -spec whole() -> map().
-whole() -> #{sources => [{"test/hls_protocol_boundary_fixture.erl", []}],
+whole() -> #{sources => [{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl", []}],
     topology => {hls_protocol_boundary_fixture, topology, []}, actor_limit => 4}.
 
 %% Global identities remain left=0, right=1 and sink=2 across the two native actors.
@@ -365,15 +365,15 @@ partition() -> (base())#{native_actors => [left, sink], host => 2, service => 29
 
 %% The same feedback actors provide source-correct incoming/outgoing framing classes.
 -spec base() -> map().
-base() -> #{sources => [{"test/hls_protocol_network_fixture.erl", []},
-    {"test/hls_protocol_inbox_fixture.erl", []}],
+base() -> #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []},
+    {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}],
     topology => {hls_protocol_network_fixture, framed, []}, actor_limit => 3, control => rectangle}.
 
 %% Only the topology constructor changes for the two placement-negative fixtures.
 -spec fixture(atom()) -> map().
 fixture(Function) ->
     Config = #{sources := Sources} = base(),
-    Config#{sources := Sources ++ [{"test/hls_protocol_composition_fixture.erl", []}],
+    Config#{sources := Sources ++ [{"apps/hls_fabric/test/hls_protocol_composition_fixture.erl", []}],
         topology := {hls_protocol_composition_fixture, Function, []}}.
 
 %% A private trace session observes this caller only; a delivery barrier precedes collection.

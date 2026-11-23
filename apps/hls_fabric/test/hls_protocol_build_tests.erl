@@ -10,7 +10,7 @@ reusable_program_test() ->
     Files = ["hls_protocol_network_fixture.erl", "hls_protocol_inbox_fixture.erl"],
     Sources = [begin
         Target = filename:join(Root, File),
-        {ok, _} = file:copy(filename:join("test", File), Target),
+        {ok, _} = file:copy(filename:join("apps/hls_fabric/test", File), Target),
         {Target, []}
     end || File <- Files],
     Program = hls_protocol_transport:prepare(#{sources => Sources,
@@ -101,7 +101,7 @@ dependency_hashes(#{dslx_dependencies := Dependencies}, File, Files) ->
 emission_inputs_test() ->
     Root = fresh("emission-inputs"),
     ok = file:make_dir(Root),
-    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []}],
         topology => {hls_protocol_network_fixture, isolated, []}, actor_limit => 1},
     Filename = filename:join(Root, "source.config"),
     ok = file:write_file(Filename, io_lib:format("~tp.~n", [Config]), [exclusive]),
@@ -128,8 +128,8 @@ shared_source_program_test_() -> {timeout, 30, fun shared_source_program/0}.
 %% Every source phase, conditional send and instance transaction survives compilation reuse.
 -spec shared_source_program() -> ok.
 shared_source_program() ->
-    Config = #{sources => [{"test/hls_protocol_capture_fixture.erl", []},
-            {"test/hls_protocol_transport_topology.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_capture_fixture.erl", []},
+            {"apps/hls_fabric/test/hls_protocol_transport_topology.erl", []}],
         topology => {hls_protocol_transport_topology, topology, []}, actor_limit => 3},
     {Build, Compiled} = trace_build(fun() -> hls_protocol_transport:plan(Config) end),
     ?assertEqual(["hls_protocol_capture_fixture.erl"], [filename:basename(File) || File <- Compiled]),

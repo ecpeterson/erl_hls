@@ -65,7 +65,7 @@ pub fn initial_publication() -> bits[{width+8}] {{
                         "._commands_vld(1'b1),._commands_rdy(),._observations(observations),"
                         "._observations_vld(),._observations_rdy(1'b1));")
     bench = stage/'bench.sv'
-    bench.write_text((ROOT/'test/rtl/protocol_inbox_tb.sv').read_text().replace('@@WIRING@@','\n'.join(declarations)))
+    bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_inbox_tb.sv').read_text().replace('@@WIRING@@','\n'.join(declarations)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,receiver/'actor.v',
          fixture/'dslx/core.v',fixture/'dslx/protocol_fabric.sv',stage/'initial.v'],stage,'rtl-compile')
     run(['vvp',stage/'sim'],stage,'rtl-sim')
@@ -94,7 +94,7 @@ def reject_miswiring(fixture: Path, receiver: Path, stage: Path, bench: Path) ->
 
 def selection_checks(xls: Path, stage: Path) -> None:
     """Prove finite-width circular priority and screen 1/3/8-input selector circuits."""
-    source=ROOT/'test/protocol_inbox_properties.x'
+    source=ROOT/'apps/hls_fabric/test/protocol_inbox_properties.x'
     raw=stage/'selection.ir'
     run([xls/'ir_converter_main','--warnings_as_errors=false',
          '--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
@@ -165,7 +165,7 @@ def main() -> None:
     args=parser.parse_args(); stage=args.stage; stage.mkdir()
     run(['rebar3','compile'],stage,'build')
     config=stage/'fixture.config'
-    config.write_text('#{sources => [{"test/hls_protocol_inbox_fixture.erl",[]}],topology => '
+    config.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],topology => '
                       '{hls_protocol_inbox_fixture,topology,[]},actor_limit => 3}.\n')
     fixture=stage/'fixture'
     run(emit_command('transport', config, fixture),stage,'emit', env=erlang_environment('default'))

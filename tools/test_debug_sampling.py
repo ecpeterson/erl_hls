@@ -31,7 +31,7 @@ def prove(args, sources, name, failure=False):
     stage = args.stage / name
     stage.mkdir(exist_ok=True)
     script = "read_verilog -formal -sv " + " ".join(map(quote, [
-        ROOT / "test/rtl/debug/hls_debug_sampling_formal.sv", *sources])) + "\n"
+        ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_formal.sv", *sources])) + "\n"
     script += ("prep -top hls_debug_sampling_formal -flatten\n"
                "memory_map\nopt\ncheck -assert\nscc -expect 0\n"
                "formalff -clk2ff -ff2anyinit\nsetundef -undriven -anyseq\n"
@@ -58,8 +58,8 @@ def prove(args, sources, name, failure=False):
 def simulate(stage, monitor, support, failure=False):
     exe = stage / "sampling.vvp"
     run(["iverilog", "-g2012", "-s", "hls_debug_sampling_tb", "-o", str(exe),
-         str(ROOT / "test/rtl/debug/hls_debug_sampling_tb.sv"),
-         str(ROOT / "priv/rtl/debug/hls_debug_tap.v"), str(monitor), *map(str, support)],
+         str(ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_tb.sv"),
+         str(ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_tap.v"), str(monitor), *map(str, support)],
         stage / "compile.log")
     log = stage / "simulation.log"
     try:
@@ -90,11 +90,11 @@ def main():
     args.stage.mkdir(parents=True, exist_ok=True)
     args.rtl = args.rtl.resolve()
     generated = [args.rtl / f"hls_debug_{name}.v" for name in ("observer", "server")]
-    monitor = ROOT / "priv/rtl/debug/hls_debug_monitor.v"
-    support = [ROOT / "priv/rtl/debug/hls_trace_store.v", *generated]
-    inputs = [monitor, ROOT / "priv/rtl/debug/hls_debug_tap.v", *support,
-              ROOT / "test/rtl/debug/hls_debug_sampling_formal.sv",
-              ROOT / "test/rtl/debug/hls_debug_sampling_tb.sv", Path(__file__).resolve()]
+    monitor = ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_monitor.v"
+    support = [ROOT / "apps/erl_hls/priv/rtl/debug/hls_trace_store.v", *generated]
+    inputs = [monitor, ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_tap.v", *support,
+              ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_formal.sv",
+              ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_tb.sv", Path(__file__).resolve()]
     started = time.monotonic()
     prove(args, [monitor, *support], "production")
     mutations = {

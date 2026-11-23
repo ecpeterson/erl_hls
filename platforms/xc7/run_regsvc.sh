@@ -5,7 +5,7 @@ experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 project_root=$(cd "$experiment_root/../.." && pwd)
 # shellcheck source=openxc7_common.sh
 source "$experiment_root/openxc7_common.sh"
-source "$project_root/tools/backend_env.sh" default
+source "$project_root/tools/hls_fabric/backend_env.sh" default
 
 target=${1:-xc7z020clg484-2}
 case "$target" in
@@ -140,7 +140,7 @@ verify_manifest_entry \
 verify_manifest_entry \
     input bram.x "$erl_hls_root/priv/xls/lib/bram.x"
 verify_manifest_entry \
-    input mailbox.x "$project_root/priv/xls/lib/mailbox.x"
+    input mailbox.x "$project_root/apps/hls_lowering/priv/xls/lib/mailbox.x"
 for debug_module in \
     hls_debug_types.x \
     hls_debug_trace.x \
@@ -168,7 +168,7 @@ verify_manifest_entry \
 verify_manifest_entry \
     input regsvc_fabric_fixture.sv "$erl_hls_root/test/rtl/regsvc_fabric_fixture.sv"
 verify_manifest_entry \
-    input remote_xls_sim.sh "$project_root/tools/remote_xls_sim.sh"
+    input remote_xls_sim.sh "$project_root/tools/hls_fabric/remote_xls_sim.sh"
 
 for source in "${sources[@]}"; do
     if [[ ! -s "$source" ]]; then

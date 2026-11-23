@@ -56,7 +56,7 @@ recursive_layout_test() ->
 %% Normal actor compilation emits dependency-ordered structs and no internal wire selectors.
 -spec normal_lowering_test() -> ok.
 normal_lowering_test() ->
-    File = "test/hls_nested_records_fixture.erl",
+    File = "apps/erl_hls/test/hls_nested_records_fixture.erl",
     Text = iolist_to_binary(xls_parse:to_xls(File)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"pub struct Vector2">>)),
     ?assertNotEqual(nomatch, binary:match(Text, <<"pub struct Sample">>)),

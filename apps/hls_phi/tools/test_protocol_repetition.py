@@ -8,18 +8,8 @@ import time
 from backend_paths import ROOT, erlang_paths
 from emit_protocol_repetition import build_application
 from backend_commands import digest, run
+from protocol_repetition_result import compare
 from test_protocol_application import simulator_source
-
-
-def compare(actual: dict, expected: dict, width: int) -> None:
-    """Compare each logical sender through the common fence and the complete final readout."""
-    assert actual['fence']==expected['fence']
-    assert actual['replies']==expected['replies']
-    assert sorted(actual['corrections'])==sorted(expected['corrections'])
-    for x in range(width):
-        assert [e for e in actual['events'] if e[0]==x and e[2]<=actual['fence']]==[
-            e for e in expected['events'] if e[0]==x and e[2]<=expected['fence']], x
-    assert actual['descriptors_closed']
 
 
 def live(build: Path, stage: Path, width: int, ebin: Path, binary: Path) -> None:

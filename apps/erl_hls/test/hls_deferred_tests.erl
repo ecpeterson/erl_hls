@@ -79,7 +79,7 @@ failure_after_last_reply_test() ->
 %% Compile the exact fixture exercised by CPU tests, with all native source annotations.
 -spec lowering_test() -> ok.
 lowering_test() ->
-    X = iolist_to_binary(xls_parse:to_xls("test/hls_deferred_fixture.erl")),
+    X = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/hls_deferred_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(X, <<"fn actor_next_event">>)),
     ?assertNotEqual(nomatch, binary:match(X, <<"reply_allowed">>)),
     ok.
@@ -93,7 +93,7 @@ with_server(Fun) ->
 %% Reject invalid resource declarations before either adapter starts executing callbacks.
 -spec declaration_bounds_test() -> ok.
 declaration_bounds_test() ->
-    {ok, Forms} = hls_source:parse_file("test/hls_deferred_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("apps/erl_hls/test/hls_deferred_fixture.erl"),
     [?assertError(invalid_hls_pending_calls,
         hls_service_contract:from_forms(attribute(Forms, hls_pending_calls, N))) || N <- [0, 256, bad]],
     [?assertError({invalid_hls_continuations, Names},

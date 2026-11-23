@@ -8,7 +8,7 @@ prepare(Stage) ->
     ok = file:make_dir(Stage),
     Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
         || Tag <- [unaligned, full, constant, small]],
-    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", []),
+    Program = xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl", []),
     #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
     lists:foreach(fun(Channel = #{port := Tag}) -> write_case(Stage, atom_to_list(Tag), Channel, hls_protocol_capture_fixture) end, Captures).
 
@@ -23,7 +23,7 @@ prepare_layouts(Stage) ->
         ok = file:write_file(filename:join(Directory, "frame_config.x"), xls_frame_layout:config(Layout), [exclusive]),
         Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
             || Tag <- [narrow, constant, small]],
-        Program = xls_actor_program:from_file("test/hls_protocol_frame_fixture.erl", [], Layout),
+        Program = xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_frame_fixture.erl", [], Layout),
         #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
         lists:foreach(fun(Channel = #{port := Tag}) ->
             write_case(Directory, atom_to_list(Tag), Channel, hls_protocol_frame_fixture)
@@ -38,7 +38,7 @@ prepare_wide(Stage) ->
     ok = file:write_file(filename:join(Stage, "frame_config.x"), xls_frame_layout:config(Layout), [exclusive]),
     Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}}
         || Tag <- [unaligned, full, constant, small]],
-    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", [], Layout),
+    Program = xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl", [], Layout),
     #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
     lists:foreach(fun(Channel = #{port := Tag}) ->
         write_case(Stage, atom_to_list(Tag), Channel, hls_protocol_capture_fixture)

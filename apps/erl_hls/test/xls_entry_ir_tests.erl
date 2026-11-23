@@ -5,7 +5,7 @@
 %% The artifact contains real branch/constructor nodes, including both distinct effect layouts.
 -spec selected_entry_structure_test() -> ok.
 selected_entry_structure_test() ->
-    #{entries := Entries} = xls_parse:actor_artifact("test/xls_entry_storage_fixture.erl", []),
+    #{entries := Entries} = xls_parse:actor_artifact("apps/erl_hls/test/xls_entry_storage_fixture.erl", []),
     [#{evaluation := Evaluation, layouts := Layouts}] =
         [Entry || Entry = #{phase := conditional} <- Entries],
     Nodes = nodes(Evaluation),
@@ -27,7 +27,7 @@ selected_entry_structure_test() ->
 %% Effect serialization retains structural field access and the provider's exact codec call.
 -spec provider_codec_structure_test() -> ok.
 provider_codec_structure_test() ->
-    #{entries := Entries} = xls_parse:actor_artifact("test/xls_entry_storage_fixture.erl", []),
+    #{entries := Entries} = xls_parse:actor_artifact("apps/erl_hls/test/xls_entry_storage_fixture.erl", []),
     [#{evaluation := Evaluation}] = [E || E = #{phase := repeated} <- Entries],
     Nodes = nodes(Evaluation),
     ?assertMatch([_ | _], [N || N = {xls_dslx, field, _, "sample"} <- Nodes]),

@@ -239,9 +239,10 @@ def main() -> None:
     trace = json.loads((args.bundle / 'endpoint-management-trace.json').read_text())
     layout, initial, mutations, rows = checked_trace(trace)
     iverilog, vvp = executable(args.iverilog), executable(args.vvp)
-    template_path = ROOT / 'test/rtl/domain_endpoint_management_tb.sv.in'
-    for path in (Path(__file__).resolve(), ROOT / 'tools/test_domain_endpoints.py',
-                 ROOT / 'tools/backend_commands.py', ROOT / 'tools/backend_paths.py', template_path, iverilog, vvp):
+    template_path = ROOT / 'apps/hls_fabric/test/rtl/domain_endpoint_management_tb.sv.in'
+    for path in (Path(__file__).resolve(), ROOT / 'tools/hls_fabric/test_domain_endpoints.py',
+                 ROOT / 'tools/hls_fabric/domain_endpoint_support.py',
+                 ROOT / 'tools/hls_fabric/backend_commands.py', ROOT / 'tools/hls_fabric/backend_paths.py', template_path, iverilog, vvp):
         inputs[path] = digest(path)
     args.stage.mkdir(parents=True)
     count = sum(len(row.get('decoded_words', [])) for row in rows)

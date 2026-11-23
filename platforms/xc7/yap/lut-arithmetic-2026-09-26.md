@@ -14,4 +14,4 @@ The original DSP path includes B14→ACOUT7, which UG479 and the local primitive
 
 ## Outcome
 
-The two-seed LUT/DSP comparison is tied (+0.23% mean step cost for LUTs) at +19.6% LUT area; reject wholesale DSP removal. The fixed-wire dependency correction reduces the reported historical period 39.667→38.551 ns and changes the limiting path to collector batch delivery. [Full results](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/lut-arithmetic-2026-09-26.md`) distinguish this model change from physical improvement.
+The two-seed LUT/DSP comparison is tied (+0.23% mean step cost for LUTs) at +19.6% LUT area; reject wholesale DSP removal. The fixed-wire dependency correction reduces the reported historical period 39.667→38.551 ns and changes the limiting path to collector batch delivery. [Full results](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/lut-arithmetic-2026-09-26.md`) distinguish this model change from physical improvement.

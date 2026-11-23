@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE = "repositories/hls_fabric/pre-packaging-2026-10-01"
 
 

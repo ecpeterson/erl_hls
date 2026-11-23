@@ -5,7 +5,7 @@
 %% A dynamic population changes only reduction storage, not the ordinary mailbox path.
 -spec mask_lowering_test() -> ok.
 mask_lowering_test() ->
-    Text = iolist_to_binary(xls_parse:to_xls("test_data/hls_statem_mask_reduction_fixture.erl")),
+    Text = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl")),
     lists:foreach(fun(Part) -> ?assertNotEqual(nomatch, binary:match(Text, Part)) end,
         [<<"expected: ReductionMembers">>, <<"expected: raw[44:50]">>,
          <<"raw: bits[74]">>, <<"state.expected & member_bit">>,
@@ -24,6 +24,6 @@ converted_member_expression_test() ->
 with_changed_fixture(From, To, Check) ->
     Path = filename:join("_build/mask-source-check", integer_to_list(erlang:unique_integer([positive])) ++ ".erl"),
     ok = filelib:ensure_dir(Path),
-    {ok, Source} = file:read_file("test_data/hls_statem_mask_reduction_fixture.erl"),
+    {ok, Source} = file:read_file("apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl"),
     ok = file:write_file(Path, binary:replace(Source, From, To)),
     try Check(xls_parse:actor_artifact(Path, [])) after file:delete(Path) end.

@@ -1,7 +1,7 @@
 -module(xls_statem_gather_tests).
 -moduledoc "Compiler boundaries for typed indexed gathers and scalar collections.".
 -include_lib("eunit/include/eunit.hrl").
--define(FIXTURE, "test_data/xls_statem_gather_fixture.erl").
+-define(FIXTURE, "apps/erl_hls/test_data/xls_statem_gather_fixture.erl").
 
 %% Ordered payload storage is independent of callback data and the scalar accumulator.
 -spec distinct_collection_types_test() -> ok.
@@ -87,7 +87,7 @@ nonconstant_padding_test() ->
 %% Each site supplies its own element layout, including gather-only actors without a reducer.
 -spec differing_site_types_test() -> ok.
 differing_site_types_test() ->
-    Spec = xls_parse:actor_artifact("test_data/xls_statem_gather_sites_fixture.erl", []),
+    Spec = xls_parse:actor_artifact("apps/erl_hls/test_data/xls_statem_gather_sites_fixture.erl", []),
     ?assertEqual(none, maps:get(reductions, Spec)),
     Gather = maps:get(gathers, Spec),
     ?assertEqual([small, large], [maps:get(name, maps:get(element, S)) || S <- maps:get(sites, Gather)]),

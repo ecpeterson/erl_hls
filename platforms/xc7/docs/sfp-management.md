@@ -42,7 +42,7 @@ Use one diagnostic process with exclusive UIO access. NACKs and observed removal
 
 ## Register and wire contract
 
-All accesses are aligned 32-bit words in the GP0 page. The common [PS probe AXI rules](../../../docs/execution/zynq-ps-probe.md) apply.
+All accesses are aligned 32-bit words in the GP0 page. The common [PS probe AXI rules](../../../docs/hls_fabric/execution/zynq-ps-probe.md) apply.
 
 | Offset | Access | Meaning |
 | --- | --- | --- |
@@ -73,6 +73,6 @@ The constraints follow the [module schematic](https://www.trenz-electronic.de/tr
 
 ## Qualification and next steps
 
-`test_sfp_probe.py` checks the reader against a pinned, GHDL-translated Trenz slave, before and after Yosys mapping. It covers all SFP flag combinations, changing echoes, stuck return wires and reset with the slave left running. Every received control nibble is checked against accidental activation. An independent edge-driven EEPROM peer checks the host command sequence, all 96 bytes, final NACK, errors and absence of data writes. GPIO direction, selection, reset and SDA synchronization are checked before/after mapping. These simulations do not qualify the carrier's installed firmware or PCB delays. [Recorded build evidence](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/sfp-probe-result.json`) retains source/image identities and checks completed before hardware access.
+`test_sfp_probe.py` checks the reader against a pinned, GHDL-translated Trenz slave, before and after Yosys mapping. It covers all SFP flag combinations, changing echoes, stuck return wires and reset with the slave left running. Every received control nibble is checked against accidental activation. An independent edge-driven EEPROM peer checks the host command sequence, all 96 bytes, final NACK, errors and absence of data writes. GPIO direction, selection, reset and SDA synchronization are checked before/after mapping. These simulations do not qualify the carrier's installed firmware or PCB delays. [Recorded build evidence](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/sfp-probe-result.json`) retains source/image identities and checks completed before hardware access.
 
 Before enabling transmitter/rate controls, confirm the installed carrier firmware's bit map and the required values of the other outputs activated by RGPIO. The [carrier documentation](https://wiki.trenz-electronic.de/display/PD/TEF1002+SC+CPLD+MAX10) disagrees with itself about write bits 20–22. Published REV03 source assigns them to SFP rate/disable controls, while the REV04 download provides only a programming image. The read flags and echo have an inspectable reference; live writes need that additional qualification. Further Ethernet preparation is a simulated 1000BASE-X PCS/MAC, followed by GTX configuration and physical link tests. The carrier I²C mapping follows its published documentation and must still be confirmed against the installed controller.

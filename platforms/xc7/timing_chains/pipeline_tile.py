@@ -18,7 +18,7 @@ def main() -> None:
     parser.add_argument('--remove',nargs='*',choices=CUTS,default=[])
     parser.add_argument('--devices',type=int,nargs='+')
     args = parser.parse_args()
-    sys.path.insert(0, str(ROOT/'tools'))
+    sys.path.insert(0, str(ROOT/'tools/hls_fabric'))
     import phi_mesh_build as mesh
     from compiler_paths import compiler_root
     args.erl_hls = compiler_root('test', args.erl_hls, ROOT)

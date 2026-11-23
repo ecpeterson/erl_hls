@@ -27,7 +27,7 @@ def emit(stage: Path, members: int, shared: bool) -> Path:
     stage.mkdir()
     config = stage / "config.erl"
     group = ",arithmetic_groups=>[[" + ",".join(map(str, range(members))) + "]]" if shared else ""
-    config.write_text('#{sources=>[{"test/hls_protocol_arithmetic_fixture.erl",[]}],'
+    config.write_text('#{sources=>[{"apps/hls_fabric/test/hls_protocol_arithmetic_fixture.erl",[]}],'
         'topology=>{hls_protocol_arithmetic_fixture,topology,[' + str(members) + ']},actor_limit=>3' + group + '}.\n')
     build = stage / "build"
     run(emit_command("network", config, build), stage, "emit", env=erlang_environment("test"))
@@ -51,7 +51,7 @@ def simulate(build: Path, stage: Path, members: int) -> None:
         wires += [f"assign valid[{i}]={name}_valid;", f"assign data[{i}]={name}_data;"]
     wires += ["wire faults=" + "|".join(faults) + ";", "protocol_network dut(" + ",".join(connections) + ");"]
     bench = stage / "bench.sv"
-    bench.write_text((ROOT / "test/rtl/protocol_arithmetic_tb.sv").read_text().replace("@@MEMBERS@@", str(members)).replace("@@WIRING@@", "\n".join(wires)))
+    bench.write_text((ROOT / "apps/hls_fabric/test/rtl/protocol_arithmetic_tb.sv").read_text().replace("@@MEMBERS@@", str(members)).replace("@@WIRING@@", "\n".join(wires)))
     run(["iverilog", "-g2012", "-s", "tb", "-o", stage / "sim", bench,
          build / "network/core.v", build / "network/protocol_network.sv"], stage, "rtl-compile")
     run(["vvp", stage / "sim"], stage, "rtl-witness")

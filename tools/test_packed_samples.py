@@ -15,10 +15,10 @@ def run(rtl, stage):
     for name in ('app_tx', 'app_rx', 'debug_tx', 'debug_rx', 'release_app', 'done'):
         (stage / name).unlink(missing_ok=True)
     for name in ('xls_sim_bridge.c', 'xls_sim_axis.h'):
-        shutil.copy(ROOT / 'test/rtl' / name, stage)
-    sources = [ROOT / 'test/rtl/packed_samples_tb.sv', rtl / 'packed_samples.v',
+        shutil.copy(ROOT / 'apps/erl_hls/test/rtl' / name, stage)
+    sources = [ROOT / 'apps/erl_hls/test/rtl/packed_samples_tb.sv', rtl / 'packed_samples.v',
                *[rtl / f'hls_debug_{name}.v' for name in ('observer', 'server')],
-               *[ROOT / 'priv/rtl/debug' / name for name in (
+               *[ROOT / 'apps/erl_hls/priv/rtl/debug' / name for name in (
                    'hls_debug_route.v', 'hls_debug_monitor.v', 'hls_debug_tap.v', 'hls_trace_store.v')]]
     with (stage / 'compile.log').open('w') as log:
         subprocess.run(['iverilog-vpi', 'xls_sim_bridge.c'], cwd=stage,

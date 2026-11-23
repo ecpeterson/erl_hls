@@ -66,7 +66,7 @@ def account_state(bundle: Path, compiled: Path, stage: Path) -> None:
 def checks(xls: Path, bundle: Path, stage: Path) -> Path:
     """Exercise finite framing histories against the actual emitted parser and shared kernel."""
     fixture = json.loads((bundle/'stream-fixture.json').read_text())
-    template = ROOT/'test/domain_channel_stream_semantics.x.in'
+    template = ROOT/'apps/hls_fabric/test/domain_channel_stream_semantics.x.in'
     text = template.read_text().replace('@@LINK@@', '0')
     for name, value in fixture['status_codes'].items():
         text = text.replace('@@'+name.upper()+'@@', str(value))
@@ -93,7 +93,7 @@ def build(xls: Path, stage: Path, source: Path | None, checks_result: Path | Non
     if checks_result:
         prior = json.loads(checks_result.read_text())
         assert prior['passed'] and prior['interpreter'] == digest(xls/'interpreter_main')
-        assert prior['template'] == digest(ROOT/'test/domain_channel_stream_semantics.x.in')
+        assert prior['template'] == digest(ROOT/'apps/hls_fabric/test/domain_channel_stream_semantics.x.in')
         for name, expected in prior['inputs'].items():
             assert digest(bundle/name) == expected, name
         semantic_checks = checks_result
@@ -108,13 +108,13 @@ def compile_adapter(bundle: Path, compiled: Path, stage: Path, semantic_checks: 
     """Build only the public transport harness around already qualified immutable RTL."""
     manifest = json.loads((bundle/'source-build.json').read_text())
     rtl = [compiled/name for name in dict.fromkeys(name for unit in manifest['units'] for name in unit['rtl'])]
-    harness = ROOT/'test/rtl/cross_domain_stream_sim.cpp'
+    harness = ROOT/'apps/hls_fabric/test/rtl/cross_domain_stream_sim.cpp'
     run(['verilator', '--cc', '--exe', '--build', '--top-module', 'protocol_domains_stream',
          '--Mdir', stage/'obj_dir', '-j', '1', '-Wno-fatal', '-CFLAGS', '-std=c++17',
          '-o', 'simulation', *rtl, harness], stage, 'verilator', timeout=None)
     binary = stage/'obj_dir/simulation'
-    inputs = [*rtl, harness, ROOT/'test/rtl/framed_fifo_endpoint.h',
-              ROOT/'test/rtl/framed_fifo_stream.h', ROOT/'test/rtl/framed_fifo_control.h',
+    inputs = [*rtl, harness, ROOT/'apps/hls_fabric/test/rtl/framed_fifo_endpoint.h',
+              ROOT/'apps/hls_fabric/test/rtl/framed_fifo_stream.h', ROOT/'apps/hls_fabric/test/rtl/framed_fifo_control.h',
               bundle/'source-build.json', bundle/'compiled.run.json', bundle/'interface.etf',
               bundle/'stream-fixture.json', bundle/'channel_management/interface.etf', semantic_checks]
     inputs.extend(bundle.glob('domain_*/domain/interface.etf'))

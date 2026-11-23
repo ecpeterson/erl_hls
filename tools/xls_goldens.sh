@@ -20,7 +20,7 @@ generated=(
     regsvc.x
 )
 goldens=(
-    src/examples/regsvc/regsvc.erl.x
+    apps/erl_hls/src/examples/regsvc/regsvc.erl.x
 )
 missing=false
 for index in "${!generated[@]}"; do

@@ -181,7 +181,7 @@ def main() -> None:
       Body = xls_scheduler_actor:to_xls(Source, #{direct_collection => exclusive_epoch, direct_actor_debug => true}),
       ok = file:write_file(Target, Body), halt().'''
     execute(['erl', '-noshell', '-pa', *erlang_paths("test"), '-eval', expression, '-extra',
-             str(ROOT/'test/hls_projection_reduction_fixture.erl'), str(stage/'collector.x')], stage, 'generate')
+             str(ROOT/'apps/hls_fabric/test/hls_projection_reduction_fixture.erl'), str(stage/'collector.x')], stage, 'generate')
     with (stage/'collector.x').open('a') as output:
         output.write('''
 // Expose two independent producers and the ordered startup source to the test.
@@ -216,7 +216,7 @@ pub proc CollectionTest {
     width, = re.findall(r'pub type ActorObservation = bits\[(\d+)\]', (stage/'collector.x').read_text())
     parameters.append(f'-Pdirect_collection_tb.OBSERVATION_BITS={width}')
     bench = overlap_observer((stage/'collector.v').read_text(), (stage/'collector.x').read_text(),
-                             (ROOT/'test/rtl/direct_collection_tb.sv').read_text())
+                             (ROOT/'apps/hls_fabric/test/rtl/direct_collection_tb.sv').read_text())
     (stage/'testbench.sv').write_text(bench)
     execute(['iverilog', '-g2012', '-s', 'direct_collection_tb', *parameters, '-o', str(stage/'test.vvp'),
              str(stage/'testbench.sv'), str(stage/'collector.v')], stage, 'test-compile')

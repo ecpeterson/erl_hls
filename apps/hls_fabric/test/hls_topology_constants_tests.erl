@@ -26,7 +26,7 @@ closed_state_projection_test() ->
     ?assertEqual(ok, xls_scheduler_debug:validate(Plan, Groups, Debug)),
     %% Codecs are exercised by the XLS witness, separately from textual checks.
     ok = filelib:ensure_dir("_build/state-projection/fixture.x"),
-    {ok, Checks} = file:read_file("test/xls/state_projection_checks.xinc"),
+    {ok, Checks} = file:read_file("apps/hls_fabric/test/xls/state_projection_checks.xinc"),
     ok = file:write_file("_build/state-projection/fixture.x", [Text, Checks]).
 
 %% Source specialization and observation validation use the artifact's selected frame capacity.
@@ -47,7 +47,7 @@ selected_frame_capacity_test() ->
           scheduler_groups => Groups, frame_payload_words => 4}),
     Options = maps:get(Module, Requirements),
     ?assertEqual(4, maps:get(frame_payload_words, Options)),
-    Artifact = xls_scheduler_actor:to_artifact("test/hls_projection_wide_fixture.erl", Options),
+    Artifact = xls_scheduler_actor:to_artifact("apps/hls_fabric/test/hls_projection_wide_fixture.erl", Options),
     Text = xls_emitted:bytes(Artifact),
     ?assertNotEqual(nomatch, binary:match(iolist_to_binary(Text),
         <<"const_assert!(axis::FRAME_BITS == u32:160)">>)),
@@ -111,7 +111,7 @@ projection_source_identity_test() ->
 -spec unsupported_protocol_test() -> ok.
 unsupported_protocol_test() ->
     ?assertError(state_projection_protocol,
-        xls_scheduler_actor:to_xls("src/examples/regsvc/regsvc.erl", #{state_projection => #{}})),
+        xls_scheduler_actor:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl", #{state_projection => #{}})),
     ?assertError(state_projection_protocol,
         xls_state_projection:validate(#{retained_calls => #{}}, #{}, [])).
 
@@ -145,7 +145,7 @@ groups() -> #{workers => #{members => [{actor, a}, {actor, b}], state_storage =>
 
 %% Read the current fixture rather than a dependency's similarly named test data.
 -spec source() -> file:filename().
-source() -> "test/hls_projection_fixture.erl".
+source() -> "apps/hls_fabric/test/hls_projection_fixture.erl".
 
 %% Match includes, feature flags and source names captured when the fixture was compiled.
 -spec context() -> hls_source:context().
@@ -167,7 +167,7 @@ reduction_projection_test() ->
     ?assertNot(lists:member(value, maps:get(constants, Projection))),
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projected_reduction, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Specs}),
-    Artifact = xls_scheduler_actor:to_artifact("test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
+    Artifact = xls_scheduler_actor:to_artifact("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
     Text = xls_emitted:bytes(Artifact),
     #{<<"banks">> := [Bank]} = xls_scheduler_debug:projection(Plan, Specs, #{Module => Artifact}),
     ?assert(maps:is_key(<<"reduction">>, Bank)),
@@ -183,7 +183,7 @@ reduction_projection_test() ->
 %% A fixed-population transport must not substitute capacity for a runtime subset.
 -spec runtime_membership_requires_ordinary_service_test() -> ok.
 runtime_membership_requires_ordinary_service_test() ->
-    #{reductions := Reduction} = xls_parse:actor_artifact("test/hls_projection_reduction_fixture.erl", []),
+    #{reductions := Reduction} = xls_parse:actor_artifact("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", []),
     ?assertEqual([], xls_reduction_codegen:declarations(Reduction, ordinary)),
     ?assertError(aggregate_only_runtime_membership,
         xls_reduction_codegen:declarations(Reduction, aggregate_only)),

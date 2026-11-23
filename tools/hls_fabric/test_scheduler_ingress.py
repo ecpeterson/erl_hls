@@ -26,7 +26,7 @@ pub struct ScheduledRequest { slot: u32, frame: axis::Frame, credit: u1 }
     names = ', '.join(f'frame_{i}' for i in range(count))
     selector = (stage/'selector.x').read_text()
     if reference:
-        (stage/'scheduler_ingress_reference.x').write_bytes((ROOT/'test/xls/scheduler_ingress_reference.x').read_bytes())
+        (stage/'scheduler_ingress_reference.x').write_bytes((ROOT/'apps/hls_fabric/test/xls/scheduler_ingress_reference.x').read_bytes())
         selector = 'import scheduler_ingress_reference;\n'
     proc = 'scheduler_ingress_reference::Reference' if reference else 'SchedulerIngress0'
     (stage/'top.x').write_text('import axis;\nimport ingress_types;\n'+selector+f'''
@@ -58,7 +58,7 @@ def simulate(stage: Path, count: int, expected_ns: int = 8) -> None:
     """Compare every accepted frame and grant against a fair ordered scoreboard."""
     connections = ',\n'.join(f'._frame_{i}(frames[{i}]), ._frame_{i}_vld(valid[{i}]), ._frame_{i}_rdy(ready[{i}])'
                              for i in range(count))
-    source = (ROOT/'test/rtl/scheduler_ingress_tb.sv').read_text().replace('@@CONNECTIONS@@', connections)
+    source = (ROOT/'apps/hls_fabric/test/rtl/scheduler_ingress_tb.sv').read_text().replace('@@CONNECTIONS@@', connections)
     (stage/'test.sv').write_text(source)
     execute(['iverilog', '-g2012', '-s', 'scheduler_ingress_tb', f'-Pscheduler_ingress_tb.N={count}', f'-Pscheduler_ingress_tb.EXPECTED_NS={expected_ns}',
              '-o', str(stage/'test.vvp'), str(stage/'test.sv'), str(stage/'ingress.v')], stage, 'compile-test')

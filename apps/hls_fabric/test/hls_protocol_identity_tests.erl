@@ -9,7 +9,7 @@ application_identity_test_() -> {timeout, 120, fun application_identity/0}.
 %% Identity follows the source/wire contract while retaining typed external IDs.
 -spec application_identity() -> ok.
 application_identity() ->
-    Config = application_config("test"),
+    Config = application_config("apps/hls_fabric/test"),
     First = hls_protocol_application:emit(Config),
     Second = hls_protocol_application:emit(Config),
     Identity = application_identity(First, board),
@@ -39,7 +39,7 @@ relocated_source(Config, Original) ->
     Files = ["hls_protocol_boundary_fixture.erl", "hls_protocol_identity_fixture.erl",
         "hls_protocol_identity_fixture.hrl"],
     lists:foreach(fun(File) ->
-        {ok, _} = file:copy(filename:join("test", File), filename:join(Root, File))
+        {ok, _} = file:copy(filename:join("apps/hls_fabric/test", File), filename:join(Root, File))
     end, Files),
     RelocatedConfig = Config#{sources := maps:get(sources, application_config(Root))},
     Relocated = hls_protocol_application:emit(RelocatedConfig),
@@ -158,7 +158,7 @@ application_config(Directory) ->
 %% Three ordinary actors provide actual source-derived crossings, ingress and separate external streams.
 -spec bridge_config() -> map().
 bridge_config() ->
-    #{sources => [{"test/hls_protocol_network_fixture.erl", []}, {"test/hls_protocol_inbox_fixture.erl", []}],
+    #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []}, {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}],
       topology => {hls_protocol_network_fixture, framed, []}, actor_limit => 3}.
 
 %% Read the identity consumed by host attachment, not an intermediate hashing helper.

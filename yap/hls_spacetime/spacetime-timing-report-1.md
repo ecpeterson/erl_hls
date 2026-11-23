@@ -1,6 +1,6 @@
 # F1: explainable timing bottlenecks
 
-2026-11-08. The offline `report-timing.mjs` workflow closes F1: it joins every selected recorded write to shared native cones and supplies one deterministic maximum-envelope chain per known cone, with exact pin/cell/net identities, cumulative arc costs, net/logic contributions, native fanout, source annotations and routing dispositions. Unknown target bits, missing timing, unsupported/cyclic cones and inapplicable launch scopes remain explicit. The [report guide](../docs/timing-report.md) defines the interface and interpretation; this is an analysis follow-on, not a new implementation measurement or a multi-clock critical-path proof.
+2026-11-08. The offline `report-timing.mjs` workflow closes F1: it joins every selected recorded write to shared native cones and supplies one deterministic maximum-envelope chain per known cone, with exact pin/cell/net identities, cumulative arc costs, net/logic contributions, native fanout, source annotations and routing dispositions. Unknown target bits, missing timing, unsupported/cyclic cones and inapplicable launch scopes remain explicit. The [report guide](../../docs/hls_spacetime/timing-report.md) defines the interface and interpretation; this is an analysis follow-on, not a new implementation measurement or a multi-clock critical-path proof.
 
 ## Saved main recording
 

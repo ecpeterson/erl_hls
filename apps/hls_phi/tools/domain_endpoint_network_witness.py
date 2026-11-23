@@ -7,7 +7,7 @@ from typing import Any
 
 from backend_commands import digest, run
 from backend_paths import ROOT, erlang_paths
-from test_domain_endpoints import bundle_file, pins, require
+from domain_endpoint_support import bundle_file, pins, require
 
 
 # This reads retained Erlang metadata only; it does not elaborate source or run a compiler.
@@ -171,7 +171,7 @@ def adapter(stage: Path, metadata: dict[str, Any], profile: dict[str, Any]) -> P
     output = stage / 'phi-domain-endpoint-repetition.cpp'
     output.write_text(text)
     for name in ('framed_fifo_endpoint.h', 'framed_fifo_stream.h', 'framed_fifo_control.h'):
-        shutil.copyfile(ROOT / 'test/rtl' / name, stage / name)
+        shutil.copyfile(ROOT / 'apps/hls_fabric/test/rtl' / name, stage / name)
     return output
 
 
@@ -226,8 +226,8 @@ def compile_adapter(domain: Path, domain_compiled: Path, network: Path, network_
     wrapper_path = wrapper(stage, profile, metadata['channels'])
     source = adapter(stage, metadata, profile)
     for path in [source, wrapper_path, profile_path, *stage.glob('*.h'), domain / 'fixture.etf', domain / 'fixture.json',
-                 Path(__file__).resolve(), ROOT / 'tools/test_domain_endpoints.py',
-                 ROOT / 'tools/backend_commands.py', ROOT / 'tools/backend_paths.py',
+                 Path(__file__).resolve(), ROOT / 'tools/hls_fabric/domain_endpoint_support.py',
+                 ROOT / 'tools/hls_fabric/backend_commands.py', ROOT / 'tools/hls_fabric/backend_paths.py',
                  ROOT / 'apps/hls_phi/test/rtl/phi_domain_endpoint_repetition_sim.cpp.in']:
         hashes[path] = digest(path)
     verilator = Path(shutil.which('verilator') or 'verilator').resolve(strict=True)

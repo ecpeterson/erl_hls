@@ -4,7 +4,7 @@
 %% Repeated fields collapse while unrelated computed bindings remain separate.
 -spec storage_width_and_capacity_test() -> ok.
 storage_width_and_capacity_test() ->
-    Dslx = iolist_to_binary(xls_parse:to_xls("test/xls_entry_storage_fixture.erl")),
+    Dslx = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/xls_entry_storage_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(Dslx, <<"ENTRY_EFFECT_PAYLOAD_BITS = u32:64;">>)),
     ?assertNotEqual(nomatch, binary:match(Dslx, <<"ENTRY_EFFECT_CAPACITY = u32:3;">>)),
     ?assertEqual(3, hls_actor_interface:max_entry_effects(
@@ -23,5 +23,5 @@ distinct_bindings_and_unknown_expressions_test() ->
 %% Interning and declaration order remain stable despite compiler-local identity tokens.
 -spec generated_output_is_deterministic_test() -> ok.
 generated_output_is_deterministic_test() ->
-    Path = "test/xls_entry_storage_fixture.erl",
+    Path = "apps/erl_hls/test/xls_entry_storage_fixture.erl",
     ?assertEqual(iolist_to_binary(xls_parse:to_xls(Path)), iolist_to_binary(xls_parse:to_xls(Path))).

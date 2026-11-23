@@ -18,7 +18,7 @@ import subprocess
 
 from backend_paths import debug_rtl
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MODES = ("components_global", "components_weak")
 
 
@@ -30,7 +30,7 @@ def simulate(build: Path, stage: Path, stages: list[int], public: Path) -> None:
         for depth in stages:
             output = stage / f"{mode}-p{depth}"
             output.mkdir(parents=True, exist_ok=True)
-            tb = ROOT / "test/rtl/mixed_effect_windows_tb.sv"
+            tb = ROOT / "apps/hls_fabric/test/rtl/mixed_effect_windows_tb.sv"
             shutil.copy(source / "expected.hex", output / "expected.hex")
             rtl = [source / f"topology_{depth}.v", source / "mixed_topology_wrapper.v",
                    public / "priv/rtl/hls_1r1w_ram.v"]

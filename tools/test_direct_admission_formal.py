@@ -25,7 +25,7 @@ def main() -> None:
     for rtl in args.rtl:
         prefix = args.stage / rtl.stem
         script = "read_verilog -sv " + " ".join(map(quote, [
-            ROOT / "test/rtl/direct_admission_formal.sv", rtl.resolve()])) + "\n"
+            ROOT / "apps/erl_hls/test/rtl/direct_admission_formal.sv", rtl.resolve()])) + "\n"
         script += "prep -top direct_admission_formal -flatten\nmemory_map\nopt\n"
         script += ("sat -verify -prove ok 1 -set legal 1 -set-at 1 reset 1 "
                    "-set-def-inputs -seq 24 -timeout 60 "

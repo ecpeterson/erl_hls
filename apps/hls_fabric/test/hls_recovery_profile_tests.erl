@@ -135,7 +135,7 @@ controller_replacement_does_not_release_resources_test() ->
 %% This checks source admissibility, separately from the ERTS interface histories above.
 -spec source_actuator_is_lowerable_test() -> ok.
 source_actuator_is_lowerable_test() ->
-    Generated = iolist_to_binary(xls_parse:to_xls("test/hls_recovery_actuator_fixture.erl")),
+    Generated = iolist_to_binary(xls_parse:to_xls("apps/hls_fabric/test/hls_recovery_actuator_fixture.erl")),
     ?assert(byte_size(Generated) > 0).
 
 %% Activate a real source controller and attach a separate host policy to its exact native endpoint.

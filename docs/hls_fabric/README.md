@@ -14,7 +14,7 @@ Begin with [building the backend](building.md). The [Phi source-to-runtime walkt
 - [Shared RTL tiles](tiles.md): one compilation with board-specific constant wrappers.
 - [Actor timing profiles](profiling.md): reusable event graphs, exact clocks and causal scope.
 - [Retained locality baseline](locality-baseline.md): reproduce the accepted Snowflake comparison design.
-- [Source quality](source-quality.md) and [style](../STYLE.md): contributor requirements.
+- [Source quality](source-quality.md) and [style](../../apps/hls_fabric/STYLE.md): contributor requirements.
 - [Passive source-protocol capture](spacetime-capture.md): optional build-bound event observations, exact simulator replay and evidence limits.
 
 `yap/` holds implementation/qualification working material. Retained measurements, scope and reproduction evidence live in the external artifact archive.

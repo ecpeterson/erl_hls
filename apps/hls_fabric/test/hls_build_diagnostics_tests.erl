@@ -169,7 +169,7 @@ composition_diagnostics() ->
         south => #{native_actors => [right, sink], host => 3, service => 31}},
         limits => #{crossings => 8, commands => 8, events => 8}},
     Multicast = (base())#{native_actors => [left, sink], host => 2, service => 29},
-    HostLink = (base())#{sources := sources() ++ [{"test/hls_protocol_composition_fixture.erl", []}],
+    HostLink = (base())#{sources := sources() ++ [{"apps/hls_fabric/test/hls_protocol_composition_fixture.erl", []}],
         topology := {hls_protocol_composition_fixture, beam_to_beam, []},
         native_actors => [left], host => 2, service => 29},
     {{Ownership, Fanout, Route}, Calls} = trace_calls(fun() ->
@@ -288,7 +288,7 @@ configuration(transport) -> maps:remove(control, base());
 configuration(Kind) when Kind =:= network; Kind =:= boundary -> base();
 configuration(application) -> (base())#{device => board, host => 2};
 configuration(bridge) -> (base())#{native_actors => [left, sink], host => 2, service => 29};
-configuration(mixed) -> (base())#{sources := sources() ++ [{"test/hls_protocol_composition_fixture.erl", []}],
+configuration(mixed) -> (base())#{sources := sources() ++ [{"apps/hls_fabric/test/hls_protocol_composition_fixture.erl", []}],
     topology := {hls_protocol_composition_fixture, beam_to_beam, []},
     native_actors => [left, right], host => 2, service => 29};
 configuration(deployment) -> deployment().
@@ -343,7 +343,7 @@ fresh_directory(Prefix) -> filename:join("_build", Prefix ++ "-" ++
 
 %% Both actor implementations are reused rather than introducing an application-sized workload.
 -spec sources() -> [hls_source_config:source_file()].
-sources() -> [{"test/hls_protocol_network_fixture.erl", []}, {"test/hls_protocol_inbox_fixture.erl", []}].
+sources() -> [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []}, {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}].
 
 %% Framing, placement and host control all derive from this three-actor feedback graph.
 -spec base() -> hls_source_config:network().

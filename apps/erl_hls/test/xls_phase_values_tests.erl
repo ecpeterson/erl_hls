@@ -1,7 +1,7 @@
 -module(xls_phase_values_tests).
 -moduledoc "Checks conservative phase inference, source freshness and opt-in specialization.".
 -include_lib("eunit/include/eunit.hrl").
--define(FIXTURE, "test/xls_phase_values_fixture.erl").
+-define(FIXTURE, "apps/erl_hls/test/xls_phase_values_fixture.erl").
 
 %% Failed writes never become later live state; successful helper aliases do.
 -spec inferred_successful_phases_test() -> ok.

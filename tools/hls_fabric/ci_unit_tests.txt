@@ -30,7 +30,6 @@ test_phi_transport_metrics
 test_profile_views
 test_profile_compilation.ProfileBuilds
 test_pipeline_ablation
-test_source_contracts
 test_source_toolchain
 test_transport_codegen
 test_verify_phi_components

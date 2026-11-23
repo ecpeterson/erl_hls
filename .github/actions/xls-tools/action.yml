@@ -6,7 +6,7 @@ runs:
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: ${{ runner.temp }}/xls
-        key: xls-${{ runner.os }}-${{ runner.arch }}-v0.0.0-10601-g9f360fc89-163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e-${{ hashFiles('tools/xls_ram_codegen/manifest.json') }}
+        key: xls-${{ runner.os }}-${{ runner.arch }}-v0.0.0-10601-g9f360fc89-163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e-${{ hashFiles('tools/hls_fabric/xls_ram_codegen/manifest.json') }}
     - name: Install compiler and RAM reservation extension
       shell: bash
       env:
@@ -22,4 +22,4 @@ runs:
           mkdir -p "$XLS_ROOT"
           tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
         fi
-        python3 tools/xls_ram_codegen/install.py "$XLS_ROOT"
+        python3 tools/hls_fabric/xls_ram_codegen/install.py "$XLS_ROOT"

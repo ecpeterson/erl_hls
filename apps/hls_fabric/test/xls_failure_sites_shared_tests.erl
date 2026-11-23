@@ -5,7 +5,7 @@
 %% Checks specializations use their own artifact codebook.
 -spec specializations_use_their_own_artifact_codebook_test() -> 'ok'.
 specializations_use_their_own_artifact_codebook_test() ->
-    File = "test/hls_reduction_failure_fixture.erl",
+    File = "apps/hls_fabric/test/hls_reduction_failure_fixture.erl",
     {ok, Forms} = hls_source:parse_file(File),
     {_, Locations} = xls_failure_sites:prepare(Forms),
     lists:foreach(fun(Mode) ->

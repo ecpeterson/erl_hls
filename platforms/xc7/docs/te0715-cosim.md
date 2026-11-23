@@ -35,7 +35,7 @@ The runner verifies kernel and runtime manifests, builds the current C diagnosti
 
 The C and BEAM diagnostics each loop back all 256 routed frame sizes, including zero and maximum payloads. Additional C checks fill both slots and require `EAGAIN` for a third write, drain frames in order, wake a blocked read on completion, and unbind with a blocked reader that must receive `ENODEV`. The guest then rebinds for the BEAM run and unloads the driver. Partial reads, malformed writes and exclusive direction ownership are also checked.
 
-Success requires guest pass markers, both simulators exiting successfully, and RTL evidence: 515 completed stream frames (259 without BEAM), interrupt edges, clock steps and actual backpressure stalls. [The recorded run](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/te0715-cosim-result.json`) includes hashes and counters. Host wall time measures test cost, not transport performance.
+Success requires guest pass markers, both simulators exiting successfully, and RTL evidence: 515 completed stream frames (259 without BEAM), interrupt edges, clock steps and actual backpressure stalls. [The recorded run](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/te0715-cosim-result.json`) includes hashes and counters. Host wall time measures test cost, not transport performance.
 
 CI runs `test_qemu_cosim.py` through the existing PS-probe suite: real Icarus/AXI traffic, slot ownership, reset, fragmented socket messages and rejection of malformed/truncated requests. The optional `--qemu` checks corrupt/truncated replies and peer loss against the native emulator. Full Linux/BEAM co-simulation is a local acceptance check; CI does not build its kernel, runtime image or QEMU.
 

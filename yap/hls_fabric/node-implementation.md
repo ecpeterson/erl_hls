@@ -1,6 +1,6 @@
 # Virtual-node boundaries
 
-`Notes/erl_xls/Roadmap.md` is the sole active task list. This note supports G1 (distribution semantics), G3 (routing/conformance), G4 (diagnostics) and P6 (physical deployment). [Device sessions](../docs/device-sessions.md) specify the current API; the older “define failure before recovery” sequence is superseded by managed domains.
+`Notes/erl_xls/Roadmap.md` is the sole active task list. This note supports G1 (distribution semantics), G3 (routing/conformance), G4 (diagnostics) and P6 (physical deployment). [Device sessions](../../docs/hls_fabric/device-sessions.md) specify the current API; the older “define failure before recovery” sequence is superseded by managed domains.
 
 ## Supervision and ownership
 
@@ -14,9 +14,9 @@ Current distribution supports authenticated protocol-v6 connections, PID/name se
 
 Finite framing, routing, backpressure, delayed-reply and exhaustion fixtures exist. They do not establish a composed proof of accepted-beat/frame conservation and per-sender order across receiver, serializer, allocator and actor admission under arbitrary legal stalls. A selected proof must state those composition assumptions and its quantified domain. Actual physical keep/TLAST, packet integrity, teardown and reset exclusion belong to P6.
 
-The [legacy return-context contract](../docs/return-contexts.md) assumes complete valid requests and exactly one reply after request-header acceptance. A never-replying request can retain its slot indefinitely; arbitrary duplicate replies after slot reuse are outside that contract. Its busy-mask and dropped-reply outputs are not yet host-query diagnostics. The [legacy device bridge](../docs/device-bridge.md) detects specific tag/lane/length/credit faults but assumes ordered, exactly-once, uncorrupted transport; it cannot detect every dropped or duplicated complete packet.
+The [legacy return-context contract](../../docs/hls_fabric/return-contexts.md) assumes complete valid requests and exactly one reply after request-header acceptance. A never-replying request can retain its slot indefinitely; arbitrary duplicate replies after slot reuse are outside that contract. Its busy-mask and dropped-reply outputs are not yet host-query diagnostics. The [legacy device bridge](../../docs/hls_fabric/device-bridge.md) detects specific tag/lane/length/credit faults but assumes ordered, exactly-once, uncorrupted transport; it cannot detect every dropped or duplicated complete packet.
 
-New [domain channels](../docs/domain-recovery.md) enforce exact generation/sequence ownership, but payload integrity remains an assumption. Their guarantees do not upgrade the legacy paths. New managed streams have nonwrapping identities and output-delivery frontiers, but no automatic application retry. Arbitration preserves its documented service ordering under accepted transfers; blocked receivers and a single ordered physical lane can still cause head-of-line delay. Finite contention tests are not an unrestricted progress proof.
+New [domain channels](../../docs/hls_fabric/domain-recovery.md) enforce exact generation/sequence ownership, but payload integrity remains an assumption. Their guarantees do not upgrade the legacy paths. New managed streams have nonwrapping identities and output-delivery frontiers, but no automatic application retry. Arbitration preserves its documented service ordering under accepted transfers; blocked receivers and a single ordered physical lane can still cause head-of-line delay. Finite contention tests are not an unrestricted progress proof.
 
 ## Conditional diagnostics and optimization
 

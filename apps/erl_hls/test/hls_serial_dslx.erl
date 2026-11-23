@@ -101,7 +101,7 @@ boundaries(W) ->
 %% Replay BEAM callbacks until failure, then require sticky source errors until reset.
 -spec write_actor(file:filename()) -> ok.
 write_actor(Stage) ->
-    Artifact = xls_parse:to_artifact("test/hls_serial_fixture.erl"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/hls_serial_fixture.erl"),
     ok = file:write_file(filename:join(Stage, "service.x"), xls_emitted:bytes(Artifact)),
     %% The ambiguous comparison fails at difference/3, before the later before/3.
     [FirstBadarg | _] = [Code || #{kind := badarg, code := Code} <- xls_emitted:sites(Artifact)],

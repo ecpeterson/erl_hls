@@ -7,13 +7,13 @@
 -spec rejects_retained_server_test() -> ok.
 rejects_retained_server_test() ->
     ?assertException(error, {hls_diagnostic, #{code := unsupported_clocked_controller}},
-        xls_clocked_controller:artifact("test/hls_server_reply_fixture.erl", 10)).
+        xls_clocked_controller:artifact("apps/hls_fabric/test/hls_server_reply_fixture.erl", 10)).
 
 %% An ordinary multi-phase actor must keep its clocked entry and mailbox owner.
 -spec rejects_state_machine_test() -> ok.
 rejects_state_machine_test() ->
     ?assertException(error, {hls_diagnostic, #{code := unsupported_clocked_controller}},
-        xls_clocked_controller:artifact("test/hls_domain_counter.erl", 10)).
+        xls_clocked_controller:artifact("apps/hls_fabric/test/hls_domain_counter.erl", 10)).
 
 -doc "Writes every shipped clocked controller as an isolated typed source unit; XLS checks both the actual shared transitions and the immediate adapter.".
 -spec write(file:filename()) -> ok.

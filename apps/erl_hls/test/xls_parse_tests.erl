@@ -11,12 +11,12 @@ non_reduction_statem_codegen_retains_artifact_bytes_test() ->
         ?assertEqual(xls_emitted:bytes(Artifact), Generated),
         ?assertNotEqual(nomatch, binary:match(Generated, <<"proc Service">>)),
         ?assertNotEqual(nomatch, binary:match(Generated, <<"pub enum OutputPort">>))
-    end, ["test/hls_data_cell_fixture.erl", "test/hls_query_cell_fixture.erl"]).
+    end, ["apps/erl_hls/test/hls_data_cell_fixture.erl", "apps/erl_hls/test/hls_query_cell_fixture.erl"]).
 
 %% Service recurrence retains typed data and failure state without serializing passive observation.
 -spec passive_state_observation_is_not_emitted_test() -> ok.
 passive_state_observation_is_not_emitted_test() ->
-    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
+    Xls = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl")),
 
     %% State serialization remains part of the generated API, but the live
     %% Service recurrence carries typed data plus failure status and never packs it.
@@ -30,7 +30,7 @@ passive_state_observation_is_not_emitted_test() ->
 %% Each source request tag owns one numeric dispatch arm, regardless of clause count.
 -spec ordered_gs_clauses_share_one_tag_arm_test() -> ok.
 ordered_gs_clauses_share_one_tag_arm_test() ->
-    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
+    Xls = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl")),
 
     %% Multiple cast and call clauses each share one wire-tag dispatch arm.
     ?assertEqual(1, length(binary:matches(Xls, <<"    Tag::SET => {">>))),
@@ -39,7 +39,7 @@ ordered_gs_clauses_share_one_tag_arm_test() ->
 %% Include-expanded declaration order is shared by numeric dispatch and runtime codecs.
 -spec repeated_hls_tags_follow_include_expanded_source_order_test() -> ok.
 repeated_hls_tags_follow_include_expanded_source_order_test() ->
-    Path = "test_data/hls_tags_fixture.erl",
+    Path = "apps/erl_hls/test_data/hls_tags_fixture.erl",
     Xls = iolist_to_binary(xls_parse:to_xls(Path)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
@@ -65,9 +65,11 @@ repeated_hls_tags_follow_include_expanded_source_order_test() ->
         _ = code:purge(Module)
     end.
 
+%% Checks repeated tag declarations in the app-owned fixture reach emitted DSLX.
+-spec repeated_hls_tags_reach_state_machine_lowering_test() -> ok.
 repeated_hls_tags_reach_state_machine_lowering_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls(
-        "test_data/hls_tags_statem_fixture.erl"
+        "apps/erl_hls/test_data/hls_tags_statem_fixture.erl"
     )),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
@@ -712,7 +714,7 @@ hls_gs_callback_body_accepts_if_test() ->
 -spec hls_gs_callback_bodies_accept_general_case_test() -> ok.
 hls_gs_callback_bodies_accept_general_case_test() ->
     XLS = iolist_to_binary(xls_parse:to_xls(
-        "test_data/xls_case_fixture.erl"
+        "apps/erl_hls/test_data/xls_case_fixture.erl"
     )),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"    Tag::QUERY => {">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"    Tag::UPDATE => {">>)),

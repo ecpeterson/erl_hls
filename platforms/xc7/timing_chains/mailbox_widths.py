@@ -31,7 +31,8 @@ pub fn selector(order: u8[{args.depth}][{actors}], occupied: u8[{actors}],
     for output, argv in (
             ('selector.ir', [str(args.xls / 'ir_converter_main'), '--top=selector',
                 '--warnings_as_errors=false', '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'),
-                '--dslx_path=' + str(ROOT / 'apps/hls_lowering/priv/xls/lib') + ':' + str(ROOT / 'test_data'), str(source)]),
+                '--dslx_path=' + str(ROOT / 'apps/hls_lowering/priv/xls/lib') + ':' +
+                str(ROOT / 'apps/hls_fabric/test_data'), str(source)]),
             ('selector.opt.ir', [str(args.xls / 'opt_main'), str(stage / 'selector.ir')]),
             ('selector.v', [str(args.xls / 'codegen_main'), '--generator=combinational',
                 '--module_name=selector', '--use_system_verilog=false', str(stage / 'selector.opt.ir')])):
@@ -65,7 +66,8 @@ def main() -> None:
     args = parser.parse_args()
     if not 1 <= args.depth <= 255 or any(n < 1 for n in args.actors):
         raise ValueError('require positive actor counts and depth 1..255')
-    inputs = [Path(__file__), ROOT / 'apps/hls_lowering/priv/xls/lib/mailbox.x', ROOT / 'test_data/mailbox_refinement.x',
+    inputs = [Path(__file__), ROOT / 'apps/hls_lowering/priv/xls/lib/mailbox.x',
+              ROOT / 'apps/hls_fabric/test_data/mailbox_refinement.x',
               args.yosys, *[args.xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')]]
     identities = {str(p): sha(p) for p in inputs}
     results = []

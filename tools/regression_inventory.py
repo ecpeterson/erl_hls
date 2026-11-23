@@ -58,7 +58,8 @@ def load_inventory(root: Path | None = None) -> Inventory:
         for path in dependencies:
             file = PurePosixPath(path)
             if (file.is_absolute() or '..' in file.parts or str(file) != path
-                    or file.parts[:1] not in [('test',), ('test_data',)]
+                    or file.parts[:3] not in [
+                        ('apps', 'erl_hls', 'test'), ('apps', 'erl_hls', 'test_data')]
                     or any(character in path for character in '*?[]') or documentation(path)):
                 raise ValueError(f'only exact fixture paths may narrow regressions: {path}')
     return inventory

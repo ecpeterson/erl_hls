@@ -15,7 +15,7 @@ The default profile selects internal PMA loopback. `--external` selects the SFP 
 
 ## Control and observations
 
-Use the existing GP0 UIO mapping, with identity `0x45544837` (`ETH7`) and ABI 1. Offsets through `0x10` retain the [register-probe contract](../../../docs/execution/zynq-ps-probe.md); control has these meanings:
+Use the existing GP0 UIO mapping, with identity `0x45544837` (`ETH7`) and ABI 1. Offsets through `0x10` retain the [register-probe contract](../../../docs/hls_fabric/execution/zynq-ps-probe.md); control has these meanings:
 
 | Register | Meaning |
 | --- | --- |

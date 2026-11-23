@@ -1,6 +1,6 @@
 # Early experiment disposition
 
-Experiments 01–06 were retired from the active source tree after their reusable checks moved to the compiler. The [manifest](retired-experiments-01-06.json) records source commit `548b75eeb07ca9fa55289c6b78210ccb473e66ca`, directory tree identities, original probe hashes and destinations. Git retains each historical input: `git show COMMIT:PATH` retrieves its recorded contents. Large historical reports remain in the external [artifact archive](../docs/artifacts.md); this change neither deletes that evidence nor makes an active build depend on it.
+Experiments 01–06 were retired from the active source tree after their reusable checks moved to the compiler. The [manifest](retired-experiments-01-06.json) records source commit `548b75eeb07ca9fa55289c6b78210ccb473e66ca`, directory tree identities, original probe hashes and destinations. Git retains each historical input: `git show COMMIT:PATH` retrieves its recorded contents. Large historical reports remain in the external [artifact archive](../../docs/hls_fabric/artifacts.md); this change neither deletes that evidence nor makes an active build depend on it.
 
 | Former directory | Disposition |
 | --- | --- |

@@ -1,6 +1,6 @@
 # TE0715 SD boot candidate
 
-This flow prepares the [PS–PL register probe](../../../docs/execution/zynq-ps-probe.md) for **TE0715-05-71C33-A / XC7Z030-1SBG485C**, intended for **TEF1002-03-A**. It builds on Apple Silicon without Vivado, PetaLinux or a Linux VM. Hardware boot is unverified.
+This flow prepares the [PS–PL register probe](../../../docs/hls_fabric/execution/zynq-ps-probe.md) for **TE0715-05-71C33-A / XC7Z030-1SBG485C**, intended for **TEF1002-03-A**. It builds on Apple Silicon without Vivado, PetaLinux or a Linux VM. Hardware boot is unverified.
 
 For first-board tests, use the [matched vendor register kit](ps-sd.md), which reuses this boot software with the timing-checked Vivado PL image. The source build below supplies its reusable SDK and base candidate.
 
@@ -44,7 +44,7 @@ The image checker verifies boot/partition checksums, bounds, non-overlap, load a
 
 The optional QEMU test boots the selected kernel and device tree with a disposable initramfs overlay. It loads the UIO module without a command-line override, verifies that the device-tree boot argument supplies its match parameter, checks the map, runs the ARM diagnostic's mock-register tests and checks CLI failures, including mapping an inert file with the wrong identity. It uses one emulated CPU and bypasses the FSBL/U-Boot chain. It does **not** test DDR training, SD boot, PCAP, fabric clocks/resets or PL MMIO. The shipped root filesystem remains unchanged.
 
-The portable board-profile tests also run through the existing PS-probe CI entry point. Full native assembly and QEMU remain local checks. See [recorded evidence](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/te0715-boot-result.json`).
+The portable board-profile tests also run through the existing PS-probe CI entry point. Full native assembly and QEMU remain local checks. See [recorded evidence](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/te0715-boot-result.json`).
 
 ## First board run
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 xls_root=${1:?usage: test_initialization.sh XLS_ROOT [STAGE]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/initialization"}
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_init_dslx:write(hd(init:get_plain_arguments())), halt().' \
     -extra "$stage"
@@ -35,7 +35,7 @@ for fixture in shared; do
     rams=
     schedules=(1 2)
     if [[ "$fixture" == shared ]]; then
-        source tools/scheduler_ram_configurations.sh
+        source tools/hls_fabric/scheduler_ram_configurations.sh
         rams=$(scheduler_ram_configurations 1)
         # The fixed-latency RAM channel constraints require at least two stages.
         schedules=(2 3)
@@ -57,7 +57,7 @@ for fixture in shared; do
         fi
         iverilog -g2012 -I "$stage" -DINIT_TOP="$top" -s "$bench" \
             -o "$stage/init_${fixture}_${stages}.vvp" \
-            "test/rtl/$bench.sv" "${sources[@]}"
+            "apps/hls_fabric/test/rtl/$bench.sv" "${sources[@]}"
         vvp "$stage/init_${fixture}_${stages}.vvp"
     done
 done
@@ -65,5 +65,5 @@ done
 # A larger producer set must elaborate promptly as well as preserving the
 # RAM-backed behavior exercised above. Keep this bound separate from codegen.
 timeout 120s "$xls_root/ir_converter_main" --top=Top "${options[@]}" \
-    "$project_root/test_data/shared_capture_large.x" > "$stage/shared_capture_large.ir"
+    "$project_root/apps/hls_fabric/test_data/shared_capture_large.x" > "$stage/shared_capture_large.ir"
 "$xls_root/opt_main" "$stage/shared_capture_large.ir" > "$stage/shared_capture_large.opt.ir"

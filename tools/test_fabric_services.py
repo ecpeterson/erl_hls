@@ -19,20 +19,21 @@ def run(rtl: Path, stage: Path) -> None:
     stage.mkdir(parents=True, exist_ok=True)
     for name in ('app_tx', 'app_rx', 'debug_tx', 'debug_rx', 'app_held', 'release_app', 'done'):
         (stage / name).unlink(missing_ok=True)
-    sources = [ROOT / 'test/rtl/regsvc_fabric_fixture.sv',
-               ROOT / 'src/examples/regsvc/regsvc_core_adapter.v',
-               ROOT / 'src/examples/regsvc/regsvc_debug_top.v',
-               *sorted((ROOT / 'priv/rtl/fabric').glob('*.v')),
-               *[ROOT / 'priv/rtl/debug' / name for name in (
+    sources = [ROOT / 'apps/erl_hls/test/rtl/regsvc_fabric_fixture.sv',
+               ROOT / 'apps/erl_hls/src/examples/regsvc/regsvc_core_adapter.v',
+               ROOT / 'apps/erl_hls/src/examples/regsvc/regsvc_debug_top.v',
+               *sorted((ROOT / 'apps/erl_hls/priv/rtl/fabric').glob('*.v')),
+               *[ROOT / 'apps/erl_hls/priv/rtl/debug' / name for name in (
                    'hls_debug_monitor.v', 'hls_debug_tap.v', 'hls_trace_store.v')],
                *[rtl / name for name in ('regsvc.v', 'hls_debug_observer.v', 'hls_debug_server.v')]]
     for name in ('xls_sim_bridge.c', 'xls_sim_axis.h'):
-        shutil.copy(ROOT / 'test/rtl' / name, stage)
+        shutil.copy(ROOT / 'apps/erl_hls/test/rtl' / name, stage)
     with (stage / 'compile.log').open('w') as log:
         for top in ('regsvc_pair_tb', 'fabric_services_tb', 'regsvc_pair_harness_tb'):
-            test_sources = ([ROOT / 'test/rtl/regsvc_pair_harness_tb.sv',
-                             ROOT / 'test/rtl/regsvc_pair_harness.v']
-                            if top == 'regsvc_pair_harness_tb' else [ROOT / f'test/rtl/{top}.sv'])
+            test_sources = ([ROOT / 'apps/erl_hls/test/rtl/regsvc_pair_harness_tb.sv',
+                             ROOT / 'apps/erl_hls/test/rtl/regsvc_pair_harness.v']
+                            if top == 'regsvc_pair_harness_tb'
+                            else [ROOT / f'apps/erl_hls/test/rtl/{top}.sv'])
             subprocess.run(['iverilog', '-g2012', '-s', top, '-o', str(stage / f'{top}.vvp'),
                             *map(str, test_sources + sources)],
                            stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)

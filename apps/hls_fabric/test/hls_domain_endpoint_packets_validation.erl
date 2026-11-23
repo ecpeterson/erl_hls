@@ -15,7 +15,7 @@
 %% Numeric pins follow the emitted adapter's declaration order at serialization only.
 -type pins() :: #{string() => non_neg_integer()}.
 
--doc "Writes a fresh standalone router bundle, real source classes and finite expected pin vectors. Four DATA/four ACK offers cover fairness, held selection, receive independence, exact identity routing, canonical rejection and sticky fault boundaries. No compiler or simulator subprocess runs here; use compile_source_build and tools/test_domain_endpoint_packets.py afterward.".
+-doc "Writes a fresh standalone router bundle, real source classes and finite expected pin vectors. Four DATA/four ACK offers cover fairness, held selection, receive independence, exact identity routing, canonical rejection and sticky fault boundaries. No compiler or simulator subprocess runs here; use compile_source_build and tools/hls_fabric/test_domain_endpoint_packets.py afterward.".
 -spec write(file:filename()) -> map().
 write(Directory) ->
     Config = fixture(),
@@ -34,7 +34,7 @@ write(Directory) ->
 %% Source-derived codecs are shared across synthetic routes without recompiling the full application.
 -spec fixture() -> hls_domain_endpoint_packets:config().
 fixture() ->
-    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", [], hls_frame_layout:new(20)),
+    Program = xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl", [], hls_frame_layout:new(20)),
     Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}} || Tag <- [unaligned, small]],
     #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
     Classes = [#{slot => I, codec => hls_protocol_codec_plan:plan(Channel, Operation)}
@@ -56,7 +56,7 @@ fixture() ->
 %% Retain the source capture fixture, native binding declaration and witness reference beside the bundle.
 -spec sources() -> hls_generated_files:files().
 sources() -> maps:from_list([begin {ok, Bytes} = file:read_file(Path), {"evidence/native/" ++ Name, Bytes} end
-    || {Name, Path} <- [{"hls_protocol_capture_fixture.erl", filename:absname("test/hls_protocol_capture_fixture.erl")},
+    || {Name, Path} <- [{"hls_protocol_capture_fixture.erl", filename:absname("apps/hls_fabric/test/hls_protocol_capture_fixture.erl")},
         {"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_fabric), "include", "hls_domain_channel_endpoints.hrl"])},
         {"hls_domain_endpoint_packets_validation.erl", filename:absname(?FILE)}]]).
 

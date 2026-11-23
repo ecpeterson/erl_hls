@@ -235,8 +235,8 @@ record_form(Line, [{dot, Anno} | Rest], Acc) ->
     end;
 record_form(Line, [Token | Rest], Acc) -> record_form(Line, Rest, [Token | Acc]).
 
-%% Guarded assertion macro arguments are legal after expansion but not ordinary
-%% expressions. Recover only function structure; retain raw tokens for its digest.
+%% Recover assertion-bearing functions and map-field-splicing types without
+%% expanding macros. Raw declaration tokens remain the fingerprint authority.
 -spec recover_macros(string(), [erl_syntax:syntaxTree()], [erl_scan:token()]) ->
     {[erl_syntax:syntaxTree()], [integer()]}.
 recover_macros(Path, Forms, Tokens) ->
@@ -249,16 +249,133 @@ recover_macros(Path, Forms, Tokens) ->
             lists:mapfoldl(fun(Form, RawLines) ->
                 case erl_syntax:type(Form) of
                     error_marker ->
-                        [First | _] = source_tokens(line(Form), Tokens, []),
+                        FormTokens = [First | _] = source_tokens(line(Form), Tokens, []),
                         Start = erl_anno:line(element(2, First)),
                         case maps:find(Start, Functions) of
                             {ok, Function} -> {Function, [Start | RawLines]};
-                            error -> {Form, RawLines}
+                            error ->
+                                case recover_map_type(FormTokens) of
+                                    {ok, Type} -> {Type, [Start | RawLines]};
+                                    error -> {Form, RawLines}
+                                end
                         end;
                     _ -> {Form, RawLines}
                 end
             end, [], Forms)
     end.
+
+%% A field splice is opaque, but the surrounding type must still parse normally.
+%% Restrict recovery to type attributes; never reinterpret a function or a spec.
+-spec recover_map_type([erl_scan:token()]) -> {ok, erl_syntax:syntaxTree()} | error.
+recover_map_type(Tokens = [{'-', _}, {atom, _, Kind} | _]) when Kind =:= type; Kind =:= opaque ->
+    case map_field_macros(Tokens, [], [], false) of
+        {ok, Rewritten, true} ->
+            case erl_parse:parse_form(Rewritten) of
+                {ok, Type = {attribute, _, Kind, {_, _, _}}} -> {ok, Type};
+                _ -> error
+            end;
+        _ -> error
+    end;
+recover_map_type(Tokens) -> recover_map_definition(Tokens).
+
+%% Field-fragment definitions contain no declarations, but their complete body
+%% must parse as map fields before the unsupported preprocessor form is ignored.
+-spec recover_map_definition([erl_scan:token()]) -> {ok, erl_syntax:syntaxTree()} | error.
+recover_map_definition([{'-', Anno}, {atom, _, define}, {'(', _}, Name | Rest])
+        when element(1, Name) =:= atom; element(1, Name) =:= var ->
+    case macro_definition_body(Rest) of
+        {ok, Body} ->
+            Head = [{'-', Anno}, {atom, Anno, type}, {atom, Anno, source_contract_macro_fields},
+                    {'(', Anno}, {')', Anno}, {'::', Anno}, {'#', Anno}, {'{', Anno}],
+            Wrapped = Head ++ Body ++ [{'}', Anno}, {dot, Anno}],
+            case map_field_macros(Wrapped, [], [], false) of
+                {ok, Rewritten, _} ->
+                    case erl_parse:parse_form(Rewritten) of
+                        {ok, {attribute, _, type, _}} ->
+                            {ok, erl_syntax:set_pos(erl_syntax:attribute(erl_syntax:atom(define), []), Anno)};
+                        _ -> error
+                    end;
+                _ -> error
+            end;
+        error -> error
+    end;
+recover_map_definition(_) -> error.
+
+%% Retain only a balanced fragment after a literal macro name and variable parameters.
+-spec macro_definition_body([erl_scan:token()]) -> {ok, [erl_scan:token()]} | error.
+macro_definition_body([{',', _} | Tail]) ->
+    case lists:reverse(Tail) of
+        [{dot, _}, {')', _} | Body] -> {ok, lists:reverse(Body)};
+        _ -> error
+    end;
+macro_definition_body([{'(', _}, {')', _}, {',', _} = Comma | Tail]) -> macro_definition_body([Comma | Tail]);
+macro_definition_body([{'(', _} | Tail]) -> macro_definition_parameters(Tail);
+macro_definition_body(_) -> error.
+
+%% Macro formal parameters are variables, not expressions or expanded tokens.
+-spec macro_definition_parameters([erl_scan:token()]) -> {ok, [erl_scan:token()]} | error.
+macro_definition_parameters([{var, _, _}, {')', _}, {',', _} = Comma | Tail]) -> macro_definition_body([Comma | Tail]);
+macro_definition_parameters([{var, _, _}, {',', _} | Tail]) -> macro_definition_parameters(Tail);
+macro_definition_parameters(_) -> error.
+
+%% Delimiter state distinguishes whole map fields from macro-valued keys/types.
+%% Only a macro followed by a field delimiter can replace one complete field.
+-spec map_field_macros([erl_scan:token()], [atom()], [erl_scan:token()], boolean()) ->
+    {ok, [erl_scan:token()], boolean()} | error.
+map_field_macros([], [], Acc, Changed) -> {ok, lists:reverse(Acc), Changed};
+map_field_macros([], _, _, _) -> error;
+map_field_macros([{'?', Anno}, Name | Rest], [map_field | Stack], Acc, _Changed)
+        when element(1, Name) =:= var; element(1, Name) =:= atom ->
+    case macro_tail(Rest) of
+        {ok, Tail = [{Delimiter, _} | _]} when Delimiter =:= ','; Delimiter =:= '}' ->
+            Field = [{atom, Anno, source_contract_macro_field}, {'=>', Anno},
+                     {atom, Anno, term}, {'(', Anno}, {')', Anno}],
+            map_field_macros(Tail, [map_body | Stack], lists:reverse(Field, Acc), true);
+        _ -> error
+    end;
+map_field_macros([{'#', _} = Hash, {'{', _} = Open | Rest], Stack, Acc, Changed) ->
+    map_field_macros(Rest, [map_field | consume_map_field(Stack)], [Open, Hash | Acc], Changed);
+map_field_macros([{',', _} = Comma | Rest], [Map | Stack], Acc, Changed)
+        when Map =:= map_field; Map =:= map_body ->
+    map_field_macros(Rest, [map_field | Stack], [Comma | Acc], Changed);
+map_field_macros([{'}', _} = Close | Rest], [Map | Stack], Acc, Changed)
+        when Map =:= map_field; Map =:= map_body ->
+    map_field_macros(Rest, Stack, [Close | Acc], Changed);
+map_field_macros([Token | Rest], Stack, Acc, Changed) ->
+    case delimiter(element(1, Token), consume_map_field(Stack)) of
+        error -> error;
+        Next -> map_field_macros(Rest, Next, [Token | Acc], Changed)
+    end.
+
+%% Consuming any ordinary token fixes this position as an explicit map field.
+-spec consume_map_field([atom()]) -> [atom()].
+consume_map_field([map_field | Rest]) -> [map_body | Rest];
+consume_map_field(Stack) -> Stack.
+
+%% Parentheses belong to a parameterized macro only immediately after its name.
+-spec macro_tail([erl_scan:token()]) -> {ok, [erl_scan:token()]} | error.
+macro_tail([{'(', _} | Rest]) -> macro_arguments(Rest, [')']);
+macro_tail(Rest) -> {ok, Rest}.
+
+%% Balance lexical argument delimiters without evaluating or interpreting tokens.
+-spec macro_arguments([erl_scan:token()], [atom()]) -> {ok, [erl_scan:token()]} | error.
+macro_arguments([], _) -> error;
+macro_arguments([Token | Rest], Stack) ->
+    case delimiter(element(1, Token), Stack) of
+        [] -> {ok, Rest};
+        error -> error;
+        Next -> macro_arguments(Rest, Next)
+    end.
+
+%% Mismatched nesting is a parse error, including inside the opaque macro call.
+-spec delimiter(atom(), [atom()]) -> [atom()] | error.
+delimiter('(', Stack) -> [')' | Stack];
+delimiter('[', Stack) -> [']' | Stack];
+delimiter('{', Stack) -> ['}' | Stack];
+delimiter('<<', Stack) -> ['>>' | Stack];
+delimiter(Close, [Close | Rest]) when Close =:= ')'; Close =:= ']'; Close =:= '}'; Close =:= '>>' -> Rest;
+delimiter(Close, _) when Close =:= ')'; Close =:= ']'; Close =:= '}'; Close =:= '>>' -> error;
+delimiter(_, Stack) -> Stack.
 
 %% Never lose macro argument changes when only the outer declaration parsed.
 -spec fingerprint_form(erl_syntax:syntaxTree(), map()) -> binary().

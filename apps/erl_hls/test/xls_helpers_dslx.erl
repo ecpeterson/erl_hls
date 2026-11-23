@@ -4,7 +4,7 @@
 -doc "Writes helper-lowering DSLX tests, BEAM-derived RTL vectors and type-rejection fixtures into an existing staging directory. Raises on source or file errors; does not execute generated tests.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Forms0} = epp:parse_file("test/xls_helpers_fixture.erl", [], []),
+    {ok, Forms0} = epp:parse_file("apps/erl_hls/test/xls_helpers_fixture.erl", [], []),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{factored, 3}, {inline, 3}]),
     Declarations = ["enum Tag : u8 { CELL = 0, REPORT = 1 }\n",
         xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),

@@ -124,8 +124,8 @@ fetch_stage="$local_stage/fetched-rtl"
 mkdir "$fetch_stage"
 
 echo "Preparing a fresh regsvc XLS stage"
-"$project_root/tools/prepare_xls_sim.sh" "$local_stage"
-cp "$project_root/tools/remote_xls_sim.sh" \
+"$project_root/tools/hls_fabric/prepare_xls_sim.sh" "$local_stage"
+cp "$project_root/tools/hls_fabric/remote_xls_sim.sh" \
     "$local_stage/remote_xls_sim.sh"
 
 quoted_remote_root=$(remote_quote "$remote_root")

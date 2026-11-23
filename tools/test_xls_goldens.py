@@ -10,7 +10,7 @@ import unittest
 
 # Checked source artifacts are the public contract of the refresh command.
 ARTIFACTS = {
-    "regsvc.x": "src/examples/regsvc/regsvc.erl.x",
+    "regsvc.x": "apps/erl_hls/src/examples/regsvc/regsvc.erl.x",
 }
 
 
@@ -68,7 +68,7 @@ class GoldenTests(unittest.TestCase):
                 (self.stage / generated).read_bytes(),
                 (self.root / checked).read_bytes(),
             )
-        self.assertFalse((self.root / "test/golden/xls_verilog.sha256").exists())
+        self.assertFalse((self.root / "apps/erl_hls/test/golden/xls_verilog.sha256").exists())
 
     def test_missing_input_preserves_checked_source(self) -> None:
         """Missing generated input must not change the checked source."""

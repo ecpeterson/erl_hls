@@ -43,8 +43,8 @@ preprocessing_context_test() ->
 invalid_build_test() ->
     Output = filename:join("_build", "invalid-topology-" ++
         binary_to_list(binary:encode_hex(crypto:strong_rand_bytes(12), lowercase))),
-    {ok, [Config]} = file:consult("src/examples/telemetry/topology.config"),
-    Sources = [{filename:join("src/examples/telemetry", File), Options}
+    {ok, [Config]} = file:consult("apps/erl_hls/src/examples/telemetry/topology.config"),
+    Sources = [{filename:join("apps/erl_hls/src/examples/telemetry", File), Options}
         || {File, Options} <- maps:get(sources, Config)],
     Build = Config#{sources := Sources},
     Cases = [{#{}, config}, {Build#{unexpected => true}, unknown_options},

@@ -84,4 +84,4 @@ Packets are capped at 1 MiB; handshake reads and socket writes time out after fi
 
 ## Hardware boundary
 
-The service must preserve reply ownership across connections. [Return contexts](return-contexts.md) specify slot lifetime, reply remapping and reset obligations. Implementation structure and follow-ups live in [maintainer notes](../yap/node-implementation.md).
+The service must preserve reply ownership across connections. [Return contexts](return-contexts.md) specify slot lifetime, reply remapping and reset obligations. Implementation structure and follow-ups live in [maintainer notes](../../yap/hls_fabric/node-implementation.md).

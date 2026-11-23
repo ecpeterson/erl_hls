@@ -6,7 +6,7 @@
 -spec write(file:filename(), file:filename()) -> ok.
 write(Compiler, Stage) ->
     ok = file:make_dir(Stage),
-    Cases = [{plain, "test/hls_local_actor_fixture.erl"},
+    Cases = [{plain, "apps/hls_fabric/test/hls_local_actor_fixture.erl"},
         {scalar, filename:join(Compiler, "test_data/hls_statem_reduction_lower_fixture.erl")},
         {gather, filename:join(Compiler, "test_data/xls_statem_gather_fixture.erl")},
         {gather_sites, filename:join(Compiler, "test_data/xls_statem_gather_sites_fixture.erl")}],

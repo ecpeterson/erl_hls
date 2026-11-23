@@ -35,7 +35,7 @@ compatibility scaffolding for an obsolete internal format.
 - Keep unchanged fields local. Compose updates through the selected row or bank; make write priority and forwarding explicit.
 - Expose established tags, bounds and ownership to the compiler. Retain checks wherever their preconditions are not established.
 - Preregister component area and cycle budgets. Synthesize representative row counts and producer fan-in before full integration.
-- Locality may spend LUTs on local storage, decode or replication. Evaluate that cost against routed timing and one cumulative whole-device budget; area neutrality is not a universal exploration gate. Apply the [campaign cost policy](yap/physical-architecture-options.md#routing-and-area-policy) to decoder experiments.
+- Locality may spend LUTs on local storage, decode or replication. Evaluate that cost against routed timing and one cumulative whole-device budget; area neutrality is not a universal exploration gate. Apply the [campaign cost policy](../../yap/hls_fabric/physical-architecture-options.md#routing-and-area-policy) to decoder experiments.
 - Use IR to check dependencies, mapped area to screen capacity, and measured cycles × routed period to judge throughput. Retain the original baseline and rejected results.
 
 ## Experimental formats and generated files
@@ -43,7 +43,7 @@ compatibility scaffolding for an obsolete internal format.
 - Replace obsolete internal formats directly unless compatibility is an
   explicit requirement; do not add deprecation machinery by default.
 - Keep compact generated DSLX beside its source when it is useful in review.
-- Keep measurement outputs outside the repository, under `HLS_ARTIFACT_ROOT` (by default the sibling `hls_artifacts/` directory). Keep generators, frozen regression inputs and small parser fixtures in source control. `_build/` is disposable. See [artifact storage](docs/artifacts.md).
+- Keep measurement outputs outside the repository, under `HLS_ARTIFACT_ROOT` (by default the sibling `hls_artifacts/` directory). Keep generators, frozen regression inputs and small parser fixtures in source control. `_build/` is disposable. See [artifact storage](../../docs/hls_fabric/artifacts.md).
 
 ## Roadmap and other working notes
 

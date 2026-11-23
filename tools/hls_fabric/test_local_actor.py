@@ -56,7 +56,7 @@ def main() -> None:
     options = stage / 'options.term'
     options.write_text('[].\n')
     target = stage / 'actor.x'
-    command = ['bash', 'tools/emit_local_actor.sh', 'test/hls_local_actor_fixture.erl', options, target]
+    command = ['bash', 'tools/hls_fabric/emit_local_actor.sh', 'apps/hls_fabric/test/hls_local_actor_fixture.erl', options, target]
     run(command, stage, 'single')
     standalone = manifest(target)
     original = {p: p.read_bytes() for p in [target, Path(str(target) + '.json')]}
@@ -75,7 +75,7 @@ def main() -> None:
     run(command[:2] + [stage / 'absent.erl', options, missing], stage, 'missing-source', False)
     assert not missing.exists() and not Path(str(missing) + '.json').exists()
     config = stage / 'transport.config'
-    config.write_text('#{sources => [{"test/hls_protocol_capture_fixture.erl",[]},{"test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
+    config.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_capture_fixture.erl",[]},{"apps/hls_fabric/test/hls_protocol_transport_topology.erl",[]}],topology => {hls_protocol_transport_topology,topology,[]},actor_limit => 3}.\n')
     transport = stage / 'transport'
     # The public CLI emits a source bundle only; RTL checks run in the transport suite.
     run(emit_command('transport', config, transport), stage, 'transport',

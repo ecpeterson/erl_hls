@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools/hls_fabric'))
 from backend_paths import application_directory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

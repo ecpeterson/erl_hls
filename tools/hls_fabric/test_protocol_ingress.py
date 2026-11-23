@@ -15,8 +15,8 @@ from test_local_protocol import prove
 
 def configuration(path: Path) -> None:
     """Use two recipients and a real source relay through the public source build."""
-    path.write_text('#{sources => [{"test/hls_protocol_ingress_fixture.erl",[]},'
-        '{"test/hls_protocol_startup_peer.erl",[]}],topology => '
+    path.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_ingress_fixture.erl",[]},'
+        '{"apps/hls_fabric/test/hls_protocol_startup_peer.erl",[]}],topology => '
         '{hls_protocol_ingress_fixture,topology,[]},actor_limit => 3}.\n')
 
 
@@ -34,7 +34,7 @@ def simulate(fixture: Path, stage: Path, core: Path | None = None, reject: bool 
         lines += [f'assign {name}_ready=ready[{i}];',f'assign valid[{i}]={name}_valid;',f'assign data[{i}]={name}_data;']
     faults=[p['name'] for p in manifest['outputs'] if p['name'].startswith('actor_')]
     lines += ['wire [50:0] faults={'+','.join(faults)+'};','protocol_network dut('+','.join(connections)+');']
-    bench=stage/'bench.sv';bench.write_text((ROOT/'test/rtl/protocol_ingress_tb.sv').read_text().replace('@@WIRING@@','\n'.join(lines)))
+    bench=stage/'bench.sv';bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_ingress_tb.sv').read_text().replace('@@WIRING@@','\n'.join(lines)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,core or fixture/'network/core.v',
          fixture/'network/protocol_network.sv'],stage,'compile')
     with (stage/'simulate.log').open('x') as log:
@@ -67,7 +67,7 @@ def properties(xls: Path, fixture: Path, stage: Path) -> None:
     imports=[fixture/'network',fixture/'actors',fixture/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric']
     converter=[xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
                '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib')]
-    run([*converter,ROOT/'test/protocol_ingress_properties.x'],stage,'properties-convert',raw)
+    run([*converter,ROOT/'apps/hls_fabric/test/protocol_ingress_properties.x'],stage,'properties-convert',raw)
     results=[prove(args,stage,raw,'protocol_ingress_properties',name,name!='wrong_retirement')
              for name in ['retirement','admission','reset_cancels','malformed','wrong_retirement']]
     cut=stage/'host_cut.x';cut_ir=stage/'host_cut.ir'
@@ -112,7 +112,7 @@ def main() -> None:
     parser.add_argument('xls',type=lambda p:Path(p).resolve())
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();config=stage/'fixture.config';configuration(config)
-    fixture=stage/'fixture';run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    fixture=stage/'fixture';run(['bash','tools/hls_fabric/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
     fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage);negative_wiring(args.xls,fixture,stage);properties(args.xls,fixture,stage);area(fixture,stage)
     (stage/'result.json').write_text(json.dumps({'passed':True,'complete_incarnations':2,'reset_interruptions':3,

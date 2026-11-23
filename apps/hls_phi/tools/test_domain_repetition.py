@@ -9,7 +9,7 @@ from pathlib import Path
 from backend_commands import digest, run
 from backend_paths import ROOT, erlang_paths
 from domain_endpoint_network_witness import compile_adapter as compile_network_adapter
-from test_protocol_repetition import compare
+from protocol_repetition_result import compare
 
 
 def adapter_source(bundle: Path, stage: Path) -> Path:
@@ -41,7 +41,7 @@ def adapter_source(bundle: Path, stage: Path) -> Path:
     source = stage / "phi-domain-repetition.cpp"
     source.write_text(text)
     for name in ("framed_fifo_endpoint.h", "framed_fifo_stream.h", "framed_fifo_control.h"):
-        shutil.copyfile(ROOT / "test/rtl" / name, stage / name)
+        shutil.copyfile(ROOT / "apps/hls_fabric/test/rtl" / name, stage / name)
     return source
 
 

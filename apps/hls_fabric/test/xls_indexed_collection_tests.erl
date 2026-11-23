@@ -23,7 +23,7 @@ reserved_startup_test() ->
 %% Only a sole reserved tag is made literal; multiple tags preserve the selected frame.
 -spec selected_frame_codegen_test() -> ok.
 selected_frame_codegen_test() ->
-    Spec = (xls_parse:actor_artifact("test/hls_indexed_adapter_fixture.erl", []))#{gather_collection => true},
+    Spec = (xls_parse:actor_artifact("apps/hls_fabric/test/hls_indexed_adapter_fixture.erl", []))#{gather_collection => true},
     #{gathers := Gathers = #{sites := [Site = #{contributions := [Contribution]}]},
         message_words := Words} = Spec,
     Single = iolist_to_binary(xls_dslx:render(xls_indexed_collection_codegen:helpers(Spec))),

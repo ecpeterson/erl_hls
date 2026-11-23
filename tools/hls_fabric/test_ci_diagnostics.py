@@ -55,7 +55,7 @@ class DiagnosticsTests(unittest.TestCase):
 
     def test_workflow_upload_policy(self) -> None:
         """Every workflow upload is bounded and gated on failure or explicit opt-in."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         for path in (root / ".github/workflows").glob("*.yml"):
             text = path.read_text()
             self.assertNotIn("uses: actions/upload-artifact@", text, path)

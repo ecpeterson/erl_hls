@@ -9,7 +9,7 @@ import subprocess
 from backend_commands import digest, execute
 from compiler_paths import compiler_root, compiler_tool
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def wrapper() -> str:

@@ -82,7 +82,7 @@ def check_provider_initializers(xls: Path, stage: Path, paths: str, public: Path
                                 json.dumps(str(providers.parent/'include'))+'},{i,'+json.dumps(str(providers))+'}].\n')
     for role in ['phi_line_cell', 'phi_halo_cell']:
         generated = stage/(role+'.x')
-        run(['escript', 'tools/emit_local_actor.escript', providers/(role+'.erl'),
+        run(['escript', 'tools/hls_fabric/emit_local_actor.escript', providers/(role+'.erl'),
              provider_options, generated], stage, role+'-emit', env=erlang_environment('default', compiler=public))
         run([xls/'ir_converter_main', '--top=local_owner_clock',
              '--warnings_as_errors=false', '--dslx_path='+paths+':'+str(providers),
@@ -109,28 +109,28 @@ def main() -> None:
     common = ['--warnings_as_errors=false', '--dslx_path='+paths,
               '--dslx_stdlib_path='+str(args.xls/'xls/dslx/stdlib')]
     batch_source = stage/'batch.erl'
-    batch_source.write_text((ROOT/'test/hls_local_actor_fixture.erl').read_text().replace(
+    batch_source.write_text((ROOT/'apps/hls_fabric/test/hls_local_actor_fixture.erl').read_text().replace(
         '-hls_outputs([result]).', '-hls_outputs([result, extra]).').replace(
         '{cast, result, #total{value = Value}}',
         '{cast, result, #total{value = Value}}, {cast, extra, #total{value = Value + 100}}'))
     cases = [('batch', batch_source, PLAIN.replace('w.emitted, u32:2', 'w.emitted, u32:4')),
-             ('plain', ROOT/'test/hls_local_actor_fixture.erl', PLAIN),
+             ('plain', ROOT/'apps/hls_fabric/test/hls_local_actor_fixture.erl', PLAIN),
              ('scalar', public/'test_data/hls_statem_reduction_lower_fixture.erl', SCALAR),
              ('gather', public/'test_data/xls_statem_gather_fixture.erl', GATHER)]
     cases = [case for case in cases if case[0] in args.cases]
     for name, source, fixture in cases:
         generated = stage/(name+'.x')
-        run(['escript', 'tools/emit_local_actor.escript', source, options, generated], stage, name+'-emit',
+        run(['escript', 'tools/hls_fabric/emit_local_actor.escript', source, options, generated], stage, name+'-emit',
             env=erlang_environment('default', compiler=public))
         test = stage/(name+'_test.x')
-        test.write_bytes(generated.read_bytes() + (ROOT/'test/local_owner_semantics.x.in').read_bytes().replace(b'@@FIXTURE@@', fixture.encode()))
+        test.write_bytes(generated.read_bytes() + (ROOT/'apps/hls_fabric/test/local_owner_semantics.x.in').read_bytes().replace(b'@@FIXTURE@@', fixture.encode()))
         run([args.xls/'interpreter_main', '--evaluator=ir-jit', '--compare=none', *common, test], stage, name+'-witness')
-        run(['python3', 'tools/compile_local_actor.py', '--erl-hls', public, args.xls, generated, stage/(name+'-rtl')],
+        run(['python3', 'tools/hls_fabric/compile_local_actor.py', '--erl-hls', public, args.xls, generated, stage/(name+'-rtl')],
             stage, name+'-rtl-build')
     for name, _, _ in cases:
         role = {'plain':0, 'scalar':1, 'gather':2, 'batch':3}[name]
         run(['iverilog', '-g2012', '-s', 'tb', '-Ptb.ROLE='+str(role), '-o', stage/(name+'-sim'),
-             stage/(name+'-rtl/actor.v'), ROOT/'test/rtl/local_owner_tb.sv'], stage, name+'-rtl-compile')
+             stage/(name+'-rtl/actor.v'), ROOT/'apps/hls_fabric/test/rtl/local_owner_tb.sv'], stage, name+'-rtl-compile')
         run(['vvp', stage/(name+'-sim')], stage, name+'-rtl-sim')
         assert 'LOCAL_OWNER_PASS' in (stage/(name+'-rtl-sim.log')).read_text()
     check_provider_initializers(args.xls, stage, paths, public)

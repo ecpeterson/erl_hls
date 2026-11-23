@@ -14,7 +14,7 @@ import subprocess
 import time
 from backend_paths import erlang_paths, erlang_environment
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(public: Path, rtl: Path, stage: Path, carrier: str) -> None:
@@ -27,7 +27,7 @@ def run(public: Path, rtl: Path, stage: Path, carrier: str) -> None:
         raise RuntimeError('regsvc RTL does not match the pinned public golden')
     stage.mkdir(parents=True, exist_ok=False)
     (stage / 'rtl-sha256.json').write_text(json.dumps(hashes, sort_keys=True, indent=2) + '\n')
-    sources = [ROOT / 'test/rtl/device_services_tb.sv', ROOT / 'test/rtl/hls_device_services.sv',
+    sources = [ROOT / 'apps/hls_fabric/test/rtl/device_services_tb.sv', ROOT / 'apps/hls_fabric/test/rtl/hls_device_services.sv',
                ROOT / 'apps/hls_lowering/priv/rtl/hls_return_routes.v',
                public / 'src/examples/regsvc/regsvc_core_adapter.v',
                public / 'src/examples/regsvc/regsvc_debug_top.v',

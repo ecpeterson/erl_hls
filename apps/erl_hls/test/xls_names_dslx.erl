@@ -6,16 +6,16 @@
 write(Stage) ->
     Grid = [0, 1, 2, 7, 16#7fffffff, 16#80000000, 16#fffffffe, 16#ffffffff],
     Cases = [{A, B, expected(A, B)} || A <- Grid, B <- Grid],
-    {ok, Semantics} = file:read_file("test_data/hls_names_semantics.inc.x"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/hls_names_semantics.inc.x"),
     ok = file:write_file(filename:join(Stage, "names.x"), [
-        xls_parse:to_xls("test/xls_names_fixture.erl"),
+        xls_parse:to_xls("apps/erl_hls/test/xls_names_fixture.erl"),
         Semantics, "#[test]\nfn beam_reduction_and_codecs() {\n",
         [io_lib:format("assert_eq(probe(u32:~B, u32:~B), bits[104]:~B);\n", [A, B, E])
             || {A, B, E} <- Cases], "}\n"]),
     ok = file:write_file(filename:join(Stage, "names_tb.sv"), testbench(Cases)),
     %% Type-check both actor service modes and the hls_gs callback codec calls.
     ok = file:write_file(filename:join(Stage, "ordinary.x"),
-        xls_parse:to_xls("test/xls_names_fixture.erl")),
+        xls_parse:to_xls("apps/erl_hls/test/xls_names_fixture.erl")),
     ok = file:write_file(filename:join(Stage, "gs.x"), gs()),
     ok.
 
@@ -38,7 +38,7 @@ expected(A, B) ->
 %% Emits a mixed-case server and reply checks, rendering lowered callback syntax at the file boundary.
 -spec gs() -> iodata().
 gs() ->
-    [xls_parse:to_xls("test/xls_names_gs_fixture.erl"),
+    [xls_parse:to_xls("apps/erl_hls/test/xls_names_gs_fixture.erl"),
         "pub fn probe(value: u32) -> u32 {\n",
         "  let state = Machine { data: ServerData { Value: value }, enter_pending: false, ..initial_machine() };\n",
         "  let frame = axis::pack(Tag::GET_VALUE as u8, u32:0);\n",

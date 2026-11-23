@@ -34,7 +34,7 @@ Each shared scheduler carries an XLS token beside its metadata in proc state. In
 
 Tokens have no payload bits; this is a scheduling constraint, with no additional request queue or RAM port. At II=1, XLS must place the write-to-next-read recurrence within one initiation interval, so consecutive activations can still issue on consecutive clocks. RAM responses and actor execution remain pipelined. In-flight actor exclusion and mailbox admission rules prevent a conflicting same-row read and write within one activation. The physical schedule can affect area and timing, which must be measured for the chosen pipeline depth.
 
-`tools/test_actor_debug.sh XLS_ROOT STAGE mailbox` exercises postponement, backpressure, and recovery at two, three, and four XLS stages through scoped `hls_debug:info` queries. It saves all actor snapshots before checking expectations, including when a check fails.
+`tools/hls_fabric/test_actor_debug.sh XLS_ROOT STAGE mailbox` exercises postponement, backpressure, and recovery at two, three, and four XLS stages through scoped `hls_debug:info` queries. It saves all actor snapshots before checking expectations, including when a check fails.
 
 ## Reset
 
@@ -42,13 +42,13 @@ Hardware reset starts a new execution: direct actor state is restored, scheduler
 
 Reset must cover the actor's surrounding topology and transport control. An interrupted frame, pending reply, or debug query cannot be continued across that boundary. Establish a new host session after an interrupted transaction; see the [transport reset contract](https://github.com/ecpeterson/erl_hls/blob/main/docs/debug-protocol.md). Resetting one actor independently of peers and in-flight traffic is not a supported recovery protocol.
 
-Run `bash tools/test_initialization.sh XLS_ROOT [STAGE]` for the regression. It compares public BEAM replies with DSLX/JIT values and generated RTL at two schedules per fixture: one/two stages for direct services, two/three for shared RAM-backed services. The RTL tests cover nonzero state, zero defaults, a nonfirst initial phase, silent initial-entry updates, per-instance topology startup, mutations, output stalls, reset during RAM initialization, and reset after a reply becomes pending. The shared fixture uses production RAMs without a reset input. Negative fixtures require a supported failing initializer to be rejected by both BEAM and XLS.
+Run `bash tools/hls_fabric/test_initialization.sh XLS_ROOT [STAGE]` for the regression. It compares public BEAM replies with DSLX/JIT values and generated RTL at two schedules per fixture: one/two stages for direct services, two/three for shared RAM-backed services. The RTL tests cover nonzero state, zero defaults, a nonfirst initial phase, silent initial-entry updates, per-instance topology startup, mutations, output stalls, reset during RAM initialization, and reset after a reply becomes pending. The shared fixture uses production RAMs without a reset input. Negative fixtures require a supported failing initializer to be rejected by both BEAM and XLS.
 
 The optional debug integration check also blocks the shared fixture's output and queries FIFO depths through the production debug endpoint. It checks that wait inspection reaches the external sink and observes recovery after release, while instrumentation preserves application outputs cycle by cycle:
 
 ```sh
-source tools/backend_env.sh test
-python3 tools/test_topology_debug_integration.py \
+source tools/hls_fabric/backend_env.sh test
+python3 tools/hls_fabric/test_topology_debug_integration.py \
   --top init_shared_wrapper --stage _build/initialization/debug \
   _build/initialization/init_shared_2.v \
   _build/initialization/init_shared_wrapper.v "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"

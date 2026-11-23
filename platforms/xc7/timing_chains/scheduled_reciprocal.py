@@ -32,7 +32,7 @@ def main() -> None:
     parser.add_argument('--stages', type=int, choices=(2, 3), default=2)
     parser.add_argument('--fabric-registers', action='store_true')
     args = parser.parse_args()
-    sys.path.insert(0, str(ROOT / 'tools'))
+    sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
     from compiler_paths import compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     stage = args.stage

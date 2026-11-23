@@ -170,8 +170,8 @@ write_stream(Bundle) ->
 %% Both finite witnesses retain the identical source topology, placement and codec capacity.
 -spec configuration() -> {hls_source_config:network(), hls_protocol_domains:placement()}.
 configuration() ->
-    Config = #{sources => [{"test/hls_cross_domain_producer.erl", []},
-        {"test/hls_cross_domain_consumer.erl", []}, {"test/hls_domain_counter.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_cross_domain_producer.erl", []},
+        {"apps/hls_fabric/test/hls_cross_domain_consumer.erl", []}, {"apps/hls_fabric/test/hls_domain_counter.erl", []}],
         topology => {hls_cross_domain_producer, topology, []}, actor_limit => 3,
         control => rectangle, activation => automatic, frame_payload_words => 20},
     Placement = #{domains => [{a, [0]}, {b, [1]}, {c, [2]}], restart_groups => [[a, b], [c]]},

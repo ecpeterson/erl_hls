@@ -35,23 +35,23 @@ def main() -> None:
         (args.stage / 'times.json').write_text(json.dumps(times, indent=2) + '\n')
 
     # Shared public-port FIFO mechanics need no generated hardware or decoder workload.
-    command('clocked-controllers', [sys.executable, 'tools/test_clocked_controllers.py',
+    command('clocked-controllers', [sys.executable, 'tools/hls_fabric/test_clocked_controllers.py',
         args.xls, args.stage / 'clocked-controllers'])
     fifo_test = args.stage / 'fifo-stream-test'
     command('fifo-stream-compile', ['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
-        ROOT / 'test/rtl/framed_fifo_stream_test.cpp', '-o', fifo_test])
+        ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_stream_test.cpp', '-o', fifo_test])
     command('fifo-stream', [fifo_test, args.stage / 'fifo-stream'], timeout=30)
     for name in ['effect_window', 'frame_queue', 'indexed_gather_ram', 'mailbox', 'scheduler', 'scheduler_observation']:
         command(name, [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none', '--max_ticks=1000', *options,
                        ROOT / 'apps/hls_lowering/priv/xls/lib' / (name + '.x')])
     command('retained-mux', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
-        '--compare=none', '--max_ticks=1000', *options, ROOT / 'test/xls/retained_mux_test.x'])
+        '--compare=none', '--max_ticks=1000', *options, ROOT / 'apps/hls_fabric/test/xls/retained_mux_test.x'])
     command('transport-envelopes', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
-        '--compare=none', *options, ROOT / 'test/xls/protocol_envelope_test.x'])
+        '--compare=none', *options, ROOT / 'apps/hls_fabric/test/xls/protocol_envelope_test.x'])
     command('bridge-transitions', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
-        '--compare=none', *options, ROOT / 'test/rtl/protocol_bridge_transitions.x'])
+        '--compare=none', *options, ROOT / 'apps/hls_fabric/test/rtl/protocol_bridge_transitions.x'])
     # Ordinary frame capacity is shared by codec bits, serialization and packed lane storage.
-    command('frame-codecs', ['bash', 'tools/test_protocol_codecs.sh', args.xls,
+    command('frame-codecs', ['bash', 'tools/hls_fabric/test_protocol_codecs.sh', args.xls,
         args.stage / 'frame-codecs', 'layouts'])
     for words in [1, 9]:
         capacity = args.stage / ('frame-words' + str(words))
@@ -80,16 +80,16 @@ def main() -> None:
                  'projected', 'projected_empty']:
         command('machine-row-' + name, [args.xls / 'interpreter_main', '--evaluator=ir-jit',
             '--compare=none', *options, rows / (name + '.x')])
-    command('execution', ['bash', 'tools/test_local_execution.sh', args.xls, args.stage / 'execution'])
-    command('receipt-contracts', [sys.executable, 'tools/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
+    command('execution', ['bash', 'tools/hls_fabric/test_local_execution.sh', args.xls, args.stage / 'execution'])
+    command('receipt-contracts', [sys.executable, 'tools/hls_fabric/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
     shapes(args.xls, args.stage / 'inspection-shapes')
     command('trace-probe', [sys.executable, ROOT / 'apps/hls_phi/tools/test_phi_cycle_trace.py', 'CycleTraceTest.test_capture'])
-    command('return-routes', ['bash', 'tools/test_return_routes.sh'])
-    command('async-fifo', [sys.executable, 'tools/test_async_fifo.py', '--stage', args.stage / 'async-fifo'])
-    command('credit-link', [sys.executable, 'tools/test_credit_link.py', args.xls, '--stage', args.stage / 'credit-link'])
+    command('return-routes', ['bash', 'tools/hls_fabric/test_return_routes.sh'])
+    command('async-fifo', [sys.executable, 'tools/hls_fabric/test_async_fifo.py', '--stage', args.stage / 'async-fifo'])
+    command('credit-link', [sys.executable, 'tools/hls_fabric/test_credit_link.py', args.xls, '--stage', args.stage / 'credit-link'])
     # One configuration per framing format, retaining isolation/reset/malformed-frame checks.
     for mode in ['full', 'compact']:
-        command('packed-' + mode, [sys.executable, 'tools/test_packed_credit.py', args.xls,
+        command('packed-' + mode, [sys.executable, 'tools/hls_fabric/test_packed_credit.py', args.xls,
             '--stage', args.stage / ('packed-' + mode), '--configs', '1:4', '--quick',
             *(['--compact'] if mode == 'compact' else [])], timeout=240)
     # Four counters cover shared/singleton/unused egress and independent stalls.
@@ -97,7 +97,7 @@ def main() -> None:
     boundary.mkdir()
     config = boundary / 'fixture.config'
     configuration(config)
-    command('boundary-build', ['bash', 'tools/emit_protocol_boundary.sh', args.xls, config, boundary / 'build'])
+    command('boundary-build', ['bash', 'tools/hls_fabric/emit_protocol_boundary.sh', args.xls, config, boundary / 'build'])
     simulate((boundary / 'build/compiled').resolve(), boundary, expected(boundary))
     # Three actors cover crossing routes, real relay leases and reset-incarnation retirement.
     framed = args.stage / 'framed'

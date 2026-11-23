@@ -19,7 +19,7 @@ statem_oracle(Offset) ->
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
     lists:foreach(fun({Kind, Module}) ->
-        Path = "test/" ++ atom_to_list(Module) ++ ".erl",
+        Path = "apps/hls_fabric/test/" ++ atom_to_list(Module) ++ ".erl",
         X = xls_scheduler_actor:to_xls(Path),
         write(Stage, atom_to_list(Module) ++ ".x", X),
         write(Stage, "init_" ++ atom_to_list(Kind) ++ ".x",
@@ -59,7 +59,7 @@ write(Stage) ->
     write(Stage, "init_shared.x", xls_fabric_topology_dslx:emit(Plan,
         Base#{name => init_shared, scheduler_groups => Groups})),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
-    {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/rtl/xls_init_topology.template.v"),
     lists:foreach(fun({Name, Rams}) ->
         Wrapper = lists:foldl(fun({Pattern, Replacement}, Text) ->
             binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])

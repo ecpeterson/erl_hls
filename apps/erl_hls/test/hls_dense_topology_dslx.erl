@@ -4,7 +4,7 @@
 -doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
-    write(Stage, "hls_dense_statem_fixture.x", xls_parse:to_xls("test/hls_dense_statem_fixture.erl")),
+    write(Stage, "hls_dense_statem_fixture.x", xls_parse:to_xls("apps/erl_hls/test/hls_dense_statem_fixture.erl")),
     Messages = [{configure, false, 7, -256}, {configure, true, 3, 255}],
     Reports = [oracle(Message) || Message <- Messages],
     write(Stage, "dense_expected.svh", [begin
@@ -36,7 +36,7 @@ write(Stage) ->
     write(Stage, "dense_direct.x", xls_topology_dslx:emit(Direct, Base#{name => dense_direct})),
     write(Stage, "dense_family.x", xls_topology_dslx:emit(Family,
         Base#{name => dense_family})),
-    {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
+    {ok, Template} = file:read_file("apps/erl_hls/test/rtl/xls_init_topology.template.v"),
     %% Startup drives both fixtures. Only the family family declares an ingress,
     %% which the wrapper holds idle.
     WithoutIngress0 = binary:replace(Template,

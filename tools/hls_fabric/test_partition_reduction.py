@@ -18,8 +18,8 @@ def main() -> None:
     args = parser.parse_args()
     xls, source, stage = args.xls.resolve(), args.source.resolve(), args.stage.resolve()
     stage.mkdir(parents=True, exist_ok=False)
-    paths = list(source.glob('*.x')) + [ROOT/'test/xls/partition_reduction_probe.x',
-        ROOT/'test/rtl/partition_reduction_tb.sv', Path(__file__)]
+    paths = list(source.glob('*.x')) + [ROOT/'apps/hls_fabric/test/xls/partition_reduction_probe.x',
+        ROOT/'apps/hls_fabric/test/rtl/partition_reduction_tb.sv', Path(__file__)]
     paths += [xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')]
     before = {str(p): digest(p) for p in paths}
     graph = (source/'device_0_graph.x').read_text()
@@ -27,7 +27,7 @@ def main() -> None:
     if collector is None or set(re.findall(r'frame_(\d+):', collector[0])) != {'0', '1', '2', '3'}:
         raise ValueError('expected a generated four-contributor collector')
     body = collector[0].replace(collector[1], 'ReductionCollector')
-    probe = (ROOT/'test/xls/partition_reduction_probe.x').read_text().replace('// GENERATED_COLLECTOR', body)
+    probe = (ROOT/'apps/hls_fabric/test/xls/partition_reduction_probe.x').read_text().replace('// GENERATED_COLLECTOR', body)
     (stage/'reduction_probe.x').write_text(probe)
     execute([str(xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false', f'--dslx_path={source}',
         f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}', 'reduction_probe.x'], stage, 'convert', output=stage/'probe.ir', timeout=120)
@@ -36,7 +36,7 @@ def main() -> None:
         '--flop_outputs=true', '--use_system_verilog=false', '--reset=reset', '--fifo_module=',
         '--module_name=reduction_probe', 'probe.opt.ir'], stage, 'codegen', output=stage/'probe.v', timeout=120)
     execute(['iverilog', '-g2012', '-s', 'partition_reduction_tb', '-o', 'probe.vvp',
-        str(ROOT/'test/rtl/partition_reduction_tb.sv'), 'probe.v'], stage, 'iverilog')
+        str(ROOT/'apps/hls_fabric/test/rtl/partition_reduction_tb.sv'), 'probe.v'], stage, 'iverilog')
     execute(['vvp', 'probe.vvp'], stage, 'simulation')
     result = (stage/'simulation.log').read_text()
     if 'PASS:' not in result or before != {str(p): digest(p) for p in paths}:

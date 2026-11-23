@@ -44,8 +44,8 @@ provider_snapshot() ->
     ok = filelib:ensure_dir(filename:join(Provider, "provider_word.x")),
     try
         ok = file:write_file(filename:join(Provider, "provider_word.x"), Bytes),
-        Config = #{sources => [{"test/hls_domain_counter.erl", []},
-                {"test/hls_domain_relay.erl", []}],
+        Config = #{sources => [{"apps/hls_fabric/test/hls_domain_counter.erl", []},
+                {"apps/hls_fabric/test/hls_domain_relay.erl", []}],
             topology => {hls_domain_counter, topology, []}, actor_limit => 2,
             control => rectangle, dslx_path => [Provider]},
         ConfigFile = filename:join(Root, "config.erl"),

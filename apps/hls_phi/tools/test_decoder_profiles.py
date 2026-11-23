@@ -74,7 +74,7 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     if args.trace:
         for helper in ("compile_xls.py", "compile_phi_decoder_profile.py", "compile_phi_decoder_profile.sh", "backend_build_profile.py", "phi_tool_paths.py"):
             source = (compiler_source(args.erl_hls, "compile_xls") if helper == "compile_xls.py" else
-                      ROOT / "tools" / helper if helper == "backend_build_profile.py" else Path(__file__).with_name(helper))
+                      ROOT / "tools/hls_fabric" / helper if helper == "backend_build_profile.py" else Path(__file__).with_name(helper))
             shutil.copyfile(source, stage / helper)
         for source in ("phi_decoder_profile_tb.sv", "phi_profile_trace.c"):
             shutil.copyfile(ROOT / "apps/hls_phi/test/rtl" / source, stage / source)

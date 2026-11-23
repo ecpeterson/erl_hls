@@ -34,13 +34,13 @@ internal_call_rejected_test() ->
     ?assertError({hls_diagnostic, #{stage := inventory, code := unsupported_internal_call,
         context := #{source := {sender, out}, destination := {actor, cell}, schema := read}}},
         hls_protocol_transport:plan(Config#{actor_limit := 2,
-            sources := [{"test/hls_protocol_call_fixture.erl", []},
-                {"test/hls_protocol_call_sender_fixture.erl", []}]})).
+            sources := [{"apps/hls_fabric/test/hls_protocol_call_fixture.erl", []},
+                {"apps/hls_fabric/test/hls_protocol_call_sender_fixture.erl", []}]})).
 
 %% Both cases compile the same complete source, changing only the declared recipient.
 -spec config(atom()) -> map().
 config(Function) ->
-    #{sources => [{"test/hls_protocol_call_fixture.erl", []}],
+    #{sources => [{"apps/hls_fabric/test/hls_protocol_call_fixture.erl", []}],
         topology => {hls_protocol_call_fixture, Function, []}, actor_limit => 1}.
 
 %% Immediate actors have no retained table, but the bridge owns one in-flight wire identity.

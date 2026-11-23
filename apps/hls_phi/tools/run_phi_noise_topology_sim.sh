@@ -9,7 +9,7 @@ remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-li
 stage_timeout=${ERL_HLS_D3_TIMEOUT:-2h}
 remote_stage="$remote_root/phi_noise_topology"
 
-"$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+"$project_root/tools/hls_fabric/prepare_xls_sim.sh" "$local_stage"
 cp "$project_root/apps/hls_phi/tools/remote_phi_noise_topology_sim.sh" \
     "$local_stage/remote_phi_noise_topology_sim.sh"
 for report in \

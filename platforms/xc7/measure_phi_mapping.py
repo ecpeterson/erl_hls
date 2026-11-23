@@ -50,7 +50,7 @@ def main() -> None:
     parser.add_argument("--profile", default="default")
     parser.add_argument("--jobs", type=int, default=2)
     args = parser.parse_args()
-    sys.path.insert(0, str(HERE.parents[1] / 'tools'))
+    sys.path.insert(0, str(HERE.parents[1] / 'tools/hls_fabric'))
     from compiler_paths import compiler_root, compiler_tool
     public = compiler_root(args.profile, args.erl_hls, HERE.parents[1])
     accounting = compiler_tool(public, 'measure_topology_debug')

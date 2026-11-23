@@ -488,7 +488,7 @@ only a coarse technology-mapping metric.
 
 The raw distance-three baseline and the register-array, relaxation-lane, and
 one-block-RAM scheduler ablations now live in
-[`experiments/08-phi-scheduler`](../../../experiments/08-phi-scheduler/README.md).
+the [historical archive](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/08-phi-scheduler`).
 They are implementation experiments rather than backend components. The most
 complete shared-state witness services this topology's routed ERTS protocol,
 matches every correction and final data-qubit value from the CPU deployment,
@@ -598,7 +598,7 @@ not additional per-actor mailboxes.
 
 ### Distance-three RTL simulation
 
-`tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
+`apps/hls_phi/tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
 regenerates the distance-three DSLX, runs XLS conversion, optimization, and
 Verilog generation on the configured build host, then compiles and runs
 `phi_noise_topology_tb.sv` with Icarus. The cost is deliberately excluded from
@@ -647,7 +647,7 @@ returns row parity one. Run the same fixture through both the CPU realization
 and the checked distance-three gateway with:
 
 ```sh
-tools/run_phi_memory_demo.sh
+apps/hls_phi/tools/run_phi_memory_demo.sh
 ```
 
 Set `ERL_HLS_PHI_NATIVE_ICARUS=1` to keep XLS conversion and code generation
@@ -1171,7 +1171,7 @@ correction feedback and the final data-frame query. Run it with the native XLS
 toolchain as described below:
 
 ```sh
-tools/run_phi_decoder_profile.sh
+apps/hls_phi/tools/run_phi_decoder_profile.sh
 ```
 
 Because the real apparatus supplies syndromes externally, further work should
@@ -1293,7 +1293,7 @@ Run this profile natively with an arm64 XLS distribution:
 
 ```sh
 ERL_HLS_XLS_ROOT=/path/to/xls-darwin-arm64 \
-    tools/run_phi_decoder_profile.sh
+    apps/hls_phi/tools/run_phi_decoder_profile.sh
 ```
 
 The stage worker remains portable to Linux for CI or as a fallback, but the
@@ -1369,7 +1369,7 @@ allows the manager to continue collecting input and returned credit while an
 effect-producing result waits to retire. This changes no mailbox capacity,
 RAM port count, actor callback, or message-order rule.
 
-The manager carries a token from its state and mailbox writes to the following activation's RAM reads, including a reduction's fast issue path. This [RAM ordering dependency](../../../docs/initialization.md#shared-ram-ordering) preserves read-before-write RAM semantics when XLS moves combinational selection and metadata updates between pipeline stages.
+The manager carries a token from its state and mailbox writes to the following activation's RAM reads, including a reduction's fast issue path. This [RAM ordering dependency](../../docs/hls_fabric/execution/initialization.md#shared-ram-ordering) preserves read-before-write RAM semantics when XLS moves combinational selection and metadata updates between pipeline stages.
 
 The isolated phi executor compiles as a two-stage II=1 pipeline. Its
 out-of-context XC7 map reports 1,477 estimated logic cells, 1,021 flip-flops,
@@ -1606,7 +1606,7 @@ run, while both planes preserve the expected 63 X and 64 Z corrections. This
 matches the effective clock rate of PR #66 while using the cleanly separated
 planner, renderer, and actor-artifact interfaces.
 
-`tools/run_phi_decoder_profile.sh` now records a clock-stamped VPI trace and
+`apps/hls_phi/tools/run_phi_decoder_profile.sh` now records a clock-stamped VPI trace and
 renders `phi_decoder_profile.causality.svg`. The standalone SVG places all six
 phi scheduler shards and both source-fragment planes on one clock axis. Solid
 arrows follow observed ordered handshakes and actor-state dependencies; dashed

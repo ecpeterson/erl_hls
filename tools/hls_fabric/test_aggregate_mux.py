@@ -41,7 +41,7 @@ pub proc Top {{
             raise ValueError('aggregate probe did not specialize exactly one mux')
     connections = ',\n'.join(f'._incoming__{i}(frames[{i}]), ._incoming__{i}_vld(valid[{i}]), ._incoming__{i}_rdy(ready[{i}])'
                             for i in range(count))
-    bench = ROOT/'test/rtl/aggregate_mux_tb.sv'
+    bench = ROOT/'apps/hls_fabric/test/rtl/aggregate_mux_tb.sv'
     (stage/'test.sv').write_text(bench.read_text().replace('@@CONNECTIONS@@', connections))
     execute(['iverilog', '-g2012', '-s', 'aggregate_mux_tb', f'-Paggregate_mux_tb.N={count}',
              f'-Paggregate_mux_tb.EXPECTED_NS={0 if shortened else 8}', '-o', str(stage/'test.vvp'),

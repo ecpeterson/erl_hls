@@ -16,7 +16,7 @@ Before native timing results: the measured command cadence is three clocks for d
 
 ## Native result
 
-The [retained native report](../docs/artifacts.md#historical-reports) (`experiments/snowflake/hardware/native-timing/README.md`) completed in 860 seconds. Synthesis/routed setup-derived periods are 15.993/15.764 ns; routed resources are 10,796 LUTs, 7,682 FFs and no DSP/BRAM. The LUT prior was high; the FF prior held. At the requested 8 ns, setup fails by 7.764 ns, while hold/pulse checks and internal timing coverage pass. All nets route; the sole DRC warning is the intentionally absent PS7 block. External I/O remains excluded, so this is not board-clock qualification.
+The [retained native report](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/snowflake/hardware/native-timing/README.md`) completed in 860 seconds. Synthesis/routed setup-derived periods are 15.993/15.764 ns; routed resources are 10,796 LUTs, 7,682 FFs and no DSP/BRAM. The LUT prior was high; the FF prior held. At the requested 8 ns, setup fails by 7.764 ns, while hold/pulse checks and internal timing coverage pass. All nets route; the sole DRC warning is the intentionally absent PS7 block. External I/O remains excluded, so this is not board-clock qualification.
 
 The predicted kernel bottleneck is present: six serial CID compare/select steps feed pointer/activity/busy, with 4.389 ns logic and 11.432 ns routing on the worst path. No sampled worst path implicates the global busy reduction. A distinct 10.524 ns capture-control path already has a 2,592-load enable net, so eliminating the kernel chain would not by itself achieve 8 ns.
 

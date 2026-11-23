@@ -4,7 +4,7 @@
 -doc "Writes bounded-pattern DSLX tests, BEAM-derived RTL vectors, a reduction actor and rejection fixtures into an existing directory. Raises on source or file errors; does not execute generated tests.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Forms0} = epp:parse_file("test/xls_patterns_fixture.erl", [], []),
+    {ok, Forms0} = epp:parse_file("apps/erl_hls/test/xls_patterns_fixture.erl", [], []),
     Names = xls_patterns_fixture:probes(),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{N, 2} || N <- Names]),
     Grid = [{X, [A, B, C]} || X <- [-2, 0, 1, 3], A <- [-1, 0, 2],
@@ -25,7 +25,7 @@ write(Stage) ->
     ok = file:write_file(filename:join(Stage, "patterns.x"), Text),
     ok = file:write_file(filename:join(Stage, "patterns_tb.sv"), testbench(Expected)),
     ok = file:write_file(filename:join(Stage, "list_reduction.x"),
-        xls_parse:to_xls("test_data/hls_list_reduction_fixture.erl")),
+        xls_parse:to_xls("apps/erl_hls/test_data/hls_list_reduction_fixture.erl")),
     write_rejections(Stage).
 
 %% Renders a scalar/list pattern probe with its selected failure kind and zero failure value.

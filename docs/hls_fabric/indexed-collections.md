@@ -17,4 +17,4 @@ These properties are not yet verified by the compiler; generation emits a warnin
 
 Accepted values have one authoritative store. Reserved contributions never fall back into the ordinary mailbox. A completed view remains immutable until its consuming activation retires, including output stalls. That activation may open an independent scalar reduction without overwriting the borrowed values. User callbacks should retain derived state, rather than copying the entire completed snapshot back into actor data.
 
-Live observations describe progress and ownership; they do not expose a second copy of the payload. See the [implementation and verification plan](../yap/topology-specialization.md) for the remaining protocol-checking work.
+Live observations describe progress and ownership; they do not expose a second copy of the payload. See the [implementation and verification plan](../../yap/hls_fabric/topology-specialization.md) for the remaining protocol-checking work.

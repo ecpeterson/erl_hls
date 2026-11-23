@@ -111,7 +111,7 @@ def compile_component(args: argparse.Namespace, name: str, source: str) -> dict:
         raise ValueError('Phi components support only the unit delay model; use tiles for custom timing')
     inputs = {'top': source, 'source_hashes_sha256': digest(args.stage/'source-hashes.json'),
               'build_profile': profile, 'build_profile_sha256': digest(build_profile),
-              'transport_codegen': digest(ROOT / 'tools/transport_codegen.py'), 'tools': {tool: digest(args.xls/tool) for tool in ('ir_converter_main', 'opt_main', 'codegen_main')}}
+              'transport_codegen': digest(ROOT / 'tools/hls_fabric/transport_codegen.py'), 'tools': {tool: digest(args.xls/tool) for tool in ('ir_converter_main', 'opt_main', 'codegen_main')}}
     if (stage/'complete.json').exists():
         record = json.loads((stage/'complete.json').read_text())
         if (record['inputs'] != inputs or record['rtl_sha256'] != digest(stage/'component.v')

@@ -12,11 +12,11 @@
 %% Binary lowering and a real packed-sample actor share the observation harness.
 write(binary, Stage) ->
     ok = xls_binary_dslx:write(Stage),
-    actor(Stage, "packed_samples.x", "src/examples/packed_samples/packed_samples.erl");
+    actor(Stage, "packed_samples.x", "apps/erl_hls/src/examples/packed_samples/packed_samples.erl");
 %% Admission varies channel depth independently from the actor and mailbox-capacity fixtures.
 write(direct_admission, Stage) ->
     ok = xls_large_mailbox_dslx:write(Stage),
-    ok = actor(Stage, "ordered_egress_actor.x", "test/ordered_egress_actor.erl"),
+    ok = actor(Stage, "ordered_egress_actor.x", "apps/erl_hls/test/ordered_egress_actor.erl"),
     lists:foreach(fun(Depth) ->
         Path = filename:join([Stage, "d" ++ integer_to_list(Depth), "ordered_egress_topology.x"]),
         ok = filelib:ensure_dir(Path),
@@ -39,20 +39,20 @@ write(names, Stage) ->
     ok;
 %% Signed-mask generation preserves the original source mutation and semantic snippets.
 write(reduction_dslx, Stage) ->
-    {ok, MaskSource} = file:read_file("test_data/hls_statem_mask_reduction_fixture.erl"),
+    {ok, MaskSource} = file:read_file("apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl"),
     SignedSource = filename:join(Stage, "signed_mask.erl"),
     ok = file:write_file(SignedSource, binary:replace(MaskSource,
         <<"mask = hls_type:zero() :: hls_nums:u8()">>,
         <<"mask = hls_type:zero() :: hls_nums:s8()">>, [global])),
     lists:foreach(fun({Name, Source, Snippets}) ->
         X = xls_parse:to_xls(Source, #{direct_actor_debug => Name =:= "mask_debug"}),
-        Tests = [begin {ok, B} = file:read_file("test_data/" ++ S ++ ".inc.x"), B end || S <- Snippets],
+        Tests = [begin {ok, B} = file:read_file("apps/erl_hls/test_data/" ++ S ++ ".inc.x"), B end || S <- Snippets],
         ok = file:write_file(filename:join(Stage, Name ++ ".x"), [X, Tests])
-    end, [{"reduction", "test_data/hls_statem_reduction_lower_fixture.erl", ["hls_statem_reduction_semantics"]},
-          {"mask", "test_data/hls_statem_mask_reduction_fixture.erl", ["hls_statem_mask_reduction_semantics"]},
-          {"mask_debug", "test_data/hls_statem_mask_reduction_fixture.erl", ["hls_statem_mask_debug_semantics"]},
+    end, [{"reduction", "apps/erl_hls/test_data/hls_statem_reduction_lower_fixture.erl", ["hls_statem_reduction_semantics"]},
+          {"mask", "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", ["hls_statem_mask_reduction_semantics"]},
+          {"mask_debug", "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", ["hls_statem_mask_debug_semantics"]},
           {"signed_mask", SignedSource, ["hls_statem_signed_mask_semantics"]},
-          {"failure", "test/hls_reduction_failure_fixture.erl", ["hls_reduction_failure_semantics", "hls_reduction_failure_ordinary_semantics"]}]);
+          {"failure", "apps/erl_hls/test/hls_reduction_failure_fixture.erl", ["hls_reduction_failure_semantics", "hls_reduction_failure_ordinary_semantics"]}]);
 %% Logical codecs and both topology layouts share their BEAM vector corpus.
 write(logical_types, Stage) ->
     ok = hls_logical_dslx:write(Stage),
@@ -60,13 +60,13 @@ write(logical_types, Stage) ->
     xls_struct_codec_dslx:write(Stage);
 %% The ordinary frame service complements the handwritten frame-family DSLX witnesses.
 write(application_frames, Stage) ->
-    actor(Stage, "application_service.x", "test/xls_init_gs_fixture.erl");
+    actor(Stage, "application_service.x", "apps/erl_hls/test/xls_init_gs_fixture.erl");
 %% Retained calls and their iterative drains use the existing singleton actor source.
 write(deferred_replies, Stage) ->
-    actor(Stage, "batch.x", "test/hls_deferred_fixture.erl");
+    actor(Stage, "batch.x", "apps/erl_hls/test/hls_deferred_fixture.erl");
 %% Reply framing is generated from the same actor used by host contract tests.
 write(service_contracts, Stage) ->
-    actor(Stage, "service.x", "test/hls_reply_fixture.erl").
+    actor(Stage, "service.x", "apps/erl_hls/test/hls_reply_fixture.erl").
 
 -doc "Writes one supported mixed-topology placement into its own existing stage directory. The source generator owns placement semantics and expected observations.".
 -spec write(mixed_topology, file:filename(), direct | ingress_direct) -> ok.

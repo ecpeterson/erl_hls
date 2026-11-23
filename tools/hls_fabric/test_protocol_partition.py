@@ -16,8 +16,8 @@ from test_local_protocol import prove
 def build(xls: Path, stage: Path, index: int, actors: str) -> Path:
     """Build each independent role from current sources through the public network entry point."""
     config=stage/f'role{index}.config'
-    config.write_text('#{sources => [{"test/hls_protocol_network_fixture.erl",[]},'
-        '{"test/hls_protocol_inbox_fixture.erl",[]}],topology => '
+    config.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl",[]},'
+        '{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],topology => '
         '{hls_protocol_network_fixture,partitioned,[]},actor_limit => 3,'
         'activation => explicit_start,native_actors => '+actors+'}.\n')
     role=stage/f'role{index}'
@@ -80,7 +80,7 @@ def pair(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
 
 def simulate(wrapper: Path, rtl: list[Path], stage: Path, reject: bool = False) -> None:
     """Check exact source outputs/order/readout across two completed common-reset incarnations."""
-    source=(ROOT/'test/rtl/protocol_network_tb.sv').read_text()
+    source=(ROOT/'apps/hls_fabric/test/rtl/protocol_network_tb.sv').read_text()
     wiring='''wire faults;
 reg [1:0] ingress_valid=0; wire [1:0] ingress_ready;
 wire [193:0] ingress_data={16'd0,16'd0,16'd1,16'd0,2'd0,8'd1,8'd0,8'd0,8'd5,96'd0};

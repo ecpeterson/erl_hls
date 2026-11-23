@@ -27,7 +27,7 @@ for binary in ir_converter_main opt_main codegen_main; do
 done
 
 ERL_HLS_PHI_PROFILE_SHARDS="$shard_count" \
-    "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+    "$project_root/tools/hls_fabric/prepare_xls_sim.sh" "$local_stage"
 local_stage=$(cd "$local_stage" && pwd)
 cp "$project_root/apps/hls_phi/tools/phi_decoder_profile_stage.sh" \
     "$local_stage/phi_decoder_profile_stage.sh"
@@ -38,7 +38,7 @@ fi
 rm -f -- "$local_stage/phi_decoder_profile.causality.svg"
 
 # Resolve overrides locally; the copied stage only consumes the resulting frozen policy.
-source "$project_root/tools/backend_env.sh" test
+source "$project_root/tools/hls_fabric/backend_env.sh" test
 policy_directory=$(mktemp -d "$local_stage/build-policy.XXXXXX")
 policy_path="$policy_directory/selected-build-profile.json"
 erl +S 2:2 -noshell -s hls_fabric_cli main -extra profile \

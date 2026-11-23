@@ -9,7 +9,7 @@ import subprocess
 from erl_hls_tools.topology_debug import quote
 
 ROOT = Path(__file__).resolve().parents[1]
-RTL = ROOT / 'priv/rtl/fabric'
+RTL = ROOT / 'apps/erl_hls/priv/rtl/fabric'
 
 
 def run(command, log, timeout=120):
@@ -38,7 +38,7 @@ def main():
             run(['iverilog', '-g2012', '-s', 'fabric_router_tb',
                  f'-Pfabric_router_tb.PORTS={ports}',
                  f'-Pfabric_router_tb.CONTINUOUS={continuous}', '-o', str(target),
-                 str(ROOT / 'test/rtl/fabric_router_tb.sv'),
+                 str(ROOT / 'apps/erl_hls/test/rtl/fabric_router_tb.sv'),
                  *map(str, RTL.glob('*.v'))], target.with_suffix('.compile.log'))
             run(['vvp', str(target)], target.with_suffix('.log'))
             print(target.with_suffix('.log').read_text().splitlines()[0], flush=True)
@@ -84,7 +84,7 @@ def prove(args, direction, ports, changed=None, mutation=None):
     top = f'fabric_{direction}_formal'
     target = args.stage / (f'mutation-{mutation}' if mutation else f'{direction}-{ports}')
     ids = sum((2 + p * 7) << (16*p) for p in range(ports))
-    monitor = ROOT / f'test/rtl/{top}.sv'
+    monitor = ROOT / f'apps/erl_hls/test/rtl/{top}.sv'
     if mutation:
         monitor_text = monitor.read_text().replace('refinement && ', '')
         monitor = args.stage / f'{top}-{mutation}.sv'

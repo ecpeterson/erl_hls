@@ -3,8 +3,10 @@
 
 %% Compare the result and match-failure flag, including failures from a
 %% selected RHS. A Boolean result alone would miss erroneous callback failure.
+-doc "Emits short-circuit probes and their BEAM comparison assertions.".
+-spec to_dslx() -> iodata().
 to_dslx() ->
-    {ok, Forms} = epp:parse_file("test/xls_short_circuit_fixture.erl", [], []),
+    {ok, Forms} = epp:parse_file("apps/erl_hls/test/xls_short_circuit_fixture.erl", [], []),
     ["import hls_failure;\n",
         [function(Name, Clause) || {function, _, Name, 3, [Clause]} <- Forms]].
 

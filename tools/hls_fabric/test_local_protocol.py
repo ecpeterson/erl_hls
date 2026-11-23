@@ -5,7 +5,7 @@ import json
 import shutil
 import time
 
-from compiler_paths import compiler_root, compiler_source_root
+from compiler_paths import compiler_root
 from backend_paths import ROOT, erlang_environment
 from test_local_actor import manifest
 from backend_commands import digest, run
@@ -50,18 +50,18 @@ def main() -> None:
     public = compiler_root('default')
     options = stage / 'options.term'
     options.write_text('[].\n')
-    properties = ROOT / 'test/local_protocol_properties.x.in'
-    cases = [('plain', ROOT / 'test/hls_local_actor_fixture.erl', ['protocol_drop_internal']),
+    properties = ROOT / 'apps/hls_fabric/test/local_protocol_properties.x.in'
+    cases = [('plain', ROOT / 'apps/hls_fabric/test/hls_local_actor_fixture.erl', ['protocol_drop_internal']),
              ('scalar', public / 'test_data/hls_statem_reduction_lower_fixture.erl',
               ['protocol_wrong_state', 'protocol_drop_internal']),
              ('gather', public / 'test_data/xls_statem_gather_fixture.erl',
               ['protocol_wrong_state', 'protocol_stale_completion', 'protocol_drop_internal'])]
     cases = [case for case in cases if args.case == 'all' or case[0] == args.case]
-    inputs = [Path(__file__), properties, ROOT / 'tools/emit_local_actor.escript', *[source for _, source, _ in cases],
+    inputs = [Path(__file__), properties, ROOT / 'tools/hls_fabric/emit_local_actor.escript', *[source for _, source, _ in cases],
               args.yosys, *[args.xls / p for p in ['ir_converter_main', 'opt_main', 'codegen_main']]]
-    for base, pattern in [(ROOT / 'src', '*.erl'), (ROOT / 'apps/hls_lowering/src', '*.erl'),
+    for base, pattern in [(ROOT / 'apps/hls_fabric/src', '*.erl'), (ROOT / 'apps/hls_lowering/src', '*.erl'),
                           (ROOT / 'apps/hls_lowering/priv/xls', '*.x*'),
-                          (public / 'src', '*.erl'), (compiler_source_root(public) / 'apps/hls_runtime/src', '*.erl'),
+                          (public / 'src', '*.erl'), (ROOT / 'apps/hls_runtime/src', '*.erl'),
                           (public / 'priv/xls', '*.x*'),
                           (args.xls / 'xls/dslx/stdlib', '*.x')]:
         inputs.extend(sorted(base.rglob(pattern)))
@@ -77,7 +77,7 @@ def main() -> None:
     results, actors = [], []
     for name, source, negatives in cases:
         built = stage / (name + '.x')
-        run(['escript', ROOT / 'tools/emit_local_actor.escript', source, options, built],
+        run(['escript', ROOT / 'tools/hls_fabric/emit_local_actor.escript', source, options, built],
             stage, name + '-build', env=erlang_environment('default', compiler=public))
         report = manifest(built)
         assert report['receipt_result_fields'] == ['handled', 'deferred_completion', 'private_machine', 'dispatched', 'directive']

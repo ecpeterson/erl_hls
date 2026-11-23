@@ -5,11 +5,11 @@
 -doc "Writes source-generated actor helpers, physical-adapter helpers and bounded lifecycle tests into Stage.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Path = "test/hls_indexed_adapter_fixture.erl",
+    Path = "apps/hls_fabric/test/hls_indexed_adapter_fixture.erl",
     Spec = (xls_parse:actor_artifact(Path, []))#{gather_collection => true},
     ok = xls_indexed_collection_codegen:validate(Spec, #{}),
-    {ok, Shape} = file:read_file("test/hls_indexed_adapter_shape.inc.x"),
-    {ok, Tests} = file:read_file("test/hls_indexed_adapter_semantics.inc.x"),
+    {ok, Shape} = file:read_file("apps/hls_fabric/test/hls_indexed_adapter_shape.inc.x"),
+    {ok, Tests} = file:read_file("apps/hls_fabric/test/hls_indexed_adapter_semantics.inc.x"),
     %% Finalize ordinary functions and physical helpers together so both contribute failure references.
     Artifact = xls_actor_codegen:artifact(Spec,
         [direct_mailbox_observation, indexed_collection_core, indexed_gather_ram, arbitration, mailbox],

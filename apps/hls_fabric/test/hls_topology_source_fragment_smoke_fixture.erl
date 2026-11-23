@@ -31,7 +31,7 @@ write(Stage) ->
 -spec actor() -> any().
 actor() ->
     xls_scheduler_actor:to_xls(
-        "test/hls_topology_source_fragment_fixture.erl",
+        "apps/hls_fabric/test/hls_topology_source_fragment_fixture.erl",
         #{shared_service => aggregate_only}
     ).
 
@@ -39,14 +39,14 @@ actor() ->
 -spec population_actor() -> any().
 population_actor() ->
     xls_scheduler_actor:to_xls(
-        "test/hls_reduction_plan_population_fixture.erl",
+        "apps/hls_fabric/test/hls_reduction_plan_population_fixture.erl",
         #{shared_service => aggregate_only}
     ).
 
 %% Translates the contribution-producing fixture actor.
 -spec source_actor() -> any().
 source_actor() ->
-    xls_scheduler_actor:to_xls("test/hls_topology_source_fixture.erl").
+    xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_topology_source_fixture.erl").
 
 %% Builds the alternate-population reduction topology.
 -spec population_topology() -> any().

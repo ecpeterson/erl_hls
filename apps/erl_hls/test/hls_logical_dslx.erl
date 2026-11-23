@@ -1,9 +1,11 @@
 -module(hls_logical_dslx).
 -export([write/1]).
 
+-doc "Writes logical codec and transaction probes into the supplied stage.".
+-spec write(file:filename_all()) -> ok.
 write(Stage) ->
     ok = file:write_file(filename:join(Stage, "service.x"),
-        xls_parse:to_xls("test/hls_logical_fixture.erl")),
+        xls_parse:to_xls("apps/erl_hls/test/hls_logical_fixture.erl")),
     ok = codecs(Stage),
     ok = transactions(Stage).
 

@@ -32,4 +32,4 @@ The shared debug PID addresses the topology query service. It does not create pe
 
 ## Validation
 
-[The RTL fixture](../yap/actor-pid-validation.md) checks addressing, codec rejection, stalled-output diagnosis and reconnect behavior through the public interfaces.
+[The RTL fixture](../../yap/hls_fabric/actor-pid-validation.md) checks addressing, codec rejection, stalled-output diagnosis and reconnect behavior through the public interfaces.

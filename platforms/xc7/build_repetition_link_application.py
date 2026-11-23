@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from build_link_application import copy_libraries
+from build_link_application import compiler_entry, copy_libraries
 from packaging_commands import execute
 from ethernet.prepare import digest
 
@@ -56,7 +56,7 @@ def codegen(xls: Path, optimized: Path, output: Path, log: Path) -> None:
 
 def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "default") -> Path:
     """Compile both role gateways and retain their external RAM shells."""
-    sys.path.insert(0, str(PROJECT / "tools"))
+    sys.path.insert(0, str(PROJECT / "tools/hls_fabric"))
     from backend_paths import erlang_paths, erlang_environment
     from compiler_paths import compiler_root, compiler_source
     public = compiler_root(profile, public, PROJECT)
@@ -78,7 +78,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
     libraries = copy_libraries(stage, public)
     phi_field = PROJECT / "apps/hls_phi/src/phi_field.x"
     shutil.copyfile(phi_field, stage / phi_field.name)
-    compiler = public / "tools/compile_xls.py"
+    compiler = compiler_entry(public)
     products: dict[str, str] = {}
     for role, device in DEVICES.items():
         release = output / f"role-{role}-build"
@@ -94,7 +94,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
         products[rtl.name] = digest(rtl)
         products[ram.name] = digest(ram)
     inputs = [Path(__file__), ROOT / "packaging_commands.py", ROOT / "build_link_application.py", FIXTURE, compiler, compiler_source(public, "compile_xls"), phi_field, *libraries,
-              *sorted((PROJECT / "src").glob("*.erl"))]
+              *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl"))]
     generated = ["deployment-a.etf", "deployment-b.etf", "fixture.json"]
     manifest = {
         "compiler_root": str(public), "rebar_profile": profile,

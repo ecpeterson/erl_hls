@@ -4,4 +4,4 @@ The phenomenological example composes data-qubit, syndrome-qubit and phi-field a
 
 Each actor has its own bounded mailbox and callback state. Routes connect declared output ports to recipients; a send can stall on downstream capacity. Source seeds and coordinates are initialization data. The CPU and hardware paths use the same message codecs and reduction callbacks.
 
-See [topology composition](../../../docs/execution/mixed-topologies.md), [reductions](../../../docs/execution/actor-reductions.md) and [repetition code](../../../docs/execution/repetition-code.md). These examples exercise translation and communication; generated RTL does not imply a board-specific resource or timing guarantee.
+See [topology composition](../../../docs/hls_fabric/execution/mixed-topologies.md), [reductions](../../../docs/hls_fabric/execution/actor-reductions.md) and [repetition code](../../../docs/hls_fabric/execution/repetition-code.md). These examples exercise translation and communication; generated RTL does not imply a board-specific resource or timing guarantee.

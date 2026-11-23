@@ -16,7 +16,7 @@ typed_literal_test() ->
 %% Every retained floating arithmetic failure keeps its source line and badarith code kind.
 -spec float_failure_codebook_test() -> ok.
 float_failure_codebook_test() ->
-    Source = "test/hls_float_fixture.erl",
+    Source = "apps/erl_hls/test/hls_float_fixture.erl",
     {ok, Forms} = hls_source:parse_file(Source),
     {_, Origins} = xls_failure_sites:prepare(Forms),
     Dslx = xls_parse:to_artifact(Source),

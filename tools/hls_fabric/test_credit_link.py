@@ -8,7 +8,7 @@ from backend_paths import erlang_environment
 import shutil
 from backend_commands import digest, execute
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> None:
@@ -24,10 +24,10 @@ def main() -> None:
     args.erl_hls = compiler_root("test", args.erl_hls)
     stage, xls = args.stage.resolve(), args.xls.resolve()
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x",
+    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x",
                args.erl_hls / "priv/xls/lib/axis.x", args.erl_hls / "priv/xls/lib/frame_config.x"]
-    tests = [ROOT / "test/rtl" / f"{name}.sv" for name in ("credit_link_tb", "credit_link_fault_tb")]
-    tracked = sources + tests + [Path(__file__), ROOT/'tools/backend_commands.py'] + list((xls / "xls/dslx/stdlib").rglob("*.x"))
+    tests = [ROOT / "apps/hls_fabric/test/rtl" / f"{name}.sv" for name in ("credit_link_tb", "credit_link_fault_tb")]
+    tracked = sources + tests + [Path(__file__), ROOT/'tools/hls_fabric/backend_commands.py'] + list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]
     provenance = {str(path): digest(path) for path in tracked}
     for path in sources:

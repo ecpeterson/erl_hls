@@ -80,7 +80,7 @@ typed_literals(_) -> [].
 %% predicates, rather than stopping at the source-preparation passes.
 -spec complete_actor_emission_test() -> ok.
 complete_actor_emission_test() ->
-    Artifact = xls_parse:to_artifact("test/hls_enum_fixture.erl"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/hls_enum_fixture.erl"),
     ?assert(byte_size(xls_emitted:bytes(Artifact)) > 0),
     ?assertEqual(<<1:2, 2:2>>, hls_enum_fixture:pack({response, busy, busy})),
     ?assertEqual({{response, busy, busy}, <<>>},
@@ -102,7 +102,7 @@ repeated_variable_domains_test_() ->
 %% ordinary field values below those callback heads may use finite atom unions.
 -spec callback_abi_test() -> ok.
 callback_abi_test() ->
-    ?assert(byte_size(iolist_to_binary(xls_parse:to_xls("test/xls_static_actions_fixture.erl"))) > 0).
+    ?assert(byte_size(iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/xls_static_actions_fixture.erl"))) > 0).
 
 %% Structural equality must recurse through enum-bearing fields, rather than
 %% comparing equal-width tuple elements as unrelated numerical codes.

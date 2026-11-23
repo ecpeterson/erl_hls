@@ -1,6 +1,6 @@
 # Spacetime S2: executable evidence contract
 
-2026-11-06. **S2 complete; S3 next.** This is the first implementation slice worth committing. No commit or PR was created. The [maintained contract](../docs/contract.md), three `src/toolchain/hls_spacetime*.erl` modules, saved `test_data/spacetime_example.term` and EUnit regressions form one reviewable change. Existing timing-profile code remains unchanged.
+2026-11-06. **S2 complete; S3 next.** This is the first implementation slice worth committing. No commit or PR was created. The [maintained contract](../../docs/hls_spacetime/contract.md), three `src/toolchain/hls_spacetime*.erl` modules, saved `test_data/spacetime_example.term` and EUnit regressions form one reviewable change. Existing timing-profile code remains unchanged.
 
 The cycle companion separates value ancestry, required control, observed resource ordering and electrical activity. It validates event/version/activation/reset identities, observer sequence coverage, storage history, masked writes, read latency and supported collisions. Full overwrites do not invent old-value dependencies; passive holds do not reserve ports. Physical mappings allow folded/shared resources and keep ambiguous/unmapped evidence explicit. JSON encoding preserves wide masks as hexadecimal strings, with exact bounded cycle/sequence numbers.
 

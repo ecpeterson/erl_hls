@@ -2,7 +2,7 @@
 
 `hls_runtime` contains the [actor and type API](src/api/README.md) and its [host runtime](src/runtime/README.md). It owns retained codecs, CPU callback execution, device brokers and observation sessions. It depends only on OTP `kernel`, `stdlib` and `crypto`; it has no dependency on the `erl_hls` compiler application.
 
-The root [`erl_hls` application](../../src/README.md) owns source preparation, parse transforms, hardware lowering and external-tool assets. It depends on this library. Both applications build together in this repository; Git consumers select root `erl_hls` and `apps/hls_runtime` explicitly at the same revision when they need compilation. A deployed application using compiled actors and retained bindings needs only the runtime library and its own code.
+The [`erl_hls` application](../erl_hls/src/README.md) owns source preparation, parse transforms, hardware lowering and external-tool assets. It depends on this library. Both applications build together in this repository. A deployed application using compiled actors and retained bindings needs only the runtime library and its own code.
 
 Both packages are library applications: neither supplies an application callback or supervisor. CPU actors and device brokers have explicit start/stop APIs and remain caller-owned. The companion fabric application's supervision policy is separate from these shared mechanisms.
 

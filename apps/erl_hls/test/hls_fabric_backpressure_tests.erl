@@ -424,6 +424,9 @@ with_peer(Mode, Options, Run) ->
         Run(Fabric, Peer, Filled)
     end).
 
+%% Opens the app-owned peer fixture and exposes its named pipes to the test callback.
+-spec with_peer_paths(atom(), term(), fun((pid(), port(), non_neg_integer(),
+    file:filename(), file:filename()) -> term())) -> term().
 with_peer_paths(Mode, Options, Run) ->
     Root = filename:absname(filename:join(["_build", "fabric-pressure-tests",
         integer_to_list(erlang:system_time(nanosecond)) ++ "-" ++
@@ -433,7 +436,7 @@ with_peer_paths(Mode, Options, Run) ->
     ok = filelib:ensure_dir(Tx),
     Mkfifo = open_port({spawn_executable, os:find_executable("mkfifo")}, [{args, [Tx, Rx]}, exit_status]),
     receive {Mkfifo, {exit_status, 0}} -> ok after 1000 -> error(mkfifo_failed) end,
-    Args = [filename:absname("test/fabric_peer.py"), Tx, Rx] ++ case Mode of closed -> ["defer"]; _ -> [] end,
+    Args = [filename:absname("apps/erl_hls/test/fabric_peer.py"), Tx, Rx] ++ case Mode of closed -> ["defer"]; _ -> [] end,
     Peer = open_port({spawn_executable, os:find_executable("python3")},
         [{args, Args}, binary, {line, 65536}, exit_status, stderr_to_stdout]),
     ?assertEqual(<<"ready">>, peer_reply(Peer)),

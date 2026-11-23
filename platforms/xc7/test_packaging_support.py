@@ -10,6 +10,7 @@ from typing import Any
 from dma import debug_device_tree as debug
 import packaging_commands
 import prepare_ps_probe as probes
+import build_link_application as link_application
 from test_sfp_probe import regenerate_reference
 
 ROOT = Path(__file__).resolve().parent
@@ -124,6 +125,17 @@ class CommandTests(unittest.TestCase):
                 with self.assertRaises(subprocess.TimeoutExpired) as raised:
                     packaging_commands.execute(["tool"], stage, log)
                 self.assertIs(raised.exception, failure)
+
+
+class CompilerPathTests(unittest.TestCase):
+    """Board application builders use the compiler app's retained private entrypoint."""
+
+    def test_umbrella_compiler_entry(self) -> None:
+        """The selected app supplies both its DSLX libraries and executable compiler helper."""
+        public = ROOT.parents[1] / "apps/erl_hls"
+        self.assertTrue((public / "priv/xls").is_dir())
+        self.assertEqual(link_application.compiler_entry(public), public / "priv/tools/compile_xls.py")
+        self.assertTrue(link_application.compiler_entry(public).is_file())
 
 
 class ReferencePathTests(unittest.TestCase):

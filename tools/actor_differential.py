@@ -134,8 +134,8 @@ class Runner(differential.Runner):
         provenance = json.loads(path.read_text())
         for file in (Path(__file__), Path(cases.__file__),
                      ROOT / "tools/test_actor_differential.py",
-                     ROOT / "test/xls_actor_differential_worker.erl",
-                     ROOT / "test_data/xls_actor_differential.inc.x",
+                     ROOT / "apps/erl_hls/test/xls_actor_differential_worker.erl",
+                     ROOT / "apps/erl_hls/test_data/xls_actor_differential.inc.x",
                      ROOT / "_build/test/lib/erl_hls/test/xls_actor_differential_worker.beam"):
             provenance["files"][str(file)] = differential.digest(file)
         differential.write_json(path, provenance)
@@ -165,7 +165,7 @@ class Runner(differential.Runner):
             return self.finish(stage, {**result, "status": "failed", "phase": "oracle",
                 "category": oracle["status"], "reason": oracle.get("reason")})
         source = stage / "actor.x"
-        source.write_text(source.read_text() + (ROOT / "test_data/xls_actor_differential.inc.x").read_text())
+        source.write_text(source.read_text() + (ROOT / "apps/erl_hls/test_data/xls_actor_differential.inc.x").read_text())
         self.inject(source)
         pipeline = [
             ("convert", [self.xls / "ir_converter_main", "--top=differential_step", *self.options(), source], "actor.ir"),

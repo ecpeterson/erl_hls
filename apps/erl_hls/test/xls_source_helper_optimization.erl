@@ -6,7 +6,7 @@
 -doc "Writes one generated source bundle, two scalar probes and finite BEAM assertions into an existing directory. Does not run XLS.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Artifact = xls_parse:to_artifact("test/xls_remote_selection_fixture.erl"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/xls_remote_selection_fixture.erl"),
     Dependencies = xls_emitted:dependencies(Artifact),
     [Selector] = [Bytes || {Path, Bytes} <- maps:to_list(Dependencies),
         filename:basename(Path) =:= "xls_remote_selector.x"],

@@ -6,4 +6,4 @@ This application owns the decoder's ordinary actor implementation and its sequen
 - `snowflake_vertex`, `snowflake_coordinator` and `snowflake_barrier` implement the communicating actors. `snowflake_actor_topology` owns their routes, startup and optional placement. `snowflake_actor_run` compares finite communicating runs with the sequential reference.
 - `snowflake_source` selects the small source-protocol example and resolves installed source/include paths. The [application guide](../README.md) describes its bounds and build entry point.
 
-Shared records and transition bodies live in [include](../include/README.md). Custom kernel RTL and scheduler ablations remain in [experiments](../../../experiments/snowflake/README.md), which consume this application source.
+Shared records and transition bodies live in [include](../include/README.md).

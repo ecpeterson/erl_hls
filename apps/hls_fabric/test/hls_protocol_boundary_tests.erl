@@ -7,7 +7,7 @@
 -spec endpoint_identity_test() -> ok.
 endpoint_identity_test() ->
     Path=filename:join("_build","boundary-identities-"++integer_to_list(erlang:system_time(nanosecond))),
-    Manifest=hls_protocol_boundary:write(#{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{?FILE,[]}],
+    Manifest=hls_protocol_boundary:write(#{sources=>[{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]},{?FILE,[]}],
         topology=>{?MODULE,topology,[]},actor_limit=>4},Path),
     #{externals:=Groups,arbitration_state_bits:=5,activation:=automatic}=Manifest,
     ?assertEqual([{0,<<"3">>,1},{1,<<"'3'">>,0},{2,<<"{bucket,1}">>,3}],

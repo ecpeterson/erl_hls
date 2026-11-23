@@ -14,7 +14,7 @@ source_helper_files() ->
         integer_to_list(erlang:unique_integer([positive, monotonic]))]),
     File = filename:join(Root, "hls_helper_file_actor.erl"),
     ok = filelib:ensure_dir(File),
-    {ok, Original} = file:read_file("test/hls_scheduler_build_fixture.erl"),
+    {ok, Original} = file:read_file("apps/hls_fabric/test/hls_scheduler_build_fixture.erl"),
     Renamed = binary:replace(Original, <<"hls_scheduler_build_fixture">>, <<"hls_helper_file_actor">>, [global]),
     Source = binary:replace(Renamed, <<"Cell#cell{value = Value}">>,
         <<"Cell#cell{value = hls_helper_file_math:adjust(Value)}">>),

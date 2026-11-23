@@ -5,7 +5,7 @@
 -doc "Writes field-sharing codec witnesses against compiled Erlang callback results.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Generated = xls_parse:to_xls("test/xls_entry_storage_fixture.erl"),
+    Generated = xls_parse:to_xls("apps/erl_hls/test/xls_entry_storage_fixture.erl"),
     Cases = [{Phase, Key, Positive, Negative, Flag, Tail}
         || Phase <- [repeated, independent, conditional], Key <- [0, 16#ffff, 16#fffffffd],
            {Positive, Negative, Flag, Tail} <- [{0, 0, false, 0}, {31, -16, true, 65535}, {17, 9, true, 16#1234}]],

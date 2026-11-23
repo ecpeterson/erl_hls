@@ -11,7 +11,7 @@ provider_build_test_() -> {timeout, 60, fun provider_build/0}.
 %% Preparation invokes both callbacks exactly once; placements and emission reuse their checked output.
 -spec provider_build() -> ok.
 provider_build() ->
-    Config = #{sources => [{"test/hls_protocol_network_fixture.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []}],
         topology => {hls_protocol_network_fixture, isolated, []}, actor_limit => 1},
     Root = filename:join("_build", "model-provider-" ++ integer_to_list(erlang:system_time(nanosecond))),
     ok = file:make_dir(Root),

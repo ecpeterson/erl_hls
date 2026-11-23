@@ -115,7 +115,7 @@ collect_bridges(Count) ->
 
 %% Arbitrary role names/addresses ensure the builder does not assume integer roles or service 7.
 -spec config() -> map().
-config() -> #{sources=>[{"test/hls_protocol_network_fixture.erl",[]},{"test/hls_protocol_inbox_fixture.erl",[]}],
+config() -> #{sources=>[{"apps/hls_fabric/test/hls_protocol_network_fixture.erl",[]},{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],
     topology=>{hls_protocol_network_fixture,framed,[]},actor_limit=>3,control=>rectangle,
     devices=>#{north=>#{native_actors=>[left,sink],host=>2,service=>29},
         south=>#{native_actors=>[right],host=>3,service=>31}},limits=>#{crossings=>8,commands=>8,events=>8}}.

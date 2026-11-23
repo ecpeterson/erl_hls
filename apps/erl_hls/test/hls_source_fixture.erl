@@ -27,7 +27,7 @@ with_source(Test) ->
     try
         ok = filelib:ensure_dir(Path),
         ok = filelib:ensure_dir(Config),
-        {ok, _} = file:copy("test_data/hls_source_context_fixture.erl", Path),
+        {ok, _} = file:copy("apps/erl_hls/test_data/hls_source_context_fixture.erl", Path),
         ok = file:write_file(Config, "-include(\"layout.hrl\").\n"),
         ok = file:write_file(filename:join(filename:dirname(Config), "layout.hrl"),
             "-ifdef(WIDE).\n-define(WORD_TYPE, u64).\n-else.\n"

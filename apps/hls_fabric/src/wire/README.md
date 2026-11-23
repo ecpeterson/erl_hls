@@ -15,7 +15,7 @@ These modules translate complete Erlang values and checked descriptors to or fro
 | `hls_protocol_mixed_schema`, `hls_protocol_mixed_codec` | Mixed native/RTL gateway framing |
 | `hls_protocol_bridge_wire` | Role-link words, attachment packets and control messages |
 
-`hls_protocol_codec:plan/0` is the retained *runtime codec description type*. Build-time inference from actor interfaces lives in `hls_protocol_codec_plan:plan/2,3` under [hls_lowering planning](../../apps/hls_lowering/src/planning/README.md), and DSLX generation lives in `xls_protocol_codec` under [hls_lowering backend/xls](../../apps/hls_lowering/src/backend/xls/README.md). Keeping those separate prevents ordinary message encoding from regenerating hardware.
+`hls_protocol_codec:plan/0` is the retained *runtime codec description type*. Build-time inference from actor interfaces lives in `hls_protocol_codec_plan:plan/2,3` under [hls_lowering planning](../../../hls_lowering/src/planning/README.md), and DSLX generation lives in `xls_protocol_codec` under [hls_lowering backend/xls](../../../hls_lowering/src/backend/xls/README.md). Keeping those separate prevents ordinary message encoding from regenerating hardware.
 
 Widths, tags and bounds belong to the appropriate schema. Wire checks detect representational mismatch; they do not establish source-version compatibility, delivery or application progress. Those are separate contracts owned by the callers.
 

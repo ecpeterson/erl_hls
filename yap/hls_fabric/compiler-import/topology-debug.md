@@ -1,6 +1,6 @@
 # Topology Debug implementation and validation
 
-Maintainer reference; the [reader contract](../docs/topology-debug.md) is authoritative for usage. These details describe the current implementation and qualification procedures.
+Maintainer reference; the [reader contract](../../../docs/hls_fabric/execution/topology-debug.md) is authoritative for usage. These details describe the current implementation and qualification procedures.
 
 ### Application memory preservation
 
@@ -14,14 +14,14 @@ python3 tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
 
 The check compares memory dimensions, address origins, and synthesis attributes across the original design, instrumented JSON, and reparsed Verilog. It then maps the latter two to XC7 memory primitives and compares their counts and complete parameter sets, including initialization and collision modes. The report, source hashes, commands, and logs are retained in `memory-check/`. This stops before LUT mapping and placement; it verifies storage implementation, without measuring whole-design area or proving functional equivalence. The live regressions separately compare application behavior through stalls and recovery.
 
-CI checks a mixed shared/direct scheduler and the complete D3 application. A small regression additionally exercises initialized distributed RAM, block RAM, byte enables, read-before-write collisions, and reset. Its negative controls require the audit to detect both lost attributes and fragmented write ports. The [RAM export qualification](../experiments/07-openxc7/results/debug-memory-export-2026-09-17.md) records the measured configurations and the scope of earlier area results.
+CI checks a mixed shared/direct scheduler and the complete D3 application. A small regression additionally exercises initialized distributed RAM, block RAM, byte enables, read-before-write collisions, and reset. Its negative controls require the audit to detect both lost attributes and fragmented write ports. The [historical RAM export qualification](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/debug-memory-export-2026-09-17.md`) records the measured configurations and the scope of earlier area results.
 
 ### Complete D3 phi-memory fixture
 
 ```sh
-python3 tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
-python3 tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
-python3 tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
+python3 apps/hls_phi/tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
+python3 apps/hls_phi/tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
+python3 apps/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
   --yosys "$YOSYS" --seeds 5 --jobs 1
 ```
 
@@ -33,7 +33,7 @@ The production reference retains normal fail-stop actor execution and its machin
 
 The measurement maps both complete designs with Yosys `synth_xilinx -abc9 -arch xc7`, excluding I/O pads and clock buffers. It includes compiler-generated observation logic, shared routing, all query resources, and one boundary monitor. Distributed RAM consumes LUTs in the reported totals; BRAM and DSP are separate. The report retains source snapshots, commands, logs, and best/mean/population-variance/worst statistics. Increase `--jobs` only with memory headroom; failed jobs are reported as they complete, and successful measurements remain available. These are synthesis area estimates; they do not establish placed timing, power, or the cost of adding further monitored boundaries.
 
-The [archived D3 measurement](../experiments/07-openxc7/results/phi-memory-debug-2026-09-13.md) includes five-seed area distributions, the public-interface stall diagnosis, and production/instrumented cycle comparison.
+The [archived D3 measurement](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/phi-memory-debug-2026-09-13.md`) includes five-seed area distributions, the public-interface stall diagnosis, and production/instrumented cycle comparison.
 
 
 ## Verification
@@ -51,15 +51,15 @@ python3 tools/test_topology_debug_integration.py \
 
 It runs the Erlang client against a real Icarus/FIFO/VPI endpoint, identifies full queues, follows the external stall, and checks recovery after releasing the sink. It compares the original and diagnostic application outputs at every cycle and independently checks every FIFO occupancy with a transfer scoreboard. The same runner accepts the D3 wrapper arguments above. D3 has two sinks, so one can progress while the selected sink is blocked. CI regenerates and exercises the ordered-egress topology with its pinned XLS release.
 
-`bash tools/test_actor_debug.sh XLS_ROOT` generates a 19-actor topology in two pipeline schedules. Public scoped queries identify failures in included helpers, an earlier bad match, explicit `fail`, and unmatched callbacks while healthy neighbors are blocked, then verify them after release. Snapshot RTL tests cover slot isolation, independent metadata updates, disabled and unused-address writes, and reset. The integration runner accepts `--actor-projection actors.json --actor-test phi` for the D3 profile and checks all 36 actors before and after release.
+`bash tools/hls_fabric/test_actor_debug.sh XLS_ROOT` generates a 19-actor topology in two pipeline schedules. Public scoped queries identify failures in included helpers, an earlier bad match, explicit `fail`, and unmatched callbacks while healthy neighbors are blocked, then verify them after release. Snapshot RTL tests cover slot isolation, independent metadata updates, disabled and unused-address writes, and reset. The integration runner accepts `--actor-projection actors.json --actor-test phi` for the D3 profile and checks all 36 actors before and after release.
 
-`bash tools/test_actor_debug.sh XLS_ROOT _build/mailbox-debug mailbox` runs a six-actor producer/consumer topology at two, three, and four pipeline stages. An external stall separates two work messages from the message that advances the consumer's phase. Public queries verify two postponed entries, then empty mailboxes and successful replay after release; CPU tests use the same consumer. The `direct_mailbox` and `mailbox_mixed` modes run the same workload at two and three stages, checking direct reservations, common capacity accounting, and placement-specific capabilities through `hls_debug`. `bash tools/test_actor_debug.sh XLS_ROOT _build/mailbox-debug-d3 phi` generates the diagnostic D3 application and checks all 36 actors under backpressure. These tests compare each generated application with and without the post-RTL query wrapper on every cycle; they do not by themselves compare independently scheduled production and diagnostic DSLX configurations.
+`bash tools/hls_fabric/test_actor_debug.sh XLS_ROOT _build/mailbox-debug mailbox` runs a six-actor producer/consumer topology at two, three, and four pipeline stages. An external stall separates two work messages from the message that advances the consumer's phase. Public queries verify two postponed entries, then empty mailboxes and successful replay after release; CPU tests use the same consumer. The `direct_mailbox` and `mailbox_mixed` modes run the same workload at two and three stages, checking direct reservations, common capacity accounting, and placement-specific capabilities through `hls_debug`. `bash tools/hls_fabric/test_actor_debug.sh XLS_ROOT _build/mailbox-debug-d3 phi` generates the diagnostic D3 application and checks all 36 actors under backpressure. These tests compare each generated application with and without the post-RTL query wrapper on every cycle; they do not by themselves compare independently scheduled production and diagnostic DSLX configurations.
 
-`bash tools/test_actor_debug.sh XLS_ROOT _build/direct-actor-debug direct_reduction` checks five register-backed actors at two and three pipeline stages. Public queries distinguish a healthy incomplete reduction from a pending failed fold, inspect terminal source-located failures after the missing contributors arrive, and follow a stalled report to the external sink before release. The generated observed application and its instrumented export are compared every clock; a separately compiled diagnostics-disabled application is checked for the same complete output frame. This bounded workload does not establish equal throughput for every topology. `python3 tools/test_direct_actor_debug.py` also checks direct/mixed provider validation, passive aliasing, retained-row isolation, and reset.
+`bash tools/hls_fabric/test_actor_debug.sh XLS_ROOT _build/direct-actor-debug direct_reduction` checks five register-backed actors at two and three pipeline stages. Public queries distinguish a healthy incomplete reduction from a pending failed fold, inspect terminal source-located failures after the missing contributors arrive, and follow a stalled report to the external sink before release. The generated observed application and its instrumented export are compared every clock; a separately compiled diagnostics-disabled application is checked for the same complete output frame. This bounded workload does not establish equal throughput for every topology. `python3 tools/test_direct_actor_debug.py` also checks direct/mixed provider validation, passive aliasing, retained-row isolation, and reset.
 
 ## Measure diagnostic logic
 
-The [D3 reduction-inspection measurement](../experiments/07-openxc7/results/reduction-inspection-2026-09-15.md) compares this query service with merged main using two matched seeds, including distributed-memory LUTs and the wider reply.
+The [D3 reduction-inspection measurement](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/reduction-inspection-2026-09-15.md`) compares this query service with merged main using two matched seeds, including distributed-memory LUTs and the wider reply.
 
 ```sh
 python3 tools/measure_topology_debug.py "$stage/topology-debug" \
@@ -93,6 +93,6 @@ python3 tools/measure_direct_actor_debug.py _build/direct-actor-debug \
 
 This compares the complete five-actor reduction application with physical queries against the same application with physical and semantic actor queries. It includes compiler-generated publication, snapshot retention, and query selection. It reads the preserved instrumented JSON to retain application memory attributes and reports each seed plus best, mean, population variance, and worst. The shared query transport is present in both builds; counters and event traces are absent. These are XC7 mapping estimates, not placed timing or power measurements.
 
-The [five-actor XC7 result](../experiments/07-openxc7/results/direct-actor-debug-2026-09-17.md) records a 4.57% mean LUT increase and 129 additional flip-flops across two seeds, with no BRAM or DSP increase. The fixture has many constant metadata fields; this is not a per-actor cost bound.
+The [five-actor XC7 result](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/direct-actor-debug-2026-09-17.md`) records a 4.57% mean LUT increase and 129 additional flip-flops across two seeds, with no BRAM or DSP increase. The fixture has many constant metadata fields; this is not a per-actor cost bound.
 
-The [direct-mailbox comparison](../experiments/07-openxc7/results/direct-mailbox-2026-09-17.md) measures a complete six-actor ingress design against merged main: +100 LUTs and +80 flip-flops across two matched seeds, including application routing and the query shell. `measure_direct_actor_debug.py --baseline BASELINE_DIR` compares two existing instrumented fixture directories; each must contain its `p2` build.
+The [direct-mailbox comparison](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/direct-mailbox-2026-09-17.md`) measures a complete six-actor ingress design against merged main: +100 LUTs and +80 flip-flops across two matched seeds, including application routing and the query shell. `measure_direct_actor_debug.py --baseline BASELINE_DIR` compares two existing instrumented fixture directories; each must contain its `p2` build.

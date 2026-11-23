@@ -2,15 +2,15 @@
 set -euo pipefail
 
 local_stage=${1:?usage: run_xls_sim.sh STAGE}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
 remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 remote_stage="$remote_root/regsvc"
 
-"$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+"$project_root/tools/hls_fabric/prepare_xls_sim.sh" "$local_stage"
 
-cp "$project_root/tools/remote_xls_sim.sh" \
+cp "$project_root/tools/hls_fabric/remote_xls_sim.sh" \
     "$local_stage/remote_xls_sim.sh"
 
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"

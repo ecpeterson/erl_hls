@@ -9,7 +9,7 @@
 %% A finite script action owns explicit request/reply bytes and named coverage obligations.
 -type action() :: map().
 
--doc "Writes a fresh standalone control source bundle from an existing network source bundle. Uses the first retained role, its native phase codec and actual none/process inspection profile. No application source is recompiled and no external tool runs. Compile the resulting source-build normally, then run tools/test_domain_board_control.py; run both inspection profiles for complete finite coverage.".
+-doc "Writes a fresh standalone control source bundle from an existing network source bundle. Uses the first retained role, its native phase codec and actual none/process inspection profile. No application source is recompiled and no external tool runs. Compile the resulting source-build normally, then run tools/hls_fabric/test_domain_board_control.py; run both inspection profiles for complete finite coverage.".
 -spec write(file:filename(), file:filename()) -> map().
 write(NetworkDirectory, Directory) ->
     {ok, NetworkBytes} = file:read_file(filename:join(NetworkDirectory, "interface.etf")),

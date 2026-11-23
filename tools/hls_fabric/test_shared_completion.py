@@ -8,7 +8,7 @@ from backend_paths import erlang_paths
 import re
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(argv: list[str], stage: Path, name: str) -> None:
@@ -30,7 +30,7 @@ def main() -> None:
     run(['rebar3', 'as', 'test', 'compile'], stage, 'compile.log')
     run(['erl', '-noshell', '-pa', *map(str, erlang_paths("test")),
          '-eval', 'io:put_chars(xls_scheduler_actor:to_xls('
-         '"test_data/hls_statem_reduction_lower_fixture.erl", '
+         '"apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl", '
          '#{shared_service => aggregate_only})), halt().'], stage, 'generated.x')
     generated = (stage / 'generated.x').read_text()
     execute = re.search(r'^pub fn shared_execute\(.*?^}', generated, re.M | re.S)[0]
@@ -38,7 +38,7 @@ def main() -> None:
     reference = execute[:start] + '  let dispatched = reference_dispatch(machine, request);\n' + execute[end:]
     reference = reference.replace('pub fn shared_execute(', 'fn reference_execute(', 1)
     source = stage / 'completion.x'
-    helpers, miter = (ROOT / 'test_data/shared_completion_reference.inc.x').read_text().split(
+    helpers, miter = (ROOT / 'apps/hls_fabric/test_data/shared_completion_reference.inc.x').read_text().split(
         '// Compare all output bits', 1)
     source.write_text(generated + '\n' + helpers + '\n' + reference + '\n' +
                       '// Compare all output bits' + miter)

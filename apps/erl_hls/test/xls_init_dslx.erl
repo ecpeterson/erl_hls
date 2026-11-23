@@ -17,7 +17,7 @@ statem_oracle(Offset) ->
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
     lists:foreach(fun({Kind, Module}) ->
-        Path = "test/" ++ atom_to_list(Module) ++ ".erl",
+        Path = "apps/erl_hls/test/" ++ atom_to_list(Module) ++ ".erl",
         X = xls_parse:to_xls(Path),
         write(Stage, atom_to_list(Module) ++ ".x", X),
         write(Stage, "init_" ++ atom_to_list(Kind) ++ ".x",
@@ -52,7 +52,7 @@ write(Stage) ->
     Plan = topology(),
     Base = #{name => init_direct, channel_depth => 1, actor_egress_depth => burst},
     write(Stage, "init_direct.x", xls_topology_dslx:emit(Plan, Base)),
-    {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
+    {ok, Template} = file:read_file("apps/erl_hls/test/rtl/xls_init_topology.template.v"),
     lists:foreach(fun(Name) ->
         Wrapper = lists:foldl(fun({Pattern, Replacement}, Text) ->
             binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])

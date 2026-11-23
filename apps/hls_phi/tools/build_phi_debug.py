@@ -93,7 +93,7 @@ def build(args: argparse.Namespace) -> None:
                        ROOT / "apps/hls_phi/src/phi_field.x", public / "priv/rtl/hls_1r1w_ram.v"]:
             shutil.copy(source, out)
         banks = len(json.loads((out / "actors.json").read_text())["banks"])
-        rams = subprocess.check_output(["bash", "-c", 'source tools/scheduler_ram_configurations.sh; scheduler_ram_configurations "$1"',
+        rams = subprocess.check_output(["bash", "-c", 'source tools/hls_fabric/scheduler_ram_configurations.sh; scheduler_ram_configurations "$1"',
                                         "phi-ram-config", str(banks)], cwd=ROOT, text=True).strip()
         print(f"Building {mode}: {banks} scheduler banks", flush=True)
         policy = out / "build-profile.json"

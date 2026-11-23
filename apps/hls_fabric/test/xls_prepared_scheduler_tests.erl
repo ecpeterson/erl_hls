@@ -12,7 +12,7 @@ retained_representations() ->
     Root = fresh("representations"),
     Source = filename:join(Root, "hls_scheduler_build_fixture.erl"),
     Header = filename:join(Root, "scheduler_value.hrl"),
-    {ok, Original} = file:read_file("test/hls_scheduler_build_fixture.erl"),
+    {ok, Original} = file:read_file("apps/hls_fabric/test/hls_scheduler_build_fixture.erl"),
     Typed = binary:replace(Original, <<"hls_nums:u8()">>, <<"?VALUE_TYPE">>, [global]),
     Included = binary:replace(Typed, <<"-module(hls_scheduler_build_fixture).">>,
         <<"-module(hls_scheduler_build_fixture).\n-include(\"scheduler_value.hrl\").">>),
@@ -35,13 +35,13 @@ retained_representations() ->
         ?assertEqual(#{}, Calls),
         ok
     after
-        hls_scheduler_build_fixture = hls_build_sources:load("test/hls_scheduler_build_fixture.erl", [])
+        hls_scheduler_build_fixture = hls_build_sources:load("apps/hls_fabric/test/hls_scheduler_build_fixture.erl", [])
     end.
 
 %% The public source builder must reuse common planning for RAM and inspection too.
 -spec public_build_analysis_once_test_() -> term().
 public_build_analysis_once_test_() -> {timeout, 30, fun() ->
-    Config = #{sources => [{"test/hls_scheduler_build_fixture.erl", []}],
+    Config = #{sources => [{"apps/hls_fabric/test/hls_scheduler_build_fixture.erl", []}],
         topology => {hls_scheduler_build_fixture, topology, []},
         frame_payload_words => 1,
         placement => #{name => retained_build, channel_depth => 1, actor_egress_depth => burst,

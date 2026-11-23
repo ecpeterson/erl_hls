@@ -14,8 +14,8 @@ from test_local_protocol import prove
 
 def configuration(path: Path, function: str, arguments: str = '[]') -> None:
     """Bind current fixture sources to an explicit trusted topology constructor."""
-    path.write_text('#{sources => [{"test/hls_protocol_network_fixture.erl",[]},'
-                    '{"test/hls_protocol_inbox_fixture.erl",[]}],topology => '
+    path.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl",[]},'
+                    '{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],topology => '
                     '{hls_protocol_network_fixture,'+function+','+arguments+'},actor_limit => 3}.\n')
 
 
@@ -39,7 +39,7 @@ def simulate(fixture: Path, stage: Path, core: Path | None = None, reject: bool 
     wires.append('wire [50:0] faults={'+','.join(faults)+'};')
     wires.append('protocol_network dut('+','.join(connections)+');')
     bench=stage/'bench.sv'
-    bench.write_text((ROOT/'test/rtl/protocol_network_tb.sv').read_text().replace('@@WIRING@@','\n'.join(wires)))
+    bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_network_tb.sv').read_text().replace('@@WIRING@@','\n'.join(wires)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,
          core or fixture/'network/core.v',fixture/'network/protocol_network.sv'],stage,'compile')
     with (stage/'simulate.log').open('x') as log:
@@ -119,7 +119,7 @@ def main() -> None:
     args=parser.parse_args(); stage=args.stage; stage.mkdir()
     config=stage/'fixture.config';configuration(config,'topology')
     fixture=stage/'fixture'
-    run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    run(['bash','tools/hls_fabric/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
     fixture=(fixture/'compiled').resolve()
     simulate(fixture,stage)
     negative_wiring(args.xls,fixture,stage)

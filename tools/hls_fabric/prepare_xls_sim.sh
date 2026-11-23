@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 stage=${1:?usage: prepare_xls_sim.sh STAGE}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 # Source listings and common host transports retain one compiler-owned implementation.
-bash "$erl_hls_root/tools/prepare_xls_sim.sh" "$stage"
+bash "$project_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '
     Stage = os:getenv("ERL_HLS_STAGE"),
         PhiHalo = xls_parse:to_xls("apps/hls_phi/src/phi_halo_cell.erl"),
@@ -167,9 +167,9 @@ cp apps/hls_phi/test/rtl/phi_halo_cell_tb.sv apps/hls_phi/test/rtl/phenom_data_c
    apps/hls_phi/test/rtl/phi_phenom_topology_tb.sv apps/hls_phi/test/rtl/phi_torus_topology_tb.sv "$stage/"
 cp apps/hls_phi/test/rtl/phi_noise_topology_smoke_tb.sv apps/hls_phi/test/rtl/phi_noise_topology_tb.sv \
    apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv apps/hls_phi/test/rtl/phi_memory_bridge_tb.sv "$stage/"
-cp tools/scheduler_ram_configurations.sh apps/hls_phi/tools/compile_phi_decoder_profile.py \
+cp tools/hls_fabric/scheduler_ram_configurations.sh apps/hls_phi/tools/compile_phi_decoder_profile.py \
    apps/hls_phi/tools/compile_phi_decoder_profile.sh apps/hls_phi/tools/phi_tool_paths.py \
-   tools/backend_build_profile.py "$stage/"
+   tools/hls_fabric/backend_build_profile.py "$stage/"
 # Preserve the preprocessed application source used by older remote OTP runtimes.
 for module in hls_pauli phi_field phenom_data_cell phenom_syndrome_cell phi_halo_cell \
     phi_memory_boundary phi_memory_demo phi_memory_experiment phi_memory_runner \
@@ -182,7 +182,7 @@ erlc -P \
     -o "$stage/test_src" apps/hls_phi/test/phi_memory_bridge_tests.erl
 cp "$stage/test_src/phi_memory_bridge_tests.P" "$stage/test_src/phi_memory_bridge_tests.erl"
 
-cp test/rtl/xls_scheduler_profile.h "$stage/xls_scheduler_profile.h"
+cp apps/hls_fabric/test/rtl/xls_scheduler_profile.h "$stage/xls_scheduler_profile.h"
 python3 - "$stage/xls_sim_bridge.c" <<'PYVPI'
 from pathlib import Path
 import sys

@@ -16,8 +16,8 @@ def build(xls: Path, stage: Path, bad_initialization: bool, ebin: Path) -> Path:
     """Emit and compile the complete reusable domain boundary; retain every failed stage."""
     stage.mkdir()
     source_options = "[{d, 'DOMAIN_BAD_INITIALIZATION'}]" if bad_initialization else "[]"
-    config = ('#{sources=>[{"test/hls_domain_counter.erl",' + source_options + '},'
-              '{"test/hls_domain_relay.erl",[]}],'
+    config = ('#{sources=>[{"apps/hls_fabric/test/hls_domain_counter.erl",' + source_options + '},'
+              '{"apps/hls_fabric/test/hls_domain_relay.erl",[]}],'
               'topology=>{hls_domain_counter,topology,[]},actor_limit=>2,control=>rectangle}')
     expression = ('[Output,Header]=init:get_plain_arguments(), _=hls_protocol_domain:write('
                   + config + ',Output), ok=hls_domain_rtl_backend:write_codes('
@@ -31,7 +31,7 @@ def build(xls: Path, stage: Path, bad_initialization: bool, ebin: Path) -> Path:
          '--Mdir', stage / 'obj_dir', '-j', '1', '-Wno-fatal',
          '-CFLAGS', '-std=c++17 -I' + shlex.quote(str(stage)),
          '-o', 'simulation', compiled / 'domain/core.v',
-         compiled / 'domain/protocol_domain.sv', ROOT / 'test/rtl/domain_sim.cpp'],
+         compiled / 'domain/protocol_domain.sv', ROOT / 'apps/hls_fabric/test/rtl/domain_sim.cpp'],
         stage, 'verilator')
     return stage / 'obj_dir/simulation'
 
@@ -72,13 +72,13 @@ def main() -> None:
     args.stage.mkdir()
     ebin = args.stage / 'ebin'
     ebin.mkdir()
-    sources = [ROOT / 'test' / name for name in
+    sources = [ROOT / 'apps/hls_fabric/test' / name for name in
                ['hls_domain_counter.erl', 'hls_domain_relay.erl',
                 'hls_domain_rtl_backend.erl',
                 'hls_domain_recovery_live.erl', 'hls_test_nodes.erl']]
     run(['erlc', *[v for p in erlang_paths('test') for v in ('-pa', p)],
          '+debug_info', '-Werror', '-o', ebin, *sources], args.stage, 'host-compile')
-    tracked = [*sources, ROOT / 'test/rtl/domain_sim.cpp', ROOT / 'test/rtl/framed_fifo_stream.h']
+    tracked = [*sources, ROOT / 'apps/hls_fabric/test/rtl/domain_sim.cpp', ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_stream.h']
     before = {str(p): digest(p) for p in tracked}
     for mode, bad in [('normal', False), ('bad_initialization', True)]:
         part = args.stage / mode

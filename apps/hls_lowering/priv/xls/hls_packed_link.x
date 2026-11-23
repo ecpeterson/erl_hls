@@ -250,7 +250,7 @@ proc Receive<TX: u32, RX: u32, TAG: u16, WORDS: u32, COMPACT: bool> {
 }
 
 // Forward the queue head without another frame register; return its credit after acceptance.
-// tools/transport_codegen.py keeps the frame in one cycle and the credit in the next.
+// tools/hls_fabric/transport_codegen.py keeps the frame in one cycle and the credit in the next.
 proc Deliver {
   delivered_queue: chan<axis::Frame> in;
   delivered_frame: chan<axis::Frame> out;
@@ -273,7 +273,7 @@ proc Deliver {
 proc Wire<WORDS: u32> {
   wire_queue: chan<bits[WORDS * u32:34]> in;
   wire_transfer: chan<bits[WORDS * u32:34]> out;
-  // Pair with the same-cycle constraint in tools/transport_codegen.py.
+  // Pair with the same-cycle constraint in tools/hls_fabric/transport_codegen.py.
   config(wire_queue: chan<bits[WORDS * u32:34]> in, wire_transfer: chan<bits[WORDS * u32:34]> out) { (wire_queue, wire_transfer) }
   // The channel owns queued transfers.
   init { () }

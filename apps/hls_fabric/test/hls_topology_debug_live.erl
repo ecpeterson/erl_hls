@@ -1,7 +1,7 @@
 -module(hls_topology_debug_live).
 -export([run/1]).
 
-%% Integration runner used by tools/test_topology_debug_integration.py. The
+%% Integration runner used by tools/hls_fabric/test_topology_debug_integration.py. The
 %% application is held at an external sink, then released through a test-only
 %% file control. All observations travel through the production debug client.
 -doc "Exercises stalled RTL through the host debug transport and checks recovery.".

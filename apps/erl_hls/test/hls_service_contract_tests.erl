@@ -74,7 +74,7 @@ missing_proxy_contract_test() ->
 %% Reads the reply-contract fixture through the same source preparation as normal compilation.
 -spec forms() -> [hls_source:form()].
 forms() ->
-    {ok, Forms} = hls_source:parse_file("test/hls_reply_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("apps/erl_hls/test/hls_reply_fixture.erl"),
     Forms.
 
 replies(Declaration) ->

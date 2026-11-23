@@ -20,14 +20,14 @@ phase_entry_and_internal_events_precede_postponed_input_test() ->
 generated_event_storage_test() ->
     Interface = hls_actor_interface:from_module(hls_statem_event_fixture),
     ?assertEqual(8, maps:get(continuation_width, Interface)),
-    Generated = iolist_to_binary(xls_parse:to_xls("test/hls_statem_event_fixture.erl")),
+    Generated = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/hls_statem_event_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"next_event: u8">>)),
     ok.
 
 %% Unsupported actions must fail during translation, before any hardware is produced.
 -spec invalid_call_directive_test() -> ok.
 invalid_call_directive_test() ->
-    {ok, Forms} = hls_source:parse_file("test/hls_statem_reply_fixture.erl"),
+    {ok, Forms} = hls_source:parse_file("apps/erl_hls/test/hls_statem_reply_fixture.erl"),
     Changed = [case Form of
         {function, L, waiting, 3, Clauses} ->
             {function, L, waiting, 3, [postpone_call(C) || C <- Clauses]};

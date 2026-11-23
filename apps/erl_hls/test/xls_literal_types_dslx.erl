@@ -5,7 +5,7 @@
 -doc "Writes BEAM-derived literal-context interpreter/RTL vectors, including untyped aliases reused at distinct exact widths, and rejections for already typed mismatches.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Forms} = epp:parse_file("test/xls_literal_fixture.erl", [], []),
+    {ok, Forms} = epp:parse_file("apps/erl_hls/test/xls_literal_fixture.erl", [], []),
     Cases = [{Mode, X} || Mode <- lists:seq(0, 29), X <- [0, 1, 2, 7, 8, 127, 255]],
     Expected = [{M, X, expected(M, X)} || {M, X} <- Cases],
     ok = file:write_file(filename:join(Stage, "literal_context.x"), [

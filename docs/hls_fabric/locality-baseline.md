@@ -4,27 +4,11 @@ This opt-in experiment preserves the accepted `local-admission-descriptors-2026-
 
 The cumulative pipeline retains source-derived receive capture and conditional decoding, phase specialization and barrier grant summaries, private consumer-payload erasure, admission predecode, and local admission/descriptors. The final pass registers actor-local free-cell/capacity proposals and masks, separates validity from private payload, and prepares ordinary/refill descriptors independently at the existing boundary. Consumer erasure remains part of this measured combination; its isolated result is not the combination's result. Later refill-selection, refill-payload-bank and owner-local-completion experiments are excluded.
 
-## Generate and qualify
+## Reproduction status
 
-Run from the repository root, with a new output directory outside the checkout. `emit` generates the fixed 128-round fixture and seven source-bound proof plans, then checks the complete generated inventory against `experiments/local_admission/reference.json`. Eight hardware-generating files must match byte for byte. The inspection-only actor projection must match every layout field; its source-location identities remain freshly generated and validated by ordinary lowering. This establishes reproduction, not qualification.
-
-```sh
-rebar3 compile
-python3 experiments/local_admission/baseline.py emit --stage "$HLS_ARTIFACT_ROOT/locality-reproduction"
-```
-
-Use the XLS tool directory and DSLX standard library from your installed toolchain and an explicit Yosys executable. Proofs run serially; each external proof stage has a 180-second limit. Completed and failed outputs are preserved, and an existing proof result cannot be silently overwritten. `--proof` selects one of the seven directories listed in `emission.json`.
-
-```sh
-python3 experiments/local_admission/baseline.py prove --stage "$HLS_ARTIFACT_ROOT/locality-reproduction" \
-  --xls-tools "$XLS_TOOLS" --xls-stdlib "$XLS_STDLIB" --yosys "$YOSYS"
-python3 experiments/local_admission/baseline.py release --stage "$HLS_ARTIFACT_ROOT/locality-reproduction"
-python3 experiments/local_admission/baseline.py verify --stage "$HLS_ARTIFACT_ROOT/locality-reproduction"
-```
-
-Release invokes the original gates for every stage before creating `local/candidate-1/dslx`. These check exact source bindings, positive propositions and deliberately false controls. Unsupported source shapes fail closed. The final inventory includes the original RAM modules, actor wrapper and placement metadata; substituting raw XLS output for the backend RTL is not an equivalent reproduction.
-
-The propositions quantify the typed component domains recorded in each plan. They include actual owner widths, private-payload noninterference and extracted coordinator/barrier init/step relations. Owner transition composition additionally relies on source/callsite review. Source extraction, XLS and Yosys remain trusted; these are not whole-network progress or native-netlist equivalence proofs. A released component candidate still needs whole-decoder full/reset witnesses and physical qualification before a new performance claim. Generation or proof release never starts a physical run.
+The original reproduction driver and its fixed reference inputs remain external to
+the umbrella. This page retains the accepted evidence and its bounds, but does not
+define a runnable in-tree workflow.
 
 ## Retained evidence
 

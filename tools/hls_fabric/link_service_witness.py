@@ -37,8 +37,8 @@ pub proc Top {{
 def compile_link(xls: Path, public: Path, stage: Path, words: int, credits: int, compact: bool = False) -> dict:
     """Compile a fresh bridge, or reuse only a complete digest-matched build."""
     tracked = [ROOT/'apps/hls_lowering/priv/xls/hls_packed_link.x', public/'priv/xls/lib/axis.x', public/'priv/xls/lib/frame_config.x', Path(__file__),
-               ROOT/'tools/test_packed_credit.py', ROOT/'tools/backend_commands.py',
-               ROOT/'tools/transport_codegen.py',
+               ROOT/'tools/hls_fabric/test_packed_credit.py', ROOT/'tools/hls_fabric/backend_commands.py',
+               ROOT/'tools/hls_fabric/transport_codegen.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *sorted((xls/'xls/dslx/stdlib').rglob('*.x'))]
     inputs = {'words': words, 'credits': credits, 'compact': compact, 'sources': {str(p): digest(p) for p in tracked}}
@@ -81,7 +81,7 @@ def testbench(path: Path) -> str:
 
 def faults(stage: Path, words: int, credits: int, compact: bool = False) -> dict:
     """Require each malformed prefix/header/termination/credit to fault until reset."""
-    path = ROOT/'test/rtl/packed_credit_fault_tb.sv'
+    path = ROOT/'apps/hls_fabric/test/rtl/packed_credit_fault_tb.sv'
     (stage/'fault-test.sv').write_text(testbench(path))
     execute(['iverilog', '-g2012', '-s', 'packed_credit_fault_tb',
          f'-Ppacked_credit_fault_tb.WORDS={words}', f'-Ppacked_credit_fault_tb.CREDITS={credits}',
@@ -98,7 +98,7 @@ def faults(stage: Path, words: int, credits: int, compact: bool = False) -> dict
 def simulate(stage: Path, words: int, credits: int, active: int, delay: int,
              stalls: bool = False, block: bool = False, restart: bool = False, pattern: int = 0) -> dict:
     """Require exact wire/delivery order, reserved credits, fair progress and complete drain."""
-    (stage/'test.sv').write_text(testbench(ROOT/'test/rtl/packed_credit_service_tb.sv'))
+    (stage/'test.sv').write_text(testbench(ROOT/'apps/hls_fabric/test/rtl/packed_credit_service_tb.sv'))
     parameters = dict(WORDS=words, CREDITS=credits, ACTIVE=active, DELAY=delay,
                       STALLS=int(stalls), BLOCK=int(block), RESTART=int(restart), PATTERN=pattern)
     name = '-'.join(f'{k.lower()}{v}' for k, v in parameters.items())

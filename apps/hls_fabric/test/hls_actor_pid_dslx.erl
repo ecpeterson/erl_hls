@@ -22,7 +22,7 @@ fixture() ->
 write(Stage) ->
     {Plan, Specs, Endpoints} = fixture(),
     Options = #{mailbox_debug => true},
-    Actor = xls_scheduler_actor:to_artifact("test/hls_actor_pid_fixture.erl", Options),
+    Actor = xls_scheduler_actor:to_artifact("apps/hls_fabric/test/hls_actor_pid_fixture.erl", Options),
     Artifacts = #{hls_actor_pid_fixture => Actor},
     Scheduler = hls_scheduler_plan:normalize(Plan, Specs),
     Bindings = xls_scheduler_ram_v:bindings(Scheduler),
@@ -39,7 +39,7 @@ write(Stage) ->
     lists:foreach(fun({Name, Data}) ->
         ok = file:write_file(filename:join(Stage, Name), Data)
     end, Files),
-    {ok, _} = file:copy("test/xls/actor_pid_ingress.x", filename:join(Stage, "actor_pid_ingress.x")),
+    {ok, _} = file:copy("apps/hls_fabric/test/xls/actor_pid_ingress.x", filename:join(Stage, "actor_pid_ingress.x")),
     ok.
 
 addresses(Scheduler, Endpoints) ->

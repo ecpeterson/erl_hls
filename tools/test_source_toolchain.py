@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-DRIVER = ROOT/'priv/tools/compile_source_build.py'
+DRIVER = ROOT/'apps/erl_hls/priv/tools/compile_source_build.py'
 spec = importlib.util.spec_from_file_location('compile_source_build', DRIVER)
 driver = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(driver)
@@ -35,7 +35,7 @@ class SourceToolchainTests(unittest.TestCase):
             release = stage/'compiler release'
             shutil.copytree(ROOT/'_build/default/rel/erl_hls', release)
             project = stage/'source project'
-            shutil.copytree(ROOT/'src/examples/telemetry', project)
+            shutil.copytree(ROOT/'apps/erl_hls/src/examples/telemetry', project)
             forbidden = stage/'forbidden'
             forbidden.mkdir()
             for name in ('python3', 'rebar3'):
@@ -92,7 +92,7 @@ class SourceToolchainTests(unittest.TestCase):
                 path.write_text('#!/bin/sh\nexit 99\n')
                 path.chmod(0o755)
             fixture = stage/'actor.erl'
-            fixture.write_text((ROOT/'test/xls_names_gs_fixture.erl').read_text().replace(
+            fixture.write_text((ROOT/'apps/erl_hls/test/xls_names_gs_fixture.erl').read_text().replace(
                 '-module(xls_names_gs_fixture).', '-module(xls_names_gs_fixture).\n-include("options.hrl").'))
             includes = stage/'includes'
             includes.mkdir()

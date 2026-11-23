@@ -175,9 +175,10 @@ def main() -> None:
     trace = json.loads((args.bundle / 'board-control-trace.json').read_text())
     layout, observations, rows = trace_layout(trace)
     iverilog, vvp = executable(args.iverilog), executable(args.vvp)
-    template_path = ROOT / 'test/rtl/domain_board_control_tb.sv.in'
-    for path in (Path(__file__).resolve(), ROOT / 'tools/test_domain_endpoints.py', ROOT / 'tools/backend_commands.py',
-                 ROOT / 'tools/backend_paths.py', template_path, iverilog, vvp):
+    template_path = ROOT / 'apps/hls_fabric/test/rtl/domain_board_control_tb.sv.in'
+    for path in (Path(__file__).resolve(), ROOT / 'tools/hls_fabric/test_domain_endpoints.py',
+                 ROOT / 'tools/hls_fabric/domain_endpoint_support.py', ROOT / 'tools/hls_fabric/backend_commands.py',
+                 ROOT / 'tools/hls_fabric/backend_paths.py', template_path, iverilog, vvp):
         hashes[path] = digest(path)
     args.stage.mkdir(parents=True)
     artifacts, replacements = vectors(args.stage, trace, observations)

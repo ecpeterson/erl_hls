@@ -12,7 +12,7 @@ from emit_protocol_repetition import build_application
 from backend_commands import digest, run
 from test_local_protocol import prove
 from test_protocol_application import simulator_source
-from test_protocol_repetition import compare
+from protocol_repetition_result import compare
 from test_protocol_inspection_shapes import shapes
 
 
@@ -67,7 +67,7 @@ def reset_witness(build: Path, stage: Path) -> None:
     manifest=json.loads((build/'network/inspection.json').read_text());fingerprint=bytes.fromhex(manifest['fingerprint'])
     assignments='\n'.join(f"fingerprint[{i}]=32'h{int.from_bytes(fingerprint[4*i:4*i+4],'little'):08x};" for i in range(8))
     bench=stage/'reset.sv'
-    bench.write_text((ROOT/'test/rtl/protocol_inspection_reset_tb.sv').read_text().replace('@@FINGERPRINT@@',assignments))
+    bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_inspection_reset_tb.sv').read_text().replace('@@FINGERPRINT@@',assignments))
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     run(['iverilog','-g2012','-s','tb','-o',stage/'simulation',bench,*rtl],stage,'compile')
     run(['vvp',stage/'simulation'],stage,'simulate')

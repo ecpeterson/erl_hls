@@ -153,7 +153,7 @@ def boot_files(candidate: Path, stage: Path, epoch: int) -> None:
 def compiled_runtime(public: Path | None = None, profile: str = "default") -> tuple[Path, Path]:
     """Refresh one fabric profile and select its compiler sources and matching runtime beams."""
     project = ROOT.parent.parent
-    sys.path.insert(0, str(project / "tools"))
+    sys.path.insert(0, str(project / "tools/hls_fabric"))
     from backend_paths import compiler_runtime_ebin
     from compiler_paths import compiler_root
     rebar = ["rebar3", "compile"] if profile == "default" else ["rebar3", "as", profile, "compile"]

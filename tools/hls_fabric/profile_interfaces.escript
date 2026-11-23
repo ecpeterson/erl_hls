@@ -2,7 +2,7 @@
 %%! -noshell
 -mode(compile).
 
-%% Usage: tools/profile_interfaces.escript CHECKOUT OUTPUT.json
+%% Usage: tools/hls_fabric/profile_interfaces.escript CHECKOUT OUTPUT.json
 %% Prepare CHECKOUT with `rebar3 as test compile` first. Run the same script
 %% against two checkouts to compare source parsing and topology planning.
 -doc "Measure source parsing and planning in one explicitly compiled test-profile checkout.".

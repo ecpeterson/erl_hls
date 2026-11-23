@@ -5,22 +5,22 @@
 -doc "Writes both designs and a wrapper using the production state/mailbox RAMs.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Events = xls_scheduler_actor:to_xls("test/hls_statem_event_fixture.erl"),
-    {ok, EventTests} = file:read_file("test_data/xls_statem_event_semantics.inc.x"),
+    Events = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_statem_event_fixture.erl"),
+    {ok, EventTests} = file:read_file("apps/hls_fabric/test_data/xls_statem_event_semantics.inc.x"),
     ok = save(Stage, "statem_events.x", [Events, EventTests]),
-    Reduction = xls_scheduler_actor:to_xls("test/hls_statem_reduction_reply_fixture.erl"),
-    {ok, ReductionTests} = file:read_file("test_data/xls_statem_reduction_reply_semantics.inc.x"),
+    Reduction = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_statem_reduction_reply_fixture.erl"),
+    {ok, ReductionTests} = file:read_file("apps/hls_fabric/test_data/xls_statem_reduction_reply_semantics.inc.x"),
     ok = save(Stage, "statem_reduction_replies.x", [Reduction, ReductionTests]),
-    Actor = xls_scheduler_actor:to_xls("test/hls_statem_reply_fixture.erl"),
+    Actor = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_statem_reply_fixture.erl"),
     ok = save(Stage, "hls_statem_reply_fixture.x", Actor),
-    {ok, ReplyTests} = file:read_file("test_data/xls_statem_reply_semantics.inc.x"),
+    {ok, ReplyTests} = file:read_file("apps/hls_fabric/test_data/xls_statem_reply_semantics.inc.x"),
     ok = save(Stage, "statem_direct.x", [Actor, ReplyTests]),
     write_shared(Stage, hls_statem_reply_fixture).
 
 -doc "Writes the server form of the same shared-RAM workload.".
 -spec write_server(file:filename()) -> ok.
 write_server(Stage) ->
-    Actor = xls_scheduler_actor:to_xls("test/hls_server_reply_fixture.erl"),
+    Actor = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_server_reply_fixture.erl"),
     ok = save(Stage, "hls_server_reply_fixture.x", Actor),
     write_shared(Stage, hls_server_reply_fixture).
 

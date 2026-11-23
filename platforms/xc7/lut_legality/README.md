@@ -1,6 +1,6 @@
 # XC7 LUT placement regression
 
-Two experimental patches for pinned nextpnr-xilinx `68aeeb39` preserve usable O5 placements and correct truth-table generation when physical inputs share several logical names. They are isolated from the installed toolchain. See the [measurement report](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/lut-legality-2026-09-21.md`) for evidence and limits.
+Two experimental patches for pinned nextpnr-xilinx `68aeeb39` preserve usable O5 placements and correct truth-table generation when physical inputs share several logical names. They are isolated from the installed toolchain. See the [measurement report](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/lut-legality-2026-09-21.md`) for evidence and limits.
 
 A physical XC7 LUT has an O6 output and an O5 output sharing five inputs. A single-output logical LUT may occupy either half if its input requirements and its neighbors permit it. The packer initially names its output `O6`; after choosing an O5 placement, nextpnr must rename that output and preserve the logical function through input permutation.
 

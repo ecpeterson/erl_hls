@@ -1,6 +1,6 @@
 # Recovery boundaries and acceptance
 
-`Notes/erl_xls/Roadmap.md` is the sole active task list. P5 owns application recovery meaning, P6 owns selected physical deployment, and G1 owns additional Erlang links/exhaustion and collective-retirement semantics. This note supports those items; the original staged plan is superseded by the implemented [domain contract](../docs/domain-recovery.md) and [qualification record](actor-recovery.md).
+`Notes/erl_xls/Roadmap.md` is the sole active task list. P5 owns application recovery meaning, P6 owns selected physical deployment, and G1 owns additional Erlang links/exhaustion and collective-retirement semantics. This note supports those items; the original staged plan is superseded by the implemented [domain contract](../../docs/hls_fabric/domain-recovery.md) and [qualification record](actor-recovery.md).
 
 ## Established digital boundary
 

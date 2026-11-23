@@ -19,8 +19,8 @@ oracle(Phase, Value) ->
 -doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
-    {ok, Semantics} = file:read_file("test_data/xls_entry_branch_semantics.inc.x"),
-    Generated = xls_parse:to_xls("test/xls_entry_branch_fixture.erl"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/xls_entry_branch_semantics.inc.x"),
+    Generated = xls_parse:to_xls("apps/erl_hls/test/xls_entry_branch_fixture.erl"),
     Cases = [{PhaseIndex, Phase, Value, Ready}
         || {PhaseIndex, Phase} <- lists:enumerate(0, phases()),
            Value <- lists:seq(0, 7),

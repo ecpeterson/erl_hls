@@ -5,7 +5,7 @@
 -doc "Writes ordinary 64/255-slot actors with selection and compaction witnesses.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Source} = file:read_file("test/hls_large_mailbox_fixture.erl"),
+    {ok, Source} = file:read_file("apps/erl_hls/test/hls_large_mailbox_fixture.erl"),
     lists:foreach(fun(Capacity) ->
         Stem = filename:join(Stage, "large_mailbox_" ++ integer_to_list(Capacity)),
         Path = Stem ++ ".erl",

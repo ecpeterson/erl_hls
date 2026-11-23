@@ -12,7 +12,7 @@ invalid_mode_test() ->
 -spec catalog_test() -> ok.
 catalog_test() ->
     Path=filename:join("_build","inspection-binding-"++integer_to_list(erlang:system_time(nanosecond))),
-    #{eligible:=false}=hls_protocol_application:write(#{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]}],
+    #{eligible:=false}=hls_protocol_application:write(#{sources=>[{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]}],
         topology=>{hls_protocol_boundary_fixture,topology,[]},actor_limit=>4,device=>board,host=>1,inspection=>process},Path),
     {ok,Bytes}=file:read_file(filename:join(Path,"network/inspection.etf")),
     Plan=#{actors:=[A|Rest],manifest:=Manifest}=binary_to_term(Bytes),
@@ -33,7 +33,7 @@ receiver_codebooks_test() ->
     #{result := #{network := #{inspection := Inspection},
         transport := #{bundle := #{modules := Modules}, actor_functions := Functions,
             receivers := Receivers}}, files := Files} = hls_protocol_network:emit(#{
-        sources => [{"test/hls_protocol_inbox_fixture.erl", []}],
+        sources => [{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}],
         topology => {hls_protocol_inbox_fixture, topology, []}, actor_limit => 3,
         inspection => process}),
     #{hls_protocol_inbox_fixture := #{emitted := Emitted, program := Program}} = Modules,
@@ -58,7 +58,7 @@ receiver_codebooks_test() ->
 -spec partition_catalog_test() -> ok.
 partition_catalog_test() ->
     #{result := #{network := #{inspection := Manifest}, transport := Transport}, files := Files} =
-        hls_protocol_network:emit(#{sources => [{"test/hls_protocol_boundary_fixture.erl", []}],
+        hls_protocol_network:emit(#{sources => [{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl", []}],
             topology => {hls_protocol_boundary_fixture, topology, []}, actor_limit => 4,
             native_actors => [a, c], inspection => process}),
     ?assertEqual([0, 2], [I || #{<<"id">> := I} <- maps:get(<<"resources">>, Manifest)]),

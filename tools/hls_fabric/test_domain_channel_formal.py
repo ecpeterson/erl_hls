@@ -32,7 +32,7 @@ def main() -> None:
     for item in manifest['inputs']:
         assert digest(args.bundle / item['file']) == item['sha256'], item['file']
     imports = [args.bundle / name for name in unit['dslx_path']]
-    properties = ROOT / 'test/domain_channel_semantics.x'
+    properties = ROOT / 'apps/hls_fabric/test/domain_channel_semantics.x'
     source = args.stage / 'properties.x'
     shutil.copyfile(properties, source)
     yosys = Path(shutil.which(args.yosys) or args.yosys).resolve()

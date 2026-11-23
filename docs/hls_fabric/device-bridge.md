@@ -89,7 +89,7 @@ The smallest torus deliberately exercises aliased neighbor ports and two externa
 
 ```sh
 rebar3 eunit
-python3 tools/test_credit_link.py "$XLS_ROOT" --stage _build/credit-link
+python3 tools/hls_fabric/test_credit_link.py "$XLS_ROOT" --stage _build/credit-link
 python3 apps/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-bridge --shape 2 2 --planes x z
 ```
 

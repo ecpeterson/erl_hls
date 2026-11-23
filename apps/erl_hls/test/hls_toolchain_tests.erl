@@ -87,7 +87,7 @@ actor_failure_sidecar_test_() -> {timeout, 60, fun actor_failure_sidecar/0}.
 actor_failure_sidecar() ->
     Root = filename:join("_build", "actor-sidecar-" ++ integer_to_list(erlang:unique_integer([positive]))),
     try
-        #{inputs := Inputs} = hls_compile:actor("test/hls_serial_fixture.erl", #{}, Root),
+        #{inputs := Inputs} = hls_compile:actor("apps/erl_hls/test/hls_serial_fixture.erl", #{}, Root),
         {ok, Dslx} = file:read_file(filename:join(Root, "actor.x")),
         {ok, SidecarBytes} = file:read_file(filename:join(Root, "actor.x.json")),
         #{<<"dslx_sha256">> := DslxHash, <<"failure_sites">> := Sites} = json:decode(SidecarBytes),

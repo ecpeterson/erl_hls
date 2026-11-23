@@ -15,7 +15,7 @@ invalid_mode_test() ->
 binding_test() ->
     Path=filename:join("_build","application-binding-"++integer_to_list(erlang:system_time(nanosecond))),
     D=#{devices:=#{board:=B},eligible:=false}=hls_protocol_application:write(
-        #{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{"test/hls_protocol_boundary_tests.erl",[]}],
+        #{sources=>[{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]},{"apps/hls_fabric/test/hls_protocol_boundary_tests.erl",[]}],
           topology=>{hls_protocol_boundary_tests,topology,[]},actor_limit=>4,device=>board,host=>19},Path),
     #{activation:=explicit_start,identity:=Identity,events:=Events}=B,
     ?assertEqual(32,byte_size(Identity)),
@@ -32,7 +32,7 @@ binding_test() ->
 external_collision_test() ->
     Path=filename:join("_build","application-collision-"++integer_to_list(erlang:system_time(nanosecond))),
     ?assertError({ambiguous_application_event,shared,5},hls_protocol_application:write(
-        #{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]},{"test/hls_protocol_application_conflict.erl",[]},{?FILE,[]}],
+        #{sources=>[{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]},{"apps/hls_fabric/test/hls_protocol_application_conflict.erl",[]},{?FILE,[]}],
           topology=>{?MODULE,collision,[]},actor_limit=>5,device=>board,host=>1},Path)),
     ?assertNot(filelib:is_dir(Path)).
 

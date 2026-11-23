@@ -170,9 +170,9 @@ runtime_declarations_remain_reserved_test() ->
             ?assertMatch({Name, {xls_name_collision, module, Name, _, _}}, {Name, Result})
         end || [Name] <- Matches, not lists:member(Name, RecordTypes)]
     end || {Path, Kind, Options} <- [
-        {"src/examples/regsvc/regsvc.erl", hls_gs, #{}},
-        {"test/hls_data_cell_fixture.erl", hls_statem, #{direct_actor_debug => true}},
-        {"test_data/hls_statem_reduction_lower_fixture.erl", hls_statem, #{direct_actor_debug => true}}
+        {"apps/erl_hls/src/examples/regsvc/regsvc.erl", hls_gs, #{}},
+        {"apps/erl_hls/test/hls_data_cell_fixture.erl", hls_statem, #{direct_actor_debug => true}},
+        {"apps/erl_hls/test_data/hls_statem_reduction_lower_fixture.erl", hls_statem, #{direct_actor_debug => true}}
     ]].
 
 forms(Tags) ->

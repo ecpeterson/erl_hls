@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 xls_root=${1:?usage: test_mixed_topology.sh XLS_ROOT [STAGE] [PLACEMENT ...]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/mixed-topology"}
 shift $(( $# >= 2 ? 2 : 1 ))
 placements=("$@")
@@ -11,8 +11,8 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
-source tools/scheduler_ram_configurations.sh
+source tools/hls_fabric/backend_env.sh test
+source tools/hls_fabric/scheduler_ram_configurations.sh
 for placement in "${placements[@]}"; do
     case "$placement" in direct|one|two|coalesced|ingress_direct|ingress_one|ingress_two|ingress_coalesced|components_global|components_weak) ;; *) echo "unknown placement: $placement" >&2; exit 1;; esac
     build="$stage/$placement"
@@ -40,7 +40,7 @@ for placement in "${placements[@]}"; do
             --flop_inputs=false --flop_outputs=true --use_system_verilog=false --reset=reset \
             --module_name=mixed_topology "${codegen_options[@]}" \
             "$build/topology.opt.ir" > "$build/topology_$stages.v" 2> "$build/codegen_$stages.log"
-        python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
+        python3 tools/hls_fabric/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
             --top mixed_topology_wrapper --stage "$build/p$stages" \
             --actor-projection "$build/actors.json" --actor-test "$actor_test" \
             "$build/topology_$stages.v" "$build/mixed_topology_wrapper.v" "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v

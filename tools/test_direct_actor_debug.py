@@ -276,7 +276,7 @@ class DirectActorTests(unittest.TestCase):
             source, exe = Path(stage) / "snapshot.sv", Path(stage) / "snapshot.vvp"
             source.write_text("\n".join(bench))
             subprocess.run(["iverilog", "-g2012", "-s", "direct_snapshot_tb", "-o", str(exe), str(source),
-                            str(ROOT / "priv/rtl/debug/hls_actor_snapshot.v")], check=True)
+                            str(ROOT / "apps/erl_hls/priv/rtl/debug/hls_actor_snapshot.v")], check=True)
             result = subprocess.run(["vvp", str(exe)], capture_output=True, text=True, check=True, timeout=30)
             self.assertIn("PASS: direct snapshots", result.stdout)
 

@@ -15,7 +15,7 @@ def compile_host(stage: Path) -> Path:
     """Compile only the maintained source application and backend-neutral witnesses."""
     ebin = stage / 'ebin'
     ebin.mkdir()
-    sources = [ROOT / 'test' / name for name in [
+    sources = [ROOT / 'apps/hls_fabric/test' / name for name in [
         'hls_recovery_actuator_fixture.erl', 'hls_recovery_policy_fixture.erl',
         'hls_recovery_device_model.erl', 'hls_recovery_supervisor.erl',
         'hls_recovery_application.erl', 'hls_recovery_application_tests.erl',
@@ -42,7 +42,7 @@ def native(stage: Path, ebin: Path, scenario: str) -> Path:
 def stream_checks(xls: Path, bundle: Path, stage: Path) -> Path:
     """Run the finite framing/clock checks with widths read from the emitted runtime interface."""
     stage.mkdir()
-    template = ROOT / 'test/domain_stream_semantics.x.in'
+    template = ROOT / 'apps/hls_fabric/test/domain_stream_semantics.x.in'
     interface = bundle / 'domain/interface.etf'
     source = stage / 'stream_checks.x'
     expression = (
@@ -71,7 +71,7 @@ def stream_checks(xls: Path, bundle: Path, stage: Path) -> Path:
          '--max_ticks=1000', '--warnings_as_errors=false',
          '--dslx_path=' + ':'.join(map(str, imports)),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), source], stage, 'witness')
-    faults = ROOT / 'test/domain_fault_semantics.x'
+    faults = ROOT / 'apps/hls_fabric/test/domain_fault_semantics.x'
     run([xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none',
          '--warnings_as_errors=false', '--dslx_path=' + ':'.join(map(str, imports)),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), faults], stage, 'fault-selection')
@@ -89,7 +89,7 @@ def build(xls: Path | None, stage: Path, ebin: Path,
     if xls is None:
         raise ValueError('--xls is required unless reusing --binary')
     if source_bundle is None:
-        config = ('#{sources=>[{"test/hls_recovery_actuator_fixture.erl",[]}],'
+        config = ('#{sources=>[{"apps/hls_fabric/test/hls_recovery_actuator_fixture.erl",[]}],'
                   'topology=>{hls_recovery_actuator_fixture,topology,[]},'
                   'actor_limit=>1,control=>rectangle}')
         expression = ('[Output]=init:get_plain_arguments(), '
@@ -106,14 +106,14 @@ def build(xls: Path | None, stage: Path, ebin: Path,
     rtl = [compiled / 'domain/stream_core.v', compiled / 'domain/domain_stream.sv']
     inputs = {str(path.resolve()): digest(path) for path in [
         *rtl, interface, bundle / 'source-build.json', bundle / 'compiled.run.json',
-        ROOT / 'test/rtl/domain_stream_sim.cpp', ROOT / 'test/rtl/framed_fifo_stream.h',
-        ROOT / 'test/rtl/framed_fifo_control.h',
-        ROOT / 'test/domain_stream_semantics.x.in', checks,
+        ROOT / 'apps/hls_fabric/test/rtl/domain_stream_sim.cpp', ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_stream.h',
+        ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_control.h',
+        ROOT / 'apps/hls_fabric/test/domain_stream_semantics.x.in', checks,
     ]}
     run(['verilator', '--cc', '--exe', '--build', '--top-module', 'domain_stream',
          '--Mdir', stage / 'obj_dir', '-j', '1', '-Wno-fatal',
          '-CFLAGS', '-std=c++17', '-o', 'simulation', *rtl,
-         ROOT / 'test/rtl/domain_stream_sim.cpp'], stage, 'verilator')
+         ROOT / 'apps/hls_fabric/test/rtl/domain_stream_sim.cpp'], stage, 'verilator')
     assert inputs == {path: digest(Path(path)) for path in inputs}
     binary = stage / 'obj_dir/simulation'
     manifest = {'binary_sha256': digest(binary), 'interface': str(interface.resolve()),
@@ -188,15 +188,17 @@ def main() -> None:
         parser.error('supply --xls for a build or --binary to reuse qualified hardware')
     args.work.mkdir()
     tracked = [ROOT / path for path in [
-        'test/hls_recovery_profile.hrl', 'test/hls_recovery_actuator_fixture.erl',
-        'test/hls_recovery_policy_fixture.erl', 'test/hls_recovery_device_model.erl',
-        'test/hls_recovery_supervisor.erl', 'test/hls_recovery_application.erl',
-        'test/hls_recovery_application_tests.erl', 'test/hls_recovery_stream_live.erl',
-        'test/hls_domain_reattach_live.erl', 'test/hls_domain_shutdown_live.erl',
-        'test/hls_shutdown_supervisor.erl', 'test/hls_test_nodes.erl', 'test/rtl/domain_stream_sim.cpp',
-        'test/rtl/framed_fifo_stream.h', 'src/runtime/domain/hls_domain_fabric.erl',
-        'src/runtime/domain/hls_domain_endpoint.erl', 'src/wire/hls_domain_wire.erl',
-        'tools/test_domain_stream.py', 'test/domain_stream_semantics.x.in',
+        'apps/hls_fabric/test/hls_recovery_profile.hrl', 'apps/hls_fabric/test/hls_recovery_actuator_fixture.erl',
+        'apps/hls_fabric/test/hls_recovery_policy_fixture.erl', 'apps/hls_fabric/test/hls_recovery_device_model.erl',
+        'apps/hls_fabric/test/hls_recovery_supervisor.erl', 'apps/hls_fabric/test/hls_recovery_application.erl',
+        'apps/hls_fabric/test/hls_recovery_application_tests.erl', 'apps/hls_fabric/test/hls_recovery_stream_live.erl',
+        'apps/hls_fabric/test/hls_domain_reattach_live.erl', 'apps/hls_fabric/test/hls_domain_shutdown_live.erl',
+        'apps/hls_fabric/test/hls_shutdown_supervisor.erl', 'apps/hls_fabric/test/hls_test_nodes.erl', 'apps/hls_fabric/test/rtl/domain_stream_sim.cpp',
+        'apps/hls_fabric/test/rtl/framed_fifo_stream.h',
+        'apps/hls_fabric/src/runtime/domain/hls_domain_fabric.erl',
+        'apps/hls_fabric/src/runtime/domain/hls_domain_endpoint.erl',
+        'apps/hls_fabric/src/wire/hls_domain_wire.erl',
+        'tools/hls_fabric/test_domain_stream.py', 'apps/hls_fabric/test/domain_stream_semantics.x.in',
     ]]
     inputs = {str(path): digest(path) for path in tracked}
     (args.work / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')

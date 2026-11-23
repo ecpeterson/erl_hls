@@ -29,15 +29,42 @@ def selected(paths: list[str], config: dict[str, object]) -> list[str]:
                       and not any(fnmatchcase(p, pattern) for pattern in config.get("exclude", []))))
 
 
+def moved_path(path: str, moves: dict[str, str]) -> str:
+    """Translate one historical path through an explicit mechanical landing map."""
+    for source in sorted(moves, key=len, reverse=True):
+        if path.startswith(source):
+            return moves[source] + path[len(source):]
+    return path
+
+
+def test_module_scope(path: str) -> str | None:
+    """Return the application whose tests own a module isolated in a separate VM."""
+    parts = Path(path).parts
+    if len(parts) >= 4 and parts[0] == "apps" and parts[2] in {"test", "test_data"}:
+        return parts[1]
+    return None
+
+
 def erlang_findings(files: list[dict[str, object]]) -> list[dict[str, object]]:
-    """Attach unique module identities and reject duplicates, including clean copies."""
-    modules = Counter(item["module"] for item in files if item["module"] is not None)
+    """Attach module identities and reject copies that can share one code server."""
+    owners = defaultdict(list)
+    for item in files:
+        if item["module"] is not None:
+            owners[item["module"]].append(item)
+    ambiguous = set()
+    for module, items in owners.items():
+        scopes = [test_module_scope(item["path"]) for item in items]
+        isolated = all(scope is not None for scope in scopes) and len(scopes) == len(set(scopes))
+        if len(items) > 1 and not isolated:
+            ambiguous.add(module)
     gaps = []
     for item in files:
         module = item["module"]
-        identity = {"module": module} if module is not None and modules[module] == 1 else {}
+        scope = test_module_scope(item["path"])
+        identity = ({"module": module} | ({"module_scope": scope} if scope else {})) \
+            if module is not None and module not in ambiguous else {}
         gaps.extend(gap | identity for gap in item["findings"])
-        if module is not None and modules[module] > 1:
+        if module in ambiguous:
             gaps.append({"path": item["path"], "line": item["module_line"],
                          "id": f"module:{module}", "rule": "module_identity",
                          "fingerprint": hashlib.sha256(module.encode()).hexdigest(),
@@ -59,20 +86,50 @@ def findings(stage: str, paths: list[str], cwd: str) -> list[dict[str, object]]:
 
 def key(item: dict[str, object]) -> tuple[object, object, object]:
     """Match unique Erlang modules across moves; other source remains path-bound."""
-    owner = ("module", item["module"]) if "module" in item else ("path", item["path"])
+    owner = (("module", item["module"], item.get("module_scope"))
+             if "module" in item else ("path", item["path"]))
     return owner, item["id"], item["rule"]
 
 
-def baseline(stage: str, revision: str, config: dict[str, object]) -> list[dict[str, object]]:
-    """Audit the complete comparison inventory as inert source using the current checker."""
-    paths = selected(run("git", "ls-tree", "-r", "--name-only", revision).splitlines(), config)
+def baseline(stage: str, revision: str, config: dict[str, object],
+             moves: dict[str, str] | None = None) -> list[dict[str, object]]:
+    """Audit one historical inventory after its declared mechanical path landing."""
+    moves = moves or {}
+    tree = run("git", "ls-tree", "-r", "--name-only", revision).splitlines()
+    landed = {path: moved_path(path, moves) for path in tree}
+    selected_landed = set(selected(list(landed.values()), config))
+    paths = [path for path in tree if landed[path] in selected_landed]
     if not paths:
         return []
     archive = subprocess.check_output(["git", "archive", revision, "--", *paths])
     with tempfile.TemporaryDirectory(prefix="source-contracts-base-") as directory:
         with tarfile.open(fileobj=io.BytesIO(archive)) as files:
             files.extractall(directory, filter="data")
-        return findings(stage, paths, directory)
+        result = []
+        for item in findings(stage, paths, directory):
+            path = moved_path(item["path"], moves)
+            landed = item | {"path": path}
+            if "module" in landed:
+                scope = test_module_scope(path)
+                landed = (landed | {"module_scope": scope}) if scope else {
+                    key: value for key, value in landed.items() if key != "module_scope"}
+            result.append(landed)
+        return result
+
+
+def inherited_baselines(stage: str, primary: str,
+                        config: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+    """Combine the primary base with migration parents absent from that base."""
+    revisions = [primary]
+    prior = baseline(stage, primary, config, config.get("baseline_moves", {}))
+    for migration in config.get("migration_baselines", []):
+        revision = migration["revision"]
+        contained = subprocess.run(["git", "merge-base", "--is-ancestor", revision, primary],
+                                   check=False, capture_output=True).returncode == 0
+        if not contained:
+            revisions.append(revision)
+            prior.extend(baseline(stage, revision, config, migration.get("moves", {})))
+    return prior, revisions
 
 
 def regressions(gaps: list[dict[str, object]], prior: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -105,9 +162,10 @@ def main() -> int:
         subprocess.run(["erlc", "-Werror", "-o", stage, "tools/source_contracts.erl"], check=True)
         current = findings(stage, sorted(set(inventory) | set(paths)), str(source_root))
         gaps = [item for item in current if item["path"] in paths or item["rule"] == "module_identity"]
-        prior = [] if args.strict else baseline(stage, revision, config)
+        prior, revisions = ([], []) if args.strict else inherited_baselines(stage, revision, config)
     new = regressions(gaps, prior)
-    report = {"base": revision, "files": len(paths), "gaps": gaps, "new": new,
+    report = {"base": revision, "bases": revisions, "files": len(paths),
+              "gaps": gaps, "new": new,
               "counts": dict(Counter(i["rule"] for i in gaps))}
     destination = Path(args.report)
     destination.parent.mkdir(parents=True, exist_ok=True)

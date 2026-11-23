@@ -20,7 +20,7 @@
 %% Both interfaces remain source-derived throughout reference generation.
 -type interfaces() :: #{tx := hls_domain_endpoint_build:result(), rx := hls_domain_endpoint_build:result()}.
 
--doc "Writes a fresh endpoint-only source bundle, native traces and separate TX/RX support snapshots. TX controller capacity is source-derived independently of RX and the twenty-word data frame. Rejects existing output and any unmet native scenario assertion. The normal compile_source_build driver and tools/test_domain_endpoints.py consume the result separately; this function runs neither.".
+-doc "Writes a fresh endpoint-only source bundle, native traces and separate TX/RX support snapshots. TX controller capacity is source-derived independently of RX and the twenty-word data frame. Rejects existing output and any unmet native scenario assertion. The normal compile_source_build driver and tools/hls_fabric/test_domain_endpoints.py consume the result separately; this function runs neither.".
 -spec write(file:filename()) -> map().
 write(Directory) ->
     #{files := TxFiles, result := Tx} = hls_domain_endpoint_build:emit(tx, 20),

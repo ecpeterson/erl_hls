@@ -136,9 +136,9 @@ interface_and_codegen_agree_test() ->
     ?assertEqual(2, hls_actor_interface:max_entry_effects(Interface)),
     ?assertEqual([value], hls_actor_interface:output_schemas(Interface, first)),
     ?assertEqual([value], hls_actor_interface:output_schemas(Interface, second)),
-    Artifact = xls_parse:actor_artifact("test/xls_static_actions_fixture.erl", []),
+    Artifact = xls_parse:actor_artifact("apps/erl_hls/test/xls_static_actions_fixture.erl", []),
     ?assertEqual(2, maps:get(max_entry_effects, Artifact)),
-    Generated = iolist_to_binary(xls_parse:to_xls("test/xls_static_actions_fixture.erl")),
+    Generated = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/xls_static_actions_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"ENTRY_EFFECT_CAPACITY = u32:2;">>)).
 
 %% Compare values, raised reasons and exact eager-call sequence against ordinary BEAM evaluation.

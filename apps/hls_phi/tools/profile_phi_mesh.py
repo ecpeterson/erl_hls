@@ -139,7 +139,7 @@ def prepare(args: argparse.Namespace) -> list[dict]:
         sources = [replacements.get(source, source) for source in sources]
     hardware = sources + [ROOT / "apps/hls_phi/test/rtl/phi_link_delay.svh", args.stage / "phi_mesh_config.vh", args.stage / "phi_mesh_devices.vh"]
     hashes = {str(p): digest(p) for p in hardware}
-    execute(["iverilog", "-g2012", "-s", "phi_bridge_tb", "-I", str(args.stage), "-I", str(ROOT / "test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"),
+    execute(["iverilog", "-g2012", "-s", "phi_bridge_tb", "-I", str(args.stage), "-I", str(ROOT / "apps/hls_fabric/test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"),
              "-o", str(args.stage / "profile.vvp"), *(["-s", "phi_message_observer"] if getattr(args, "messages", False) else []), *map(str, sources)], args.stage, "iverilog", timeout=900)
     if hashes != {str(p): digest(p) for p in hardware}:
         raise ValueError("hardware changed during compilation")

@@ -31,7 +31,7 @@ test -s "$cpu_witness"
 
 ERL_HLS_PHI_BRIDGE_DISTANCE=demo \
 ERL_HLS_PHI_SHARDS="$phi_shards" \
-    "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+    "$project_root/tools/hls_fabric/prepare_xls_sim.sh" "$local_stage"
 cp "$project_root/apps/hls_phi/tools/remote_phi_memory_demo.sh" \
     "$local_stage/remote_phi_memory_demo.sh"
 

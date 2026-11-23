@@ -10,7 +10,7 @@ TYPE_ERROR = r"TypeInferenceError|[Tt]ype[Mm]ismatch|[Tt]ype mismatch|[Ss]ize mi
 
 def bench(c: Case, name: str) -> Path:
     """Name a checked-in testbench without copying or changing its oracle."""
-    return c.root / "test/rtl" / (name + ".sv")
+    return c.root / "apps/erl_hls/test/rtl" / (name + ".sv")
 
 
 def scalar(c: Case, name: str, *, top: str = "probe", module: str = "probe", tb: str | None = None,
@@ -75,7 +75,7 @@ def type_shapes(c: Case) -> None:
 def patterns(c: Case) -> None:
     """Retain runtime patterns, negative constant tails and destructured reduction conversion."""
     c.generate("xls_patterns_dslx")
-    c.interpret(c.root / "priv/xls/lib/hls_patterns.x")
+    c.interpret(c.root / "apps/erl_hls/priv/xls/lib/hls_patterns.x")
     scalar(c, "patterns")
     for name in ("empty_tail", "overlong_tail"):
         c.convert(name, "probe", rejection=r"const_assert! failure")
@@ -116,7 +116,7 @@ def integer_arithmetic(c: Case) -> None:
 def integer_shifts(c: Case) -> None:
     """Use the fixture writer's variant table, without repeating its signedness/width matrix."""
     c.generate("xls_shift_dslx")
-    c.interpret(c.root / "priv/xls/lib/hls_integer.x")
+    c.interpret(c.root / "apps/erl_hls/priv/xls/lib/hls_integer.x")
     def expand(row: list[str]) -> list:
         """Produce one complete shift pipeline from the generated corpus dimensions."""
         name, width, count_width, count = row
@@ -166,7 +166,7 @@ def ring(c: Case) -> None:
 def collections(c: Case) -> None:
     """Keep constant-wiring assertions plus signed/unsigned collection vector simulation."""
     c.generate("xls_collection_dslx")
-    c.interpret(c.root / "priv/xls/lib/hls_lists.x")
+    c.interpret(c.root / "apps/erl_hls/priv/xls/lib/hls_lists.x")
     c.interpret("constant.x"); c.convert("constant", "constant_probe"); c.codegen("constant", module="constant_probe")
     c.yosys("constant", f'read_verilog -sv "{c.path("constant.v")}"; hierarchy -top constant_probe; proc; opt; check -assert; select -assert-none t:*')
     for width in (8, 32, 64):
@@ -256,7 +256,7 @@ def binary(c: Case) -> None:
     """Keep bit syntax/codecs, a wires-only assertion, and live packed-sample observation."""
     c.imports = ("lib", "debug")
     c.compile(); c.fixture("binary")
-    c.interpret(c.root / "priv/xls/lib/hls_bits.x")
+    c.interpret(c.root / "apps/erl_hls/priv/xls/lib/hls_bits.x")
     for name, top in (("binary", "probe"), ("binary_codecs", "codec_probe")):
         scalar(c, name, top=top, module=top)
     c.convert("wires", "wire_probe", "binary.x"); c.codegen("wires", module="wire_probe")
@@ -264,7 +264,7 @@ def binary(c: Case) -> None:
     for name, top, stages, interval in (("packed_samples", "Top", 3, 2),
             ("hls_debug_observer", "Observer", 2, 1), ("hls_debug_server", "DebugServer", 3, 2)):
         if name != "packed_samples":
-            c.steps.append(Copy(c.root / "priv/xls/debug", name + ".x", c.stage))
+            c.steps.append(Copy(c.root / "apps/erl_hls/priv/xls/debug", name + ".x", c.stage))
         c.convert(name, top); c.codegen(name, flags=pipeline(stages, interval, flop=False))
     c.structure("service", "__packed_samples__Top_0_next", [c.path("packed_samples.v")])
     c.python("packed-samples", "test_packed_samples.py", c.stage, "--stage", c.path("live"))
@@ -273,10 +273,10 @@ def binary(c: Case) -> None:
 def application_frames(c: Case) -> None:
     """Exercise all frame families and the ordinary service at the original schedules."""
     c.imports = ("lib", "fabric")
-    c.interpret(c.root / "priv/xls/lib/axis.x")
+    c.interpret(c.root / "apps/erl_hls/priv/xls/lib/axis.x")
     for top, defines in (("RawTop", []), ("ReservedTop", ["-DRESERVED"]),
                          ("EndpointTop", ["-DROUTED"]), ("DebugTop", [])):
-        c.convert(top, top, c.root / "test_data/application_frames_rtl.x")
+        c.convert(top, top, c.root / "apps/erl_hls/test_data/application_frames_rtl.x")
         for stages, interval in SCHEDULES:
             name = f"{top}-p{stages}-ii{interval}"
             c.codegen(name, source=top, module="application_frames", flags=pipeline(stages, interval))
@@ -450,7 +450,7 @@ def mixed_topology(c: Case) -> None:
 
 def selection_equivalence(c: Case) -> None:
     """Compare indexed/direct/early selectors for all input bits at both retained fan-ins."""
-    c.steps.append(Copy(c.root / "test_data", "xls_selection.x", c.stage))
+    c.steps.append(Copy(c.root / "apps/erl_hls/test_data", "xls_selection.x", c.stage))
     for width in (19, 22):
         for form in ("indexed", "direct", "early"):
             name = f"{form}{width}"
@@ -466,8 +466,8 @@ def selection_equivalence(c: Case) -> None:
 
 def state_updates(c: Case) -> None:
     """Check 8,192 addressed-state replies with stalls/reset; retain a diagnostic IR census."""
-    c.steps.append(Copy(c.root / "test_data", "xls_state_updates.x", c.stage))
-    c.steps.append(Copy(c.root / "test/rtl", "xls_state_updates_tb.sv", c.stage))
+    c.steps.append(Copy(c.root / "apps/erl_hls/test_data", "xls_state_updates.x", c.stage))
+    c.steps.append(Copy(c.root / "apps/erl_hls/test/rtl", "xls_state_updates_tb.sv", c.stage))
     c.convert("state_updates", "Rows", "xls_state_updates.x")
     c.codegen("state_updates", module="state_updates", flags=pipeline(2))
     c.simulate("state_updates", "xls_state_updates_tb",
@@ -482,7 +482,8 @@ def telemetry(c: Case) -> None:
     """Compile the shipped two-actor example bundle once and compare its stalled/reset RTL to BEAM."""
     c.generate("telemetry_example_fixture")
     rtl = c.path("compiled/telemetry_top.v")
-    c.command("telemetry-bundle", [sys.executable, c.root / "priv/tools/compile_source_build.py",
+    c.command("telemetry-bundle", [sys.executable,
+        c.root / "apps/erl_hls/priv/tools/compile_source_build.py",
         c.xls, c.path("bundle"), "--output", c.path("compiled"), "--cache", c.path("cache")],
         products=(rtl,), timeout=900)
     c.structure("telemetry", "telemetry_top", [rtl])

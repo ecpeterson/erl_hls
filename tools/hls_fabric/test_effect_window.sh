@@ -2,7 +2,7 @@
 set -euo pipefail
 
 xls_root=${1:?usage: test_effect_window.sh XLS_ROOT [STAGE]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/effect_window"}
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
@@ -10,7 +10,7 @@ xls_root=$(cd "$xls_root" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
 cd "$project_root"
 rebar3 as test compile >/dev/null
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
     --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
@@ -19,7 +19,7 @@ source tools/backend_env.sh test
 for top in ArbiterTop ReturnTop; do
     "$xls_root/ir_converter_main" --top="$top" --warnings_as_errors=false \
         --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
-        "$project_root/test_data/effect_window_rtl.x" > "$stage/$top.ir"
+        "$project_root/apps/hls_fabric/test_data/effect_window_rtl.x" > "$stage/$top.ir"
     "$xls_root/opt_main" "$stage/$top.ir" > "$stage/$top.opt.ir"
     if [[ "$top" == ArbiterTop ]]; then
         testbench=effect_window_tb
@@ -34,20 +34,20 @@ for top in ArbiterTop ReturnTop; do
             --worst_case_throughput="$interval" --delay_model=unit \
             --flop_inputs=false --flop_outputs=true --use_system_verilog=false \
             --reset=reset --fifo_module= "$stage/$top.opt.ir" > "$prefix.v"
-        bash "$erl_hls_root/tools/check_rtl_structure.sh" \
+        bash "$project_root/tools/check_rtl_structure.sh" \
             "__effect_window_rtl__${top}_0_next" "$prefix-check" "$prefix.v"
         iverilog -g2012 -s "$testbench" -o "$prefix.vvp" \
-            "$project_root/test/rtl/$testbench.sv" "$prefix.v"
+            "$project_root/apps/hls_fabric/test/rtl/$testbench.sv" "$prefix.v"
         timeout 60s vvp "$prefix.vvp" | tee "$prefix.sim.log"
     done
 done
 
 # Exercise the generated router, including retained payload/index coupling.
-python3 tools/test_effect_router.py "$xls_root" --stage "$stage/router"
+python3 tools/hls_fabric/test_effect_router.py "$xls_root" --stage "$stage/router"
 
 # Bound elaboration separately from functional tests: the prior conditional
 # array update becomes impractical at twelve contenders on the native compiler.
 timeout 120s "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
     --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
-    "$project_root/test_data/effect_window_large.x" > "$stage/large.ir"
+    "$project_root/apps/hls_fabric/test_data/effect_window_large.x" > "$stage/large.ir"
 "$xls_root/opt_main" "$stage/large.ir" > "$stage/large.opt.ir"

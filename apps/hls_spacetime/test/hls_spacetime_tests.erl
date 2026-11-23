@@ -4,8 +4,13 @@
 %% Saved fixture is a schema exercise, never a measured decoder recording.
 -spec fixture() -> hls_spacetime:bundle().
 fixture() ->
-    {ok, [Bundle]} = file:consult("test_data/spacetime_example.term"),
+    {ok, [Bundle]} = file:consult(fixture_path()),
     Bundle.
+
+%% Umbrella tests run from the repository root; keep the app-owned fixture explicit.
+-spec fixture_path() -> file:filename().
+fixture_path() ->
+    filename:join(["apps", "hls_spacetime", "test_data", "spacetime_example.term"]).
 
 %% Encoding retains the cycle domain and does not prune tied prerequisite identities.
 -spec saved_example_test() -> ok.

@@ -80,7 +80,7 @@ write(Placement, Stage) ->
         effect_window_partition => window_policy(Placement)}, Options),
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Profile),
     Artifacts = maps:map(fun(Module, Requirement) ->
-        xls_scheduler_actor:to_artifact(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
+        xls_scheduler_actor:to_artifact(filename:join("apps/hls_fabric/test", atom_to_list(Module) ++ ".erl"), Requirement)
     end, Requirements),
     maps:foreach(fun(Module, Artifact) ->
         ok = xls_emitted:write(Artifact, filename:join(Stage, atom_to_list(Module) ++ ".x"))

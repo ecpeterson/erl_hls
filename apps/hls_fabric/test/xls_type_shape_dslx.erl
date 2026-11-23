@@ -8,7 +8,7 @@ write(Stage) ->
     xls_type_shape_fixture:with_source(fun(Actor, Provider, _Header) ->
         ok = xls_type_shape_fixture:load(Provider, []),
         ok = xls_type_shape_fixture:load(Actor, []),
-        {ok, Semantics} = file:read_file("test_data/hls_type_shape_semantics.inc.x"),
+        {ok, Semantics} = file:read_file("apps/hls_fabric/test_data/hls_type_shape_semantics.inc.x"),
         Grid = [0, 1, 16#7fffffff, 16#ffffffff],
         Cases = [{[A, B, C, D], expected(A, B, C, D)}
             || A <- Grid, B <- Grid, C <- Grid, D <- Grid],

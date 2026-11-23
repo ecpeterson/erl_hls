@@ -154,7 +154,7 @@ endmodule
 
 def build(args: argparse.Namespace) -> dict:
     """Compile each cut once and compare against the exact current application recurrence."""
-    sys.path.insert(0, str(ROOT / 'tools'))
+    sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
     from compiler_paths import compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     args.stage.mkdir(parents=True, exist_ok=False)

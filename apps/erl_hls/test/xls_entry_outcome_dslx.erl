@@ -20,8 +20,8 @@ oracle(Phase, Value) ->
 -doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
 -spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok' | {'error',atom()}.
 write(Stage) ->
-    {ok, Semantics} = file:read_file("test_data/xls_entry_outcome_semantics.inc.x"),
-    Generated = xls_parse:to_xls("test/xls_entry_outcome_fixture.erl"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/xls_entry_outcome_semantics.inc.x"),
+    Generated = xls_parse:to_xls("apps/erl_hls/test/xls_entry_outcome_fixture.erl"),
     Cases = [{PhaseIndex, Phase, Value, Ready}
         || {PhaseIndex, Phase} <- lists:enumerate(0, phases()),
            Value <- [0, 1, 2, 3],
@@ -31,8 +31,8 @@ write(Stage) ->
     ok = file:write_file(filename:join(Stage, "xls_entry_outcome_tb.sv"),
         testbench(Cases)),
     {ok, ReductionTests} = file:read_file(
-        "test_data/xls_entry_reduction_semantics.inc.x"),
-    X = xls_parse:to_xls("test/xls_entry_reduction_fixture.erl"),
+        "apps/erl_hls/test_data/xls_entry_reduction_semantics.inc.x"),
+    X = xls_parse:to_xls("apps/erl_hls/test/xls_entry_reduction_fixture.erl"),
     file:write_file(filename:join(Stage, "xls_entry_reduction.x"), [X, ReductionTests]).
 
 expected(Phase, Value, Ready) ->

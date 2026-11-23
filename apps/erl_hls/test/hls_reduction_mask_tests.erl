@@ -49,7 +49,7 @@ reduce(poison, _A, _B) ->
 -spec actor_member_mask_test() -> ok.
 actor_member_mask_test() ->
     Module = hls_statem_mask_reduction_fixture,
-    {ok, Module, Binary} = compile:file("test_data/hls_statem_mask_reduction_fixture.erl", [binary]),
+    {ok, Module, Binary} = compile:file("apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", [binary]),
     {module, Module} = code:load_binary(Module, "mask_fixture", Binary),
     {ok, Pid} = hls_statem:start_link(Module, [], [{mailbox_capacity, 8}, {outputs, #{out => self()}}]),
     try
@@ -97,7 +97,7 @@ maximum_capacity_sparse_mask_test() ->
 -spec hardware_membership_observation_test() -> ok.
 hardware_membership_observation_test() ->
     Reduction = maps:get(reductions, xls_parse:actor_artifact(
-        "test_data/hls_statem_mask_reduction_fixture.erl", [])),
+        "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", [])),
     {Resource, Fields} = debug_resource(Reduction),
     Values = #{status => 1, site => 0, key => 7, remaining => 1, failure => 0,
         expected => 33, seen => 32},
@@ -112,7 +112,7 @@ hardware_membership_observation_test() ->
 -spec wide_mask_observation_test() -> ok.
 wide_mask_observation_test() ->
     Reduction = maps:get(reductions, xls_parse:actor_artifact(
-        "test_data/hls_statem_mask_reduction_fixture.erl", [])),
+        "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", [])),
     [Site] = maps:get(sites, Reduction),
     Wide = Reduction#{sites := [Site#{population := #{mode => members, size => 255,
         members => lists:seq(0, 254), runtime_mask => true}}]},
@@ -144,7 +144,7 @@ debug_sample(Values, Resource, Fields) ->
 -spec mixed_site_observation_test() -> ok.
 mixed_site_observation_test() ->
     Reduction = maps:get(reductions, xls_parse:actor_artifact(
-        "test_data/hls_statem_mask_reduction_fixture.erl", [])),
+        "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", [])),
     [Site] = maps:get(sites, Reduction),
     Fixed = Site#{id := 1, population := #{mode => members, size => 2, members => [10, 40]}},
     {Resource, Fields} = debug_resource(Reduction#{sites := [Site, Fixed]}),
@@ -159,7 +159,7 @@ mixed_site_observation_test() ->
 -spec early_collection_observation_test() -> ok.
 early_collection_observation_test() ->
     Reduction = maps:get(reductions, xls_parse:actor_artifact(
-        "test_data/hls_statem_mask_reduction_fixture.erl", [])),
+        "apps/erl_hls/test_data/hls_statem_mask_reduction_fixture.erl", [])),
     {Resource, Fields} = debug_resource(Reduction),
     EarlyResource = Resource#{<<"reduction">> := (maps:get(<<"reduction">>, Resource))#{<<"early_collection">> => true}},
     Values = #{status => 1, site => 0, key => 7, remaining => 0, failure => 0, expected => 0, seen => 32},

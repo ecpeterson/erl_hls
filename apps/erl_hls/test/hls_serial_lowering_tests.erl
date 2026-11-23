@@ -5,7 +5,7 @@
 %% Calls and record fields discover the companion without manual imports.
 -spec provider_and_failure_origins_test() -> ok.
 provider_and_failure_origins_test() ->
-    Source = "test/hls_serial_fixture.erl",
+    Source = "apps/erl_hls/test/hls_serial_fixture.erl",
     {ok, Forms} = hls_source:parse_file(Source),
     ?assert(lists:member(hls_serial, xls_dslx_imports:from_forms(Forms))),
     {_, Origins} = xls_failure_sites:prepare(Forms),

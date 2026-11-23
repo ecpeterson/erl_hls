@@ -73,6 +73,19 @@ class RegsvcContextTests(unittest.TestCase):
                     regsvc.compiler_context(selected, "default")
                 run.assert_not_called()
 
+    def test_runtime_provenance_uses_sibling_application(self) -> None:
+        """Manifest inputs retain runtime sources from the umbrella sibling application."""
+        with tempfile.TemporaryDirectory() as directory:
+            apps = Path(directory) / "apps"
+            public = apps / "erl_hls"
+            runtime = apps / "hls_runtime/src/runtime"
+            runtime.mkdir(parents=True)
+            first = runtime / "first.erl"
+            second = runtime / "second.erl"
+            first.touch()
+            second.touch()
+            self.assertEqual(regsvc.runtime_sources(public), [first, second])
+
 
 if __name__ == "__main__":
     unittest.main()

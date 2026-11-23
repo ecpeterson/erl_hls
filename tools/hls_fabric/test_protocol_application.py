@@ -33,7 +33,7 @@ def reset_witness(build: Path, stage: Path, rtl: list[Path]) -> None:
     identity=bytes.fromhex(json.loads((build/'application/manifest.json').read_text())['identity'])
     assignments='\n'.join(f"identity[{i}]=32'h{int.from_bytes(identity[4*i:4*i+4],'little'):08x};" for i in range(8))
     bench=stage/'reset.sv'
-    bench.write_text((ROOT/'test/rtl/protocol_application_reset_tb.sv').read_text().replace('@@IDENTITY@@',assignments))
+    bench.write_text((ROOT/'apps/hls_fabric/test/rtl/protocol_application_reset_tb.sv').read_text().replace('@@IDENTITY@@',assignments))
     run(['iverilog','-g2012','-s','tb','-o',stage/'reset-sim',bench,*rtl],stage,'reset-compile')
     run(['vvp',stage/'reset-sim'],stage,'reset-simulate')
     assert 'PROTOCOL_APPLICATION_RESET_PASS' in (stage/'reset-simulate.log').read_text()
@@ -44,9 +44,9 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls',type=lambda p:Path(p).resolve());parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir();build=stage/'build';config=stage/'config.erl'
-    config.write_text('#{sources=>[{"test/hls_protocol_boundary_fixture.erl",[]}],topology=>'
+    config.write_text('#{sources=>[{"apps/hls_fabric/test/hls_protocol_boundary_fixture.erl",[]}],topology=>'
         '{hls_protocol_boundary_fixture,topology,[]},actor_limit=>4,device=>board,host=>1}.\n')
-    run(['bash','tools/emit_protocol_application.sh',args.xls,config,build],stage,'public-build')
+    run(['bash','tools/hls_fabric/emit_protocol_application.sh',args.xls,config,build],stage,'public-build')
     qualify((build/'compiled').resolve(),stage)
 
 
@@ -57,11 +57,11 @@ def simulator_source(build: Path, stage: Path) -> Path:
     indices=range(actors)
     expression='dut.ingress_fault||'+'||'.join(f'dut.actor_{i}_{field}' for field in ['failure','fault'] for i in indices)
     source=stage/'simulation.cpp'
-    text=(ROOT/'test/rtl/protocol_application_sim.cpp.in').read_text().replace('@@SOURCE_FAULTS@@',expression)
+    text=(ROOT/'apps/hls_fabric/test/rtl/protocol_application_sim.cpp.in').read_text().replace('@@SOURCE_FAULTS@@',expression)
     from protocol_inspection_sim import debug_fragments
     for key,value in debug_fragments(manifest.get('inspection','none') != 'none').items():text=text.replace('@@DEBUG_'+key+'@@',value)
     source.write_text(text)
-    source.with_name("framed_fifo_stream.h").write_bytes((ROOT/"test/rtl/framed_fifo_stream.h").read_bytes())
+    source.with_name("framed_fifo_stream.h").write_bytes((ROOT/"apps/hls_fabric/test/rtl/framed_fifo_stream.h").read_bytes())
     return source
 
 
@@ -69,7 +69,7 @@ def qualify(build: Path, stage: Path) -> None:
     """Exercise a compiled public application; retain simulation, host and reset evidence."""
     ebin=stage/'ebin';ebin.mkdir()
     run(['erlc',*[v for path in erlang_paths("default") for v in ('-pa',path)],'+debug_info','-Werror','-o',ebin,
-        ROOT/'test/hls_protocol_boundary_fixture.erl',ROOT/'test/hls_protocol_application_live.erl'],stage,'host-compile')
+        ROOT/'apps/hls_fabric/test/hls_protocol_boundary_fixture.erl',ROOT/'apps/hls_fabric/test/hls_protocol_application_live.erl'],stage,'host-compile')
     rtl=[build/p for p in (build/'files.f').read_text().splitlines()]
     source=simulator_source(build,stage)
     tracked=rtl+[source,source.with_name("framed_fifo_stream.h"),build/'deployment.etf']

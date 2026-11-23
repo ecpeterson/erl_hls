@@ -38,7 +38,7 @@ The Ethernet CDC report retains six critical alerts for intentional asynchronous
 
 ## Measured evidence
 
-The [September 21 report](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/vivado-reference-2026-09-21.json`) records exact artifact identities and coverage. The four-phi profile is the same closed application RTL as the preceding native experiment, with four replay cells, both reduction planes, and no transport/debug shell.
+The [September 21 report](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/vivado-reference-2026-09-21.json`) records exact artifact identities and coverage. The four-phi profile is the same closed application RTL as the preceding native experiment, with four replay cells, both reduction planes, and no transport/debug shell.
 
 | Design | Target | Setup slack | Hold slack |
 | --- | --- | ---: | ---: |

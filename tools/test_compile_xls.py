@@ -568,9 +568,9 @@ class NativeBuild(unittest.TestCase):
             self.skipTest('pass --xls-root to compare real regsvc compilation')
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)
-            for source in (ROOT / 'priv/xls/lib').glob('*.x'):
+            for source in (ROOT / 'apps/erl_hls/priv/xls/lib').glob('*.x'):
                 shutil.copyfile(source, stage / source.name)
-            shutil.copyfile(ROOT / 'src/examples/regsvc/regsvc.erl.x', stage / 'regsvc.x')
+            shutil.copyfile(ROOT / 'apps/erl_hls/src/examples/regsvc/regsvc.erl.x', stage / 'regsvc.x')
             stdlib = NATIVE_XLS / 'xls/dslx/stdlib'
             commands = [
                 ('regsvc.ir', [NATIVE_XLS / 'ir_converter_main', '--warnings_as_errors=false', '--dslx_path=.',

@@ -6,7 +6,7 @@
 -spec prepare(file:filename(), file:filename()) -> ok.
 prepare(Stage, CompilerRoot) ->
     ok = file:make_dir(Stage),
-    {ok, Source} = file:read_file("test/hls_local_actor_fixture.erl"),
+    {ok, Source} = file:read_file("apps/hls_fabric/test/hls_local_actor_fixture.erl"),
     lists:foreach(fun({Name, Body, Value, Failure}) -> variant(Stage, Name, Body, Value, Failure) end,
         [{"base", Source, 8, false},
          {"arithmetic", binary:replace(Source, <<"C#counter.value + Added">>, <<"C#counter.value bxor Added">>), 6, false},
@@ -29,9 +29,9 @@ prepare_replies(Stage) ->
 -spec replies(file:filename()) -> ok.
 replies(Stage) ->
     Output = filename:join(Stage, "reply.x"),
-    _ = hls_local_actor:write("test/hls_protocol_call_fixture.erl", [], Output),
+    _ = hls_local_actor:write("apps/hls_fabric/test/hls_protocol_call_fixture.erl", [], Output),
     {ok, Generated} = file:read_file(Output),
-    {ok, Checks} = file:read_file("test/local_reply_semantics.x.in"),
+    {ok, Checks} = file:read_file("apps/hls_fabric/test/local_reply_semantics.x.in"),
     file:write_file(filename:join(Stage, "reply_test.x"), [Generated, Checks], [exclusive]).
 
 %% Each variant changes source before parsing; no generated program is rewritten.
@@ -42,7 +42,7 @@ variant(Stage, Name, Source, Expected, Failure) ->
     Output = filename:join(Stage, Name ++ ".x"),
     _ = hls_local_actor:write(File, [], Output),
     {ok, Generated} = file:read_file(Output),
-    {ok, Template} = file:read_file("test/local_actor_semantics.x.in"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/local_actor_semantics.x.in"),
     Checks = binary:replace(binary:replace(Template, <<"@@SECOND@@">>, integer_to_binary(Expected), [global]),
         <<"@@FAIL@@">>, atom_to_binary(Failure), [global]),
     file:write_file(filename:join(Stage, Name ++ "_test.x"), [Generated, Checks], [exclusive]).
@@ -59,10 +59,10 @@ projection(Stage) ->
         state_storage => registers, mailbox_storage => registers, specialize_state => true}},
     #{groups := [#{state_projection := Projection}]} = hls_scheduler_plan:normalize(Plan, Groups),
     [Context] = proplists:get_value(hls_source_context, hls_projection_fixture:module_info(attributes)),
-    File = "test/hls_projection_fixture.erl",
+    File = "apps/hls_fabric/test/hls_projection_fixture.erl",
     Spec = xls_parse:actor_artifact(File, Context),
     ok = xls_state_projection:validate(Spec, Projection, hls_source:read(File, Context)),
-    {ok, Checks} = file:read_file("test/local_projection_semantics.x.in"),
+    {ok, Checks} = file:read_file("apps/hls_fabric/test/local_projection_semantics.x.in"),
     Artifact = xls_activation_codegen:artifact(Spec#{state_projection => Projection}),
     xls_emitted:write(xls_emitted:with_bytes(Artifact, [xls_emitted:bytes(Artifact), Checks]),
         filename:join(Stage, "projected.x")).

@@ -183,7 +183,7 @@ port_endpoint_test() ->
 -spec attach_unmapped_test() -> ok.
 attach_unmapped_test() ->
     with_export(fun(D)->
-        {ok,[B0]}=file:consult("test_data/spacetime_example.term"),
+        {ok,[B0]}=file:consult(fixture_path()),
         B=B0#{build:=build(),evidence:=simulation_witness,physical:=null},
         P=hls_spacetime_import:read(D,build(),<<"checkpoint-digest">>),
         Joined=hls_spacetime_import:attach(B,P,#{generated=>[],bindings=>[]}),
@@ -201,6 +201,10 @@ binding()->#{resource=><<"word">>,generated=>[<<"word-rtl">>],cells=>[<<"r0">>,<
 %% Human-readable labels identify this parser fixture, never a native checkpoint.
 -spec build() -> hls_spacetime:build().
 build()->#{source=><<"fixture-source">>,rtl=><<"fixture-rtl">>,observation=><<"fixture-observer">>}.
+
+%% Umbrella tests run from the repository root; keep the app-owned fixture explicit.
+-spec fixture_path() -> file:filename().
+fixture_path()->filename:join(["apps","hls_spacetime","test_data","spacetime_example.term"]).
 
 %% Test-owned temporary files are always removed, including failed deliberate corruptions.
 -spec with_export(fun((file:filename())->term())) -> ok.

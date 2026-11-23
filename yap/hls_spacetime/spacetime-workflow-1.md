@@ -8,7 +8,7 @@
 
 `hls_spacetime`’s built command imports native evidence, joins reviewed claims and validates raw ETF bundles. `prepare-view.mjs` takes arbitrary validated bundle JSON and optional navigation metadata. It checks an independent timing identity before attaching a saved timing report. `select-routes.mjs` resolves those saved arcs using the complete canonical-net/pin catalogue and emits portable escaped controls. `attach-routes.mjs` attaches completed native topology to the exact selected view. The server accepts an explicit saved-data directory. None of these product entry points searches old campaign directories or repeats implementation.
 
-The [workflow guide](../docs/workflow.md) is the user-facing command/ownership reference. Localized synthetic cases qualify interchange, identity rejection and orchestration. Actual finite simulator witnesses remain distinct from native measurements and all-input proofs.
+The [workflow guide](../../docs/hls_spacetime/workflow.md) is the user-facing command/ownership reference. Localized synthetic cases qualify interchange, identity rejection and orchestration. Actual finite simulator witnesses remain distinct from native measurements and all-input proofs.
 
 ## What remains unmapped in the main recording
 

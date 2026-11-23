@@ -143,7 +143,7 @@ collections(Type = {hls_type, _, Name, []}) ->
 write_actor(Stage, Name, Type) ->
     W = hls_type:width(Type),
     Options = [{d, 'FLOAT_TYPE', Name}] ++ case W of 16 -> [{d, 'HALF'}]; _ -> [] end,
-    Source = "test/hls_float_fixture.erl",
+    Source = "apps/erl_hls/test/hls_float_fixture.erl",
     {ok, hls_float_fixture, Binary} = compile:file(Source, [binary, return_errors] ++ Options),
     code:purge(hls_float_fixture),
     {module, hls_float_fixture} = code:load_binary(hls_float_fixture, Source, Binary),

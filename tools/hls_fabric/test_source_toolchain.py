@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class SourceToolchainTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class SourceToolchainTests(unittest.TestCase):
                 path.write_text('#!/bin/sh\necho forbidden-build-tool >&2\nexit 99\n')
                 path.chmod(0o755)
             fixture = stage/'fixture.erl'
-            source = (ROOT/'test/hls_protocol_boundary_fixture.erl').read_text().replace(
+            source = (ROOT/'apps/hls_fabric/test/hls_protocol_boundary_fixture.erl').read_text().replace(
                 'C#cell{base=N}', 'C#cell{base=hls_fixture_math:adjust(N)}')
             fixture.write_text(source)
             actor_line = next(i for i, line in enumerate(source.splitlines(), 1)

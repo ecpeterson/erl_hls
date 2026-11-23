@@ -5,7 +5,7 @@
 %% Checks diagnostic outputs are explicit.
 -spec diagnostic_outputs_are_explicit_test() -> 'ok'.
 diagnostic_outputs_are_explicit_test() ->
-    Source = "test/hls_dense_statem_fixture.erl",
+    Source = "apps/erl_hls/test/hls_dense_statem_fixture.erl",
     Plain = iolist_to_binary(xls_parse:to_xls(Source)),
     ?assertEqual(Plain, iolist_to_binary(xls_parse:to_xls(Source, #{direct_actor_debug => false}))),
     ?assertEqual(nomatch, binary:match(Plain, <<"actor_debug_out">>)),
@@ -24,7 +24,7 @@ diagnostic_outputs_are_explicit_test() ->
             xls_topology_dslx:emit(Plan, Profile#{direct_actor_debug => yes}))
     end, [scalar, rectangle]),
     ?assertError({direct_actor_debug, yes}, xls_parse:to_xls(Source, #{direct_actor_debug => yes})),
-    Server = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl", #{direct_actor_debug => true})),
+    Server = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl", #{direct_actor_debug => true})),
     ?assertNotEqual(nomatch, binary:match(Server, <<"actor_debug_out">>)).
 
 observation_boundary_name_collisions_test() ->
@@ -71,10 +71,12 @@ retained_interface_lowering_test() ->
 
 %% Native compiler smoke fixtures: a standalone actor, scalar topology, and
 %% genuinely two-dimensional rectangular family exercise each output path.
+-doc "Writes the retained actor-observation fixtures into the supplied stage.".
+-spec write(file:filename_all()) -> ok.
 write(Stage) ->
     Options = #{direct_actor_debug => true},
     write(Stage, "hls_dense_statem_fixture.x",
-        xls_parse:to_xls("test/hls_dense_statem_fixture.erl", Options)),
+        xls_parse:to_xls("apps/erl_hls/test/hls_dense_statem_fixture.erl", Options)),
     lists:foreach(fun(Kind) ->
         Plan = plan(Kind),
         #{name := Name} = Profile = profile(Kind),
@@ -87,7 +89,7 @@ write(Stage) ->
     write(Stage, "hls_dense_statem_fixture.json",
         json:encode([#{port => <<"_actor_debug_out">>, width => 49}])),
     write(Stage, "hls_actor_observation_fixture.x",
-        xls_parse:to_xls("test/hls_actor_observation_fixture.erl", Options)),
+        xls_parse:to_xls("apps/erl_hls/test/hls_actor_observation_fixture.erl", Options)),
     write(Stage, "debug_commit.x", """
     import axis;
     import hls_actor_observation_fixture;

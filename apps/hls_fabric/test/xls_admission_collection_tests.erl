@@ -5,7 +5,7 @@
 %% Opting out retains the ordinary artifact, while unsupported service combinations fail early.
 -spec option_contract_test() -> ok.
 option_contract_test() ->
-    Path = "test/hls_projection_reduction_fixture.erl",
+    Path = "apps/hls_fabric/test/hls_projection_reduction_fixture.erl",
     ?assertEqual(xls_scheduler_actor:to_xls(Path),
         xls_scheduler_actor:to_xls(Path, #{admission_reductions => false})),
     ?assertError({admission_reductions, invalid},
@@ -13,7 +13,7 @@ option_contract_test() ->
     ?assertError(admission_reductions_require_ordinary_reduced_actor,
         xls_scheduler_actor:to_xls(Path, #{shared_service => aggregate_only, admission_reductions => true})),
     ?assertError(admission_reductions_require_ordinary_reduced_actor,
-        xls_scheduler_actor:to_xls("test/hls_actor_debug_fixture.erl", #{admission_reductions => true})).
+        xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_actor_debug_fixture.erl", #{admission_reductions => true})).
 
 %% A generated module cannot simultaneously serve incompatible ownership policies.
 -spec placement_agreement_test() -> ok.
@@ -31,8 +31,8 @@ placement_agreement_test() ->
 %% Append behavioral tests to the actual generated actor, not a replica of its reducer.
 -spec generated_semantics_test() -> ok.
 generated_semantics_test() ->
-    Body = xls_scheduler_actor:to_xls("test/hls_projection_reduction_fixture.erl", #{admission_reductions => true}),
-    {ok, Tests} = file:read_file("test/xls/admission_collection.x.in"),
+    Body = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", #{admission_reductions => true}),
+    {ok, Tests} = file:read_file("apps/hls_fabric/test/xls/admission_collection.x.in"),
     Path = "_build/admission-collection/unit/collection.x",
     ok = filelib:ensure_dir(Path),
     ok = file:write_file(Path, [Body, "\n", Tests]).
@@ -40,8 +40,8 @@ generated_semantics_test() ->
 %% Exclusive mode changes ordering by assertion and must not depend on callback data.
 -spec exclusive_generated_semantics_test() -> ok.
 exclusive_generated_semantics_test() ->
-    Body = xls_scheduler_actor:to_xls("test/hls_projection_reduction_fixture.erl", #{admission_reductions => exclusive_epoch}),
-    {ok, Tests} = file:read_file("test/xls/exclusive_collection.x.in"),
+    Body = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", #{admission_reductions => exclusive_epoch}),
+    {ok, Tests} = file:read_file("apps/hls_fabric/test/xls/exclusive_collection.x.in"),
     Path = "_build/exclusive-collection/unit/collection.x",
     ok = filelib:ensure_dir(Path),
     ok = file:write_file(Path, [Body, "\n", Tests]).
@@ -49,7 +49,7 @@ exclusive_generated_semantics_test() ->
 %% Direct collectors reject runtimes whose event/reply ownership is not integrated.
 -spec direct_option_contract_test() -> ok.
 direct_option_contract_test() ->
-    Path = "test/hls_projection_reduction_fixture.erl",
+    Path = "apps/hls_fabric/test/hls_projection_reduction_fixture.erl",
     ?assertEqual(xls_scheduler_actor:to_xls(Path),
         xls_scheduler_actor:to_xls(Path, #{direct_collection => false})),
     ?assertError({direct_collection, invalid},
@@ -59,14 +59,14 @@ direct_option_contract_test() ->
             xls_scheduler_actor:to_xls(Path, Options#{direct_collection => exclusive_epoch}))
     end, [#{shared_service => aggregate_only}, #{admission_reductions => exclusive_epoch}]),
     ?assertError(direct_collection_requires_reduced_statem,
-        xls_scheduler_actor:to_xls("test/hls_actor_debug_fixture.erl", #{direct_collection => exclusive_epoch})).
+        xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_actor_debug_fixture.erl", #{direct_collection => exclusive_epoch})).
 
 %% Exercise the ordinary generated callbacks through the direct collection boundary.
 -spec direct_generated_semantics_test() -> ok.
 direct_generated_semantics_test() ->
-    Body = xls_scheduler_actor:to_xls("test/hls_projection_reduction_fixture.erl",
+    Body = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_projection_reduction_fixture.erl",
         #{direct_collection => exclusive_epoch}),
-    {ok, Tests} = file:read_file("test/xls/direct_collection.x.in"),
+    {ok, Tests} = file:read_file("apps/hls_fabric/test/xls/direct_collection.x.in"),
     Path = "_build/direct-collection/unit/collection.x",
     ok = filelib:ensure_dir(Path),
     ok = file:write_file(Path, [Body, "\n", Tests]).
@@ -85,7 +85,7 @@ direct_topology_and_debug_test() ->
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Profile),
     Options = maps:get(Module, Requirements),
     ?assertMatch(#{direct_collection := exclusive_epoch, direct_actor_debug := true}, Options),
-    Artifact = xls_scheduler_actor:to_artifact("test/hls_projection_reduction_fixture.erl", Options),
+    Artifact = xls_scheduler_actor:to_artifact("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", Options),
     Topology = iolist_to_binary(xls_fabric_topology_dslx:emit(Plan, Profile)),
     ?assertNotEqual(nomatch, binary:match(Topology, <<"::CollectionService<u32:1, u32:0>">>)),
     Projection = #{<<"direct">> := [Bank]} = xls_scheduler_debug:projection(

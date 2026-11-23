@@ -7,8 +7,8 @@
 -spec ordinary_shared_service_option_preserves_default_output_test() -> 'ok'.
 ordinary_shared_service_option_preserves_default_output_test() ->
     Sources = [
-        "src/examples/regsvc/regsvc.erl",
-        "test_data/hls_statem_reduction_lower_fixture.erl"
+        "apps/erl_hls/src/examples/regsvc/regsvc.erl",
+        "apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl"
     ],
     lists:foreach(fun(Source) ->
         ?assertEqual(
@@ -21,7 +21,7 @@ ordinary_shared_service_option_preserves_default_output_test() ->
 %% Checks shared service options are exact and validated.
 -spec shared_service_options_are_exact_and_validated_test() -> 'ok'.
 shared_service_options_are_exact_and_validated_test() ->
-    Path = "src/examples/regsvc/regsvc.erl",
+    Path = "apps/erl_hls/src/examples/regsvc/regsvc.erl",
     ?assertError(
         {invalid_xls_shared_service, speculative},
         xls_scheduler_actor:to_xls(Path, #{shared_service => speculative})
@@ -46,7 +46,7 @@ aggregate_only_requires_an_actor_reduction_test() ->
     ?assertError(
         aggregate_only_requires_reductions,
         xls_scheduler_actor:to_xls(
-            "test_data/hls_tags_statem_fixture.erl",
+            "apps/hls_fabric/test_data/hls_tags_statem_fixture.erl",
             #{shared_service => aggregate_only}
         )
     ).
@@ -54,7 +54,7 @@ aggregate_only_requires_an_actor_reduction_test() ->
 %% Checks aggregate only emits only the transport artifact surface.
 -spec aggregate_only_emits_only_the_transport_artifact_surface_test() -> 'ok'.
 aggregate_only_emits_only_the_transport_artifact_surface_test() ->
-    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    Path = "apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl",
     Ordinary = iolist_to_binary(xls_scheduler_actor:to_xls(Path)),
     AggregateOnly = iolist_to_binary(xls_scheduler_actor:to_xls(
         Path, #{shared_service => aggregate_only})),
@@ -75,7 +75,7 @@ aggregate_only_emits_only_the_transport_artifact_surface_test() ->
 %% Checks aggregate only uses one pending receptacle per actor.
 -spec aggregate_only_uses_one_pending_receptacle_per_actor_test() -> 'ok'.
 aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
-    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    Path = "apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl",
     AggregateOnly = iolist_to_binary(xls_scheduler_actor:to_xls(
         Path, #{shared_service => aggregate_only})),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
@@ -350,11 +350,11 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
 -spec actor_cursor_storage_is_bounded_in_each_service_mode_test() -> ok.
 actor_cursor_storage_is_bounded_in_each_service_mode_test() ->
     Cases = [
-        {"test_data/hls_tags_statem_fixture.erl", #{}},
-        {"test_data/hls_statem_reduction_lower_fixture.erl", #{}},
-        {"test_data/hls_statem_reduction_lower_fixture.erl", #{shared_service => aggregate_only}},
-        {"test/hls_indexed_adapter_fixture.erl", #{}},
-        {"test/hls_indexed_adapter_fixture.erl", #{gather_collection => true}}
+        {"apps/hls_fabric/test_data/hls_tags_statem_fixture.erl", #{}},
+        {"apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl", #{}},
+        {"apps/hls_fabric/test_data/hls_statem_reduction_lower_fixture.erl", #{shared_service => aggregate_only}},
+        {"apps/hls_fabric/test/hls_indexed_adapter_fixture.erl", #{}},
+        {"apps/hls_fabric/test/hls_indexed_adapter_fixture.erl", #{gather_collection => true}}
     ],
     lists:foreach(fun({Path, Options}) ->
         Generated = iolist_to_binary(xls_scheduler_actor:to_xls(Path, Options)),

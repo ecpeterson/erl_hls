@@ -160,7 +160,7 @@ branching_suffix_does_not_invalidate_source_capture_test() ->
         hls_actor_interface:from_module(Module))),
     %% Exercise both layout arms in the aggregate artifact's prefix renderer.
     Generated = iolist_to_binary(xls_scheduler_actor:to_xls(
-        "test/hls_reduction_plan_branch_fixture.erl", #{shared_service => aggregate_only})),
+        "apps/hls_fabric/test/hls_reduction_plan_branch_fixture.erl", #{shared_service => aggregate_only})),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"match scheduled.effects.layout">>)).
 

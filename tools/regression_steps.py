@@ -87,7 +87,8 @@ class Case:
 
     def options(self, warnings: bool = False) -> list[str]:
         """Preserve ordered import roots and explicit XLS standard-library selection."""
-        paths = ([self.stage] if self.stage_import else []) + [self.root / "priv/xls" / p for p in self.imports]
+        paths = ([self.stage] if self.stage_import else []) + [
+            self.root / "apps/erl_hls/priv/xls" / p for p in self.imports]
         return [f"--warnings_as_errors={str(warnings).lower()}", "--dslx_path=" + ":".join(map(str, paths)),
             "--dslx_stdlib_path=" + str(self.xls / "xls/dslx/stdlib")]
 
@@ -136,7 +137,8 @@ class Case:
     def library(self, *directories: str) -> None:
         """Stage each complete selected support import root, in the original order."""
         for directory in directories:
-            self.steps.append(Copy(self.root / "priv/xls" / directory, "*.x", self.stage))
+            self.steps.append(Copy(
+                self.root / "apps/erl_hls/priv/xls" / directory, "*.x", self.stage))
 
     def compiled(self, name: str, source: str, artifact: str, stages: int, interval: int | None = None,
                  flags: tuple[str, ...] = ()) -> Path:

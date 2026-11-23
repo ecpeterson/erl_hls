@@ -34,8 +34,8 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "test.vvp"
             subprocess.run(["iverilog", "-g2012", "-s", "hls_debug_route_tb", "-o", str(target),
-                            str(ROOT / "test/rtl/debug/hls_debug_route_tb.sv"),
-                            str(ROOT / "priv/rtl/debug/hls_debug_route.v")], check=True)
+                            str(ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_route_tb.sv"),
+                            str(ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_route.v")], check=True)
             subprocess.run(["vvp", str(target)], check=True, timeout=30)
 
     def test_area_includes_distributed_ram(self):
@@ -341,8 +341,8 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as stage:
             exe = str(Path(stage) / "test.vvp")
             subprocess.run(["iverilog", "-g2012", "-s", "hls_actor_snapshot_tb", "-o", exe,
-                str(ROOT / "test/rtl/debug/hls_actor_snapshot_tb.sv"),
-                str(ROOT / "priv/rtl/debug/hls_actor_snapshot.v")], check=True)
+                str(ROOT / "apps/erl_hls/test/rtl/debug/hls_actor_snapshot_tb.sv"),
+                str(ROOT / "apps/erl_hls/priv/rtl/debug/hls_actor_snapshot.v")], check=True)
             result = subprocess.run(["vvp", exe], capture_output=True, text=True, check=True, timeout=30)
             self.assertIn("PASS: committed writes", result.stdout)
 
@@ -426,7 +426,7 @@ class DiscoveryTests(unittest.TestCase):
             source, exe = Path(stage) / 'selector.sv', Path(stage) / 'selector.vvp'
             source.write_text('\n'.join(bench))
             subprocess.run(['iverilog', '-g2012', '-s', 'selector_tb', '-o', str(exe), str(source),
-                            str(ROOT / 'priv/rtl/debug/hls_actor_snapshot.v')], check=True)
+                            str(ROOT / 'apps/erl_hls/priv/rtl/debug/hls_actor_snapshot.v')], check=True)
             result = subprocess.run(['vvp', str(exe)], capture_output=True, text=True, check=True, timeout=30)
             self.assertIn('PASS: generated bank selection', result.stdout)
 
@@ -434,8 +434,8 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as stage:
             exe = str(Path(stage) / "test.vvp")
             subprocess.run(["iverilog", "-g2012", "-s", "hls_topology_debug_tb", "-o", exe,
-                str(ROOT / "test/rtl/debug/hls_topology_debug_tb.sv"),
-                *[str(ROOT / "priv/rtl/debug" / name) for name in
+                str(ROOT / "apps/erl_hls/test/rtl/debug/hls_topology_debug_tb.sv"),
+                *[str(ROOT / "apps/erl_hls/priv/rtl/debug" / name) for name in
                   ["hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v"]]], check=True)
             result = subprocess.run(["vvp", exe], capture_output=True, text=True, check=True, timeout=30)
             self.assertIn("PASS: routed topology queries", result.stdout)

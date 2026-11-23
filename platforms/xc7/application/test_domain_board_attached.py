@@ -16,12 +16,13 @@ import time
 
 PLATFORM = Path(__file__).resolve().parents[1]
 ROOT = PLATFORM.parents[1]
-sys.path[:0] = [str(PLATFORM), str(ROOT / 'tools'), str(ROOT / 'apps/hls_phi/tools')]
+sys.path[:0] = [str(PLATFORM), str(ROOT / 'tools/hls_fabric'),
+                str(ROOT / 'apps/hls_phi/tools')]
 from application.domain_board import bundle, command
 from backend_commands import digest
 from backend_paths import erlang_paths
 from test_domain_repetition import runtime_inputs
-from test_protocol_repetition import compare
+from protocol_repetition_result import compare
 
 
 def save(path: Path, value: dict) -> None:
@@ -83,12 +84,13 @@ def build(args: argparse.Namespace) -> None:
         if (fixture['width'],fixture['split'],fixture['inspection']) != (8,4,'process'):
             raise ValueError('need the retained N8/4+4 process fixture')
         source = Path(__file__).with_name('domain_board_attached_sim.cpp')
-        header = ROOT / 'test/rtl/framed_fifo_stream.h'
+        header = ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_stream.h'
         shutil.copyfile(header,args.stage / header.name)
         verilator = Path(shutil.which('verilator') or 'verilator').resolve(strict=True)
         for path in (source,header,verilator,PLATFORM / 'application/domain_board.py',
-                     ROOT / 'tools/backend_commands.py',ROOT / 'apps/hls_phi/tools/test_domain_repetition.py',
-                     ROOT / 'apps/hls_phi/tools/test_protocol_repetition.py'):
+                     ROOT / 'tools/hls_fabric/backend_commands.py',
+                     ROOT / 'apps/hls_phi/tools/test_domain_repetition.py',
+                     ROOT / 'apps/hls_phi/tools/protocol_repetition_result.py'):
             inputs[str(path)] = digest(path)
         for index in (1,0):
             directory = args.stage / f'build-role{index}'; directory.mkdir()

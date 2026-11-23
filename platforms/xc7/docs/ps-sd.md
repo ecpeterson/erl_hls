@@ -1,6 +1,6 @@
 # Register and DMA SD kits
 
-These complete SD kits pair the retained, timing-checked Vivado register and DMA-loopback images with the **100-MHz FCLK0** boot configuration for **TE0715-05-71C33-A on TEF1002-03-A**. The [result manifest](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/ps-sd-2026-09-21.json`) identifies the archived files and software checks. Physical operation remains unverified.
+These complete SD kits pair the retained, timing-checked Vivado register and DMA-loopback images with the **100-MHz FCLK0** boot configuration for **TE0715-05-71C33-A on TEF1002-03-A**. The [result manifest](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/ps-sd-2026-09-21.json`) identifies the archived files and software checks. Physical operation remains unverified.
 
 | Kit | Linux interface | SD layout |
 | --- | --- | --- |

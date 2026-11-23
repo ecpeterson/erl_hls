@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 from backend_commands import digest, execute
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test(stage: Path, yosys: str, cells: Path | None) -> None:
     """Require bounded ordered operation and two-read-clock visibility before and after mapping."""
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v", ROOT / "test/rtl/async_fifo_tb.sv"]
+    sources = [ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v", ROOT / "apps/hls_fabric/test/rtl/async_fifo_tb.sv"]
     report = {"sources": {str(path.relative_to(ROOT)): digest(path) for path in sources},
               "cases": []}
     for bits, write, read in ((2, 3, 7), (3, 7, 3), (3, 5, 5), (4, 2, 11)):
@@ -27,7 +27,7 @@ def test(stage: Path, yosys: str, cells: Path | None) -> None:
             raise RuntimeError(f"FIFO test did not complete: {name}")
         report["cases"].append({"name": name, "command": command, "result": log})
         print(log.strip())
-    latency = ROOT / "test/rtl/async_fifo_latency_tb.sv"
+    latency = ROOT / "apps/hls_fabric/test/rtl/async_fifo_latency_tb.sv"
     report["sources"][str(latency.relative_to(ROOT))] = digest(latency)
     execute(["iverilog", "-g2012", "-s", "async_fifo_latency_tb", "-o", str(stage / "latency.vvp"),
              str(sources[0]), str(latency)], stage, "latency-compile")

@@ -60,7 +60,7 @@ class ProfileBuilds(BuildFixture):
         for helper in ('compile_xls.py', 'compile_phi_decoder_profile.py',
                        'compile_phi_decoder_profile.sh', 'backend_build_profile.py', 'phi_tool_paths.py'):
             source = (compiler_source(compiler_root('test'), 'compile_xls') if helper == 'compile_xls.py'
-                      else ROOT / 'tools' / helper if helper == 'backend_build_profile.py' else Path(__file__).with_name(helper))
+                      else ROOT / 'tools/hls_fabric' / helper if helper == 'backend_build_profile.py' else Path(__file__).with_name(helper))
             shutil.copyfile(source, self.inputs / helper)
         self.command = ['bash', str(self.inputs / 'compile_phi_decoder_profile.sh'),
                         str(self.inputs), str(self.xls)]

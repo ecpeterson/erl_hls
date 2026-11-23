@@ -1,6 +1,6 @@
 # hls_fabric
 
-Private actor execution, device fabrics and timing experiments. The supervised `hls_fabric` application depends only on the shared `hls_runtime` library; the separate `hls_lowering` library owns builds and depends on the `erl_hls` compiler. The common build frontend supports source-protocol actors and channel-scheduled shared executors. Start with the [two-counter build walkthrough](docs/building.md#one-build-boundary-two-execution-models), then [execution backends](docs/execution/README.md) for their placement and interface contracts.
+Private actor execution, device fabrics and physical timing workflows. The supervised `hls_fabric` application depends only on the shared `hls_runtime` library; the separate `hls_lowering` library owns builds and depends on the `erl_hls` compiler. The common build frontend supports source-protocol actors and channel-scheduled shared executors. Start with the [two-counter build walkthrough](../../docs/hls_fabric/building.md#one-build-boundary-two-execution-models), then [execution backends](../../docs/hls_fabric/execution/README.md) for their placement and interface contracts.
 
 `hls-fabric plan` inspects a checked backend request; `hls-fabric emit` produces its portable source bundle. XLS compilation, simulation and physical qualification remain separate steps. For a small source-protocol application:
 
@@ -12,11 +12,11 @@ _build/default/rel/hls/bin/hls-fabric emit --config apps/hls_lowering/src/exampl
 
 Use `--backend channel_scheduler --config apps/hls_lowering/src/examples/counter/scheduler.config` to build the same topology as dedicated channel actors. The alternative `scheduler-ram.config` places both counters on one shared executor with external state/mailbox RAM interfaces. Backend selection belongs to the build request; the actor source and logical routes do not select it. Each backend checks its own configuration and execution restrictions. The ordinary actor frame uses a fixed 32-bit header and configured `frame_payload_words` payload (three words, or 128 total bits, by default).
 
-Source-protocol applications include framed host attachment, connected typed capture links and whole or multi-role placement; see [source protocol](docs/source-protocol.md). The node interface below covers standalone services and scheduled-actor gateways, which have their own documented support limits.
+Source-protocol applications include framed host attachment, connected typed capture links and whole or multi-role placement; see [source protocol](../../docs/hls_fabric/source-protocol.md). The node interface below covers standalone services and scheduled-actor gateways, which have their own documented support limits.
 
 Each configured device has a virtual node name and genuine external Erlang PIDs for standalone services and scheduled actors. One ordinary BEAM hosts the node adapters and physical fabric brokers; no second VM or per-actor proxy process is required.
 
-See the [documentation guide](docs/README.md) for node, addressing and transport contracts. For development, the [runtime source map](src/README.md) and [build source map](apps/hls_lowering/src/README.md) explain ownership, entry points and the one-way dependency. `rebar3 release -n hls` packages the build CLI; `rebar3 release -n hls_fabric` packages the runtime without compiler or lowering modules.
+See the [documentation guide](../../docs/hls_fabric/README.md) for node, addressing and transport contracts. For development, the [runtime source map](src/README.md) and [build source map](../hls_lowering/src/README.md) explain ownership, entry points and the one-way dependency. `rebar3 release -n hls` packages the build CLI; `rebar3 release -n hls_fabric` packages the runtime without compiler or lowering modules.
 
 ```erlang
 {ok, _} = application:ensure_all_started(hls_fabric),
@@ -35,7 +35,7 @@ Use the actual host name in the virtual node name. EPMD must be running. The lis
 
 A caller can use the same PID after reconnecting. Connection loss retires its return routes and bookkeeping, while FPGA actor state remains intact. Restarting the virtual node obtains a new EPMD creation and new PIDs; old PIDs cannot address the replacement. Starting or stopping this adapter never resets hardware or reopens physical descriptors.
 
-This is an executable distribution **endpoint prototype**, with a deliberately limited signal set. It supports PID/registered-name calls and casts, monitors/demonitors, alias replies and `net_adm:ping`. Links, exit propagation, remote spawn, RPC services, sequential tracing, and general BEAM introspection are not implemented. Unsupported signals close the affected connection. TCP distribution is the default. Start the hosting BEAM with `-proto_dist hls_local` to connect to locally hosted virtual nodes through an in-process distribution controller. Other ERTS nodes still use ordinary TCP, as do remote callers of the virtual nodes. ETF serialization remains; this is not zero-copy messaging. See [node semantics and architecture](docs/device-sessions.md).
+This is an executable distribution **endpoint prototype**, with a deliberately limited signal set. It supports PID/registered-name calls and casts, monitors/demonitors, alias replies and `net_adm:ping`. Links, exit propagation, remote spawn, RPC services, sequential tracing, and general BEAM introspection are not implemented. Unsupported signals close the affected connection. TCP distribution is the default. Start the hosting BEAM with `-proto_dist hls_local` to connect to locally hosted virtual nodes through an in-process distribution controller. Other ERTS nodes still use ordinary TCP, as do remote callers of the virtual nodes. ETF serialization remains; this is not zero-copy messaging. See [node semantics and architecture](../../docs/hls_fabric/device-sessions.md).
 
 ## Local carrier
 
@@ -50,7 +50,7 @@ Start the application and attach nodes as above. Each virtual node manager reser
 
 Both carriers use the same cookie handshake, node creation, service PIDs, codecs, pending transactions and route retirement. The local adapter pauses ERTS distribution intake when its waiting queue fills; normal ERTS busy-buffer behavior then applies, including possible sender suspension. This also means an asynchronous request API need not return immediately under distribution saturation. The device-release/control process must not depend on that saturated sender making progress.
 
-See [host-path measurements](docs/artifacts.md#historical-reports) (`experiments/results/carrier-measurements.md`) for latency, throughput and memory-pressure comparisons with TCP loopback and local fabric proxies. They exclude physical I/O and hardware execution.
+See [host-path measurements](../../docs/hls_fabric/artifacts.md#historical-reports) for latency, throughput and memory-pressure comparisons with TCP loopback and local fabric proxies. They exclude physical I/O and hardware execution.
 
 ## Scheduled actors
 
@@ -72,28 +72,28 @@ ok = hls_statem:cast(Actor, {work, 42}),
     hls_debug:info(Target, [phase, message_queue_len]).
 ```
 
-Actor PIDs accept casts; effects follow their declared topology routes. Their shared topology debug endpoint supplies fingerprint-checked actor observations. The executable gateway currently covers the four-actor fixture with two interleaved scheduler groups; creating a descriptor alone does not add ingress to an arbitrary topology. See [actor addressing and its current limits](docs/actor-pids.md).
+Actor PIDs accept casts; effects follow their declared topology routes. Their shared topology debug endpoint supplies fingerprint-checked actor observations. The executable gateway currently covers the four-actor fixture with two interleaved scheduler groups; creating a descriptor alone does not add ingress to an arbitrary topology. See [actor addressing and its current limits](../../docs/hls_fabric/actor-pids.md).
 
 ## Device-to-device messages
 
-The private partition backend expands a closed topology onto multiple devices and gives each cut source/recipient pair an independently credited lane. The bridge is written in static DSLX and moves complete actor frames over a full-duplex ready/valid word link without host forwarding. The executable phi experiment compares independently generated devices with BEAM, holds a link while querying public debug state, and verifies ordered recovery under asymmetric stalls. The devices and host debug transport have independent clocks; bounded asynchronous FIFOs preserve complete beats, and the regression diagnoses a stopped peer through the running device’s public debug port. See [clock domains, reset and implementation constraints](docs/clock-domains.md).
+The private partition backend expands a closed topology onto multiple devices and gives each cut source/recipient pair an independently credited lane. The bridge is written in static DSLX and moves complete actor frames over a full-duplex ready/valid word link without host forwarding. The bounded Phi regression compares independently generated devices with BEAM, holds a link while querying public debug state, and verifies ordered recovery under asymmetric stalls. The devices and host debug transport have independent clocks; bounded asynchronous FIFOs preserve complete beats, and the regression diagnoses a stopped peer through the running device’s public debug port. See [clock domains, reset and implementation constraints](../../docs/hls_fabric/clock-domains.md).
 
-The [complete memory experiments](docs/distributed-memory.md) use checked application streams for correction delivery and final measurements. D3 covers two partitions; the D6 torus covers eighteen physical 4×2 patches with four distinct neighbor links each. Eligible [reductions](docs/partitioned-reductions.md) collect contributions outside actor state RAM; scheduler replication controls how many actors share an executor.
+The [complete memory experiments](../../docs/hls_fabric/distributed-memory.md) use checked application streams for correction delivery and final measurements. D3 covers two partitions; the D6 torus covers eighteen physical 4×2 patches with four distinct neighbor links each. Eligible [reductions](../../docs/hls_fabric/partitioned-reductions.md) collect contributions outside actor state RAM; scheduler replication controls how many actors share an executor.
 
-Placement supports register-backed actors and shared-RAM schedulers with independent actor outboxes. Physical Ethernet transport and independent device restart remain separate tasks. See [the device bridge contract and reproduction commands](docs/device-bridge.md).
+Placement supports register-backed actors and shared-RAM schedulers with independent actor outboxes. Physical Ethernet transport and independent device restart remain separate tasks. See [the device bridge contract and reproduction commands](../../docs/hls_fabric/device-bridge.md).
 
-The TE0715 experiment now carries an [N=6 repetition application](platforms/xc7/docs/repetition-link.md) across two three-cell PL roles. Its bounded board demonstration exposes decoded corrections and complete local status rounds to the two host BEAMs; the cross-host logical-memory closeout remains to be qualified on hardware.
+The TE0715 workflow carries an [N=6 repetition application](../../platforms/xc7/docs/repetition-link.md) across two three-cell PL roles. Its bounded board demonstration exposes decoded corrections and complete local status rounds to the two host BEAMs; the cross-host logical-memory closeout remains to be qualified on hardware.
 
 ## Application and platform ownership
 
-Complete decoder examples live in [hls_phi](apps/hls_phi/README.md) and [hls_snowflake](apps/hls_snowflake/README.md). The [Phi walkthrough](docs/execution/phi-walkthrough.md) follows a six-site source-protocol build through planning, XLS and host-relayed runtime attachment. `rebar3 release -n hls_examples` packages their optional build tooling. [XC7 platform support](platforms/xc7/README.md) owns board constraints, drivers and installation. [Retained experiments](experiments/README.md) document which architecture alternatives remain separate from maintained applications.
+Complete decoder examples live in [hls_phi](../hls_phi/README.md) and [hls_snowflake](../hls_snowflake/README.md). The [Phi walkthrough](../../docs/hls_fabric/execution/phi-walkthrough.md) follows a six-site source-protocol build through planning, XLS and host-relayed runtime attachment. `rebar3 release -n hls_examples` packages their optional build tooling. [XC7 platform support](../../platforms/xc7/README.md) owns board constraints, drivers and installation.
 
 ## Validation
 
 ```sh
 rebar3 eunit
-bash tools/test_local_dist.sh
-bash tools/test_return_routes.sh
+bash tools/hls_fabric/test_local_dist.sh
+bash tools/hls_fabric/test_return_routes.sh
 ```
 
 The Erlang tests use production fabric brokers, FIFO receive paths and a deterministic wire-level `regsvc` model. They exercise native external PIDs, an additional real ERTS caller, independent caller/actor lifetimes, reconnects, retired replies, transaction exhaustion, broker admission, aliases, node incarnation changes and supervised broker loss. The extra caller VM is a distribution test peer, not part of the device runtime. Local distribution sockets and EPMD must be permitted. OTP 28.0.2 is the CI baseline.
@@ -101,23 +101,23 @@ The Erlang tests use production fabric brokers, FIFO receive paths and a determi
 The generated-RTL test hosts two virtual FPGA nodes **in one BEAM**, backed by two Icarus simulations:
 
 ```sh
-python3 tools/test_rtl.py /path/to/generated-rtl \
+python3 tools/hls_fabric/test_rtl.py /path/to/generated-rtl \
     --erl-hls /path/to/erl_hls \
     --stage _build/rtl-devices --carrier hls_local
 ```
 
 Run EUnit first to compile the test modules. The RTL directory contains `regsvc.v`, `hls_debug_observer.v` and `hls_debug_server.v` from the pinned public regression. The runner verifies the maintained `regsvc` golden digest and records all input hashes. It checks independent state, 200 pings, casts, variable-length replies, complete debug traces, concurrent peer connections, and delayed-reply exclusion across reconnect. Public debug queries diagnose the stalled application output; VPI handles only the external AXI interfaces. No XLS rebuild or synthesis sweep is repeated.
 
-The private routed shell preserves requester identity around the existing `regsvc` cores. Its context adapter is directly tested at capacities 1, 3, 16, 255 and 256. `tools/measure_return_routes.py` reproduces the isolated Xilinx 7-series area estimate. The public demonstration shell's fixed reply destination cannot be used unchanged.
+The private routed shell preserves requester identity around the existing `regsvc` cores. Its context adapter is directly tested at capacities 1, 3, 16, 255 and 256. `tools/hls_fabric/measure_return_routes.py` reproduces the isolated Xilinx 7-series area estimate. The public demonstration shell's fixed reply destination cannot be used unchanged.
 
 The scheduled-actor regression generates fresh XLS RTL, binds real state/mailbox RAM, and checks both distribution carriers using public application and debug ports:
 
 ```sh
-python3 tools/test_actor_rtl.py /path/to/xls --stage _build/actor-pids
+python3 tools/hls_fabric/test_actor_rtl.py /path/to/xls --stage _build/actor-pids
 ```
 
-This optional regression uses the selected XLS tools and retains build provenance and decoded debug observations. The [bounded CI tiers](docs/ci.md) select focused components plus one phi scheduler integration and one Snowflake source-protocol integration; they do not run every historical experiment. The [ingress measurement](docs/artifacts.md#historical-reports) (`experiments/results/actor-pid-measurements.md`) compares the complete small fixture with direct and addressed ingress while preserving its RAM mapping attributes.
+This optional regression uses the selected XLS tools and retains build provenance and decoded debug observations. The [bounded CI tiers](../../docs/hls_fabric/ci.md) select focused components plus one Phi scheduler integration and one Snowflake source-protocol integration; they do not run every optional hardware regression. The [ingress measurement](../../docs/hls_fabric/artifacts.md#historical-reports) compares the complete small fixture with direct and addressed ingress while preserving its RAM mapping attributes.
 
-The [compiler dependency](docs/building.md) is pinned and prepared automatically. All virtual-node implementation and documentation remain private here.
+The [compiler application](../../docs/hls_fabric/building.md) is built locally in the umbrella. All virtual-node implementation and documentation remain private here.
 
 Source-protocol build output records eligibility and native measurement separately. Emitting or compiling a source bundle does not by itself establish application progress, resource fit or physical timing.

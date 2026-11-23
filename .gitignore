@@ -1,12 +1,36 @@
-*.beam
+.rebar3
 _build
+_checkouts
+_vendor
+.eunit
+*.o
+*.beam
+*.plt
+*.swp
+*.swo
+.erlang.cookie
+ebin
+log
+logs
+erl_crash.dump
+.rebar
+.idea
+*.iml
+rebar3.crashdump
+*~
 .DS_Store
+__pycache__/
+
+# Measurement evidence belongs in the external artifact archive.
+/platforms/xc7/results/
+
+# Standalone viewer state is generated beneath its owning application.
+/apps/hls_spacetime/node_modules/
+/apps/hls_spacetime/web/data/
 
 # Pinned XLS regenerates and simulates these actor artifacts in _build. Keep
 # the smaller DSLX beside its Erlang source for review, but not generated RTL.
-/src/examples/regsvc/regsvc.v
-/src/examples/phi_decoder/phi_halo_cell.v
-/src/examples/phi_decoder/phenom_data_cell.v
-/src/examples/phi_decoder/phenom_syndrome_cell.v
-
-__pycache__/
+/apps/erl_hls/src/examples/regsvc/regsvc.v
+/apps/erl_hls/src/examples/phi_decoder/phi_halo_cell.v
+/apps/erl_hls/src/examples/phi_decoder/phenom_data_cell.v
+/apps/erl_hls/src/examples/phi_decoder/phenom_syndrome_cell.v

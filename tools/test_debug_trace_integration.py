@@ -21,14 +21,14 @@ def run(rtl, stage):
         for path in stage.glob(pattern):
             path.unlink()
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
-        shutil.copy(ROOT / "test/rtl" / name, stage)
-    support = [ROOT / "priv/rtl/debug" / name for name in (
+        shutil.copy(ROOT / "apps/erl_hls/test/rtl" / name, stage)
+    support = [ROOT / "apps/erl_hls/priv/rtl/debug" / name for name in (
         "hls_debug_tap.v", "hls_debug_monitor.v", "hls_trace_store.v", "hls_debug_route.v")]
     generated = [rtl / f"hls_debug_{name}.v" for name in ("observer", "server")]
     with (stage / "compile.log").open("w") as log:
         for command in (["iverilog-vpi", "xls_sim_bridge.c"],
                         ["iverilog", "-g2012", "-s", "hls_debug_trace_live_tb", "-o", "test.vvp",
-                         str(ROOT / "test/rtl/debug/hls_debug_trace_live_tb.sv"),
+                         str(ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_trace_live_tb.sv"),
                          *map(str, support + generated)]):
             subprocess.run(command, cwd=stage, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
     env = dict(os.environ, ERL_HLS_SIM_DIR=str(stage),

@@ -5,15 +5,15 @@
 -doc "Writes both designs and a wrapper using the dedicated actor interfaces.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Events = xls_parse:to_xls("test/hls_statem_event_fixture.erl"),
-    {ok, EventTests} = file:read_file("test_data/xls_statem_event_semantics.inc.x"),
+    Events = xls_parse:to_xls("apps/erl_hls/test/hls_statem_event_fixture.erl"),
+    {ok, EventTests} = file:read_file("apps/erl_hls/test_data/xls_statem_event_semantics.inc.x"),
     ok = save(Stage, "statem_events.x", [Events, EventTests]),
-    Reduction = xls_parse:to_xls("test/hls_statem_reduction_reply_fixture.erl"),
-    {ok, ReductionTests} = file:read_file("test_data/xls_statem_reduction_reply_semantics.inc.x"),
+    Reduction = xls_parse:to_xls("apps/erl_hls/test/hls_statem_reduction_reply_fixture.erl"),
+    {ok, ReductionTests} = file:read_file("apps/erl_hls/test_data/xls_statem_reduction_reply_semantics.inc.x"),
     ok = save(Stage, "statem_reduction_replies.x", [Reduction, ReductionTests]),
-    Actor = xls_parse:to_xls("test/hls_statem_reply_fixture.erl"),
+    Actor = xls_parse:to_xls("apps/erl_hls/test/hls_statem_reply_fixture.erl"),
     ok = save(Stage, "hls_statem_reply_fixture.x", Actor),
-    {ok, ReplyTests} = file:read_file("test_data/xls_statem_reply_semantics.inc.x"),
+    {ok, ReplyTests} = file:read_file("apps/erl_hls/test_data/xls_statem_reply_semantics.inc.x"),
     ok = save(Stage, "statem_direct.x", [Actor, ReplyTests]),
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
         families => #{cells => #{module => hls_statem_reply_fixture, shape => [2, 1]}},

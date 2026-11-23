@@ -253,7 +253,7 @@ def build(dma: Path, peer: Path, clock: Path | None, base: Path, boot_base: Path
     if output.exists():
         raise ValueError(f"output already exists: {output}")
     application = application_inputs(application_dir)
-    sys.path.insert(0, str(PROJECT / "tools"))
+    sys.path.insert(0, str(PROJECT / "tools/hls_fabric"))
     from backend_paths import application_directory, compiler_runtime_ebin
     from compiler_paths import compiler_root
     profile = application["rebar_profile"]

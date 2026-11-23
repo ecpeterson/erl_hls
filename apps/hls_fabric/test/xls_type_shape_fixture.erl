@@ -10,14 +10,14 @@ with_source(Test) ->
     Provider = filename:join(Directory, "hls_shape_type_fixture.erl"),
     Header = filename:join(Directory, "hls_shape_type_config.hrl"),
     ok = filelib:ensure_dir(Actor),
-    {ok, Source} = file:read_file("test_data/hls_list_reduction_fixture.erl"),
+    {ok, Source} = file:read_file("apps/hls_fabric/test_data/hls_list_reduction_fixture.erl"),
     Renamed = binary:replace(Source, <<"hls_list_reduction_fixture">>,
         <<"hls_shape_reduction_fixture">>),
     ok = file:write_file(Actor, binary:replace(Renamed,
         <<"hls_vec:vector(hls_nums:u32(), 2)">>,
         <<"hls_shape_type_fixture:vector()">>, [global])),
-    {ok, _} = file:copy("test_data/hls_shape_type_fixture.erl", Provider),
-    {ok, _} = file:copy("test_data/hls_shape_type_config.hrl", Header),
+    {ok, _} = file:copy("apps/hls_fabric/test_data/hls_shape_type_fixture.erl", Provider),
+    {ok, _} = file:copy("apps/hls_fabric/test_data/hls_shape_type_config.hrl", Header),
     try Test(Actor, Provider, Header)
     after
         [begin code:purge(M), code:delete(M) end

@@ -2,7 +2,7 @@
 # Exercise retained calls through public singleton/topology ports at two schedules.
 set -euo pipefail
 xls_root=${1:?usage: test_statem_replies.sh XLS_ROOT [STAGE] [statem|server]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/statem-replies"}
 kind=${3:-statem}
 case "$kind" in statem|server) ;; *) echo "expected statem or server" >&2; exit 2;; esac
@@ -11,7 +11,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 if [[ "$kind" == server ]]; then
     erl -noshell -eval 'ok = hls_statem_reply_dslx:write_server(hd(init:get_plain_arguments())), halt().' -extra "$stage"
     definitions=(-DSERVER_CALLBACKS)
@@ -29,7 +29,7 @@ if [[ "$kind" == statem ]]; then
             --dslx_path="$stage:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$unit"
     done
 fi
-source tools/scheduler_ram_configurations.sh
+source tools/hls_fabric/scheduler_ram_configurations.sh
 for kind in shared; do
     rams=(--ram-configurations "")
     top="__statem_${kind}__Top_0_next"
@@ -41,11 +41,11 @@ for kind in shared; do
         prefix="$stage/$kind-p$stages"
         sources=("$prefix/statem.v")
         if [[ "$kind" == shared ]]; then sources+=("$stage/statem_shared_wrapper.v" "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v); fi
-        python3 "$erl_hls_root/tools/compile_xls.py" "$stage/statem_$kind.x" "$xls_root" --output "$prefix" \
+        python3 "$project_root/tools/compile_xls.py" "$stage/statem_$kind.x" "$xls_root" --output "$prefix" \
             --name statem --top Top --pipeline-stages "$stages" "${rams[@]}"
-        bash "$erl_hls_root/tools/check_rtl_structure.sh" "$top" "$prefix-check" "${sources[@]}"
+        bash "$project_root/tools/check_rtl_structure.sh" "$top" "$prefix-check" "${sources[@]}"
         iverilog -g2012 "${definitions[@]}" -s "statem_reply_${kind}_tb" -o "$prefix.vvp" \
-            "test/rtl/statem_reply_${kind}_tb.sv" "${sources[@]}"
+            "apps/hls_fabric/test/rtl/statem_reply_${kind}_tb.sv" "${sources[@]}"
         vvp "$prefix.vvp" | tee "$prefix.sim.log"
     done
 done

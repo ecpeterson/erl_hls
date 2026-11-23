@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/hls_fabric'))
 from backend_paths import application_directory
 
 from escript_test import run_self_test

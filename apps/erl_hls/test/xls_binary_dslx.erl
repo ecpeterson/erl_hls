@@ -4,7 +4,7 @@
 -doc "Writes finite BEAM-derived binary-operation vectors and codec witnesses; does not execute them.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Forms0} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
+    {ok, Forms0} = epp:parse_file("apps/erl_hls/test/xls_binary_fixture.erl", [], []),
     Probes = xls_binary_fixture:probes(),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{N, 2} || {N, _} <- Probes]),
     Grid = [{X, <<B:24>>} || X <- [-256, -1, 0, 1, 127, 255, 256, 65535],

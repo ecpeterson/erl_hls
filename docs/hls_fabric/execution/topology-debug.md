@@ -9,7 +9,7 @@ Start with the [common inspection API](debug-targets.md). Use physical queues to
 Use the selected compiler's `tools/topology_debug.py` on the application's generated RTL and RAM shell. For the D3 profile, resolve the same dependency and compiled profile first:
 
 ```sh
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 compiled=$(cd "$stage/compiled" && pwd -P)
 python3 "$erl_hls_root/tools/topology_debug.py" \
   --top phi_decoder_profile_top --clock aclk \
@@ -137,4 +137,4 @@ python3 apps/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/
 
 This fixture has six shared schedulers, 54 actors, mailbox observations and one routed boundary monitor. It compares production and instrumented outputs, checks recovery while debug traffic stalls, and verifies memory mapping. Area results include the composed application but do not establish placed timing or power. Ordinary fail-stop logic remains in the production reference.
 
-Implementation details, further tests and measurement scopes are in the [maintainer reference](../../yap/compiler-import/topology-debug.md). The [RAM export qualification](../artifacts.md#historical-reports) (`experiments/07-openxc7/results/debug-memory-export-2026-09-17.md`) identifies which earlier synthesis results remain applicable.
+Implementation details, further tests and measurement scopes are in the [maintainer reference](../../../yap/hls_fabric/compiler-import/topology-debug.md). The [RAM export qualification](../artifacts.md#historical-reports) (`experiments/07-openxc7/results/debug-memory-export-2026-09-17.md`) identifies which earlier synthesis results remain applicable.

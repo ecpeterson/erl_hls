@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 xls_root=${1:?usage: test_type_shapes.sh XLS_ROOT [STAGE]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/type-shapes"}
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_type_shape_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"

@@ -1,6 +1,6 @@
 # GTX and Ethernet SD diagnostics
 
-These three independent SD kits pair the retained, timing-checked [Vivado images](vivado-reference.md) with a 25-MHz FSBL, Linux/UIO and a matching ARM diagnostic. They target **TE0715-05-71C33-A on TEF1002-03-A**. Hardware operation remains unverified. [Recorded kit hashes and checks](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/link-sd-2026-09-21.json`) identify the retained local archive.
+These three independent SD kits pair the retained, timing-checked [Vivado images](vivado-reference.md) with a 25-MHz FSBL, Linux/UIO and a matching ARM diagnostic. They target **TE0715-05-71C33-A on TEF1002-03-A**. Hardware operation remains unverified. [Recorded kit hashes and checks](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/link-sd-2026-09-21.json`) identify the retained local archive.
 
 | Kit | Test | UIO name | Diagnostic |
 | --- | --- | --- | --- |

@@ -9,7 +9,7 @@ branch_capacity_is_the_largest_selected_list_test() ->
     ?assertEqual(3, hls_actor_interface:max_entry_effects(Interface)),
     ?assertEqual([small, wide], hls_actor_interface:output_schemas(Interface, first)),
     ?assertEqual([small, wide], hls_actor_interface:output_schemas(Interface, third)),
-    Generated = iolist_to_binary(xls_parse:to_xls("test/xls_entry_branch_fixture.erl")),
+    Generated = iolist_to_binary(xls_parse:to_xls("apps/erl_hls/test/xls_entry_branch_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"ENTRY_EFFECT_PAYLOAD_BITS = u32:32;">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,

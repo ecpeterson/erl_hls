@@ -24,7 +24,7 @@ def native(stage: Path, scenario: str = 'permanent') -> Path:
 
 def emit(stage: Path, scenario: str = 'permanent') -> Path:
     """Emit source-defined supervision of two copies of the same typed actuator."""
-    child = ('#{sources=>[{"test/hls_recovery_actuator_fixture.erl",[]}],'
+    child = ('#{sources=>[{"apps/hls_fabric/test/hls_recovery_actuator_fixture.erl",[]}],'
              'topology=>{hls_recovery_actuator_fixture,topology,[]},actor_limit=>1,control=>rectangle}')
     declaration = ('supervisor=>{hls_temporary_supervisor_otp,[]},'
                    'templates=>hls_temporary_supervisor_otp:templates(unbound_owner),'
@@ -45,7 +45,7 @@ def checks(xls: Path, bundle: Path, stage: Path, scenario: str = 'permanent') ->
     """Exercise finite supervised observer histories using the same emitted source as RTL."""
     target = stage / 'stream-checks'
     target.mkdir()
-    template = ROOT / 'test/supervised_domain_stream_semantics.x.in'
+    template = ROOT / 'apps/hls_fabric/test/supervised_domain_stream_semantics.x.in'
     source = target / 'checks.x'
     interface = bundle / 'child_0/domain/interface.etf'
     expression = (
@@ -69,7 +69,7 @@ def checks(xls: Path, bundle: Path, stage: Path, scenario: str = 'permanent') ->
          '--dslx_path=' + ':'.join(map(str, imports)),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), source], target, 'witness')
     if scenario == 'temporary':
-        temporary = ROOT / 'test/supervisor_temporary_semantics.x'
+        temporary = ROOT / 'apps/hls_fabric/test/supervisor_temporary_semantics.x'
         units = json.loads((bundle / 'source-build.json').read_text())['units']
         paths = next(u['dslx_path'] for u in units if u['top'] == 'supervisor_clock')
         run([xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none',
@@ -79,7 +79,7 @@ def checks(xls: Path, bundle: Path, stage: Path, scenario: str = 'permanent') ->
     result = target / 'result.json'
     result.write_text(json.dumps({'passed': True, 'evidence': 'Finite supervised observer and selected temporary-controller witnesses.',
         'inputs': {str(path): digest(path) for path in [template, interface, source,
-            *([ROOT / 'test/supervisor_temporary_semantics.x'] if scenario == 'temporary' else [])]},
+            *([ROOT / 'apps/hls_fabric/test/supervisor_temporary_semantics.x'] if scenario == 'temporary' else [])]},
         'controller_inputs': {str(path): digest(path) for path in (bundle / 'supervisor').glob('*.x')},
         'output': digest(target / 'witness.log'), 'child_inputs': child_inputs(bundle),
         'interpreter': digest(xls / 'interpreter_main')}, indent=2)+'\n')
@@ -114,13 +114,13 @@ def build(xls: Path, stage: Path, source: Path | None = None, checks_result: Pat
     manifest = json.loads((bundle / 'source-build.json').read_text())
     rtl = [compiled / name for name in dict.fromkeys(
         name for unit in manifest['units'] for name in unit['rtl'])]
-    harness = ROOT / 'test/rtl/supervisor_stream_sim.cpp'
+    harness = ROOT / 'apps/hls_fabric/test/rtl/supervisor_stream_sim.cpp'
     run(['verilator', '--cc', '--exe', '--build', '--top-module', 'protocol_supervisor_stream',
          '--Mdir', stage / 'obj_dir', '-j', '1', '-Wno-fatal', '-CFLAGS', '-std=c++17',
          '-o', 'simulation', *rtl, harness], stage, 'verilator')
     binary = stage / 'obj_dir/simulation'
-    inputs = [*rtl, harness, ROOT / 'test/rtl/framed_fifo_stream.h',
-              ROOT / 'test/rtl/framed_fifo_control.h', bundle / 'source-build.json',
+    inputs = [*rtl, harness, ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_stream.h',
+              ROOT / 'apps/hls_fabric/test/rtl/framed_fifo_control.h', bundle / 'source-build.json',
               bundle / 'compiled.run.json', bundle / 'interface.etf', semantic_checks]
     inputs.extend(bundle.glob('child_*/domain/interface.etf'))
     binary.with_suffix('.json').write_text(json.dumps({

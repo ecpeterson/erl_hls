@@ -9,7 +9,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
 sys.path.insert(0, str(ROOT / "apps/hls_phi/tools"))
 from backend_commands import logged_command
 from decoder_profile_witness import rtl_events, sequences
@@ -214,7 +214,7 @@ def run(args: argparse.Namespace) -> None:
     shards = profile['shards_per_plane']
     evidence = {'reference': str(args.reference), 'remove': args.remove, 'sources': sources,
                 'script_sha256': sha(Path(__file__)), 'phases_seconds': phases,
-                'support_sha256': {name: sha(ROOT / ('apps/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools') / name) for name in
+                'support_sha256': {name: sha(ROOT / ('apps/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools/hls_fabric') / name) for name in
                                    ('backend_commands.py', 'decoder_profile_witness.py')},
                 'derived_inputs_sha256': sha(args.stage / INPUTS)}
     manifest_path.write_text(json.dumps(evidence, indent=2)+'\n')

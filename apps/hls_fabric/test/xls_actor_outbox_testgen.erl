@@ -5,7 +5,7 @@
 -doc "Writes both placements, production RAM wrappers and expected BEAM report values.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Actor = xls_scheduler_actor:to_xls("test/xls_actor_outbox_fixture.erl", #{mailbox_debug => true}),
+    Actor = xls_scheduler_actor:to_xls("apps/hls_fabric/test/xls_actor_outbox_fixture.erl", #{mailbox_debug => true}),
     save(Stage, "xls_actor_outbox_fixture.x", Actor),
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
         families => #{cell => #{module => xls_actor_outbox_fixture, shape => [2, 1]}},
@@ -14,7 +14,7 @@ write(Stage) ->
     Groups = #{counters => #{members => [{family, cell}], state_storage => block_ram,
         mailbox_storage => block_ram}},
     Rams = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
-    {ok, Template} = file:read_file("test/rtl/xls_actor_outbox.template.v"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/rtl/xls_actor_outbox.template.v"),
     lists:foreach(fun(Kind) ->
         Name = "outbox_" ++ atom_to_list(Kind),
         save(Stage, Name ++ ".x", topology(Kind)),

@@ -6,28 +6,35 @@ import shutil
 
 from backend_commands import digest
 from backend_paths import ROOT
-from compiler_paths import compiler_source_root
+from compiler_paths import compiler_source_root, compiler_tools_root
 
 
 def inputs(args: argparse.Namespace) -> dict:
     """Hash compiler, fixture and tool inputs used to validate reuse of the actor RTL build."""
     private = [ROOT / path for path in (
-        "test/hls_actor_pid_fixture.erl", "test/hls_actor_pid_dslx.erl",
-        "test/rtl/actor_device_tb.sv", "tools/test_actor_rtl.py", "tools/actor_build_artifacts.py", "tools/backend_commands.py",
-        "tools/backend_paths.py", "tools/compiler_paths.py", "tools/scheduler_ram_configurations.sh", "rebar.config", "rebar.lock")]
-    private += list((ROOT / "src").rglob("*.erl"))
+        "apps/hls_fabric/test/hls_actor_pid_fixture.erl", "apps/hls_fabric/test/hls_actor_pid_dslx.erl",
+        "apps/hls_fabric/test/rtl/actor_device_tb.sv", "tools/hls_fabric/test_actor_rtl.py", "tools/hls_fabric/actor_build_artifacts.py", "tools/hls_fabric/backend_commands.py",
+        "tools/hls_fabric/backend_paths.py", "tools/hls_fabric/compiler_paths.py", "tools/hls_fabric/scheduler_ram_configurations.sh", "rebar.config", "rebar.lock")]
+    private += list((ROOT / "apps/hls_fabric/src").rglob("*.erl"))
     private += list((ROOT / "apps/hls_lowering/src").rglob("*.erl"))
     private += list((ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"))
-    private += list((ROOT / "test/xls").rglob("*.x"))
+    private += list((ROOT / "apps/hls_fabric/test/xls").rglob("*.x"))
     source_root = compiler_source_root(args.erl_hls)
     public = [source_root / path for path in (
         "priv/rtl/hls_1r1w_ram.v",
         "test/rtl/xls_sim_bridge.c", "test/rtl/xls_sim_axis.h")]
     for pattern in ("src/**/*.erl", "apps/*/src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x",
-                    "priv/rtl/debug/*.v", "tools/erl_hls_tools/*.py"):
+                    "priv/rtl/debug/*.v"):
         public += list(source_root.glob(pattern))
+    tools_root = compiler_tools_root(source_root)
+    public += list((tools_root / "tools/erl_hls_tools").glob("*.py"))
     files = {"private/" + str(path.relative_to(ROOT)): digest(path) for path in private}
-    files.update({"public/" + str(path.relative_to(source_root)): digest(path) for path in public})
+    for path in public:
+        try:
+            relative = path.relative_to(source_root)
+        except ValueError:
+            relative = path.relative_to(tools_root)
+        files["public/" + str(relative)] = digest(path)
     tools = {name: digest(args.xls / name) for name in ("ir_converter_main", "opt_main", "codegen_main")}
     for path in (args.xls / "xls/dslx/stdlib").rglob("*.x"):
         files["stdlib/" + str(path.relative_to(args.xls / "xls/dslx/stdlib"))] = digest(path)

@@ -12,7 +12,7 @@ write(Stage) ->
     end, [nested, expression_case, empty_case, field_access]),
     Cases = [witness({sample, {vector2, X, Y}, Valid})
         || X <- [0, 1, 15, 31], Y <- [-64, -1, 0, 63], Valid <- [false, true]],
-    Actor = xls_parse:to_xls("test/hls_nested_records_fixture.erl"),
+    Actor = xls_parse:to_xls("apps/erl_hls/test/hls_nested_records_fixture.erl"),
     ok = file:write_file(filename:join(Stage, "nested_records.x"), [Actor, transition(),
         "\n#[test]\nfn host_agreement() {\n",
         [io_lib:format("  assert_eq(nested_transition(bits[13]:~p), bits[53]:~p);\n", [In, Out])
@@ -27,7 +27,7 @@ write(Stage) ->
 -doc "Returns valid Erlang whose nominal record alternatives are outside the fixed-layout hardware subset.".
 -spec mismatch_source(helper | nested | expression_case | empty_case | field_access) -> binary().
 mismatch_source(Kind) ->
-    {ok, Original} = file:read_file("test/hls_nested_records_fixture.erl"),
+    {ok, Original} = file:read_file("apps/erl_hls/test/hls_nested_records_fixture.erl"),
     Extra = <<"-record(other_vector, {x = hls_type:zero() :: hls_nums:uN(5), "
         "y = hls_type:zero() :: hls_nums:sN(7)}).\n"
         "-record(other_sample, {position = hls_type:zero() :: #vector2{}, "

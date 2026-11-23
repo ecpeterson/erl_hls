@@ -252,7 +252,7 @@ def main() -> None:
                         help='diagnostic: allow DSP register absorption; mapped simulation must still pass')
     args = parser.parse_args()
     # Standalone experiment bootstrap; compiler helpers retain root-isolated imports.
-    sys.path.insert(0, str(ROOT / 'tools'))
+    sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
     from compiler_paths import compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     args.stage.mkdir(parents=True, exist_ok=False)

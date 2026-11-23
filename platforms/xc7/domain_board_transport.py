@@ -214,7 +214,7 @@ def validate_result(stage: Path, bundle: Path, native: Path, namespace: int) -> 
     """Reuse the existing native-oracle comparison, checking actual replacement identities only."""
     tools = Path(__file__).resolve().parents[2] / 'apps/hls_phi/tools'
     sys.path.insert(0, str(tools))
-    from test_protocol_repetition import compare
+    from protocol_repetition_result import compare
     metadata = json.loads((bundle / 'fixture.json').read_text())
     expected = json.loads(native.read_text())
     actual = json.loads((stage / 'result.json').read_text())

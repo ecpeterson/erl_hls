@@ -5,7 +5,7 @@
 -spec server_interfaces_test() -> ok.
 server_interfaces_test() ->
     lists:foreach(fun(Module) ->
-        Path = "test/" ++ atom_to_list(Module) ++ ".erl",
+        Path = "apps/erl_hls/test/" ++ atom_to_list(Module) ++ ".erl",
         Interface = xls_parse:actor_interface(Path),
         ?assertEqual([hls_server], maps:get(phases, Interface)),
         ?assertMatch(#{}, hls_actor_interface:from_module(Module)),
@@ -15,11 +15,11 @@ server_interfaces_test() ->
 %% Immediate calls carry no persistent transaction slot or allocation sequence.
 -spec no_immediate_table_test() -> ok.
 no_immediate_table_test() ->
-    Spec = xls_parse:actor_artifact("test/hls_reply_fixture.erl", []),
+    Spec = xls_parse:actor_artifact("apps/erl_hls/test/hls_reply_fixture.erl", []),
     ?assertEqual(32, xls_statem_reply_codegen:width(Spec)),
-    ?assertEqual(32, maps:get(reply_storage_width, xls_parse:actor_interface("test/hls_reply_fixture.erl"))),
+    ?assertEqual(32, maps:get(reply_storage_width, xls_parse:actor_interface("apps/erl_hls/test/hls_reply_fixture.erl"))),
     ?assertEqual(96 + 72 * 2, xls_statem_reply_codegen:width(
-        xls_parse:actor_artifact("test/hls_deferred_fixture.erl", []))).
+        xls_parse:actor_artifact("apps/erl_hls/test/hls_deferred_fixture.erl", []))).
 
 %% Capturing before tuple normalization preserves the first observable exception.
 -spec result_evaluation_order_test() -> ok.

@@ -5,8 +5,8 @@
 -doc "Writes a generated fixture, a total entry-observation probe, and finite source-derived codec/failure witnesses. The probe masks uncommitted data/effects on failure but retains its exact code.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Source = xls_parse:to_xls("test/xls_known_bits_fixture.erl"),
-    {ok, Probe} = file:read_file("test_data/xls_known_bits_probe.inc.x"),
+    Source = xls_parse:to_xls("apps/erl_hls/test/xls_known_bits_fixture.erl"),
+    {ok, Probe} = file:read_file("apps/erl_hls/test_data/xls_known_bits_probe.inc.x"),
     Cases = [{V, S, Signed} || V <- [0, 1, 16#1234, 16#ffff],
         {S, Signed} <- [{0, -16}, {31, -1}, {21, 15}]],
     file:write_file(filename:join(Stage, "known_bits.x"),

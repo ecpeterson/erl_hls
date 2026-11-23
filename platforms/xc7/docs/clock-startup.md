@@ -1,6 +1,6 @@
 # TE0715 reference-clock startup
 
-The clock-startup SD kits initialize the TE0715 Si5338 before loading the PRBS/Ethernet PL image, then verify it again before handing control to U-Boot. They program volatile registers only; factory NVM is unchanged. The [recorded build](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/clock-startup-2026-09-21.json`) identifies the three retained kits and their software checks. **Physical operation remains unverified.**
+The clock-startup SD kits initialize the TE0715 Si5338 before loading the PRBS/Ethernet PL image, then verify it again before handing control to U-Boot. They program volatile registers only; factory NVM is unchanged. The [recorded build](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/clock-startup-2026-09-21.json`) identifies the three retained kits and their software checks. **Physical operation remains unverified.**
 
 ## Board and clock contract
 

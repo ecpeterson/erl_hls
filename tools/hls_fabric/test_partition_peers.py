@@ -46,12 +46,12 @@ def main() -> None:
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",
                         stage / "partition_peers.x", profile="test"), stage, "generation", timeout=60)
-    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
+    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
                public / "priv/xls/lib/frame_config.x"]
     for path in sources:
         shutil.copy(path, stage)
-    tracked = sources + [ROOT / "test/rtl/partition_peers_tb.sv", Path(__file__),
-        ROOT / "apps/hls_lowering/src/backend/xls/partition/hls_partition_links.erl", ROOT / "test/hls_partition_link_fixture.erl"]
+    tracked = sources + [ROOT / "apps/hls_fabric/test/rtl/partition_peers_tb.sv", Path(__file__),
+        ROOT / "apps/hls_lowering/src/backend/xls/partition/hls_partition_links.erl", ROOT / "apps/hls_fabric/test/hls_partition_link_fixture.erl"]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [Path(shutil.which(args.yosys) or args.yosys).resolve()]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]
@@ -68,7 +68,7 @@ def main() -> None:
         "read_verilog -sv link.v; hierarchy -top link; proc; flatten; write_verilog -noattr link.flat.v"], stage, "flatten-peer")
     (stage / "partition_peers_devices.vh").write_text(connections())
     execute(["iverilog", "-g2012", "-s", "partition_peers_tb", "-I", str(stage), "-o", "peers.vvp",
-             str(ROOT / "test/rtl/partition_peers_tb.sv"), "partition_peers.v", "link.flat.v"], stage, "iverilog")
+             str(ROOT / "apps/hls_fabric/test/rtl/partition_peers_tb.sv"), "partition_peers.v", "link.flat.v"], stage, "iverilog")
     execute(["vvp", "peers.vvp"], stage, "simulation")
     result = (stage / "simulation.log").read_text()
     if "PASS:" not in result:

@@ -5,7 +5,7 @@
 %% All 256 idle cells and eight representable dynamic directions; invalid host values are rejected by the ordinary packer.
 -spec emitted_frame_identity_test() -> ok.
 emitted_frame_identity_test() ->
-    File = "test_data/xls_message_facts_fixture.erl",
+    File = "apps/erl_hls/test_data/xls_message_facts_fixture.erl",
     {ok, M, Beam} = compile:file(File, [binary]),
     {module, M} = code:load_binary(M, File, Beam),
     try
@@ -37,9 +37,9 @@ assert_identity(M, Message, #{mask := Mask, value := Known}) ->
 %% Dynamic inputs and generated reply alternatives never create assumptions.
 -spec unknown_and_silent_test() -> ok.
 unknown_and_silent_test() ->
-    {_, F} = xls_message_facts:from_file("test_data/xls_message_facts_fixture.erl", []),
+    {_, F} = xls_message_facts:from_file("apps/erl_hls/test_data/xls_message_facts_fixture.erl", []),
     ?assertEqual(#{mask => 0, value => 0}, xls_message_facts:frame_bits(F, [silent])),
-    {_, R} = xls_message_facts:from_file("test/hls_statem_reply_fixture.erl", []),
+    {_, R} = xls_message_facts:from_file("apps/erl_hls/test/hls_statem_reply_fixture.erl", []),
     ?assertEqual(#{mask => 0, value => 0}, xls_message_facts:frame_bits(R, [reply])).
 
 %% Finite joins keep precisely the common known bits, including disagreement.
@@ -53,7 +53,7 @@ joins_test() ->
 %% Schema-conditioned bounds preserve ABI bits that a cross-schema join loses.
 -spec schema_cases_identity_test() -> ok.
 schema_cases_identity_test() ->
-    File = "test_data/xls_message_facts_fixture.erl",
+    File = "apps/erl_hls/test_data/xls_message_facts_fixture.erl",
     {ok, M, Beam} = compile:file(File, [binary]),
     {module, M} = code:load_binary(M, File, Beam),
     try
@@ -67,7 +67,7 @@ schema_cases_identity_test() ->
             assert_identity(M, Message, Bound)
         end, [{piece, V, 9} || V <- lists:seq(0, 7)] ++ [{alternate, -3, 0}]),
         ?assertEqual([], xls_message_facts:frame_cases(F, [silent])),
-        {_, R} = xls_message_facts:from_file("test/hls_statem_reply_fixture.erl", []),
+        {_, R} = xls_message_facts:from_file("apps/erl_hls/test/hls_statem_reply_fixture.erl", []),
         ?assertEqual(unknown, xls_message_facts:frame_cases(R, [reply]))
     after code:delete(M), code:purge(M) end.
 

@@ -1,6 +1,6 @@
 # Actor Reductions implementation and validation
 
-Maintainer reference; the [reader contract](../docs/actor-reductions.md) is authoritative for usage. These details describe the current implementation and qualification procedures.
+Maintainer reference; the [reader contract](../../../docs/hls_fabric/execution/actor-reductions.md) is authoritative for usage. These details describe the current implementation and qualification procedures.
 
 ## Source-fragment hardware realization
 
@@ -117,6 +117,6 @@ profile and the matching `aggregate_only` actor artifacts reported by
 queries every staged family topology and selects the matching actor artifact,
 rejecting incompatible requirements for a module before DSLX typechecking.
 
-`bash tools/test_reduction_dslx.sh XLS_ROOT [STAGE]` exercises absorbing failures through the real Erlang reducer, helper calls, direct/shared machines, aggregate delivery, and count/fixed-member bookkeeping. It retains generated fixtures for diagnosis. `bash tools/test_actor_debug.sh XLS_ROOT STAGE reduction` and the `aggregate` variant query source-located arithmetic, case, match, and if failures in generated RTL through the framed debug endpoint; a healthy actor shares the scheduler and completes under output backpressure.
+`bash tools/hls_fabric/test_reduction_dslx.sh XLS_ROOT [STAGE]` exercises absorbing failures through the real Erlang reducer, helper calls, direct/shared machines, aggregate delivery, and count/fixed-member bookkeeping. It retains generated fixtures for diagnosis. `bash tools/hls_fabric/test_actor_debug.sh XLS_ROOT STAGE reduction` and the `aggregate` variant query source-located arithmetic, case, match, and if failures in generated RTL through the framed debug endpoint; a healthy actor shares the scheduler and completes under output backpressure.
 
-Final source-fragment aggregate channels have one forward-bypassing slot. Upstream readiness depends on occupancy, breaking the scheduler-to-reduction ready chain; empty delivery remains immediate. Full-buffer recovery cannot replace the departing item on the same cycle. Acceptance transfers retention responsibility to the buffer, not actor-state ownership or commit. Mux-source channels remain unbuffered. See the [matched timing screen](../experiments/07-openxc7/results/aggregate-ready-boundary-2026-09-27.md).
+Final source-fragment aggregate channels have one forward-bypassing slot. Upstream readiness depends on occupancy, breaking the scheduler-to-reduction ready chain; empty delivery remains immediate. Full-buffer recovery cannot replace the departing item on the same cycle. Acceptance transfers retention responsibility to the buffer, not actor-state ownership or commit. Mux-source channels remain unbuffered. See the [matched timing screen](../../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/aggregate-ready-boundary-2026-09-27.md`).

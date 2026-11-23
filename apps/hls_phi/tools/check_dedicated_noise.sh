@@ -17,7 +17,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)
 mkdir "$stage"
 stage=$(cd "$stage" && pwd -P)
 cd "$project_root"
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 
 PHI_DEDICATED_STAGE="$stage" erl +S 2:2 -noshell -eval '
     Stage = os:getenv("PHI_DEDICATED_STAGE"),

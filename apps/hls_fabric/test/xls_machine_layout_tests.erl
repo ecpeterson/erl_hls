@@ -13,7 +13,7 @@ representations_test_() ->
 local_descriptor_test() ->
     lists:foreach(fun({Module, Width, EventOffset, EventWidth}) ->
         [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
-        Source = hls_local_actor:prepare("test/" ++ atom_to_list(Module) ++ ".erl", Context),
+        Source = hls_local_actor:prepare("apps/hls_fabric/test/" ++ atom_to_list(Module) ++ ".erl", Context),
         #{machine_layout := Layout, machine_bits := Width, continuation_bits := EventWidth} =
             hls_local_actor:descriptor(Source),
         ?assertEqual(Width, maps:get(width, Layout)),
@@ -94,7 +94,7 @@ prepare(Name) ->
           actor_egress_depth => burst, scheduler_groups => Groups}),
     Options = maps:get(Module, xls_fabric_topology_dslx:artifact_requirements(Generation)),
     [Context] = proplists:get_value(hls_source_context, Module:module_info(attributes)),
-    Source = filename:join("test", atom_to_list(Module) ++ ".erl"),
+    Source = filename:join("apps/hls_fabric/test", atom_to_list(Module) ++ ".erl"),
     Spec = maps:merge(xls_parse:actor_artifact(Source, Context), Options),
     {Generation, Spec, xls_scheduler_actor:to_artifact(Source, Options#{source_options => Context})}.
 
@@ -130,16 +130,16 @@ topology(Name, Module, Inputs, Outputs) ->
 -spec checks(atom()) -> iodata().
 checks(Name) ->
     File = case Name of gather_external -> gather; _ -> Name end,
-    {ok, RowChecks} = file:read_file(filename:join("test/xls", "machine_row_" ++ atom_to_list(File) ++ ".xinc")),
+    {ok, RowChecks} = file:read_file(filename:join("apps/hls_fabric/test/xls", "machine_row_" ++ atom_to_list(File) ++ ".xinc")),
     Prefix = case Name of
         gather -> "const STORED_GATHER_VALUES = true;\n";
         gather_external -> "const STORED_GATHER_VALUES = false;\n";
         _ -> []
     end,
     Existing = case Name of
-        events -> "test_data/xls_statem_event_semantics.inc.x";
-        reduction_replies -> "test_data/xls_statem_reduction_reply_semantics.inc.x";
-        projected -> "test/xls/state_projection_checks.xinc";
+        events -> "apps/hls_fabric/test_data/xls_statem_event_semantics.inc.x";
+        reduction_replies -> "apps/hls_fabric/test_data/xls_statem_reduction_reply_semantics.inc.x";
+        projected -> "apps/hls_fabric/test/xls/state_projection_checks.xinc";
         _ -> none
     end,
     ["\n", Prefix, RowChecks, case Existing of

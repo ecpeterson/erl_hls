@@ -175,7 +175,7 @@ composition() ->
     put(Key, 0),
     try
         SnapshotConfig = Config#{sources := maps:get(sources, Config) ++
-                [{"test/hls_protocol_domains_fixture.erl", []}],
+                [{"apps/hls_fabric/test/hls_protocol_domains_fixture.erl", []}],
             topology := {hls_protocol_domains_fixture, topology, [Key]}},
         #{files := Files, result := Result} = hls_protocol_domains:emit(SnapshotConfig, Placement),
         ?assertEqual(1, get(Key)),
@@ -188,8 +188,8 @@ composition() ->
 %% The independent counter has no crossing; producer and consumer share one declared restart group.
 -spec config() -> hls_source_config:network().
 config() ->
-    #{sources => [{"test/hls_cross_domain_producer.erl", []},
-          {"test/hls_cross_domain_consumer.erl", []}, {"test/hls_domain_counter.erl", []}],
+    #{sources => [{"apps/hls_fabric/test/hls_cross_domain_producer.erl", []},
+          {"apps/hls_fabric/test/hls_cross_domain_consumer.erl", []}, {"apps/hls_fabric/test/hls_domain_counter.erl", []}],
       topology => {hls_cross_domain_producer, topology, []}, actor_limit => 3,
       control => rectangle}.
 

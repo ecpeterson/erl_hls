@@ -46,7 +46,7 @@ unsupported_and_identity_test() ->
 %% Actual entry plans store 30 of 58 message bits once for two aliased effects.
 -spec compression_and_freshness_test() -> ok.
 compression_and_freshness_test() ->
-    File = "test/xls_known_bits_fixture.erl",
+    File = "apps/erl_hls/test/xls_known_bits_fixture.erl",
     {Spec, Facts} = xls_message_facts:from_file(File, []),
     [#{layouts := [#{storage := Storage}]}] = maps:get(entries, Spec),
     ?assertEqual(30, xls_entry_storage:width(Storage)),
@@ -64,7 +64,7 @@ compression_and_freshness_test() ->
 %% Source execution and its independently generated packer check all frame-bound bits.
 -spec frame_bounds_and_failure_test() -> ok.
 frame_bounds_and_failure_test() ->
-    File = "test/xls_known_bits_fixture.erl",
+    File = "apps/erl_hls/test/xls_known_bits_fixture.erl",
     {_, Facts} = xls_message_facts:from_file(File, []),
     Bound = xls_message_facts:frame_bits(Facts, [first, second]),
     lists:foreach(fun({V, S, Signed}) ->
@@ -82,7 +82,7 @@ frame_bounds_and_failure_test() ->
 %% Aliases intersect partial masks and finite literals; an unknown producer clears the bound.
 -spec aliased_port_join_test() -> ok.
 aliased_port_join_test() ->
-    {ok, Original} = file:read_file("test/xls_known_bits_fixture.erl"),
+    {ok, Original} = file:read_file("apps/erl_hls/test/xls_known_bits_fixture.erl"),
     File = filename:join("_build", "known_bits_join_" ++ integer_to_list(erlang:unique_integer([positive])) ++ ".erl"),
     Cases = [{"Cell#cell.value", unknown},
         {"16#8040", {16#f0d0, 16#8040}},

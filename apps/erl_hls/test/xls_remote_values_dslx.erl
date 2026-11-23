@@ -6,8 +6,8 @@
 -doc "Writes a generated actor and sixty finite entry assertions into an existing directory; expected results come from BEAM.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    {ok, Semantics} = file:read_file("test_data/xls_static_actions_semantics.inc.x"),
-    Artifact = xls_parse:to_artifact("test/xls_remote_values_fixture.erl"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/xls_static_actions_semantics.inc.x"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/xls_remote_values_fixture.erl"),
     Cases = [{Index, Phase, Value, Ready}
         || {Index, Phase} <- lists:enumerate(0, phases()),
            Value <- [0, 1, 2, 3], Ready <- [16#ffff, 16#aaa0, 0]],

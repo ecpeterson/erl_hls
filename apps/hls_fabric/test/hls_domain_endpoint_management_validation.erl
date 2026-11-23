@@ -14,7 +14,7 @@
     models := models(), session := hls_nums:u64(), request := hls_nums:u32(),
     rows := [map()], mutations := [map()]}.
 
--doc "Writes a fresh parser-only source bundle and machine-readable finite script. Native kernels generate controlled metadata and expected responses without compiling endpoint RTL. The normal compile_source_build boundary and tools/test_domain_endpoint_management.py execute separately. Existing directories and unmet native expectations reject; no XLS or simulation subprocess runs here.".
+-doc "Writes a fresh parser-only source bundle and machine-readable finite script. Native kernels generate controlled metadata and expected responses without compiling endpoint RTL. The normal compile_source_build boundary and tools/hls_fabric/test_domain_endpoint_management.py execute separately. Existing directories and unmet native expectations reject; no XLS or simulation subprocess runs here.".
 -spec write(file:filename()) -> map().
 write(Directory) ->
     Codecs = codecs(),

@@ -10,7 +10,7 @@ import subprocess
 
 from fifo_experiment import MODULE, compare, ports, sha
 import sys
-sys.path.append(str(Path(__file__).resolve().parents[3] / "tools"))
+sys.path.append(str(Path(__file__).resolve().parents[3] / "tools/hls_fabric"))
 from prove_fifo import run as bounded_compare
 from types import SimpleNamespace
 

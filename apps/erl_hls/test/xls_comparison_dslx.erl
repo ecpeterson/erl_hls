@@ -101,7 +101,7 @@ boundaries(W) -> lists:usort([0, 1, (1 bsl (W - 1)) - 1, 1 bsl (W - 1), (1 bsl W
 -spec write_actor(file:filename()) -> ok.
 write_actor(Stage) ->
     ok = file:write_file(filename:join(Stage, "service.x"),
-        xls_parse:to_xls("test/xls_comparison_fixture.erl")),
+        xls_parse:to_xls("apps/erl_hls/test/xls_comparison_fixture.erl")),
     Requests = [{request, A, B} || A <- [-128, -1, 0, 1, 127], B <- [0, 1, 127, 128, 255, 511]],
     {In, Out, _} = lists:foldl(fun(Request, {Inputs, Outputs, Tx}) ->
         {reply, Reply, _} = xls_comparison_fixture:handle_call(Request, xls_comparison_fixture:init([])),

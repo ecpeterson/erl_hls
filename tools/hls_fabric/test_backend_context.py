@@ -33,10 +33,10 @@ class BuildContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='build context ') as temporary:
             root = Path(temporary).resolve()/'space "quote" \\path'
             root.mkdir()
-            scripts = root/'tools'
-            scripts.mkdir()
+            scripts = root/'tools/hls_fabric'
+            scripts.mkdir(parents=True)
             for name in ('backend_env.sh', 'backend_paths.py', 'compiler_paths.py'):
-                shutil.copyfile(ROOT/'tools'/name, scripts/name)
+                shutil.copyfile(ROOT/'tools/hls_fabric'/name, scripts/name)
             script = root/'probe.escript'
             script.write_text('#!/usr/bin/env escript\nmain(_) -> io:format("~p", [{context_probe:value(), compiler_probe:value(), code:which(fixture_probe)}]).\n')
             for profile in ('test', 'default'):
@@ -188,7 +188,7 @@ class BuildContextTests(unittest.TestCase):
 
     def test_profiles_are_explicit_at_python_callsites(self) -> None:
         """Keep migrated callers from restoring profile inference or test-owned execution helpers."""
-        for path in (ROOT/'tools').glob('*.py'):
+        for path in (ROOT/'tools/hls_fabric').glob('*.py'):
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and node.module in ('test_actor_rtl', 'test_local_protocol'):
@@ -214,7 +214,7 @@ def compiler_fixture(public: Path, label: str) -> Path:
 
 def production_sources() -> list[Path]:
     """List tool and experiment Python sources, excluding test entrypoints."""
-    roots = [ROOT/'tools', ROOT/'apps/hls_phi/tools', ROOT/'experiments', ROOT/'platforms']
+    roots = [ROOT/'tools/hls_fabric', ROOT/'apps/hls_phi/tools', ROOT/'platforms']
     return sorted(path for root in roots for path in root.rglob('*.py')
                   if not path.name.startswith('test_') and not path.stem.endswith('_test')
                   and '__pycache__' not in path.parts
@@ -307,7 +307,7 @@ class CompilerContextTests(unittest.TestCase):
 
     def test_production_imports_are_inert(self) -> None:
         """Import every production tool without compiler lookup, test imports or child execution."""
-        modules = [path.stem for directory in (ROOT/'tools', ROOT/'apps/hls_phi/tools')
+        modules = [path.stem for directory in (ROOT/'tools/hls_fabric', ROOT/'apps/hls_phi/tools')
                    for path in sorted(directory.glob('*.py'))
                    if not path.name.startswith('test_')]
         script = import_probe() + '''
@@ -343,7 +343,7 @@ assert Path.cwd() == before_cwd
         for name in names:
             with self.subTest(name=name):
                 path = next(directory / f'{name}.py' for directory in
-                            (ROOT/'tools', ROOT/'apps/hls_phi/tools')
+                            (ROOT/'tools/hls_fabric', ROOT/'apps/hls_phi/tools')
                             if (directory / f'{name}.py').is_file())
                 result = self.run_probe(script, [str(path)])
                 self.assertIn('usage:', result.stdout.lower())
@@ -376,7 +376,7 @@ assert Path.cwd() == before_cwd
         with tempfile.TemporaryDirectory(prefix='inert tool imports ') as temporary:
             result = subprocess.run([sys.executable, '-B', '-c', script, *arguments],
                 cwd=temporary, capture_output=True, text=True, timeout=15,
-                env={**os.environ, 'PYTHONPATH': os.pathsep.join(map(str, (ROOT/'tools', ROOT/'apps/hls_phi/tools'))),
+                env={**os.environ, 'PYTHONPATH': os.pathsep.join(map(str, (ROOT/'tools/hls_fabric', ROOT/'apps/hls_phi/tools'))),
                      'ERL_HLS_ROOT': '/nonexistent-compiler', 'ERL_AFLAGS': 'sentinel'})
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             self.assertEqual(list(Path(temporary).iterdir()), [])

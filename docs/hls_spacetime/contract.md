@@ -6,7 +6,7 @@ This is a cycle-native companion to [compiler timing profiles](https://github.co
 
 ## Producer data
 
-The exported types in [`hls_spacetime`](../src/hls_spacetime.erl) define the native representation: atom field/enum names, binary text and integer cycles. JSON encoding turns those names into strings. Cycle/sequence counts must be below `2^53`; write masks are native integers but encode as hexadecimal strings such as `"0xFFFFFFFFFFFFFFFF"`, preserving wide hardware masks in browser consumers. Callers retain original recordings and bound input size before constructing the artifact. Validation loads the tables and graph into memory; it is not a streaming collector or an untrusted Erlang-term parser.
+The exported types in [`hls_spacetime`](../../apps/hls_spacetime/src/hls_spacetime.erl) define the native representation: atom field/enum names, binary text and integer cycles. JSON encoding turns those names into strings. Cycle/sequence counts must be below `2^53`; write masks are native integers but encode as hexadecimal strings such as `"0xFFFFFFFFFFFFFFFF"`, preserving wide hardware masks in browser consumers. Callers retain original recordings and bound input size before constructing the artifact. Validation loads the tables and graph into memory; it is not a streaming collector or an untrusted Erlang-term parser.
 
 | Table | Meaning |
 | --- | --- |
@@ -61,12 +61,12 @@ The first view will stack chip tile coordinates across clock layers. Repeating a
 
 ## Saved example and checks
 
-[`test_data/spacetime_example.term`](../test_data/spacetime_example.term) is a trusted synthetic producer fixture. Phi/data names illustrate correction feedback, but its cycles, identities, checkpoint label and coordinates are invented. It includes a register write/hold, masked RAM write, read-first collision, delayed result, tied join inputs, separate grant order, two tags folded into one primitive, an ambiguous mapping and reset retirement. It is not an N2 simulation result.
+[`spacetime_example.term`](../../apps/hls_spacetime/test_data/spacetime_example.term) is a trusted synthetic producer fixture. Phi/data names illustrate correction feedback, but its cycles, identities, checkpoint label and coordinates are invented. It includes a register write/hold, masked RAM write, read-first collision, delayed result, tied join inputs, separate grant order, two tags folded into one primitive, an ambiguous mapping and reset retirement. It is not an N2 simulation result.
 
 After `rebar3 compile`, an Erlang caller can inspect or serialize it:
 
 ```erlang
-{ok, [Bundle]} = file:consult("test_data/spacetime_example.term"),
+{ok, [Bundle]} = file:consult("apps/hls_spacetime/test_data/spacetime_example.term"),
 Summary = hls_spacetime:validate(Bundle),
 Json = hls_spacetime:encode(Bundle).
 ```

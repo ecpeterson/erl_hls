@@ -5,7 +5,7 @@
 %% Every phase and conditional layout participates; aliases retain layout-local offsets.
 -spec complete_entry_effects_test() -> ok.
 complete_entry_effects_test() ->
-    Program = xls_actor_program:from_file("test/xls_entry_storage_fixture.erl", []),
+    Program = xls_actor_program:from_file("apps/erl_hls/test/xls_entry_storage_fixture.erl", []),
     Effects = xls_actor_program:entry_effects(Program),
     ?assertEqual(12, length(Effects)),
     ?assertEqual([{repeated, 3}, {independent, 3}, {conditional, 6}],
@@ -28,7 +28,7 @@ complete_entry_effects_test() ->
 %% Full field metadata survives the view, including partial slices and aliased storage.
 -spec partial_fields_and_aliases_test() -> ok.
 partial_fields_and_aliases_test() ->
-    Program = xls_actor_program:from_file("test/xls_known_bits_fixture.erl", []),
+    Program = xls_actor_program:from_file("apps/erl_hls/test/xls_known_bits_fixture.erl", []),
     [First, Second] = xls_actor_program:entry_effects(Program),
     ?assertMatch(#{phase := active, order := 0, port := first, tag := packet}, First),
     ?assertMatch(#{phase := active, order := 1, port := second, tag := packet}, Second),
@@ -45,7 +45,7 @@ partial_fields_and_aliases_test() ->
 %% Complete plan views expose records and ordered families without breaking opacity.
 -spec complete_plan_views_test() -> ok.
 complete_plan_views_test() ->
-    File = "test_data/xls_statem_gather_fixture.erl",
+    File = "apps/erl_hls/test_data/xls_statem_gather_fixture.erl",
     Program = xls_actor_program:from_file(File, []),
     Plan = xls_actor_program:plan(Program),
     Records = xls_statem_plan:records(Plan),
@@ -97,7 +97,7 @@ source_snapshot_lifetime_test() ->
         integer_to_list(erlang:unique_integer([positive]))),
     File = filename:join(Root, "actor.erl"),
     ok = filelib:ensure_dir(File),
-    {ok, Original} = file:read_file("test/xls_known_bits_fixture.erl"),
+    {ok, Original} = file:read_file("apps/erl_hls/test/xls_known_bits_fixture.erl"),
     try
         ok = file:write_file(File, Original),
         Program = xls_actor_program:from_file(File, []),

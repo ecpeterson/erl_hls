@@ -21,4 +21,4 @@ This emits source for two three-cell roles. External XLS compilation and actual 
 
 The ordinary host entry is `phi_memory_runner`, which feeds events through the pure `phi_memory_experiment` reducer and sends ordered commands through the runtime transport or `phi_memory_cpu_fabric`. `phi_protocol_repetition` performs finite source-protocol correction feedback and readout. These examples motivate toolchain development; their witnesses are not general decoder convergence or live-device qualification.
 
-The handwritten globally scheduled and BRAM alternatives remain [Phi scheduler experiments](../../experiments/08-phi-scheduler/README.md). Board shells and installation belong to [XC7 platforms](../../platforms/xc7/README.md).
+Board shells and installation belong to [XC7 platforms](../../platforms/xc7/README.md).

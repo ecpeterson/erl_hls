@@ -4,4 +4,4 @@ These EUnit modules check local vertex transitions, completion barriers, coordin
 
 `snowflake_phase_witness` exports complete phase snapshots, proposals and retirements for experimental implementation comparisons. Its explicit fixture word layout is separate from the actor transport ABI. `snowflake_barrier_tests.inc.x` is a DSLX test fragment appended by `snowflake_barrier_tests:write_dslx/1` to the normally lowered barrier; it is not a standalone support module.
 
-The repository integration harness exercises the small source-protocol application with external XLS/RTL tools. Larger custom kernels and scheduling probes remain in [experiments](../../../experiments/snowflake/README.md). Finite agreement does not establish a threshold or unrestricted decoder correctness.
+The repository integration harness exercises the small source-protocol application with external XLS/RTL tools. Finite agreement does not establish a threshold or unrestricted decoder correctness.

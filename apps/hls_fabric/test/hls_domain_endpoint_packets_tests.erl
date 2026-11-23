@@ -122,7 +122,7 @@ eight_offers(#{codecs := Codecs, crossings := [#{link := Link} | _]}) ->
 %% Ordinary source capture analysis supplies distinct unaligned/small schemas at the actual wide frame capacity.
 -spec fixture() -> hls_domain_endpoint_packets:config().
 fixture() ->
-    Program = xls_actor_program:from_file("test/hls_protocol_capture_fixture.erl", [], hls_frame_layout:new(20)),
+    Program = xls_actor_program:from_file("apps/hls_fabric/test/hls_protocol_capture_fixture.erl", [], hls_frame_layout:new(20)),
     Channels = [#{source => a, port => Tag, tag => Tag, destination => {actor, b}} || Tag <- [unaligned, small]],
     #{channels := Captures} = hls_protocol_capture:plan(#{channels => Channels}, #{a => Program}),
     Classes = [#{slot => I, codec => hls_protocol_codec_plan:plan(Channel, Operation)}

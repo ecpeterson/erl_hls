@@ -5,7 +5,7 @@ suite=${1:?usage: ci.sh all|software|components|phi|snowflake XLS_ROOT FRESH_STA
 xls_root=${2:?missing XLS_ROOT (use - for software)}
 stage=${3:?missing FRESH_STAGE}
 case "$suite" in all|software|components|phi|snowflake) ;; *) echo "Unknown suite: $suite" >&2; exit 2;; esac
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mkdir -p "$(dirname "$stage")"
 mkdir "$stage"
 stage=$(cd "$stage" && pwd)
@@ -25,28 +25,29 @@ rebar3 as test compile
 rebar3 release -n hls
 record_time prepare
 if [[ "$suite" == all || "$suite" == software ]]; then
-    rebar3 eunit
+    bash tools/test_umbrella_eunit.sh default
     rebar3 release -n hls_examples
-    bash tools/test_local_dist.sh
+    bash tools/hls_fabric/test_local_dist.sh
     tests=()
     while IFS= read -r name; do
         case "$name" in ''|\#*) ;; *) tests+=("$name");; esac
-    done < tools/ci_unit_tests.txt
-    PYTHONPATH=tools:apps/hls_phi/tools python3 -m unittest "${tests[@]}"
+    done < tools/hls_fabric/ci_unit_tests.txt
+    PYTHONPATH=tools/hls_fabric:apps/hls_phi/tools python3 -m unittest "${tests[@]}"
     # Only mocked board-support contracts; never discover hardware/image witnesses here.
     for test in test_regsvc_context.py test_packaging_support.py; do
         python3 -m unittest discover -s platforms/xc7 -p "$test"
     done
+    python3 tools/test_source_contracts.py
     python3 tools/check_source_contracts.py
     rebar3 dialyzer
-    python3 tools/check_application_boundaries.py
+    python3 tools/hls_fabric/check_application_boundaries.py
     rebar3 release -n hls_fabric
-    python3 tools/check_package_boundaries.py --runtime hls_runtime --runtime hls_fabric \
+    python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_runtime --runtime hls_fabric \
         --release _build/default/rel/hls_fabric
     record_time software
 fi
 if [[ "$suite" == all || "$suite" == components ]]; then
-    python3 tools/test_ci_components.py "$xls_root" "$stage/components"
+    python3 tools/hls_fabric/test_ci_components.py "$xls_root" "$stage/components"
     record_time components
 fi
 if [[ "$suite" == all || "$suite" == phi ]]; then
@@ -57,6 +58,6 @@ if [[ "$suite" == all || "$suite" == phi ]]; then
     record_time phi
 fi
 if [[ "$suite" == all || "$suite" == snowflake ]]; then
-    python3 tools/test_protocol_snowflake.py "$xls_root" "$stage/snowflake"
+    python3 tools/hls_fabric/test_protocol_snowflake.py "$xls_root" "$stage/snowflake"
     record_time snowflake
 fi

@@ -54,13 +54,13 @@ The profile selects the ordinary actor ABI through `frame_payload_words`, defaul
 
 The caller must own the selected actor state and reserve a destination for its result. Apply the returned mailbox directive only when `dispatched` is true, and only once for that selected message. Retain postponed messages in sender order and hold every valid returned effect batch until accepted. `effects_reserved=false` allows a callback to commit with entry work pending; preserve that returned state and resume it when publication capacity becomes available. The functions provide neither mailbox storage nor connected-protocol admission.
 
-Run `bash tools/test_local_execution.sh /path/to/xls /path/to/fresh-stage` after preparing the compiler dependency. Interpreter/JIT witnesses vary source arithmetic, guards and phase names, exercise malformed frames and output stalls, and cover two projected slots with all 128 mutable field values. Separate IR conversion checks reductions and gathers with continuations. These finite checks do not establish network progress or routed timing.
+Run `bash tools/hls_fabric/test_local_execution.sh /path/to/xls /path/to/fresh-stage` after preparing the compiler dependency. Interpreter/JIT witnesses vary source arithmetic, guards and phase names, exercise malformed frames and output stalls, and cover two projected slots with all 128 mutable field values. Separate IR conversion checks reductions and gathers with continuations. These finite checks do not establish network progress or routed timing.
 
 ## Observe and reproduce
 
 Prepare the source-checked binding with `hls_shared_debug_catalog:prepare/4` during lowering. Runtime clients open hardware sessions with `hls_shared_observation:open/2` and attach that retained value using `bind/2`; `open/3` combines these runtime steps. Inspection still uses `hls_debug:info`, boundary counters/traces and physical wait queries. The explicitly installed local observer decodes scheduler metadata; incoming packets cannot choose executable decoders. See [debug targets](debug-targets.md).
 
-`tools/prepare_xls_sim.sh STAGE` combines common compiler assets with shared actor artifacts, RAM bindings and private profiler hooks. The common VPI transport supplies accepted-edge samples; `test/rtl/xls_scheduler_profile.h` adds passive scheduler telemetry. Profile event meaning, SVG/Perfetto rendering and measurement commands remain in [profiling](../profiling.md).
+`tools/hls_fabric/prepare_xls_sim.sh STAGE` combines common compiler assets with shared actor artifacts, RAM bindings and private profiler hooks. The common VPI transport supplies accepted-edge samples; `test/rtl/xls_scheduler_profile.h` adds passive scheduler telemetry. Profile event meaning, SVG/Perfetto rendering and measurement commands remain in [profiling](../profiling.md).
 
 Prepared Snowflake and Phi experiments use `hls_build_profile:experiment/1` through a retained profile sidecar. Their specialized source generation and replay checks remain separate, but their literal channel schedule and completion-storage policy have the same owner as the public frontend. See [prepared experiment policy](../building.md#prepared-experiment-policy).
 
@@ -76,7 +76,7 @@ The common compiler's `xls_parse:actor_artifact/2` returns checked callback sema
 
 Private code owns reservation, actor selection, storage transactions, execution handoff, retirement, effect windows and offloaded reductions. Pipeline changes belong here. Dedicated actors continue to use the public execution body, including in mixed graphs; XLS can pipeline their generated procs independently.
 
-The [scheduler ownership contract](scheduler-pipeline.md) describes reservations, visibility and stalls. The longer [pipeline plan](../../platforms/xc7/yap/scheduler-pipeline-plan.md) records the remaining measurement and design work.
+The [scheduler ownership contract](scheduler-pipeline.md) describes reservations, visibility and stalls. The longer [pipeline plan](../../../platforms/xc7/yap/scheduler-pipeline-plan.md) records the remaining measurement and design work.
 
 The source-bound actor builder adds a [clocked DSLX owner](../source-protocol.md#compile-a-clocked-source-actor) around these functions, with selected-head retirement and one ordered outbox. Its standalone RTL command consumes the same fixed sampled-clock profile as connected source builds. Standalone owner compilation establishes neither connected-protocol admission nor application progress.
 

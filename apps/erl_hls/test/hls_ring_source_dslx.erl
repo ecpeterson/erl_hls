@@ -8,7 +8,7 @@ write(Stage) ->
     Cases = [witness(A,B) || A <- Requests, B <- Requests],
     {ok,active,S} = M:init([]), Width = bit_size(M:pack(S)),
     MessageWidth = bit_size(M:pack(hd(Requests))), InWidth = 2 * MessageWidth,
-    Artifact = xls_parse:to_artifact("test/hls_ring_fixture.erl"),
+    Artifact = xls_parse:to_artifact("apps/erl_hls/test/hls_ring_fixture.erl"),
     Probe = io_lib:format("\npub fn ring_source_probe(payload: bits[~p]) -> bits[~p] {\n"
         "let a = axis::pack(Tag::REQUEST as u8, hls_bits::frame_payload(payload[~p+:bits[~p]]));\n"
         "let b = axis::pack(Tag::REQUEST as u8, hls_bits::frame_payload(payload[0+:bits[~p]]));\n"

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(argv: list[str | Path], stage: Path, log: str, output: str | None = None) -> None:
@@ -37,7 +37,7 @@ def main() -> None:
              '--use_system_verilog=false', '--fifo_module=', 'request.opt.ir'],
             args.stage, f'codegen-{stages}.log', rtl)
         run(['iverilog', '-g2012', '-s', 'shared_request_stage_tb', '-o', 'sim.vvp',
-             ROOT / 'test/rtl/shared_request_stage_tb.sv', rtl], args.stage, 'compile.log')
+             ROOT / 'apps/hls_fabric/test/rtl/shared_request_stage_tb.sv', rtl], args.stage, 'compile.log')
         run(['vvp', 'sim.vvp'], args.stage, f'simulate-{stages}.log')
         if 'PASS:' not in (args.stage / f'simulate-{stages}.log.out').read_text():
             raise AssertionError('request-stage witness did not finish')

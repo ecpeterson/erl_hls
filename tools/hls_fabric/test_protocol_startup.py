@@ -16,8 +16,8 @@ from test_local_protocol import prove
 
 def configuration(path: Path, function: str) -> None:
     """Use fresh source fixtures through the production network build boundary."""
-    path.write_text('#{sources => [{"test/hls_protocol_startup_fixture.erl",[]},'
-        '{"test/hls_protocol_startup_peer.erl",[]}],topology => '
+    path.write_text('#{sources => [{"apps/hls_fabric/test/hls_protocol_startup_fixture.erl",[]},'
+        '{"apps/hls_fabric/test/hls_protocol_startup_peer.erl",[]}],topology => '
         '{hls_protocol_startup_fixture,'+function+',[]},actor_limit => 2}.\n')
 
 
@@ -58,7 +58,7 @@ $display("PROTOCOL_STARTUP_FAILURE_PASS");$finish;
 end
 endmodule
 """
-    else: text=(ROOT/'test/rtl/protocol_startup_tb.sv').read_text()
+    else: text=(ROOT/'apps/hls_fabric/test/rtl/protocol_startup_tb.sv').read_text()
     bench=stage/'bench.sv';bench.write_text(text.replace('@@WIRING@@',wiring(fixture)))
     run(['iverilog','-g2012','-s','tb','-o',stage/'sim',bench,core or fixture/'network/core.v',
          fixture/'network/protocol_network.sv'],stage,'compile')
@@ -93,7 +93,7 @@ def negative_wiring(xls: Path, fixture: Path, stage: Path) -> None:
 
 def selection_checks(xls: Path, stage: Path) -> None:
     """Prove oldest eligible startup selection for every finite mask in three widths."""
-    source=ROOT/'test/protocol_startup_properties.x';raw=stage/'selection.ir'
+    source=ROOT/'apps/hls_fabric/test/protocol_startup_properties.x';raw=stage/'selection.ir'
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'selection-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
@@ -113,7 +113,7 @@ def main() -> None:
     parser.add_argument('stage',type=lambda p:Path(p).resolve())
     args=parser.parse_args();stage=args.stage;stage.mkdir()
     config=stage/'startup.config';configuration(config,'topology');fixture=stage/'fixture'
-    run(['bash','tools/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
+    run(['bash','tools/hls_fabric/emit_protocol_network.sh',args.xls,config,fixture],stage,'public-build')
     fixture=(fixture/'compiled').resolve()
     assert json.loads((fixture/'network/manifest.json').read_text())['startup_messages']==4
     simulate(fixture,stage)

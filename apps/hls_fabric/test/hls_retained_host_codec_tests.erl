@@ -25,7 +25,7 @@ compatible_provider() ->
     false = code:is_loaded(?ACTOR), false = code:is_loaded(?PROVIDER),
     try
         ok = source(Source, custom),
-        {ok, ProviderBytes} = file:read_file("test/hls_retained_host_codec_provider.erl.in"),
+        {ok, ProviderBytes} = file:read_file("apps/hls_fabric/test/hls_retained_host_codec_provider.erl.in"),
         ok = file:write_file(ProviderSource, ProviderBytes, [exclusive]),
         FirstCode = load_provider(ProviderSource, false),
         Config = application_config(Source),
@@ -262,7 +262,7 @@ toggle(Payload, Position) ->
 %% Render only the intentional source differences; the ordinary compiler loads each version.
 -spec source(file:filename(), a | b | padded | custom) -> ok.
 source(Path, Version) ->
-    {ok, Template} = file:read_file("test/hls_retained_host_codec_actor.erl.in"),
+    {ok, Template} = file:read_file("apps/hls_fabric/test/hls_retained_host_codec_actor.erl.in"),
     {Fields, Tags} = case Version of
         First when First =:= a; First =:= padded -> {"left = hls_type:zero() :: hls_nums:u8(), right = hls_type:zero() :: hls_nums:u16()", "[work, unused]"};
         b -> {"right = hls_type:zero() :: hls_nums:u16(), left = hls_type:zero() :: hls_nums:u8()", "[unused, work]"};

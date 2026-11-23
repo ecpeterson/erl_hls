@@ -17,7 +17,7 @@ The native flow checks whether the open-source Xilinx 7-series toolchain can bui
 
 - a small counter smoke test for `xc7z010clg225-1` and `xc7z020clg484-2`;
 - an [XC7Z030-SBG485 package overlay and counter/BRAM/DSP compile check](zynq7030.md);
-- a [PS7/FCLK0/GP0 register probe](../../docs/execution/zynq-ps-probe.md) for CPU-access bring-up;
+- a [PS7/FCLK0/GP0 register probe](../../docs/hls_fabric/execution/zynq-ps-probe.md) for CPU-access bring-up;
 - a [native TE0715 SD boot candidate](docs/te0715-boot.md), with source-built FSBL and ARM Linux diagnostic;
 - [matched vendor register/DMA SD kits](docs/ps-sd.md), with a 100-MHz FSBL and checked Linux/BEAM diagnostics for first-board tests;
 - an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
@@ -37,7 +37,7 @@ The native flow checks whether the open-source Xilinx 7-series toolchain can bui
 - a [Vivado reference batch](docs/vivado-reference.md) for exact-part configuration comparisons, vendor primitive simulation, timing/CDC evidence and fallback board candidates;
 - a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader;
 - a [1000BASE-X packet regression](docs/ethernet-packets.md), with bounded frame storage, independent wire checks, [supervised clock-loss recovery](docs/ethernet-gtx.md#supervised-recovery) and a [board-facing compile probe](docs/ethernet-board.md); and
-- a [D3 decoder place-and-route benchmark](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/phi-timing.md`) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
+- a [D3 decoder place-and-route benchmark](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/phi-timing.md`) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
 
 The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
 
@@ -186,6 +186,6 @@ remain the fuller behavioral correctness checks.
 Repeated builds print a checksum of deterministic Project X-Ray frames rather
 than the final `.bit`, whose metadata includes its build time and input path.
 
-The [reciprocal integration](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/reciprocal-integration-2026-09-27.md`) carries the exact limb arithmetic into the phi executor, compares two/three-stage schedules, and checks mapped ready/valid pipelines.
+The [reciprocal integration](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/reciprocal-integration-2026-09-27.md`) carries the exact limb arithmetic into the phi executor, compares two/three-stage schedules, and checks mapped ready/valid pipelines.
 
-The [aggregate ready boundary](../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/aggregate-ready-boundary-2026-09-27.md`) cuts scheduler-to-reduction backpressure with an existing bypass FIFO and measures its storage, cycles and remaining control cones.
+The [aggregate ready boundary](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/07-openxc7/results/aggregate-ready-boundary-2026-09-27.md`) cuts scheduler-to-reduction backpressure with an existing bypass FIFO and measures its storage, cycles and remaining control cones.

@@ -20,7 +20,7 @@ write(Stage, Policy) ->
         mailbox_storage => block_ram, admission_reductions => Policy}},
     Profile = #{name => collection_top, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Groups},
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan, Profile),
-    Actor = xls_scheduler_actor:to_xls("test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
+    Actor = xls_scheduler_actor:to_xls("apps/hls_fabric/test/hls_projection_reduction_fixture.erl", maps:get(Module, Requirements)),
     ok = save(Stage, "hls_projection_reduction_fixture.x", Actor),
     ok = save(Stage, "collection_top.x", xls_fabric_topology_dslx:emit(Plan, Profile)),
     Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),

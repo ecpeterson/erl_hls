@@ -18,6 +18,11 @@ FIXTURE = ROOT / "application/link_probe_fixture.erl"
 BUILD = ROOT / "build/partition-link/rtl"
 
 
+def compiler_entry(public: Path) -> Path:
+    """Return the selected compiler application's standalone build entrypoint."""
+    return public / "priv/tools/compile_xls.py"
+
+
 def copy_libraries(stage: Path, public: Path) -> list[Path]:
     """Flatten the complete private DSLX libraries after rejecting name collisions."""
     libraries = sorted(public.glob("priv/xls/**/*.x")) + sorted(PROJECT.glob("apps/hls_lowering/priv/xls/**/*.x"))
@@ -32,7 +37,7 @@ def copy_libraries(stage: Path, public: Path) -> list[Path]:
 
 def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "default") -> Path:
     """Compile the actor, generated graphs and two complete gateway wrappers."""
-    sys.path.insert(0, str(PROJECT / "tools"))
+    sys.path.insert(0, str(PROJECT / "tools/hls_fabric"))
     from backend_paths import erlang_paths, erlang_environment
     from compiler_paths import compiler_root, compiler_source
     public = compiler_root(profile, public, PROJECT)
@@ -52,7 +57,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
                   "lists:nth(2, init:get_plain_arguments())), halt().")
     execute(["erl", "-noshell", "-pa", *paths, ebin, "-eval", expression, "-extra", stage, ACTOR], PROJECT, log, environment, timeout=1200)
     libraries = copy_libraries(stage, public)
-    compiler = public / "tools/compile_xls.py"
+    compiler = compiler_entry(public)
     products = {}
     for role in ("a", "b"):
         release = output / f"role-{role}-build"
@@ -64,7 +69,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
         shutil.copyfile(release / "link_application.v", rtl)
         products[rtl.name] = digest(rtl)
     inputs = [Path(__file__), ROOT / "packaging_commands.py", ACTOR, FIXTURE, compiler, compiler_source(public, "compile_xls"), *libraries,
-              *sorted((PROJECT / "src").glob("*.erl"))]
+              *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl"))]
     manifest = {
         "compiler_root": str(public), "rebar_profile": profile,
         "profile": "partition-link-application",

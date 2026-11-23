@@ -18,7 +18,7 @@ def run(command, cwd, log):
 
 def build_bridge(directory, fault=None):
     directory.mkdir(exist_ok=True)
-    source = (ROOT / "test/rtl/xls_sim_bridge.c").read_text()
+    source = (ROOT / "apps/erl_hls/test/rtl/xls_sim_bridge.c").read_text()
     if fault:
         args = "void *buf" if fault == "read" else "const void *buf"
         inject = f'''
@@ -29,7 +29,7 @@ static ssize_t fail_{fault}(int fd, {args}, size_t count) {{
 '''
         source = source.replace('#define BUFFER_SIZE', inject + '\n#define BUFFER_SIZE', 1)
     (directory / "xls_sim_bridge.c").write_text(source)
-    shutil.copy(ROOT / "test/rtl/xls_sim_axis.h", directory)
+    shutil.copy(ROOT / "apps/erl_hls/test/rtl/xls_sim_axis.h", directory)
     run(["iverilog-vpi", "xls_sim_bridge.c"], directory, directory / "build.log")
 
 

@@ -18,9 +18,9 @@ def measure(xls: Path, public: Path, stage: Path) -> dict:
     source = ROOT/'apps/hls_lowering/priv/xls/hls_credit_link.x'
     axis = public/'priv/xls/lib/axis.x'
     frame_config = public/'priv/xls/lib/frame_config.x'
-    template = ROOT/'test/rtl/credit_service_tb.sv'
-    tracked = [source, axis, frame_config, template, Path(__file__), ROOT/'tools/link_service_witness.py',
-               ROOT/'tools/backend_commands.py',
+    template = ROOT/'apps/hls_fabric/test/rtl/credit_service_tb.sv'
+    tracked = [source, axis, frame_config, template, Path(__file__), ROOT/'tools/hls_fabric/link_service_witness.py',
+               ROOT/'tools/hls_fabric/backend_commands.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
                *(xls/'xls/dslx/stdlib').rglob('*.x')]
     inputs = {str(p): digest(p) for p in tracked}

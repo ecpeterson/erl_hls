@@ -20,7 +20,7 @@ write(Stage) ->
     ExampleReports = oracle(Example),
     ExampleReports = telemetry:run(Example),
     ok = hls_compile_cli:run(["topology", "--config",
-        "src/examples/telemetry/topology.config", "--output", filename:join(Stage, "emitted")]),
+        "apps/erl_hls/src/examples/telemetry/topology.config", "--output", filename:join(Stage, "emitted")]),
     ok = file:rename(filename:join(Stage, "emitted"), filename:join(Stage, "bundle")),
     Partial = through_samples(Commands, 2),
     First = through_samples(Commands, 4),

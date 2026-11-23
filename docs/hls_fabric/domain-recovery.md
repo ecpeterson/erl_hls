@@ -49,8 +49,8 @@ Run the finite native/public-pin witness and the separate compiled-channel check
 
 ```sh
 rebar3 as test compile
-python3 tools/test_cross_domain_mailboxes.py /path/to/xls /fresh/mailbox-evidence
-python3 tools/test_domain_channel_formal.py /path/to/xls /fresh/mailbox-evidence/build/source /fresh/channel-evidence --yosys /path/to/yosys
+python3 tools/hls_fabric/test_cross_domain_mailboxes.py /path/to/xls /fresh/mailbox-evidence
+python3 tools/hls_fabric/test_domain_channel_formal.py /path/to/xls /fresh/mailbox-evidence/build/source /fresh/channel-evidence --yosys /path/to/yosys
 ```
 
 The RTL schedule retains old data across replacement, replays old data and credits against a fresh packet with the same sequence number, stalls acknowledgements while C advances, and checks same-edge endpoint reset. The channel checker runs six finite schedules, two single-edge finite-state propositions and a rejecting stale-generation negative control. The state-budget check measures source/optimized-IR storage; it does not infer mapped area or timing.
@@ -223,7 +223,7 @@ The maintained shared-application witness is:
 
 ```sh
 rebar3 as test compile
-python3 tools/test_domain_stream.py --xls /path/to/xls --work /fresh/artifact/directory
+python3 tools/hls_fabric/test_domain_stream.py --xls /path/to/xls --work /fresh/artifact/directory
 ```
 
 It runs the same profile actuator, host policy, ordinary OTP supervisor and surviving device model on ERTS and on two independent generated cores. Both use the custom distribution node and a real second ERTS node for typed calls, casts, monitors and fresh virtual PIDs. The C++ simulator moves public word beats only; it neither interprets recovery commands nor manufactures replies, acknowledgements or frontiers. Native and RTL histories are checked against explicit application expectations. Device effect history and resource reservations live in the application-side model and deliberately survive controller replacement.
@@ -231,7 +231,7 @@ It runs the same profile actuator, host policy, ordinary OTP supervisor and surv
 The transport replacement witness uses the same generated actuator core:
 
 ```sh
-python3 tools/test_domain_stream.py --scenario reattach --xls /path/to/xls --work /fresh/artifact/directory
+python3 tools/hls_fabric/test_domain_stream.py --scenario reattach --xls /path/to/xls --work /fresh/artifact/directory
 ```
 
 It withholds an actual reply, kills the host backend, checks remote call/monitor uncertainty and independent-domain progress, rotates the FIFO descriptors, and establishes a new session through sampled public RTL pins. It checks preserved state/incarnation/virtual PID, stale-session rejection, fresh monitoring and subsequent actual source failure. An incomplete old packet is checked against accepted-word traces; focused DSLX tests separately exercise abandoned calls whose source reply has not yet arrived. These are bounded witnesses, not exhaustive native/RTL equivalence.
@@ -239,7 +239,7 @@ It withholds an actual reply, kills the host backend, checks remote call/monitor
 The shutdown scenario runs the same three-domain application on ERTS and generated RTL through a real distribution peer:
 
 ```sh
-python3 tools/test_domain_stream.py --scenario shutdown --xls /path/to/xls --work /fresh/artifact/directory
+python3 tools/hls_fabric/test_domain_stream.py --scenario shutdown --xls /path/to/xls --work /fresh/artifact/directory
 ```
 
 It exercises healthy child termination, `one_for_all`, `rest_for_one`, fresh identities, duplicate/stale stop requests and an unaffected third domain. An additional RTL schedule withholds already-produced output and requires the earlier reply before orderly shutdown becomes visible. These are finite histories; asynchronous child readiness and physical reset completion remain separate contracts.
@@ -248,7 +248,7 @@ The autonomous-supervisor witness exercises the production parent and child adap
 
 ```sh
 rebar3 as test compile
-python3 tools/test_supervisor_stream.py --xls /path/to/xls --stage /fresh/artifact/directory
+python3 tools/hls_fabric/test_supervisor_stream.py --xls /path/to/xls --stage /fresh/artifact/directory
 ```
 
 An ordinary host OTP parent controls a generated FPGA supervisor and two independently resettable source actors. A real ERTS peer uses the published child PIDs. The witness compares native replacement histories, holds an accepted reply while local restart finishes, requires that reply before the old PID's `DOWN`, and checks sibling progress. It also loses observation during a source failure, isolates the old descriptors, establishes a new session, explicitly adopts the independently observed successor and shuts down the parent. These are finite transport/lifecycle witnesses, not physical reset or board qualification.
@@ -256,7 +256,7 @@ An ordinary host OTP parent controls a generated FPGA supervisor and two indepen
 The temporary-child variant uses two initially empty templates and the same typed source actors:
 
 ```sh
-python3 tools/test_supervisor_stream.py --scenario temporary --xls /path/to/xls --stage /fresh/artifact/directory
+python3 tools/hls_fabric/test_supervisor_stream.py --scenario temporary --xls /path/to/xls --stage /fresh/artifact/directory
 ```
 
 It compares concurrent admission, capacity rejection, source failure without restart, explicit completion, fresh identity/state, stale-operation rejection and unaffected sibling state against ordinary OTP temporary children. The RTL extension holds accepted output across retirement and requires reply-before-`DOWN` before slot reuse. Focused kernel/controller tests additionally exercise parent shutdown during startup, failed initialization and finite identity exhaustion.
@@ -266,7 +266,7 @@ It compares concurrent admission, capacity rejection, source failure without res
 After compiling the test profile with the matching compiler checkout, run:
 
 ```sh
-python3 tools/test_domain_recovery.py /path/to/xls /fresh/artifact/directory
+python3 tools/hls_fabric/test_domain_recovery.py /path/to/xls /fresh/artifact/directory
 ```
 
 The witness compiles two ordinary source actors, counter then relay, into a complete network; two independent instances communicate with actual Erlang owners and incarnation-specific actor endpoints through separate management/application FIFO pairs. A second build makes initial source entry fail. Test-only stale-wire injections are labeled separately from actual source-generated responses. The simulator touches only public clock, management, ingress and egress ports, and never forces internal actor state.
@@ -280,7 +280,7 @@ The fixture implements requests as source-level request-ID/cast/report messages.
 The compiled kernel can also be checked independently:
 
 ```sh
-python3 tools/test_domain_formal.py /path/to/xls /emitted/source/bundle /fresh/formal/evidence
+python3 tools/hls_fabric/test_domain_formal.py /path/to/xls /emitted/source/bundle /fresh/formal/evidence
 ```
 
 The checker consumes an already emitted source bundle. It checks exact command framing, admission consistency, preservation of state on stale requests and unused control encodings, first-fault closure, completion requirements for readiness, and stopped-state exclusion of implicit replacement over every finite input/state encoding, plus all eight-command histories from cold state. An intentionally incorrect admission rule must produce a counterexample. These results trust the compiler, XLS and SAT toolchain; they verify controller decisions under the meanings assigned to backend completion signals, not the physical fence or reset wiring. See the compiler's evidence labels when reporting a run.

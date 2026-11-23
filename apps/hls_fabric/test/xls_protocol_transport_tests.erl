@@ -35,8 +35,8 @@ crossing_validation_is_retained_test() ->
 
 %% The fixture has two independently publishing sources, a sink and feedback paths.
 -spec config() -> hls_source_config:transport().
-config() -> #{sources => [{"test/hls_protocol_network_fixture.erl", []},
-    {"test/hls_protocol_inbox_fixture.erl", []}],
+config() -> #{sources => [{"apps/hls_fabric/test/hls_protocol_network_fixture.erl", []},
+    {"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl", []}],
     topology => {hls_protocol_network_fixture, framed, []}, actor_limit => 3, control => rectangle}.
 
 %% These two sampled inputs affect only the committed transition.

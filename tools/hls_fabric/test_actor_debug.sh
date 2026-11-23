@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 xls_root=${1:?usage: test_actor_debug.sh XLS_ROOT [STAGE] [small|mailbox|direct_mailbox|mailbox_mixed|reduction|aggregate|direct_reduction|phi]}
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 stage=${2:-"$project_root/_build/actor-debug"}
 kind=${3:-small}
 case "$kind" in small|mailbox|direct_mailbox|mailbox_mixed|reduction|aggregate|direct_reduction|phi) ;; *) echo "unknown actor fixture: $kind" >&2; exit 1;; esac
@@ -10,7 +10,7 @@ stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
-source tools/backend_env.sh test
+source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval '[Stage, KindText] = init:get_plain_arguments(),
         Kind = maps:get(KindText, #{"small" => small, "mailbox" => mailbox, "direct_mailbox" => direct_mailbox, "mailbox_mixed" => mailbox_mixed, "phi" => phi, "reduction" => reduction, "aggregate" => aggregate, "direct_reduction" => direct_reduction}),
@@ -19,10 +19,10 @@ erl -noshell \
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
     cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$project_root/apps/hls_phi/src/phi_field.x" "$stage/"
-    cp tools/scheduler_ram_configurations.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
+    cp tools/hls_fabric/scheduler_ram_configurations.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
     bash apps/hls_phi/tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
-    python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
+    python3 tools/hls_fabric/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \
         --stage "$stage/debug" --actor-projection "$stage/phi-actors.json" --actor-test phi \
         "$compiled/phi_decoder_profile.v" "$compiled/phi_decoder_profile_top.v" "$compiled/hls_1r1w_ram.v"
@@ -33,7 +33,7 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_l
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
-source tools/scheduler_ram_configurations.sh
+source tools/hls_fabric/scheduler_ram_configurations.sh
 codegen_options=(--fifo_module=)
 [[ "$scheduler_count" == 0 ]] || codegen_options+=(--ram_configurations="$(scheduler_ram_configurations "$scheduler_count")")
 if [[ "$kind" == direct_reduction ]]; then
@@ -67,7 +67,7 @@ for stages in "${stages_to_test[@]}"; do
             "$production/actor_debug.opt.ir" > "$production/actor_debug_$stages.v"
         reference_options+=(--reference-rtl "$production/actor_debug_$stages.v" --reference-rtl "$production/actor_debug_wrapper.v")
     fi
-    python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
+    python3 tools/hls_fabric/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top actor_debug_wrapper --stage "$stage/p$stages" \
         --actor-projection "$stage/small-actors.json" --actor-test "$kind" \
         "${reference_options[@]}" \

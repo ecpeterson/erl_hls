@@ -36,16 +36,30 @@ def compiler_source_root(public: Path) -> Path:
     if (public / "src").is_symlink():
         candidates.append((public / "src").resolve().parent)
     for source in candidates:
-        if (source / "tools/erl_hls_tools/__init__.py").is_file():
+        standalone = source / "tools/erl_hls_tools/__init__.py"
+        umbrella = source.parents[1] / "tools/erl_hls_tools/__init__.py"
+        if (standalone.is_file() or
+                (source.name == "erl_hls" and source.parent.name == "apps" and
+                 (source / "src").is_dir() and (source / "priv").is_dir() and umbrella.is_file())):
             return source
-    raise FileNotFoundError(f"missing compiler Python package in {public}")
+    raise FileNotFoundError(f"missing compiler application sources in {public}")
+
+
+def compiler_tools_root(public: Path) -> Path:
+    """Return the repository that owns the selected compiler's Python package."""
+    source = compiler_source_root(public)
+    candidates = [source, source.parents[1] if source.parent.name == "apps" else source]
+    for root in candidates:
+        if (root / "tools/erl_hls_tools/__init__.py").is_file():
+            return root
+    raise FileNotFoundError(f"missing compiler Python package for {source}")
 
 
 def compiler_source(public: Path, name: str) -> Path:
     """Return a named compiler tool's authoritative source for loading or provenance."""
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
         raise ValueError(f"invalid compiler tool name: {name!r}")
-    source = compiler_source_root(public) / "tools/erl_hls_tools" / (name + ".py")
+    source = compiler_tools_root(public) / "tools/erl_hls_tools" / (name + ".py")
     if not source.is_file():
         raise FileNotFoundError(f"missing compiler tool: {source}")
     return source

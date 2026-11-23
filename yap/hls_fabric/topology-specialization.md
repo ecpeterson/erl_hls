@@ -6,7 +6,7 @@ The campaign preserved ordinary Erlang source, logical actor identity, ordered e
 
 ## Retained baseline and comparison scope
 
-The historical #65 configuration is `experiments/snowflake/actors/configurations/indexed-snapshots.json` (see [artifact lookup](../docs/artifacts.md#historical-reports)): full D3/H3 Snowflake actor decoder, 36 vertices, six shared executors, tree acknowledgments, local phase advancement, exclusive transfer/acknowledgment collectors, indexed snapshots and width-two publication. The 128-sheet p = 0.005 phenomenological cohort checks all 1,125 corrections.
+The historical #65 configuration is `experiments/snowflake/actors/configurations/indexed-snapshots.json` (see [artifact lookup](../../docs/hls_fabric/artifacts.md#historical-reports)): full D3/H3 Snowflake actor decoder, 36 vertices, six shared executors, tree acknowledgments, local phase advancement, exclusive transfer/acknowledgment collectors, indexed snapshots and width-two publication. The 128-sheet p = 0.005 phenomenological cohort checks all 1,125 corrections.
 
 | Retained stage | Mean round clocks | Routed period | Mean-round proxy | Routed LUTs |
 | --- | ---: | ---: | ---: | ---: |
@@ -39,7 +39,7 @@ G5 requires independent offered-load and burst/backlog measurement on the actual
 
 Alternative storage/compute ownership must preserve coherent logical debug and application behavior without serializing Phi’s geometric lanes. These are acceptance constraints, not instructions to reopen the historical campaign or keep application work paused.
 
-The current snapshot placement still asserts reserved-tag ownership, uniform keys, bounded live versions and generation-safe reuse. Runtime failures and adversarial simulations do not establish those properties for arbitrary source. A missing active member remains an obligation; inactive padding is not arrival. Monoid reductions and fixed-order gathers have different algebraic contracts. See [indexed collections](../docs/indexed-collections.md), [exclusive collections](../docs/exclusive-collections.md) and [workload acceptance](decoder-service-investigations.md).
+The current snapshot placement still asserts reserved-tag ownership, uniform keys, bounded live versions and generation-safe reuse. Runtime failures and adversarial simulations do not establish those properties for arbitrary source. A missing active member remains an obligation; inactive padding is not arrival. Monoid reductions and fixed-order gathers have different algebraic contracts. See [indexed collections](../../docs/hls_fabric/indexed-collections.md), [exclusive collections](../../docs/hls_fabric/exclusive-collections.md) and [workload acceptance](decoder-service-investigations.md).
 
 Narrower fields, extra banks, another pipeline cut and callback folding remain possible techniques, not automatic next tasks. Choose them only through the new architecture's access/recurrence ledger. A larger busy fraction or fewer callbacks is not itself higher completed-sheet capacity.
 
@@ -54,9 +54,9 @@ Retained evidence is under `hls_artifacts/runs/`: `indexed-snapshots-2026-10-01/
 
 ## TE0715 deployment evidence
 
-The [partition link](../platforms/xc7/docs/partition-link.md#physical-witness) completed two attached 4,096-exchange hardware passes. The [3+3 repetition images](../platforms/xc7/docs/repetition-link.md#physical-result-and-packaging) completed a local status round on each board, and paired PS reboot was physically exercised. These establish bounded actor/DMA/packet-link operation, not general timing, BER, sustained-load or recovery qualification. The [72-bit inferred-memory probe](../platforms/xc7/docs/bram-sdp72.md) also passed its physical patterns; the Yosys mapping correction is upstream.
+The [partition link](../../platforms/xc7/docs/partition-link.md#physical-witness) completed two attached 4,096-exchange hardware passes. The [3+3 repetition images](../../platforms/xc7/docs/repetition-link.md#physical-result-and-packaging) completed a local status round on each board, and paired PS reboot was physically exercised. These establish bounded actor/DMA/packet-link operation, not general timing, BER, sustained-load or recovery qualification. The [72-bit inferred-memory probe](../../platforms/xc7/docs/bram-sdp72.md) also passed its physical patterns; the Yosys mapping correction is upstream.
 
-P6 owns any selected next hardware slice. Its acceptance may require actual six-cell logical-memory readout (`check_repetition_link --memory`, still unqualified on the pair), safe warm lifecycle/transport replacement without PS reboot, interrupted-work and mismatched-peer handling, independent debug during blocked application traffic, and exact image/clock identities. The newer digital recovery contract does not silently qualify this older board bridge. The separate [routed regsvc image](../platforms/xc7/docs/te0715-regsvc.md) likewise retains its own uncompleted board acceptance.
+P6 owns any selected next hardware slice. Its acceptance may require actual six-cell logical-memory readout (`check_repetition_link --memory`, still unqualified on the pair), safe warm lifecycle/transport replacement without PS reboot, interrupted-work and mismatched-peer handling, independent debug during blocked application traffic, and exact image/clock identities. The newer digital recovery contract does not silently qualify this older board bridge. The separate [routed regsvc image](../../platforms/xc7/docs/te0715-regsvc.md) likewise retains its own uncompleted board acceptance.
 
 Measured FCLK, DDR stress, physical CDC/reset/timing constraints and stated bidirectional load/PRBS/BER intervals remain distinct requirements. Raising the 12.5-MHz diagnostic application clock needs matched application acceptance at the new qualified rate; do not infer it from a nominal frequency or an out-of-context route.
 

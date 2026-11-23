@@ -26,7 +26,7 @@ def identity(source: Path, xls: Path, ram_helper: Path, schedulers: int,
     if (delay_model == 'xc7_7030') != (delay_table is not None):
         raise ValueError('xc7_7030 requires a delay table; other models do not accept one')
     result = {'schema': 1, 'sources': sources,
-            'transport_codegen': digest(ROOT / 'tools/transport_codegen.py'),
+            'transport_codegen': digest(ROOT / 'tools/hls_fabric/transport_codegen.py'),
             'tools': {name: digest(xls/name) for name in ('ir_converter_main', 'opt_main', 'codegen_main')},
             'stdlib': {str(p.relative_to(xls/'xls/dslx/stdlib')): digest(p)
                        for p in sorted((xls/'xls/dslx/stdlib').rglob('*.x'))},
@@ -109,7 +109,7 @@ def prepare(args: argparse.Namespace, devices: list[dict]) -> Path:
     return cache/'phi_tile.v'
 
 
-RAM_HELPER = ROOT / "tools/scheduler_ram_configurations.sh"
+RAM_HELPER = ROOT / "tools/hls_fabric/scheduler_ram_configurations.sh"
 
 def outputs(cache: Path) -> dict[str, str]:
     """Hash compiler products; log files do not establish cache validity."""

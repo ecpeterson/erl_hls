@@ -41,8 +41,10 @@ lower(Source) ->
     xls_clause_lower:clause_outcome({clause, 1, [{var, 1, 'X'}, {var, 1, 'B'}], [], Body},
         ["x", "b"], unused, #{}).
 
+%% Checks the app-owned fixture retains local and auto-imported size BIF distinctions.
+-spec size_bif_resolution_test() -> ok.
 size_bif_resolution_test() ->
-    {ok, Forms} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
+    {ok, Forms} = epp:parse_file("apps/erl_hls/test/xls_binary_fixture.erl", [], []),
     Prepared = xls_binary_lower:prepare(Forms),
     ?assertNotEqual(Forms, Prepared),
     Bif = {call, 1, {atom, 1, bit_size}, [{var, 1, 'X'}]},
@@ -61,7 +63,7 @@ size_bif_resolution_test() ->
 %% Binary operations and assignments retain distinct source failures in the emitted codebook.
 -spec source_failure_sites_test() -> ok.
 source_failure_sites_test() ->
-    {ok, Forms0} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
+    {ok, Forms0} = epp:parse_file("apps/erl_hls/test/xls_binary_fixture.erl", [], []),
     {Forms, Origins} = xls_failure_sites:prepare(Forms0),
     Bodies = [begin
         [Clause] = hls_source:find_function(Forms, Name, 2),

@@ -1,8 +1,10 @@
 -module(hls_source_dslx).
 -export([write/1]).
 
+-doc "Writes source-context probes into the supplied stage.".
+-spec write(file:filename_all()) -> ok.
 write(Stage) ->
-    {ok, Semantics} = file:read_file("test_data/hls_source_context_semantics.inc.x"),
+    {ok, Semantics} = file:read_file("apps/erl_hls/test_data/hls_source_context_semantics.inc.x"),
     hls_source_fixture:with_source(fun(Path, Directory) ->
         lists:foreach(fun({Name, Macros}) ->
             Options = hls_source_fixture:options(Directory) ++ Macros,

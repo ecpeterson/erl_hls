@@ -1,4 +1,4 @@
-name: CI
+name: Fabric CI
 # Automatic runs remain suspended while the reduced suite is qualified locally.
 # Restore pull_request here only after reviewing its measured cost; no main-push duplicate.
 on:
@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.ref }}
+  group: fabric-ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   checks:
@@ -47,7 +47,7 @@ jobs:
       - name: Run selected tier serially with shared tool setup
         env:
           SUITE: ${{ inputs.suite }}
-        run: bash tools/ci.sh "$SUITE" "$RUNNER_TEMP/xls" _build/ci
+        run: bash tools/hls_fabric/ci.sh "$SUITE" "$RUNNER_TEMP/xls" _build/ci
       - name: Retain bounded failure diagnostics
         if: failure() || inputs.diagnostics == true
         uses: ./.github/actions/diagnostics

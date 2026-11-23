@@ -23,8 +23,9 @@ class SelectionTests(unittest.TestCase):
         """Documents skip; sources, fixtures, workflows and unknown files trigger checks."""
         for paths in ([], ['README.md', 'docs/p.png', 'experiments/probe/results/p.svg']):
             self.assertFalse(plan(paths, CONFIG)['qualify'])
-        for path in ('src/actor.erl', 'priv/xls/a.x', 'rtl/a.sv', 'docs/example.py',
-                     'rebar.lock', '.github/workflows/ci.yml', 'new-file', 'test/fixture.json'):
+        for path in ('apps/erl_hls/src/actor.erl', 'apps/erl_hls/priv/xls/a.x',
+                     'rtl/a.sv', 'docs/example.py', 'rebar.lock', '.github/workflows/ci.yml',
+                     'new-file', 'apps/erl_hls/test/fixture.json'):
             with self.subTest(path=path):
                 self.assertTrue(plan([path], CONFIG)['qualify'])
         self.assertTrue(all(plan(None, CONFIG)[g] for g in CONFIG['groups']))
@@ -32,24 +33,27 @@ class SelectionTests(unittest.TestCase):
 
     def test_exact_fixture_selection_is_shared(self) -> None:
         """Local and CI views use the same exact dependencies, including shared testbenches."""
-        paths = ['test/rtl/logical_service_tb.sv']
+        paths = ['apps/erl_hls/test/rtl/logical_service_tb.sv']
         expected = ['comparisons', 'logical_types', 'serial']
         self.assertEqual(select_cases(paths, CONFIG), expected)
         selected = plan(paths, CONFIG)
         self.assertEqual(selected['test_cases'], expected)
         self.assertTrue(selected['test'])
         self.assertFalse(selected['topology'])
-        self.assertEqual(select_cases(paths + ['test/xls_binary_dslx.erl'], CONFIG),
+        self.assertEqual(select_cases(paths + ['apps/erl_hls/test/xls_binary_dslx.erl'], CONFIG),
                          ['binary', *expected])
-        self.assertEqual(select_cases(['test_data/hls_reduction_failure_semantics.inc.x'], CONFIG),
+        self.assertEqual(select_cases([
+            'apps/erl_hls/test_data/hls_reduction_failure_semantics.inc.x'], CONFIG),
                          ['reduction_dslx'])
 
     def test_full_fallback_and_group_filters(self) -> None:
         """Core, tools, unknown fixtures and missing history cannot reduce feature coverage."""
         all_cases = sorted(CONFIG['cases'])
-        for paths in (None, ['src/xls_actor.erl'], ['priv/xls/axis.x'],
-                      ['tools/test_binary.sh'], ['test/unlisted_fixture.erl'],
-                      ['test/xls_binary_dslx.erl', 'test/new_fixture.erl']):
+        for paths in (None, ['apps/erl_hls/src/xls_actor.erl'],
+                      ['apps/erl_hls/priv/xls/axis.x'], ['tools/test_binary.sh'],
+                      ['apps/erl_hls/test/unlisted_fixture.erl'],
+                      ['apps/erl_hls/test/xls_binary_dslx.erl',
+                       'apps/erl_hls/test/new_fixture.erl']):
             with self.subTest(paths=paths):
                 self.assertEqual(select_cases(paths, CONFIG), all_cases)
                 selected = plan(paths, CONFIG)
@@ -64,14 +68,14 @@ class SelectionTests(unittest.TestCase):
 
     def test_topology_and_local_only_keep_base_checks(self) -> None:
         """Specialized feature selection never drops ordinary EUnit and toolchain checks."""
-        topology = ['test/hls_mixed_topology_dslx.erl']
+        topology = ['apps/erl_hls/test/hls_mixed_topology_dslx.erl']
         self.assertEqual(select_cases(topology, CONFIG), ['mixed_topology'])
         selected = plan(topology, CONFIG)
         self.assertTrue(selected['test'])
         self.assertTrue(selected['topology'])
         self.assertEqual(selected['test_cases'], [])
         self.assertEqual(selected['topology_cases'], ['mixed_topology'])
-        local_only = ['test/xls_phase_values_dslx.erl']
+        local_only = ['apps/erl_hls/test/xls_phase_values_dslx.erl']
         self.assertEqual(select_cases(local_only, CONFIG), ['phase_values'])
         selected = plan(local_only, CONFIG)
         self.assertTrue(selected['test'])
@@ -85,8 +89,11 @@ class SelectionTests(unittest.TestCase):
             root = Path(directory)
             (root / 'tools').mkdir()
             metadata = root / 'tools/regression_inventory.json'
-            for dependency in ('src/xls_actor.erl', 'tools/test_binary.sh', 'test/*.erl',
-                               'test/../src/xls_actor.erl', '/test/a.erl', 'test/README.md'):
+            for dependency in ('apps/erl_hls/src/xls_actor.erl', 'tools/test_binary.sh',
+                               'apps/erl_hls/test/*.erl',
+                               'apps/erl_hls/test/../src/xls_actor.erl',
+                               '/apps/erl_hls/test/a.erl',
+                               'apps/erl_hls/test/README.md'):
                 with self.subTest(dependency=dependency):
                     invalid = copy.deepcopy(CONFIG)
                     invalid['cases']['binary']['dependencies'] = [dependency]
@@ -113,36 +120,36 @@ class SelectionTests(unittest.TestCase):
 
             git('init', '-q')
             git('config', 'core.filemode', 'true')
-            (root / 'test').mkdir()
-            binary = root / 'test/xls_binary_dslx.erl'
-            helper = root / 'test/xls_helpers_dslx.erl'
+            (root / 'apps/erl_hls/test').mkdir(parents=True)
+            binary = root / 'apps/erl_hls/test/xls_binary_dslx.erl'
+            helper = root / 'apps/erl_hls/test/xls_helpers_dslx.erl'
             binary.write_text('binary fixture\n')
             helper.write_text('helper fixture\n')
             git('add', '-A')
             git('commit', '-qm', 'base')
             base = git('rev-parse', 'HEAD')
             binary.write_text('staged binary change\n')
-            git('add', 'test/xls_binary_dslx.erl')
+            git('add', 'apps/erl_hls/test/xls_binary_dslx.erl')
             helper.write_text('working helper change\n')
             paths = paths_since(base, root)
             self.assertEqual(select_cases(paths, CONFIG), ['binary', 'helpers'])
             self.assertEqual(changed_paths(base, root), [])
             (root / 'README.md').write_text('passive note\n')
             self.assertEqual(select_cases(paths_since(base, root), CONFIG), ['binary', 'helpers'])
-            (root / 'test/new_fixture.erl').write_text('unknown dependency\n')
+            (root / 'apps/erl_hls/test/new_fixture.erl').write_text('unknown dependency\n')
             self.assertEqual(select_cases(paths_since(base, root), CONFIG), sorted(CONFIG['cases']))
-            (root / 'test/new_fixture.erl').unlink()
-            binary.rename(root / 'test/binary_renamed.erl')
+            (root / 'apps/erl_hls/test/new_fixture.erl').unlink()
+            binary.rename(root / 'apps/erl_hls/test/binary_renamed.erl')
             paths = paths_since(base, root)
-            self.assertIn('test/xls_binary_dslx.erl', paths)
-            self.assertIn('test/binary_renamed.erl', paths)
+            self.assertIn('apps/erl_hls/test/xls_binary_dslx.erl', paths)
+            self.assertIn('apps/erl_hls/test/binary_renamed.erl', paths)
             self.assertEqual(select_cases(paths, CONFIG), sorted(CONFIG['cases']))
             for missing in ('', '0' * 40, 'unavailable'):
                 self.assertIsNone(paths_since(missing, root))
             (root / 'README.md').chmod(0o755)
             self.assertIsNone(paths_since(base, root))
             (root / 'README.md').unlink()
-            (root / 'README.md').symlink_to('test/xls_helpers_dslx.erl')
+            (root / 'README.md').symlink_to('apps/erl_hls/test/xls_helpers_dslx.erl')
             self.assertIsNone(paths_since(base, root))
 
     def test_real_git_history(self) -> None:

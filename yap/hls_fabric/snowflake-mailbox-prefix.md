@@ -27,4 +27,4 @@ The sample establishes enough backlog to justify a K2 experiment if K1 remains a
 
 ## K1 control result
 
-The [retained experiment](../docs/artifacts.md#historical-reports) (`experiments/snowflake/actors/mailbox-gather/README.md`) exercised all 8,160 folds. Every observed boundary and the complete external transcript remained cycle-identical to the ordinary-source control. The gather function itself is not where these ownership cycles are spent. K2 stays deferred; the availability measurement justifies a future bounded-batch investigation, not adopting K1 alone.
+The [retained experiment](../../docs/hls_fabric/artifacts.md#historical-reports) (`experiments/snowflake/actors/mailbox-gather/README.md`) exercised all 8,160 folds. Every observed boundary and the complete external transcript remained cycle-identical to the ordinary-source control. The gather function itself is not where these ownership cycles are spent. K2 stays deferred; the availability measurement justifies a future bounded-batch investigation, not adopting K1 alone.

@@ -41,7 +41,7 @@ retained_plan_test_() -> {timeout, 30, fun retained_plan/0}.
 retained_plan() ->
     Root = fresh("retained"), ok = file:make_dir(Root),
     Source = filename:join(Root, "hls_scheduler_build_fixture.erl"),
-    {ok, _} = file:copy("test/hls_scheduler_build_fixture.erl", Source),
+    {ok, _} = file:copy("apps/hls_fabric/test/hls_scheduler_build_fixture.erl", Source),
     Config = (config(groups()))#{sources := [{Source, []}], schedule => #{pipeline_stages => 3}},
     Before = files(Root),
     Plan = hls_scheduler_build:plan(Config),
@@ -79,7 +79,7 @@ source_context() ->
     ok = file:write_file(Header,
         "-ifdef(WIDE_WORD).\n-define(VALUE_TYPE, hls_nums:u16()).\n"
         "-else.\n-define(VALUE_TYPE, hls_nums:u8()).\n-endif.\n", [exclusive]),
-    {ok, Original} = file:read_file("test/hls_scheduler_build_fixture.erl"),
+    {ok, Original} = file:read_file("apps/hls_fabric/test/hls_scheduler_build_fixture.erl"),
     Typed = binary:replace(Original, <<"hls_nums:u8()">>, <<"?VALUE_TYPE">>, [global]),
     SourceBytes = binary:replace(Typed, <<"-hls_mailbox_capacity(2).">>,
         <<"-hls_mailbox_capacity(?CAPACITY).">>),
@@ -132,7 +132,7 @@ end}.
 %% Tests select only physical placement; their application source is unchanged.
 -spec config(hls_scheduler_plan:spec()) -> hls_scheduler_build:config().
 config(Groups) ->
-    #{sources => [{"test/hls_scheduler_build_fixture.erl", []}],
+    #{sources => [{"apps/hls_fabric/test/hls_scheduler_build_fixture.erl", []}],
       topology => {hls_scheduler_build_fixture, topology, []},
       placement => #{name => scheduler_fixture, channel_depth => 1, actor_egress_depth => burst,
         scheduler_groups => Groups}}.

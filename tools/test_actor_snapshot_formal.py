@@ -23,8 +23,8 @@ def main():
     # arbitrary-history check small enough for the regular CI memory budget.
     for slots, mailbox, reduction in ((1, 0, 0), (1, 1, 66), (3, 0, 53), (9, 1, 59), (32, 0, 0)):
         prefix = args.stage / f'slots-{slots}-mailbox-{mailbox}-reduction-{reduction}'
-        sources = [ROOT / 'test/rtl/debug/hls_actor_snapshot_formal.sv',
-                   ROOT / 'priv/rtl/debug/hls_actor_snapshot.v']
+        sources = [ROOT / 'apps/erl_hls/test/rtl/debug/hls_actor_snapshot_formal.sv',
+                   ROOT / 'apps/erl_hls/priv/rtl/debug/hls_actor_snapshot.v']
         script = 'read_verilog -sv ' + ' '.join(map(quote, sources)) + '\n'
         script += f'chparam -set SLOTS {slots} -set MAILBOX {mailbox} -set REDUCTION_WIDTH {reduction} hls_actor_snapshot_formal\n'
         script += 'prep -top hls_actor_snapshot_formal -flatten\nmemory_map\nopt\n'

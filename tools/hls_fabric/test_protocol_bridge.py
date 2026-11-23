@@ -15,8 +15,8 @@ def build(xls: Path, stage: Path) -> list[Path]:
     roles=[]
     for i,actors in enumerate(['[left,sink]','[right]']):
         config=stage/f'role{i}.config'
-        config.write_text('#{sources=>[{"test/hls_protocol_network_fixture.erl",[]},'
-            '{"test/hls_protocol_inbox_fixture.erl",[]}],topology=>{hls_protocol_network_fixture,framed,[]},'
+        config.write_text('#{sources=>[{"apps/hls_fabric/test/hls_protocol_network_fixture.erl",[]},'
+            '{"apps/hls_fabric/test/hls_protocol_inbox_fixture.erl",[]}],topology=>{hls_protocol_network_fixture,framed,[]},'
             'actor_limit=>3,control=>rectangle,activation=>explicit_start,native_actors=>'+actors+',host=>1,service=>'+str(7+10*i)+'}.\n')
         role=stage/f'role{i}'
         run(emit_command('bridge', config, role),stage,f'emit-{i}', env=erlang_environment("test"))
@@ -72,9 +72,9 @@ def qualify(roles: list[Path], stage: Path) -> tuple[Path,list[Path]]:
     """Compile once and exercise two fresh reset-owned incarnations through real host routes."""
     ebin=stage/'ebin';ebin.mkdir()
     run(['erlc',*[v for p in erlang_paths("test") for v in ('-pa',p)],'+debug_info','-Werror','-o',ebin,
-         ROOT/'test/hls_protocol_network_fixture.erl',ROOT/'test/hls_protocol_bridge_live.erl'],stage,'host-compile')
+         ROOT/'apps/hls_fabric/test/hls_protocol_network_fixture.erl',ROOT/'apps/hls_fabric/test/hls_protocol_bridge_live.erl'],stage,'host-compile')
     wrapper,rtl=pair(roles,stage)
-    source=ROOT/'test/rtl/protocol_bridge_sim.cpp'
+    source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_sim.cpp'
     tracked=[wrapper,*rtl,source,source.with_name('framed_fifo_stream.h')]
     hashes={str(p):digest(p) for p in tracked}
     run(['verilator','--cc','--exe','--build','--top-module','protocol_bridge_pair',
@@ -90,7 +90,7 @@ def reset_witness(role: Path, stage: Path) -> None:
     """Interrupt public framing and ownership; reject stale sessions and mismatched identities."""
     m=json.loads((role/'bridge/manifest.json').read_text());identity=bytes.fromhex(m['identity'])
     incoming=next(l for l in m['links'] if l['direction']=='incoming');c=incoming['classes'][0]
-    source=(ROOT/'test/rtl/protocol_bridge_reset_tb.sv').read_text()
+    source=(ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_reset_tb.sv').read_text()
     replacements={'IDENTITY':'\n'.join(f"identity[{i}]=32'h{int.from_bytes(identity[i*4:i*4+4],'little'):08x};" for i in range(8)),
         'LINK':str(incoming['index']),'SLOT':str(c['slot']),'FRAME':str(c['codec']['value'])}
     for key,value in replacements.items():source=source.replace('@@'+key+'@@',value)
@@ -104,7 +104,7 @@ def properties(xls: Path, stage: Path) -> None:
     """Quantify all finite component state/input bits; no reachable-state or progress claim."""
     from types import SimpleNamespace
     from test_local_protocol import prove
-    source=ROOT/'test/rtl/protocol_bridge_properties.x';raw=stage/'properties.ir'
+    source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_properties.x';raw=stage/'properties.ir'
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'properties-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
@@ -132,7 +132,7 @@ def area(wrapper: Path, rtl: list[Path], stage: Path) -> None:
 
 def component(xls: Path, stage: Path) -> None:
     """Measure the preregistered controller population including its selection/access logic."""
-    source=ROOT/'test/rtl/protocol_bridge_component.x'
+    source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_component.x'
     compiler=application_directory('erl_hls','test')
     imports=[ROOT/'apps/hls_lowering/priv/xls/lib',compiler/'priv/xls/lib',compiler/'priv/xls/fabric']
     compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',imports)

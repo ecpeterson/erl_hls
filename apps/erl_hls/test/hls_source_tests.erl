@@ -227,7 +227,7 @@ source_options_are_checked_test() ->
             xls_parse:to_xls("unused.erl", #{source_options => [Option]}))
     end, [{i, 7}, {d, "NAME"}, {feature, maybe_expr, wrong}, debug_info]),
     ?assertMatch([#{module := epp} | _],
-        errors(fun() -> xls_parse:actor_interface("test_data/hls_source_context_fixture.erl") end)).
+        errors(fun() -> xls_parse:actor_interface("apps/erl_hls/test_data/hls_source_context_fixture.erl") end)).
 
 %% Extract structured source errors while allowing unrelated exceptions to fail the test.
 -spec errors(fun(() -> term())) -> [#{source := binary(), location := erl_anno:location(), module := module(), reason := term(), message := binary()}].

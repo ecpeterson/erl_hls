@@ -31,7 +31,7 @@ finite_atom_domain_test() ->
 %% Declared calls preserve their bounded wire slot; ordinary casts still require transaction zero.
 -spec call_transaction_domain_test() -> ok.
 call_transaction_domain_test() ->
-    Source = hls_local_actor:prepare("test/hls_protocol_call_fixture.erl", []),
+    Source = hls_local_actor:prepare("apps/hls_fabric/test/hls_protocol_call_fixture.erl", []),
     [#{mask := Mask, value := Value}] = hls_protocol_schema:domains(Source, [read]),
     Frame = Value,
     ?assertError({hls_diagnostic, #{code := unsupported_startup_call, context := #{schema := read}}},
@@ -87,7 +87,7 @@ rejects_ambiguous_test() ->
 -spec target_coordinates_and_projection_test() -> ok.
 target_coordinates_and_projection_test() ->
     Module = hls_protocol_boundary_fixture,
-    Artifact = hls_local_actor:compile("test/hls_protocol_boundary_fixture.erl", []),
+    Artifact = hls_local_actor:compile("apps/hls_fabric/test/hls_protocol_boundary_fixture.erl", []),
     Actors = [#{id => Id, module => Module} || Id <- [left, right]],
     Targets = [#{id => near, schemas => [work], recipients => [
         #{actor => left, at => [0, 0]}, #{actor => right, at => [1, 0]}]},
@@ -170,7 +170,7 @@ artifact(Names, Type) ->
 -spec selected_frame_capacity_test() -> ok.
 selected_frame_capacity_test() ->
     Layout = hls_frame_layout:new(1),
-    Artifact = hls_local_actor:prepare("test/hls_protocol_frame_fixture.erl", [], Layout),
+    Artifact = hls_local_actor:prepare("apps/hls_fabric/test/hls_protocol_frame_fixture.erl", [], Layout),
     Plan = hls_protocol_control:plan(#{frame_layout => Layout,
         modules => #{hls_protocol_frame_fixture => Artifact},
         topology => #{actors => [#{id => cell, module => hls_protocol_frame_fixture}],

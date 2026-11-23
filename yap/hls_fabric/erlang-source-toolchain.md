@@ -1,6 +1,6 @@
 # Erlang source toolchain
 
-The source-toolchain consolidation and its post-campaign follow-ons are complete. Use [building](../docs/building.md) for the supported commands and `Notes/erl_xls/Roadmap.md` for the sole active task list (G2/G6/G8). The [original implementation record](https://github.com/ecpeterson/hls_fabric/blob/28f8bd1562f7f429a8f482c4d73776b04cdc2e31/yap/erlang-source-toolchain.md) preserves intermediate limitations, exact validation counts and resolved failures; its former “next” tasks are not pending work.
+The source-toolchain consolidation and its post-campaign follow-ons are complete. Use [building](../../docs/hls_fabric/building.md) for the supported commands and `Notes/erl_xls/Roadmap.md` for the sole active task list (G2/G6/G8). The [original implementation record](https://github.com/ecpeterson/hls_fabric/blob/28f8bd1562f7f429a8f482c4d73776b04cdc2e31/yap/erlang-source-toolchain.md) preserves intermediate limitations, exact validation counts and resolved failures; its former “next” tasks are not pending work.
 
 - Replaced the duplicate Python compiler preparer with ordinary rebar dependencies and a relocatable OTP release.
 - Gave `erl_hls` ownership of `hlsc`, source preparation, diagnostics, source bundles and the optional external XLS driver; retained placement, execution and application presets in fabric.
