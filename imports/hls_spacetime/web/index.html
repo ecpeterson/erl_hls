@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HLS Spacetime · saved execution explorer</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="step-comparison.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="brand-mark">▱<br />▱<br />▱</span>
+        <div>
+          <strong>HLS Spacetime</strong><span>Saved execution explorer</span>
+        </div>
+      </div>
+      <div class="capture-controls">
+        <label
+          >Capture
+          <select id="capture">
+            <option value="">Choose a saved capture</option>
+          </select></label
+        ><label class="file-button"
+          >Open file<input
+            id="file"
+            type="file"
+            accept=".json,application/json" /></label
+        ><button id="help-button" aria-expanded="false">How to read</button>
+      </div>
+    </header>
+    <section id="help" hidden>
+      <strong
+        >Space across each chip layer. Clock cycles along the stack.</strong
+      >
+      <p>
+        This is a 3D scene: orbit changes the viewing direction, pan moves the
+        view, and zoom changes its scale. Layer spacing separates clock cycles
+        without changing their meaning. Opaque objects can hide others behind
+        them; rotate the scene or change the clock window to see what is
+        occluded. Top, Side and 3D restore useful camera directions. Expand
+        scene gives the drawing the full window. The evidence inspector and flat
+        chip panel are optional. Select a recorded operation, then follow its
+        inputs or consumers.
+      </p>
+      <p>
+        Solid cubes mark recorded access positions, not known electrical
+        switching. Distributed accesses follow associated native tile positions;
+        cells sharing a tile can share a mark. Where a write mask identifies
+        bits, the positions follow those selected bits. Read marks may represent
+        whole-word context because the consumed bit subset is unknown: their
+        solid shape does not mean the subset is known. Inspect the access mask
+        and binding details for that distinction. Turning off Distributed
+        accesses groups positions; a group centre is not the location of its
+        computation. Show unmapped participants adds unknown-location context;
+        its position outside the chip is a layout convention. Display filters do
+        not remove operations or their evidence from the recording.
+      </p>
+      <p>
+        In Clock planes view, thicker storage links join a write at C to its Q
+        sample at C+1. Thinner links show residence of the same version between
+        samples; both are opaque in the 3D view. By default, only versions with
+        recorded uses are drawn, ending at their last use. A hold or delayed
+        response does not extend source-word use. Full storage history includes
+        other residence. Hidden does not mean proven dead: unobserved consumers
+        may exist. Selecting a word expands its qualified cells by default; the
+        expansion control can group them again. Residence depends on the
+        declared write coverage and does not establish native enables or
+        exclusive occupancy. All glyph sizes and link thicknesses aid
+        legibility; they are not physical cell dimensions or metal widths.
+      </p>
+      <p>
+        Computation circuits show the native combinational fan-in of recorded
+        writes at their clocks, back to register outputs, constants and explicit
+        boundary gaps. Function colors distinguish data, enables, resets and
+        shared circuitry. Occupied tiles retains the spatial footprint; Wire
+        routes adds retained electrical connections; Routes + switches also
+        marks routing switches. Native wire tiles and PIP order locate the
+        connection, but the drawn spans do not claim a measured metal
+        trajectory. Mux alternatives remain structural context, not observed
+        switching paths. Dim context uses muted colors, not transparency or an
+        X-ray view.
+      </p>
+      <p>
+        Within-clock arrival places old Q sampled at C on the launch reference
+        plane, combinational pins at their latest static arrival, and write C at
+        the next Q/capture plane C+1. Auto STA uses the saved whole-design
+        reference estimate; Original target uses its constraint, and Manual
+        supplies a shared hypothetical period. Missing clock evidence falls back
+        explicitly to the shared manual value, initially 10 ns. The spatial
+        scale per nanosecond stays fixed across matched captures. None is a
+        measured running clock. Late arrivals extend beyond the next reference
+        boundary. Gray links distinguish other-input readiness and
+        ready-to-capture intervals from recorded storage. Logic is shown at
+        output settling time; red marks budget overruns. Geometry without
+        arrival timing is omitted here; clock planes retain its spatial context.
+        Known endpoints with incomplete route geometry stay connected by a thin
+        core with a dashed sleeve. Heights between measured pin endpoints are
+        interpolated along schematic routing chords. These are timing bounds,
+        not a switching trace. Computation + urgency keeps destination hue and
+        brightens complete paths within the chosen distance of the capture-wide
+        longest path. It is not STA slack or a congestion measurement.
+      </p>
+      <p>
+        Register Q → D/control excludes external and constant launches,
+        clock-to-Q and setup. Whole-cone timing includes all source boundaries.
+        Both preserve the full selected cone and use conservative SDF bounds.
+        Actor, task and operation filters select work; function and delay
+        filters select its circuits. The prepared viewer loads rendering
+        indexes; the original native graph and records remain separately
+        retained, hash-bound evidence. They need not all be loaded into the
+        browser to render the scene.
+      </p>
+      <p>
+        Native timing path adds an independent pink static STA overlay selected
+        in Chip & resources. Its ordered pins and delays come from a saved
+        report bound to the same build and checkpoint. It does not establish
+        activity or sensitization on a displayed clock, or a dependency on the
+        selected operation. Public completion annotations likewise add no
+        execution edges.
+      </p>
+    </section>
+    <div id="notice" role="status">
+      Open a prepared saved capture, or prepare the retained example with the
+      command in README.
+    </div>
+    <details id="load-details" class="load-details">
+      <summary>Loading details</summary>
+      <p id="load-metrics">No capture loaded.</p>
+    </details>
+    <main id="explorer">
+      <section class="workspace">
+        <div class="summary">
+          <div>
+            <span class="eyebrow">SELECTED INTERVAL</span>
+            <h1 id="title">One step, across space and time</h1>
+            <p id="subtitle">
+              Inspect recorded work without rebuilding the application.
+            </p>
+          </div>
+          <div id="metrics"></div>
+        </div>
+        <div class="filters">
+          <label
+            >Actor<select id="actor">
+              <option value="">All actors</option>
+            </select></label
+          >
+          <label
+            >Activation<select id="activation">
+              <option value="">All activations</option>
+            </select></label
+          >
+          <label
+            >Operation<select id="operation">
+              <option value="">All operations</option>
+            </select></label
+          >
+          <label
+            >Task<select id="task">
+              <option value="">All tasks</option>
+            </select></label
+          >
+          <button id="clear-filters">Clear filters</button>
+        </div>
+        <label class="examples-label"
+          >Start with an example<select id="example">
+            <option value="">Choose a recorded example</option>
+          </select></label
+        >
+        <section id="chain-panel" class="chain-panel" hidden>
+          <div class="selection-toolbar">
+            <label
+              >Follow an action<select id="chain">
+                <option value="">Choose an action chain</option>
+              </select></label
+            >
+            <label
+              ><input type="checkbox" id="chain-only" checked /> Only this
+              chain</label
+            >
+            <label
+              ><input type="checkbox" id="chain-context" /> Adjacent input
+              context</label
+            >
+          </div>
+          <p id="chain-summary" class="legend-note"></p>
+          <div id="chain-milestones" class="chain-milestones"></div>
+        </section>
+        <section id="step-comparison" hidden></section>
+        <div class="view-grid">
+          <section id="scene-panel" class="panel stack-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Spacetime scene</h2>
+                <span id="space-unit"
+                  >Device tile coordinates · time flows down</span
+                >
+                <p id="scene-caption" class="compact-scene-caption"></p>
+              </div>
+              <div class="scene-actions">
+                <button
+                  id="toggle-scene-controls"
+                  aria-expanded="true"
+                  title="Hide toolbars and details without changing the view settings"
+                >
+                  Hide controls
+                </button>
+                <button
+                  id="toggle-inspector"
+                  aria-controls="evidence-inspector"
+                  aria-expanded="false"
+                >
+                  Evidence inspector
+                </button>
+                <button
+                  id="scene-focus"
+                  aria-pressed="false"
+                  title="Give the scene the full window"
+                >
+                  Expand scene
+                </button>
+              </div>
+            </div>
+            <div class="camera-toolbar" aria-label="Scene camera">
+              <div
+                class="control-group"
+                role="group"
+                aria-label="Camera direction"
+              >
+                <button
+                  id="camera-isometric"
+                  aria-pressed="true"
+                  title="Isometric view"
+                >
+                  3D
+                </button>
+                <button
+                  id="camera-top"
+                  aria-pressed="false"
+                  title="Look straight at the chip layers"
+                >
+                  Top
+                </button>
+                <button
+                  id="camera-side"
+                  aria-pressed="false"
+                  title="See the separation between clock layers"
+                >
+                  Side
+                </button>
+              </div>
+              <label
+                >Drag<select id="camera-mode">
+                  <option value="orbit">Orbit</option>
+                  <option value="pan">Pan</option>
+                </select></label
+              >
+              <div class="control-group" role="group" aria-label="Camera zoom">
+                <button id="zoom-out" aria-label="Zoom out">−</button>
+                <button id="zoom-in" aria-label="Zoom in">+</button>
+              </div>
+              <button
+                id="fit-selection"
+                title="Frame the selected work"
+                disabled
+              >
+                Fit selection
+              </button>
+              <button id="reset-camera" title="Frame the visible clock window">
+                Reset view
+              </button>
+              <span class="camera-help"
+                >Drag to orbit · Shift-drag to pan · Scroll to zoom</span
+              >
+            </div>
+            <div class="clock-reference-controls">
+              <label
+                >Period source<select id="clock-source">
+                  <option value="auto">Auto STA</option>
+                  <option value="target">Original target</option>
+                  <option value="manual">Manual</option>
+                </select></label
+              >
+              <label
+                >Period (ns)<input
+                  id="arrival-budget"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  value="10"
+                  required
+              /></label>
+              <p id="clock-reference-note" class="legend-note"></p>
+              <details id="clock-reference-evidence" hidden>
+                <summary>Whole-design STA evidence</summary>
+                <pre id="clock-reference-provenance"></pre>
+              </details>
+            </div>
+            <div class="scene-display-controls">
+              <label
+                ><input id="computation-circuits" type="checkbox" disabled />
+                Computation circuits</label
+              >
+              <label
+                >Time layout<select id="time-layout" disabled>
+                  <option value="flat">Clock planes</option>
+                  <option value="arrival">Within-clock arrival</option>
+                </select></label
+              >
+              <label
+                >Color style<select id="color-mode">
+                  <option value="criticality">Computation + urgency</option>
+                  <option value="delay-kind">Logic / net + urgency</option>
+                  <option value="role" selected>Data / enable / reset</option>
+                  <option value="computation">Sub-computation</option>
+                  <option value="direction">Flow direction</option>
+                </select></label
+              >
+              <label
+                >Detail<select id="detail-level">
+                  <option value="overview">Occupied tiles</option>
+                  <option value="routes" selected>Routing connectivity</option>
+                  <option value="switches">Connectivity + switches</option>
+                </select></label
+              >
+              <label
+                ><input id="ghost-context" type="checkbox" /> Dim context</label
+              >
+            </div>
+            <div id="color-legend" class="color-legend" aria-live="polite">
+              <div id="role-legend">
+                <span><i class="role-data"></i>Data</span
+                ><span><i class="role-enable"></i>Enable</span
+                ><span><i class="role-reset"></i>Reset</span
+                ><span><i class="role-shared"></i>Shared</span>
+              </div>
+              <div id="computation-legend" hidden>
+                <span id="computation-count"></span
+                ><span><i class="computation-shared"></i>Shared circuitry</span>
+                <details class="computation-colors">
+                  <summary>Color key</summary>
+                  <div id="computation-key"></div>
+                  <p>
+                    Hue follows the destination register across clocks. Colors
+                    are hints, not unique identifiers. Untimed storage keeps its
+                    categorical hue outside timing modes.
+                  </p>
+                </details>
+              </div>
+              <p class="legend-note">
+                Routing links join known locations; bends and track offsets are
+                unavailable. Coincident spans are combined, not electrically
+                connected.
+              </p>
+              <div id="analysis-legend" hidden></div>
+              <div id="delay-kind-legend" hidden>
+                <span><i class="sink-logic"></i>Logic delay</span
+                ><span><i class="sink-net"></i>Net delay</span
+                ><span
+                  >Brightness: near-longest paths · gray: shared categories /
+                  untimed storage</span
+                >
+              </div>
+              <div id="urgency-legend" hidden>
+                <span id="urgency-summary"></span>
+              </div>
+              <div id="arrival-legend" hidden>
+                <span
+                  >Height: latest static arrival · logic shown at output
+                  settling time · gray: other-input readiness / ready-to-capture
+                  interval · red: budget overrun · missing arrival timing is
+                  omitted</span
+                ><span
+                  >Solid: retained endpoint / routing connectivity · thin core
+                  with dashed sleeve: schematic endpoint connection across
+                  incomplete routing geometry</span
+                >
+                <span id="arrival-ruler-note"></span>
+              </div>
+              <div id="direction-legend" hidden>
+                <span>Source / earlier</span
+                ><i id="direction-ramp" class="timing-ramp"></i
+                ><span>Sink / later →</span
+                ><span class="legend-note"
+                  >Each displayed span restarts the ramp · conflicting
+                  directions / unknown routes stay neutral · connectivity, not
+                  switching</span
+                >
+              </div>
+              <span><i class="role-unknown"></i>Unknown</span>
+            </div>
+            <div class="window-inputs">
+              <label
+                >First clock<input id="first" type="number" min="0" /></label
+              ><label
+                >Window<input
+                  id="window"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="24" /></label
+              ><input
+                id="position"
+                type="range"
+                min="0"
+                value="0"
+                aria-label="Window first clock"
+              /><span id="window-label"></span>
+            </div>
+            <div class="selection-toolbar">
+              <label
+                >Click target<select id="pick-mode">
+                  <option value="sinks">Timing sinks</option>
+                  <option value="reads">Read events</option>
+                  <option value="writes">Write events</option>
+                  <option value="storage">Storage spans</option>
+                  <option value="navigate">Navigate only</option>
+                </select></label
+              >
+              <label
+                ><input type="checkbox" id="pick-all" /> Show all targets</label
+              >
+              <span id="pick-summary"></span>
+            </div>
+            <p id="untimed-summary" class="legend-note" hidden></p>
+            <p id="pick-notice" class="legend-note" aria-live="polite"></p>
+            <div class="path-workbench">
+              <div id="scene-frame" class="canvas-wrap">
+                <canvas id="scene3d" aria-hidden="true"></canvas>
+                <canvas
+                  id="stack"
+                  aria-label="Interactive chip stack. Choose a click target above. Diamonds select timing sinks; circles select events. Overlapping targets open a keyboard-accessible chooser. Drag to move the camera."
+                  tabindex="0"
+                ></canvas>
+                <div class="axis-hint">
+                  CLOCK AXIS<span>Presets restore time orientation</span>
+                </div>
+                <div id="tooltip" hidden></div>
+                <section
+                  id="pick-chooser"
+                  aria-label="Targets at cursor"
+                  hidden
+                >
+                  <div class="pick-heading">
+                    <strong id="pick-heading"></strong
+                    ><button id="pick-close" aria-label="Close target chooser">
+                      ×
+                    </button>
+                  </div>
+                  <div id="pick-choices"></div>
+                  <div class="pick-paging">
+                    <button id="pick-prev">Previous targets</button
+                    ><span id="pick-page"></span
+                    ><button id="pick-next">Next targets</button>
+                  </div>
+                </section>
+              </div>
+              <details id="sink-panel" class="render-notes" open hidden>
+                <summary>Paths to sinks · logic / net delay</summary>
+                <div class="sink-controls">
+                  <label
+                    >Path view<select id="sink-mode">
+                      <option value="all">All circuitry</option>
+                      <option value="per-sink">
+                        Longest path to every sink
+                      </option>
+                      <option value="selected">
+                        Selected sink: longest path
+                      </option>
+                      <option value="neighborhood">Path neighborhood</option>
+                      <option value="cut">Candidate register cut</option>
+                      <option value="near">
+                        Selected sink: near-longest paths
+                      </option>
+                    </select></label
+                  >
+                  <label
+                    >Near-longest margin (ns)<input
+                      id="sink-margin"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value="0.5"
+                      required
+                      disabled
+                  /></label>
+                </div>
+                <p id="sink-selection" class="sink-selection"></p>
+                <p id="sink-path-summary"></p>
+                <section id="path-neighborhood" hidden>
+                  <div class="analysis-controls">
+                    <label
+                      >Similar timing ± ns<input
+                        id="family-margin"
+                        type="number"
+                        min="0"
+                        step="0.05"
+                        value="0.1"
+                        required
+                    /></label>
+                    <label
+                      >Region padding (tiles)<input
+                        id="family-padding"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value="12"
+                        required
+                    /></label>
+                  </div>
+                  <label class="analysis-toggle"
+                    ><input id="family-context" type="checkbox" checked />
+                    Nearby installed logic</label
+                  >
+                  <p id="family-summary"></p>
+                  <label
+                    >Driver fanout<select id="family-driver">
+                      <option value="">No fanout overlay</option>
+                    </select></label
+                  >
+                  <p id="family-driver-summary"></p>
+                  <details open>
+                    <summary>Similar sinks</summary>
+                    <div id="family-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="family-prev" type="button">
+                        Previous family page</button
+                      ><span id="family-page"></span
+                      ><button id="family-next" type="button">
+                        Next family page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Neighborhood coverage</summary>
+                    <p id="family-coverage"></p>
+                  </details>
+                </section>
+                <section id="path-cut" hidden>
+                  <label
+                    >Cut after arrival (ns)<input
+                      id="cut-time"
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                  /></label>
+                  <input
+                    id="cut-threshold"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.5"
+                    aria-label="Candidate cut arrival"
+                  />
+                  <label class="analysis-toggle"
+                    ><input id="cut-full-graph" type="checkbox" /> Show complete
+                    input graph</label
+                  >
+                  <p class="muted">
+                    Default: longest path and all crossing bits. Estimates
+                    always include the complete eligible input graph.
+                  </p>
+                  <p id="cut-summary"></p>
+                  <div id="cut-bars" class="cut-bars"></div>
+                  <p class="analysis-key">
+                    Amber: before cut · blue: after cut · gold: crossing bit.
+                    Original arrival heights are retained; no hardware or clock
+                    stages were changed.
+                  </p>
+                  <p id="cut-side-inputs"></p>
+                  <details open>
+                    <summary>Values crossing the cut</summary>
+                    <div id="cut-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="cut-prev" type="button">
+                        Previous cut page</button
+                      ><span id="cut-page"></span
+                      ><button id="cut-next" type="button">
+                        Next cut page
+                      </button>
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Estimate limits</summary>
+                    <p id="cut-limits"></p>
+                  </details>
+                </section>
+                <details id="scenario-panel" class="regional-panel">
+                  <summary>What-if: added actor latency</summary>
+                  <p id="scenario-status" aria-live="polite">
+                    No scenario profile loaded.
+                  </p>
+                  <button type="button" id="scenario-load" disabled>
+                    Load saved scenario profile
+                  </button>
+                  <div id="scenario-content" hidden>
+                    <label>Change<select id="scenario-choice"></select></label>
+                    <div class="analysis-controls">
+                      <label
+                        >Extra clocks per action<input
+                          id="scenario-latency"
+                          type="number"
+                          min="0"
+                          max="1000"
+                          step="1"
+                          value="1"
+                          required
+                      /></label>
+                      <label
+                        >Assumed baseline period (ns)<input
+                          id="scenario-before"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="10"
+                          required
+                      /></label>
+                      <label
+                        >Assumed candidate period (ns)<input
+                          id="scenario-after"
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value="8.5"
+                          required
+                      /></label>
+                    </div>
+                    <button type="button" id="scenario-run">
+                      Run conditional scenario
+                    </button>
+                    <div id="scenario-results"></div>
+                    <p id="scenario-physical"></p>
+                    <details>
+                      <summary>Source obligations & limitations</summary>
+                      <div id="scenario-evidence"></div>
+                    </details>
+                  </div>
+                </details>
+                <details id="regional-panel" class="regional-panel">
+                  <summary>Regional routing resources</summary>
+                  <p id="region-status" aria-live="polite">
+                    This capture has no prepared regional-resource data.
+                  </p>
+                  <button id="region-load" type="button" disabled>
+                    Load saved regional data
+                  </button>
+                  <div id="region-content" hidden>
+                    <div class="analysis-controls">
+                      <label
+                        >Count<select id="region-metric">
+                          <option value="pips">
+                            Distinct routing switches
+                          </option>
+                          <option value="cells">Installed cells</option>
+                          <option value="nets">Distinct routed nets</option>
+                        </select></label
+                      >
+                      <label
+                        >Primitive kind<select id="region-kind" disabled>
+                          <option value="">All primitive kinds</option>
+                        </select></label
+                      >
+                      <label
+                        >Map extent<select id="region-scope">
+                          <option value="family">Path neighborhood</option>
+                          <option value="all">Whole installed device</option>
+                        </select></label
+                      >
+                    </div>
+                    <p id="region-scope-note"></p>
+                    <div id="region-map" class="region-map"></div>
+                    <label
+                      >Region<select id="region-bin">
+                        <option value="">Select a region</option>
+                      </select></label
+                    >
+                    <p id="region-scale"></p>
+                    <label class="analysis-toggle"
+                      ><input id="region-overlay" type="checkbox" /> Show
+                      resource map on 3D reference plane</label
+                    >
+                    <p class="muted">
+                      Installed allocation and route membership, not capacity
+                      utilization, routing demand, congestion or placement
+                      causality. Counts use complete retained native
+                      populations, independent of the clock window.
+                    </p>
+                    <p id="region-selection"></p>
+                    <p class="muted">
+                      Resource selection stays pinned across path and list
+                      filters for comparison; Clear resource selection removes
+                      it.
+                    </p>
+                    <button id="region-clear" type="button">
+                      Clear resource selection
+                    </button>
+                    <label
+                      >Contributors<select id="region-population">
+                        <option value="nets">Nets</option>
+                        <option value="cells">Cells</option>
+                        <option value="pips">Routing switches</option>
+                      </select></label
+                    >
+                    <label
+                      >Find contributor<input
+                        id="region-search"
+                        type="search"
+                        placeholder="Native cell, net or PIP name"
+                    /></label>
+                    <label class="analysis-toggle"
+                      ><input id="region-family-only" type="checkbox" />
+                      Contributors touching the path family</label
+                    >
+                    <div id="region-list" class="analysis-list"></div>
+                    <div class="sink-paging">
+                      <button id="region-prev" type="button">
+                        Previous resource page</button
+                      ><span id="region-page"></span
+                      ><button id="region-next" type="button">
+                        Next resource page
+                      </button>
+                    </div>
+                    <p id="region-footprint"></p>
+                    <details>
+                      <summary>Resource coverage</summary>
+                      <p id="region-coverage"></p>
+                    </details>
+                  </div>
+                </details>
+                <div class="sink-kind-legend">
+                  <span><i class="sink-logic"></i>Logic</span
+                  ><span><i class="sink-net"></i>Net / transmission</span
+                  ><span
+                    >Strip widths show each arc's local delay; parallel paths
+                    are not added.</span
+                  >
+                </div>
+                <div
+                  id="sink-strip"
+                  class="sink-strip"
+                  aria-label="Ordered source-to-sink delay contributions"
+                ></div>
+                <p
+                  id="sink-arc-detail"
+                  class="sink-arc-detail"
+                  aria-live="polite"
+                ></p>
+                <p id="sink-geometry" class="muted"></p>
+                <details>
+                  <summary>All ordered arcs, including zero-delay arcs</summary>
+                  <div id="sink-steps" class="sink-steps"></div>
+                </details>
+                <details open class="sink-ranking">
+                  <summary>Ranked sinks</summary>
+                  <label
+                    >Find sink<input
+                      id="sink-search"
+                      type="search"
+                      placeholder="Pin, register or role"
+                  /></label>
+                  <p id="sink-population"></p>
+                  <div id="sink-list" class="sink-list"></div>
+                  <div class="sink-paging">
+                    <button type="button" id="sink-prev">Previous</button
+                    ><span id="sink-page"></span
+                    ><button type="button" id="sink-next">Next</button>
+                  </div>
+                </details>
+              </details>
+            </div>
+            <details id="scene-options" class="scene-options">
+              <summary>Layers, storage & timing filters</summary>
+              <div class="stack-controls">
+                <label
+                  >Highlight within (ns)<input
+                    id="urgency-window"
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value="1"
+                    required
+                    title="Distance below the capture-wide longest structural path"
+                /></label>
+                <label
+                  >Time scale<input
+                    id="spacing"
+                    type="range"
+                    min="2"
+                    max="80"
+                    step="1"
+                    value="8" /></label
+                ><label
+                  ><input id="context" type="checkbox" /> Installed
+                  context</label
+                ><label
+                  ><input id="show-unmapped" type="checkbox" /> Show unmapped
+                  participants</label
+                ><label
+                  ><input id="residence" type="checkbox" checked /> Storage
+                  links</label
+                ><label
+                  ><input id="full-storage" type="checkbox" /> Full storage
+                  history</label
+                ><label
+                  ><input id="access-footprints" type="checkbox" checked />
+                  Distributed accesses</label
+                ><label
+                  ><input
+                    id="expand-storage"
+                    type="checkbox"
+                    checked
+                    disabled
+                  />
+                  Expand selected storage into cells</label
+                ><span class="legend"
+                  ><i class="load"></i> load C→C+1
+                  <i class="hold"></i> residence <i></i> selected
+                  <i class="unknown"></i> unknown / unmapped</span
+                >
+              </div>
+              <div class="stack-controls">
+                <label
+                  >Function<select id="circuit-role" disabled>
+                    <option value="">Data + enables + resets</option>
+                    <option value="data">Data</option>
+                    <option value="enable">Enables</option>
+                    <option value="reset">Resets</option>
+                  </select></label
+                >
+                <label
+                  >Timing scope<select id="circuit-timing" disabled>
+                    <option value="registered_launch">
+                      Register Q → D/control
+                    </option>
+                    <option value="whole_cone">
+                      Whole cone, including ports
+                    </option>
+                  </select></label
+                >
+                <label
+                  >Minimum static cone delay (ns)<input
+                    id="circuit-delay"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value="0"
+                    disabled
+                /></label>
+                <label
+                  ><input
+                    id="circuit-unknown"
+                    type="checkbox"
+                    checked
+                    disabled
+                  />
+                  Include cones without timing</label
+                >
+                <label
+                  ><input id="circuit-selected" type="checkbox" disabled />
+                  Selected write or producer only</label
+                >
+              </div>
+            </details>
+            <details id="arrival-details" class="render-notes" hidden>
+              <summary>Arrival and local-delay details</summary>
+              <p id="arrival-summary"></p>
+              <p>
+                Lowest relative margins first; local net delay covers the
+                complete connection, not individual PIP spans. Readiness gaps
+                are not extra wire delay. These bounds exclude clock-to-Q,
+                setup, skew and timing exceptions.
+              </p>
+              <div id="arrival-table"></div>
+            </details>
+            <details class="render-notes">
+              <summary>Coverage notes</summary>
+              <p
+                id="circuit-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
+              <p
+                id="storage-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
+              <p
+                id="access-summary"
+                class="storage-summary"
+                aria-live="polite"
+              ></p>
+            </details>
+          </section>
+          <details id="flat-panel" class="panel flat-panel">
+            <summary class="panel-heading">
+              <span class="panel-title">Chip & resources</span>
+              <span id="flat-subtitle"
+                >Unique installed cells, counted once</span
+              >
+            </summary>
+            <div class="flat-content">
+              <canvas
+                id="flat"
+                aria-label="Flat device view of installed and selected resources"
+                tabindex="0"
+              ></canvas>
+              <label
+                ><input id="spatial-density" type="checkbox" checked />
+                Installed-cell concentration</label
+              >
+              <p id="spatial-summary" class="storage-summary"></p>
+              <p class="muted">
+                Gold marks the selected resource’s associated cells, which may
+                be spread across the chip. This is storage placement, not the
+                circuit computing its next value or the wires connecting it.
+              </p>
+              <div id="resource-summary">
+                Select an operation to inspect its resource bindings.
+              </div>
+              <label class="resource-picker"
+                >Resource<select id="resource">
+                  <option value="">Select a resource</option>
+                </select></label
+              >
+              <details>
+                <summary>Storage versions in view</summary>
+                <div id="storage-history" class="storage-history"></div>
+              </details>
+              <label class="resource-picker"
+                >Native timing path<select id="native-path">
+                  <option value="">No static path overlay</option>
+                </select></label
+              >
+              <p id="native-path-summary" class="storage-summary"></p>
+              <details>
+                <summary>Ordered path pins</summary>
+                <div id="native-path-steps" class="native-path-steps"></div>
+              </details>
+              <details id="cell-details">
+                <summary>
+                  Placed cell details <span id="cell-count"></span>
+                </summary>
+                <div id="cells" class="cell-list"></div>
+              </details>
+            </div>
+          </details>
+        </div>
+        <section class="panel timeline-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Execution timeline</h2>
+              <span id="timeline-label">Recorded clock cycles</span>
+            </div>
+            <div class="window-actions">
+              <button id="previous" aria-label="Previous clock window">←</button
+              ><button id="step">Selected step</button
+              ><button id="completion">Completion record</button
+              ><button id="all">Whole capture</button
+              ><button id="next" aria-label="Next clock window">→</button>
+            </div>
+          </div>
+          <canvas
+            id="timeline"
+            aria-label="Timeline. Click to move the window around a clock."
+            tabindex="0"
+          ></canvas>
+          <p id="activity-summary" class="storage-summary"></p>
+          <p id="timing-summary" class="storage-summary"></p>
+        </section>
+        <section class="panel events-panel">
+          <div class="panel-heading">
+            <h2>Operations in view</h2>
+            <span id="event-count"></span>
+          </div>
+          <div id="events" class="event-list" tabindex="0"></div>
+        </section>
+      </section>
+      <aside id="evidence-inspector" aria-label="Evidence inspector" hidden>
+        <section class="panel selection-panel">
+          <div class="panel-heading">
+            <h2>Evidence inspector</h2>
+            <span id="selected-kind">No selection</span>
+          </div>
+
+          <p id="access-detail" class="storage-summary"></p>
+          <div id="selection">
+            <p class="empty">
+              Select an operation in the stack or choose an example to follow a
+              stored value.
+            </p>
+          </div>
+          <div class="dependency-controls">
+            <button id="backward">← Inputs</button
+            ><button id="forward">Consumers →</button
+            ><button id="clear-trace">Clear path</button>
+          </div>
+          <div id="trace-summary"></div>
+          <div id="neighbors"></div>
+        </section>
+        <section class="panel evidence-panel">
+          <div class="panel-heading"><h2>Capture scope</h2></div>
+          <div id="scope">
+            <p>
+              Saved observations establish a finite witness, not all-input
+              equivalence.
+            </p>
+          </div>
+          <details>
+            <summary>Source identities</summary>
+            <pre id="identities"></pre>
+          </details>
+        </section>
+      </aside>
+    </main>
+    <footer>
+      <span>HLS Spacetime / storage history</span
+      ><span>Cycle observations · qualified placement · explicit unknowns</span>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

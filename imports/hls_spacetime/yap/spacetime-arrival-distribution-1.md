@@ -1,0 +1,21 @@
+# Correct the apparent launch-time sheet
+
+The matched numerical-action view was mixing three different things at the top of a clock: real early fan-out from sampled Q, untimed semantic event overlays, and early input contributions to logic whose output was still waiting on other inputs. The first is physical timing evidence; the other two needed a display correction.
+
+Untimed operations no longer acquire a coordinate merely from their event cycle or associated storage resource. Only qualified scalar-register samples/captures get boundary glyphs; untimed events and their dependency overlays remain in the event list and clock-plane layout with explicit omission counts in arrival view. The saved STA overlay likewise stays out of arrival geometry until it has qualified heights.
+
+Logic now uses the latest output arrival as its settling boundary. An early input gets a neutral readiness interval at its input, then its unchanged local arc delay ending at that output boundary. This is an analytical readiness depiction, not a measured internal start or gate-switching time. The raw source arrival, source-plus-delay and output arrival remain in the inspector. Net heights, native delays, longest-path costs and pin arrivals are unchanged. Quarter-budget labels make the common hypothetical time scale legible; large windows suppress only the extra labels.
+
+A read-only audit of the exact prepared Phi-3 destination tables found no missing timing in the selected registered-launch data cones and no internal pin falsely seeded at zero. In the original first computation, 2,389 of 7,400 net arcs launch directly from Q; their early fan-out is real within this model. The median net start is 2.7181 ns and median logic-input arrival is 3.2653 ns, so the computation is not concentrated at launch. Source-Q delay still excludes clock-to-Q/setup/skew. The audit retained one bounded failed array-append attempt and its corrected result.
+
+The corrected figures reuse the complete frozen capture archive, whose manifest is `f9532445a4a28af6948127b553cb69219b6345514f211147b6f7da1df69ee7d8`. No source/RTL/native capture, synthesis, placement or routing was repeated. The original measurements remain 8.997→5.560 ns setup-equivalent period and an unchanged public clock schedule; neither the old nor new picture is a switching simulation.
+
+## Qualification and retained comparison
+
+The full JavaScript suite passed 549 tests under the serial 6 GiB guard. Review then found that a validated zero-latency register response could retain the same Q anchor as its matching request; the final helper passed six focused tests, including two new request/result regressions. No unchanged native, Erlang or C++ witness was repeated. Browser checks cover both matched captures, the numerical corridor, scalar read/capture boundaries, clock-plane fallback and the smaller ruler. There were no browser warnings or errors.
+
+The new side-view figures preserve the same camera, tile extent, action, four-clock window, 10 ns display budget, layer spacing 60 and sub-computation colors. All data circuitry for the selected destination masks remains included; enable/reset cones and unrelated action context are excluded by the visible filters. The side projection avoids overlap between chip position and time while 3D remains available. Four untimed event overlays/seven dependency overlays are excluded in the baseline; five/eleven in the candidate. No selected native span, pin or root has missing arrival timing.
+
+The original first-stage envelope is 8.8635 ns; the candidate numerator envelopes are 3.2460/3.1633 ns. The following Phi-commit envelope is 5.4633 ns before and 5.1228 ns after. No independent stage cost is added across placement runs. Gray spans distinguish readiness/capture annotations and recorded residence; they are not extra logic.
+
+Small audit, local-test, source-patch and screenshot evidence is retained separately in `/Users/ecpeterson/Documents/code/hls_artifacts/runs/spacetime-2026-11-09/arrival-distribution-1`, with a 12 MiB total/4 MiB per-file cap. The full parent archive is referenced, not duplicated. [Viewer semantics](../docs/viewer.md) remain the maintained interface.

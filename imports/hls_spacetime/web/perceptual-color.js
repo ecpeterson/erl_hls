@@ -1,0 +1,218 @@
+/** Function, computation, delay kind and perceptually ordered static-path colors.
+ * Delays are supplied by the caller; this module never infers timing or activity.
+ * Selection belongs to a separate outline/halo, not this color mapping.
+ */
+export const UNKNOWN_COLOR = "#81738f";
+export const OUTSIDE_TIMING_COLOR = "#526471";
+export const FUNCTION_COLORS = Object.freeze({
+  data: "#65dac7",
+  enable: "#f1bb6c",
+  reset: "#b6a1e8",
+  mixed: "#d2dfe5",
+  shared: "#d2dfe5",
+});
+
+const knownDelay = (value) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+// Oklab preserves a meaningful lightness axis while changing hue. Gamut fitting
+// reduces chroma only; it does not flatten the increasing lightness of the scale.
+function linearRgb(lightness, a, b) {
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+function inGamut(rgb) {
+  return rgb.every((value) => value >= 0 && value <= 1);
+}
+
+function hexColor(lightness, a, b) {
+  let rgb = linearRgb(lightness, a, b);
+  if (!inGamut(rgb)) {
+    let low = 0;
+    let high = 1;
+    for (let iteration = 0; iteration < 16; iteration++) {
+      const chroma = (low + high) / 2;
+      if (inGamut(linearRgb(lightness, a * chroma, b * chroma))) {
+        low = chroma;
+      } else {
+        high = chroma;
+      }
+    }
+    rgb = linearRgb(lightness, a * low, b * low);
+  }
+  const encode = (linear) => {
+    const bounded = Math.max(0, Math.min(1, linear));
+    const srgb =
+      bounded <= 0.0031308
+        ? 12.92 * bounded
+        : 1.055 * bounded ** (1 / 2.4) - 0.055;
+    return Math.round(srgb * 255)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${rgb.map(encode).join("")}`;
+}
+
+// Constant Oklab lightness keeps categorical hue from suggesting a rank. The
+// small palette deliberately permits collisions: color is not a unique identity.
+const COMPUTATION_HUES = Object.freeze([
+  15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345,
+]);
+const computationHue = (lightness, index) => {
+  const radians = (COMPUTATION_HUES[index] * Math.PI) / 180;
+  return hexColor(
+    lightness,
+    0.13 * Math.cos(radians),
+    0.13 * Math.sin(radians),
+  );
+};
+export const COMPUTATION_COLORS = Object.freeze(
+  COMPUTATION_HUES.map((_, index) => computationHue(0.73, index)),
+);
+export const COMPUTATION_SHARED_COLOR = hexColor(0.8, 0, 0);
+
+// Delay kinds use equal-lightness amber/blue categories. A mixed or unspecified
+// kind is neutral; it does not invent a dominant contribution.
+function delayKindHue(lightness, kind) {
+  const angle = kind === "logic" ? 75 : kind === "net" ? 245 : null;
+  if (angle === null) return hexColor(lightness, 0, 0);
+  const radians = (angle * Math.PI) / 180;
+  return hexColor(
+    lightness,
+    0.13 * Math.cos(radians),
+    0.13 * Math.sin(radians),
+  );
+}
+export const DELAY_KIND_COLORS = Object.freeze({
+  logic: delayKindHue(0.73, "logic"),
+  net: delayKindHue(0.73, "net"),
+  mixed: delayKindHue(0.73, "mixed"),
+});
+
+/** Stable FNV-1a over JavaScript string code units; key type is part of identity.
+ * Missing/invalid keys are unknown rather than silently joining one category.
+ */
+function computationIndex(key) {
+  const value =
+    typeof key === "string" && key.length
+      ? `text:${key}`
+      : Number.isSafeInteger(key)
+        ? `number:${key}`
+        : null;
+  if (value === null) return null;
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  }
+  return (hash >>> 0) % COMPUTATION_HUES.length;
+}
+
+/** Stable categorical hue, independent of display order, filters and timing.
+ * Supply a nonempty semantic key or safe integer; twelve colors may be shared.
+ */
+export function computationColor(key) {
+  const index = computationIndex(key);
+  return index === null ? UNKNOWN_COLOR : COMPUTATION_COLORS[index];
+}
+
+/** Clamp a supplied scalar coordinate; unknown values do not become zero. */
+function fraction(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : null;
+}
+
+/** Direction means a caller-supplied source-to-sink coordinate, not timing or
+ * observed activity. Dark cool sources lead to bright warm sinks.
+ */
+export function directionColor(position) {
+  const value = fraction(position);
+  if (value === null) return UNKNOWN_COLOR;
+  return hexColor(
+    0.5 + 0.38 * value,
+    -0.035 + 0.065 * value,
+    -0.11 + 0.23 * value,
+  );
+}
+export const DIRECTION_SOURCE_COLOR = directionColor(0);
+export const DIRECTION_SINK_COLOR = directionColor(1);
+
+/** Near-longest structural margin controls lightness independently of hue.
+ * A positive bandwidth is required; absent timing remains unknown.
+ */
+function urgencyLightness(delayNs, maxDelayNs, marginWindowNs) {
+  if (!(Number.isFinite(marginWindowNs) && marginWindowNs > 0))
+    throw new RangeError("Criticality window must be positive");
+  if (!knownDelay(delayNs) || !knownDelay(maxDelayNs)) return null;
+  const margin = Math.max(0, maxDelayNs - delayNs);
+  return 0.28 + 0.62 * Math.max(0, 1 - margin / marginWindowNs);
+}
+
+/** Categorical logic/net color when options are omitted; otherwise combine its
+ * hue with the supplied complete-path urgency. An unknown kind is neutral,
+ * while unknown timing and out-of-scope timing retain distinct dispositions.
+ */
+export function delayKindColor(kind, options) {
+  if (options === undefined)
+    return kind === "logic" || kind === "net"
+      ? DELAY_KIND_COLORS[kind]
+      : DELAY_KIND_COLORS.mixed;
+  const {
+    delayNs = null,
+    maxDelayNs = null,
+    marginWindowNs = 1,
+    timingApplicable = true,
+  } = options;
+  if (!timingApplicable) return OUTSIDE_TIMING_COLOR;
+  const lightness = urgencyLightness(delayNs, maxDelayNs, marginWindowNs);
+  return lightness === null ? UNKNOWN_COLOR : delayKindHue(lightness, kind);
+}
+
+/** Map supplied function, computation identity or complete-path urgency to opaque
+ * CSS color. Urgency retains computation or delay-kind hue and varies lightness.
+ * Explicitly shared computation ownership uses neutral gray, never a fake key.
+ * Use the same maxDelayNs across the capture, not each window or selection.
+ */
+export function sceneColor({
+  role = "data",
+  kind = null,
+  mode = "role",
+  delayNs = null,
+  maxDelayNs = null,
+  computationKey = null,
+  computationShared = false,
+  timingApplicable = true,
+  marginWindowNs = 1,
+} = {}) {
+  if (mode === "role") return FUNCTION_COLORS[role] ?? UNKNOWN_COLOR;
+  if (["criticality", "delay-kind"].includes(mode) && !timingApplicable)
+    return OUTSIDE_TIMING_COLOR;
+  if (mode === "delay-kind")
+    return delayKindColor(kind, {
+      delayNs,
+      maxDelayNs,
+      marginWindowNs,
+      timingApplicable,
+    });
+  if (mode === "computation")
+    return computationShared
+      ? COMPUTATION_SHARED_COLOR
+      : computationColor(computationKey);
+  if (mode === "criticality") {
+    const lightness = urgencyLightness(delayNs, maxDelayNs, marginWindowNs);
+    const index = computationIndex(computationKey);
+    if (lightness === null || (!computationShared && index === null))
+      return UNKNOWN_COLOR;
+    return computationShared
+      ? hexColor(lightness, 0, 0)
+      : computationHue(lightness, index);
+  }
+  throw new RangeError(`Unknown scene color mode: ${mode}`);
+}
