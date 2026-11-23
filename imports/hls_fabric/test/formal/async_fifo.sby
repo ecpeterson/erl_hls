@@ -1,0 +1,18 @@
+[tasks]
+prove
+cover
+[options]
+prove: mode prove
+prove: depth 64
+cover: mode cover
+cover: depth 100
+multiclock on
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+[script]
+read -formal hls_async_fifo.v async_fifo.sv
+prep -top async_fifo_formal
+[files]
+apps/hls_lowering/priv/rtl/hls_async_fifo.v
+test/formal/async_fifo.sv

@@ -1,0 +1,226 @@
+// Passive pre-edge recording/replay for the source-protocol application's public pins.
+// Live mode retains the real broker; replay checks its saved offered schedule.
+// Drive mode applies deliberate stimulus without claiming equivalence to its source trace.
+#include "Vprotocol_application_top.h"
+#include "verilated.h"
+#include "verilated_vpi.h"
+#include "framed_fifo_stream.h"
+#include "spacetime_trace.h"
+#include <chrono>
+#include <cstdio>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <thread>
+#include <unistd.h>
+
+// A requested signal must exist with exactly the declared width. Only VPI reads occur.
+class PassiveTaps {
+public:
+    explicit PassiveTaps(const std::string& path) {
+        if (path == "-") return;
+        std::ifstream input(path);
+        if (!input) throw std::runtime_error("tap_file_open");
+        std::string line;
+        while (spacetime::read_line(input, line)) {
+            auto fields = spacetime::fields(line);
+            if (fields.size() != 3) throw std::runtime_error("tap_file_fields");
+            uint64_t width = spacetime::decimal(fields[1]);
+            if (!width || width > 65536) throw std::runtime_error("tap_width_limit");
+            declarations_.push_back({fields[0], static_cast<uint32_t>(width), fields[2]});
+            if (declarations_.size() > 4096) throw std::runtime_error("tap_count_limit");
+        }
+        spacetime::validate_taps(declarations_);
+        try {
+            for (const auto& tap : declarations_) {
+                vpiHandle handle = vpi_handle_by_name(const_cast<char*>(tap.path.c_str()), nullptr);
+                if (!handle) throw std::runtime_error("missing_tap_" + tap.id);
+                int width = vpi_get(vpiSize, handle);
+                if (width <= 0 || static_cast<uint32_t>(width) != tap.width) {
+                    vpi_free_object(handle);
+                    throw std::runtime_error("tap_width_" + tap.id);
+                }
+                handles_.push_back(handle);
+            }
+        } catch (...) {
+            for (auto handle : handles_) vpi_free_object(handle);
+            throw;
+        }
+    }
+    PassiveTaps(const PassiveTaps&) = delete;
+    PassiveTaps& operator=(const PassiveTaps&) = delete;
+    ~PassiveTaps() {
+        for (auto handle : handles_) vpi_free_object(handle);
+    }
+    const std::vector<spacetime::Tap>& declarations() const { return declarations_; }
+
+    // Preserve every sampled bit, including unchanged values and inactive payloads.
+    void append(spacetime::Values& values) const {
+        for (size_t i = 0; i < handles_.size(); ++i) {
+            s_vpi_value result{};
+            result.format = vpiHexStrVal;
+            vpi_get_value(handles_[i], &result);
+            if (!result.value.str) throw std::runtime_error("tap_read_" + declarations_[i].id);
+            std::string text(result.value.str);
+            for (char& c : text)
+                if (c >= 'A' && c <= 'F') c = c - 'A' + 'a';
+            size_t first = text.find_first_not_of('0');
+            text = first == std::string::npos ? "0" : text.substr(first);
+            spacetime::hex_width(text, declarations_[i].width);
+            values.push_back(std::move(text));
+        }
+    }
+
+private:
+    std::vector<spacetime::Tap> declarations_;
+    std::vector<vpiHandle> handles_;
+};
+
+// Public ordering matches the trace header. Time remains a cycle index, never nanoseconds.
+static spacetime::Values sample(Vprotocol_application_top& dut, const PassiveTaps& taps) {
+    spacetime::Values values = {
+        spacetime::hex(dut.reset),
+        spacetime::hex(dut.s_app_tvalid),
+        spacetime::hex(dut.s_app_tdata),
+        spacetime::hex(dut.s_app_tlast),
+        spacetime::hex(dut.m_app_tready),
+        spacetime::hex(dut.s_app_tready),
+        spacetime::hex(dut.m_app_tvalid),
+        spacetime::hex(dut.m_app_tdata),
+        spacetime::hex(dut.m_app_tlast),
+        spacetime::hex(bool(@@SOURCE_FAULTS@@)),
+        spacetime::hex(dut.running)
+    };
+    taps.append(values);
+    return values;
+}
+
+// Inputs have already passed trace-width validation before this conversion.
+static uint32_t input_word(const std::string& value) {
+    return static_cast<uint32_t>(std::stoull(value, nullptr, 16));
+}
+
+// Baseline replay omits semantic taps but checks every public pin on every clock.
+static void same_catalogue(const std::vector<spacetime::Tap>& actual,
+                           const std::vector<spacetime::Tap>& expected) {
+    if (actual.size() != expected.size()) throw std::runtime_error("replay_tap_count");
+    for (size_t i = 0; i < actual.size(); ++i)
+        if (actual[i].id != expected[i].id || actual[i].width != expected[i].width ||
+            actual[i].path != expected[i].path)
+            throw std::runtime_error("replay_tap_identity");
+}
+
+// Mismatches report the exact edge and field; failures retain the observed prefix.
+static void compare(uint64_t cycle, const spacetime::Values& actual,
+                    const spacetime::Values& expected, const PassiveTaps& taps) {
+    if (actual.size() > expected.size()) throw std::runtime_error("replay_sample_shape");
+    for (size_t i = 0; i < actual.size(); ++i) {
+        if (actual[i] == expected[i]) continue;
+        std::string field = i < spacetime::public_fields ? "public_" + std::to_string(i) :
+            taps.declarations()[i - spacetime::public_fields].id;
+        std::fprintf(stderr, "MISMATCH cycle=%llu field=%s actual=%s expected=%s\n",
+            static_cast<unsigned long long>(cycle), field.c_str(),
+            actual[i].substr(0, 120).c_str(), expected[i].substr(0, 120).c_str());
+        throw std::runtime_error("replay_mismatch");
+    }
+}
+
+// Run one bounded capture. Successful completion requires a footer, not a zero exit alone.
+int main(int argc, char** argv) {
+    std::unique_ptr<spacetime::Writer> writer;
+    try {
+        bool live = argc == 4 && std::string(argv[1]) == "live";
+        bool replay = argc == 5 && std::string(argv[1]) == "replay";
+        bool drive = argc == 5 && std::string(argv[1]) == "drive";
+        if (!live && !replay && !drive)
+            throw std::runtime_error("usage_live_STAGE_TAPS_or_replay_or_drive_TRACE_OUTPUT_TAPS");
+        std::string output = live ? argv[2] : argv[3];
+        std::string tap_file = live ? argv[3] : argv[4];
+        Verilated::commandArgs(argc, argv);
+        Vprotocol_application_top dut;
+        PassiveTaps taps(tap_file);
+        writer = std::make_unique<spacetime::Writer>(output + "/capture.tsv", taps.declarations());
+        auto began = std::chrono::steady_clock::now();
+        uint64_t activation = 0;
+        if (replay || drive) {
+            spacetime::Reader reader(argv[2]);
+            if (replay && tap_file != "-") same_catalogue(taps.declarations(), reader.taps());
+            uint64_t cycle;
+            spacetime::Values expected;
+            while (reader.next(cycle, expected)) {
+                if (std::chrono::steady_clock::now() - began > std::chrono::seconds(120))
+                    throw std::runtime_error("wall_deadline");
+                dut.clk = 0;
+                dut.reset = input_word(expected[0]);
+                dut.s_app_tvalid = input_word(expected[1]);
+                dut.s_app_tdata = input_word(expected[2]);
+                dut.s_app_tlast = input_word(expected[3]);
+                dut.m_app_tready = input_word(expected[4]);
+                dut.eval();
+                auto actual = sample(dut, taps);
+                writer->append(cycle, actual);
+                if (replay) compare(cycle, actual, expected, taps);
+                dut.clk = 1;
+                dut.eval();
+            }
+            writer->finish(true, "ok");
+            dut.final();
+            std::printf("PASS spacetime %s cycles=%llu records=%llu taps=%zu\n",
+                drive ? "drive" : "replay",
+                static_cast<unsigned long long>(writer->samples()),
+                static_cast<unsigned long long>(writer->records()), taps.declarations().size());
+            return 0;
+        }
+
+        FramedFifoStream app(output + "/app");
+        for (uint64_t cycle = 0; cycle < spacetime::max_cycles; ++cycle) {
+            if (std::chrono::steady_clock::now() - began > std::chrono::seconds(120))
+                throw std::runtime_error("wall_deadline");
+            bool reset = cycle < 8;
+            if (!reset) app.pump();
+            dut.clk = 0;
+            dut.reset = reset;
+            dut.s_app_tdata = app.word;
+            dut.s_app_tlast = app.last;
+            dut.s_app_tvalid = !reset && app.valid;
+            dut.m_app_tready = !reset && app.output_ready() && cycle % 19 >= 7;
+            dut.eval();
+            auto values = sample(dut, taps);
+            writer->append(cycle, values);
+            if (!reset) {
+                if (values[9] != "0") throw std::runtime_error("source_fault");
+                app.sample(dut.s_app_tready, dut.m_app_tdata, dut.m_app_tvalid,
+                           dut.m_app_tlast, dut.m_app_tready, cycle);
+            }
+            dut.clk = 1;
+            dut.eval();
+            if (dut.running && !activation) activation = cycle;
+            if (cycle % 64 == 0) {
+                if (access((output + "/done").c_str(), F_OK) == 0) {
+                    if (app.input_pending()) throw std::runtime_error("pending_application_input");
+                    writer->finish(true, "ok");
+                    dut.final();
+                    std::printf("PASS live application cycles=%llu activation=%llu input_words=%llu output_words=%llu output_stalls=%llu records=%llu\n",
+                        static_cast<unsigned long long>(cycle + 1),
+                        static_cast<unsigned long long>(activation),
+                        static_cast<unsigned long long>(app.inputs),
+                        static_cast<unsigned long long>(app.outputs),
+                        static_cast<unsigned long long>(app.stalls),
+                        static_cast<unsigned long long>(writer->records()));
+                    return 0;
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
+        }
+        throw std::runtime_error("cycle_limit");
+    } catch (const std::exception& error) {
+        if (writer) {
+            try { writer->finish(false, error.what()); }
+            catch (const std::exception& footer) {
+                std::fprintf(stderr, "FAIL spacetime footer: %s\n", footer.what());
+            }
+        }
+        std::fprintf(stderr, "FAIL spacetime capture: %s\n", error.what());
+        return 1;
+    }
+}

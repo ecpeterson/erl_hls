@@ -1,0 +1,15 @@
+# Narrow recurrence engine: registered experiment
+
+Base: `85ea5a7`. The preceding publication-buffer experiment was rejected; its hardware is absent here.
+
+**Prediction:** approximately zero whole-core clock improvement from arithmetic alone. Independent metadata/selection paths remain near the routed limit. The experiment must report arithmetic depth, complete-engine area and dependent-round latency separately; an isolated MHz improvement is not an application speedup.
+
+Implement the complete four-neighbor Q15.16 recurrence with five explicit cuts: numerator, independent products, carry-save reduction, quotient, saturation. Preserve signed rounding, saturation, 32-bit source addition and wrapping epochs. Expect at most one combinational DSP in a stage, II=1 across independent actors, and five clocks of arithmetic latency. An 8 ns isolated period is a design target, not a forecast. Compare with the same recurrence and ownership protocol using an unsplit one-stage kernel; do not compare against an unregistered port-to-port circuit.
+
+Give each local slot exclusive field/epoch ownership between acquire and release. Reserve one result per slot before issue; commit does not depend on output ready. Retain the actor reservation until its result is consumed. No duplicated writable actor-RAM field, full machine in the arithmetic pipeline, or deep full-result FIFO. Invalid ownership/epoch commands return errors without mutation; reset invalidates all ownership and in-flight results. This is an experimental component, not yet a generated actor backend.
+
+Before application integration, extract a feedback ledger from the existing complete D6 capture and small replay fixture. Distinguish aggregate readiness, scheduler capture, RAM issue, executor acceptance, commit and publication; report missing observations rather than inventing timestamps. The purpose of integration would be to remove repeated actor-state transactions during diffusion, not merely insert five arithmetic stages into those transactions. Measure the complete engine first, including stalls, overlapping actors, rollover and release/reacquire. Only then choose a safe cold/hot handoff and make an application-level prediction.
+
+## Local write-permission refinement
+
+The first five-stage engine screen reaches 9.244 ns; its longest reported path goes from the command slot through shared readiness and write selection to a field-register enable (1.0 ns logic, 8.3 ns routing). Retain that source and mapped simulation as the control. Decode each slot's acceptance against its own busy/pending/ownership bits instead of feeding the shared ready result back into the per-slot write decision. No new registers, changed arbitration, added capacity or transaction cycles are allowed. Require identical accepted-command/response logs, including resets and stalls. Expect 0–10% lower engine period, with low confidence because other stage paths can take over; require no more than 5% LUT growth. This is not a whole-decoder prediction.

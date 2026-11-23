@@ -1,0 +1,25 @@
+--- a/xilinx/pack_clocking_xc7.cc
++++ b/xilinx/pack_clocking_xc7.cc
+@@ -62,6 +62,7 @@
+             ci->attrs[ctx->id("X_ORIG_PORT_" + new_name)] = orig_name;
+         };
+         if (upgrade.count(ci->type)) {
++            ci->attrs[ctx->id("X_BASE_CLKIN1_ONLY")] = Property(1);
+             save_orig_type();
+             IdString new_type = upgrade.at(ci->type);
+             ci->type = new_type;
+@@ -205,6 +206,14 @@
+             bool is_mmcm = ci->type == ctx->id("MMCME2_ADV_MMCME2_ADV");
+             if (!is_pll && !is_mmcm)
+                 continue;
++            // BASE has only CLKIN1. Upgrading it to ADV creates an unused
++            // CLKIN2 tie; routing that tie can conflict with CLKFBIN mux bits.
++            // Leave ADV designs' second clock (including a stopped clock) alone.
++            if (bool_or_default(ci->attrs, ctx->id("X_BASE_CLKIN1_ONLY"), false)) {
++                auto unused = get_net_or_empty(ci, ctx->id("CLKIN2"));
++                if (unused != nullptr && (unused->name == gnd || unused->name == vcc))
++                    disconnect_port(ctx, ci, ctx->id("CLKIN2"));
++            }
+             for (auto &p : drp) {
+                 NetInfo *nn = get_net_or_empty(ci, ctx->id(p));
+                 if (nn != nullptr && (nn->name == gnd || nn->name == vcc)) {

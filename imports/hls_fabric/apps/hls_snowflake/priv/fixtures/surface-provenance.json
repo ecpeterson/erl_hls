@@ -1,0 +1,29 @@
+{
+  "schema": "snowflake-surface-reference-provenance-v1",
+  "repository": "https://github.com/timchan0/localuf",
+  "revision": "daf81a10ed5d201c0bcaf6a1d5cdc6563a06b96c",
+  "version": "3.4.4",
+  "license": "MIT",
+  "python": "3.13.11",
+  "fixtures": {
+    "surface-named.json": {
+      "sha256": "ab7e27418bfcb917084285918e2475dcf790666ea37f2d2785950c418fbb7000",
+      "cases": 11,
+      "sheets": 404,
+      "odd_final_logical_parities": 3
+    },
+    "surface-enumerated.json": {
+      "sha256": "7bfff8dff9937de5d873acf91885fe997e077ca32bb25897edfe5c8d6aa74ac5",
+      "cases": 58,
+      "sheets": 928,
+      "odd_final_logical_parities": 0
+    }
+  },
+  "source_sha256": {
+    "localuf/codes.py": "9b9389f28fb668700a265e9ef17552c2b06368370dc40002c004354418d8f4ff",
+    "localuf/decoders/snowflake/main.py": "44e70b6677f270c0ac821fd86b7c615bd00757ba8f7050474adbe171cdafdf16"
+  },
+  "generator_sha256": "20342b3ab99db819cf98f573c64eb744e906627ed3f0763efce6cb2e17760321",
+  "observer_helpers_sha256": "61ef0f5538d87dd1aefe8300b7fc7ef2fdc61c78eda6a5cc5946af52af491397",
+  "requirements_sha256": "8e4f2ce6edb5dd12e70a47d5822804cb0ac4e34ae2dc8198ac28e171d35ec787"
+}

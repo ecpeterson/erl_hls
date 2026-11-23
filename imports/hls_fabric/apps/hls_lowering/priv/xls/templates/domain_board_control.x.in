@@ -1,0 +1,198 @@
+import domain_frames as framing;
+
+// Board-local full-frame control switch. Application bank 0 bypasses this unit.
+// Bank 1 forwards routes 0/2 intact; routes 3/4 are passive observation/session
+// commands. No command resets an actor, endpoint, link namespace or carrier.
+// ESTABLISH requires quiescence: drain/ACK both DMA banks, finish old packets,
+// and exclude pending/new native responses during establishment. Empty DMA
+// mailboxes alone do not establish this. This lane cannot cancel partial DMA.
+const ROLE = u32:@@ROLE@@;
+const INSPECTION = @@INSPECTION@@;
+const READY = u3:@@READY@@;
+const OK = u3:0;
+const REPLAY = u3:1;
+const STALE = u3:2;
+const MALFORMED = u3:3;
+const NOT_ATTACHED = u3:4;
+const UNSUPPORTED = u3:5;
+
+@@INPUTS@@
+@@OUTPUTS@@
+
+// 723 declared bits: request 292, response 416, framing/arbitration 15.
+// One shared response uses 11 payload words. The separate endpoint/domain
+// parsers and native observation registers are not charged to this unit.
+pub struct State {
+  receive: framing::Receive<192>, reply: framing::Packet<352>,
+  reply_valid: bool, reply_position: u4, input_route: u3,
+  output_owner: u2, output_locked: bool, output_cursor: u2,
+  establish_wait: u2,
+}
+// One edge's pre-state observations and complete successor state.
+pub struct Tick { state: State, output: Outputs }
+
+// No route word is removed or rewritten. Unknown routes drain to TLAST.
+fn route(word: u32) -> u3 {
+  match word { u32:0 => u3:1, u32:2 => u3:2, u32:3 | u32:4 => u3:3, _ => u3:4 }
+}
+// Missing request words retain the parser's canonical zero padding.
+fn request_word(s: State, index: u32) -> u32 {
+  (s.receive.packet.payload >> (index * u32:32)) as u32
+}
+// Session and incarnation fields retain both little-endian words.
+fn request_pair(s: State, index: u32) -> u64 {
+  (s.receive.packet.payload >> (index * u32:32)) as u64
+}
+
+// Fixed wire schema: phase[2:0], domain/endpoint attached[3]/[4], host faults
+// [5]/[6], router fault[7], carrier faults[15:8], carrier armed[16].
+fn health(io: Inputs) -> u32 {
+  io.domain_phase as u32 | ((io.domain_attached as u32) << u32:3) |
+    ((io.endpoint_attached as u32) << u32:4) |
+    ((io.domain_wire_fault as u32) << u32:5) |
+    ((io.endpoint_wire_fault as u32) << u32:6) |
+    ((io.router_fault as u32) << u32:7) |
+    ((io.carrier_fault as u32) << u32:8) | ((io.carrier_armed as u32) << u32:16)
+}
+
+// Every bootstrap result includes a fresh snapshot, including stale/replay/error.
+fn status_reply(s: State, io: Inputs, status: u3) -> framing::Packet<352> {
+  let words = u32[11]:[request_word(s, u32:0), status as u32, 1, ROLE,
+    io.domain_session as u32, (io.domain_session >> u32:32) as u32,
+    io.endpoint_session as u32, (io.endpoint_session >> u32:32) as u32,
+    io.domain_current as u32, (io.domain_current >> u32:32) as u32, health(io)];
+  let payload = for (i, value): (u32, bits[352]) in u32:0..u32:11 {
+    bit_slice_update(value, i * u32:32, words[i])
+  }(bits[352]:0);
+  framing::Packet<352> { route: u32:4, header: u32:0x8000000b, payload }
+}
+
+// A nonlocal sparse address yields the native zero observation, without inventing
+// a dense address space or changing its catalog. Errors expose no process value.
+fn inspection_reply(s: State, io: Inputs, status: u3) -> framing::Packet<352> {
+  let value = if status == OK { io.inspect_value } else { bits[128]:0 };
+  let words = u32[11]:[request_word(s, u32:5), status as u32,
+    request_word(s, u32:0), request_word(s, u32:1),
+    request_word(s, u32:2), request_word(s, u32:3), request_word(s, u32:4),
+    value as u32, (value >> u32:32) as u32, (value >> u32:64) as u32,
+    (value >> u32:96) as u32];
+  let payload = for (i, payload): (u32, bits[352]) in u32:0..u32:11 {
+    bit_slice_update(payload, i * u32:32, words[i])
+  }(bits[352]:0);
+  framing::Packet<352> { route: u32:3, header: u32:0x8000000b, payload }
+}
+
+// Select only availability before selecting payload; retain a stalled packet's
+// owner until its accepted TLAST. Fairness is over complete finite packets.
+fn grant(s: State, available: bool[3]) -> (bool, u2) {
+  if s.output_locked { (available[s.output_owner as u32], s.output_owner) } else {
+    for (offset, chosen): (u32, (bool, u2)) in u32:0..u32:3 {
+      let index = (s.output_cursor as u32 + offset) % u32:3;
+      if !chosen.0 && available[index] { (true, index as u2) } else { chosen }
+    }((false, u2:0))
+  }
+}
+
+// The external bridge supplies only complete DMA frames. Malformed local frames
+// drain through their TLAST and return MALFORMED, with request 0 if uncaptured.
+// They never become an actor/fabric failure. A cold reset is the only reset here.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  let live = !io.reset;
+  let selected = if s.input_route == u3:0 { route(io.host_word) } else { s.input_route };
+  let local_ready = !s.receive.full && !s.reply_valid && s.establish_wait == u2:0;
+  let host_ready = live && match selected {
+    u3:1 => io.domain_ready, u3:2 => io.endpoint_ready,
+    u3:3 => local_ready, _ => true
+  };
+  let input_take = io.host_valid && host_ready;
+  let receive = if input_take && selected == u3:3 {
+    framing::receive(s.receive, io.host_word, io.host_last)
+  } else { s.receive };
+  let local_request = s.receive.full && !s.reply_valid && s.establish_wait == u2:0 && live;
+  let header = s.receive.packet.header;
+  let operation = header[24+:u8];
+  let count = header[0+:u8];
+  let status = s.receive.packet.route == u32:4;
+  let inspect = s.receive.packet.route == u32:3;
+  let query = status && operation == u8:0 && count == u8:1;
+  let establish = status && operation == u8:1 && count == u8:3;
+  let read = inspect && operation == u8:0 && count == u8:6;
+  let request = request_word(s, if inspect { u32:5 } else { u32:0 });
+  let malformed = s.receive.bad || (header & u32:0x00ffff00) != u32:0 ||
+    !(query || establish || read) || request == u32:0;
+  let target = request_pair(s, u32:1);
+  let replay = target != u64:0 && target == io.domain_session && target == io.endpoint_session &&
+    io.domain_attached && io.endpoint_attached;
+  let fresh = target != u64:0 && target > io.domain_session && target > io.endpoint_session;
+  // Never interrupt an output packet. The host must also drain application bank
+  // 0 and old pending responses before establishing; this unit cannot cancel DMA.
+  let establish_start = local_request && !malformed && establish && fresh && !s.output_locked;
+  let waiting = s.establish_wait != u2:0;
+  let finish = s.establish_wait == u2:2 && live;
+  let acknowledged = target == io.domain_session && target == io.endpoint_session &&
+    io.domain_attached && io.endpoint_attached;
+  let attached = io.domain_attached && request_pair(s, u32:0) == io.domain_session;
+  let incarnation = request_pair(s, u32:2);
+  let read_status = if malformed { MALFORMED } else if !INSPECTION { UNSUPPORTED }
+    else if !attached { NOT_ATTACHED }
+    else if incarnation == u64:0 || incarnation != io.domain_current || io.domain_phase != READY { STALE }
+    else { OK };
+  let boot_status = if malformed { MALFORMED } else if query { OK }
+    else if replay { REPLAY } else { STALE };
+  let immediate = local_request && (!establish || malformed || !fresh);
+  let capture = immediate || finish;
+  let reply = if finish { status_reply(s, io, if acknowledged { OK } else { NOT_ATTACHED }) }
+    else if immediate && inspect { inspection_reply(s, io, read_status) }
+    else if immediate { status_reply(s, io, boot_status) } else { s.reply };
+
+  let (available, owner) = grant(s, bool[3]:[io.domain_output_valid, io.endpoint_output_valid, s.reply_valid]);
+  let output_word = match owner {
+    u2:0 => io.domain_output_word, u2:1 => io.endpoint_output_word,
+    _ => framing::word(s.reply, s.reply_position as u32)
+  };
+  let output_last = match owner {
+    u2:0 => io.domain_output_last, u2:1 => io.endpoint_output_last,
+    _ => framing::last(s.reply, s.reply_position as u32)
+  };
+  let output_take = live && available && io.host_output_ready;
+  let output_done = output_take && output_last;
+  let local_take = output_take && owner == u2:2;
+  let next = State {
+    receive: if capture { zero!<framing::Receive<192>>() } else { receive },
+    reply, reply_valid: capture || (s.reply_valid && !(local_take && output_last)),
+    reply_position: if capture || (local_take && output_last) { u4:0 }
+      else { s.reply_position + local_take as u4 },
+    input_route: if input_take { if io.host_last { u3:0 } else { selected } } else { s.input_route },
+    output_owner: if available { owner } else { s.output_owner },
+    output_locked: (s.output_locked || available) && !output_done,
+    output_cursor: if output_done { ((owner as u32 + u32:1) % u32:3) as u2 } else { s.output_cursor },
+    establish_wait: if establish_start { u2:1 } else if finish { u2:0 }
+      else if waiting { s.establish_wait + u2:1 } else { u2:0 },
+  };
+  Tick { state: if io.reset { zero!<State>() } else { next }, output: Outputs {
+    host_ready, host_output_word: output_word, host_output_valid: live && available,
+    host_output_last: output_last,
+    domain_word: io.host_word, domain_valid: live && io.host_valid && selected == u3:1,
+    domain_last: io.host_last, domain_output_ready: live && available && owner == u2:0 && io.host_output_ready,
+    endpoint_word: io.host_word, endpoint_valid: live && io.host_valid && selected == u3:2,
+    endpoint_last: io.host_last, endpoint_output_ready: live && available && owner == u2:1 && io.host_output_ready,
+    transport_reset: establish_start, transport_session: target,
+    inspect_address: request_word(s, u32:4), inspect_incarnation: incarnation,
+  }}
+}
+
+// One sampled command/observation per application clock; no extra pipeline stage.
+pub proc board_control_clock {
+  commands: chan<Inputs> in; observations: chan<Outputs> out;
+  // The mechanical wrapper samples both channels on every clock.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // Cold state owns no partial command, reply, grant or host-session transition.
+  init { zero!<State>() }
+  // Commit one tick without scheduling a separate management clock.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _ = send(tok, observations, result.output);
+    result.state
+  }
+}

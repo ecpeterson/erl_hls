@@ -1,0 +1,94 @@
+// One open token per actor, separate depth-two banks, and one atomic pending batch.
+struct @@STATE_DECLARATION@@ {
+  input_cursor: @@INPUT_INDEX@@,
+  output_cursor: @@OUTPUT_INDEX@@,
+  open_tokens: u1[u32:@@OPEN_TOKEN_COUNT@@],
+@@BANK_FIELDS@@
+  pending_valid: u1,
+  pending_batch: @@BATCH_FIELD@@,
+}
+
+// Retire one complete destination aggregate and accept one source batch independently.
+proc @@PLANE_NAME@@ {
+@@MEMBERS@@
+  // Bind source schedulers and their destination aggregate lanes in planner order.
+@@CONFIG_SIGNATURE@@
+    (@@CONFIG_NAMES@@)
+  }
+
+  // Reset owns no batch or aggregate and starts both round-robin cursors at zero.
+  init { zero!<@@INITIAL_STATE@@>() }
+
+  // Select from old banks, retire, then insert all fragments or retain the whole batch.
+  next(state: @@PRIOR_STATE@@) {
+    let ready_slots = [
+@@READY_ROWS@@
+    ];
+    let (output_ready, output_index) = arbitration::select(
+      ready_slots, state.output_cursor);
+    let output_slot = output_index as u32;
+    let pop_sources = match output_slot {
+@@POP_SOURCE_ROWS@@
+      _ => zero!<u32[u32:@@POP_SOURCE_COUNT@@]>(),
+    };
+    let frames = match output_slot {
+@@FRAME_ROWS@@
+      _ => zero!<axis::Frame[u32:@@FRAME_COUNT@@]>(),
+    };
+    let aggregate = @@AGGREGATE_MODULE@@::reduction_aggregate_batch<u32:@@AGGREGATE_COUNT@@>(frames);
+    let output_tok = if output_ready {
+      match output_slot {
+@@OUTPUT_ROUTES@@
+        _ => join(),
+      }
+    } else { join() };
+    // Input and output handshakes are independent. The scalar
+    // pending batch makes all fragment-bank insertion atomic.
+    let (input_tok, received, incoming) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1, @@BATCH_ACCUMULATOR@@)) in u32:0..u32:@@INPUT_COUNT@@ {
+        let (next_tok, next_batch, valid) =
+          recv_if_non_blocking(
+            acc.0, batch_in[candidate],
+            !state.pending_valid &&
+              state.input_cursor as u32 == candidate,
+            zero!<@@EMPTY_INPUT_BATCH@@>());
+        (next_tok, acc.1 || valid,
+          if valid { next_batch } else { acc.2 })
+      }((join(), u1:0, zero!<@@INITIAL_INPUT_BATCH@@>()));
+    let work_valid = state.pending_valid || received;
+    let work = if state.pending_valid {
+      state.pending_batch
+    } else { incoming };
+    let source_valid = work.source < u32:@@WORK_SOURCE_BOUND@@;
+    let push_source = if source_valid { work.source
+      } else { u32:0 };
+    // An actor cannot reopen before its current aggregate retires,
+    // so one token bit is sufficient. Clear before set keeps the
+    // conservative same-cycle update well-defined.
+    let open_tokens_after_output = if output_ready {
+      update(state.open_tokens, output_slot, u1:0)
+    } else { state.open_tokens };
+    let incoming_source_valid = received &&
+      incoming.source < u32:@@INCOMING_SOURCE_BOUND@@;
+    let open_tokens = if incoming_source_valid {
+      update(open_tokens_after_output, incoming.source, u1:1)
+    } else { open_tokens_after_output };
+@@CAPACITY_BINDINGS@@
+    let can_insert = work_valid && source_valid@@CAPACITY_GUARDS@@;
+@@BANK_UPDATES@@
+    let _done = join(output_tok, input_tok);
+    @@NEXT_STATE@@ {
+      input_cursor: if state.pending_valid { state.input_cursor
+      } else { arbitration::successor<u32:@@INPUT_CURSOR_COUNT@@>(state.input_cursor) },
+      output_cursor: if !output_ready { state.output_cursor
+      } else { arbitration::successor<u32:@@OUTPUT_CURSOR_COUNT@@>(output_index) },
+      open_tokens,
+@@BANK_VALUES@@
+      pending_valid: work_valid && !can_insert,
+      pending_batch: if work_valid && !can_insert { work
+        } else { state.pending_batch },
+    }
+  }
+}
+

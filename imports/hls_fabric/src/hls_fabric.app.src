@@ -1,0 +1,16 @@
+{application, hls_fabric, [
+    {description, "Virtual FPGA nodes over Erlang distribution"},
+    {vsn, "0.1.0"},
+    {registered, [hls_fabric_sup]},
+    {mod, {hls_fabric_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        hls_runtime
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+ ]}.

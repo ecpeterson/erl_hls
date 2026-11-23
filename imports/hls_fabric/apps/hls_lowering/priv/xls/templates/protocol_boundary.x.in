@@ -1,0 +1,56 @@
+import axis;
+import network;
+import protocol_egress as egress;
+
+// Sampled application boundary pins.
+pub struct Inputs {
+  @@INPUT_FIELDS@@
+}
+
+// Sampled application boundary pins.
+pub struct Outputs {
+  @@OUTPUT_FIELDS@@
+}
+
+// Network state and endpoint ownership; no copied frame payloads.
+pub struct State {
+  network: network::State,
+  @@ARBITER_STATE@@
+}
+
+// Next state and current boundary observations.
+pub struct Tick {
+  state: State,
+  output: Outputs
+}
+
+// Preview ignores sink readiness; the final transition retires publications.
+pub fn tick(s: State, io: Inputs) -> Tick {
+  // Observe retained publications without acknowledging any producer.
+  let offer = network::Inputs {
+    @@PASS_INPUTS@@
+    ..zero!<network::Inputs>()
+  };
+  let preview = network::tick(s.network, offer).output;
+
+  // Select independently at each endpoint with multiple producers.
+  @@ARBITER_STEPS@@
+
+  // Only the selected producers receive this clock's acceptance.
+  let step = network::tick(s.network, network::Inputs {
+    @@ACCEPTANCE@@
+    ..offer
+  });
+
+  // Commit ownership while forwarding pre-edge observations.
+  Tick {
+    state: State {
+      network: step.state,
+      @@ARBITER_UPDATES@@
+    },
+    output: Outputs {
+      @@PASS_OUTPUTS@@
+      @@OBSERVATIONS@@
+    }
+  }
+}

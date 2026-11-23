@@ -1,0 +1,245 @@
+`timescale 1ns/1ps
+// Finite control witness. Native parser sessions and sparse observation are
+// controlled public inputs; actor/endpoint/carrier state is never forced.
+module domain_board_control_tb;
+  localparam integer OBS_BITS = @@OBS_BITS@@;
+  localparam integer OBSERVATIONS = @@OBSERVATIONS@@;
+  localparam integer ACTIONS = @@ACTIONS@@;
+  localparam integer WORDS = @@WORDS@@;
+  localparam integer DOMAIN_OFFSET = @@DOMAIN_OFFSET@@;
+  localparam integer DOMAIN_WORDS = @@DOMAIN_WORDS@@;
+  localparam integer ENDPOINT_OFFSET = @@ENDPOINT_OFFSET@@;
+  localparam integer ENDPOINT_WORDS = @@ENDPOINT_WORDS@@;
+  reg clock = 0;
+  @@WIRING@@
+  // The native observation model retains one sparse address and full incarnation.
+  assign inspect_value = inspect_address == 32'd@@ACTOR@@ && inspect_incarnation == domain_current
+      ? 128'h@@SNAPSHOT@@ : 128'd0;
+  reg [OBS_BITS-1:0] observations [0:OBSERVATIONS-1];
+  reg [31:0] words [0:WORDS-1];
+  integer domain_position = DOMAIN_OFFSET, domain_left = 0, domain_gap = 0;
+  integer endpoint_position = ENDPOINT_OFFSET, endpoint_left = 0, endpoint_gap = 0;
+  integer input_target = 0, expected_pulses = 0, acknowledgment = 0;
+  reg [63:0] expected_session = 0;
+  reg deny_pulse = 0, held = 0;
+  reg [31:0] held_word;
+  reg held_last;
+  integer steps = 0, sessions = 0, responses = 0, forwarded = 0, domain_sent = 0, endpoint_sent = 0;
+  integer action_row, action_kind, arg_a, arg_b, arg_c, arg_d, arg_aux, arg_ack;
+  reg [63:0] arg_session;
+  integer handle, scanned;
+  string actions_path, words_path, observations_path, trailing;
+
+  // Observation updates are explicitly serialized test inputs, independent of DUT storage.
+  task set_observation(input [OBS_BITS-1:0] value);
+    begin
+      @@OBS_ASSIGN@@
+    end
+  endtask
+
+  // Each native source preserves its current full-frame beat until acceptance;
+  // deterministic valid gaps after accepted words exercise packet ownership lock.
+  task settle;
+    begin
+      domain_output_valid = domain_left > 0 && domain_gap == 0;
+      domain_output_word = domain_left > 0 ? words[domain_position] : 0;
+      domain_output_last = domain_left == 1;
+      endpoint_output_valid = endpoint_left > 0 && endpoint_gap == 0;
+      endpoint_output_word = endpoint_left > 0 ? words[endpoint_position] : 0;
+      endpoint_output_last = endpoint_left == 1;
+      #1;
+    end
+  endtask
+
+  // Observe all ownership pulses on the old edge, then advance only controlled
+  // downstream queues and the explicitly requested session acknowledgment model.
+  task step;
+    reg domain_take, endpoint_take, pulse;
+    reg [63:0] target;
+    begin
+      settle();
+      #1;
+      if (domain_valid !== (!reset && host_valid && input_target == 1) ||
+          endpoint_valid !== (!reset && host_valid && input_target == 2))
+        $fatal(1, "wrong ingress route action=%0d step=%0d domain=%b endpoint=%b target=%0d",
+               action_row, steps, domain_valid, endpoint_valid, input_target);
+      if (domain_valid && (domain_word !== host_word || domain_last !== host_last || host_ready !== domain_ready))
+        $fatal(1, "domain route/header/payload changed action=%0d", action_row);
+      if (endpoint_valid && (endpoint_word !== host_word || endpoint_last !== host_last || host_ready !== endpoint_ready))
+        $fatal(1, "endpoint route/header/payload changed action=%0d", action_row);
+      if (domain_valid && domain_ready) forwarded = forwarded + 1;
+      if (endpoint_valid && endpoint_ready) forwarded = forwarded + 1;
+      if ((domain_output_ready && (!domain_output_valid || !host_output_ready)) ||
+          (endpoint_output_ready && (!endpoint_output_valid || !host_output_ready)) ||
+          (domain_output_ready && endpoint_output_ready))
+        $fatal(1, "invalid egress ownership action=%0d", action_row);
+      if (held && !reset && (host_output_valid !== 1'b1 || host_output_word !== held_word || host_output_last !== held_last))
+        $fatal(1, "host response changed while stalled action=%0d step=%0d", action_row, steps);
+      held = !reset && host_output_valid && !host_output_ready;
+      held_word = host_output_word;
+      held_last = host_output_last;
+      pulse = transport_reset;
+      target = transport_session;
+      if (transport_reset !== 1'b0 && transport_reset !== 1'b1) $fatal(1, "unknown reset control");
+      if (pulse) begin
+        if (reset || deny_pulse || expected_pulses != 1 || target !== expected_session)
+          $fatal(1, "unexpected transport pulse action=%0d session=%h expected=%h", action_row, target, expected_session);
+        expected_pulses = 0;
+        sessions = sessions + 1;
+      end
+      domain_take = domain_output_valid && domain_output_ready;
+      endpoint_take = endpoint_output_valid && endpoint_output_ready;
+      clock = 1;
+      #1;
+      if (pulse && (acknowledgment == 1 || acknowledgment == 2)) begin
+        domain_session = target; domain_attached = 1; domain_wire_fault = 0;
+      end
+      if (pulse && acknowledgment == 1) begin
+        endpoint_session = target; endpoint_attached = 1; endpoint_wire_fault = 0;
+      end
+      if (domain_take) begin
+        domain_position = domain_position + 1; domain_left = domain_left - 1;
+        domain_gap = 1 + domain_position % 2; domain_sent = domain_sent + 1;
+      end else if (domain_gap > 0) domain_gap = domain_gap - 1;
+      if (endpoint_take) begin
+        endpoint_position = endpoint_position + 1; endpoint_left = endpoint_left - 1;
+        endpoint_gap = 1 + endpoint_position % 2; endpoint_sent = endpoint_sent + 1;
+      end else if (endpoint_gap > 0) endpoint_gap = endpoint_gap - 1;
+      clock = 0;
+      #1;
+      steps = steps + 1;
+      if (steps > 50000) $fatal(1, "finite board-control step budget exceeded");
+    end
+  endtask
+
+  // Each action authorizes at most one exact session pulse; rejected commands authorize none.
+  task arm(input [63:0] session, input integer ack);
+    begin
+      if (expected_pulses != 0) $fatal(1, "previous session transition never issued");
+      expected_session = session; expected_pulses = session != 0; acknowledgment = ack;
+    end
+  endtask
+
+  // Full packet bytes, including their original route, remain stable through valid/ready stalls.
+  task send_packet(input integer offset, input integer count, input integer destination);
+    integer position, gap, waited;
+    begin
+      input_target = destination;
+      domain_ready = 1; endpoint_ready = 1;
+      for (position = 0; position < count; position = position + 1) begin
+        host_valid = 0;
+        for (gap = 0; gap < position % 3; gap = gap + 1) step();
+        host_word = words[offset + position]; host_last = position == count - 1; host_valid = 1;
+        if (destination == 1) domain_ready = 0;
+        if (destination == 2) endpoint_ready = 0;
+        if (destination == 1 || destination == 2)
+          for (gap = 0; gap <= position % 2; gap = gap + 1) step();
+        domain_ready = 1; endpoint_ready = 1;
+        settle(); waited = 0;
+        while (host_ready !== 1'b1) begin
+          step(); settle(); waited = waited + 1;
+          if (waited > 128) $fatal(1, "host input timeout action=%0d word=%0d", action_row, position);
+        end
+        step();
+      end
+      host_valid = 0; host_last = 0;
+      settle();
+      if (count == 8 && words[offset] == 3 && (words[offset + 1] & 255) == 6 &&
+          (inspect_address !== words[offset + 6] ||
+           inspect_incarnation !== {words[offset + 5], words[offset + 4]}))
+        $fatal(1, "inspection selector does not match exact request action=%0d", action_row);
+    end
+  endtask
+
+  // Check every output word and TLAST through deterministic stalls and native-source gaps.
+  task receive_packet(input integer offset, input integer count);
+    integer position, stall, waited;
+    begin
+      host_output_ready = 0;
+      for (position = 0; position < count; position = position + 1) begin
+        settle(); waited = 0;
+        while (host_output_valid !== 1'b1) begin
+          step(); settle(); waited = waited + 1;
+          if (waited > 128) $fatal(1, "response timeout action=%0d word=%0d", action_row, position);
+        end
+        for (stall = 0; stall <= position % 3; stall = stall + 1) step();
+        settle();
+        if (host_output_word !== words[offset + position] || host_output_last !== (position == count - 1))
+          $fatal(1, "response mismatch action=%0d word=%0d actual=%h expected=%h last=%b", action_row,
+                 position, host_output_word, words[offset + position], host_output_last);
+        host_output_ready = 1; step(); host_output_ready = 0;
+      end
+      responses = responses + 1;
+    end
+  endtask
+
+  // Unknown routes and completed scenarios must not invent local or native output packets.
+  task quiet(input integer cycles);
+    integer elapsed;
+    begin
+      host_valid = 0; host_output_ready = 0;
+      for (elapsed = 0; elapsed < cycles; elapsed = elapsed + 1) begin
+        step(); settle();
+        if (host_output_valid !== 1'b0) $fatal(1, "unexpected quiet output action=%0d", action_row);
+      end
+    end
+  endtask
+
+  // All expected packet sequences are retained script data; the bench has no board parser FSM.
+  initial begin
+    if (!$value$plusargs("actions=%s", actions_path) || !$value$plusargs("words=%s", words_path) ||
+        !$value$plusargs("observations=%s", observations_path)) $fatal(1, "missing control witness inputs");
+    $readmemh(words_path, words);
+    $readmemh(observations_path, observations);
+    handle = $fopen(actions_path, "r");
+    if (!handle) $fatal(1, "cannot open finite control script");
+    for (action_row = 0; action_row < ACTIONS; action_row = action_row + 1) begin
+      scanned = $fscanf(handle, "%d %d %d %d %d %d %h %d", action_kind, arg_a, arg_b, arg_c, arg_d, arg_aux, arg_session, arg_ack);
+      if (scanned != 8) $fatal(1, "incomplete control action=%0d", action_row);
+      case (action_kind)
+        0: begin set_observation(observations[arg_a]); reset = 1; step(); reset = 0; step(); end
+        1: begin
+          arm(arg_session, arg_ack);
+          send_packet(arg_a, arg_b, words[arg_a] == 3 || words[arg_a] == 4 ? 0 : 3);
+          if (arg_d != 0) receive_packet(arg_c, arg_d); else quiet(4);
+        end
+        2: begin set_observation(observations[arg_a]); step(); end
+        3: begin arm(0, 0); send_packet(arg_a, arg_b, arg_aux); end
+        4: begin
+          arm(arg_session, arg_ack);
+          domain_position = DOMAIN_OFFSET; domain_left = DOMAIN_WORDS; domain_gap = 0;
+          endpoint_position = ENDPOINT_OFFSET; endpoint_left = ENDPOINT_WORDS; endpoint_gap = 0;
+          send_packet(arg_a, arg_b, 0);
+          receive_packet(DOMAIN_OFFSET, DOMAIN_WORDS);
+          receive_packet(ENDPOINT_OFFSET, ENDPOINT_WORDS);
+          receive_packet(arg_c, arg_d);
+        end
+        5: begin
+          arm(arg_session, arg_ack); deny_pulse = 1;
+          domain_position = DOMAIN_OFFSET; domain_left = DOMAIN_WORDS; domain_gap = 0;
+          send_packet(arg_a, arg_b, 0);
+          repeat (4) step();
+          receive_packet(DOMAIN_OFFSET, DOMAIN_WORDS);
+          deny_pulse = 0;
+          receive_packet(arg_c, arg_d);
+        end
+        6: quiet(arg_a);
+        default: $fatal(1, "unknown control action=%0d", action_kind);
+      endcase
+      if (expected_pulses != 0) $fatal(1, "missing expected session pulse action=%0d", action_row);
+    end
+    scanned = $fscanf(handle, "%s", trailing);
+    if (scanned == 1) $fatal(1, "extra control script actions");
+    $fclose(handle);
+    if (domain_left != 0 || endpoint_left != 0) $fatal(1, "native response queues not drained");
+    $display("BOARD_CONTROL_PASS actions=%0d sessions=%0d responses=%0d forwarded=%0d domain=%0d endpoint=%0d steps=%0d",
+             ACTIONS, sessions, responses, forwarded, domain_sent, endpoint_sent, steps);
+    $finish;
+  end
+
+  // This simulation horizon is independent of the subprocess timeout and explicit edge budget.
+  initial begin
+    #@@TIMEOUT@@;
+    $fatal(1, "board-control witness timeout");
+  end
+endmodule

@@ -1,0 +1,8 @@
+{application, router, [
+    {description, "Rectangular multicast and ordered barriers for Erlang and fabric endpoints"},
+    {vsn, "0.1.0"},
+    {applications, [kernel, stdlib]},
+    {registered, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]}
+]}.

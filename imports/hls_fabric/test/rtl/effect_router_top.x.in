@@ -1,0 +1,21 @@
+// The production buffered ownership composition, isolated from actor execution.
+pub proc Top {
+  // Depth-one protocol buffers match production ownership wiring.
+  config(scheduled: chan<router_probe_actor::ScheduledEffects> in,
+      credit: chan<router_probe_actor::ScheduledRequest> out,
+      left: chan<axis::Frame> out, right: chan<axis::Frame> out,
+@@PREFIX_ARG@@
+  ) {
+    let (request_p, request_c) = chan<u1, u32:1>[u32:1]("effect_window_request");
+    let (grant_p, grant_c) = chan<u1, u32:1>[u32:1]("effect_window_grant");
+    let (release_p, release_c) = chan<u1, u32:1>[u32:1]("effect_window_release");
+    spawn effect_window::Arbiter<u32:1>(request_c, grant_p, release_c);
+    spawn SchedulerRouter0(scheduled, credit, left, right, @@PREFIX_NAME@@
+      request_p[u32:0], grant_c[u32:0], release_p[u32:0]);
+    ()
+  }
+  // Ownership state belongs to the generated router and real arbiter.
+  init { () }
+  // The wrapper only connects child processes.
+  next(state: ()) { state }
+}

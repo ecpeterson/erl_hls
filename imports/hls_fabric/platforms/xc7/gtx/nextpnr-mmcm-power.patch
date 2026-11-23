@@ -1,0 +1,10 @@
+--- a/xilinx/pins.cc
++++ b/xilinx/pins.cc
+@@ -364,6 +364,7 @@
+     invertible_pins[ctx->id("PLLE2_ADV")].insert(ctx->id("CLKINSEL"));
+     invertible_pins[ctx->id("PLLE2_ADV")].insert(ctx->id("PWRDWN"));
+     invertible_pins[ctx->id("PLLE2_ADV")].insert(ctx->id("RST"));
++    invertible_pins[ctx->id("MMCME2_BASE")].insert(ctx->id("PWRDWN"));
+     invertible_pins[ctx->id("MMCME2_ADV")].insert(ctx->id("CLKINSEL"));
+     invertible_pins[ctx->id("MMCME2_ADV")].insert(ctx->id("PSEN"));
+     invertible_pins[ctx->id("MMCME2_ADV")].insert(ctx->id("PSINCDEC"));

@@ -1,0 +1,74 @@
+{
+  "packages": {
+    "definitions": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "apio-definitions"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-definitions-${YYYYMMDD}.tgz"
+      }
+    },
+    "examples": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "apio-examples"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-examples-${YYYYMMDD}.tgz"
+      }
+    },
+    "oss-cad-suite": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "tools-oss-cad-suite"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-oss-cad-suite-${PLATFORM}-${YYYYMMDD}.tgz"
+      }
+    },
+    "openxc7": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "tools-openxc7"
+      },
+      "release": {
+        "tag": "2026-08-20",
+        "package": "apio-openxc7-${PLATFORM}-${YYYYMMDD}.tgz"
+      }
+    },
+    "graphviz": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "tools-graphviz"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-graphviz-${PLATFORM}-${YYYYMMDD}.tgz"
+      }
+    },
+    "verible": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "tools-verible"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-verible-${PLATFORM}-${YYYYMMDD}.tgz"
+      }
+    },
+    "drivers": {
+      "repository": {
+        "organization": "fpgawars",
+        "name": "tools-drivers"
+      },
+      "release": {
+        "tag": "2026-08-19",
+        "package": "apio-drivers-${PLATFORM}-${YYYYMMDD}.tgz"
+      }
+    }
+  }
+}

@@ -1,0 +1,117 @@
+// Exercise compiler-generated parity callbacks through both physical delivery paths.
+fn opened(mask: u8) -> ActorState {
+  shared_machine_enter(ActorState {
+    phase: Phase::COLLECTING, entered_from: Phase::IDLE, enter_pending: true,
+    data: Cell { key: u32:7, mask, value: u8:0 }, ..initial_shared_machine()
+  }, true).machine
+}
+
+// A frame uses the same record codec and header length as ordinary delivery.
+fn piece_frame(member: u32, value: u8) -> axis::Frame {
+  axis::Frame { header: axis::Header { op: Tag::PIECE as u8, payload_words: u8:3,
+    ..zero!<axis::Header>() }, payload: bits_from_piece(Piece { key: u32:7, member, value }) as bits[96] }
+}
+
+// Check every nonempty six-member subset against ordinary callback reduction.
+#[test]
+fn every_population_matches_ordinary() {
+  for (mask, ()): (u8, ()) in u8:1..u8:64 {
+    let final = for (member, machine): (u32, ActorState) in u32:0..u32:6 {
+      if ((mask >> member) & u8:1) == u8:0 { machine } else {
+        let frame = piece_frame(member, (u8:1 << member));
+        let collected = collection_try(machine, frame);
+        let ordinary = shared_machine_dispatch(machine, frame, true);
+        assert_eq(collected.0, true);
+        assert_eq(collected.1, ordinary.machine.reduction);
+        ActorState { reduction: collected.1, ..machine }
+      }
+    }(opened(mask));
+    assert_eq(final.reduction.status, ReductionStatus::COMPLETE);
+    assert_eq(final.reduction.seen, mask as u6);
+    assert_eq(shared_machine_complete(final).machine.data.value, mask);
+  }(())
+}
+
+// Fast and ordinary contributions share one accumulator even while RAM is stale.
+#[test]
+fn mixed_paths_and_retirement_preserve_authority() {
+  let machine = opened(u8:33);
+  let state = SharedState<u32:2, u32:2> {
+    collection_context: [machine, opened(u8:3)],
+    pending: [ScheduledRequest { frame: piece_frame(u32:0, u8:9), ..zero!<ScheduledRequest>() }, zero!<ScheduledRequest>()],
+    pending_valid: [true, false], ..zero!<SharedState<u32:2, u32:2>>()
+  };
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  let collected = collection_admit(state, intent, false, u32:0);
+  assert_eq(collected.0, true);
+  let other = ActorState { data: Cell { value: u8:42, ..machine.data }, ..machine };
+  let retired = collection_retire(state, true, u32:1, other);
+  let committed = collection_commit(retired, intent, collected);
+  assert_eq(committed.pending_valid, [false, false]);
+  assert_eq(committed.admission_cursor, u32:1);
+  assert_eq(committed.collection_context[u32:1], other);
+  let restored = collection_machine_bits(bits_from_machine(machine), committed.collection_context[u32:0].reduction);
+  let result = shared_execute(SharedExecutorRequest { machine: restored,
+    frame: piece_frame(u32:5, u8:3), received: true, egress_ready: true,
+    ..zero!<SharedExecutorRequest>() });
+  let complete = machine_from_bits(result.machine);
+  assert_eq(complete.reduction.remaining, ReductionRemaining:0);
+  assert_eq(complete.reduction.accumulator.value, u8:10);
+  let next = collection_retire(committed, true, u32:0, complete);
+  assert_eq(next.collection_context[u32:0], complete);
+  assert_eq(shared_machine_complete(complete).machine.data.value, u8:10);
+}
+
+// No fast path may overtake an existing queued, owned or newly issued activation.
+#[test]
+fn ownership_and_queue_order_block_capture() {
+  let machine = opened(u8:3);
+  let state = SharedState<u32:1, u32:1> { collection_context: [machine],
+    pending: [ScheduledRequest { frame: piece_frame(u32:0, u8:1), ..zero!<ScheduledRequest>() }],
+    pending_valid: [true], ..zero!<SharedState<u32:1, u32:1>>() };
+  let intent = mailbox::Admission { valid: true, ..zero!<mailbox::Admission>() };
+  assert_eq(!collection_admit(state, intent, true, u32:0).0, true);
+  assert_eq(!collection_admit(SharedState<u32:1,u32:1> { occupied: [u8:1], ..state }, intent, false, u32:0).0, true);
+  assert_eq(!collection_admit(SharedState<u32:1,u32:1> { in_flight: [true], ..state }, intent, false, u32:0).0, true);
+  assert_eq(!collection_admit(state, mailbox::Admission { valid: false, ..intent }, false, u32:0).0, true);
+  assert_eq(!collection_try(ActorState { enter_pending: true, ..machine }, piece_frame(u32:0, u8:1)).0, true);
+  assert_eq(!collection_try(initial_shared_machine(), piece_frame(u32:0, u8:1)).0, true);
+}
+
+// Protocol errors remain ordinary actor errors, preserving the first captured input.
+#[test]
+fn errors_fall_back_without_losing_partial_state() {
+  let machine = opened(u8:33);
+  let first = collection_try(machine, piece_frame(u32:0, u8:9));
+  let partial = ActorState { reduction: first.1, ..machine };
+  assert_eq(!collection_try(partial, piece_frame(u32:0, u8:4)).0, true);
+  assert_eq(!collection_try(partial, piece_frame(u32:2, u8:4)).0, true);
+  let malformed = axis::Frame { header: axis::Header { payload_words: u8:1,
+    ..piece_frame(u32:5,u8:4).header }, ..piece_frame(u32:5,u8:4) };
+  assert_eq(!collection_try(partial, malformed).0, true);
+  let wrong_key = axis::Frame { payload: bits_from_piece(Piece { key: u32:8, member: u32:5, value: u8:4 }) as bits[96],
+    ..piece_frame(u32:5,u8:4) };
+  assert_eq(!collection_try(partial, wrong_key).0, true);
+  let fallback = shared_machine_dispatch(partial, piece_frame(u32:0, u8:4), true);
+  assert_eq(hls_failure::failed(fallback.machine.failure), true);
+  assert_eq(fallback.machine.reduction, partial.reduction);
+}
+
+// An existing reducer failure is absorbing but does not discharge missing members.
+#[test]
+fn poisoned_collection_still_drains() {
+  let machine = opened(u8:33);
+  let poisoned = ActorState { reduction: ReductionState {
+    failure: hls_failure::REDUCTION_PROTOCOL, accumulator: Parity { value: u8:17 },
+    ..machine.reduction }, ..machine };
+  let first = collection_try(poisoned, piece_frame(u32:0, u8:9));
+  assert_eq(first.0, true);
+  assert_eq(first.1.status, ReductionStatus::OPEN);
+  assert_eq(first.1.accumulator.value, u8:17);
+  let last = collection_try(ActorState { reduction: first.1, ..poisoned }, piece_frame(u32:5,u8:5));
+  assert_eq(last.0, true);
+  assert_eq(last.1.status, ReductionStatus::COMPLETE);
+  assert_eq(last.1.accumulator.value, u8:17);
+  let completion = shared_machine_complete(ActorState { reduction: last.1, ..poisoned });
+  assert_eq(completion.machine.failure, hls_failure::REDUCTION_PROTOCOL);
+}

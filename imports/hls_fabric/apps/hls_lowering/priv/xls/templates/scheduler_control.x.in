@@ -1,0 +1,53 @@
+// Enumerate the controlled families in their checked declaration order.
+enum ControlFamily : u8 {
+@@FAMILY_MEMBERS@@}
+
+// Retain one rectangle request and its next logical destination across stalls.
+struct ControlState {
+  active: u1,
+  packet: hls_spatial_router::SpatialFrame,
+  family: u8,
+  x: u16,
+  y: u16,
+}
+
+// Walk each controlled family's rectangle, holding the cursor until delivery accepts.
+proc ControlDispatcher {
+  spatial_in: chan<hls_spatial_router::SpatialFrame> in;
+@@CHANNEL_FIELDS@@
+  // Connect the checked control-owned request lane of each reached scheduler.
+@@CONFIG_SIGNATURE@@    (spatial_in@@CHANNEL_NAMES@@)
+  }
+
+  // Start without a retained host request.
+  init { zero!<ControlState>() }
+
+  // Receive only while idle; otherwise deliver, then advance y, x and family in order.
+  next(state: ControlState) {
+    if !state.active {
+      let (_tok, packet) = recv(join(), spatial_in);
+      ControlState { active: u1:1, packet,
+        ..zero!<ControlState>() }
+    } else {
+      let _done = match state.family as ControlFamily {
+@@DELIVERY_ARMS@@        _ => join(),
+      };
+      let last_y = state.y + u16:1 == u16:@@HEIGHT@@;
+      let last_x = state.x + u16:1 == u16:@@WIDTH@@;
+      let last_family = state.family + u8:1 == u8:@@FAMILY_COUNT@@;
+      let family_done = last_y && last_x;
+      let all_done = family_done && last_family;
+      ControlState {
+        active: !all_done,
+        family: if family_done { state.family + u8:1 }
+          else { state.family },
+        x: if last_y {
+          if last_x { u16:0 } else { state.x + u16:1 }
+        } else { state.x },
+        y: if last_y { u16:0 } else { state.y + u16:1 },
+        ..state
+      }
+    }
+  }
+}
+

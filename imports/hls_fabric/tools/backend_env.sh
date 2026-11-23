@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Source after compilation: source tools/backend_env.sh PROFILE [COMPILER_ROOT].
+backend_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+backend_profile=${1:?source backend_env.sh with the compiled rebar profile}
+# Resolve sources and beams together. Only this explicit shell operation exports
+# context; Python imports never mutate the caller's environment or import paths.
+backend_exports=$(PYTHONPATH="$backend_root/tools" python3 - "$backend_root" "$backend_profile" "${2:-}" <<'PYCONTEXT'
+from pathlib import Path
+import shlex
+import sys
+from backend_paths import erlang_environment
+from compiler_paths import compiler_root
+root, profile, override = sys.argv[1:]
+public = compiler_root(profile, Path(override) if override else None, Path(root))
+values = {"ERL_HLS_ROOT": str(public), "PYTHONPATH": str(Path(root) / "tools"),
+          "ERL_AFLAGS": erlang_environment(profile, Path(root), compiler=public)["ERL_AFLAGS"]}
+for name, value in values.items():
+    print("export " + name + "=" + shlex.quote(value))
+PYCONTEXT
+) || return
+eval "$backend_exports"
+erl_hls_root=$ERL_HLS_ROOT

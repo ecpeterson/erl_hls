@@ -1,0 +1,83 @@
+// Routes one committed actor-entry batch in source order. A @@WINDOW_SCOPE@@
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
+// Retain the active batch and registered ownership actions across stalls.
+struct @@STATE_DECLARATION@@ {
+  control: effect_window::ClientState,
+  credit: bool,
+  release: bool,
+  request: bool,
+  scheduled: @@SCHEDULED_MODULE@@::ScheduledEffects,
+  index: u8,
+  // While active, head equals scheduled_effect(scheduled, index).
+  head: (@@HEAD_MODULE@@::Egress, u1, u1),
+}
+
+// Publish only the retained head; admission and returned credits cross registers.
+proc @@ROUTER_NAME@@ {
+@@CHANNEL_FIELDS@@
+  // Connect concrete actor and destination channel types.
+@@CONFIG_SIGNATURE@@
+    (@@CHANNEL_NAMES@@)
+  }
+
+  // Start without an active batch, credit, request or reservation.
+  init { zero!<@@STATE_INITIALIZER@@>() }
+
+  // Observe retained ownership, route the active effect, then commit the next batch.
+  next(state: @@STATE_INPUT@@) {
+    let state_effect_info = state.head;
+@@OBSERVE_BATCH_COMPLETION@@
+    let can_receive = effect_window::can_receive(
+      state.control, state_last);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<@@EMPTY_INCOMING_MODULE@@::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.control.window_requested &&
+          !state.control.window_granted, u1:0);
+    let batch_valid = state.control.active;
+    let scheduled = state.scheduled;
+    let index = state.index;
+    // Every batch crosses the retained head before publication.
+    let incoming_effect_info = @@INCOMING_MODULE@@::scheduled_effect(incoming, u8:0);
+    let effect_info = state.head;
+@@OBSERVE_REDUCTION_PREFIX@@
+    let effect = effect_info.0;
+    let emit = batch_valid && effect_info.1;
+@@ROUTE_EFFECT@@
+@@BATCH_COMPLETION@@
+    let transition = effect_window::advance_client(
+      state.control, incoming_valid, grant_valid, last);
+    let forward_credit = state.credit;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, @@CREDIT_MODULE@@::ScheduledRequest {
+        credit: u1:1,
+        ..zero!<@@EMPTY_CREDIT_MODULE@@::ScheduledRequest>()
+      });
+    let release = state.release;
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let _request_tok = send_if(
+      release_tok, window_request_out, state.request, u1:1);
+    let updated = @@STATE_UPDATE@@ {
+      control: transition.state,
+      credit: transition.forward_credit, release: transition.release, request: transition.request,
+      ..zero!<@@STATE_ZERO@@>()
+    };
+    if transition.carry_lookahead || (!state.control.active && incoming_valid) {
+      @@STATE_INCOMING@@ { scheduled: incoming, head: incoming_effect_info, ..updated }
+    } else if transition.batch_continues {
+      let next_index = index + @@CURSOR_ADVANCE@@;
+      @@STATE_CONTINUED@@ {
+        scheduled, index: next_index,
+        head: @@CONTINUED_MODULE@@::scheduled_effect(scheduled, next_index),
+        ..updated
+      }
+    } else { updated }
+  }
+}
+

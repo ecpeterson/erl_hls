@@ -1,0 +1,28 @@
+// Exclude protocol-handled receipts; all other frames retain source validation.
+fn local_plain_dispatch(machine: ActorState, frame: axis::Frame, received: bool)
+    -> ActorDispatch {
+  if hls_failure::failed(machine.failure) || machine.enter_pending || !received {
+    ActorDispatch { machine, ..zero!<ActorDispatch>() }
+  } else {
+    let tag_ok = @@TAG_OK@@;
+@@BINDINGS@@
+    let invalid_repeat = tag_ok && repeat_phase && (directive != Directive::CONSUME || next_phase != machine.phase);
+@@EFFECTIVE@@
+    let phase_changed = effective && next_phase != machine.phase;
+    let phase_boundary = phase_changed || (effective && repeat_phase);
+@@FAILED@@
+    let next_machine = ActorState {
+      phase: if effective { next_phase } else { machine.phase },
+      entered_from: if phase_boundary { machine.phase } else { machine.entered_from },
+      data: if effective { next_data } else { machine.data },
+@@NEXT_EVENT@@
+      enter_pending: effective && phase_boundary && !failed,
+      failure, ..machine
+    };
+    ActorDispatch {
+      machine: next_machine,
+@@DISPATCHED@@
+      directive, phase_boundary, ..zero!<ActorDispatch>()
+    }
+  }
+}

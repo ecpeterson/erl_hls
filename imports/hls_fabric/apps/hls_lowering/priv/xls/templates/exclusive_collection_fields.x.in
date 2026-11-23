@@ -1,0 +1,5 @@
+  collection_context: CollectionContext[ACTOR_COUNT],
+  collection_owners: CollectionOwners<ACTOR_COUNT>,
+  collection_cursor: u32,
+  collection_command: CollectionCommand,
+  collection_inputs: CollectionInput[PRODUCER_COUNT],

@@ -1,0 +1,27 @@
+// Called only with a valid frame and no pending internal/entry/failure work.
+fn local_protocol_scalar(machine: ActorState, frame: axis::Frame) -> LocalProtocolResult {
+  let applied = reduction_apply(machine.reduction,
+    reduction_contribution(frame, machine.phase, machine.data));
+  let accepted = applied.outcome == ReductionOutcome::PENDING ||
+    applied.outcome == ReductionOutcome::COMPLETE;
+  if applied.outcome == ReductionOutcome::NOT_CANDIDATE {
+    local_protocol_unhandled(machine)
+  } else if applied.outcome == ReductionOutcome::MISMATCH {
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(machine),
+      dispatched: true, directive: Directive::POSTPONE as u2,
+    }
+  } else if accepted {
+    let next = ActorState { reduction: applied.state, ..machine };
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::CONSUME as u2,
+    }
+  } else {
+    let next = ActorState { failure: hls_failure::REDUCTION_PROTOCOL, ..machine };
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::FAIL as u2,
+    }
+  }
+}

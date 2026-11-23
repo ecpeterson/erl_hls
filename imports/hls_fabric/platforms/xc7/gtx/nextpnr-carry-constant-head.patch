@@ -1,0 +1,18 @@
+--- a/xilinx/pack_carry_xc7.cc
++++ b/xilinx/pack_carry_xc7.cc
+@@ -1333,6 +1333,15 @@
+                     continue;
+                 if (i == off) {
+                     NetInfo *cin = get_net_or_empty(c4, ctx->id("CIN"));
++                    // Constant root carry-in was folded into PRECYINIT and
++                    // disconnected during packing. Recover that explicit value
++                    // for O0 = S0 ^ CIN; otherwise a split can leave O0 and CO0
++                    // competing for the same OUTMUX at every possible placement.
++                    if (cin == nullptr && i == 0) {
++                        int initial = int_or_default(c4->params, ctx->id("PRECYINIT_CONST"), -1);
++                        if (initial == 0 || initial == 1)
++                            cin = initial ? vcc : gnd;
++                    }
+                     if (cin != nullptr)
+                         relocate_sum(c4, i, cin, root);
+                 } else {

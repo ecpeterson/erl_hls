@@ -1,0 +1,308 @@
+#include "Vphi_endpoint_network_witness.h"
+#include "framed_fifo_endpoint.h"
+#include <array>
+#include <chrono>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <thread>
+
+// Complete public atomic packets are opaque to transport except retained diagnostic
+// copies and identity classification. No endpoint state or peer readiness is driven.
+struct Packet {
+    std::array<uint32_t,32> words{};
+    uint8_t count=0;
+    unsigned kind() const { return words[0]&255u; }
+    unsigned channel() const { return words[1]; }
+    uint64_t pair(unsigned low) const { return uint64_t(words[low])|(uint64_t(words[low+1])<<32); }
+    std::array<uint64_t,4> identity() const { return {pair(2),pair(4),pair(6),pair(8)}; }
+    uint64_t generation() const { return pair(4); }
+    bool operator==(const Packet& other) const { return count==other.count&&words==other.words; }
+    // This diagnostic classification does not admit, repair or rewrite a packet.
+    void check() const {
+        if((words[0]>>16)!=0||!pair(2)||!pair(4)||!pair(6)||!pair(8))
+            throw std::runtime_error("noncanonical outgoing packet identity/control");
+        if(kind()==1&&count==32) return;
+        if(kind()!=2||count!=11||(words[0]>>8)!=0)
+            throw std::runtime_error("invalid outgoing packet kind/count");
+        for(unsigned i=11;i<32;++i) if(words[i]) throw std::runtime_error("nonzero outgoing ACK tail");
+    }
+};
+
+// Diagnostic copies are bounded to the first DATA and ACK per crossing. They do
+// not supply normal transport capacity; each direction below owns just one slot.
+struct Channel {
+    unsigned index,source,destination;
+    CData& data_drop;CData& credit_drop;CData& tx_fault;CData& rx_fault;
+    std::optional<Packet> first_data,first_credit;
+    bool data_done=false,credit_done=false;
+    uint64_t transmitted=0,delivered=0,acknowledged=0,returned=0,data_stalls=0,credit_stalls=0,normal_drops=0;
+    std::map<uint64_t,std::array<uint64_t,4>> identities;
+    Channel(unsigned index,unsigned source,unsigned destination,CData& data_drop,CData& credit_drop,
+        CData& tx_fault,CData& rx_fault):index(index),source(source),destination(destination),
+        data_drop(data_drop),credit_drop(credit_drop),tx_fault(tx_fault),rx_fault(rx_fault) {}
+    // Every captured identity is retained independently of the host's ready handle.
+    bool capture(const Packet& packet,unsigned from) {
+        packet.check();
+        if(packet.channel()!=index||from!=(packet.kind()==1?source:destination))
+            throw std::runtime_error("outgoing packet route/direction mismatch");
+        auto identity=packet.identity();
+        auto found=identities.find(packet.generation());
+        if(found!=identities.end()&&found->second!=identity) throw std::runtime_error("generation changed full binding");
+        identities.emplace(packet.generation(),identity);
+        auto& first=packet.kind()==1?first_data:first_credit;
+        bool done=packet.kind()==1?data_done:credit_done;
+        if(packet.kind()==1) ++transmitted;else ++acknowledged;
+        if(!first) first=packet;
+        if(!done&&packet.generation()>first->generation()) {
+            auto previous=first->identity();
+            if(identity[0]!=previous[0]||identity[2]<=previous[2]||identity[3]<=previous[3])
+                throw std::runtime_error("new generation lacks two fresh endpoint incarnations");
+            return true;
+        }
+        return false;
+    }
+    // The actual native child drop output must assert on each injected old packet's acceptance edge.
+    void consume(const Packet& packet,bool injected) {
+        bool dropped=packet.kind()==1?data_drop:credit_drop;
+        if(injected) {
+            if(!dropped) throw std::runtime_error("stale full-binding packet was admitted");
+            bool& done=packet.kind()==1?data_done:credit_done;
+            if(done) throw std::runtime_error("duplicate stale injection");
+            done=true;
+        } else if(dropped) ++normal_drops;
+        else if(packet.kind()==1) ++delivered;
+        else ++returned;
+    }
+    // Coverage requires both full bindings, real traffic and both native stale exclusions on every channel.
+    void result(FILE* out) const {
+        if(identities.size()!=2||!transmitted||!delivered||!acknowledged||!returned||!data_done||!credit_done)
+            throw std::runtime_error("incomplete independent endpoint crossing coverage");
+        fprintf(out,"{\"index\":%u,\"tx\":%llu,\"delivered\":%llu,\"ack\":%llu,\"returned\":%llu,"
+            "\"data_stalls\":%llu,\"credit_stalls\":%llu,\"normal_drops\":%llu,"
+            "\"stale_data_dropped\":true,\"stale_credit_dropped\":true,\"bindings\":[",index,
+            (unsigned long long)transmitted,(unsigned long long)delivered,(unsigned long long)acknowledged,
+            (unsigned long long)returned,(unsigned long long)data_stalls,(unsigned long long)credit_stalls,
+            (unsigned long long)normal_drops);
+        bool first=true;for(const auto& [generation,identity]:identities) {
+            if(!first) fprintf(out,",");first=false;
+            fprintf(out,"{\"namespace\":%llu,\"generation\":%llu,\"source_incarnation\":%llu,\"destination_incarnation\":%llu}",
+                (unsigned long long)identity[0],(unsigned long long)generation,
+                (unsigned long long)identity[2],(unsigned long long)identity[3]);
+        }fprintf(out,"]}");
+    }
+};
+
+// Pin references bind one producer's atomic offer and the other role's atomic receive interface.
+struct PacketPins {
+    CData& tx_ready;CData& tx_valid;CData& tx_words;VlWide<32>& tx;
+    CData& rx_valid;CData& rx_ready;CData& rx_words;VlWide<32>& rx;
+};
+#define PACKETS(A,B) PacketPins{core.A##_packet_tx_ready,core.A##_packet_tx_valid,core.A##_packet_tx_words,core.A##_packet_tx,core.B##_packet_rx_valid,core.B##_packet_rx_ready,core.B##_packet_rx_words,core.B##_packet_rx}
+
+// Exactly one normal payload slot per direction. Empty-slot publication and local
+// deterministic stalls set TX readiness; no remote combinational ready wire exists.
+class Direction {
+    PacketPins p;
+    unsigned source,destination;
+    std::map<unsigned,Channel>& channels;
+    std::optional<Packet> slot,held;
+    bool injecting=false;
+    uint64_t after=0,accepted=0,delivered=0,injected=0,source_stalls=0,receive_stalls=0;
+    // A diagnostic old copy is offered ahead of the retained fresh slot exactly once per kind/channel.
+    const Packet& offered() const {
+        if(!injecting) return *slot;
+        const auto& channel=channels.at(slot->channel());
+        return slot->kind()==1?*channel.first_data:*channel.first_credit;
+    }
+    // Copy all 1024 bits even for ACKs, whose unused tail must remain canonical zero.
+    Packet outgoing() const {
+        Packet packet;packet.count=p.tx_words;
+        for(unsigned i=0;i<32;++i) packet.words[i]=p.tx[i];
+        return packet;
+    }
+public:
+    Direction(PacketPins pins,unsigned source,unsigned destination,std::map<unsigned,Channel>& channels):
+        p(pins),source(source),destination(destination),channels(channels) {}
+    // Inputs depend only on retained packet ownership, local clock counts and finite delay schedules.
+    void drive(uint64_t tick,const std::array<uint64_t,2>& cycles) {
+        p.tx_ready=!slot&&(cycles[source]+source*3)%11>=3;
+        p.rx_valid=slot.has_value()&&tick>=after;
+        if(slot) {
+            const auto& packet=offered();p.rx_words=packet.count;
+            for(unsigned i=0;i<32;++i) p.rx[i]=packet.words[i];
+        } else {p.rx_words=0;for(unsigned i=0;i<32;++i) p.rx[i]=0;}
+    }
+    // Sample old-edge public handshakes only. A full slot cannot accept another packet,
+    // including when its opposite-clock consumer happens to release it at this instant.
+    void sample(uint64_t tick,const std::array<bool,2>& rising) {
+        bool take=rising[source]&&p.tx_valid&&p.tx_ready;
+        bool give=rising[destination]&&p.rx_valid&&p.rx_ready;
+        if(take&&slot) throw std::runtime_error("atomic packet capacity exceeded");
+        if(rising[source]) {
+            if(p.tx_valid) {
+                Packet packet=outgoing();
+                if(held&&packet.identity()==held->identity()&&!(packet==*held))
+                    throw std::runtime_error("packet offer changed under backpressure");
+                if(!p.tx_ready) {
+                    auto& channel=channels.at(packet.channel());
+                    if(packet.kind()==1) ++channel.data_stalls;else ++channel.credit_stalls;
+                    ++source_stalls;held=packet;
+                } else held.reset();
+            } else held.reset(); // Local retirement may explicitly cancel an unaccepted offer.
+        }
+        if(rising[destination]&&p.rx_valid&&!p.rx_ready) ++receive_stalls;
+        if(give) {
+            if(!slot) throw std::runtime_error("atomic receive without retained slot");
+            const Packet packet=offered();
+            channels.at(packet.channel()).consume(packet,injecting);
+            if(injecting) {++injected;injecting=false;after=tick+7+destination;}
+            else {++delivered;slot.reset();}
+        }
+        if(take) {
+            Packet packet=outgoing();
+            injecting=channels.at(packet.channel()).capture(packet,source);
+            slot=packet;after=tick+5+(accepted*3+source*7)%29;++accepted;
+        }
+    }
+    // Diagnostic copies add injections; ordinary captures and releases remain capacity-one accounting.
+    void result(FILE* out) const {
+        if(!accepted||!delivered||!source_stalls||injected!=8||accepted!=delivered+(slot?1:0))
+            throw std::runtime_error("incomplete bounded directional transport coverage");
+        fprintf(out,"{\"source\":%u,\"destination\":%u,\"capacity\":1,\"accepted\":%llu,\"delivered\":%llu,"
+            "\"injected\":%llu,\"source_stalls\":%llu,\"receive_stalls\":%llu,\"remaining\":%u}",source,destination,
+            (unsigned long long)accepted,(unsigned long long)delivered,(unsigned long long)injected,
+            (unsigned long long)source_stalls,(unsigned long long)receive_stalls,slot?1:0);
+    }
+};
+
+// The existing witness's passive process-inspection checks run on the owning role's
+// clock. Expected lifetimes still come solely from the host's public ready handles.
+class Inspection {
+    IData& address;QData& incarnation;VlWide<4>& value;
+    std::vector<unsigned> actors;std::string control;unsigned foreign;
+    uint64_t epoch=0;bool reject=true;std::map<uint64_t,uint64_t> observed;
+public:
+    Inspection(IData& address,QData& incarnation,VlWide<4>& value,std::vector<unsigned> actors,
+        unsigned foreign,std::string control):address(address),incarnation(incarnation),value(value),
+        actors(actors),control(control),foreign(foreign) {}
+    // Invalid local lifetime and foreign/global addresses must not expose selected process state.
+    void drive(uint64_t cycle) {
+        if(cycle%256==0) {std::ifstream input(control);uint64_t next;if(input>>next) epoch=next;}
+        unsigned mode=cycle%8;address=actors[(cycle/8)%actors.size()];incarnation=epoch;reject=!epoch;
+        if(mode==1) {incarnation=epoch?epoch-1:0;reject=true;}
+        if(mode==2) {address=0xffffffffu;reject=true;}
+        if(mode==3) {address=foreign;reject=true;}
+    }
+    // Presence is a sampled observation only, not a complete event history.
+    void sample() {
+        bool nonzero=false;for(unsigned i=0;i<4;++i) nonzero|=value[i]!=0;
+        if(reject&&nonzero) throw std::runtime_error("invalid process inspection exposed state");
+        if(!reject&&(value[0]&(1u<<25))) ++observed[epoch];
+    }
+    // Both host lifetimes must appear in any enabled inspection witness.
+    void result(FILE* out) const {
+        if(observed.size()!=2) throw std::runtime_error("inspection did not observe both lifetimes");
+        fprintf(out,"{");bool first=true;for(const auto& [epoch,count]:observed) {
+            if(!first) fprintf(out,",");first=false;
+            fprintf(out,"\"%llu\":%llu",(unsigned long long)epoch,(unsigned long long)count);
+        }fprintf(out,"}");
+    }
+};
+
+// Ordinary OTP owns the two incarnations. Only each role's rising edge consumes
+// its host FIFOs and packet handshakes; clocks have unequal periods and phases.
+int main(int argc,char** argv) {
+    Verilated::commandArgs(argc,argv);
+    if(argc!=2) return 2;
+    try {
+        std::string directory=argv[1];
+        Vphi_endpoint_network_witness core;
+        @@INITIALIZE@@
+        core.clk_0=core.clk_1=0;core.r0_reset=core.r1_reset=1;
+        Endpoint a(SESSION(r0_domain_0),directory+"/domain0");
+        a.add(LANE(r0_domain_0,management),"management");a.add(LANE(r0_domain_0,application),"application");
+        Endpoint b(SESSION(r1_domain_1),directory+"/domain1");
+        b.add(LANE(r1_domain_1,management),"management");b.add(LANE(r1_domain_1,application),"application");
+        Endpoint ma(SESSION(r0_endpoint),directory+"/endpoint0");ma.add(LANE(r0_endpoint,management),"management");
+        Endpoint mb(SESSION(r1_endpoint),directory+"/endpoint1");mb.add(LANE(r1_endpoint,management),"management");
+        std::vector<Endpoint*> host[2];host[0]={&a,&ma};host[1]={&b,&mb};
+        std::map<unsigned,Channel> channels;
+        @@CHANNELS@@
+        std::array<Direction,2> links={Direction(PACKETS(r0,r1),0,1,channels),Direction(PACKETS(r1,r0),1,0,channels)};
+        std::vector<Inspection> inspections[2];
+        @@INSPECTIONS@@
+        std::array<uint64_t,2> cycles={0,0};
+        uint64_t finish=0,host_stalls=0;
+        auto start=std::chrono::steady_clock::now();
+        for(uint64_t tick=0;tick<2000000000ull;++tick) {
+            std::array<bool,2> rising={tick%6==0,tick%10==1};
+            std::array<bool,2> falling={tick%6==3,tick%10==6};
+            if(rising[0]||rising[1]||falling[0]||falling[1]) {
+                if(rising[0]) core.r0_reset=cycles[0]<4;
+                if(rising[1]) core.r1_reset=cycles[1]<4;
+                for(unsigned role=0;role<2;++role) if(rising[role]) {
+                    for(unsigned i=0;i<host[role].size();++i) {
+                        auto* endpoint=host[role][i];endpoint->drive(cycles[role]);
+                        for(unsigned j=0;j<endpoint->lanes.size();++j) {
+                            auto& p=endpoint->lanes[j]->pins;
+                            p.output_ready=p.output_ready&&(cycles[role]+7*i+3*j+role)%19>=3;
+                        }
+                    }
+                    for(auto& inspection:inspections[role]) inspection.drive(cycles[role]);
+                }
+                for(auto& link:links) link.drive(tick,cycles);
+                core.eval();
+                for(unsigned role=0;role<2;++role) if(rising[role]) {
+                    for(auto* endpoint:host[role]) {
+                        for(const auto& lane:endpoint->lanes)
+                            if(lane->pins.output_valid&&!lane->pins.output_ready) ++host_stalls;
+                        endpoint->sample(cycles[role]);
+                    }
+                    for(auto& inspection:inspections[role]) inspection.sample();
+                }
+                if(cycles[0]>=4&&cycles[1]>=4) {
+                    if(core.r0_router_fault||core.r1_router_fault||core.r0_endpoint_wire_fault||core.r1_endpoint_wire_fault)
+                        throw std::runtime_error("local packet or management parser fault");
+                    for(const auto& [index,channel]:channels) if(channel.tx_fault||channel.rx_fault)
+                        throw std::runtime_error("native endpoint fault");
+                }
+                for(auto& link:links) link.sample(tick,rising);
+                if(rising[0]) core.clk_0=1;else if(falling[0]) core.clk_0=0;
+                if(rising[1]) core.clk_1=1;else if(falling[1]) core.clk_1=0;
+                core.eval();
+                for(unsigned role=0;role<2;++role) if(rising[role]) {
+                    for(auto* endpoint:host[role]) endpoint->observe();
+                    ++cycles[role];
+                }
+            }
+            if(tick%1024==0) {
+                if(!finish&&access((directory+"/finished").c_str(),F_OK)==0) finish=tick+4096;
+                if(std::chrono::steady_clock::now()-start>std::chrono::seconds(600))
+                    throw std::runtime_error("bounded independent repetition transport timeout");
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+            if(finish&&tick>=finish) {
+                if(!host_stalls||cycles[0]==cycles[1]) throw std::runtime_error("independent clocks or host stalls not exercised");
+                FILE* out=fopen((directory+"/transport.json").c_str(),"wx");
+                if(!out) throw std::runtime_error("transport result");
+                fprintf(out,"{\"cycles\":%llu,\"clock_periods\":[6,10],\"clock_phases\":[0,1],"
+                    "\"local_cycles\":[%llu,%llu],\"host_stalls\":%llu,\"channels\":[",
+                    (unsigned long long)tick,(unsigned long long)cycles[0],(unsigned long long)cycles[1],(unsigned long long)host_stalls);
+                bool first=true;for(const auto& [index,channel]:channels) {
+                    if(!first) fprintf(out,",");first=false;channel.result(out);
+                }
+                fprintf(out,"],\"links\":[");links[0].result(out);fprintf(out,",");links[1].result(out);
+                fprintf(out,"],\"inspection\":[");first=true;
+                for(const auto& group:inspections) for(const auto& inspection:group) {
+                    if(!first) fprintf(out,",");first=false;inspection.result(out);
+                }
+                fprintf(out,"]}\n");fclose(out);
+                printf("PASS Phi domain repetition: independent clocks ticks=%llu\n",(unsigned long long)tick);return 0;
+            }
+        }
+        throw std::runtime_error("bounded independent repetition transport clocks");
+    } catch(const std::exception& failure) {
+        fprintf(stderr,"FAIL Phi domain repetition: %s\n",failure.what());return 1;
+    }
+}

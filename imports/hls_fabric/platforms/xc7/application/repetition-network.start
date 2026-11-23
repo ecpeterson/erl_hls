@@ -1,0 +1,21 @@
+#!/bin/sh
+# Restore the role-specific maintenance address after every PS boot.
+set -eu
+
+mountpoint=/mnt/sd
+role_file=$mountpoint/repetition-role
+
+mkdir -p "$mountpoint"
+if ! grep -q " $mountpoint " /proc/mounts; then
+    mount -t vfat -o ro /dev/mmcblk0p1 "$mountpoint"
+fi
+
+role=$(tr -d '\r\n' < "$role_file")
+case "$role" in
+    a) address=192.168.77.31 ;;
+    b) address=192.168.77.32 ;;
+    *) echo "invalid repetition role in $role_file: $role" >&2; exit 1 ;;
+esac
+
+ifconfig eth0 "$address" netmask 255.255.255.0 up
+echo "repetition role $role maintenance address $address"

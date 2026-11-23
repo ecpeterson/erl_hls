@@ -1,0 +1,2 @@
+# Frozen parser fixtures, not measurement output.
+platforms/xc7/timing_chains/fixtures/*.rpt linguist-generated=true

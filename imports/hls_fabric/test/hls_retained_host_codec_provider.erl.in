@@ -1,0 +1,49 @@
+-module(hls_retained_host_codec_provider).
+-moduledoc "Equivalent implementations of one declared custom scalar ABI for host-binding regressions.".
+-behaviour(hls_type).
+-export([value/0, width/2, zero/2, print_type/2, pack/3, unpack/3, transpile/3]).
+-export_type([value/0]).
+
+-doc "An unsigned byte with the ordinary full-width scalar wire representation.".
+-type value() :: 0 .. ((1 bsl 8) - 1).
+
+-doc "Returns the stable custom type descriptor, independently of implementation selection.".
+-spec value() -> hls_type:descriptor().
+value() -> {hls_type, ?MODULE, value, []}.
+
+-doc "The custom alias occupies exactly one byte.".
+-spec width(value, []) -> 8.
+width(value, []) -> 8.
+
+-doc "The custom alias starts at zero.".
+-spec zero(value, []) -> 0.
+zero(value, []) -> 0.
+
+-doc "The custom alias uses XLS's ordinary unsigned-byte scalar representation.".
+-spec print_type(value, []) -> string().
+print_type(value, []) -> "u8".
+
+-doc "Delegates ordinary numeric expressions; this fixture only needs the type callbacks.".
+-spec transpile(atom(), [xls_clause_lower:ir()], xls_clause_lower:clause_state()) ->
+    xls_clause_lower:ir() | xls_clause_lower:clause_state() |
+    {fallible, atom(), xls_clause_lower:ir()}.
+transpile(Name, Args, State) -> hls_nums:transpile(Name, Args, State).
+
+-ifdef(ALTERNATE_IMPLEMENTATION).
+-doc "Packs a byte directly, with the same range checks as the original implementation.".
+-spec pack(value(), value, []) -> <<_:8>>.
+pack(Value, value, []) when is_integer(Value), Value >= 0, Value < (1 bsl 8) -> <<Value:8>>;
+pack(_, value, []) -> error(badarg).
+
+-doc "Decodes one byte directly, preserving all remaining bits.".
+-spec unpack(bitstring(), value, []) -> {value(), bitstring()}.
+unpack(<<Value:8, Rest/bitstring>>, value, []) -> {Value, Rest}.
+-else.
+-doc "Packs a byte through the ordinary numeric provider.".
+-spec pack(value(), value, []) -> <<_:8>>.
+pack(Value, value, []) -> hls_nums:pack(Value, u8, []).
+
+-doc "Decodes one byte through the ordinary numeric provider.".
+-spec unpack(bitstring(), value, []) -> {value(), bitstring()}.
+unpack(Bits, value, []) -> hls_nums:unpack(Bits, u8, []).
+-endif.

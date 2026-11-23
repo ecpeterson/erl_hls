@@ -1,0 +1,61 @@
+name: CI
+# Automatic runs remain suspended while the reduced suite is qualified locally.
+# Restore pull_request here only after reviewing its measured cost; no main-push duplicate.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Bounded test tier (all runs each tier once)
+        type: choice
+        options: [all, software, components, phi, snowflake]
+        default: all
+      diagnostics:
+        description: Retain bounded diagnostics even when tests pass
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ERL_FLAGS: '+S 2:2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/beam-tools
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            _build/default/*plt
+            ~/.cache/rebar3/*plt
+          key: dialyzer-${{ runner.os }}-${{ runner.arch }}-28.0.2-${{ hashFiles('rebar.lock', '**/rebar.config') }}
+      - uses: ./.github/actions/rtl-tools
+        if: inputs.suite != 'software'
+        with:
+          packages: yosys verilator build-essential autoconf bison flex gperf libreadline-dev zlib1g-dev
+      - uses: ./.github/actions/iverilog
+        if: inputs.suite != 'software'
+      - uses: ./.github/actions/xls-tools
+        if: inputs.suite != 'software'
+      - name: Run selected tier serially with shared tool setup
+        env:
+          SUITE: ${{ inputs.suite }}
+        run: bash tools/ci.sh "$SUITE" "$RUNNER_TEMP/xls" _build/ci
+      - name: Retain bounded failure diagnostics
+        if: failure() || inputs.diagnostics == true
+        uses: ./.github/actions/diagnostics
+        with:
+          name: ci-diagnostics
+          paths: |
+            _build/ci/**/*.log
+            _build/ci/**/result.json
+            _build/ci/**/times.json
+            _build/ci/times.tsv
+            _build/source-contracts.json

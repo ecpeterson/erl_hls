@@ -1,0 +1,38 @@
+-module(hls_retained_host_codec_actor).
+-moduledoc "Temporary actor whose equal-width wire schema changes between retained host builds.".
+-behaviour(hls_statem).
+-compile({parse_transform, hls_pack}).
+-export([init/1, ready/3, topology/0]).
+-hls_data(cell).
+-hls_phases([ready]).
+-hls_outputs([report]).
+-hls_mailbox_capacity(2).
+-hls_tags(@@TAGS@@).
+
+@@ENTRY_RECORD@@
+%% Both schema versions have the same width but reverse the two leading fields.
+-record(work, {@@FIELDS@@,
+    entries = hls_type:zero() :: @@ENTRIES@@}).
+%% This public record has no mailbox dispatch and is not accepted by the ingress target.
+-record(unused, {value = hls_type:zero() :: hls_nums:u8()}).
+%% Application state is independent of the message layout under test.
+-record(cell, {value = hls_type:zero() :: hls_nums:u8()}).
+
+-doc "Starts without a startup command.".
+-spec init([]) -> {ok, ready, #cell{}}.
+init([]) -> {ok, ready, #cell{}}.
+
+-doc "Declares one output schema and consumes the ordinary input schema.".
+-spec ready(enter, hls_statem:phase(), #cell{}) -> hls_statem:enter_result(#cell{});
+    (cast, #work{}, #cell{}) -> hls_statem:cast_result(#cell{}).
+ready(enter, _, Cell) -> {Cell, [{cast, report, #work{}}]};
+ready(cast, #work{}, Cell) -> {ready, Cell, consume}.
+
+-doc "Uses two sparse actor points and one shared external stream.".
+-spec topology() -> map().
+topology() ->
+    #{version => 1, actors => #{left => ?MODULE, right => ?MODULE}, families => #{},
+      route_relations => [], startup => [], externals => [{reports, out, [work]}],
+      routes => [{{Id, report}, [{external, reports}]} || Id <- [left, right]],
+      ingresses => [{host, {rectangle, [3, 1]}, [{cells, [work],
+          [{actor, left, {at, [0, 0]}}, {actor, right, {at, [2, 0]}}]}]}]}.

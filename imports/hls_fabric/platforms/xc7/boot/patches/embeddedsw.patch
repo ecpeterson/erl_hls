@@ -1,0 +1,13 @@
+--- a/lib/sw_apps/zynq_fsbl/misc/copy_bsp.sh
++++ b/lib/sw_apps/zynq_fsbl/misc/copy_bsp.sh
+@@ -86 +86 @@
+-cp -r $SERVICES_DIR/xilffs/ $BSP_DIR/libsrc/
++cp -r $SERVICES_DIR/xilffs $BSP_DIR/libsrc/
+@@ -90 +90 @@
+-cp -r $SERVICES_DIR/xilrsa/ $BSP_DIR/libsrc/
++cp -r $SERVICES_DIR/xilrsa $BSP_DIR/libsrc/
+--- a/lib/sw_apps/zynq_fsbl/misc/makefile
++++ b/lib/sw_apps/zynq_fsbl/misc/makefile
+@@ -22 +22 @@
+-	$(MAKE) -j --no-print-directory par_libs
++	$(MAKE) -j4 --no-print-directory par_libs

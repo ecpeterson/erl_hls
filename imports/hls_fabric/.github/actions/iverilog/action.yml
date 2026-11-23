@@ -1,0 +1,29 @@
+name: Install pinned Icarus
+description: Reuse the Icarus 13 simulator and matching VPI compiler used by the Phi regression
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ${{ runner.temp }}/iverilog
+        key: iverilog-${{ runner.os }}-${{ runner.arch }}-13.0-c897bbfa9848688982c6d5c30529fc29d68df0b9ff22ffa73bad89db73a7ce49
+    - name: Build simulator on cache miss
+      shell: bash
+      env:
+        IVERILOG_ROOT: ${{ runner.temp }}/iverilog
+      run: |
+        set -euo pipefail
+        if [[ ! -x "$IVERILOG_ROOT/bin/iverilog" ]]; then
+          archive="$RUNNER_TEMP/iverilog.tar.gz"
+          curl --fail --location --show-error --connect-timeout 15 --max-time 120 \
+            https://github.com/steveicarus/iverilog/archive/refs/tags/v13_0.tar.gz --output "$archive"
+          echo "c897bbfa9848688982c6d5c30529fc29d68df0b9ff22ffa73bad89db73a7ce49  $archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/iverilog-source"
+          tar -xzf "$archive" --strip-components=1 -C "$RUNNER_TEMP/iverilog-source"
+          cd "$RUNNER_TEMP/iverilog-source"
+          autoconf
+          ./configure --prefix="$IVERILOG_ROOT"
+          make -j2
+          make install
+        fi
+        echo "$IVERILOG_ROOT/bin" >> "$GITHUB_PATH"

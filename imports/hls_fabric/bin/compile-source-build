@@ -1,0 +1,5 @@
+#!/bin/sh
+# Delegate to the optional XLS driver shipped by the resolved compiler dependency.
+set -eu
+bundle=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec python3 "$bundle"/lib/erl_hls-*/priv/tools/compile_source_build.py "$@"

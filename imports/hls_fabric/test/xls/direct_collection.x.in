@@ -1,0 +1,281 @@
+// Build a contribution through the same codec as an ordinary sender.
+fn piece_frame(key: u32, member: u32, value: u8) -> axis::Frame {
+  axis::Frame { header: axis::Header { op: Tag::PIECE as u8, payload_words: u8:3,
+    ..zero!<axis::Header>() }, payload: bits_from_piece(Piece { key, member, value }) as bits[96] }
+}
+
+// Enter collection with a caller-selected epoch and member mask.
+fn collecting_machine(key: u32, mask: u8) -> Machine {
+  Machine { phase: Phase::COLLECTING, entered_from: Phase::IDLE, enter_pending: false,
+    data: Cell { key, mask, value: u8:0 }, ..initial_machine() }
+}
+
+// Every member subset and early/open interleaving has one completed parity.
+#[test]
+fn every_mask_and_opening_position() {
+  for (mask, ()): (u8, ()) in u8:1..u8:64 {
+    for (opening_at, ()): (u32, ()) in u32:0..u32:7 {
+      let (last, count) = for (index, (previous, count)):
+          (u32, (DirectCollectionStep, u32)) in u32:0..u32:16 {
+        let machine = Machine { enter_pending: previous.machine.enter_pending || index == opening_at,
+          ..previous.machine };
+        let selected = index < u32:6 && ((mask >> index) & u8:1) != u8:0;
+        let step = direct_collection_step(machine, previous.collection, previous.control,
+          zero!<axis::Frame>(), false, piece_frame(u32:7, index, u8:1 << index), selected);
+        assert_eq(step.machine.failure, hls_failure::NONE);
+        (step, count + (step.egress_valid as u32))
+      }((DirectCollectionStep { machine: collecting_machine(u32:7, mask),
+          ..zero!<DirectCollectionStep>() }, u32:0));
+      assert_eq(last.machine.phase, Phase::COMPLETE);
+      assert_eq(last.machine.data.value, mask);
+      assert_eq(count, u32:1);
+      assert_eq(last.collection.opened, false);
+      assert_eq(last.machine.reduction.status, ReductionStatus::IDLE);
+    }(())
+  }(())
+}
+
+// Ownership commands cannot affect the bank before crossing their register.
+#[test]
+fn opening_and_release_are_registered() {
+  let first = direct_collection_step(Machine { enter_pending: true,
+      ..collecting_machine(u32:7,u8:1) }, zero!<DirectCollection>(), zero!<CollectionControl>(),
+    zero!<axis::Frame>(), false, piece_frame(u32:7,u32:0,u8:9), true);
+  assert_eq(first.control.open, true);
+  assert_eq(first.collection.opened, false);
+  let opened = direct_collection_step(first.machine, first.collection, first.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(opened.collection.reduction.status, ReductionStatus::COMPLETE);
+  assert_eq(opened.machine.phase, Phase::COLLECTING);
+  let consumed = direct_collection_step(opened.machine, opened.collection, opened.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(consumed.machine.phase, Phase::COMPLETE);
+  assert_eq(consumed.control.release, true);
+  assert_eq(consumed.collection.opened, true);
+  let published = direct_collection_step(consumed.machine, consumed.collection, consumed.control,
+    zero!<axis::Frame>(), false, zero!<axis::Frame>(), false);
+  assert_eq(published.egress_valid, true);
+  assert_eq(published.collection.opened, false);
+}
+
+// A completed bank remains owned until the exact epoch is released. Early next
+// input waits, while duplicates and overlapping incomplete epochs remain faults.
+#[test]
+fn keyed_ownership_and_successor_wait() {
+  let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:1) };
+  let opening = machine_step(machine, zero!<axis::Frame>(), false, true).machine.reduction;
+  let bank = collection_control(zero!<CollectionBank>(), CollectionControl {
+    open: true, opening, ..zero!<CollectionControl>() });
+  let complete = collection_fold(bank, piece_frame(u32:7,u32:0,u8:3), true);
+  assert_eq(complete.reduction.status, ReductionStatus::COMPLETE);
+  assert_eq(collection_accepts(complete, piece_frame(u32:8,u32:0,u8:4)), false);
+  assert_eq(collection_accepts(complete, piece_frame(u32:7,u32:0,u8:4)), true);
+  assert_eq(collection_fold(complete,piece_frame(u32:7,u32:0,u8:4),true).failure,
+    hls_failure::REDUCTION_PROTOCOL);
+  assert_eq(collection_control(complete, CollectionControl {
+    release: true, release_key: u32:8, ..zero!<CollectionControl>() }).failure,
+    hls_failure::REDUCTION_PROTOCOL);
+  let released = collection_control(complete, CollectionControl {
+    release: true, release_key: u32:7, ..zero!<CollectionControl>() });
+  assert_eq(collection_accepts(released,piece_frame(u32:8,u32:0,u8:4)),true);
+  let next = collection_fold(released,piece_frame(u32:8,u32:0,u8:4),true);
+  assert_eq(next.reduction.key,u32:8);
+  assert_eq(next.reduction.seen,ReductionMembers:1);
+  assert_eq(next.failure,hls_failure::NONE);
+}
+
+// Poison is not a protocol release: the rest of the selected members must drain.
+#[test]
+fn reducer_failure_retains_member_obligations() {
+  let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:3) };
+  let opening = machine_step(machine,zero!<axis::Frame>(),false,true).machine.reduction;
+  let bank = collection_control(zero!<CollectionBank>(), CollectionControl {
+    open: true, opening, ..zero!<CollectionControl>() });
+  let first = collection_fold(bank,piece_frame(u32:7,u32:0,u8:9),true);
+  let poisoned = CollectionBank { reduction: ReductionState {
+    failure: hls_failure::REDUCTION_PROTOCOL, ..first.reduction }, ..first };
+  let last = collection_fold(poisoned,piece_frame(u32:7,u32:1,u8:3),true);
+  assert_eq(last.reduction.status,ReductionStatus::COMPLETE);
+  assert_eq(last.reduction.seen,ReductionMembers:3);
+  assert_eq(last.reduction.accumulator.value,u8:9);
+  assert_eq(last.failure,hls_failure::NONE);
+  assert_eq(last.reduction.failure,hls_failure::REDUCTION_PROTOCOL);
+}
+
+// A contribution bypassing the collector is a fault, never an ordinary fold.
+#[test]
+fn reserved_schema_is_rejected_by_direct_mailbox() {
+  let initial = initial_machine();
+  let ready = machine_step(initial, zero!<axis::Frame>(), false, true).machine;
+  let frame = axis::Frame { header: axis::Header { op: Tag::PIECE as u8,
+    payload_words: u8:3, ..zero!<axis::Header>() },
+    payload: bits_from_piece(Piece { key: u32:7, member: u32:0, value: u8:1 }) as bits[96] };
+  let result = machine_step(ready, frame, true, true);
+  assert_eq(hls_failure::failed(result.machine.failure), true);
+  assert_eq(result.machine.reduction, ready.reduction);
+}
+
+// A selection made before the last member folds may refer to the successor.
+// It must wait through registered release instead of failing or being lost.
+#[test]
+fn overlap_successor_revalidation() {
+  let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:1) };
+  let opening = machine_step(machine,zero!<axis::Frame>(),false,true).machine.reduction;
+  let bank = collection_control(zero!<CollectionBank>(), CollectionControl {
+    open: true, opening, ..zero!<CollectionControl>() });
+  let last = direct_collection_advance(bank,zero!<CollectionControl>(),
+    piece_frame(u32:7,u32:0,u8:3),true,false);
+  assert_eq(last.1,true);
+  assert_eq(last.0.reduction.status,ReductionStatus::COMPLETE);
+  let successor = piece_frame(u32:8,u32:0,u8:4);
+  let waiting = direct_collection_advance(last.0,zero!<CollectionControl>(),successor,true,false);
+  assert_eq(waiting,(last.0,false));
+  let released = direct_collection_advance(waiting.0,CollectionControl {
+    release: true, release_key: u32:7, ..zero!<CollectionControl>() },successor,true,false);
+  assert_eq(released.1,false);
+  assert_eq(released.0.failure,hls_failure::NONE);
+  let accepted = direct_collection_advance(released.0,zero!<CollectionControl>(),successor,true,false);
+  assert_eq(accepted.1,true);
+  assert_eq(accepted.0.reduction.key,u32:8);
+  assert_eq(accepted.0.reduction.seen,ReductionMembers:1);
+  assert_eq(accepted.0.failure,hls_failure::NONE);
+}
+
+// Dense contributions can fold on both actor grant and execute clocks. Vary
+// opening, atomic stalls and reset placement; compare every visible bank to the
+// common checked control/fold transition and require nonempty completions.
+#[test]
+fn overlap_bank_schedule() {
+  let completed = for (trial, completed): (u32,u32) in u32:0..u32:96 {
+    let machine = Machine { enter_pending: true, ..collecting_machine(u32:7,u8:63) };
+    let opening = machine_step(machine,zero!<axis::Frame>(),false,true).machine.reduction;
+    let opening_at = trial % u32:8;
+    let stall_at = (trial / u32:8) % u32:6;
+    let reset_at = if trial >= u32:48 { u32:5 } else { u32:32 };
+    let last = for (clock, state): (u32,(DirectCollection,u32,u32,u32)) in u32:0..u32:32 {
+      let (bank, member, active, folds) = state;
+      if clock == reset_at { (zero!<DirectCollection>(),u32:0,u32:0,u32:0) }
+      else if clock == stall_at { state }
+      else {
+        let control = CollectionControl { open: active == opening_at, opening,
+          ..zero!<CollectionControl>() };
+        let frame = piece_frame(u32:7,member,(u8:1 << member));
+        let valid = member < u32:6;
+        let advanced = direct_collection_advance(bank,control,frame,valid,false);
+        assert_eq(advanced.0,collection_fold(collection_control(bank,control),frame,valid));
+        assert_eq(advanced.0.failure,hls_failure::NONE);
+        (advanced.0,member + advanced.1 as u32,active + u32:1,folds + advanced.1 as u32)
+      }
+    }((zero!<DirectCollection>(),u32:0,u32:0,u32:0));
+    assert_eq(last.0.reduction.status,ReductionStatus::COMPLETE);
+    assert_eq(last.0.reduction.accumulator.value,u8:63);
+    assert_eq(last.3,u32:6);
+    completed + u32:1
+  }(u32:0);
+  assert_eq(completed,u32:96);
+}
+
+// Revalidation still accepts duplicate/malformed frames into the checked fault
+// transition. A preexisting actor failure stops consumption without changing it.
+#[test]
+fn overlap_fault_and_failed_owner() {
+  let first = collection_fold(zero!<DirectCollection>(),piece_frame(u32:7,u32:0,u8:1),true);
+  let duplicate = direct_collection_advance(first,zero!<CollectionControl>(),
+    piece_frame(u32:7,u32:0,u8:2),true,false);
+  assert_eq(duplicate.1,true);
+  assert_eq(duplicate.0.failure,hls_failure::REDUCTION_PROTOCOL);
+  let failed = direct_collection_advance(first,zero!<CollectionControl>(),
+    piece_frame(u32:7,u32:1,u8:2),true,true);
+  assert_eq(failed,(first,false));
+  let malformed = direct_collection_advance(first,zero!<CollectionControl>(),
+    zero!<axis::Frame>(),true,false);
+  assert_eq(malformed.1,true);
+  assert_eq(malformed.0.failure,hls_failure::REDUCTION_PROTOCOL);
+}
+
+// Build an owned open epoch and its checked one-member completion.
+fn completion_fixture() -> (DirectCollectionState<u32:2>, DirectCollection) {
+  let machine = machine_step(Machine { enter_pending: true,
+    ..collecting_machine(u32:7,u8:1) },zero!<axis::Frame>(),false,true).machine;
+  let bank = collection_control(zero!<DirectCollection>(),CollectionControl {
+    open: true, opening: machine.reduction, ..zero!<CollectionControl>() });
+  let completed = collection_fold(bank,piece_frame(u32:7,u32:0,u8:9),true);
+  (DirectCollectionState<u32:2> { machine, collection: bank,
+    ..zero!<DirectCollectionState<u32:2>>() },completed)
+}
+
+// Fast completion preserves ordinary grants and only the existing owned epoch
+// may use the committed-next bank. Enumerate all64 gating combinations.
+#[test]
+fn completion_descriptor_ownership() {
+  let (base,bank) = completion_fixture();
+  let _ = for (trial, ()): (u32, ()) in u32:0..u32:64 {
+    let executing = (trial & u32:1) != u32:0;
+    let occupied = (trial & u32:2) != u32:0;
+    let received = (trial & u32:4) != u32:0;
+    let wrong_key = (trial & u32:8) != u32:0;
+    let failed = (trial & u32:16) != u32:0;
+    let entering = (trial & u32:32) != u32:0;
+    let machine = Machine { occupied: occupied as u8, enter_pending: entering,
+      ..base.machine };
+    let state = DirectCollectionState<u32:2> { command_valid: executing, machine, ..base };
+    let next_bank = DirectCollection { reduction: ReductionState {
+      key: if wrong_key { u32:8 } else { u32:7 }, ..bank.reduction },
+      failure: if failed { hls_failure::REDUCTION_PROTOCOL } else { hls_failure::NONE }, ..bank };
+    let stepped = DirectCollectionStep { machine, ..zero!<DirectCollectionStep>() };
+    let grant = direct_collection_next_grant(state,stepped,next_bank,received);
+    assert_eq(grant.valid,(executing || !occupied) && !received && !wrong_key && !failed && !entering);
+    let checked = direct_collection_machine(machine,next_bank);
+    assert_eq(grant.reduction,checked.reduction);
+    assert_eq(grant.failure,checked.failure);
+    assert_eq(grant.failed,hls_failure::failed(checked.failure));
+  }(());
+  let new_opening = DirectCollectionStep { machine: base.machine, ..zero!<DirectCollectionStep>() };
+  let idle = DirectCollectionState<u32:2> { command_valid: true,
+    machine: Machine { reduction: zero!<ReductionState>(), ..base.machine }, ..base };
+  assert_eq(direct_collection_next_grant(idle,new_opening,bank,false).valid,false);
+}
+
+// Completion commits before entry; reuse the descriptor without composing the
+// two callbacks. A bank fault at commit suppresses entry with the same snapshot
+// as a separate grant. A poisoned completion cannot prepare an entry callback.
+#[test]
+fn completion_entry_descriptor_and_fault_snapshot() {
+  let (base,bank) = completion_fixture();
+  let completion = direct_collection_next_grant(base,
+    DirectCollectionStep { machine: base.machine, ..zero!<DirectCollectionStep>() },bank,false);
+  assert_eq(completion.valid,true);
+  let executing = DirectCollectionState<u32:2> { collection: bank,
+    command_valid: true, command_reduction: completion.reduction,
+    command_failure: completion.failure, command_failed: completion.failed, ..base };
+  let completed = direct_collection_execute(executing);
+  assert_eq(completed.machine.phase,Phase::COMPLETE);
+  assert_eq(completed.machine.enter_pending,true);
+  assert_eq(completed.control.release,true);
+  assert_eq(completed.egress_valid,false);
+  let _ = for (fault, ()): (u32, ()) in u32:0..u32:2 {
+    let next_bank = DirectCollection { failure: if fault == u32:0 {
+      hls_failure::NONE } else { hls_failure::REDUCTION_PROTOCOL }, ..bank };
+    let entry = direct_collection_next_grant(executing,completed,next_bank,false);
+    assert_eq(entry.valid,true);
+    let checked = direct_collection_machine(completed.machine,next_bank);
+    assert_eq(entry.reduction,checked.reduction);
+    assert_eq(entry.failure,checked.failure);
+    assert_eq(entry.failed,hls_failure::failed(checked.failure));
+    let state = DirectCollectionState<u32:2> { machine: completed.machine, collection: next_bank,
+      control: completed.control, command_valid: true, command_reduction: entry.reduction,
+      command_failure: entry.failure, command_failed: entry.failed, ..base };
+    let actual = direct_collection_execute(state);
+    let expected = machine_step(checked,zero!<axis::Frame>(),false,true);
+    assert_eq(actual.machine,expected.machine);
+    assert_eq(actual.egress,expected.egress);
+    assert_eq(actual.egress_valid,fault == u32:0);
+    assert_eq(actual.control,direct_collection_command(checked,expected));
+    assert_eq(actual.control.release,false);
+  }(());
+  let poisoned = DirectCollectionState<u32:2> { command_reduction: ReductionState {
+    failure: hls_failure::REDUCTION_PROTOCOL, ..executing.command_reduction }, ..executing };
+  let failed = direct_collection_execute(poisoned);
+  assert_eq(hls_failure::failed(failed.machine.failure),true);
+  assert_eq(direct_collection_next_grant(poisoned,failed,bank,false).valid,false);
+}

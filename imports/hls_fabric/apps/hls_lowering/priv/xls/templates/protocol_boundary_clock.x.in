@@ -1,0 +1,16 @@
+// Channels are clock samples; the pin adapter ties both XLS handshakes high.
+pub proc boundary_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // Only application ready fields may stall producers, never this whole proc.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) { (commands, observations) }
+  // The network installs source initialization on its masked first clock.
+  init { zero!<State>() }
+  // Network and endpoint arbitration advance together under one common reset.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

@@ -1,0 +1,17 @@
+diff --git a/xilinx/fasm.cc b/xilinx/fasm.cc
+--- a/xilinx/fasm.cc
++++ b/xilinx/fasm.cc
+@@ -2179,8 +2179,12 @@ class FasmWriter
+         const bool b_side_reads_half_the_word =
+                 (is_36 ? (read_width_a == 72) : (read_width_a == 36));
+-        // On a RAMB18E1 the A side carries half of a 36-bit SDP write.
+-        const bool a_side_writes_half_the_word = (!is_36 && (write_width_b == 36));
++        // The A side carries half of the wide SDP write: 18 of 36 bits in a
++        // RAMB18E1, or 36 of 72 bits in a RAMB36E1.  Omitting the RAMB36E1
++        // case leaves its A-side parity inputs in width-1 mode, so logical bits
++        // 8, 17, 26 and 35 silently read back as zero on silicon.
++        const bool a_side_writes_half_the_word =
++                is_36 ? (write_width_b == 72) : (write_width_b == 36);
+ 
+         if (this_width_param_is_unset && this_param_is_read_width_b && b_side_reads_half_the_word) {
+             write_bit("READ_WIDTH_B_18");

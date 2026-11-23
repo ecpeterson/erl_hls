@@ -1,0 +1,9 @@
+# RAM-safe CI code generator
+
+The shared pipeline requires XLS's fixed-latency RAM response reservation and accepted-request gating. The upstream release in CI lacks [XLS #4952](https://github.com/google/xls/pull/4952): the three-stage shared-outbox witness stalls with stock codegen and passes with the patched compiler. Do not serialize the loader or skip that witness to accommodate the bug.
+
+`manifest.json` pins the upstream release, patch revision, build inputs and private binary. CI retains the upstream converter, optimizer, interpreter and standard library, replacing only `codegen_main`. `install.py XLS_ROOT` verifies both the installed upstream binary and the downloaded replacement; unknown local builds are refused. The pinned build must be a published prerelease within this private repository: GitHub hides draft releases and their assets from read-only CI tokens. GitHub CLI authentication needs repository read access. `--asset FILE.gz` permits offline installation.
+
+To rebuild on Linux x86-64, install standard C/C++ build tools, Python, patch, tar and Icarus, then run `python3 tools/xls_ram_codegen/build.py WORK_DIRECTORY`. Four compilation jobs and an 18 GB Bazel memory budget are defaults. Source, dependencies and intermediate outputs remain in the work directory/Bazel cache; the output is the compressed binary, build manifest and upstream license. The recipe runs the patch's focused C++ regressions. Rebuilding need not produce the identical binary; publish a new verified digest if it differs. CI downloads the retained build instead of recompiling LLVM on every PR.
+
+Remove this overlay when a pinned upstream release includes the fix and passes the same stalled/reset regressions. The timing campaign's native compact-FIFO/calibrated code generator is a separate recorded build; this CI overlay adds only the RAM fix.

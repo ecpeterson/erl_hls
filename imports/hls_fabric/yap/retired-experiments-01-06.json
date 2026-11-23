@@ -1,0 +1,82 @@
+{
+  "source_repository": "hls_fabric",
+  "source_commit": "548b75eeb07ca9fa55289c6b78210ccb473e66ca",
+  "directories": [
+    {
+      "path": "experiments/01-fmac",
+      "tracked_files": 8,
+      "git_tree": "6f691d99701ac3aea50b59597ea99b00c6bd4403"
+    },
+    {
+      "path": "experiments/02-zynqberrydemo",
+      "tracked_files": 367,
+      "git_tree": "d48de591fee43bde19ca5ed46edba9b6da93c266"
+    },
+    {
+      "path": "experiments/03-async",
+      "tracked_files": 8,
+      "git_tree": "502fed51a207d3041db361c352ea4e875b8e6d39"
+    },
+    {
+      "path": "experiments/04-erlang",
+      "tracked_files": 2,
+      "git_tree": "83d1b0f888199271faa7aee529905d55dda55384"
+    },
+    {
+      "path": "experiments/05-xls",
+      "tracked_files": 14,
+      "git_tree": "0278ca69539988f617f52ebeecab93bc9f1a6240"
+    },
+    {
+      "path": "experiments/06-parse",
+      "tracked_files": 12,
+      "git_tree": "81c7edddeb5796fc0d4d3598c7347a6f156e3ed4"
+    }
+  ],
+  "promoted": [
+    {
+      "source": "experiments/05-xls/one-hot-selection/selection.x",
+      "source_sha256": "f8b8fc41cc4a0def059a3cf681cd393e71332d32a1c87243490ee99b0f643e0a",
+      "destination_repository": "erl_hls",
+      "destination": "test_data/xls_selection.x"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/rows.x",
+      "source_sha256": "187d4ee575a4adfc98f1ead0ac996d2b1a915ca84be576a576a1efa2b868ed6f",
+      "destination_repository": "erl_hls",
+      "destination": "test_data/xls_state_updates.x"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/rows_tb.sv",
+      "source_sha256": "7fa4efbc5f28f05d12f525b7b3bd6035d1579c2b4d9ea06dd7c577f589280719",
+      "destination_repository": "erl_hls",
+      "destination": "test/rtl/xls_state_updates_tb.sv"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/ir_census.py",
+      "source_sha256": "6fc96ba808a60be72ca87122758045aa16e06a1ce49f58ae1170c19e30b56dbd",
+      "destination_repository": "erl_hls",
+      "destination": "tools/erl_hls_tools/xls_ir_census.py"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/test_ir_census.py",
+      "source_sha256": "370ca55a12828558fcfa24badf5d526bd36fca767f96c3629a2287de37f97ed2",
+      "destination_repository": "erl_hls",
+      "destination": "tools/test_xls_ir_census.py"
+    }
+  ],
+  "retired_optimizer_inputs": [
+    {
+      "source": "experiments/05-xls/state-projection/next-value-no-split.txtpb",
+      "source_sha256": "93310fd86079f9da0e5dfe4c0e0634933b1ef2d7821081d4321a30b49ba7c85d"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/array-flattening.patch",
+      "source_sha256": "07b3e1dbf20d344b8e317d46905d17b38f5184aad2f2f0caa0b0d997b1eba47a"
+    },
+    {
+      "source": "experiments/05-xls/state-projection/row-local-epoch.patch",
+      "source_sha256": "b285606550af9c0fd2bd09b31b765e2423e91daa191dc8d8154a4ffbfec553ac"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+--- a/xilinx/arch_place.cc
++++ b/xilinx/arch_place.cc
+@@ -1097,17 +1097,12 @@
+         if (tt != id_CLBLM_L && tt != id_CLBLM_R)
+             return false;
+     }
+-    // A LUT that uses any 6LUT-only physical pin -- the A6 input or the O6
+-    // output -- cannot sit on a 5LUT bel, which has neither (a 5LUT bel is
+-    // A1..A5 in, O5 out).  The tile-level isBelLocationValid() also rejects the
+-    // A6 case, but only post-hoc; the placer uses THIS per-candidate gate to
+-    // choose bels, and legalisation can slip such a LUT onto a 5LUT bel that
+-    // the cached tile check then misses -- surfacing much later as an
+-    // unroutable "No wire found for port A6/O6".  A 5LUT bel is identified by
+-    // the absence of an A6 pin.  The cell needs a 6LUT bel if it draws 6
+-    // inputs, drives both outputs, or has a connected A6/O6 physical port
+-    // (the latter covers a LUT whose output was mapped to O6 while at a 6LUT
+-    // bel and then relocated).
++    // A 5LUT bel has no sixth input or second output. On XC7, however,
++    // a single output named O6 is provisional: pack_luts uses that name even
++    // for LUT1..LUT5, and fixupPlacement() renames it to O5 after placement.
++    // Match the XC7 tile checks here; rejecting the provisional output name
++    // needlessly moves legal 5LUT occupants into 6LUT bels during repair.
++    // Preserve the existing non-XC7 output-pin restriction.
+     // (Only gates USER cells: an imported BEL-pinned cell is fixed at a
+     // Vivado-proven bel -- e.g. a $trt routethru LUT1 deliberately placed at a
+     // free 5LUT -- so it is trusted, not re-validated by this heuristic.)
+@@ -1142,7 +1137,7 @@
+                 log_info("   port %s type=%d net=%d\n", p.first.c_str(this), int(p.second.type),
+                          int(p.second.net != nullptr));
+         }
+-        if (in_used == 6 || cell->lutInfo.output_count == 2 || drives_o6 ||
++        if (in_used == 6 || cell->lutInfo.output_count == 2 || (!xc7 && drives_o6) ||
+             get_net_or_empty(cell, id_A6) != nullptr)
+             return false;
+     }

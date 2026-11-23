@@ -1,0 +1,90 @@
+// Receive one checked contribution and one ordinary command per activation.
+// Startup frames precede ordinary input; early contributions may accumulate.
+pub proc CollectionService<PRODUCER_COUNT: u32, STARTUP_COUNT: u32,
+    STARTUP_BITS: u32 = {(std::clog2((STARTUP_COUNT as u64) + u64:1) as u32) + (STARTUP_COUNT == u32:0) as u32}> {
+  req_in: chan<axis::Frame>[PRODUCER_COUNT] in;
+  startup_in: chan<axis::Frame> in;
+  egress_out: chan<Egress> out;
+@@DEBUG_FIELD@@
+  // Each producer owns one bounded, independently stalled input slot.
+  config(req_in: chan<axis::Frame>[PRODUCER_COUNT] in,
+      startup_in: chan<axis::Frame> in, egress_out: chan<Egress> out@@DEBUG_PARAMETER@@) {
+    (req_in, startup_in, egress_out@@DEBUG_VALUE@@)
+  }
+  // Reset discards all input slots and reduction progress together.
+  init { DirectCollectionState<PRODUCER_COUNT, STARTUP_BITS> {
+    machine: initial_machine(), ..zero!<DirectCollectionState<PRODUCER_COUNT, STARTUP_BITS>>() } }
+  // Grant establishes fault priority and completion identity; execution uses
+  // only that registered decision. The independent collector drains/refills its
+  // retained contribution each activation and applies each control command once.
+  // Completion/entry preparation may refill the same descriptor at commit; each
+  // callback still reads a registered descriptor and the committed machine.
+  // Publication drains its preceding retained command; stalls hold all ownership.
+  next(state: DirectCollectionState<PRODUCER_COUNT, STARTUP_BITS>) {
+    let machine = direct_collection_machine(state.machine, state.collection);
+    let granting = !state.command_valid;
+@@DEBUG_SAMPLE@@
+    let flags = unroll_for! (producer, masks):
+        (u32, (bool[PRODUCER_COUNT], bool[PRODUCER_COUNT])) in u32:0..PRODUCER_COUNT {
+      let reserved = collection_reserved(state.pending[producer]);
+      (update(masks.0, producer, state.valid[producer] && !reserved),
+       update(masks.1, producer, state.valid[producer] && reserved &&
+         collection_accepts(state.collection, state.pending[producer])))
+    }((zero!<bool[PRODUCER_COUNT]>(), zero!<bool[PRODUCER_COUNT]>()));
+    let ordinary = arbitration::select(flags.0, state.ordinary_cursor);
+    let collection = arbitration::select(flags.1, state.collection_cursor);
+    let failed = hls_failure::failed(machine.failure);
+    let completion = state.collection.opened &&
+      state.collection.reduction.status == ReductionStatus::COMPLETE;
+    let can_receive = !failed && !state.machine.enter_pending && !completion &&
+      state.machine.occupied < MAILBOX_CAPACITY;
+    let starting = (state.initialized as u32) < STARTUP_COUNT;
+    let (startup_tok, startup, startup_valid) = recv_if_non_blocking(
+      join(), startup_in, granting && starting && can_receive, zero!<axis::Frame>());
+    let received = granting && !starting && can_receive && state.ordinary_valid;
+    let selected = granting && !starting && (!state.ordinary_valid || received) && ordinary.0;
+    let collector = direct_collection_advance(state.collection, state.control,
+      state.contribution_frame, state.contribution_valid, failed);
+    let folded = collector.1;
+    let collected = !failed && collection.0 && (!state.contribution_valid || folded);
+    let stepped = if state.command_valid { direct_collection_execute(state) } else {
+      DirectCollectionStep { machine: state.machine, collection: state.collection,
+        control: state.control, ..zero!<DirectCollectionStep>() }
+    };
+    let next_grant = direct_collection_next_grant(state, stepped, collector.0,
+      startup_valid || received);
+    let freed = unroll_for! (producer, valid): (u32, bool[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+      update(valid, producer, valid[producer] &&
+        !(selected && ordinary.1 == producer) && !(collected && collection.1 == producer))
+    }(state.valid);
+    let captured = unroll_for! (producer, acc):
+        (u32, (token, axis::Frame[PRODUCER_COUNT], bool[PRODUCER_COUNT])) in u32:0..PRODUCER_COUNT {
+      let (tok, frame, valid) = recv_if_non_blocking(
+        acc.0, req_in[producer], !failed && !freed[producer], zero!<axis::Frame>());
+      (tok, update(acc.1, producer, if valid { frame } else { acc.1[producer] }),
+        update(acc.2, producer, freed[producer] || valid))
+    }((join(), state.pending, freed));
+    let _egress = send_if(join(startup_tok, captured.0), egress_out, state.publish_valid, state.publish);
+    DirectCollectionState<PRODUCER_COUNT, STARTUP_BITS> {
+      machine: stepped.machine, collection: collector.0,
+      control: if state.command_valid { stepped.control } else { zero!<CollectionControl>() },
+      pending: captured.1, valid: captured.2,
+      ordinary_cursor: if selected { arbitration::successor<PRODUCER_COUNT>(ordinary.1) } else { state.ordinary_cursor },
+      collection_cursor: if collected { arbitration::successor<PRODUCER_COUNT>(collection.1) } else { state.collection_cursor },
+      initialized: state.initialized + (startup_valid as uN[STARTUP_BITS]),
+      command_valid: granting || next_grant.valid,
+      command_frame: if next_grant.valid { zero!<axis::Frame>() }
+        else if starting { startup } else { state.ordinary_pending },
+      command_received: !next_grant.valid && (startup_valid || received),
+      contribution_frame: if collected { state.pending[collection.1] } else { state.contribution_frame },
+      contribution_valid: collected || (state.contribution_valid && !folded),
+      command_reduction: if next_grant.valid { next_grant.reduction } else { machine.reduction },
+      command_failure: if next_grant.valid { next_grant.failure } else { machine.failure },
+      command_failed: if next_grant.valid { next_grant.failed } else { failed },
+      publish: stepped.egress,
+      publish_valid: stepped.egress_valid,
+      ordinary_pending: if selected { state.pending[ordinary.1] } else { state.ordinary_pending },
+      ordinary_valid: (state.ordinary_valid && !received) || selected,
+    }
+  }
+}

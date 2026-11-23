@@ -1,0 +1,47 @@
+// Publish a contiguous prefix segment, ending before a destination repeats.
+// Aliased ports retain source order; ordinary tails use the existing serial router.
+proc @NAME@ {
+  batches: chan<@MODULE@::ScheduledEffects> in;
+  effects: chan<@MODULE@::Egress> out;
+  credits: chan<@MODULE@::ScheduledRequest> out;
+@FIELDS@
+  config(batches: chan<@MODULE@::ScheduledEffects> in,
+      effects: chan<@MODULE@::Egress> out, credits: chan<@MODULE@::ScheduledRequest> out,
+      @PARAMETERS@) { (batches, effects, credits, @NAMES@) }
+  // Retirement occupies its own activation, after every output has been accepted.
+  init { (false, zero!<@MODULE@::ScheduledEffects>(), u8:0, false) }
+  next(state: (u1, @MODULE@::ScheduledEffects, u8, u1)) {
+    let (active, saved, index, retiring) = state;
+    let (tok, incoming) = recv_if(join(), batches, !active, saved);
+    let batch = saved;
+    let (proved, count, prefix_only) = @MODULE@::scheduled_reduction_prefix(batch);
+    let parallel = proved && count == u8:@COUNT@;
+    let prefix = parallel && index < u8:@COUNT@;
+    let (effect, emit, serial_last) = @MODULE@::scheduled_effect(batch, index);
+@SCAN@
+    let limit = u8:@COUNT@;
+@LIMIT@
+    let ordinary = send_if(tok, effects, active && !retiring && !prefix && emit, effect);
+@SEND@
+    let last = if prefix { prefix_only && limit == u8:@COUNT@ } else { serial_last };
+    let _credited = send_if(tok, credits, retiring,
+      @MODULE@::ScheduledRequest { slot: u32:@SLOT@, credit: true,
+        ..zero!<@MODULE@::ScheduledRequest>() });
+    if !active { (true, incoming, u8:0, false) }
+    else { (!retiring, batch, if retiring || last { u8:0 } else if prefix { limit } else { index + u8:1 }, !retiring && last) }
+  }
+}
+
+// Preserve the complete effect at the observable publication boundary, then
+// discard its already-routed port. Codegen schedules this stateless adapter in one stage.
+proc @NAME@_ReductionFrame {
+  fragment: chan<@MODULE@::Egress> in;
+  frame: chan<axis::Frame> out;
+  config(fragment: chan<@MODULE@::Egress> in, frame: chan<axis::Frame> out) { (fragment, frame) }
+  init { () }
+  next(state: ()) {
+    let (tok, effect) = recv(join(), fragment);
+    let _sent = send(tok, frame, effect.frame);
+    state
+  }
+}

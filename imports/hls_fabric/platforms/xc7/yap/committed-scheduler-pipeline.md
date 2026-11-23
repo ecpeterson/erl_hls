@@ -1,0 +1,55 @@
+# Committed scheduler metadata experiment
+
+Implement the first two boundaries of [the pipeline plan](scheduler-pipeline-plan.md), measuring the metadata cut before separating dispatch/load. Baseline is merged private `14b54d4` with public `573f1f9`. All changes stay private. Keep the exact arithmetic, mailbox/outbox capacity, geometry, shared/per-actor egress modes and conservative RAM write fence.
+
+## First screen: arbitration from committed metadata
+
+Select work and an admission intent only from the current registered state. No current result, aggregate capture, or credit return participates in either arbitration. Apply the selected append to the metadata after retirement as a delta; do not overwrite a retired row with a stale reservation snapshot. Cancel an intent targeting a simultaneously failed actor without consuming its producer. Capacity freed by retirement is usable at the next metadata edge. Preserve round-robin advancement only when work/admission is accepted.
+
+The first screen leaves load in the metadata proc deliberately. This tests whether removing result-to-arbiter forwarding suffices before paying for a separate ticket/loader. XLS's shared stage-completion enables may still connect these regions. Require the complete D/CE/RAM frontier, not only named old paths, to decide whether this screen is a real cut.
+
+Preregistered structural target: reduce the affected roughly 24–25-level control regions to at most 16 primitive levels. This is a screening criterion, not a frequency prediction. Expect fresh metadata and aggregates to wait for a registered visibility edge. One/two extra exposed cycles in each of twelve diffusion rounds would raise the historical 79.25 cycles/step to 91.25/103.25, requiring >13.2%/>23.2% period improvement to break even; measure actual cycles rather than assuming those scenarios bound contention. No overall clock gain is forecast while other arithmetic/control paths remain near 15 ns.
+
+## Second screen: reserved dispatch ticket
+
+If the first screen leaves a long selection/load chain, introduce a retained ticket and independent loader. Reserve actor ownership before transfer, sample work kind once, retain aggregate ownership, and provision bounded result capacity. Keep at most one writable actor-state authority. Audit every new register as a launch and endpoint, test stalls and reset, then route a matched pair only when the structural evidence warrants the cost.
+
+## Validation
+
+Use the existing small 2×1 two-plane fixture for attribution, with the same compiler, calibration table and synthesis policy on both sides. Check normal/stalled results against BEAM and compare per-actor outputs under prolonged stalls/reset. Add directed same-row admission/retirement, full-queue recovery and held-ticket tests. Verify ordinary/aggregate-only actors and shared/per-actor egress. Report mapped resources, cycles per step, complete supported/uncovered control frontiers and any routed period separately. The application target is a 2×4-qubit patch at 1 µs/step; the small fixture alone cannot establish that target.
+
+## First measurements and next adjustment
+
+The full regenerated baseline reproduces 79.25 cycles/step; the metadata-only screen costs 111.25. Both match all 161 BEAM events with normal/stalled output readiness. The complete result-occupancy frontier loses all RAM read-address/read-enable endpoints; phi FF D/CE maxima improve 25–26 to 19–20 levels, missing the ≤16 target. Per-aggregate tracing records all 1,848 aggregate-to-read handoffs at 0 clocks before and 2 afterward. Full-core LUTs increase 33,637→35,069; FFs stay 22,442. This baseline is newly compiled and mapped with the same tools on both sides; it differs from the older module-substitution mapping.
+
+Next hypothesis, before implementation: remove the redundant look-ahead selection register and select directly from committed metadata. This does not restore current retirement/capture/credit forwarding. Expect aggregate-to-read latency to drop from 2 to 1 clock and recover approximately 16 cycles/step (111.25→95.25). The data-path selection may regain a level or two; retain the complete endpoint audit and do not accept a return of result-to-read dependencies. This experiment prices the visibility edge separately from the later reserved-ticket/loader boundary.
+
+The direct committed selector measured exactly 95.25 cycles/step (normal) and 96.375 (stalled), with 161 matching oracle events in each run. This recovers the predicted 16 cycles; the final loader comparison is against this intermediate as well as the original baseline.
+
+The loader experiment transfers an immutable ticket through the backend's registered producer output and a depth-one FIFO. It owns state/mailbox reads while the metadata owner retains writes. Ticket transfer waits for prior write acknowledgements. One in-flight reservation per actor owns one completion slot: the existing retained result plus `max(1, ACTOR_COUNT-1)` result FIFO entries can park all outstanding activations. This leaves the two-actor fixture's completion capacity unchanged; larger groups pay for extra result storage explicitly. A held result no longer globally prevents unrelated actors from being granted. State and mailbox capacities and effect-batch ordering are unchanged. Check the generated register at the ticket output and its independent enable; do not count the FIFO's empty bypass itself as forward isolation.
+
+The last known Vivado host did not respond. Current matched mappings contain registered DSP modes that the strict native full-core runner rejects. Keep native path coverage limits explicit; structural control depth and fixed-clock cycle counts cannot establish a routed step-frequency improvement.
+
+## Routed feedback and completion cut
+
+The user restarted Vivado. Matched 5 ns/Default routes measure baseline 13.388 ns × 79.25 = 1.061 µs, committed metadata 12.664 ns × 95.25 = 1.206 µs, and loader 12.603 ns × 111.25 = 1.402 µs. These are small-fixture results, not the 2×4 target. Read-control isolation works, but does not compensate for added feedback latency. Full paths now expose RAM-response→executor arithmetic and arithmetic→retirement→router→reduction storage.
+
+Next screen, registered before editing: use the existing completion slot on every result, eliminating its empty bypass without adding a wide storage copy. Expect roughly +16 cycles/step (111.25→127.25, contention may change this). The arithmetic-to-publication family should split at the completion register; aim for ≤9 ns in that affected family, but expect the approximately 12.6 ns RAM-to-arithmetic path to remain. No full-clock or step-time gain is predicted for this cut alone. Next test a registered loader response separately, with explicit storage accounting.
+
+The installed converter accepts `#![feature(channel_attributes)]` and emits the requested explicit FIFO configuration. Next screen: make `executor_request` depth 2, bypass false, push-ready registered, pop outputs unregistered. This replaces a depth-one bypass FIFO, adding one request of storage (403 bits for each source scheduler, 938 for each phi scheduler: 2,682 payload bits before constant pruning). Two slots preserve one-transfer/clock capability without a pop-ready→push-ready path. Expect +16 exposed cycles/step beyond the completion cut, and target ≤9.5 ns for the RAM→arithmetic family. Other control/commit paths can still limit the whole design. `flop_outputs=true` alone did **not** register this internal transfer; generated RTL and explicit channel metadata are the authority.
+
+Integration exposed a DSLX limitation: channel attributes apply module-wide, forbid the older parametric-depth syntax and accept only literal depths. The result FIFO needs `ACTOR_COUNT-1`. Keep that sizing and use an explicit one-request register stage before the existing depth-one FIFO instead. The same 2,682 payload-bit budget and latency/path hypothesis apply. This avoids silently rounding result capacity or adding compiler-command special cases. The generated stage must still demonstrate independent advancement under stalls and one-transfer/clock capability.
+
+Next screen: remove dispatch's selected-actor exclusion from admission. A selected live message and a free physical append slot are disjoint in the committed snapshot; retirement still merges its delta afterward, and full rows still wait. First check this invariant for arbitrary legal rows at depths 1/3/5. Expect no intrinsic cycle penalty (interleaving may differ), and shorten the approximately 21-level admission/write-address cone toward ≤16 levels; target ≤10 ns for the routed write-control family versus the loader's approximately 12 ns. No full-clock claim while executor/commit limits remain. This completes the intended independence of the two arbiters, rather than silently weakening fairness or reading newly written messages.
+
+The final independent-arbiter build also preserves a simultaneous captured aggregate when releasing its previous ticket. Normally the one-open-window protocol prevents this overlap; an invalid duplicate nevertheless carries a failure value that must not be silently dropped. The earlier registered-response screen omits this correctness fix. Consequently their physical delta is not attributed exclusively to arbiter independence.
+
+Add a 2×2, both-plane replay probe with four actors per scheduler to test latency hiding. Expect a smaller fractional cycle penalty than the two-actor probe's 80.8%; make no routed step-time prediction for this unseen placement. This is still a core attribution fixture, not the networked board application or qualification of its 1 µs target.
+
+## Decision after the matched routes
+
+The final two-actor period is 10.524 ns (−21.4%), but step time is 1.508 µs (+42.1%). The four-actor pair measures 16.321→10.786 ns and 120→171.5 cycles: 1.959→1.850 µs, a 5.6% improvement on one placement. This meets the request for quantitative signal while showing why added registers alone are not a sufficient throughput strategy. Keep the two-actor regression explicit. Four-actor FFs rise 27,195→38,295 because reservations must have real completion storage.
+
+The request cut reduces the whole RAM-launched path class 12.159→4.385 ns. Final metadata still reaches 19 D / 17 CE levels. The four-actor limit moves from result occupancy→CE to committed mailbox occupancy→write address. The small-core limit moves to request-FIFO occupancy→input selection→two DSPs. Continue with those ownership boundaries only after measuring the full tile; commit/publication remain in the metadata service. The older name-dependent selection-counter adapter is not qualified for the new generated layout; new phi handshakes and hardware debug queries are validated separately.
+
+The [result report](../../../docs/artifacts.md#historical-reports) (`experiments/07-openxc7/results/committed-pipeline-2026-09-27.md`) and indexed evidence retain every accepted route, finite test limits and failed prediction. No additional vendor calibration was needed in this round.

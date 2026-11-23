@@ -1,0 +1,12 @@
+{
+  "qemu": {
+    "file": "qemu-10.2.0.tar.xz",
+    "url": "https://download.qemu.org/qemu-10.2.0.tar.xz",
+    "sha256": "9e30ad1b8b9f7b4463001582d1ab297f39cfccea5d08540c0ca6d6672785883a"
+  },
+  "ninja": {
+    "file": "ninja-1.13.1.tar.gz",
+    "url": "https://github.com/ninja-build/ninja/archive/refs/tags/v1.13.1.tar.gz",
+    "sha256": "f0055ad0369bf2e372955ba55128d000cfcc21777057806015b45e4accbebf23"
+  }
+}

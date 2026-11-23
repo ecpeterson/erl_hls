@@ -1,0 +1,37 @@
+name: Install RTL tools
+description: Install required Ubuntu 24.04 amd64 packages with bounded downloads
+inputs:
+  packages:
+    description: Space-separated Ubuntu package names
+    default: iverilog yosys
+runs:
+  using: composite
+  steps:
+    - name: Install required packages from the Ubuntu archive
+      shell: bash
+      env:
+        RTL_PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -euo pipefail
+        source /etc/os-release
+        [[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 && "$(dpkg --print-architecture)" == amd64 ]]
+        read -r -a packages <<< "$RTL_PACKAGES"
+        [[ ${#packages[@]} -gt 0 ]]
+        for package in "${packages[@]}"; do
+          [[ "$package" =~ ^[a-z0-9][a-z0-9+.-]*$ ]] || { echo "Invalid package: $package" >&2; exit 2; }
+        done
+        # Scope sources to these commands; keep runner configuration and signature checks.
+        apt_options=(
+          -o "Dir::Etc::sourcelist=$GITHUB_ACTION_PATH/ubuntu.sources"
+          -o "Dir::Etc::sourceparts=-"
+          -o Acquire::Retries=2
+          -o Acquire::http::Timeout=15
+          -o Acquire::https::Timeout=15
+        )
+        # Bound network phases separately so a slow mirror cannot consume the test budget.
+        sudo timeout --kill-after=10s 60s apt-get "${apt_options[@]}" update --error-on=any
+        sudo timeout --kill-after=10s 120s apt-get "${apt_options[@]}" install \
+          --yes --no-install-recommends --download-only "${packages[@]}"
+        # Do not interrupt dpkg or allow another download during package installation.
+        sudo apt-get "${apt_options[@]}" install \
+          --yes --no-install-recommends --no-download "${packages[@]}"

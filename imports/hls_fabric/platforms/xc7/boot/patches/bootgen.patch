@@ -1,0 +1,8 @@
+--- a/cdo-alloc.c
++++ b/cdo-alloc.c
+@@ -21 +20,0 @@
+-#include <malloc.h>
+--- a/cdo-npi.c
++++ b/cdo-npi.c
+@@ -21 +20,0 @@
+-#include <malloc.h>

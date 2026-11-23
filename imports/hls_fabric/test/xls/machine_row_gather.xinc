@@ -1,0 +1,22 @@
+// Payload values live in the row only for ordinary gather storage; external storage retires them.
+#[test]
+fn physical_gather_row_abi() {
+  let data = Cell {epoch: u32:0x12345678, result: u8:0x93};
+  let progress = GatherProgress {status: GatherStatus::COMPLETE, site: GatherSite::COLLECTING,
+    key: u32:0x89abcdef, remaining: u8:2, expected: GatherMembers:3,
+    seen: GatherMembers:1, failure: u16:0x123d};
+  let progress_bits = u16:0x123d ++ u3:1 ++ u3:3 ++ u8:2 ++ u32:0x89abcdef ++ u8:0 ++ u2:2;
+  let gather = GatherState {progress, values: GatherValues:0x2468ac};
+  let machine = ActorState {phase: Phase::REPORTING, entered_from: Phase::COLLECTING,
+    data, gather, enter_pending: true, failure: u16:0xa55a};
+  let base = u16:0xa55a ++ u1:1 ++ bits_from_cell(data) ++
+    (Phase::COLLECTING as u8) ++ (Phase::REPORTING as u8);
+  let expected = if STORED_GATHER_VALUES {
+    (u24:0x2468ac ++ progress_bits ++ base) as MachineBits
+  } else { (progress_bits ++ base) as MachineBits };
+  assert_eq(bits_from_machine(machine), expected);
+  let restored = ActorState {gather: GatherState {
+    values: if STORED_GATHER_VALUES { GatherValues:0x2468ac } else { GatherValues:0 }, ..gather}, ..machine};
+  assert_eq(machine_from_bits(expected), restored);
+  assert_eq(bits_from_machine(restored), expected);
+}

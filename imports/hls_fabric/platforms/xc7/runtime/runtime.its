@@ -1,0 +1,32 @@
+/dts-v1/;
+
+/* Linux mounts the separate SD root partition; no expanded runtime lives in RAM. */
+/ {
+    description = "TE0715 ARM Linux/OTP SD-root candidate";
+    #address-cells = <1>;
+    images {
+        kernel {
+            description = "Trenz 2023.2 Linux 6.1.30";
+            data = /incbin/("zImage");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x00200000>;
+            entry = <0x00200000>;
+            hash { algo = "sha256"; };
+        };
+        fdt {
+            description = "TE0715 PS and register-probe PL";
+            data = /incbin/("system.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            hash { algo = "sha256"; };
+        };
+    };
+    configurations {
+        default = "runtime";
+        runtime { kernel = "kernel"; fdt = "fdt"; };
+    };
+};

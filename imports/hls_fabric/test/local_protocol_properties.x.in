@@ -1,0 +1,102 @@
+// Arbitrary finite-width receipt refinement. Eligibility is computed by the
+// implementation from ordinary source validators; no legal-message assumption.
+// Runtime ownership and temporal progress are separate obligations.
+pub fn protocol_receipt_equal(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = actor::local_protocol_at(raw, frame, received, slot);
+  let reference = actor::local_step_at(raw, frame, received, effects_reserved, slot);
+  let receipt = actor::LocalStepResult {
+    machine: fast.private_machine, dispatched: fast.dispatched, directive: fast.directive,
+    ..zero!<actor::LocalStepResult>()
+  };
+  !fast.handled || fast.deferred_completion || reference == receipt
+}
+
+// A final gathered receipt is private state with the original head still owned.
+// Full completion from that state must match the original atomic activation,
+// including fault, entry, effects, boundary and final mailbox directive.
+pub fn protocol_completion_equal(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = actor::local_protocol_at(raw, frame, received, slot);
+  let reference = actor::local_step_at(raw, frame, received, effects_reserved, slot);
+  let completion = actor::local_slow_step_at(fast.private_machine, bits[128]:0, false, effects_reserved, slot);
+  !fast.handled || !fast.deferred_completion || reference == completion
+}
+
+// Deliberately discard a receipt update. SAT must find a handled changing state.
+pub fn protocol_wrong_state(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = actor::local_protocol_at(raw, frame, received, slot);
+  let reference = actor::local_step_at(raw, frame, received, effects_reserved, slot);
+  let broken = actor::LocalStepResult {
+    machine: raw, dispatched: fast.dispatched, directive: fast.directive,
+    ..zero!<actor::LocalStepResult>()
+  };
+  !fast.handled || fast.deferred_completion || reference == broken
+}
+
+// Deliberately complete from the stale state, omitting the last indexed value.
+pub fn protocol_stale_completion(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let fast = actor::local_protocol_at(raw, frame, received, slot);
+  let reference = actor::local_step_at(raw, frame, received, effects_reserved, slot);
+  let broken = actor::local_step_at(raw, bits[128]:0, false, effects_reserved, slot);
+  !fast.handled || !fast.deferred_completion || reference == broken
+}
+
+// Actual caller domain: internal pending work suppresses incoming dispatch,
+// and the separate collector intercepts every handled receipt.
+pub fn protocol_slow_equal(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !actor::local_pending_at(raw, slot)) &&
+    !actor::local_protocol_at(raw, frame, received, slot).handled;
+  !admissible || actor::local_slow_step_at(raw, frame, received, effects_reserved, slot) ==
+    actor::local_step_at(raw, frame, received, effects_reserved, slot)
+}
+
+// Removing internal pending work must be detected by the same caller domain.
+pub fn protocol_drop_internal(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !actor::local_pending_at(raw, slot)) &&
+    !actor::local_protocol_at(raw, frame, received, slot).handled;
+  let broken = actor::LocalStepResult { machine: raw, ..zero!<actor::LocalStepResult>() };
+  !admissible || actor::local_step_at(raw, frame, received, effects_reserved, slot) == broken
+}
+
+// A blocked entry leaves the action machine unchanged and publishes no effects.
+// Retrying that same action after reserving storage equals ordinary execution;
+// no new mailbox receipt or callback may intervene between the two evaluations.
+pub fn protocol_publication_retry(raw: actor::MachineBits, frame: bits[128],
+    received: bool, slot: u32) -> bool {
+  let admissible = (!received || !actor::local_pending_at(raw, slot)) &&
+    !actor::local_protocol_at(raw, frame, received, slot).handled;
+  let action = actor::local_action_at(raw, frame, received, slot);
+  let blocked = actor::local_enter_at(action, false, slot);
+  let retained = actor::LocalAction { private_machine: blocked.machine, ..action };
+  !admissible || !blocked.egress_blocked ||
+    (blocked.machine == action.private_machine && !blocked.effects_valid &&
+    actor::local_enter_at(retained, true, slot) == actor::local_step_at(raw, frame, received, true, slot))
+}
+
+// Losing the private action machine must be detected even with correct metadata.
+pub fn protocol_stale_action(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !actor::local_pending_at(raw, slot)) &&
+    !actor::local_protocol_at(raw, frame, received, slot).handled;
+  let action = actor::local_action_at(raw, frame, received, slot);
+  let broken = actor::local_enter_at(actor::LocalAction { private_machine: raw, ..action }, effects_reserved, slot);
+  !admissible || broken == actor::local_step_at(raw, frame, received, effects_reserved, slot)
+}
+
+// Saving machine bits alone loses the action's mailbox and phase disposition.
+pub fn protocol_drop_action_disposition(raw: actor::MachineBits, frame: bits[128],
+    received: bool, effects_reserved: bool, slot: u32) -> bool {
+  let admissible = (!received || !actor::local_pending_at(raw, slot)) &&
+    !actor::local_protocol_at(raw, frame, received, slot).handled;
+  let action = actor::local_action_at(raw, frame, received, slot);
+  let lost_disposition = actor::LocalAction {
+    dispatched: false, directive: u2:0, phase_boundary: false, ..action
+  };
+  let broken = actor::local_enter_at(lost_disposition, effects_reserved, slot);
+  !admissible || broken == actor::local_step_at(raw, frame, received, effects_reserved, slot)
+}

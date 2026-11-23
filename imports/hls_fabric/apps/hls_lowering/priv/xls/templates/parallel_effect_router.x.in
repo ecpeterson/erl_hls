@@ -1,0 +1,91 @@
+// A batch retains the ordinary effect-window reservation. Consecutive effects
+// share a clock only when their actual recipient sets are disjoint.
+struct RouterHead {
+  base: axis::Frame,
+  deltas: ACTOR::PublicationPatch[WIDTH],
+  targets: bits[LANES][WIDTH],
+  advance: u8,
+  last: u1,
+}
+
+// Decode destinations while capturing the next owned window. A collision ends
+// the prefix, including aliases between different logical output ports.
+fn router_head(scheduled: ACTOR::ScheduledEffects, index: u8) -> RouterHead {
+  let base = ACTOR::scheduled_effect(scheduled, index).0.frame;
+  let base_patch = ACTOR::publication_patch(scheduled, index);
+  let (deltas, targets, _, advance, last, _) = for (offset, acc):
+      (u32, (ACTOR::PublicationPatch[WIDTH], bits[LANES][WIDTH], bits[LANES], u8, u1, u1))
+      in u32:0..WIDTH {
+    let (deltas, targets, used, advance, last, stopped) = acc;
+    let info = ACTOR::scheduled_effect(scheduled, index + offset as u8);
+    let patch = ACTOR::publication_patch(scheduled, index + offset as u8);
+    let compatible = offset == u32:0 || (base_patch.1 && patch.1);
+    let mask = if info.1 { router_targets(scheduled.slot, info.0) } else { bits[LANES]:0 };
+    let take = compatible && !stopped && (mask & used) == bits[LANES]:0;
+    (update(deltas, offset, patch.0 ^ base_patch.0),
+     update(targets, offset, if take { mask } else { bits[LANES]:0 }),
+     used | if take { mask } else { bits[LANES]:0 },
+     advance + take as u8, last || (take && info.2), stopped || !take || info.2)
+  }((zero!<ACTOR::PublicationPatch[WIDTH]>(), zero!<bits[LANES][WIDTH]>(), bits[LANES]:0,
+     u8:0, false, false));
+  RouterHead { base, deltas, targets, advance, last }
+}
+
+// Apply the narrow constant differences established by the source storage plan.
+// Unsupported batches retain their original serial frame decoding.
+fn router_frame(head: RouterHead, lane: u32) -> (u1, axis::Frame) {
+  let (valid, delta) = for (i, acc): (u32, (u1, ACTOR::PublicationPatch)) in u32:0..WIDTH {
+    let select = ((head.targets[i] >> lane) as u1) != u1:0;
+    (acc.0 || select, acc.1 | if select { head.deltas[i] } else { ACTOR::PublicationPatch:0 })
+  }((false, ACTOR::PublicationPatch:0));
+  (valid, ACTOR::publication_frame(head.base, delta))
+}
+
+// The active batch and one bounded lookahead obey the common credit protocol.
+struct RouterState {
+  control: effect_window::ClientState,
+  scheduled: ACTOR::ScheduledEffects,
+  index: u8,
+  head: RouterHead,
+  credit: bool,
+  release: bool,
+  request: bool,
+}
+
+// Publish consecutive disjoint effects under the common bounded credit protocol.
+proc Router {
+@@MEMBERS@@
+  // Bind the same lanes and reservation channels as the serial router.
+  config(@@ARGUMENTS@@) { (@@NAMES@@) }
+  // No batch or reservation is owned after reset.
+  init { zero!<RouterState>() }
+  // Advance the whole disjoint prefix only after every selected send completes.
+  next(state: RouterState) {
+    let can_receive = effect_window::can_receive(state.control, state.head.last);
+    let (receive_tok, incoming, incoming_valid) = recv_if_non_blocking(
+      join(), scheduled_in, can_receive, zero!<ACTOR::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) = recv_if_non_blocking(
+      receive_tok, window_grant_in,
+      state.control.window_requested && !state.control.window_granted, u1:0);
+    let batch_valid = state.control.active;
+    let scheduled = state.scheduled;
+    let index = state.index;
+    let incoming_head = router_head(incoming, u8:0);
+    let head = state.head;
+@@SENDS@@
+    let last = batch_valid && head.last;
+    let transition = effect_window::advance_client(state.control, incoming_valid, grant_valid, last);
+    let credit_tok = send_if(routed_tok, credit_out, state.credit,
+      ACTOR::ScheduledRequest { credit: u1:1, ..zero!<ACTOR::ScheduledRequest>() });
+    let release_tok = send_if(credit_tok, window_release_out, state.release, u1:1);
+    let _request_tok = send_if(release_tok, window_request_out, state.request, u1:1);
+    let updated = RouterState { control: transition.state, credit: transition.forward_credit,
+      release: transition.release, request: transition.request, ..zero!<RouterState>() };
+    if transition.carry_lookahead || (!state.control.active && incoming_valid) {
+      RouterState { scheduled: incoming, head: incoming_head, ..updated }
+    } else if transition.batch_continues {
+      let next_index = index + head.advance;
+      RouterState { scheduled, index: next_index, head: router_head(scheduled, next_index), ..updated }
+    } else { updated }
+  }
+}

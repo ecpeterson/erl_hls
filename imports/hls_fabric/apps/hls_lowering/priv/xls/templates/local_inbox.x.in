@@ -1,0 +1,147 @@
+// One actor's exact sender-local capture identities, flattened only for selection.
+type InboxMask = bits[INBOX_SLOTS];
+// Only the cursor needs a binary identity; reservations remain one-hot masks.
+type InboxCursor = bits[INBOX_CURSOR_BITS];
+
+// No payload copy: the committed machine/action own all data after dispatch.
+pub struct LocalInboxState {
+  owner: LocalOwnerState,
+  started: bool,
+  held: InboxMask,
+  postponed: InboxMask,
+  released: InboxMask,
+  cursor: InboxCursor,
+  startup_consumed: bits[STARTUP_BITS],
+}
+
+// Transport consumes take now and release on the following edge. accepted reserves
+// a still-pending head; it must never be wired to take. owner carries ordinary effects.
+pub struct LocalInboxOutputs {
+  eligible: InboxMask,
+  take: InboxMask,
+  release: InboxMask,
+  accepted: InboxMask,
+  owner: LocalOwnerOutputs,
+}
+
+// Next state and all pre-edge observations share one clock transition.
+pub struct LocalInboxTick { state: LocalInboxState, output: LocalInboxOutputs }
+
+// Source initialization runs on the first active clock, with handshakes suppressed.
+pub fn local_inbox_initial() -> LocalInboxState {
+  LocalInboxState { owner: local_owner_initial(), started: true, ..zero!<LocalInboxState>() }
+}
+
+// Only old registered state affects transport selection: no combinational loop
+// from its selected head back to eligibility. A held selection remains eligible.
+pub fn local_inbox_eligible(s: LocalInboxState, reset: bool) -> InboxMask {
+  let observation = local_observe(s.owner.machine, u32:0);
+  if reset || !s.started { InboxMask:0 }
+  else if s.held != InboxMask:0 { s.held }
+  else if s.owner.action_valid || observation.pending || observation.failure != u16:0 { InboxMask:0 }
+  else { !s.postponed }
+}
+
+// True only after every declared startup record committed consume in this reset
+// incarnation. It says nothing about internal readiness messages or quiescence.
+pub fn local_inbox_startup_done(s: LocalInboxState, reset: bool) -> bool {
+  !reset && s.started && (s.startup_consumed & STARTUP_VALID) == STARTUP_VALID
+}
+
+// Recovery readiness requires successful source entry and no pending private work.
+// It is intentionally stronger than startup_done; it assumes silent setup.
+pub fn local_inbox_initialized(s: LocalInboxState, reset: bool) -> bool {
+  let observation = local_observe(s.owner.machine, u32:0);
+  local_inbox_startup_done(s, reset) && !observation.pending &&
+    observation.failure == u16:0 && !s.owner.action_valid &&
+    s.owner.outbox.index == s.owner.outbox.count
+}
+
+// Pair-local age filtering precedes cross-sender choice. Keep the head pending
+// through entry stalls; consume only at commit, then release after last read.
+pub fn local_inbox_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxTick {
+  if io.reset || !s.started {
+    LocalInboxTick { state: local_inbox_initial(), output: zero!<LocalInboxOutputs>() }
+  } else {
+    let eligible = local_inbox_eligible(s, io.reset);
+    let startup = startup_control::head(s.startup_consumed,
+      (eligible >> CAPTURE_SLOTS) as bits[STARTUP_BITS], STARTUP_VALID);
+    let selected = ((inbox_selected(io) & inbox_available(io)) |
+      ((startup as InboxMask) << CAPTURE_SLOTS)) & eligible;
+    let pick = inbox_control::select(selected, s.cursor as u32);
+    let offered = s.held == InboxMask:0 && pick.mask != InboxMask:0;
+    let step = local_owner_tick(s.owner, LocalOwnerInputs {
+      received: offered, frame: inbox_frame(io, pick.index), output_ready: io.output_ready,
+      @@COMPLETION_INPUTS@@
+      ..zero!<LocalOwnerInputs>() });
+    let accepted = offered && step.output.input_ready;
+    let reservation = if s.held != InboxMask:0 { s.held } else { pick.mask };
+    let dispatched = step.output.head_done && step.output.dispatched;
+    let take = if dispatched && step.output.directive == u2:0 { reservation } else { InboxMask:0 };
+    let postpone = if dispatched && step.output.directive == u2:1 { reservation } else { InboxMask:0 };
+    LocalInboxTick {
+      state: LocalInboxState {
+        owner: step.state,
+        held: if step.output.head_done { InboxMask:0 } else if accepted { reservation } else { s.held },
+        // Source phase boundaries wake all postponed heads, including this one.
+        postponed: if step.output.phase_boundary { InboxMask:0 } else { s.postponed | postpone },
+        released: take,
+        startup_consumed: s.startup_consumed | ((take >> CAPTURE_SLOTS) as bits[STARTUP_BITS]),
+        cursor: if accepted { (if pick.index + u32:1 == INBOX_SLOTS { u32:0 }
+                              else { pick.index + u32:1 }) as InboxCursor } else { s.cursor },
+        ..s
+      },
+      output: LocalInboxOutputs { eligible, take, release: s.released,
+        accepted: if accepted { reservation } else { InboxMask:0 }, owner: step.output },
+    }
+  }
+}
+
+// Complete evaluated entry snapshot. Use only with local_inbox_batch_tick from
+// reset: mixing serial-effect and batch drains would replay a partial batch.
+pub struct LocalInboxBatch {
+  valid: bool,
+  layout: u8,
+  payload: bits[ENTRY_EFFECT_PAYLOAD_BITS],
+}
+
+// Publisher offers depend exclusively on old registered owner state, never ready.
+pub fn local_inbox_batch(s: LocalInboxState, reset: bool) -> LocalInboxBatch {
+  LocalInboxBatch {
+    valid: !reset && s.started && s.owner.outbox.index == u8:0 && s.owner.outbox.count != u8:0,
+    layout: s.owner.outbox.layout, payload: s.owner.outbox.payload,
+  }
+}
+
+// Reuse the ordinary receiver transition, disabling its serial-effect drain.
+// output_ready instead accepts the entire old batch. Old occupancy still blocks
+// a new entry on this edge; neither action nor selected-head ownership changes.
+pub fn local_inbox_batch_tick(s: LocalInboxState, io: LocalInboxInputs) -> LocalInboxTick {
+  let step = local_inbox_tick(s, LocalInboxInputs { output_ready: false, ..io });
+  let accepted = local_inbox_batch(s, io.reset).valid && io.output_ready;
+  let outbox = LocalOutbox { index: s.owner.outbox.count, ..s.owner.outbox };
+  LocalInboxTick {
+    state: if accepted { LocalInboxState {
+      owner: LocalOwnerState { outbox, ..step.state.owner }, ..step.state
+    } } else { step.state }, ..step
+  }
+}
+
+// Sampled clock channels must always be enabled, exactly as for local_owner_clock.
+pub proc local_inbox_clock {
+  commands: chan<LocalInboxInputs> in;
+  observations: chan<LocalInboxOutputs> out;
+  // Transport link wires are clock samples, not blocking XLS streams.
+  config(commands: chan<LocalInboxInputs> in, observations: chan<LocalInboxOutputs> out) {
+    (commands, observations)
+  }
+  // Provider-backed source initialization is performed by the masked first tick.
+  init { zero!<LocalInboxState>() }
+  // Register selection and source state together; output_ready stalls only publication.
+  next(state: LocalInboxState) {
+    let (tok, input) = recv(join(), commands);
+    let result = local_inbox_tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

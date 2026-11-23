@@ -1,0 +1,18 @@
+// A whole source-initialized network advances once per sampled hardware clock.
+pub proc network_clock {
+  commands: chan<Inputs> in;
+  observations: chan<Outputs> out;
+  // Always enable XLS channels; external backpressure is ordinary input data.
+  config(commands: chan<Inputs> in, observations: chan<Outputs> out) {
+    (commands, observations)
+  }
+  // Each receiver evaluates source init on its first masked clock.
+  init { zero!<State>() }
+  // One stage without IO flops; all component state uses the same reset epoch.
+  next(state: State) {
+    let (tok, input) = recv(join(), commands);
+    let result = tick(state, input);
+    let _sent = send(tok, observations, result.output);
+    result.state
+  }
+}

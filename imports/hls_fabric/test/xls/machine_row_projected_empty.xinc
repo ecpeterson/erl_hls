@@ -1,0 +1,12 @@
+// Zero-width source storage leaves phase and failure at their original boundaries.
+#[test]
+fn physical_empty_projected_row_abi() {
+  for (slot, _): (u32, ()) in u32:0..u32:2 {
+    let machine = ActorState {phase: Phase::READY, entered_from: Phase::BOOT,
+      data: zero!<Cell>(), enter_pending: true, failure: u16:0xa55a};
+    let expected = u16:0xa55a ++ u1:1 ++ (Phase::BOOT as u8) ++ (Phase::READY as u8);
+    assert_eq(bits_from_machine(machine), expected);
+    assert_eq(machine_from_bits<u32:0>(expected, slot), machine);
+    ()
+  }(())
+}

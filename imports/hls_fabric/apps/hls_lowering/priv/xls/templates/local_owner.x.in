@@ -1,0 +1,141 @@
+// One immutable batch; count/index preserve the source's ordered effect sequence.
+pub struct LocalOutbox {
+  payload: bits[ENTRY_EFFECT_PAYLOAD_BITS],
+  layout: u8,
+  count: u8,
+  index: u8,
+}
+
+// Raw committed state stays unchanged while an action waits for publication room.
+// selected owns an external mailbox head; no frame copy is needed after dispatch.
+pub struct LocalOwnerState {
+  machine: MachineBits,
+  action: LocalAction,
+  action_valid: bool,
+  selected: bool,
+  action_slot: u32,
+  outbox: LocalOutbox,
+}
+
+// slot identifies this actor's validated instance. received offers a selected head,
+// not a dequeue: after input_ready, reserve it until head_done or reset.
+pub struct LocalOwnerInputs {
+  reset: bool,
+  received: bool,
+  frame: bits[axis::FRAME_BITS],
+  slot: u32,
+  output_ready: bool,
+@@SHARED_INPUTS@@}
+
+// These are pre-edge observations/handshakes. head_done ends a reservation;
+// dispatched/directive apply only with it. A phase boundary also wakes postponed
+// heads after internal work. failure describes committed state before this edge.
+pub struct LocalOwnerOutputs {
+  input_ready: bool,
+  head_done: bool,
+  dispatched: bool,
+  directive: u2,
+  phase_boundary: bool,
+  output_valid: bool,
+  effect: LocalEffect,
+  failure: u16,
+}
+
+// Clock transition result; state is private to the owner, outputs face its caller.
+pub struct LocalOwnerTick {
+  state: LocalOwnerState,
+  output: LocalOwnerOutputs,
+}
+
+@@SHARED_FUNCTIONS@@
+// Source initialization is the reset authority, including pending entry/failure.
+pub fn local_owner_initial() -> LocalOwnerState {
+  LocalOwnerState { machine: local_initial(), ..zero!<LocalOwnerState>() }
+}
+
+// Advance one clock. Receipts can commit while an older batch drains. Other
+// actions register once, then retry only entry; no new head is accepted meanwhile.
+// A full outbox is not reused on its last-drain edge: reservation uses old state.
+pub fn local_owner_tick(s: LocalOwnerState, io: LocalOwnerInputs) -> LocalOwnerTick {
+  let observation = local_observe(s.machine, io.slot);
+  let out_valid = s.outbox.index < s.outbox.count;
+  let drained = LocalOutbox {
+    index: if out_valid && io.output_ready { s.outbox.index + u8:1 } else { s.outbox.index },
+    ..s.outbox
+  };
+  let ready = !s.action_valid && !observation.pending && observation.failure == u16:0;
+  let accepted = ready && io.received;
+  let base = LocalOwnerTick {
+    state: LocalOwnerState { outbox: drained, ..s },
+    output: LocalOwnerOutputs {
+      input_ready: ready, output_valid: out_valid, failure: observation.failure,
+      effect: if out_valid { local_effect(s.outbox.layout, s.outbox.payload, s.outbox.index) }
+              else { zero!<LocalEffect>() },
+      ..zero!<LocalOwnerOutputs>()
+    },
+  };
+  if io.reset {
+    LocalOwnerTick { state: local_owner_initial(), output: zero!<LocalOwnerOutputs>() }
+  } else if s.action_valid {
+    let step = local_enter_at(s.action, !out_valid, s.action_slot);
+    if step.egress_blocked { base } else {
+      LocalOwnerTick {
+        state: LocalOwnerState {
+          machine: step.machine, action_valid: false, selected: false,
+          outbox: if step.effects_valid {
+            LocalOutbox { payload: step.effect_payload, layout: step.effect_layout,
+              count: step.effect_count, index: u8:0 }
+          } else { drained }, ..s
+        },
+        output: LocalOwnerOutputs {
+          head_done: s.selected, dispatched: s.selected && step.dispatched,
+          directive: step.directive, phase_boundary: step.phase_boundary, ..base.output
+        },
+      }
+    }
+@@SHARED_COMPLETION@@  } else if accepted || observation.pending {
+    let receipt = local_protocol_at(s.machine, io.frame, accepted, io.slot);
+    if receipt.handled && !receipt.deferred_completion {
+      LocalOwnerTick {
+        state: LocalOwnerState { machine: receipt.private_machine, ..base.state },
+        output: LocalOwnerOutputs { head_done: true, dispatched: receipt.dispatched,
+          directive: receipt.directive, ..base.output },
+      }
+    } else {
+      let raw = if receipt.handled { receipt.private_machine } else { s.machine };
+      let action = local_action_selected_at(raw, io.frame, accepted && !receipt.handled, io.slot, @@LOCAL_COMPLETION@@);
+      LocalOwnerTick { state: LocalOwnerState { action, action_valid: true,
+        selected: accepted, action_slot: io.slot, ..base.state }, ..base }
+    }
+  } else { base }
+}
+
+// Startup evaluates the ordinary initializer in hardware, so provider functions
+// need not be DSLX constexpr. No handshake may expose the zero-filled reset state.
+struct LocalOwnerClockState {
+  started: bool,
+  owner: LocalOwnerState,
+}
+
+// Both channels sample every clock; output_ready is application backpressure.
+// Compile with one stage and no input/output flops. An enclosing adapter must
+// tie commands_vld and observations_rdy high, including during stalls/reset.
+pub proc local_owner_clock {
+  commands: chan<LocalOwnerInputs> in;
+  observations: chan<LocalOwnerOutputs> out;
+  // Bundle pins into a sampled clock interface, not an application queue.
+  config(commands: chan<LocalOwnerInputs> in, observations: chan<LocalOwnerOutputs> out) {
+    (commands, observations)
+  }
+  // The first active clock installs source init without accepting a mailbox head.
+  init { zero!<LocalOwnerClockState>() }
+  // Register owner state once per clock; source effects use the explicit handshake.
+  next(state: LocalOwnerClockState) {
+    let (tok, input) = recv(join(), commands);
+    let result = if state.started { local_owner_tick(state.owner, input) } else {
+      LocalOwnerTick { state: local_owner_initial(), output: zero!<LocalOwnerOutputs>() }
+    };
+    let _sent = send(tok, observations, result.output);
+    LocalOwnerClockState { started: true, owner: result.state }
+  }
+}

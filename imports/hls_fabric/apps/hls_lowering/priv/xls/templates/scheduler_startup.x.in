@@ -1,0 +1,21 @@
+// Send the group's prepared startup frames in order before routed input is admitted.
+proc @@PROC_NAME@@ {
+  request_out: chan<@@FIELD_MODULE@@::ScheduledRequest> out;
+
+  // Connect the scheduler's dedicated startup lane.
+  config(request_out: chan<@@CONFIG_MODULE@@::ScheduledRequest> out) { (request_out,) }
+
+  // The first unsent frame has index zero.
+  init { u32:0 }
+
+  // Advance only after the selected request is accepted; remain idle after the final frame.
+  next(index: u32) {
+    let request = match index {
+@@REQUEST_ARMS@@      _ => zero!<@@EMPTY_MODULE@@::ScheduledRequest>(),
+    };
+    let active = index < u32:@@REQUEST_COUNT@@;
+    let _done = send_if(join(), request_out, active, request);
+    if active { index + u32:1 } else { index }
+  }
+}
+

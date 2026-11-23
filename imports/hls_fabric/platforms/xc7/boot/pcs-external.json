@@ -1,0 +1,110 @@
+{
+  "profile": "pcs-external",
+  "part": "xc7z030sbg485-1",
+  "configuration": {
+    "uio": "erl-hls-pcs",
+    "program": "probe_pcs",
+    "source": "ethernet",
+    "loopback": "none",
+    "rx_polarity": 1,
+    "tx_polarity": 1
+  },
+  "link": {
+    "reference_clock_hz": 125000000,
+    "line_rate_bps": 1250000000,
+    "full_clock_hz": 125000000,
+    "half_clock_hz": 62500000,
+    "protocol": "1000BASE-X configuration ordered sets",
+    "hard_8b10b": false,
+    "hard_comma_alignment": true,
+    "sgmii": false
+  },
+  "route": {
+    "synthesis_and_route": "passed",
+    "seed": 2,
+    "backend_sha256": "d181915ddc9d7e10d962151d0216eec2dd656acd60274f6d5a107f126c15f32c",
+    "fasm_sha256": "1e433fa09edd0e8eb63c733a34de84b84e496449263e2bdeec28a9cd6bf0b6ab",
+    "netlist_sha256": "94bd8c59d6900abceab9f4c67c815eba604802a170727349c3f3c9e31d879439",
+    "fmax_partial_only_mhz": {
+      "clock": {"achieved": 115.97, "constraint": 25.0},
+      "rx_clock": {"achieved": 168.89, "constraint": 125.0},
+      "rx_half_clock": {"achieved": 236.69, "constraint": 62.5},
+      "tx_clock": {"achieved": 154.54, "constraint": 125.0},
+      "tx_half_clock": {"achieved": 586.17, "constraint": 62.5}
+    }
+  },
+  "assembly": {
+    "reference_profile": "ethernet-external",
+    "reference_bitstream_sha256": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6",
+    "fasm_sha256": "1e433fa09edd0e8eb63c733a34de84b84e496449263e2bdeec28a9cd6bf0b6ab",
+    "candidate_frames_sha256": "5f8cea42249afa6532baf66b8681696d64c5bdca111d8f1a2a8cfc0b4a5a3485",
+    "candidate_bits_sha256": "dca7f37f8a1d8052e3f1e0fef40018da21ca5688ec9bbccd1e71c5beebac02bf",
+    "enabled_features": 324,
+    "known_bit_mask": 1933,
+    "missing_enabled_features": [],
+    "extra_known_bits": [],
+    "recovered_non_ecc_bits": 102652,
+    "reproducible": true,
+    "bitstream_header": {
+      "design": "candidate.frames;Generator=xc7frames2bit",
+      "date": "2000/01/01",
+      "time": "00:00:00"
+    }
+  },
+  "source_sha256": {
+    "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+    "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e",
+    "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "gtx/te0715_gtx_channel.v": "540c26292e313c85c425e2031ae983471d4e018bc2953b6189a2b901d0d90997",
+    "ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
+    "ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
+    "ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+    "ethernet/pcs_probe_sample.v": "5ccd2ab9e0713a7e248e18f4dca56b3f626242968062a3bc32e6ca0ee6d9e5b1",
+    "ethernet/te0715_pcs_probe_top.v": "f2c5a350309b1acfa040caee94aaa8d857755102c2295f8a73ac26cffb486b2b",
+    "ethernet/generate_pcs_probe.py": "dd1f412668e81c3374267e5836e3a7ffe344f15a58988d3a91ab246516fd5cf9",
+    "ethernet/generate_gearbox.py": "bb4466f72a5ff724fb398a0cd4386e8ca674723d124c3437e39628f31eadee8a",
+    "ethernet/prepare_pcs_probe.py": "59c3bc0670f1680fdf3b73b5eae0d117882cb89e41e5533b2417e9bfdf90e499",
+    "ethernet/prepare.py": "af77fc81c91ac7c878b315219c6dbc63411bbc9f20a27a4c0a2881c0441add15",
+    "ethernet/te0715_ethernet.xdc": "b4b2661ee58d9db2a9842d8c8fba37af35a38fddb2557c2a1fb6610a0233ebd8"
+  },
+  "generated_sha256": {
+    "liteeth_pcs_probe.v": "a319e2cbf97c0f14d24c7250f961ab064c7fcaa3140f85224135acfcc5e8d5f5",
+    "liteeth_pcs_probe_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
+    "liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67"
+  },
+  "mmcm_power_correction": {
+    "base_fasm_sha256": "c3cee1e48b532ff467c19ea7dca6e57d5e92964bf740979c1538b3103cc68e0d",
+    "added_features": [
+      "CMT_TOP_L_LOWER_B_X195Y113.MMCME2_ADV.ZINV_PWRDWN",
+      "CMT_TOP_L_LOWER_B_X195Y165.MMCME2_ADV.ZINV_PWRDWN"
+    ],
+    "added_non_ecc_bits": [
+      "bit_0000271c_003_15",
+      "bit_0040271c_003_15"
+    ],
+    "evidence": "Both features are present at the same MMCM sites in the hardware-working Vivado external-Ethernet image; the failed native image omitted both and neither MMCM locked. The corrected image reached READY with both MMCM locks on hardware."
+  },
+  "autonegotiation_correction": {
+    "observed_deadlock": "One peer received 0x4020 while transmitting 0x0020; the other received 0x0020 while transmitting 0x4020, leaving link=0 with both decoder locks asserted.",
+    "changes": [
+      "Do not accept the all-zero break-link word as a link-partner ability.",
+      "Accept a stable ACK-bearing configuration as link-partner ability after a delayed peer starts."
+    ],
+    "simulation_witness": "Eight directed independent-clock late-peer starts reached link on both peers; the prior generated PCS fails the same regression.",
+    "hardware_witness": {
+      "date": "2026-10-10",
+      "boards": 2,
+      "late_peer_seconds": 1,
+      "last_config": "0x4020",
+      "lp_abi": "0x4020",
+      "link": 1,
+      "decoder_invalids": 0,
+      "generated_clock_locks": "1/1"
+    },
+    "hardware_qualified": true
+  },
+  "candidate_bitstream_sha256": "2394eff4f5c7a89aea35a6ebbe1bb1c6093dba4a6fed12b216a91f67128844ec",
+  "hardware_validated": false,
+  "timing_qualified": false,
+  "limits": "Native modeled paths pass their stated constraints, and two physical peers reached 1000BASE-X RUNNING with a one-second startup offset. Ethernet frames, sustained operation, BER, jitter and complete PS/GTX timing remain unqualified."
+}

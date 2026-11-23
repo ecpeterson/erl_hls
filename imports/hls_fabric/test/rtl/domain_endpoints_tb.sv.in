@@ -1,0 +1,55 @@
+`timescale 1ns/1ps
+// Finite public-pin comparison; each trace row advances one independently sampled clock.
+module domain_endpoints_tb;
+  localparam integer INPUT_BITS = @@INPUT_BITS@@;
+  localparam integer OUTPUT_BITS = @@OUTPUT_BITS@@;
+  localparam integer ROWS = @@ROWS@@;
+  @@WIRING@@
+
+  reg [INPUT_BITS-1:0] command;
+  reg [OUTPUT_BITS-1:0] expected, mask, actual;
+  integer trace_handle, scanned, row, role, delay_ns;
+  integer checked_steps = 0, tx_steps = 0, rx_steps = 0;
+  string trace_path, trailing;
+
+  // Compare old-state combinational observations before committing the selected local edge.
+  initial begin
+    if (!$value$plusargs("trace=%s", trace_path)) $fatal(1, "missing trace path");
+    trace_handle = $fopen(trace_path, "r");
+    if (!trace_handle) $fatal(1, "cannot open trace");
+    for (row = 0; row < ROWS; row = row + 1) begin
+      scanned = $fscanf(trace_handle, "%d %h %h %h %d", role, command, expected, mask, delay_ns);
+      if (scanned != 5) $fatal(1, "incomplete trace row=%0d fields=%0d", row, scanned);
+      if (delay_ns < 1 || delay_ns > 11) $fatal(1, "invalid edge delay row=%0d", row);
+      if (role == 0) tx_inputs = command;
+      else if (role == 1) rx_inputs = command;
+      else $fatal(1, "unknown endpoint role row=%0d", row);
+      #(delay_ns);
+      actual = role == 0 ? tx_outputs : rx_outputs;
+      if ((actual & mask) !== (expected & mask))
+        $fatal(1, "endpoint mismatch row=%0d role=%0d actual=%h expected=%h mask=%h",
+               row, role, actual, expected, mask);
+      if (mask != 0) checked_steps = checked_steps + 1;
+      if (role == 0) begin
+        tx_clk = 1; tx_steps = tx_steps + 1; #1; tx_clk = 0;
+      end else begin
+        rx_clk = 1; rx_steps = rx_steps + 1; #1; rx_clk = 0;
+      end
+      #1;
+    end
+    scanned = $fscanf(trace_handle, "%s", trailing);
+    if (scanned == 1) $fatal(1, "unexpected trailing trace rows");
+    $fclose(trace_handle);
+    if (checked_steps == 0 || tx_steps == 0 || rx_steps == 0)
+      $fatal(1, "empty endpoint witness");
+    $display("DOMAIN_ENDPOINTS_PASS steps=%0d checked_steps=%0d tx_steps=%0d rx_steps=%0d",
+             ROWS, checked_steps, tx_steps, rx_steps);
+    $finish;
+  end
+
+  // Trace length and every row delay are bounded independently of subprocess timeout.
+  initial begin
+    #@@TIMEOUT@@;
+    $fatal(1, "endpoint witness timeout");
+  end
+endmodule

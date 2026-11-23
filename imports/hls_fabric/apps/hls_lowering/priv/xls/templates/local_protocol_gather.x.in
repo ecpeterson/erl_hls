@@ -1,0 +1,34 @@
+// Indexed recognition precedes scalar dispatch exactly as in shared_execute.
+fn local_protocol_gather(machine: ActorState, frame: axis::Frame) -> LocalProtocolResult {
+  let applied = gather_apply(machine.gather,
+    gather_contribution(frame, machine.phase, machine.data));
+  if applied.outcome == GatherOutcome::NOT_CANDIDATE {
+    local_protocol_scalar(machine, frame)
+  } else if applied.outcome == GatherOutcome::COMPLETE {
+    let next = ActorState { gather: applied.state, ..machine };
+    LocalProtocolResult {
+      handled: true, deferred_completion: true, private_machine: bits_from_machine(next),
+      dispatched: false, directive: Directive::CONSUME as u2,
+    }
+  } else if applied.outcome == GatherOutcome::PENDING {
+    let next = ActorState { gather: applied.state, ..machine };
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::CONSUME as u2,
+    }
+  } else if applied.outcome == GatherOutcome::MISMATCH {
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(machine),
+      dispatched: true, directive: Directive::POSTPONE as u2,
+    }
+  } else {
+    let next = ActorState {
+      failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+      ..machine
+    };
+    LocalProtocolResult {
+      handled: true, deferred_completion: false, private_machine: bits_from_machine(next),
+      dispatched: true, directive: Directive::FAIL as u2,
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "upstream_release": "v0.0.0-10601-g9f360fc89",
+  "upstream_revision": "9f360fc89e88573e70869fe8603a79b3429c2804",
+  "upstream_codegen_sha256": "f9ddff8c71003182b067e86af2866f5354c8757c40533f7f72accfb5e570aa59",
+  "source_url": "https://github.com/google/xls/archive/9f360fc89.tar.gz",
+  "source_sha256": "bbe107c13ef75b672ac7007c645006bc9066883cb849fcc4053cfe554cb70fe8",
+  "patch_sha256": "5b7c7db4210f9762a9f4a7e1833a98c13f5f5dd5b5179810fd6ec2180d917dd4",
+  "patch_pr": "https://github.com/google/xls/pull/4952",
+  "patch_revision": "05a16983f3e9ffcbf4a59abf39e5029ff6817dd6",
+  "bazel_url": "https://github.com/bazelbuild/bazel/releases/download/8.7.0/bazel-8.7.0-linux-x86_64",
+  "bazel_sha256": "d7606e679b78067c811096fb3d6cf135225b528835ca396e3a4dddf957859544",
+  "asset_repository": "ecpeterson/hls_fabric",
+  "asset_tag": "xls-ram-9f360fc89-05a16983",
+  "asset_name": "codegen_main-linux-x86_64.gz",
+  "asset_sha256": "3ce01608163a5e551dd6b2ee260eeadf568200e6c06458e6464ffea5f0999ae9",
+  "codegen_sha256": "f1b4511aef28e39381de1b56cf8899bd4856df2855c2541f698f55fb028689d5"
+}

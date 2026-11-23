@@ -1,0 +1,148 @@
+// Finite framing witnesses through the real parser/channel tick functions.
+// Packet injection isolates parsing; the integration driver supplies actual word beats.
+import channel_management as management;
+import domain_channel as channel;
+import domain_stream as stream;
+import domain;
+import domain_codes;
+import domain_frames as framing;
+
+// One test transition matches the acyclic combinational wiring between separate generated units.
+struct Pair { management: management::State, channel: channel::State, output: management::Outputs }
+// The concrete fixture has one directed crossing; identities are deliberate nonzero constants.
+fn channel_inputs() -> channel::Inputs {
+  channel::Inputs { source_incarnation: u64:3, destination_incarnation: u64:4,
+    source_live: true, destination_live: true, ..zero!<channel::Inputs>() }
+}
+// Only metadata enters management; the channel's retained payload is never selected here.
+fn inputs(observed: channel::Outputs, reset_session: bool) -> management::Inputs {
+  management::Inputs {
+    channel_transport_reset: reset_session, channel_transport_session: u64:8,
+    observed_ch_@@LINK@@_current_source: u64:3, observed_ch_@@LINK@@_current_destination: u64:4,
+    observed_ch_@@LINK@@_generation: observed.generation,
+    observed_ch_@@LINK@@_source: observed.bound_source_incarnation,
+    observed_ch_@@LINK@@_destination: observed.bound_destination_incarnation,
+    observed_ch_@@LINK@@_packet_sequence: observed.packet_sequence,
+    observed_ch_@@LINK@@_status: observed.status, observed_ch_@@LINK@@_active: observed.active,
+    observed_ch_@@LINK@@_fault: observed.fault, ..zero!<management::Inputs>()
+  }
+}
+// Preview commands depend only on request and endpoint identity, then capture the actual channel result.
+fn clock(s: management::State, c: channel::State, reset_session: bool) -> Pair {
+  let before = channel::tick(c, channel_inputs());
+  let command = management::tick(s, inputs(before.output, reset_session)).output;
+  let committed = channel::tick(c, channel::Inputs {
+    bind_request: command.ch_@@LINK@@_bind_request, fence: command.ch_@@LINK@@_fence,
+    expected_generation: command.ch_@@LINK@@_expected_generation, ..channel_inputs() });
+  let framed = management::tick(s, inputs(committed.output, reset_session));
+  Pair { management: framed.state, channel: committed.state, output: framed.output }
+}
+// Canonical operation lengths include the session prefix and all complete identity words.
+fn packet(tag: u8, session: u64, request: u32, source: u64, destination: u64) -> framing::Packet<u32:448> {
+  let payload = session as bits[448] | (request as bits[448] << u32:64) |
+    (u32:@@LINK@@ as bits[448] << u32:96) |
+    (source as bits[448] << u32:192) | (destination as bits[448] << u32:256);
+  framing::Packet<u32:448> { route: u32:0,
+    header: framing::header(u32:0, tag, if tag == u8:0 { u8:4 } else if tag == u8:1 { u8:10 } else { u8:6 }), payload }
+}
+// Full-packet state is a labelled finite fixture, not a substitute for stream integration.
+fn queued(p: framing::Packet<u32:448>, session: u64) -> management::State {
+  management::State { attached: true, session,
+    rx: framing::Receive<u32:448> { packet: p, full: true, ..zero!<framing::Receive<u32:448>>() },
+    ..zero!<management::State>() }
+}
+// Extract a public response word without assuming the compact kernel status width.
+fn word(p: framing::Packet<u32:448>, index: u32) -> u32 { (p.payload >> (index * u32:32)) as u32 }
+
+// A mismatching requested pair is rejected before any channel binding can happen.
+#[test]
+fn exact_pair_required() {
+  let wrong = clock(queued(packet(u8:1, u64:7, u32:1, u64:2, u64:4), u64:7), zero!<channel::State>(), false);
+  assert_eq(wrong.output.ch_@@LINK@@_bind_request, false);
+  assert_eq(wrong.channel, zero!<channel::State>());
+  assert_eq(word(wrong.management.tx, u32:4), u32:@@STALE@@);
+  let accepted = clock(queued(packet(u8:1, u64:7, u32:1, u64:3, u64:4), u64:7), zero!<channel::State>(), false);
+  assert_eq(accepted.output.ch_@@LINK@@_bind_request, true);
+  assert_eq(word(accepted.management.tx, u32:4), u32:@@ACCEPTED@@);
+  assert_eq(word(accepted.management.tx, u32:5), u32:1);
+}
+
+// Old-session traffic drains silently; a malformed current-session length closes this parser alone.
+#[test]
+fn stale_session_and_wrong_length() {
+  let old = clock(queued(packet(u8:1, u64:6, u32:1, u64:3, u64:4), u64:7), zero!<channel::State>(), false);
+  assert_eq(old.management.rx.full, false);
+  assert_eq(old.management.tx_valid, false);
+  assert_eq(old.output.ch_@@LINK@@_bind_request, false);
+  assert_eq(old.management.fault, false);
+  let p = packet(u8:1, u64:7, u32:1, u64:3, u64:4);
+  let malformed = clock(queued(framing::Packet<u32:448> { header: framing::header(u32:0, u8:1, u8:9), ..p }, u64:7), zero!<channel::State>(), false);
+  assert_eq(malformed.management.fault, true);
+  assert_eq(malformed.output.ch_@@LINK@@_bind_request, false);
+  assert_eq(malformed.channel, zero!<channel::State>());
+}
+
+// Unknown link identity returns invalid rather than issuing a command to some default row.
+#[test]
+fn unknown_channel_rejected() {
+  let p = packet(u8:1, u64:7, u32:1, u64:3, u64:4);
+  let invalid = framing::Packet<u32:448> { payload: p.payload | (u32:0xffffffff as bits[448] << u32:96), ..p };
+  let result = clock(queued(invalid, u64:7), zero!<channel::State>(), false);
+  assert_eq(result.output.ch_@@LINK@@_bind_request, false);
+  assert_eq(word(result.management.tx, u32:4), u32:@@INVALID@@);
+}
+
+// Losing a successful acknowledgement does not replay binding or discard the channel's generation.
+#[test]
+fn accepted_bind_survives_management_session_loss() {
+  let bound = clock(queued(packet(u8:1, u64:7, u32:1, u64:3, u64:4), u64:7), zero!<channel::State>(), false);
+  assert_eq(bound.management.tx_valid, true);
+  let changed = clock(bound.management, bound.channel, true);
+  assert_eq(changed.management.tx_valid, false);
+  assert_eq(changed.channel, bound.channel);
+  let inspected = clock(queued(packet(u8:0, u64:8, u32:2, u64:0, u64:0), u64:8), changed.channel, false);
+  assert_eq(inspected.output.ch_@@LINK@@_bind_request, false);
+  assert_eq(word(inspected.management.tx, u32:4), u32:@@OK@@);
+  assert_eq(word(inspected.management.tx, u32:5), u32:1);
+  assert_eq(word(inspected.management.tx, u32:7), u32:3);
+  assert_eq(word(inspected.management.tx, u32:9), u32:4);
+  assert_eq(word(inspected.management.tx, u32:12), u32:1);
+}
+
+// A delayed fence names its binding generation; rejection cannot retire a newer channel.
+#[test]
+fn fence_matches_generation() {
+  let bound = clock(queued(packet(u8:1, u64:7, u32:1, u64:3, u64:4), u64:7), zero!<channel::State>(), false);
+  let old = clock(queued(packet(u8:2, u64:7, u32:2, u64:0, u64:0), u64:7), bound.channel, false);
+  assert_eq(word(old.management.tx, u32:4), u32:@@STALE@@);
+  assert_eq(word(old.management.tx, u32:12), u32:1);
+  let p = packet(u8:2, u64:7, u32:3, u64:0, u64:0);
+  let current = framing::Packet<u32:448> { payload: p.payload | (u32:1 as bits[448] << u32:128), ..p };
+  let fenced = clock(queued(current, u64:7), old.channel, false);
+  assert_eq(word(fenced.management.tx, u32:4), u32:@@ACCEPTED@@);
+  assert_eq(word(fenced.management.tx, u32:12), u32:0);
+  assert_eq(word(fenced.management.tx, u32:5), u32:1);
+}
+
+// Transport replacement changes observation framing, not the next actor/core transition.
+#[test]
+fn domain_transport_reset_preserves_core() {
+  let activated = domain::tick(zero!<domain::State>(), domain::Inputs {
+    management_valid: true, management_op: domain_codes::OPERATION_ACTIVATE,
+    target: u64:9, transition: u64:9, ..zero!<domain::Inputs>() });
+  let ready = for (_, core): (u32, domain::State) in u32:0..u32:64 {
+    domain::tick(core, zero!<domain::Inputs>()).state
+  }(activated.state);
+  assert_eq(ready.control.data.lifecycle.phase, domain_codes::PHASE_READY);
+  assert_eq(ready.control.data.lifecycle.current, u64:9);
+  let s = stream::State { core: ready, session: u64:1, attached: true, ..zero!<stream::State>() };
+  let ordinary = stream::tick(s, zero!<stream::Inputs>());
+  let reset = stream::tick(s, stream::Inputs { transport_reset: true, transport_session: u64:2, ..zero!<stream::Inputs>() });
+  assert_eq(reset.state.core, ordinary.state.core);
+  assert_eq(reset.state.session, u64:2);
+  assert_eq(reset.state.core.control.data.lifecycle.current, u64:9);
+}
+
+// Source storage includes every parser register; this does not claim mapped area or unrestricted progress.
+#[test]
+fn bounded_management_storage() { assert_eq(bit_count<management::State>(), u32:1159); }

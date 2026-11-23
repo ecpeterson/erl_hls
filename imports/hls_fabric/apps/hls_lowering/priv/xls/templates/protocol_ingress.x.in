@@ -1,0 +1,20 @@
+// The shared command register is sized to the exact elaborated actor population.
+pub type State = control::State<ACTORS>;
+// Current observations are a registered frame, pending-recipient mask and status.
+pub type Offer = control::Offer<ACTORS>;
+// Decode uses checked constant tables, never an inferred traffic domain.
+pub type Decoded = control::Decoded<ACTORS>;
+
+// Accept the inherited ordinary SpatialFrame wire representation.
+pub fn decode(packet: bits[axis::FRAME_BITS + u32:66]) -> Decoded {
+  control::decode(packet, TARGETS, WIDTH, HEIGHT)
+}
+// Startup enable and reset affect visibility; live packets and consumption do not.
+pub fn observe(s: State, reset: bool, enable: bool) -> Offer {
+  control::observe(s, reset, enable)
+}
+// Only committed inbox consumption retires a copy; no refill on the last edge.
+pub fn tick(s: State, reset: bool, enable: bool, valid: bool,
+            decoded: Decoded, consumed: bits[ACTORS]) -> State {
+  control::tick(s, reset, enable, valid, decoded, consumed)
+}

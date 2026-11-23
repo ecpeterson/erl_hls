@@ -1,0 +1,24 @@
+{
+  "schema": "snowflake-reference-provenance-v1",
+  "repository": "https://github.com/timchan0/localuf",
+  "revision": "daf81a10ed5d201c0bcaf6a1d5cdc6563a06b96c",
+  "version": "3.4.4",
+  "license": "MIT",
+  "python": "3.13.11",
+  "reference_algorithm_sha256": "44e70b6677f270c0ac821fd86b7c615bd00757ba8f7050474adbe171cdafdf16",
+  "requirements_sha256": "8e4f2ce6edb5dd12e70a47d5822804cb0ac4e34ae2dc8198ac28e171d35ec787",
+  "fixtures": {
+    "named.json": {
+      "sha256": "78bae96d882afd490f0c2d44d69bd38ed19a34c7b5c1fd57c7d9407ee817136d",
+      "cases": 14,
+      "sheets": 498,
+      "logical_failures": 2
+    },
+    "enumerated.json": {
+      "sha256": "d1010e6090fa09b513aa7b1631a2d8adf603d7d5b4be75416a877f15ad8e2fb4",
+      "cases": 121,
+      "sheets": 1936,
+      "logical_failures": 29
+    }
+  }
+}
