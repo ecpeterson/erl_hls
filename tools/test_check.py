@@ -139,6 +139,8 @@ class CheckTests(unittest.TestCase):
             for duplicate in ('run: rebar3 eunit', 'run: rebar3 dialyzer',
                               'tools/test_source_toolchain.py', 'tools/run_regression.py'):
                 self.assertNotIn(duplicate, workflow)
+        self.assertEqual(ci.count('uses: ./.github/actions/rtl-tools'), 2)
+        self.assertNotIn('sudo apt-get', ci)
 
 
 if __name__ == '__main__':
