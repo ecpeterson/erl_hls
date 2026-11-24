@@ -83,6 +83,7 @@ def build_routes(grid: ChipGrid, fixed: Path, native: dict, limit: int) -> dict:
         charge(len(issues))
         unresolved += len(issues)
         rows.append({"id": name, "aliases": raw["aliases"],
-                     "status": "partial" if issues else "complete", "route_status": "ROUTED",
+                     "status": "partial" if issues else "complete",
+                     "route_status": "ROUTED" if nodes else "NO_BOUND_WIRES",
                      "nodes": nodes, "pips": pips, "pin_attachments": pins, "issues": issues})
     return {"schema": 1, "nets": rows, "objects": count, "unresolved": unresolved}

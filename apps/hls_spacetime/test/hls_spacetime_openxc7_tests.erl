@@ -48,6 +48,33 @@ native_placement_test_() ->
         Dir -> [{timeout, 30, fun() -> native_placement(Dir) end}]
     end.
 
+%% Size- and digest-consistent tables still cannot claim whole-design routing for a subset.
+-spec whole_route_census_test() -> ok.
+whole_route_census_test() ->
+    Dir = filename:join(os:getenv("TMPDIR", "/tmp"),
+        "spacetime-route-census-" ++ integer_to_list(erlang:system_time(nanosecond))),
+    ok = file:make_dir(Dir),
+    try
+        {M, Checkpoint} = fixture(Dir),
+        Net = #{id => <<"d">>, aliases => [], nodes => [], pips => [], pin_attachments => [], issues => []},
+        Routes = #{schema => 1, objects => 1, unresolved => 0, nets => [Net]},
+        Check = fun(All) ->
+            Requested = case All of true -> []; false -> [<<"d">>] end,
+            Extra = #{<<"route-request.json">> => json:encode(#{all => All, nets => Requested}),
+                <<"routes.json">> => json:encode(Routes), <<"fixed-routes.txt">> => <<>>,
+                <<"native-pins.json">> => <<"{}">>, <<"openxc7_pins.py">> => <<>>},
+            Files = maps:merge(maps:get(files, M), maps:map(fun(Name, Bytes) ->
+                ok = file:write_file(filename:join(Dir, Name), Bytes),
+                #{bytes => iolist_size(Bytes), sha256 => hash(Bytes)}
+            end, Extra)),
+            Manifest = M#{files := Files, bytes := lists:sum([N || #{bytes := N} <- maps:values(Files)]),
+                limits := (maps:get(limits, M))#{route_objects => 10}, routing => #{objects => 1, unresolved => 0}},
+            hls_spacetime_openxc7:read(Dir, write_manifest(Dir, Manifest), Checkpoint)
+        end,
+        ?assertMatch(#{nets := [#{id := <<"d">>}]}, Check(false)),
+        ?assertError({openxc7_import, route_net_census}, Check(true))
+    after ok = file:del_dir_r(Dir) end.
+
 %% Compare the raw packed LUT/FF connection, complete census, BEL spelling and grid coordinates.
 -spec native_placement(file:filename()) -> ok.
 native_placement(Dir) ->
@@ -74,7 +101,8 @@ fixture(Dir) ->
     Cell = fun(Attrs) -> #{type => <<"primitive">>, attributes => Attrs} end,
     Packed = #{absent => Cell(#{}), missing => Cell(#{'NEXTPNR_BEL' => <<"lost/X">>}),
         pad => Cell(#{'NEXTPNR_BEL' => <<"io/IOB33/PAD">>}), power => Cell(#{'NEXTPNR_BEL' => <<"T/VCC">>})},
-    Top = #{cells => Packed, settings => #{'arch.name' => <<"xilinx">>, route => <<"00000000000000000000000000000001">>}},
+    Top = #{cells => Packed, netnames => #{d => #{}, q => #{}},
+        settings => #{'arch.name' => <<"xilinx">>, route => <<"00000000000000000000000000000001">>}},
     Loc = #{tile => <<"T">>, x => 2, y => 4},
     Files = maps:map(fun(File, Data) ->
         ok = file:write_file(filename:join(Dir, File), Data),

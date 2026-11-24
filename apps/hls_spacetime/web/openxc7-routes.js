@@ -6,6 +6,8 @@ export function openxc7Routing(model, detail) {
   const { implementation, checkpoint, nets } = detail;
   if (
     !model.catalogue ||
+    typeof implementation !== "string" ||
+    !implementation.length ||
     implementation !== model.bundle.build.implementation ||
     checkpoint !== model.catalogue.checkpoint ||
     !Array.isArray(nets)
@@ -18,7 +20,16 @@ export function openxc7Routing(model, detail) {
         (!model.cells.has(ref.cell) || ref.pin !== `${ref.cell}/${ref.port}`)
       )
         throw Error("openXC7 route pin outside packed cell census");
-  return createNativeRouting(nets);
+  const index = createNativeRouting(nets, { nets: 100000 });
+  if (
+    detail.packedNetCount !== undefined &&
+    !(
+      Number.isSafeInteger(detail.packedNetCount) &&
+      detail.packedNetCount >= index.nets.size
+    )
+  )
+    throw Error("openXC7 packed net count disagrees with captured routing");
+  return { ...index, packedNetCount: detail.packedNetCount };
 }
 
 /** Show one sink at a time. Tile marks are footprints; ordered PIPs retain same-tile site routing. */
@@ -31,6 +42,10 @@ export function showOpenxc7Routes(panel, index) {
     switches = panel.querySelector("ol");
   const canvas = panel.querySelector("canvas"),
     context = canvas.getContext("2d");
+  panel.querySelector("[data-net-count]").textContent =
+    index.packedNetCount === undefined
+      ? `${index.nets.size} nets captured`
+      : `${index.nets.size} of ${index.packedNetCount} packed nets captured`;
   function chooseSink() {
     switches.replaceChildren();
     context.clearRect(0, 0, canvas.width, canvas.height);

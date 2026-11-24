@@ -8,7 +8,10 @@ revision=68aeeb39f92e39bfb239c7e4a44dd93451fc1889
 src="$stage/nextpnr-xilinx-$revision"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime.patch"
 cp "$here/spacetime.h" "$src/xilinx/spacetime.h"
-cmake --build "$stage/native-build" --parallel 2 > "$stage/build-spacetime.log" 2>&1
+# A patched source and the previous variant's object can share a Make timestamp.
+cmake --build "$stage/native-build" --clean-first --parallel 2 > "$stage/build-spacetime.log" 2>&1
 ctest --test-dir "$stage/native-build" --output-on-failure > "$stage/ctest-spacetime.log" 2>&1
 cp "$stage/native-build/nextpnr-xilinx" "$stage/bin/nextpnr-spacetime"
+"$stage/bin/nextpnr-spacetime" --help > "$stage/spacetime-options.log" 2>&1
+grep -q -- '--spacetime-timing' "$stage/spacetime-options.log"
 python3 "$here/spacetime_build_identity.py" "$stage"

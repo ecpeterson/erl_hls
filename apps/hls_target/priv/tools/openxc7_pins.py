@@ -19,13 +19,14 @@ def capture(context, request: dict) -> dict:
         charge()
         aliases[alias] = target
     names = {aliases.get(name, name) for name in request["nets"]}
+    all_routes = request.get("all", False)
     by_net = {name: [] for name in names}
     for alias, target in aliases.items():
-        if target in by_net:
-            by_net[target].append(alias)
+        if all_routes or target in by_net:
+            by_net.setdefault(target, []).append(alias)
     nets = {}
     for name, net in context.nets:
-        if name not in names:
+        if not all_routes and name not in names:
             continue
         charge()
         wires = {}
@@ -54,8 +55,8 @@ def capture(context, request: dict) -> dict:
         for user in net.users:
             pin(user, "IN")
         nets[name] = {"wires": wires, "pins": pins,
-                      "aliases": sorted(by_net[name])}
-    if names != set(nets):
+                      "aliases": sorted(by_net.get(name, []))}
+    if not all_routes and names != set(nets):
         raise ValueError(f"selected nets absent after packing: {sorted(names - set(nets))}")
     return nets
 

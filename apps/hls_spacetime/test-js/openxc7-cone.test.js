@@ -5,9 +5,39 @@ import { join } from "node:path";
 import { createModel } from "../web/model.js";
 import {
   createComputations,
+  computationConnection,
   computationLayers,
 } from "../web/computation-routes.js";
 import { openxc7Computations } from "../scripts/openxc7-computations.mjs";
+import { sourceFixture } from "./fixtures/computation-publication.js";
+
+test("packed shift registers and LUT RAM stop combinational traversal", async (t) => {
+  const { view } = await sourceFixture(t);
+  const type = "SLICE_LUTX";
+  view.catalogue.cells[0].kind = type;
+  const ports = {
+    A1: { net: "a", class: "comb_input", direction: "IN" },
+    O6: { net: "q", class: "comb_output", direction: "OUT" },
+  };
+  const raw = { type, ports, arcs: [{ from: "A1", to: "O6", delay_ps: 200 }] };
+  for (const [attrs, expected] of [
+    [{ X_ORIG_TYPE: "LUT1" }, "combinational"],
+    [{ X_ORIG_TYPE: "SRL16E", X_LUT_AS_SRL: "1" }, "unsupported"],
+    [{ X_ORIG_TYPE: "RAMD64E", X_LUT_AS_DRAM: "1" }, "unsupported"],
+    [{ X_ORIG_TYPE: "LUT6", X_LUT_AS_DRAM: "1" }, "unsupported"],
+    [{}, "unsupported"],
+  ]) {
+    const result = openxc7Computations(
+      view,
+      { ff: { type, attributes: attrs } },
+      { cells: { ff: raw }, sinks: [] },
+      [],
+      {},
+    );
+    assert.equal(result.cells[0].boundary, expected);
+    assert.equal(result.arcs.length, expected === "combinational" ? 1 : 0);
+  }
+});
 
 const dir = process.env.OPENXC7_CONE_FIXTURE;
 test(
@@ -25,6 +55,41 @@ test(
     const cones = (index) => computationLayers(index, ["edge/2"])[0].cones;
     const checked = load(document.openxc7Computations);
     assert.equal(checked.model.events.size, 8);
+    if (json("cone/route-request.json").all) {
+      const netIds = Object.keys(
+        json("cone/routed.json").modules.top.netnames,
+      ).sort();
+      assert.deepEqual(routes.map((r) => r.id).sort(), netIds);
+      assert.equal(document.openxc7Routes.packedNetCount, netIds.length);
+      const selected = createComputations(
+        model,
+        document.openxc7Computations,
+        routes.filter((r) => ["d[0]", "d[1]"].includes(r.id)),
+      );
+      const outcomes = (index, ids) =>
+        ids
+          .map((id) => computationConnection(index, id))
+          .filter(Boolean)
+          .map((r) => r.disposition);
+      const { arcs, cones: writeCones } = computationLayers(checked, [
+        "edge/2",
+      ])[0];
+      assert.equal(
+        outcomes(selected, arcs).filter((d) => d === "resolved").length,
+        2,
+      );
+      const all = outcomes(checked, arcs);
+      assert.equal(all.length, 12);
+      assert.equal(all.filter((d) => d === "resolved").length, 8);
+      assert.equal(all.filter((d) => d === "unavailable").length, 4);
+      for (const control of writeCones.filter((c) => c.role !== "data")) {
+        assert.deepEqual(outcomes(checked, control.arcIndices), [
+          "resolved",
+          "resolved",
+        ]);
+        assert.equal(control.registeredDelayNs, null);
+      }
+    }
     assert.deepEqual(
       cones(checked)
         .map((c) => c.role)

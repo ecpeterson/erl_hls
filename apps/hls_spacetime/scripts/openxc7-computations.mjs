@@ -22,8 +22,29 @@ function originAt(cell, port, actual) {
     : null;
 }
 
+/** The XC7 packer shares a LUT cell type between logic, shift registers and distributed RAM. */
+function boundary({ type, attributes }) {
+  if (type === "SLICE_FFX") return "sequential";
+  if (type === "PSEUDO_GND" || type === "PSEUDO_VCC") return "constant";
+  if (
+    type === "SLICE_LUTX" &&
+    /^LUT[1-6]$/.test(attributes.X_ORIG_TYPE) &&
+    !Object.hasOwn(attributes, "X_LUT_AS_SRL") &&
+    !Object.hasOwn(attributes, "X_LUT_AS_DRAM")
+  )
+    return "combinational";
+  return "unsupported";
+}
+
 /** Build only measured net arcs and LUT inputs, preserving missing delays and unqualified bits. */
-export function openxc7Computations(view, packed, timing, words, modelInfo) {
+export function openxc7Computations(
+  view,
+  packed,
+  timing,
+  words,
+  modelInfo,
+  packedNets = [],
+) {
   const cells = [],
     pins = [],
     nets = [],
@@ -51,22 +72,16 @@ export function openxc7Computations(view, packed, timing, words, modelInfo) {
       timingStatus: ps === null ? "missing" : "available",
     });
   }
+  for (const net of packedNets) netId(net);
   for (const id of cellNames) {
     const raw = timing.cells[id],
       cell = packed[id];
     if (!cell || raw.type !== cell.type)
       throw Error("Packed timing cell mismatch");
     const kind = cell.type;
-    const boundary =
-      kind === "SLICE_FFX"
-        ? "sequential"
-        : kind === "SLICE_LUTX"
-          ? "combinational"
-          : ["PSEUDO_GND", "PSEUDO_VCC"].includes(kind)
-            ? "constant"
-            : "unsupported";
+    const cellBoundary = boundary(cell);
     const index = cells.length;
-    cells.push({ id, kind, boundary });
+    cells.push({ id, kind, boundary: cellBoundary });
     for (const [port, p] of Object.entries(raw.ports)) {
       const name = id + "/" + port;
       if (pinIndex.has(name)) throw Error("Duplicate nextpnr pin");
@@ -82,7 +97,7 @@ export function openxc7Computations(view, packed, timing, words, modelInfo) {
         timingClass: p.class,
       });
     }
-    if (boundary !== "combinational") continue;
+    if (cellBoundary !== "combinational") continue;
     const delays = new Map(
       raw.arcs.map((row) => [JSON.stringify([row.from, row.to]), row]),
     );

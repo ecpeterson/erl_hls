@@ -13,15 +13,17 @@ mkdir "$5"
 stage=$(cd "$5" && pwd)
 fixture=apps/hls_spacetime/test/native/openxc7
 tool=apps/hls_target/priv/tools/export_openxc7.py
-common=(--apio-home "$apio" --chipdb "$chipdb" --max-cells 32 --max-bytes 2097152)
+common=(--apio-home "$apio" --chipdb "$chipdb" --max-cells 32)
 if [[ -n ${OPENXC7_CHIPDB_MANIFEST:-} ]]; then common+=(--chipdb-manifest "$OPENXC7_CHIPDB_MANIFEST"); fi
+# The two chip-wide constant nodes each expand to 42,636 constituent wire records.
 for design in placement branches cone; do
     args=("${common[@]}")
     constraints=platforms/xc7/xc7z030sbg485.xdc
     case "$design" in
-      branches) args+=(--route-net d_alias --max-route-objects 512);;
+      placement) args+=(--route-all --max-route-objects 90000 --max-bytes 10485760);;
+      branches) args+=(--route-net d_alias --max-route-objects 512 --max-bytes 2097152);;
       cone) args+=(--timing-tools "$backend" --max-timing-objects 4096 --storage-word q=q
-                  --route-net 'd[0]' --route-net 'd[1]' --max-route-objects 1024)
+                  --route-all --max-route-objects 90000 --max-bytes 10485760)
             constraints="$fixture/cone.xdc";;
     esac
     python3 "$tool" "${args[@]}" --rtl "$fixture/$design.v" --xdc "$constraints" \

@@ -201,21 +201,35 @@ export async function writeView({
       document.provenance.sources.push(data.identity);
       return JSON.parse(data.bytes);
     }
+    const top =
+      meta.routing || meta.timing
+        ? (await sidecar("routed.json")).modules.top
+        : null;
     if (meta.routing) {
+      const { nets } = await sidecar("routes.json");
+      const request = await sidecar("route-request.json");
+      const packedNetCount = Object.keys(top.netnames).length;
+      check(
+        nets.every((net) => Object.hasOwn(top.netnames, net.id)) &&
+          (!request.all || nets.length === packedNetCount),
+        "openXC7 route net census mismatch",
+      );
       document.openxc7Routes = {
         implementation: manifest.identity.raw_sha256,
         checkpoint: document.catalogue.checkpoint,
-        nets: (await sidecar("routes.json")).nets,
+        packedNetCount,
+        nets,
       };
       openxc7Routing(createModel(document), document.openxc7Routes);
     }
     if (meta.timing) {
       document.openxc7Computations = openxc7Computations(
         document,
-        (await sidecar("routed.json")).modules.top.cells,
+        top.cells,
         await sidecar("timing.json"),
         meta.storage ? await sidecar("storage.json") : [],
         meta.timing,
+        Object.keys(top.netnames),
       );
       createComputations(
         createModel(document),

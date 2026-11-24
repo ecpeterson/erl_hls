@@ -109,9 +109,13 @@ def capture(args: argparse.Namespace) -> None:
         limits["timing_objects"] = args.max_timing_objects
         inventory += ("timing.json",)
         route.extend(["--spacetime-timing", "timing.json", "--spacetime-objects", str(args.max_timing_objects)])
-    if args.route_net:
+    capture_routes = args.route_all or bool(args.route_net)
+    if capture_routes:
         limits["route_objects"] = args.max_route_objects
-        write_json(out / "route-request.json", {"nets": args.route_net, "max_objects": args.max_route_objects})
+        request = {"nets": args.route_net, "max_objects": args.max_route_objects}
+        if args.route_all:
+            request["all"] = True
+        write_json(out / "route-request.json", request)
         if args.timing_tools:
             route.extend(["--spacetime-route-request", "route-request.json"])
         else:
@@ -151,7 +155,7 @@ def capture(args: argparse.Namespace) -> None:
             inventory += ("storage.json",)
             manifest["storage"] = {"words": len(words), "bits": sum(len(w["bits"]) for w in words),
                                    "unknown": sum(b["status"] == "unknown" for w in words for b in w["bits"])}
-        if args.route_net:
+        if capture_routes:
             write_json(out / "native-pins.json", timing["selected_routes"])
     bels = [cell["attributes"].get("NEXTPNR_BEL", "") for cell in cells.values()]
     prefixes = [bel.split("/", 1)[0] for bel in bels]
@@ -159,9 +163,11 @@ def capture(args: argparse.Namespace) -> None:
         grid = ChipGrid(data)
         part = grid.part
         locations = {p: grid.location(p) for p in set(prefixes) if p in grid.owners}
-        if args.route_net:
-            graph = build_routes(grid, out / "fixed-routes.txt",
-                                 json.loads((out / "native-pins.json").read_bytes()), args.max_route_objects)
+        if capture_routes:
+            native = json.loads((out / "native-pins.json").read_bytes())
+            if args.route_all and native.keys() != top["netnames"].keys():
+                raise ValueError("whole-design route net census differs from routed JSON")
+            graph = build_routes(grid, out / "fixed-routes.txt", native, args.max_route_objects)
             write_json(out / "routes.json", graph)
             manifest["routing"] = {"objects": graph["objects"], "unresolved": graph["unresolved"]}
     write_json(out / "locations.json", locations)
@@ -201,7 +207,9 @@ def main() -> None:
     parser.add_argument("--chipdb-manifest", type=Path, help="package overlay manifest bound by the chipdb toolchain stamp")
     parser.add_argument("--freq", type=int, default=25, help="target frequency in MHz")
     parser.add_argument("--max-cells", type=int, default=MAX_CELLS)
-    parser.add_argument("--route-net", action="append", default=[], help="retain routes for this net or alias")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--route-net", action="append", default=[], help="retain routes for this net or alias")
+    selection.add_argument("--route-all", action="store_true", help="retain every packed net within the route budget")
     parser.add_argument("--max-route-objects", type=int, default=100_000)
     parser.add_argument("--timing-tools", type=Path, help="pinned build_spacetime.sh output directory")
     parser.add_argument("--max-timing-objects", type=int, default=100_000)

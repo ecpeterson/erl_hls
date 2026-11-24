@@ -45,18 +45,26 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
     Json::object cells;
     Json::array sinks;
     Json::object selected;
+    bool all_routes = false;
+    std::map<IdString, Json::array> route_aliases;
     if (!route_request.empty()) {
         std::ifstream in(route_request);
         std::string data((std::istreambuf_iterator<char>(in)), {}), error;
         auto request = Json::parse(data, error);
         if (!error.empty() || !request["nets"].is_array())
             log_error("Invalid Spacetime route request\n");
+        all_routes = request["all"].bool_value();
         for (const auto &alias : request["nets"].array_items()) {
             auto net = ctx->getNetByAlias(ctx->id(alias.string_value()));
             if (net == nullptr)
                 log_error("Unknown selected net '%s'\n", alias.string_value().c_str());
             selected[net->name.str(ctx)] = Json();
         }
+        for (const auto &al : ctx->net_aliases)
+            if (all_routes ? ctx->nets.count(al.second) : selected.count(al.second.str(ctx))) {
+                chargeSpacetime(limit);
+                route_aliases[al.second].push_back(al.first.str(ctx));
+            }
     }
     for (const auto &item : ctx->cells) {
         chargeSpacetime(limit);
@@ -113,14 +121,9 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
     for (const auto &item : ctx->nets) {
         const NetInfo *net = item.second.get();
         auto driver = net->driver;
-        if (selected.count(net->name.str(ctx))) {
-            Json::array pins, aliases;
+        if (all_routes || selected.count(net->name.str(ctx))) {
+            Json::array pins;
             Json::object wires;
-            for (auto &al : ctx->net_aliases)
-                if (al.second == net->name) {
-                    chargeSpacetime(limit);
-                    aliases.push_back(al.first.str(ctx));
-                }
             auto record_pin = [&](const PortRef &ref, const char *direction) {
                 chargeSpacetime(limit);
                 auto ci = ref.cell;
@@ -145,7 +148,7 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
                 wires[ctx->getWireName(wire).str(ctx)] = Json::object{{"index", local},
                     {"incoming", pip == PipId() ? Json() : Json(ctx->getPipName(pip).str(ctx))}};
             }
-            selected[net->name.str(ctx)] = Json::object{{"aliases", aliases}, {"wires", wires}, {"pins", pins}};
+            selected[net->name.str(ctx)] = Json::object{{"aliases", route_aliases[net->name]}, {"wires", wires}, {"pins", pins}};
         }
         for (const auto &user : net->users) {
             chargeSpacetime(limit);

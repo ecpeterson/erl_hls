@@ -23,7 +23,7 @@ The opt-in EUnit placement witness reads `OPENXC7_PLACEMENT_FIXTURE` and `OPENXC
 
 ## openXC7 routes and computation timing
 
-Add `--route-net NAME` to the capture for each net or alias to inspect. Stock nextpnr exports each selected packed port, BEL pin and bound wire. The exporter joins these to directed fixed-route PIPs using their native tile and wire indices. In the viewer, select the net and sink under **Selected openXC7 routes** to inspect its ordered switches and tile footprints. Missing endpoints and ambiguous branches have a disposition and a gap. The tile marks locate the resources at chipdb resolution.
+Add `--route-net NAME` for each net or alias to inspect, or `--route-all` to capture every packed net under the same explicit byte and route-object limits. Both the exporter and offline reader check a whole-design selection against the net names in the routed JSON. The inventory includes nets with unresolved endpoints. Stock nextpnr exports each selected packed port, BEL pin and bound wire. The exporter joins these to directed fixed-route PIPs using their native tile and wire indices. In the viewer, select the net and sink under **openXC7 routes** to inspect its ordered switches and tile footprints. Missing endpoints and ambiguous branches have a disposition and a gap. The tile marks locate the resources at chipdb resolution.
 
 For timed cones, build the pinned timing observer once, then add `--timing-tools "$TIMING_TOOLS"` at capture. The optional final argument to the build script is a local cache containing the verified nextpnr and Eigen source archives. For a package-overlay chipdb, supply `--chipdb-manifest PATH` to record its stamped package, reference part and database hashes.
 

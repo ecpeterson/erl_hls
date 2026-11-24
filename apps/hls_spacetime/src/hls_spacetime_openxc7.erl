@@ -90,7 +90,7 @@ load(Directory, Expected, Checkpoint) ->
     check(hls_observation_build:match(Expected, Build) =:= ok, build_mismatch),
     check(Route =:= Checkpoint, checkpoint_mismatch),
     Data = maps:map(fun(Name, Meta) -> verified(Directory, Name, Meta) end, Files),
-    #{<<"modules">> := #{<<"top">> := #{<<"settings">> := Settings, <<"cells">> := Packed}}} =
+    #{<<"modules">> := #{<<"top">> := Top = #{<<"settings">> := Settings, <<"cells">> := Packed}}} =
         decode(maps:get(<<"routed.json">>, Data)),
     check(
         maps:get(<<"arch.name">>, Settings) =:= <<"xilinx">> andalso
@@ -114,7 +114,7 @@ load(Directory, Expected, Checkpoint) ->
         evidence => native_measurement,
         coordinate_unit => tile_grid,
         cells => Cells,
-        nets => nets(Data, Manifest),
+        nets => nets(Data, Manifest, maps:get(<<"netnames">>, Top, #{})),
         generated => [],
         bindings => []
     },
@@ -223,10 +223,10 @@ check_timing(
     check(length([ok || #{<<"delay_ps">> := null} <- Arcs ++ Sinks]) =:= Missing, missing_delays);
 check_timing(Data, _, _) when not is_map_key(<<"timing.json">>, Data) -> ok.
 
-%% Selected routed nets carry measured packed pins; graph geometry stays in the verified sidecar.
--spec nets(map(), map()) -> [map()].
-nets(#{<<"timing.json">> := Timing} = Data, Manifest) ->
-    _ = nets(maps:remove(<<"timing.json">>, Data), Manifest),
+%% Check route selection against packed net identities and retain the timed pin census.
+-spec nets(map(), map(), map()) -> [map()].
+nets(#{<<"timing.json">> := Timing} = Data, Manifest, PackedNets) ->
+    _ = nets(maps:remove(<<"timing.json">>, Data), Manifest, PackedNets),
     #{<<"cells">> := Cells} = decode(Timing),
     Pins = [
         {Net, #{
@@ -241,11 +241,16 @@ nets(#{<<"timing.json">> := Timing} = Data, Manifest) ->
     Groups = maps:groups_from_list(
         fun({Net, _}) -> Net end, fun({_, Pin}) -> Pin end, lists:sort(Pins)
     ),
-    [#{id => N, pins => Ps} || {N, Ps} <- lists:sort(maps:to_list(Groups))];
-nets(#{<<"routes.json">> := Raw}, #{
-    <<"routing">> := #{<<"objects">> := Count, <<"unresolved">> := Gaps},
-    <<"limits">> := #{<<"route_objects">> := Limit}
-}) ->
+    check(lists:all(fun(N) -> is_map_key(N, PackedNets) end, maps:keys(Groups)), timing_net_census),
+    [#{id => N, pins => maps:get(N, Groups, [])} || N <- lists:sort(maps:keys(PackedNets))];
+nets(
+    #{<<"routes.json">> := Raw, <<"route-request.json">> := Request},
+    #{
+        <<"routing">> := #{<<"objects">> := Count, <<"unresolved">> := Gaps},
+        <<"limits">> := #{<<"route_objects">> := Limit}
+    },
+    PackedNets
+) ->
     check(in_range(Limit, 1, 100000) andalso in_range(Count, 0, Limit), route_limit),
     #{<<"schema">> := 1, <<"nets">> := Rows, <<"objects">> := Count, <<"unresolved">> := Gaps} = decode(
         Raw
@@ -262,6 +267,12 @@ nets(#{<<"routes.json">> := Raw}, #{
         } <- Rows
     ],
     check(length(Sizes) =:= length(Rows) andalso lists:sum(Sizes) =:= Count, route_count),
+    Names = lists:sort([N || #{<<"id">> := N} <- Rows]),
+    check(length(Names) =:= length(lists:usort(Names)), route_net_census),
+    case maps:get(<<"all">>, decode(Request), false) of
+        true -> check(Names =:= lists:sort(maps:keys(PackedNets)), route_net_census);
+        false -> check(lists:all(fun(N) -> is_map_key(N, PackedNets) end, Names), route_net_census)
+    end,
     check(lists:sum([length(maps:get(<<"issues">>, R)) || R <- Rows]) =:= Gaps, route_gaps),
     [
         #{
@@ -280,7 +291,7 @@ nets(#{<<"routes.json">> := Raw}, #{
         }
      || R <- Rows
     ];
-nets(Data, _) when not is_map_key(<<"routes.json">>, Data) -> [].
+nets(Data, _, _) when not is_map_key(<<"routes.json">>, Data) -> [].
 
 %% The nextpnr post-route hook records whether each port is the driver or a user of this net.
 -spec direction(binary()) -> input | output | inout.

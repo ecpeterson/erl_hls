@@ -59,6 +59,12 @@ test("exact BEL wires support an intrasite branch; an unknown switch leaves a vi
   const { model, detail, net } = fixture();
   const route = () =>
     nativeConnection(openxc7Routing(model, detail), "d", "lut/O6", "ff/D");
+  const missing = structuredClone(model);
+  delete missing.bundle.build.implementation;
+  assert.throws(
+    () => openxc7Routing(missing, { ...detail, implementation: undefined }),
+    /mismatch/,
+  );
   assert.deepEqual(
     route().pips.map((p) => p.id),
     ["MUX"],
