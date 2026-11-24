@@ -139,3 +139,35 @@ test(
     }
   },
 );
+
+test("a permuted input retains its physical BEL pin and the net-owned incoming switch", () => {
+  const { model, detail, net } = fixture();
+  const physical = "SITEWIRE/SLICE_X1Y2/B2",
+    router = "SITEWIRE/SLICE_X1Y2/B3";
+  Object.assign(net.nodes[1], { id: router });
+  Object.assign(net.pips[0], { to_node: router, native_switch: "CLB/1.4" });
+  const pin = net.pin_attachments[1];
+  Object.assign(pin, {
+    pin: "ff/A2",
+    port: "A2",
+    bel_pins: ["SLICE_X1Y2/B5LUT/A2"],
+    bel_wire: physical,
+    routing_node: router,
+    lut_permutation_pip: "MUX",
+  });
+  assert.equal(
+    nativeConnection(openxc7Routing(model, detail), "d", "lut/O6", "ff/A2")
+      .disposition,
+    "resolved",
+  );
+  for (const [key, value] of [
+    ["lut_permutation_pip", "other"],
+    ["bel_wire", router],
+    ["bel_pins", ["SLICE_X1Y2/C5LUT/A2"]],
+  ]) {
+    const old = pin[key];
+    pin[key] = value;
+    assert.throws(() => openxc7Routing(model, detail), /permutation/);
+    pin[key] = old;
+  }
+});

@@ -242,12 +242,32 @@ function netGraph(net, budget, tiles) {
       pin.routing_node === null || nodes.has(pin.routing_node),
       "pin routing node outside used net",
     );
+    const permutation = pips.get(pin.lut_permutation_pip);
+    const lut = /^(SLICE_X\d+Y\d+)\/([ABCD])[56]LUT\/(A[1-6])$/.exec(
+      pin.bel_pins[0],
+    );
+    const mappedLut =
+      permutation &&
+      lut &&
+      pin.direction === "IN" &&
+      pin.port === lut[3] &&
+      pin.bel_wire === `SITEWIRE/${lut[1]}/${lut[2]}${pin.port[1]}` &&
+      permutation.direction_status === "directional" &&
+      text(permutation.native_switch) &&
+      permutation.to_node === pin.routing_node &&
+      /^[1-6]$/.test(pin.routing_node?.slice(-1)) &&
+      pin.routing_node.slice(0, -1) === `SITEWIRE/${lut[1]}/${lut[2]}`;
+    if (pin.lut_permutation_pip !== undefined)
+      requireValue(
+        mappedLut && pin.status === "resolved",
+        "invalid LUT permutation attachment",
+      );
     if (pin.status === "resolved" && Object.hasOwn(pin, "bel_wire"))
       requireValue(
         pin.bel_pins.length === 1 &&
           pin.site_pins.length === 0 &&
           text(pin.bel_wire) &&
-          pin.bel_wire === pin.routing_node,
+          (pin.bel_wire === pin.routing_node || mappedLut),
         "resolved BEL pin lacks exact bound wire",
       );
     else if (pin.status === "resolved")

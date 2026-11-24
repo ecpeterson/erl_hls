@@ -11,6 +11,7 @@ import shlex
 import shutil
 from openxc7_chipdb import ChipGrid
 from openxc7_routes import build_routes
+from openxc7_endpoints import qualify_selected
 from openxc7_storage import qualify_words
 import subprocess
 
@@ -307,6 +308,7 @@ def capture(args: argparse.Namespace) -> None:
             if args.route_all and native.keys() != top["netnames"].keys():
                 raise ValueError("whole-design route net census differs from routed JSON")
             graph = build_routes(grid, out / "fixed-routes.txt", native, args.max_route_objects)
+            qualify_selected(grid, top, graph)
             write_json(out / "routes.json", graph)
             manifest["routing"] = {"objects": graph["objects"], "unresolved": graph["unresolved"]}
     if args.timing_tools and part == "xc7z030sbg485-1":

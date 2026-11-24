@@ -80,8 +80,27 @@ test(
       );
       const all = outcomes(checked, arcs);
       assert.equal(all.length, 12);
-      assert.equal(all.filter((d) => d === "resolved").length, 8);
-      assert.equal(all.filter((d) => d === "unavailable").length, 4);
+      const permutations = routes.flatMap((n) =>
+        n.pin_attachments.filter((p) => p.lut_permutation_pip),
+      );
+      // Older captured graphs retain the original four missing attachments.
+      if (permutations.length || process.env.OPENXC7_EXPECT_PERMUTATIONS) {
+        assert.equal(permutations.length, 4);
+        assert.ok(permutations.some((p) => p.bel_pins[0].includes("5LUT/A5")));
+        assert.ok(permutations.some((p) => p.bel_pins[0].includes("6LUT/A5")));
+        const missing = arcs.filter(
+          (i) =>
+            computationConnection(checked, i)?.disposition === "unavailable",
+        );
+        assert.equal(all.filter((d) => d === "resolved").length, 10);
+        assert.deepEqual(
+          missing.map((i) => checked.pins[checked.arcs[i].from].id),
+          Array(2).fill("$PACKER_GND_DRV/Y"),
+        );
+      } else {
+        assert.equal(all.filter((d) => d === "resolved").length, 8);
+        assert.equal(all.filter((d) => d === "unavailable").length, 4);
+      }
       for (const control of writeCones.filter((c) => c.role !== "data")) {
         assert.deepEqual(outcomes(checked, control.arcIndices), [
           "resolved",

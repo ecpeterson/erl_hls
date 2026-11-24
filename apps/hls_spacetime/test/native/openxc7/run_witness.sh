@@ -63,4 +63,4 @@ escript "$fixture/cone_witness.escript" "$stage/cone" "$stage/samples.term" "$st
 checkpoint=$(shasum -a 256 "$stage/cone/routed.json" | cut -d ' ' -f 1)
 "$cli" join-openxc7 "$stage/trace/bundle.etf" "$stage/cone" "$checkpoint" "$stage/joined"
 node apps/hls_spacetime/scripts/prepare-view.mjs --bundle "$stage/joined/bundle.json" --openxc7 "$stage/cone" --output "$stage/view"
-OPENXC7_CONE_FIXTURE="$stage" node --test apps/hls_spacetime/test-js/openxc7-cone.test.js
+OPENXC7_EXPECT_PERMUTATIONS=1 OPENXC7_CONE_FIXTURE="$stage" node --test apps/hls_spacetime/test-js/openxc7-cone.test.js

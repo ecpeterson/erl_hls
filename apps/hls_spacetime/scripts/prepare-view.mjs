@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Project any validated execution bundle for the browser. No archive layout,
  * application name, compiler checkout, simulation or vendor tool is assumed. */
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { openxc7Routing } from "../web/openxc7-routes.js";
 import { openxc7Computations } from "./openxc7-computations.mjs";
@@ -131,6 +132,7 @@ export async function writeView({
   timingReport,
   timingIdentity,
   openxc7,
+  openxc7Chipdb,
   output,
 }) {
   check(bundlePath && output, "--bundle and --output are required");
@@ -181,6 +183,7 @@ export async function writeView({
     nativePaths(createModel(document));
   }
   let graph;
+  check(!openxc7Chipdb || openxc7, "chipdb requires an openXC7 capture");
   if (openxc7) {
     const manifest = await input(
       join(resolve(openxc7), "manifest.json"),
@@ -214,7 +217,22 @@ export async function writeView({
         : null;
     let request;
     if (meta.routing) {
-      const { nets } = await sidecar("routes.json");
+      let { nets } = await sidecar("routes.json");
+      if (openxc7Chipdb) {
+        const script = fileURLToPath(
+          new URL(
+            "../../hls_target/priv/tools/openxc7_frozen.py",
+            import.meta.url,
+          ),
+        );
+        ({ nets } = JSON.parse(
+          execFileSync(
+            "python3",
+            [script, openxc7, manifest.identity.raw_sha256, openxc7Chipdb],
+            { maxBuffer: 128 * 1024 * 1024 },
+          ),
+        ));
+      }
       request = await sidecar("route-request.json");
       const packedNetCount = Object.keys(top.netnames).length;
       check(
@@ -391,6 +409,7 @@ export function parseArguments(args) {
     "--timing-report": "timingReport",
     "--timing-identity": "timingIdentity",
     "--openxc7": "openxc7",
+    "--openxc7-chipdb": "openxc7Chipdb",
     "--output": "output",
   };
   const options = {};
@@ -413,7 +432,7 @@ if (
     const options = parseArguments(process.argv.slice(2));
     if (options.help)
       console.log(
-        "node scripts/prepare-view.mjs --bundle BUNDLE.json[.gz] [--metadata CONTEXT.json] [--timing-report REPORT.rpt[.gz] --timing-identity VERIFIED.json] [--openxc7 CAPTURE_DIRECTORY] --output FRESH_DIRECTORY",
+        "node scripts/prepare-view.mjs --bundle BUNDLE.json[.gz] [--metadata CONTEXT.json] [--timing-report REPORT.rpt[.gz] --timing-identity VERIFIED.json] [--openxc7 CAPTURE_DIRECTORY [--openxc7-chipdb CHIPDB]] --output FRESH_DIRECTORY",
       );
     else console.log(JSON.stringify(await writeView(options), null, 2));
   } catch (error) {
