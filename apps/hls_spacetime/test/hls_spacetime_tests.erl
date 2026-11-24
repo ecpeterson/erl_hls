@@ -32,6 +32,33 @@ saved_example_test() ->
     ?assertEqual([<<"side">>, <<"read0">>], maps:get(inputs, Join)),
     ?assertEqual(B, fixture()).
 
+%% A native timing report can locate a cell at its site without identifying the BEL.
+-spec site_only_placement_test() -> ok.
+site_only_placement_test() ->
+    #{physical := #{cells := [Cell | Rest]} = Physical} = Bundle = fixture(),
+    SiteOnly = Cell#{bel := null},
+    Updated = Bundle#{physical := Physical#{cells := [SiteOnly | Rest]}},
+    ?assertMatch(#{mapping := #{physical_cells := 3}}, hls_spacetime:validate(Updated)),
+    ?assertError({spacetime, {invalid_physical_identifier, null}}, hls_spacetime:validate(Bundle#{physical := Physical#{
+        cells := [SiteOnly#{site := null} | Rest]
+    }})).
+
+%% Only widthless computations can span cells without supplying a storage bit map.
+-spec distributed_logic_test() -> ok.
+distributed_logic_test() ->
+    #{physical := #{bindings := Bindings} = Physical, resources := Resources} = Bundle = fixture(),
+    Spread = [case B of
+        #{resource := <<"dispatch">>} -> B#{disposition := distributed};
+        _ -> B
+    end || B <- Bindings],
+    Measured = Bundle#{physical := Physical#{bindings := Spread}},
+    ?assertMatch(#{mapping := #{mapped := 5}}, hls_spacetime:validate(Measured)),
+    Encoded = [case R of
+        #{id := <<"dispatch">>} -> R#{width => 2};
+        _ -> R
+    end || R <- Resources],
+    ?assertError({spacetime, missing_distributed_bits}, hls_spacetime:validate(Measured#{resources := Encoded})).
+
 %% The shared build contract preserves this artifact's map shape while spacetime keeps UTF-8 text.
 -spec observation_build_contract_test() -> ok.
 observation_build_contract_test() ->

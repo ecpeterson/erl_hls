@@ -1,0 +1,177 @@
+{
+  "scope": "One closed four-Phi simulation replay, one selected RAM output lane and accepted multiplication in two implementations.",
+  "part": "xc7z030sbg485-1",
+  "periodNs": 20,
+  "pins": {
+    "clock": "Y14",
+    "activity": "V13"
+  },
+  "archive": "e465bba8b1effdf82450ec5147ccfeab43de85c6af7d5c83ef5f318c4a5f6bc3",
+  "sharedRTL": "66bdb8328a046047d95459a4f418b9f1c761d86905d586eed0625b64b2152784",
+  "observation": "4bdadf4ae6ded80541704678d960c86111271e88a2537618d3b318a2cc9e7ce4",
+  "nativeChipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+  "captureReceipt": "55fcf91f0770d924e245d26bbc83247f8ef8557eb6b6740a29630948443e256c",
+  "selection": {
+    "cycles": 4096,
+    "ramWidth": 540,
+    "selectedBit": 84,
+    "factor": "0x2aaaaaaaab",
+    "counts": {
+      "writes": 1325,
+      "reads": 1321,
+      "collisions": 0,
+      "accepted": 1320,
+      "changed_products": 1262
+    },
+    "transaction": {
+      "writeCycle": 32,
+      "readCycle": 36,
+      "address": 0,
+      "value": "0000000000000000000000000000000000000800000004200000000000000000000000000001715609d00000001000000000001aaab0000155500000002000000000202",
+      "previousOutput": "000000000000000000000000000000000000080000000220000000000000000000000000001b54cda560000000000000000000000000000000000000001000000000202",
+      "resultCycle": 37,
+      "operand": "0000024004",
+      "product": "000006000aaaaab6aac",
+      "priorAcceptedOperand": "0000000006",
+      "requestState": "0000000000000000000000000000000000000800000004200000000000000000000000000001715609d00000001000000000001aaab0000155500000002000000000202",
+      "capturedResult": "000003000",
+      "priorResult": "000000000"
+    }
+  },
+  "physical": {
+    "vivado": {
+      "checkpoint": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+      "basis": "reported setup path",
+      "hardCells": {
+        "DSP48E1": 40,
+        "RAMB18E1": 4,
+        "RAMB36E1": 28
+      },
+      "stagesChecked": [
+        "AREG",
+        "BREG",
+        "MREG",
+        "PREG"
+      ],
+      "selectedStageValues": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "productDsps": 5,
+      "placedCellsOnPath": 27,
+      "selectedRam": {
+        "kind": "RAMB36E1",
+        "site": "RAMB36_X0Y9",
+        "output": "DOADO[12]"
+      },
+      "ramMode": "SDP72 READ_FIRST, DO_REG=0",
+      "dspPath": [
+        {
+          "site": "DSP48_X0Y18",
+          "input": "A[20]",
+          "output": "PCOUT[47]"
+        },
+        {
+          "site": "DSP48_X0Y19",
+          "input": "PCIN[47]",
+          "output": "P[21]"
+        }
+      ],
+      "wholeDesignPREGEnabled": 18,
+      "fullDataDelayNs": 19.263,
+      "slackNs": 0.462
+    },
+    "openxc7": {
+      "checkpoint": "2ec4016b8b9926c991a8ad46875929455eb19d1c8fe5babd6908a467108953e0",
+      "basis": "placed netlist connectivity",
+      "hardCells": {
+        "DSP48E1": 48,
+        "RAMB18E1": 44,
+        "RAMB36E1": 8,
+        "SRL16E": 2,
+        "SRLC32E": 1
+      },
+      "stagesChecked": [
+        "AREG",
+        "BREG",
+        "MREG",
+        "PREG"
+      ],
+      "selectedStageValues": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "productDsps": 6,
+      "placedCellsOnPath": 10,
+      "selectedRam": {
+        "kind": "RAMB18E1_RAMB18E1",
+        "site": "RAMB18_X1Y30",
+        "output": "DOADO11"
+      },
+      "ramMode": "SDP36 READ_FIRST, DO_REG=0",
+      "dspPath": [
+        {
+          "site": "DSP48_X1Y26",
+          "input": "A11",
+          "output": null
+        }
+      ],
+      "wholeDesignPREGEnabled": 0,
+      "fixedSrlTaps": true
+    }
+  },
+  "nativeRouteAttempt": {
+    "exit": -15,
+    "guard": "time",
+    "seconds": 3600.1,
+    "peakGroupRSSBytes": 2121531392,
+    "lastLoggedIteration": {
+      "iteration": 15,
+      "wires": 1416596,
+      "overusedWires": 2120,
+      "overuse": 2123
+    },
+    "placementChecksums": {
+      "routeAttempt": [
+        "0x2c46f91a",
+        "0x09664ac0"
+      ],
+      "publishedPlacement": [
+        "0x2c46f91a",
+        "0x09664ac0"
+      ]
+    }
+  },
+  "checks": {
+    "negativeReplayChecks": [
+      "read output",
+      "write data",
+      "product",
+      "captured result",
+      "write enable",
+      "missing edge"
+    ],
+    "galleryLinks": "Two captures, two selections per capture in headless Chrome.",
+    "commonEventsAndVersions": true
+  },
+  "limits": [
+    "Structural joins identify a possible path; electrical sensitization on the selected clock is unknown.",
+    "The selected openXC7 branch has no qualified delay. Vivado delay and slack refer to the complete reported setup check.",
+    "The 539 other read lanes, registered DSP operations and variable-address SRLs remain outside this selection."
+  ],
+  "artifacts": {
+    "directory": "runs/spacetime-g4-parity-2026-11-24/four-phi",
+    "files": {
+      "index.json": "df430d38c2174ede3640afb429773e0f66ec084820818e39a8e6d8dd9f86b5bf",
+      "openxc7.json": "6626ddd1f8f6200b8ec50211a4a313ae1da839eccefe556feb4a4a5da92df794",
+      "selection.json": "6832a3644d8e935614c339aed607c3a99a9e8a9f13b3609b98333a8bcee7976f",
+      "vivado.json": "6a5edba7da5a82b0cc4cc2a808430d7697358f469c5235ac0a88b7492d2aa48f",
+      "witness.tar.gz": "23d2dfa21594645453bd91e2ca8498f75021c9113daaa3c6ea620e1ac7dac79f"
+    },
+    "inventorySha256": "0a15197a6aafc6d5e0ef6bf35e3b4c215550a2612f125f53ad3545a0eb8cc863"
+  }
+}

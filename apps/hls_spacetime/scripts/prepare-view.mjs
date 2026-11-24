@@ -66,6 +66,7 @@ export function prepareView(bundle, metadata = {}) {
     "coverage",
     "measurement",
     "clockReference",
+    "hardwarePath",
     "stepComparison",
   ]);
   check(
@@ -119,6 +120,31 @@ export function prepareView(bundle, metadata = {}) {
       scope: "Logical resource/address lanes; no native placement supplied",
     };
   createModel(document);
+  if (document.hardwarePath) {
+    // The browser projection omits the full net table. Verify each declared branch before projection.
+    const { steps } = document.hardwarePath;
+    const nets = new Map(bundle.physical.nets.map((net) => [net.id, net.pins]));
+    for (let i = 1; i < steps.length; i++) {
+      const sink = steps[i],
+        source = steps[i - 1],
+        pins = nets.get(sink.net);
+      check(
+        pins?.some(
+          (p) =>
+            p.cell === source.cell &&
+            p.pin === source.output &&
+            p.direction === "output",
+        ) &&
+          pins.some(
+            (p) =>
+              p.cell === sink.cell &&
+              p.pin === sink.input &&
+              p.direction === "input",
+          ),
+        "hardware path branch lacks connected native pins",
+      );
+    }
+  }
   checkExamples(document);
   return document;
 }

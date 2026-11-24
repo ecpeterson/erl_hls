@@ -2426,6 +2426,23 @@ function drawFlat() {
         );
       }
     }
+    const path = model.document.hardwarePath;
+    if (path?.events.includes(state.selected)) {
+      ctx.save();
+      ctx.strokeStyle = "#91b8d1";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      path.steps.forEach((step, i) => {
+        chosen.add(step.cell);
+        const cell = model.cells.get(step.cell);
+        const x = ox + (cell.x - b.minX) * scale;
+        const y = h - oy - (cell.y - b.minY) * scale;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
     for (const cell of model.cells.values()) {
       if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
       const p = {
@@ -2809,8 +2826,17 @@ function renderInspector() {
     e = d.event;
   $("selected-kind").textContent = `C${e.cycle}`;
   const lifetimes = selectedLifetimes();
+  const path = state.model.document.hardwarePath;
+  const physicalPath = path?.events.includes(e.id)
+    ? `<details open><summary>Hardware path · ${esc(path.basis)}</summary><p>${esc(path.description)} Dashed lines on the flat chip connect the sites schematically.</p><ol>${path.steps
+        .map((step) => {
+          const cell = state.model.cells.get(step.cell);
+          return `<li><details><summary>${esc(cell.site)} · ${esc(cell.kind)} · ${[step.input, step.output].filter(Boolean).map(esc).join(" → ")}</summary><button type="button" data-cell="${esc(cell.id)}">${esc(cell.id)}</button>${step.net ? `<p>Input net · ${esc(step.net)}</p>` : ""}</details></li>`;
+        })
+        .join("")}</ol></details>`
+    : "";
   $("selection").innerHTML =
-    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}${e.access.read_mask ? `<dt>Selected read bits</dt><dd>${esc(e.access.read_mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${d.inputs
+    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}${e.access.read_mask ? `<dt>Selected read bits</dt><dd>${esc(e.access.read_mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${physicalPath}${d.inputs
       .filter((v) => v.producer === "root")
       .map(
         (v) =>
@@ -2898,7 +2924,7 @@ function renderResource() {
   $("expand-storage").disabled =
     (!state.resource && !state.chain) || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
-    ? `${cells.length} associated native storage cells highlighted`
+    ? `${cells.length} associated native cells highlighted`
     : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
@@ -2906,7 +2932,7 @@ function renderResource() {
       .slice(0, 600)
       .map(
         (c) =>
-          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site ?? c.tile)} / ${esc(c.bel)} · tile (${c.x}, ${c.y})</span></div>`,
+          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site ?? c.tile)} / ${esc(c.bel ?? "BEL unavailable")} · tile (${c.x}, ${c.y})</span></div>`,
       )
       .join("") +
     (cells.length > 600
@@ -3554,7 +3580,7 @@ function bindControls() {
     if (hit) {
       state.cell = hit.cell.id;
       notice(
-        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site ?? hit.cell.tile}/${hit.cell.bel}`,
+        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site ?? hit.cell.tile}/${hit.cell.bel ?? "BEL unavailable"}`,
       );
       $("cell-details").open = true;
       repaint();

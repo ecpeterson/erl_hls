@@ -124,3 +124,61 @@ test("a same-hierarchy timing report must still match its independent native ide
     /build mismatch/,
   );
 });
+
+test("selected hardware paths require the same checkpoint, placed cells and a connected branch", () => {
+  const source = bundle();
+  source.capture.observers[0].next_sequence = 1;
+  source.events = [
+    {
+      id: "accept",
+      cycle: 0,
+      sequence: 0,
+      observer: "o",
+      incarnation: "i",
+      actor: "a",
+      task: "test",
+      activation: "one",
+      operation: "accept",
+      inputs: [],
+      outputs: [],
+      evidence: "synthetic",
+    },
+  ];
+  source.physical = {
+    build: source.build,
+    checkpoint: "checkpoint",
+    bindings: [],
+    generated: [],
+    cells: ["ram", "dsp"].map((id, i) => ({ id, x: i, y: 0, site: id })),
+    nets: [
+      {
+        id: "data",
+        pins: [
+          { cell: "ram", pin: "Q", direction: "output" },
+          { cell: "dsp", pin: "A", direction: "input" },
+        ],
+      },
+    ],
+  };
+  const path = {
+    basis: "routed netlist connectivity",
+    checkpoint: "checkpoint",
+    events: ["accept"],
+    description: "Synthetic connectivity.",
+    steps: [
+      { cell: "ram", input: null, output: "Q" },
+      { cell: "dsp", input: "A", output: null, net: "data" },
+    ],
+  };
+  assert.equal(prepareView(source, { hardwarePath: path }).hardwarePath, path);
+  assert.throws(
+    () =>
+      prepareView(source, { hardwarePath: { ...path, checkpoint: "other" } }),
+    /identity/,
+  );
+  path.steps[1].input = "B";
+  assert.throws(
+    () => prepareView(source, { hardwarePath: path }),
+    /connected native pins/,
+  );
+});
