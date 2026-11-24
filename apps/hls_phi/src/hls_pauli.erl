@@ -12,6 +12,7 @@ This example-local hls_type provider is used by the phenom actors and memory wir
 """.
 
 -behavior(hls_type).
+-behaviour(xls_type).
 
 %% Application constructor and Pauli operations.
 -export([pauli/0, i/0, x/0, y/0, z/0, multiply/2, anticommutes/2, is_pauli/1]).

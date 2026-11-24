@@ -1,6 +1,6 @@
-# Umbrella OTP Stages 0–1 audit
+# Umbrella OTP Stages 0–2 audit
 
-Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. The [source inventory](umbrella-otp-inventory.md) preserves the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
+Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Stage 2 reconciled direct application ownership, provider declarations, runtime codecs, tools and resource paths without merging or adding an application. The [source inventory](umbrella-otp-inventory.md) preserves the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
 
 ## Import selection
 
@@ -33,12 +33,12 @@ Edges omit stock OTP applications.
 | hls_fabric | hls_runtime | Deployed nodes, sessions, transport and device protocols |
 | hls_lowering | erl_hls, hls_runtime, hls_fabric | Multi-actor build, topology and deployment-plan elaboration |
 | hls_phi | erl_hls, hls_runtime, hls_fabric, hls_lowering | Phi examples and application-specific assembly |
-| hls_snowflake | hls_runtime, hls_fabric, hls_lowering | Snowflake examples and application-specific assembly |
-| hls_spacetime_observer | hls_lowering, hls_spacetime | Translation of observations into offline evidence |
+| hls_snowflake | hls_runtime, erl_hls, hls_fabric, hls_lowering | Snowflake examples and application-specific assembly |
+| hls_spacetime_observer | hls_runtime, erl_hls, hls_lowering, hls_spacetime | Translation of observations into offline evidence |
 | router | — | Standalone routing and barrier application |
 | hls_spacetime | — | Offline evidence reconstruction, latency models and viewer |
 
-Static BEAM imports still show Snowflake modules importing compiler modules through lowering. Stage 2 must declare that direct dependency or move the compile-time operations behind the lowering interface. This is not changed during the mechanical import.
+The Stage 2 audit declares Snowflake's direct compiler use and the observer's direct compiler/runtime use. Every compiled import and remote type edge between the nine applications is now declared by its caller. The direct declarations preserve the intended ownership instead of adding pass-through lowering APIs.
 
 ## Retained-path and history manifest
 
@@ -132,14 +132,34 @@ The restricted Work sandbox still rejects local listeners: the Fabric projection
 
 Release assembly must name one of the four configured releases; bare `rebar3 release` correctly rejects the ambiguous selection. Each named release retains the existing warning that SASL is absent, so it is not upgrade-capable. A stale pre-relocation `_build/default` initially produced missing-source warnings and obsolete beams; moving that generated cache aside and rebuilding from scratch removed them. Fresh releases contain the expected 102 compiler source files.
 
+## Stage 2 ownership and application seams
+
+The compiled dependency audit now treats every direct project-application BEAM import and remote type as a manifest edge. It checks the seven default applications and all nine applications in the `spacetime` profile while retaining the rule that generic compiler, runtime, Fabric, lowering and router libraries cannot depend on Phi or Snowflake. The combined default and spacetime snapshots inspect 761 modules and report zero missing applications, undeclared edges or reverse example dependencies.
+
+Two manifest corrections follow executable consumers rather than a new abstraction:
+
+- `hls_snowflake` now declares `erl_hls`. `snowflake_actor_run` and `snowflake_actor_topology` normalize compiler-owned topology values, `snowflake_actor_topology` writes compiler-owned emitted artifacts, and `snowflake_source` exposes the compiler topology type. Moving these calls behind lowering would create a pass-through interface while compiler APIs deliberately remain in `erl_hls`.
+- `hls_spacetime_observer` now declares `erl_hls` and `hls_runtime`. Its stream and publication planners compare compiler-owned packaged resources and frame configuration, then validate dimensions with the runtime-owned frame-layout API before translating observations. The manifest test records the two computed-resource owners independently of the current static imports.
+
+Neither correction enlarges a configured release closure because `hls_lowering` already carried the same dependencies transitively.
+
+Provider review found that `phi_field` and `hls_pauli` already implement both host-runtime and compiler-provider callbacks but declared only `hls_type`; both now also declare `xls_type`. All other production compiler providers already declared that behavior. Existing focused tests exercise both provider dispatch paths.
+
+No codec or ownership move is supported by an executable consumer. `hls_runtime` remains the authority for retained values, records and host type dispatch; Fabric owns live-session and wire codecs; lowering owns deployment plans and renderers; compiler APIs remain in `erl_hls`; observer translation remains in `hls_spacetime_observer`; router remains standalone; and offline evidence remains in `hls_spacetime`. The review therefore creates no shared core, application merge or additional target application.
+
+Computed resource and tool/configuration review also requires no move. Production resources resolve through the owning application's `code:priv_dir/1`; the observer's variable application paths are exactly the newly declared owners plus its existing lowering, observer and spacetime dependencies. Production sources contain no repository-relative `apps/`, `tools/`, `_build/` or checkout-parent resource path. Root release overlays remain distinct, installed launchers self-locate, compiler-tool wrappers retain one implementation authority, and profile selection never falls back to another build. Focused backend isolation passes 16/16, relocated Fabric toolchain tests pass 3/3 and relocated compiler toolchain tests pass 5/5.
+
+The software CI tier now compiles the `spacetime` profile before running one combined default/spacetime boundary audit. Seven package-auditor tests cover calls, remote types, release ownership, broad snapshots and computed observer resources; two CI-policy tests pin the profile compile and audit ordering. Both profile compiles, the 49-module compiler package boundary and the 98-module assembled Fabric runtime boundary pass. Source-contract checks retain 3,544 inherited gaps across 1,080 files and report zero new or changed gaps. Dialyzer passes over 371 default and 390 spacetime project files. Fresh listener-capable EUnit projections match the Stage 1 baseline: compiler 1,290/0, default Fabric 1,390/0, Fabric `spacetime` 1,467/0 and standalone spacetime 155/0. All four named releases and their launchers pass; the spacetime escript builds and exposes its four-command help contract. The retained SASL warning still means the releases are not upgrade-capable.
+
+No Stage 2 check needs hardware, EC2 or another environment. Native, physical and external-consumer qualifications remain assigned to their later campaign stages.
+
 ## Deferred qualification
 
-Stages 0–1 establish the import contract and a green mechanical umbrella, not cross-repository equivalence or redesigned application seams.
+Stages 0–2 establish the import contract, a green mechanical umbrella and deliberate application seams, not external-consumer or hardware equivalence.
 
 - Native XLS/Yosys compilation, source-map integration and extended RTL simulation against the combined umbrella still need their external tool environment.
 - Vivado, physical timing and board qualification wait for a changed hardware boundary and the appropriate remote or board environment.
 - The optional spacetime RAM witness still needs its explicit testbench and primitive environment.
 - The external same-revision runtime-only consumer, separate compile-time consumer and assembled-release asset witnesses remain Stage 3 work.
-- Ownership, provider declarations and the known Snowflake compile-time dependency remain Stage 2 decisions; Stage 1 changes none of those interfaces.
 
-Stage 2 may now reconcile ownership and application seams. It must not treat the mechanical pass as authority to merge application identities or redesign shared models without the executable-consumer evidence required by the roadmap.
+Stage 3 may now qualify unchanged external consumers and assembled artifacts. It must not treat Stage 2's static dependency closure as an external build, release-asset or physical-equivalence witness.

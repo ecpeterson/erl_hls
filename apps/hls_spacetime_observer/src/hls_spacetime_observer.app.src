@@ -2,7 +2,7 @@
     {description, "Passive XLS source-protocol capture adapter"},
     {vsn, "0.1.0"},
     {registered, []},
-    {applications, [kernel, stdlib, crypto, hls_lowering, hls_spacetime]},
+    {applications, [kernel, stdlib, crypto, hls_runtime, erl_hls, hls_lowering, hls_spacetime]},
     {env, []},
     {modules, []},
     {licenses, ["Apache-2.0"]}

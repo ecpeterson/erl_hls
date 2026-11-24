@@ -2,7 +2,11 @@
 from pathlib import Path
 import tempfile
 import unittest
-from erl_hls_tools.package_boundaries import application_files, violations
+from erl_hls_tools.package_boundaries import (
+    application_files,
+    undeclared_application_dependencies,
+    violations,
+)
 
 
 class PackageBoundariesTests(unittest.TestCase):
@@ -31,6 +35,35 @@ class PackageBoundariesTests(unittest.TestCase):
         snapshot['applications'][0]['dependencies'].append('erl_hls')
         self.assertEqual(violations(snapshot, {'hls_runtime'}, {'erl_hls'})[0]['kind'],
                          'application_dependency')
+
+    def test_undeclared_project_imports_and_remote_types(self) -> None:
+        """Every direct project-app import or remote type requires a manifest dependency."""
+        for reference in ('imports', 'types'):
+            snapshot = self.snapshot()
+            snapshot['runtime_modules'][0][reference] = ['lower']
+            self.assertEqual(
+                undeclared_application_dependencies(snapshot, {'hls_runtime', 'erl_hls'}),
+                [{'kind': 'undeclared_application_dependency', 'reference': reference,
+                  'application': 'hls_runtime', 'module': 'codec', 'target': 'erl_hls',
+                  'target_module': 'lower'}])
+            snapshot['applications'][0]['dependencies'].append('erl_hls')
+            self.assertEqual(
+                undeclared_application_dependencies(snapshot, {'hls_runtime', 'erl_hls'}), [])
+
+    def test_forbidden_scan_ignores_unrequested_callers(self) -> None:
+        """A broad snapshot does not apply one package's reverse-edge rule to another package."""
+        snapshot = self.snapshot()
+        snapshot['runtime_modules'].append(
+            {'module': 'lower', 'application': 'erl_hls', 'imports': ['lower'], 'types': []})
+        self.assertEqual(violations(snapshot, {'hls_runtime'}, {'erl_hls'}), [])
+
+    def test_observer_declares_dynamic_resource_owners(self) -> None:
+        """The observer declares both owners used by its computed compiler-resource paths."""
+        manifest = (Path(__file__).resolve().parents[1] /
+                    'apps/hls_spacetime_observer/src/hls_spacetime_observer.app.src').read_text()
+        dependency_text = manifest.split('{applications, [', 1)[1].split(']}', 1)[0]
+        dependencies = {name.strip() for name in dependency_text.split(',')}
+        self.assertTrue({'erl_hls', 'hls_runtime'} <= dependencies)
 
     def test_release_cannot_smuggle_build_module_into_runtime_app(self) -> None:
         """Both app manifests and individual BEAM ownership are checked after packaging."""

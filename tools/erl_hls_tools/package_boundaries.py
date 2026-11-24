@@ -48,6 +48,28 @@ def application_files(root: Path, profile: str) -> list[Path]:
     return list(applications.values())
 
 
+def undeclared_application_dependencies(snapshot: dict,
+                                        applications: set[str]) -> list[dict[str, str]]:
+    """Reject direct project imports and remote types absent from the caller's app manifest."""
+    owners = {module: app['name'] for app in snapshot['applications'] for module in app['modules']}
+    declared = {app['name']: set(app['dependencies']) for app in snapshot['applications']}
+    errors: list[dict[str, str]] = []
+    for module in snapshot['runtime_modules']:
+        application = module['application']
+        if application not in applications:
+            continue
+        for reference in ('imports', 'types'):
+            for target_module in module[reference]:
+                target = owners.get(target_module)
+                if (target in applications and target != application and
+                        target not in declared.get(application, set())):
+                    errors.append(dict(kind='undeclared_application_dependency',
+                                       reference=reference, application=application,
+                                       module=module['module'], target=target,
+                                       target_module=target_module))
+    return errors
+
+
 def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
                release: Path | None = None) -> list[dict[str, str]]:
     """Reject declared dependencies, calls or remote types crossing the runtime/build boundary."""
@@ -60,6 +82,8 @@ def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
             for dependency in sorted(set(app['dependencies']) & forbidden):
                 errors.append(dict(kind='application_dependency', application=app['name'], target=dependency))
     for module in snapshot['runtime_modules']:
+        if module['application'] not in runtimes:
+            continue
         for kind in ('imports', 'types'):
             for target in module[kind]:
                 if owners.get(target) in forbidden:

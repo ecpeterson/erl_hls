@@ -2,7 +2,7 @@
     {description, "Snowflake actors, geometry and finite reference fixtures"},
     {vsn, "0.1.0"},
     {registered, []},
-    {applications, [kernel, stdlib, crypto, hls_runtime, hls_fabric, hls_lowering]},
+    {applications, [kernel, stdlib, crypto, hls_runtime, erl_hls, hls_fabric, hls_lowering]},
     {env, []},
     {modules, []},
     {licenses, ["Apache-2.0", "MIT"]},

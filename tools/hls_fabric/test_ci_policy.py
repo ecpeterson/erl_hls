@@ -20,7 +20,15 @@ class PolicyTests(unittest.TestCase):
 
     def test_local_entrypoint_and_unit_inventory(self) -> None:
         """The local entry point parses in bash and names real, unique tooling test modules."""
-        subprocess.run(['bash', '-n', ROOT / 'tools/hls_fabric/ci.sh'], check=True)
+        entrypoint = ROOT / 'tools/hls_fabric/ci.sh'
+        subprocess.run(['bash', '-n', entrypoint], check=True)
+        script = entrypoint.read_text()
+        spacetime = 'rebar3 as spacetime compile'
+        boundaries = ('python3 tools/hls_fabric/check_application_boundaries.py \\\n'
+                      '        --profile default --profile spacetime')
+        self.assertIn(spacetime, script)
+        self.assertIn(boundaries, script)
+        self.assertLess(script.index(spacetime), script.index(boundaries))
         names = [line for line in (ROOT / 'tools/hls_fabric/ci_unit_tests.txt').read_text().splitlines()
                  if line and not line.startswith('#')]
         self.assertEqual(len(names), len(set(names)))

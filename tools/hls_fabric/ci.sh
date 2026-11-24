@@ -40,7 +40,9 @@ if [[ "$suite" == all || "$suite" == software ]]; then
     python3 tools/test_source_contracts.py
     python3 tools/check_source_contracts.py
     rebar3 dialyzer
-    python3 tools/hls_fabric/check_application_boundaries.py
+    rebar3 as spacetime compile
+    python3 tools/hls_fabric/check_application_boundaries.py \
+        --profile default --profile spacetime
     rebar3 release -n hls_fabric
     python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_runtime --runtime hls_fabric \
         --release _build/default/rel/hls_fabric

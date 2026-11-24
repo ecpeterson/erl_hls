@@ -18,6 +18,7 @@ and decide whether gauge recentering is preferable.
 Used by the phi cell callbacks as an application arithmetic/type provider. XLS lowering imports the adjacent phi_field.x companion through dslx_imports/0.
 """.
 -behavior(hls_type).
+-behaviour(xls_type).
 %% Application constructors and field arithmetic.
 -export([
     scalar/0,
