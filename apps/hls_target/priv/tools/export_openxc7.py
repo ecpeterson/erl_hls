@@ -168,6 +168,7 @@ def capture(args: argparse.Namespace) -> None:
     yosys, nextpnr = packages / "oss-cad-suite", packages / "openxc7"
     chipdb = args.chipdb.resolve()
     tools = {"yosys": package(yosys, "yosys"), "nextpnr": package(nextpnr, "nextpnr-xilinx")}
+    tools["yosys"]["xc7-bram-map"] = identity(yosys / "share/yosys/xilinx/brams_xc6v_map.v")
     database = identity(chipdb)
     if args.chipdb_manifest:
         with args.chipdb_manifest.open("rb") as stream:

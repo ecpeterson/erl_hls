@@ -4,8 +4,10 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
+import sys
 import tarfile
 
 from replay import require
@@ -30,6 +32,9 @@ REPORTS = [
     "effective.xdc",
 ]
 XDC = ROOT / "platforms/xc7/xc7z030sbg485.xdc"
+BRAM_MAP = Path("share/yosys/xilinx/brams_xc6v_map.v")
+sys.path.insert(0, str(ROOT / "platforms/xc7/bram"))
+from check_yosys import audit_library
 
 SHARED_FILES = [
     *(INPUT / n for n in RTL),
@@ -127,7 +132,23 @@ def implement(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) -> 
                 check=True,
                 timeout=1200,
             )
+    check_mapping_log(native / "map.log", yosys.parent.parent / BRAM_MAP)
     place_or_route(native, router, chipdb, mode)
+
+
+def check_mapping_log(log: Path, library: Path) -> None:
+    """Require synthesis to have read the same BRAM map that the capture identifies."""
+    opened = {
+        Path(path).resolve()
+        for path in re.findall(
+            r"Executing Verilog-2005 frontend: (.*brams_xc6v_map\.v)$",
+            log.read_text(),
+            re.M,
+        )
+    }
+    require(
+        opened == {library.resolve()}, "effective Yosys BRAM map differs from capture"
+    )
 
 
 def place_or_route(native: Path, router: Path, chipdb: Path, mode: str) -> None:
@@ -176,6 +197,7 @@ def identities(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) ->
     tools = {
         "yosys": yosys,
         "yosys-executable": yosys.parent.parent / "libexec/yosys",
+        "xc7-bram-map": yosys.parent.parent / BRAM_MAP,
         "abc": yosys.parent.parent / "libexec/yosys-abc",
         "nextpnr": router,
         "chipdb": chipdb,
@@ -207,6 +229,7 @@ def main() -> None:
     args = parser.parse_args()
     run = args.output.resolve()
     tools = [args.yosys.resolve(), args.router.resolve(), args.chipdb.resolve()]
+    audit_library((tools[0].parent.parent / BRAM_MAP).read_text())
     stage(args.archive, run)
     inputs = {p: digest(run / p) for p in SHARED_FILES if p.is_relative_to(PREFIX)}
     simulate(run)
