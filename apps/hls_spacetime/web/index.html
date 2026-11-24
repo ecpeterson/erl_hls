@@ -749,6 +749,16 @@
                   aria-live="polite"
                 ></p>
                 <p id="sink-geometry" class="muted"></p>
+                <section id="interval-panel" hidden>
+                  <h4>Interval routing geometry</h4>
+                  <p id="interval-census"></p>
+                  <label>Net arc ID or full sink pin <input id="interval-arc" type="text" /></label>
+                  <button id="interval-inspect" type="button">Inspect branch</button>
+                  <p id="interval-status" role="status"></p>
+                  <p id="interval-detail"></p>
+                  <canvas id="interval-map" width="320" height="144" hidden aria-label="Branch tile wires in blue and fixed PIPs in amber"></canvas>
+                  <details><summary>Ordered native switches</summary><ol id="interval-switches"></ol></details>
+                </section>
                 <details>
                   <summary>All ordered arcs, including zero-delay arcs</summary>
                   <div id="sink-steps" class="sink-steps"></div>

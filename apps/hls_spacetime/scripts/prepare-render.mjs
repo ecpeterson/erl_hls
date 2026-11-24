@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { resolve, dirname, join, relative, isAbsolute } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { encodePrimitive } from "../web/prepared-format.js";
@@ -447,8 +448,19 @@ async function retain(from, to, descriptor, limit) {
 
 /** Compile one selected publication into a fresh portable directory. Ordinary
  * browser captures without this derivative remain supported by their old loader. */
-export async function prepareRender({ input, output, capture }) {
+export async function prepareRender({
+  input,
+  output,
+  capture,
+  openxc7,
+  chipdb,
+  constids,
+}) {
   check(input && output, "input and output are required");
+  check(
+    (!openxc7 && !chipdb && !constids) || (openxc7 && chipdb && constids),
+    "interval geometry requires --openxc7, --chipdb and --constids together",
+  );
   const root = resolve(input),
     out = resolve(output),
     index = JSON.parse(await bytes(join(root, "index.json"), 4 * MiB));
@@ -531,12 +543,25 @@ export async function prepareRender({ input, output, capture }) {
     bytes: manifestBytes.length,
     sha256: hash(manifestBytes),
   };
+  const example = { ...entry, render };
+  delete example.geometry;
+  if (openxc7) {
+    const publisher = fileURLToPath(
+      new URL("./openxc7-geometry.py", import.meta.url),
+    );
+    example.geometry = JSON.parse(
+      execFileSync("python3", [publisher, out, openxc7, chipdb, constids], {
+        input: JSON.stringify(example),
+        stdio: ["pipe", "pipe", "inherit"],
+      }),
+    );
+  }
   await writeFile(
     join(out, "index.json"),
     JSON.stringify({
       format: "spacetime-view-index",
       schema: 1,
-      examples: [{ ...entry, render }],
+      examples: [example],
     }),
     { flag: "wx" },
   );
@@ -554,7 +579,14 @@ export function parseArguments(args) {
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
     check(
-      ["--input", "--output", "--capture"].includes(args[i]) &&
+      [
+        "--input",
+        "--output",
+        "--capture",
+        "--openxc7",
+        "--chipdb",
+        "--constids",
+      ].includes(args[i]) &&
         args[i + 1] &&
         !args[i + 1].startsWith("--"),
       "invalid option",
@@ -569,7 +601,7 @@ if (
 ) {
   if (process.argv.includes("--help"))
     console.log(
-      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE]",
+      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE] [--openxc7 CAPTURE --chipdb CHIPDB --constids CONSTIDS]",
     );
   else
     prepareRender(parseArguments(process.argv.slice(2)))

@@ -24,7 +24,7 @@ export function publicationUrl(file, base) {
 
 /** Read a bounded stream before decoding, then require the advertised bytes and
  * digest. A partial response cannot become a successfully loaded table. */
-async function checkedJson(url, expected, limit, fetcher, signal) {
+export async function checkedJson(url, expected, limit, fetcher, signal) {
   if (
     !expected ||
     !Number.isSafeInteger(expected.bytes) ||

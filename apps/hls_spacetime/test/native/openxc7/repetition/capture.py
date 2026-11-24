@@ -132,15 +132,30 @@ def publish(args: argparse.Namespace) -> None:
             args.output / "native",
             "--metadata",
             args.output / "metadata.json",
+            "--openxc7-chipdb",
+            args.chipdb,
             "--output",
             args.output / "view",
         ],
         check=True,
     )
+    geometry = []
+    if args.all_words:
+        meta = json.loads((args.output / "native/manifest.json").read_bytes())
+        commit = meta["tools"]["nextpnr"]["build"]["commit"]
+        geometry = [
+            "--openxc7",
+            args.output / "native",
+            "--chipdb",
+            args.chipdb,
+            "--constids",
+            args.tools / f"nextpnr-xilinx-{commit}/xilinx/constids.inc",
+        ]
     subprocess.run(
         [
             "node",
             scripts / "prepare-render.mjs",
+            *geometry,
             "--input",
             args.output / "view",
             "--output",

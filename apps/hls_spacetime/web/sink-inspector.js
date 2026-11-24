@@ -273,6 +273,9 @@ export function createSinkInspector(onChange) {
     get selection() {
       return selection;
     },
+    get pathArcs() {
+      return path?.arcIndices ?? [];
+    },
     get activeArc() {
       return activeArc;
     },

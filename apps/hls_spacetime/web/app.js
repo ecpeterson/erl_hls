@@ -23,6 +23,7 @@ import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
 import { openxc7Routing, showOpenxc7Routes } from "./openxc7-routes.js";
+import { createIntervalInspector } from "./interval-inspector.js";
 import { loadComputations, publicationUrl } from "./computation-loader.js";
 import { loadRecording } from "./recording-loader.js";
 import { loadPreparedRenderWorker } from "./prepared-loader.js";
@@ -139,6 +140,7 @@ const sinkInspector = createSinkInspector(() => {
   $("pick-notice").textContent = "";
   repaint();
 });
+const intervalInspector = createIntervalInspector(() => repaint());
 const sceneSelection = createSceneSelection({
   onChoose(target) {
     if (target.kind === "sink") {
@@ -1208,6 +1210,9 @@ function renderCircuitSummary(layers) {
       : "";
   node.textContent =
     `${writes.toLocaleString()} recorded writes · ${arcs.toLocaleString()} native arcs summed across ${layers.length} clocks · ${pips.toLocaleString()} PIP locations summed across clocks · ${unknown.toLocaleString()} unmapped target-bit occurrences · ${untimed} displayed cones with unknown timing${launchSummary} · ${filtered} filtered write-cone occurrences. ` +
+    (intervalInspector.available
+      ? "Embedded route coverage across the displayed clocks totals "
+      : "") +
     Object.entries(dispositions)
       .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
       .join(" · ") +
@@ -1726,6 +1731,7 @@ function buildStackScene() {
     enabled: arrival,
     scope: metric === "registered_launch" ? "registered" : "static",
   });
+  intervalInspector.update(sinkInspector);
   const explorer = sinkInspector.explorer;
   regionalControls.update(state.computations, explorer.neighborhood);
   scenarioControls.update(state.computations, explorer.cut);
@@ -3150,6 +3156,7 @@ function bindControls() {
     };
     const sequence = ++state.loadSequence;
     stepComparison.reset();
+    intervalInspector.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();
@@ -3267,6 +3274,18 @@ function bindControls() {
           : await loadComputations(options);
         if (sequence !== state.loadSequence) return;
         installComputationData(data);
+        if (expected.geometry) {
+          await intervalInspector.configure(
+            {
+              entry: expected,
+              baseUrl: options.baseUrl,
+              model: state.model,
+              signal,
+            },
+            state.computations,
+          );
+          if (sequence !== state.loadSequence) return;
+        }
         await new Promise((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
         );
@@ -3292,6 +3311,7 @@ function bindControls() {
     sceneSelection.reset();
     const sequence = ++state.loadSequence;
     stepComparison.reset();
+    intervalInspector.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();

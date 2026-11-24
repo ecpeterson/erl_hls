@@ -97,6 +97,23 @@ async function ledger(root) {
       (kind === 0 ? "net" : "logic") + (delay === null ? "_missing" : "_known"),
     );
   }
+  let intervalGeometry;
+  if (entry.geometry) {
+    const m = await verified(root, entry.geometry);
+    assert.equal(m.render, entry.render.sha256);
+    assert.equal(m.view, entry.sha256);
+    assert.equal(m.checkpoint, view.catalogue.checkpoint);
+    assert.equal(m.source, entry.computations.sha256);
+    assert.deepEqual(
+      [m.selection.firstCycle, m.selection.endCycle, m.branches, m.writes],
+      [1775, 1874, branches.size, writes.length],
+    );
+    intervalGeometry = {
+      sha256: entry.geometry.sha256,
+      counts: m.counts,
+      unavailableByNet: m.unavailableByNet,
+    };
+  }
   const selected = tables.writes.find((w) => w.event === "e/25066");
   const details = selected.cones.map((i) => {
     const c = tables.cones[i];
@@ -133,6 +150,7 @@ async function ledger(root) {
       uniqueCones: active.size,
       uniqueBranches: branches.size,
       dispositions,
+      intervalGeometry,
       uniqueArcDelays: timing,
       sourceCounts: render.render.sourceCounts,
       selected: {

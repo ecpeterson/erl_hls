@@ -43,6 +43,23 @@ node apps/hls_spacetime/scripts/prepare-view.mjs --bundle joined/bundle.json --o
 npm --prefix apps/hls_spacetime start -- --data "$PWD/view"
 ```
 
+### Publish interval geometry from a frozen openXC7 capture
+
+Use a complete timed capture containing numeric fixed routes, its matching chipdb and the pinned observer’s `xilinx/constids.inc`. The joined recording must identify the cycle interval in its selection metadata. From the umbrella root, choose fresh output directories and run under the project resource guard. The all-word N2 capture driver also runs this preparation.
+
+```sh
+scripts=apps/hls_spacetime/scripts
+node "$scripts/prepare-view.mjs" --bundle joined/bundle.json --metadata metadata.json \
+  --openxc7 native --openxc7-chipdb "$CHIPDB" --output view
+node "$scripts/prepare-render.mjs" --input view --output prepared \
+  --openxc7 native --chipdb "$CHIPDB" --constids "$CONSTIDS"
+npm --prefix apps/hls_spacetime start -- --data "$PWD/prepared"
+```
+
+The first step can qualify selected LUT endpoints in a previously exported route graph. The second step binds the interval geometry to the exact recording, computation source, render derivative, checkpoint and chipdb. It reconciles every demanded net’s incoming PIPs before publishing shared node, switch and branch tables. Fixed-route capture requires at most two million PIP rows, one million demanded branches and sixteen million PIP membership references for this derivative. Each part contains at most 1,024 rows and 1 MiB of decoded JSON. A failed preparation leaves the output without a served index.
+
+Select a sink in the arrival view to load its representative path. Click a net arc in the ordered path to inspect its wire footprint and switches. Under **Interval routing geometry**, enter a full sink pin or net arc ID to inspect another branch. An empty lookup returns to the selected path. The viewer verifies part hashes before applying a selection, with a 16 MiB cache budget and a 32 MiB per-inspection budget measured in decoded JSON bytes. The four-bit and Vivado publications also work without this attachment.
+
 Run the three serial, compile-only witnesses from the umbrella root under the local process guard. `TILEGRID` is the device’s Project X-Ray `tilegrid.json`. Set `OPENXC7_CHIPDB_MANIFEST` to include the package-overlay check. The script uses fresh output directories and requires Icarus Verilog from the Apio suite.
 
 ```sh
