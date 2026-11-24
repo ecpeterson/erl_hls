@@ -1,6 +1,6 @@
 -module(hls_domain_endpoint_packets_validation).
 -moduledoc "Builds a finite eight-offer packet-router RTL witness. Real source capture plans supply canonical frames; native binding packing supplies independent packet bytes. The schedule names expected arbitration winners and fault edges explicitly instead of duplicating the router FSM. Endpoint ownership, carrier integrity and physical timing remain external assumptions.".
--include_lib("hls_fabric/include/hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% Normal source-build compilation and bounded simulation consume the written bundle separately.
 -export([write/1]).
@@ -45,7 +45,7 @@ fixture() ->
     Crossings = [#{index => Id, source_domain => 0, destination_domain => 1,
         link => #{index => Id, direction => outgoing, source_index => 0, destination_index => 1,
             slots => 2, classes => Classes}} || Id <- Ids],
-    Source = hls_source:library_file(hls_fabric, "runtime/domain/hls_domain_channel_tx.erl"),
+    Source = hls_source:library_file(hls_runtime, "fabric/runtime/domain/hls_domain_channel_tx.erl"),
     {ok, Parsed} = hls_source:parse_file(Source),
     Forms = hls_records:resolve(Parsed),
     Inputs = maps:from_list(hls_records:fields(hls_records:find(Forms, endpoint_tx_input))),
@@ -57,7 +57,7 @@ fixture() ->
 -spec sources() -> hls_generated_files:files().
 sources() -> maps:from_list([begin {ok, Bytes} = file:read_file(Path), {"evidence/native/" ++ Name, Bytes} end
     || {Name, Path} <- [{"hls_protocol_capture_fixture.erl", filename:absname("apps/hls_fabric/test/hls_protocol_capture_fixture.erl")},
-        {"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_fabric), "include", "hls_domain_channel_endpoints.hrl"])},
+        {"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_runtime), "include", "hls_domain_channel_endpoints.hrl"])},
         {"hls_domain_endpoint_packets_validation.erl", filename:absname(?FILE)}]]).
 
 %% Pack every driven input and all relevant outputs; valid packet/data fields are compared in full.

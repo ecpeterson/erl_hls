@@ -19,13 +19,18 @@ BUILD = ROOT / "build/partition-link/rtl"
 
 
 def compiler_entry(public: Path) -> Path:
-    """Return the selected compiler application's standalone build entrypoint."""
-    return public / "priv/tools/compile_xls.py"
+    """Return the target application's standalone build entrypoint."""
+    from compiler_paths import compiler_resource
+    return compiler_resource(public, "hls_target", "priv/tools/compile_xls.py")
 
 
 def copy_libraries(stage: Path, public: Path) -> list[Path]:
     """Flatten the complete private DSLX libraries after rejecting name collisions."""
-    libraries = sorted(public.glob("priv/xls/**/*.x")) + sorted(PROJECT.glob("apps/hls_lowering/priv/xls/**/*.x"))
+    from compiler_paths import compiler_resource
+    roots = [compiler_resource(public, "hls_compile", "priv/xls"),
+             compiler_resource(public, "hls_fabric", "priv/xls"),
+             compiler_resource(public, "hls_target", "priv/xls")]
+    libraries = sorted({path.resolve() for root in roots for path in root.rglob("*.x")})
     names = [path.name for path in libraries]
     if len(set(names)) != len(names):
         duplicates = sorted({name for name in names if names.count(name) > 1})

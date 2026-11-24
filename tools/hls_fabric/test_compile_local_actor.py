@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import compile_local_actor
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 
 public = compiler_root('test')
 BuildFixture = compiler_tool(public, 'testing').BuildFixture
@@ -19,7 +19,8 @@ class LocalActorCompilationTests(BuildFixture):
         super().setUp()
         self.manifest = Path(str(self.source) + '.json')
         self.frame_config = self.source.parent / 'frame_config.x'
-        self.frame_config.write_bytes((public / 'priv/xls/lib/frame_config.x').read_bytes())
+        self.frame_config.write_bytes(
+            compiler_resource(public, 'hls_compile', 'priv/xls/lib/frame_config.x').read_bytes())
         self.bind_source()
         self.imports = self.root / 'import with spaces'
         self.library = self.imports / 'nested/helper.x'

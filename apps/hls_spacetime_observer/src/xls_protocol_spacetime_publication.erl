@@ -138,9 +138,9 @@ plan(
         ["boundary/boundary.x", "boundary/protocol_boundary.sv"]
     ),
     Libraries = [
-        {hls_lowering, <<"support/fabric/">>, "xls/lib/protocol_transport.x"},
-        {hls_lowering, <<"support/fabric/">>, "xls/lib/protocol_egress.x"},
-        {erl_hls, <<"support/compiler/">>, "xls/lib/arbitration.x"}
+        {hls_target, <<"support/target/">>, "xls/lib/protocol_transport.x"},
+        {hls_target, <<"support/target/">>, "xls/lib/protocol_egress.x"},
+        {hls_compile, <<"support/compiler/">>, "xls/lib/arbitration.x"}
     ],
     lists:foreach(
         fun({App, Prefix, Name}) ->

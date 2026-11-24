@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import shutil
 
 from backend_commands import digest, execute
@@ -17,14 +17,15 @@ def run(args: argparse.Namespace) -> None:
     fixture = "partition_ordered_io.x" if args.ordered else "partition_tile_io.x" if args.tile else "partition_io.x"
     top = "partition_ordered_io_tb" if args.ordered else "partition_io_tb"
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_partition_io.x", ROOT / "apps/hls_fabric/test/xls" / fixture,
-               ROOT / "apps/hls_lowering/priv/xls/hls_partition_tile_io.x",
-               ROOT / "apps/hls_lowering/priv/xls/lib/protocol_framing.x", ROOT / "apps/hls_lowering/priv/xls/lib/protocol_rectangle.x",
-               ROOT / "apps/hls_lowering/priv/xls/lib/protocol_envelope.x",
-               public / "priv/xls/lib/axis.x", public / "priv/xls/lib/frame_config.x",
-               public / "priv/xls/fabric/hls_spatial_router.x"]
+    sources = [ROOT / "apps/hls_target/priv/xls/hls_partition_io.x", ROOT / "apps/hls_fabric/test/xls" / fixture,
+               ROOT / "apps/hls_target/priv/xls/hls_partition_tile_io.x",
+               ROOT / "apps/hls_target/priv/xls/lib/protocol_framing.x", ROOT / "apps/hls_target/priv/xls/lib/protocol_rectangle.x",
+               ROOT / "apps/hls_target/priv/xls/lib/protocol_envelope.x",
+               compiler_resource(public, "hls_compile", "priv/xls/lib/axis.x"),
+               compiler_resource(public, "hls_compile", "priv/xls/lib/frame_config.x"),
+               compiler_resource(public, "hls_fabric", "priv/xls/fabric/hls_spatial_router.x")]
     bench = ROOT / "apps/hls_fabric/test/rtl" / (top + ".sv")
-    bridges = [ROOT / "apps/hls_lowering/priv/rtl/hls_partition_activation.sv"] if args.ordered else []
+    bridges = [ROOT / "apps/hls_target/priv/rtl/hls_partition_activation.sv"] if args.ordered else []
     tracked = sources + bridges + [bench, Path(__file__), ROOT / "tools/hls_fabric/test_actor_rtl.py"]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))

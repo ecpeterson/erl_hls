@@ -253,12 +253,13 @@ def main() -> None:
     args = parser.parse_args()
     # Standalone experiment bootstrap; compiler helpers retain root-isolated imports.
     sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
-    from compiler_paths import compiler_root
+    from compiler_paths import compiler_resource, compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     args.stage.mkdir(parents=True, exist_ok=False)
     cells = args.yosys.parent.parent / 'share/yosys/xilinx/cells_sim.v'
-    sources = [Path(__file__), Path(__file__).with_suffix('.x'), public / 'priv/xls/lib/hls_fixed.x',
-               public / 'priv/xls/lib/hls_multiply.x', cells,
+    library = compiler_resource(public, 'hls_compile', 'priv/xls/lib')
+    sources = [Path(__file__), Path(__file__).with_suffix('.x'), library / 'hls_fixed.x',
+               library / 'hls_multiply.x', cells,
                cells.with_name('cells_map.v'), cells.with_name('xc7_dsp_map.v'),
                ROOT / 'platforms/xc7/timing_model/characterize.py']
     tools = [args.yosys, *[args.xls / n for n in ('ir_converter_main', 'opt_main', 'codegen_main')],
@@ -269,7 +270,8 @@ def main() -> None:
         root.mkdir()
         shutil.copyfile(Path(__file__).with_suffix('.x'), root / 'staged_reciprocal.x')
         for library in ('hls_fixed.x', 'hls_multiply.x'):
-            shutil.copyfile(public / 'priv/xls/lib' / library, root / library)
+            shutil.copyfile(compiler_resource(public, 'hls_compile', 'priv/xls/lib') / library,
+                            root / library)
         for function in functions:
             for label, argv, output in (
                     ('convert', [str(args.xls / 'ir_converter_main'), '--top=' + function, '--dslx_path=.',

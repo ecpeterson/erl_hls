@@ -94,7 +94,7 @@ duplicate_primitive_pin_test() ->
             _ -> Net
         end || Net <- maps:get(nets, P)],
         ?assertError({spacetime, {duplicate_physical_pin, <<"r1">>, <<"D">>}},
-            hls_spacetime_physical:validate(build(), #{}, P#{nets := Nets}))
+            hls_target_physical:validate(build(), #{}, P#{nets := Nets}))
     end).
 
 %% Missing timing values are explicit null; a malformed numeric token cannot become zero.
@@ -113,16 +113,16 @@ distributed_word_test() ->
         Resources=#{<<"word">>=>#{width=>2}},
         Qualified=P#{generated=>[#{id=><<"word-rtl">>,source=><<"Two-bit generated register">>}],
             bindings=>[binding()]},
-        ?assertMatch(#{mapped:=1,physical_cells:=3},hls_spacetime_physical:validate(build(),Resources,Qualified)),
+        ?assertMatch(#{mapped:=1,physical_cells:=3},hls_target_physical:validate(build(),Resources,Qualified)),
         Absent=Qualified#{bindings=>[maps:remove(bits,binding())]},
-        ?assertError({spacetime,missing_distributed_bits},hls_spacetime_physical:validate(build(),Resources,Absent)),
+        ?assertError({spacetime,missing_distributed_bits},hls_target_physical:validate(build(),Resources,Absent)),
         Bad=Qualified#{bindings=>[(binding())#{bits:=[]} ]},
-        ?assertError({spacetime,bit_binding_coverage},hls_spacetime_physical:validate(build(),Resources,Bad)),
+        ?assertError({spacetime,bit_binding_coverage},hls_target_physical:validate(build(),Resources,Bad)),
         [B0,B1]=maps:get(bits,binding()),
         Unknown=Qualified#{bindings=>[(binding())#{bits:=[B0,maps:without([cell,pin],B1#{status:=unknown})]}]},
-        ?assertError({spacetime,unsupported_distributed_bit},hls_spacetime_physical:validate(build(),Resources,Unknown)),
+        ?assertError({spacetime,unsupported_distributed_bit},hls_target_physical:validate(build(),Resources,Unknown)),
         WrongPin=Qualified#{bindings=>[(binding())#{bits:=[B0,B1#{pin:=<<"D">>}]}]},
-        ?assertError({spacetime,{bit_output_pin,<<"r1">>,<<"D">>}},hls_spacetime_physical:validate(build(),Resources,WrongPin))
+        ?assertError({spacetime,{bit_output_pin,<<"r1">>,<<"D">>}},hls_target_physical:validate(build(),Resources,WrongPin))
     end).
 
 %% Names-only physical candidates may be retained, but cannot inflate mapped coverage.
@@ -133,7 +133,7 @@ ambiguous_bits_test() ->
         [B0,B1]=maps:get(bits,binding()),
         B=(binding())#{disposition:=ambiguous,bits:=[B0,maps:without([cell,pin],B1#{status:=unknown})]},
         Q=P#{generated=>[#{id=><<"word-rtl">>,source=><<"Candidate only">>}],bindings=>[B]},
-        ?assertMatch(#{mapped:=0,ambiguous:=1},hls_spacetime_physical:validate(build(),#{<<"word">>=>#{width=>2}},Q))
+        ?assertMatch(#{mapped:=0,ambiguous:=1},hls_target_physical:validate(build(),#{<<"word">>=>#{width=>2}},Q))
     end).
 
 %% Native timing references and corner order are independent of parser byte-count consistency.
@@ -142,7 +142,7 @@ native_rejections_test_() ->
     [?_test(with_export(fun(D)->
         P=hls_spacetime_import:read(D,build(),<<"checkpoint-digest">>),
         Q=P#{native:=Change(maps:get(native,P))},
-        ?assertException(error,{spacetime,_},hls_spacetime_physical:validate(build(),#{},Q))
+        ?assertException(error,{spacetime,_},hls_target_physical:validate(build(),#{},Q))
     end))||Change<-[
         fun(N)->N#{sampled_nets:=[<<"missing">>]} end,
         fun(N)->N#{sampled_nets:=[<<"n0">>,<<"n0">>]} end,
@@ -176,7 +176,7 @@ port_endpoint_test() ->
         P=hls_spacetime_import:read(D,build(),<<"checkpoint-digest">>),
         #{native:=N=#{paths:=[V]}}=P,
         Q=P#{native:=N#{paths:=[V#{endpoint:=<<"out">>}]}},
-        ?assertMatch(#{physical_cells:=3},hls_spacetime_physical:validate(build(),#{},Q))
+        ?assertMatch(#{physical_cells:=3},hls_target_physical:validate(build(),#{},Q))
     end).
 
 %% Empty claims leave every semantic resource explicitly unmapped, without changing event histories.

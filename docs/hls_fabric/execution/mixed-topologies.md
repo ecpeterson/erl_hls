@@ -30,7 +30,7 @@ A group may also contain `{actor, Id}`, including an exact actor alongside a fam
 
 ## Shared RAM owner
 
-The [shared-service template](../../../apps/hls_lowering/priv/xls/templates/shared_service.x.in) contains the RAM owner's initialization and RUN sequence. [`xls_scheduler_codegen`](../../../apps/hls_lowering/src/backend/xls/scheduler/xls_scheduler_codegen.erl) supplies feature bindings grouped by ports, capture, retirement, admission and memory commands; shared-artifact validation remains in `xls_scheduler_actor`.
+The [shared-service template](../../../apps/hls_target/priv/xls/templates/shared_service.x.in) contains the RAM owner's initialization and RUN sequence. [`xls_scheduler_codegen`](../../../apps/hls_target/src/backend/xls/scheduler/xls_scheduler_codegen.erl) supplies feature bindings grouped by ports, capture, retirement, admission and memory commands; shared-artifact validation remains in `xls_scheduler_actor`.
 
 Within RUN, the owner merges captured inputs with credits from previously registered requests, retires a held executor result, applies the previous admission intent to the retired metadata, and reserves dispatch. Ordinary admission selects from a snapshot that excludes its existing reservation. Exclusive collection selects independently from the original ownership snapshot; opportunistic collection uses the ordinary intent. Incoming executor results cannot bypass the completion register, and new captures cannot enter current selection. Dispatch joins prior RAM write acknowledgments. Physical writes and publication send registered commands while the current decisions populate the next commands. These are steps within the existing owner transition, not additional pipeline stages.
 
@@ -115,7 +115,7 @@ These choices preserve each sender's ordering while letting unrelated senders co
 
 Shared routers also use an **effect-window arbiter**. Its grant permits one early return of a batch-completion credit, so a router can retain a lookahead batch while its current batch drains. It does not grant every message send or serialize all actor execution. Credit returns have dedicated inputs so they do not queue behind application requests awaiting mailbox space.
 
-The [shared router template](../../../apps/hls_lowering/priv/xls/templates/scheduler_effect_router.x.in) exposes that sequence: observe the retained batch, route its active effect, send registered ownership actions, then commit the next batch. Compact and instance-based renderers supply concrete channels and route selection to the same template. Newly received batches cannot bypass the retained head.
+The [shared router template](../../../apps/hls_target/priv/xls/templates/scheduler_effect_router.x.in) exposes that sequence: observe the retained batch, route its active effect, send registered ownership actions, then commit the next batch. Compact and instance-based renderers supply concrete channels and route selection to the same template. Newly received batches cannot bypass the retained head.
 
 The physical profile chooses the scope of this extra capacity with `effect_window_partition`:
 

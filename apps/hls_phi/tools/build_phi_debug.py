@@ -5,7 +5,7 @@ Uses native XLS plus Yosys. Each directory retains DSLX, IR, RTL, source hashes,
 commands and logs; debug/ contains the deployable shared-transport wrapper.
 """
 import phi_tool_paths  # Resolve shared tooling for this application.
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 from backend_paths import erl_command, erlang_environment
 import argparse
@@ -89,8 +89,11 @@ def build(args: argparse.Namespace) -> None:
         subprocess.run(erl_command(public, expression, out, str(mode == "observed").lower(),
                                   str(args.shards), profile="test"), cwd=ROOT,
                        env=erlang_environment("test", compiler=public), check=True)
-        for source in [*public.glob("priv/xls/lib/*.x"), *ROOT.glob("apps/hls_lowering/priv/xls/lib/*.x"), *public.glob("priv/xls/fabric/*.x"),
-                       ROOT / "apps/hls_phi/src/phi_field.x", public / "priv/rtl/hls_1r1w_ram.v"]:
+        for source in [*compiler_resource(public, "hls_compile", "priv/xls/lib").glob("*.x"),
+                       *ROOT.glob("apps/hls_target/priv/xls/lib/*.x"),
+                       *compiler_resource(public, "hls_fabric", "priv/xls/fabric").glob("*.x"),
+                       ROOT / "apps/hls_phi/src/phi_field.x",
+                       compiler_resource(public, "hls_target", "priv/rtl/hls_1r1w_ram.v")]:
             shutil.copy(source, out)
         banks = len(json.loads((out / "actors.json").read_text())["banks"])
         rams = subprocess.check_output(["bash", "-c", 'source tools/hls_fabric/scheduler_ram_configurations.sh; scheduler_ram_configurations "$1"',
@@ -102,7 +105,10 @@ def build(args: argparse.Namespace) -> None:
     (stage / "fixture.json").write_text(json.dumps({"shards": args.shards}) + "\n")
     support = stage / "support"
     support.mkdir(exist_ok=True)
-    for source in [*public.glob("priv/xls/debug/*.x"), *public.glob("priv/xls/fabric/*.x"), *public.glob("priv/xls/lib/*.x"), *ROOT.glob("apps/hls_lowering/priv/xls/lib/*.x")]:
+    for source in [*compiler_resource(public, "hls_target", "priv/xls/debug").glob("*.x"),
+                   *compiler_resource(public, "hls_fabric", "priv/xls/fabric").glob("*.x"),
+                   *compiler_resource(public, "hls_compile", "priv/xls/lib").glob("*.x"),
+                   *ROOT.glob("apps/hls_target/priv/xls/lib/*.x")]:
         shutil.copy(source, support)
     for module, top, stages, ii in (("hls_fabric_router", "HostRoutedTx", 1, 1),
                                     ("hls_debug_observer", "Observer", 2, 1),

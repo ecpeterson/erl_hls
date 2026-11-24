@@ -1,0 +1,126 @@
+// Selected expression failures. Values on a failed path are placeholders;
+// consumers must check the code before committing state or publishing effects.
+pub enum Kind : u4 {
+    NONE = 0,
+    FUNCTION_CLAUSE = 1,
+    MATCH_FAILURE = 2,
+    REQUEST_LENGTH = 3,
+    CASE_CLAUSE = 4,
+    IF_CLAUSE = 5,
+    EXPLICIT_FAIL = 6,
+    INVALID_MESSAGE = 7,
+    INVALID_REPEAT = 8,
+    REDUCTION_MISMATCH = 9,
+    REDUCTION_PROTOCOL = 10,
+    INVALID_EFFECT = 11,
+    INTERNAL = 12,
+    BADARITH = 13,
+    BADARG = 14,
+    REPLY_CONTRACT = 15,
+}
+
+// Zero is success. Codes 1..15 are generic reasons; source-located codes are
+// allocated by the actor compiler and decoded with that artifact's source map.
+// Bits 3:0 retain the reason; wire status also distinguishes terminal failures from rejected requests.
+pub type Code = u16;
+pub const NONE = Code:0;
+pub const FUNCTION_CLAUSE = Code:1;
+pub const MATCH_FAILURE = Code:2;
+pub const REQUEST_LENGTH = Code:3;
+pub const CASE_CLAUSE = Code:4;
+pub const IF_CLAUSE = Code:5;
+pub const EXPLICIT_FAIL = Code:6;
+pub const INVALID_MESSAGE = Code:7;
+pub const INVALID_REPEAT = Code:8;
+pub const REDUCTION_MISMATCH = Code:9;
+pub const REDUCTION_PROTOCOL = Code:10;
+pub const INVALID_EFFECT = Code:11;
+pub const INTERNAL = Code:12;
+pub const BADARITH = Code:13;
+pub const BADARG = Code:14;
+// A live caller must receive one of its declared reply record types.
+pub const REPLY_CONTRACT = Code:15;
+
+// Selects the earlier code unless it is successful, preserving evaluation priority.
+pub fn first(earlier: Code, later: Code) -> Code {
+    if earlier != NONE { earlier } else { later }
+}
+
+// Codes are in evaluation order. Fold from the right to retain the same
+// priority expression without making generated source grow in nesting depth.
+pub fn first_all<N: u32>(codes: Code[N]) -> Code {
+    for (i, selected): (u32, Code) in u32:0..N {
+        first(codes[N - i - u32:1], selected)
+    } (NONE)
+}
+
+// Checks source-code preservation and left-to-right priority across a full array.
+#[test]
+fn first_all_preserves_source_code_and_order() {
+    assert_eq(first_all([NONE, NONE, NONE]), NONE);
+    for (position, ()): (u32, ()) in u32:0..u32:64 {
+        let codes = for (i, codes): (u32, Code[64]) in u32:0..u32:64 {
+            let code = ((i + u32:1) as Code) << u32:4 | BADARG;
+            update(codes, i, if i >= position { code } else { NONE })
+        } (zero!<Code[64]>());
+        assert_eq(first_all(codes), codes[position]);
+    } (())
+}
+
+// Returns code exactly when failed is true; otherwise returns successful NONE.
+pub fn check(failed: bool, code: Code) -> Code {
+    if failed { code } else { NONE }
+}
+
+// Reports whether a code denotes any failure rather than successful NONE.
+pub fn failed(code: Code) -> bool { code != NONE }
+
+// Transport and scheduler failures precede callback evaluation. A selected
+// callback retains its original code rather than becoming a generic FAIL.
+pub fn dispatch(invalid_message: bool, invalid_repeat: bool,
+    incomplete_reduction: bool, effective: bool, callback: Code) -> Code {
+    if invalid_message { INVALID_MESSAGE }
+    else if invalid_repeat { INVALID_REPEAT }
+    else if incomplete_reduction { REDUCTION_PROTOCOL }
+    else { check(effective, callback) }
+}
+
+// Selects completion protocol faults before a dispatched callback's own code.
+pub fn completion(dispatched: bool, invalid_repeat: bool, callback: Code) -> Code {
+    if !dispatched { REDUCTION_PROTOCOL }
+    else if invalid_repeat { INVALID_REPEAT }
+    else { callback }
+}
+
+// Decodes the low reason nibble; any higher source-location bits are ignored.
+pub fn kind(code: Code) -> Kind { (code as u4) as Kind }
+
+// Wire errors use one u32 word. The upper flags distinguish terminal actor
+// lifetime from recoverable admission, and source codes from runtime reasons.
+pub const WIRE_TERMINAL = u32:1 << u32:31;
+pub const WIRE_SOURCE = u32:1 << u32:30;
+
+// Preserve the complete source code; zero remains successful, not a fault.
+pub fn source_error(code: Code) -> u32 {
+    if code == NONE { u32:0 } else { WIRE_TERMINAL | WIRE_SOURCE | code as u32 }
+}
+
+// Runtime ownership faults have no fabricated source position.
+pub fn runtime_error(reason: u32) -> u32 {
+    if reason == u32:0 { u32:0 } else { WIRE_TERMINAL | reason }
+}
+
+// Admission rejections leave both terminal flags clear.
+pub fn wire_terminal(error: u32) -> bool { (error & WIRE_TERMINAL) != u32:0 }
+
+// A source code can share its low bits with a runtime reason without aliasing it.
+#[test]
+fn wire_failure_categories_test() {
+    assert_eq(source_error(NONE), u32:0);
+    assert_eq(runtime_error(u32:0), u32:0);
+    assert_eq(source_error(Code:17), u32:0xc0000011);
+    assert_eq(runtime_error(u32:17), u32:0x80000011);
+    assert_eq(wire_terminal(u32:16), false);
+    assert_eq(wire_terminal(source_error(Code:17)), true);
+    assert_eq(wire_terminal(runtime_error(u32:17)), true);
+}

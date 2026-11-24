@@ -48,7 +48,7 @@ def main():
         scope = ('complete five-actor reduction fixture, pipeline stages 2, XC7 ABC9; '
                  'physical queries versus physical plus committed actor queries')
     rows, inputs = [], {}
-    rtl = ROOT/'apps/erl_hls/priv/rtl/debug'
+    rtl = ROOT/'apps/hls_target/priv/rtl/debug'
     for mode, instrumented in modes.items():
         # Use the preserved Yosys representation; Verilog export may omit
         # application memory-mapping attributes.

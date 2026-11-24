@@ -195,9 +195,9 @@ def main() -> None:
         'apps/hls_fabric/test/hls_domain_reattach_live.erl', 'apps/hls_fabric/test/hls_domain_shutdown_live.erl',
         'apps/hls_fabric/test/hls_shutdown_supervisor.erl', 'apps/hls_fabric/test/hls_test_nodes.erl', 'apps/hls_fabric/test/rtl/domain_stream_sim.cpp',
         'apps/hls_fabric/test/rtl/framed_fifo_stream.h',
-        'apps/hls_fabric/src/runtime/domain/hls_domain_fabric.erl',
-        'apps/hls_fabric/src/runtime/domain/hls_domain_endpoint.erl',
-        'apps/hls_fabric/src/wire/hls_domain_wire.erl',
+        'apps/hls_runtime/src/fabric/runtime/domain/hls_domain_fabric.erl',
+        'apps/hls_runtime/src/fabric/runtime/domain/hls_domain_endpoint.erl',
+        'apps/hls_runtime/src/fabric/wire/hls_domain_wire.erl',
         'tools/hls_fabric/test_domain_stream.py', 'apps/hls_fabric/test/domain_stream_semantics.x.in',
     ]]
     inputs = {str(path): digest(path) for path in tracked}

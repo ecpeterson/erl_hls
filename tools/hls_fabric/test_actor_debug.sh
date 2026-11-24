@@ -18,8 +18,8 @@ erl -noshell \
             mailbox_mixed -> #{direct_actor_debug => true, mailbox_debug => true}; _ -> #{mailbox_debug => true} end,
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
-    cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$project_root/apps/hls_phi/src/phi_field.x" "$stage/"
-    cp tools/hls_fabric/scheduler_ram_configurations.sh "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
+    cp "$hls_compile_root"/priv/xls/lib/*.x apps/hls_target/priv/xls/lib/*.x "$hls_fabric_root"/priv/xls/fabric/*.x "$project_root/apps/hls_phi/src/phi_field.x" "$stage/"
+    cp tools/hls_fabric/scheduler_ram_configurations.sh "$hls_target_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
     bash apps/hls_phi/tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
     python3 tools/hls_fabric/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
@@ -29,7 +29,7 @@ if [[ "$kind" == phi ]]; then
     exit 0
 fi
 scheduler_count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$stage/small-actors.json")
-options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_target/priv/xls/lib:$project_root/apps/hls_fabric/priv/xls/fabric:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
@@ -48,7 +48,7 @@ path = Path(sys.argv[1])
 path.write_text(path.read_text().replace("actor_debug", "actor_debug_production"))
 PY
     "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
-        --dslx_path="$production:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$production:$project_root/apps/hls_target/priv/xls/lib:$project_root/apps/hls_fabric/priv/xls/fabric:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$production/actor_debug.x" > "$production/actor_debug.ir"
     "$xls_root/opt_main" "$production/actor_debug.ir" > "$production/actor_debug.opt.ir"
 fi
@@ -71,5 +71,5 @@ for stages in "${stages_to_test[@]}"; do
         --top actor_debug_wrapper --stage "$stage/p$stages" \
         --actor-projection "$stage/small-actors.json" --actor-test "$kind" \
         "${reference_options[@]}" \
-        "$stage/actor_debug_$stages.v" "$stage/actor_debug_wrapper.v" "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v
+        "$stage/actor_debug_$stages.v" "$stage/actor_debug_wrapper.v" "$hls_target_root"/priv/rtl/hls_1r1w_ram.v
 done

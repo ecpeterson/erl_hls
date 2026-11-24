@@ -5,6 +5,7 @@ import json
 
 from backend_commands import digest, run
 from backend_paths import ROOT, application_directory, erlang_environment
+from compiler_paths import compiler_resource
 
 
 def main() -> None:
@@ -18,8 +19,9 @@ def main() -> None:
          '[P]=init:get_plain_arguments(),ok=xls_clocked_controller_tests:write(P),halt().',
          '-extra', args.stage], args.stage, 'emit', env=erlang_environment('test'))
     compiler = application_directory('erl_hls', 'test')
-    shared = [compiler / 'priv/xls/lib', compiler / 'priv/xls/fabric',
-              ROOT / 'apps/hls_lowering/priv/xls/lib']
+    shared = [compiler_resource(compiler, 'hls_compile', 'priv/xls/lib'),
+              compiler_resource(compiler, 'hls_fabric', 'priv/xls/fabric'),
+              ROOT / 'apps/hls_target/priv/xls/lib']
     evidence = []
     for unit in sorted(p for p in args.stage.iterdir() if p.is_dir()):
         inputs = {str(p): digest(p) for p in unit.glob('*.x')}

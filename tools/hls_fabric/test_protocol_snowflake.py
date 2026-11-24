@@ -85,8 +85,8 @@ def main() -> None:
     expression = '[Build, Vectors]=init:get_plain_arguments(),ok=hls_ci_snowflake:write(Build),ok=hls_ci_snowflake:oracle(Vectors),halt().'
     run(['erl', '-noshell', '-eval', expression, '-extra', build, args.stage / 'vectors.json'],
         args.stage, 'emit-reference', env=env)
-    compiler = application_directory('erl_hls', 'test')
-    run([sys.executable, compiler / 'priv/tools/compile_source_build.py', args.xls, build],
+    target = application_directory('hls_target', 'test')
+    run([sys.executable, target / 'priv/tools/compile_source_build.py', args.xls, build],
         args.stage, 'xls', timeout=600)
     qualify((build / 'compiled').resolve(), args.stage, json.loads((args.stage / 'vectors.json').read_text()))
 

@@ -94,7 +94,7 @@ class SourceToolchainTests(unittest.TestCase):
                 path.write_text('#!/bin/sh\nprintf "mock product\\n"\n')
                 path.chmod(0o755)
             detached_driver = stage/'compile_source_build.py'
-            compiler_tools = next(release.glob('lib/erl_hls-*/priv/tools'))
+            compiler_tools = next(release.glob('lib/hls_target-*/priv/tools'))
             for name in ('compile_source_build.py', 'compile_xls.py'):
                 shutil.copyfile(compiler_tools/name, stage/name)
             spec = importlib.util.spec_from_file_location('packaged_xls_consumer', stage/'compile_xls.py')
@@ -168,10 +168,10 @@ class SourceToolchainTests(unittest.TestCase):
             release = stage/'relocated toolchain'
             shutil.copytree(ROOT/'_build/default/rel/hls', release)
             source = stage/'hls_counter_example.erl'
-            shutil.copyfile(ROOT/'apps/hls_lowering/src/examples/counter/hls_counter_example.erl', source)
+            shutil.copyfile(ROOT/'apps/erl_hls/src/examples/counter/hls_counter_example.erl', source)
             config = stage/'scheduler.config'
-            config.write_text((ROOT/'apps/hls_lowering/src/examples/counter/scheduler-ram.config').read_text().replace(
-                '"apps/hls_lowering/src/examples/counter/hls_counter_example.erl"', json.dumps(str(source))))
+            config.write_text((ROOT/'apps/erl_hls/src/examples/counter/scheduler-ram.config').read_text().replace(
+                '"apps/erl_hls/src/examples/counter/hls_counter_example.erl"', json.dumps(str(source))))
             environment = {**os.environ, 'ERL_AFLAGS': '', 'ERL_HLS_ROOT': '/not-a-compiler'}
             cli = release/'bin/hls-fabric'
 
@@ -194,7 +194,7 @@ class SourceToolchainTests(unittest.TestCase):
             self.assertEqual(profile['placement']['scheduler_groups']['counters']['state_storage'], 'block_ram')
             unit, = schedule
             self.assertTrue(any(flag.startswith('--ram_configurations=') for flag in unit['codegen_flags']))
-            self.assertIn('support/compiler/rtl/hls_1r1w_ram.v', unit['rtl'])
+            self.assertIn('support/target/rtl/hls_1r1w_ram.v', unit['rtl'])
             rejected = invoke('emit', '--backend', 'channel_scheduler', '--kind', 'application',
                               '--config', stage/'absent.erl', '--output', stage/'rejected-kind',
                               '--diagnostics', 'json')
@@ -203,8 +203,8 @@ class SourceToolchainTests(unittest.TestCase):
             self.assertEqual(rejected.stdout, '')
             self.assertFalse((stage/'rejected-kind').exists())
             override = stage/'source-override.config'
-            source_config = (ROOT/'apps/hls_lowering/src/examples/counter/source.config').read_text().replace(
-                '"apps/hls_lowering/src/examples/counter/hls_counter_example.erl"', '"missing-source.erl"')
+            source_config = (ROOT/'apps/erl_hls/src/examples/counter/source.config').read_text().replace(
+                '"apps/erl_hls/src/examples/counter/hls_counter_example.erl"', '"missing-source.erl"')
             prefix, separator, suffix = source_config.rpartition('}.')
             self.assertEqual(separator, '}.')
             override.write_text(prefix + ', schedule => #{pipeline_stages => 2}}.' + suffix)
@@ -235,7 +235,7 @@ class SourceToolchainTests(unittest.TestCase):
                 executable = xls/name
                 executable.write_text('#!/bin/sh\nprintf "stub product\\n"\n')
                 executable.chmod(0o755)
-            compiler_tools = next(release.glob('lib/erl_hls-*/priv/tools'))
+            compiler_tools = next(release.glob('lib/hls_target-*/priv/tools'))
             for name in ('compile_source_build.py', 'compile_xls.py'):
                 shutil.copyfile(compiler_tools/name, stage/name)
             subprocess.run([sys.executable, stage/'compile_source_build.py', xls, moved],

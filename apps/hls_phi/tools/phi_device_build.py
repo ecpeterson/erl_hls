@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 
-from compiler_paths import compiler_tool, compiler_source_root, compiler_tools_root
+from compiler_paths import compiler_application, compiler_resource, compiler_tool, compiler_tools_root
 from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 from transport_codegen import specialize
 from backend_commands import digest, execute
@@ -20,23 +20,28 @@ from phi_build_artifacts import bridge_outputs, read_bridge_build
 def inputs(args: argparse.Namespace) -> dict:
     """Fingerprint compiler inputs, including the selected full-application fixture."""
     files = {}
+    applications = {name: compiler_application(args.erl_hls, name)
+                    for name in ("erl_hls", "hls_compile", "hls_fabric", "hls_target")}
     sources = (
-        ("private", ROOT, ("apps/hls_fabric/src/**/*.erl", "apps/hls_lowering/src/**/*.erl", "apps/hls_phi/src/**/*.erl",
+        ("private", ROOT, ("apps/hls_fabric/src/**/*.erl", "apps/hls_target/src/**/*.erl", "apps/hls_phi/src/**/*.erl",
                            "apps/hls_phi/src/*.x", "apps/hls_phi/include/**/*.hrl", "apps/hls_phi/tools/phi_tool_paths.py", "apps/hls_phi/test/hls_bridge_phi_fixture.erl",
                            "apps/hls_phi/test/rtl/phi_bridge_tb.sv", "apps/hls_phi/test/rtl/phi_link_delay.svh", "apps/hls_phi/test/rtl/phi_memory_transport.svh",
                            "apps/hls_fabric/test/rtl/partition_sim_bridge.c",
                            "apps/hls_phi/test/hls_phi_memory_fixture.erl", "apps/hls_phi/test/hls_phi_board_geometry.erl", "apps/hls_phi/tools/test_phi_memory.py",
-                           "apps/hls_lowering/priv/rtl/hls_async_fifo.v", "apps/hls_lowering/priv/xls/**/*.x", "tools/hls_fabric/scheduler_ram_configurations.sh",
+                           "apps/hls_target/priv/rtl/hls_async_fifo.v", "apps/hls_target/priv/xls/**/*.x", "tools/hls_fabric/scheduler_ram_configurations.sh",
                            "apps/hls_phi/tools/test_phi_bridge.py", "apps/hls_phi/tools/phi_device_build.py", "apps/hls_phi/tools/phi_build_artifacts.py",
                            "tools/hls_fabric/test_actor_rtl.py", "tools/hls_fabric/backend_commands.py",
                            "tools/hls_fabric/backend_paths.py", "tools/hls_fabric/compiler_paths.py", "tools/hls_fabric/transport_codegen.py",
                            "tools/hls_fabric/backend_build_profile.py",
                            "rebar.config", "rebar.lock")),
-        ("public", compiler_source_root(args.erl_hls), ("src/**/*.erl", "apps/*/src/**/*.erl",
-                                  "include/**/*.hrl", "priv/xls/**/*.x",
-                                  "priv/rtl/debug/*.v",
-                                  "priv/rtl/hls_1r1w_ram.v",
-                                  "test/rtl/xls_sim_bridge.c", "test/rtl/xls_sim_axis.h")),
+        ("public/erl_hls", applications["erl_hls"],
+         ("src/**/*.erl", "test/rtl/xls_sim_bridge.c", "test/rtl/xls_sim_axis.h")),
+        ("public/hls_compile", applications["hls_compile"],
+         ("src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x")),
+        ("public/hls_fabric", applications["hls_fabric"],
+         ("src/**/*.erl", "include/**/*.hrl", "priv/xls/**/*.x")),
+        ("public/hls_target", applications["hls_target"],
+         ("src/**/*.erl", "priv/xls/**/*.x", "priv/rtl/debug/*.v", "priv/rtl/hls_1r1w_ram.v")),
         ("public-tools", compiler_tools_root(args.erl_hls), ("tools/erl_hls_tools/*.py",)),
         ("stdlib", args.xls / "xls/dslx/stdlib", ("**/*.x",)),
     )
@@ -191,7 +196,8 @@ def instrument_device(args: argparse.Namespace, device: dict) -> None:
     top = name + "_ram" if ram else name
     rtl = [stage / f"{name}.v"]
     if ram:
-        rtl += [source / f"{name}_ram.v", args.erl_hls / "priv/rtl/hls_1r1w_ram.v"]
+        rtl += [source / f"{name}_ram.v",
+                compiler_resource(args.erl_hls, "hls_target", "priv/rtl/hls_1r1w_ram.v")]
     topology.instrument(argparse.Namespace(
         rtl=rtl, top=top, clock="clk", reset="reset", reset_active_low=False,
         output_top=f"hls_phi_device_{ident}", stage=stage / "debug", yosys=args.yosys,
@@ -252,10 +258,11 @@ def build(args: argparse.Namespace) -> None:
     with (args.stage / "generation.log").open("w") as log:
         subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=300)
-    for library in ("lib", "fabric"):
-        for path in (args.erl_hls / "priv/xls" / library).glob("*.x"):
-            shutil.copy(path, source)
-    for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
+    for path in compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib").glob("*.x"):
+        shutil.copy(path, source)
+    for path in compiler_resource(args.erl_hls, "hls_fabric", "priv/xls/fabric").glob("*.x"):
+        shutil.copy(path, source)
+    for path in (ROOT / "apps/hls_target/priv/xls").rglob("*.x"):
         shutil.copy(path, source)
     shutil.copy(ROOT / "apps/hls_phi/src/phi_field.x", source)
     devices = json.loads((source / "bridge.json").read_text())["devices"]
@@ -285,5 +292,5 @@ def compile_simulation(args: argparse.Namespace, devices: list[dict]) -> None:
         simulation_netlist(args, device['id']))]
     execute(["iverilog", "-g2012", "-s", "phi_bridge_tb", "-I", str(args.stage),
              *( ["-DPHI_MEMORY"] if getattr(args, "memory", False) else []),
-             "-I", str(ROOT / "apps/hls_fabric/test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"), "-o", str(args.stage / "phi_bridge.vvp"), str(ROOT / "apps/hls_phi/test/rtl/phi_bridge_tb.sv"), str(ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v"),
+             "-I", str(ROOT / "apps/hls_fabric/test/rtl"), "-I", str(ROOT / "apps/hls_phi/test/rtl"), "-o", str(args.stage / "phi_bridge.vvp"), str(ROOT / "apps/hls_phi/test/rtl/phi_bridge_tb.sv"), str(ROOT / "apps/hls_target/priv/rtl/hls_async_fifo.v"),
              *map(str, device_rtl + debug_rtl(args.erl_hls))], args.stage, "iverilog", timeout=300)

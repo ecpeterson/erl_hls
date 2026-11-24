@@ -11,10 +11,10 @@ rebar3 as test compile
 source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_actor_outbox_testgen:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$stage:$root/apps/hls_lowering/priv/xls/lib:$root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$root/apps/hls_target/priv/xls/lib:$root/apps/hls_fabric/priv/xls/fabric:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for module in mailbox scheduler; do
-    "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$root/apps/hls_lowering/priv/xls/lib/$module.x"
+    "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$root/apps/hls_target/priv/xls/lib/$module.x"
 done
 source tools/hls_fabric/scheduler_ram_configurations.sh
 for kind in direct shared; do
@@ -29,8 +29,8 @@ for kind in direct shared; do
             "$stage/$kind.opt.ir" > "$stage/${kind}_${stages}.v"
         iverilog -g2012 "${defines[@]}" -DOUTBOX_TOP="outbox_${kind}_wrapper" -s xls_actor_outbox_tb \
             -o "$stage/${kind}_${stages}.vvp" apps/hls_fabric/test/rtl/xls_actor_outbox_tb.sv \
-            "$stage/outbox_${kind}_wrapper.v" "$stage/${kind}_${stages}.v" "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v
+            "$stage/outbox_${kind}_wrapper.v" "$stage/${kind}_${stages}.v" "$hls_target_root"/priv/rtl/hls_1r1w_ram.v
         (cd "$stage" && vvp "${kind}_${stages}.vvp")
-        "${YOSYS:-yosys}" -Q -T -p "read_verilog -sv $stage/outbox_${kind}_wrapper.v $stage/${kind}_${stages}.v $erl_hls_root/priv/rtl/hls_1r1w_ram.v; hierarchy -top outbox_${kind}_wrapper; proc; flatten; opt; scc -expect 0; check -assert" > "$stage/${kind}_${stages}.scc.log"
+        "${YOSYS:-yosys}" -Q -T -p "read_verilog -sv $stage/outbox_${kind}_wrapper.v $stage/${kind}_${stages}.v $hls_target_root/priv/rtl/hls_1r1w_ram.v; hierarchy -top outbox_${kind}_wrapper; proc; flatten; opt; scc -expect 0; check -assert" > "$stage/${kind}_${stages}.scc.log"
     done
 done

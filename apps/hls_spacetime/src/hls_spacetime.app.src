@@ -1,8 +1,8 @@
 {application, hls_spacetime, [
-    {description, "Cycle execution histories and FPGA physical correspondence"},
+    {description, "System-plan optimization and offline execution analysis"},
     {vsn, "0.1.0"},
     {registered, []},
-    {applications, [kernel, stdlib, crypto, hls_core]},
+    {applications, [kernel, stdlib, crypto, hls_core, hls_target]},
     {env, []},
     {modules, []},
     {licenses, ["MPL-2.0", "Apache-2.0"]},

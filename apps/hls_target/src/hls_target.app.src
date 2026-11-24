@@ -1,0 +1,19 @@
+{application, hls_target, [
+    {description, "Physical implementation, target generation and characterization adapters"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        compiler,
+        hls_core,
+        hls_runtime,
+        hls_compile,
+        hls_fabric
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["MPL-2.0", "Apache-2.0"]},
+    {links, []}
+]}.

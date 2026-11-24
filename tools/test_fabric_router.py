@@ -9,7 +9,7 @@ import subprocess
 from erl_hls_tools.topology_debug import quote
 
 ROOT = Path(__file__).resolve().parents[1]
-RTL = ROOT / 'apps/erl_hls/priv/rtl/fabric'
+RTL = ROOT / 'apps/hls_fabric/priv/rtl/fabric'
 
 
 def run(command, log, timeout=120):

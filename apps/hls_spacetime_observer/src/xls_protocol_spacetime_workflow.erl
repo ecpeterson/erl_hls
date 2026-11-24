@@ -56,7 +56,7 @@ prepare(Config) when is_map(Config) ->
             [
                 {<<"simulation.cpp">>, Harness},
                 {<<"framed_fifo_stream.h">>,
-                    read(priv(hls_lowering, "simulator/framed_fifo_stream.h"), ?MAX_PLAN)},
+                    read(priv(hls_target, "simulator/framed_fifo_stream.h"), ?MAX_PLAN)},
                 {<<"spacetime_trace.h">>,
                     read(priv(hls_spacetime, "include/spacetime_trace.h"), ?MAX_PLAN)},
                 {<<"raw.ir">>, read(Raw, ?MAX_INPUT)},
@@ -204,10 +204,10 @@ write_qualification(CatalogueFile, BundleFile, CandidatesFile, WitnessFile, Dire
             xls_protocol_spacetime_physical,
             hls_spacetime,
             hls_spacetime_storage,
-            hls_spacetime_physical,
-            hls_spacetime_native,
+            hls_target_physical,
+            hls_target_native,
             hls_spacetime_import,
-            hls_spacetime_sdf
+            hls_target_sdf
         ]
     ),
     Inputs = [
@@ -223,7 +223,7 @@ write_qualification(CatalogueFile, BundleFile, CandidatesFile, WitnessFile, Dire
     #{build := Build, resources := Resources} = Bundle,
     #{build := Build} = Catalogue,
     _ = hls_spacetime:validate(Bundle),
-    _ = hls_spacetime_physical:validate(Build, #{}, Catalogue),
+    _ = hls_target_physical:validate(Build, #{}, Catalogue),
     Qualified = xls_protocol_spacetime_physical:qualify(Catalogue, Candidates, Witness),
     Claims = xls_protocol_spacetime_physical:claims(Resources, Qualified),
     _ = hls_spacetime_import:attach(Bundle, Catalogue, Claims),

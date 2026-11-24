@@ -59,7 +59,7 @@ def simulate(stage, monitor, support, failure=False):
     exe = stage / "sampling.vvp"
     run(["iverilog", "-g2012", "-s", "hls_debug_sampling_tb", "-o", str(exe),
          str(ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_tb.sv"),
-         str(ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_tap.v"), str(monitor), *map(str, support)],
+         str(ROOT / "apps/hls_target/priv/rtl/debug/hls_debug_tap.v"), str(monitor), *map(str, support)],
         stage / "compile.log")
     log = stage / "simulation.log"
     try:
@@ -90,9 +90,9 @@ def main():
     args.stage.mkdir(parents=True, exist_ok=True)
     args.rtl = args.rtl.resolve()
     generated = [args.rtl / f"hls_debug_{name}.v" for name in ("observer", "server")]
-    monitor = ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_monitor.v"
-    support = [ROOT / "apps/erl_hls/priv/rtl/debug/hls_trace_store.v", *generated]
-    inputs = [monitor, ROOT / "apps/erl_hls/priv/rtl/debug/hls_debug_tap.v", *support,
+    monitor = ROOT / "apps/hls_target/priv/rtl/debug/hls_debug_monitor.v"
+    support = [ROOT / "apps/hls_target/priv/rtl/debug/hls_trace_store.v", *generated]
+    inputs = [monitor, ROOT / "apps/hls_target/priv/rtl/debug/hls_debug_tap.v", *support,
               ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_formal.sv",
               ROOT / "apps/erl_hls/test/rtl/debug/hls_debug_sampling_tb.sv", Path(__file__).resolve()]
     started = time.monotonic()

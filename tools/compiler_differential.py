@@ -79,10 +79,11 @@ class Runner:
             result = execute(["rebar3", "as", "test", "compile"], self.stage, "compile", 180)
             if result["returncode"]:
                 raise RuntimeError(f"rebar3 failed; see {self.stage / 'compile.stderr'}")
-        shutil.copytree(ROOT / "apps/erl_hls/priv/xls/lib", self.library, dirs_exist_ok=True)
+        shutil.copytree(ROOT / "apps/hls_compile/priv/xls/lib", self.library, dirs_exist_ok=True)
+        applications = ("hls_core", "hls_runtime", "hls_compile", "hls_fabric", "hls_target", "erl_hls")
         files = [*self.library.glob("*.x"), *self.xls.glob("xls/dslx/stdlib/**/*.x"),
-                 *ROOT.glob("_build/test/lib/erl_hls/ebin/*.beam"),
-                 *ROOT.glob("_build/test/lib/hls_runtime/ebin/*.beam"),
+                 *(beam for app in applications
+                   for beam in ROOT.glob(f"_build/test/lib/{app}/ebin/*.beam")),
                  ROOT / "_build/test/lib/erl_hls/test/xls_differential_worker.beam",
                  Path(__file__), Path(cases.__file__), ROOT / "apps/erl_hls/test/xls_differential_worker.erl"]
         version = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
@@ -105,8 +106,10 @@ class Runner:
             request["cases"].append({"name": f"probe_{i}", "width": width,
                                       "signed": signed, "inputs": p["inputs"]})
         write_json(stage / "request.json", request)
+        applications = ("hls_core", "hls_runtime", "hls_compile", "hls_fabric", "hls_target", "erl_hls")
+        ebins = [ROOT / "_build/test/lib" / app / "ebin" for app in applications]
         commands = [
-            ("lower", ["erl", "-noshell", "-pa", ROOT / "_build/test/lib/erl_hls/ebin", ROOT / "_build/test/lib/hls_runtime/ebin",
+            ("lower", ["erl", "-noshell", "-pa", *ebins,
                        ROOT / "_build/test/lib/erl_hls/test", "-s", "xls_differential_worker", "main",
                        "-extra", stage / "request.json"]),
             ("dslx", [self.xls / "interpreter_main", "--compare=jit", *self.options(), stage / "probe.x"])]

@@ -155,12 +155,13 @@ endmodule
 def build(args: argparse.Namespace) -> dict:
     """Compile each cut once and compare against the exact current application recurrence."""
     sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
-    from compiler_paths import compiler_root
+    from compiler_paths import compiler_resource, compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     args.stage.mkdir(parents=True, exist_ok=False)
     sources = [HERE/'phi_numerical.x', HERE/'staged_reciprocal.x',
                ROOT/'apps/hls_phi/src/phi_field.x',
-               *[public/'priv/xls/lib'/name for name in ('hls_fixed.x', 'hls_multiply.x', 'hls_vec.x')]]
+               *[compiler_resource(public, 'hls_compile', 'priv/xls/lib')/name
+                 for name in ('hls_fixed.x', 'hls_multiply.x', 'hls_vec.x')]]
     identities = {str(p): sha(p) for p in [Path(__file__), *sources, args.yosys,
                   *[args.xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')]]}
     for name, functions in (('reference', ('reference',)),

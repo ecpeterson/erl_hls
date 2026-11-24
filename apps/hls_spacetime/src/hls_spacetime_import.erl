@@ -9,8 +9,8 @@ Reads the bounded native Vivado census exported by export_spacetime.tcl and atta
 
 -doc "Reviewed generated-object descriptions and binding dispositions. Omitted resources are explicitly unmapped; callers must substantiate supported associations independently of signal spelling.".
 -type claims() :: #{
-    generated := [hls_spacetime_physical:generated()],
-    bindings := [hls_spacetime_physical:binding()]
+    generated := [hls_target_physical:generated()],
+    bindings := [hls_target_physical:binding()]
 }.
 
 %% These are importer ceilings, independent of producer-advertised limits.
@@ -19,7 +19,7 @@ Reads the bounded native Vivado census exported by export_spacetime.tcl and atta
 
 -doc "Reads a complete native export directory and requires exact source/RTL/observation and checkpoint digest agreement. Checks every table's header, row/byte counters, aggregate caps and primitive references. Unknown values remain null. Malformed or missing evidence raises an import/physical/SDF-contract or JSON decoding error. The caller owns evidence authenticity and collection hash verification.".
 -spec read(file:filename_all(), hls_observation_build:build(), binary()) ->
-    hls_spacetime_physical:physical().
+    hls_target_physical:physical().
 read(Directory, ExpectedBuild, ExpectedCheckpoint) ->
     try
         read_checked(Directory, ExpectedBuild, ExpectedCheckpoint)
@@ -31,7 +31,7 @@ read(Directory, ExpectedBuild, ExpectedCheckpoint) ->
 
 %% Structural record matches remain private to the external import error boundary.
 -spec read_checked(file:filename_all(), hls_observation_build:build(), binary()) ->
-    hls_spacetime_physical:physical().
+    hls_target_physical:physical().
 read_checked(Directory, ExpectedBuild, ExpectedCheckpoint) ->
     Manifest = manifest(Directory),
     #{
@@ -89,11 +89,11 @@ read_checked(Directory, ExpectedBuild, ExpectedCheckpoint) ->
         bindings => [],
         native => Native
     },
-    _ = hls_spacetime_physical:validate(Build, #{}, Catalogue),
+    _ = hls_target_physical:validate(Build, #{}, Catalogue),
     Catalogue.
 
 -doc "Attaches a checked catalogue and explicit claims while preserving all execution events, versions and dependencies. Supplies an unmapped disposition for each omitted semantic resource. Validates the complete result; names-only candidates should be ambiguous, never direct/distributed.".
--spec attach(hls_spacetime:bundle(), hls_spacetime_physical:physical(), claims()) ->
+-spec attach(hls_spacetime:bundle(), hls_target_physical:physical(), claims()) ->
     hls_spacetime:bundle().
 attach(Bundle = #{resources := Resources}, Catalogue, #{
     generated := Generated, bindings := Bindings
@@ -174,11 +174,11 @@ sdf_sizes(Directory, Sdf) ->
 -spec read_sdf(file:filename_all(), fast | slow, map()) -> map().
 read_sdf(Directory, Corner, Sdf) ->
     #{<<"file">> := Name, <<"sha256">> := Hash} = maps:get(atom_to_binary(Corner), Sdf),
-    Parsed = hls_spacetime_sdf:read(
+    Parsed = hls_target_sdf:read(
         filename:join(Directory, Name),
         #{corner => Corner, mode => sta, sha256 => Hash}
     ),
-    (hls_spacetime_sdf:describe(Parsed))#{file => Name}.
+    (hls_target_sdf:describe(Parsed))#{file => Name}.
 
 %% Negative or extravagant producer counts cannot drive an allocation.
 -spec count(term()) -> non_neg_integer().

@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import time
 from backend_paths import erlang_paths, erlang_environment
+from compiler_paths import compiler_application, compiler_resource
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -27,12 +28,15 @@ def run(public: Path, rtl: Path, stage: Path, carrier: str) -> None:
         raise RuntimeError('regsvc RTL does not match the pinned public golden')
     stage.mkdir(parents=True, exist_ok=False)
     (stage / 'rtl-sha256.json').write_text(json.dumps(hashes, sort_keys=True, indent=2) + '\n')
+    facade = compiler_application(public, 'erl_hls')
+    fabric = compiler_application(public, 'hls_fabric')
+    target = compiler_application(public, 'hls_target')
     sources = [ROOT / 'apps/hls_fabric/test/rtl/device_services_tb.sv', ROOT / 'apps/hls_fabric/test/rtl/hls_device_services.sv',
-               ROOT / 'apps/hls_lowering/priv/rtl/hls_return_routes.v',
-               public / 'src/examples/regsvc/regsvc_core_adapter.v',
-               public / 'src/examples/regsvc/regsvc_debug_top.v',
-               *sorted((public / 'priv/rtl/fabric').glob('*.v')),
-               *[public / 'priv/rtl/debug' / name for name in
+               ROOT / 'apps/hls_target/priv/rtl/hls_return_routes.v',
+               facade / 'src/examples/regsvc/regsvc_core_adapter.v',
+               facade / 'src/examples/regsvc/regsvc_debug_top.v',
+               *sorted((fabric / 'priv/rtl/fabric').glob('*.v')),
+               *[target / 'priv/rtl/debug' / name for name in
                  ('hls_debug_monitor.v', 'hls_debug_tap.v', 'hls_trace_store.v')], *generated]
     for name in ('xls_sim_bridge.c', 'xls_sim_axis.h'):
         shutil.copy(public / 'test/rtl' / name, stage)

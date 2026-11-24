@@ -5,9 +5,17 @@
 %% One fixed supervisor owns a finite set of independently resettable children.
 -type supervisor_phase() :: unbound | starting | running | stopping | stopped | failed.
 %% Initial startup and replacement retain different OTP failure meanings.
--type supervisor_child_phase() :: fresh | starting | running | restarting | retiring | retired | vacant | admitting.
+-type supervisor_child_phase() ::
+    fresh | starting | running | restarting | retiring | retired | vacant | admitting.
 %% The first shutdown cause remains visible after every child has retired.
--type supervisor_reason() :: none | requested | initialization_failure | intensity_exhausted | identities_exhausted | clock_failure | child_state_failure.
+-type supervisor_reason() ::
+    none
+    | requested
+    | initialization_failure
+    | intensity_exhausted
+    | identities_exhausted
+    | clock_failure
+    | child_state_failure.
 %% A temporary occupant is never restarted; its compiled slot survives retirement.
 -type supervisor_policy() :: permanent | temporary.
 %% Parent and selected-child commands always name the lifetime they may change.
@@ -38,7 +46,7 @@
     reason = none :: supervisor_reason(),
     head = 0 :: hls_nums:u8(),
     count = 0 :: hls_nums:u8(),
-    times = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] :: hls_vec:vector(hls_nums:u64(), 16)
+    times = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] :: hls_vec:vector(hls_nums:u64(), 16)
 }).
 
 %% Policy/dormant are immutable slot metadata. Reusable certifies transport retirement,

@@ -23,7 +23,7 @@ class SelectionTests(unittest.TestCase):
         """Documents skip; sources, fixtures, workflows and unknown files trigger checks."""
         for paths in ([], ['README.md', 'docs/p.png', 'experiments/probe/results/p.svg']):
             self.assertFalse(plan(paths, CONFIG)['qualify'])
-        for path in ('apps/erl_hls/src/actor.erl', 'apps/erl_hls/priv/xls/a.x',
+        for path in ('apps/hls_compile/src/actor.erl', 'apps/hls_compile/priv/xls/a.x',
                      'rtl/a.sv', 'docs/example.py', 'rebar.lock', '.github/workflows/ci.yml',
                      'new-file', 'apps/erl_hls/test/fixture.json'):
             with self.subTest(path=path):
@@ -49,8 +49,8 @@ class SelectionTests(unittest.TestCase):
     def test_full_fallback_and_group_filters(self) -> None:
         """Core, tools, unknown fixtures and missing history cannot reduce feature coverage."""
         all_cases = sorted(CONFIG['cases'])
-        for paths in (None, ['apps/erl_hls/src/xls_actor.erl'],
-                      ['apps/erl_hls/priv/xls/axis.x'], ['tools/test_binary.sh'],
+        for paths in (None, ['apps/hls_compile/src/xls_actor.erl'],
+                      ['apps/hls_compile/priv/xls/axis.x'], ['tools/test_binary.sh'],
                       ['apps/erl_hls/test/unlisted_fixture.erl'],
                       ['apps/erl_hls/test/xls_binary_dslx.erl',
                        'apps/erl_hls/test/new_fixture.erl']):
@@ -89,7 +89,7 @@ class SelectionTests(unittest.TestCase):
             root = Path(directory)
             (root / 'tools').mkdir()
             metadata = root / 'tools/regression_inventory.json'
-            for dependency in ('apps/erl_hls/src/xls_actor.erl', 'tools/test_binary.sh',
+            for dependency in ('apps/hls_compile/src/xls_actor.erl', 'tools/test_binary.sh',
                                'apps/erl_hls/test/*.erl',
                                'apps/erl_hls/test/../src/xls_actor.erl',
                                '/apps/erl_hls/test/a.erl',

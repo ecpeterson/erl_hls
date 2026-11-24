@@ -33,7 +33,7 @@ def main() -> None:
     parser.add_argument('--fabric-registers', action='store_true')
     args = parser.parse_args()
     sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
-    from compiler_paths import compiler_root
+    from compiler_paths import compiler_resource, compiler_root
     public = compiler_root(args.profile, args.erl_hls, ROOT)
     stage = args.stage
     stage.mkdir(parents=True, exist_ok=False)
@@ -81,7 +81,8 @@ end
 endmodule
 '''.replace('COUNT', str(len(cases))))
     cells = args.yosys.parent.parent / 'share/yosys/xilinx/cells_sim.v'
-    inputs = [public / 'priv/xls/lib/hls_fixed.x', public / 'priv/xls/lib/hls_multiply.x',
+    library = compiler_resource(public, 'hls_compile', 'priv/xls/lib')
+    inputs = [library / 'hls_fixed.x', library / 'hls_multiply.x',
               args.table, args.codegen, args.yosys, cells,
               args.xls / 'ir_converter_main', args.xls / 'opt_main']
     summary = {'stages': args.stages, 'fabric_registers': args.fabric_registers,
@@ -104,7 +105,7 @@ pub proc Top {
 }
 '''.replace('OPERATION', operation))
         run([str(args.xls / 'ir_converter_main'), '--warnings_as_errors=false', '--top=Top',
-             '--dslx_path=' + str(public / 'priv/xls/lib'),
+             '--dslx_path=' + str(library),
              '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), 'design.x'], root, 'ir', 'design.ir')
         run([str(args.xls / 'opt_main'), 'design.ir'], root, 'opt', 'design.opt.ir')
         run([str(args.codegen), '--pipeline_stages=' + str(args.stages), '--flop_inputs=false',

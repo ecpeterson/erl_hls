@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from erl_hls_tools.package_boundaries import (
     application_files,
+    architecture_violations,
+    duplicate_module_ownership,
     policy_violations,
     undeclared_application_dependencies,
     violations,
@@ -36,6 +38,14 @@ class PackageBoundariesTests(unittest.TestCase):
         snapshot['applications'][0]['dependencies'].append('erl_hls')
         self.assertEqual(violations(snapshot, {'hls_runtime'}, {'erl_hls'})[0]['kind'],
                          'application_dependency')
+
+    def test_duplicate_module_ownership(self) -> None:
+        """A stale application cannot silently replace the owner used by edge checks."""
+        snapshot = self.snapshot()
+        snapshot['applications'][1]['modules'].append('codec')
+        self.assertEqual(duplicate_module_ownership(snapshot), [
+            {'kind': 'duplicate_module_ownership', 'module': 'codec',
+             'applications': ['erl_hls', 'hls_runtime']}])
 
     def test_undeclared_project_imports_and_remote_types(self) -> None:
         """Every direct project-app import or remote type requires a manifest dependency."""
@@ -88,6 +98,24 @@ class PackageBoundariesTests(unittest.TestCase):
         dependency_text = manifest.split('{applications, [', 1)[1].split(']}', 1)[0]
         dependencies = {name.strip() for name in dependency_text.split(',')}
         self.assertTrue({'erl_hls', 'hls_core', 'hls_runtime'} <= dependencies)
+
+    def test_synthesis_layers_cannot_depend_on_optimizer_or_facade(self) -> None:
+        """Compile, communication and target layers keep the Stage 3 graph acyclic."""
+        snapshot = {'applications': [
+            {'name': 'hls_compile', 'modules': ['lower'], 'dependencies': ['hls_core']},
+            {'name': 'hls_fabric', 'modules': ['route'], 'dependencies': ['hls_compile']},
+            {'name': 'hls_target', 'modules': ['emit'], 'dependencies': ['hls_fabric']},
+            {'name': 'hls_spacetime', 'modules': ['plan'], 'dependencies': ['hls_core']}],
+            'runtime_modules': [
+                {'module': 'lower', 'application': 'hls_compile', 'imports': [], 'types': []},
+                {'module': 'route', 'application': 'hls_fabric', 'imports': ['lower'], 'types': []},
+                {'module': 'emit', 'application': 'hls_target', 'imports': ['route'], 'types': []},
+                {'module': 'plan', 'application': 'hls_spacetime', 'imports': [], 'types': []}]}
+        self.assertEqual(architecture_violations(snapshot), [])
+        snapshot['runtime_modules'][2]['types'] = ['plan']
+        self.assertEqual(architecture_violations(snapshot), [
+            {'kind': 'types', 'module': 'emit', 'target': 'plan',
+             'application': 'hls_spacetime'}])
 
     def test_release_cannot_smuggle_build_module_into_runtime_app(self) -> None:
         """Both app manifests and individual BEAM ownership are checked after packaging."""

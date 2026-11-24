@@ -5,7 +5,7 @@ import json
 import shutil
 import time
 
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from backend_paths import ROOT, erlang_environment
 from test_local_actor import manifest
 from backend_commands import digest, run
@@ -59,8 +59,8 @@ def main() -> None:
     cases = [case for case in cases if args.case == 'all' or case[0] == args.case]
     inputs = [Path(__file__), properties, ROOT / 'tools/hls_fabric/emit_local_actor.escript', *[source for _, source, _ in cases],
               args.yosys, *[args.xls / p for p in ['ir_converter_main', 'opt_main', 'codegen_main']]]
-    for base, pattern in [(ROOT / 'apps/hls_fabric/src', '*.erl'), (ROOT / 'apps/hls_lowering/src', '*.erl'),
-                          (ROOT / 'apps/hls_lowering/priv/xls', '*.x*'),
+    for base, pattern in [(ROOT / 'apps/hls_fabric/src', '*.erl'), (ROOT / 'apps/hls_target/src', '*.erl'),
+                          (ROOT / 'apps/hls_target/priv/xls', '*.x*'),
                           (public / 'src', '*.erl'), (ROOT / 'apps/hls_runtime/src', '*.erl'),
                           (public / 'priv/xls', '*.x*'),
                           (args.xls / 'xls/dslx/stdlib', '*.x')]:
@@ -90,8 +90,9 @@ def main() -> None:
         # Import the emitted public types/functions across the real module boundary.
         proof.write_bytes(f'import {name} as actor;\n\n'.encode() + properties.read_bytes())
         raw = stage / (module + '.ir')
-        paths = ':'.join(map(str, [stage, ROOT / 'apps/hls_lowering/priv/xls/lib', ROOT / 'apps/hls_lowering/priv/xls/fabric',
-                                  public / 'priv/xls/lib', public / 'priv/xls/fabric']))
+        paths = ':'.join(map(str, [stage, ROOT / 'apps/hls_target/priv/xls/lib', ROOT / 'apps/hls_fabric/priv/xls/fabric',
+                                  compiler_resource(public, 'hls_compile', 'priv/xls/lib'),
+                                  compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')]))
         run([args.xls / 'ir_converter_main', '--warnings_as_errors=false', '--dslx_path=' + paths,
              '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib'), proof], stage, name + '-convert', raw)
         for prop, expected in [(p, True) for p in positive] + [(p, False) for p in negatives]:

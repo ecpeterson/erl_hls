@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from backend_paths import erlang_environment
 import shutil
 from backend_commands import digest, execute
@@ -24,8 +24,9 @@ def main() -> None:
     args.erl_hls = compiler_root("test", args.erl_hls)
     stage, xls = args.stage.resolve(), args.xls.resolve()
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x",
-               args.erl_hls / "priv/xls/lib/axis.x", args.erl_hls / "priv/xls/lib/frame_config.x"]
+    library = compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib")
+    sources = [ROOT / "apps/hls_target/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x",
+               library / "axis.x", library / "frame_config.x"]
     tests = [ROOT / "apps/hls_fabric/test/rtl" / f"{name}.sv" for name in ("credit_link_tb", "credit_link_fault_tb")]
     tracked = sources + tests + [Path(__file__), ROOT/'tools/hls_fabric/backend_commands.py'] + list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]

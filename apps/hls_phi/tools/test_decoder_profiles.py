@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare configurable decoder profiles with BEAM and stalled RTL execution."""
 import phi_tool_paths  # Resolve shared tooling for this application.
-from compiler_paths import compiler_root, compiler_source
+from compiler_paths import compiler_resource, compiler_root, compiler_source
 from backend_paths import erlang_paths
 from backend_commands import logged_command
 from backend_build_profile import emit as emit_build_profile
@@ -34,10 +34,13 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     erl = ["erl", "-noshell", "-pa", *map(str, erlang_paths("test", compiler=args.erl_hls))]
     logged_command([*erl, "-eval", "[Stage] = init:get_plain_arguments(), phi_decoder_profile_fixture:write(Stage), "
              "phi_decoder_profile_fixture:oracle(Stage), halt().", "-extra", stage], ROOT, stage / "prepare.log", 120)
-    for directory in (ROOT / "apps/hls_lowering/priv/xls/lib", args.erl_hls / "priv/xls/lib", args.erl_hls / "priv/xls/fabric"):
+    for directory in (ROOT / "apps/hls_target/priv/xls/lib",
+                      compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib"),
+                      compiler_resource(args.erl_hls, "hls_fabric", "priv/xls/fabric")):
         for path in directory.glob("*.x"):
             shutil.copyfile(path, stage / path.name)
-    for path in (ROOT / "apps/hls_phi/src/phi_field.x", args.erl_hls / "priv/rtl/hls_1r1w_ram.v"):
+    for path in (ROOT / "apps/hls_phi/src/phi_field.x",
+                 compiler_resource(args.erl_hls, "hls_target", "priv/rtl/hls_1r1w_ram.v")):
         shutil.copyfile(path, stage / path.name)
     logged_command(["iverilog", "-g2012", "-tnull", "-i", stage / "phi_decoder_profile_top.v",
              stage / "hls_1r1w_ram.v"], stage, stage / "shell-check.log")

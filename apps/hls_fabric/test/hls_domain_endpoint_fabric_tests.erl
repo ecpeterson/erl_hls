@@ -1,7 +1,7 @@
 -module(hls_domain_endpoint_fabric_tests).
 -moduledoc "Finite broker-interface witnesses for the shared management adapter's independent-endpoint mode. Tests retain exact mutation identity and ordered observations; they do not establish device reset, distributed ownership or remote progress.".
 -include_lib("eunit/include/eunit.hrl").
--include("hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% A lost bind keeps its complete identity until a later ordered status response.
 -spec lost_reply_reconciles_test() -> ok.

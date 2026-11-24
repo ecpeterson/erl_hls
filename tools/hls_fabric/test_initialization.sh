@@ -12,7 +12,7 @@ source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_init_dslx:write(hd(init:get_plain_arguments())), halt().' \
     -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_target/priv/xls/lib:$project_root/apps/hls_fabric/priv/xls/fabric:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for kind in gs statem; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/init_$kind.x"
@@ -53,7 +53,7 @@ for fixture in shared; do
         else
             bench=xls_init_topology_tb
             top="init_${fixture}_wrapper"
-            sources+=("$stage/${top}.v" "$erl_hls_root"/priv/rtl/hls_1r1w_ram.v)
+            sources+=("$stage/${top}.v" "$hls_target_root"/priv/rtl/hls_1r1w_ram.v)
         fi
         iverilog -g2012 -I "$stage" -DINIT_TOP="$top" -s "$bench" \
             -o "$stage/init_${fixture}_${stages}.vvp" \

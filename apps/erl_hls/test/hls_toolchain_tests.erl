@@ -64,7 +64,7 @@ empty_support_import_test() ->
 %% Independent source bundles may choose different capacities without touching installed support.
 -spec frame_support_test() -> ok.
 frame_support_test() ->
-    Default = filename:join([code:priv_dir(erl_hls), "xls", "lib", "frame_config.x"]),
+    Default = filename:join([code:priv_dir(hls_compile), "xls", "lib", "frame_config.x"]),
     {ok, Before} = file:read_file(Default),
     lists:foreach(fun(Words) ->
         Root = filename:join("_build", "frame-support-" ++ integer_to_list(Words) ++ "-" ++

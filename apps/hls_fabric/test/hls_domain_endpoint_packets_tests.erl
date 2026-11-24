@@ -130,7 +130,7 @@ fixture() ->
     Crossings = [#{index => I, source_domain => 0, destination_domain => 1,
         link => #{index => I, direction => outgoing, source_index => 0, destination_index => 1,
             slots => 2, classes => Classes}} || I <- [8, 61]],
-    Source = hls_source:library_file(hls_fabric, "runtime/domain/hls_domain_channel_tx.erl"),
+    Source = hls_source:library_file(hls_runtime, "fabric/runtime/domain/hls_domain_channel_tx.erl"),
     {ok, Parsed} = hls_source:parse_file(Source),
     Forms = hls_records:resolve(Parsed),
     Inputs = maps:from_list(hls_records:fields(hls_records:find(Forms, endpoint_tx_input))),

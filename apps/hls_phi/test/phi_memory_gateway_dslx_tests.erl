@@ -226,7 +226,7 @@ generated(Distance) ->
 %% Renders the host-facing router used by the gateway fixture.
 -spec fabric_router() -> binary().
 fabric_router() ->
-    {ok, Router} = file:read_file(filename:join(code:priv_dir(erl_hls), "xls/fabric/hls_fabric_router.x")),
+    {ok, Router} = file:read_file(filename:join(code:priv_dir(hls_fabric), "xls/fabric/hls_fabric_router.x")),
     Router.
 
 %% Requires the generated artifact to contain the selected structural marker.

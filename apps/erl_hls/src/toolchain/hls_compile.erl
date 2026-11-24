@@ -51,7 +51,7 @@ actor(Source, Options, Output) ->
     end,
     SourceOptions =
         maps:get(source_options, Options, []) ++
-            [{i, filename:join(code:lib_dir(erl_hls), "include")}],
+            [{i, filename:join(code:lib_dir(hls_compile), "include")}],
     Emitted = xls_parse:to_artifact(Source, #{
         source_options => SourceOptions,
         direct_actor_debug => maps:get(direct_actor_debug, Options, false),
@@ -116,13 +116,7 @@ support(Output, Imports, Layout) ->
 -doc "Selects the ordinary-frame layout in a newly copied support tree before the bundle manifest is frozen. Requires the copied frame_config.x; never call on a published bundle or installed library. Debug, hash and explicit FrameN envelope widths are unchanged.".
 -spec configure_support(file:filename(), hls_frame_layout:layout()) -> ok.
 configure_support(Output, Layout) ->
-    case filelib:is_file(filename:join(Output, "source-build.json")) of
-        true -> error({published_bundle, Output});
-        false -> ok
-    end,
-    Path = filename:join([Output, "support", "compiler", "xls", "lib", "frame_config.x"]),
-    {ok, _} = file:read_file_info(Path),
-    ok = file:write_file(Path, xls_frame_layout:config(Layout)).
+    hls_compile_support:configure(Output, Layout).
 
 -doc "Compiler and caller-owned support trees with their emitted import directories, without writing files. Library sources are absolute; imports are bundle-relative.".
 -type support_layout() :: #{libraries := [hls_artifact_bundle:library()], imports := [binary()]}.
@@ -130,27 +124,4 @@ configure_support(Output, Layout) ->
 -doc "Plans the same support snapshot used by support/2 without opening an output directory. Missing extra import trees fail; optional compiler import subdirectories are included only when present in the source tree.".
 -spec support_layout([file:filename()]) -> support_layout().
 support_layout(Imports) ->
-    Priv = code:priv_dir(erl_hls),
-    Extra = [
-        {filename:absname(Source), "support/import" ++ integer_to_list(I), [".x"]}
-     || {I, Source} <- lists:enumerate(0, Imports)
-    ],
-    Libraries = [
-        {filename:join(Priv, "xls"), "support/compiler/xls", [".x"]},
-        {filename:join(Priv, "rtl"), "support/compiler/rtl", [".v", ".sv"]}
-        | Extra
-    ],
-    lists:foreach(fun({Source, _, _}) -> {ok, _} = file:list_dir(Source) end, Libraries),
-    Candidates =
-        [
-            {filename:join([Priv, "xls", "lib"]), "support/compiler/xls/lib"},
-            {filename:join([Priv, "xls", "fabric"]), "support/compiler/xls/fabric"}
-        ] ++
-            [{Source, Target} || {Source, Target, _} <- Extra],
-    #{
-        libraries => Libraries,
-        imports => [
-            unicode:characters_to_binary(Target)
-         || {Source, Target} <- Candidates, filelib:is_dir(Source)
-        ]
-    }.
+    hls_compile_support:layout(Imports).

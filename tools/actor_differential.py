@@ -154,8 +154,9 @@ class Runner(differential.Runner):
             "output": str(stage / "oracle.json"), "program": program})
         result: Result = {"status": "ok", "stage": str(stage), "segments": len(program["segments"]),
                           "clocks": len(program["segments"]) * cases.HORIZON}
-        failure = self.command("oracle", ["erl", "-noshell", "-pa",
-            ROOT / "_build/test/lib/erl_hls/ebin", ROOT / "_build/test/lib/hls_runtime/ebin",
+        applications = ("hls_core", "hls_runtime", "hls_compile", "hls_fabric", "hls_target", "erl_hls")
+        ebins = [ROOT / "_build/test/lib" / app / "ebin" for app in applications]
+        failure = self.command("oracle", ["erl", "-noshell", "-pa", *ebins,
             ROOT / "_build/test/lib/erl_hls/test", "-s", "xls_actor_differential_worker", "main",
             "-extra", stage / "request.json"], stage)
         if failure:

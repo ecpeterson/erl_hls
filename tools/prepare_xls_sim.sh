@@ -9,6 +9,19 @@ cd "$project_root"
 
 rebar3 as test compile
 
+build_ebins=(
+    "$project_root/_build/test/lib/hls_core/ebin"
+    "$project_root/_build/test/lib/hls_runtime/ebin"
+    "$project_root/_build/test/lib/hls_compile/ebin"
+    "$project_root/_build/test/lib/hls_fabric/ebin"
+    "$project_root/_build/test/lib/hls_target/ebin"
+    "$project_root/_build/test/lib/erl_hls/ebin"
+)
+erlc_paths=()
+for ebin in "${build_ebins[@]}"; do
+    erlc_paths+=(-pa "$ebin")
+done
+
 ERL_HLS_REGSVC_X="$stage/regsvc.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
@@ -18,7 +31,7 @@ ERL_HLS_NUMERIC_TEST_X="$stage/hls_numeric_test.x" \
 ERL_HLS_SHORT_CIRCUIT_TEST_X="$stage/xls_short_circuit_test.x" \
 erl \
     -noshell \
-    -pa "$project_root/_build/test/lib/erl_hls/ebin" -pa "$project_root/_build/test/lib/hls_runtime/ebin" \
+    -pa "${build_ebins[@]}" \
     -pa "$project_root/_build/test/lib/erl_hls/test" \
     -eval '
         Regsvc = xls_parse:to_xls("apps/erl_hls/src/examples/regsvc/regsvc.erl"),
@@ -56,32 +69,32 @@ erl \
         halt().
     '
 
-cp "$project_root"/apps/erl_hls/priv/xls/lib/*.x "$stage/"
+cp "$project_root"/apps/hls_compile/priv/xls/lib/*.x "$stage/"
 cp "$project_root/apps/erl_hls/test_data/hls_companion_provider.x" "$stage/hls_companion_provider.x"
 cp "$project_root/apps/erl_hls/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/apps/erl_hls/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
-cp "$project_root/apps/erl_hls/priv/rtl/hls_1r1w_ram.v" "$stage/hls_1r1w_ram.v"
-cp "$project_root"/apps/erl_hls/priv/rtl/fabric/*.v "$stage/"
-cp "$project_root/apps/erl_hls/priv/xls/fabric/hls_fabric_router.x" \
+cp "$project_root/apps/hls_target/priv/rtl/hls_1r1w_ram.v" "$stage/hls_1r1w_ram.v"
+cp "$project_root"/apps/hls_fabric/priv/rtl/fabric/*.v "$stage/"
+cp "$project_root/apps/hls_fabric/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
-cp "$project_root/apps/erl_hls/priv/xls/fabric/hls_spatial_router.x" \
+cp "$project_root/apps/hls_fabric/priv/xls/fabric/hls_spatial_router.x" \
     "$stage/hls_spatial_router.x"
-cp "$project_root/apps/erl_hls/priv/xls/debug/hls_debug_types.x" \
+cp "$project_root/apps/hls_target/priv/xls/debug/hls_debug_types.x" \
     "$stage/hls_debug_types.x"
-cp "$project_root/apps/erl_hls/priv/xls/debug/hls_debug_trace.x" \
+cp "$project_root/apps/hls_target/priv/xls/debug/hls_debug_trace.x" \
     "$stage/hls_debug_trace.x"
-cp "$project_root/apps/erl_hls/priv/xls/debug/hls_debug_framing.x" "$stage/hls_debug_framing.x"
-cp "$project_root/apps/erl_hls/priv/xls/debug/hls_debug_observer.x" \
+cp "$project_root/apps/hls_target/priv/xls/debug/hls_debug_framing.x" "$stage/hls_debug_framing.x"
+cp "$project_root/apps/hls_target/priv/xls/debug/hls_debug_observer.x" \
     "$stage/hls_debug_observer.x"
-cp "$project_root/apps/erl_hls/priv/xls/debug/hls_debug_server.x" \
+cp "$project_root/apps/hls_target/priv/xls/debug/hls_debug_server.x" \
     "$stage/hls_debug_server.x"
-cp "$project_root/apps/erl_hls/priv/rtl/debug/hls_debug_tap.v" \
+cp "$project_root/apps/hls_target/priv/rtl/debug/hls_debug_tap.v" \
     "$stage/hls_debug_tap.v"
-cp "$project_root/apps/erl_hls/priv/rtl/debug/hls_debug_monitor.v" \
+cp "$project_root/apps/hls_target/priv/rtl/debug/hls_debug_monitor.v" \
     "$stage/hls_debug_monitor.v"
-cp "$project_root/apps/erl_hls/priv/rtl/debug/hls_trace_store.v" \
+cp "$project_root/apps/hls_target/priv/rtl/debug/hls_trace_store.v" \
     "$stage/hls_trace_store.v"
 cp "$project_root/apps/erl_hls/test/rtl/debug/hls_debug_tap_tb.sv" \
     "$stage/hls_debug_tap_tb.sv"
@@ -107,13 +120,13 @@ for source in \
     "$project_root"/apps/hls_runtime/src/runtime/*.erl \
     "$project_root/apps/erl_hls/src/examples/regsvc/regsvc.erl"
 do
-    erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" -pa "$project_root/_build/test/lib/hls_runtime/ebin" \
-        -I "$project_root/apps/erl_hls/include" -P -o "$stage/erl_src" "$source"
+    erlc "${erlc_paths[@]}" \
+        -I "$project_root/apps/hls_compile/include" -P -o "$stage/erl_src" "$source"
     module=$(basename "$source" .erl)
     cp "$stage/erl_src/$module.P" "$stage/erl_src/$module.erl"
 done
 
-erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" -pa "$project_root/_build/test/lib/hls_runtime/ebin" \
+erlc "${erlc_paths[@]}" \
     -P -o "$stage/test_src" "$project_root/apps/erl_hls/test/regsvc_cpu_tests.erl"
 cp "$stage/test_src/regsvc_cpu_tests.P" \
     "$stage/test_src/regsvc_cpu_tests.erl"

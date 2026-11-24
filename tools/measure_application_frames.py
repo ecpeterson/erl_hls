@@ -78,7 +78,7 @@ def measure(args: argparse.Namespace) -> None:
                         subprocess.run(list(map(str, command)), cwd=ROOT, stdout=dest,
                                        stderr=log, check=True)
                 run([args.xls_root / 'ir_converter_main', '--warnings_as_errors=false', f'--top={top}',
-                     f'--dslx_path={directory}:{ROOT / "apps/erl_hls/priv/xls/lib"}',
+                     f'--dslx_path={directory}:{ROOT / "apps/hls_compile/priv/xls/lib"}',
                      f'--dslx_stdlib_path={args.xls_root / "xls/dslx/stdlib"}', source],
                     prefix.with_suffix('.ir'))
                 run([args.xls_root / 'opt_main', prefix.with_suffix('.ir')], prefix.with_suffix('.opt.ir'))

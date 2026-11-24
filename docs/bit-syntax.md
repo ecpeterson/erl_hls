@@ -9,7 +9,7 @@ Translated callbacks and typed local helpers can construct and match native Erla
 decode(<<5:3, Flags:5, Delta:16/signed-little>>) -> {Flags, Delta}.
 ```
 
-The [`packed_samples`](../src/examples/packed_samples/packed_samples.erl) service decodes this format, adds the signed delta to an accumulator, and constructs a packed receipt. Its state and replies also exercise bitstrings inside generated record codecs.
+The [`packed_samples`](../apps/erl_hls/src/examples/packed_samples/packed_samples.erl) service decodes this format, adds the signed delta to an accumulator, and constructs a packed receipt. Its state and replies also exercise bitstrings inside generated record codecs.
 
 ## Segments and byte order
 

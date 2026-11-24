@@ -8,6 +8,8 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_EBINS = [ROOT / '_build/test/lib' / app / 'ebin'
+                 for app in ('hls_core', 'hls_runtime', 'erl_hls')]
 
 
 def run(rtl, stage):
@@ -18,7 +20,7 @@ def run(rtl, stage):
         shutil.copy(ROOT / 'apps/erl_hls/test/rtl' / name, stage)
     sources = [ROOT / 'apps/erl_hls/test/rtl/packed_samples_tb.sv', rtl / 'packed_samples.v',
                *[rtl / f'hls_debug_{name}.v' for name in ('observer', 'server')],
-               *[ROOT / 'apps/erl_hls/priv/rtl/debug' / name for name in (
+               *[ROOT / 'apps/hls_target/priv/rtl/debug' / name for name in (
                    'hls_debug_route.v', 'hls_debug_monitor.v', 'hls_debug_tap.v', 'hls_trace_store.v')]]
     with (stage / 'compile.log').open('w') as log:
         subprocess.run(['iverilog-vpi', 'xls_sim_bridge.c'], cwd=stage,
@@ -40,8 +42,8 @@ def run(rtl, stage):
                     raise RuntimeError((stage / 'simulation.log').read_text())
                 time.sleep(0.02)
             with (stage / 'host.log').open('w') as host:
-                result = subprocess.run(['erl', '-noshell', '-pa',
-                    str(ROOT / '_build/test/lib/erl_hls/ebin'), str(ROOT / '_build/test/lib/hls_runtime/ebin'), str(ROOT / '_build/test/lib/erl_hls/test'),
+                result = subprocess.run(['erl', '-noshell', '-pa', *map(str, RUNTIME_EBINS),
+                    str(ROOT / '_build/test/lib/erl_hls/test'),
                     '-eval', 'ok = packed_samples_live:run(hd(init:get_plain_arguments())), halt().',
                     '-extra', str(stage)], cwd=stage, stdout=host, stderr=subprocess.STDOUT, timeout=120)
             if result.returncode:

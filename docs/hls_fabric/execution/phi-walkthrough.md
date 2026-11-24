@@ -31,7 +31,7 @@ _build/default/rel/hls_examples/bin/hls-repetition \
     --width 6 --split 3 --output _build/repetition-source
 ```
 
-Use a fresh output directory. The example release includes the compiler, lowering library and both decoder applications with their source inputs. It runs neither synthesis nor a fabric node. The generic `hls` build release excludes the decoders; the `hls_fabric` runtime release excludes compiler/lowering code. See [build packaging](../building.md).
+Use a fresh output directory. The example release includes computation, communication and target applications plus both decoders and their source inputs. It runs neither synthesis tools nor a fabric node. The generic `hls` build release excludes the decoders; the legacy-named `hls_fabric` runtime release excludes all synthesis and target applications. See [build packaging](../building.md).
 
 [`phi_protocol_cli`](../../../apps/hls_phi/src/phi_protocol_cli.erl) calls `phi_protocol_config:repetition(6, #{split => 3})`. That function returns `{deployment, Config}`. The frontend submits `#{backend => source_protocol, kind => deployment, configuration => Config}` to `hls_build:plan/1`, then writes the resulting plan. The backend is chosen by this build request; the logical actor definitions do not choose it.
 
@@ -102,7 +102,7 @@ Emission renders the roles and records their descriptors and support dependencie
 | `source-build.json` | External build driver: hashed inputs, compilation units, import paths, required schedules and RTL lists. |
 | `deployment.etf` | Trusted runtime attachment descriptor: roles, identities, routes, limits and application codecs. This is not the in-process compiler plan. |
 | `role0/bridge/bridge.x`, `role1/bridge/bridge.x` | Two independent bridge compilation units, each with top `bridge_clock`. |
-| `support/` and per-role metadata | Copied compiler/lowering/application support and bindings needed by this bundle. |
+| `support/` and per-role metadata | Copied compiler/Fabric/target/application support and bindings needed by this bundle. |
 
 The bridge units each use one pipeline stage with input/output flops disabled, as required by their sampled feedback clock. Do not retime that boundary by adding arbitrary codegen flags. Other composition kinds can contain differently scheduled units. A unit delay model describes an XLS schedule, not a measured FPGA clock period.
 
@@ -142,7 +142,7 @@ Phi host loop
        cross-role packets return through the same host relay
 ```
 
-Here `hls_fabric` is the broker module supplied by the compiler repository's `hls_runtime` application. The fabric repository's `hls_fabric` application supplies deployment streams, routing and optional virtual-node services. Runtime operations use retained descriptors and codecs; they do not call the compiler or load an Erlang source file to discover the wire format. Type-provider implementations still follow ordinary Erlang code loading; a descriptor is not a promise to freeze all provider code or detect every semantic upgrade mismatch.
+Here `hls_fabric` is the broker module supplied by the umbrella's `hls_runtime` application. That same runtime application supplies deployment streams, live routing and optional virtual-node services; the `hls_fabric` application is process-free communication synthesis. Runtime operations use retained descriptors and codecs; they do not call the compiler or load an Erlang source file to discover the wire format. Type-provider implementations still follow ordinary Erlang code loading; a descriptor is not a promise to freeze all provider code or detect every semantic upgrade mismatch.
 
 The following is an attachment skeleton, after the caller has opened one fresh compatible broker per role and reset/brought up both hardware roles. `Broker0`, `Broker1`, `Session0` and `Session1` are caller-supplied values, not values inferred from the build:
 
@@ -184,7 +184,7 @@ A fake ERTS node is optional. `hls_node` adapts supported device services to ext
 | --- | --- |
 | Decoder rule, noise model, logical routes or finite correction policy | `apps/hls_phi`: actor source, topology and host loop. |
 | Supported Erlang construct, typed record packing or callback lowering | `erl_hls` compiler; runtime packing/transport contracts live in its `hls_runtime` application. |
-| Physical ownership, captures, scheduling, bridges or deployment composition | `apps/hls_lowering`; preserve checked source and wire contracts. |
+| Physical ownership, captures, scheduling, bridges or deployment composition | `apps/hls_target`; preserve checked source and wire contracts. |
 | Live command ownership, host relay, recovery or virtual-node behavior | Fabric `src/runtime/` and `src/wire/`, consuming retained descriptors. |
 | DSLX optimization/scheduling/code generation | XLS, after the project's source and scheduling contracts are fixed. |
 | Pins, CDC, board shell, constraints, programming and device transport | The relevant platform integration. |

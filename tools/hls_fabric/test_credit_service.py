@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import re
 import shutil
 
@@ -15,9 +15,9 @@ from link_service_witness import summarize
 def measure(xls: Path, public: Path, stage: Path) -> dict:
     """Build once and require ordered drain in twenty controlled bidirectional workloads."""
     stage.mkdir(parents=True, exist_ok=False)
-    source = ROOT/'apps/hls_lowering/priv/xls/hls_credit_link.x'
-    axis = public/'priv/xls/lib/axis.x'
-    frame_config = public/'priv/xls/lib/frame_config.x'
+    source = ROOT/'apps/hls_target/priv/xls/hls_credit_link.x'
+    axis = compiler_resource(public, 'hls_compile', 'priv/xls/lib/axis.x')
+    frame_config = compiler_resource(public, 'hls_compile', 'priv/xls/lib/frame_config.x')
     template = ROOT/'apps/hls_fabric/test/rtl/credit_service_tb.sv'
     tracked = [source, axis, frame_config, template, Path(__file__), ROOT/'tools/hls_fabric/link_service_witness.py',
                ROOT/'tools/hls_fabric/backend_commands.py',

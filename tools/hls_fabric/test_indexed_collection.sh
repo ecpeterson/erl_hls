@@ -11,15 +11,15 @@ stage=$(cd "$stage" && pwd)
 rebar3 as test compile
 source tools/hls_fabric/backend_env.sh test
 erl +S 2:2 -noshell -eval 'ok = hls_indexed_adapter_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-for source in "$project_root/apps/hls_lowering/priv/xls/lib/mailbox.x" \
-              "$project_root/apps/hls_lowering/priv/xls/templates/indexed_collection_core_tests.x" \
-              "$project_root/apps/hls_lowering/priv/xls/lib/indexed_gather_ram.x" \
+for source in "$project_root/apps/hls_target/priv/xls/lib/mailbox.x" \
+              "$project_root/apps/hls_target/priv/xls/templates/indexed_collection_core_tests.x" \
+              "$project_root/apps/hls_target/priv/xls/lib/indexed_gather_ram.x" \
               "$stage/indexed_adapter.x"; do
     "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-        --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/templates:$erl_hls_root/priv/xls/lib" \
+        --dslx_path="$stage:$project_root/apps/hls_target/priv/xls/lib:$project_root/apps/hls_target/priv/xls/templates:$hls_compile_root/priv/xls/lib" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$source"
 done
 iverilog -g2012 -Wall -s hls_indexed_gather_ram_tb -o "$stage/ram.vvp" \
-    apps/hls_lowering/priv/rtl/hls_indexed_gather_ram.v \
+    apps/hls_target/priv/rtl/hls_indexed_gather_ram.v \
     apps/hls_fabric/test/rtl/hls_indexed_gather_ram_tb.sv
 vvp "$stage/ram.vvp"

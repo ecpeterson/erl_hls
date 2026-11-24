@@ -69,7 +69,7 @@ contains(Source, Needles) ->
 %% Preprocess source only; compiler parse transforms are intentionally not executed here.
 -spec source_dependencies(module()) -> [module()].
 source_dependencies(Module) ->
-    Path = filename:join("apps/erl_hls/src/frontend", atom_to_list(Module) ++ ".erl"),
+    Path = filename:join("apps/hls_compile/src/frontend", atom_to_list(Module) ++ ".erl"),
     {ok, Forms} = epp:parse_file(Path, [], []),
     ?assertEqual([], [Error || Error = {error, _} <- Forms]),
     lists:usort(remote_modules(Forms)).

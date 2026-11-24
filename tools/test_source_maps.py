@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def load_driver() -> ModuleType:
     """Load the same standalone source-bundle driver distributed with the compiler."""
-    path = ROOT / 'apps/erl_hls/priv/tools/compile_source_build.py'
+    path = ROOT / 'apps/hls_target/priv/tools/compile_source_build.py'
     spec = importlib.util.spec_from_file_location('source_map_build_driver', path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))

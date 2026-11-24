@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-DRIVER = ROOT/'apps/erl_hls/priv/tools/compile_source_build.py'
+DRIVER = ROOT/'apps/hls_target/priv/tools/compile_source_build.py'
 spec = importlib.util.spec_from_file_location('compile_source_build', DRIVER)
 driver = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(driver)

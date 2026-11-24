@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import json
 from backend_paths import ROOT, erlang_paths
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from backend_commands import run
 from test_local_protocol import prove
 
@@ -19,7 +19,8 @@ def shapes(xls: Path, stage: Path) -> None:
 def shape_case(xls: Path, part: Path) -> None:
     """Check one freshly emitted shape against the ordinary typed machine unpacker."""
     source=part/'shape.x';raw=part/'shape.ir'
-    imports=[part,ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('test')/'priv/xls/lib',compiler_root('test')/'priv/xls/fabric']
+    public = compiler_root('test')
+    imports=[part,ROOT/'apps/hls_target/priv/xls/lib',compiler_resource(public, 'hls_compile', 'priv/xls/lib'),compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')]
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],part,'shape-convert',raw)
     result=prove(SimpleNamespace(xls=xls,yosys='yosys'),part,raw,'shape','metadata',True)

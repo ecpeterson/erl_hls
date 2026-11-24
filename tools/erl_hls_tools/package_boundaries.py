@@ -7,6 +7,14 @@ import subprocess
 import sys
 import tempfile
 
+
+ARCHITECTURE_FORBIDDEN = {
+    'hls_compile': {'erl_hls', 'hls_fabric', 'hls_target', 'hls_spacetime',
+                    'hls_spacetime_observer'},
+    'hls_fabric': {'erl_hls', 'hls_target', 'hls_spacetime', 'hls_spacetime_observer'},
+    'hls_target': {'erl_hls', 'hls_spacetime', 'hls_spacetime_observer'},
+}
+
 # Inspect inert BEAM tables; no application or project module is started or called.
 ERLANG_AUDIT = r'''
 [Request] = init:get_plain_arguments(),
@@ -70,6 +78,17 @@ def undeclared_application_dependencies(snapshot: dict,
     return errors
 
 
+def duplicate_module_ownership(snapshot: dict) -> list[dict[str, str]]:
+    """Reject one BEAM module claimed by more than one inspected OTP application."""
+    owners: dict[str, set[str]] = {}
+    for application in snapshot['applications']:
+        for module in application['modules']:
+            owners.setdefault(module, set()).add(application['name'])
+    return [dict(kind='duplicate_module_ownership', module=module,
+                 applications=sorted(applications))
+            for module, applications in sorted(owners.items()) if len(applications) > 1]
+
+
 def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
                release: Path | None = None) -> list[dict[str, str]]:
     """Reject declared dependencies, calls or remote types crossing the runtime/build boundary."""
@@ -116,13 +135,25 @@ def policy_violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
     return errors
 
 
+def architecture_violations(snapshot: dict) -> list[dict[str, str]]:
+    """Reject reverse dependencies from synthesis and target layers into their consumers."""
+    found = {app['name'] for app in snapshot['applications']}
+    errors: list[dict[str, str]] = []
+    for application, forbidden in ARCHITECTURE_FORBIDDEN.items():
+        if application in found:
+            errors.extend(violations(snapshot, {application}, forbidden & found, None))
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     """Inspect one already-built profile and optionally its runtime-only release; never compile."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path.cwd())
     parser.add_argument('--profile', default='default')
     parser.add_argument('--runtime', action='append', required=True, help='runtime OTP application (repeatable)')
-    parser.add_argument('--forbid', action='append', default=['erl_hls', 'hls_lowering', 'compiler'])
+    parser.add_argument('--forbid', action='append', default=[
+        'erl_hls', 'hls_compile', 'hls_fabric', 'hls_target',
+        'hls_spacetime', 'hls_spacetime_observer', 'compiler'])
     parser.add_argument('--release', type=Path)
     parser.add_argument('--report', type=Path, default=Path('_build/package-boundaries.json'))
     args = parser.parse_args(argv)
@@ -136,7 +167,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(result.stdout + result.stderr)
         return 1
     snapshot = json.loads(result.stdout)
-    errors = policy_violations(snapshot, set(args.runtime), set(args.forbid), args.release)
+    errors = duplicate_module_ownership(snapshot)
+    errors.extend(policy_violations(snapshot, set(args.runtime), set(args.forbid), args.release))
+    errors.extend(architecture_violations(snapshot))
     report = snapshot | {'violations': errors, 'release': str(args.release) if args.release else None}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')

@@ -148,7 +148,9 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
             GatewayProfile
         ),
         maps:foreach(fun(Name, Data) ->
-            ok = file:write_file(filename:join(Stage, Name), Data)
+            Path = filename:join(Stage, Name),
+            ok = filelib:ensure_dir(Path),
+            ok = file:write_file(Path, Data)
         end, ProfileFiles),
         ok = file:write_file(filename:join(Stage, "phi_halo_cell.x"), PhiHalo),
         ok = file:write_file(filename:join(Stage, "phi_field_test.x"), PhiFieldTest),
@@ -161,7 +163,7 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         ok = file:write_file(filename:join(Stage, "phi_memory_gateway.x"), PhiMemoryGateway),
         ok = file:write_file(filename:join(Stage, "phi_memory_debug_top.v"), PhiMemoryDebugTop),
         halt().'
-cp apps/hls_lowering/priv/xls/lib/*.x "$stage/"
+cp apps/hls_target/priv/xls/lib/*.x "$stage/"
 cp apps/hls_phi/src/phi_field.x "$stage/"
 cp apps/hls_phi/test/rtl/phi_halo_cell_tb.sv apps/hls_phi/test/rtl/phenom_data_cell_tb.sv \
    apps/hls_phi/test/rtl/phi_phenom_topology_tb.sv apps/hls_phi/test/rtl/phi_torus_topology_tb.sv "$stage/"

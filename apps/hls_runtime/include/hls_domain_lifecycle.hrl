@@ -5,7 +5,17 @@
 -type domain_phase() :: unbound | ready | closing | isolated | initializing | failed | stopped.
 
 %% Management commands and correlated completions; adapters may explicitly reject an envelope.
--type domain_operation() :: inspect | activate | replace | fault | fenced | reset_done | initialized | abort | reject | stop.
+-type domain_operation() ::
+    inspect
+    | activate
+    | replace
+    | fault
+    | fenced
+    | reset_done
+    | initialized
+    | abort
+    | reject
+    | stop.
 
 %% Command disposition is distinct from completion of the requested physical work.
 -type domain_status() :: ok | accepted | replay | stale | busy | invalid | failure | completed.
@@ -14,7 +24,13 @@
 -type domain_action() :: none | fence | reset | initialize | publish.
 
 %% Domain causes, separate from numeric compiler failure/site codes in diagnostics.
--type domain_fault() :: none | actor_failure | owner_down | initialization_failure | lifecycle_failure | protocol_failure.
+-type domain_fault() ::
+    none
+    | actor_failure
+    | owner_down
+    | initialization_failure
+    | lifecycle_failure
+    | protocol_failure.
 
 %% Current incarnation and one live/last lifecycle transition, never application history.
 -record(domain_state, {

@@ -6,6 +6,7 @@ import re
 import subprocess
 import time
 from backend_paths import ROOT, erlang_paths, erlang_environment, application_directory
+from compiler_paths import compiler_resource
 from protocol_test_build import compile_build, compile_clock, emit_command
 from backend_commands import digest, run
 
@@ -105,7 +106,7 @@ def properties(xls: Path, stage: Path) -> None:
     from types import SimpleNamespace
     from test_local_protocol import prove
     source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_properties.x';raw=stage/'properties.ir'
-    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_lowering/priv/xls/lib'),
+    run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+str(ROOT/'apps/hls_target/priv/xls/lib'),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'properties-convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')
     results=[prove(args,stage,raw,'protocol_bridge_properties',name,positive) for name,positive in
@@ -134,7 +135,9 @@ def component(xls: Path, stage: Path) -> None:
     """Measure the preregistered controller population including its selection/access logic."""
     source=ROOT/'apps/hls_fabric/test/rtl/protocol_bridge_component.x'
     compiler=application_directory('erl_hls','test')
-    imports=[ROOT/'apps/hls_lowering/priv/xls/lib',compiler/'priv/xls/lib',compiler/'priv/xls/fabric']
+    imports=[ROOT/'apps/hls_target/priv/xls/lib',
+             compiler_resource(compiler, 'hls_compile', 'priv/xls/lib'),
+             compiler_resource(compiler, 'hls_fabric', 'priv/xls/fabric')]
     compile_clock(xls,source,stage,'bridge_component_clock','bridge_component',imports)
     script=stage/'map.ys';netlist=stage/'mapped.json'
     script.write_text('read_verilog "'+str(stage/'core.v')+'"\n'

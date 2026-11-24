@@ -122,9 +122,9 @@ plan(Files) ->
         Gateway
     ),
     Libraries = [
-        {hls_lowering, <<"support/fabric/">>, "xls/hls_partition_io.x"},
-        {hls_lowering, <<"support/fabric/">>, "xls/lib/protocol_framing.x"},
-        {erl_hls, <<"support/compiler/">>, "xls/lib/axis.x"}
+        {hls_target, <<"support/target/">>, "xls/hls_partition_io.x"},
+        {hls_target, <<"support/target/">>, "xls/lib/protocol_framing.x"},
+        {hls_compile, <<"support/compiler/">>, "xls/lib/axis.x"}
     ],
     lists:foreach(
         fun({App, Prefix, Name}) ->
@@ -141,7 +141,7 @@ plan(Files) ->
     ],
     true = Configs =/= [],
     lists:foreach(fun({Name, _}) -> ok = same(Name, FrameConfig, Files) end, Configs),
-    Io = maps:get(<<"support/fabric/xls/hls_partition_io.x">>, Files),
+    Io = maps:get(<<"support/target/xls/hls_partition_io.x">>, Files),
     {match, [[FirstText]]} = re:run(
         Io,
         <<"const FIRST_EVENT_ENDPOINT = u16:([0-9]+);">>,

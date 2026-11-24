@@ -54,7 +54,7 @@ def measure(args: argparse.Namespace) -> None:
     provenance = read_bridge_build(args.build)
     args.stage.mkdir(parents=True, exist_ok=False)
     accounting = compiler_tool(args.erl_hls, "measure_topology_debug")
-    sources = [ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v", *debug_rtl(args.erl_hls)]
+    sources = [ROOT / "apps/hls_target/priv/rtl/hls_async_fifo.v", *debug_rtl(args.erl_hls)]
     report = {"scope": "Full devices: actors, RAM, application gateway, credited link, public topology/actor queries and five CDC FIFOs each; excludes optional counter/trace services, PS, DMA, Ethernet/GT and I/O pads. Synthesis only, no placement/timing claim.",
         "build_provenance_sha256": digest(args.build / "provenance.json"),
         "placement": provenance["inputs"]["config"].get("placement", "direct"),

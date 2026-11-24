@@ -131,10 +131,13 @@ class CompilerPathTests(unittest.TestCase):
     """Board application builders use the compiler app's retained private entrypoint."""
 
     def test_umbrella_compiler_entry(self) -> None:
-        """The selected app supplies both its DSLX libraries and executable compiler helper."""
+        """The selected umbrella supplies DSLX and the target-owned compiler helper."""
         public = ROOT.parents[1] / "apps/erl_hls"
-        self.assertTrue((public / "priv/xls").is_dir())
-        self.assertEqual(link_application.compiler_entry(public), public / "priv/tools/compile_xls.py")
+        sys.path.insert(0, str(ROOT.parents[1] / "tools/hls_fabric"))
+        from compiler_paths import compiler_resource
+        self.assertTrue(compiler_resource(public, "hls_compile", "priv/xls").is_dir())
+        self.assertEqual(link_application.compiler_entry(public),
+                         compiler_resource(public, "hls_target", "priv/tools/compile_xls.py"))
         self.assertTrue(link_application.compiler_entry(public).is_file())
 
 

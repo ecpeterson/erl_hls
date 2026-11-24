@@ -17,10 +17,10 @@ read(Path) ->
         [
             hls_spacetime,
             hls_spacetime_storage,
-            hls_spacetime_physical,
-            hls_spacetime_native,
+            hls_target_physical,
+            hls_target_native,
             hls_spacetime_import,
-            hls_spacetime_sdf
+            hls_target_sdf
         ]
     ),
     {ok, Bytes} = file:read_file(Path),
@@ -47,10 +47,10 @@ write_bundle(Bundle, Directory) ->
     Summary.
 
 -doc "Writes a catalogue returned by hls_spacetime_import:read/3 as catalogue.etf with a SHA-256 inventory into a new directory. Checks its physical schema; the importer and caller still own native input verification.".
--spec write_catalogue(hls_spacetime_physical:physical(), file:filename_all()) ->
-    hls_spacetime_physical:summary().
+-spec write_catalogue(hls_target_physical:physical(), file:filename_all()) ->
+    hls_target_physical:summary().
 write_catalogue(Catalogue = #{build := Build}, Directory) ->
-    Summary = hls_spacetime_physical:validate(Build, #{}, Catalogue),
+    Summary = hls_target_physical:validate(Build, #{}, Catalogue),
     write(Directory, [{"catalogue.etf", term_to_binary(Catalogue, [deterministic])}]),
     Summary.
 

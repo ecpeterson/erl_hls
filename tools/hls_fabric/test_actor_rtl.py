@@ -8,7 +8,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 from backend_paths import erl_command, debug_rtl
 from backend_commands import digest, execute
 from actor_build_artifacts import inputs, outputs, validate_build
@@ -33,9 +33,9 @@ def build(args: argparse.Namespace) -> None:
     for library in ("lib", "fabric"):
         for path in (public / "priv/xls" / library).glob("*.x"):
             shutil.copy(path, source)
-    for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
+    for path in (ROOT / "apps/hls_target/priv/xls").rglob("*.x"):
         shutil.copy(path, source)
-    shutil.copy(public / "priv/rtl/hls_1r1w_ram.v", source)
+    shutil.copy(compiler_resource(public, "hls_target", "priv/rtl/hls_1r1w_ram.v"), source)
     banks = len(json.loads((source / "actors.json").read_text())["banks"])
     configurations = subprocess.check_output([
         "bash", "-c", 'source "$1"; scheduler_ram_configurations "$2"',

@@ -1,6 +1,6 @@
 -module(hls_spacetime).
 -moduledoc """
-Cycle-native execution evidence shared by compiler/lowering observers and offline viewers. Producers supply identities and observations; this module checks consistency before serialization. Storage history and physical correspondence are checked by hls_spacetime_storage and hls_spacetime_physical. It neither observes hardware nor infers missing causality, and does not change the nanosecond timing-profile format.
+Cycle-native execution evidence shared by compiler/lowering observers and offline viewers. Producers supply identities and observations; this module checks consistency before serialization. Storage history and physical correspondence are checked by hls_spacetime_storage and hls_target_physical. It neither observes hardware nor infers missing causality, and does not change the nanosecond timing-profile format.
 """.
 %% Producer-facing artifact validation and serialization; neither writes files.
 -export([validate/1, encode/1]).
@@ -113,7 +113,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
     events := [event()],
     relations := [relation()],
     activity := [activity()],
-    physical := hls_spacetime_physical:physical()
+    physical := hls_target_physical:physical()
 }.
 -doc "Derived recording size and mapping coverage; complete refers only to the observer's declared scope.".
 -type summary() :: #{
@@ -122,7 +122,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
     resources := non_neg_integer(),
     complete := boolean(),
     required_version_edges := non_neg_integer(),
-    mapping := hls_spacetime_physical:summary()
+    mapping := hls_target_physical:summary()
 }.
 
 -doc "Checks a producer's complete artifact and returns derived counts/coverage. Raises {spacetime, Reason}; checks declared evidence consistency, not observer completeness or physical authenticity. Known gaps are accepted only when complete=false.".
@@ -174,7 +174,7 @@ validate_bundle(#{
         {simulation_witness, #{evidence := native_measurement}} -> ok;
         _ -> fail(mixed_evidence_kinds)
     end,
-    Mapping = hls_spacetime_physical:validate(Build, Resources, Physical),
+    Mapping = hls_target_physical:validate(Build, Resources, Physical),
     #{
         events => map_size(Events),
         versions => map_size(Versions),

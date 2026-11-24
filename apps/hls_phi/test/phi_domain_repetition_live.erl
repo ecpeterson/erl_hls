@@ -2,7 +2,7 @@
 -moduledoc "Finite Phi memory/recovery witness through production domain and channel APIs. The simulator controls only bounded public transport delivery; this module supplies ordinary OTP supervision, source configuration, correction feedback and readout. Two fresh lifetimes reuse one retained BEAM oracle.".
 -behaviour(supervisor).
 -include_lib("hls_runtime/include/hls_domain_lifecycle.hrl").
--include_lib("hls_fabric/include/hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% Public finite witness and ordinary dependent-group child declarations.
 -export([run/2, run/3, run_attached/4, init/1]).

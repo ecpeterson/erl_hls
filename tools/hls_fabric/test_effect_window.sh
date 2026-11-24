@@ -13,12 +13,12 @@ rebar3 as test compile >/dev/null
 source tools/hls_fabric/backend_env.sh test
 
 "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
-    "$project_root/apps/hls_lowering/priv/xls/lib/effect_window.x"
+    --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
+    "$project_root/apps/hls_target/priv/xls/lib/effect_window.x"
 
 for top in ArbiterTop ReturnTop; do
     "$xls_root/ir_converter_main" --top="$top" --warnings_as_errors=false \
-        --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
+        --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
         "$project_root/apps/hls_fabric/test_data/effect_window_rtl.x" > "$stage/$top.ir"
     "$xls_root/opt_main" "$stage/$top.ir" > "$stage/$top.opt.ir"
     if [[ "$top" == ArbiterTop ]]; then
@@ -48,6 +48,6 @@ python3 tools/hls_fabric/test_effect_router.py "$xls_root" --stage "$stage/route
 # Bound elaboration separately from functional tests: the prior conditional
 # array update becomes impractical at twelve contenders on the native compiler.
 timeout 120s "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
-    --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
+    --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" --dslx_stdlib_path="$stdlib" \
     "$project_root/apps/hls_fabric/test_data/effect_window_large.x" > "$stage/large.ir"
 "$xls_root/opt_main" "$stage/large.ir" > "$stage/large.opt.ir"

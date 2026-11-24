@@ -1,7 +1,7 @@
 -module(hls_domain_channel_endpoints_tests).
 -moduledoc "Finite native witnesses for independently owned mailbox endpoints. Carrier integrity, physical reset and remote liveness are assumptions, not established by these kernel tests.".
 -include_lib("eunit/include/eunit.hrl").
--include_lib("hls_fabric/include/hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% The receiver's exact active binding must be confirmed before source admission.
 -spec receiver_confirmation_test() -> ok.

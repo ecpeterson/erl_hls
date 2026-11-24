@@ -1,6 +1,6 @@
 # Independent device clocks
 
-Each XLS device runs on its own clock. `apps/hls_lowering/priv/rtl/hls_async_fifo.v` supplies the ready/valid boundary between domains; the DSLX credit protocol and actor graph do not change. The phi simulation has three clocks: one for the host debug transport and one for each device. Two FIFOs carry the full-duplex application link, and four more carry independent debug requests and responses. All storage is bounded.
+Each XLS device runs on its own clock. `apps/hls_target/priv/rtl/hls_async_fifo.v` supplies the ready/valid boundary between domains; the DSLX credit protocol and actor graph do not change. The phi simulation has three clocks: one for the host debug transport and one for each device. Two FIFOs carry the full-duplex application link, and four more carry independent debug requests and responses. All storage is bounded.
 
 In a board implementation each FIFO lives wholly inside one FPGA, between the application clock and a local transport or recovered clock. The simulated direct connection collapses the intervening transport into an ordered beat stream; a physical adapter must supply that stream and its clocks.
 

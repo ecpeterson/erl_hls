@@ -1,1 +1,1 @@
-../../../hls_lowering/priv/simulator/framed_fifo_stream.h
+../../../hls_target/priv/simulator/framed_fifo_stream.h

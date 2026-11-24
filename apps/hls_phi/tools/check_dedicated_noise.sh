@@ -41,9 +41,9 @@ PHI_DEDICATED_STAGE="$stage" erl +S 2:2 -noshell -eval '
     halt().
 ' > "$stage/generation.log" 2>&1
 
-# Use support sources from the same compiler selected for the Erlang lowering.
-cp "$erl_hls_root"/priv/xls/lib/*.x "$stage/"
-cp "$erl_hls_root/priv/xls/fabric/hls_spatial_router.x" "$stage/"
+# Use support sources from the selected umbrella applications used by Erlang lowering.
+cp "$hls_compile_root"/priv/xls/lib/*.x "$stage/"
+cp "$hls_fabric_root/priv/xls/fabric/hls_spatial_router.x" "$stage/"
 cp apps/hls_phi/src/phi_field.x "$stage/"
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \

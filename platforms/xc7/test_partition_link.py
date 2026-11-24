@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/hls_fabric'))
 from backend_paths import application_directory
+from compiler_paths import compiler_application
 
 from escript_test import run_self_test
 
@@ -29,7 +30,7 @@ def simulate(stage: Path, name: str, sources: list[Path]) -> None:
 def run(public: Path | None = None) -> None:
     """Run framing/probe witnesses and the host checker's offline invariants."""
     public = public or application_directory("erl_hls", "default")
-    fabric = public / "priv/rtl/fabric"
+    fabric = compiler_application(public, "hls_fabric") / "priv/rtl/fabric"
     ingress = fabric / "hls_fabric_ingress.v"
     egress = fabric / "hls_fabric_egress.v"
     if not ingress.is_file() or not egress.is_file():

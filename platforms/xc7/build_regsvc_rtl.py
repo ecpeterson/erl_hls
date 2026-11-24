@@ -15,10 +15,20 @@ ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT.parent.parent
 BUILD = ROOT / "build/routed-dma/rtl"
 GENERATED = ("regsvc", "hls_debug_observer", "hls_debug_server")
-HANDWRITTEN = ("test/rtl/regsvc_fabric_fixture.sv", "src/examples/regsvc/regsvc_core_adapter.v",
-               "src/examples/regsvc/regsvc_debug_top.v", "priv/rtl/debug/hls_debug_tap.v",
-               "priv/rtl/debug/hls_debug_monitor.v", "priv/rtl/debug/hls_trace_store.v",
-               "priv/rtl/fabric/hls_fabric_ingress.v", "priv/rtl/fabric/hls_fabric_egress.v")
+HANDWRITTEN = (("erl_hls", "test/rtl/regsvc_fabric_fixture.sv"),
+               ("erl_hls", "src/examples/regsvc/regsvc_core_adapter.v"),
+               ("erl_hls", "src/examples/regsvc/regsvc_debug_top.v"),
+               ("hls_target", "priv/rtl/debug/hls_debug_tap.v"),
+               ("hls_target", "priv/rtl/debug/hls_debug_monitor.v"),
+               ("hls_target", "priv/rtl/debug/hls_trace_store.v"),
+               ("hls_fabric", "priv/rtl/fabric/hls_fabric_ingress.v"),
+               ("hls_fabric", "priv/rtl/fabric/hls_fabric_egress.v"))
+
+
+def handwritten_sources(public: Path) -> list[Path]:
+    """Resolve board support RTL through each selected umbrella application owner."""
+    from compiler_paths import compiler_application
+    return [compiler_application(public, application) / name for application, name in HANDWRITTEN]
 
 
 def runtime_sources(public: Path) -> list[Path]:
@@ -36,7 +46,7 @@ def sources(directory: Path) -> list[Path]:
     for name, expected in manifest["outputs"].items():
         if digest(directory / name) != expected:
             raise ValueError(f"RTL output changed: {name}")
-    return [*(public / name for name in HANDWRITTEN),
+    return [*handwritten_sources(public),
             *(directory / f"{name}.v" for name in GENERATED)]
 
 
@@ -58,7 +68,7 @@ def build(xls: Path, public: Path | None = None, profile: str = "default") -> Pa
     """Generate DSLX, compile three procs and require the existing routed RTL regression."""
     public = compiler_context(public, profile)
     from backend_paths import compiler_ebin, erlang_environment
-    from compiler_paths import compiler_source, compiler_tool
+    from compiler_paths import compiler_application, compiler_source, compiler_tool
     compiler = compiler_tool(public, "compile_xls")
     BUILD.mkdir(parents=True, exist_ok=True)
     (BUILD / "manifest.json").unlink(missing_ok=True)
@@ -69,7 +79,9 @@ def build(xls: Path, public: Path | None = None, profile: str = "default") -> Pa
                     'xls_parse:to_xls("src/examples/regsvc/regsvc.erl")), halt().'],
                    cwd=public, env={**erlang_environment(profile, BACKEND, compiler=public),
                                     "REGSVC_OUTPUT": str(stage / "regsvc.x")}, check=True)
-    libraries = list((public / "priv/xls").rglob("*.x"))
+    libraries = sorted({path.resolve()
+                        for application in ("hls_compile", "hls_fabric", "hls_target")
+                        for path in (compiler_application(public, application) / "priv/xls").rglob("*.x")})
     if len({p.name for p in libraries}) != len(libraries):
         raise ValueError("DSLX import names collide")
     for path in libraries:
@@ -81,21 +93,23 @@ def build(xls: Path, public: Path | None = None, profile: str = "default") -> Pa
         compiler.build(stage / f"{name}.x", xls, output, top=top,
                        pipeline_stages=depth, initiation_interval=interval)
         shutil.copyfile(output / f"{name}.v", BUILD / f"{name}.v")
+    facade = compiler_application(public, "erl_hls")
+    compile_app = compiler_application(public, "hls_compile")
     inputs = [Path(__file__), compiler_source(public, "compile_xls"),
-              *(public / name for name in HANDWRITTEN),
-              *sorted((public / "src").rglob("*.erl")), *sorted((public / "src").rglob("*.hrl")),
+              *handwritten_sources(public),
+              *sorted((facade / "src").rglob("*.erl")), *sorted((compile_app / "src").rglob("*.erl")),
               *runtime_sources(public),
-              *sorted((public / "include").rglob("*.hrl")), *sorted((public / "priv/xls").rglob("*.x"))]
+              *sorted((compile_app / "include").rglob("*.hrl")), *libraries]
     manifest = {"compiler_root": str(public), "rebar_profile": profile,
                 "inputs": {os.path.relpath(p, public): digest(p) for p in inputs},
                 "outputs": {f"{name}.v": digest(BUILD / f"{name}.v") for name in GENERATED},
                 "build_manifests": {name: digest(BUILD / f"{name}-build/{name}.build.json") for name in GENERATED},
                 "xls_tools": {name: digest(xls / name) for name in
                               ("ir_converter_main", "opt_main", "codegen_main")}}
-    rtl = [*(public / name for name in HANDWRITTEN), *(BUILD / f"{name}.v" for name in GENERATED)]
+    rtl = [*handwritten_sources(public), *(BUILD / f"{name}.v" for name in GENERATED)]
     with (BUILD / "test.log").open("w") as log:
         subprocess.run(["iverilog", "-g2012", "-s", "regsvc_pair_tb", "-o", str(BUILD / "test.vvp"),
-                        str(public / "test/rtl/regsvc_pair_tb.sv"), *map(str, rtl)],
+                        str(facade / "test/rtl/regsvc_pair_tb.sv"), *map(str, rtl)],
                        stdout=log, stderr=subprocess.STDOUT, check=True)
         subprocess.run(["vvp", str(BUILD / "test.vvp")], stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=30)

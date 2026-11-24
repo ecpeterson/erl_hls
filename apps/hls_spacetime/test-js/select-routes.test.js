@@ -191,7 +191,7 @@ test("generated Tcl round-trips metacharacters without evaluating native names",
       "source [lindex $argv 0]\nsource [lindex $argv 1]\nputs [dict get [lindex [::hls_spacetime_routes::selection $selection] 0] report_net]\n",
     );
     const exporter = fileURLToPath(
-      new URL("../priv/tools/export_routes.tcl", import.meta.url),
+      new URL("../../hls_target/priv/tools/export_routes.tcl", import.meta.url),
     );
     assert.equal(
       execFileSync("tclsh", [driver, exporter, selection], {

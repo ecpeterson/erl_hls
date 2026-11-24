@@ -1,7 +1,7 @@
 -module(hls_domain_channel_tests).
 -moduledoc "Finite channel ownership witnesses; transport and lifecycle observations are explicit inputs, not physical reset evidence.".
 -include_lib("eunit/include/eunit.hrl").
--include_lib("hls_fabric/include/hls_domain_channel.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel.hrl").
 
 %% Each accepted handshake has a distinct edge, including credit return and next source capture.
 -spec held_data_and_credit_test() -> ok.

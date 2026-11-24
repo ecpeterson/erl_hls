@@ -1,6 +1,8 @@
 # hls_spacetime
 
-Inspect saved FPGA execution as work spread over placed circuitry and clock cycles. The standalone Erlang library validates event/version histories, reads bounded simulator traces, and imports physical catalogues and timing sidecars. It starts no processes and depends only on OTP. Backend observation adapters stay with their producers; application stimuli stay with their applications.
+`hls_spacetime` owns process-free system-level planning and offline execution analysis. It proposes deterministic partition and scheduler requests from a core logical topology, and revises a checked `hls_implementation_plan` through a caller-supplied pure policy and an exactly correlated `hls_characterization`. It neither reads a cache nor calls target tools; supplied and cached values take the same API path.
+
+The library also validates event/version histories and reads bounded simulator traces so saved FPGA execution can be inspected as work spread over placed circuitry and clock cycles. Physical catalogue and timing-sidecar validation belong to `hls_target`; Spacetime consumes those checked values rather than owning vendor adapters. Backend observation adapters stay with their producers, and application stimuli stay with their applications. The optional `hls_spacetime_observer` application is the cross-layer integration adapter and has no application callback.
 
 The browser viewer consumes saved JSON without running the compiler, simulator or Vivado. Its depth-tested 3D scene places computation routes within clock layers and storage links between them. Orbit, pan, zoom and a movable clock window reveal the spatial spread and residence of recorded values; the evidence inspector and flat chip are optional. Computation circuits retain every recorded write's structural fan-in, with function and static cone-delay colors. Prepared rendering indexes keep the complete source evidence separately retained instead of loading the entire native graph into the browser. Unknown mappings and ancestry stay explicit. The display does not infer metal centrelines, unrecorded read subsets, gate activity or a physical execution period.
 
@@ -20,13 +22,13 @@ node scripts/prepare-render.mjs --input /path/to/computation-publication --outpu
 npm start -- --data /path/to/fresh-render-view
 ```
 
-Use `--capture RECORDING_FILE` if the publication contains more than one computation capture. This offline step retains the original recording and native tables alongside a hash-bound rendering derivative; it runs no new measurement. See [computation routing](docs/computation-routing.md#prepare-rendering-indexes) for its inputs and limits.
+Use `--capture RECORDING_FILE` if the publication contains more than one computation capture. This offline step retains the original recording and native tables alongside a hash-bound rendering derivative; it runs no new measurement. See [computation routing](../../docs/hls_spacetime/computation-routing.md#prepare-rendering-indexes) for its inputs and limits.
 
-Open the printed loopback URL. No capture is uploaded. “Open file” also accepts a prepared `spacetime-view` JSON projection. The [maintained workflow](docs/workflow.md) covers capture, native extraction, finite binding qualification, join, validation and routed-path attachment. It has no campaign-directory dependency. `prepare-example.mjs` remains the adapter for retained S3/S4 demonstration archives; it is not the entry point for new workloads. See [the viewer guide](docs/viewer.md) for controls and interpretation.
+Open the printed loopback URL. No capture is uploaded. “Open file” also accepts a prepared `spacetime-view` JSON projection. The [maintained workflow](../../docs/hls_spacetime/workflow.md) covers capture, native extraction, finite binding qualification, join, validation and routed-path attachment. It has no campaign-directory dependency. `prepare-example.mjs` remains the adapter for retained S3/S4 demonstration archives; it is not the entry point for new workloads. See [the viewer guide](../../docs/hls_spacetime/viewer.md) for controls and interpretation.
 
 ## Timing diagnostics
 
-Generate an [explainable timing report](docs/timing-report.md) from a saved computation publication:
+Generate an [explainable timing report](../../docs/hls_spacetime/timing-report.md) from a saved computation publication:
 
 ```sh
 node scripts/report-timing.mjs --input /path/to/computation-publication --output /path/to/fresh-report
@@ -45,6 +47,6 @@ rebar3 dialyzer
 npm test
 ```
 
-Read [the execution contract](docs/contract.md), [native import](docs/native.md), [sample-stream trace dialect](docs/trace-format.md), [optional RAM witness](docs/memory-witness.md), and [local source checks](docs/source-quality.md). The compiler-owned RAM primitive/testbench are supplied explicitly for the optional witness; the library has no compiler dependency.
+Read [the execution contract](../../docs/hls_spacetime/contract.md), [native import](../../docs/hls_spacetime/native.md), [sample-stream trace dialect](../../docs/hls_spacetime/trace-format.md), [optional RAM witness](../../docs/hls_spacetime/memory-witness.md), and [source checks](../../docs/source-quality.md). The target-owned RAM primitive/testbench are supplied explicitly for the optional witness. Spacetime itself neither invokes compilation nor imports compiler modules.
 
-`src/` owns validation and readers; `priv/` contains the recorder header and vendor extraction boundary; `web/` owns browser rendering and graph indexes; `scripts/` contains saved-file preparation and a read-only loopback server. Tests use localized fixtures. The [campaign evidence index](yap/spacetime-visualization.md) and historical records live in `yap/`; the Notes master roadmap (`Notes/erl_xls/Roadmap.md`) is the sole active task list.
+`src/` owns pure plan policy, artifact validation and readers; `priv/` contains the recorder header; `web/` owns browser rendering and graph indexes; `scripts/` contains saved-file preparation and a read-only loopback server. Vendor extraction and timing adapters live in `hls_target`. Tests use localized fixtures. The [campaign evidence index](../../yap/hls_spacetime/spacetime-visualization.md) and historical records live in `yap/`; the Notes master roadmap is the sole active task list.

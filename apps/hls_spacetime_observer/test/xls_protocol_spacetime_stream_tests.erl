@@ -122,8 +122,8 @@ source_binding_test() ->
         Changed = Files#{Name := <<(maps:get(Name, Files))/binary, "\n// changed\n">>},
         ?assertError({spacetime_stream_source, Name}, xls_protocol_spacetime_stream:plan(Changed))
     end, [<<"application/protocol_application_top.sv">>, <<"application/application_config.x">>,
-        <<"application/gateway.x">>, <<"support/fabric/xls/hls_partition_io.x">>,
-        <<"support/fabric/xls/lib/protocol_framing.x">>, <<"actors/frame_config.x">>]).
+        <<"application/gateway.x">>, <<"support/target/xls/hls_partition_io.x">>,
+        <<"support/target/xls/lib/protocol_framing.x">>, <<"actors/frame_config.x">>]).
 
 %% A new gateway selector cannot inherit the ordered-gateway interpretation accidentally.
 -spec unsupported_gateway_test() -> ok.
@@ -150,9 +150,9 @@ source_fixture() ->
     Gateway = xls_protocol_application:emit(Binding),
     Files = maps:from_list([{iolist_to_binary(["application/", N]), iolist_to_binary(B)} ||
         {N, B} <- maps:to_list(Gateway)]),
-    Libraries = [{hls_lowering, <<"support/fabric/">>, "xls/hls_partition_io.x"},
-        {hls_lowering, <<"support/fabric/">>, "xls/lib/protocol_framing.x"},
-        {erl_hls, <<"support/compiler/">>, "xls/lib/axis.x"}],
+    Libraries = [{hls_target, <<"support/target/">>, "xls/hls_partition_io.x"},
+        {hls_target, <<"support/target/">>, "xls/lib/protocol_framing.x"},
+        {hls_compile, <<"support/compiler/">>, "xls/lib/axis.x"}],
     Support = maps:from_list([begin
         {ok, Bytes} = file:read_file(filename:join(code:priv_dir(App), Name)),
         {iolist_to_binary([Prefix, Name]), Bytes}

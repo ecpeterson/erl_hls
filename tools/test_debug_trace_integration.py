@@ -13,6 +13,8 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_EBINS = [ROOT / "_build/test/lib" / app / "ebin"
+                 for app in ("hls_core", "hls_runtime", "erl_hls")]
 
 
 def run(rtl, stage):
@@ -22,7 +24,7 @@ def run(rtl, stage):
             path.unlink()
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(ROOT / "apps/erl_hls/test/rtl" / name, stage)
-    support = [ROOT / "apps/erl_hls/priv/rtl/debug" / name for name in (
+    support = [ROOT / "apps/hls_target/priv/rtl/debug" / name for name in (
         "hls_debug_tap.v", "hls_debug_monitor.v", "hls_trace_store.v", "hls_debug_route.v")]
     generated = [rtl / f"hls_debug_{name}.v" for name in ("observer", "server")]
     with (stage / "compile.log").open("w") as log:
@@ -44,7 +46,7 @@ def run(rtl, stage):
                 if sim.poll() is not None or time.monotonic() > deadline:
                     raise RuntimeError(f"No debug transport; see {stage / 'simulation.log'}")
                 time.sleep(0.01)
-            command = ["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/erl_hls/ebin"), str(ROOT / "_build/test/lib/hls_runtime/ebin"),
+            command = ["erl", "-noshell", "-pa", *map(str, RUNTIME_EBINS),
                        str(ROOT / "_build/test/lib/erl_hls/test"), "-eval",
                        'ok = hls_debug_trace_live:run(hd(init:get_plain_arguments())), halt(0).',
                        "-extra", str(stage)]

@@ -6,6 +6,16 @@ import os
 import sys
 
 
+IMPORT_ROOTS = {
+    "lib": Path("apps/hls_compile/priv/xls/lib"),
+    "fabric": Path("apps/hls_fabric/priv/xls/fabric"),
+    "debug": Path("apps/hls_target/priv/xls/debug"),
+}
+BUILD_APPLICATIONS = (
+    "hls_core", "hls_runtime", "hls_compile", "hls_fabric", "hls_target", "erl_hls"
+)
+
+
 @dataclass(frozen=True)
 class FileText:
     """A generated scalar inserted into one argv element only when the step runs."""
@@ -72,7 +82,8 @@ class Case:
 
     def erl(self, expression: str, *arguments: str | Path, name: str = "fixtures") -> None:
         """Execute the original Erlang fixture/oracle writer with explicit arguments."""
-        self.command(name, ["erl", "-noshell", "-pa", self.root / "_build/test/lib/erl_hls/ebin", self.root / "_build/test/lib/hls_runtime/ebin",
+        ebins = [self.root / "_build/test/lib" / app / "ebin" for app in BUILD_APPLICATIONS]
+        self.command(name, ["erl", "-noshell", "-pa", *ebins,
             self.root / "_build/test/lib/erl_hls/test", "-eval", expression, "-extra", *(arguments or (self.stage,))], directories=(self.stage,))
 
     def fixture(self, name: str, placement: str | None = None) -> None:
@@ -88,7 +99,7 @@ class Case:
     def options(self, warnings: bool = False) -> list[str]:
         """Preserve ordered import roots and explicit XLS standard-library selection."""
         paths = ([self.stage] if self.stage_import else []) + [
-            self.root / "apps/erl_hls/priv/xls" / p for p in self.imports]
+            self.root / IMPORT_ROOTS[name] for name in self.imports]
         return [f"--warnings_as_errors={str(warnings).lower()}", "--dslx_path=" + ":".join(map(str, paths)),
             "--dslx_stdlib_path=" + str(self.xls / "xls/dslx/stdlib")]
 
@@ -138,7 +149,7 @@ class Case:
         """Stage each complete selected support import root, in the original order."""
         for directory in directories:
             self.steps.append(Copy(
-                self.root / "apps/erl_hls/priv/xls" / directory, "*.x", self.stage))
+                self.root / IMPORT_ROOTS[directory], "*.x", self.stage))
 
     def compiled(self, name: str, source: str, artifact: str, stages: int, interval: int | None = None,
                  flags: tuple[str, ...] = ()) -> Path:

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test(stage: Path, yosys: str, cells: Path | None) -> None:
     """Require bounded ordered operation and two-read-clock visibility before and after mapping."""
     stage.mkdir(parents=True, exist_ok=False)
-    sources = [ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v", ROOT / "apps/hls_fabric/test/rtl/async_fifo_tb.sv"]
+    sources = [ROOT / "apps/hls_target/priv/rtl/hls_async_fifo.v", ROOT / "apps/hls_fabric/test/rtl/async_fifo_tb.sv"]
     report = {"sources": {str(path.relative_to(ROOT)): digest(path) for path in sources},
               "cases": []}
     for bits, write, read in ((2, 3, 7), (3, 7, 3), (3, 5, 5), (4, 2, 11)):

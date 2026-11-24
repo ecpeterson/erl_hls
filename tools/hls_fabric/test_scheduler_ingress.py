@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 
 from backend_paths import ROOT, erl_command
 from backend_commands import digest, execute
@@ -40,7 +40,8 @@ pub proc Top {{
 ''')
     commands = [
         ([str(xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false',
-          f'--dslx_path={stage}:{public/"priv/xls/lib"}', f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}',
+          f'--dslx_path={stage}:{compiler_resource(public, "hls_compile", "priv/xls/lib")}',
+          f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}',
           str(stage/'top.x')], 'convert', 'ingress.ir'),
         ([str(xls/'opt_main'), str(stage/'ingress.ir')], 'optimize', 'ingress.opt.ir'),
         ([str(xls/'codegen_main'), '--pipeline_stages=2', '--delay_model=unit',
@@ -50,8 +51,8 @@ pub proc Top {{
     for command, label, output in commands:
         execute(command, stage, label, output=stage/output)
     (stage/'build.json').write_text(json.dumps({'count': count, 'reference': reference, 'commands': [c for c,_,_ in commands],
-        'rtl_sha256': digest(stage/'ingress.v'), 'emitter_sha256': digest(ROOT/'apps/hls_lowering/src/backend/xls/partition/hls_partition_shared_dslx.erl'),
-        'template_sha256': digest(ROOT/'apps/hls_lowering/priv/xls/scheduler_ingress.x.in')}, indent=2)+'\n')
+        'rtl_sha256': digest(stage/'ingress.v'), 'emitter_sha256': digest(ROOT/'apps/hls_target/src/backend/xls/partition/hls_partition_shared_dslx.erl'),
+        'template_sha256': digest(ROOT/'apps/hls_target/priv/xls/scheduler_ingress.x.in')}, indent=2)+'\n')
 
 
 def simulate(stage: Path, count: int, expected_ns: int = 8) -> None:

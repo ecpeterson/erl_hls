@@ -4,4 +4,4 @@
 
 `regsvc.erl.x` is generated DSLX. `regsvc_core_adapter.v` and `regsvc_debug_top.v` connect the generated service in the example RTL fixture. The simulation scripts and tests own execution; this directory does not implement a general deployment shell.
 
-Use this example to trace an ordinary call/cast compilation path. Shared codec operations belong to the [core API](../../../../hls_core/src/api/README.md), compiler passes to [backend](../../backend/README.md), and device/session handling to the [runtime implementation](../../../../hls_runtime/src/runtime/README.md).
+Use this example to trace an ordinary call/cast compilation path. Shared codec operations belong to the [core API](../../../../hls_core/src/api/README.md), compiler passes to the [`hls_compile` backend](../../../../hls_compile/src/backend/README.md), and device/session handling to the [runtime implementation](../../../../hls_runtime/src/runtime/README.md).

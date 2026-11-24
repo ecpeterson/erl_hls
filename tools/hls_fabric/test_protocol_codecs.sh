@@ -28,7 +28,7 @@ case "$mode" in
 esac
 for directory in "${directories[@]}"; do
     for name in "${names[@]}"; do
-        "$xls_root/ir_converter_main" --top="codec_$name" --dslx_path="$directory:$ERL_HLS_ROOT/priv/xls/lib" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$directory/codec_$name.x" > "$directory/$name.ir" 2> "$directory/$name-convert.log"
+        "$xls_root/ir_converter_main" --top="codec_$name" --dslx_path="$directory:$ERL_HLS_COMPILE_ROOT/priv/xls/lib" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$directory/codec_$name.x" > "$directory/$name.ir" 2> "$directory/$name-convert.log"
         "$xls_root/opt_main" "$directory/$name.ir" > "$directory/$name.opt.ir" 2> "$directory/$name-opt.log"
         "$xls_root/codegen_main" --generator=combinational --use_system_verilog=false --module_name="codec_$name" "$directory/$name.opt.ir" > "$directory/codec_$name.v" 2> "$directory/$name-codegen.log"
         iverilog -g2012 -s tb -o "$directory/$name.vvp" "$directory/codec_$name.v" "$directory/${name}_tb.sv"

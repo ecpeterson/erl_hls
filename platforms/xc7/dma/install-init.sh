@@ -21,7 +21,7 @@ cp -a /lib/modules /target/lib/
 depmod -b /target "$release"
 cp /check_dma_device /check_dma_beam.escript /target/opt/erl-hls/bin/
 if [ -d /regsvc ]; then
-    rm -rf /target/opt/erl-hls/lib/erl_hls /target/opt/erl-hls/lib/hls_lowering
+    rm -rf /target/opt/erl-hls/lib/erl_hls /target/opt/erl-hls/lib/hls_target
     rm -rf /target/opt/erl-hls/lib/hls_runtime/ebin
     mkdir -p /target/opt/erl-hls/lib/hls_runtime /target/opt/erl-hls/lib/hls_board_examples/ebin
     cp -a /regsvc/ebin /target/opt/erl-hls/lib/hls_runtime/

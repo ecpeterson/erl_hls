@@ -128,7 +128,7 @@ def prepare(args: argparse.Namespace) -> list[dict]:
     (args.stage / "phi_mesh_config.vh").write_text(f"`define MESH_DEVICES {len(devices)}\n"
         f"`define MESH_LINK_WIDTH {devices[0].get('link_width', 33)}\n")
     (args.stage / "phi_mesh_devices.vh").write_text(connections(devices, args.link_stages))
-    sources = [ROOT / "apps/hls_phi/test/rtl/phi_mesh_tb.sv", ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v"]
+    sources = [ROOT / "apps/hls_phi/test/rtl/phi_mesh_tb.sv", ROOT / "apps/hls_target/priv/rtl/hls_async_fifo.v"]
     sources += [args.build / f"device{d['id']}/debug" / name for d in devices for name in ("debug_top.v", "instrumented.v")]
     sources += debug_rtl(args.erl_hls)
     if getattr(args, "messages", False):

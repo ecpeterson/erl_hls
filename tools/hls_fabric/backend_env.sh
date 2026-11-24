@@ -9,10 +9,14 @@ from pathlib import Path
 import shlex
 import sys
 from backend_paths import erlang_environment
-from compiler_paths import compiler_root
+from compiler_paths import compiler_application, compiler_root
 root, profile, override = sys.argv[1:]
 public = compiler_root(profile, Path(override) if override else None, Path(root))
-values = {"ERL_HLS_ROOT": str(public), "PYTHONPATH": str(Path(root) / "tools/hls_fabric"),
+values = {"ERL_HLS_ROOT": str(public),
+          "ERL_HLS_COMPILE_ROOT": str(compiler_application(public, "hls_compile")),
+          "ERL_HLS_FABRIC_ROOT": str(compiler_application(public, "hls_fabric")),
+          "ERL_HLS_TARGET_ROOT": str(compiler_application(public, "hls_target")),
+          "PYTHONPATH": str(Path(root) / "tools/hls_fabric"),
           "ERL_AFLAGS": erlang_environment(profile, Path(root), compiler=public)["ERL_AFLAGS"]}
 for name, value in values.items():
     print("export " + name + "=" + shlex.quote(value))
@@ -20,3 +24,6 @@ PYCONTEXT
 ) || return
 eval "$backend_exports"
 erl_hls_root=$ERL_HLS_ROOT
+hls_compile_root=$ERL_HLS_COMPILE_ROOT
+hls_fabric_root=$ERL_HLS_FABRIC_ROOT
+hls_target_root=$ERL_HLS_TARGET_ROOT

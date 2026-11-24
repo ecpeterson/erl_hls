@@ -105,9 +105,9 @@ sources=(
     "$erl_hls_root/test/rtl/regsvc_fabric_fixture.sv"
     "$erl_hls_root/src/examples/regsvc/regsvc_debug_top.v"
     "$erl_hls_root/src/examples/regsvc/regsvc_core_adapter.v"
-    "$erl_hls_root/priv/rtl/debug/hls_debug_tap.v"
-    "$erl_hls_root/priv/rtl/debug/hls_debug_monitor.v"
-    "$erl_hls_root/priv/rtl/debug/hls_trace_store.v"
+    "$hls_target_root/priv/rtl/debug/hls_debug_tap.v"
+    "$hls_target_root/priv/rtl/debug/hls_debug_monitor.v"
+    "$hls_target_root/priv/rtl/debug/hls_trace_store.v"
     "$generated_rtl/regsvc.v"
     "$generated_rtl/hls_debug_observer.v"
     "$generated_rtl/hls_debug_server.v"
@@ -130,17 +130,17 @@ done
 
 for direction in ingress egress; do
     verify_manifest_entry input "hls_fabric_${direction}.v" \
-        "$erl_hls_root/priv/rtl/fabric/hls_fabric_${direction}.v"
+        "$hls_fabric_root/priv/rtl/fabric/hls_fabric_${direction}.v"
 done
 
 verify_manifest_entry \
-    input axis.x "$erl_hls_root/priv/xls/lib/axis.x"
+    input axis.x "$hls_compile_root/priv/xls/lib/axis.x"
 verify_manifest_entry \
-    input frame_config.x "$erl_hls_root/priv/xls/lib/frame_config.x"
+    input frame_config.x "$hls_compile_root/priv/xls/lib/frame_config.x"
 verify_manifest_entry \
-    input bram.x "$erl_hls_root/priv/xls/lib/bram.x"
+    input bram.x "$hls_compile_root/priv/xls/lib/bram.x"
 verify_manifest_entry \
-    input mailbox.x "$project_root/apps/hls_lowering/priv/xls/lib/mailbox.x"
+    input mailbox.x "$project_root/apps/hls_target/priv/xls/lib/mailbox.x"
 for debug_module in \
     hls_debug_types.x \
     hls_debug_trace.x \
@@ -148,11 +148,11 @@ for debug_module in \
     hls_debug_server.x
 do
     verify_manifest_entry \
-        input "$debug_module" "$erl_hls_root/priv/xls/debug/$debug_module"
+        input "$debug_module" "$hls_target_root/priv/xls/debug/$debug_module"
 done
 verify_manifest_entry \
     input hls_fabric_router.x \
-    "$erl_hls_root/priv/xls/fabric/hls_fabric_router.x"
+    "$hls_fabric_root/priv/xls/fabric/hls_fabric_router.x"
 verify_manifest_entry \
     input regsvc_core_adapter.v \
     "$erl_hls_root/src/examples/regsvc/regsvc_core_adapter.v"
@@ -160,11 +160,11 @@ verify_manifest_entry \
     input regsvc_debug_top.v \
     "$erl_hls_root/src/examples/regsvc/regsvc_debug_top.v"
 verify_manifest_entry \
-    input hls_debug_tap.v "$erl_hls_root/priv/rtl/debug/hls_debug_tap.v"
+    input hls_debug_tap.v "$hls_target_root/priv/rtl/debug/hls_debug_tap.v"
 verify_manifest_entry \
-    input hls_debug_monitor.v "$erl_hls_root/priv/rtl/debug/hls_debug_monitor.v"
+    input hls_debug_monitor.v "$hls_target_root/priv/rtl/debug/hls_debug_monitor.v"
 verify_manifest_entry \
-    input hls_trace_store.v "$erl_hls_root/priv/rtl/debug/hls_trace_store.v"
+    input hls_trace_store.v "$hls_target_root/priv/rtl/debug/hls_trace_store.v"
 verify_manifest_entry \
     input regsvc_fabric_fixture.sv "$erl_hls_root/test/rtl/regsvc_fabric_fixture.sv"
 verify_manifest_entry \

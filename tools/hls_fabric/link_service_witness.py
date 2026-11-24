@@ -7,6 +7,7 @@ import statistics
 
 from backend_paths import ROOT
 from backend_commands import digest, execute
+from compiler_paths import compiler_resource
 from transport_codegen import specialize
 
 
@@ -36,7 +37,8 @@ pub proc Top {{
 
 def compile_link(xls: Path, public: Path, stage: Path, words: int, credits: int, compact: bool = False) -> dict:
     """Compile a fresh bridge, or reuse only a complete digest-matched build."""
-    tracked = [ROOT/'apps/hls_lowering/priv/xls/hls_packed_link.x', public/'priv/xls/lib/axis.x', public/'priv/xls/lib/frame_config.x', Path(__file__),
+    library = compiler_resource(public, 'hls_compile', 'priv/xls/lib')
+    tracked = [ROOT/'apps/hls_target/priv/xls/hls_packed_link.x', library/'axis.x', library/'frame_config.x', Path(__file__),
                ROOT/'tools/hls_fabric/test_packed_credit.py', ROOT/'tools/hls_fabric/backend_commands.py',
                ROOT/'tools/hls_fabric/transport_codegen.py',
                *[xls/name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],

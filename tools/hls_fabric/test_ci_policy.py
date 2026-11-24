@@ -28,6 +28,7 @@ class PolicyTests(unittest.TestCase):
                       '        --profile default --profile spacetime')
         self.assertIn(spacetime, script)
         self.assertIn(boundaries, script)
+        self.assertIn('bash tools/test_umbrella_eunit.sh boundaries', script)
         self.assertLess(script.index(spacetime), script.index(boundaries))
         names = [line for line in (ROOT / 'tools/hls_fabric/ci_unit_tests.txt').read_text().splitlines()
                  if line and not line.startswith('#')]

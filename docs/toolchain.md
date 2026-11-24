@@ -103,4 +103,4 @@ A later-unit failure leaves the previous release selected and retains the failed
 
 The relocation tests use real Erlang lowering and mock external executables. They establish packaging/invocation behavior, not hardware semantics; RTL simulation and physical measurement remain separate evidence.
 
-The [telemetry example](../src/examples/telemetry/README.md) shows a complete communicating project built with these APIs: actor sources and shared records, a logical topology, CPU execution, portable source packaging and public-port RTL simulation. It needs no downstream fabric package.
+The [telemetry example](../apps/erl_hls/src/examples/telemetry/README.md) shows a complete communicating project built with these APIs: actor sources and shared records, a logical topology, CPU execution, portable source packaging and public-port RTL simulation. It needs no downstream fabric package.

@@ -11,6 +11,7 @@ import shutil
 from backend_commands import digest, execute
 from backend_build_profile import emit as emit_profile
 from backend_paths import ROOT, erl_command
+from compiler_paths import compiler_resource
 from phi_build_artifacts import mesh_artifacts
 from phi_device_build import inputs, build_device, instrument_device
 
@@ -81,10 +82,11 @@ def build(args: argparse.Namespace, *, transform: Callable[[Path], None] | None 
             f"#{{phi_halo_cell => {args.phi_actors_per_scheduler}}}, {args.reductions}, {transport}, "
             f"{str(getattr(args, 'tiles', False)).lower()}), halt().",
             source, profile="test"), args.stage, "generation", timeout=600)
-        for library in ("lib", "fabric"):
-            for path in (args.erl_hls / "priv/xls" / library).glob("*.x"):
-                shutil.copy(path, source)
-        for path in (ROOT / "apps/hls_lowering/priv/xls").rglob("*.x"):
+        for path in compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib").glob("*.x"):
+            shutil.copy(path, source)
+        for path in compiler_resource(args.erl_hls, "hls_fabric", "priv/xls/fabric").glob("*.x"):
+            shutil.copy(path, source)
+        for path in (ROOT / "apps/hls_target/priv/xls").rglob("*.x"):
             shutil.copy(path, source)
         shutil.copy(ROOT / "apps/hls_phi/src/phi_field.x", source)
         if transform is not None:

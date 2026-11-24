@@ -114,6 +114,12 @@ def erl_command(public: Path, expression: str, *arguments: str | Path, profile: 
 
 
 def debug_rtl(public: Path) -> list[Path]:
-    """Return the compiler-owned RTL files for the ordinary actor debug transport."""
-    return [public / "priv/rtl/debug" / name for name in
+    """Return target-owned RTL files for the selected umbrella's actor debug transport."""
+    source = public.resolve()
+    if (source / "src").is_symlink():
+        source = (source / "src").resolve().parent
+    target = source.parent / "hls_target" if source.parent.name == "apps" else source
+    if not (target / "priv/rtl/debug").is_dir():
+        target = source
+    return [target / "priv/rtl/debug" / name for name in
             ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]

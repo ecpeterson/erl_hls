@@ -27,7 +27,6 @@ isolated_runtime() ->
              {env, [{"ERL_LIBS", false}, {"ERL_AFLAGS", false}, {"ERL_FLAGS", false}]},
              {args, ["+S", "2:2", "+A", "2", "-noshell", "-sname", "fabric_runtime_" ++ Suffix,
                  "-pa", filename:join(code:lib_dir(hls_core), "ebin"),
-                 filename:join(code:lib_dir(hls_fabric), "ebin"),
                  filename:join(code:lib_dir(hls_runtime), "ebin"), Dir,
                  "-runtime_fixture", Dir,
                  "-eval", "ok = hls_fabric_runtime_package_tests:witness(), halt(0)."]}]),
@@ -80,7 +79,7 @@ witness() ->
     {ok, Bytes} = file:read_file(filename:join(Dir, "fixture.etf")),
     #{deployment := Deployment = #{actors := Actors}, binding := Binding,
         manifest := Manifest, selector := Selector} = binary_to_term(Bytes),
-    {ok, _} = application:ensure_all_started(hls_fabric),
+    {ok, _} = application:ensure_all_started(hls_runtime),
     ok = hls_node_binding:validate(Deployment),
     lists:foreach(fun(Actor = #{slot := Slot}) ->
         {{Selector, 255, 1}, <<Slot:32/little, 16#12345678:32/little>>} =

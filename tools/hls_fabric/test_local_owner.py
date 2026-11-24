@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 import json
 
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from backend_paths import ROOT, erlang_environment, application_directory
 from backend_commands import run
 
@@ -104,8 +104,9 @@ def main() -> None:
     public = compiler_root('default')
     options = stage/'options.term'
     options.write_text('[].\n')
-    paths = ':'.join(map(str, [ROOT/'apps/hls_lowering/priv/xls/lib', ROOT/'apps/hls_lowering/priv/xls/fabric',
-                              public/'priv/xls/lib', public/'priv/xls/fabric']))
+    paths = ':'.join(map(str, [ROOT/'apps/hls_target/priv/xls/lib', ROOT/'apps/hls_fabric/priv/xls/fabric',
+                              compiler_resource(public, 'hls_compile', 'priv/xls/lib'),
+                              compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')]))
     common = ['--warnings_as_errors=false', '--dslx_path='+paths,
               '--dslx_stdlib_path='+str(args.xls/'xls/dslx/stdlib')]
     batch_source = stage/'batch.erl'

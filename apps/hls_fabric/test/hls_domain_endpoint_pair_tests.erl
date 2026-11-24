@@ -1,7 +1,7 @@
 -module(hls_domain_endpoint_pair_tests).
 -moduledoc "Finite paired-management witnesses through the production shared adapter and canonical wire protocol. Fake brokers step the native endpoint kernels; owner fixtures expose status only. These tests establish neither remote progress nor physical-clock behavior.".
 -include_lib("eunit/include/eunit.hrl").
--include("hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% RX is installed and confirmed before TX, and capability-owner death retires both.
 -spec ordered_admission_and_owner_death_test() -> ok.

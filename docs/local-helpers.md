@@ -11,7 +11,7 @@ scale(Value, Gain, Offset) ->
         hls_type:as(hls_nums:s32(), Offset).
 ```
 
-This helper widens before arithmetic; its declared operand ranges fit the signed32 result. Each caller separately chooses its state-machine transition and continuation phase. The [telemetry calibrator](../src/examples/telemetry/telemetry_calibrator.erl) extends this pattern with explicit saturation and a typed reading result.
+This helper widens before arithmetic; its declared operand ranges fit the signed32 result. Each caller separately chooses its state-machine transition and continuation phase. The [telemetry calibrator](../apps/erl_hls/src/examples/telemetry/telemetry_calibrator.erl) extends this pattern with explicit saturation and a typed reading result.
 
 ## Calls across modules
 

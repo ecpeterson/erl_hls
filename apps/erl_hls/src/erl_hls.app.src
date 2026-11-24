@@ -8,7 +8,10 @@
         compiler,
         crypto,
         hls_core,
-        hls_runtime
+        hls_runtime,
+        hls_compile,
+        hls_fabric,
+        hls_target
     ]},
     {env, []},
     {modules, []},

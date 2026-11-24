@@ -2,7 +2,7 @@
 """Exercise production-generated parallel outboxes with aliased and independent lanes."""
 import argparse
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import shutil
 
 from backend_paths import erl_command
@@ -16,7 +16,7 @@ def check(xls: Path, public: Path, stage: Path, lanes: int) -> None:
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, f'[Path] = init:get_plain_arguments(), ok = hls_partition_outbox_tests:write(Path, {lanes}), halt().', stage/'top.x', profile="test"), stage, 'generate')
     for name in ('axis.x', 'frame_config.x'):
-        shutil.copy(public/'priv/xls/lib'/name, stage/name)
+        shutil.copy(compiler_resource(public, 'hls_compile', 'priv/xls/lib')/name, stage/name)
     shutil.copy(ROOT/'apps/hls_fabric/test/rtl/parallel_outbox_actor.x', stage/'parallel_outbox_actor.x')
     for command, name, output in [
         ([str(xls/'ir_converter_main'), '--top=Top', '--warnings_as_errors=false', '--dslx_path=.',

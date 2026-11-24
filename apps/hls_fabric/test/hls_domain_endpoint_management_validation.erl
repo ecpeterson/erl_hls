@@ -1,6 +1,6 @@
 -module(hls_domain_endpoint_management_validation).
 -moduledoc "Builds a finite management-parser RTL witness with controlled endpoint metadata. Native endpoint steps supply issue-edge and retained observations; the RTL testbench supplies those observations as explicit inputs, not compiled endpoint feedback. Exact responses, command pulses, stalls and session boundaries are checked by the external runner.".
--include_lib("hls_fabric/include/hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% Bundle publication is separate from normal XLS compilation and simulation.
 -export([write/1]).
@@ -40,9 +40,9 @@ write(Directory) ->
 %% Retain source declarations and reference generation beside the immutable source-build manifest.
 -spec reference_sources() -> hls_generated_files:files().
 reference_sources() ->
-    Sources = [{Name, hls_source:library_file(hls_fabric, "runtime/domain/" ++ Name)}
+    Sources = [{Name, hls_source:library_file(hls_runtime, "fabric/runtime/domain/" ++ Name)}
         || Name <- ["hls_domain_channel_tx.erl", "hls_domain_channel_rx.erl", "hls_domain_channel_binding.erl"]] ++
-        [{"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_fabric), "include", "hls_domain_channel_endpoints.hrl"])},
+        [{"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_runtime), "include", "hls_domain_channel_endpoints.hrl"])},
          {"hls_domain_endpoint_management_validation.erl", filename:absname(?FILE)}],
     maps:from_list([begin {ok, Bytes} = file:read_file(Path), {"evidence/native/" ++ Name, Bytes} end
         || {Name, Path} <- Sources]).
@@ -50,7 +50,7 @@ reference_sources() ->
 %% Parsing source declarations supplies codecs without compiling an endpoint service a second time.
 -spec codecs() -> hls_domain_endpoint_wire:codecs().
 codecs() ->
-    Source = hls_source:library_file(hls_fabric, "runtime/domain/hls_domain_channel_tx.erl"),
+    Source = hls_source:library_file(hls_runtime, "fabric/runtime/domain/hls_domain_channel_tx.erl"),
     {ok, Parsed} = hls_source:parse_file(Source),
     Forms = hls_records:resolve(Parsed),
     Input = maps:from_list(hls_records:fields(hls_records:find(Forms, endpoint_tx_input))),

@@ -5,7 +5,7 @@
 %% Cached application beams must not conceal missing parse-transform dependencies.
 -spec isolated_interface_test() -> ok.
 isolated_interface_test() ->
-    {ok, Config} = file:consult("apps/erl_hls/rebar.config"),
+    {ok, Config} = file:consult("apps/hls_compile/rebar.config"),
     %% Core and runtime are complete dependency applications before any compiler bootstrap file.
     {ok, [{application, hls_core, Core}]} = file:consult(
         filename:join([code:lib_dir(hls_core), "ebin", "hls_core.app"])),

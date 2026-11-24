@@ -1,6 +1,6 @@
 -module(hls_domain_endpoint_validation).
 -moduledoc "Builds a fresh two-unit endpoint bundle and finite native reference traces. Independent sampled clocks, retained payloads and adversarial packets are simulation-witness inputs; only the external RTL runner supplies a comparison verdict. This fixture establishes neither arbitrary-history equivalence, physical CDC behavior nor recovery progress.".
--include_lib("hls_fabric/include/hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% Fixture publication does not invoke XLS or a simulator.
 -export([write/1]).
@@ -47,9 +47,9 @@ write(Directory) ->
 native_sources() ->
     SourceNames = ["hls_domain_channel_tx.erl", "hls_domain_channel_rx.erl",
         "hls_domain_channel_binding.erl"],
-    Sources = [{Name, hls_source:library_file(hls_fabric, "runtime/domain/" ++ Name)}
+    Sources = [{Name, hls_source:library_file(hls_runtime, "fabric/runtime/domain/" ++ Name)}
         || Name <- SourceNames] ++ [
-        {"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_fabric),
+        {"hls_domain_channel_endpoints.hrl", filename:join([code:lib_dir(hls_runtime),
             "include", "hls_domain_channel_endpoints.hrl"])},
         {"hls_domain_endpoint_validation.erl", filename:absname(?FILE)}
     ],

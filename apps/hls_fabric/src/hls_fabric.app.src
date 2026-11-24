@@ -1,14 +1,14 @@
 {application, hls_fabric, [
-    {description, "Virtual FPGA nodes over Erlang distribution"},
+    {description, "Communication synthesis, protocol adaptation and logical routing"},
     {vsn, "0.1.0"},
-    {registered, [hls_fabric_sup]},
-    {mod, {hls_fabric_app, []}},
+    {registered, []},
     {applications, [
         kernel,
         stdlib,
         crypto,
         hls_core,
-        hls_runtime
+        hls_runtime,
+        hls_compile
     ]},
     {env, []},
     {modules, []},

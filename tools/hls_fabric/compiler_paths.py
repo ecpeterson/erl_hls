@@ -40,7 +40,7 @@ def compiler_source_root(public: Path) -> Path:
         umbrella = source.parents[1] / "tools/erl_hls_tools/__init__.py"
         if (standalone.is_file() or
                 (source.name == "erl_hls" and source.parent.name == "apps" and
-                 (source / "src").is_dir() and (source / "priv").is_dir() and umbrella.is_file())):
+                 (source / "src").is_dir() and umbrella.is_file())):
             return source
     raise FileNotFoundError(f"missing compiler application sources in {public}")
 
@@ -53,6 +53,35 @@ def compiler_tools_root(public: Path) -> Path:
         if (root / "tools/erl_hls_tools/__init__.py").is_file():
             return root
     raise FileNotFoundError(f"missing compiler Python package for {source}")
+
+
+def compiler_application(public: Path, name: str) -> Path:
+    """Return one source application owned by the selected compiler umbrella.
+
+    Current umbrellas keep compiler, communication and target resources in separate
+    applications. A legacy standalone compiler may still carry those resources in
+    its selected root; retain that fallback only when no umbrella application exists.
+    """
+    if name not in {"erl_hls", "hls_compile", "hls_fabric", "hls_target"}:
+        raise ValueError(f"unsupported compiler application: {name!r}")
+    source = compiler_source_root(public)
+    repository = compiler_tools_root(source)
+    candidate = repository / "apps" / name
+    if candidate.is_dir():
+        return candidate.resolve()
+    if name == "erl_hls":
+        return source
+    if repository == source:
+        return source
+    raise FileNotFoundError(f"missing {name} resources for compiler {source}")
+
+
+def compiler_resource(public: Path, name: str, *parts: str) -> Path:
+    """Resolve a relative resource below one selected compiler application."""
+    if not parts or any(not part or Path(part).is_absolute() or ".." in Path(part).parts
+                        for part in parts):
+        raise ValueError(f"invalid compiler resource path: {parts!r}")
+    return compiler_application(public, name).joinpath(*parts)
 
 
 def compiler_source(public: Path, name: str) -> Path:

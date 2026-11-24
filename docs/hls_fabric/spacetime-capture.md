@@ -34,14 +34,14 @@ Publication and scalar attribution produce a new interpretation bundle. They do 
 
 ## Build the optional adapter
 
-The adapter is an OTP library application under `apps/hls_spacetime_observer`, selected by the root `spacetime` rebar3 profile. Ordinary builds and releases exclude it and its private dependency. From the repository root, use OTP 28.0.2 and rebar3; access to the private `ecpeterson/hls_spacetime` repository is required only for this profile:
+The adapter and `hls_spacetime` are local OTP library applications selected by the root `spacetime` rebar3 profile. Ordinary builds and releases exclude both. From the repository root, use OTP 28.0.2 and rebar3:
 
 ```sh
 rebar3 as spacetime compile
 rebar3 as spacetime eunit --dir=apps/hls_spacetime_observer/test
 ```
 
-When converting a capture, add `_build/spacetime/lib/hls_spacetime_observer/ebin` and `_build/spacetime/lib/hls_spacetime/ebin` to the Erlang code path. The application-specific live stimulus still uses the ordinary fabric build. Generic artifact validation, physical import and visualization live in [hls_spacetime](https://github.com/ecpeterson/hls_spacetime), without a compiler dependency.
+When converting a capture, add `_build/spacetime/lib/hls_spacetime_observer/ebin` and `_build/spacetime/lib/hls_spacetime/ebin` to the Erlang code path. The application-specific live stimulus still uses the ordinary fabric build. Generic artifact validation and visualization live in [`hls_spacetime`](../../apps/hls_spacetime/README.md); native physical import and timing adapters live in `hls_target`.
 
 ## Prepare, record and interpret
 
@@ -67,7 +67,7 @@ sh /absolute/fresh-observer/build-simulator.sh /absolute/path/to/verilator
 
 Apply the project's serial 6 GiB process-group guard to external compilation and recording. Preparation derives fault aggregation from the checked application actor population, renders the packaged harness and copies its RTL/header closure. Mechanical RTL files whose names occur in the source manifest must match those emitted bytes. XLS-generated RTL is retained with exact file hashes; the external compiler and its input closure remain the trust boundary, not an all-input equivalence claim. It emits deterministic `observation.etf`, `taps.tsv`, raw/optimized IR, `source-build.json`, `build-simulator.sh` and a final `manifest.json` with exact file sizes and SHA256 digests. The script compiles one worker with `--vpi --public-flat-rw`; it refuses an existing `obj_dir`. Preparation accepts at most 512 RTL paths and 256 MiB total copied inputs. No old `_build/spacetime-*` directory is required.
 
-`xls_protocol_spacetime_workflow:prepare/1` and `write/2` expose the same stages as library calls. `prepare/1` accepts this config map or a filename containing one map; `write/2` writes a fresh directory. Retained paths are diagnostic provenance; the prepared simulator inputs and plan are self-contained. The optional observer's `priv/simulator` owns its harness; the ordinary lowering library's `priv/simulator` owns the shared framed FIFO helper; `hls_spacetime` owns the trace header.
+`xls_protocol_spacetime_workflow:prepare/1` and `write/2` expose the same stages as library calls. `prepare/1` accepts this config map or a filename containing one map; `write/2` writes a fresh directory. Retained paths are diagnostic provenance; the prepared simulator inputs and plan are self-contained. The optional observer's `priv/simulator` owns its harness; `hls_target` owns the shared framed FIFO helper; `hls_spacetime` owns the trace header.
 
 The executable accepts these modes. Create each fresh output directory first:
 

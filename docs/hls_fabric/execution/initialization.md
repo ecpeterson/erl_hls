@@ -51,5 +51,5 @@ source tools/hls_fabric/backend_env.sh test
 python3 tools/hls_fabric/test_topology_debug_integration.py \
   --top init_shared_wrapper --stage _build/initialization/debug \
   _build/initialization/init_shared_2.v \
-  _build/initialization/init_shared_wrapper.v "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"
+  _build/initialization/init_shared_wrapper.v "$hls_target_root/priv/rtl/hls_1r1w_ram.v"
 ```

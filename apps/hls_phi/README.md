@@ -1,6 +1,6 @@
 # Phi decoder example
 
-`hls_phi` owns the complete Phi/noise application: actors and shared headers, logical topologies, source-protocol and scheduler configurations, finite CPU/runtime drivers, provider DSLX and application-specific RTL templates. It depends on the compiler, lowering and runtime libraries; none of those libraries depends on this example. Its host loops do not run unless explicitly invoked.
+`hls_phi` owns the complete Phi/noise application: actors and shared headers, logical topologies, source-protocol and scheduler configurations, finite CPU/runtime drivers, provider DSLX and application-specific RTL templates. It consumes computation, communication, target and runtime APIs through the facade; none of those product applications depends on this example. Its host loops do not run unless explicitly invoked.
 
 Build the optional examples release for the repetition CLI:
 

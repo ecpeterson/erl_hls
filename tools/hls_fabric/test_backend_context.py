@@ -1,5 +1,6 @@
 """Exercise profile isolation and helper imports without XLS or hardware builds."""
 import ast
+import importlib
 import json
 import os
 import shutil
@@ -12,7 +13,7 @@ from unittest.mock import patch
 
 from backend_commands import run, execute
 from backend_paths import ROOT, erlang_paths, erlang_environment, application_directory, erl_command
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_application, compiler_resource, compiler_root, compiler_tool
 
 
 class BuildContextTests(unittest.TestCase):
@@ -105,7 +106,7 @@ class BuildContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = root/'_build/test'
-            for name in ['lib/hls_fabric/ebin', 'lib/hls_lowering/ebin',
+            for name in ['lib/hls_fabric/ebin', 'lib/hls_target/ebin',
                          'lib/hls_runtime/apps/hls_runtime/ebin']:
                 (base/name).mkdir(parents=True)
             self.assertEqual(application_directory('hls_runtime', 'test', root),
@@ -114,11 +115,12 @@ class BuildContextTests(unittest.TestCase):
             selected = erlang_paths('test', root)
             self.assertIn(base/'checkouts/hls_runtime/ebin', selected)
             self.assertNotIn(base/'lib/hls_runtime/apps/hls_runtime/ebin', selected)
-            self.assertIn(base/'lib/hls_lowering/ebin', selected)
+            self.assertIn(base/'lib/hls_target/ebin', selected)
 
     def test_production_emitter_uses_native_release(self) -> None:
         """The optional driver delegates source configuration to the packaged Erlang CLI."""
-        import emit_protocol_repetition as emitter
+        with patch.object(sys, 'path', [str(ROOT/'apps/hls_phi/tools'), *sys.path]):
+            emitter = importlib.import_module('emit_protocol_repetition')
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)/'application'
             with patch.object(emitter, 'run') as invoke:
@@ -148,13 +150,13 @@ class BuildContextTests(unittest.TestCase):
             published = Path(temporary)/'release'
             published.mkdir()
             (directory/'compiled').symlink_to(published, target_is_directory=True)
-            compiler = Path(temporary)/'compiler'
-            with patch.object(builder, 'application_directory', return_value=compiler) as select, \
+            target = Path(temporary)/'target'
+            with patch.object(builder, 'application_directory', return_value=target) as select, \
                     patch.object(builder, 'run') as invoke:
                 self.assertEqual(builder.compile_build(Path('/xls'), directory, profile='test'), published.resolve())
-            select.assert_called_once_with('erl_hls', 'test')
+            select.assert_called_once_with('hls_target', 'test')
             self.assertEqual(invoke.call_args.args[0],
-                             [sys.executable, compiler/'priv/tools/compile_source_build.py', Path('/xls'), directory])
+                             [sys.executable, target/'priv/tools/compile_source_build.py', Path('/xls'), directory])
             self.assertEqual(invoke.call_args.args[1], directory)
             self.assertIsNone(invoke.call_args.kwargs['timeout'])
 
@@ -267,6 +269,35 @@ class CompilerContextTests(unittest.TestCase):
             self.assertIn(selected/'ebin', paths)
             self.assertIn(root/'_build/test/checkouts/hls_runtime/ebin', paths)
             self.assertNotIn(source/'_build/test/lib/erl_hls/ebin', paths)
+
+    def test_umbrella_resources_resolve_by_application_owner(self) -> None:
+        """A selected facade maps resources to sibling applications, with checked paths."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root/'tools/erl_hls_tools'
+            package.mkdir(parents=True)
+            (package/'__init__.py').write_text('"""Compiler package fixture."""\n')
+            facade = root/'apps/erl_hls'
+            (facade/'src').mkdir(parents=True)
+            for name in ('hls_compile', 'hls_fabric', 'hls_target'):
+                (root/'apps'/name).mkdir()
+            self.assertEqual(compiler_application(facade, 'erl_hls'), facade.resolve())
+            self.assertEqual(compiler_application(facade, 'hls_compile'),
+                             (root/'apps/hls_compile').resolve())
+            self.assertEqual(compiler_resource(facade, 'hls_target', 'priv/rtl/debug'),
+                             (root/'apps/hls_target/priv/rtl/debug').resolve())
+            with self.assertRaisesRegex(ValueError, 'unsupported compiler application'):
+                compiler_application(facade, 'unknown')
+            for parts in ((), ('../outside',), ('',)):
+                with self.assertRaisesRegex(ValueError, 'invalid compiler resource path'):
+                    compiler_resource(facade, 'hls_compile', *parts)
+
+    def test_standalone_resource_fallback_is_deliberate(self) -> None:
+        """A legacy compiler fixture without an umbrella retains its flat resource root."""
+        with tempfile.TemporaryDirectory() as temporary:
+            source = compiler_fixture(Path(temporary)/'standalone', 'legacy')
+            for name in ('erl_hls', 'hls_compile', 'hls_fabric', 'hls_target'):
+                self.assertEqual(compiler_application(source, name), source)
 
     def test_override_is_explicit_and_never_falls_back(self) -> None:
         """Explicit sources need no build tree; incomplete overrides cannot select another compiler."""

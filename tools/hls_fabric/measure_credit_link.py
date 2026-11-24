@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 import shutil
 import statistics
 import subprocess
@@ -30,15 +30,16 @@ def measure(args: argparse.Namespace) -> None:
               "tools": {name: digest(args.xls / name)
                         for name in ("ir_converter_main", "opt_main", "codegen_main")},
               "sources": {str(path.relative_to(ROOT)): digest(path) for path in
-                          (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "tools/hls_fabric/backend_commands.py", Path(__file__))},
-              "compiler_sources": {name: digest(args.erl_hls / "priv/xls/lib" / name)
+                          (ROOT / "apps/hls_target/priv/xls/hls_credit_link.x", ROOT / "tools/hls_fabric/backend_commands.py", Path(__file__))},
+              "compiler_sources": {name: digest(compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib") / name)
                                    for name in ("axis.x", "frame_config.x")},
               "configurations": []}
     for lanes in args.lanes:
         stage = args.stage / f"lanes-{lanes}"
         stage.mkdir()
-        for path in (ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", args.erl_hls / "priv/xls/lib/axis.x",
-                     args.erl_hls / "priv/xls/lib/frame_config.x"):
+        library = compiler_resource(args.erl_hls, "hls_compile", "priv/xls/lib")
+        for path in (ROOT / "apps/hls_target/priv/xls/hls_credit_link.x", library / "axis.x",
+                     library / "frame_config.x"):
             shutil.copyfile(path, stage / path.name)
         (stage / "endpoint.x").write_text(wrapper(lanes))
         commands = [

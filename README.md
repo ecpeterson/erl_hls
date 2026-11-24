@@ -8,11 +8,11 @@ Start with the [documentation guide](docs/README.md), [register-service example]
 
 ## Packages
 
-This umbrella builds separate compiler, core, runtime, lowering, Fabric and example applications. [`hls_core`](apps/hls_core/README.md) owns process-free values, logical identities, process interfaces, topology, retained descriptors and provenance keys; `erl_hls` owns source analysis and the compiler; [`hls_runtime`](apps/hls_runtime/README.md) owns CPU actors, domains, brokers and live sessions. Deployed applications can use compiled actors and retained bindings without shipping compiler implementation.
+The [umbrella package map](apps/README.md) separates seven product applications. `hls_core` owns shared process-free contracts; `hls_runtime` owns execution and virtual nodes; `hls_compile` owns computation synthesis; `hls_fabric` owns communication synthesis; `hls_target` owns physical materialization; `hls_spacetime` owns pure system-plan policy and offline analysis; `erl_hls` is the CLI/orchestration facade. Static audits enforce their one-way dependencies.
 
-Neither `hls_core` nor `hls_runtime` starts an application supervisor. Actors and sessions have explicit lifecycle APIs; supervised applications decide how to own them. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
+`hls_runtime` starts the retained virtual-node supervisor; CPU actors, brokers and sessions still use explicit lifecycle APIs. The synthesis, target, optimizer and facade applications start no process. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
 
-`rebar3 compile` builds the default umbrella applications locally. Runtime deployments include `hls_core`, `hls_runtime`, their application code and any selected transport application. The compiler CLI release includes the complete compiler and source assets.
+`rebar3 compile` builds the default umbrella applications locally. The `hls` release contains the facade and complete build closure. The legacy-named `hls_fabric` release contains only `hls_runtime`, `hls_core` and OTP dependencies; deployed code does not ship synthesis, target or optimizer applications.
 
 ## Build and check
 

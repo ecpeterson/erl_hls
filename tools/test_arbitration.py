@@ -84,10 +84,10 @@ def main():
     args = parser.parse_args()
     xls, stage = args.xls.resolve(), args.stage.resolve()
     stage.mkdir(parents=True, exist_ok=True)
-    paths = [f"--dslx_path={ROOT / 'apps/erl_hls/priv/xls/lib'}",
+    paths = [f"--dslx_path={ROOT / 'apps/hls_compile/priv/xls/lib'}",
              f"--dslx_stdlib_path={xls / 'xls/dslx/stdlib'}"]
     run([xls / "interpreter_main", "--compare=jit", *paths,
-         ROOT / "apps/erl_hls/priv/xls/lib/arbitration.x"], stage, "library.log")
+         ROOT / "apps/hls_compile/priv/xls/lib/arbitration.x"], stage, "library.log")
     for count in (1, 2, 3, 4, 9, 16, 17, 32):
         # Narrow plane cursors and existing 32-bit scheduler clients share
         # the implementation. Include both representations in the proof.

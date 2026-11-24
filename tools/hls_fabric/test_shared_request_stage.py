@@ -22,7 +22,7 @@ def main() -> None:
                         default=ROOT / '_build/shared-request-stage')
     args = parser.parse_args()
     args.stage.mkdir(parents=True, exist_ok=True)
-    template = (ROOT / 'apps/hls_lowering/priv/xls/templates/shared_loader.x.in').read_text()
+    template = (ROOT / 'apps/hls_target/priv/xls/templates/shared_loader.x.in').read_text()
     stage = template[template.index('proc SharedRequestStage {'):]
     (args.stage / 'request_stage.x').write_text(stage.replace('SharedDispatchTicket', 'u16'))
     run([args.xls / 'ir_converter_main', '--top=SharedRequestStage',

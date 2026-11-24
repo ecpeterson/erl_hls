@@ -7,7 +7,7 @@ import json
 import subprocess
 import time
 from backend_paths import ROOT, erlang_paths, application_directory
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from emit_protocol_repetition import build_application
 from backend_commands import digest, run
 from test_local_protocol import prove
@@ -33,7 +33,8 @@ def properties(xls: Path, build: Path, stage: Path) -> None:
         'pub fn wrong_same_value(s: network::State, io: network::Inputs) -> bool { '
         'network::tick(s, network::Inputs { inspect_address: u32:0, ..io }).output.inspect_value == '
         'network::tick(s, network::Inputs { inspect_address: u32:1, ..io }).output.inspect_value }\n')
-    imports=[build/'network',build/'actors',build/'dslx',ROOT/'apps/hls_lowering/priv/xls/lib',compiler_root('default')/'priv/xls/lib',compiler_root('default')/'priv/xls/fabric',application_directory('hls_phi', 'default')/'src']
+    public = compiler_root('default')
+    imports=[build/'network',build/'actors',build/'dslx',ROOT/'apps/hls_target/priv/xls/lib',compiler_resource(public, 'hls_compile', 'priv/xls/lib'),compiler_resource(public, 'hls_fabric', 'priv/xls/fabric'),application_directory('hls_phi', 'default')/'src']
     run([xls/'ir_converter_main','--warnings_as_errors=false','--dslx_path='+':'.join(map(str,imports)),
          '--dslx_stdlib_path='+str(xls/'xls/dslx/stdlib'),source],stage,'convert',raw)
     args=SimpleNamespace(xls=xls,yosys='yosys')

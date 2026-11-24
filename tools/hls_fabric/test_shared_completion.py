@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prove generated shared completion equivalent for every input bit pattern."""
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import argparse
 import json
 from pathlib import Path
@@ -43,7 +43,8 @@ def main() -> None:
     source.write_text(generated + '\n' + helpers + '\n' + reference + '\n' +
                       '// Compare all output bits' + miter)
     run([str(xls / 'ir_converter_main'), '--top=completion_equivalent', '--warnings_as_errors=false',
-         '--dslx_path=' + str(ROOT / 'apps/hls_lowering/priv/xls/lib') + ':' + str(compiler_root('test') / 'priv/xls/lib'),
+         '--dslx_path=' + str(ROOT / 'apps/hls_target/priv/xls/lib') + ':' +
+         str(compiler_resource(compiler_root('test'), 'hls_compile', 'priv/xls/lib')),
          '--dslx_stdlib_path=' + str(xls / 'xls/dslx/stdlib'), str(source)], stage, 'completion.ir')
     run([str(xls / 'opt_main'), str(stage / 'completion.ir')], stage, 'completion.opt.ir')
     run([str(xls / 'codegen_main'), '--generator=combinational', '--module_name=completion',

@@ -1,0 +1,10 @@
+{application, hls_compile, [
+    {description, "Erlang source analysis and computation synthesis"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [kernel, stdlib, compiler, crypto, hls_core, hls_runtime]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

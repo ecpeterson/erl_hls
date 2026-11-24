@@ -11,7 +11,7 @@ cd "$project_root"
 rebar3 as test compile
 source tools/hls_fabric/backend_env.sh test
 erl +S 2:2 -noshell -eval 'ok=hls_indexed_debug_dslx:write(hd(init:get_plain_arguments())),halt().' -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_lowering/priv/xls/lib:$project_root/apps/hls_lowering/priv/xls/fabric:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/apps/hls_target/priv/xls/lib:$project_root/apps/hls_fabric/priv/xls/fabric:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
@@ -26,5 +26,5 @@ for stages in 2 3; do
         --top actor_debug_wrapper --stage "$stage/p$stages" \
         --actor-projection "$stage/small-actors.json" --actor-test indexed_gather \
         "$stage/actor_debug_$stages.v" "$stage/actor_debug_wrapper.v" \
-        "$erl_hls_root/priv/rtl/hls_1r1w_ram.v" apps/hls_lowering/priv/rtl/hls_indexed_gather_ram.v
+        "$hls_target_root/priv/rtl/hls_1r1w_ram.v" apps/hls_target/priv/rtl/hls_indexed_gather_ram.v
 done

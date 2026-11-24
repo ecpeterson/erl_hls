@@ -7,7 +7,7 @@ mount -t sysfs sysfs /sys 2>/dev/null || true
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 mkdir -p /target
 mount /dev/mmcblk0 /target
-rm -rf /target/opt/erl-hls/lib/erl_hls /target/opt/erl-hls/lib/hls_lowering
+rm -rf /target/opt/erl-hls/lib/erl_hls /target/opt/erl-hls/lib/hls_target
 rm -rf /target/opt/erl-hls/lib/hls_runtime/ebin
 rm -rf /target/opt/erl-hls/lib/hls_fabric/ebin
 mkdir -p /target/opt/erl-hls/lib/hls_runtime

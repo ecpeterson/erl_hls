@@ -62,7 +62,7 @@ def profile(args: argparse.Namespace) -> None:
     (args.stage / "probes.json").write_text(json.dumps(plan, indent=2)+"\n")
     for name in ("host_requests", "host_responses"):
         os.mkfifo(args.stage / name)
-    sources = [ROOT / "apps/hls_phi/test/rtl/phi_bridge_tb.sv", ROOT / "apps/hls_lowering/priv/rtl/hls_async_fifo.v"]
+    sources = [ROOT / "apps/hls_phi/test/rtl/phi_bridge_tb.sv", ROOT / "apps/hls_target/priv/rtl/hls_async_fifo.v"]
     sources += [args.build / f"device{d}/debug" / name for d in (0, 1)
                 for name in ("debug_top.v", "instrumented.v")]
     sources += debug_rtl(args.erl_hls)

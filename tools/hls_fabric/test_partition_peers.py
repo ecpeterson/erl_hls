@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import shutil
 
 from backend_commands import digest, execute
@@ -46,12 +46,13 @@ def main() -> None:
     stage.mkdir(parents=True, exist_ok=False)
     execute(erl_command(public, "ok = hls_partition_link_fixture:write(hd(init:get_plain_arguments())), halt().",
                         stage / "partition_peers.x", profile="test"), stage, "generation", timeout=60)
-    sources = [ROOT / "apps/hls_lowering/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x", public / "priv/xls/lib/axis.x",
-               public / "priv/xls/lib/frame_config.x"]
+    library = compiler_resource(public, "hls_compile", "priv/xls/lib")
+    sources = [ROOT / "apps/hls_target/priv/xls/hls_credit_link.x", ROOT / "apps/hls_fabric/test/xls/credit_link.x", library / "axis.x",
+               library / "frame_config.x"]
     for path in sources:
         shutil.copy(path, stage)
     tracked = sources + [ROOT / "apps/hls_fabric/test/rtl/partition_peers_tb.sv", Path(__file__),
-        ROOT / "apps/hls_lowering/src/backend/xls/partition/hls_partition_links.erl", ROOT / "apps/hls_fabric/test/hls_partition_link_fixture.erl"]
+        ROOT / "apps/hls_target/src/backend/xls/partition/hls_partition_links.erl", ROOT / "apps/hls_fabric/test/hls_partition_link_fixture.erl"]
     tracked += list((xls / "xls/dslx/stdlib").rglob("*.x"))
     tracked += [Path(shutil.which(args.yosys) or args.yosys).resolve()]
     tracked += [xls / name for name in ("ir_converter_main", "opt_main", "codegen_main")]

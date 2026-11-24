@@ -29,7 +29,7 @@ direct_and_ram() ->
     RamFlags = [F || F <- maps:get(codegen_flags, RamUnit),
         binary:match(F, <<"--ram_configurations=">>) =/= nomatch],
     ?assertMatch([_], RamFlags),
-    ?assert(lists:member(<<"support/compiler/rtl/hls_1r1w_ram.v">>, maps:get(rtl, RamUnit))),
+    ?assert(lists:member(<<"support/target/rtl/hls_1r1w_ram.v">>, maps:get(rtl, RamUnit))),
     ok.
 
 %% Source removal after planning proves writing consumes retained generated material.

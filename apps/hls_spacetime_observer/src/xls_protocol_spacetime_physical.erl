@@ -94,7 +94,7 @@
 }.
 
 -doc "Checks unique candidate bits, exact build/checkpoint/netlist/probe agreement, every nonreset finite comparison and actual native output-pin/parent-net membership. Requires a complete validated catalogue and at least one nonempty case. Rejects disagreement with {spacetime_physical, Reason}; does not invoke vendor tools or infer missing constants, aliases or causality.".
--spec qualify(hls_spacetime_physical:physical(), candidates(), witness()) -> qualified().
+-spec qualify(hls_target_physical:physical(), candidates(), witness()) -> qualified().
 qualify(
     Catalogue = #{build := CatalogueBuild, checkpoint := CatalogueCheckpoint},
     #{
@@ -159,7 +159,7 @@ unique(Rows, Reason) ->
     ).
 
 %% Canonical pin membership is independent of descriptive generated names.
--spec catalogue_index(hls_spacetime_physical:physical()) -> context().
+-spec catalogue_index(hls_target_physical:physical()) -> context().
 catalogue_index(#{cells := Cells, nets := Nets} = Catalogue) ->
     Aliases = maps:get(aliases, maps:get(native, Catalogue, #{}), []),
     #{
@@ -341,7 +341,7 @@ claims(Resources, #{probes := Probes}) ->
 
 %% Whole-word status is complete only when every encoded bit has qualified output correspondence.
 -spec binding(qualified_probe(), #{binary() => hls_spacetime:resource()}) ->
-    hls_spacetime_physical:binding().
+    hls_target_physical:binding().
 binding(#{resource := Resource, generated := Generated, width := Width, bits := Bits}, Resources) ->
     #{kind := register, width := Width, depth := 1} = maps:get(Resource, Resources),
     Index = unique([{maps:get(bit, B), B} || B <- Bits], duplicate_bit),

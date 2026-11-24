@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from backend_commands import digest
-from compiler_paths import compiler_source, compiler_tool
+from compiler_paths import compiler_resource, compiler_source, compiler_tool
 
 
 def payload_net(channel: str) -> str:
@@ -23,7 +23,8 @@ def retained_rtl(build: Path, stage: Path, device: int, public: Path, selected: 
     target.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((stage/f'device{device}-manifest.json').read_text())
     name = f'phi_device_{device}'
-    sources = [build/f'device{device}/{name}.v', build/f'source/{name}_ram.v', public/'priv/rtl/hls_1r1w_ram.v']
+    sources = [build/f'device{device}/{name}.v', build/f'source/{name}_ram.v',
+               compiler_resource(public, 'hls_target', 'priv/rtl/hls_1r1w_ram.v')]
     yosys = Path(json.loads((build/'inputs.json').read_text())['tools']['yosys']['path'])
     inputs = [*sources, yosys, build/f'source/{name}_actors.json',
               *sorted(compiler_source(public, 'topology_debug').parent.glob('topology_debug*.py'))]

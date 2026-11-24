@@ -17,7 +17,7 @@ Erlang source moves retain inherited gaps only when one literal `-module` identi
 
 CI cannot assess whether prose is useful or a spec is truthful. Review changed contracts against [STYLE.md](../../apps/hls_fabric/STYLE.md); favor short behavioral descriptions over implementation narratives. Keep working notes in `yap/`.
 
-Handwritten DSLX under `apps/hls_lowering/priv/xls/` uses the same declaration-comment audit as the compiler. Input fragments use `.x.in`; generated complete modules are checked by XLS in the backend regressions. Existing omissions are migration work; new and changed declarations must pass.
+Handwritten DSLX under `apps/hls_target/priv/xls/` uses the same declaration-comment audit as the compiler. Input fragments use `.x.in`; generated complete modules are checked by XLS in the backend regressions. Existing omissions are migration work; new and changed declarations must pass.
 
 ## Formatting
 
@@ -29,6 +29,6 @@ The optional [spacetime observation application](../../apps/hls_spacetime_observ
 
 ## Package boundaries
 
-`python3 tools/hls_fabric/check_application_boundaries.py` additionally rejects direct calls, remote types and declared dependencies from the compiler, lowering and runtime libraries into `hls_phi` or `hls_snowflake`. Example packages may depend on the libraries; the reverse direction is an ownership error. The report is `_build/application-boundaries.json`.
+`python3 tools/hls_fabric/check_application_boundaries.py` additionally rejects undeclared project edges, reverse example dependencies and calls from computation, communication or target synthesis into higher layers. Example packages may depend on the libraries; the reverse direction is an ownership error. The report is `_build/application-boundaries.json`.
 
-After compilation, run `python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_core --runtime hls_runtime --runtime hls_fabric --release _build/default/rel/hls_fabric`. The shared auditor rejects direct BEAM imports, remote type references and declared application dependencies from runtime applications into compiler/build applications; `hls_core` additionally rejects every other inspected application and therefore remains an OTP-only library. For a supplied runtime release it also checks application and individual BEAM ownership, so moving a compiler module into a runtime package cannot hide it. These static checks do not infer targets of arbitrary dynamic calls; runtime-only behavior tests exercise supported retained-codec and session paths.
+After compilation, run `python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_core --runtime hls_runtime --release _build/default/rel/hls_fabric`. The shared auditor rejects direct BEAM imports, remote type references and declared application dependencies from runtime applications into synthesis applications; `hls_core` additionally rejects every other inspected application and therefore remains an OTP-only library. For a supplied runtime release it also checks application and individual BEAM ownership, so moving a compiler module into a runtime package cannot hide it. `bash tools/test_umbrella_eunit.sh boundaries` exercises the separated synthesis layers from fresh projections. These checks do not infer targets of arbitrary dynamic calls; runtime-only behavior tests exercise supported retained-codec and session paths.

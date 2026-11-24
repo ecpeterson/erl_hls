@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import argparse
 import json
 from backend_paths import ROOT, erlang_environment
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from protocol_test_build import compile_build, emit_command
 from backend_commands import run
 from test_local_protocol import prove
@@ -91,7 +91,8 @@ def action_contract(xls: Path, build: Path, stage: Path) -> None:
         "let b=shared::local_reduce_action_at(raw,u32:0);\n"
         "!shared::local_reduce_pending(raw,u32:0) || a.private_machine == (b.private_machine ^ reference::MachineBits:1) }\n" + ORDINARY_CONTRACT)
     raw = stage / "contract.ir"
-    paths = [build / "actors", ROOT / "apps/hls_lowering/priv/xls/lib", ROOT / "apps/hls_lowering/priv/xls/fabric", compiler_root('test') / "priv/xls/lib", compiler_root('test') / "priv/xls/fabric"]
+    public = compiler_root('test')
+    paths = [build / "actors", ROOT / "apps/hls_target/priv/xls/lib", ROOT / "apps/hls_fabric/priv/xls/fabric", compiler_resource(public, 'hls_compile', 'priv/xls/lib'), compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')]
     run([xls / "ir_converter_main", "--warnings_as_errors=false", "--dslx_path=" + ":".join(map(str, paths)),
          "--dslx_stdlib_path=" + str(xls / "xls/dslx/stdlib"), source], stage, "contract-convert", raw)
     args = SimpleNamespace(xls=xls, yosys="yosys")

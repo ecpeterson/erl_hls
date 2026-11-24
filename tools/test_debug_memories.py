@@ -17,7 +17,7 @@ def test(yosys, stage):
     instrument(argparse.Namespace(
         top="memory_export_fixture", output_top="observed", clock="clk", reset="reset",
         reset_active_low=False, stage=stage, yosys=yosys,
-        rtl=[ROOT / "apps/erl_hls/test/rtl/debug/memory_export_fixture.sv", ROOT / "apps/erl_hls/priv/rtl/hls_1r1w_ram.v"]))
+        rtl=[ROOT / "apps/erl_hls/test/rtl/debug/memory_export_fixture.sv", ROOT / "apps/hls_target/priv/rtl/hls_1r1w_ram.v"]))
     report = memories.check(stage, yosys, map_xc7=True)
     counts = report["mapping"]["verilog"]["primitives"]
     assert counts.get("RAMB18E1", 0) == 3, counts
@@ -26,7 +26,7 @@ def test(yosys, stage):
     subprocess.run(["iverilog", "-g2012", "-s", "memory_export_tb", "-o", str(exe),
                     str(ROOT / "apps/erl_hls/test/rtl/debug/memory_export_tb.sv"),
                     str(ROOT / "apps/erl_hls/test/rtl/debug/memory_export_fixture.sv"),
-                    str(ROOT / "apps/erl_hls/priv/rtl/hls_1r1w_ram.v"), str(stage / "instrumented.v")], check=True)
+                    str(ROOT / "apps/hls_target/priv/rtl/hls_1r1w_ram.v"), str(stage / "instrumented.v")], check=True)
     subprocess.run(["vvp", str(exe)], check=True, timeout=30)
     # Removing only -noattr is insufficient: without opt_reduce, identical
     # word-enable bits become separate writes and fragment the mapped RAMs.

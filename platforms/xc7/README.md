@@ -1,6 +1,6 @@
 # XC7 platform support
 
-This directory owns Xilinx 7-series board shells, pin/clock constraints, Linux drivers, boot images, target-runtime packaging and physical-tool probes. It is checkout tooling, not an OTP application: installed HLS bundles obtain shared RTL from `hls_lowering/priv/rtl`, while these scripts combine generated application RTL with a selected board's physical interfaces. Application algorithms remain with their application packages.
+This directory owns Xilinx 7-series board shells, pin/clock constraints, Linux drivers, boot images, target-runtime packaging and physical-tool probes. It is checkout tooling, not an OTP application: installed HLS bundles obtain shared RTL from `hls_target/priv/rtl`, while these scripts combine generated application RTL with a selected board's physical interfaces. Application algorithms remain with their application packages.
 
 ## Ownership and entry points
 

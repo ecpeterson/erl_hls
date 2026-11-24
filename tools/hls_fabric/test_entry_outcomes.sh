@@ -16,7 +16,7 @@ ERL_HLS_ENTRY_STAGE="$stage" erl -noshell \
 
 for fixture in xls_entry_outcome xls_entry_branch xls_entry_reduction xls_entry_reduction_aggregate; do
     "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
-        --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
         "$stage/$fixture.x"
 done
@@ -25,7 +25,7 @@ for fixture in xls_entry_outcome xls_entry_branch; do
     top=entry_probe
     if [[ "$fixture" == xls_entry_branch ]]; then top=entry_cycle_probe; fi
     "$xls_root/ir_converter_main" --top="$top" --warnings_as_errors=false \
-        --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric" \
+        --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
         "$stage/$fixture.x" > "$stage/$fixture.ir"
     "$xls_root/opt_main" "$stage/$fixture.ir" > "$stage/$fixture.opt.ir"

@@ -20,8 +20,8 @@ def compile_build(xls: Path, directory: Path, *, profile: str = 'default') -> Pa
     Schedules, imports, input verification and provenance come from the production
     source-build boundary. No fixture-specific compiler implementation is selected.
     """
-    compiler = application_directory('erl_hls', profile)
-    run([sys.executable, compiler/'priv/tools/compile_source_build.py', xls, directory],
+    target = application_directory('hls_target', profile)
+    run([sys.executable, target/'priv/tools/compile_source_build.py', xls, directory],
         directory, 'compile-source-build', timeout=None)
     return (directory/'compiled').resolve()
 

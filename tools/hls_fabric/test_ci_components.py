@@ -8,6 +8,7 @@ import time
 
 from backend_commands import run
 from backend_paths import ROOT, application_directory, erlang_environment
+from compiler_paths import compiler_resource
 from test_protocol_boundary import configuration, expected, simulate
 from test_protocol_bridge import build, qualify, reset_witness
 from test_protocol_inspection_shapes import shapes
@@ -21,7 +22,9 @@ def main() -> None:
     args = parser.parse_args()
     args.stage.mkdir()
     compiler = application_directory('erl_hls', 'test')
-    imports = [ROOT / 'apps/hls_lowering/priv/xls/lib', ROOT / 'apps/hls_lowering/priv/xls/fabric', compiler / 'priv/xls/lib', compiler / 'priv/xls/fabric']
+    library = compiler_resource(compiler, 'hls_compile', 'priv/xls/lib')
+    fabric = compiler_resource(compiler, 'hls_fabric', 'priv/xls/fabric')
+    imports = [ROOT / 'apps/hls_target/priv/xls/lib', ROOT / 'apps/hls_fabric/priv/xls/fabric', library, fabric]
     options = ['--warnings_as_errors=false', '--dslx_path=' + ':'.join(map(str, imports)),
                '--dslx_stdlib_path=' + str(args.xls / 'xls/dslx/stdlib')]
     times = {}
@@ -43,7 +46,7 @@ def main() -> None:
     command('fifo-stream', [fifo_test, args.stage / 'fifo-stream'], timeout=30)
     for name in ['effect_window', 'frame_queue', 'indexed_gather_ram', 'mailbox', 'scheduler', 'scheduler_observation']:
         command(name, [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter', '--compare=none', '--max_ticks=1000', *options,
-                       ROOT / 'apps/hls_lowering/priv/xls/lib' / (name + '.x')])
+                       ROOT / 'apps/hls_target/priv/xls/lib' / (name + '.x')])
     command('retained-mux', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
         '--compare=none', '--max_ticks=1000', *options, ROOT / 'apps/hls_fabric/test/xls/retained_mux_test.x'])
     command('transport-envelopes', [args.xls / 'interpreter_main', '--evaluator=dslx-interpreter',
@@ -56,7 +59,7 @@ def main() -> None:
     for words in [1, 9]:
         capacity = args.stage / ('frame-words' + str(words))
         capacity.mkdir()
-        for source in [compiler / 'priv/xls/lib/axis.x', ROOT / 'apps/hls_lowering/priv/xls/hls_packed_link.x']:
+        for source in [library / 'axis.x', ROOT / 'apps/hls_target/priv/xls/hls_packed_link.x']:
             shutil.copyfile(source, capacity / source.name)
         command('frame-config-' + str(words), ['erl', '+S', '2:2', '-noshell', '-eval',
             '[W,P]=init:get_plain_arguments(),L=hls_frame_layout:new(list_to_integer(W)),'

@@ -11,7 +11,7 @@ rebar3 as test compile
 source tools/hls_fabric/backend_env.sh test
 erl -noshell \
     -eval 'ok = xls_type_shape_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
-options=(--warnings_as_errors=false --dslx_path="$project_root/apps/hls_lowering/priv/xls/lib:$erl_hls_root/priv/xls/lib:$erl_hls_root/priv/xls/fabric"
+options=(--warnings_as_errors=false --dslx_path="$project_root/apps/hls_target/priv/xls/lib:$hls_compile_root/priv/xls/lib:$hls_fabric_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/shape.x"
 "$xls_root/ir_converter_main" --top=probe "${options[@]}" "$stage/shape.x" > "$stage/shape.ir"

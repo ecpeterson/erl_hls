@@ -16,4 +16,4 @@ Prefer the clearest current design over compatibility scaffolding for obsolete i
 - Keep cycle time, static timing, placement, dependencies and electrical activity distinct. Unknown evidence remains unknown; names and equality do not establish causality.
 - Human documentation belongs in `docs/`; campaign/design notes belong in `yap/`. Keep one authoritative campaign plan. Do not manually wrap Markdown paragraphs.
 - Keep generated measurements outside the repository. Retain small fixtures and generators; saved hashes do not exempt bulk artifacts from retention limits.
-- Run the checks in [source quality](docs/source-quality.md) and focused regressions. Do not rerun a complete native or application witness to qualify a parser change.
+- Run the checks in [source quality](../../docs/source-quality.md) and focused regressions. Do not rerun a complete native or application witness to qualify a parser change.

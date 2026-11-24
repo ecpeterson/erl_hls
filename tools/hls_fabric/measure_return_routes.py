@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def measure(yosys, stage):
     stage.mkdir(parents=True, exist_ok=False)
-    source = ROOT / 'apps/hls_lowering/priv/rtl/hls_return_routes.v'
+    source = ROOT / 'apps/hls_target/priv/rtl/hls_return_routes.v'
     report = {'yosys': subprocess.check_output([str(yosys), '-V'], text=True).strip(),
               'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
               'slots': 16, 'target': 'xc7', 'adapters': {}}

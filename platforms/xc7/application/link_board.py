@@ -22,16 +22,16 @@ TOP = "te0715_partition_link_top"
 
 def sources(generated: Path, application: Path, ram_wrapper: Path | None = None) -> list[Path]:
     """Return the complete role-specific physical source closure."""
-    public = application_directory("erl_hls", "default")
-    debug = public / "priv/rtl/debug"
-    fabric = public / "priv/rtl/fabric"
+    target = application_directory("hls_target", "default")
+    fabric = application_directory("hls_fabric", "default") / "priv/rtl/fabric"
+    debug = target / "priv/rtl/debug"
     routed = ROOT / "build/routed-dma/rtl"
     return [
         generated / "liteeth_packet_core.v",
         generated / "liteeth_pcs_gearbox.v",
         application,
         *([ram_wrapper] if ram_wrapper else []),
-        *([public / "priv/rtl/hls_1r1w_ram.v"] if ram_wrapper else []),
+        *([target / "priv/rtl/hls_1r1w_ram.v"] if ram_wrapper else []),
         routed / "hls_debug_observer.v",
         routed / "hls_debug_server.v",
         debug / "hls_debug_tap.v",

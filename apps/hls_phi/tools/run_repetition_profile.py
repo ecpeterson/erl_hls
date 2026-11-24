@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build and verify a periodic repetition-code workload; optionally map XC7 resources."""
 import phi_tool_paths  # Resolve shared tooling for this application.
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 from backend_paths import erl_command, erlang_environment
 from backend_build_profile import emit as emit_build_profile, read as read_build_profile
 import argparse
@@ -72,11 +72,13 @@ def profile(stage: Path, xls: Path, count: int, table: Path | None,
                        cwd=ROOT, env=dict(erlang_environment("test", compiler=public),
                                         REPETITION_STAGE=str(stage), REPETITION_COUNT=str(count)),
                        stdout=out, stderr=subprocess.STDOUT, check=True, timeout=120)
-    for directory in (ROOT / "apps/hls_lowering/priv/xls/lib", public / "priv/xls/lib", public / "priv/xls/fabric"):
+    for directory in (ROOT / "apps/hls_target/priv/xls/lib",
+                      compiler_resource(public, "hls_compile", "priv/xls/lib"),
+                      compiler_resource(public, "hls_fabric", "priv/xls/fabric")):
         for source in directory.glob("*.x"):
             shutil.copy2(source, stage / source.name)
     for source in (ROOT / "apps/hls_phi/src/phi_field.x",
-                   public / "priv/rtl/hls_1r1w_ram.v"):
+                   compiler_resource(public, "hls_target", "priv/rtl/hls_1r1w_ram.v")):
         shutil.copy2(source, stage / source.name)
     configurations = ",".join(
         f"scheduler_{i}_{kind}:1R1W:_scheduler_{i}_{stem}_read_req_out:"

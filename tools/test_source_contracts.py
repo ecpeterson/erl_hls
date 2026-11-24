@@ -443,15 +443,15 @@ fn empty_test() { () }
         """The scope includes static libraries without treating generated outputs as owned APIs."""
         config = json.loads((ROOT / 'source-contracts.json').read_text())
         self.assertEqual(CONTRACTS.selected([
-            'apps/erl_hls/priv/xls/lib/mailbox.x',
-            'apps/erl_hls/priv/xls/debug/server.x',
-            'apps/erl_hls/priv/xls/direct.x',
-            'apps/erl_hls/priv/xls/deep/sub/library.x',
+            'apps/hls_compile/priv/xls/lib/hls_bits.x',
+            'apps/hls_target/priv/xls/debug/server.x',
+            'apps/hls_target/priv/xls/direct.x',
+            'apps/hls_target/priv/xls/deep/sub/library.x',
             'examples/generated.erl.x', 'test_data/generated.x', '_build/out.x'], config),
-            ['apps/erl_hls/priv/xls/debug/server.x',
-             'apps/erl_hls/priv/xls/deep/sub/library.x',
-             'apps/erl_hls/priv/xls/direct.x',
-             'apps/erl_hls/priv/xls/lib/mailbox.x'])
+            ['apps/hls_compile/priv/xls/lib/hls_bits.x',
+             'apps/hls_target/priv/xls/debug/server.x',
+             'apps/hls_target/priv/xls/deep/sub/library.x',
+             'apps/hls_target/priv/xls/direct.x'])
 
     def test_git_baseline_uses_current_dslx_scope(self) -> None:
         """Adding DSLX coverage must audit old source, not classify every old gap as new."""

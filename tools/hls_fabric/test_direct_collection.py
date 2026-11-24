@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 from backend_paths import ROOT, erlang_paths
 from backend_commands import execute
 
@@ -27,8 +27,11 @@ def state_paths(dslx: str) -> dict[int, str]:
         if '::' in kind:
             module, kind = kind.split('::', 1)
             if module not in sources:
-                locations = [root/'priv/xls'/folder/(module+'.x')
-                             for root in (ROOT/'apps/hls_lowering', compiler_root("test")) for folder in ('lib', 'fabric')]
+                public = compiler_root("test")
+                locations = [ROOT/'apps/hls_target/priv/xls/lib'/(module+'.x'),
+                             ROOT/'apps/hls_fabric/priv/xls/fabric'/(module+'.x'),
+                             compiler_resource(public, 'hls_compile', 'priv/xls/lib')/(module+'.x'),
+                             compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')/(module+'.x')]
                 found = next((p for p in locations if p.is_file()), None)
                 if found is None:
                     raise ValueError(f'missing imported state layout: {module}')
@@ -198,9 +201,12 @@ pub proc CollectionTest {
   next(state: ()) { state }
 }
 ''')
+    public = compiler_root('test')
     commands = [
         ([str(xls/'ir_converter_main'), '--top=CollectionTest', '--warnings_as_errors=false',
-          f'--dslx_path={ROOT/"apps/hls_lowering/priv/xls/lib"}:{compiler_root('test')/"priv/xls/lib"}:{compiler_root('test')/"priv/xls/fabric"}',
+          f'--dslx_path={ROOT/"apps/hls_target/priv/xls/lib"}:'
+          f'{compiler_resource(public, "hls_compile", "priv/xls/lib")}:'
+          f'{compiler_resource(public, "hls_fabric", "priv/xls/fabric")}',
           f'--dslx_stdlib_path={xls/"xls/dslx/stdlib"}', str(stage/'collector.x')], 'convert', 'collector.ir'),
         ([str(xls/'opt_main'), str(stage/'collector.ir')], 'opt', 'collector.opt.ir'),
         ([str(xls/'codegen_main'), f'--pipeline_stages={args.pipeline_stages}', '--delay_model=unit',

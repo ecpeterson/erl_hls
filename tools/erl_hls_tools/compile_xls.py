@@ -1,1 +1,1 @@
-../../apps/erl_hls/priv/tools/compile_xls.py
+../../apps/hls_target/priv/tools/compile_xls.py

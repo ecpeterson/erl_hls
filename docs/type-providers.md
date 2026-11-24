@@ -35,7 +35,7 @@ Import discovery visits only the selected hardware source and nested type argume
 
 `xls_struct_codec` renders those layouts using `xls_type` conversions. `hls_frame_layout` owns the ordinary header schema and host capacity checks; `xls_frame_layout` emits the matching per-build DSLX configuration. Neither renderer owns a second copy of the layout or host codec policy.
 
-Compiler provider dispatch, built-in companions and typed codec renderers live together in [backend/xls/types](../src/backend/xls/types/README.md); see the [backend directory map](../src/backend/xls/README.md) for their expression, actor and emission collaborators.
+Compiler provider dispatch, built-in companions and typed codec renderers live together in [backend/xls/types](../apps/hls_compile/src/backend/xls/types/README.md); see the [backend directory map](../apps/hls_compile/src/backend/xls/README.md) for their expression, actor and emission collaborators.
 
 ## Finite atom unions
 

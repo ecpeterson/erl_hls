@@ -43,14 +43,21 @@ link_production_app() {
     done
 }
 
+link_boundary_app() {
+    local projection_root=$1 app=$2
+    link_production_app "$projection_root" "$app"
+    ln -s "$repo_root/apps/$app/test_boundary" "$projection_root/apps/$app/test"
+}
+
 run_compiler() (
     local projection_root
     projection_root=$(mktemp -d "${TMPDIR:-/tmp}/erl-hls-eunit.XXXXXX")
     trap 'cleanup_projection "$projection_root"' EXIT
     link_root_inputs "$projection_root"
     link_full_app "$projection_root" erl_hls
-    link_full_app "$projection_root" hls_core
-    link_full_app "$projection_root" hls_runtime
+    for app in hls_core hls_compile hls_runtime hls_fabric hls_target; do
+        link_production_app "$projection_root" "$app"
+    done
     printf '==> EUnit compiler projection\n'
     (cd "$projection_root" && rebar3 eunit)
 )
@@ -62,8 +69,9 @@ run_fabric() (
     link_root_inputs "$projection_root"
     link_production_app "$projection_root" erl_hls
     link_production_app "$projection_root" hls_core
+    link_production_app "$projection_root" hls_compile
     link_production_app "$projection_root" hls_runtime
-    for app in hls_fabric router hls_lowering hls_phi hls_snowflake; do
+    for app in hls_fabric router hls_target hls_phi hls_snowflake; do
         link_full_app "$projection_root" "$app"
     done
     if [[ "$profile" == spacetime ]]; then
@@ -83,9 +91,58 @@ run_spacetime() (
     trap 'cleanup_projection "$projection_root"' EXIT
     link_root_inputs "$projection_root"
     link_production_app "$projection_root" hls_core
+    link_production_app "$projection_root" hls_compile
+    link_production_app "$projection_root" hls_runtime
+    link_production_app "$projection_root" hls_fabric
+    link_production_app "$projection_root" hls_target
     link_full_app "$projection_root" hls_spacetime
     printf '==> EUnit standalone spacetime projection\n'
     (cd "$projection_root" && rebar3 as spacetime eunit)
+)
+
+run_boundaries() {
+    run_compile_boundary
+    run_fabric_boundary
+    run_target_boundary
+    run_spacetime
+}
+
+run_compile_boundary() (
+    local projection_root
+    projection_root=$(mktemp -d "${TMPDIR:-/tmp}/erl-hls-eunit.XXXXXX")
+    trap 'cleanup_projection "$projection_root"' EXIT
+    link_root_inputs "$projection_root"
+    link_full_app "$projection_root" hls_compile
+    link_production_app "$projection_root" hls_core
+    link_production_app "$projection_root" hls_runtime
+    printf '==> EUnit computation-synthesis boundary projection\n'
+    (cd "$projection_root" && rebar3 eunit)
+)
+
+run_fabric_boundary() (
+    local projection_root
+    projection_root=$(mktemp -d "${TMPDIR:-/tmp}/erl-hls-eunit.XXXXXX")
+    trap 'cleanup_projection "$projection_root"' EXIT
+    link_root_inputs "$projection_root"
+    link_boundary_app "$projection_root" hls_fabric
+    for app in hls_core hls_runtime hls_compile; do
+        link_production_app "$projection_root" "$app"
+    done
+    printf '==> EUnit communication-synthesis boundary projection\n'
+    (cd "$projection_root" && rebar3 eunit)
+)
+
+run_target_boundary() (
+    local projection_root
+    projection_root=$(mktemp -d "${TMPDIR:-/tmp}/erl-hls-eunit.XXXXXX")
+    trap 'cleanup_projection "$projection_root"' EXIT
+    link_root_inputs "$projection_root"
+    link_boundary_app "$projection_root" hls_target
+    for app in hls_core hls_runtime hls_compile hls_fabric; do
+        link_production_app "$projection_root" "$app"
+    done
+    printf '==> EUnit physical-target boundary projection\n'
+    (cd "$projection_root" && rebar3 eunit)
 )
 
 case "${1:-default}" in
@@ -97,8 +154,11 @@ case "${1:-default}" in
         run_fabric spacetime
         run_spacetime
         ;;
+    boundaries)
+        run_boundaries
+        ;;
     *)
-        echo "usage: $0 default|spacetime" >&2
+        echo "usage: $0 default|spacetime|boundaries" >&2
         exit 2
         ;;
 esac

@@ -1,7 +1,7 @@
 -module(hls_domain_endpoints_stream_tests).
 -moduledoc "Independent endpoint management wire and source-emission checks. Exact vectors cover retained binding packing and canonical responses; emitted pins and bounded parser storage are checked without XLS execution, peer coordination or physical transport claims.".
 -include_lib("eunit/include/eunit.hrl").
--include("hls_domain_channel_endpoints.hrl").
+-include_lib("hls_runtime/include/hls_domain_channel_endpoints.hrl").
 
 %% Independent byte vectors retain all four 64-bit binding identities and the explicit endpoint ID.
 -spec wire_vectors_test() -> ok.
@@ -113,7 +113,7 @@ emission_test() ->
 %% Resolve the actual source declarations without compiling an actor or invoking XLS.
 -spec codecs() -> hls_domain_endpoint_wire:codecs().
 codecs() ->
-    Source = hls_source:library_file(hls_fabric, "runtime/domain/hls_domain_channel_tx.erl"),
+    Source = hls_source:library_file(hls_runtime, "fabric/runtime/domain/hls_domain_channel_tx.erl"),
     {ok, Parsed} = hls_source:parse_file(Source),
     Forms = hls_records:resolve(Parsed),
     Inputs = maps:from_list(hls_records:fields(hls_records:find(Forms, endpoint_tx_input))),

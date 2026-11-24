@@ -128,7 +128,7 @@ def main():
                       {b for bank in banks for b in bank['taps'] if isinstance(b, int)})
     indices = {b: i for i, b in enumerate(all_bits)}
 
-    rtl = root / 'apps/erl_hls/priv/rtl/debug'
+    rtl = root / 'apps/hls_target/priv/rtl/debug'
     yosys = args.yosys
     (stage / 'yosys-version.txt').write_bytes(subprocess.check_output([yosys, '-V']))
     modes = ['physical']

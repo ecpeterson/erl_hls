@@ -8,8 +8,10 @@
         crypto,
         hls_core,
         hls_runtime,
+        hls_compile,
         erl_hls,
-        hls_lowering,
+        hls_fabric,
+        hls_target,
         hls_spacetime
     ]},
     {env, []},

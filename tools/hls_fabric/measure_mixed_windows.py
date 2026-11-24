@@ -7,7 +7,7 @@ its cycles are independent of the separate live debug regression's host timing.
 Optional area mapping includes the complete application and topology/actor
 query service, but no boundary counter/trace monitor or board transport.
 """
-from compiler_paths import compiler_root, compiler_tool
+from compiler_paths import compiler_resource, compiler_root, compiler_tool
 import argparse
 import hashlib
 import json
@@ -33,7 +33,7 @@ def simulate(build: Path, stage: Path, stages: list[int], public: Path) -> None:
             tb = ROOT / "apps/hls_fabric/test/rtl/mixed_effect_windows_tb.sv"
             shutil.copy(source / "expected.hex", output / "expected.hex")
             rtl = [source / f"topology_{depth}.v", source / "mixed_topology_wrapper.v",
-                   public / "priv/rtl/hls_1r1w_ram.v"]
+                   compiler_resource(public, "hls_target", "priv/rtl/hls_1r1w_ram.v")]
             with (output / "compile.log").open("w") as log:
                 subprocess.run(["iverilog", "-g2012", "-s", "window_tb", "-o", str(output / "test.vvp"),
                                 str(tb), *map(str, rtl)], stdout=log, stderr=subprocess.STDOUT,

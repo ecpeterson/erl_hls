@@ -55,7 +55,7 @@ See [native catalogue import](native.md) for extraction, checked sidecars and na
 
 ## Standalone inspection boundary
 
-A viewer should consume a validated execution bundle, its matching physical catalogue and the two hashed SDF sidecars without rerunning the compiler, simulator or implementation tools. Backend packages generate observation bindings; application packages define inputs, completion events and workload interpretation. This repository keeps generic validation, reconstruction and rendering together; it does not depend on the application compiler.
+A viewer should consume a validated execution bundle, its matching physical catalogue and the two hashed SDF sidecars without rerunning the compiler, simulator or implementation tools. Backend packages generate observation bindings; application packages define inputs, completion events and workload interpretation. Spacetime keeps generic validation, reconstruction and rendering together, while target-owned adapters validate physical catalogues and SDF. Spacetime modules do not invoke the application compiler.
 
 The first view will stack chip tile coordinates across clock layers. Repeating a cell in several layers does not multiply installed area. Static delay annotations neither create execution dependencies nor add another delay to an interval already measured in clocks. Endpoint connectivity remains schematic until actual routed geometry is supplied.
 
@@ -63,7 +63,7 @@ The first view will stack chip tile coordinates across clock layers. Repeating a
 
 [`spacetime_example.term`](../../apps/hls_spacetime/test_data/spacetime_example.term) is a trusted synthetic producer fixture. Phi/data names illustrate correction feedback, but its cycles, identities, checkpoint label and coordinates are invented. It includes a register write/hold, masked RAM write, read-first collision, delayed result, tied join inputs, separate grant order, two tags folded into one primitive, an ambiguous mapping and reset retirement. It is not an N2 simulation result.
 
-After `rebar3 compile`, an Erlang caller can inspect or serialize it:
+After `rebar3 as spacetime compile`, an Erlang caller can inspect or serialize it:
 
 ```erlang
 {ok, [Bundle]} = file:consult("apps/hls_spacetime/test_data/spacetime_example.term"),
@@ -73,7 +73,7 @@ Json = hls_spacetime:encode(Bundle).
 
 The caller owns any file write. No decoder that interns arbitrary JSON names as atoms is supplied. The term fixture is for trusted tests; external consumers use the JSON representation and must preserve this contract.
 
-Run `rebar3 eunit --module=hls_spacetime_tests,hls_spacetime_trace_tests,hls_spacetime_import_tests,hls_spacetime_sdf_tests` for positive cases and deliberate corruptions. These are consistency tests, not hardware proofs. The import tests use synthetic native-shaped tables, not a vendor measurement. Native extraction, trace-to-implementation qualification and visualization remain separate stages.
+From the umbrella root, run `rebar3 as spacetime eunit --module=hls_spacetime_tests,hls_spacetime_trace_tests,hls_spacetime_import_tests,hls_target_sdf_tests` for positive cases and deliberate corruptions. These are consistency tests, not hardware proofs. The import and target SDF tests use synthetic native-shaped tables and bounded sidecars, not a vendor measurement. Native extraction, trace-to-implementation qualification and visualization remain separate stages.
 
 ## Passive sample reader
 
@@ -81,6 +81,6 @@ Run `rebar3 eunit --module=hls_spacetime_tests,hls_spacetime_trace_tests,hls_spa
 
 The raw format is `spacetime_cycle_trace` version 1: header and public-field rows, tap declarations, run-length samples, then one mandatory footer. Wide samples use hexadecimal text. A missing footer rejects; an explicitly incomplete prefix can be inspected but never certifies a complete interval. A valid footer checks the producer's reported scope, not the authenticity of its measurements.
 
-The source-protocol producer lives in `hls_lowering` as `xls_protocol_spacetime` and `xls_protocol_spacetime_capture`; its Verilator recorder and exact-replay shell are fabric simulation assets. The [source-protocol capture guide](https://github.com/ecpeterson/hls_fabric/blob/main/docs/spacetime-capture.md) describes the external tool boundary and observation limits. Phi's public completion/readout interpretation stays in the application test package. Numerical attribution and physical correspondence remain separate from raw sample coverage.
+The optional `hls_spacetime_observer` application owns `xls_protocol_spacetime`, `xls_protocol_spacetime_capture` and its Verilator recorder/exact-replay shell. It consumes exact compiler and target products without moving their ownership into Spacetime. The [source-protocol capture guide](../hls_fabric/spacetime-capture.md) describes the external tool boundary and observation limits. Phi's public completion/readout interpretation stays in the application test package. Numerical attribution and physical correspondence remain separate from raw sample coverage.
 
 See [the optional RTL memory witness](memory-witness.md) for a localized real-RAM recording.

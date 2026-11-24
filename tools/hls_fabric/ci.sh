@@ -26,6 +26,7 @@ rebar3 release -n hls
 record_time prepare
 if [[ "$suite" == all || "$suite" == software ]]; then
     bash tools/test_umbrella_eunit.sh default
+    bash tools/test_umbrella_eunit.sh boundaries
     rebar3 release -n hls_examples
     bash tools/hls_fabric/test_local_dist.sh
     tests=()
@@ -45,7 +46,7 @@ if [[ "$suite" == all || "$suite" == software ]]; then
         --profile default --profile spacetime
     rebar3 release -n hls_fabric
     python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_core --runtime hls_runtime \
-        --runtime hls_fabric --release _build/default/rel/hls_fabric
+        --release _build/default/rel/hls_fabric
     record_time software
 fi
 if [[ "$suite" == all || "$suite" == components ]]; then

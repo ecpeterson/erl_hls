@@ -12,6 +12,8 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_EBINS = [ROOT / '_build/test/lib' / app / 'ebin'
+                 for app in ('hls_core', 'hls_runtime', 'erl_hls')]
 
 
 def run(rtl: Path, stage: Path) -> None:
@@ -22,8 +24,8 @@ def run(rtl: Path, stage: Path) -> None:
     sources = [ROOT / 'apps/erl_hls/test/rtl/regsvc_fabric_fixture.sv',
                ROOT / 'apps/erl_hls/src/examples/regsvc/regsvc_core_adapter.v',
                ROOT / 'apps/erl_hls/src/examples/regsvc/regsvc_debug_top.v',
-               *sorted((ROOT / 'apps/erl_hls/priv/rtl/fabric').glob('*.v')),
-               *[ROOT / 'apps/erl_hls/priv/rtl/debug' / name for name in (
+               *sorted((ROOT / 'apps/hls_fabric/priv/rtl/fabric').glob('*.v')),
+               *[ROOT / 'apps/hls_target/priv/rtl/debug' / name for name in (
                    'hls_debug_monitor.v', 'hls_debug_tap.v', 'hls_trace_store.v')],
                *[rtl / name for name in ('regsvc.v', 'hls_debug_observer.v', 'hls_debug_server.v')]]
     for name in ('xls_sim_bridge.c', 'xls_sim_axis.h'):
@@ -56,7 +58,7 @@ def run(rtl: Path, stage: Path) -> None:
                     raise RuntimeError((stage / 'simulation.log').read_text())
                 time.sleep(0.02)
             with (stage / 'host.log').open('w') as host:
-                subprocess.run(['erl', '-noshell', '-pa', str(ROOT / '_build/test/lib/erl_hls/ebin'), str(ROOT / '_build/test/lib/hls_runtime/ebin'),
+                subprocess.run(['erl', '-noshell', '-pa', *map(str, RUNTIME_EBINS),
                                 str(ROOT / '_build/test/lib/erl_hls/test'), '-eval',
                                 'ok = hls_fabric_services_live:run(hd(init:get_plain_arguments())), halt().',
                                 '-extra', str(stage)], cwd=stage, stdout=host,

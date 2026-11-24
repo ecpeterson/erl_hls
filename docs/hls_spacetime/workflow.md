@@ -1,10 +1,10 @@
 # Capture to view
 
-The workflow has three owners: the producer knows what generated signals mean; `hls_spacetime` validates saved execution and physical evidence; the viewer displays the resulting recording. Simulator and Vivado execution remain explicit external steps. None of the commands discovers or starts an EC2 instance, repeats implementation, or depends on a campaign archive.
+The workflow has explicit owners: the producer knows what generated signals mean; `hls_target` validates vendor physical and timing inputs; `hls_spacetime` validates saved execution and its correlation; the viewer displays the resulting recording. Simulator and Vivado execution remain explicit external steps. None of the commands discovers or starts an EC2 instance, repeats implementation, or depends on a campaign archive.
 
 ## Prerequisites and outputs
 
-Use OTP 28.0.2, rebar3 3.24.0 and Node 22 or later. Build this repository’s offline command with `rebar3 escriptize`. The XLS source-protocol adapter is the optional `hls_spacetime_observer` application in `hls_fabric`; use that repository’s `spacetime` profile and its [capture guide](https://github.com/ecpeterson/hls_fabric/blob/main/docs/spacetime-capture.md). Other backends supply the same generic bundle rather than importing this adapter.
+Use OTP 28.0.2, rebar3 3.24.0 and Node 22 or later. From the umbrella root, build the offline command with `rebar3 as spacetime escriptize`. The XLS source-protocol adapter is the local optional `hls_spacetime_observer` application; its [capture guide](../hls_fabric/spacetime-capture.md) uses the same profile. Other backends supply the generic bundle rather than importing this adapter.
 
 Each stage takes explicit files and creates a fresh output directory. Keep source, emitted RTL, observation-plan and native-checkpoint identities with the result. A complete inventory is written last; a failed prefix is diagnostic material. Retain logs, tool versions and input/output hashes alongside a bounded capture, and apply the project’s seven-day artifact review policy. Never use a filename or equal signal values as evidence of correspondence.
 
@@ -16,11 +16,11 @@ Prepare the producer’s plan and simulator harness from the exact ordinary comp
 
 The maintained producer `prepare`, `capture` and `qualify` commands are documented in the producer capture guide. `capture` saves both the generic bundle and backend sidecars. Public completion/readout interpretation stays with the application. It can provide the optional navigation metadata described below; it does not become an execution dependency unless the producer supplies checked graph contributors.
 
-For an immediately runnable small example, follow the [RAM witness](memory-witness.md). It exercises 17 clocks of masked writes, read-first collisions, response latency and reset retirement against explicitly supplied compiler RTL. Its memory placement remains unknown. Normal unit tests use smaller synthetic cases, with neither native implementation nor a full decoder simulation.
+For an immediately runnable small example, follow the [RAM witness](memory-witness.md). It exercises 17 clocks of masked writes, read-first collisions, response latency and reset retirement against explicitly supplied target RTL. Its memory placement remains unknown. Normal unit tests use smaller synthetic cases, with neither native implementation nor a full decoder simulation.
 
 ## Extract and qualify native evidence
 
-Use [the native exporter](native.md) on an existing checkpoint from the exact compiled design, with separately verified fast/slow STA SDF files. An outer time/memory guard covers blocking tool calls. The exporter’s complete inventory authorizes import; an incomplete marker does not. Retain and verify all collected bytes before importing. This step reads the checkpoint and never synthesizes, places or routes it.
+Use the [target-owned native exporter](native.md) on an existing checkpoint from the exact compiled design, with separately verified fast/slow STA SDF files. An outer time/memory guard covers blocking tool calls. The exporter’s complete inventory authorizes import; an incomplete marker does not. Retain and verify all collected bytes before importing. This step reads the checkpoint and never synthesizes, places or routes it.
 
 Create an identity file containing one trusted Erlang term, for example:
 
@@ -32,7 +32,7 @@ Create an identity file containing one trusted Erlang term, for example:
 Then import once:
 
 ```sh
-_build/default/bin/spacetime import /path/to/native-export /path/to/identity.term /path/to/fresh-catalogue
+_build/spacetime/bin/spacetime import /path/to/native-export /path/to/identity.term /path/to/fresh-catalogue
 ```
 
 Physical candidates come from the producer’s generated-register and connected-native-output evidence. The producer’s `qualify` command checks explicit candidates against a complete catalogue and identity-bound finite comparisons, including nonempty horizons, all candidate bits, mismatch/unknown counts and native output-pin/net membership. Constant-only finite observations are distinguished from exercised bits. Omitted bits stay unknown, shared cells stay shared, and unrelated semantic objects stay unmapped. The supplied comparison is a finite witness, not all-input equivalence; the caller retains the netlist/probe extraction and comparison evidence behind it.
@@ -40,8 +40,8 @@ Physical candidates come from the producer’s generated-register and connected-
 Join the resulting claims and validate the result in a fresh process:
 
 ```sh
-_build/default/bin/spacetime join /path/to/capture/bundle.etf /path/to/fresh-catalogue/catalogue.etf /path/to/claims.etf /path/to/fresh-joined
-_build/default/bin/spacetime validate /path/to/fresh-joined/bundle.etf
+_build/spacetime/bin/spacetime join /path/to/capture/bundle.etf /path/to/fresh-catalogue/catalogue.etf /path/to/claims.etf /path/to/fresh-joined
+_build/spacetime/bin/spacetime validate /path/to/fresh-joined/bundle.etf
 ```
 
 Validation checks execution/storage consistency, evidence kinds, object references and claimed mapping coverage. It does not authenticate the caller’s files or establish dynamic gate sensitization. A recording without a physical catalogue remains useful; skip extraction and join when unavailable.
@@ -49,9 +49,9 @@ Validation checks execution/storage consistency, evidence kinds, object referenc
 ## Prepare, inspect and measure
 
 ```sh
-node scripts/prepare-view.mjs --bundle /path/to/fresh-joined/bundle.json --output /path/to/fresh-view
-node scripts/check-storage-view.mjs /path/to/fresh-view/recording.json
-npm start -- --data /path/to/fresh-view
+node apps/hls_spacetime/scripts/prepare-view.mjs --bundle /path/to/fresh-joined/bundle.json --output /path/to/fresh-view
+node apps/hls_spacetime/scripts/check-storage-view.mjs /path/to/fresh-view/recording.json
+npm --prefix apps/hls_spacetime start -- --data /path/to/fresh-view
 ```
 
 Preparation accepts plain or gzip JSON, bounded at 256 MiB decoded; the projection must fit the browser’s 128 MiB input limit. The independent storage audit allows at most one million word-clock comparisons and rejects contradictions; incomplete observation coverage remains unqualified. Serving is read-only on loopback. `--port` selects a different port. Later repeated scalar options take precedence.

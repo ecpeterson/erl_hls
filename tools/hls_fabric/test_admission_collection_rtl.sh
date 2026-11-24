@@ -13,7 +13,7 @@ source tools/hls_fabric/backend_env.sh test
 erl -noshell -eval '
 [Stage,Policy]=init:get_plain_arguments(),
 ok=hls_admission_collection_dslx:write(Stage,case Policy of "true" -> true; "exclusive_epoch" -> exclusive_epoch end),halt().' -extra "$stage" "$policy"
-cp "$erl_hls_root"/priv/xls/lib/*.x apps/hls_lowering/priv/xls/lib/*.x "$erl_hls_root"/priv/xls/fabric/*.x "$stage/"
+cp "$hls_compile_root"/priv/xls/lib/*.x apps/hls_target/priv/xls/lib/*.x "$hls_fabric_root"/priv/xls/fabric/*.x "$stage/"
 source tools/hls_fabric/scheduler_ram_configurations.sh
 for stages in 2 3; do
   output="$stage/p$stages"
@@ -22,12 +22,12 @@ for stages in 2 3; do
     --ram-configurations "$(scheduler_ram_configurations 1)"
   iverilog -g2012 -s admission_collection_tb -o "$stage/test-p$stages.vvp" \
     apps/hls_fabric/test/rtl/admission_collection_tb.sv \
-    "$output/collection.v" "$stage/collection_wrapper.v" "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"
+    "$output/collection.v" "$stage/collection_wrapper.v" "$hls_target_root/priv/rtl/hls_1r1w_ram.v"
   vvp "$stage/test-p$stages.vvp"
   if [[ "$policy" == exclusive_epoch ]]; then
     iverilog -g2012 -s exclusive_collection_tb -o "$stage/exclusive-p$stages.vvp" \
       apps/hls_fabric/test/rtl/exclusive_collection_tb.sv \
-      "$output/collection.v" "$stage/collection_wrapper.v" "$erl_hls_root/priv/rtl/hls_1r1w_ram.v"
+      "$output/collection.v" "$stage/collection_wrapper.v" "$hls_target_root/priv/rtl/hls_1r1w_ram.v"
     vvp "$stage/exclusive-p$stages.vvp"
   fi
 done

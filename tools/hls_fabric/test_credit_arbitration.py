@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from compiler_paths import compiler_root
+from compiler_paths import compiler_resource, compiler_root
 import shutil
 
 from backend_paths import ROOT
@@ -13,8 +13,9 @@ from backend_commands import digest, execute
 def check(xls: Path, public: Path, stage: Path, source: Path, sparse_limit: int) -> None:
     """Compile the static transmitter and validate opaque traffic under sparse/saturated loads."""
     stage.mkdir(parents=True, exist_ok=False)
+    library = compiler_resource(public, 'hls_compile', 'priv/xls/lib')
     sources = [source, ROOT / 'apps/hls_fabric/test/xls/credit_arbitration.x',
-               public / 'priv/xls/lib/axis.x', public / 'priv/xls/lib/frame_config.x']
+               library / 'axis.x', library / 'frame_config.x']
     template = ROOT / 'apps/hls_fabric/test/rtl/credit_arbitration_tb.sv'
     tracked = [*sources, template, Path(__file__), ROOT / 'tools/hls_fabric/backend_commands.py',
                *[xls / name for name in ('ir_converter_main', 'opt_main', 'codegen_main')],
@@ -54,7 +55,7 @@ def main() -> None:
     parser.add_argument('xls', type=Path)
     parser.add_argument('--erl-hls', type=Path, default=None)
     parser.add_argument('--stage', type=Path, required=True)
-    parser.add_argument('--source', type=Path, default=ROOT / 'apps/hls_lowering/priv/xls/hls_credit_link.x', help='explicit historical source for matched comparisons')
+    parser.add_argument('--source', type=Path, default=ROOT / 'apps/hls_target/priv/xls/hls_credit_link.x', help='explicit historical source for matched comparisons')
     parser.add_argument('--sparse-limit', type=int, default=400, help='maximum cycles for the sparse workload')
     args = parser.parse_args()
     args.erl_hls = compiler_root("test", args.erl_hls)

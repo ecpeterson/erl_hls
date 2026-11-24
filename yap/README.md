@@ -14,7 +14,7 @@ Compiler extensions and typed-plan work are tracked under G2, pinned-toolchain q
 | Finite compiler and actor comparisons | [Differential checks](../docs/compiler-differential.md) | [Actor transition qualification](actor-transition-differential.md) |
 | Integer and provider semantics | [Numeric contract](../docs/numeric-contract.md), [provider extensions](../docs/type-providers.md) | [Static integer qualification](static-integer-semantics.md) |
 | Actor lifetimes and supervision | [Actor domains](../docs/actor-domains.md) | [Recovery qualification](actor-recovery.md) |
-| Documentation and package boundaries | [Source quality](../docs/source-quality.md), [source map](../src/README.md) | [Documentation audit](documentation-audit.md) |
+| Documentation and package boundaries | [Source quality](../docs/source-quality.md), [source map](../apps/erl_hls/src/README.md) | [Documentation audit](documentation-audit.md) |
 
 The digital recovery campaign is complete, including the downstream [framed-crossing closeout](https://github.com/ecpeterson/hls_fabric/blob/main/yap/actor-recovery.md#framed-crossing-closeout). Its finite witnesses do not establish physical exclusion, live-device operation or application retry validity. Compiler/runtime contracts remain application-neutral.
 
