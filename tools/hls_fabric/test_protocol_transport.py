@@ -206,8 +206,8 @@ def main() -> None:
     retained = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
     run(['bash','tools/hls_fabric/emit_protocol_transport.sh',args.xls,config,fixture],stage,'reject-existing',accepted=False)
     assert retained == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in fixture.rglob('*') if p.is_file()}
-    run(['rebar3', 'release', '-n', 'hls_examples'], stage, 'prepare-examples', timeout=300)
-    example_bin = ROOT/'_build/default/rel/hls_examples/bin'
+    run(['rebar3', 'release', '-n', 'hls_workloads'], stage, 'prepare-workloads', timeout=300)
+    workload_bin = ROOT/'_build/default/rel/hls_workloads/bin'
     applications = []
     receiver_shapes: set[tuple] = set()
     receiver_lowerings = lower_receivers(args.xls, fixture, stage, receiver_shapes)
@@ -220,9 +220,9 @@ def main() -> None:
         config = stage/(key+'.config')
         config.write_text('#{sources => ['+sources+'],topology => {'+topology+',topology,['+str(n)+',16#80000000]},actor_limit => 64,dslx_path => ['+json.dumps(str(directory))+']}.\n')
         output = stage/key
-        run([example_bin/'hls-fabric', 'emit', '--kind', 'transport', '--config', config,
+        run([workload_bin/'hls-fabric', 'emit', '--kind', 'transport', '--config', config,
              '--output', output], stage, 'emit-'+key, timeout=300)
-        run([example_bin/'compile-source-build', args.xls, output], stage, 'compile-'+key, timeout=1000)
+        run([workload_bin/'compile-source-build', args.xls, output], stage, 'compile-'+key, timeout=1000)
         compiled=(output/'compiled').resolve()
         rtl_files = [compiled / path for path in (compiled/'files.f').read_text().splitlines()]
         run(['erl','-noshell','-eval','ok=hls_protocol_transport_validation:startup(hd(init:get_plain_arguments())),halt().','-extra',output],stage,'startup-reference-'+key)

@@ -11,7 +11,7 @@ source tools/hls_fabric/backend_env.sh test
 bash "$project_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '
     Stage = os:getenv("ERL_HLS_STAGE"),
-        PhiHalo = xls_parse:to_xls("apps/hls_phi/src/phi_halo_cell.erl"),
+        PhiHalo = xls_parse:to_xls("workloads/hls_phi/src/phi_halo_cell.erl"),
         PhiFieldTest = phi_field_dslx:to_dslx(),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
@@ -114,11 +114,11 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         %% Shared staging must agree with the already prepared profile actors.
         [_ = SharedServiceFor(Module) || Module <- maps:keys(ProfileRequirements)],
         PhenomData = xls_scheduler_actor:to_xls(
-            "apps/hls_phi/src/phenom_data_cell.erl",
+            "workloads/hls_phi/src/phenom_data_cell.erl",
             #{shared_service => SharedServiceFor(phenom_data_cell)}
         ),
         PhenomSyndrome = xls_scheduler_actor:to_xls(
-            "apps/hls_phi/src/phenom_syndrome_cell.erl",
+            "workloads/hls_phi/src/phenom_syndrome_cell.erl",
             #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
         ),
         PhiNoiseTopology = xls_fabric_topology_dslx:emit(
@@ -164,25 +164,28 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
         ok = file:write_file(filename:join(Stage, "phi_memory_debug_top.v"), PhiMemoryDebugTop),
         halt().'
 cp apps/hls_target/priv/xls/lib/*.x "$stage/"
-cp apps/hls_phi/src/phi_field.x "$stage/"
-cp apps/hls_phi/test/rtl/phi_halo_cell_tb.sv apps/hls_phi/test/rtl/phenom_data_cell_tb.sv \
-   apps/hls_phi/test/rtl/phi_phenom_topology_tb.sv apps/hls_phi/test/rtl/phi_torus_topology_tb.sv "$stage/"
-cp apps/hls_phi/test/rtl/phi_noise_topology_smoke_tb.sv apps/hls_phi/test/rtl/phi_noise_topology_tb.sv \
-   apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv apps/hls_phi/test/rtl/phi_memory_bridge_tb.sv "$stage/"
-cp tools/hls_fabric/scheduler_ram_configurations.sh apps/hls_phi/tools/compile_phi_decoder_profile.py \
-   apps/hls_phi/tools/compile_phi_decoder_profile.sh apps/hls_phi/tools/phi_tool_paths.py \
+cp workloads/hls_phi/src/phi_field.x "$stage/"
+cp workloads/hls_phi/test/rtl/phi_halo_cell_tb.sv workloads/hls_phi/test/rtl/phenom_data_cell_tb.sv \
+   workloads/hls_phi/test/rtl/phi_phenom_topology_tb.sv workloads/hls_phi/test/rtl/phi_torus_topology_tb.sv "$stage/"
+cp workloads/hls_phi/test/rtl/phi_noise_topology_smoke_tb.sv workloads/hls_phi/test/rtl/phi_noise_topology_tb.sv \
+   workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv workloads/hls_phi/test/rtl/phi_memory_bridge_tb.sv "$stage/"
+cp tools/hls_fabric/scheduler_ram_configurations.sh workloads/hls_phi/tools/compile_phi_decoder_profile.py \
+   workloads/hls_phi/tools/compile_phi_decoder_profile.sh workloads/hls_phi/tools/phi_tool_paths.py \
    tools/hls_fabric/backend_build_profile.py "$stage/"
 # Preserve the preprocessed application source used by older remote OTP runtimes.
 for module in hls_pauli phi_field phenom_data_cell phenom_syndrome_cell phi_halo_cell \
     phi_memory_boundary phi_memory_demo phi_memory_experiment phi_memory_runner \
     phi_memory_wire phi_noise_topology; do
-    erlc -I apps/hls_phi/include -P -o "$stage/erl_src" "apps/hls_phi/src/$module.erl"
-    cp "$stage/erl_src/$module.P" "$stage/erl_src/$module.erl"
+    erlc -I workloads/hls_phi/include -P -o "$stage/portable_host_sources" \
+        "workloads/hls_phi/src/$module.erl"
+    cp "$stage/portable_host_sources/$module.P" \
+        "$stage/portable_host_sources/$module.erl"
 done
 
 erlc -P \
-    -o "$stage/test_src" apps/hls_phi/test/phi_memory_bridge_tests.erl
-cp "$stage/test_src/phi_memory_bridge_tests.P" "$stage/test_src/phi_memory_bridge_tests.erl"
+    -o "$stage/portable_test_sources" workloads/hls_phi/test/phi_memory_bridge_tests.erl
+cp "$stage/portable_test_sources/phi_memory_bridge_tests.P" \
+    "$stage/portable_test_sources/phi_memory_bridge_tests.erl"
 
 cp apps/hls_fabric/test/rtl/xls_scheduler_profile.h "$stage/xls_scheduler_profile.h"
 python3 - "$stage/xls_sim_bridge.c" <<'PYVPI'

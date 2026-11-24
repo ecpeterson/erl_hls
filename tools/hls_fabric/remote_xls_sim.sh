@@ -510,11 +510,11 @@ fi
 
 beam_dir="$stage/beam"
 mkdir -p "$beam_dir"
-erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
-erlc -pa "$beam_dir" -o "$beam_dir" "$stage"/erl_src/hls_*.erl
-erlc -pa "$beam_dir" -o "$beam_dir" "$stage/erl_src/regsvc.erl"
+erlc -o "$beam_dir" "$stage/portable_host_sources/hls_type.erl"
+erlc -pa "$beam_dir" -o "$beam_dir" "$stage"/portable_host_sources/hls_*.erl
+erlc -pa "$beam_dir" -o "$beam_dir" "$stage/portable_host_sources/regsvc.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/test_src/regsvc_cpu_tests.erl"
+    "$stage/portable_test_sources/regsvc_cpu_tests.erl"
 
 ERL_HLS_SIM_DIR="$sim_dir" erl \
     -noshell \
@@ -567,17 +567,17 @@ if [[ \
 fi
 
 erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/erl_src/hls_pauli.erl" \
-    "$stage/erl_src/phenom_data_cell.erl" \
-    "$stage/erl_src/phenom_syndrome_cell.erl" \
-    "$stage/erl_src/phi_halo_cell.erl" \
-    "$stage/erl_src/phi_memory_boundary.erl" \
-    "$stage/erl_src/phi_memory_experiment.erl" \
-    "$stage/erl_src/phi_memory_runner.erl" \
-    "$stage/erl_src/phi_memory_wire.erl" \
-    "$stage/erl_src/phi_noise_topology.erl"
+    "$stage/portable_host_sources/hls_pauli.erl" \
+    "$stage/portable_host_sources/phenom_data_cell.erl" \
+    "$stage/portable_host_sources/phenom_syndrome_cell.erl" \
+    "$stage/portable_host_sources/phi_halo_cell.erl" \
+    "$stage/portable_host_sources/phi_memory_boundary.erl" \
+    "$stage/portable_host_sources/phi_memory_experiment.erl" \
+    "$stage/portable_host_sources/phi_memory_runner.erl" \
+    "$stage/portable_host_sources/phi_memory_wire.erl" \
+    "$stage/portable_host_sources/phi_noise_topology.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/test_src/phi_memory_bridge_tests.erl"
+    "$stage/portable_test_sources/phi_memory_bridge_tests.erl"
 
 ERL_HLS_PHI_SIM_DIR="$phi_sim_dir" erl \
     -noshell \

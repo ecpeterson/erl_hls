@@ -40,7 +40,8 @@ def moved_path(path: str, moves: dict[str, str]) -> str:
 def test_module_scope(path: str) -> str | None:
     """Return the application whose tests own a module isolated in a separate VM."""
     parts = Path(path).parts
-    if len(parts) >= 4 and parts[0] == "apps" and parts[2] in {"test", "test_data"}:
+    if (len(parts) >= 4 and parts[0] in {"apps", "workloads"}
+            and parts[2] in {"test", "test_data"}):
         return parts[1]
     return None
 

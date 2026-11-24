@@ -598,7 +598,7 @@ not additional per-actor mailboxes.
 
 ### Distance-three RTL simulation
 
-`apps/hls_phi/tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
+`workloads/hls_phi/tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
 regenerates the distance-three DSLX, runs XLS conversion, optimization, and
 Verilog generation on the configured build host, then compiles and runs
 `phi_noise_topology_tb.sv` with Icarus. The cost is deliberately excluded from
@@ -647,7 +647,7 @@ returns row parity one. Run the same fixture through both the CPU realization
 and the checked distance-three gateway with:
 
 ```sh
-apps/hls_phi/tools/run_phi_memory_demo.sh
+workloads/hls_phi/tools/run_phi_memory_demo.sh
 ```
 
 Set `ERL_HLS_PHI_NATIVE_ICARUS=1` to keep XLS conversion and code generation
@@ -1171,7 +1171,7 @@ correction feedback and the final data-frame query. Run it with the native XLS
 toolchain as described below:
 
 ```sh
-apps/hls_phi/tools/run_phi_decoder_profile.sh
+workloads/hls_phi/tools/run_phi_decoder_profile.sh
 ```
 
 Because the real apparatus supplies syndromes externally, further work should
@@ -1293,7 +1293,7 @@ Run this profile natively with an arm64 XLS distribution:
 
 ```sh
 ERL_HLS_XLS_ROOT=/path/to/xls-darwin-arm64 \
-    apps/hls_phi/tools/run_phi_decoder_profile.sh
+    workloads/hls_phi/tools/run_phi_decoder_profile.sh
 ```
 
 The stage worker remains portable to Linux for CI or as a fallback, but the
@@ -1606,7 +1606,7 @@ run, while both planes preserve the expected 63 X and 64 Z corrections. This
 matches the effective clock rate of PR #66 while using the cleanly separated
 planner, renderer, and actor-artifact interfaces.
 
-`apps/hls_phi/tools/run_phi_decoder_profile.sh` now records a clock-stamped VPI trace and
+`workloads/hls_phi/tools/run_phi_decoder_profile.sh` now records a clock-stamped VPI trace and
 renders `phi_decoder_profile.causality.svg`. The standalone SVG places all six
 phi scheduler shards and both source-fragment planes on one clock axis. Solid
 arrows follow observed ordered handshakes and actor-state dependencies; dashed

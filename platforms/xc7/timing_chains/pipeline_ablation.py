@@ -10,7 +10,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'tools/hls_fabric'))
-sys.path.insert(0, str(ROOT / "apps/hls_phi/tools"))
+sys.path.insert(0, str(ROOT / "workloads/hls_phi/tools"))
 from backend_commands import logged_command
 from decoder_profile_witness import rtl_events, sequences
 from compile_phi_decoder_profile import INPUTS, BUILD_PROFILE, checked_inputs
@@ -214,13 +214,13 @@ def run(args: argparse.Namespace) -> None:
     shards = profile['shards_per_plane']
     evidence = {'reference': str(args.reference), 'remove': args.remove, 'sources': sources,
                 'script_sha256': sha(Path(__file__)), 'phases_seconds': phases,
-                'support_sha256': {name: sha(ROOT / ('apps/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools/hls_fabric') / name) for name in
+                'support_sha256': {name: sha(ROOT / ('workloads/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools/hls_fabric') / name) for name in
                                    ('backend_commands.py', 'decoder_profile_witness.py')},
                 'derived_inputs_sha256': sha(args.stage / INPUTS)}
     manifest_path.write_text(json.dumps(evidence, indent=2)+'\n')
     selected = args.stage / 'ablation-build-profile.json'
     emit_build_profile(selected, profile='test', delay_model='xc7_7030')
-    timed('compile', ['bash', ROOT/'apps/hls_phi/tools/compile_phi_decoder_profile.sh', args.stage,
+    timed('compile', ['bash', ROOT/'workloads/hls_phi/tools/compile_phi_decoder_profile.sh', args.stage,
           args.xls_root, '--timeout', '20m', '--build-profile', selected,
           '--delay-table', args.delay_table], ROOT, 3700)
     compiled = (args.stage/'compiled').resolve()
@@ -233,7 +233,7 @@ def run(args: argparse.Namespace) -> None:
                           Z_ENABLED=int('z' in profile['planes']), STALL_OUTPUTS=stalled)
         timed(f'iverilog-{stalled}', ['iverilog', '-g2012', '-s', 'phi_decoder_profile_tb',
             '-o', work/'sim.vvp', *[f'-Pphi_decoder_profile_tb.{k}={v}' for k,v in parameters.items()],
-            ROOT/'apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv',
+            ROOT/'workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv',
             *[compiled/f for f in ('phi_decoder_profile.v','phi_decoder_profile_top.v','hls_1r1w_ram.v')]], work)
         timed(f'simulate-{stalled}', ['vvp', work/'sim.vvp'], work)
         actual = sequences(rtl_events(work/'phi_decoder_profile.events'))

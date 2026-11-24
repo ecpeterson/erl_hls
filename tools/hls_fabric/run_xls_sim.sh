@@ -45,8 +45,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/xls_scheduler_profile.h" \
     "$local_stage/xls_sim_axis.h" \
-    "$local_stage/erl_src" \
-    "$local_stage/test_src" \
+    "$local_stage/portable_host_sources" \
+    "$local_stage/portable_test_sources" \
     "$local_stage/remote_xls_sim.sh" \
     "$remote_host:$remote_stage/"
 

@@ -4,7 +4,7 @@
 
 ## Current gap
 
-The maintained [Snowflake example](../../apps/hls_snowflake/README.md) builds an ordinary D2/H2 actor graph. [The CI oracle](../../apps/hls_fabric/test/hls_ci_snowflake.erl) uses eight fixed syndrome masks, [the driver](../../tools/hls_fabric/test_protocol_snowflake.py) assumes six corrections per sender, and [the public-pin scoreboard](../../apps/hls_fabric/test/rtl/protocol_snowflake_tb.sv) permits at most two sheets ahead of completed rounds. That is useful finite functional coverage, but its input timing follows decoder progress and cannot establish sustained independently offered service or overload behavior.
+The maintained [Snowflake example](../../workloads/hls_snowflake/README.md) builds an ordinary D2/H2 actor graph. [The CI oracle](../../apps/hls_fabric/test/hls_ci_snowflake.erl) uses eight fixed syndrome masks, [the driver](../../tools/hls_fabric/test_protocol_snowflake.py) assumes six corrections per sender, and [the public-pin scoreboard](../../apps/hls_fabric/test/rtl/protocol_snowflake_tb.sv) permits at most two sheets ahead of completed rounds. That is useful finite functional coverage, but its input timing follows decoder progress and cannot establish sustained independently offered service or overload behavior.
 
 Snowflake consumes generated syndrome sheets; the integrated phenomenological-noise actors belong to Phi/repetition. Longer Snowflake runs should reuse the existing reference/noise inputs and ordinary BEAM actor oracle, without claiming that those Phi actors are already wired into Snowflake.
 

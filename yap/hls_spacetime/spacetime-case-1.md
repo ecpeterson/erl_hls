@@ -76,13 +76,13 @@ All 122 files named by `source-build.json` passed their stored hashes; the emitt
 The archived `run-2.py` and `attempt-2/phases.json` record exact external commands and code paths. Source configuration, lowering and semantic reference execution remain Erlang-owned. To reproduce in a **new** case directory, use the recorded source revisions, paired compiler/runtime checkout dependencies and isolated rebar configuration, then:
 
 ```sh
-rebar3 release -n hls_examples
-_build/default/rel/hls_examples/bin/hls-repetition --width 2 --output FRESH_SOURCE
+rebar3 release -n hls_workloads
+_build/default/rel/hls_workloads/bin/hls-repetition --width 2 --output FRESH_SOURCE
 ```
 
-Compile `apps/hls_phi/test/phi_protocol_repetition_fixture.erl` with the resulting release's `lib/*/ebin` directories, then call `phi_protocol_repetition_fixture:oracle(FRESH_ORACLE_DIRECTORY, 2)` in the same release code closure. The stage must exist and its `oracle.json` must not. The exact `erlc`/`erl` argument vectors are in the phase record; do not use an unrelated `_build` profile. Existing artifacts are single-use evidence, not overwrite targets.
+Compile `workloads/hls_phi/test/phi_protocol_repetition_fixture.erl` with the resulting release's `lib/*/ebin` directories, then call `phi_protocol_repetition_fixture:oracle(FRESH_ORACLE_DIRECTORY, 2)` in the same release code closure. The stage must exist and its `oracle.json` must not. The exact `erlc`/`erl` argument vectors are in the phase record; do not use an unrelated `_build` profile. Existing artifacts are single-use evidence, not overwrite targets.
 
-The existing full hardware witness entry is `apps/hls_phi/tools/test_protocol_repetition.py XLS_ROOT FRESH_RUN --width 2`, using the pinned Python, matching built profile and a serial guard. It is **not yet a spacetime capture command**. S3 should extend its simulator-source/qualification path to capture events and reuse this registered source bundle/oracle while their identities remain valid, rather than repeating the full successful S1 setup. Bind the actual Verilator executable and compiler when adding capture; no simulator executable was selected or run in S1.
+The existing full hardware witness entry is `workloads/hls_phi/tools/test_protocol_repetition.py XLS_ROOT FRESH_RUN --width 2`, using the pinned Python, matching built profile and a serial guard. It is **not yet a spacetime capture command**. S3 should extend its simulator-source/qualification path to capture events and reuse this registered source bundle/oracle while their identities remain valid, rather than repeating the full successful S1 setup. Bind the actual Verilator executable and compiler when adding capture; no simulator executable was selected or run in S1.
 
 The old read-only export entry is `vivado -mode batch -source physical_census.tcl -tclargs EXACT_DCP FRESH_OUTPUT BAND_NS ENDPOINT_LIMIT`; its sibling Python helper is required. S4 must promote/generalize this entry, enforce the registered output caps and add complete relevant connectivity/timing evidence. Do not execute the old script against an unrelated checkpoint and label its output N2.
 

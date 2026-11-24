@@ -16,7 +16,7 @@ CI checks the standalone FIFOs and both phi populations: `[2,2]` X/Z at 6/14 ns 
 python3 tools/hls_fabric/test_async_fifo.py
 sby -f -d _build/async-fifo-proof test/formal/async_fifo.sby prove
 sby -f -d _build/async-fifo-cover test/formal/async_fifo.sby cover
-python3 apps/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-clocks --shape 4 2 --planes x --clock-halves 7 3
+python3 workloads/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-clocks --shape 4 2 --planes x --clock-halves 7 3
 ```
 
 ## Area

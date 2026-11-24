@@ -3,6 +3,8 @@
   "exclude": [],
   "base_ref": "origin/main",
   "baseline_moves": {
+    "apps/hls_phi/": "workloads/hls_phi/",
+    "apps/hls_snowflake/": "workloads/hls_snowflake/",
     "src/": "apps/erl_hls/src/",
     "include/": "apps/erl_hls/include/",
     "priv/": "apps/erl_hls/priv/",
@@ -18,6 +20,8 @@
         "imports/hls_fabric/include/": "apps/hls_fabric/include/",
         "imports/hls_fabric/test/": "apps/hls_fabric/test/",
         "imports/hls_fabric/test_data/": "apps/hls_fabric/test_data/",
+        "imports/hls_fabric/apps/hls_phi/": "workloads/hls_phi/",
+        "imports/hls_fabric/apps/hls_snowflake/": "workloads/hls_snowflake/",
         "imports/hls_fabric/apps/": "apps/",
         "imports/hls_fabric/platforms/": "platforms/",
         "imports/hls_fabric/bin/": "bin/",

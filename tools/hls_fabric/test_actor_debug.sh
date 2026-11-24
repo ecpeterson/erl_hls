@@ -18,9 +18,9 @@ erl -noshell \
             mailbox_mixed -> #{direct_actor_debug => true, mailbox_debug => true}; _ -> #{mailbox_debug => true} end,
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
-    cp "$hls_compile_root"/priv/xls/lib/*.x apps/hls_target/priv/xls/lib/*.x "$hls_fabric_root"/priv/xls/fabric/*.x "$project_root/apps/hls_phi/src/phi_field.x" "$stage/"
+    cp "$hls_compile_root"/priv/xls/lib/*.x apps/hls_target/priv/xls/lib/*.x "$hls_fabric_root"/priv/xls/fabric/*.x "$project_root/workloads/hls_phi/src/phi_field.x" "$stage/"
     cp tools/hls_fabric/scheduler_ram_configurations.sh "$hls_target_root"/priv/rtl/hls_1r1w_ram.v "$stage/"
-    bash apps/hls_phi/tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
+    bash workloads/hls_phi/tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" --timeout 2h
     compiled=$(cd "$stage/compiled" && pwd -P)
     python3 tools/hls_fabric/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \

@@ -1,4 +1,4 @@
-# Rectangular multicast
+# router: rectangular multicast
 
 `router` is an OTP library application. Its only dependencies are Kernel and STDLIB. The owner starts one registered root with `router:start_link(MinX, MinY, MaxX, MaxY, Routes)` under its supervisor, after its endpoints are ready. Omit `Routes` for an Erlang-only tree. Coordinates are inclusive and can be negative.
 

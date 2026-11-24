@@ -86,7 +86,7 @@ def main() -> None:
     command('execution', ['bash', 'tools/hls_fabric/test_local_execution.sh', args.xls, args.stage / 'execution'])
     command('receipt-contracts', [sys.executable, 'tools/hls_fabric/test_local_protocol.py', args.xls, args.stage / 'receipt-contracts', '--case', 'scalar'], timeout=180)
     shapes(args.xls, args.stage / 'inspection-shapes')
-    command('trace-probe', [sys.executable, ROOT / 'apps/hls_phi/tools/test_phi_cycle_trace.py', 'CycleTraceTest.test_capture'])
+    command('trace-probe', [sys.executable, ROOT / 'workloads/hls_phi/tools/test_phi_cycle_trace.py', 'CycleTraceTest.test_capture'])
     command('return-routes', ['bash', 'tools/hls_fabric/test_return_routes.sh'])
     command('async-fifo', [sys.executable, 'tools/hls_fabric/test_async_fifo.py', '--stage', args.stage / 'async-fifo'])
     command('credit-link', [sys.executable, 'tools/hls_fabric/test_credit_link.py', args.xls, '--stage', args.stage / 'credit-link'])

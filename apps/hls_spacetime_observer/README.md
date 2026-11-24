@@ -1,4 +1,4 @@
-# Passive spacetime observation
+# hls_spacetime_observer: passive source-protocol observation
 
 `hls_spacetime_observer` is an optional OTP library application for the XLS source-protocol backend. It reconstructs semantic events from a bounded simulator recording and the exact emitted source/IR/RTL; it does not lower an application or run in a deployed fabric node. Planning uses installed compiler, communication and target renderers for exact source checks and writes no hardware. The adapter has no application callback, supervisor or registered processes. Its `xls_protocol_spacetime_*` module names identify the supported backend; the application name identifies its observation role.
 
@@ -23,4 +23,4 @@ rebar3 fmt --check
 
 `xls_protocol_spacetime_workflow` packages exact simulator inputs, interprets saved recordings and writes qualified physical claims through `bin/hls-spacetime-observer`. Application stimulus and external compiler/simulator execution stay with the caller.
 
-See [capture instructions](../../docs/hls_fabric/spacetime-capture.md) for supported boundaries and recording limits. The packaged simulator harness belongs to [observer support](priv/simulator/README.md); finite Phi stimulus and completion/readout interpretation belong to [Phi tests](../hls_phi/test/README.md). Generic trace readers, artifact validation and viewing belong to the local `hls_spacetime` application; native physical import and timing adapters belong to `hls_target`.
+See [capture instructions](../../docs/hls_fabric/spacetime-capture.md) for supported boundaries and recording limits. The packaged simulator harness belongs to [observer support](priv/simulator/README.md); finite Phi stimulus and completion/readout interpretation belong to [Phi tests](../../workloads/hls_phi/test/README.md). Generic trace readers, artifact validation and viewing belong to the local `hls_spacetime` application; native physical import and timing adapters belong to `hls_target`.

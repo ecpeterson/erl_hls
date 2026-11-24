@@ -4,11 +4,22 @@ Compile bounded Erlang actors into hardware through XLS, and communicate with th
 
 Actors use `hls_gs` server or `hls_statem` state-machine callbacks and typed records; state machines declare bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events, reductions and [indexed gathers](docs/indexed-gathers.md). Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
 
-Start with the [documentation guide](docs/README.md), [register-service example](apps/erl_hls/src/examples/regsvc/regsvc.erl), or [connected telemetry project](apps/erl_hls/src/examples/telemetry/README.md).
+## Choose a starting point
 
-## Packages
+| Goal | Start here |
+| --- | --- |
+| Understand the value and application boundaries | [Documentation guide](docs/README.md) and [system model](docs/system-model.md) |
+| Compile one actor without assembling a deployment | [Standalone toolchain](docs/toolchain.md) |
+| Follow a complete small project | [Connected telemetry](apps/erl_hls/src/examples/telemetry/README.md) |
+| Exercise calls, casts, records and bounded replies | [Register service](apps/erl_hls/src/examples/regsvc/README.md) |
+| Study a complete multi-actor decoder application | [Phi walkthrough](docs/hls_fabric/execution/phi-walkthrough.md) or [Snowflake application](workloads/hls_snowflake/README.md) |
+| Inspect saved execution and physical evidence | [`hls_spacetime` viewer](apps/hls_spacetime/README.md) |
 
-The [umbrella package map](apps/README.md) separates seven product applications. `hls_core` owns shared process-free contracts; `hls_runtime` owns execution and virtual nodes; `hls_compile` owns computation synthesis; `hls_fabric` owns communication synthesis; `hls_target` owns physical materialization; `hls_spacetime` owns pure system-plan policy and offline analysis; `erl_hls` is the CLI/orchestration facade. Static audits enforce their one-way dependencies.
+## Repository map
+
+The [`apps/`](apps/README.md) directory contains the seven-application architectural spine and its supporting OTP applications. `hls_core` owns shared process-free contracts; `hls_runtime` owns execution and virtual nodes; `hls_compile` owns computation synthesis; `hls_fabric` owns communication synthesis; `hls_target` owns physical materialization; `hls_spacetime` owns pure system-plan policy and offline analysis; `erl_hls` is the CLI/orchestration facade. Static audits enforce their one-way dependencies.
+
+Small teaching and compiler examples live under [`apps/erl_hls/src/examples`](apps/erl_hls/src/examples/README.md). Larger maintained applications live under [`workloads/`](workloads/README.md): `hls_phi` and `hls_snowflake` own their actors, resources and finite integration witnesses, while generic compiler and runtime applications do not depend on them. `router` is an independent multicast/barrier library, while `hls_spacetime_observer` is an optional cross-layer capture adapter.
 
 `hls_runtime` starts the retained virtual-node supervisor; CPU actors, brokers and sessions still use explicit lifecycle APIs. The synthesis, target, optimizer and facade applications start no process. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
 

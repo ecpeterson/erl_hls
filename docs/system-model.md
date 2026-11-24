@@ -37,7 +37,7 @@ These distinctions permit joint optimization without a reverse package dependenc
 
 ## Dependency rule
 
-The seven product applications have one-way ownership:
+The seven architectural applications have one-way ownership:
 
 1. `hls_core` depends only on OTP.
 2. `hls_runtime` depends on core and owns live execution, wire codecs and virtual-node supervision.
@@ -47,6 +47,6 @@ The seven product applications have one-way ownership:
 6. `hls_spacetime` owns pure system-plan policy and offline execution analysis. It consumes core contracts and target-validated physical values, while target never calls back into it.
 7. `erl_hls` is the CLI and orchestration facade over the lower applications.
 
-The optional `hls_spacetime_observer` application is a coherent cross-layer integration adapter and may consume compiler, Fabric, target and Spacetime products. Keeping that adapter separate prevents its broad dependency closure from becoming an authority in any lower package. Example applications depend only on the product boundaries they exercise.
+The optional `hls_spacetime_observer` application is a coherent cross-layer integration adapter and may consume compiler, Fabric, target and Spacetime products. Keeping that adapter separate prevents its broad dependency closure from becoming an authority in any lower package. Workload applications depend only on the architectural boundaries they exercise.
 
 Static package audits enforce the prohibited reverse edges, and fresh boundary projections exercise computation, communication, physical materialization and optimizer policy independently. Runtime-only releases contain core and runtime code, not synthesis or optimization applications.

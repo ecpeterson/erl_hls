@@ -39,14 +39,23 @@ def plan(paths: list[str] | None, config: Inventory, manual: bool = False) -> di
                for group in config['groups']}}
 
 
+def qualification_paths(paths: list[str] | None, event: str) -> list[str] | None:
+    """Select full coverage when a report-only CI event needs prior-success evidence."""
+    if (event in {'push', 'pull_request'} and paths is not None
+            and all(documentation(path) for path in paths)):
+        return None
+    return paths
+
+
 def main() -> None:
     """Emit Actions decisions and a content key for successful-suite reuse."""
     root = Path.cwd()
-    manual = os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+    event = os.environ.get('GITHUB_EVENT_NAME', '')
+    manual = event == 'workflow_dispatch'
     extended = manual and os.environ.get('CI_EXTENDED') == 'true'
     config = load_inventory(root)
     paths = changed_paths(os.environ.get('CI_BASE', ''), root)
-    selected = plan(paths, config, manual)
+    selected = plan(qualification_paths(paths, event), config, manual)
     suite_groups = os.environ.get('CI_GROUPS', ','.join(config['groups'])).split(',')
     selected['qualify'] = any(selected[group] for group in suite_groups)
     selected['reusable'] = paths is not None and not manual

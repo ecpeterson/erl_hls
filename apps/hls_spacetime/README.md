@@ -1,6 +1,6 @@
-# hls_spacetime
+# hls_spacetime: planning and offline analysis
 
-`hls_spacetime` owns process-free system-level planning and offline execution analysis. It proposes deterministic partition and scheduler requests from a core logical topology, and revises a checked `hls_implementation_plan` through a caller-supplied pure policy and an exactly correlated `hls_characterization`. It neither reads a cache nor calls target tools; supplied and cached values take the same API path.
+“Spacetime” means joining logical events and value versions to placed structures and clock cycles. `hls_spacetime` owns that process-free system-level planning and offline execution analysis. It proposes deterministic partition and scheduler requests from a core logical topology, and revises a checked `hls_implementation_plan` through a caller-supplied pure policy and an exactly correlated `hls_characterization`. It neither reads a cache nor calls target tools; supplied and cached values take the same API path.
 
 The library also validates event/version histories and reads bounded simulator traces so saved FPGA execution can be inspected as work spread over placed circuitry and clock cycles. Physical catalogue and timing-sidecar validation belong to `hls_target`; Spacetime consumes those checked values rather than owning vendor adapters. Backend observation adapters stay with their producers, and application stimuli stay with their applications. The optional `hls_spacetime_observer` application is the cross-layer integration adapter and has no application callback.
 

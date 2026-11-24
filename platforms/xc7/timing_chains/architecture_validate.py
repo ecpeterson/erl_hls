@@ -10,7 +10,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'tools'))
-sys.path.insert(0, str(ROOT / "apps/hls_phi/tools"))
+sys.path.insert(0, str(ROOT / "workloads/hls_phi/tools"))
 from decoder_profile_witness import rtl_events, sequences
 
 
@@ -33,7 +33,7 @@ def validate(stage: Path, reference: Path, cycle_exact: bool = False,
         command(['iverilog', '-g2012', '-s', 'phi_decoder_profile_tb', '-o', 'sim.vvp',
                  '-Pphi_decoder_profile_tb.WIDTH=2', '-Pphi_decoder_profile_tb.HEIGHT=1',
                  f'-Pphi_decoder_profile_tb.STALL_OUTPUTS={stalled}',
-                 str(ROOT / 'apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv'), *files], run, 'compile')
+                 str(ROOT / 'workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv'), *files], run, 'compile')
         command(['vvp', 'sim.vvp'], run, 'simulation')
         actual = sequences(rtl_events(run / 'phi_decoder_profile.events'))
         if actual != expected:
@@ -62,7 +62,7 @@ def validate(stage: Path, reference: Path, cycle_exact: bool = False,
     (stage / 'comparison.json').write_text(json.dumps({'samples': samples, 'cycle_exact': cycle_exact,
         'reference_rtl': str(baseline),
         'support_sha256': {'decoder_profile_witness.py':
-            hashlib.sha256((ROOT/'apps/hls_phi/tools/decoder_profile_witness.py').read_bytes()).hexdigest()},
+            hashlib.sha256((ROOT/'workloads/hls_phi/tools/decoder_profile_witness.py').read_bytes()).hexdigest()},
         'reset_stalls': (stage / 'compare.log').read_text()}, indent=2) + '\n')
     for name in ('reference.v', 'compare.vvp'):
         (stage / name).unlink()

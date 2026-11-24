@@ -1,3 +1,0 @@
-# Phi source headers
-
-`phi_protocol.hrl` defines this application's messages. The `*_impl.hrl` files share actor behavior between line and halo wrappers; `phi_neighborhood.hrl` selects bounded geometry and an ordered direction table. Phi wrappers own their ports, mailbox bound, state layout and arithmetic/tie-selection policy; the common callbacks build directional broadcasts with literal-list comprehensions. The line and halo `*_state.hrl` headers own their distinct private cell layouts; the line retains weighted numerators between diffusion completion and state entry. Actors include these through the `hls_phi` application so dynamic compilation and installed source builds use the same files. These are example contracts, not compiler or transport headers.

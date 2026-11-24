@@ -212,7 +212,7 @@ def configuration(value: Any) -> list[tuple[int, int, list[str]]]:
 
 def validate_result(stage: Path, bundle: Path, native: Path, namespace: int) -> dict[str, Any]:
     """Reuse the existing native-oracle comparison, checking actual replacement identities only."""
-    tools = Path(__file__).resolve().parents[2] / 'apps/hls_phi/tools'
+    tools = Path(__file__).resolve().parents[2] / 'workloads/hls_phi/tools'
     sys.path.insert(0, str(tools))
     from protocol_repetition_result import compare
     metadata = json.loads((bundle / 'fixture.json').read_text())

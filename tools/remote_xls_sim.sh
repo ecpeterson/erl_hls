@@ -285,11 +285,11 @@ fi
 
 beam_dir="$stage/beam"
 mkdir -p "$beam_dir"
-erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
+erlc -o "$beam_dir" "$stage/portable_host_sources/hls_type.erl"
 # Listings already contain host-expanded schemas and include the full runtime package.
-erlc -pa "$beam_dir" -o "$beam_dir" "$stage"/erl_src/*.erl
+erlc -pa "$beam_dir" -o "$beam_dir" "$stage"/portable_host_sources/*.erl
 erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/test_src/regsvc_cpu_tests.erl"
+    "$stage/portable_test_sources/regsvc_cpu_tests.erl"
 
 ERL_HLS_SIM_DIR="$sim_dir" erl \
     -noshell \

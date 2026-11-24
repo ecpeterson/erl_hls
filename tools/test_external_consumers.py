@@ -113,7 +113,8 @@ def build_releases(source: Path, environment: dict[str, str]) -> dict[str, Path]
     """Build both canonical consumption closures once from the clean exact checkout."""
     known = {
         path.parent.parent.name
-        for path in (source / "apps").glob("*/src/*.app.src")
+        for application_root in ("apps", "workloads")
+        for path in (source / application_root).glob("*/src/*.app.src")
     }
     for name in ("erl_hls", "hls_runtime"):
         checked(["rebar3", "release", "-n", name], source, environment)

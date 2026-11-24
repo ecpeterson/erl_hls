@@ -26,7 +26,7 @@ class CheckTests(unittest.TestCase):
             plans = {group: check.recipe(group, root/'xls', root/group, cases,
                      ('direct', 'ingress_direct'), None) for group in check.GROUPS}
             steps = {step.name: step for plan in plans.values() for step in plan.steps if isinstance(step, Command)}
-            for name in ('eunit', 'release-compiler', 'release-facade', 'release-examples',
+            for name in ('eunit', 'release-compiler', 'release-facade', 'release-workloads',
                          'installed-toolchain', 'source-maps', 'DSLX-golden',
                          'function-differential', 'actor-differential',
                          'test_sim_bridge', 'test_debug_memories', 'test_actor_snapshot_formal',
@@ -38,10 +38,10 @@ class CheckTests(unittest.TestCase):
                              ['rebar3', 'release', '-n', 'erl_hls'])
             self.assertEqual(steps['release-facade'].argv,
                              ['rebar3', 'release', '-n', 'hls'])
-            self.assertEqual(steps['release-examples'].argv,
-                             ['rebar3', 'release', '-n', 'hls_examples'])
+            self.assertEqual(steps['release-workloads'].argv,
+                             ['rebar3', 'release', '-n', 'hls_workloads'])
             ordered = [step.name for step in plans['test'].steps if isinstance(step, Command)]
-            self.assertLess(ordered.index('release-examples'), ordered.index('installed-toolchain'))
+            self.assertLess(ordered.index('release-workloads'), ordered.index('installed-toolchain'))
             self.assertTrue(set(cases) <= {name.split('/')[0] for name in steps})
             topology = str([step.argv for step in plans['topology'].steps if isinstance(step, Command)])
             self.assertIn(', direct)', topology)
@@ -57,7 +57,7 @@ class CheckTests(unittest.TestCase):
         names = {step.name for step in plan.steps if isinstance(step, Command)}
         self.assertIn('installed-toolchain', names)
         self.assertIn('RTL-and-bridge', names)
-        release_names = {'release-compiler', 'release-facade', 'release-examples'}
+        release_names = {'release-compiler', 'release-facade', 'release-workloads'}
         self.assertTrue(release_names <= names)
         for raw in ('{}', '[1]', '["absent"]', '["mixed_topology"]', '["telemetry"]'):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
@@ -114,6 +114,19 @@ class CheckTests(unittest.TestCase):
                     argv = steps[name].argv
                     output = Path(argv[argv.index('--stage') + 1])
                     self.assertEqual(output.parent, stage)
+
+    def test_source_map_fixture_compiles_umbrella_test_beam_first(self) -> None:
+        """The fixture must not depend on disposable umbrella EUnit projection artifacts."""
+        plan = check.recipe('test', Path('/xls'), Path('/stage'), [], ('direct',), None)
+        commands = [step for step in plan.steps if isinstance(step, Command)]
+        fixture_index = next(index for index, step in enumerate(commands)
+                             if step.name == 'source-map-fixtures')
+        self.assertEqual(commands[fixture_index - 1].name, 'beam-compile')
+        self.assertEqual(commands[fixture_index - 1].argv,
+                         ['rebar3', 'as', 'test', 'compile'])
+        fixture = commands[fixture_index]
+        self.assertIn('xls_source_map_dslx:write', fixture.argv[fixture.argv.index('-eval') + 1])
+        self.assertIn(str(check.ROOT / '_build/test/lib/erl_hls/test'), fixture.argv)
 
     def test_ci_uses_shared_recipes(self) -> None:
         """Workflows delegate qualification instead of maintaining separate test command lists."""

@@ -1,4 +1,4 @@
-# HLS execution runtime
+# hls_runtime: actor execution
 
 `hls_runtime` owns live actor execution and transport state. It contains the actor/domain API, CPU callback execution, device brokers, virtual Erlang nodes, observation sessions, retained wire codecs and protocol queues. Shared values, logical identities and serialization contracts live in [`hls_core`](../hls_core/README.md).
 

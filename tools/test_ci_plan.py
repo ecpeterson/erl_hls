@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ci_plan import changed_paths, main, plan, source_fingerprint
+from ci_plan import changed_paths, main, plan, qualification_paths, source_fingerprint
 
 from regression_inventory import load_inventory, paths_since, select_cases
 
@@ -30,6 +30,18 @@ class SelectionTests(unittest.TestCase):
                 self.assertTrue(plan([path], CONFIG)['qualify'])
         self.assertTrue(all(plan(None, CONFIG)[g] for g in CONFIG['groups']))
         self.assertTrue(all(plan([], CONFIG, manual=True)[g] for g in CONFIG['groups']))
+
+    def test_report_only_events_require_qualification_evidence(self) -> None:
+        """A report-only CI event selects full coverage until its exact inputs have passed."""
+        paths = ['README.md', 'docs/p.png']
+        for event in ('push', 'pull_request'):
+            with self.subTest(event=event):
+                self.assertIsNone(qualification_paths(paths, event))
+        self.assertEqual(qualification_paths(paths, ''), paths)
+        self.assertEqual(qualification_paths(paths, 'workflow_dispatch'), paths)
+        self.assertEqual(qualification_paths(['README.md', 'rebar.lock'], 'push'),
+                         ['README.md', 'rebar.lock'])
+        self.assertIsNone(qualification_paths(None, 'push'))
 
     def test_exact_fixture_selection_is_shared(self) -> None:
         """Local and CI views use the same exact dependencies, including shared testbenches."""
@@ -216,6 +228,27 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(json.loads(actual[f'{group}_cases']),
                                  select_cases(None, CONFIG, groups=[group]))
             self.assertIn('Affected groups:', (root/'summary').read_text())
+
+    def test_report_only_push_outputs_full_reusable_plan(self) -> None:
+        """A report-only push requests cache lookup and reruns every group on a miss."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = {'GITHUB_OUTPUT': str(root / 'output'),
+                   'GITHUB_STEP_SUMMARY': str(root / 'summary'),
+                   'GITHUB_EVENT_NAME': 'push', 'CI_BASE': 'base'}
+            repository = Path(__file__).resolve().parents[1]
+            with patch.dict(os.environ, env, clear=True), \
+                    patch('ci_plan.Path.cwd', return_value=repository), \
+                    patch('ci_plan.changed_paths', return_value=['README.md']):
+                main()
+            actual = dict(line.split('=', 1)
+                          for line in (root / 'output').read_text().splitlines())
+            self.assertIs(json.loads(actual['qualify']), True)
+            self.assertIs(json.loads(actual['reusable']), True)
+            for group in CONFIG['groups']:
+                self.assertIs(json.loads(actual[group]), True)
+                self.assertEqual(json.loads(actual[f'{group}_cases']),
+                                 select_cases(None, CONFIG, groups=[group]))
 
 
 if __name__ == '__main__':

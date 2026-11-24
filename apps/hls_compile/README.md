@@ -1,4 +1,4 @@
-# Computation synthesis
+# hls_compile: computation synthesis
 
 `hls_compile` owns Erlang source acquisition, process analysis, XLS computation lowering and compiler summaries. It is a process-free library: it does not choose placement, construct communication fabrics, run target tools or consume system-optimization results.
 

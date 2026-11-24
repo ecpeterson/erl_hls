@@ -253,15 +253,15 @@ class SourceToolchainTests(unittest.TestCase):
             rtl = (published/'files.f').read_text().splitlines()
             self.assertTrue(all(not Path(path).is_absolute() and (published/path).is_file() for path in rtl))
 
-    def test_relocated_example_release(self) -> None:
-        """Examples ship separately and resolve source/includes from their installed application."""
+    def test_relocated_workload_release(self) -> None:
+        """Workloads ship separately and resolve source/includes from their installed application."""
         generic = ROOT / '_build/default/rel/hls/lib'
         self.assertFalse(list(generic.glob('hls_phi-*')))
         self.assertFalse(list(generic.glob('hls_snowflake-*')))
-        with tempfile.TemporaryDirectory(prefix='example release ') as temporary:
+        with tempfile.TemporaryDirectory(prefix='workload release ') as temporary:
             stage = Path(temporary).resolve()
-            release = stage / 'relocated examples'
-            shutil.copytree(ROOT / '_build/default/rel/hls_examples', release)
+            release = stage / 'relocated workloads'
+            shutil.copytree(ROOT / '_build/default/rel/hls_workloads', release)
             environment = {**os.environ, 'ERL_AFLAGS': '', 'ERL_HLS_ROOT': '/not-a-checkout'}
             phi = subprocess.run([release / 'bin/hls-repetition', '--width', '2',
                                   '--output', stage / 'phi'], cwd=stage, env=environment,

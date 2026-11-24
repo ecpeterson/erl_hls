@@ -353,6 +353,13 @@ class SourceContractsTests(unittest.TestCase):
         self.assertEqual(CONTRACTS.moved_path('imports/fabric/apps/example/src/a.erl', moves),
                          'apps/example/src/a.erl')
 
+    def test_workload_tests_retain_application_scoped_module_identity(self) -> None:
+        """Moved workload fixtures remain isolated by their OTP application."""
+        self.assertEqual(CONTRACTS.test_module_scope(
+            'workloads/hls_phi/test/shared_fixture.erl'), 'hls_phi')
+        self.assertIsNone(CONTRACTS.test_module_scope(
+            'workloads/hls_phi/src/shared_fixture.erl'))
+
 
 class DslxContractsTests(unittest.TestCase):
     """Protect DSLX coverage against syntax, visibility and baseline mistakes."""

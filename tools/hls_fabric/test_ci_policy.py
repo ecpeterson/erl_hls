@@ -45,7 +45,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         for name in names:
             self.assertTrue(any((directory / (name.split('.')[0] + '.py')).is_file()
-                for directory in [ROOT / 'tools/hls_fabric', ROOT / 'apps/hls_phi/tools']), name)
+                for directory in [ROOT / 'tools/hls_fabric', ROOT / 'workloads/hls_phi/tools']), name)
         self.assertFalse(any('ci_plan' in name for name in names))
         xls_action = (ROOT / '.github/actions/xls-tools/action.yml').read_text()
         self.assertIn("hashFiles('tools/hls_fabric/xls_ram_codegen/manifest.json')", xls_action)

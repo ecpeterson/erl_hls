@@ -1,4 +1,4 @@
-# Communication synthesis
+# hls_fabric: communication synthesis
 
 `hls_fabric` owns process-free communication synthesis: logical protocol projection, finite wait-graph analysis, host-codec planning and communication-topology rendering. Its planners consume checked logical and compiler facts and return retained values. They do not start virtual nodes, assign physical layouts, invoke target tools or revise system-level placement policy.
 

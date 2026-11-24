@@ -1,4 +1,4 @@
-# HLS core library
+# hls_core: shared values and models
 
 `hls_core` owns the process-free values shared by actor source, computation synthesis, communication planning, target materialization, deployed execution and characterization. It contains type descriptors and providers, record and frame layouts, deterministic collection and PRNG helpers, retained host codec primitives, structured diagnostics and stable logical actor keys.
 

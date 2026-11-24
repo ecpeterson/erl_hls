@@ -8,7 +8,7 @@ from pathlib import Path
 import tarfile
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'apps/hls_phi/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'workloads/hls_phi/tools'))
 from phi_cycle_trace import executor_requests, read
 from phi_transport_metrics import dense, distribution
 

@@ -100,7 +100,7 @@ The library equivalent is `xls_protocol_spacetime_workflow:write_capture(Prepare
 
 Prepared ETF files are trusted local producer artifacts; do not pass arbitrary downloaded terms to this command. The file hash and deterministic `observation_digest/1` have separate roles. New plans use deterministic external-term identity on the pinned OTP toolchain. Historical captures retain their original identities; never rebind them silently to a new plan.
 
-The graph is application independent. Phi's finite completion/readout adapter remains `phi_spacetime_fixture:summary/2` and `bind_summary/2` under `apps/hls_phi/test`; it joins actual public route/incarnation/occurrence identities. Other workloads supply their own optional annotations rather than modifying the observer. Unrepresented controls and unsupported expressions remain unknown roots; complete file coverage does not imply complete causal ancestry.
+The graph is application independent. Phi's finite completion/readout adapter remains `phi_spacetime_fixture:summary/2` and `bind_summary/2` under `workloads/hls_phi/test`; it joins actual public route/incarnation/occurrence identities. Other workloads supply their own optional annotations rather than modifying the observer. Unrepresented controls and unsupported expressions remain unknown roots; complete file coverage does not imply complete causal ancestry.
 
 Physical correspondence is absent until an independently qualified exact-checkpoint catalogue and claims are attached through the standalone library. The optional producer command qualifies explicit register candidates against independently reviewed finite replay summaries:
 

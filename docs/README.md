@@ -1,6 +1,8 @@
 # Documentation
 
-Start with the [telemetry project](../apps/erl_hls/src/examples/telemetry/README.md) for a complete communicating example, or the [standalone compiler](toolchain.md) for one actor. `hls_core` owns shared values and codecs, `hls_compile` owns source analysis, `erl_hls` owns the supported facade and orchestration, and `hls_runtime` owns CPU actors and device sessions. The [source map](../apps/erl_hls/src/README.md) describes those package boundaries. Phi and Snowflake remain distinct applications in this umbrella; the [Phi guide](repetition-code.md) points to its maintained walkthrough.
+Start with the [telemetry project](../apps/erl_hls/src/examples/telemetry/README.md) for a complete communicating example, or the [standalone compiler](toolchain.md) for one actor. `hls_core` owns shared values and codecs, `hls_compile` owns source analysis, `erl_hls` owns the supported facade and orchestration, and `hls_runtime` owns CPU actors and device sessions. The [application map](../apps/README.md) describes that architectural spine and its supporting packages; the [workload map](../workloads/README.md) covers the maintained decoder applications; the [source map](../apps/erl_hls/src/README.md) locates implementation entry points.
+
+The small examples under `apps/erl_hls/src/examples/` teach individual APIs and project structure. For larger end-to-end applications, use the maintained [Phi walkthrough](hls_fabric/execution/phi-walkthrough.md) or [Snowflake guide](../workloads/hls_snowflake/README.md). Phi and Snowflake remain separate OTP applications because they own application-specific actors, resources and witnesses; neither is a generic compiler stage.
 
 Read the contract before its deployment details:
 

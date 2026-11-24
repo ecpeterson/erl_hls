@@ -24,7 +24,7 @@ def main() -> None:
     instances = re.findall(r'\w+ (materialized_fifo_fifo__scheduler_\d+_aggregate_) \(', text)
     if len(instances) != 2:
         raise ValueError('expected exactly two aggregate delivery channels in the 2x1 fixture')
-    source = (ROOT / 'apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv').read_text()
+    source = (ROOT / 'workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv').read_text()
     observers = ['integer observed_cycle=0; always @(negedge clk) observed_cycle=observed_cycle+1;']
     for i, instance in enumerate(instances):
         endpoint = f'{SCOPE}.{instance}'

@@ -7,6 +7,7 @@ from erl_hls_tools.package_boundaries import (
     architecture_violations,
     duplicate_module_ownership,
     policy_violations,
+    project_applications,
     undeclared_application_dependencies,
     violations,
 )
@@ -63,6 +64,17 @@ class PackageBoundariesTests(unittest.TestCase):
         self.assertEqual(duplicate_module_ownership(snapshot), [
             {'kind': 'duplicate_module_ownership', 'module': 'codec',
              'applications': ['erl_hls', 'hls_runtime']}])
+
+    def test_project_applications_include_workloads(self) -> None:
+        """Package policy owns descriptors in both architectural and workload roots."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative, name in (("apps/core/src", "core"),
+                                   ("workloads/example/src", "example")):
+                directory = root / relative
+                directory.mkdir(parents=True)
+                (directory / f"{name}.app.src").write_text("fixture")
+            self.assertEqual(project_applications(root), {"core", "example"})
 
     def test_undeclared_project_imports_and_remote_types(self) -> None:
         """Every direct project-app import or remote type requires a manifest dependency."""

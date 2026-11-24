@@ -1,4 +1,4 @@
-# Physical target integration
+# hls_target: physical target integration
 
 `hls_target` owns physical implementation boundaries: target-specific planning and materialization, generated-source composition, external-tool support, physical catalogue import and timing-sidecar validation. It consumes computation artifacts from `hls_compile`, communication plans from `hls_fabric` and shared proposed-implementation contracts from `hls_core`.
 

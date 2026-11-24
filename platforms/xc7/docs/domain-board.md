@@ -1,6 +1,6 @@
 # Independent recovery domains on two boards
 
-This flow combines already compiled source-domain RTL with one independently clocked endpoint per directed crossing, a physical Ethernet carrier, and the TE0715 host DMA shell. It consumes ordinary compiler bundles; the platform does not reinterpret application source or generate decoder policy. The N8 repetition qualification assigns four data/phi/syndrome positions to each board. The application fixture and oracle remain in `apps/hls_phi/`.
+This flow combines already compiled source-domain RTL with one independently clocked endpoint per directed crossing, a physical Ethernet carrier, and the TE0715 host DMA shell. It consumes ordinary compiler bundles; the platform does not reinterpret application source or generate decoder policy. The N8 repetition qualification assigns four data/phi/syndrome positions to each board. The application fixture and oracle remain in `workloads/hls_phi/`.
 
 ## Boundaries
 

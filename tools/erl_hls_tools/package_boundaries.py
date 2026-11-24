@@ -83,7 +83,12 @@ def application_files(root: Path, profile: str) -> list[Path]:
 def project_applications(root: Path) -> set[str]:
     """Return OTP application names owned by this umbrella, excluding fetched dependencies."""
     suffix = '.app.src'
-    return {path.name[:-len(suffix)] for path in (root/'apps').glob('*/src/*.app.src')}
+    paths = [
+        path
+        for application_root in ('apps', 'workloads')
+        for path in (root/application_root).glob('*/src/*.app.src')
+    ]
+    return {path.name[:-len(suffix)] for path in paths}
 
 
 def undeclared_application_dependencies(snapshot: dict,

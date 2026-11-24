@@ -22,7 +22,7 @@ ERL_HLS_PHI_PROFILE_HEIGHT=2 \
 ERL_HLS_PHI_PROFILE_PLANES=x \
 ERL_HLS_PHI_PROFILE_SHARDS=2 \
 ERL_HLS_PHI_PROFILE_TRACE=0 \
-bash apps/hls_phi/tools/run_phi_decoder_profile.sh _build/profile-2x2-x "$XLS_ROOT"
+bash workloads/hls_phi/tools/run_phi_decoder_profile.sh _build/profile-2x2-x "$XLS_ROOT"
 ```
 
 Planes are `x`, `z`, or `xz` (the default). Width and height each default to three. The shell runner defaults to three shards; set fewer for populations with fewer than three cells per plane. The Erlang configuration API instead defaults to the smaller of three and the cell count. Empty planes, duplicate planes, nonpositive dimensions, unknown configuration keys, and more shards than cells are rejected.
@@ -36,8 +36,8 @@ The normal runner measures completed external events and RAM-port activity witho
 ## Validate and measure
 
 ```sh
-python3 apps/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT"
-python3 apps/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT" --cases d3
+python3 workloads/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT"
+python3 workloads/hls_phi/tools/test_decoder_profiles.py "$XLS_ROOT" --cases d3
 python3 platforms/xc7/measure_decoder_profiles.py \
     _build/decoder-profiles/board-sized \
     _build/decoder-profiles/small-both \

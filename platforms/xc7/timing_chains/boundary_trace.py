@@ -92,7 +92,7 @@ def measure(rtl: Path, stage: Path) -> None:
     files = [rtl / name for name in ('phi_decoder_profile.v', 'phi_decoder_profile_top.v', 'hls_1r1w_ram.v')]
     command = ['iverilog', '-g2012', '-s', 'phi_decoder_profile_tb', '-s', 'boundary_monitor',
                '-Pphi_decoder_profile_tb.WIDTH=2', '-Pphi_decoder_profile_tb.HEIGHT=1',
-               '-o', 'simulation.vvp', str(ROOT / 'apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv'),
+               '-o', 'simulation.vvp', str(ROOT / 'workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv'),
                *map(str, files), 'monitor.v']
     with (stage / 'compile.log').open('w') as log:
         subprocess.run(command, cwd=stage, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)

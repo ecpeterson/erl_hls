@@ -2,6 +2,29 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+%% Both CI placements lower their actors from the canonical umbrella application.
+-spec fixture_writers_use_umbrella_sources_test_() ->
+    {timeout, pos_integer(), fun(() -> ok)}.
+fixture_writers_use_umbrella_sources_test_() ->
+    {timeout, 30, fun() ->
+        Root = filename:join("_build", "mixed-topology-fixtures-" ++
+            integer_to_list(erlang:unique_integer([positive]))),
+        try
+            lists:foreach(fun({Placement, Actors}) ->
+                Stage = filename:join(Root, atom_to_list(Placement)),
+                ok = filelib:ensure_dir(filename:join(Stage, "fixture")),
+                ok = xls_regression_fixtures:write(mixed_topology, Stage, Placement),
+                ?assert(filelib:is_file(filename:join(Stage, "mixed_topology.x"))),
+                lists:foreach(fun(Actor) ->
+                    ?assert(filelib:is_file(filename:join(Stage, atom_to_list(Actor) ++ ".x")))
+                end, Actors)
+            end, [{direct, [hls_mixed_source, hls_mixed_collector, hls_mixed_worker]},
+                {ingress_direct, [hls_mixed_collector, hls_mixed_worker]}])
+        after
+            ok = file:del_dir_r(Root)
+        end
+    end}.
+
 %% Exact and family routes retain their canonical logical identities across normalization.
 -spec crossing_routes_retain_logical_identities_test() -> ok.
 crossing_routes_retain_logical_identities_test() ->

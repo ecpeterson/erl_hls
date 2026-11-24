@@ -14,7 +14,7 @@ The umbrella builds `erl_hls`, `hls_compile`, `hls_fabric`, `hls_target`, `hls_c
 
 The build release `rebar3 release -n hls` produces `_build/default/rel/hls/`, which contains the CLI, resolved BEAM dependencies, headers, templates and the small counter walkthrough. Copy the **whole directory**, not just `bin/hls-fabric`, to use it elsewhere with a compatible OTP 28 runtime. `include_src` retains the source inputs that the HLS compiler consumes. The tiny shell launcher supplies the release's fixed library directory; all argument handling, configuration and source compilation run in Erlang. It does not start a fabric node or invoke rebar at runtime.
 
-`hls_compile` owns computation synthesis, `hls_fabric` owns communication planning, and `hls_target` owns physical materialization and generic `priv` assets. `apps/hls_phi` and `apps/hls_snowflake` own the complete decoder applications, their sources, tests and application-specific build drivers. Run `rebar3 release -n hls_runtime` for the runtime-only `_build/default/rel/hls_runtime/` release. Its closure includes `hls_runtime` and `hls_core`, not synthesis, target, facade or optimizer applications; it contains no build launchers or source templates. `hls_runtime` starts its virtual-node supervisor; synthesis and target applications have no startup callback.
+`hls_compile` owns computation synthesis, `hls_fabric` owns communication planning, and `hls_target` owns physical materialization and generic `priv` assets. `workloads/hls_phi` and `workloads/hls_snowflake` own the complete decoder applications, their sources, tests and application-specific build drivers. Run `rebar3 release -n hls_runtime` for the runtime-only `_build/default/rel/hls_runtime/` release. Its closure includes `hls_runtime` and `hls_core`, not synthesis, target, facade or optimizer applications; it contains no build launchers or source templates. `hls_runtime` starts its virtual-node supervisor; synthesis and target applications have no startup callback.
 
 The `erl_hls` facade owns `hlsc` and `hls-fabric` command orchestration. Compiler source preprocessing, Fabric communication planning and target bundle publication remain in their owning applications. Repetition settings live in the example frontend, not either generic command.
 
@@ -92,10 +92,10 @@ Packaging delegates relative paths, metadata, generated input hashes, DSLX entry
 
 A scheduler bundle contains `scheduler/topology.x`, generated actor modules with `.x.json` sidecars containing their byte hash and allocated failure codebook, `profile.json`, and RAM binding/fragments under `ram/`. The dedicated-actor counter example needs no external state/mailbox RAM. With `block_ram` placement, the compiled core exposes its RAM channels; `wires.vh`, `application_ports.vh` and `instances.vh` describe their connection to the support RAMs. These fragments are for an application shell, not independently compiled RTL. The generic scheduler build does not invent a framed host gateway, board pinout or complete application wrapper.
 
-Build `rebar3 release -n hls_examples` to include both decoder applications. This separate release retains their source/header inputs for lowering after relocation; the generic `hls` release excludes them. `hls-repetition` remains a Phi-owned convenience frontend. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then uses the source-protocol builder. For example:
+Build `rebar3 release -n hls_workloads` to include both decoder applications. This separate release retains their source/header inputs for lowering after relocation; the generic `hls` release excludes them. `hls-repetition` remains a Phi-owned convenience frontend. It constructs native Erlang terms in `phi_protocol_config:repetition/2`, then uses the source-protocol builder. For example:
 
 ```sh
-_build/default/rel/hls_examples/bin/hls-repetition --width 6 --split 3 --output /path/to/fresh-repetition
+_build/default/rel/hls_workloads/bin/hls-repetition --width 6 --split 3 --output /path/to/fresh-repetition
 ```
 
 Its placement, inspection and shared-arithmetic bounds are documented in [source protocol](source-protocol.md).

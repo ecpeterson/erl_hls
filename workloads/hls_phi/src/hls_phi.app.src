@@ -1,0 +1,16 @@
+{application, hls_phi, [
+    {description, "Phi decoder, phenomenological source and finite workload drivers"},
+    {vsn, "0.1.0"}, {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        hls_core,
+        hls_runtime,
+        hls_compile,
+        erl_hls,
+        hls_fabric,
+        hls_target
+    ]},
+    {env, []}, {modules, []}, {licenses, ["Apache-2.0"]}, {links, []}
+]}.

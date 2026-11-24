@@ -27,13 +27,13 @@ record_time prepare
 if [[ "$suite" == all || "$suite" == software ]]; then
     bash tools/test_umbrella_eunit.sh default
     bash tools/test_umbrella_eunit.sh boundaries
-    rebar3 release -n hls_examples
+    rebar3 release -n hls_workloads
     bash tools/hls_fabric/test_local_dist.sh
     tests=()
     while IFS= read -r name; do
         case "$name" in ''|\#*) ;; *) tests+=("$name");; esac
     done < tools/hls_fabric/ci_unit_tests.txt
-    PYTHONPATH=tools/hls_fabric:apps/hls_phi/tools python3 -m unittest "${tests[@]}"
+    PYTHONPATH=tools/hls_fabric:workloads/hls_phi/tools python3 -m unittest "${tests[@]}"
     # Only mocked board-support contracts; never discover hardware/image witnesses here.
     for test in test_regsvc_context.py test_packaging_support.py; do
         python3 -m unittest discover -s platforms/xc7 -p "$test"
@@ -54,9 +54,9 @@ if [[ "$suite" == all || "$suite" == components ]]; then
     record_time components
 fi
 if [[ "$suite" == all || "$suite" == phi ]]; then
-    python3 apps/hls_phi/tools/test_phi_memory.py "$xls_root" --stage "$stage/phi-build" \
+    python3 workloads/hls_phi/tools/test_phi_memory.py "$xls_root" --stage "$stage/phi-build" \
         --placement coalesced --reductions ordinary --memory-case board_memory --compiler-timeout 300 --devices-only
-    python3 apps/hls_phi/tools/profile_phi_memory.py "$stage/phi-build" --stage "$stage/phi-run" \
+    python3 workloads/hls_phi/tools/profile_phi_memory.py "$stage/phi-build" --stage "$stage/phi-run" \
         --clock-halves 3 7 --stalls --timeout 300
     record_time phi
 fi

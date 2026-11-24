@@ -68,7 +68,7 @@ For the decoder-only profile, `phi_decoder_profile_build:emit(Config, Options)` 
 
 Its `phi_decoder_profile.inputs.json` binds the generated sources, wrapper and profile metadata by SHA-256 and carries the XLS RAM configurations from the scheduler bindings. A separate RAM recipe fingerprint identifies the compiled renderer and channel-name authority, independently of the chosen geometry and actor sources, for experiment comparisons. `compile_phi_decoder_profile.py` verifies those inputs before passing the configurations to the common XLS executor; it does not interpret DSLX to recover placement. Regenerate an old prepared stage before compiling it. The manifest checks consistency of trusted local build output, not authenticity or hardware equivalence.
 
-Board shells, physical constraints, drivers and deployment probes live under `platforms/xc7`; decoder applications and their external drivers live under `apps/hls_phi` and `apps/hls_snowflake`. Historical report paths are archive lookup keys, not current checkout paths. [CI coverage](../ci.md) separates routine backend witnesses from expensive complete-application measurements.
+Board shells, physical constraints, drivers and deployment probes live under `platforms/xc7`; decoder applications and their external drivers live under `workloads/hls_phi` and `workloads/hls_snowflake`. Historical report paths are archive lookup keys, not current checkout paths. [CI coverage](../ci.md) separates routine backend witnesses from expensive complete-application measurements.
 
 ## Maintenance boundary
 

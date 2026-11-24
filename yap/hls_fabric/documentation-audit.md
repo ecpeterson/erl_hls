@@ -21,23 +21,23 @@ Every existing `docs/**/*.md` and application Markdown guide is listed below. â€
 | [apps/hls_lowering/src/examples/counter/README.md](../../apps/hls_lowering/src/examples/counter/README.md) | Retained | Public source/scheduler configuration paths remain current. |
 | [apps/hls_lowering/src/planning/README.md](../../apps/hls_lowering/src/planning/README.md) | Retained | Planner responsibilities and runtime exclusions match current modules. |
 | [apps/hls_lowering/src/toolchain/README.md](../../apps/hls_lowering/src/toolchain/README.md) | Corrected | Distinguished the counter entry from decoder application packages. |
-| [apps/hls_phi/README.md](../../apps/hls_phi/README.md) | Retained | Optional example release, host entry points and deployment limits remain current. |
-| [apps/hls_phi/include/README.md](../../apps/hls_phi/include/README.md) | Retained | Application records and geometry-specific macros retain their stated ownership. |
-| [apps/hls_phi/priv/README.md](../../apps/hls_phi/priv/README.md) | Retained | Provider and shell assets are resolved from the example application. |
-| [apps/hls_phi/priv/rtl/README.md](../../apps/hls_phi/priv/rtl/README.md) | Retained | Application shells remain separate from shared support and board pins/clocks. |
-| [apps/hls_phi/src/README.md](../../apps/hls_phi/src/README.md) | Retained | Application source, topology and driver entry points remain current. |
-| [apps/hls_phi/src/phi_phenom_topology.md](../../apps/hls_phi/src/phi_phenom_topology.md) | Corrected | Corrected relative links after application relocation. |
-| [apps/hls_phi/test/README.md](../../apps/hls_phi/test/README.md) | Retained | Application-specific semantics and finite witness ownership remain current. |
-| [apps/hls_phi/test/rtl/README.md](../../apps/hls_phi/test/rtl/README.md) | Retained | Application benches are correctly separated from shipped support and platform probes. |
-| [apps/hls_phi/test/rtl/debug/README.md](../../apps/hls_phi/test/rtl/debug/README.md) | Retained | Public debug-wire witness scope and driver path remain current. |
-| [apps/hls_phi/tools/README.md](../../apps/hls_phi/tools/README.md) | Retained | Checkout-only measurement drivers and dedicated graph check remain current. |
-| [apps/hls_snowflake/README.md](../../apps/hls_snowflake/README.md) | Retained | Common source build, example-release closure, finite oracle and experimental alternatives remain current. |
-| [apps/hls_snowflake/include/README.md](../../apps/hls_snowflake/include/README.md) | Retained | Shared application actor records/macros remain correctly located. |
-| [apps/hls_snowflake/priv/README.md](../../apps/hls_snowflake/priv/README.md) | Retained | Installed application fixture ownership remains current. |
-| [apps/hls_snowflake/priv/fixtures/README.md](../../apps/hls_snowflake/priv/fixtures/README.md) | Retained | Named finite corpus ownership and provenance remain current. |
-| [apps/hls_snowflake/reference/README.md](../../apps/hls_snowflake/reference/README.md) | Corrected | Corrected the reference generator invocation after relocation. |
-| [apps/hls_snowflake/src/README.md](../../apps/hls_snowflake/src/README.md) | Retained | Ordinary actors, reference model and separate experiment tools remain correctly distinguished. |
-| [apps/hls_snowflake/test/README.md](../../apps/hls_snowflake/test/README.md) | Retained | Local semantic checks and the one small source-protocol integration remain correctly scoped. |
+| [workloads/hls_phi/README.md](../../workloads/hls_phi/README.md) | Retained | Optional example release, host entry points and deployment limits remain current. |
+| [workloads/hls_phi/include/README.md](../../workloads/hls_phi/include/README.md) | Retained | Application records and geometry-specific macros retain their stated ownership. |
+| [workloads/hls_phi/priv/README.md](../../workloads/hls_phi/priv/README.md) | Retained | Provider and shell assets are resolved from the example application. |
+| [workloads/hls_phi/priv/rtl/README.md](../../workloads/hls_phi/priv/rtl/README.md) | Retained | Application shells remain separate from shared support and board pins/clocks. |
+| [workloads/hls_phi/src/README.md](../../workloads/hls_phi/src/README.md) | Retained | Application source, topology and driver entry points remain current. |
+| [workloads/hls_phi/src/phi_phenom_topology.md](../../workloads/hls_phi/src/phi_phenom_topology.md) | Corrected | Corrected relative links after application relocation. |
+| [workloads/hls_phi/test/README.md](../../workloads/hls_phi/test/README.md) | Retained | Application-specific semantics and finite witness ownership remain current. |
+| [workloads/hls_phi/test/rtl/README.md](../../workloads/hls_phi/test/rtl/README.md) | Retained | Application benches are correctly separated from shipped support and platform probes. |
+| [workloads/hls_phi/test/rtl/debug/README.md](../../workloads/hls_phi/test/rtl/debug/README.md) | Retained | Public debug-wire witness scope and driver path remain current. |
+| [workloads/hls_phi/tools/README.md](../../workloads/hls_phi/tools/README.md) | Retained | Checkout-only measurement drivers and dedicated graph check remain current. |
+| [workloads/hls_snowflake/README.md](../../workloads/hls_snowflake/README.md) | Retained | Common source build, example-release closure, finite oracle and experimental alternatives remain current. |
+| [workloads/hls_snowflake/include/README.md](../../workloads/hls_snowflake/include/README.md) | Retained | Shared application actor records/macros remain correctly located. |
+| [workloads/hls_snowflake/priv/README.md](../../workloads/hls_snowflake/priv/README.md) | Retained | Installed application fixture ownership remains current. |
+| [workloads/hls_snowflake/priv/fixtures/README.md](../../workloads/hls_snowflake/priv/fixtures/README.md) | Retained | Named finite corpus ownership and provenance remain current. |
+| [workloads/hls_snowflake/reference/README.md](../../workloads/hls_snowflake/reference/README.md) | Corrected | Corrected the reference generator invocation after relocation. |
+| [workloads/hls_snowflake/src/README.md](../../workloads/hls_snowflake/src/README.md) | Retained | Ordinary actors, reference model and separate experiment tools remain correctly distinguished. |
+| [workloads/hls_snowflake/test/README.md](../../workloads/hls_snowflake/test/README.md) | Retained | Local semantic checks and the one small source-protocol integration remain correctly scoped. |
 | [docs/README.md](../../docs/hls_fabric/README.md) | Corrected | Added maintained Phi source-to-runtime navigation. |
 | [docs/actor-pids.md](../../docs/hls_fabric/actor-pids.md) | Corrected | Scoped the 96-bit bound to the scheduled-PID gateway; general actor layouts are configurable. |
 | [docs/admission-reductions.md](../../docs/hls_fabric/admission-reductions.md) | Retained | Admission credit/reduction contract and bounded evidence remain current. |

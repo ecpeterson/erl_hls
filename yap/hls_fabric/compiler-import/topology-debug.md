@@ -19,9 +19,9 @@ CI checks a mixed shared/direct scheduler and the complete D3 application. A sma
 ### Complete D3 phi-memory fixture
 
 ```sh
-python3 apps/hls_phi/tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
-python3 apps/hls_phi/tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
-python3 apps/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
+python3 workloads/hls_phi/tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
+python3 workloads/hls_phi/tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
+python3 workloads/hls_phi/tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
   --yosys "$YOSYS" --seeds 5 --jobs 1
 ```
 

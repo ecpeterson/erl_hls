@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit declared OTP edges and keep generic libraries independent of examples."""
+"""Audit declared OTP edges and keep generic libraries independent of workloads."""
 import argparse
 import json
 from pathlib import Path
@@ -12,8 +12,8 @@ from compiler_paths import compiler_root, compiler_tool
 GENERIC_APPLICATIONS = {
     'erl_hls', 'hls_core', 'hls_compile', 'hls_runtime', 'hls_target', 'hls_fabric', 'router'
 }
-EXAMPLE_APPLICATIONS = {'hls_phi', 'hls_snowflake'}
-DEFAULT_APPLICATIONS = GENERIC_APPLICATIONS | EXAMPLE_APPLICATIONS
+WORKLOAD_APPLICATIONS = {'hls_phi', 'hls_snowflake'}
+DEFAULT_APPLICATIONS = GENERIC_APPLICATIONS | WORKLOAD_APPLICATIONS
 PROFILE_APPLICATIONS = {
     'default': DEFAULT_APPLICATIONS,
     'spacetime': DEFAULT_APPLICATIONS | {'hls_spacetime', 'hls_spacetime_observer'},
@@ -21,7 +21,7 @@ PROFILE_APPLICATIONS = {
 
 
 def audit_profile(profile: str) -> tuple[dict, list[dict[str, str]]]:
-    """Inspect one built profile for missing apps, undeclared edges and reverse example edges."""
+    """Inspect one built profile for missing apps, undeclared edges and reverse workload edges."""
     expected = PROFILE_APPLICATIONS[profile]
     auditor = compiler_tool(compiler_root(profile), 'package_boundaries')
     paths = auditor.application_files(Path.cwd(), profile)
@@ -37,7 +37,7 @@ def audit_profile(profile: str) -> tuple[dict, list[dict[str, str]]]:
     errors = auditor.duplicate_module_ownership(snapshot)
     errors.extend(auditor.policy_violations(snapshot, expected, set(), None))
     errors.extend(auditor.violations(snapshot, GENERIC_APPLICATIONS & found,
-                                     EXAMPLE_APPLICATIONS, None))
+                                     WORKLOAD_APPLICATIONS, None))
     errors.extend(auditor.undeclared_application_dependencies(snapshot, expected))
     errors.extend(auditor.architecture_violations(snapshot))
     return snapshot, errors

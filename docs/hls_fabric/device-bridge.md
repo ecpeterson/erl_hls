@@ -67,7 +67,7 @@ Fault output codes are 1 for a wrong tag, 2 for an invalid lane, 3 for invalid p
 
 The [complete memory experiment](distributed-memory.md) also applies corrections and compares final measurements. The smaller replay fixture below isolates decoder/link behavior.
 
-The fixture uses the real `phi_halo_cell` and deterministic `phi_syndrome_replay_cell` actors from `apps/hls_phi`. Global PRNG seeds, coordinates, toroidal routes and initial records are unchanged by placement. The graph splits its Y dimension evenly between devices. It is a decoder-only experiment: replay sources replace data/syndrome acquisition, and correction/status frames leave through external ports.
+The fixture uses the real `phi_halo_cell` and deterministic `phi_syndrome_replay_cell` actors from `workloads/hls_phi`. Global PRNG seeds, coordinates, toroidal routes and initial records are unchanged by placement. The graph splits its Y dimension evenly between devices. It is a decoder-only experiment: replay sources replace data/syndrome acquisition, and correction/status frames leave through external ports.
 
 `shape` counts phi cells per selected plane, not physical qubits. A `[2,2]` grid with both X and Z planes gives four phi actors and four replay actors on each device, matching the intended two-board phi population. The larger single-plane cases exercise more neighbor relationships; none of these register-backed builds establish a Z-7030 capacity or timing result.
 
@@ -90,7 +90,7 @@ The smallest torus deliberately exercises aliased neighbor ports and two externa
 ```sh
 rebar3 eunit
 python3 tools/hls_fabric/test_credit_link.py "$XLS_ROOT" --stage _build/credit-link
-python3 apps/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-bridge --shape 2 2 --planes x z
+python3 workloads/hls_phi/tools/test_phi_bridge.py "$XLS_ROOT" --stage _build/phi-bridge --shape 2 2 --planes x z
 ```
 
 `XLS_ROOT` supplies the converter, optimizer, code generator and matching standard library. The runner records source/tool hashes, both independent compilation command sequences, generated artifacts, debug manifests and observations, and BEAM/RTL event logs. Instrumentation is checked for structural noninterference, and each generated device passes a combinational-loop check. `--reuse-build` verifies the original inputs and outputs before reusing a completed build for another host-side run; use a fresh stage for changed hardware inputs. This optional command is separate from the current CI integration selection; use the pinned RAM-safe XLS build for shared placement.

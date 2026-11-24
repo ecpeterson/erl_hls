@@ -6,15 +6,15 @@ The commands below build and emit source locally. XLS compilation is an explicit
 
 ## 1. Application source and logical topology
 
-The application lives in [hls_phi](../../../apps/hls_phi/README.md). Its three actor families are:
+The application lives in [hls_phi](../../../workloads/hls_phi/README.md). Its three actor families are:
 
 | Source | Role in the repetition experiment |
 | --- | --- |
-| [`phenom_line_data_cell`](../../../apps/hls_phi/src/phenom_line_data_cell.erl) | Maintains a data site's Pauli state and reproducible phenomenological noise; answers neighboring checks and final readout. |
-| [`phenom_line_syndrome_cell`](../../../apps/hls_phi/src/phenom_line_syndrome_cell.erl) | Collects the two neighboring data replies and supplies noisy syndrome measurements. |
-| [`phi_line_cell`](../../../apps/hls_phi/src/phi_line_cell.erl) | Exchanges local field values, performs the configured diffusion steps and reports corrections/status. |
+| [`phenom_line_data_cell`](../../../workloads/hls_phi/src/phenom_line_data_cell.erl) | Maintains a data site's Pauli state and reproducible phenomenological noise; answers neighboring checks and final readout. |
+| [`phenom_line_syndrome_cell`](../../../workloads/hls_phi/src/phenom_line_syndrome_cell.erl) | Collects the two neighboring data replies and supplies noisy syndrome measurements. |
+| [`phi_line_cell`](../../../workloads/hls_phi/src/phi_line_cell.erl) | Exchanges local field values, performs the configured diffusion steps and reports corrections/status. |
 
-The line wrappers include shared application bodies from `apps/hls_phi/include/`. [`phi_repetition_topology`](../../../apps/hls_phi/src/phi_repetition_topology.erl) declares the families, startup values and routes around the periodic line. It also defines how a decoder correction maps back to a data-site Pauli update. This is explicit application structure: the compiler does not run arbitrary `spawn` calls and infer a hardware graph from the resulting process tree.
+The line wrappers include shared application bodies from `workloads/hls_phi/include/`. [`phi_repetition_topology`](../../../workloads/hls_phi/src/phi_repetition_topology.erl) declares the families, startup values and routes around the periodic line. It also defines how a decoder correction maps back to a data-site Pauli update. This is explicit application structure: the compiler does not run arbitrary `spawn` calls and infer a hardware graph from the resulting process tree.
 
 The actor API describes typed state, callbacks and message records. Source preparation uses the application's include paths and preprocessing context. It reads Erlang source, not BEAM machine instructions; BEAM loading is used for trusted constructors, type providers and the ordinary host implementation. Hardware support is a checked subset of Erlang and the actor behaviors, not an implementation of the whole ERTS runtime. [Compiler actor semantics](../../actor-compilation.md) describe that boundary.
 
@@ -25,15 +25,15 @@ Noise is part of the actor graph. It is not an unrelated host-side stream that h
 From the umbrella checkout, with OTP 28 and rebar3 3.24.0:
 
 ```sh
-rebar3 release -n hls_examples
-_build/default/rel/hls_examples/bin/hls-repetition --help
-_build/default/rel/hls_examples/bin/hls-repetition \
+rebar3 release -n hls_workloads
+_build/default/rel/hls_workloads/bin/hls-repetition --help
+_build/default/rel/hls_workloads/bin/hls-repetition \
     --width 6 --split 3 --output _build/repetition-source
 ```
 
-Use a fresh output directory. The example release includes computation, communication and target applications plus both decoders and their source inputs. It runs neither synthesis tools nor a fabric node. The generic `hls` build release excludes the decoders; the `hls_runtime` release excludes all synthesis and target applications. See [build packaging](../building.md).
+Use a fresh output directory. The workload release includes computation, communication and target applications plus both decoders and their source inputs. It runs neither synthesis tools nor a fabric node. The generic `hls` build release excludes the decoders; the `hls_runtime` release excludes all synthesis and target applications. See [build packaging](../building.md).
 
-[`phi_protocol_cli`](../../../apps/hls_phi/src/phi_protocol_cli.erl) calls `phi_protocol_config:repetition(6, #{split => 3})`. That function returns `{deployment, Config}`. The frontend submits `#{backend => source_protocol, kind => deployment, configuration => Config}` to `hls_build:plan/1`, then writes the resulting plan. The backend is chosen by this build request; the logical actor definitions do not choose it.
+[`phi_protocol_cli`](../../../workloads/hls_phi/src/phi_protocol_cli.erl) calls `phi_protocol_config:repetition(6, #{split => 3})`. That function returns `{deployment, Config}`. The frontend submits `#{backend => source_protocol, kind => deployment, configuration => Config}` to `hls_build:plan/1`, then writes the resulting plan. The backend is chosen by this build request; the logical actor definitions do not choose it.
 
 The preset establishes these concrete choices:
 
@@ -45,7 +45,7 @@ The preset establishes these concrete choices:
 
 The example frontend supports widths 2–16. Its split form excludes mixed BEAM/native placement, process inspection and shared arithmetic. These are checked restrictions of this preset, not claims that all those combinations are implemented elsewhere. Other build requests can select ordinary `frame_payload_words`; fixed bridge envelopes still impose their own limits. [Frame capacity](../building.md#ordinary-frame-capacity) explains the distinction.
 
-For inspection without creating output, use the same configuration in an Erlang VM with the example release on its code path:
+For inspection without creating output, use the same configuration in an Erlang VM with the workload release on its code path:
 
 ```erlang
 {Kind, Config} = phi_protocol_config:repetition(6, #{split => 3}),
@@ -109,9 +109,9 @@ The bridge units each use one pipeline stage with input/output flops disabled, a
 With a compatible XLS installation containing its tools and DSLX standard library:
 
 ```sh
-_build/default/rel/hls_examples/bin/compile-source-build \
+_build/default/rel/hls_workloads/bin/compile-source-build \
     --dry-run /path/to/xls _build/repetition-source
-_build/default/rel/hls_examples/bin/compile-source-build \
+_build/default/rel/hls_workloads/bin/compile-source-build \
     /path/to/xls _build/repetition-source
 compiled=$(cd _build/repetition-source/compiled && pwd -P)
 ```
@@ -125,10 +125,10 @@ This is the end of the generic toolchain's hardware build boundary. To deploy ph
 For a complete local simulator setup, the optional integration driver supplies the RTL peers, brokers and retirement sequence:
 
 ```sh
-python3 apps/hls_phi/tools/test_protocol_deployment.py /path/to/xls /path/to/fresh-stage
+python3 workloads/hls_phi/tools/test_protocol_deployment.py /path/to/xls /path/to/fresh-stage
 ```
 
-It builds both roles and compares two fresh incarnations with the ordinary-BEAM reference in [`phi_protocol_repetition_fixture:oracle/2`](../../../apps/hls_phi/test/phi_protocol_repetition_fixture.erl), including independent stalls, correction feedback and readout. This is a larger explicit experiment outside routine CI; `--area` additionally requests a local synthesis screen. Neither mode establishes a live-board result. The attachment skeleton below is the production API used inside that setup.
+It builds both roles and compares two fresh incarnations with the ordinary-BEAM reference in [`phi_protocol_repetition_fixture:oracle/2`](../../../workloads/hls_phi/test/phi_protocol_repetition_fixture.erl), including independent stalls, correction feedback and readout. This is a larger explicit experiment outside routine CI; `--area` additionally requests a local synthesis screen. Neither mode establishes a live-board result. The attachment skeleton below is the production API used inside that setup.
 
 ## 5. Attach roles and run the host loop
 
@@ -170,7 +170,7 @@ Cross-role messages are encoded and forwarded by the host relay, preserving the 
 
 It returns the fence, source events, corrections and sorted readout. One timeout bounds setup through readout; a timeout or malformed event aborts rather than replaying a possibly partially delivered command. The helper currently accepts cutoff below 512. Running a different finite experiment longer is an application/test change, not evidence that the measured throughput estimate has already been sustained. This loop provides a finite behavioral witness, not a threshold, convergence or unbounded-progress proof.
 
-The quiet/empty application fence is not global transport quiescence. On completion, obtain each broker lease from `hls_fabric:info/1`, stop the stream with `hls_protocol_stream:stop/1`, then stop every broker with `hls_fabric:stop/1`. Close any simulator-side FIFO endpoints and call `hls_fabric:await_closed/2` for every lease before resetting/reusing the roles. [`phi_protocol_deployment_live`](../../../apps/hls_phi/test/phi_protocol_deployment_live.erl) shows the concrete simulation lifecycle. A participant or client failure retires the whole deployment; uncertain writes must not be replayed into it. A new activation needs coordinated reset and fresh sessions. Independent board restart and arbitrary live migration are not supported by this attachment contract.
+The quiet/empty application fence is not global transport quiescence. On completion, obtain each broker lease from `hls_fabric:info/1`, stop the stream with `hls_protocol_stream:stop/1`, then stop every broker with `hls_fabric:stop/1`. Close any simulator-side FIFO endpoints and call `hls_fabric:await_closed/2` for every lease before resetting/reusing the roles. [`phi_protocol_deployment_live`](../../../workloads/hls_phi/test/phi_protocol_deployment_live.erl) shows the concrete simulation lifecycle. A participant or client failure retires the whole deployment; uncertain writes must not be replayed into it. A new activation needs coordinated reset and fresh sessions. Independent board restart and arbitrary live migration are not supported by this attachment contract.
 
 ## 6. Inspection and ERTS-facing services
 
@@ -182,7 +182,7 @@ A fake ERTS node is optional. `hls_node` adapts supported device services to ext
 
 | Intended change | Owning layer |
 | --- | --- |
-| Decoder rule, noise model, logical routes or finite correction policy | `apps/hls_phi`: actor source, topology and host loop. |
+| Decoder rule, noise model, logical routes or finite correction policy | `workloads/hls_phi`: actor source, topology and host loop. |
 | Supported Erlang construct, typed record packing or callback lowering | `hls_compile`; runtime packing and transport contracts live in `hls_runtime`. |
 | Physical ownership, captures, scheduling, bridges or deployment composition | `apps/hls_target`; preserve checked source and wire contracts. |
 | Live command ownership, host relay, recovery or virtual-node behavior | `apps/hls_runtime/src/fabric/runtime/` and `apps/hls_runtime/src/fabric/wire/`, consuming retained descriptors. |

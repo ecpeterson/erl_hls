@@ -4,11 +4,12 @@ set -euo pipefail
 stage=${1:?usage: prepare_xls_sim.sh STAGE}
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-mkdir -p "$stage/erl_src" "$stage/test_src"
+mkdir -p "$stage"
+stage=$(cd "$stage" && pwd)
 cd "$project_root"
 
 rebar3 as test compile
-
+bash tools/stage_host_sources.sh "$stage"
 build_ebins=(
     "$project_root/_build/test/lib/hls_core/ebin"
     "$project_root/_build/test/lib/hls_runtime/ebin"
@@ -17,10 +18,6 @@ build_ebins=(
     "$project_root/_build/test/lib/hls_target/ebin"
     "$project_root/_build/test/lib/erl_hls/ebin"
 )
-erlc_paths=()
-for ebin in "${build_ebins[@]}"; do
-    erlc_paths+=(-pa "$ebin")
-done
 
 ERL_HLS_REGSVC_X="$stage/regsvc.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
@@ -111,26 +108,6 @@ cp "$project_root/apps/erl_hls/test/rtl/ordered_egress_topology_tb.sv" \
 cp "$project_root/apps/erl_hls/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
 cp "$project_root/apps/erl_hls/test/rtl/xls_sim_axis.h" "$stage/xls_sim_axis.h"
 cp "$project_root/apps/erl_hls/test/rtl/debug/hls_debug_server_tb.sv" "$stage/hls_debug_server_tb.sv"
-
-# `erlc -P` writes source listings after includes, macros, and parse transforms
-# have been expanded. This lets an older remote OTP compile its own compatible
-# BEAM files instead of loading BEAM files produced by the development host.
-for source in \
-    "$project_root"/apps/hls_runtime/src/api/*.erl \
-    "$project_root"/apps/hls_runtime/src/runtime/*.erl \
-    "$project_root/apps/erl_hls/src/examples/regsvc/regsvc.erl"
-do
-    erlc "${erlc_paths[@]}" \
-        -I "$project_root/apps/hls_compile/include" -P -o "$stage/erl_src" "$source"
-    module=$(basename "$source" .erl)
-    cp "$stage/erl_src/$module.P" "$stage/erl_src/$module.erl"
-done
-
-erlc "${erlc_paths[@]}" \
-    -P -o "$stage/test_src" "$project_root/apps/erl_hls/test/regsvc_cpu_tests.erl"
-cp "$stage/test_src/regsvc_cpu_tests.P" \
-    "$stage/test_src/regsvc_cpu_tests.erl"
-
 
 for helper in compile_xls.py; do
     cp "$project_root/tools/erl_hls_tools/$helper" "$stage/$helper"

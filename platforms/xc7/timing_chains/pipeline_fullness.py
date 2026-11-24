@@ -11,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT/'tools/hls_fabric'))
-sys.path.insert(0, str(ROOT / "apps/hls_phi/tools"))
+sys.path.insert(0, str(ROOT / "workloads/hls_phi/tools"))
 from backend_commands import logged_command
 from decoder_profile_witness import rtl_events, sequences
 
@@ -117,7 +117,7 @@ def run(args: argparse.Namespace) -> None:
     rtl = (compiled/'phi_decoder_profile.v').read_text()
     observed, bindings = instrument(rtl)
     (args.stage/'observed.v').write_text(observed)
-    tb = (ROOT/'apps/hls_phi/test/rtl/phi_decoder_profile_tb.sv').read_text()
+    tb = (ROOT/'workloads/hls_phi/test/rtl/phi_decoder_profile_tb.sv').read_text()
     for boundary in ('warmup', 'target'):
         old = f'{boundary}_cycle = cycle_count;'
         if tb.count(old) != 1:
@@ -139,7 +139,7 @@ def run(args: argparse.Namespace) -> None:
     end, = re.findall(r'FULLNESS_TARGET (\d+)',log)
     report = {'rtl_sha256': hashlib.sha256(rtl.encode()).hexdigest(),
               'observer_sha256': hashlib.sha256(observed.encode()).hexdigest(),
-              'support_sha256': {name: hashlib.sha256((ROOT / ('apps/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools/hls_fabric') / name).read_bytes()).hexdigest()
+              'support_sha256': {name: hashlib.sha256((ROOT / ('workloads/hls_phi/tools' if name == 'decoder_profile_witness.py' else 'tools/hls_fabric') / name).read_bytes()).hexdigest()
                                  for name in ('backend_commands.py', 'decoder_profile_witness.py')},
               'interval_ps': [int(start),int(end)],
               'schedulers': summarize(args.stage, bindings, int(start),int(end))}

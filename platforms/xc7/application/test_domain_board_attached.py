@@ -17,7 +17,7 @@ import time
 PLATFORM = Path(__file__).resolve().parents[1]
 ROOT = PLATFORM.parents[1]
 sys.path[:0] = [str(PLATFORM), str(ROOT / 'tools/hls_fabric'),
-                str(ROOT / 'apps/hls_phi/tools')]
+                str(ROOT / 'workloads/hls_phi/tools')]
 from application.domain_board import bundle, command
 from backend_commands import digest
 from backend_paths import erlang_paths
@@ -89,8 +89,8 @@ def build(args: argparse.Namespace) -> None:
         verilator = Path(shutil.which('verilator') or 'verilator').resolve(strict=True)
         for path in (source,header,verilator,PLATFORM / 'application/domain_board.py',
                      ROOT / 'tools/hls_fabric/backend_commands.py',
-                     ROOT / 'apps/hls_phi/tools/test_domain_repetition.py',
-                     ROOT / 'apps/hls_phi/tools/protocol_repetition_result.py'):
+                     ROOT / 'workloads/hls_phi/tools/test_domain_repetition.py',
+                     ROOT / 'workloads/hls_phi/tools/protocol_repetition_result.py'):
             inputs[str(path)] = digest(path)
         for index in (1,0):
             directory = args.stage / f'build-role{index}'; directory.mkdir()

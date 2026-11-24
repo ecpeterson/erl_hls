@@ -22,16 +22,22 @@ link_root_inputs() {
         [[ -e "$source" ]] || continue
         name=${source##*/}
         case "$name" in
-            .git|_build|_checkouts|apps|imports) continue ;;
+            .git|_build|_checkouts|apps|imports|workloads) continue ;;
         esac
         ln -s "$source" "$projection_root/$name"
     done
     mkdir -p "$projection_root/apps"
+    mkdir -p "$projection_root/workloads"
 }
 
 link_full_app() {
     local projection_root=$1 app=$2
     ln -s "$repo_root/apps/$app" "$projection_root/apps/$app"
+}
+
+link_full_workload() {
+    local projection_root=$1 app=$2
+    ln -s "$repo_root/workloads/$app" "$projection_root/workloads/$app"
 }
 
 link_production_app() {
@@ -71,8 +77,11 @@ run_fabric() (
     link_production_app "$projection_root" hls_core
     link_production_app "$projection_root" hls_compile
     link_production_app "$projection_root" hls_runtime
-    for app in hls_fabric router hls_target hls_phi hls_snowflake; do
+    for app in hls_fabric router hls_target; do
         link_full_app "$projection_root" "$app"
+    done
+    for app in hls_phi hls_snowflake; do
+        link_full_workload "$projection_root" "$app"
     done
     if [[ "$profile" == spacetime ]]; then
         link_production_app "$projection_root" hls_spacetime
