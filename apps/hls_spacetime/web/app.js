@@ -3705,10 +3705,18 @@ async function initialize() {
     const response = await fetch("data/index.json");
     if (!response.ok) return;
     const index = await response.json();
+    const query = new URLSearchParams(location.search);
     if (
       index.workload === "four-phi" &&
-      !new URLSearchParams(location.search).has("detail")
+      index.flow === 1 &&
+      query.get("detail") === "1"
     ) {
+      query.delete("detail");
+      query.set("view", "flow");
+      location.replace("workload.html?" + query + location.hash);
+      return;
+    }
+    if (index.workload === "four-phi" && !query.has("detail")) {
       location.replace("workload.html" + location.search + location.hash);
       return;
     }

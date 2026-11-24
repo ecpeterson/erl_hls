@@ -188,7 +188,8 @@ article {
   background: var(--v);
   margin-right: 8px;
 }
-#openxc7 h3:before {
+#openxc7 h3:before,
+#openxc7-flow h3:before {
   background: var(--o);
 }
 .stat {
@@ -345,4 +346,31 @@ button:disabled {
 }
 .cells div + div {
   border-top: 1px solid var(--line);
+}
+header nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+#flow-section canvas {
+  display: block;
+  width: 100%;
+  height: clamp(300px, 39vw, 445px);
+  touch-action: none;
+  cursor: grab;
+  background: #0e1922;
+  border: 1px solid #2f414f;
+}
+#flow-section canvas:active {
+  cursor: grabbing;
+}
+.flow-selection {
+  font: 12px/1.5 var(--mono);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+#flow-section details p {
+  max-width: 90ch;
+  margin-top: 6px;
 }

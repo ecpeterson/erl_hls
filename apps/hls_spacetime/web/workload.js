@@ -4,7 +4,8 @@ const byId = (id) => document.getElementById(id);
 const colors = { vivado: [255, 181, 109], openxc7: [99, 218, 203] };
 const backends = Object.keys(colors);
 const fmt = (n) => n.toLocaleString("en-US");
-let replay,
+let flow,
+  replay,
   logic,
   cycle,
   unit,
@@ -387,6 +388,8 @@ async function select(value) {
   const request = ++generation;
   cycle = Math.max(0, Math.min(replay.cycles - 1, Math.round(value) || 0));
   byId("cycle").value = byId("scrub").value = cycle;
+  const link = byId("other-view");
+  link.href = "workload.html?cycle=" + cycle + (flow ? "" : "&view=flow");
   const frames = replay.logical.frames.filter((f) => f.cycle === cycle);
   byId("current-frame").textContent = frames
     .map(
@@ -409,10 +412,13 @@ async function select(value) {
   raster();
   try {
     const bytes = await Promise.all(
-      backends.map((b) => windowMasks(b, cycle, byId("window").value)),
+      backends.map((b) =>
+        windowMasks(b, cycle, flow ? 1 : byId("window").value),
+      ),
     );
-    if (request === generation)
-      backends.forEach((b, i) => aggregate(b, bytes[i]));
+    if (request !== generation) return;
+    if (flow) flow.update(cycle, bytes, byId("flow-filter").value);
+    else backends.forEach((b, i) => aggregate(b, bytes[i]));
   } catch (e) {
     if (request === generation) fault(e);
   }
@@ -553,15 +559,36 @@ async function init() {
     }
     byId("play").textContent = timer ? "Pause" : "Play";
   };
-  const initial = new URLSearchParams(location.search).get("cycle");
+  const query = new URLSearchParams(location.search);
+  const inFlow = query.get("view") === "flow";
+  byId("other-view").hidden = !replay.flow;
+  byId("other-view").textContent = inFlow ? "2D placement" : "3D signal flow";
+  if (inFlow) {
+    if (replay.flow?.schema !== 1)
+      throw Error("This gallery has no four-Phi flow capture.");
+    byId("placement-section").hidden = true;
+    byId("flow-section").hidden = false;
+    for (const b of backends)
+      byId(b + "-flow").querySelector(".stat").textContent =
+        "Loading connections…";
+    const { createFlow } = await import("./workload-flow.js");
+    flow = await createFlow(replay, catalogs, asset);
+    byId("flow-filter").onchange = () => select(cycle);
+  }
+  const initial = query.get("cycle");
   unit = replay.logical.units.find((u) => u.label === "X reduction");
   await select(
-    initial === null ? replay.logical.frames[0].cycle : Number(initial),
+    initial === null
+      ? flow
+        ? 32
+        : replay.logical.frames[0].cycle
+      : Number(initial),
   );
   window.addEventListener("resize", () => {
     history();
     raster();
-    backends.forEach(drawMap);
+    if (flow) flow.resize();
+    else backends.forEach(drawMap);
   });
 }
 init().catch(fault);

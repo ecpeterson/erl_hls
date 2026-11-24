@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flow import arrivals, vivado
 from init_bits import configured
 from scopes import links
 
@@ -17,6 +18,27 @@ from capture import check_mapping_log
 
 class WorkloadTest(unittest.TestCase):
     """Run small witnesses independently of the archived decoder and device databases."""
+
+    def test_clock_to_pin_flow(self) -> None:
+        """Use the launch pin as time zero and propagate only connected scalar bus lanes."""
+        with tempfile.TemporaryDirectory() as directory:
+            sdf = Path(directory) / "flow.sdf"
+            sdf.write_text(
+                "(INSTANCE ff)\n(IOPATH C Q[1:0] (8:9:10) (8:9:20))\n"
+                "(INSTANCE lut)\n(IOPATH I0 O (9:10:30) (9:10:15))\n"
+                "(INSTANCE )\n"
+                "(INTERCONNECT clock_IBUF_BUFG_inst/O ff/C (900:900:900) (900:900:900))\n"
+                "(INTERCONNECT ff/Q[1] lut/I0 (40:50:80) (40:50:70))\n"
+                "(INTERCONNECT lut/O ff/D (20:30:40) (20:30:35))\n"
+            )
+            nets, local, counts = vivado(sdf, ["clock_IBUF_BUFG_inst", "ff", "lut"])
+            self.assertEqual(counts["timedConnections"], 2)
+            self.assertEqual(len(local), 2)
+            self.assertEqual(nets[0][:2], ((1, "Q[1]"), (2, "I0")))
+            self.assertAlmostEqual(nets[0][2], 0.02)
+            self.assertAlmostEqual(nets[1][3], 0.17)
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            arrivals([(1, 2, 1), (2, 1, 1)], {1: 0})
 
     def test_effective_map(self) -> None:
         """Reject a run whose executable opened a different installation's technology map."""

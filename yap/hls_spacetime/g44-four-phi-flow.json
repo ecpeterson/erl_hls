@@ -1,0 +1,59 @@
+{
+  "evidence": "simulation_witness",
+  "scope": "4,096 settled four-Phi samples per implementation, overlaid on static connections and structural arrivals",
+  "archiveDirectory": "runs/spacetime-g4-parity-2026-11-24/four-phi-flow",
+  "galleryInventorySha256": "07d015fd4bbad61f95d18c905b495a100137ae3662244039fad3dcf8656dae9e",
+  "checkpoints": {
+    "vivado": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+    "openxc7": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9"
+  },
+  "sdf": "3a360208ca9b32e89c943c66c2e4bb095fb9f22d1400b1ded903e7dbf66566b6",
+  "readableEdif": "d86d6d73d4f529bc73bb8540f4e7bec7a48d7997c817359ffe4e9f343d8fe1a7",
+  "rapidWright": "2026.1.2",
+  "vivado": {
+    "IOPATH": 227933,
+    "INTERCONNECT": 303093,
+    "dataConnections": 273350,
+    "timedConnections": 273349,
+    "localSpans": 255369,
+    "clockPins": 29743,
+    "pipBranches": 259525,
+    "unresolved": 9861,
+    "direct": 3963,
+    "pins": {
+      "file": "vivado-flow-pins.gz",
+      "sha256": "16de3da170f26ee729d61318cef649ba7792c0147e1c1aa1b0ac8d7f5452c9f9"
+    },
+    "edges": {
+      "file": "vivado-flow.gz",
+      "sha256": "2c9f2f1622bab45a2ba9e692a5959f683560c88ddf193d6442c74ee5dc401456"
+    },
+    "routes": {
+      "file": "vivado-switches.gz",
+      "sha256": "1e051d83340891c8a929e78814712bff352dbcd2dd8582aa05542156bd49d5d6"
+    }
+  },
+  "openxc7": {
+    "cellPairs": 234039,
+    "locatedDepthPairs": 234038,
+    "edges": {
+      "file": "openxc7-flow.gz",
+      "sha256": "0d2e94f1b67ae0900c1b0eb595612df626986086b989dc86af66f134e4e3a489"
+    }
+  },
+  "defaultSelection": {
+    "clock": 32,
+    "vivadoNetConnections": 4565,
+    "vivadoPrimitiveArcs": 22087,
+    "openxc7CellPairs": 2780
+  },
+  "browserWitness": "Both C32 canvases contain visible geometry across more than 300 CSS pixels of height at 1360 x 1050. Picking, orbiting, the activity filter, C0, C105, mobile layout, the original link, the 2D comparison and transaction navigation were exercised.",
+  "slowSetupReportCheck": {
+    "paths": 100,
+    "consecutiveInterconnectPinPairsIncludingRepeatedOccurrences": 2823,
+    "matched": 2823,
+    "medianAbsoluteNetIncrementDifferenceNs": 0.0004,
+    "maxAbsoluteNetIncrementDifferenceNs": 0.119501,
+    "comparison": "SDF maximum over rise/fall against the reported per-path net increment. Absolute differences use the displayed report increments."
+  }
+}

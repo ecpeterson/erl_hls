@@ -14,7 +14,10 @@
           <h1>Four-Phi decoder</h1>
           <p id="subtitle">Loading the paired implementation replay…</p>
         </div>
-        <a href="./?detail=1">Inspect the C32–C37 transaction ↗</a>
+        <nav aria-label="Replay views">
+          <a id="other-view" hidden></a>
+          <a href="./?detail=transaction">C32–C37 transaction ↗</a>
+        </nav>
       </header>
       <p role="alert" id="error" hidden></p>
       <section aria-label="Clock navigation" class="transport">
@@ -47,7 +50,81 @@
         />
         <div class="bounds"><span>C0 · reset</span><span id="end"></span></div>
       </section>
-      <section aria-label="Physical activity">
+      <section
+        id="flow-section"
+        hidden
+        aria-label="Three-dimensional signal flow"
+      >
+        <div class="section-head">
+          <h2>3D signal flow</h2>
+          <div class="filters">
+            <label
+              >Connections
+              <select id="flow-filter">
+                <option value="both">Both primitives changing</option>
+                <option value="source">Changing driver</option>
+              </select></label
+            >
+            <button id="flow-fit">Reset camera</button>
+          </div>
+        </div>
+        <div class="maps">
+          <article id="vivado-flow">
+            <div class="map-head">
+              <h3>Vivado</h3>
+              <span>Routed · delay in ns</span>
+            </div>
+            <p class="stat" aria-live="polite"></p>
+            <canvas
+              tabindex="0"
+              aria-label="Vivado routed 3D signal flow"
+            ></canvas>
+            <p class="flow-selection"></p>
+          </article>
+          <article id="openxc7-flow">
+            <div class="map-head">
+              <h3>openXC7</h3>
+              <span>Placed · logic depth</span>
+            </div>
+            <p class="stat" aria-live="polite"></p>
+            <canvas
+              tabindex="0"
+              aria-label="openXC7 placed 3D signal flow"
+            ></canvas>
+            <p class="flow-selection"></p>
+          </article>
+        </div>
+        <p class="caption">
+          Lines show static connections between primitives selected by the
+          clock’s activity. Drag to orbit both views. Scroll to zoom. Select a
+          line to inspect its endpoints. With keyboard focus, use the arrow keys
+          to orbit and + or − to zoom.
+        </p>
+        <details>
+          <summary>How to read the geometry</summary>
+          <p>
+            The floor shows placement and highlights tiles with a known
+            primitive output change at the selected clock. Lines show structural
+            connections selected by that activity. A changed primitive can have
+            several output bits. The replay samples after settling and cannot
+            establish which pin toggled first or which path carried a
+            transition.
+          </p>
+          <p>
+            Vivado height accumulates maximum SDF delays from a launch clock
+            pin. Solid net lines pass through the recovered switch tiles, with
+            height interpolated between the two timed pins. Dashed lines join
+            endpoints where the checkpoint branch could not be resolved.
+            Vertical strokes show individual primitive timing arcs.
+          </p>
+          <p>
+            openXC7 lines connect placed endpoints. Height counts combinational
+            cell levels from a register or memory boundary. This implementation
+            has no completed route or measured within-clock delays.
+          </p>
+        </details>
+      </section>
+      <section id="placement-section" aria-label="Physical activity">
         <div class="section-head">
           <h2>Placed primitive activity</h2>
           <div class="filters">
@@ -149,8 +226,7 @@
       </section>
       <footer>
         Simulation witness · Mapped outputs are sampled after settling, once per
-        clock. Within-clock glitches and propagation delays are outside this
-        view.
+        clock. The activity masks record known output changes between samples.
       </footer>
     </main>
     <script type="module" src="workload.js"></script>

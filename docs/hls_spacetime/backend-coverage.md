@@ -102,7 +102,7 @@ Both memories use READ_FIRST with their optional output register bypassed. All i
 
 The paired gallery opens on the first accepted public frames at C105. Scrub from C0 to C4095 or jump to a frame. **Window** selects one clock, a short history, or the union over the entire replay. Both maps count distinct primitives with a known change between successive settled output samples. Click a tile for measured instance names and types. Zoom both maps around that tile to inspect its neighbors. Unknown comparisons have a separate count and can coexist with a known change on another output. C0 initializes the observer.
 
-The source timeline covers 21 generated processes, 42 FIFOs, eight scheduler RAMs and the X/Z output interface. It records 238 handshakes, enables and public probes before the active edge, plus addresses and accepted 128-bit frames. An interface can appear at both ends of a transfer. **Only selected instance** uses retained synthesis hierarchy, unambiguous named output nets and checked public capture registers. Shared or unnamed logic remains in the whole-design view. The physical maps are functional simulations of each technology netlist on its own placement. The openXC7 checkpoint ends at placement. Within-clock propagation and wire delays need a separate timing witness.
+The source timeline covers 21 generated processes, 42 FIFOs, eight scheduler RAMs and the X/Z output interface. It records 238 handshakes, enables and public probes before the active edge, plus addresses and accepted 128-bit frames. An interface can appear at both ends of a transfer. **Only selected instance** uses retained synthesis hierarchy, unambiguous named output nets and checked public capture registers. Shared or unnamed logic remains in the whole-design view. The physical maps are functional simulations of each technology netlist on its own placement. The openXC7 checkpoint ends at placement. The 3D view below adds Vivado static timing to the sampled activity.
 
 The opening comparison covers 70,418 Vivado primitives and 65,381 openXC7 primitives. Each simulated primitive has a location on its own implementation. Over the full replay 19,800 Vivado primitives and 18,545 openXC7 primitives changed output. At C32 alone the counts were 2,702 and 2,252. Source RTL accepted 86 X and 86 Z status frames between C105 and C4017, with steps 0 through 42 for both coordinates on each plane. This input emitted zero correction frames. The public activity pin, initialized capture register lanes and six handshake-related register lanes per backend are checked at each edge. The design retains 99 physical payload lanes per plane in Vivado and 103 logical payload lanes backed by 102 distinct registers per plane in Yosys. The corrected C32 drill-down follows ten placed cells from `RAMB18_X2Y32/DOADO11` to `DSP48_X2Y56/A7`.
 
@@ -122,6 +122,22 @@ python3 "$workload/sdp72.py" "$YOSYS" "$UNISIM/verilog/src" "$LANE_PROBE"
 python3 "$workload/measure.py" "$RUN" "$WORK" "$UNISIM/verilog/src" "$RAPIDWRIGHT_JAR" "$GUARD" "$YOSYS"
 python3 "$workload/pack.py" "$RUN" "$WORK" "$CHIPDB" "$GALLERY" "$PAIRED"
 npm --prefix apps/hls_spacetime start -- --data "$PAIRED"
+```
+
+### Within-clock signal flow
+
+Choose **3D signal flow** in the paired gallery. Opening `workload.html?view=flow&cycle=32` selects a busy clock. Drag either scene to orbit both, scroll to zoom and click a line for its endpoints. **Both primitives changing** selects connections between cells with known output changes at that clock. **Changing driver** also includes fanout to cells whose outputs stayed stable. The simulation observes settled primitive outputs. Pin-specific transitions, glitches and actual subcycle event times are unobserved.
+
+Vivado height uses maximum SDF arc delays, accumulated from a local launch clock pin through each reachable input and output. Bus-wide arcs expand over connected lanes. A net rises by its own interconnect delay. Switch-tile heights interpolate that delay along the retained directed branch. Of 273,350 non-launch-clock connections, 273,349 have a clock-launched arrival. Of those, 259,525 resolve through used PIPs, 3,963 have a direct connection and 9,861 retain dashed endpoint spans. All 2,823 consecutive net pin pairs across the 100 saved slow setup paths appear in the gallery, including repeated occurrences. Cell arcs use their individual delays. These structural arrival envelopes omit clock skew, timing exceptions and input sensitization.
+
+openXC7 shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. The route and delay of the full native implementation remain open under G4.4b. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
+
+Serve `runs/spacetime-g4-parity-2026-11-24/four-phi-flow/gallery` from the artifact archive to use both the flow and placement views. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
+
+```sh
+python3 "$workload/flow.py" --gallery "$PAIRED" --run "$RUN" --archive "$REFERENCE_ARCHIVE" \
+  --edif "$WORK/vendor.edf" --java "$JAVA" --jar "$RAPIDWRIGHT_JAR" --chipdb "$CHIPDB" --output "$FLOW"
+npm --prefix apps/hls_spacetime start -- --data "$FLOW"
 ```
 
 ## Remaining work
