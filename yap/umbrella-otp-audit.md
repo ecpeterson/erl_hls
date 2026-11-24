@@ -1,6 +1,6 @@
-# Umbrella OTP Stages 0–2 audit
+# Umbrella OTP Stages 0–3 audit
 
-Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` completed the application-seam preflight, and `6b1246c` completes Stage 2 by extracting a process-free `hls_core` and making its semantic model authoritative across the umbrella. The current optional-profile tree has 394 production modules across ten applications. The [source inventory](umbrella-otp-inventory.md) remains the historical record of the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
+Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` completed the application-seam preflight, and `6b1246c` completed Stage 2 by extracting a process-free `hls_core` and making its semantic model authoritative across the umbrella. Commit `8bdbfb0` completes the Stage 3 ownership redraw. The final default tree has 382 production modules across nine applications; the optional profile has 400 across eleven. The [source inventory](umbrella-otp-inventory.md) remains the historical record of the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
 
 ## Import selection
 
@@ -194,13 +194,58 @@ The final qualification used OTP 28.0.2 and Rebar3 3.24.0.
 
 No native XLS, RTL, Vivado, EC2 or board run is required for this extraction because it changes no generated actor or wire semantics. That is a scoped architectural result, not native or physical equivalence evidence. The excluded experiment history and private external-consumer material remain outside the umbrella. No Stage 3 application extraction or ownership move is included.
 
+## Stage 3 synthesis and optimization boundaries
+
+Commit `8bdbfb0` redraws ownership around the seven-application architectural spine while retaining the four product, observer and router applications in the optional eleven-application profile:
+
+- `hls_compile` owns computation synthesis: source analysis, compiler interfaces, XLS lowering and emission, logical topology construction, compiler headers and compiler DSLX support.
+- `hls_fabric` owns process-free communication planning, protocol projections, logical routing renderers and Fabric DSLX/RTL. Live nodes, wires, sessions and transport processes moved to `hls_runtime`; that move is required for Fabric to be a synthesis library rather than a second runtime.
+- `hls_target` replaces `hls_lowering` and owns target materialization, partition and scheduler implementation, physical/SDF characterization readers, RTL support and external tool adapters.
+- `hls_spacetime` owns pure partition, schedule and plan revision over core implementation contracts and supplied characterization. It does not start target or runtime services.
+- `hls_core` adds authoritative implementation-plan and characterization values. `erl_hls` retains supported façade, configuration and orchestration entry points rather than compiler internals.
+
+Edges below omit stock OTP applications. The synthesis path is acyclic, and no core, compile, Fabric or target module depends on the optimizer or façade.
+
+| Application | Project dependencies after Stage 3 |
+| --- | --- |
+| hls_core | — |
+| hls_runtime | hls_core |
+| hls_compile | hls_core, hls_runtime |
+| hls_fabric | hls_core, hls_runtime, hls_compile |
+| hls_target | hls_core, hls_runtime, hls_compile, hls_fabric |
+| hls_spacetime | hls_core, hls_target |
+| erl_hls | hls_core, hls_runtime, hls_compile, hls_fabric, hls_target |
+| hls_phi, hls_snowflake | hls_core, hls_runtime, hls_compile, erl_hls, hls_fabric, hls_target |
+| hls_spacetime_observer | hls_core, hls_runtime, hls_compile, erl_hls, hls_fabric, hls_target, hls_spacetime |
+| router | — |
+
+Fresh projections separately exercise computation synthesis, communication synthesis and physical target materialization, then exercise the optimizer with only its declared closure. The package auditor rejects duplicate module ownership as well as undeclared, reverse and forbidden edges, so a stale build cannot conceal an ownership error. Application-relative resource resolution now selects compiler, Fabric and target assets independently while preserving a deliberate flat-checkout fallback for standalone tools.
+
+Generated bundles now identify compiler resources under `support/compiler` and target-owned protocol, debug and physical resources under `support/target`; Fabric-owned routing resources remain under `support/fabric`. Stale generated bundles must rebuild. This is a packaging and resource-identity change, not a claim that native XLS or RTL output is byte-identical.
+
+The final qualification used OTP 28.0.2 and Rebar3 3.24.0.
+
+| Check | Stage 3 result |
+| --- | --- |
+| Fresh compile and EUnit | Default and optional compiles pass. Listener-capable fresh projections pass: compiler 1,290/0; default Fabric 1,417/0; Fabric `spacetime` 1,495/0; standalone spacetime 136/0. |
+| Independent boundaries | Computation synthesis 1/0, communication synthesis 1/0, physical target 1/0 and standalone optimizer 136/0; 139/0 total. |
+| Dialyzer | Default passes over 382 project modules; `spacetime` passes over 400. |
+| Source contracts | 33 checker tests pass. The changed-file comparison covers 1,099 files, reports 3,198 inherited gaps and zero new or changed gaps. Strict checks cover 15 new core, compiler, boundary and optimizer files with zero gaps. |
+| Package boundaries | Ten package-checker tests pass. Combined default and optional snapshots inspect 782 modules with zero violations; core plus runtime contain 107 modules with zero violations, including the assembled runtime release. |
+| Artifact assembly | All four named releases pass and expose executable launchers with the retained missing-SASL warning. The spacetime escript builds and exposes `validate`, `import`, `join` and `sdf-arcs`. |
+| Resource/tool paths | Backend-context tests pass 18/18, local-actor tools 5/5, regression tools 14/14, XC7 packaging mocks 7/7 and relocated source-toolchain tests 3/3. Fresh simulation staging succeeds and copies 62 collision-free support libraries. |
+| Native-format front ends | JavaScript passes 574/574; route hashing passes 14/14; the C++ trace transport passes its round trip and 12 rejecting cases; the route exporter and 19-case graph-exporter Tcl fixtures pass. |
+| Formatting and hygiene | Root formatting, Python and shell syntax, stale-path scans, confidentiality/exclusion scans and committed-diff whitespace checks pass. The historical inventory is unchanged. |
+
+These are software, packaging and synthetic native-interface witnesses. No native XLS/Yosys/Vivado, routed checkpoint, board or EC2 run was needed or performed. They establish the new authorities and the behavior of the maintained boundaries, not native synthesis, physical timing or board equivalence. The excluded history and private external-consumer material remain outside the umbrella.
+
 ## Deferred qualification
 
-Stages 0–2 establish the import contract, green mechanical umbrella and canonical shared semantic model. They do not establish the target Stage 3 application architecture or qualify native and physical behavior beyond the unchanged software witnesses above.
+Stages 0–3 establish the import contract, green mechanical umbrella, canonical shared semantic model and acyclic synthesis/optimization architecture. They do not establish the Stage 4 deployment/consumption separation or qualify native and physical behavior beyond the bounded witnesses above.
 
 - Native XLS/Yosys compilation, source-map integration and extended RTL simulation against the combined umbrella still need their external tool environment.
 - Vivado, physical timing and board qualification wait for a changed hardware boundary and the appropriate remote or board environment.
 - The optional spacetime RAM witness still needs its explicit testbench and primitive environment.
 - The external same-revision runtime-only consumer, separate compile-time consumer and assembled-release asset witnesses remain Stage 4 work.
 
-Stage 3 is next: redraw computation, communication and physical-synthesis boundaries without hiding cycles behind pass-through adapters. Stage 4 then qualifies separated compilation and execution with external consumers, and Stage 5 adds the measured `plan → implement → characterize → revise` loop so physical feedback can optimize computation and communication together. No Stage 3 work has begun.
+Stage 4 is next: define and validate the deployment artifact, reduce the façade and qualify separated compilation and execution with external consumers. Stage 5 then adds the measured `plan → implement → characterize → revise` loop so physical feedback can optimize computation and communication together.
