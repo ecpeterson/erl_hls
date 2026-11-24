@@ -1,6 +1,6 @@
-# Umbrella OTP Stages 0–1 audit and Stage 2 preflight
+# Umbrella OTP Stages 0–2 audit
 
-Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` subsequently completed an application-seam preflight for Stage 2: it reconciled direct dependencies, provider declarations, tools and resource paths on the current graph without deciding the target application architecture. Canonical semantic-model extraction remains open. The [source inventory](umbrella-otp-inventory.md) preserves the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
+Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` completed the application-seam preflight, and `6b1246c` completes Stage 2 by extracting a process-free `hls_core` and making its semantic model authoritative across the umbrella. The current optional-profile tree has 394 production modules across ten applications. The [source inventory](umbrella-otp-inventory.md) remains the historical record of the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
 
 ## Import selection
 
@@ -22,7 +22,7 @@ Current `origin/main` tips were fetched before selection.
 
 The selected trees contain 390 literal production-module identities and no duplicate module names or gitlinks. Relative to the retained 330-module audit, 64 identities were added and four were removed. The inventory records the exact delta. The selected Fabric revision pins compiler/runtime revision `ef0b280728671e49c79b5cecc13150f92754a41a` and optional spacetime revision `c2b0c328d095fa8410231a9120c1298393ae2e31`; standalone baseline tests therefore still exercise those declared revisions rather than the selected import tips.
 
-## Application graph and ownership
+## Stage 1 application graph and ownership
 
 Edges omit stock OTP applications.
 
@@ -145,7 +145,7 @@ Neither correction enlarges a configured release closure because `hls_lowering` 
 
 Provider review found that `phi_field` and `hls_pauli` already implement both host-runtime and compiler-provider callbacks but declared only `hls_type`; both now also declare `xls_type`. All other production compiler providers already declared that behavior. Existing focused tests exercise both provider dispatch paths.
 
-The preflight records the current authorities for runtime values, live protocols, deployment planning, compiler APIs, observer translation, routing and offline evidence. It did not test or reject semantic consolidation. Static dependency closure cannot determine whether shared models belong in `hls_core`, compiler machinery should move to `hls_compile`, physical adapters should move to `hls_target`, or existing application identities should be narrowed or retired. Those remain Stage 2–3 architectural work.
+The preflight records the current authorities for runtime values, live protocols, deployment planning, compiler APIs, observer translation, routing and offline evidence. It did not test or reject semantic consolidation. Static dependency closure could not determine whether shared models belonged in `hls_core`, compiler machinery should move to `hls_compile`, physical adapters should move to `hls_target`, or existing application identities should be narrowed or retired. The shared-model decision is resolved below; the ownership redraw remains Stage 3 work.
 
 Computed resource and tool/configuration review requires no immediate repair on the current graph. This validates the relocated packaging baseline only; later architectural stages may move toolchain adapters and their resources while preserving application-relative lookup. Production resources resolve through the owning application's `code:priv_dir/1`; the observer's variable application paths are exactly the newly declared owners plus its existing lowering, observer and spacetime dependencies. Production sources contain no repository-relative `apps/`, `tools/`, `_build/` or checkout-parent resource path. Root release overlays remain distinct, installed launchers self-locate, compiler-tool wrappers retain one implementation authority, and profile selection never falls back to another build. Focused backend isolation passes 16/16, relocated Fabric toolchain tests pass 3/3 and relocated compiler toolchain tests pass 5/5.
 
@@ -153,13 +153,54 @@ The software CI tier now compiles the `spacetime` profile before running one com
 
 No seam-preflight check needs hardware, EC2 or another environment. This does not discharge the semantic, physical or external-consumer exit criteria of the restored campaign.
 
+## Stage 2 common semantic model
+
+Commit `6b1246c` adds the process-free `hls_core` application and completes the Stage 2 extraction without beginning the Stage 3 ownership redraw. The default profile now contains 375 production modules across eight applications; the optional `spacetime` profile contains 394 across ten. `hls_core` contains 30 production modules: 21 previously shared API, identity, codec and diagnostic modules, plus nine model authorities. The existing application boundaries and distinct computation, execution, communication, optimization and physical-implementation representations remain intact.
+
+Edges below omit stock OTP applications. They describe the post-Stage 2 executable graph, not the tentative Stage 3 target architecture.
+
+| Application | Project dependencies after Stage 2 |
+| --- | --- |
+| hls_core | — |
+| hls_runtime | hls_core |
+| erl_hls | hls_core, hls_runtime |
+| hls_fabric | hls_core, hls_runtime |
+| hls_lowering | hls_core, erl_hls, hls_runtime, hls_fabric |
+| hls_phi | hls_core, hls_runtime, erl_hls, hls_fabric, hls_lowering |
+| hls_snowflake | hls_core, hls_runtime, erl_hls, hls_fabric, hls_lowering |
+| hls_spacetime | hls_core |
+| hls_spacetime_observer | hls_core, hls_runtime, erl_hls, hls_lowering, hls_spacetime |
+| router | — |
+
+`hls_logical_identity`, `hls_process_interface` and `hls_logical_topology` are the shared authorities for logical actor identity, typed communication requirements and topology. The topology model supports compact families and bounded materialization of arbitrary ranks, including the maintained two-dimensional rectangle ingress form. Exact instances retain their family identity and provenance. The compiler's richer interface catalog now projects to this core representation and validates exact agreement instead of maintaining a parallel protocol topology.
+
+The extraction also establishes shared implementation constraints and flag rendering, a host-codec and protocol-application contract, and exact source/RTL/observation provenance through `hls_observation_build`. Compiler backends, partitioning, Phi CPU execution, observations and debug catalogs consume the core catalog. Duplicate backend, partition, Phi and debug expansions and the former protocol-topology authority are removed. Runtime messages, device protocols, persisted artifacts and checked caches remain genuine boundaries rather than being collapsed into in-memory calls.
+
+Partition plans now retain the authoritative process-interface catalog through device-local, scheduling and tiled derived plans. This changes deterministic partition-term fingerprints and associated metadata; stale generated partition artifacts must be rebuilt. Actor identities, encoded messages and emitted RTL are unchanged by that metadata retention. The internal `hls_partition_schedule:topology/1` helper consequently accepts the partition or local-plan map rather than a bare actor list; every in-tree caller is updated.
+
+The [system model](../docs/system-model.md) distinguishes four layers: logical system, proposed implementation plan, realized implementation and measured characterization. This prevents planned placement or scheduling from being mistaken for realized hardware, and prevents either from being mistaken for measurement. Stage 5 can therefore feed measured timing and resource evidence back into a later plan without making that feedback part of the Stage 2 model.
+
+The final qualification used OTP 28.0.2 and Rebar3 3.24.0.
+
+| Check | Stage 2 result |
+| --- | --- |
+| Fresh compile and EUnit | Listener-capable fresh projections pass: compiler 1,307/0; default Fabric 1,394/0; Fabric `spacetime` 1,472/0; standalone spacetime 156/0. The distribution cases that fail with `nodistribution` in the restricted sandbox pass with loopback listener access. |
+| Dialyzer | Default passes over 375 project files; `spacetime` passes over 394. |
+| Source contracts | 33 checker tests pass. The changed-file comparison covers 1,087 files, reports 3,352 inherited gaps and zero new or changed gaps. Strict checks pass for the 12 new core model/test files and the changed actor-identity declaration. The unchanged API/support declarations moved into `hls_core` retain 157 previously recorded strict gaps, so the application is not claimed wholly documented. |
+| Package boundaries | Eight package-checker tests pass. Core plus runtime contain 58 modules with zero violations; the assembled runtime release contains 105 with zero violations; combined default and optional-profile application snapshots inspect 769 project modules with zero violations. |
+| Artifact assembly | All four named releases pass with the retained SASL-upgrade warning. The spacetime escript builds and its `validate`, `import`, `join` and `sdf-arcs` help contract runs. |
+| Relocated toolchains | Compiler release tests pass 5/5 and Fabric build/examples release tests pass 3/3 with their maintained mock external tools. |
+| Formatting and hygiene | Root formatting and both source/package checker suites pass; the committed diff passes whitespace validation. |
+
+No native XLS, RTL, Vivado, EC2 or board run is required for this extraction because it changes no generated actor or wire semantics. That is a scoped architectural result, not native or physical equivalence evidence. The excluded experiment history and private external-consumer material remain outside the umbrella. No Stage 3 application extraction or ownership move is included.
+
 ## Deferred qualification
 
-Stages 0–1 establish the import contract and green mechanical umbrella; `f92f8b0` establishes honest manifests and enforceable current edges. They do not establish a canonical shared semantic model or the target application architecture.
+Stages 0–2 establish the import contract, green mechanical umbrella and canonical shared semantic model. They do not establish the target Stage 3 application architecture or qualify native and physical behavior beyond the unchanged software witnesses above.
 
 - Native XLS/Yosys compilation, source-map integration and extended RTL simulation against the combined umbrella still need their external tool environment.
 - Vivado, physical timing and board qualification wait for a changed hardware boundary and the appropriate remote or board environment.
 - The optional spacetime RAM witness still needs its explicit testbench and primitive environment.
 - The external same-revision runtime-only consumer, separate compile-time consumer and assembled-release asset witnesses remain Stage 4 work.
 
-Stage 2 remains open: extract the canonical semantic model and remove obsolete internal conversions. Stage 3 will then redraw computation, communication and physical-synthesis boundaries. The current static dependency closure is not evidence that substantial reorganization is unnecessary.
+Stage 3 is next: redraw computation, communication and physical-synthesis boundaries without hiding cycles behind pass-through adapters. Stage 4 then qualifies separated compilation and execution with external consumers, and Stage 5 adds the measured `plan → implement → characterize → revise` loop so physical feedback can optimize computation and communication together. No Stage 3 work has begun.
