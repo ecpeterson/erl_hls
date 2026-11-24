@@ -1,0 +1,304 @@
+{
+  "evidence": "Bounded functional simulation and exact placement join using the archived 50 MHz four-Phi harness. RTL pre-edge transactions and four-state mapped output comparisons after settling.",
+  "cycles": 4096,
+  "part": "xc7z030sbg485-1",
+  "clockPeriodNs": 20,
+  "seed": 1,
+  "pins": {
+    "clock": "Y14",
+    "activity": "V13"
+  },
+  "sourceArchive": "e465bba8b1effdf82450ec5147ccfeab43de85c6af7d5c83ef5f318c4a5f6bc3",
+  "matchedCapture": "876282f0c38a4e9711d7688ebc97e52fcd840b87908c88e2d612f8ee5ddbd78d",
+  "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+  "rtl": {
+    "units": {
+      "Process": 21,
+      "FIFO": 42,
+      "RAM": 8,
+      "Output": 1
+    },
+    "probes": 238,
+    "ramAccesses": 6378,
+    "acceptedFrames": 172,
+    "byPlane": {
+      "X": 86,
+      "Z": 86
+    },
+    "byKind": {
+      "Status": 172
+    },
+    "firstFrame": 105,
+    "lastFrame": 4017,
+    "steps": [
+      0,
+      42
+    ],
+    "raw": "b46cb779a15c8c6ea06162b5c7bfeba1e72c0f5081aa89bc904a999a9472f5ef"
+  },
+  "physical": {
+    "vivado": {
+      "checkpoint": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+      "functionalCells": 70418,
+      "located": 70418,
+      "unplaced": {},
+      "placementOnly": {
+        "<LOCKED>": 1,
+        "<PORT>": 2
+      },
+      "functionalTypes": {
+        "BUFG": 2,
+        "CARRY4": 1111,
+        "DSP48E1": 40,
+        "FDRE": 29658,
+        "IBUF": 1,
+        "LUT1": 615,
+        "LUT2": 4953,
+        "LUT3": 6845,
+        "LUT4": 6573,
+        "LUT5": 6662,
+        "LUT6": 13900,
+        "MUXF7": 22,
+        "OBUF": 1,
+        "RAMB18E1": 4,
+        "RAMB36E1": 28,
+        "SRL16E": 2,
+        "SRLC32E": 1
+      },
+      "withSourceInstance": 68304,
+      "everKnownChange": 19800,
+      "peakChanging": 6191,
+      "peakCycle": 3224,
+      "atC32": 2702,
+      "atC105": 467,
+      "checkedPayloadLanesPerPlane": [
+        99,
+        99
+      ],
+      "distinctPayloadRegistersPerPlane": [
+        99,
+        99
+      ],
+      "validAndSinkReadyRegisterLanes": 6,
+      "cellsTSV": "c576ca74a9437e9b0774dab759b8e37bfe502e529fdd4389ced51d29e3ca4096",
+      "initialQ": "5d515d89d9345565910508969ce161294bb9700649d59c75b42f31b54edc1485",
+      "transitions": "cd42bbe24c0ae6304ebe54d714b19adced8f1c410fd3a5f04c46adfcdb9c47b9"
+    },
+    "openxc7": {
+      "checkpoint": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+      "functionalCells": 65381,
+      "located": 65381,
+      "unplaced": {},
+      "placementOnly": {
+        "LUT1": 4678,
+        "PAD": 2,
+        "PSEUDO_GND": 1,
+        "PSEUDO_VCC": 1
+      },
+      "functionalTypes": {
+        "BUFG": 1,
+        "CARRY4": 902,
+        "DSP48E1": 48,
+        "FDRE": 29864,
+        "IBUF": 1,
+        "INV": 588,
+        "LUT2": 5282,
+        "LUT3": 5502,
+        "LUT4": 6980,
+        "LUT5": 7949,
+        "LUT6": 8197,
+        "MUXF7": 8,
+        "MUXF8": 3,
+        "OBUF": 1,
+        "RAMB18E1": 44,
+        "RAMB36E1": 8,
+        "SRL16E": 2,
+        "SRLC32E": 1
+      },
+      "withSourceInstance": 33617,
+      "everKnownChange": 18545,
+      "peakChanging": 5367,
+      "peakCycle": 3831,
+      "atC32": 2252,
+      "atC105": 466,
+      "checkedPayloadLanesPerPlane": [
+        103,
+        103
+      ],
+      "distinctPayloadRegistersPerPlane": [
+        102,
+        102
+      ],
+      "validAndSinkReadyRegisterLanes": 6,
+      "cellsTSV": "832b3ad071d8892ea201e2a0ae4893e87e75979aa57a3d71364bc75c2c35f3d0",
+      "initialQ": "b8f1e8f929a1aa9e145a96c4c97550f02760eb901e267992670f7cfa2a28bbe6",
+      "transitions": "1acb175905120a4b574bf579b19d303e8e0c19c7f5593edc2e2e2c8ff65784d9"
+    }
+  },
+  "scope": "The source run emits status frames. The paired maps expose sampled changes, including LUT, carry, FF, RAM and DSP activity. Packer-only implementation helpers contribute to occupancy. Native ends at placement. Routing, within-clock delay, board operation and a correction-bearing workload are separate witnesses.",
+  "sdp72": {
+    "originalSelection": "G4 selected the stock 2026-08-19 Apio package with 2026-03-24 Yosys. October board qualification retained a separate corrected map with the same executable.",
+    "boardPR": "https://github.com/ecpeterson/hls_fabric/pull/75",
+    "upstreamMap": "https://github.com/YosysHQ/yosys/commit/aba5b279c6ea3c7ef0867f43d2f7d8dc23d9f440",
+    "executable": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+    "stockMap": "678908f431dd3304aa41f2d1cb87ed6958c20adff848a0b3a6ea8903e59a1008",
+    "qualifiedMap": "a1afcda1610f3f3dcbc0b9bbe99c30ce2125788b7e69cbaa456f314fbfca6431",
+    "netlistBefore": "306645e46c619ab6cfcf4d14eaa4a8698ffeaeabc17b896aaaf814cc8905c36c",
+    "earlierWitnessRAMs": {
+      "g44-application/native/synth.json": {
+        "sha256": "288ba769dc9391408d7e2afea221c35801e0a7dc3e2a11cc1be819e6b3ba97b0",
+        "modes": {}
+      },
+      "g44-review/native/synth.json": {
+        "sha256": "288ba769dc9391408d7e2afea221c35801e0a7dc3e2a11cc1be819e6b3ba97b0",
+        "modes": {}
+      },
+      "g44-followup/probes/bram/synth.json": {
+        "sha256": "071472d32abf08fcf4b376da21fd75ea44d1fd9e20a8ad37a5140b0f3cb094c9",
+        "modes": {
+          "RAMB36E1 SDP A:72/0 B:0/72": 1
+        }
+      },
+      "g44-followup/probes/bramreg/synth.json": {
+        "sha256": "68ebb9e19310d80de2b49eac3663346b66cb09a96fcea606a771000a7b630469",
+        "modes": {
+          "RAMB36E1 SDP A:72/0 B:0/72": 1
+        }
+      },
+      "g4-four-phi/native/synth.json": {
+        "sha256": "306645e46c619ab6cfcf4d14eaa4a8698ffeaeabc17b896aaaf814cc8905c36c",
+        "modes": {
+          "RAMB36E1 SDP A:72/0 B:0/72": 8,
+          "RAMB18E1 SDP A:36/0 B:0/36": 44
+        }
+      },
+      "g4-phi-work/fixed-run/native/synth.json": {
+        "sha256": "be776b3cbeaf1d487c1cd46457be1e43176d9c6be01b8045e136e46634866243",
+        "modes": {
+          "RAMB36E1 SDP A:72/0 B:0/72": 8,
+          "RAMB18E1 SDP A:36/0 B:0/36": 44
+        }
+      }
+    },
+    "netlistAfter": "be776b3cbeaf1d487c1cd46457be1e43176d9c6be01b8045e136e46634866243",
+    "firstMismatch": {
+      "clock": 12,
+      "RAM": "scheduler_0_mailbox",
+      "rtl": "0x800000009e3779b906000003",
+      "stock": "0x80000080de1769b906000003"
+    },
+    "firstBadWalkingOne": "8 expected 000000000000000100 read 000000100000000100",
+    "correctedOneHotLanes": 72,
+    "laterUpstreamOneHotLanes": 72,
+    "laterUpstreamMap": "a1afcda1610f3f3dcbc0b9bbe99c30ce2125788b7e69cbaa456f314fbfca6431",
+    "sameC12FailureAfterResolvingStartupBits": true
+  },
+  "simulationModels": {
+    "UNISIMCommit": "1c8e05fd1e9a79ceb8b996a0996674122eed086f",
+    "modelSet250Files": "de97e2b21318aa2dd4185a1f9d808a44c30be594efbaeabe5fbe23d1b89d1d10",
+    "rapidwrightJar": "f5108093ae59d6dfacf9128d0f35e2e0a4340af492f6af185af8dfc197258d41",
+    "startupBits": {
+      "FDRE.INIT": 29621,
+      "RAMB18E1.INITP_nn": 90112,
+      "RAMB18E1.INIT_A": 792,
+      "RAMB18E1.INIT_B": 792,
+      "RAMB18E1.INIT_nn": 720896,
+      "RAMB18E1.SRVAL_A": 792,
+      "RAMB18E1.SRVAL_B": 792,
+      "RAMB36E1.INITP_nn": 32768,
+      "RAMB36E1.INIT_A": 288,
+      "RAMB36E1.INIT_B": 288,
+      "RAMB36E1.INIT_nn": 262144,
+      "RAMB36E1.SRVAL_A": 288,
+      "RAMB36E1.SRVAL_B": 288
+    }
+  },
+  "limits": {
+    "cycles": 4096,
+    "groupMiB": 6144,
+    "secondsPerStage": 1200,
+    "physicalCells": 150000,
+    "logicalInstances": 256,
+    "channels": 2048,
+    "nativeFunctionalSeconds": 3000
+  },
+  "completedStages": {
+    "execution": {
+      "seconds": 5.15,
+      "peakGroupRSSBytes": 53968896
+    },
+    "corrected-map": {
+      "seconds": 96.05,
+      "peakGroupRSSBytes": 2151333888
+    },
+    "serial-placement": {
+      "seconds": 631.2,
+      "peakGroupRSSBytes": 754614272
+    },
+    "vivado-sim": {
+      "seconds": 574.78,
+      "peakGroupRSSBytes": 1746239488
+    },
+    "native-sim": {
+      "seconds": 1507.56,
+      "peakGroupRSSBytes": 1634140160
+    },
+    "transaction": {
+      "seconds": 4.13,
+      "peakGroupRSSBytes": 690176000
+    },
+    "pack": {
+      "seconds": 5.17,
+      "peakGroupRSSBytes": 1003028480
+    },
+    "browser": {
+      "seconds": 10.3,
+      "peakGroupRSSBytes": 1558691840
+    },
+    "checks": {
+      "seconds": 76.6,
+      "peakGroupRSSBytes": 825147392
+    }
+  },
+  "checks": {
+    "fullVivadoBaseline": "C0 scalar FDRE values and first mask from a one-clock replay of the same archived netlist. All subsequent masks and activity use the full 4096-clock run.",
+    "browser": {
+      "first": 105,
+      "cycles": [
+        0,
+        32,
+        37,
+        127,
+        128,
+        2000,
+        4095
+      ],
+      "pickedTile": 18841,
+      "wholeRun": true,
+      "coverageFilters": true,
+      "playback": true,
+      "mobile": true,
+      "detail": true,
+      "errors": []
+    },
+    "qualityLog": "e76a66a1263a4573361a94a31c2d0f30ab71c988d437a0147f30cea435019b30",
+    "viewerTests": 594,
+    "projectQuality": "11-step quality group and Spacetime Dialyzer",
+    "earlierN2": "The retained repetition N2 synthesis has no block RAM. The small timing probes directly instantiate SDP72 with tied parity inputs."
+  },
+  "retained": {
+    "under": "hls_artifacts/runs/spacetime-g4-parity-2026-11-24/four-phi-workload/",
+    "galleryManifest": "85ec6defb9c8d833363883471be4c6799cc53739bda24a01dc2a33f4fd768cf1",
+    "galleryFiles": 75,
+    "galleryBytes": 12067728,
+    "observationsArchive": "796d94a614b4909788b306ed1e34652943bad891084bf640dc4343472574ac63",
+    "inventory": "52c4ecb7329ab26f7a8f2aeb2f889de6826d6313129d96bf5544c047fa50363b",
+    "sharedEarlierArchive": "23d2dfa21594645453bd91e2ca8498f75021c9113daaa3c6ea620e1ac7dac79f"
+  },
+  "placementReproduction": {
+    "synthesis": "be776b3cbeaf1d487c1cd46457be1e43176d9c6be01b8045e136e46634866243",
+    "placed": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+    "placementLog": "7fab7d2eb120fe7801c634cba9fc355c5ed4d93bcbe9b2ee1f0628e361261b5b",
+    "reason": "The first placement overlapped a stopped simulator trial. A fresh isolated placement reproduced the byte-identical checkpoint used by the gallery."
+  }
+}

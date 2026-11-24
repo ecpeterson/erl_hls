@@ -77,7 +77,7 @@ The closed 2×1-per-plane Phi workload provides a matched hard-block witness on 
 
 The passive Icarus monitor samples the 540-bit scheduler state RAM and one executor multiply for 4,096 edges. It checks enabled writes against both stored rows, the read-first output against the previous contents, and each accepted product against its 38-bit operands. The replay checked 1,325 writes, 1,321 reads and 1,320 accepted multiplies, including 1,262 changes from the preceding accepted operand. It observed zero same-address collisions. Address 0 was written at C32 and read at C36. Bit 84 changed, and the next request contained the entire written word. At C37 the rounded operand was `0x24004` and the sliced result register captured `0x3000`. Open **Scheduler state write and readback** for the address, mask, value and response edge. **Accepted multiply and DSP stages** shows the operand, product and the placed DSP pipeline settings. The event inspector lists the primitive pins in path order. The flat chip connects their reported sites schematically. Clock coincidence and a static path do not establish gate-level sensitization.
 
-To reproduce, build the Spacetime profile, then run the witness under the serial 6 GiB process-group guard. Supply the September 21 `erl-hls-vivado-evidence-20260921.tar.gz` from the artifact archive, the Apio Yosys launcher, the G4 Spacetime nextpnr binary with its build receipt, the Z-7030 package chipdb and fresh directories. Capture verifies the archived reference SHA-256 before extraction. The default capture stops after placement. Pass `--native-stage routed` to attempt a full route with the same seed and 50 MHz target. The one-hour route attempt reached its time limit with 2,120 overused wires in the last completed iteration. The scoped publication admits one path per backend, at most 512 steps per path, 512 MiB for the native checkpoint and 16 MiB for the two viewer documents together.
+To reproduce, build the Spacetime profile, then run the witness under the serial 6 GiB process-group guard. Supply the September 21 `erl-hls-vivado-evidence-20260921.tar.gz` from the artifact archive, the SDP72-qualified Yosys executable, the G4 Spacetime nextpnr binary with its build receipt, the Z-7030 package chipdb and fresh directories. Capture verifies the archived reference SHA-256 before extraction. The default capture stops after placement. Pass `--native-stage routed` to attempt a full route with the same seed and 50 MHz target. The one-hour route attempt reached its time limit with 2,120 overused wires in the last completed iteration. The scoped publication admits one path per backend, at most 512 steps per path, 512 MiB for the native checkpoint and 16 MiB for the two viewer documents together.
 
 ```sh
 rebar3 as spacetime compile
@@ -87,7 +87,7 @@ python3 "$witness/publish.py" "$RUN" "$CHIPDB" "$GALLERY"
 npm --prefix apps/hls_spacetime start -- --data "$GALLERY"
 ```
 
-The [four-Phi ledger](../../yap/hls_spacetime/g44-four-phi.json) identifies the portable gallery in `runs/spacetime-g4-parity-2026-11-24/four-phi/`. Its two recordings share four events and three versions. Each has a separate checkpoint and pin bindings.
+The following measurements describe the original C32–C37 capture with stock Apio synthesis. The full replay below uses a corrected native checkpoint. The [four-Phi ledger](../../yap/hls_spacetime/g44-four-phi.json) identifies the portable gallery in `runs/spacetime-g4-parity-2026-11-24/four-phi/`. Its two recordings share four events and three versions. Each has a separate checkpoint and pin bindings.
 
 | Measurement | Vivado | openXC7 |
 | --- | --- | --- |
@@ -97,6 +97,32 @@ The [four-Phi ledger](../../yap/hls_spacetime/g44-four-phi.json) identifies the 
 | Timing | The complete reported setup path has 19.263 ns data delay and +0.462 ns slack. | Selected branch delay and routing geometry remain unmeasured. |
 
 Both memories use READ_FIRST with their optional output register bypassed. All identified partial products bypass AREG, BREG, MREG and PREG. Across the entire implementation Vivado enables PREG on 18 other DSPs and Yosys enables it on none. N2 remains the witness for broader route and register coverage.
+
+## Whole four-Phi execution
+
+The paired gallery opens on the first accepted public frames at C105. Scrub from C0 to C4095 or jump to a frame. **Window** selects one clock, a short history, or the union over the entire replay. Both maps count distinct primitives with a known change between successive settled output samples. Click a tile for measured instance names and types. Zoom both maps around that tile to inspect its neighbors. Unknown comparisons have a separate count and can coexist with a known change on another output. C0 initializes the observer.
+
+The source timeline covers 21 generated processes, 42 FIFOs, eight scheduler RAMs and the X/Z output interface. It records 238 handshakes, enables and public probes before the active edge, plus addresses and accepted 128-bit frames. An interface can appear at both ends of a transfer. **Only selected instance** uses retained synthesis hierarchy, unambiguous named output nets and checked public capture registers. Shared or unnamed logic remains in the whole-design view. The physical maps are functional simulations of each technology netlist on its own placement. The openXC7 checkpoint ends at placement. Within-clock propagation and wire delays need a separate timing witness.
+
+The opening comparison covers 70,418 Vivado primitives and 65,381 openXC7 primitives. Each simulated primitive has a location on its own implementation. Over the full replay 19,800 Vivado primitives and 18,545 openXC7 primitives changed output. At C32 alone the counts were 2,702 and 2,252. Source RTL accepted 86 X and 86 Z status frames between C105 and C4017, with steps 0 through 42 for both coordinates on each plane. This input emitted zero correction frames. The public activity pin, initialized capture register lanes and six handshake-related register lanes per backend are checked at each edge. The design retains 99 physical payload lanes per plane in Vivado and 103 logical payload lanes backed by 102 distinct registers per plane in Yosys. The corrected C32 drill-down follows ten placed cells from `RAMB18_X2Y32/DOADO11` to `DSP48_X2Y56/A7`.
+
+The November 24 G4 exporter selected the stock Apio installation. Its August 19 package bundles a March 24 Yosys release. The earlier repetition N2 netlist inferred no block RAM. The small SDP72 timing probes directly instantiate RAMB36E1 with both parity inputs tied low. Neither exercised inferred SDP72 data mapping. The earlier TE0715 work retained a separate SDP72-corrected copy. Both use the same Yosys executable. G4 originally chose the stock mapping library, which duplicates the lower parity inputs. In the four-Phi simulation, scheduler 0’s first bad mailbox read at C12 returned `0x80000080de1769b906000003` for `0x800000009e3779b906000003`. Resolving unspecified startup bits alone reproduced the failure. The four-Phi capture now runs the board library audit, verifies which map synthesis opened and records its digest. [Board qualification and guards](../../platforms/xc7/docs/bram-sdp72.md) · [Original board PR](https://github.com/ecpeterson/hls_fabric/pull/75)
+
+The [workload evidence ledger](../../yap/hls_spacetime/g44-four-phi-workload.json) identifies the paired gallery and its raw observations in `hls_artifacts/runs/spacetime-g4-parity-2026-11-24/four-phi-workload/`. To open the retained view from the umbrella root:
+
+```sh
+node apps/hls_spacetime/scripts/serve.mjs --data ../hls_artifacts/runs/spacetime-g4-parity-2026-11-24/four-phi-workload/gallery
+```
+
+For a fresh run, take `yosys-0.63-sdp72/libexec/yosys` from the retired Fabric `board-tools.tar.zst` and run the preceding capture and transaction publication with it. Use its complete package directory so Yosys finds its own technology maps and ABC. The corrected library SHA-256 begins `a1afcda1610f`. Use absolute paths for all input and output directories in the commands below. Supply JDK 21, the RapidWright 2026.1.2 standalone JAR, the Xilinx UNISIM library at `1c8e05fd1e9a79ceb8b996a0996674122eed086f` and the serial process-group guard. RapidWright reads physical locations from the archived Vivado DCP using readable EDIF translated from its matching structural Verilog. For an offline replay, set `RAPIDWRIGHT_PATH` to the `rw/` directory retained with the observations. The reader checks the part, device and primitive database digests.
+
+```sh
+workload=apps/hls_spacetime/test/native/four_phi/workload
+python3 "$workload/sdp72.py" "$YOSYS" "$UNISIM/verilog/src" "$LANE_PROBE"
+python3 "$workload/measure.py" "$RUN" "$WORK" "$UNISIM/verilog/src" "$RAPIDWRIGHT_JAR" "$GUARD" "$YOSYS"
+python3 "$workload/pack.py" "$RUN" "$WORK" "$CHIPDB" "$GALLERY" "$PAIRED"
+npm --prefix apps/hls_spacetime start -- --data "$PAIRED"
+```
 
 ## Remaining work
 

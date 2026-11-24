@@ -3705,6 +3705,13 @@ async function initialize() {
     const response = await fetch("data/index.json");
     if (!response.ok) return;
     const index = await response.json();
+    if (
+      index.workload === "four-phi" &&
+      !new URLSearchParams(location.search).has("detail")
+    ) {
+      location.replace("workload.html" + location.search + location.hash);
+      return;
+    }
     const entries = Array.isArray(index)
       ? index
       : (index.captures ?? index.examples ?? index.files ?? []);
