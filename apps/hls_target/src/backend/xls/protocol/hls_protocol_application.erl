@@ -39,7 +39,7 @@
 -doc "Generated application files paired with the exact final host deployment.".
 -type output() :: hls_generated_files:output(result()).
 
--doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns a deployment for hls_partition_stream and writes deployment.etf. The gateway orders setup before start; started acknowledges actual network activation. inspection => process adds the common endpoint-2 debug stream and network/inspection.json plus a trusted local inspection.etf catalog. Attachment identity detects mismatched builds, not malicious peers. native_actors is rejected because this gateway does not carry crossing links. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
+-doc "Compiles the same trusted source config as hls_protocol_boundary, plus device and host (1..65535), into a fresh application directory. Uses explicit_start; rejects another activation mode, absent rectangle ingress and absent external endpoints. Binds loaded host codecs to captured source schemas and rejects conflicting external selectors. Returns the emitted build descriptor and writes its validated runtime projection to deployment.etf; application-build.etf retains target-only observer input. The gateway orders setup before start; started acknowledges actual network activation. inspection => process adds the common endpoint-2 debug stream and network/inspection.json plus a trusted local inspection.etf catalog. Attachment identity detects mismatched builds, not malicious peers. native_actors is rejected because this gateway does not carry crossing links. Capacity, progress and native qualification remain unestablished; callers must drain events, honor source command preconditions and coordinate whole-application reset before replacement.".
 -spec write(hls_source_config:application() | file:filename() | plan(), file:filename()) ->
     result().
 write(Config, Directory) ->
@@ -94,6 +94,7 @@ emit(#plan{boundary = BoundaryPlan, application = Application, device = Device})
     #{files := BoundaryFiles, result := #{boundary := Boundary, transport := Transport}} =
         hls_protocol_boundary:emit(BoundaryPlan),
     Deployment = deployment(Application, Transport, Boundary, BoundaryFiles, Device),
+    Artifact = hls_deployment_artifact:new(partition_application, Deployment),
     Binding = #{control_adapter := Hardware} = maps:get(Device, maps:get(devices, Deployment)),
     GatewayFiles = hls_generated_files:prefix(
         "application", xls_protocol_application:emit(Binding)
@@ -105,11 +106,13 @@ emit(#plan{boundary = BoundaryPlan, application = Application, device = Device})
             "application/protocol_application_top.sv" => sv_protocol_application:emit(
                 Binding, Boundary
             ),
-            "deployment.etf" => term_to_binary(Deployment, [deterministic])
+            "deployment.etf" => hls_deployment_artifact:encode(Artifact),
+            "application-build.etf" => term_to_binary(Deployment, [deterministic])
         }
     ]),
     Files =
-        maps:keys(GatewayFiles) ++ ["deployment.etf", "application/protocol_application_top.sv"] ++
+        maps:keys(GatewayFiles) ++
+            ["deployment.etf", "application-build.etf", "application/protocol_application_top.sv"] ++
             case maps:get(inspection, Boundary) of
                 none -> [];
                 _ -> ["network/inspection.json", "network/inspection.etf"]

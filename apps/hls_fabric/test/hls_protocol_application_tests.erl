@@ -24,8 +24,10 @@ binding_test() ->
     ?assertMatch([{board,{19,7},{2,0,0},_}],hls_partition_wire:command(D,{host,cells,{0,0,3,0},{work,12}})),
     ?assertEqual({{bucket,1},{sample,2,12}},hls_partition_wire:event(B,{10,19},{5,0,0},<<2:32/little,12:32/little>>)),
     ?assertError({badmatch,false},hls_partition_wire:event(B,{10,19},{5,0,0},<<2:32/little>>)),
-    {ok,Bytes}=file:read_file(filename:join(Path,"deployment.etf")),
-    ?assertEqual(D,binary_to_term(Bytes)),ok.
+    {ok,Artifact}=hls_deployment_artifact:load(filename:join(Path,"deployment.etf")),
+    ?assertEqual(hls_deployment_artifact:new(partition_application,D),Artifact),
+    {ok,BuildBytes}=file:read_file(filename:join(Path,"application-build.etf")),
+    ?assertEqual(D,binary_to_term(BuildBytes)),ok.
 
 %% Equal payload width and selector cannot conceal a reversed source record layout.
 -spec external_collision_test() -> ok.

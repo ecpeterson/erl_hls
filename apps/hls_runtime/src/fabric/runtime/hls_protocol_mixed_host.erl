@@ -7,9 +7,12 @@
 %% Retained control and event conversion.
 -export([controls/2, external/4, native_event/3]).
 
--doc "Describes a dedicated sealed virtual source service for an existing central owner and exact real BEAM actors. The owner must check source_bind against these targets before any actor is connected.".
--spec service(map(), pid(), #{non_neg_integer() => pid()}) -> hls_node:service().
-service(#{actors := Actors, targets := Targets}, Owner, Pids) ->
+-doc "Describes a dedicated sealed virtual source service from a validated mixed-application artifact, existing central owner and exact real BEAM actors. The owner must check source_bind against these targets before any actor is connected.".
+-spec service(hls_deployment_artifact:artifact(), pid(), #{non_neg_integer() => pid()}) ->
+    hls_node:service().
+service(Artifact, Owner, Pids) ->
+    #{actors := Actors, targets := Targets} =
+        hls_deployment_artifact:descriptor(mixed_application, Artifact),
     true = lists:sort(maps:keys(Actors)) =:= lists:sort(maps:keys(Pids)),
     #{
         name => source,
@@ -67,5 +70,8 @@ external(
 
 -doc "Decodes a canonical native external frame using the original shared application schema and physical port order. Rejects nonzero padding/flags or unknown ports. Logical source fields retain their admitted source meaning; no extra global chronology is introduced.".
 -spec native_event(map(), byte(), non_neg_integer()) -> {atom(), tuple()}.
-native_event(#{application := Application}, Index, Frame) ->
+native_event(
+    #{application := Application, mixed := #{external_count := ExternalCount}}, Index, Frame
+) ->
+    true = Index < ExternalCount,
     hls_protocol_application_codec:event(Application, board, Index, Frame).

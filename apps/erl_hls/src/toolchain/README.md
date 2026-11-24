@@ -4,6 +4,8 @@
 
 `hls_fabric_cli` implements `hls-fabric plan`, `emit` and `profile`. `hls_build`, `hls_source_build` and `hls_scheduler_build` select and inspect a checked backend request, while lower applications retain their own policy and products. Facade orchestration does not make compiler, Fabric or target internals part of this application.
 
+`hls_actor_debug:catalog/3` is the source-aware observation seam: it asks `xls_actor_debug` to validate retained compiler metadata, then asks `hls_debug_catalog` to bind the verified runtime session. Deployment code that already trusts the built projection uses the runtime catalog directly and needs no compiler.
+
 `hls_target`'s `hls_artifact_bundle` owns fresh output directories, support-tree snapshots and the hashed `source-build.json` manifest. The emitter supplies literal codegen flags and descriptive metadata; publication does not run external tools. The target-owned driver consumes the published bundle explicitly.
 
 Compiler passes belong to [`hls_compile`](../../../hls_compile/README.md), logical communication planning to [`hls_fabric`](../../../hls_fabric/README.md), physical materialization to [`hls_target`](../../../hls_target/README.md), and runtime sessions to [`hls_runtime`](../../../hls_runtime/README.md). `hls_spacetime` remains a separate process-free optimizer/analysis application, not a callback used by this facade.

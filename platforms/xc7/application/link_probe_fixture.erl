@@ -3,7 +3,7 @@
 
 -export([write/2]).
 
--doc "Writes actor DSLX, per-role graphs/wrappers and deterministic local deployment terms.".
+-doc "Writes actor DSLX, per-role graphs/wrappers and versioned local deployment artifacts.".
 -spec write(file:filename(), file:filename()) -> ok.
 write(Stage, ActorSource) ->
     Plan = hls_topology:normalize(#{
@@ -34,16 +34,32 @@ write(Stage, ActorSource) ->
 
 %% Bind one compiled graph to the device-specific gateway identity and host endpoint.
 -spec write_device(file:filename(), map(), map(), a | b) -> ok.
-write_device(Stage, Partition, Deployment = #{devices := Devices}, Device) ->
+write_device(Stage, Partition, Deployment, Device) ->
     Graph = list_to_atom("link_probe_" ++ atom_to_list(Device) ++ "_graph"),
     GraphSource = hls_partition_dslx:emit(Partition, Device,
         #{name => Graph, channel_depth => 1, actor_egress_depth => burst}),
     ok = save(Stage, atom_to_list(Graph) ++ ".x", GraphSource),
     ok = save(Stage, "link_application_" ++ atom_to_list(Device) ++ ".x",
         xls_partition_application:emit(Deployment, Device, Graph)),
-    Local = Deployment#{devices := #{Device => maps:get(Device, Devices)}},
+    Local = single_device(Deployment, Device),
+    Artifact = hls_deployment_artifact:new(partition_application, Local),
     save(Stage, "deployment-" ++ atom_to_list(Device) ++ ".etf",
-        term_to_binary(Local, [deterministic])).
+        hls_deployment_artifact:encode(Artifact)).
+
+%% Retain global ingress geometry while removing recipients owned by the other role.
+-spec single_device(map(), a | b) -> map().
+single_device(Deployment = #{partition := Partition, devices := Devices}, Device) ->
+    Ingresses = [
+        Ingress#{bindings := [
+            Binding
+         || Binding = #{device := Bound} <- maps:get(bindings, Ingress), Bound =:= Device
+        ]}
+     || Ingress <- maps:get(ingresses, Partition)
+    ],
+    Deployment#{
+        partition := Partition#{ingresses := Ingresses},
+        devices := maps:with([Device], Devices)
+    }.
 
 %% Retain only publication-safe identity data in the JSON build summary.
 -spec device_summary(map(), a | b) -> map().

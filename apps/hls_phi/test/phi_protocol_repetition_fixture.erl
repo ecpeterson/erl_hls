@@ -37,7 +37,7 @@ oracle(Stage,N) ->
 -doc "Runs the production helper over real brokers and public RTL ports, then retires stream and FIFO descriptors. Uses only the freshly emitted deployment and pinned source codecs.".
 -spec live(file:filename(),file:filename(),pos_integer()) -> ok.
 live(Build,Stage,N) ->
-    {ok,Bytes}=file:read_file(filename:join(Build,"deployment.etf")),Deployment=binary_to_term(Bytes),
+    {ok,Deployment}=hls_deployment_artifact:load(filename:join(Build,"deployment.etf")),
     {ok,Broker}=hls_fabric:start_link(filename:join(Stage,"app_tx"),filename:join(Stage,"app_rx"),#{rx_route_limit=>1}),
     {ok,Stream}=hls_partition_stream:start_link(Deployment,#{board=>Broker},#{queue_limit=>128,write_timeout=>30000}),
     try

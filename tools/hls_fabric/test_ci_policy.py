@@ -29,7 +29,14 @@ class PolicyTests(unittest.TestCase):
         self.assertIn(spacetime, script)
         self.assertIn(boundaries, script)
         self.assertIn('bash tools/test_umbrella_eunit.sh boundaries', script)
+        runtime_release = 'bash tools/hls_fabric/test_runtime_release.sh'
+        external_consumers = 'python3 tools/test_external_consumers.py'
+        self.assertIn(runtime_release, script)
+        self.assertIn(external_consumers, script)
         self.assertLess(script.index(spacetime), script.index(boundaries))
+        self.assertLess(script.index(runtime_release), script.index(external_consumers))
+        local_distribution = (ROOT / 'tools/hls_fabric/test_local_dist.sh').read_text()
+        self.assertIn('/../.." && pwd)', local_distribution)
         names = [line for line in (ROOT / 'tools/hls_fabric/ci_unit_tests.txt').read_text().splitlines()
                  if line and not line.startswith('#')]
         self.assertEqual(len(names), len(set(names)))

@@ -8,9 +8,10 @@ run(Role0,Role1,Stage,Incarnation) ->
     Devices=maps:from_list([{R,read(filename:join(Build,"bridge.etf"))}
         ||{R,Build}<-lists:zip([0,1],[Role0,Role1])]),
     Plan=#{devices=>Devices,actors=>3,limits=>#{crossings=>8,commands=>16,events=>32}},
+    Artifact=hls_deployment_artifact:new(protocol_deployment,Plan),
     Brokers=maps:from_list([begin P=filename:join(Stage,"role"++integer_to_list(R)),
         {ok,B}=hls_fabric:start_link(P++"_tx",P++"_rx",#{rx_route_limit=>1}),{R,B} end||R<-[0,1]]),
-    {ok,Stream}=hls_protocol_stream:start_link(Plan,Brokers,#{0=>Incarnation*2+1,1=>Incarnation*2+2}),
+    {ok,Stream}=hls_protocol_stream:start_link(Artifact,Brokers,#{0=>Incarnation*2+1,1=>Incarnation*2+2}),
     try
         {ok,1}=hls_protocol_stream:submit(Stream,start),
         Deadline=erlang:monotonic_time(millisecond)+45000,

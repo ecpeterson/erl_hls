@@ -63,6 +63,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
     execute(["erl", "-noshell", "-pa", *paths, ebin, "-eval", expression, "-extra", stage, ACTOR], PROJECT, log, environment, timeout=1200)
     libraries = copy_libraries(stage, public)
     compiler = compiler_entry(public)
+    artifact_source = PROJECT / "apps/hls_runtime/src/fabric/runtime/hls_deployment_artifact.erl"
     products = {}
     for role in ("a", "b"):
         release = output / f"role-{role}-build"
@@ -73,8 +74,9 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
         rtl = output / f"link_application_{role}.v"
         shutil.copyfile(release / "link_application.v", rtl)
         products[rtl.name] = digest(rtl)
-    inputs = [Path(__file__), ROOT / "packaging_commands.py", ACTOR, FIXTURE, compiler, compiler_source(public, "compile_xls"), *libraries,
-              *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl"))]
+    inputs = [Path(__file__), ROOT / "packaging_commands.py", ACTOR, FIXTURE,
+              artifact_source, compiler, compiler_source(public, "compile_xls"),
+              *libraries, *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl"))]
     manifest = {
         "compiler_root": str(public), "rebar_profile": profile,
         "profile": "partition-link-application",

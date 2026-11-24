@@ -9,7 +9,7 @@ run(Build,Stage,N) ->
     Plan=#{manifest:=Manifest,actors:=Actors}=binary_to_term(Bytes),
     {ok,Debug}=hls_fabric:start_link(filename:join(Stage,"debug_tx"),filename:join(Stage,"debug_rx"),#{rx_route_limit=>1}),
     {ok,Client}=hls_debug:start_link(undefined,{fabric,Debug,2}),
-    {ok,DeployBytes}=file:read_file(filename:join(Build,"deployment.etf")),Deployment=binary_to_term(DeployBytes),
+    {ok,Deployment}=hls_deployment_artifact:load(filename:join(Build,"deployment.etf")),
     {ok,App}=hls_fabric:start_link(filename:join(Stage,"app_tx"),filename:join(Stage,"app_rx"),#{rx_route_limit=>1}),
     {ok,Stream}=hls_partition_stream:start_link(Deployment,#{board=>App},#{queue_limit=>128,write_timeout=>30000}),
     try

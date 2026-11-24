@@ -128,6 +128,32 @@ deployment_stream_test() ->
         await(fun()->lists:all(fun(P)->maps:get(owner,hls_protocol_relay_peer:stats(P))=:=retired end,maps:values(Peers)) end)
     end).
 
+%% Artifact projection retains the bounded external interface consumed by relay events.
+-spec artifact_external_event_test() -> ok.
+artifact_external_event_test() ->
+    with_deployment(fun(Stream, Peers, Sessions) ->
+        {ok, 1} = hls_protocol_stream:submit(Stream, start),
+        [ok = started(Role, Peers, Sessions) || Role <- [42, north, {tile, south}]],
+        ?assertEqual({ok, application, {started}}, hls_protocol_stream:next(Stream, 1000)),
+        ok = hls_protocol_relay_peer:emit(
+            maps:get(north, Peers),
+            {16#85, 0, 0},
+            <<101:64/little, 0:128>>
+        ),
+        ?assertEqual({ok, {north, 0}, 0}, hls_protocol_stream:next(Stream, 1000))
+    end).
+
+%% A raw relay artifact cannot silently enter the typed application path.
+-spec raw_application_rejection_test() -> ok.
+raw_application_rejection_test() ->
+    Artifact = hls_deployment_artifact:new(protocol_deployment, deployment()),
+    ?assertException(
+        error,
+        {badmatch, _},
+        hls_protocol_stream:start_application(Artifact, #{}, #{})
+    ),
+    ok.
+
 %% A peer can consume an ACK and reply before the broker reports that write's completion.
 -spec acknowledgment_completion_race_test() -> ok.
 acknowledgment_completion_race_test() ->
@@ -181,7 +207,8 @@ sessions()->#{north=>101,42=>102,{tile,south}=>103}.
 with_deployment(Fun)->
     Plan=#{devices:=Devices}=deployment(),Sessions=sessions(),
     Peers=maps:map(fun(_,B)->{ok,P}=hls_protocol_relay_peer:start(B),P end,Devices),
-    {ok,Stream}=hls_protocol_stream:start_link(Plan,Peers,Sessions),unlink(Stream),
+    Artifact=hls_deployment_artifact:new(protocol_deployment,Plan),
+    {ok,Stream}=hls_protocol_stream:start_link(Artifact,Peers,Sessions),unlink(Stream),
     try await(fun()->maps:get(phase,hls_protocol_stream:info(Stream))=:=attached end),Fun(Stream,Peers,Sessions),ok
     after catch hls_protocol_stream:stop(Stream),[catch gen_server:stop(P)||P<-maps:values(Peers)] end.
 %% Inject a start acknowledgment only after the test observes the actual start write.

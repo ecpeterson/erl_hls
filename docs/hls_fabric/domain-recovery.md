@@ -263,7 +263,7 @@ It compares concurrent admission, capacity rejection, source failure without res
 
 ## Focused local witness
 
-After compiling the test profile with the matching compiler checkout, run:
+After compiling the umbrella test profile, run:
 
 ```sh
 python3 tools/hls_fabric/test_domain_recovery.py /path/to/xls /fresh/artifact/directory

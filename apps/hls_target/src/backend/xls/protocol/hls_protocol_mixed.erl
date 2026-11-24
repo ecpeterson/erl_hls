@@ -76,7 +76,7 @@
 -doc "Generated native bridge files and the final mixed runtime deployment.".
 -type output() :: hls_generated_files:output(result()).
 
--doc "Builds one framed native partition using hls_protocol_bridge's configuration; complementary actors run in BEAM. Requires one recipient per BEAM output, no BEAM-to-BEAM links, rectangle control and explicit activation. Writes mixed.etf for hls_protocol_mixed_stream and the usual bridge artifacts. Loaded codecs are checked against fresh source declarations. Generation failures create no output; I/O failures retain partial output; no mailbox replacement, progress, timing or device admission is granted.".
+-doc "Builds one framed native partition using hls_protocol_bridge's configuration; complementary actors run in BEAM. Requires one recipient per BEAM output, no BEAM-to-BEAM links, rectangle control and explicit activation. Writes a validated mixed.etf runtime artifact for hls_protocol_mixed_stream and returns the larger emitted build descriptor with the usual bridge artifacts. Loaded codecs are checked against fresh source declarations. Generation failures create no output; I/O failures retain partial output; no mailbox replacement, progress, timing or device admission is granted.".
 -spec write(hls_source_config:mixed() | file:filename() | plan(), file:filename()) -> result().
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
@@ -145,10 +145,11 @@ emit(#plan{bridge = BridgePlan, descriptor = Descriptor = #{mixed := Mixed}}) ->
     #{files := BridgeFiles, result := #{bridge := Bridge = #{identity := Identity}}} =
         hls_protocol_bridge:emit(BridgePlan),
     Deployment = Descriptor#{bridge := Bridge, mixed := Mixed#{identity => Identity}},
+    Artifact = hls_deployment_artifact:new(mixed_application, Deployment),
     #{
         files => hls_generated_files:merge([
             BridgeFiles,
-            #{"mixed.etf" => term_to_binary(Deployment, [deterministic])}
+            #{"mixed.etf" => hls_deployment_artifact:encode(Artifact)}
         ]),
         result => Deployment
     };

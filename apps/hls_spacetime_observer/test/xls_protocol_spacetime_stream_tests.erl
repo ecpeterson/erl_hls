@@ -130,12 +130,14 @@ source_binding_test() ->
 unsupported_gateway_test() ->
     Files = source_fixture(),
     Deployment = #{devices := #{fixture := Binding = #{control_adapter := Adapter}}} =
-        binary_to_term(maps:get(<<"deployment.etf">>, Files)),
+        binary_to_term(maps:get(<<"application-build.etf">>, Files)),
     Source = <<"xls/templates/another_gateway.x">>,
     Changed = Deployment#{devices := #{fixture => Binding#{control_adapter :=
         Adapter#{gateway_source := Source}}}},
     ?assertError({spacetime_stream, {unsupported_gateway, Source}},
-        xls_protocol_spacetime_stream:plan(Files#{<<"deployment.etf">> := term_to_binary(Changed)})).
+        xls_protocol_spacetime_stream:plan(
+            Files#{<<"application-build.etf">> := term_to_binary(Changed)}
+        )).
 
 %% A self-contained synthetic deployment uses the real mechanical emitter, without invoking XLS.
 -spec source_fixture() -> map().
@@ -158,7 +160,9 @@ source_fixture() ->
         {iolist_to_binary([Prefix, Name]), Bytes}
     end || {App, Prefix, Name} <- Libraries]),
     (maps:merge(Files, Support))#{
-        <<"deployment.etf">> => term_to_binary(#{devices => #{fixture => Binding}, source_boundary => Boundary}),
+        <<"application-build.etf">> => term_to_binary(#{
+            devices => #{fixture => Binding}, source_boundary => Boundary
+        }),
         <<"application/protocol_application_top.sv">> => iolist_to_binary(sv_protocol_application:emit(Binding, Boundary)),
         <<"actors/frame_config.x">> => iolist_to_binary(xls_frame_layout:config(Layout))}.
 

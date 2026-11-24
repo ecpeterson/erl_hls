@@ -1,6 +1,6 @@
 # Reproducing the retained Snowflake locality baseline
 
-This opt-in experiment preserves the accepted `local-admission-descriptors-2026-10-15` combination as a comparison point for future architectures. It does not change ordinary backend lowering. Build with the pinned compiler using [the normal prerequisites](building.md), OTP 28.0.2 and rebar3 3.24.0.
+This opt-in experiment preserves the accepted `local-admission-descriptors-2026-10-15` combination as a comparison point for future architectures. It does not change ordinary backend lowering. Build the matching umbrella revision using [the normal prerequisites](building.md), OTP 28.0.2 and rebar3 3.24.0.
 
 The cumulative pipeline retains source-derived receive capture and conditional decoding, phase specialization and barrier grant summaries, private consumer-payload erasure, admission predecode, and local admission/descriptors. The final pass registers actor-local free-cell/capacity proposals and masks, separates validity from private payload, and prepares ordinary/refill descriptors independently at the existing boundary. Consumer erasure remains part of this measured combination; its isolated result is not the combination's result. Later refill-selection, refill-payload-bank and owner-local-completion experiments are excluded.
 

@@ -7,7 +7,7 @@ stage=$(cd "$stage" && pwd)
 cd "$project_root"
 rebar3 as test compile
 source tools/hls_fabric/backend_env.sh test
-# Source listings and common host transports retain one compiler-owned implementation.
+# Source listings and common host transports retain one target-owned executor.
 bash "$project_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '
     Stage = os:getenv("ERL_HLS_STAGE"),

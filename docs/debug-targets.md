@@ -56,7 +56,7 @@ Catalog0 = hls_debug_catalog:hardware(Plan, #{}, Boundaries),
 Catalog = hls_debug_catalog:bind(Catalog0, Projection, Session).
 ```
 
-The empty placement map selects dedicated actors. `bind/3` checks the supplied logical identities, projection and verified resource manifest; it does not recompile source. When the compiler and actor sources are available, `xls_actor_debug:catalog(Plan, Boundaries, Session)` additionally validates the projection against current source before performing this binding. Runtime deployment needs the build-validated projection and `hls_runtime`, not that compiler convenience call.
+The empty placement map selects dedicated actors. `bind/3` checks the supplied logical identities, projection and verified resource manifest; it does not recompile source. When the compiler and actor sources are available, the façade's `hls_actor_debug:catalog(Plan, Boundaries, Session)` additionally validates the projection against current source before performing this binding. Runtime deployment needs the build-validated projection and `hls_runtime`, not that compiler-aware convenience call.
 
 `phase` is the Erlang phase atom. Requested fields share one sample. Before the first state publication, `initialized = false` and the phase, failure and reduction fields are `undefined`. CPU failure ordinarily terminates the process; hardware retains a failure latch.
 

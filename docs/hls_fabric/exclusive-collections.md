@@ -31,4 +31,4 @@ Failures are not transactions: opening validation follows the callback that requ
 
 Shared and dedicated collectors use the same pure input-fold transition. Their arbitration and backpressure remain separate: a shared engine selects among actor slots, while a dedicated engine serves one actor. Debug observations read the bank that currently owns collection progress. The columnar ownership layout intentionally avoids imposing a wide indexed record update on every flag change.
 
-See [building](building.md) for the pinned compiler APIs and complete decoder configuration.
+See [building](building.md) for the umbrella APIs and complete decoder configuration.

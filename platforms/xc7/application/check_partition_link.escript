@@ -32,12 +32,12 @@ requested(Role, Arguments) ->
 run(Role, Rounds, Passes) ->
     ok = hls_dma_device:await("/dev/hls-dma0", "40000000.dma-mailbox", 5000),
     {ok, _} = application:ensure_all_started(crypto),
-    Deployment = deployment(Role),
+    Artifact = deployment_artifact(Role),
     {ok, Broker} = hls_fabric:start_link("/dev/hls-dma0", "/dev/hls-dma0"),
     #{counts := Baseline} = hls_fabric:info(Broker),
     Elapsed = try
         {ok, Stream} = hls_partition_stream:start_link(
-            Deployment, #{Role => Broker}, #{queue_limit => 8, write_timeout => 10000}),
+            Artifact, #{Role => Broker}, #{queue_limit => 8, write_timeout => 10000}),
         try
             Started = erlang:monotonic_time(millisecond),
             ok = run_passes(Role, Stream, Broker, Baseline, Rounds, 1, Passes),
@@ -121,14 +121,19 @@ check_install() ->
     io:format("PASS: installed partition-link deployments and actor codecs~n").
 
 %% Decode only the build-generated, manifest-hashed local deployment artifact.
--spec deployment(a | b) -> map().
-deployment(Role) ->
+-spec deployment_artifact(a | b) -> hls_deployment_artifact:artifact().
+deployment_artifact(Role) ->
     Path = "/opt/erl-hls/share/partition-link/deployment-" ++ atom_to_list(Role) ++ ".etf",
-    {ok, Bytes} = file:read_file(Path),
-    Deployment = binary_to_term(Bytes),
+    {ok, Artifact} = hls_deployment_artifact:load(Path),
+    Deployment = hls_deployment_artifact:descriptor(partition_application, Artifact),
     #{devices := Devices} = Deployment,
     [Role] = maps:keys(Devices),
-    Deployment.
+    Artifact.
+
+%% Project the checked descriptor only for the pure installed-command witness.
+-spec deployment(a | b) -> map().
+deployment(Role) ->
+    hls_deployment_artifact:descriptor(partition_application, deployment_artifact(Role)).
 
 %% Run one sequential exchange at a time so every nonce has an exact reply boundary.
 -spec soak(a | b, pid(), pos_integer(), pos_integer(), non_neg_integer(), pos_integer(), integer()) -> ok.

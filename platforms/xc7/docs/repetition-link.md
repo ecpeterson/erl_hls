@@ -12,7 +12,7 @@ BEAM A ↔ DMA A ↔ cells 0..2 ══ private PL Ethernet ══ cells 3..5 ↔
 ```
 
 `build_repetition_link_application.py` normalizes the N=6 topology, attaches
-source-fragment reductions, emits deterministic role deployments and compiles
+source-fragment reductions, emits versioned deterministic role deployment artifacts and compiles
 two-stage 25 MHz RTL. State and mailbox storage use external 1R1W RAM shells.
 The physical build therefore requires the checked 72-bit parity mapping and
 routed-width guards in [bram-sdp72.md](bram-sdp72.md). The optional five-bit

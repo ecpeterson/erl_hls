@@ -1,6 +1,6 @@
 # Documentation
 
-Start with the [telemetry project](../apps/erl_hls/src/examples/telemetry/README.md) for a complete communicating example, or the [standalone compiler](toolchain.md) for one actor. `hls_core` owns shared values and codecs, `erl_hls` owns source analysis, and `hls_runtime` owns CPU actors and device sessions. The [source map](../apps/erl_hls/src/README.md) describes those package boundaries. Phi and Snowflake remain distinct applications in this umbrella; the [Phi guide](repetition-code.md) points to its maintained walkthrough.
+Start with the [telemetry project](../apps/erl_hls/src/examples/telemetry/README.md) for a complete communicating example, or the [standalone compiler](toolchain.md) for one actor. `hls_core` owns shared values and codecs, `hls_compile` owns source analysis, `erl_hls` owns the supported facade and orchestration, and `hls_runtime` owns CPU actors and device sessions. The [source map](../apps/erl_hls/src/README.md) describes those package boundaries. Phi and Snowflake remain distinct applications in this umbrella; the [Phi guide](repetition-code.md) points to its maintained walkthrough.
 
 Read the contract before its deployment details:
 

@@ -235,10 +235,7 @@ class SourceToolchainTests(unittest.TestCase):
                 executable = xls/name
                 executable.write_text('#!/bin/sh\nprintf "stub product\\n"\n')
                 executable.chmod(0o755)
-            compiler_tools = next(release.glob('lib/hls_target-*/priv/tools'))
-            for name in ('compile_source_build.py', 'compile_xls.py'):
-                shutil.copyfile(compiler_tools/name, stage/name)
-            subprocess.run([sys.executable, stage/'compile_source_build.py', xls, moved],
+            subprocess.run([release/'bin/compile-source-build', xls, moved],
                            cwd=stage, env=environment, check=True, timeout=30)
             published = (moved/'compiled').resolve()
             compiled = json.loads((published/'compiled.json').read_text())

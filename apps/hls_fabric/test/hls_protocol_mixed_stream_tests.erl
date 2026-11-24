@@ -13,13 +13,24 @@ write_priority_test() ->
         {ok, 1} = hls_protocol_mixed_stream:submit(Stream, control(0, 3)),
         ok = gen_server:call(Stream, {source_send, maps:get(0, Actors), {actor, 2}, {total, 4}}),
         ok = emit(Peer, packet(2, 10, 1, 0)),
-        await(fun() -> #{received := Count} = hls_protocol_mixed_stream:info(Stream), Count =:= 4 end),
+        await(fun() ->
+            #{received := Count} = hls_protocol_mixed_stream:info(Stream),
+            Count =:= 4
+        end),
         ?assertEqual([3, 2], operations(Peer)),
         ok = hls_protocol_relay_peer:set(Peer, normal),
-        await(fun() -> #{written := Count} = hls_protocol_mixed_stream:info(Stream), Count =:= 6 end),
+        await(fun() ->
+            #{written := Count} = hls_protocol_mixed_stream:info(Stream),
+            Count =:= 6
+        end),
         ?assertEqual([3, 2, 4, 2, 4], operations(Peer)),
-        ?assertMatch([#{kind := 2, link := 20, sequence := 0},
-            #{kind := 1, link := 10, sequence := 0}], packets(Peer)),
+        ?assertMatch(
+            [
+                #{kind := 2, link := 20, sequence := 0},
+                #{kind := 1, link := 10, sequence := 0}
+            ],
+            packets(Peer)
+        ),
         ?assertMatch(#{data := [3, 2, 1]}, hls_statem:info(maps:get(0, Actors)))
     end).
 
@@ -35,15 +46,21 @@ stalled_admission_test() ->
         ok = emit(Peer, data(Plan, 20, 3, 20)),
         await(fun() -> length(packets(Peer)) =:= 3 end),
         {ok, 1} = hls_protocol_mixed_stream:submit(Stream, control(1, 30)),
-        ?assertMatch(#{counts := #{commands := 1, reverse := 1}, admission := #{admitted := 4}},
-            hls_protocol_mixed_stream:info(Stream)),
+        ?assertMatch(
+            #{counts := #{commands := 1, reverse := 1}, admission := #{admitted := 4}},
+            hls_protocol_mixed_stream:info(Stream)
+        ),
         %% Several natural 5 ms retries must not send the already admitted prefix again.
         timer:sleep(30),
-        ?assertMatch(#{counts := #{commands := 1, reverse := 1}, admission := #{admitted := 4}},
-            hls_protocol_mixed_stream:info(Stream)),
+        ?assertMatch(
+            #{counts := #{commands := 1, reverse := 1}, admission := #{admitted := 4}},
+            hls_protocol_mixed_stream:info(Stream)
+        ),
         ?assertMatch(#{data := [30, 20]}, hls_statem:info(maps:get(0, Actors))),
-        ?assertMatch(#{data := [], postponed := 2, mailbox := #{occupied := 2}},
-            hls_statem:info(maps:get(1, Actors))),
+        ?assertMatch(
+            #{data := [], postponed := 2, mailbox := #{occupied := 2}},
+            hls_statem:info(maps:get(1, Actors))
+        ),
         ?assertEqual([0, 1, 3], [N || #{kind := 2, sequence := N} <- packets(Peer)]),
         ?assertEqual([3, 4, 4, 4], operations(Peer))
     end).
@@ -88,20 +105,33 @@ write_failure_test() ->
 with_owner(SecondMode, Fun) ->
     Plan = plan(),
     Actors = maps:from_list([{I, actor(Mode)} || {I, Mode} <- [{0, running}, {1, SecondMode}]]),
-    Handle = spawn(fun() -> receive stop -> ok end end),
+    Handle = spawn(fun() ->
+        receive
+            stop -> ok
+        end
+    end),
     {ok, Peer} = hls_protocol_relay_peer:start(#{host => 55, service => 7, identity => <<1:256>>}),
     try
-        {ok, Stream} = hls_protocol_mixed_stream:start_link(Plan, Peer, Actors, 123, #{}),
+        Artifact = hls_deployment_artifact:new(mixed_application, Plan),
+        {ok, Stream} = hls_protocol_mixed_stream:start_link(Artifact, Peer, Actors, 123, #{}),
         unlink(Stream),
         try
             await(fun() -> maps:get(phase, hls_protocol_mixed_stream:info(Stream)) =:= attached end),
-            ok = gen_server:call(Stream, {source_bind, #{name => node()}, #{{actor, native} => Handle}}),
+            ok = gen_server:call(
+                Stream, {source_bind, #{name => node()}, #{{actor, native} => Handle}}
+            ),
             ok = gen_server:call(Stream, {source_attach, self()}),
             {ok, 1} = hls_protocol_mixed_stream:submit(Stream, start),
-            await(fun() -> #{written := Count} = hls_protocol_mixed_stream:info(Stream), Count =:= 2 end),
+            await(fun() ->
+                #{written := Count} = hls_protocol_mixed_stream:info(Stream),
+                Count =:= 2
+            end),
             ok = hls_protocol_relay_peer:emit(Peer, {16#83, 0, 0}, <<123:64/little, 0:32>>),
-            ?assertEqual({ok, 123, application, {started}}, hls_protocol_mixed_stream:next(Stream, 1000)),
-            Fun(Stream, Peer, Actors, Plan), ok
+            ?assertEqual(
+                {ok, 123, application, {started}}, hls_protocol_mixed_stream:next(Stream, 1000)
+            ),
+            Fun(Stream, Peer, Actors, Plan),
+            ok
         after
             catch hls_protocol_relay_peer:set(Peer, normal),
             catch hls_protocol_mixed_stream:stop(Stream)
@@ -116,32 +146,95 @@ with_owner(SecondMode, Fun) ->
 -spec actor(waiting | running) -> pid().
 actor(Mode) ->
     {ok, Pid} = hls_statem:start_link(hls_protocol_mixed_stream_actor, Mode, [{mailbox_capacity, 2}]),
-    unlink(Pid), Pid.
+    unlink(Pid),
+    Pid.
 
 %% The trusted descriptor contains only one dynamic u32 schema and explicit reverse destinations.
 -spec plan() -> map().
 plan() ->
     Module = hls_protocol_mixed_stream_actor,
-    Codec = hls_protocol_codec_plan:plan(#{message_bits => 32, payload_bits => 32,
-        fields => [#{type => {hls_type, hls_nums, uN, [32]}, message_bit_offset => 0, capture_bit_offset => 0}]},
-        Module:pack_tag(total)),
+    Codec = hls_protocol_codec_plan:plan(
+        #{
+            message_bits => 32,
+            payload_bits => 32,
+            fields => [
+                #{
+                    type => {hls_type, hls_nums, uN, [32]},
+                    message_bit_offset => 0,
+                    capture_bit_offset => 0
+                }
+            ]
+        },
+        Module:pack_tag(total)
+    ),
     Record = hls_record_codec:bind(total, [{value, hls_nums:u32()}]),
-    Schemas = #{total => #{name => total, selector => Module:pack_tag(total), width => 32, codec => Record}},
-    Class = #{slot => 0, port => out, tag => total, codec => Codec, message_bits => 32,
-        source_record => Record, destination_record => Record},
-    Links = [#{index => I, source_index => S, destination_index => D, direction => Direction,
-        source_module => Module, destination_module => Module, classes => [Class]}
-        || {I, S, D, Direction} <- [{10, 0, 2, to_rtl}, {20, 2, 0, to_beam}, {21, 2, 1, to_beam}]],
-    Actors = maps:from_list([{I, #{module => Module, capacity => 2, startup => [],
-        outputs => #{out => {actor, native}}, schemas => Schemas, output_schemas => #{out => [total]}}}
-        || I <- [0, 1]]),
-    Ingress = #{id => host, shape => [2, 1], targets => [#{id => all, selector => 0, schemas => [total]}],
-        bindings => [#{module => Module, schemas => Schemas, index => I, device => board,
-            point => [I, 0], targets => [all]} || I <- [0, 1]]},
-    #{actors => Actors, targets => #{{actor, native} => {actor, 2}}, binding => #{host => 55, control => 7},
+    Schemas = #{
+        total => #{name => total, selector => Module:pack_tag(total), width => 32, codec => Record}
+    },
+    Class = #{
+        slot => 0,
+        port => out,
+        tag => total,
+        codec => Codec,
+        message_bits => 32,
+        source_record => Record,
+        destination_record => Record
+    },
+    Links = [
+        #{
+            index => I,
+            source_index => S,
+            destination_index => D,
+            direction => Direction,
+            source_module => Module,
+            destination_module => Module,
+            classes => [Class]
+        }
+     || {I, S, D, Direction} <- [
+            {10, 0, 2, to_rtl},
+            {11, 1, 2, to_rtl},
+            {20, 2, 0, to_beam},
+            {21, 2, 1, to_beam}
+        ]
+    ],
+    Actors = maps:from_list([
+        {I, #{
+            module => Module,
+            capacity => 2,
+            startup => [],
+            outputs => #{out => {actor, native}},
+            schemas => Schemas,
+            output_schemas => #{out => [total]}
+        }}
+     || I <- [0, 1]
+    ]),
+    Ingress = #{
+        id => host,
+        shape => [2, 1],
+        targets => [#{id => all, selector => 0, schemas => [total]}],
+        bindings => [
+            #{
+                module => Module,
+                schemas => Schemas,
+                index => I,
+                device => board,
+                point => [I, 0],
+                targets => [all]
+            }
+         || I <- [0, 1]
+        ]
+    },
+    #{
+        actors => Actors,
+        targets => #{{actor, native} => {actor, 2}},
+        binding => #{host => 55, control => 7},
         mixed => #{identity => <<1:256>>, host_actors => [0, 1], links => Links},
-        application => #{partition => #{ingresses => [Ingress]},
-            devices => #{board => #{host => 55, control => 7, ingress => host, events => #{}}}}}.
+        bridge => #{externals => []},
+        application => #{
+            partition => #{ingresses => [Ingress]},
+            devices => #{board => #{host => 55, control => 7, ingress => host, events => #{}}}
+        }
+    }.
 
 %% Rectangle zero selects the consuming actor; one also selects the postponed actor.
 -spec control(0 | 1, non_neg_integer()) -> hls_partition_wire:command().
@@ -175,8 +268,13 @@ operations(Peer) ->
 -spec packets(pid()) -> [map()].
 packets(Peer) ->
     #{writes := Writes} = hls_protocol_relay_peer:stats(Peer),
-    [begin {packet, Packet} = hls_protocol_bridge_wire:event(123, {16#84, 0, 0}, Bytes), Packet end
-        || {_, {4, 0, 0}, Bytes} <- lists:reverse(Writes)].
+    [
+        begin
+            {packet, Packet} = hls_protocol_bridge_wire:event(123, {16#84, 0, 0}, Bytes),
+            Packet
+        end
+     || {_, {4, 0, 0}, Bytes} <- lists:reverse(Writes)
+    ].
 
 %% Every pause has a finite deadline and observes a public counter or broker receipt.
 -spec await(fun(() -> boolean())) -> ok.
@@ -184,10 +282,13 @@ await(Predicate) -> hls_bridge_phi_live:await(Predicate, 1000).
 
 %% A held completion proves that the request was issued before another event is injected.
 -spec await_held(pid()) -> ok.
-await_held(Peer) -> await(fun() -> maps:get(held, hls_protocol_relay_peer:stats(Peer)) =/= none end).
+await_held(Peer) ->
+    await(fun() -> maps:get(held, hls_protocol_relay_peer:stats(Peer)) =/= none end).
 
 %% Lifecycle assertions require the exact terminal reason, not merely a missing PID.
 -spec down(reference(), pid(), term()) -> ok.
 down(Monitor, Stream, Reason) ->
-    receive {'DOWN', Monitor, process, Stream, Reason} -> ok
-    after 1000 -> error(owner_retirement_timeout) end.
+    receive
+        {'DOWN', Monitor, process, Stream, Reason} -> ok
+    after 1000 -> error(owner_retirement_timeout)
+    end.

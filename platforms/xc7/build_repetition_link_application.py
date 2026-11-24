@@ -77,6 +77,7 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
              "-extra", stage], PROJECT, log, environment, timeout=1200)
     libraries = copy_libraries(stage, public)
     phi_field = PROJECT / "apps/hls_phi/src/phi_field.x"
+    artifact_source = PROJECT / "apps/hls_runtime/src/fabric/runtime/hls_deployment_artifact.erl"
     shutil.copyfile(phi_field, stage / phi_field.name)
     compiler = compiler_entry(public)
     products: dict[str, str] = {}
@@ -93,8 +94,11 @@ def build(xls: Path, public: Path, output: Path = BUILD, *, profile: str = "defa
         shutil.copyfile(stage / f"phi_device_{device}_ram.v", ram)
         products[rtl.name] = digest(rtl)
         products[ram.name] = digest(ram)
-    inputs = [Path(__file__), ROOT / "packaging_commands.py", ROOT / "build_link_application.py", FIXTURE, compiler, compiler_source(public, "compile_xls"), phi_field, *libraries,
-              *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl"))]
+    inputs = [Path(__file__), ROOT / "packaging_commands.py",
+              ROOT / "build_link_application.py", FIXTURE, artifact_source,
+              compiler, compiler_source(public, "compile_xls"), phi_field,
+              *libraries, *sorted((PROJECT / "apps/hls_fabric/src").glob("*.erl")),
+              *sorted((PROJECT / "apps/hls_phi/src").glob("*.erl"))]
     generated = ["deployment-a.etf", "deployment-b.etf", "fixture.json"]
     manifest = {
         "compiler_root": str(public), "rebar_profile": profile,

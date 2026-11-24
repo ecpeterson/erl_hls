@@ -1,8 +1,8 @@
 # Actor execution backends
 
-`erl_hls` owns Erlang callback semantics and dedicated communicating actors. This repository adds physical sharing: multiple logical actors use an executor and state/mailbox storage. Logical actor identities, messages and callback behavior remain unchanged by placement.
+`hls_compile` owns Erlang callback semantics, while `hls_fabric` plans communication and `hls_target` materializes dedicated or shared execution. Multiple logical actors can use one executor and state/mailbox storage without changing their logical identities, messages or callback behavior.
 
-Build with `rebar3 as test compile`. The dependency is pinned in `rebar.config`; for coordinated development, link the matching compiler checkout at `_checkouts/erl_hls` and its `apps/hls_runtime` directory at `_checkouts/hls_runtime`. External drivers accept an explicit `--erl-hls` checkout where needed; the selected compiler must have matching beams for the declared profile. See [build context](../building.md).
+Build the umbrella with `rebar3 as test compile`. External drivers accept an explicit `--erl-hls` tool root where needed; its helper/resources and selected façade/runtime BEAMs must remain compatible with the invoking profile's compiler, Fabric and target BEAMs. See [build context](../building.md).
 
 ## Select and inspect a backend
 
@@ -32,7 +32,7 @@ The primary `scheduler.config` keeps both counters dedicated. To share an execut
 
 For ordinary development, `hls_scheduler_build` performs the following sequence behind `hls_build`; the individual APIs are useful when changing a lowering pass:
 
-1. Compile every declared source and normalize the logical graph with `hls_topology` from `erl_hls`.
+1. Compile every declared source and normalize the logical graph with `hls_topology` from `hls_compile`.
 2. Normalize `placement` with `xls_fabric_topology_profile`, selecting scheduler groups, state/mailbox storage, queue depths and optional reduction placements.
 3. Prepare `Generation = xls_fabric_topology_dslx:plan(Topology, Placement)` once. Obtain requirements with `artifact_requirements(Generation)` and pass them to `xls_scheduler_actor:to_artifact/2` using each source's captured context. Retain the emitted artifacts for debug projection; `xls_emitted:write/2` publishes the main DSLX and its generated helper modules. In-memory bundles compose `bytes/1` with `dependencies/1` relative to the main file directory.
 4. Emit the graph with `xls_fabric_topology_dslx:emit(Generation)`. Its `analysis/1` supplies the retained scheduler and interfaces to `xls_scheduler_ram_v:bindings/3`; package those bindings, the hardware profile and unit schedule.
@@ -54,7 +54,7 @@ The profile selects the ordinary actor ABI through `frame_payload_words`, defaul
 
 The caller must own the selected actor state and reserve a destination for its result. Apply the returned mailbox directive only when `dispatched` is true, and only once for that selected message. Retain postponed messages in sender order and hold every valid returned effect batch until accepted. `effects_reserved=false` allows a callback to commit with entry work pending; preserve that returned state and resume it when publication capacity becomes available. The functions provide neither mailbox storage nor connected-protocol admission.
 
-Run `bash tools/hls_fabric/test_local_execution.sh /path/to/xls /path/to/fresh-stage` after preparing the compiler dependency. Interpreter/JIT witnesses vary source arithmetic, guards and phase names, exercise malformed frames and output stalls, and cover two projected slots with all 128 mutable field values. Separate IR conversion checks reductions and gathers with continuations. These finite checks do not establish network progress or routed timing.
+Run `bash tools/hls_fabric/test_local_execution.sh /path/to/xls /path/to/fresh-stage` after compiling the umbrella test profile. Interpreter/JIT witnesses vary source arithmetic, guards and phase names, exercise malformed frames and output stalls, and cover two projected slots with all 128 mutable field values. Separate IR conversion checks reductions and gathers with continuations. These finite checks do not establish network progress or routed timing.
 
 ## Observe and reproduce
 
@@ -68,11 +68,11 @@ For the decoder-only profile, `phi_decoder_profile_build:emit(Config, Options)` 
 
 Its `phi_decoder_profile.inputs.json` binds the generated sources, wrapper and profile metadata by SHA-256 and carries the XLS RAM configurations from the scheduler bindings. A separate RAM recipe fingerprint identifies the compiled renderer and channel-name authority, independently of the chosen geometry and actor sources, for experiment comparisons. `compile_phi_decoder_profile.py` verifies those inputs before passing the configurations to the common XLS executor; it does not interpret DSLX to recover placement. Regenerate an old prepared stage before compiling it. The manifest checks consistency of trusted local build output, not authenticity or hardware equivalence.
 
-Board shells, physical constraints, drivers and deployment probes live under `platforms/xc7`; decoder applications and their external drivers live under `apps/hls_phi` and `apps/hls_snowflake`. Remaining alternative implementations and ablations live under `experiments/`. Historical report paths are archive lookup keys, not current checkout paths. [CI coverage](../ci.md) separates routine backend witnesses from expensive complete-application measurements.
+Board shells, physical constraints, drivers and deployment probes live under `platforms/xc7`; decoder applications and their external drivers live under `apps/hls_phi` and `apps/hls_snowflake`. Historical report paths are archive lookup keys, not current checkout paths. [CI coverage](../ci.md) separates routine backend witnesses from expensive complete-application measurements.
 
 ## Maintenance boundary
 
-The common compiler's `xls_parse:actor_artifact/2` returns checked callback semantics: initialization, dispatch, effects, continuations, retained replies, reductions and source failures. `xls_actor_codegen:artifact/3` finalizes those semantics and a supplied execution body into an `xls_emitted` artifact. The artifact binds the main module and generated helper-module bytes to one failure codebook allocated from retained structured references; `xls_emitted:sites/2` additionally checks source locations at debug boundaries. The byte-only `emit/3`, `to_xls/2` and `xls_activation_codegen:emit/1` conveniences return only the main module for inspection; they do not carry generated imports. Fabric uses `xls_scheduler_actor:to_artifact/2` and `xls_activation_codegen:artifact/1` where metadata must survive specialization or owner composition. The artifact is a versioned-source interface through the dependency pin, not a stable serialized interchange format.
+The common compiler's `xls_parse:actor_artifact/2` returns checked callback semantics: initialization, dispatch, effects, continuations, retained replies, reductions and source failures. `xls_actor_codegen:artifact/3` finalizes those semantics and a supplied execution body into an `xls_emitted` artifact. The artifact binds the main module and generated helper-module bytes to one failure codebook allocated from retained structured references; `xls_emitted:sites/2` additionally checks source locations at debug boundaries. The byte-only `emit/3`, `to_xls/2` and `xls_activation_codegen:emit/1` conveniences return only the main module for inspection; they do not carry generated imports. Fabric uses `xls_scheduler_actor:to_artifact/2` and `xls_activation_codegen:artifact/1` where metadata must survive specialization or owner composition. The artifact is an in-process checked-source interface within one umbrella revision, not a stable serialized interchange format.
 
 Private code owns reservation, actor selection, storage transactions, execution handoff, retirement, effect windows and offloaded reductions. Pipeline changes belong here. Dedicated actors continue to use the public execution body, including in mixed graphs; XLS can pipeline their generated procs independently.
 

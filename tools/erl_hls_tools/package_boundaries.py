@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,27 @@ ARCHITECTURE_FORBIDDEN = {
     'hls_fabric': {'erl_hls', 'hls_target', 'hls_spacetime', 'hls_spacetime_observer'},
     'hls_target': {'erl_hls', 'hls_spacetime', 'hls_spacetime_observer'},
 }
+
+# hls_gs retains the public callback/type-provider identity. Compilation may call only its
+# process-free retained-handle descriptor; every live runtime entry point remains forbidden.
+COMPILE_RUNTIME_ALLOWED_CALLS = {('xls_provider_gs', 'hls_gs', 'from', 0)}
+
+RUNTIME_PROJECT_DIRECTORIES = {'ebin', 'include'}
+RUNTIME_PROJECT_SUFFIXES = {
+    'ebin': {'.app', '.appup', '.beam'},
+    'include': {'.hrl', '.md'},
+}
+RUNTIME_LIBRARY_DIRECTORIES = {'ebin', 'include', 'priv'}
+RUNTIME_RELEASE_DIRECTORIES = {'bin', 'lib', 'releases'}
+BUILD_LAUNCHERS = {
+    'compile-source-build', 'compile_xls.py', 'hls-fabric', 'hls-repetition', 'hlsc'
+}
+RUNTIME_FORBIDDEN_SUFFIXES = {
+    '.bash', '.c', '.cc', '.cmake', '.cpp', '.erl', '.escript', '.ex', '.exs', '.h',
+    '.hpp', '.ir', '.m', '.mk', '.mm', '.py', '.sh', '.sv', '.tcl', '.v', '.vhd',
+    '.vhdl', '.x', '.xdc', '.zsh',
+}
+RELEASE_APPLICATION = re.compile(r'\{\s*([a-z][a-zA-Z0-9_@]*),\s*"[^"]+"(?:\s*,[^{}]*)?\}')
 
 # Inspect inert BEAM tables; no application or project module is started or called.
 ERLANG_AUDIT = r'''
@@ -36,7 +58,9 @@ Inspect = fun(Module, App) ->
     {ok, {Module, [{imports, Imports}, {abstract_code, {raw_abstract_v1, Forms}}]}} =
         beam_lib:chunks(unicode:characters_to_list(Beam), [imports, abstract_code]),
     #{module => Module, application => maps:get(name, App),
-      imports => lists:usort([M || {M, _, _} <- Imports]), types => lists:usort(Remote(Forms))}
+      imports => lists:usort([M || {M, _, _} <- Imports]),
+      calls => lists:usort([[M, F, A] || {M, F, A} <- Imports]),
+      types => lists:usort(Remote(Forms))}
 end,
 Modules = [Inspect(M, App) || App <- Apps,
     lists:member(atom_to_binary(maps:get(name, App)), Runtime), M <- maps:get(modules, App)],
@@ -54,6 +78,12 @@ def application_files(root: Path, profile: str) -> list[Path]:
                 for path in sorted(directory.glob('*.app')):
                     applications[path.stem] = path
     return list(applications.values())
+
+
+def project_applications(root: Path) -> set[str]:
+    """Return OTP application names owned by this umbrella, excluding fetched dependencies."""
+    suffix = '.app.src'
+    return {path.name[:-len(suffix)] for path in (root/'apps').glob('*/src/*.app.src')}
 
 
 def undeclared_application_dependencies(snapshot: dict,
@@ -89,6 +119,137 @@ def duplicate_module_ownership(snapshot: dict) -> list[dict[str, str]]:
             for module, applications in sorted(owners.items()) if len(applications) > 1]
 
 
+def release_manifest_applications(path: Path) -> set[str]:
+    """Read application names from one generated OTP release manifest."""
+    return set(RELEASE_APPLICATION.findall(path.read_text())) - {'erts'}
+
+
+def runtime_release_violations(snapshot: dict, runtimes: set[str],
+                               release: Path) -> list[dict[str, str]]:
+    """Require an exact runtime closure and reject build assets in every packaged library."""
+    if not release.is_dir():
+        return []
+    errors: list[dict[str, str]] = []
+    project = set(snapshot.get(
+        'project_applications', (app['name'] for app in snapshot['applications'])))
+    expected_modules = {
+        app['name']: set(app['modules']) for app in snapshot['applications']
+    }
+    library = release/'lib'
+    roots = sorted(library.iterdir()) if library.is_dir() else []
+    app_files: list[Path] = []
+    for root in roots:
+        if root.is_symlink() or not root.is_dir():
+            errors.append(dict(kind='release_library_root',
+                               path=str(root.relative_to(release))))
+            continue
+        applications = sorted((root/'ebin').glob('*.app'))
+        app_files.extend(applications)
+        if len(applications) != 1:
+            errors.append(dict(kind='release_library_application_count',
+                               path=str(root.relative_to(release)),
+                               count=str(len(applications))))
+        elif not root.name.startswith(applications[0].stem + '-'):
+            errors.append(dict(kind='release_library_application_name',
+                               path=str(root.relative_to(release)),
+                               application=applications[0].stem))
+        for entry in sorted(root.iterdir()):
+            if (entry.is_symlink() or not entry.is_dir() or
+                    entry.name not in RUNTIME_LIBRARY_DIRECTORIES):
+                errors.append(dict(kind='release_library_asset',
+                                   path=str(entry.relative_to(release))))
+        for asset in sorted(root.rglob('*')):
+            if asset.is_symlink():
+                errors.append(dict(kind='release_library_symlink',
+                                   path=str(asset.relative_to(release))))
+                continue
+            if asset.is_dir():
+                continue
+            if (asset.name in BUILD_LAUNCHERS or
+                    asset.suffix.lower() in RUNTIME_FORBIDDEN_SUFFIXES):
+                errors.append(dict(kind='release_forbidden_asset',
+                                   path=str(asset.relative_to(release))))
+    application_copies: dict[str, int] = {}
+    for app_file in app_files:
+        application_copies[app_file.stem] = application_copies.get(app_file.stem, 0) + 1
+    for application, count in sorted(application_copies.items()):
+        if count != 1:
+            errors.append(dict(kind='release_application_library_count',
+                               application=application, count=str(count)))
+    released = {path.stem for path in app_files}
+    for entry in sorted(release.iterdir()):
+        if entry.name not in RUNTIME_RELEASE_DIRECTORIES:
+            errors.append(dict(kind='release_overlay_asset', path=entry.name))
+        elif entry.is_symlink() or not entry.is_dir():
+            errors.append(dict(kind='release_root_entry', path=entry.name))
+    for asset in sorted(release.rglob('*')):
+        relative = asset.relative_to(release)
+        if asset.is_symlink():
+            errors.append(dict(kind='release_symlink', path=str(relative)))
+        elif (not asset.is_dir() and relative.parts[0] not in {'bin', 'lib'} and
+              (asset.name in BUILD_LAUNCHERS or
+               asset.suffix.lower() in RUNTIME_FORBIDDEN_SUFFIXES)):
+            errors.append(dict(kind='release_forbidden_asset', path=str(relative)))
+    for name in sorted((released & project) - runtimes):
+        errors.append(dict(kind='unexpected_release_application', application=name))
+
+    manifests = sorted((release/'releases').glob('*/*.rel'))
+    if len(manifests) != 1:
+        errors.append(dict(kind='release_manifest_count', path=str(release),
+                           count=str(len(manifests))))
+    else:
+        manifest = release_manifest_applications(manifests[0])
+        for name in sorted(released - manifest):
+            errors.append(dict(kind='unlisted_release_application', application=name))
+        for name in sorted(manifest - released):
+            errors.append(dict(kind='missing_release_library', application=name))
+        for name in sorted((manifest & project) - runtimes):
+            errors.append(dict(kind='unexpected_release_manifest_application', application=name))
+        for name in sorted(runtimes - manifest):
+            errors.append(dict(kind='missing_release_manifest_application', application=name))
+        allowed_bin = {
+            manifests[0].stem,
+            f'{manifests[0].stem}-{manifests[0].parent.name}',
+            'install_upgrade.escript',
+            'no_dot_erlang.boot',
+            'nodetool',
+        }
+        for entry in sorted((release/'bin').iterdir() if (release/'bin').is_dir() else []):
+            if entry.name not in allowed_bin:
+                errors.append(dict(kind='release_build_launcher',
+                                   path=str(entry.relative_to(release))))
+
+    for app_file in app_files:
+        if app_file.stem not in runtimes:
+            continue
+        root = app_file.parent.parent
+        released_modules = {path.stem for path in (root/'ebin').glob('*.beam')}
+        for module in sorted(released_modules - expected_modules.get(app_file.stem, set())):
+            errors.append(dict(kind='unexpected_release_beam', application=app_file.stem,
+                               module=module))
+        for module in sorted(expected_modules.get(app_file.stem, set()) - released_modules):
+            errors.append(dict(kind='missing_release_beam', application=app_file.stem,
+                               module=module))
+        for entry in sorted(root.iterdir()):
+            if entry.name not in RUNTIME_PROJECT_DIRECTORIES:
+                errors.append(dict(kind='release_project_asset', application=app_file.stem,
+                                   path=str(entry.relative_to(release))))
+                continue
+            for asset in sorted(entry.rglob('*')):
+                if (asset.is_symlink() or asset.is_dir() or
+                        asset.suffix not in RUNTIME_PROJECT_SUFFIXES[entry.name]):
+                    errors.append(dict(kind='release_project_asset', application=app_file.stem,
+                                       path=str(asset.relative_to(release))))
+
+    if len(manifests) != 1:
+        for name in sorted(BUILD_LAUNCHERS):
+            launcher = release/'bin'/name
+            if launcher.exists():
+                errors.append(dict(kind='release_build_launcher',
+                                   path=str(launcher.relative_to(release))))
+    return errors
+
+
 def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
                release: Path | None = None) -> list[dict[str, str]]:
     """Reject declared dependencies, calls or remote types crossing the runtime/build boundary."""
@@ -121,6 +282,7 @@ def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
         released = {app.stem for app in applications}
         for name in sorted(runtimes - released):
             errors.append(dict(kind='missing_release_application', application=name))
+        errors.extend(runtime_release_violations(snapshot, runtimes, release))
     return errors
 
 
@@ -142,6 +304,21 @@ def architecture_violations(snapshot: dict) -> list[dict[str, str]]:
     for application, forbidden in ARCHITECTURE_FORBIDDEN.items():
         if application in found:
             errors.extend(violations(snapshot, {application}, forbidden & found, None))
+    owners = {module: app['name'] for app in snapshot['applications'] for module in app['modules']}
+    for module in snapshot['runtime_modules']:
+        if module['application'] != 'hls_compile':
+            continue
+        for target in module['types']:
+            if owners.get(target) == 'hls_runtime':
+                errors.append(dict(kind='compile_runtime_boundary', reference='types',
+                                   module=module['module'], target=target))
+        for target, function, arity in module.get('calls', []):
+            edge = (module['module'], target, function, arity)
+            if (owners.get(target) == 'hls_runtime' and
+                    edge not in COMPILE_RUNTIME_ALLOWED_CALLS):
+                errors.append(dict(kind='compile_runtime_boundary', reference='call',
+                                   module=module['module'], target=target,
+                                   function=function, arity=str(arity)))
     return errors
 
 
@@ -167,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(result.stdout + result.stderr)
         return 1
     snapshot = json.loads(result.stdout)
+    snapshot['project_applications'] = sorted(project_applications(args.root.resolve()))
     errors = duplicate_module_ownership(snapshot)
     errors.extend(policy_violations(snapshot, set(args.runtime), set(args.forbid), args.release))
     errors.extend(architecture_violations(snapshot))

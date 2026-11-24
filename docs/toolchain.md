@@ -8,7 +8,7 @@ _build/default/rel/erl_hls/bin/hlsc --help
 _build/default/rel/erl_hls/bin/hlsc emit apps/erl_hls/src/examples/regsvc/regsvc.erl --output /path/to/fresh-bundle
 ```
 
-Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application or a distributed Erlang node. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
+Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application, the `hls_runtime` application or a distributed Erlang node. Runtime BEAM files remain available on the code path because source types can use pure runtime-owned providers such as `hls_gs:from()`; loading those value/codec callbacks does not start `hls_fabric_sup` or another service. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
 
 `hlsc emit SOURCE --output DIRECTORY` lowers one supported `hls_gs` or `hls_statem` actor through `hls_compile:actor/3` and the `xls_parse:to_artifact/2` path. It writes annotated `actor.x`, its `actor.x.json` runtime failure-codebook sidecar and a source bundle. Fabric placement, gateways, shared execution and application presets belong to downstream frontends.
 
@@ -54,7 +54,7 @@ The command lowers each actor with the topology's derived requirements and emits
 
 ## Bundle contract
 
-`hls_artifact_bundle` is the shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees with the default frame capacity; `support/3` accepts a checked `hls_frame_layout`. Clients that snapshot libraries directly call `configure_support/2` on the fresh copy before `finish/3`. This replaces only the copied frame configuration before hashes are frozen; never reconfigure a published bundle. `support_layout/1` describes the same sources and bundle-relative import directories without copying them. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
+`hls_artifact_bundle` is the target-owned shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees with the default frame capacity; `support/3` accepts a checked `hls_frame_layout`. Clients that snapshot libraries directly call `configure_support/2` on the fresh copy before `finish/3`. This replaces only the copied frame configuration before hashes are frozen; never reconfigure a published bundle. `support_layout/1` describes the same sources and bundle-relative import directories without copying them. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
 
 Version 1 of `source-build.json` contains:
 
@@ -103,4 +103,4 @@ A later-unit failure leaves the previous release selected and retains the failed
 
 The relocation tests use real Erlang lowering and mock external executables. They establish packaging/invocation behavior, not hardware semantics; RTL simulation and physical measurement remain separate evidence.
 
-The [telemetry example](../apps/erl_hls/src/examples/telemetry/README.md) shows a complete communicating project built with these APIs: actor sources and shared records, a logical topology, CPU execution, portable source packaging and public-port RTL simulation. It needs no downstream fabric package.
+The [telemetry example](../apps/erl_hls/src/examples/telemetry/README.md) shows a complete communicating project built with these APIs: actor sources and shared records, a logical topology, CPU execution, portable source packaging and public-port RTL simulation. It needs no Fabric communication plan or deployed device session.

@@ -20,9 +20,11 @@ covering both graphs, gateways, links and transport buffers.
 %% gen_server callbacks.
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
--doc "Attaches one broker per device for the calling owner. Options are queue_limit (128 frames) and write_timeout (10000 ms).".
--spec start_link(map(), #{term() => pid()}, map()) -> {ok, pid()} | {error, term()}.
-start_link(Deployment, Brokers, Options) ->
+-doc "Attaches one validated partition-application artifact to one broker per device for the calling owner. Options are queue_limit (128 frames) and write_timeout (10000 ms).".
+-spec start_link(hls_deployment_artifact:artifact(), #{term() => pid()}, map()) ->
+    {ok, pid()} | {error, term()}.
+start_link(Artifact, Brokers, Options) ->
+    Deployment = hls_deployment_artifact:descriptor(partition_application, Artifact),
     gen_server:start_link(?MODULE, {self(), Deployment, Brokers, Options}, []).
 
 -doc "Admits a whole command batch or returns busy before sending any part. start is single-use per explicit-start connection; its admission does not acknowledge activation. Delivery across devices is not atomic.".

@@ -1,0 +1,8 @@
+{application, stage4_runtime_consumer, [
+    {description, "External runtime-only package witness"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [kernel, stdlib, hls_core, hls_runtime]},
+    {env, []},
+    {modules, []}
+]}.

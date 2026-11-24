@@ -82,7 +82,7 @@ inspect(#plan{backend = Backend, value = Plan}, Stage) ->
     Builder = builder(Backend),
     (Builder:inspect(Plan, Stage))#{backend => Backend}.
 
--doc "Writes the retained backend plan to a fresh source bundle. Both backends use the same compiler-owned manifest and optional external driver; this call neither executes XLS nor runs simulation or qualification.".
+-doc "Writes the retained backend plan to a fresh source bundle. Both backends use the same target-owned portable manifest and optional external driver; this call neither executes XLS nor runs simulation or qualification.".
 -spec write(plan(), file:filename()) -> manifest().
 write(#plan{backend = Backend, value = Plan}, Directory) ->
     Builder = builder(Backend),

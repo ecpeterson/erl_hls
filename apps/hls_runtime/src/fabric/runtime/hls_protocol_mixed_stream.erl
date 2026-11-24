@@ -73,10 +73,13 @@ One bounded owner for source actors, shared framing and BEAM admission. A failed
     source_messages := non_neg_integer()
 }.
 
--doc "Starts a fresh owner with exact source-bound host plan, broker, disconnected BEAM PIDs and nonzero fresh session. Options accepts admission_timeout only. Caller becomes the sole control/event consumer. Prior transport retirement and hardware reset must be established externally; this does not reset hardware. Starts one framed attachment, admits retained startup through public BEAM barriers, and requires a separately bound sealed virtual node before start.".
--spec start_link(map(), pid(), #{actor_id() => pid()}, pos_integer(), map()) ->
+-doc "Starts a fresh owner from a validated mixed-application artifact, broker, disconnected BEAM PIDs and nonzero fresh session. Options accepts admission_timeout only. Caller becomes the sole control/event consumer. Prior transport retirement and hardware reset must be established externally; this does not reset hardware. Starts one framed attachment, admits retained startup through public BEAM barriers, and requires a separately bound sealed virtual node before start.".
+-spec start_link(
+    hls_deployment_artifact:artifact(), pid(), #{actor_id() => pid()}, pos_integer(), map()
+) ->
     gen_server:start_ret().
-start_link(Plan, Broker, Pids, Session, Options) ->
+start_link(Artifact, Broker, Pids, Session, Options) ->
+    Plan = hls_deployment_artifact:descriptor(mixed_application, Artifact),
     gen_server:start_link(?MODULE, {Plan, Broker, Pids, Session, Options, self()}, []).
 
 -doc "Queues one checked rectangle or single-use start, returning busy without admission at the 16-command limit. Only the owner client may call. An accepted command may be partially executed on later failure; never replay.".

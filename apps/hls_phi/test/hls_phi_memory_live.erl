@@ -54,9 +54,10 @@ with_activation(Stage, Options, Fun) ->
         {D, Broker}
     end || D <- [0, 1]]),
     Deployment = hls_partition_binding:deployment(Partition),
+    Artifact = hls_deployment_artifact:new(partition_application, Deployment),
     Physical = maps:values(Brokers) ++ [B || #{fabric := B} <- Connections],
     Leases = [begin #{io := #{lease := L}} = hls_fabric:info(B), L end || B <- Physical],
-    {ok, Application} = hls_partition_stream:start_link(Deployment, Brokers, Options),
+    {ok, Application} = hls_partition_stream:start_link(Artifact, Brokers, Options),
     Resources = #{application => Application, brokers => Brokers, connections => Connections,
         physical => Physical, leases => Leases, partition => Partition, deployment => Deployment},
     try Fun(Resources)

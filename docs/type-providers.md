@@ -1,6 +1,6 @@
 # Type providers and compiler extensions
 
-A descriptor `{hls_type, Module, Name, Arguments}` identifies a value representation. `hls_type` in the `hls_core` library owns host dispatch; `xls_type` in the `erl_hls` compiler owns DSLX rendering and operation lowering. The descriptor always names its original provider, including during compilation. Packaging does not replace it with a compiler-companion name.
+A descriptor `{hls_type, Module, Name, Arguments}` identifies a value representation. `hls_type` in the `hls_core` library owns host dispatch; `xls_type` in `hls_compile` owns DSLX rendering and operation lowering. The descriptor always names its original provider, including during compilation. Packaging does not replace it with a compiler-companion name.
 
 ## Host contract
 
@@ -25,7 +25,7 @@ Providers implement only the roles they support: an operation library need not d
 
 Use `xls_type:print_type/1`, `dslx_from_bits/2` and `dslx_to_bits/2` when composing descriptors. Use `xls_type:transpile/4` to delegate a source operation to another provider. These APIs preserve nested element codecs and wire padding. Return deferred `xls_dslx:value()` fragments; do not render them while composing an enclosing computation, because that would lose structured failure references.
 
-The compiler has an explicit mapping from built-in core modules to `xls_provider_*` companions. It is an implementation dispatch table, with no provider registration or version registry. For custom modules, `xls_type:provider/1` returns the original module and calls its existing callbacks directly. A custom module can declare both `hls_type` and `xls_type` behaviours; adding an operation does not require editing the compiler's built-in mapping. Its compiler callbacks need compiler APIs only on compilation paths. Applications remain responsible for keeping their host operations independent of those callbacks when deploying without `erl_hls`.
+The compiler has an explicit mapping from built-in core modules to `xls_provider_*` companions. It is an implementation dispatch table, with no provider registration or version registry. For custom modules, `xls_type:provider/1` returns the original module and calls its existing callbacks directly. A custom module can declare both `hls_type` and `xls_type` behaviours; adding an operation does not require editing the compiler's built-in mapping. Its compiler callbacks need compiler APIs only on compilation paths. Applications remain responsible for keeping their host operations independent of those callbacks when deploying without `hls_compile` or the `erl_hls` façade.
 
 Import discovery visits only the selected hardware source and nested type arguments. The provider declares direct DSLX imports; XLS resolves their transitive imports using the supplied search path. The callbacks do not discover files or package support assets themselves. See [source selection and compilation](actor-compilation.md) for preparation and [expression lowering](expression-ir.md) for the source/target representation boundary.
 

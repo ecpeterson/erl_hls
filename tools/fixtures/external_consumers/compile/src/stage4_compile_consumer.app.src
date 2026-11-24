@@ -1,0 +1,18 @@
+{application, stage4_compile_consumer, [
+    {description, "External compile-time facade witness"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        hls_core,
+        hls_runtime,
+        hls_compile,
+        hls_fabric,
+        hls_target,
+        erl_hls
+    ]},
+    {env, []},
+    {modules, []}
+]}.

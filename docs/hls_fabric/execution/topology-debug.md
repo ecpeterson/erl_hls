@@ -21,7 +21,7 @@ python3 "$erl_hls_root/tools/topology_debug.py" \
 
 Supply Yosys on `PATH` or through `--yosys`. All observed channels must share the selected clock; crossings are rejected. Clock/reset defaults are `clk` and active-high `reset`. Preserve the application's actual reset polarity.
 
-Compile `instrumented.v`, `debug_top.v` and the selected compiler dependency's `priv/rtl/debug/{hls_debug_frame_rx,hls_debug_route,hls_topology_debug}.v`, selecting `hls_debug_application` as top. Actor projections also require that directory's `hls_actor_snapshot.v`. Resolve this dependency through the [build context](../building.md#experiment-and-diagnostic-drivers); these assets are not under the fabric checkout's `priv/`. The wrapper preserves application ports and adds `s_dbg_*`/`m_dbg_*`. Reserved-port collisions require connecting the inner query service to an existing router instead.
+Compile `instrumented.v`, `debug_top.v` and the selected umbrella's `apps/hls_target/priv/rtl/debug/{hls_debug_frame_rx,hls_debug_route,hls_topology_debug}.v`, selecting `hls_debug_application` as top. Actor projections also require that directory's `hls_actor_snapshot.v`. Resolve the selected checkout and profile through the [build context](../building.md#experiment-and-diagnostic-drivers). The wrapper preserves application ports and adds `s_dbg_*`/`m_dbg_*`. Reserved-port collisions require connecting the inner query service to an existing router instead.
 
 Keep `manifest.json` with the **exact bitstream**. Its embedded fingerprint covers resource wiring and source hashes. Resource IDs and hierarchy names are build-local; logical actor identities come from a verified catalog. A projection and width-compatible RTL alone do not prove semantic correspondence.
 

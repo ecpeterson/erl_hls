@@ -73,8 +73,8 @@ def compiler_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
 def compiler_runtime_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
     """Select runtime beams belonging to the explicit compiler build or its installed siblings.
 
-    A checkout override replaces both compiler-owned applications. Never combine
-    its compiler with the fabric dependency's unrelated runtime provider code.
+    A checkout override replaces both selected umbrella applications. Never combine
+    its facade with the Fabric dependency's unrelated runtime provider code.
     """
     public = public.resolve()
     base = public / "_build" / profile

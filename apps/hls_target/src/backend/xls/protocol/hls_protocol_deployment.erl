@@ -45,7 +45,7 @@
 -doc "Every numbered role bundle and the final deployment binding, before output I/O.".
 -type output() :: hls_generated_files:output(result()).
 
--doc "Writes a fresh deployment and numbered role bundles from a trusted config map or filename. Each device supplies native_actors, host and service; limits bounds crossings, commands and events. Requires complete disjoint ownership, distinct return endpoints and rectangle control. Generation failures create no output; I/O failures retain partial output. All roles share one retirement/reset domain; the result remains ineligible for device admission.".
+-doc "Writes a fresh deployment and numbered role bundles from a trusted config map or filename. Returns the emitted build descriptor while deployment.etf contains its validated runtime artifact. Each device supplies native_actors, host and service; limits bounds crossings, commands and events. Requires complete disjoint ownership, distinct return endpoints and rectangle control. Generation failures create no output; I/O failures retain partial output. All roles share one retirement/reset domain; the result remains ineligible for device admission.".
 -spec write(hls_source_config:deployment() | file:filename() | plan(), file:filename()) -> result().
 write(Config, Directory) ->
     hls_generated_files:write(emit(Config), Directory).
@@ -131,12 +131,13 @@ emit(#plan{roles = Roles, descriptor = Descriptor}) ->
      || {Device, _, #{result := #{bridge := Bridge}}} <- Outputs
     ]),
     Deployment = Descriptor#{devices := Bridges},
+    Artifact = hls_deployment_artifact:new(protocol_deployment, Deployment),
     Files = hls_generated_files:merge(
         [
             hls_generated_files:prefix(Name, RoleFiles)
          || {_, Name, #{files := RoleFiles}} <- Outputs
         ] ++
-            [#{"deployment.etf" => term_to_binary(Deployment, [deterministic])}]
+            [#{"deployment.etf" => hls_deployment_artifact:encode(Artifact)}]
     ),
     #{files => Files, result => Deployment};
 emit(Config) ->

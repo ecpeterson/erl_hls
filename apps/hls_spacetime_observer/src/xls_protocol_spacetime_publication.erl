@@ -116,7 +116,7 @@ plan(
     #{fabric := Fabric = #{sources := Sources, links := Links}, receivers := Receivers} =
         Transport = binary_to_term(maps:get(<<"transport.etf">>, Files)),
     #{source_boundary := #{activation := Activation, inspection := none, externals := Groups}} =
-        binary_to_term(maps:get(<<"deployment.etf">>, Files)),
+        binary_to_term(maps:get(<<"application-build.etf">>, Files)),
     require(maps:get(crossings, Fabric, []) =:= [], crossing_links),
     require(maps:get(arithmetic, Transport) =:= [], shared_arithmetic),
     #{files := GeneratedTransport} = xls_protocol_transport:emit(
@@ -192,7 +192,7 @@ plan(
     Names =
         [
             <<"transport.etf">>,
-            <<"deployment.etf">>,
+            <<"application-build.etf">>,
             <<"dslx/transport.x">>,
             <<"network/network.x">>,
             <<"boundary/boundary.x">>,

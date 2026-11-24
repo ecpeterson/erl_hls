@@ -25,7 +25,8 @@ binding_test() ->
     ok=events(A),
     ?assertException(error,_,hls_protocol_application_codec:control(A,{host,all,{0,0,2,0},{total,12}})),
     ?assertException(error,_,hls_protocol_application_codec:control(A,{host,all,{0,0,1,0},{value,12}})),
-    {ok,Bytes}=file:read_file(filename:join(Dir,"deployment.etf")),?assertEqual(D,binary_to_term(Bytes)),ok.
+    {ok,Artifact}=hls_deployment_artifact:load(filename:join(Dir,"deployment.etf")),
+    ?assertEqual(hls_deployment_artifact:new(protocol_deployment,D),Artifact),ok.
 
 %% Canonical record bytes and source ownership are both required for a typed external event.
 -spec events(map()) -> ok.

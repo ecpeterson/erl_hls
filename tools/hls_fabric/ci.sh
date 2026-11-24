@@ -45,8 +45,8 @@ if [[ "$suite" == all || "$suite" == software ]]; then
     python3 tools/hls_fabric/check_application_boundaries.py \
         --profile default --profile spacetime
     rebar3 release -n hls_fabric
-    python3 tools/hls_fabric/check_package_boundaries.py --runtime hls_core --runtime hls_runtime \
-        --release _build/default/rel/hls_fabric
+    bash tools/hls_fabric/test_runtime_release.sh _build/default/rel/hls_fabric
+    python3 tools/test_external_consumers.py
     record_time software
 fi
 if [[ "$suite" == all || "$suite" == components ]]; then

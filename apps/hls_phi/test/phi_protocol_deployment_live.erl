@@ -5,8 +5,8 @@
 -doc "Runs cutoff-eight N6 feedback/readout with the source-bound typed relay, then stops every route and broker and awaits both leases. Pending algorithm chatter is explicitly cancelled by whole-deployment retirement; a quiet application fence is not global network quiescence. Each invocation requires reset hardware and distinct fresh sessions.".
 -spec run(file:filename(),file:filename(),pos_integer(),pos_integer()) -> ok.
 run(Build,Stage,Width,Incarnation) ->
-    {ok,Bytes}=file:read_file(filename:join(Build,"deployment.etf")),
-    Deployment=#{devices:=Devices}=binary_to_term(Bytes),
+    {ok,Deployment}=hls_deployment_artifact:load(filename:join(Build,"deployment.etf")),
+    #{devices:=Devices}=hls_deployment_artifact:descriptor(protocol_deployment,Deployment),
     Roles=lists:sort(maps:keys(Devices)),
     Brokers=maps:from_list([begin P=filename:join(Stage,"role"++integer_to_list(R)),
         {ok,B}=hls_fabric:start_link(P++"_tx",P++"_rx",#{rx_route_limit=>1}),{R,B} end||R<-Roles]),

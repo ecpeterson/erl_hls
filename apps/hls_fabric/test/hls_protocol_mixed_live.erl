@@ -8,14 +8,15 @@ run(Binding,Stage,N,Session)->execute(Binding,Stage,N,Session).
 -spec execute(file:filename(),file:filename(),pos_integer(),pos_integer()) -> ok.
 execute(Binding,Stage,N,Session)->
     hls_test_nodes:distribution(),{ok,_}=application:ensure_all_started(crypto),
-    Plan=#{actors:=Actors}=read(filename:join(Binding,"mixed.etf")),
+    {ok,Artifact}=hls_deployment_artifact:load(filename:join(Binding,"mixed.etf")),
+    #{actors:=Actors}=hls_deployment_artifact:descriptor(mixed_application,Artifact),
     Pids=maps:map(fun(_,#{module:=Module})->{ok,P}=Module:start_link(),unlink(P),P end,Actors),
     {ok,App}=hls_fabric:start_link(filename:join(Stage,"app_tx"),filename:join(Stage,"app_rx"),#{rx_route_limit=>1}),
     {ok,Debug}=hls_actor_broker_fixture:start(debug),
-    {ok,Stream}=hls_protocol_mixed_stream:start_link(Plan,App,Pids,Session,#{}),unlink(Stream),
+    {ok,Stream}=hls_protocol_mixed_stream:start_link(Artifact,App,Pids,Session,#{}),unlink(Stream),
     [_Local,Host]=string:split(atom_to_list(node()),"@"),
     Name=list_to_atom("mixed_live_"++integer_to_list(erlang:unique_integer([positive]))++"@"++Host),
-    {ok,Node}=hls_node:start_link(Name,#{application=>App,debug=>Debug},[hls_protocol_mixed_host:service(Plan,Stream,Pids)],#{}),unlink(Node),
+    {ok,Node}=hls_node:start_link(Name,#{application=>App,debug=>Debug},[hls_protocol_mixed_host:service(Artifact,Stream,Pids)],#{}),unlink(Node),
     try
         pong=net_adm:ping(Name),
         Result=phi_protocol_repetition:run(hls_protocol_mixed_stream,Stream,N,8,123,60000),
@@ -34,6 +35,3 @@ execute(Binding,Stage,N,Session)->
         catch hls_fabric:stop(App),catch hls_actor_broker_fixture:stop(Debug),
         maps:foreach(fun(_,P)->catch hls_statem:stop(P) end,Pids)
     end.
-%% Inputs are trusted local retained build artifacts, never device-supplied Erlang terms.
--spec read(file:filename()) -> term().
-read(Path)->{ok,Bytes}=file:read_file(Path),binary_to_term(Bytes).

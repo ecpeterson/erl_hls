@@ -59,14 +59,18 @@ One bounded framed owner for a fixed deployment of source-protocol RTL partition
     written := non_neg_integer()
 }.
 
--doc "Attaches one fresh broker per deployment device using the descriptor's identity, host and service. Device keys must match brokers and distinct nonzero sessions. Return route pairs must be unique because broker deliveries contain a route but no broker identity. All participants share one reset/retirement domain; the caller exclusively owns commands/events and must retire old transports before reuse.".
--spec start_link(map(), map(), map()) -> gen_server:start_ret().
-start_link(Plan, Brokers, Sessions) ->
+-doc "Attaches one fresh broker per device in a validated protocol-deployment artifact using its identity, host and service. Device keys must match brokers and distinct nonzero sessions. Return route pairs must be unique because broker deliveries contain a route but no broker identity. All participants share one reset/retirement domain; the caller exclusively owns commands/events and must retire old transports before reuse.".
+-spec start_link(hls_deployment_artifact:artifact(), map(), map()) -> gen_server:start_ret().
+start_link(Artifact, Brokers, Sessions) ->
+    Plan = hls_deployment_artifact:descriptor(protocol_deployment, Artifact),
     gen_server:start_link(?MODULE, {Plan, Brokers, Sessions, self(), raw}, []).
 
--doc "Attaches a fresh deployment emitted by hls_protocol_deployment with source-checked application codecs. submit accepts typed rectangle commands and next returns {ok,Device,External,Record}; aggregate start uses Device=application. The same bounded owner, crossing queue and collective retirement rules apply; descriptors must be trusted local build outputs.".
--spec start_application(map(), map(), map()) -> gen_server:start_ret().
-start_application(Plan = #{application := Application}, Brokers, Sessions) ->
+-doc "Attaches a validated protocol-deployment artifact with source-checked application codecs. submit accepts typed rectangle commands and next returns {ok,Device,External,Record}; aggregate start uses Device=application. The same bounded owner, crossing queue and collective retirement rules apply.".
+-spec start_application(hls_deployment_artifact:artifact(), map(), map()) -> gen_server:start_ret().
+start_application(Artifact, Brokers, Sessions) ->
+    Plan =
+        #{application := Application = #{}} =
+        hls_deployment_artifact:descriptor(protocol_deployment, Artifact),
     gen_server:start_link(?MODULE, {Plan, Brokers, Sessions, self(), Application}, []).
 -doc "Admits raw control bytes (start_link) or a source-checked typed rectangle (start_application), or one-shot start within the deployment command limit. A command reaches all participants before the next command is issued; recipients are not atomically updated. Failure after partial delivery is terminal and must never trigger replay.".
 -spec submit(pid(), hls_partition_wire:command() | {control, binary()}) -> {ok, 1} | {error, busy}.
@@ -377,8 +381,8 @@ event(Role, started, S = #{phases := Phases, events := Events}) ->
 event(Role, {packet, Packet}, S = #{queue := Queue}) ->
     S#{queue := hls_protocol_relay_queue:event(Role, Packet, Queue)};
 event(Role, {external, Index, Frame}, S = #{devices := Devices, events := Events}) ->
-    #{externals := Externals} = maps:get(Role, Devices),
-    true = Index < length(Externals),
+    #{external_count := ExternalCount} = maps:get(Role, Devices),
+    true = Index < ExternalCount,
     Words = Frame band 255,
     true = Words =< 3,
     0 = (Frame bsr 8) band 65535,

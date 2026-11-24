@@ -57,7 +57,7 @@ Compile the optional profile once, then use `bin/hls-spacetime-observer`. This c
 
 The default scope is `full`: missing semantic controls reject. Add `scope => storage` explicitly when requesting only enabled register writes and Q/D/enable checks. This scope removes actor, ownership, publication, scalar-ancestry and stream attribution; the preparation and capture manifests retain the original unsupported-control diagnostics. It is useful when XLS has erased semantic aliases in a small workload. No missing control is replaced with zero, and every D producer remains unknown.
 
-Paths resolve from the invoking directory. Source preparation and XLS compilation use the ordinary build toolchain; the observer does not choose its backend or schedule. Keep those original build artifacts and tool identities. Run from the fabric checkout with OTP 28.0.2 and rebar3 on `PATH`:
+Paths resolve from the invoking directory. Source preparation and XLS compilation use the ordinary build toolchain; the observer does not choose its backend or schedule. Keep those original build artifacts and tool identities. Run from the umbrella checkout with OTP 28.0.2 and rebar3 on `PATH`:
 
 ```sh
 rebar3 as spacetime compile
@@ -111,15 +111,16 @@ bin/hls-spacetime-observer qualify CATALOGUE.etf BUNDLE.etf \
 
 `xls_protocol_spacetime_physical` documents the candidate and witness types. Inputs are trusted uncompressed local terms; native catalogue and bundle schemas are checked first. The command checks exact build/checkpoint/declared netlist and probe identities, every nonempty comparison case, masks, zero mismatches/unknown samples, and actual output-pin/canonical-parent-net membership. It writes `claims.etf`, qualification detail and a byte/hash manifest; the standalone `spacetime join` command consumes those claims. Candidate discovery, native replay and authenticity of the supplied comparison summary remain independent producer responsibilities. Names-only candidates never become supported, and missing bits remain unknown.
 
-Use its maintained validate/join/view workflow on `bundle.etf`/`bundle.json`; there is no requirement for the historical S3/S4 archive layout. Logical cycles and register names imply neither placement nor an execution period. The optional [RAM witness](https://github.com/ecpeterson/hls_spacetime/blob/main/docs/memory-witness.md) supplies its own small recording with explicit RTL paths and no native placement.
+Use its maintained validate/join/view workflow on `bundle.etf`/`bundle.json`; there is no requirement for the historical S3/S4 archive layout. Logical cycles and register names imply neither placement nor an execution period. The optional [RAM witness](../hls_spacetime/memory-witness.md) supplies its own small recording with explicit RTL paths and no native placement.
 
 Run `rebar3 as spacetime eunit --dir=apps/hls_spacetime_observer/test` for localized plan/binding/transfer/reset, file-integrity, publication and operand checks. Synthetic producer tests check serialization and fresh output behavior; they do not establish simulator noninterference or a generated observer ABI. A localized generated source-protocol fixture can qualify a new packaging path without repeating a full decoder run. Qualify changed observer semantics separately, preserving prior identities and evidence.
 
 ## Inspect the retained S3/S4 case
 
-The retained example is the external `spacetime-2026-11-06` archive, not a build directory. `capture-1/manifest.json` binds the live/reset traces, already interpreted JSON graphs, public-frame summaries, memory fixture and reproduction inputs. `physical-1/manifest.json` binds the joined graphs and native sidecars. To reopen the saved example, run from the `hls_spacetime` checkout:
+The retained example is the external `spacetime-2026-11-06` archive, not a build directory. `capture-1/manifest.json` binds the live/reset traces, already interpreted JSON graphs, public-frame summaries, memory fixture and reproduction inputs. `physical-1/manifest.json` binds the joined graphs and native sidecars. To reopen the saved example, enter the umbrella's `apps/hls_spacetime` directory:
 
 ```sh
+cd apps/hls_spacetime
 node scripts/prepare-example.mjs \
   --physical-archive /path/to/spacetime-2026-11-06/physical-1 \
   --capture-archive /path/to/spacetime-2026-11-06/capture-1 \

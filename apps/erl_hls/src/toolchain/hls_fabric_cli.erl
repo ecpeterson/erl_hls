@@ -1,6 +1,6 @@
 -module(hls_fabric_cli).
 -moduledoc """
-hls-fabric command entry point for checked plan inspection, source-bundle emission and prepared-source profiles. Uses compiler-owned hls_cli/diagnostics, hls_build for backend dispatch and hls_build_profile for experiment policy. It runs neither rebar nor external XLS tools.
+hls-fabric command entry point for checked plan inspection, source-bundle emission and prepared-source profiles. Uses facade-owned hls_cli, shared diagnostics, hls_build for backend dispatch and hls_build_profile for experiment policy. It runs neither rebar nor external XLS tools.
 """.
 %% Executable and programmatic CLI entry points.
 -export([main/0, run/1]).

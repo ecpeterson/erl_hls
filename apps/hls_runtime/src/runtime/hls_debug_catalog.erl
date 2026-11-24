@@ -8,7 +8,9 @@ from transport FIFOs or attribute boundary events to one actor.
 Boundary targets explicitly describe the monitored interface. hardware/3 is
 metadata-only; bind/3 binds committed-state snapshots from a retained projection and verified session.
 
-Build/runtime clients construct catalogs here; hls_debug_target interprets the returned handles. Source-bound projection preparation belongs to xls_actor_debug:catalog/3; live binding does not read actor source.
+Build/runtime clients construct catalogs here; hls_debug_target interprets the
+returned handles. Source-bound projection preparation belongs to
+hls_actor_debug:catalog/3 in the façade; live binding does not read actor source.
 """.
 %% CPU and hardware catalog construction.
 -export([cpu/2, hardware/3, bind/3]).

@@ -15,7 +15,7 @@ projection_and_catalog_test() ->
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"direct-fixture">>},
     Session = #{manifest => Manifest, resources => list_to_tuple(Resources)},
-    Catalog = xls_actor_debug:catalog(Plan, [], Session),
+    Catalog = hls_actor_debug:catalog(Plan, [], Session),
     lists:foreach(fun(Id) ->
         {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
         ?assertEqual({placement, #{kind => direct}}, hls_debug:info(Actor, placement)),
@@ -40,7 +40,7 @@ projection_and_catalog_test() ->
     lists:foreach(fun(BadResource) ->
         BadManifest = Manifest#{<<"resources">> := [BadResource | Rs]},
         ?assertError(actor_resources_mismatch,
-            xls_actor_debug:catalog(Plan, [], Session#{manifest := BadManifest}))
+            hls_actor_debug:catalog(Plan, [], Session#{manifest := BadManifest}))
     end, [R#{<<"slot">> := 1}, R#{<<"mailbox_kind">> := <<"shared">>},
         R#{<<"mailbox_capacity">> := 99}, maps:remove(<<"mailbox_kind">>, R)]).
 

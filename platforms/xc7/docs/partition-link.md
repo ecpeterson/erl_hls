@@ -10,7 +10,7 @@ BEAM B ↔ DMA B ↔ actor B ↔ serial credit ↔ packet CDC ↔ 1000BASE-X
 BEAM debug ↔ independent DMA bank ↔ routed passive monitor/trace
 ```
 
-`build_link_application.py` normalizes the two-actor topology, partitions it into roles `a` and `b`, emits deterministic deployment terms and compiles both role-specific wrappers. `application/link_board.py` joins one wrapper to the PS, paired DMA banks, passive monitor, private packet adapter and physical Ethernet endpoint. Its route report retains source identities, hard-boundary counts, partial timing and the independent LUT audit. Native timing remains implementation evidence rather than signoff.
+`build_link_application.py` normalizes the two-actor topology, partitions it into roles `a` and `b`, emits versioned deterministic deployment artifacts and compiles both role-specific wrappers. `application/link_board.py` joins one wrapper to the PS, paired DMA banks, passive monitor, private packet adapter and physical Ethernet endpoint. Its route report retains source identities, hard-boundary counts, partial timing and the independent LUT audit. Native timing remains implementation evidence rather than signoff.
 
 ## Private framing
 

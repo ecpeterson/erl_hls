@@ -69,7 +69,7 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
     }
     | #{kind := mixed, build := hls_protocol_mixed:descriptor(), dslx_path := [file:filename()]}.
 
--doc "The compiler-owned source bundle format with this builder's kind metadata. Unit schedules use hls_artifact_bundle's shared contract; inputs bind every packaged file and RTL lists are grouped by role.".
+-doc "The target-owned source bundle format with this builder's kind metadata. Unit schedules use hls_artifact_bundle's shared contract; inputs bind every packaged file and RTL lists are grouped by role.".
 -type manifest() :: #{
     version := 1,
     metadata := #{

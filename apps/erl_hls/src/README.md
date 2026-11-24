@@ -4,7 +4,7 @@
 
 | Location | Owns | Main entry points |
 | --- | --- | --- |
-| [toolchain](toolchain/README.md) | Build and compile orchestration, CLI parsing and cross-application publication | `hls_build`, `hls_compile`, `hls_fabric_cli`, `hls_source_build`, `hls_scheduler_build` |
+| [toolchain](toolchain/README.md) | Build, debug and compile orchestration, CLI parsing and cross-application publication | `hls_build`, `hls_compile`, `hls_actor_debug`, `hls_fabric_cli`, `hls_source_build`, `hls_scheduler_build` |
 | [examples](examples/README.md) | Small compileable applications and host drivers | `regsvc`, `packed_samples`, `telemetry`, counter configurations |
 | [`hls_compile`](../../hls_compile/README.md) | Erlang source acquisition, process analysis and computation synthesis | `hls_source`, `hls_topology`, `xls_parse` |
 | [`hls_fabric`](../../hls_fabric/README.md) | Communication planning, logical routing and protocol projection | `hls_protocol_wait_graph`, `hls_protocol_codec_plan`, `hls_host_codec_plan` |

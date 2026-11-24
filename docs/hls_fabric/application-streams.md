@@ -36,13 +36,14 @@ Events return through the gateway and the same physical application connection. 
 
 ```erlang
 Deployment = hls_partition_binding:deployment(Partition),
-{ok, Stream} = hls_partition_stream:start_link(Deployment, Brokers, #{}),
+Artifact = hls_deployment_artifact:new(partition_application, Deployment),
+{ok, Stream} = hls_partition_stream:start_link(Artifact, Brokers, #{}),
 {ok, DeviceCount} = hls_partition_stream:submit(Stream,
     {Ingress, Target, {X0, Y0, X1, Y1}, Record}),
 {ok, Device, External, Event} = hls_partition_stream:next(Stream, 1000).
 ```
 
-`Brokers` maps each device ID to a distinct existing `hls_fabric` application broker. The caller owns the client. Each device must have one rectangle ingress and at least one external output. The fixed rectangle wire envelope accepts at most three payload words. The legacy scheduler partition gateway permits an ordinary frame capacity up to eight words for events; source-protocol framed builders currently reject native capacities above three words. The raw actor network can use a different capacity under the [ordinary frame contract](building.md#ordinary-frame-capacity).
+`hls_deployment_artifact:new/2` projects a trusted in-process builder result to the static execution contract. Published source-protocol builds instead load the canonical artifact with `hls_deployment_artifact:load/1`. `Brokers` maps each device ID to a distinct existing `hls_fabric` application broker. The caller owns the client. Each device must have one rectangle ingress and at least one external output. The fixed rectangle wire envelope accepts at most three payload words. The legacy scheduler partition gateway permits an ordinary frame capacity up to eight words for events; source-protocol framed builders currently reject native capacities above three words. The raw actor network can use a different capacity under the [ordinary frame contract](building.md#ordinary-frame-capacity).
 
 Attachment compares each gateway's SHA-256 deployment identity before returning. The identity covers placement, startup values and wire bindings; its acknowledgment precedes external events. It detects deployment mismatches, not corruption or malicious peers, and does not replace debug-manifest verification.
 

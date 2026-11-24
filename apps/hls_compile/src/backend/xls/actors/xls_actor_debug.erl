@@ -1,11 +1,14 @@
 -module(xls_actor_debug).
--moduledoc "Binds dedicated actor observation layouts to logical topology identities and the exact xls_emitted failure codebooks. Build and debug consumers use these projections; xls_actor_observation owns the generated sampling channels, while transport and live queries are outside this module.".
+-moduledoc """
+Builds dedicated actor observation layouts from logical topology identities and
+exact xls_emitted failure codebooks. Build and debug consumers use these
+projections; xls_actor_observation owns the generated sampling channels, while
+runtime binding, transport and live queries are outside this module.
+""".
 %% Build and validate source-bound debug projections.
 -export([projection/2, projection/3, validate/2]).
 %% Compose banks and identities for external observation backends.
 -export([direct_bank/4, failures/1]).
-%% Source-bound dedicated observation catalog construction.
--export([catalog/3]).
 
 %% Source metadata accepted by the canonical JSON projection encoder.
 -type metadata() ::
@@ -156,10 +159,3 @@ digest(Term) ->
             )
         )
     ).
-
--doc "Validates a dedicated actor projection against source, then binds its retained manifest resources to the logical runtime catalog.".
--spec catalog(hls_topology:plan(), [{boundary, pid(), term()}], map()) -> map().
-catalog(Plan, Boundaries, Session = #{manifest := Manifest}) ->
-    Projection = maps:get(<<"actor_projection">>, Manifest, none),
-    ok = validate(Plan, Projection),
-    hls_debug_catalog:bind(hls_debug_catalog:hardware(Plan, #{}, Boundaries), Projection, Session).

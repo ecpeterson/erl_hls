@@ -2,6 +2,8 @@
     {description, "Erlang source analysis and computation synthesis"},
     {vsn, "0.1.0"},
     {registered, []},
+    %% Source descriptors dispatch pure provider callbacks from hls_runtime;
+    %% compiler entry points do not start applications.
     {applications, [kernel, stdlib, compiler, crypto, hls_core, hls_runtime]},
     {env, []},
     {modules, []},

@@ -2,7 +2,7 @@
 
 Inspect the actual repetition/noise application before proposing specialized transport or storage. This command produces a source and topology inventory, including unresolved ownership obligations. It does not remove fields, emit hardware or select a backend.
 
-Build the pinned compiler dependency with `rebar3 compile`, then run:
+From the compiled umbrella checkout, run:
 
 ```sh
 bash apps/hls_phi/tools/inspect_phi_protocol.sh /path/to/fresh-output
@@ -31,7 +31,7 @@ The lower-level inventory API expects artifacts from the same fresh compilation;
 
 ## Generate publication and capture transport
 
-After preparing the pinned compiler and an XLS tool distribution, write a trusted Erlang configuration containing explicit source files, their compiler options, a topology constructor and an actor population limit. For example, from the repository root:
+After compiling the umbrella and obtaining an XLS tool distribution, write a trusted Erlang configuration containing explicit source files, their compiler options, a topology constructor and an actor population limit. For example, from the repository root:
 
 ```erlang
 #{sources => [{"test/hls_protocol_capture_fixture.erl", []},
@@ -252,7 +252,7 @@ Host commands are delivered separately to each role. Coordinates/selectors retai
 
 Use `bash tools/hls_fabric/emit_protocol_bridge.sh XLS_ROOT CONFIG FRESH_OUTPUT` for a framed partition. The config extends the raw network config with `native_actors`, positive 16-bit `host`/`service` addresses, `control => rectangle` and explicit activation. The builder plans the source transport, then `hls_protocol_bridge:plan/2` checks its network/boundary layout, control ports, crossing indices and contender budget. Only after these checks does `hls_protocol_bridge:emit/1` render the boundary and call `xls_protocol_bridge:emit/3`. These return an in-memory file bundle; the outer `write` persists it after all bridge checks succeed. The generated wrapper binds the application's incoming/outgoing link IDs, capture classes, external streams, identity and control adapter. `protocol_bridge.x` owns sessions, credits and delivery reservations; `protocol_framing.x` owns word assembly/serialization; `protocol_rectangle.x` owns the existing rectangle command grammar. The older application gateway shares the latter two modules. `hls_protocol_envelope:fields/1` owns the fixed packet and rectangle wire layouts: `hls_record` packs their host fields, and `xls_struct_codec` generates the checked-in `protocol_envelope.x` structs and codecs. Regenerate that library with `file:write_file(Path, xls_protocol_envelope:emit())` after changing a schema; EUnit checks that it matches. Rectangle validation remains in `protocol_rectangle.x`, which returns a typed spatial frame for either gateway and adapts it to native ingress only at the source boundary. The rectangle adapter is currently the only supported application-control binding; the transport core has no rectangle fields or decoder.
 
-`bridge.etf` contains the trusted local descriptor, `bridge/manifest.json` binds generated inputs, library hashes and state costs, and `files.f` lists the complete RTL. Attachment identity uses canonical source identities and exact generated boundary hardware hashes, never the raw planning term or analysis reports. Changes to the control adapter or framing library change the build identity. Supply source-provider imports with `dslx_path => [Directory, ...]` in the configuration; `hls-fabric emit --kind bridge` copies them into the source bundle. Generated Verilog outside XLS is pin packing only.
+`bridge.etf` contains the trusted local build descriptor, `bridge/manifest.json` binds generated inputs, library hashes and state costs, and `files.f` lists the complete RTL. Attachment identity uses canonical source identities and exact generated boundary hardware hashes, never the raw planning term or analysis reports. Changes to the control adapter or framing library change the build identity. Supply source-provider imports with `dslx_path => [Directory, ...]` in the configuration; `hls-fabric emit --kind bridge` copies them into the source bundle. Generated Verilog outside XLS is pin packing only.
 
 The top has `clk`, `reset`, `retire`, word-aligned 32-bit `s_app_*`/`m_app_*` ready/valid/last streams, `fault` and `running`. A complete routed frame is the common broker route word, header and payload words. Attachment binds one nonzero 64-bit session and the exact build identity. Setup and one-shot start follow in input order; the start receipt acknowledges the actual source start handshake. The existing single-network application gateway retains its separate sessionless protocol.
 
@@ -281,8 +281,9 @@ West = binary_to_term(A), East = binary_to_term(B),
 Deployment = #{actors => maps:get(actors, West),
                devices => #{west => West, east => East},
                limits => #{crossings => 8, commands => 16, events => 32}},
+Artifact = hls_deployment_artifact:new(protocol_deployment, Deployment),
 {ok, Stream} = hls_protocol_stream:start_link(
-    Deployment, #{west => WestBroker, east => EastBroker},
+    Artifact, #{west => WestBroker, east => EastBroker},
     #{west => 101, east => 102}),
 {ok, 1} = hls_protocol_stream:submit(Stream, start).
 ```
@@ -400,7 +401,7 @@ This is a consumption boundary, not an application-ready or quiescence assertion
 
 ## Shared external output endpoints
 
-Use `bash tools/hls_fabric/emit_protocol_boundary.sh XLS_ROOT CONFIG FRESH_OUTPUT` with the same source-network config to expose **one stream per declared external endpoint**, including unused declarations. The shell command calls `hls-fabric emit`, which prepares `hls_build:plan/1` and writes it with `hls_build:write/2`. The source backend plans `hls_protocol_boundary` (network ports and endpoint fan-in), then calls `hls_protocol_boundary:emit/1` → `hls_protocol_network:emit/1` → `xls_protocol_boundary:emit/2` → static DSLX `protocol_egress` and packages the output and its support libraries. `hls_protocol_boundary:write/2` is a lower-level plan-and-write convenience. The shell finally invokes the compiler’s `compile_source_build.py`. That driver verifies the complete `source-build.json` input inventory and follows its one-stage clock schedule. `files.f` lists the resulting core and mechanical Verilog pin adapter.
+Use `bash tools/hls_fabric/emit_protocol_boundary.sh XLS_ROOT CONFIG FRESH_OUTPUT` with the same source-network config to expose **one stream per declared external endpoint**, including unused declarations. The shell command calls `hls-fabric emit`, which prepares `hls_build:plan/1` and writes it with `hls_build:write/2`. The source backend plans `hls_protocol_boundary` (network ports and endpoint fan-in), then calls `hls_protocol_boundary:emit/1` → `hls_protocol_network:emit/1` → `xls_protocol_boundary:emit/2` → static DSLX `protocol_egress` and packages the output and its support libraries. `hls_protocol_boundary:write/2` is a lower-level plan-and-write convenience. The shell finally invokes the target-owned `compile_source_build.py`. That driver verifies the complete `source-build.json` input inventory and follows its one-stage clock schedule. `files.f` lists the resulting core and mechanical Verilog pin adapter.
 
 The boundary replaces separate producer pins with `external_I_valid`, F-bit `external_I_data` and `external_I_ready`. All startup, host, explicit-start and fault pins pass through. Data is meaningful only while valid, except that unused endpoints always drive zero. `boundary/manifest.json` maps each index to its canonical normalized topology ID (printed Erlang term text) and exact producer membership. Indices follow normalized topology order, not source declaration order. The underlying network manifest retains both its separate producer streams and their endpoint indices.
 
@@ -421,21 +422,22 @@ For N=2..256 producers, each endpoint adds `2*ceil(log2(N))+1` state bits: curso
   actor_limit => 4, device => board, host => 1}.
 ```
 
-The CLI first calls `hls_source_build:plan(application, Config)` → `hls_protocol_application:plan/1`, which prepares the transport/boundary and checks host codec binding. Writing that retained plan calls `hls_protocol_application:emit/1` → `hls_protocol_boundary:emit/1`, then `hls_generated_files:write/2` and source-bundle packaging. Planning precedes rendering; the convenience `hls_source_build:write/3` combines those stages. The builder binds the elaborated actor identities, rectangle ingress, record schemas and canonical external endpoint order into `deployment.etf`. Shared event selectors must agree on field names/order, types and canonical framing, not merely payload width. The application requires one rectangle ingress and at least one external endpoint.
+The CLI first calls `hls_source_build:plan(application, Config)` → `hls_protocol_application:plan/1`, which prepares the transport/boundary and checks host codec binding. Writing that retained plan calls `hls_protocol_application:emit/1` → `hls_protocol_boundary:emit/1`, then `hls_generated_files:write/2` and source-bundle packaging. Planning precedes rendering; the convenience `hls_source_build:write/3` combines those stages. The builder binds the elaborated actor identities, rectangle ingress, record schemas and canonical external endpoint order into the versioned execution-only `deployment.etf`. `application-build.etf` separately retains target-only boundary and adapter metadata for the observer. Shared event selectors must agree on field names/order, types and canonical framing, not merely payload width. The application requires one rectangle ingress and at least one external endpoint.
 
-Host command, event and mixed-crossing codecs retain these schemas and selectors rather than calling the actor module after planning. Reloading an actor does not change an older binding's schema. Compiler-owned `hls_record_codec` uses current provider implementations, checking their availability, required callbacks and retained record width. A provider constructor and its arguments define an encoding contract: compatible implementation changes are allowed; incompatible encodings need a distinct constructor, version argument or explicit adapter. These checks cannot detect same-width changes of meaning, including compensating field-width changes. Code loading, state migration and retirement of sessions with outstanding messages remain application responsibilities; mixed BEAM execution needs the intended actor implementation.
+Host command, event and mixed-crossing codecs retain these schemas and selectors rather than calling the actor module after planning. Reloading an actor does not change an older binding's schema. Core-owned `hls_record_codec` uses current provider implementations, checking their availability, required callbacks and retained record width. A provider constructor and its arguments define an encoding contract: compatible implementation changes are allowed; incompatible encodings need a distinct constructor, version argument or explicit adapter. These checks cannot detect same-width changes of meaning, including compensating field-width changes. Code loading, state migration and retirement of sessions with outstanding messages remain application responsibilities; mixed BEAM execution needs the intended actor implementation.
 
 The application's SHA-256 identity covers canonical compiler content identities, normalized topology, placement, arithmetic groups, emitted boundary DSLX/Verilog and the boundary/wire binding. Host codec bindings contain schema data, not provider implementation fingerprints. Fresh builds in different processes or relocated source trees retain the same identity when their preprocessed semantics and relative source/include layout agree. Source, startup, placement, host bindings or generated boundary hardware changes invalidate it. This is a build-mismatch check, not authentication or native equivalence.
 
 Attachment identity is separate from package byte integrity. Diagnostic paths, build-local references, output directories and optional model reports do not enter it. Path-sensitive source values such as `?FILE` remain significant, as do failure locations and preprocessing options. The bridge additionally binds its framing/control library hashes. The enclosing source package records exact generated/support-file hashes; attachment identity is not a cache key for a complete XLS toolchain, external provider implementation or bitstream.
 
+Both deployment decoders accept trusted build output only because full codec validation may load and invoke installed provider modules. `hls_deployment_artifact:decode/1` uses existing-atom ETF and never interns atoms. `load/1` additionally uses a 64 MiB bounded reader and may intern retained atoms before canonical and complete static validation. Never pass either API uploaded or network-provided bytes, or pass `load/1` a user-selected untrusted path. Its SHA-256 identity detects byte changes but does not authenticate the producer. The artifact does not retain synthesis-only module names.
+
 `xls_protocol_application` instantiates the existing `hls_partition_io::OrderedBoundary`; `sv_protocol_application` only connects pins and converts actor frame bit ordering to the gateway's DSLX struct ordering. It reuses the existing `hls_partition_activation.sv` bridge unchanged. There is no new framing or activation state machine. The compiler builds the boundary with its single-stage sampled-clock schedule and the shared gateway with its established two-stage channel schedule. `files.f` lists the complete application RTL; `source-build.json` records both compilation units and their copied dependencies; `compiled.json` records the source-bundle hash, tool identities, per-unit commands and complete RTL dependencies.
 
-Use the returned deployment directly with the existing host client:
+Load the emitted deployment artifact directly with the existing host client:
 
 ```erlang
-{ok, Bytes} = file:read_file("BUILD/deployment.etf"),
-Deployment = binary_to_term(Bytes), % trusted local build artifact only
+{ok, Deployment} = hls_deployment_artifact:load("BUILD/deployment.etf"),
 {ok, Stream} = hls_partition_stream:start_link(Deployment, #{board => Broker}, #{}),
 {ok, 1} = hls_partition_stream:submit(Stream, {host, cells, {0,0,0,0}, {cfg,1}}),
 {ok, 1} = hls_partition_stream:submit(Stream, {host, cells, {1,0,1,0}, {cfg,2}}),
@@ -478,8 +480,7 @@ This is the placement portion of a configuration, not a standalone application. 
 Attach the emitted repetition deployment to two already opened brokers:
 
 ```erlang
-{ok, Bytes} = file:read_file("BUILD/deployment.etf"),
-Deployment = binary_to_term(Bytes), % trusted local build artifact only
+{ok, Deployment} = hls_deployment_artifact:load("BUILD/deployment.etf"),
 {ok, Stream} = hls_protocol_stream:start_application(
     Deployment, #{0 => Broker0, 1 => Broker1}, #{0 => FreshSession0, 1 => FreshSession1}),
 Result = phi_protocol_repetition:run(hls_protocol_stream, Stream, 6, 8, 123, 120000),
@@ -499,14 +500,14 @@ The repetition helper reuses its existing cutoff, correction-feedback, common-fe
 
 The CLI derives its configuration through `phi_protocol_config:repetition/2`, then calls `hls_build:plan/1` and `hls_build:write/2`. The source backend plans `hls_protocol_mixed`, including its bridge and host route/codec checks, then emits the retained mixed/bridge plans before `hls_generated_files:write/2` and source-bundle packaging. The mixed builder derives the complementary BEAM actors, startup records, routes and crossing codecs from the fresh source bundle. `hls_protocol_application_binding` checks loaded host codecs against those sources. For another application, supply the ordinary bridge configuration with `native_actors`, `control => rectangle`, `host` and `service`. Every BEAM output must have exactly one native or external recipient; BEAM-to-BEAM routes and inspection are unsupported. The build remains `eligible => false`.
 
-Create disconnected ordinary actors from the trusted local plan, open the application broker, then bind the stream owner to a dedicated virtual node:
+After loading the shipped actor/provider modules, create disconnected ordinary actors from the trusted local artifact, open the application broker, then bind the stream owner to a dedicated virtual node:
 
 ```erlang
-{ok, Bytes} = file:read_file("BUILD/mixed.etf"),
-Plan = #{actors := Actors} = binary_to_term(Bytes),
+{ok, Deployment} = hls_deployment_artifact:load("BUILD/mixed.etf"),
+#{actors := Actors} = hls_deployment_artifact:descriptor(mixed_application, Deployment),
 Pids = maps:map(fun(_, #{module := M}) -> {ok, P} = M:start_link(), P end, Actors),
-{ok, Stream} = hls_protocol_mixed_stream:start_link(Plan, AppBroker, Pids, FreshSession, #{}),
-Service = hls_protocol_mixed_host:service(Plan, Stream, Pids),
+{ok, Stream} = hls_protocol_mixed_stream:start_link(Deployment, AppBroker, Pids, FreshSession, #{}),
+Service = hls_protocol_mixed_host:service(Deployment, Stream, Pids),
 {ok, Node} = hls_node:start_link(VirtualNodeName,
     #{application => AppBroker, debug => DebugBroker}, [Service], #{}),
 pong = net_adm:ping(VirtualNodeName),

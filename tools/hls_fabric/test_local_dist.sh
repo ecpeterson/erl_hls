@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run after rebar3 eunit has compiled the test profile.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$project_root"
 source tools/hls_fabric/backend_env.sh test
 exec erl +S 4:4 +zdbbl 8 -noshell -kernel net_ticktime 4 -proto_dist hls_local \
     -pa _build/test/lib/hls_fabric/ebin _build/test/lib/hls_fabric/test \

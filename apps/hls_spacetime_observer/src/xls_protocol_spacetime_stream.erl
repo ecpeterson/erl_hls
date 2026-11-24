@@ -94,7 +94,7 @@
 -spec plan(#{binary() => binary()}) -> plan().
 plan(Files) ->
     #{devices := Devices, source_boundary := Boundary} = binary_to_term(
-        maps:get(<<"deployment.etf">>, Files)
+        maps:get(<<"application-build.etf">>, Files)
     ),
     [
         Binding = #{
@@ -174,7 +174,7 @@ plan(Files) ->
     BoundFiles =
         [
             Top,
-            <<"deployment.etf">>,
+            <<"application-build.etf">>,
             <<"application/gateway.x">>,
             <<"application/application_config.x">>
         ] ++

@@ -16,13 +16,13 @@ The application lives in [hls_phi](../../../apps/hls_phi/README.md). Its three a
 
 The line wrappers include shared application bodies from `apps/hls_phi/include/`. [`phi_repetition_topology`](../../../apps/hls_phi/src/phi_repetition_topology.erl) declares the families, startup values and routes around the periodic line. It also defines how a decoder correction maps back to a data-site Pauli update. This is explicit application structure: the compiler does not run arbitrary `spawn` calls and infer a hardware graph from the resulting process tree.
 
-The actor API describes typed state, callbacks and message records. Source preparation uses the application's include paths and preprocessing context. It reads Erlang source, not BEAM machine instructions; BEAM loading is used for trusted constructors, type providers and the ordinary host implementation. Hardware support is a checked subset of Erlang and the actor behaviors, not an implementation of the whole ERTS runtime. [Compiler actor semantics](https://github.com/ecpeterson/erl_hls/blob/main/docs/actor-compilation.md) describe that boundary.
+The actor API describes typed state, callbacks and message records. Source preparation uses the application's include paths and preprocessing context. It reads Erlang source, not BEAM machine instructions; BEAM loading is used for trusted constructors, type providers and the ordinary host implementation. Hardware support is a checked subset of Erlang and the actor behaviors, not an implementation of the whole ERTS runtime. [Compiler actor semantics](../../actor-compilation.md) describe that boundary.
 
 Noise is part of the actor graph. It is not an unrelated host-side stream that happens to resemble decoder input. The finite host loop configures its cutoff and feeds decoder corrections back into the same data actors. The [repetition model](repetition-code.md) explains the arithmetic and distinguishes this correction/readout loop from the scheduler throughput fixture, which observes outputs without feeding corrections back.
 
 ## 2. Choose an execution model and placement
 
-From a fabric checkout, with OTP 28 and rebar3 3.24.0:
+From the umbrella checkout, with OTP 28 and rebar3 3.24.0:
 
 ```sh
 rebar3 release -n hls_examples
@@ -95,12 +95,12 @@ Most behavior is generated DSLX or shared DSLX support. Small `sv_protocol_*` ad
 
 ## 4. Source bundle, XLS and hardware artifacts
 
-Emission renders the roles and records their descriptors and support dependencies in a fresh directory. `hls_artifact_bundle` supplies the shared packaging format. Useful entries include:
+Emission renders the roles and records their descriptors and support dependencies in a fresh directory. Target-owned `hls_artifact_bundle` supplies the shared packaging format. Useful entries include:
 
 | Entry | Consumer |
 | --- | --- |
 | `source-build.json` | External build driver: hashed inputs, compilation units, import paths, required schedules and RTL lists. |
-| `deployment.etf` | Trusted runtime attachment descriptor: roles, identities, routes, limits and application codecs. This is not the in-process compiler plan. |
+| `deployment.etf` | Versioned, canonical runtime artifact: roles, identities, routes, limits and application codecs. This is not the in-process compiler plan. |
 | `role0/bridge/bridge.x`, `role1/bridge/bridge.x` | Two independent bridge compilation units, each with top `bridge_clock`. |
 | `support/` and per-role metadata | Copied compiler/Fabric/target/application support and bindings needed by this bundle. |
 
@@ -147,8 +147,8 @@ Here `hls_fabric` is the broker module supplied by the umbrella's `hls_runtime` 
 The following is an attachment skeleton, after the caller has opened one fresh compatible broker per role and reset/brought up both hardware roles. `Broker0`, `Broker1`, `Session0` and `Session1` are caller-supplied values, not values inferred from the build:
 
 ```erlang
-{ok, Bytes} = file:read_file(filename:join(CompiledDirectory, "deployment.etf")),
-Deployment = binary_to_term(Bytes), % trusted local build output only
+{ok, Deployment} = hls_deployment_artifact:load(
+    filename:join(CompiledDirectory, "deployment.etf")),
 Brokers = #{0 => Broker0, 1 => Broker1},
 Sessions = #{0 => Session0, 1 => Session1}, % distinct fresh nonzero sessions
 {ok, Stream} = hls_protocol_stream:start_application(Deployment, Brokers, Sessions),
@@ -183,9 +183,9 @@ A fake ERTS node is optional. `hls_node` adapts supported device services to ext
 | Intended change | Owning layer |
 | --- | --- |
 | Decoder rule, noise model, logical routes or finite correction policy | `apps/hls_phi`: actor source, topology and host loop. |
-| Supported Erlang construct, typed record packing or callback lowering | `erl_hls` compiler; runtime packing/transport contracts live in its `hls_runtime` application. |
+| Supported Erlang construct, typed record packing or callback lowering | `hls_compile`; runtime packing and transport contracts live in `hls_runtime`. |
 | Physical ownership, captures, scheduling, bridges or deployment composition | `apps/hls_target`; preserve checked source and wire contracts. |
-| Live command ownership, host relay, recovery or virtual-node behavior | Fabric `src/runtime/` and `src/wire/`, consuming retained descriptors. |
+| Live command ownership, host relay, recovery or virtual-node behavior | `apps/hls_runtime/src/fabric/runtime/` and `apps/hls_runtime/src/fabric/wire/`, consuming retained descriptors. |
 | DSLX optimization/scheduling/code generation | XLS, after the project's source and scheduling contracts are fixed. |
 | Pins, CDC, board shell, constraints, programming and device transport | The relevant platform integration. |
 

@@ -30,12 +30,12 @@ main(_) -> usage().
 run({Role, Device, Coordinates, Rectangle}, Timeout, Output) ->
     ok = hls_dma_device:await("/dev/hls-dma0", "40000000.dma-mailbox", 5000),
     {ok, _} = application:ensure_all_started(crypto),
-    Deployment = deployment(Role),
+    Artifact = deployment_artifact(Role),
     {ok, Broker} = hls_fabric:start_link("/dev/hls-dma0", "/dev/hls-dma0"),
     #{counts := Baseline} = hls_fabric:info(Broker),
     {Round, Final} = try
         {ok, Stream} = hls_partition_stream:start_link(
-            Deployment, #{Device => Broker}, #{queue_limit => 64, write_timeout => 10000}),
+            Artifact, #{Device => Broker}, #{queue_limit => 64, write_timeout => 10000}),
         Result = try
             {ok, 1} = hls_partition_stream:submit(Stream, cutoff(Rectangle)),
             Deadline = erlang:monotonic_time(millisecond) + Timeout,
@@ -93,7 +93,7 @@ memory({Role, Device, Coordinates, Rectangle}, Timeout) ->
     #{counts := Baseline} = hls_fabric:info(Broker),
     {Result, Final} = try
         {ok, Stream} = hls_partition_stream:start_link(
-            deployment(Role), #{Device => Broker},
+            deployment_artifact(Role), #{Device => Broker},
             #{queue_limit => 128, write_timeout => 10000}),
         RunResult = try
             Deadline = erlang:monotonic_time(millisecond) + Timeout,
@@ -487,11 +487,16 @@ check_deployment(Role, Device, Rectangle) ->
     ok.
 
 %% Decode one manifest-hashed deployment installed by the image builder.
+-spec deployment_artifact(a | b) -> hls_deployment_artifact:artifact().
+deployment_artifact(Role) ->
+    Path = "/opt/erl-hls/share/repetition-link/deployment-" ++ atom_to_list(Role) ++ ".etf",
+    {ok, Artifact} = hls_deployment_artifact:load(Path),
+    Artifact.
+
+%% Project the checked descriptor only for the pure installed-command witness.
 -spec deployment(a | b) -> map().
 deployment(Role) ->
-    Path = "/opt/erl-hls/share/repetition-link/deployment-" ++ atom_to_list(Role) ++ ".etf",
-    {ok, Bytes} = file:read_file(Path),
-    binary_to_term(Bytes).
+    hls_deployment_artifact:descriptor(partition_application, deployment_artifact(Role)).
 
 %% Create the first valid host command, which releases the generated gateway's outputs.
 -spec cutoff({0..5, 0, 0..5, 0}) -> hls_partition_wire:command().

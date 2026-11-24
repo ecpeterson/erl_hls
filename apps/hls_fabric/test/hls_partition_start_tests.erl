@@ -65,7 +65,8 @@ invalid_start_reply_test() ->
 independent_devices_test() ->
     D = #{devices := Devices} = deployment(),
     Peers = maps:map(fun(_, B) -> {ok, P} = hls_partition_peer:start(B), P end, Devices),
-    {ok, S} = hls_partition_stream:start_link(D, Peers, #{queue_limit => 4}),
+    Artifact = hls_deployment_artifact:new(partition_application, D),
+    {ok, S} = hls_partition_stream:start_link(Artifact, Peers, #{queue_limit => 4}),
     unlink(S),
     try
         A = maps:get(a, Peers), B = maps:get(b, Peers),
@@ -90,10 +91,13 @@ independent_devices_test() ->
 %% Automatic bindings cannot silently acquire explicit-start semantics.
 -spec automatic_start_rejected_test() -> ok.
 automatic_start_rejected_test() ->
-    Deployment = #{devices := #{a := B0}} = deployment(),
+    Deployment = #{devices := #{a := B0}} = single_device(deployment(), a),
     B = maps:remove(activation, B0),
     {ok, P} = hls_partition_peer:start(B),
-    {ok, S} = hls_partition_stream:start_link(Deployment#{devices := #{a => B}}, #{a => P}, #{}),
+    Artifact = hls_deployment_artifact:new(
+        partition_application, Deployment#{devices := #{a => B}}
+    ),
+    {ok, S} = hls_partition_stream:start_link(Artifact, #{a => P}, #{}),
     unlink(S),
     try
         ?assertMatch({error, {invalid_command, start_unavailable}}, hls_partition_stream:submit(S, start)),
@@ -116,12 +120,27 @@ deployment() ->
 %% Reset ownership between model cases; real deployment reset covers hardware and transport.
 -spec with_connection(pos_integer(), fun((pid(),pid()) -> term())) -> ok.
 with_connection(Limit,Fun) ->
-    D0 = #{devices := #{a := B}} = deployment(),
-    D = D0#{devices := #{a => B}},
+    D = #{devices := #{a := B}} = single_device(deployment(), a),
     {ok,P} = hls_partition_peer:start(B),
-    {ok,S} = hls_partition_stream:start_link(D,#{a => P},#{queue_limit => Limit}),
+    Artifact = hls_deployment_artifact:new(partition_application, D),
+    {ok,S} = hls_partition_stream:start_link(Artifact,#{a => P},#{queue_limit => Limit}),
     unlink(S),
     try Fun(S,P),ok after catch hls_partition_stream:stop(S),catch gen_server:stop(P) end.
+
+%% A synthetic one-peer deployment must not retain another device's ingress recipient.
+-spec single_device(map(), term()) -> map().
+single_device(Deployment = #{partition := Partition, devices := Devices}, Device) ->
+    Ingresses = [
+        Ingress#{bindings := [
+            Binding
+         || Binding = #{device := Bound} <- maps:get(bindings, Ingress), Bound =:= Device
+        ]}
+     || Ingress <- maps:get(ingresses, Partition)
+    ],
+    Deployment#{
+        partition := Partition#{ingresses := Ingresses},
+        devices := maps:with([Device], Devices)
+    }.
 
 %% One setup-like typed command precedes activation in the same device queue.
 -spec command() -> tuple().

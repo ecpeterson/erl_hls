@@ -4,7 +4,7 @@
 %% Interface-to-wire descriptor derivation.
 -export([schemas/1, outputs/1]).
 
--doc "Captures every checked record for compiler-owned packing with current compatible providers. No actor module is required to use the returned codecs.".
+-doc "Captures every checked record for core-owned retained packing with current compatible providers. No actor module is required to use the returned codecs.".
 -spec schemas(hls_actor_interface:summary()) -> hls_host_codec:catalog().
 schemas(#{schemas := Schemas}) ->
     maps:from_list([

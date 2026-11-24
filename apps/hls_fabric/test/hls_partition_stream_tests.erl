@@ -139,7 +139,9 @@ wrong_identity_retires_partial_attachment_test() ->
     Old = process_flag(trap_exit, true),
     try
         ?assertMatch({error, {attachment_failed, error, {identity_response, _}}},
-            hls_partition_stream:start_link(Deployment, Peers, #{})),
+            hls_partition_stream:start_link(
+                hls_deployment_artifact:new(partition_application, Deployment), Peers, #{}
+            )),
         await(fun() -> lists:all(fun(P) ->
             lists:all(fun(R) -> R =:= retired end, maps:values(maps:get(routes, hls_partition_peer:stats(P))))
         end, maps:values(Peers)) end)
@@ -178,7 +180,8 @@ owner_death_retires_stream_test() ->
     Peers = maps:map(fun(_, B) -> {ok, P} = hls_partition_peer:start(B), P end, Devices),
     Parent = self(),
     Owner = spawn(fun() ->
-        {ok, Stream} = hls_partition_stream:start_link(Deployment, Peers, #{}),
+        Artifact = hls_deployment_artifact:new(partition_application, Deployment),
+        {ok, Stream} = hls_partition_stream:start_link(Artifact, Peers, #{}),
         Parent ! {owned, self(), Stream},
         receive done -> ok end
     end),
@@ -209,7 +212,8 @@ deployment() ->
 with_connection(Options, Fun) ->
     Deployment = #{devices := Devices} = deployment(),
     Peers = maps:map(fun(_, Binding) -> {ok, P} = hls_partition_peer:start(Binding), P end, Devices),
-    {ok, Stream} = hls_partition_stream:start_link(Deployment, Peers, Options),
+    Artifact = hls_deployment_artifact:new(partition_application, Deployment),
+    {ok, Stream} = hls_partition_stream:start_link(Artifact, Peers, Options),
     unlink(Stream),
     try Fun(Stream, Peers), ok
     after

@@ -2,7 +2,7 @@
 
 `hls_spacetime` defines a backend-neutral artifact for observations of work and stored values across FPGA clocks. Erlang producers call `validate/1` before publication; `encode/1` validates and returns JSON iodata. Neither function starts simulation, writes files, extracts checkpoints or renders a picture. The storage and physical companion validators are internal parts of that contract.
 
-This is a cycle-native companion to [compiler timing profiles](https://github.com/ecpeterson/erl_hls/blob/main/docs/profiling.md), with header `format: "spacetime", schema: 1, unit: "cycle"`. It does not change that format or imply a clock period. A later projection needs an evidenced period/origin, suitable precision and a definition of each duration. A target clock constraint does not establish elapsed physical time.
+This is a cycle-native companion to [compiler timing profiles](../profiling.md), with header `format: "spacetime", schema: 1, unit: "cycle"`. It does not change that format or imply a clock period. A later projection needs an evidenced period/origin, suitable precision and a definition of each duration. A target clock constraint does not establish elapsed physical time.
 
 ## Producer data
 

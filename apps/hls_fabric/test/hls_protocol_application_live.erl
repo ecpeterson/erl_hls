@@ -5,7 +5,7 @@
 -doc "Attaches the emitted deployment, configures four sources, orders start, then feeds each returned sample into its next point command. Checks all 24 records against ordinary source callbacks, per-producer order and started acknowledgment. Stops the client/broker and awaits descriptor closure. This is a finite simulation witness, not a progress or device timing claim.".
 -spec run(file:filename(),file:filename()) -> ok.
 run(Build,Stage) ->
-    {ok,Bytes}=file:read_file(filename:join(Build,"deployment.etf")),Deployment=binary_to_term(Bytes),
+    {ok,Deployment}=hls_deployment_artifact:load(filename:join(Build,"deployment.etf")),
     {ok,Broker}=hls_fabric:start_link(filename:join(Stage,"app_tx"),filename:join(Stage,"app_rx"),#{rx_route_limit=>1}),
     {ok,Stream}=hls_partition_stream:start_link(Deployment,#{board=>Broker},#{queue_limit=>32,write_timeout=>30000}),
     try
