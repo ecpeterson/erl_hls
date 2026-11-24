@@ -22,6 +22,7 @@ import {
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
+import { openxc7Routing, showOpenxc7Routes } from "./openxc7-routes.js";
 import { loadComputations, publicationUrl } from "./computation-loader.js";
 import { loadRecording } from "./recording-loader.js";
 import { loadPreparedRenderWorker } from "./prepared-loader.js";
@@ -212,6 +213,11 @@ async function loadDocument(
   sceneSelection.reset();
   regionalControls.configure();
   scenarioControls.configure();
+  if (!computationData && model.document.openxc7Computations)
+    computationData = {
+      attachment: model.document.openxc7Computations,
+      routeNets: model.document.openxc7Routes?.nets ?? [],
+    };
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
     : createComputations(
@@ -220,6 +226,19 @@ async function loadDocument(
         computationData?.routeNets,
       );
   const paths = nativePaths(model);
+  showOpenxc7Routes(
+    $("openxc7-routing"),
+    openxc7Routing(model, model.document.openxc7Routes),
+  );
+  const nativeTiming = model.document.openxc7Computations;
+  const modelNote = $("openxc7-timing-model");
+  modelNote.hidden = !nativeTiming;
+  if (nativeTiming) {
+    const predicted = nativeTiming.arcs.filter(
+      (a) => a.timing.basis === "predicted",
+    ).length;
+    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.timingModel.unresolved_delays} unavailable delay queries. Register setup, hold and clock-to-Q use compiled constants. Per-entry database characterization is unverified.`;
+  }
   const routes = nativeRoutes(model);
   const routeIndex = new Map(
     routes.map((route) => [`${route.pathId}/${route.arcIndex}`, route]),
@@ -1039,7 +1058,8 @@ function circuitPaint(layer) {
       return p;
     });
     if (!route.nodes.length) {
-      segment(`unresolved/${a}`, from, to, roles, "unresolved");
+      if (!index.attachment.timingModel)
+        segment(`unresolved/${a}`, from, to, roles, "unresolved");
       continue;
     }
     const ends = [from, ...switches, to];
@@ -2869,7 +2889,7 @@ function renderResource() {
       .slice(0, 600)
       .map(
         (c) =>
-          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site)} / ${esc(c.bel)} · tile (${c.x}, ${c.y})</span></div>`,
+          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site ?? c.tile)} / ${esc(c.bel)} · tile (${c.x}, ${c.y})</span></div>`,
       )
       .join("") +
     (cells.length > 600
@@ -3503,7 +3523,7 @@ function bindControls() {
     if (hit) {
       state.cell = hit.cell.id;
       notice(
-        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site}/${hit.cell.bel}`,
+        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site ?? hit.cell.tile}/${hit.cell.bel}`,
       );
       $("cell-details").open = true;
       repaint();

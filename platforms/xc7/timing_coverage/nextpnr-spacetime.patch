@@ -1,0 +1,59 @@
+--- a/xilinx/main.cc
++++ b/xilinx/main.cc
+@@ -71,6 +71,8 @@
+         log_error("Cannot write timing coverage file '%s'\n", filename.c_str());
+ }
+
++#include "spacetime.h"
++
+ class UspCommandHandler : public CommandHandler
+ {
+   public:
+@@ -93,6 +95,9 @@
+     specific.add_options()("chipdb", po::value<std::string>(), "name of chip database binary");
+     specific.add_options()("xdc", po::value<std::vector<std::string>>(), "XDC-style constraints file");
+     specific.add_options()("fasm", po::value<std::string>(), "fasm bitstream file to write");
++    specific.add_options()("spacetime-timing", po::value<std::string>(), "write post-route timing and preserve packing origins");
++    specific.add_options()("spacetime-route-request", po::value<std::string>(), "selected packed nets or aliases");
++    specific.add_options()("spacetime-objects", po::value<int>()->default_value(100000), "bound Spacetime observer records");
+     specific.add_options()("timing-coverage", po::value<std::string>(), "write connected-port timing classifications");
+     specific.add_options()("fixed-routes", po::value<std::string>(),
+                            "frozen hard-macro routing to LOCK before routing (net + src->dst pips)");
+@@ -104,6 +109,9 @@
+
+ void UspCommandHandler::customBitstream(Context *ctx)
+ {
++    if (vm.count("spacetime-timing"))
++        writeSpacetimeTiming(ctx, vm["spacetime-timing"].as<std::string>(), vm["spacetime-objects"].as<int>(),
++                             vm.count("spacetime-route-request") ? vm["spacetime-route-request"].as<std::string>() : "");
+     if (vm.count("timing-coverage"))
+         writeTimingCoverage(ctx, vm["timing-coverage"].as<std::string>());
+     if (vm.count("fasm")) {
+@@ -126,6 +134,12 @@
+
+ void UspCommandHandler::customAfterLoad(Context *ctx)
+ {
++    if (vm.count("spacetime-timing")) {
++        int limit = vm["spacetime-objects"].as<int>();
++        if (limit < 1 || limit > 100000)
++            log_error("Spacetime object limit outside 1..100000\n");
++        markSpacetimeOrigins(ctx, limit);
++    }
+     if (vm.count("xdc")) {
+         std::vector<std::string> files = vm["xdc"].as<std::vector<std::string>>();
+         for (const auto &filename : files) {
+--- a/xilinx/pack.cc
++++ b/xilinx/pack.cc
+@@ -251,6 +251,12 @@
+             // instance -- unlike a BEL pin, a region is just a bbox and
+             // applies equally well to both halves.
+             half->region = ci->region;
++            if (ci->attrs.count(ctx->id("SPACETIME_CELL"))) {
++                for (const auto &attr : ci->attrs)
++                    if (attr.first.str(ctx).find("SPACETIME_") == 0)
++                        half->attrs[attr.first] = attr.second;
++                half->attrs[ctx->id("SPACETIME_OUTPUT")] = std::string(std::string(suffix) == "$LUT5" ? "O5" : "O6");
++            }
+             // The BEL-ambiguity check above guarantees at most one half is
+             // ever actually built when the original cell was BEL-constrained,
+             // so it's safe to hand that BEL straight to whichever one it is.

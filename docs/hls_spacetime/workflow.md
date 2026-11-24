@@ -20,6 +20,8 @@ For an immediately runnable small example, follow the [RAM witness](memory-witne
 
 ## Extract and qualify native evidence
 
+For openXC7, capture a [physical catalogue](native.md#openxc7-placement). Include selected nets, native timing and storage-word bindings as needed. Use `join-openxc7` and `prepare-view.mjs --openxc7` to display routed branches and timed computations alongside execution events. The [openXC7 workflow](native.md#openxc7-routes-and-computation-timing) includes an executable witness. The following checkpoint and SDF inputs apply to Vivado.
+
 Use the [target-owned native exporter](native.md) on an existing checkpoint from the exact compiled design, with separately verified fast/slow STA SDF files. An outer time/memory guard covers blocking tool calls. The exporter’s complete inventory authorizes import; an incomplete marker does not. Retain and verify all collected bytes before importing. This step reads the checkpoint and never synthesizes, places or routes it.
 
 Create an identity file containing one trusted Erlang term, for example:

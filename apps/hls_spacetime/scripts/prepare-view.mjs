@@ -2,6 +2,9 @@
 /** Project any validated execution bundle for the browser. No archive layout,
  * application name, compiler checkout, simulation or vendor tool is assumed. */
 import { createHash } from "node:crypto";
+import { openxc7Routing } from "../web/openxc7-routes.js";
+import { openxc7Computations } from "./openxc7-computations.mjs";
+import { createComputations } from "../web/computation-routes.js";
 import { readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { resolve, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,6 +127,7 @@ export async function writeView({
   metadata,
   timingReport,
   timingIdentity,
+  openxc7,
   output,
 }) {
   check(bundlePath && output, "--bundle and --output are required");
@@ -172,6 +176,53 @@ export async function writeView({
     };
     document.provenance.sources.push(report.identity);
     nativePaths(createModel(document));
+  }
+  if (openxc7) {
+    const manifest = await input(
+      join(resolve(openxc7), "manifest.json"),
+      1024 * 1024,
+    );
+    const meta = JSON.parse(manifest.bytes);
+    check(
+      meta.format === "openxc7_placement" &&
+        meta.complete === true &&
+        manifest.identity.raw_sha256 === bundle.build.implementation &&
+        meta.files["routed.json"].sha256 === document.catalogue?.checkpoint,
+      "openXC7 implementation mismatch",
+    );
+    document.provenance.sources.push(manifest.identity);
+    async function sidecar(name) {
+      const data = await input(join(resolve(openxc7), name), 64 * 1024 * 1024);
+      check(
+        data.identity.raw_sha256 === meta.files[name]?.sha256 &&
+          data.bytes.length === meta.files[name]?.bytes,
+        "openXC7 file mismatch: " + name,
+      );
+      document.provenance.sources.push(data.identity);
+      return JSON.parse(data.bytes);
+    }
+    if (meta.routing) {
+      document.openxc7Routes = {
+        implementation: manifest.identity.raw_sha256,
+        checkpoint: document.catalogue.checkpoint,
+        nets: (await sidecar("routes.json")).nets,
+      };
+      openxc7Routing(createModel(document), document.openxc7Routes);
+    }
+    if (meta.timing) {
+      document.openxc7Computations = openxc7Computations(
+        document,
+        (await sidecar("routed.json")).modules.top.cells,
+        await sidecar("timing.json"),
+        meta.storage ? await sidecar("storage.json") : [],
+        meta.timing,
+      );
+      createComputations(
+        createModel(document),
+        document.openxc7Computations,
+        document.openxc7Routes?.nets,
+      );
+    }
   }
   const bytes = Buffer.from(JSON.stringify(document));
   check(
@@ -236,6 +287,7 @@ export function parseArguments(args) {
     "--metadata": "metadata",
     "--timing-report": "timingReport",
     "--timing-identity": "timingIdentity",
+    "--openxc7": "openxc7",
     "--output": "output",
   };
   const options = {};
@@ -258,7 +310,7 @@ if (
     const options = parseArguments(process.argv.slice(2));
     if (options.help)
       console.log(
-        "node scripts/prepare-view.mjs --bundle BUNDLE.json[.gz] [--metadata CONTEXT.json] [--timing-report REPORT.rpt[.gz] --timing-identity VERIFIED.json] --output FRESH_DIRECTORY",
+        "node scripts/prepare-view.mjs --bundle BUNDLE.json[.gz] [--metadata CONTEXT.json] [--timing-report REPORT.rpt[.gz] --timing-identity VERIFIED.json] [--openxc7 CAPTURE_DIRECTORY] --output FRESH_DIRECTORY",
       );
     else console.log(JSON.stringify(await writeView(options), null, 2));
   } catch (error) {

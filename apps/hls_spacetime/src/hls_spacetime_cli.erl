@@ -1,6 +1,6 @@
 -module(hls_spacetime_cli).
 -moduledoc """
-Offline command boundary for the standalone spacetime library. Capture adapters own trace interpretation; Vivado owns extraction; this command validates and joins their saved artifacts. It never invokes either tool or discovers a compiler checkout.
+Offline command boundary for the standalone spacetime library. Capture adapters interpret traces. Native exporters supply Vivado or openXC7 evidence for validation and joining.
 """.
 %% Escript callback and testable command dispatcher.
 -export([main/1, run/1]).
@@ -29,7 +29,7 @@ main(Arguments) ->
             halt(1)
     end.
 
--doc "Dispatches validate BUNDLE.etf; import EXPORT IDENTITY.term OUTPUT; join BUNDLE.etf CATALOGUE.etf CLAIMS.etf OUTPUT; or sdf-arcs INPUT SHA256 fast|slow FRESH_JSON. All inputs are trusted local files. Import/join outputs require new directories; sdf-arcs writes one exclusive file, at most 256 MiB including its trailing newline. Import identity is one Erlang map containing build and checkpoint; join independently validates all references and supplied claims. Returns a summary or raises the underlying contract/file error.".
+-doc "Validates bundles, imports Vivado or openXC7 catalogues, joins checked claims, or projects SDF arcs as listed by --help. Inputs are trusted local files. Import and join require fresh directories. Imports require an expected build and checkpoint. Returns a summary or raises the contract or file error.".
 -spec run([string()]) ->
     help | hls_spacetime:summary() | hls_target_physical:summary() | sdf_summary().
 run(["--help"]) ->
@@ -40,11 +40,19 @@ run(["import", Directory, Identity, Output]) ->
     {ok, [#{build := Build, checkpoint := Checkpoint}]} = file:consult(Identity),
     Catalogue = hls_spacetime_import:read(Directory, Build, Checkpoint),
     hls_spacetime_artifact:write_catalogue(Catalogue, Output);
+run(["import-openxc7", Directory, Identity, Output]) ->
+    {ok, [#{build := Build, checkpoint := Checkpoint}]} = file:consult(Identity),
+    Catalogue = hls_spacetime_openxc7:read(Directory, Build, Checkpoint),
+    hls_spacetime_artifact:write_catalogue(Catalogue, Output);
 run(["join", BundlePath, CataloguePath, ClaimsPath, Output]) ->
     Bundle = hls_spacetime_artifact:read(BundlePath),
     Catalogue = hls_spacetime_artifact:read(CataloguePath),
     Claims = hls_spacetime_artifact:read(ClaimsPath),
     Joined = hls_spacetime_import:attach(Bundle, Catalogue, Claims),
+    hls_spacetime_artifact:write_bundle(Joined, Output);
+run(["join-openxc7", BundlePath, Directory, Checkpoint, Output]) ->
+    Bundle = hls_spacetime_artifact:read(BundlePath),
+    Joined = hls_spacetime_openxc7:join(Bundle, Directory, list_to_binary(Checkpoint)),
     hls_spacetime_artifact:write_bundle(Joined, Output);
 run(["sdf-arcs", Input, Digest, CornerName, Output]) ->
     sdf_arcs(Input, Digest, corner(CornerName), Output);
@@ -90,7 +98,9 @@ usage() ->
     <<
         "spacetime validate BUNDLE.etf\n"
         "spacetime import EXPORT_DIRECTORY IDENTITY.term FRESH_OUTPUT\n"
+        "spacetime import-openxc7 EXPORT_DIRECTORY IDENTITY.term FRESH_OUTPUT\n"
         "spacetime join BUNDLE.etf CATALOGUE.etf CLAIMS.etf FRESH_OUTPUT\n"
+        "spacetime join-openxc7 BUNDLE.etf EXPORT_DIRECTORY ROUTED_JSON_SHA256 FRESH_OUTPUT\n"
         "spacetime sdf-arcs INPUT.sdf SHA256 fast|slow FRESH_JSON\n"
         "SDF input/output are bounded at 256 MiB; SHA256 binds the exact raw input. The output file must not exist.\n"
         "Bundle/catalogue/claim inputs use trusted raw ETF (256 MiB each), not compressed ETF. Import identity: #{build => #{source => <<...>>, rtl => <<...>>, observation => <<...>>, implementation => <<...>>}, checkpoint => <<SHA256>>}.\n"

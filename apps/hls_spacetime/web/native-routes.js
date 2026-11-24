@@ -243,7 +243,15 @@ function netGraph(net, budget, tiles) {
       pin.routing_node === null || nodes.has(pin.routing_node),
       "pin routing node outside used net",
     );
-    if (pin.status === "resolved")
+    if (pin.status === "resolved" && Object.hasOwn(pin, "bel_wire"))
+      requireValue(
+        pin.bel_pins.length === 1 &&
+          pin.site_pins.length === 0 &&
+          text(pin.bel_wire) &&
+          pin.bel_wire === pin.routing_node,
+        "resolved BEL pin lacks exact bound wire",
+      );
+    else if (pin.status === "resolved")
       requireValue(
         pin.routing_node !== null &&
           pin.site_pins.every((site) => site.node !== null) &&
@@ -356,7 +364,9 @@ function branchBetween(graph, source, target, budget) {
       (target.direction === null || ["IN", "INOUT"].includes(target.direction)),
     "timing endpoint direction mismatch",
   );
-  const gaps = [pinGap(source, "source"), pinGap(target, "target")];
+  const gaps = [];
+  if (!source.bel_wire) gaps.push(pinGap(source, "source"));
+  if (!target.bel_wire) gaps.push(pinGap(target, "target"));
   if (source.status !== "resolved" || target.status !== "resolved") {
     const disposition = [source.status, target.status].includes("ambiguous")
       ? "ambiguous"
@@ -471,6 +481,7 @@ function branchBetween(graph, source, target, budget) {
  * candidates. Null site-node mappings are unresolved, never proven unused. */
 function candidates(pin) {
   if (!["resolved", "ambiguous"].includes(pin.status)) return [];
+  if (pin.status === "resolved" && pin.bel_wire) return [pin.bel_wire];
   return [
     ...new Set(
       pin.site_pins.map((site) => site.node).filter((node) => node !== null),
@@ -512,6 +523,8 @@ function branch(graph, sourcePin, targetPin, budget) {
       "Every located source candidate is interior to directed used routing",
       gaps,
     );
+  if (source.bel_wire && target.bel_wire)
+    return branchBetween(graph, source, target, budget);
   if (roots.length * targetNodes.length > 64)
     return unresolved(
       graph,
@@ -566,20 +579,22 @@ function branch(graph, sourcePin, targetPin, budget) {
   const endpointGaps = [
     [source, "source", selected.start, sourceNodes],
     [target, "target", selected.end, targetNodes],
-  ].map(([pin, end, chosen, known]) => ({
-    ...pinGap(pin, end),
-    node: chosen,
-    observedStatus: pin.status,
-    locatedCandidates: known,
-    unresolvedSitePins: pin.site_pins
-      .filter((site) => site.node === null)
-      .map((site) => site.id),
-    reason:
-      "Unique branch among explicitly located admissible native attachments; intra-site wire geometry remains unavailable" +
-      (pin.site_pins.some((site) => site.node === null)
-        ? "; additional site-node mappings are unresolved, not proven unused"
-        : ""),
-  }));
+  ]
+    .filter(([pin]) => !pin.bel_wire)
+    .map(([pin, end, chosen, known]) => ({
+      ...pinGap(pin, end),
+      node: chosen,
+      observedStatus: pin.status,
+      locatedCandidates: known,
+      unresolvedSitePins: pin.site_pins
+        .filter((site) => site.node === null)
+        .map((site) => site.id),
+      reason:
+        "Unique branch among explicitly located admissible native attachments; intra-site wire geometry remains unavailable" +
+        (pin.site_pins.some((site) => site.node === null)
+          ? "; additional site-node mappings are unresolved, not proven unused"
+          : ""),
+    }));
   return {
     ...selected.result,
     disposition: unlocated ? "partial" : "resolved",

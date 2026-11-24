@@ -19,7 +19,7 @@ Physical companion validation for hls_spacetime recordings. Checks build identit
     bel := binary() | null,
     x := non_neg_integer() | null,
     y := non_neg_integer() | null,
-    placement => placed | unplaced,
+    placement => placed | unplaced | unknown,
     tile => binary(),
     clock_region => binary(),
     properties := #{binary() => binary()}
@@ -209,14 +209,14 @@ cell(
     #{
         id := Id,
         kind := Kind,
-        placement := unplaced,
+        placement := Status,
         site := null,
         bel := null,
         x := null,
         y := null,
         properties := Properties
     } = Cell
-) ->
+) when Status =:= unplaced; Status =:= unknown ->
     lists:foreach(fun identifier/1, [Id, Kind]),
     cell_properties(Id, Properties),
     cell_location(Cell),
@@ -226,7 +226,11 @@ cell(
         Cell
 ) ->
     require(maps:get(placement, Cell, placed) =:= placed, {invalid_cell_placement, Id}),
-    lists:foreach(fun identifier/1, [Id, Kind, Site, Bel]),
+    lists:foreach(fun identifier/1, [Id, Kind, Bel]),
+    case Site of
+        null -> identifier(maps:get(tile, Cell));
+        _ -> identifier(Site)
+    end,
     require(
         is_integer(X) andalso X >= 0 andalso X < (1 bsl 53) andalso
             is_integer(Y) andalso Y >= 0 andalso Y < (1 bsl 53),

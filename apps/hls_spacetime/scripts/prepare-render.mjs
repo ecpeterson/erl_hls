@@ -143,7 +143,7 @@ export function prepareRenderData(model, computationData) {
     const from = cellPoint(index.pins[arc.from].cell),
       to = cellPoint(index.pins[arc.to].cell);
     if (!route.nodes.length) {
-      if (from && to)
+      if (from && to && !index.attachment.timingModel)
         ids.add(
           add(`unresolved/${arcId}`, {
             type: "segments",
