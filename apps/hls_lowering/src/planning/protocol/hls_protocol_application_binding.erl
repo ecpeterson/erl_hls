@@ -36,13 +36,18 @@
 -spec bind(
     hls_protocol_transport:bundle(),
     none | hls_protocol_control:plan(),
-    #{hls_protocol_topology:id() => hls_source_config:device()},
+    #{hls_logical_topology:id() => hls_source_config:device()},
     #{hls_source_config:device() => hls_source_config:endpoint()}
 ) -> hls_protocol_application_schema:application().
 bind(
     #{
         frame_layout := Layout,
-        topology := Topology = #{actors := Actors, routes := Routes, externals := Externals},
+        topology := Topology = #{
+            actors := Actors,
+            instances := Instances,
+            routes := Routes,
+            externals := Externals
+        },
         modules := Modules
     },
     Control,
@@ -50,11 +55,25 @@ bind(
     Hosts
 ) ->
     ok = check_ownership(Actors, Owners, Hosts),
-    Interfaces = checked_interfaces(Modules),
-    ok = check_externals(Topology, Modules, Interfaces),
-    Bound = bind_actors(Actors, Owners, Interfaces),
+    ProcessInterfaces = hls_logical_topology:interfaces(Topology),
+    Interfaces = checked_interfaces(ProcessInterfaces, Modules),
+    ok = check_externals(Topology, Modules, ProcessInterfaces),
+    IdentityById = maps:from_list([
+        {maps:get(id, Actor), Identity}
+     || #{identity := Identity, actor := Actor} <- Instances
+    ]),
+    Bound = bind_actors(Actors, Owners, Interfaces, IdentityById),
     Ingresses = hls_protocol_control:host_ingresses(Control, Bound),
-    PortRoutes = [R#{source := {{actor, Id}, Port}} || R = #{source := {Id, Port}} <- Routes],
+    PortRoutes = [
+        R#{
+            source := {maps:get(Id, IdentityById), Port},
+            recipients := [
+                application_recipient(Recipient, IdentityById)
+             || Recipient <- maps:get(recipients, R)
+            ]
+        }
+     || R = #{source := {Id, Port}} <- Routes
+    ],
     Ports = [
         E#{port => "external_" ++ integer_to_list(I)}
      || {I, E} <- lists:enumerate(0, Externals)
@@ -78,8 +97,8 @@ bind(
 
 %% An application binding covers every actor and exactly the devices that own them.
 -spec check_ownership(
-    [hls_protocol_topology:actor()],
-    #{hls_protocol_topology:id() => hls_source_config:device()},
+    [hls_logical_topology:actor()],
+    #{hls_logical_topology:id() => hls_source_config:device()},
     #{hls_source_config:device() => hls_source_config:endpoint()}
 ) -> ok.
 check_ownership(Actors, Owners, Hosts) ->
@@ -87,23 +106,39 @@ check_ownership(Actors, Owners, Hosts) ->
     true = lists:sort(maps:keys(Hosts)) =:= lists:usort(maps:values(Owners)),
     ok.
 
-%% Loaded codecs must agree with the same fresh program that supplied the hardware layouts.
--spec checked_interfaces(#{module() => hls_local_actor:source() | hls_local_actor:artifact()}) ->
+%% Loaded codecs must project exactly to the retained logical communication catalog.
+-spec checked_interfaces(
+    hls_logical_topology:interface_catalog(),
+    #{module() => hls_local_actor:source() | hls_local_actor:artifact()}
+) ->
     #{module() => hls_actor_interface:summary()}.
-checked_interfaces(Modules) ->
+checked_interfaces(ProcessInterfaces, Modules) ->
     Interfaces = hls_actor_interface:from_modules(maps:keys(Modules)),
+    true = lists:sort(maps:keys(ProcessInterfaces)) =:= lists:sort(maps:keys(Interfaces)),
     maps:foreach(
-        fun(Module, Actor) -> check_codec(Module, Actor, maps:get(Module, Interfaces)) end, Modules
+        fun(Module, Actor) ->
+            Interface = maps:get(Module, Interfaces),
+            Expected = maps:get(Module, ProcessInterfaces),
+            case hls_topology:project_interface(Interface) of
+                Expected ->
+                    ok;
+                Projected ->
+                    error({application_process_interface_mismatch, Module, Expected, Projected})
+            end,
+            check_codec(Module, Actor, Interface)
+        end,
+        Modules
     ),
     Interfaces.
 
 %% Global source order defines indices independently of role names and sparse native placement.
 -spec bind_actors(
-    [hls_protocol_topology:actor()],
-    #{hls_protocol_topology:id() => hls_source_config:device()},
-    #{module() => hls_actor_interface:summary()}
+    [hls_logical_topology:actor()],
+    #{hls_logical_topology:id() => hls_source_config:device()},
+    #{module() => hls_actor_interface:summary()},
+    #{hls_logical_topology:id() => hls_actor_identity:id()}
 ) -> [hls_protocol_application_schema:actor()].
-bind_actors(Actors, Owners, Interfaces) ->
+bind_actors(Actors, Owners, Interfaces, IdentityById) ->
     Codecs = maps:map(
         fun(_, Interface) ->
             #{
@@ -115,7 +150,7 @@ bind_actors(Actors, Owners, Interfaces) ->
     ),
     [
         (maps:merge(A, maps:get(Module, Codecs)))#{
-            identity => {actor, Id},
+            identity => maps:get(Id, IdentityById),
             index => I,
             device => maps:get(Id, Owners)
         }
@@ -144,11 +179,13 @@ check_codec(Module, #{program := Program}, Interface) ->
 
 %% A host event selector cannot ambiguously identify different producers' record layouts.
 -spec check_externals(
-    hls_protocol_topology:plan(),
+    hls_logical_topology:materialized_plan(),
     #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
-    #{module() => hls_actor_interface:summary()}
+    hls_logical_topology:interface_catalog()
 ) -> ok.
-check_externals(#{actors := Actors, routes := Routes, externals := Externals}, Modules, Interfaces) ->
+check_externals(
+    #{actors := Actors, routes := Routes, externals := Externals}, Modules, ProcessInterfaces
+) ->
     ById = maps:from_list([{Id, Module} || #{id := Id, module := Module} <- Actors]),
     lists:foreach(
         fun(#{id := External}) ->
@@ -158,7 +195,7 @@ check_externals(#{actors := Actors, routes := Routes, externals := Externals}, M
                 lists:member({external, External}, Recipients)
             ],
             Domains = lists:append([
-                producer_domains(Source, ById, Modules, Interfaces)
+                producer_domains(Source, ById, Modules, ProcessInterfaces)
              || Source <- Producers
             ]),
             _ = lists:foldl(
@@ -179,18 +216,28 @@ check_externals(#{actors := Actors, routes := Routes, externals := Externals}, M
 
 %% Resolve a producer port through the checked interface before asking its source for wire domains.
 -spec producer_domains(
-    {hls_protocol_topology:id(), atom()},
-    #{hls_protocol_topology:id() => module()},
+    {hls_logical_topology:id(), atom()},
+    #{hls_logical_topology:id() => module()},
     #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
-    #{module() => hls_actor_interface:summary()}
+    hls_logical_topology:interface_catalog()
 ) -> [event_domain()].
-producer_domains({Id, Port}, ById, Modules, Interfaces) ->
+producer_domains({Id, Port}, ById, Modules, ProcessInterfaces) ->
     Module = maps:get(Id, ById),
-    Tags = hls_actor_interface:output_schemas(maps:get(Module, Interfaces), Port),
+    Tags = hls_process_interface:output_schemas(maps:get(Module, ProcessInterfaces), Port),
     hls_protocol_schema:domains(maps:get(Module, Modules), Tags).
 
+%% Translate a logical destination to the canonical exact-or-family instance identity.
+-spec application_recipient(
+    hls_logical_topology:destination(),
+    #{hls_logical_topology:id() => hls_actor_identity:id()}
+) -> hls_actor_identity:id() | {external, hls_logical_topology:id()}.
+application_recipient({actor, Id}, IdentityById) ->
+    maps:get(Id, IdentityById);
+application_recipient(External = {external, _Id}, _IdentityById) ->
+    External.
+
 %% Multiple producers may share a selector only when their complete source domains agree.
--spec check_event_selector(hls_protocol_topology:id(), event_domain(), #{byte() => event_domain()}) ->
+-spec check_event_selector(hls_logical_topology:id(), event_domain(), #{byte() => event_domain()}) ->
     #{byte() => event_domain()}.
 check_event_selector(External, Domain = #{value := Value}, Seen) ->
     Op = (Value bsr 24) band 255,

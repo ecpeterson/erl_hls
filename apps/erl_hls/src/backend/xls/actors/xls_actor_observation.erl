@@ -4,6 +4,8 @@
 -export([enabled/1, layout/1, collection/1, validate_channels/1]).
 %% Bind topology channels and stable instance names.
 -export([bindings/2, bindings/3, wires/1, ports/1, scalar_name/1, family_name/1, spawn_argument/2]).
+%% Decorate core materialization with generated topology observation ports.
+-export([instance_origins/2]).
 %% Fragments consumed by the dedicated actor renderer.
 -export([imports/1, declarations/1, proc_field/1, config_parameter/1, config_value/1, sample/1]).
 
@@ -113,37 +115,88 @@ integer_width(Value) -> 1 + integer_width(Value bsr 1).
 -spec bindings(map(), term()) -> [map()].
 bindings(Plan, Excluded) ->
     Direct = direct(Plan, Excluded),
-    Interfaces = hls_actor_interface:from_modules([Module || {_, Module, _} <- Direct]),
-    observation_bindings(Direct, Interfaces).
+    case Direct of
+        [] ->
+            [];
+        _ ->
+            Interfaces = hls_actor_interface:from_modules(
+                maps:keys(hls_logical_topology:interfaces(Plan))
+            ),
+            ok = hls_topology:validate_interfaces(Plan, Interfaces),
+            observation_bindings(Direct, Interfaces)
+    end.
 
 -doc "Lists direct observation ports using the checked interfaces retained by the topology planner; excludes scheduler-owned identities without reloading their modules.".
 -spec bindings(hls_topology:plan(), map(), #{module() => hls_actor_interface:summary()}) -> [map()].
 bindings(Plan, Excluded, Interfaces) ->
+    ok = hls_topology:validate_interfaces(Plan, Interfaces),
     observation_bindings(direct(Plan, Excluded), Interfaces).
+
+-doc "Maps core instances to their established scalar or family-array DSLX observation ports without re-enumerating the logical graph.".
+-spec instance_origins(
+    hls_logical_topology:compact_plan(), [hls_logical_topology:instance()]
+) -> #{hls_logical_identity:id() => map()}.
+instance_origins(#{actors := Actors, families := Families}, Instances) ->
+    ExactIndices = maps:from_list([
+        {Id, Index}
+     || {Index, #{id := Id}} <- lists:enumerate(0, Actors)
+    ]),
+    FamilyIndices = maps:from_list([
+        {Id, Index}
+     || {Index, #{id := Id}} <- lists:enumerate(0, Families)
+    ]),
+    maps:from_list([
+        {maps:get(id, Actor), instance_origin(Identity, ExactIndices, FamilyIndices)}
+     || #{identity := Identity, actor := Actor} <- Instances
+    ]).
+
+%% Exact and family observation identities select scalar or coordinate-bearing ports.
+-spec instance_origin(hls_actor_identity:id(), map(), map()) -> map().
+instance_origin(Identity = {actor, Id}, ExactIndices, _FamilyIndices) ->
+    #{logical => Identity, debug => scalar_name(maps:get(Id, ExactIndices))};
+instance_origin(Identity = {family, Id, [X, Y]}, _ExactIndices, FamilyIndices) ->
+    #{
+        logical => Identity,
+        debug => [
+            family_name(maps:get(Id, FamilyIndices)),
+            "[u32:",
+            integer_to_list(X),
+            "][u32:",
+            integer_to_list(Y),
+            "]"
+        ]
+    }.
 
 %% Logical ordering determines stable observation indices and generated port names.
 -spec direct(hls_topology:plan(), map()) -> [{term(), module(), iodata()}].
-direct(#{actors := Actors, families := Families}, Excluded) ->
-    Logical =
-        [
-            {{actor, Id}, Module, ["_", scalar_name(I)]}
-         || {I, #{id := Id, module := Module}} <- lists:enumerate(0, Actors)
-        ] ++
-            [
-                {{family, Id, [X, Y]}, Module, [
-                    "_",
-                    family_name(I),
-                    "__",
-                    integer_to_list(X),
-                    "_",
-                    integer_to_list(Y)
-                ]}
-             || {I, #{id := Id, module := Module, shape := [Width, Height]}} <-
-                    lists:enumerate(0, Families),
-                X <- lists:seq(0, Width - 1),
-                Y <- lists:seq(0, Height - 1)
-            ],
+direct(Plan = #{actors := Actors, families := Families}, Excluded) ->
+    ExactIndices = maps:from_list([
+        {Id, Index}
+     || {Index, #{id := Id}} <- lists:enumerate(0, Actors)
+    ]),
+    FamilyIndices = maps:from_list([
+        {Id, Index}
+     || {Index, #{id := Id}} <- lists:enumerate(0, Families)
+    ]),
+    Logical = [
+        {Identity, maps:get(module, Actor), observation_port(Identity, ExactIndices, FamilyIndices)}
+     || #{identity := Identity, actor := Actor} <- hls_logical_topology:instances(Plan)
+    ],
     [Entry || Entry = {Id, _, _} <- Logical, not maps:is_key(Id, Excluded)].
+
+%% Preserve generated scalar and family-array names while core owns instance enumeration.
+-spec observation_port(hls_actor_identity:id(), map(), map()) -> iodata().
+observation_port({actor, Id}, ExactIndices, _FamilyIndices) ->
+    ["_", scalar_name(maps:get(Id, ExactIndices))];
+observation_port({family, Id, [X, Y]}, _ExactIndices, FamilyIndices) ->
+    [
+        "_",
+        family_name(maps:get(Id, FamilyIndices)),
+        "__",
+        integer_to_list(X),
+        "_",
+        integer_to_list(Y)
+    ].
 
 %% Only public observation metadata is derived; no callback payload is exposed.
 -spec observation_bindings(

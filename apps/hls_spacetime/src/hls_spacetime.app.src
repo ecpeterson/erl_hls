@@ -2,7 +2,7 @@
     {description, "Cycle execution histories and FPGA physical correspondence"},
     {vsn, "0.1.0"},
     {registered, []},
-    {applications, [kernel, stdlib, crypto]},
+    {applications, [kernel, stdlib, crypto, hls_core]},
     {env, []},
     {modules, []},
     {licenses, ["MPL-2.0", "Apache-2.0"]},

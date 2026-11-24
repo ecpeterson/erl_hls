@@ -1,6 +1,6 @@
 # Source-protocol planning
 
-`hls_protocol_topology`, `inventory`, `source` and `capture` retain checked actor programs and their possible messages. `hls_protocol_transactions`, `fabric` and `inbox` derive ownership and receiver storage; `arithmetic` selects supported shared completion groups. [Protocol generators](../../backend/xls/protocol/README.md) consume these plans without replacing the compiler's callback semantics.
+`hls_logical_topology`, `inventory`, `source` and `capture` retain checked actor programs and their possible messages. Core logical topology owns bounded materialization; the remaining planners consume that result. `hls_protocol_transactions`, `fabric` and `inbox` derive ownership and receiver storage; `arithmetic` selects supported shared completion groups. [Protocol generators](../../backend/xls/protocol/README.md) consume these plans without replacing the compiler's callback semantics.
 
 Schema, projection and codec planners derive compact wiring. Control, application binding, link, partition and identity modules describe larger source-network boundaries. Host recipients reuse [hls_partition_binding](../hls_partition_binding.erl); deployed codecs consume retained descriptors without running these planners.
 

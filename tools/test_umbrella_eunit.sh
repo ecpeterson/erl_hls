@@ -49,6 +49,7 @@ run_compiler() (
     trap 'cleanup_projection "$projection_root"' EXIT
     link_root_inputs "$projection_root"
     link_full_app "$projection_root" erl_hls
+    link_full_app "$projection_root" hls_core
     link_full_app "$projection_root" hls_runtime
     printf '==> EUnit compiler projection\n'
     (cd "$projection_root" && rebar3 eunit)
@@ -60,6 +61,7 @@ run_fabric() (
     trap 'cleanup_projection "$projection_root"' EXIT
     link_root_inputs "$projection_root"
     link_production_app "$projection_root" erl_hls
+    link_production_app "$projection_root" hls_core
     link_production_app "$projection_root" hls_runtime
     for app in hls_fabric router hls_lowering hls_phi hls_snowflake; do
         link_full_app "$projection_root" "$app"
@@ -80,6 +82,7 @@ run_spacetime() (
     projection_root=$(mktemp -d "${TMPDIR:-/tmp}/erl-hls-eunit.XXXXXX")
     trap 'cleanup_projection "$projection_root"' EXIT
     link_root_inputs "$projection_root"
+    link_production_app "$projection_root" hls_core
     link_full_app "$projection_root" hls_spacetime
     printf '==> EUnit standalone spacetime projection\n'
     (cd "$projection_root" && rebar3 as spacetime eunit)

@@ -11,13 +11,12 @@
 -export([identifier/2, egress_depth/2]).
 -export_type([profile/0]).
 
--define(U32_MAX, 16#ffffffff).
-
--type egress_policy() :: burst | 0..?U32_MAX.
+%% The common contract accepts a literal depth or one actor effect burst.
+-type egress_policy() :: hls_implementation_constraints:egress_policy().
 -doc "Physical generation options; logical actor identities and callback semantics remain separate.".
 -type profile() :: #{
     name := atom() | string(),
-    channel_depth := 1..?U32_MAX,
+    channel_depth := 1..((1 bsl 32) - 1),
     actor_egress_depth := egress_policy(),
     direct_actor_debug => boolean(),
     frame_payload_words => hls_frame_layout:words()
@@ -29,93 +28,44 @@
 -doc "Validates input structure and bounds before returning a complete normalized plan.".
 -spec normalize(profile()) -> profile().
 normalize(Profile) when is_map(Profile) ->
-    Required = [actor_egress_depth, channel_depth, name],
-    Keys = lists:sort(maps:keys(Profile)),
-    Allowed = Required ++ [direct_actor_debug, frame_payload_words],
-    case {Required -- Keys, Keys -- Allowed} of
-        {[], []} -> ok;
-        {Missing, Unknown} -> error({invalid_dslx_profile_keys, Missing, Unknown})
-    end,
-    #{
-        name := Name0,
-        channel_depth := Depth,
-        actor_egress_depth := EgressDepth
-    } = Profile,
-    Name = identifier(Name0, topology_name),
-    ok = validate_channel_depth(Depth),
-    ok = validate_egress_depth(EgressDepth),
-    normalize_options(Profile#{name := Name});
+    normalize_options(
+        hls_implementation_constraints:normalize_topology(
+            Profile, [direct_actor_debug], fun identifier/2
+        )
+    );
 normalize(Profile) ->
     error({invalid_dslx_profile, Profile}).
-
-validate_channel_depth(Depth) when
-    is_integer(Depth), Depth > 0, Depth =< ?U32_MAX
-->
-    ok;
-validate_channel_depth(Depth) ->
-    error({invalid_dslx_channel_depth, Depth}).
-
-validate_egress_depth(burst) ->
-    ok;
-validate_egress_depth(Depth) when
-    is_integer(Depth), Depth >= 0, Depth =< ?U32_MAX
-->
-    ok;
-validate_egress_depth(Depth) ->
-    error({egress_depth, Depth}).
 
 %% Observation is independent of buffering and routing.
 -spec normalize_options(profile()) -> profile().
 normalize_options(Profile) ->
-    Layout = hls_frame_layout:new(maps:get(frame_payload_words, Profile, 3)),
     Profile#{
-        direct_actor_debug => xls_actor_observation:enabled(Profile),
-        frame_payload_words => hls_frame_layout:payload_words(Layout)
+        direct_actor_debug => xls_actor_observation:enabled(Profile)
     }.
 
 %% The registered producer already holds one effect; burst reserves only the
 %% remaining capacity in the explicit egress FIFO. Literal depths pass through.
+-doc "Returns the checked literal egress depth or derives remaining FIFO capacity from the actor's largest effect batch.".
 -spec egress_depth(egress_policy(), hls_actor_interface:summary()) ->
     non_neg_integer().
 egress_depth(burst, Interface) ->
-    max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
+    hls_implementation_constraints:egress_depth(
+        burst, hls_actor_interface:max_entry_effects(Interface)
+    );
 egress_depth(Depth, _Interface) ->
-    Depth.
+    hls_implementation_constraints:egress_depth(Depth, 0).
 
 -doc "Validates a lowercase deployment identifier against the shared DSLX keyword set.".
 -spec identifier(atom() | string(), term()) -> string().
 identifier(Name, Context) when is_atom(Name) ->
-    identifier(atom_to_list(Name), Context);
-identifier(Name, Context) when is_list(Name) ->
-    case re:run(Name, "^[a-z][a-z0-9_]*$", [{capture, none}]) of
-        match ->
-            case reserved(Name, Context) of
-                true -> error({reserved_dslx_identifier, Context, Name});
-                false -> Name
-            end;
-        nomatch ->
-            error({invalid_dslx_identifier, Context, Name})
-    end;
+    hls_implementation_constraints:identifier(Name, Context, fun reserved/2);
 identifier(Name, Context) ->
-    error({invalid_dslx_identifier, Context, Name}).
+    hls_implementation_constraints:identifier(Name, Context, fun reserved/2).
 
 %% Ports and endpoint IDs are stems: their emitted identifiers receive suffixes.
 %% In particular the ordinary source port `out` never becomes bare DSLX `out`.
 -spec reserved(string(), term()) -> boolean().
-reserved(_, {actor_output, _}) -> false;
-reserved(_, external_id) -> false;
-reserved(_, ingress_id) -> false;
-reserved(_, ingress_target) -> false;
-reserved(Name, {actor_module, _}) -> reserved_module(Name);
-reserved(Name, family_module) -> reserved_module(Name);
-reserved(Name, _) -> xls_names:keyword(Name) orelse lists:member(Name, ["spawn", "while"]).
-
-%% These modules provide the topology's transport and arbitration vocabulary.
-%% An actor artifact with the same import name would replace that vocabulary.
--spec reserved_module(string()) -> boolean().
-reserved_module(Name) ->
-    reserved(Name, topology_name) orelse
-        lists:member(
-            Name,
-            ["axis", "frame_transport", "arbitration", "hls_spatial_router"]
-        ).
+reserved(Name, Context) ->
+    hls_implementation_constraints:reserved_identifier(
+        Name, Context, fun xls_names:keyword/1, [], []
+    ).

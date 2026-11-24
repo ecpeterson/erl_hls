@@ -23,7 +23,7 @@
 }.
 
 %% Other transport options belong to their owning planners and are ignored by this cut.
--type options() :: #{native_actors => [hls_protocol_topology:id()], atom() => term()}.
+-type options() :: #{native_actors => [hls_logical_topology:id()], atom() => term()}.
 
 -doc "Selects all actors by default, or a nonempty proper subset of unique logical IDs in native_actors. Keeps global actor/link indices, local publications and destination-owned captures; crossing links carry a slot and canonical destination frame in the common source-build layout. Derives every codec from fresh capture/source schemas, never supplied constants. Filters rectangle recipients without renumbering the host mask. Returns fabric, ingress and native indices; malformed selections fail before hardware emission. All roles must share clock/reset and stable ready/valid handshakes. No capacity, progress or multi-board admission is established.".
 -spec plan(

@@ -57,12 +57,17 @@ validate(_, _) ->
     (module(), [xls_failure_sites:location()]) -> [xls_failure_sites:site()]
 )) -> map().
 build(Plan, Options, Codebook) ->
-    Direct =
+    {Direct, Interfaces} =
         case xls_actor_observation:enabled(Options) of
-            true -> xls_actor_observation:bindings(Plan, #{});
-            false -> []
+            true ->
+                Catalog = hls_actor_interface:from_modules(
+                    maps:keys(hls_logical_topology:interfaces(Plan))
+                ),
+                ok = hls_topology:validate_interfaces(Plan, Catalog),
+                {xls_actor_observation:bindings(Plan, #{}, Catalog), Catalog};
+            false ->
+                {[], #{}}
         end,
-    Interfaces = hls_actor_interface:from_modules(lists:usort([M || #{module := M} <- Direct])),
     Codebooks = maps:map(
         fun(Module, #{failure_locations := Locations}) -> Codebook(Module, Locations) end,
         Interfaces

@@ -70,12 +70,13 @@ def recipe(group: str, xls: Path, stage: Path, features: list[str],
         c.command('format', ['rebar3', 'fmt', '--check'])
         c.command('dialyzer', ['rebar3', 'dialyzer'], timeout=900)
         py('package-auditor', 'test_package_boundaries.py')
-        py('runtime-boundaries', 'check_package_boundaries.py', '--runtime', 'hls_runtime')
+        py('runtime-boundaries', 'check_package_boundaries.py',
+           '--runtime', 'hls_core', '--runtime', 'hls_runtime')
     elif group == 'test':
         for script in ('test_compact_build.py', 'test_hls_profile.py', 'test_xls_goldens.py'):
             py(Path(script).stem, script)
         c.command('eunit', ['bash', 'tools/test_umbrella_eunit.sh', 'default'], timeout=300)
-        c.command('release', ['rebar3', 'release'])
+        c.command('release', ['rebar3', 'release', '-n', 'erl_hls'])
         py('installed-toolchain', 'test_source_toolchain.py')
         c.command('source-build-executor', [sys.executable, '-m', 'unittest', 'tools.test_source_build_executor'])
         py('source-diagnostics', 'test_source_diagnostics.py')

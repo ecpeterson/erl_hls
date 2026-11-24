@@ -4,7 +4,7 @@
 
 -module(hls_topology_family).
 -moduledoc """
-Internal family normalizer used by `hls_topology`.
+Internal family normalizer used by `hls_logical_topology`.
 
 The supported compact subset is intentionally small: zero-based rectangular
 families, same-shape wrapped translations, and rectangle-addressed ingress
@@ -20,24 +20,28 @@ stable logical services, not actor generations. Router acceptance is a bounded
 network handoff rather than an atomic multicast admission guarantee.
 """.
 
-%% Compact family normalization and route lookup.
--export([normalize/3, routes_for_instance/3]).
+%% Compact family declaration, normalization, and route lookup.
+-export([interface_modules/1, normalize/3, routes_for_instance/3]).
 
--spec normalize(map(), [module()], fun((map(), map(), map()) -> map())) -> map().
+-doc "Validates compact family declarations and returns their computation modules in declaration order.".
+-spec interface_modules(map()) -> [module()].
+interface_modules(Specs) ->
+    [maps:get(module, Family) || Family <- normalize_families(Specs)].
+
+-spec normalize(map(), #{module() => hls_process_interface:interface()}, fun(
+    (map(), map(), map()) -> map()
+)) -> map().
+-doc "Normalizes bounded families, ingress, route relations, and lane relations using retained process interfaces and an exact-section callback.".
 normalize(
     Spec = #{
         actors := ActorSpecs,
         families := FamilySpecs,
         route_relations := RelationSpecs
     },
-    ActorModules,
+    Interfaces,
     NormalizeExact
 ) ->
     Declarations = normalize_families(FamilySpecs),
-    Interfaces = hls_actor_interface:from_modules(
-        ActorModules ++
-            [Module || #{module := Module} <- Declarations]
-    ),
     Families = [
         family_summary(Family, maps:get(Module, Interfaces))
      || Family = #{module := Module} <- Declarations
@@ -72,6 +76,7 @@ normalize(
         lane_relations => derive_lane_relations(Relations, FamilyIndex)
     }.
 
+-doc "Resolves the compact route relations emitted by one bounded family instance.".
 -spec routes_for_instance(map(), term(), [non_neg_integer()]) -> [map()].
 routes_for_instance(Plan, FamilyId, Coordinates) ->
     FamilyIndex = index_by_id(maps:get(families, Plan)),
@@ -97,6 +102,7 @@ routes_for_instance(Plan, FamilyId, Coordinates) ->
 %%% Families
 %%%
 
+-spec normalize_families(term()) -> [map()].
 normalize_families(Specs) when is_map(Specs) ->
     sort_by(
         fun(Family) -> maps:get(id, Family) end,
@@ -105,8 +111,10 @@ normalize_families(Specs) when is_map(Specs) ->
 normalize_families(Specs) ->
     error({invalid_topology_field, families, Specs}).
 
+%% Validate one bounded family declaration and cache its finite instance count.
+-spec normalize_family(term(), term()) -> map().
 normalize_family(Id, Spec) when is_map(Spec) ->
-    ok = validate_id(Id),
+    ok = hls_logical_identity:validate(Id),
     Required = [module, shape],
     Keys = maps:keys(Spec),
     case {Required -- Keys, Keys -- Required} of
@@ -133,6 +141,8 @@ normalize_family(Id, Spec) when is_map(Spec) ->
 normalize_family(Id, Spec) ->
     error({invalid_family_spec, Id, Spec}).
 
+%% Adds routing facts from the retained process interface to a family declaration.
+-spec family_summary(map(), hls_process_interface:interface()) -> map().
 family_summary(
     Family,
     Interface = #{
@@ -150,6 +160,7 @@ family_summary(
 %%% Rectangle-addressed ingress
 %%%
 
+-spec normalize_ingresses(term(), map()) -> [map()].
 normalize_ingresses(Specs, Endpoints) when is_list(Specs) ->
     Ingresses = [normalize_ingress(Spec, Endpoints) || Spec <- Specs],
     require_unique(
@@ -160,10 +171,12 @@ normalize_ingresses(Specs, Endpoints) when is_list(Specs) ->
 normalize_ingresses(Specs, _Endpoints) ->
     error({invalid_topology_field, ingresses, Specs}).
 
+%% Normalize one bounded rectangular ingress and its selector targets.
+-spec normalize_ingress(term(), map()) -> map().
 normalize_ingress({Id, {rectangle, Shape}, TargetSpecs}, Endpoints) when
     is_list(TargetSpecs), TargetSpecs =/= []
 ->
-    ok = validate_id(Id),
+    ok = hls_logical_identity:validate(Id),
     ok = validate_rectangle_shape(Id, Shape),
     Targets = [
         normalize_ingress_target(Target, Shape, Endpoints)
@@ -183,6 +196,8 @@ normalize_ingress({Id, {rectangle, Shape}, TargetSpecs}, Endpoints) when
 normalize_ingress(Spec, _Endpoints) ->
     error({invalid_ingress, Spec}).
 
+%% Normalize one ingress target's schemas and statically embedded recipients.
+-spec normalize_ingress_target(term(), [pos_integer()], map()) -> map().
 normalize_ingress_target(
     {Id, Schemas, RecipientSpecs},
     Shape,
@@ -193,7 +208,7 @@ normalize_ingress_target(
     is_list(RecipientSpecs),
     RecipientSpecs =/= []
 ->
-    ok = validate_id(Id),
+    ok = hls_logical_identity:validate(Id),
     case lists:all(fun erlang:is_atom/1, Schemas) of
         true -> require_unique(duplicate_ingress_schemas, Schemas);
         false -> error({invalid_ingress_schemas, Id, Schemas})
@@ -212,6 +227,8 @@ normalize_ingress_target(
 normalize_ingress_target(Target, _Shape, _Endpoints) ->
     error({invalid_ingress_target, Target}).
 
+%% Normalizes one embedded family or exact-actor ingress recipient.
+-spec normalize_ingress_recipient(term(), [pos_integer()], map()) -> map().
 normalize_ingress_recipient(
     {family, FamilyId, {embed, Scale, Offset}},
     AddressShape,
@@ -268,6 +285,8 @@ normalize_ingress_recipient({actor, ActorId, {at, Point}}, Shape, Endpoints) ->
 normalize_ingress_recipient(Recipient, _Shape, _Endpoints) ->
     error({invalid_ingress_recipient, Recipient}).
 
+%% Requires repeated target declarations to embed each endpoint at one position.
+-spec validate_ingress_embeddings(term(), [map()]) -> ok.
 validate_ingress_embeddings(IngressId, Targets) ->
     Bindings = lists:foldl(
         fun(#{recipients := Recipients}, Acc) ->
@@ -300,14 +319,20 @@ validate_ingress_embeddings(IngressId, Targets) ->
         lists:sort(maps:to_list(Bindings))
     ).
 
+%% Returns the endpoint key and spatial position represented by an ingress recipient.
+-spec ingress_binding(map()) -> {{family | actor, term()}, term()}.
 ingress_binding(#{family := Id, scale := Scale, offset := Offset}) ->
     {{family, Id}, {Scale, Offset}};
 ingress_binding(#{actor := Id, at := Point}) ->
     {{actor, Id}, Point}.
 
+%% Projects the diagnostic ID from an ingress endpoint key.
+-spec ingress_binding_id({family | actor, term()}) -> term().
 ingress_binding_id({family, Id}) -> Id;
 ingress_binding_id({actor, Id}) -> {actor, Id}.
 
+%% Accepts only positive two-dimensional ingress address spaces.
+-spec validate_rectangle_shape(term(), term()) -> ok.
 validate_rectangle_shape(_Id, [Width, Height]) when
     is_integer(Width),
     Width > 0,
@@ -318,6 +343,8 @@ validate_rectangle_shape(_Id, [Width, Height]) when
 validate_rectangle_shape(Id, Shape) ->
     error({invalid_ingress_shape, Id, Shape}).
 
+%% Require every ingress recipient to dispatch identical declared schema layouts.
+-spec validate_ingress_interfaces(term(), [atom()], [map()], map()) -> ok.
 validate_ingress_interfaces(TargetId, Schemas, Recipients, Endpoints) ->
     Interfaces = [
         {ingress_binding_id(Key), ingress_interface(Recipient, Endpoints)}
@@ -325,7 +352,7 @@ validate_ingress_interfaces(TargetId, Schemas, Recipients, Endpoints) ->
     ],
     lists:foreach(
         fun({Id, Interface}) ->
-            Missing = Schemas -- hls_actor_interface:dispatched_schemas(Interface),
+            Missing = Schemas -- hls_process_interface:dispatched_schemas(Interface),
             case Missing of
                 [] -> ok;
                 _ -> error({ingress_schemas, TargetId, Id, Missing})
@@ -338,7 +365,7 @@ validate_ingress_interfaces(TargetId, Schemas, Recipients, Endpoints) ->
             Layouts = lists:usort([
                 maps:get(
                     fields,
-                    hls_actor_interface:schema(Interface, Schema)
+                    hls_process_interface:schema(Interface, Schema)
                 )
              || {_, Interface} <- Interfaces
             ]),
@@ -350,6 +377,8 @@ validate_ingress_interfaces(TargetId, Schemas, Recipients, Endpoints) ->
         Schemas
     ).
 
+%% Selects the process interface attached to a normalized ingress recipient.
+-spec ingress_interface(map(), map()) -> hls_process_interface:interface().
 ingress_interface(#{family := Id}, #{families := Families}) ->
     #{interface := Interface} = maps:get(Id, Families),
     Interface;
@@ -357,6 +386,8 @@ ingress_interface(#{actor := Id}, #{actors := Actors}) ->
     #{interface := Interface} = maps:get(Id, Actors),
     Interface.
 
+%% Rejects family IDs whose tuple namespace contains another family ID.
+-spec reject_family_namespace_collisions([map()]) -> ok.
 reject_family_namespace_collisions(Families) ->
     Collisions = lists:sort([
         {maps:get(id, Family), maps:get(id, Other)}
@@ -370,6 +401,8 @@ reject_family_namespace_collisions(Families) ->
         _ -> error({family_namespace_collisions, Collisions})
     end.
 
+%% Requires a nonempty shape whose dimensions are positive integers.
+-spec validate_shape(term(), term()) -> ok.
 validate_shape(Id, Shape) when is_list(Shape), Shape =/= [] ->
     case
         lists:all(
@@ -383,6 +416,8 @@ validate_shape(Id, Shape) when is_list(Shape), Shape =/= [] ->
 validate_shape(Id, Shape) ->
     error({invalid_family_shape, Id, Shape}).
 
+%% Rejects exact actor IDs that occupy a family declaration or member namespace.
+-spec reject_actor_family_collisions(term(), map()) -> ok.
 reject_actor_family_collisions(ActorSpecs, FamilyIndex) when
     is_map(ActorSpecs)
 ->
@@ -402,6 +437,8 @@ reject_actor_family_collisions(ActorSpecs, FamilyIndex) when
 reject_actor_family_collisions(_ActorSpecs, _FamilyIndex) ->
     ok.
 
+%% Reports whether an ID is a bounded member of the supplied normalized family.
+-spec is_family_instance_id(term(), map()) -> boolean().
 is_family_instance_id(Id, Family) when is_tuple(Id) ->
     Shape = maps:get(shape, Family),
     tuple_size(Id) =:= length(Shape) + 1 andalso
@@ -414,6 +451,7 @@ is_family_instance_id(_Id, _Family) ->
 %%% Route relations
 %%%
 
+-spec normalize_route_relations(term(), map(), map()) -> [map()].
 normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, ExternalIndex) when
     is_list(Specs)
 ->
@@ -446,6 +484,8 @@ normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, Externa
 normalize_route_relations(Specs, _Endpoints, _ExternalIndex) ->
     error({invalid_topology_field, route_relations, Specs}).
 
+%% Selects direct or explicit fanout delivery and rejects malformed relation syntax.
+-spec normalize_route_relation(term(), map(), map()) -> map().
 normalize_route_relation({Source, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route_relation, Source});
 normalize_route_relation({Source, Recipients}, Endpoints, ExternalIndex) when
@@ -495,6 +535,8 @@ normalize_route_relation(
 normalize_route_relation(Spec, _Endpoints, _ExternalIndex) ->
     error({invalid_route_relation_spec, Spec}).
 
+%% Validates one route source and its recipients, then canonicalizes translations.
+-spec normalize_route_relation(term(), atom(), [term()], map(), map()) -> map().
 normalize_route_relation(
     Source,
     Delivery,
@@ -529,6 +571,8 @@ normalize_route_relation(
         recipients => lists:sort(NormalRecipients)
     }.
 
+%% Resolves a declared family output used as a compact relation source.
+-spec normalize_source(term(), map()) -> {term(), atom()}.
 normalize_source({FamilyId, Port}, #{families := FamilyIndex}) when is_atom(Port) ->
     Family = require_family(FamilyId, FamilyIndex, route_relation_source),
     case lists:member(Port, maps:get(outputs, Family)) of
@@ -538,6 +582,8 @@ normalize_source({FamilyId, Port}, #{families := FamilyIndex}) when is_atom(Port
 normalize_source(Source, _Endpoints) ->
     error({invalid_route_relation_source, Source}).
 
+%% Validates one translated family, exact actor, or external relation recipient.
+-spec normalize_recipient(term(), term(), [pos_integer()], map(), map()) -> term().
 normalize_recipient(
     Recipient = {family, DestinationId, {translate, Offset, wrap}},
     Source,
@@ -600,6 +646,8 @@ normalize_recipient(
 ) ->
     error({invalid_route_relation_recipient, Source, Recipient}).
 
+%% Validate schemas and layouts on every compact family-relation edge.
+-spec validate_relation_interfaces([map()], map(), map()) -> ok.
 validate_relation_interfaces(
     Relations, #{families := FamilyIndex, actors := ActorIndex}, ExternalIndex
 ) ->
@@ -610,7 +658,7 @@ validate_relation_interfaces(
                 interface,
                 maps:get(FamilyId, FamilyIndex)
             ),
-            Emitted = hls_actor_interface:output_schemas(
+            Emitted = hls_process_interface:output_schemas(
                 SourceInterface,
                 Port
             ),
@@ -656,6 +704,7 @@ validate_relation_interfaces(
 %%% Compact lanes and point resolution
 %%%
 
+-spec derive_lane_relations([map()], map()) -> [map()].
 derive_lane_relations(Relations, FamilyIndex) ->
     LanePorts = lists:foldl(
         fun(Relation, Acc0) ->
@@ -692,6 +741,8 @@ derive_lane_relations(Relations, FamilyIndex) ->
             lists:sort(maps:to_list(LanePorts))
     ].
 
+%% Reduces translations modulo shape while leaving exact destinations unchanged.
+-spec canonical_recipient(term(), [pos_integer()]) -> term().
 canonical_recipient(
     {family, DestinationId, {translate, Offset, wrap}},
     Shape
@@ -708,6 +759,8 @@ canonical_recipient(Recipient = {actor, _ActorId}, _Shape) ->
 canonical_recipient(Recipient = {external, _ExternalId}, _Shape) ->
     Recipient.
 
+%% Resolves a compact recipient at one source-family coordinate.
+-spec resolve_recipient(term(), [non_neg_integer()], map()) -> term().
 resolve_recipient(
     {family, DestinationId, {translate, Offset, wrap}},
     Coordinates,
@@ -728,9 +781,13 @@ resolve_recipient(
 ) ->
     Recipient.
 
+%% Constructs the canonical tuple ID of one family member.
+-spec family_instance_id(term(), [non_neg_integer()]) -> tuple().
 family_instance_id(FamilyId, Coordinates) ->
     list_to_tuple([FamilyId | Coordinates]).
 
+%% Requires a coordinate vector to match the rank and bounds of a family shape.
+-spec validate_coordinates(term(), term(), [pos_integer()]) -> ok.
 validate_coordinates(FamilyId, Coordinates, Shape) when
     is_list(Coordinates), length(Coordinates) =:= length(Shape)
 ->
@@ -741,6 +798,8 @@ validate_coordinates(FamilyId, Coordinates, Shape) when
 validate_coordinates(FamilyId, Coordinates, Shape) ->
     error({invalid_family_coordinates, FamilyId, Coordinates, Shape}).
 
+%% Reports whether every supplied coordinate lies inside its paired dimension.
+-spec coordinates_in_shape(term(), [pos_integer()]) -> boolean().
 coordinates_in_shape(Coordinates, Shape) ->
     lists:all(
         fun({Coordinate, Size}) ->
@@ -750,14 +809,20 @@ coordinates_in_shape(Coordinates, Shape) ->
         lists:zip(Coordinates, Shape)
     ).
 
+%% Zips three equal-length lists; callers establish matching ranks first.
+-spec zip3([term()], [term()], [term()]) -> [{term(), term(), term()}].
 zip3([A | As], [B | Bs], [C | Cs]) ->
     [{A, B, C} | zip3(As, Bs, Cs)];
 zip3([], [], []) ->
     [].
 
+%% Returns the nonnegative residue for a positive modulus.
+-spec positive_mod(integer(), pos_integer()) -> non_neg_integer().
 positive_mod(Value, Modulus) ->
     ((Value rem Modulus) + Modulus) rem Modulus.
 
+%% Chooses the shortest signed representative of a wrapped offset.
+-spec canonical_offset(integer(), pos_integer()) -> integer().
 canonical_offset(Value, Size) ->
     Offset = positive_mod(Value, Size),
     case Offset > Size div 2 of
@@ -769,27 +834,23 @@ canonical_offset(Value, Size) ->
 %%% Shared validation
 %%%
 
+-spec require_family(term(), map(), term()) -> map().
 require_family(FamilyId, FamilyIndex, Context) ->
     case maps:find(FamilyId, FamilyIndex) of
         {ok, Family} -> Family;
         error -> error({unknown_family, FamilyId, Context})
     end.
 
-%% Logical names are independent of bounded family indices and physical addresses.
--spec validate_id(term()) -> ok.
-validate_id(Id) when is_atom(Id); is_integer(Id) ->
-    ok;
-validate_id(Id) when is_tuple(Id), tuple_size(Id) > 0 ->
-    lists:foreach(fun validate_id/1, tuple_to_list(Id));
-validate_id(Id) ->
-    error({invalid_topology_id, Id}).
-
+%% Requires all values to be unique, reporting sorted duplicates under `ErrorTag`.
+-spec require_unique(atom(), [term()]) -> ok.
 require_unique(ErrorTag, Values) ->
     case duplicates(Values) of
         [] -> ok;
         Duplicates -> error({ErrorTag, Duplicates})
     end.
 
+%% Returns the sorted values occurring more than once.
+-spec duplicates([term()]) -> [term()].
 duplicates(Values) ->
     Counts = lists:foldl(
         fun(Value, Acc) ->
@@ -800,11 +861,17 @@ duplicates(Values) ->
     ),
     lists:sort([Value || {Value, Count} <- maps:to_list(Counts), Count > 1]).
 
+%% Indexes normalized declarations by their required `id` field.
+-spec index_by_id([map()]) -> map().
 index_by_id(Items) ->
     maps:from_list([{maps:get(id, Item), Item} || Item <- Items]).
 
+%% Removes retained process interfaces from public normalized family declarations.
+-spec strip_interfaces([map()]) -> [map()].
 strip_interfaces(Items) ->
     [maps:remove(interface, Item) || Item <- Items].
 
+%% Sorts values by a derived Erlang term key.
+-spec sort_by(fun((term()) -> term()), [term()]) -> [term()].
 sort_by(Key, Values) ->
     lists:sort(fun(A, B) -> Key(A) < Key(B) end, Values).

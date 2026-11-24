@@ -19,7 +19,7 @@
 }.
 
 -doc "Inspects a normalized exact topology and module artifacts containing a complete opaque compiler program. Retains every entry alternative and complete ordered callback family. Reports unknown producers, interfaces and temporal obligations without executing callbacks or trusting fixture traces. The caller must bind these trusted compiler artifacts to current source; this function is not a stale-artifact validator.".
--spec inspect(hls_topology:plan(), #{module() => map()}) -> report().
+-spec inspect(hls_logical_topology:materialized_plan(), #{module() => map()}) -> report().
 inspect(Topology = #{actors := Actors, routes := Routes}, Artifacts) ->
     Modules = maps:map(fun module/2, Artifacts),
     ActorModules = maps:from_list([{Id, M} || #{id := Id, module := M} <- Actors]),

@@ -12,24 +12,24 @@
 -record(plan, {bridge :: hls_protocol_bridge:plan(), descriptor :: descriptor()}).
 -doc "One ordinary BEAM actor's checked source identity, capacity, startup records and unique output recipients.".
 -type host_actor() :: #{
-    id := hls_protocol_topology:id(),
+    id := hls_logical_topology:id(),
     module := module(),
     capacity := pos_integer(),
-    outputs := #{atom() => hls_protocol_topology:destination()},
+    outputs := #{atom() => hls_logical_topology:destination()},
     startup := [tuple()],
     schemas := hls_host_codec:catalog(),
     output_schemas := #{atom() => [atom()]}
 }.
 
 %% Source actor indices stay global when host and native subsets are separated.
--type indexed_actor() :: {non_neg_integer(), hls_protocol_topology:actor()}.
+-type indexed_actor() :: {non_neg_integer(), hls_logical_topology:actor()}.
 %% Startup order is source-declared and independent of host placement.
--type startup() :: #{target := hls_protocol_topology:id(), delivery := cast, messages := [tuple()]}.
+-type startup() :: #{target := hls_logical_topology:id(), delivery := cast, messages := [tuple()]}.
 
 %% Logical targets map to global native indices or unchanged external stream identities.
 -type targets() :: #{
-    hls_protocol_topology:destination() =>
-        {actor, non_neg_integer()} | {external, hls_protocol_topology:id()}
+    hls_logical_topology:destination() =>
+        {actor, non_neg_integer()} | {external, hls_logical_topology:id()}
 }.
 %% The mixed session uses the bridge's checked return addresses.
 -type endpoints() :: #{
@@ -158,10 +158,10 @@ emit(Config) ->
 %% Bind one host actor to its exact mailbox, ordered startup messages and checked output routes.
 -spec host_actor(
     hls_protocol_application_schema:actor(),
-    [hls_protocol_topology:route()],
+    [hls_logical_topology:route()],
     [startup()],
     #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
-    [hls_protocol_topology:id()]
+    [hls_logical_topology:id()]
 ) -> host_actor().
 host_actor(
     #{id := Id, module := Module, schemas := Schemas, output_schemas := OutputSchemas},
@@ -189,11 +189,11 @@ host_actor(
 
 %% Retain source port names while checking the supported single-recipient host routing model.
 -spec host_outputs(
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     module(),
-    [hls_protocol_topology:route()],
-    [hls_protocol_topology:id()]
-) -> #{atom() => hls_protocol_topology:destination()}.
+    [hls_logical_topology:route()],
+    [hls_logical_topology:id()]
+) -> #{atom() => hls_logical_topology:destination()}.
 host_outputs(Id, Module, Routes, HostIds) ->
     maps:from_list([
         {Port, host_destination(Id, Module, Port, Recipients, HostIds)}
@@ -216,12 +216,12 @@ targets(Native, HostActors) ->
 
 %% A BEAM output has one crossing or external recipient; host-to-host routing is unsupported.
 -spec host_destination(
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     module(),
     atom(),
-    [hls_protocol_topology:destination()],
-    [hls_protocol_topology:id()]
-) -> hls_protocol_topology:destination().
+    [hls_logical_topology:destination()],
+    [hls_logical_topology:id()]
+) -> hls_logical_topology:destination().
 host_destination(Id, Module, Port, [Destination], HostIds) ->
     case Destination of
         {actor, To} ->

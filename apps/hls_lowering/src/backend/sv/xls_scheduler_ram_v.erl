@@ -24,15 +24,8 @@ bindings(Plan) -> bindings(Plan, hls_frame_layout:default()).
 
 -doc "Derives RAM bindings with the selected ordinary-frame width; actor state, gather storage and debug words remain independently sized.".
 -spec bindings(hls_scheduler_plan:plan(), hls_frame_layout:layout()) -> [map()].
-bindings(Plan = #{groups := Groups}, Layout) ->
-    Interfaces = hls_actor_interface:from_modules(
-        [
-            Module
-         || Group = #{module := Module} <- Groups,
-            xls_collection_observation:enabled(Group)
-        ],
-        Layout
-    ),
+bindings(Plan = #{interfaces := Interfaces}, Layout) ->
+    maps:foreach(fun(_, #{frame_layout := Selected}) -> Layout = Selected end, Interfaces),
     bindings(Plan, Layout, Interfaces).
 
 -doc "Derives RAM bindings from retained scheduler facts and supplied actor summaries without reloading interfaces. Only optional collection observations consume an interface; ordinary groups need no additional summary fields.".

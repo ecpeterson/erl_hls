@@ -10,7 +10,7 @@ Physical companion validation for hls_spacetime recordings. Checks build identit
 %% Opaque nonempty identities are shared with the execution recording.
 -type id() :: binary().
 %% Exact source, generated RTL and observation identities bind both companions.
--type build() :: #{source := id(), rtl := id(), observation := id()}.
+-type build() :: hls_observation_build:build().
 %% Primitive placement uses one common tile grid; properties retain native strings.
 -type cell() :: #{
     id := id(),
@@ -108,7 +108,7 @@ physical(
     } = Physical
 ) ->
     build(PhysicalBuild),
-    require(PhysicalBuild =:= Build, physical_build_mismatch),
+    require(hls_observation_build:match(Build, PhysicalBuild) =:= ok, physical_build_mismatch),
     identifier(Checkpoint),
     require(
         lists:member(Evidence, [synthetic_fixture, native_measurement]),
@@ -160,11 +160,17 @@ pin_index(Nets) ->
     ).
 
 %% The recording supplies each identity; consumers must not infer them from paths or names.
--spec build(build()) -> ok.
-build(#{source := Source, rtl := Rtl, observation := Observation}) ->
-    lists:foreach(fun identifier/1, [Source, Rtl, Observation]);
-build(_) ->
-    fail(invalid_physical_build).
+-spec build(term()) -> ok.
+build(Build) ->
+    case hls_observation_build:validate(Build) of
+        ok ->
+            #{source := Source, rtl := Rtl, observation := Observation} = Build,
+            lists:foreach(fun identifier/1, [Source, Rtl, Observation]);
+        {error, {invalid_component, _Name, Value}} ->
+            identifier(Value);
+        {error, invalid_shape} ->
+            fail(invalid_physical_build)
+    end.
 
 %% Count installed catalogue cells once, regardless of repeated semantic or time-layer references.
 -spec empty_summary(non_neg_integer()) -> summary().

@@ -30,7 +30,8 @@ main([ApplicationRoot,Output]) ->
     Beams=[code:which(M)||M<-[xls_actor_program,xls_statem_plan,xls_statem_lower,
         xls_parse,xls_clause_lower,xls_record_codegen,xls_gs_immediate,
         hls_source,hls_actor_source,hls_records,hls_pack,hls_topology,
-        hls_topology_family,hls_actor_interface,hls_protocol_topology,hls_protocol_inventory]],
+        hls_topology_family,hls_topology_endpoint,hls_actor_interface,
+        hls_process_interface,hls_logical_identity,hls_logical_topology,hls_protocol_inventory]],
     Report=#{eligible=>false,rtl_generated=>false,source_plans=>maps:map(fun(_,P)->source_summary(P) end,Plans),
         topologies=>Summaries,inputs=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Inputs],
         compiler_beams=>[#{path=>list_to_binary(P),sha256=>digest(P)}||P<-Beams]},
@@ -54,7 +55,7 @@ load(File,Options)->
 -spec inventory(string(),map(),map(),file:filename()) -> map().
 inventory(Name,Topology,Plans,Output)->
     Normal=hls_topology:normalize(Topology),
-    Expanded=#{actors:=Actors,routes:=FullRoutes}=hls_protocol_topology:elaborate(Normal,64),
+    Expanded=#{actors:=Actors,routes:=FullRoutes}=hls_logical_topology:materialize(Normal,64),
     Used=maps:with(lists:usort([M||#{module:=M}<-Actors]),Plans),
     R=#{channels:=Channels,diagnostics:=Diagnostics,obligations:=Obligations}=hls_protocol_inventory:inspect(Expanded,Used),
     Stem=filename:join(Output,Name),

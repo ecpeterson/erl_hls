@@ -396,7 +396,7 @@ composition_targets() -> [{hls_protocol_transport, emit, 1}, {xls_protocol_netwo
 -spec source_targets() -> [{module(), atom(), arity()}].
 source_targets() -> [{compile, file, 2}, {xls_actor_program, from_file, 3},
     {xls_statem_plan, from_file, 3}, {hls_protocol_transport, prepare, 1},
-    {hls_protocol_topology, elaborate, 2}].
+    {hls_logical_topology, materialize, 2}].
 
 %% Select actual hardware generation without counting legitimate source preparation during planning.
 -spec renderer_calls(map()) -> map().

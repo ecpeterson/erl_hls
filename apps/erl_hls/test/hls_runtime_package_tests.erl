@@ -23,7 +23,8 @@ standalone_runtime() ->
         Port = open_port({spawn_executable, os:find_executable("erl")},
             [binary, exit_status, stderr_to_stdout,
              {env, [{"ERL_LIBS", false}, {"ERL_AFLAGS", false}, {"ERL_FLAGS", "+S 2:2"}]},
-             {args, ["-noshell", "-pa", filename:join(code:lib_dir(hls_runtime), "ebin"), Dir,
+             {args, ["-noshell", "-pa", filename:join(code:lib_dir(hls_core), "ebin"),
+                 filename:join(code:lib_dir(hls_runtime), "ebin"), Dir,
                  "-eval", "ok = hls_runtime_package_tests:witness(), halt(0)."]}]),
         await(Port, <<>>)
     after

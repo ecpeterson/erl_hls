@@ -18,26 +18,12 @@ Build/runtime clients construct catalogs here; hls_debug_target interprets the r
 %% Shared type contracts.
 -export_type([actor_id/0, topology/0]).
 
--doc "Logical topology view consumed by catalog construction; additional build metadata is ignored.".
--type topology() :: #{
-    actors := [
-        #{id := term(), module := module(), mailbox_capacity := pos_integer(), atom() => term()}
-    ],
-    families := [
-        #{
-            id := term(),
-            module := module(),
-            mailbox_capacity := pos_integer(),
-            shape := [pos_integer()],
-            atom() => term()
-        }
-    ],
-    atom() => term()
-}.
+-doc "Compact or materialized logical topology consumed by catalog construction; additional build metadata is ignored.".
+-type topology() ::
+    hls_logical_topology:compact_plan() | hls_logical_topology:materialized_plan().
 
 -doc "Exact actor or indexed family identity used by logical observation handles.".
-
--type actor_id() :: {actor, term()} | {family, term(), [non_neg_integer()]}.
+-type actor_id() :: hls_actor_identity:id().
 
 -doc "Binds every logical actor to its CPU reference process.".
 -spec cpu(topology(), #{actor_id() := pid()}) -> map().
@@ -173,6 +159,8 @@ bind(Catalog = #{actors := Targets}, Projection, Session = #{manifest := Manifes
         )
     }.
 
+%% Projects one observation bank's retained mailbox and optional reduction widths.
+-spec observation_fields(map()) -> map().
 observation_fields(Bank = #{<<"reduction">> := Reduction = #{<<"width">> := Width}}) ->
     (observation_fields(maps:remove(<<"reduction">>, Bank)))#{
         <<"width">> := 56 + Width, <<"reduction">> => Reduction
@@ -182,9 +170,11 @@ observation_fields(#{<<"mailbox">> := #{<<"capacity">> := Capacity, <<"kind">> :
 observation_fields(_) ->
     #{<<"width">> => 26}.
 
+-doc "Lists the catalog's logical actor identities in deterministic term order.".
 -spec actors(map()) -> [actor_id()].
 actors(#{actors := Actors}) -> lists:sort(maps:keys(Actors)).
 
+-doc "Looks up one logical actor target without contacting its backend.".
 -spec actor(map(), actor_id()) -> {ok, hls_debug_target:target()} | {error, term()}.
 actor(#{actors := Actors}, Id) ->
     case maps:find(Id, Actors) of
@@ -192,23 +182,21 @@ actor(#{actors := Actors}, Id) ->
         error -> {error, {unknown_actor, Id}}
     end.
 
+-doc "Lists the catalog's explicitly associated shared boundary monitors.".
+-spec boundaries(map()) -> [{boundary, pid(), term()}].
 boundaries(#{boundaries := Boundaries}) -> Boundaries.
 
+%% Project canonical bounded topology instances into catalog metadata.
+-spec logical_actors(topology()) -> #{actor_id() := map()}.
 logical_actors(Plan) ->
     maps:from_list([
-        {Id, #{identity => Id, module => Module, mailbox_capacity => Capacity}}
-     || {Id, Module, Capacity} <- instances(Plan)
+        {Identity, #{
+            identity => Identity,
+            module => Module,
+            mailbox_capacity => Capacity
+        }}
+     || #{
+            identity := Identity,
+            actor := #{module := Module, mailbox_capacity := Capacity}
+        } <- hls_logical_topology:instances(Plan)
     ]).
-
-instances(#{actors := Actors, families := Families}) ->
-    [
-        {{actor, Id}, Module, Capacity}
-     || #{id := Id, module := Module, mailbox_capacity := Capacity} <- Actors
-    ] ++
-        [
-            {{family, Id, [X, Y]}, Module, Capacity}
-         || #{id := Id, module := Module, mailbox_capacity := Capacity, shape := [Width, Height]} <-
-                Families,
-            X <- lists:seq(0, Width - 1),
-            Y <- lists:seq(0, Height - 1)
-        ].

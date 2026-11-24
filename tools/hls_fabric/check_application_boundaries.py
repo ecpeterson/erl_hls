@@ -9,7 +9,9 @@ import tempfile
 from compiler_paths import compiler_root, compiler_tool
 
 
-GENERIC_APPLICATIONS = {'erl_hls', 'hls_runtime', 'hls_lowering', 'hls_fabric', 'router'}
+GENERIC_APPLICATIONS = {
+    'erl_hls', 'hls_core', 'hls_runtime', 'hls_lowering', 'hls_fabric', 'router'
+}
 EXAMPLE_APPLICATIONS = {'hls_phi', 'hls_snowflake'}
 DEFAULT_APPLICATIONS = GENERIC_APPLICATIONS | EXAMPLE_APPLICATIONS
 PROFILE_APPLICATIONS = {
@@ -32,7 +34,7 @@ def audit_profile(profile: str) -> tuple[dict, list[dict[str, str]]]:
                                 check=True, timeout=60)
     snapshot = json.loads(result.stdout)
     found = {app['name'] for app in snapshot['applications']}
-    errors = auditor.violations(snapshot, expected, set(), None)
+    errors = auditor.policy_violations(snapshot, expected, set(), None)
     errors.extend(auditor.violations(snapshot, GENERIC_APPLICATIONS & found,
                                      EXAMPLE_APPLICATIONS, None))
     errors.extend(auditor.undeclared_application_dependencies(snapshot, expected))

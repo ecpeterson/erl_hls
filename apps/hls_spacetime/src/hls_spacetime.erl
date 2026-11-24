@@ -10,7 +10,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
 -doc "Nonempty textual identifier scoped to one artifact, independent of payload equality.".
 -type id() :: binary().
 -doc "Identities of the exact source bundle, compiled RTL and observation bindings; not application names.".
--type build() :: #{source := id(), rtl := id(), observation := id()}.
+-type build() :: hls_observation_build:build().
 -doc "A semantic storage word or explicit transient value. Root versions disclose initial, carry-in or unknown ancestry.".
 -type version() :: #{
     id := id(),
@@ -153,8 +153,7 @@ validate_bundle(#{
     physical := Physical
 }) ->
     member(Evidence, [synthetic_fixture, simulation_witness], evidence_kind),
-    #{source := Source, rtl := Rtl, observation := Observation} = Build,
-    lists:foreach(fun text/1, [Source, Rtl, Observation]),
+    build(Build),
     Resources = index(Resources0, resource),
     Versions = index(Versions0, version),
     Events = index(Events0, event),
@@ -186,6 +185,19 @@ validate_bundle(#{
     };
 validate_bundle(_) ->
     fail(format).
+
+%% Core identities are opaque; serialized spacetime recordings additionally require UTF-8 text.
+-spec build(term()) -> ok.
+build(Build) ->
+    case hls_observation_build:validate(Build) of
+        ok ->
+            #{source := Source, rtl := Rtl, observation := Observation} = Build,
+            lists:foreach(fun text/1, [Source, Rtl, Observation]);
+        {error, {invalid_component, _Name, Value}} ->
+            text(Value);
+        {error, invalid_shape} ->
+            fail(malformed_record)
+    end.
 
 -doc "Validates then produces JSON iodata. Caller owns file creation/retention. Atom field/enum names become strings; write/read masks become hexadecimal strings to retain wide values in browser consumers. No term-to-atom decoder is involved.".
 -spec encode(bundle()) -> iodata().

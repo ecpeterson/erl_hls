@@ -16,7 +16,7 @@ lower(Plan = #{actors := Actors}, Profile) ->
     Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Actors], Layout),
     lower(Plan, Profile, Interfaces).
 
--doc "Lowers a materialized graph with a retained interface catalog from hls_actor_interface:from_modules/2. The catalog must cover every actor and use the profile frame layout; no interface or source is reloaded.".
+-doc "Lowers a materialized graph with a retained physical catalog from hls_actor_interface:from_modules/2. The catalog must cover every actor, use the profile frame layout and project exactly to the core communication catalog; no interface or source is reloaded.".
 -spec lower(map(), xls_topology_profile:profile(), #{module() => hls_actor_interface:summary()}) ->
     map().
 lower(
@@ -38,8 +38,12 @@ lower(
     } =
         Profile,
     Layout = hls_frame_layout:new(PayloadWords),
+    ProcessInterfaces = hls_logical_topology:interfaces(Plan),
+    ok = validate_physical_interfaces(Plan, Layout, Interfaces),
     ok = validate_lanes(Plan),
-    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth, Layout, Interfaces),
+    Actors = annotate_actors(
+        maps:get(actors, Plan), EgressDepth, Layout, ProcessInterfaces, Interfaces
+    ),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([{maps:get(id, Actor), Actor} || Actor <- Actors]),
     ok = validate_route_selectors(maps:get(routes, Plan), ActorIndex),
@@ -58,11 +62,13 @@ lower(
         startup => Startup
     }.
 
+%% Reject a materialized plan whose cached exact lanes disagree with its routes.
+-spec validate_lanes(map()) -> ok.
 validate_lanes(Plan = #{routes := Routes}) ->
     check_lanes(lanes, Routes, Plan).
 
-%% Exact routes and family relations have the same source/recipient incidence
-%% shape once their normalizer has canonicalized wrapped translations.
+-doc "Checks one cached exact or family lane set against core derivation, retaining the established backend-specific error tag.".
+-spec check_lanes(lanes | lane_relations, [map()], map()) -> ok.
 check_lanes(Key, Routes, Plan) ->
     Expected = lanes(Routes),
     case maps:get(Key, Plan, '$missing') of
@@ -77,53 +83,60 @@ check_lanes(Key, Routes, Plan) ->
             error({Error, Expected, Cached})
     end.
 
+-doc "Delegates exact logical lane derivation to the core topology authority.".
+-spec lanes([hls_logical_topology:route()]) -> [map()].
 lanes(Routes) ->
-    LanePorts = lists:foldl(
-        fun(Route, Acc0) ->
-            {SourceActor, Port} = maps:get(source, Route),
-            lists:foldl(
-                fun(Recipient, Acc) ->
-                    Key = {SourceActor, Recipient},
-                    maps:update_with(
-                        Key,
-                        fun(Ports) -> [Port | Ports] end,
-                        [Port],
-                        Acc
-                    )
-                end,
-                Acc0,
-                maps:get(recipients, Route)
-            )
-        end,
-        #{},
-        Routes
-    ),
-    [
-        #{
-            source => Source,
-            destination => Destination,
-            source_ports => lists:sort(Ports)
-        }
-     || {{Source, Destination}, Ports} <-
-            lists:sort(maps:to_list(LanePorts))
-    ].
+    hls_logical_topology:lanes(Routes).
 
 %% Retained summaries must have been checked for this physical frame capacity.
 -spec annotate_actors(
     [map()],
     burst | non_neg_integer(),
     hls_frame_layout:layout(),
+    hls_logical_topology:interface_catalog(),
     #{module() => hls_actor_interface:summary()}
 ) -> [map()].
-annotate_actors(Actors, EgressDepth, Layout, Interfaces) ->
+annotate_actors(Actors, EgressDepth, Layout, ProcessInterfaces, Interfaces) ->
     [
         begin
             #{frame_layout := Layout} = maps:get(Module, Interfaces),
-            annotate_actor(Index, Actor, Interfaces, EgressDepth)
+            annotate_actor(
+                Index,
+                Actor#{process_interface => maps:get(Module, ProcessInterfaces)},
+                Interfaces,
+                EgressDepth
+            )
         end
      || {Index, Actor = #{module := Module}} <- lists:enumerate(0, Actors)
     ].
 
+%% Rich physical summaries must project exactly to the plan's retained communication contracts.
+-spec validate_physical_interfaces(
+    hls_logical_topology:materialized_plan(),
+    hls_frame_layout:layout(),
+    #{module() => hls_actor_interface:summary()}
+) -> ok.
+validate_physical_interfaces(Plan, Layout, Interfaces) ->
+    ok = hls_topology:validate_interfaces(Plan, Interfaces),
+    maps:foreach(
+        fun(Module, Interface) ->
+            case maps:get(frame_layout, Interface) of
+                Layout ->
+                    ok;
+                ActualLayout ->
+                    error({physical_frame_layout_mismatch, Module, Layout, ActualLayout})
+            end
+        end,
+        Interfaces
+    ).
+
+%% Attach physical interface, rendered names, dense index and selected egress capacity.
+-spec annotate_actor(
+    non_neg_integer(),
+    map(),
+    #{module() => hls_actor_interface:summary()},
+    burst | non_neg_integer()
+) -> map().
 annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     Module = maps:get(module, Actor),
     ModuleName = xls_topology_profile:identifier(
@@ -149,6 +162,8 @@ annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
         )
     }.
 
+%% Assign stable backend output names without changing logical external identities.
+-spec annotate_externals([hls_logical_topology:external()]) -> [map()].
 annotate_externals(Externals) ->
     [
         External#{
@@ -162,14 +177,16 @@ annotate_externals(Externals) ->
      || External <- Externals
     ].
 
+%% Require every physical tag selector to preserve the core-validated logical route schemas.
+-spec validate_route_selectors([hls_logical_topology:route()], map()) -> ok.
 validate_route_selectors(Routes, ActorIndex) ->
     lists:foreach(
         fun(Route) ->
             Source = {SourceId, Port} = maps:get(source, Route),
             SourceActor = maps:get(SourceId, ActorIndex),
             SourceInterface = maps:get(interface, SourceActor),
-            Schemas = hls_actor_interface:output_schemas(
-                SourceInterface,
+            Schemas = hls_process_interface:output_schemas(
+                maps:get(process_interface, SourceActor),
                 Port
             ),
             lists:foreach(
@@ -205,6 +222,14 @@ validate_route_selectors(Routes, ActorIndex) ->
     ),
     validate_external_selectors(Routes, ActorIndex).
 
+%% Check one actor-to-actor schema's backend-local selector without redefining its layout.
+-spec validate_route_selector(
+    term(),
+    term(),
+    atom(),
+    hls_actor_interface:summary(),
+    hls_actor_interface:summary()
+) -> ok.
 validate_route_selector(
     Source,
     Recipient,
@@ -230,6 +255,8 @@ validate_route_selector(
             )
     end.
 
+%% Collect core schema layouts plus physical selectors for each external output.
+-spec validate_external_selectors([hls_logical_topology:route()], map()) -> ok.
 validate_external_selectors(Routes, ActorIndex) ->
     Bindings = lists:foldl(
         fun(Route, Acc0) ->
@@ -238,7 +265,11 @@ validate_external_selectors(Routes, ActorIndex) ->
                 interface,
                 maps:get(SourceId, ActorIndex)
             ),
-            Schemas = hls_actor_interface:output_schemas(Interface, Port),
+            ProcessInterface = maps:get(
+                process_interface,
+                maps:get(SourceId, ActorIndex)
+            ),
+            Schemas = hls_process_interface:output_schemas(ProcessInterface, Port),
             lists:foldl(
                 fun
                     ({external, ExternalId}, Acc1) ->
@@ -255,10 +286,7 @@ validate_external_selectors(Routes, ActorIndex) ->
                                 ),
                                 fields => maps:get(
                                     fields,
-                                    hls_actor_interface:schema(
-                                        Interface,
-                                        Schema
-                                    )
+                                    hls_process_interface:schema(ProcessInterface, Schema)
                                 )
                             }
                          || Schema <- Schemas
@@ -281,6 +309,8 @@ validate_external_selectors(Routes, ActorIndex) ->
     ),
     maps:foreach(fun validate_external_bindings/2, Bindings).
 
+%% Reject schema or selector aliases whose producer encodings are not identical.
+-spec validate_external_bindings(hls_logical_topology:id(), [map()]) -> ok.
 validate_external_bindings(ExternalId, Bindings) ->
     _ = lists:foldl(
         fun(Binding, {BySchema0, BySelector0}) ->
@@ -323,6 +353,8 @@ validate_external_bindings(ExternalId, Bindings) ->
     ),
     ok.
 
+%% Startup messages require actors whose physical initial phase emits no competing effects.
+-spec validate_startup_quiescence([map()], map()) -> ok.
 validate_startup_quiescence(Startup, ActorIndex) ->
     lists:foreach(
         fun(Item) ->
@@ -342,6 +374,9 @@ validate_startup_quiescence(Startup, ActorIndex) ->
         Startup
     ).
 
+%% Order routes by dense actor order and each actor's declared output ABI.
+-spec physical_route_order([map()], [hls_logical_topology:route()]) ->
+    [hls_logical_topology:route()].
 physical_route_order(Actors, Routes) ->
     RouteIndex = maps:from_list([{maps:get(source, Route), Route} || Route <- Routes]),
     Ordered = lists:append([
@@ -353,6 +388,8 @@ physical_route_order(Actors, Routes) ->
     ]),
     Ordered.
 
+%% Add physical frames while retaining the logical startup messages and order.
+-spec pack_startup([map()], map()) -> [map()].
 pack_startup(Startup, ActorIndex) ->
     [
         Item#{frames => pack_startup_messages(Target, Messages, ActorIndex)}

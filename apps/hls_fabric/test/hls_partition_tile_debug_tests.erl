@@ -35,7 +35,10 @@ fixture() ->
     Actors = [#{id => I, index => I, logical_identity => {family, cells, [7, I]},
         module => hls_partition_fixture, mailbox_capacity => 2, outputs => [left, right, report]}
         || I <- [0, 1]],
-    Plan = #{actors => Actors, families => []},
+    Interfaces = maps:map(fun(_Module, Interface) ->
+        hls_topology:project_interface(Interface)
+    end, hls_actor_interface:from_modules([hls_partition_fixture])),
+    Plan = #{actors => Actors, families => [], interfaces => Interfaces},
     Specs = #{cells => #{members => [{actor, 0}, {actor, 1}],
         state_storage => block_ram, mailbox_storage => block_ram}},
     Physical = xls_scheduler_debug:projection(Plan, Specs, #{hls_partition_fixture => xls_emitted:new([], <<>>)}, #{mailbox_debug => true}),

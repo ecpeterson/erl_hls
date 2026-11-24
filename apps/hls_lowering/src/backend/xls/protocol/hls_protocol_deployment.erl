@@ -144,9 +144,9 @@ emit(Config) ->
 
 %% Keep conflicting assignments for diagnostics, then return the checked single owner per actor.
 -spec placement(#{hls_source_config:device() => hls_source_config:role()}, [
-    hls_protocol_topology:actor()
+    hls_logical_topology:actor()
 ]) ->
-    #{hls_protocol_topology:id() => hls_source_config:device()}.
+    #{hls_logical_topology:id() => hls_source_config:device()}.
 placement(Devices, Actors) ->
     Roles = lists:sort(maps:to_list(Devices)),
     lists:foreach(

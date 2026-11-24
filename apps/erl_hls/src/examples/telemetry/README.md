@@ -49,14 +49,14 @@ The helper accepts the records in `telemetry.hrl` (or their Erlang tuple represe
 ## Build hardware sources and RTL
 
 ```sh
-rebar3 release
+rebar3 release -n erl_hls
 _build/default/rel/erl_hls/bin/hlsc topology \
-  --config src/examples/telemetry/topology.config --output /tmp/telemetry-build
+  --config apps/erl_hls/src/examples/telemetry/topology.config --output /tmp/telemetry-build
 _build/default/rel/erl_hls/bin/compile-source-build \
   /path/to/xls /tmp/telemetry-build
 ```
 
-Choose a fresh output directory. The [generic topology command](../../../docs/toolchain.md#communicating-topologies) reads `topology.config`: source files and preprocessing options, the `telemetry_topology` callback, and a dedicated-actor buffering/scheduling profile. Paths in that file are relative to its directory. The graph remains application code; compilation and packaging live in `hls_compile:topology/2`. The command retains annotated actor/helper files and failure-codebook sidecars, snapshots compiler support and freezes the standard `source-build.json`.
+Choose a fresh output directory. The [generic topology command](../../../../../docs/toolchain.md#communicating-topologies) reads `topology.config`: source files and preprocessing options, the `telemetry_topology` callback, and a dedicated-actor buffering/scheduling profile. Paths in that file are relative to its directory. The graph remains application code; compilation and packaging live in `hls_compile:topology/2`. The command retains annotated actor/helper files and failure-codebook sidecars, snapshots compiler support and freezes the standard `source-build.json`.
 
 The optional external driver then converts DSLX to XLS IR, optimizes it and generates `telemetry_top.v`. The immutable result is published through `/tmp/telemetry-build/compiled`; its `files.f`, logs and `compiled.json` describe the exact products. The bundle can move before compilation. The selected schedule is two stages with a unit-delay model, not a physical clock-frequency estimate. No FPGA synthesis, placement or routing is performed.
 

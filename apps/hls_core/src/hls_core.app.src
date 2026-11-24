@@ -1,0 +1,10 @@
+{application, hls_core, [
+    {description, "Shared HLS values, logical models, contracts and diagnostics"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [kernel, stdlib, crypto]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

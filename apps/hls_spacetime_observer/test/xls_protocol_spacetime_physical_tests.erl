@@ -37,6 +37,7 @@ rejection_test_() ->
     Changes = [
         {identity_mismatch, Catalogue, Candidates, Witness#{identity := Identity#{probe := <<"other">>}}},
         {catalogue_identity_mismatch, Catalogue#{checkpoint := <<"other">>}, Candidates, Witness},
+        {catalogue_identity_mismatch, Catalogue#{build := (maps:get(build, Catalogue))#{rtl := <<"other-rtl">>}}, Candidates, Witness},
         {{invalid_horizon, <<"live">>}, Catalogue, Candidates,
             Witness#{cases := [C#{nonreset_cycles := 0}]}},
         {{incomplete_witness, <<"live">>}, Catalogue, Candidates,

@@ -67,7 +67,7 @@ shared(Partition = #{actors := Actors}, Members) ->
     [ok = startup_capacity(A) || A <- Actors],
     Specs = maps:map(fun(_, Ids) -> group_spec(Ids) end, Members),
     #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(
-        topology(Actors),
+        topology(Partition),
         Specs,
         maps:get(frame_layout, Partition, hls_frame_layout:default())
     ),
@@ -119,9 +119,14 @@ local(#{schedulers := Groups}, Local = #{id := Device}) ->
 local(_, Local) ->
     Local#{schedulers => []}.
 
--doc "Returns the materialized public scheduler-planning view of the selected actors.".
--spec topology([map()]) -> map().
-topology(Actors) -> #{actors => [A#{id => Id} || A = #{identity := Id} <- Actors], families => []}.
+-doc "Returns the materialized public scheduler-planning view of the selected actors with its retained process-interface catalog.".
+-spec topology(map()) -> map().
+topology(#{actors := Actors, interfaces := Interfaces}) ->
+    #{
+        actors => [A#{id => Id} || A = #{identity := Id} <- Actors],
+        families => [],
+        interfaces => Interfaces
+    }.
 
 -doc "Returns public group specifications preserving this device's group and slot order.".
 -spec specs([map()]) -> map().

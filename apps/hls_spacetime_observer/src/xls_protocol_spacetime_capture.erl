@@ -37,14 +37,22 @@
 }).
 
 -doc "Returns only the validated generic graph from capture/3. Stream dependency events remain in the graph; backend frame identities and pending/reset diagnostics are available separately through capture/3.".
--spec bundle(xls_protocol_spacetime:plan(), hls_spacetime_trace:trace(), hls_spacetime:build()) ->
+-spec bundle(
+    xls_protocol_spacetime:plan(),
+    hls_spacetime_trace:trace(),
+    hls_observation_build:build()
+) ->
     hls_spacetime:bundle().
 bundle(Plan, Trace, Build) ->
     #{bundle := Bundle} = capture(Plan, Trace, Build),
     Bundle.
 
 -doc "Builds a validated simulation-witness graph plus separate backend evidence sidecars from the native tap plan, a complete or explicitly incomplete bounded trace, and exact build identities. Records enabled writes to retained data registers of at least 16 bits, semantic receiver/publication events, link ownership transitions and observed stream transfers. Checks each adjacent nonreset Q/D/enable transfer. Selected scalar values are checked against observed D; publication occurrence identities follow checked ownership controls. The final enabled edge lacks a following Q sample. Unsupported expressions and unrepresented controls remain unknown roots. Plans without stream taps produce an empty stream sidecar with an explicit unobserved scope.".
--spec capture(xls_protocol_spacetime:plan(), hls_spacetime_trace:trace(), hls_spacetime:build()) ->
+-spec capture(
+    xls_protocol_spacetime:plan(),
+    hls_spacetime_trace:trace(),
+    hls_observation_build:build()
+) ->
     capture().
 capture(Plan = #{signals := Signals, registers := Registers, state := Leaves}, Trace, Build) ->
     [] = maps:get(unsupported, Plan),
@@ -155,18 +163,18 @@ capture_scope(_) ->
     <<"All sampled enabled writes to retained RTL data registers >=16 bits; receiver accept/head_done/take/postpone/phase and publication controls; link ownership transitions. Encoded register operands only; unresolved computation inputs are explicit unknown roots. No sensitized gate ancestry. Adjacent Q/D/enable transfers checked; final enabled edge has no following Q sample.">>.
 
 %% Exact source, RTL and native observation-plan digests jointly identify this interpretation.
--spec check_build(xls_protocol_spacetime:plan(), hls_spacetime:build()) -> ok.
+-spec check_build(xls_protocol_spacetime:plan(), hls_observation_build:build()) -> ok.
 check_build(Plan = #{inputs := #{rtl := Rtl, source_build := Source}}, Build) ->
     Observation = xls_protocol_spacetime:observation_digest(Plan),
-    lists:foreach(
-        fun({Key, Expected}) ->
-            case maps:find(Key, Build) of
-                {ok, Expected} -> ok;
-                Other -> error({spacetime_build_binding, Key, Expected, Other})
-            end
-        end,
-        [{rtl, Rtl}, {source, Source}, {observation, Observation}]
-    ).
+    Expected = hls_observation_build:new(Source, Rtl, Observation),
+    case hls_observation_build:match(Expected, Build) of
+        ok ->
+            ok;
+        {error, {component_mismatch, Key, ExpectedValue, ActualValue}} ->
+            error({spacetime_build_binding, Key, ExpectedValue, ActualValue});
+        {error, Reason} ->
+            error({spacetime_build_binding, build, Expected, {invalid, Reason}})
+    end.
 
 %% The ownership-code interpretation requires each declared capture's original two bits.
 -spec check_owner_encodings(xls_protocol_spacetime:plan(), map()) -> ok.

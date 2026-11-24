@@ -735,7 +735,7 @@ crossing_descriptor(#{
     }.
 
 %% Keep per-producer stream identity even when several producers share one external endpoint.
--spec producer_descriptor(hls_protocol_fabric:boundary(), [hls_protocol_topology:external()]) ->
+-spec producer_descriptor(hls_protocol_fabric:boundary(), [hls_logical_topology:external()]) ->
     producer().
 producer_descriptor(
     Boundary = #{
@@ -871,7 +871,7 @@ boundary(#{source_index := I, output := #{index := D}}) -> "boundary_" ++ n(I) +
 n(I) -> integer_to_list(I).
 
 %% Canonical normalized topology order is shared by the boundary and host binding.
--spec external_index(hls_protocol_topology:id(), [hls_protocol_topology:external()]) ->
+-spec external_index(hls_logical_topology:id(), [hls_logical_topology:external()]) ->
     non_neg_integer().
 external_index(Id, Externals) ->
     [Index] = [I || {I, #{id := Name}} <- lists:enumerate(0, Externals), Name =:= Id],

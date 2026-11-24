@@ -14,7 +14,7 @@
 -doc "One elaborated topology, its checked source snapshots and source inventory. Emission adds DSLX to module artifacts without changing these semantic bindings.".
 -type bundle() :: #{
     frame_layout := hls_frame_layout:layout(),
-    topology := hls_protocol_topology:plan(),
+    topology := hls_logical_topology:materialized_plan(),
     modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
     inventory := hls_protocol_inventory:report()
 }.
@@ -205,7 +205,7 @@ load_sources(Sources) ->
 
 %% Only the declared, exported constructor may elaborate the source graph.
 -spec prepare_topology(hls_source_config:topology(), pos_integer(), [module()]) ->
-    hls_protocol_topology:plan().
+    hls_logical_topology:materialized_plan().
 prepare_topology({Module, Function, Arguments}, Limit, Loaded) ->
     case lists:member(Module, Loaded) of
         true ->
@@ -235,12 +235,14 @@ prepare_topology({Module, Function, Arguments}, Limit, Loaded) ->
             )
     end,
     Normal = hls_topology:normalize(apply(Module, Function, Arguments)),
-    Topology = #{routes := Routes} = hls_protocol_topology:elaborate(Normal, Limit),
+    Topology = #{routes := Routes} = hls_logical_topology:materialize(Normal, Limit),
     lists:foreach(fun delivery/1, Routes),
     Topology.
 
 %% Compile each distinct actor module once, retaining every affected logical actor in diagnostics.
--spec prepare_actors(hls_protocol_topology:plan(), [module()], hls_frame_layout:layout()) ->
+-spec prepare_actors(
+    hls_logical_topology:materialized_plan(), [module()], hls_frame_layout:layout()
+) ->
     #{module() => hls_local_actor:source()}.
 prepare_actors(#{actors := Actors}, Loaded, FrameLayout) ->
     Missing = [
@@ -273,7 +275,9 @@ prepare_actors(#{actors := Actors}, Loaded, FrameLayout) ->
     ]).
 
 %% Inventory diagnostics retain their original ordering and detailed source contexts.
--spec inspect_sources(hls_protocol_topology:plan(), #{module() => hls_local_actor:source()}) ->
+-spec inspect_sources(hls_logical_topology:materialized_plan(), #{
+    module() => hls_local_actor:source()
+}) ->
     hls_protocol_inventory:report().
 inspect_sources(Topology, Modules) ->
     Inventory = hls_protocol_inventory:inspect(Topology, Modules),
@@ -353,7 +357,7 @@ function_descriptors(Modules) ->
     ].
 
 %% Each receiver owns its source, interface and checked inbox together; global indices remain stable.
--spec plan_receiver(non_neg_integer(), hls_protocol_topology:actor(), build()) -> #receiver{}.
+-spec plan_receiver(non_neg_integer(), hls_logical_topology:actor(), build()) -> #receiver{}.
 plan_receiver(
     Index,
     #{id := Id, module := Module},
@@ -586,7 +590,7 @@ compile(Module, FrameLayout) ->
     Artifact#{context => Context}.
 
 %% Independent destination acceptance implements direct and buffered delivery only.
--spec delivery(hls_protocol_topology:route()) -> ok.
+-spec delivery(hls_logical_topology:route()) -> ok.
 delivery(#{delivery := Mode}) when Mode =:= direct; Mode =:= buffered -> ok;
 delivery(#{source := {Actor, Port}, delivery := Mode}) ->
     hls_diagnostic:raise(

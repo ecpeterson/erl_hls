@@ -1,6 +1,6 @@
 %%%% A materialized topology graph with independent placement decisions.
 -module(xls_topology_instance_dslx).
--moduledoc "Renders dedicated actors and explicit routes when xls_topology_dslx cannot retain a compact family representation. It materializes logical instances, uses xls_topology_graph for interfaces and startup checks, and composes ingress/router wiring. Shared RAM scheduling is an hls_fabric backend responsibility.".
+-moduledoc "Renders dedicated actors and explicit routes when xls_topology_dslx cannot retain a compact family representation. It consumes bounded core materialization, uses xls_topology_graph for physical interfaces and startup checks, and composes ingress/router wiring. Shared RAM scheduling is an hls_fabric backend responsibility.".
 %% Prepare required actor specializations before module generation.
 -export([artifact_requirements/2]).
 %% Prepare and render the materialized dedicated topology.
@@ -22,7 +22,7 @@ lower(Plan, Profile0) ->
     xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
     xls_topology_graph:check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
     {Materialized, Origins} = materialize(Plan),
-    Base = xls_topology_graph:lower(Materialized, Profile),
+    Base = xls_topology_graph:lower(Materialized#{ingresses := []}, Profile),
     Startup = maps:from_list([
         {Id, Frames}
      || #{target := Id, frames := Frames} <-
@@ -40,7 +40,7 @@ lower(Plan, Profile0) ->
     Direct = [Actor || Actor = #{placement := direct} <- Actors],
     Routes = maps:get(routes, Base),
     lists:foreach(fun validate_delivery/1, Routes),
-    Ingresses = ingress_units(Plan, ActorIndex),
+    Ingresses = ingress_units(Materialized, ActorIndex),
     Routed = [
         {maps:get(unit, maps:get(Id, ActorIndex)), Recipient}
      || #{source := {Id, _}, recipients := Recipients} <- Routes,
@@ -73,110 +73,30 @@ lower(Plan, Profile0) ->
         artifact_requirements => flag_modules(Requirements, Direct1, direct_actor_debug, ActorDebug)
     }.
 
-materialize(
-    Plan = #{
-        actors := Exact,
-        families := Families,
-        routes := ExactRoutes
-    }
-) ->
-    ExactOrigins = [
-        {Id, #{
-            logical => {actor, Id},
-            debug => xls_actor_observation:scalar_name(I)
-        }}
-     || {I, #{id := Id}} <- lists:enumerate(0, Exact)
-    ],
-    FamilyEntries = lists:append([
-        family_entries(I, Family)
-     || {I, Family} <- lists:enumerate(0, Families)
-    ]),
-    Expanded = Exact ++ [Actor || {Actor, _} <- FamilyEntries],
-    Origins = maps:from_list(
-        ExactOrigins ++
-            [
-                {maps:get(id, Actor), Origin}
-             || {Actor, Origin} <- FamilyEntries
-            ]
-    ),
-    Relations = lists:append([
-        hls_topology:routes_for_instance(Plan, Id, [X, Y])
-     || #{id := Id, shape := [W, H]} <- Families,
-        X <- lists:seq(0, W - 1),
-        Y <- lists:seq(0, H - 1)
-    ]),
-    Routes = ExactRoutes ++ Relations,
-    {
-        Plan#{
-            actors := Expanded,
-            families := [],
-            ingresses := [],
-            routes := Routes,
-            route_relations := [],
-            lane_relations := [],
-            lanes := xls_topology_graph:lanes(Routes)
-        },
-        Origins
-    }.
+%% Ask core for the bounded exact graph and retain only backend observation names here.
+-spec materialize(hls_logical_topology:compact_plan()) ->
+    {hls_logical_topology:materialized_plan(), #{hls_logical_identity:id() => map()}}.
+materialize(Plan) ->
+    Materialized = hls_logical_topology:materialize(Plan, 1 bsl 16),
+    {Materialized, xls_actor_observation:instance_origins(Plan, maps:get(instances, Materialized))}.
 
-ingress_units(#{families := Families, ingresses := Ingresses}, Actors) ->
-    Interfaces = maps:from_list([
-        {Module, Interface}
-     || #{module := Module, interface := Interface} <- maps:values(Actors)
-    ]),
-    FamilyIndex = maps:from_list([
-        {Id, Family#{interface => maps:get(Module, Interfaces)}}
-     || Family = #{id := Id, module := Module} <- Families
-    ]),
+%% Attach physical ingress encoding to core-expanded exact recipients.
+-spec ingress_units(hls_logical_topology:materialized_plan(), map()) -> [map()].
+ingress_units(#{ingresses := Ingresses}, Actors) ->
     [
         Ingress#{
             kind => ingress,
             unit => {ingress, I},
-            bindings => maps:from_list(
-                lists:append([
-                    ingress_bindings(Recipient, FamilyIndex)
-                 || Recipient <- Recipients
-                ])
-            )
+            bindings => maps:from_list([ingress_binding(Recipient) || Recipient <- Recipients])
         }
      || Ingress = #{index := I, recipients := Recipients} <-
-            xls_topology_ingress:lower(Ingresses, #{actors => Actors, families => FamilyIndex})
+            xls_topology_ingress:lower(Ingresses, #{actors => Actors, families => #{}})
     ].
 
-ingress_bindings(#{actor := Id, at := Point, targets := Targets}, _) ->
-    [{Id, #{point => Point, targets => Targets}}];
-ingress_bindings(
-    #{
-        family := Id,
-        scale := [SX, SY],
-        offset := [OX, OY],
-        targets := Targets
-    },
-    Families
-) ->
-    #{shape := [W, H]} = maps:get(Id, Families),
-    [
-        {{Id, X, Y}, #{point => [OX + SX * X, OY + SY * Y], targets => Targets}}
-     || X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)
-    ].
-
-family_entries(I, Family = #{id := Id, shape := [W, H]}) ->
-    [
-        {maps:without([shape, instance_count], Family#{id := {Id, X, Y}}), #{
-            logical => {family, Id, [X, Y]},
-            debug => [
-                xls_actor_observation:family_name(I),
-                "[u32:",
-                n(X),
-                "][u32:",
-                n(Y),
-                "]"
-            ]
-        }}
-     || X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)
-    ];
-family_entries(_, #{id := Id, shape := Shape}) ->
-    error({unsupported_instance_family_shape, Id, Shape}).
+%% Convert one already exact logical ingress recipient into renderer lookup metadata.
+-spec ingress_binding(map()) -> {hls_logical_identity:id(), map()}.
+ingress_binding(#{actor := Id, at := Point, targets := Targets}) ->
+    {Id, #{point => Point, targets => Targets}}.
 %% Attaches generated channel names and storage placement to one logical actor.
 -spec place_actor(map(), map(), map()) -> map().
 place_actor(Actor = #{id := Id, index := Index}, Origin, Startup) ->

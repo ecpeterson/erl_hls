@@ -42,7 +42,8 @@ Selection preserves ordered effects and never rolls back or repeats accepted out
 -doc "Normalized physical execution graph with logical identities retained for routing and debugging.".
 -type plan() :: #{
     groups := [map()],
-    direct_members := [member_ref()]
+    direct_members := [member_ref()],
+    interfaces := interfaces()
 }.
 
 -doc "Validates scheduler groups against one normalized semantic topology.".
@@ -63,6 +64,7 @@ normalize(_Topology, Specs, _Layout) ->
 normalize(Topology = #{actors := _, families := _}, Specs, Layout, Interfaces) when
     is_map(Specs)
 ->
+    ok = hls_topology:validate_interfaces(Topology, Interfaces),
     maps:foreach(fun(_, #{frame_layout := Selected}) -> Layout = Selected end, Interfaces),
     MemberIndex = member_index(Topology),
     Declarations = [
@@ -87,6 +89,7 @@ normalize(Topology = #{actors := _, families := _}, Specs, Layout, Interfaces) w
     All = lists:sort(maps:keys(MemberIndex)),
     #{
         groups => Groups,
+        interfaces => Interfaces,
         direct_members => [
             Reference
          || Reference <- All,
@@ -96,10 +99,14 @@ normalize(Topology = #{actors := _, families := _}, Specs, Layout, Interfaces) w
 normalize(_Topology, Specs, _Layout, _Interfaces) ->
     error({scheduler_groups, Specs}).
 
--doc "Loads each distinct exact-actor and family module summary once, validating public schemas against Layout. Retain the result for one preparation; a later preparation obtains fresh summaries.".
+-doc "Loads each distinct exact-actor and family module summary once, validating its core projection and public schemas against Layout. Retain the result for one preparation; a later preparation obtains fresh summaries.".
 -spec interfaces(hls_topology:plan(), hls_frame_layout:layout()) -> interfaces().
-interfaces(#{actors := Actors, families := Families}, Layout) ->
-    hls_actor_interface:from_modules([Module || #{module := Module} <- Actors ++ Families], Layout).
+interfaces(Topology = #{actors := Actors, families := Families}, Layout) ->
+    Interfaces = hls_actor_interface:from_modules(
+        [Module || #{module := Module} <- Actors ++ Families], Layout
+    ),
+    ok = hls_topology:validate_interfaces(Topology, Interfaces),
+    Interfaces.
 
 %% Validates one homogeneous group and expands its member references.
 -spec normalize_group(term(), map(), map()) -> map().

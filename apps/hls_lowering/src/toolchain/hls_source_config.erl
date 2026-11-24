@@ -45,19 +45,19 @@ Trusted source-build terms and configuration-shape contracts shared by hls_build
 ).
 %% erlfmt:ignore Map-type field fragments are not complete type expressions.
 -define(PLACEMENT_FIELDS,
-    native_actors => [hls_protocol_topology:id(), ...],
-    arithmetic_groups => [[hls_protocol_topology:id(), ...]]
+    native_actors => [hls_logical_topology:id(), ...],
+    arithmetic_groups => [[hls_logical_topology:id(), ...]]
 ).
 -define(NETWORK_FIELDS,
     activation => activation(), inspection => inspection(), control => rectangle
 ).
 %% erlfmt:ignore Map-type field fragments are not complete type expressions.
 -define(BRIDGE_FIELDS,
-    native_actors := [hls_protocol_topology:id(), ...],
+    native_actors := [hls_logical_topology:id(), ...],
     host := endpoint(),
     service := endpoint(),
     control := rectangle,
-    arithmetic_groups => [[hls_protocol_topology:id(), ...]],
+    arithmetic_groups => [[hls_logical_topology:id(), ...]],
     activation => explicit_start,
     inspection => none
 ).
@@ -128,7 +128,7 @@ validate_source(Config) ->
     ?SOURCE_FIELDS,
     device := device(),
     host := endpoint(),
-    arithmetic_groups => [[hls_protocol_topology:id(), ...]],
+    arithmetic_groups => [[hls_logical_topology:id(), ...]],
     control => rectangle,
     activation => explicit_start,
     inspection => inspection()
@@ -139,7 +139,7 @@ validate_source(Config) ->
 
 -doc "One device's exact native ownership and distinct return endpoints. The deployment must cover all actors once and use distinct endpoint pairs.".
 -type role() :: #{
-    native_actors := [hls_protocol_topology:id(), ...],
+    native_actors := [hls_logical_topology:id(), ...],
     host := endpoint(),
     service := endpoint()
 }.
@@ -155,7 +155,7 @@ validate_source(Config) ->
     control := rectangle,
     activation => explicit_start,
     inspection => none,
-    arithmetic_groups => [[hls_protocol_topology:id(), ...]]
+    arithmetic_groups => [[hls_logical_topology:id(), ...]]
 }.
 
 -doc "A framed native partition whose complementary source actors run in BEAM. Uses bridge inputs; each host output must have one recipient and no BEAM-to-BEAM route.".

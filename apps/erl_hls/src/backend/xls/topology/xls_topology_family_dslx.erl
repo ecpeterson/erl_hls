@@ -62,9 +62,13 @@ lower(Plan, Profile, Interfaces) ->
         frame_payload_words := PayloadWords
     } = xls_topology_profile:normalize(Profile),
     Layout = hls_frame_layout:new(PayloadWords),
+    ok = hls_topology:validate_interfaces(Plan, Interfaces),
+    ProcessInterfaces = hls_logical_topology:interfaces(Plan),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
-    Families1 = annotate_families(Families0, EgressDepth, Layout, Interfaces),
+    Families1 = annotate_families(
+        Families0, EgressDepth, Layout, ProcessInterfaces, Interfaces
+    ),
     FamilyIndex = index_by_id(Families1),
     Ingresses = xls_topology_ingress:lower(
         maps:get(ingresses, Plan, []),
@@ -79,7 +83,7 @@ lower(Plan, Profile, Interfaces) ->
     Relations = maps:get(route_relations, Plan, []),
     ok = validate_relations(Relations, FamilyIndex),
     ok = validate_route_selectors(Relations, FamilyIndex, ExternalIndex),
-    LaneRelations = derive_lane_relations(Relations),
+    LaneRelations = hls_logical_topology:lanes(Relations),
     case maps:get(lane_relations, Plan, '$missing') of
         LaneRelations -> ok;
         CachedLanes -> error({inconsistent_dslx_family_plan_lanes, LaneRelations, CachedLanes})
@@ -170,9 +174,10 @@ require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
     [map()],
     burst | non_neg_integer(),
     hls_frame_layout:layout(),
+    hls_logical_topology:interface_catalog(),
     #{module() => hls_actor_interface:summary()}
 ) -> [map()].
-annotate_families(Families, EgressDepth, Layout, Interfaces) ->
+annotate_families(Families, EgressDepth, Layout, ProcessInterfaces, Interfaces) ->
     [
         begin
             Module = maps:get(module, Family),
@@ -183,6 +188,7 @@ annotate_families(Families, EgressDepth, Layout, Interfaces) ->
                     Module, family_module
                 ),
                 interface => Interface,
+                process_interface => maps:get(Module, ProcessInterfaces),
                 egress_depth => xls_topology_profile:egress_depth(
                     EgressDepth, Interface
                 )
@@ -239,37 +245,6 @@ validate_queued_recipients(Source, Recipients, FamilyIndex) ->
 
 recipient_kind({family, _, _}) -> family;
 recipient_kind({external, _}) -> external.
-
-derive_lane_relations(Relations) ->
-    LanePorts = lists:foldl(
-        fun(Relation, Acc0) ->
-            {SourceFamily, Port} = maps:get(source, Relation),
-            lists:foldl(
-                fun(Destination, Acc) ->
-                    Key = {SourceFamily, Destination},
-                    maps:update_with(
-                        Key,
-                        fun(Ports) -> [Port | Ports] end,
-                        [Port],
-                        Acc
-                    )
-                end,
-                Acc0,
-                maps:get(recipients, Relation)
-            )
-        end,
-        #{},
-        Relations
-    ),
-    [
-        #{
-            source => SourceFamily,
-            destination => Destination,
-            source_ports => lists:sort(Ports)
-        }
-     || {{SourceFamily, Destination}, Ports} <-
-            lists:sort(maps:to_list(LanePorts))
-    ].
 
 annotate_externals(Externals) ->
     [
@@ -453,6 +428,8 @@ validate_external_lanes(Externals, Lanes) ->
         Externals
     ).
 
+%% Require physical selectors to preserve every core-validated family route schema.
+-spec validate_route_selectors([map()], map(), map()) -> ok.
 validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
     lists:foreach(
         fun(
@@ -461,12 +438,10 @@ validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
                 recipients := Recipients
             }
         ) ->
-            SourceInterface = maps:get(
-                interface,
-                maps:get(SourceId, FamilyIndex)
-            ),
-            Schemas = hls_actor_interface:output_schemas(
-                SourceInterface,
+            SourceFamily = maps:get(SourceId, FamilyIndex),
+            SourceInterface = maps:get(interface, SourceFamily),
+            Schemas = hls_process_interface:output_schemas(
+                maps:get(process_interface, SourceFamily),
                 Port
             ),
             lists:foreach(
@@ -512,6 +487,8 @@ validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
     ),
     validate_external_selectors(Relations, FamilyIndex).
 
+%% Collect core schema layouts plus physical selectors for each external output.
+-spec validate_external_selectors([map()], map()) -> ok.
 validate_external_selectors(Relations, FamilyIndex) ->
     Bindings = lists:foldl(
         fun(
@@ -521,8 +498,9 @@ validate_external_selectors(Relations, FamilyIndex) ->
             },
             Acc0
         ) ->
-            #{interface := Interface} = maps:get(SourceId, FamilyIndex),
-            Schemas = hls_actor_interface:output_schemas(Interface, Port),
+            #{interface := Interface, process_interface := ProcessInterface} =
+                maps:get(SourceId, FamilyIndex),
+            Schemas = hls_process_interface:output_schemas(ProcessInterface, Port),
             lists:foldl(
                 fun
                     ({external, ExternalId}, Acc) ->
@@ -530,6 +508,7 @@ validate_external_selectors(Relations, FamilyIndex) ->
                             external_binding(
                                 Source,
                                 Schema,
+                                ProcessInterface,
                                 Interface
                             )
                          || Schema <- Schemas
@@ -552,9 +531,13 @@ validate_external_selectors(Relations, FamilyIndex) ->
     ),
     maps:foreach(fun validate_external_bindings/2, Bindings).
 
-external_binding(Source, Schema, Interface) ->
-    #{selector := Selector, fields := Fields} =
-        hls_actor_interface:schema(Interface, Schema),
+%% Combine the core field layout with the checked physical selector for one producer.
+-spec external_binding(
+    term(), atom(), hls_process_interface:interface(), hls_actor_interface:summary()
+) -> map().
+external_binding(Source, Schema, ProcessInterface, Interface) ->
+    #{selector := Selector} = hls_actor_interface:schema(Interface, Schema),
+    #{fields := Fields} = hls_process_interface:schema(ProcessInterface, Schema),
     #{
         source => Source,
         schema => Schema,

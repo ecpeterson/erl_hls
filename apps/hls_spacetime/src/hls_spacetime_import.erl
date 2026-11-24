@@ -18,7 +18,7 @@ Reads the bounded native Vivado census exported by export_spacetime.tcl and atta
 -define(MAX_RECORDS, 2000000).
 
 -doc "Reads a complete native export directory and requires exact source/RTL/observation and checkpoint digest agreement. Checks every table's header, row/byte counters, aggregate caps and primitive references. Unknown values remain null. Malformed or missing evidence raises an import/physical/SDF-contract or JSON decoding error. The caller owns evidence authenticity and collection hash verification.".
--spec read(file:filename_all(), hls_spacetime:build(), binary()) ->
+-spec read(file:filename_all(), hls_observation_build:build(), binary()) ->
     hls_spacetime_physical:physical().
 read(Directory, ExpectedBuild, ExpectedCheckpoint) ->
     try
@@ -30,7 +30,7 @@ read(Directory, ExpectedBuild, ExpectedCheckpoint) ->
     end.
 
 %% Structural record matches remain private to the external import error boundary.
--spec read_checked(file:filename_all(), hls_spacetime:build(), binary()) ->
+-spec read_checked(file:filename_all(), hls_observation_build:build(), binary()) ->
     hls_spacetime_physical:physical().
 read_checked(Directory, ExpectedBuild, ExpectedCheckpoint) ->
     Manifest = manifest(Directory),
@@ -48,7 +48,7 @@ read_checked(Directory, ExpectedBuild, ExpectedCheckpoint) ->
         <<"bytes">> := Bytes
     } = Manifest,
     Build = build(RawBuild),
-    require(Build =:= ExpectedBuild, build_mismatch),
+    require(hls_observation_build:match(ExpectedBuild, Build) =:= ok, build_mismatch),
     require(Checkpoint =:= ExpectedCheckpoint, checkpoint_mismatch),
     Specs = tables(),
     require(
@@ -125,9 +125,13 @@ manifest(Directory) ->
     json:decode(Bytes).
 
 %% Translate only fixed schema keys, never external names into atoms.
--spec build(map()) -> hls_spacetime:build().
+-spec build(map()) -> hls_observation_build:build().
 build(#{<<"source">> := Source, <<"rtl">> := Rtl, <<"observation">> := Observation}) ->
-    #{source => Source, rtl => Rtl, observation => Observation}.
+    Build = #{source => Source, rtl => Rtl, observation => Observation},
+    case hls_observation_build:validate(Build) of
+        ok -> Build;
+        {error, _Reason} -> fail(malformed_export)
+    end.
 
 %% File bytes are checked before allocating parsed row tables.
 -spec size(file:filename_all(), binary(), non_neg_integer()) -> non_neg_integer().

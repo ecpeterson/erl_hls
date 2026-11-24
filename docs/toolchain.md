@@ -3,9 +3,9 @@
 Use OTP 28 and rebar3 3.24 to build and package the compiler:
 
 ```sh
-rebar3 release
+rebar3 release -n erl_hls
 _build/default/rel/erl_hls/bin/hlsc --help
-_build/default/rel/erl_hls/bin/hlsc emit src/examples/regsvc/regsvc.erl --output /path/to/fresh-bundle
+_build/default/rel/erl_hls/bin/hlsc emit apps/erl_hls/src/examples/regsvc/regsvc.erl --output /path/to/fresh-bundle
 ```
 
 Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application or a distributed Erlang node. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
@@ -28,7 +28,7 @@ Compiler and downstream owners raise `hls_diagnostic:raise/4`; a caller can add 
 
 ```sh
 _build/default/rel/erl_hls/bin/hlsc topology \
-  --config src/examples/telemetry/topology.config --output /tmp/telemetry-build
+  --config apps/erl_hls/src/examples/telemetry/topology.config --output /tmp/telemetry-build
 ```
 
 `hls_compile:topology(ConfigOrFilename, Output)` is the equivalent Erlang API. The logical graph remains an application module's `topology/0` callback; the build file names its source closure and dedicated-actor compilation policy:

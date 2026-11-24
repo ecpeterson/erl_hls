@@ -1,6 +1,6 @@
 -module(hls_partition).
 -moduledoc """
-Partition build drivers enter here after constructing a logical hls_topology graph. It delegates ingress binding and later physical scheduling/rendering to the partition helpers.
+Partition build drivers enter here after constructing a logical hls_topology graph. Core materialization supplies its bounded instances, routes and ingress coordinates; this module adds placement, physical lanes, codecs and device-local views.
 
 Expands a logical topology into an explicit multi-device deployment.
 
@@ -26,16 +26,16 @@ normalize(Plan, Placement) -> normalize(Plan, Placement, hls_frame_layout:defaul
 -spec normalize(hls_topology:plan(), map(), hls_frame_layout:layout()) -> map().
 normalize(
     Plan = #{
-        actors := Exact,
-        families := Families,
-        ingresses := _Ingresses,
         externals := Externals,
+        ingresses := Ingresses,
         startup := Startup
     },
     Placement,
     Layout
 ) when is_map(Placement) ->
-    Expanded = expand_actors(Exact, Families),
+    ok = validate_ingress_container(Ingresses),
+    Materialized = hls_logical_topology:materialize(Plan, 1 bsl 16),
+    Expanded = partition_actors(maps:get(instances, Materialized)),
     Identities = [Id || #{identity := Id} <- Expanded],
     ok = check_placement(Identities, Placement),
     Devices = lists:usort(maps:values(Placement)),
@@ -45,6 +45,8 @@ normalize(
     end,
     RawIds = maps:from_list([{Raw, Id} || #{raw_id := Raw, identity := Id} <- Expanded]),
     Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Expanded], Layout),
+    ok = hls_topology:validate_interfaces(Materialized, Interfaces),
+    ProcessInterfaces = hls_logical_topology:interfaces(Materialized),
     HostCodecs = maps:map(
         fun(_, Interface) ->
             #{
@@ -63,18 +65,21 @@ normalize(
      || {Index, A} <- lists:enumerate(0, Expanded)
     ],
     ActorIndex = maps:from_list([{Id, A} || A = #{identity := Id} <- Actors]),
-    Routes = routes(Plan, Expanded, RawIds),
-    ok = validate_routes(Routes, ActorIndex, Interfaces, Layout),
-    ok = validate_external_encodings(Routes, ActorIndex, Interfaces, Layout),
+    Routes = routes(maps:get(routes, Materialized), RawIds),
+    ok = validate_routes(Routes, ActorIndex, Interfaces, ProcessInterfaces, Layout),
+    ok = validate_external_encodings(
+        Routes, ActorIndex, Interfaces, ProcessInterfaces, Layout
+    ),
     Lanes = lanes(Routes, ActorIndex),
     #{
         version => 1,
         frame_layout => Layout,
+        interfaces => ProcessInterfaces,
         devices => Devices,
         actors => local_slots(Actors),
         routes => Routes,
         lanes => Lanes,
-        ingresses => hls_partition_ingress_plan:lower(Plan, Actors, Interfaces),
+        ingresses => hls_partition_ingress_plan:lower(Materialized, Actors, Interfaces),
         externals => [
             E#{index => I, port => "external_" ++ integer_to_list(I) ++ "_out"}
          || {I, E} <- lists:enumerate(0, Externals)
@@ -82,6 +87,15 @@ normalize(
     };
 normalize(_Plan, _Placement, _Layout) ->
     error(invalid_partition_input).
+
+%% Preserve the partition backend's one-ingress container diagnostic before core expansion.
+-spec validate_ingress_container([term()]) -> ok.
+validate_ingress_container([]) ->
+    ok;
+validate_ingress_container([Ingress]) when is_map(Ingress) ->
+    ok;
+validate_ingress_container(Ingresses) ->
+    error({ingress_count, length(Ingresses)}).
 
 -doc "Returns derived local bindings; the deployment remains their authority.".
 -spec device(map(), term()) -> map().
@@ -91,7 +105,8 @@ device(
         actors := Actors,
         lanes := Lanes,
         externals := Externals,
-        ingresses := Ingresses
+        ingresses := Ingresses,
+        interfaces := Interfaces
     },
     Device
 ) ->
@@ -112,6 +127,10 @@ device(
             lanes => LocalLanes,
             transport => maps:get(transport, Partition, serial),
             frame_layout => maps:get(frame_layout, Partition, hls_frame_layout:default()),
+            interfaces => maps:with(
+                lists:usort([Module || #{module := Module} <- LocalActors]),
+                Interfaces
+            ),
             reduction_inputs => maps:with(
                 [Id || #{identity := Id} <- LocalActors],
                 maps:get(reduction_inputs, Partition, #{})
@@ -129,39 +148,16 @@ device(
         })
     ).
 
-%% Expand family coordinates into stable logical identities alongside singleton actors.
--spec expand_actors([map()], [map()]) -> [map()].
-expand_actors(Exact, Families) ->
+%% Project core instances into the retained partition actor shape and established term order.
+-spec partition_actors([hls_logical_topology:instance()]) -> [map()].
+partition_actors(Instances) ->
     lists:sort(
         fun(#{identity := A}, #{identity := B}) -> A < B end,
-        [A#{identity => {actor, Id}, raw_id => Id} || A = #{id := Id} <- Exact] ++
-            lists:append([
-                [
-                    #{
-                        identity => {family, Id, Coordinates},
-                        raw_id => list_to_tuple([Id | Coordinates]),
-                        module => Module,
-                        outputs => Outputs,
-                        mailbox_capacity => Capacity
-                    }
-                 || Coordinates <- coordinates(Shape)
-                ]
-             || #{
-                    id := Id,
-                    module := Module,
-                    shape := Shape,
-                    outputs := Outputs,
-                    mailbox_capacity := Capacity
-                } <- Families
-            ])
+        [
+            Actor#{identity => Identity, raw_id => maps:get(id, Actor)}
+         || #{identity := Identity, actor := Actor} <- Instances
+        ]
     ).
-
-%% Enumerate each coordinate in row-major Cartesian product order.
--spec coordinates([pos_integer()]) -> [[non_neg_integer()]].
-coordinates([]) ->
-    [[]];
-coordinates([Size | Rest]) ->
-    [[I | Tail] || I <- lists:seq(0, Size - 1), Tail <- coordinates(Rest)].
 
 %% Require exactly one placement for every expanded actor.
 -spec check_placement([term()], map()) -> ok.
@@ -227,15 +223,9 @@ pack_startup(Id, Module, Message, Layout) when is_tuple(Message), tuple_size(Mes
 pack_startup(Id, _Module, Message, _) ->
     error({partition_startup_message, Id, Message}).
 
-%% Expand compact routes and replace raw names by canonical logical identities.
--spec routes(hls_topology:plan(), [map()], map()) -> [map()].
-routes(Plan = #{routes := Exact}, Actors, RawIds) ->
-    Expanded =
-        Exact ++
-            lists:append([
-                hls_topology:routes_for_instance(Plan, Id, Coordinates)
-             || #{identity := {family, Id, Coordinates}} <- Actors
-            ]),
+%% Replace core materialized actor names by their stable observation identities.
+-spec routes([hls_logical_topology:route()], map()) -> [map()].
+routes(Expanded, RawIds) ->
     lists:sort([
         R#{
             source := {maps:get(Source, RawIds), Port},
@@ -251,8 +241,10 @@ routes(Plan = #{routes := Exact}, Actors, RawIds) ->
     ]).
 
 %% Check delivery policy and exact schema compatibility on every actor-to-actor route.
--spec validate_routes([map()], map(), map(), hls_frame_layout:layout()) -> ok.
-validate_routes(Routes, Actors, Interfaces, Layout) ->
+-spec validate_routes(
+    [map()], map(), map(), hls_logical_topology:interface_catalog(), hls_frame_layout:layout()
+) -> ok.
+validate_routes(Routes, Actors, Interfaces, ProcessInterfaces, Layout) ->
     lists:foreach(
         fun(
             #{
@@ -268,16 +260,20 @@ validate_routes(Routes, Actors, Interfaces, Layout) ->
             end,
             #{module := Module} = maps:get(Id, Actors),
             Interface = maps:get(Module, Interfaces),
-            Schemas = hls_actor_interface:output_schemas(Interface, Port),
+            ProcessInterface = maps:get(Module, ProcessInterfaces),
+            Schemas = hls_process_interface:output_schemas(ProcessInterface, Port),
             lists:foreach(
                 fun(Schema) ->
-                    Encoding = encoding(Interface, Schema, Layout),
+                    Encoding = encoding(Interface, ProcessInterface, Schema, Layout),
                     lists:foreach(
                         fun
                             ({actor, Target}) ->
                                 #{module := TargetModule} = maps:get(Target, Actors),
                                 TargetEncoding = encoding(
-                                    maps:get(TargetModule, Interfaces), Schema, Layout
+                                    maps:get(TargetModule, Interfaces),
+                                    maps:get(TargetModule, ProcessInterfaces),
+                                    Schema,
+                                    Layout
                                 ),
                                 case Encoding =:= TargetEncoding of
                                     true ->
@@ -298,10 +294,16 @@ validate_routes(Routes, Actors, Interfaces, Layout) ->
     ).
 
 %% Read a schema's selector and fields, rejecting representations outside the ordinary frame ABI.
--spec encoding(hls_actor_interface:summary(), atom(), hls_frame_layout:layout()) ->
+-spec encoding(
+    hls_actor_interface:summary(),
+    hls_process_interface:interface(),
+    atom(),
+    hls_frame_layout:layout()
+) ->
     {byte(), [map()]}.
-encoding(Interface, Schema, Layout) ->
-    #{selector := Selector, fields := Fields} = hls_actor_interface:schema(Interface, Schema),
+encoding(Interface, ProcessInterface, Schema, Layout) ->
+    #{selector := Selector} = hls_actor_interface:schema(Interface, Schema),
+    #{fields := Fields} = hls_process_interface:schema(ProcessInterface, Schema),
     Width = lists:sum([hls_type:width(Type) || #{type := Type} <- Fields]),
     case
         Selector >= 0 andalso Selector =< 255 andalso Width =< hls_frame_layout:payload_bits(Layout)
@@ -311,15 +313,20 @@ encoding(Interface, Schema, Layout) ->
     end.
 
 %% Require all producers of each external schema/selector to agree on its encoding.
--spec validate_external_encodings([map()], map(), map(), hls_frame_layout:layout()) -> ok.
-validate_external_encodings(Routes, Actors, Interfaces, Layout) ->
+-spec validate_external_encodings(
+    [map()], map(), map(), hls_logical_topology:interface_catalog(), hls_frame_layout:layout()
+) -> ok.
+validate_external_encodings(Routes, Actors, Interfaces, ProcessInterfaces, Layout) ->
     _ = lists:foldl(
         fun(#{source := {Id, Port}, recipients := Recipients}, Acc0) ->
             #{module := Module} = maps:get(Id, Actors),
             Interface = maps:get(Module, Interfaces),
+            ProcessInterface = maps:get(Module, ProcessInterfaces),
             lists:foldl(
                 fun({External, Schema}, Acc) ->
-                    Encoding = {Selector, _Fields} = encoding(Interface, Schema, Layout),
+                    Encoding =
+                        {Selector, _Fields} =
+                        encoding(Interface, ProcessInterface, Schema, Layout),
                     Acc1 = consistent({External, schema, Schema}, Encoding, Acc),
                     consistent({External, selector, Selector}, Schema, Acc1)
                 end,
@@ -327,7 +334,7 @@ validate_external_encodings(Routes, Actors, Interfaces, Layout) ->
                 [
                     {External, Schema}
                  || {external, External} <- Recipients,
-                    Schema <- hls_actor_interface:output_schemas(Interface, Port)
+                    Schema <- hls_process_interface:output_schemas(ProcessInterface, Port)
                 ]
             )
         end,

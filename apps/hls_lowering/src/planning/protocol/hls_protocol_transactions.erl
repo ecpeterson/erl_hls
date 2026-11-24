@@ -7,8 +7,8 @@
 
 -doc "One source send delivered to one logical recipient, retaining source order across ports.".
 -type delivery() :: #{
-    source := hls_protocol_topology:id(),
-    destination := hls_protocol_topology:destination(),
+    source := hls_logical_topology:id(),
+    destination := hls_logical_topology:destination(),
     order := non_neg_integer(),
     port := atom(),
     tag := atom()
@@ -30,7 +30,7 @@
 }.
 
 -doc "Every alternative entry transaction for one logical actor, including empty layouts.".
--type actor() :: #{actor := hls_protocol_topology:id(), batches := [batch()]}.
+-type actor() :: #{actor := hls_logical_topology:id(), batches := [batch()]}.
 
 -doc "The complete actor transaction catalogue; independent delivery does not establish capacity or progress.".
 -type plan() :: #{
@@ -47,7 +47,7 @@
 -type effect() :: #{order := non_neg_integer(), port := atom(), tag := atom(), fields := [map()]}.
 %% Each recipient sees only its subsequence of the original source send order.
 -type recipient() :: #{
-    destination := hls_protocol_topology:destination(),
+    destination := hls_logical_topology:destination(),
     effects := [#{order := non_neg_integer(), port := atom(), tag := atom()}]
 }.
 %% Counts price shared evaluated payload bits, not control or routing hardware.
@@ -61,7 +61,7 @@
 }.
 %% Planning uses only layout identities from the inventory, not its display-only field projection.
 -type inventory() :: #{
-    actors := [#{id := hls_protocol_topology:id(), module := module(), atom() => term()}],
+    actors := [#{id := hls_logical_topology:id(), module := module(), atom() => term()}],
     modules := #{module() => #{entry_layouts := [layout()], atom() => term()}},
     channels := [hls_protocol_capture:binding()],
     atom() => term()
@@ -70,7 +70,7 @@
 -type layout() :: #{phase := atom(), layout := non_neg_integer()}.
 
 -doc "Expands every retained instance entry layout into immutable payload captures and per-recipient sequences. Each logical sender keeps one active transaction until all recipients accept it, so later batches cannot overtake it. Sends to distinct recipients may be delivered independently; sends through different ports to one recipient remain ordered. Runtime layout selection and source failures are unchanged. Inputs must be complete source-bound eligibility and entry-fact reports. This plan leaves destination capacity, boundary contracts and progress unestablished.".
--spec plan(inventory(), #{hls_protocol_topology:id() => [xls_actor_program:entry_effect()]}) ->
+-spec plan(inventory(), #{hls_logical_topology:id() => [xls_actor_program:entry_effect()]}) ->
     plan().
 plan(#{actors := Actors, modules := Modules, channels := Channels}, Entries) ->
     #{
@@ -90,7 +90,7 @@ plan(#{actors := Actors, modules := Modules, channels := Channels}, Entries) ->
 
 %% A phase may choose an empty layout; lack of sends must not manufacture a reservation.
 -spec actor(
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     [layout()],
     [xls_actor_program:entry_effect()],
     [hls_protocol_capture:binding()]
@@ -116,7 +116,7 @@ actor(Id, Layouts, Alternatives, Channels) ->
 
 %% Logical send order stays in the source descriptor; delivery gets only the necessary pair edges.
 -spec batch(
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     atom(),
     non_neg_integer(),
     [xls_actor_program:entry_effect()],
@@ -154,7 +154,7 @@ batch(Id, Phase, Layout, Effects, Channels) ->
 
 %% An absent or duplicate channel is an incomplete contract, never an omitted source send.
 -spec delivery(
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     xls_actor_program:entry_effect(),
     [hls_protocol_capture:binding()]
 ) -> [delivery()].

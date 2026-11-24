@@ -7,10 +7,9 @@
 Runs the compact phi/noise topology as ordinary `hls_statem` processes while
 presenting the `register_route` and `send` calls used by `hls_fabric`.
 
-The normalized topology remains authoritative: this module instantiates every
-family member, resolves wrapped route relations, queues normalized startup
-messages while all actors are disconnected, and interprets the normalized
-rectangle embeddings for host commands. The first noise-cutoff command is
+The core-materialized topology remains authoritative: this module instantiates
+its bounded actors, consumes exact routes and ingress coordinates, and queues
+normalized startup messages while all actors are disconnected. The first noise-cutoff command is
 delivered before activation; data and syndrome actors are then connected
 before the phi actors, whose initial phase starts the decoder.
 
@@ -42,6 +41,7 @@ phi_memory_demo starts this CPU transport substitute; phi_memory_runner drives i
 %% An instantiated actor receives its output map before activation.
 -type actor() :: #{
     id := actor_id(),
+    identity := hls_actor_identity:id(),
     family := atom(),
     coordinates := [non_neg_integer()],
     module := module(),
@@ -50,8 +50,6 @@ phi_memory_demo starts this CPU transport substitute; phi_memory_runner drives i
 }.
 %% Instance lookup used while resolving routes, startup messages and rectangles.
 -type actors() :: #{actor_id() => actor()}.
-%% Normalization adds interface metadata beyond the fields used to start this example.
--type family() :: #{id := atom(), module := module(), shape := [pos_integer()], atom() => term()}.
 %% A forwarding destination is either a local actor mailbox or an external event stream.
 -type target() :: {actor, pid()} | {external, phi_memory_experiment:stream()}.
 %% Normalized exact routes retain source identity and destination actor/stream identities.
@@ -62,10 +60,6 @@ phi_memory_demo starts this CPU transport substitute; phi_memory_runner drives i
 }.
 %% Inclusive physical coordinates selected by one routed host command.
 -type rectangle() :: {non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()}.
-%% Normalized scale/offset maps a family member into the ingress coordinate space.
--type embedding() :: #{
-    family := atom(), scale := [integer()], offset := [integer()], atom() => term()
-}.
 %% Broker-compatible call replies, including the scoped CPU debug catalog.
 -type reply() :: ok | #{actors := map(), boundaries := []} | {error, term()}.
 
@@ -75,7 +69,7 @@ phi_memory_demo starts this CPU transport substitute; phi_memory_runner drives i
 }).
 
 -record(state, {
-    plan :: hls_topology:plan(),
+    plan :: hls_logical_topology:materialized_plan(),
     boundary :: map(),
     actors :: map(),
     forwarders = [] :: [pid()],
@@ -103,12 +97,13 @@ init({Distance, NoiseRate}) ->
     Plan = hls_topology:normalize(
         phi_noise_topology:topology(Distance, NoiseRate)
     ),
+    Materialized = hls_logical_topology:materialize(Plan, 1 bsl 16),
     Boundary = phi_memory_boundary:contract(Distance),
-    Actors = start_actors(maps:get(families, Plan)),
-    {ConnectedActors, Forwarders} = prepare_outputs(Plan, Actors),
-    queue_startup(maps:get(startup, Plan), ConnectedActors),
+    Actors = start_actors(maps:get(instances, Materialized)),
+    {ConnectedActors, Forwarders} = prepare_outputs(Materialized, Actors),
+    queue_startup(maps:get(startup, Materialized), ConnectedActors),
     {ok, #state{
-        plan = Plan,
+        plan = Materialized,
         boundary = Boundary,
         actors = ConnectedActors,
         forwarders = Forwarders
@@ -119,8 +114,8 @@ init({Distance, NoiseRate}) ->
 %% Bind logical family identities to the currently instantiated CPU actors.
 handle_call(debug_targets, _From, State = #state{plan = Plan, actors = Actors}) ->
     Processes = maps:from_list([
-        {{family, Family, Coordinates}, Pid}
-     || #{family := Family, coordinates := Coordinates, pid := Pid} <- maps:values(Actors)
+        {Identity, Pid}
+     || #{identity := Identity, pid := Pid} <- maps:values(Actors)
     ]),
     {reply, hls_debug_catalog:cpu(Plan, Processes), State};
 %% Keep one monitored live owner per route; an exited owner may be replaced.
@@ -237,59 +232,49 @@ terminate(_Reason, #state{actors = Actors, forwarders = Forwarders}) ->
 %%% Actor graph construction
 %%%
 
-%% Instantiate all normalized families into one logical-instance lookup.
--spec start_actors([family()]) -> actors().
-start_actors(Families) ->
+%% Instantiate every core-enumerated Phi family member into one raw-ID lookup.
+-spec start_actors([hls_logical_topology:instance()]) -> actors().
+start_actors(Instances) ->
     lists:foldl(
-        fun(Family, Acc0) ->
-            start_family(Family, Acc0)
+        fun(Instance, Actors) ->
+            start_actor(Instance, Actors)
         end,
         #{},
-        Families
+        Instances
     ).
 
-%% Start one disconnected actor per two-dimensional family coordinate; reject other family dimensions.
--spec start_family(family(), actors()) -> actors().
-start_family(
-    #{id := FamilyId, module := Module, shape := [Width, Height]},
-    Actors0
+%% Start one disconnected actor from its canonical family identity and raw route ID.
+-spec start_actor(hls_logical_topology:instance(), actors()) -> actors().
+start_actor(
+    #{
+        identity := Identity = {family, FamilyId, Coordinates = [_, _]},
+        actor := #{id := Id, module := Module}
+    },
+    Actors
 ) ->
-    lists:foldl(
-        fun({X, Y}, Actors) ->
-            Id = {FamilyId, X, Y},
-            {ok, Pid} = Module:start_link(),
-            Actors#{
-                Id => #{
-                    id => Id,
-                    family => FamilyId,
-                    coordinates => [X, Y],
-                    module => Module,
-                    pid => Pid
-                }
-            }
-        end,
-        Actors0,
-        [
-            {X, Y}
-         || X <- lists:seq(0, Width - 1),
-            Y <- lists:seq(0, Height - 1)
-        ]
-    );
-start_family(#{id := Id, shape := Shape}, _Actors) ->
-    error({family, Id, Shape}).
+    {ok, Pid} = Module:start_link(),
+    Actors#{
+        Id => #{
+            id => Id,
+            identity => Identity,
+            family => FamilyId,
+            coordinates => Coordinates,
+            module => Module,
+            pid => Pid
+        }
+    };
+start_actor(#{identity := Identity}, _Actors) ->
+    error({unsupported_phi_cpu_actor, Identity}).
 
 %% Resolve each instance's normalized routes into its connect map while retaining all created forwarders.
--spec prepare_outputs(hls_topology:plan(), actors()) -> {actors(), [pid()]}.
+-spec prepare_outputs(hls_logical_topology:materialized_plan(), actors()) -> {actors(), [pid()]}.
 prepare_outputs(Plan, Actors) ->
+    Routes = maps:get(routes, Plan),
     lists:foldl(
         fun({Id, Actor}, {ActorAcc, ForwarderAcc}) ->
-            Routes = hls_topology:routes_for_instance(
-                Plan,
-                maps:get(family, Actor),
-                maps:get(coordinates, Actor)
-            ),
+            ActorRoutes = [Route || Route = #{source := {Source, _}} <- Routes, Source =:= Id],
             {Outputs, Forwarders} = actor_outputs(
-                Routes, Actors, ForwarderAcc
+                ActorRoutes, Actors, ForwarderAcc
             ),
             {ActorAcc#{Id => Actor#{outputs => Outputs}}, Forwarders}
         end,
@@ -418,36 +403,18 @@ deliver_command(
     ),
     State.
 
-%% Select actor PIDs by normalized embeddings and inclusive physical bounds in stable logical-instance order.
--spec rectangle_recipients(rectangle(), #{recipients := [embedding()], atom() => term()}, actors()) ->
+%% Select exact core ingress points inside inclusive physical bounds in retained order.
+-spec rectangle_recipients(rectangle(), #{recipients := [map()], atom() => term()}, actors()) ->
     [pid()].
-rectangle_recipients(Rectangle, #{recipients := Embeddings}, Actors) ->
+rectangle_recipients({X0, Y0, X1, Y1}, #{recipients := Recipients}, Actors) ->
     [
-        Pid
-     || {_Id, #{
-            family := Family,
-            coordinates := [X, Y],
-            pid := Pid
-        }} <- lists:sort(maps:to_list(Actors)),
-        Embedding <- Embeddings,
-        embedded(Family, X, Y, Embedding, Rectangle)
+        maps:get(pid, maps:get(Id, Actors))
+     || #{actor := Id, at := [X, Y]} <- Recipients,
+        X >= X0,
+        X =< X1,
+        Y >= Y0,
+        Y =< Y1
     ].
-
-%% Apply a matching family's affine coordinate embedding and check membership in the requested rectangle.
--spec embedded(atom(), non_neg_integer(), non_neg_integer(), embedding(), rectangle()) -> boolean().
-embedded(
-    Family,
-    X,
-    Y,
-    #{family := Family, scale := [ScaleX, ScaleY], offset := [DX, DY]},
-    {X0, Y0, X1, Y1}
-) ->
-    EmbeddedX = ScaleX * X + DX,
-    EmbeddedY = ScaleY * Y + DY,
-    EmbeddedX >= X0 andalso EmbeddedX =< X1 andalso
-        EmbeddedY >= Y0 andalso EmbeddedY =< Y1;
-embedded(_Family, _X, _Y, _Embedding, _Rectangle) ->
-    false.
 
 %% Preserve mailbox order while copying each cast to local actors and reporting external events to the owner; never returns normally.
 -spec forwarder(pid(), [target()]) -> no_return().

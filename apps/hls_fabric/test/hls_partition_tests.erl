@@ -29,6 +29,41 @@ deterministic_assignment_test() ->
     Reverse = maps:from_list(lists:reverse(maps:to_list(Placement))),
     ?assertEqual(hls_partition:normalize(plan(), Placement), hls_partition:normalize(plan(), Reverse)).
 
+%% The partition projection preserves core identities and routes for non-rectangular family ranks.
+-spec arbitrary_rank_partition_matches_core_materialization_test() -> ok.
+arbitrary_rank_partition_matches_core_materialization_test() ->
+    Cases = [
+        {[3], [[0], [1], [2]]},
+        {[2, 1, 2], [[0, 0, 0], [0, 0, 1], [1, 0, 0], [1, 0, 1]]}
+    ],
+    lists:foreach(
+        fun({Shape, Coordinates}) ->
+            Plan = ranked_plan(Shape),
+            Materialized = hls_logical_topology:materialize(Plan, length(Coordinates)),
+            Placement = maps:from_list([
+                {{family, ranked, Coordinate}, ranked_device(Coordinate)}
+             || Coordinate <- Coordinates
+            ]),
+            Partition = hls_partition:normalize(Plan, Placement),
+            ?assertEqual(
+                lists:sort([
+                    {Identity, maps:get(id, Actor)}
+                 || #{identity := Identity, actor := Actor} <- maps:get(
+                        instances, Materialized
+                    )
+                ]),
+                [
+                    {Identity, RawId}
+                 || #{identity := Identity, raw_id := RawId} <- maps:get(actors, Partition)
+                ]
+            ),
+            ?assertEqual(
+                canonical_materialized_routes(Materialized), maps:get(routes, Partition)
+            )
+        end,
+        Cases
+    ).
+
 unsupported_delivery_test() ->
     Spec = spec(),
     Relations = [{{cells, left}, coupled, [
@@ -101,6 +136,21 @@ mixed_external_encoding_rejected_test() ->
     ?assertException(error, {partition_external_encoding, _, _, _},
         hls_partition:normalize(Plan, #{{actor, one} => a, {actor, two} => b})).
 
+%% Partition lowering cannot silently replace a retained core communication contract.
+-spec compiler_interface_must_match_core_catalog_test() -> ok.
+compiler_interface_must_match_core_catalog_test() ->
+    Plan = plan(),
+    ProcessInterfaces = hls_logical_topology:interfaces(Plan),
+    ProcessInterface = maps:get(hls_partition_fixture, ProcessInterfaces),
+    Mismatch = Plan#{interfaces := ProcessInterfaces#{
+        hls_partition_fixture := ProcessInterface#{mailbox_capacity := 999}
+    }},
+    ?assertException(
+        error,
+        {compiler_process_interface_mismatch, hls_partition_fixture, _, _},
+        hls_partition:normalize(Mismatch, placement())
+    ).
+
 mixed_spec(Target) ->
     #{version => 1, families => #{}, ingresses => [],
         actors => #{one => hls_partition_fixture, two => hls_partition_retagged_fixture},
@@ -121,3 +171,49 @@ spec() ->
 
 placement() -> maps:from_list([{{family, cells, [X, Y]}, case X of 0 -> a; 1 -> b end}
     || X <- [0, 1], Y <- [0, 1]]).
+
+%% Normalize one family whose outputs all leave the logical graph.
+-spec ranked_plan([pos_integer()]) -> hls_topology:plan().
+ranked_plan(Shape) ->
+    hls_topology:normalize(#{
+        version => 1,
+        actors => #{},
+        families => #{ranked => #{module => hls_partition_fixture, shape => Shape}},
+        ingresses => [],
+        externals => [{reports, out, [work]}],
+        routes => [],
+        startup => [],
+        route_relations => [
+            {{ranked, left}, [{external, reports}]},
+            {{ranked, right}, [{external, reports}]},
+            {{ranked, report}, [{external, reports}]}
+        ]
+    }).
+
+%% Spread every ranked witness across the two devices required by partition planning.
+-spec ranked_device([non_neg_integer()]) -> a | b.
+ranked_device([0 | _]) -> a;
+ranked_device([_ | _]) -> b.
+
+%% Rewrite core raw actor names to the canonical identities used by the partition plan.
+-spec canonical_materialized_routes(hls_logical_topology:materialized_plan()) -> [map()].
+canonical_materialized_routes(Materialized) ->
+    Identities = maps:from_list([
+        {maps:get(id, Actor), Identity}
+     || #{identity := Identity, actor := Actor} <- maps:get(instances, Materialized)
+    ]),
+    lists:sort([
+        Route#{
+            source := {maps:get(Source, Identities), Port},
+            recipients := [
+                case Recipient of
+                    {actor, Target} -> {actor, maps:get(Target, Identities)};
+                    {external, _} -> Recipient
+                end
+             || Recipient <- Recipients
+            ]
+        }
+     || Route = #{source := {Source, Port}, recipients := Recipients} <- maps:get(
+            routes, Materialized
+        )
+    ]).

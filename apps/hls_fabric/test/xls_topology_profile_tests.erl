@@ -97,3 +97,34 @@ parallel_delivery_bounds_test() ->
             xls_fabric_topology_profile:normalize((profile())#{effect_delivery_width => Width})))
     end || Width <- [1, 2, 3, 6]],
     ok.
+
+%% Compiler and Fabric wrappers retain one normalized common constraint projection.
+-spec shared_constraint_parity_test() -> ok.
+shared_constraint_parity_test() ->
+    Profile = (profile())#{frame_payload_words => 2, direct_actor_debug => true},
+    Fields = [name, channel_depth, actor_egress_depth, frame_payload_words, direct_actor_debug],
+    ?assertEqual(
+        maps:with(Fields, xls_topology_profile:normalize(Profile)),
+        maps:with(Fields, xls_fabric_topology_profile:normalize(Profile))
+    ),
+    lists:foreach(
+        fun(Bad) ->
+            Compiler = rejection(fun() -> xls_topology_profile:normalize(Bad) end),
+            Fabric = rejection(fun() -> xls_fabric_topology_profile:normalize(Bad) end),
+            ?assertEqual(Compiler, Fabric)
+        end,
+        [
+            (profile())#{channel_depth := 0},
+            (profile())#{actor_egress_depth := -1},
+            (profile())#{frame_payload_words => 0}
+        ]
+    ).
+
+%% Capture only the public error reason, excluding wrapper-specific stack frames.
+-spec rejection(fun(() -> term())) -> term().
+rejection(Fun) ->
+    try Fun() of
+        Value -> {unexpected_success, Value}
+    catch
+        error:Reason -> Reason
+    end.

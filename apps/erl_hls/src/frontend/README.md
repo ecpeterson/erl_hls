@@ -1,6 +1,6 @@
 # Source preparation and analysis
 
-`hls_source` captures include/macro/feature context and preprocesses source. `hls_actor_source` reads state/message declarations, while `hls_records` resolves ordered fields, nested records and defaults through the runtime [type providers](../../apps/hls_runtime/src/api/README.md).
+`hls_source` captures include/macro/feature context and preprocesses source. `hls_actor_source` reads state/message declarations, while `hls_records` resolves ordered fields, nested records and defaults through the core [type providers](../../../hls_core/src/api/README.md).
 
 `hls_pack` is the Erlang parse-transform callback selected by actor sources. It generates BEAM record codecs and embeds checked service/interface metadata. `hls_service_contract` analyzes request/reply declarations; the runtime's `hls_service_schema:from_module/1` reads the embedded result. These preparation paths share callback analysis with the [XLS backend](../backend/xls/README.md), so compiling an actor requires `erl_hls`. Executing its generated codecs and callbacks requires the runtime library.
 

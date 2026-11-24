@@ -308,9 +308,9 @@ select_scope(Plan, storage) ->
     }).
 
 %% Build identities describe the exact observation domain, not a physical checkpoint.
--spec build(xls_protocol_spacetime:plan()) -> hls_spacetime:build().
+-spec build(xls_protocol_spacetime:plan()) -> hls_observation_build:build().
 build(Plan = #{inputs := #{source_build := Source, rtl := Rtl}}) ->
-    #{source => Source, rtl => Rtl, observation => xls_protocol_spacetime:observation_digest(Plan)}.
+    hls_observation_build:new(Source, Rtl, xls_protocol_spacetime:observation_digest(Plan)).
 
 %% Source fault aggregation follows the verified public wrapper's actor population.
 -spec harness(binary(), non_neg_integer()) -> binary().

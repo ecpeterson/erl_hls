@@ -40,7 +40,7 @@ normalize(Plan, Specs, Endpoints) ->
         [] -> ok;
         Duplicates -> error({duplicate_endpoints, lists:usort(Duplicates)})
     end,
-    Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Groups]),
+    Interfaces = maps:get(interfaces, Scheduler),
     Codecs = maps:map(fun schemas/2, Interfaces),
     Bindings = [group(Group, Index, Endpoints) || {Index, Group} <- lists:enumerate(0, Groups)],
     ById = maps:from_list([{Id, G} || G = #{id := Id} <- Bindings]),

@@ -8,7 +8,7 @@ Build the pinned compiler dependency with `rebar3 compile`, then run:
 bash apps/hls_phi/tools/inspect_phi_protocol.sh /path/to/fresh-output
 ```
 
-The shell entry point compiles this checkout's default profile and selects its backend/compiler beams explicitly. The escript compiles the six actor modules and two topology modules from the selected `hls_phi` application sources and headers, obtains complete ordinary source plans, and normalizes the N2/N3/N6 periodic repetition and D3 noise topologies. It invokes `hls_protocol_topology:elaborate/2` to materialize at most 64 actors and `hls_protocol_inventory:inspect/2` to inventory every route, send alternative and callback family. Application callbacks are analyzed, not run; only the topology constructors execute.
+The shell entry point compiles this checkout's default profile and selects its backend/compiler beams explicitly. The escript compiles the six actor modules and two topology modules from the selected `hls_phi` application sources and headers, obtains complete ordinary source plans, and normalizes the N2/N3/N6 periodic repetition and D3 noise topologies. It invokes `hls_logical_topology:materialize/2` to materialize at most 64 actors and `hls_protocol_inventory:inspect/2` to attach every route, send alternative and callback family to that core plan. Application callbacks are analyzed, not run; only the topology constructors execute.
 
 Elaboration retains startup, explicit recipients, spatial coordinates, external streams and lane metadata. Unknown families, duplicate ownership or recipients, out-of-range coordinates and excess population reject. Inventory diagnoses missing source plans, unknown producers/consumers, undeclared ports/boundaries, incomplete or duplicate output routing, unsupported internal calls and unexpanded topology shapes. Each actor also retains unresolved generation ownership, per-sender ordering, snapshot lifetime, bounded reservation and boundary obligations. A structurally clean report still has `eligible: false`; it is not permission to replace a mailbox or elide payloads.
 
@@ -20,7 +20,7 @@ The inspection call path is:
 apps/hls_phi/tools/inspect_phi_protocol.sh
   → apps/hls_phi/tools/inspect_phi_protocol.escript
     → ordinary source compilation + hls_topology:normalize/1
-    → hls_protocol_topology:elaborate/2
+    → hls_logical_topology:materialize/2
     → hls_protocol_inventory:inspect/2
     → application bundles + diagnostic summary
 ```

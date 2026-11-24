@@ -180,12 +180,14 @@ incoming(Id, P = #{lanes := Lanes}) ->
 
 -doc "Returns the public physical scheduler plan, with the logical identity retained on each actor for debug binding.".
 -spec planning(map()) -> {map(), map()}.
-planning(#{tile := true, actors := Actors, schedulers := Groups}) ->
+planning(Local = #{tile := true, actors := Actors, schedulers := Groups}) ->
     Aliases = maps:from_list([{Id, I} || #{identity := Id, index := I} <- Actors]),
-    Plan = hls_partition_schedule:topology([
-        A#{identity := I, logical_identity => Id}
-     || A = #{identity := Id, index := I} <- Actors
-    ]),
+    Plan = hls_partition_schedule:topology(Local#{
+        actors := [
+            A#{identity := I, logical_identity => Id}
+         || A = #{identity := Id, index := I} <- Actors
+        ]
+    }),
     Specs = hls_partition_schedule:specs([
         G#{
             actors := [
@@ -196,8 +198,8 @@ planning(#{tile := true, actors := Actors, schedulers := Groups}) ->
      || G = #{actors := Members} <- Groups
     ]),
     {Plan, Specs};
-planning(#{actors := Actors, schedulers := Groups}) ->
-    {hls_partition_schedule:topology(Actors), hls_partition_schedule:specs(Groups)}.
+planning(Local = #{schedulers := Groups}) ->
+    {hls_partition_schedule:topology(Local), hls_partition_schedule:specs(Groups)}.
 
 -doc "Labels physical slots with logical actors, binding both views in the generated projection.".
 -spec projection(map(), map()) -> map().

@@ -118,6 +118,32 @@ ungrouped_members_keep_direct_realization_test() ->
         Direct
     ).
 
+%% Supplied compiler summaries must cover and exactly project to the retained core catalog.
+-spec supplied_interfaces_match_core_catalog_test() -> ok.
+supplied_interfaces_match_core_catalog_test() ->
+    Topology = hls_topology:from_module(phi_noise_topology),
+    Layout = hls_frame_layout:default(),
+    Interfaces = hls_scheduler_plan:interfaces(Topology, Layout),
+    Scheduler = hls_scheduler_plan:normalize(Topology, #{}, Layout, Interfaces),
+    ?assertEqual(Interfaces, maps:get(interfaces, Scheduler)),
+    [Module | _] = maps:keys(Interfaces),
+    ?assertError(
+        {compiler_process_interface_catalog, [Module], []},
+        hls_scheduler_plan:normalize(
+            Topology, #{}, Layout, maps:remove(Module, Interfaces)
+        )
+    ),
+    ProcessInterfaces = hls_logical_topology:interfaces(Topology),
+    ProcessInterface = maps:get(Module, ProcessInterfaces),
+    Mismatch = Topology#{interfaces := ProcessInterfaces#{
+        Module := ProcessInterface#{mailbox_capacity := 999}
+    }},
+    ?assertException(
+        error,
+        {compiler_process_interface_mismatch, Module, _, _},
+        hls_scheduler_plan:normalize(Mismatch, #{}, Layout, Interfaces)
+    ).
+
 %% Checks heterogeneous group is rejected.
 -spec heterogeneous_group_is_rejected_test() -> 'ok'.
 heterogeneous_group_is_rejected_test() ->
@@ -181,17 +207,24 @@ storage_binding_is_required_and_checked_test() ->
 %% Checks exact actors can share when their artifacts match.
 -spec exact_actors_can_share_when_their_artifacts_match_test() -> 'ok'.
 exact_actors_can_share_when_their_artifacts_match_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    [Phi] = [Actor || Actor = #{id := phi} <- maps:get(actors, Plan)],
-    Topology = #{
-        actors => [Phi#{id := phi_a}, Phi#{id := phi_b}],
-        families => []
-    },
+    Topology = hls_topology:normalize(#{
+        version => 1,
+        actors => #{phi_a => hls_partition_fixture, phi_b => hls_partition_fixture},
+        families => #{},
+        externals => [{reports, out, [work]}],
+        ingresses => [],
+        routes => [
+            {{Actor, Port}, [{external, reports}]}
+         || Actor <- [phi_a, phi_b], Port <- [left, right, report]
+        ],
+        route_relations => [],
+        startup => []
+    }),
     #{groups := [Group], direct_members := []} =
         hls_scheduler_plan:normalize(Topology, #{
             phi => group_spec([{actor, phi_a}, {actor, phi_b}])
         }),
-    ?assertEqual(phi_halo_cell, maps:get(module, Group)),
+    ?assertEqual(hls_partition_fixture, maps:get(module, Group)),
     ?assertEqual(2, maps:get(slot_count, Group)).
 
 %% Builds a homogeneous storage policy for the requested fixture members.

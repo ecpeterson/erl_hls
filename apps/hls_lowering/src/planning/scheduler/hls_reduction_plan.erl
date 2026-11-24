@@ -30,7 +30,7 @@ The supported subset has a complete, fixed, inverse-closed exchange and message-
 -spec normalize(hls_topology:plan(), hls_scheduler_plan:plan(), map()) -> plan().
 normalize(Topology, Scheduler, Requested) ->
     ok = validate_inputs(Topology, Scheduler, Requested),
-    normalize(Topology, Scheduler, Requested, module_interfaces(maps:get(families, Topology))).
+    normalize(Topology, Scheduler, Requested, maps:get(interfaces, Scheduler)).
 
 -doc "Validates requested source-fragment placements using supplied actor summaries without reloading interfaces. Retains the same structural proof and explicit semantic assumptions as normalize/3.".
 -spec normalize(
@@ -41,6 +41,7 @@ normalize(Topology, Scheduler, Requested) ->
 ) -> plan().
 normalize(Topology, Scheduler, Requested, Interfaces) ->
     ok = validate_inputs(Topology, Scheduler, Requested),
+    ok = hls_topology:validate_interfaces(Topology, Interfaces),
     Families = maps:get(families, Topology),
     FamilyIndex = index_by_id(Families),
     Selections = validate_selections(Requested, FamilyIndex),
@@ -758,11 +759,6 @@ validate_selections(Requested, FamilyIndex) ->
         end,
         lists:sort(maps:to_list(Requested))
     ).
-
-%% Loads each actor interface once for the current planning pass.
--spec module_interfaces([map()]) -> hls_scheduler_plan:interfaces().
-module_interfaces(Families) ->
-    hls_actor_interface:from_modules([Module || #{module := Module} <- Families]).
 
 %% Resolves a declared family to its actor module.
 -spec family_module(atom(), hls_topology:plan()) -> module().

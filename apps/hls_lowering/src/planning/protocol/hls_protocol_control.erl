@@ -10,7 +10,7 @@
 
 -doc "One checked rectangle target with canonical receiver domains and globally indexed coordinates. Placement can leave its recipient list empty.".
 -type target() :: #{
-    id := hls_protocol_topology:id(),
+    id := hls_logical_topology:id(),
     selector := non_neg_integer(),
     schemas := [atom()],
     domains := [
@@ -27,7 +27,7 @@
 -doc "A checked rectangle control plan; the actor mask retains whole-topology indices across native placement.".
 -type plan() :: #{
     kind := rectangle,
-    id := hls_protocol_topology:id(),
+    id := hls_logical_topology:id(),
     width := pos_integer(),
     height := pos_integer(),
     actors := pos_integer(),
@@ -77,12 +77,12 @@
     topology := #{
         actors := [
             #{
-                id := hls_protocol_topology:id(),
+                id := hls_logical_topology:id(),
                 module := module(),
                 atom() => term()
             }
         ],
-        ingresses := [hls_protocol_topology:ingress()],
+        ingresses := [hls_logical_topology:ingress()],
         atom() => term()
     },
     modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
@@ -191,13 +191,13 @@ host_ingresses(
 %% Different targets may reuse recipients; a target may not deliver duplicate copies.
 -spec target(
     #{
-        id := hls_protocol_topology:id(),
+        id := hls_logical_topology:id(),
         schemas := [atom()],
-        recipients := [#{actor := hls_protocol_topology:id(), at := [non_neg_integer()]}],
+        recipients := [#{actor := hls_logical_topology:id(), at := [non_neg_integer()]}],
         atom() => term()
     },
     non_neg_integer(),
-    [#{id := hls_protocol_topology:id(), module := module(), atom() => term()}],
+    [#{id := hls_logical_topology:id(), module := module(), atom() => term()}],
     #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
     pos_integer(),
     pos_integer()

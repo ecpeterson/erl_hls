@@ -4,22 +4,22 @@ Compile bounded Erlang actors into hardware through XLS, and communicate with th
 
 Actors use `hls_gs` server or `hls_statem` state-machine callbacks and typed records; state machines declare bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events, reductions and [indexed gathers](docs/indexed-gathers.md). Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
 
-Start with the [documentation guide](docs/README.md), [register-service example](src/examples/regsvc/regsvc.erl), or [connected telemetry project](src/examples/telemetry/README.md).
+Start with the [documentation guide](docs/README.md), [register-service example](apps/erl_hls/src/examples/regsvc/regsvc.erl), or [connected telemetry project](apps/erl_hls/src/examples/telemetry/README.md).
 
 ## Packages
 
-This repository builds two library applications. `erl_hls` owns the compiler, parse transform and toolchain assets; [`hls_runtime`](apps/hls_runtime/README.md) owns type providers, retained codecs, CPU actors and device sessions. The compiler depends on the runtime library. Deployed applications can use compiled actors and retained bindings without shipping compiler implementation.
+This umbrella builds separate compiler, core, runtime, lowering, Fabric and example applications. [`hls_core`](apps/hls_core/README.md) owns process-free values, logical identities, process interfaces, topology, retained descriptors and provenance keys; `erl_hls` owns source analysis and the compiler; [`hls_runtime`](apps/hls_runtime/README.md) owns CPU actors, domains, brokers and live sessions. Deployed applications can use compiled actors and retained bindings without shipping compiler implementation.
 
-Neither library starts an application supervisor. Actors and sessions have explicit lifecycle APIs; supervised applications decide how to own them. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
+Neither `hls_core` nor `hls_runtime` starts an application supervisor. Actors and sessions have explicit lifecycle APIs; supervised applications decide how to own them. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
 
-`rebar3 compile` builds both locally. Git consumers select root `erl_hls` and `hls_runtime` from `apps/hls_runtime` using `git_subdir` at the same revision; dependency fetching does not discover sibling applications automatically. Runtime deployments depend on `hls_runtime` alone. The compiler CLI release includes the complete compiler and source assets.
+`rebar3 compile` builds the default umbrella applications locally. Runtime deployments include `hls_core`, `hls_runtime`, their application code and any selected transport application. The compiler CLI release includes the complete compiler and source assets.
 
 ## Build and check
 
 Use OTP 28 and rebar3. The [standalone toolchain](docs/toolchain.md) packages `hlsc` for actor-to-DSLX compilation and an optional independent XLS driver:
 
 ```sh
-rebar3 release
+rebar3 release -n erl_hls
 _build/default/rel/erl_hls/bin/hlsc --help
 # Complete local CI coverage (native audits, packaging, XLS and RTL):
 python3 tools/check.py /path/to/xls
@@ -35,6 +35,6 @@ After changing translation, prepare a fresh stage with `tools/prepare_xls_sim.sh
 
 [Compiler differential tests](docs/compiler-differential.md) compare generated programs with BEAM and retain minimized failures. [Debug targets](docs/debug-targets.md) expose actor snapshots, physical queue state and stream counters/traces. [Timing profiles](docs/profiling.md) provide reusable SVG and Perfetto views, keeping causal dependencies distinct from observed resource ordering.
 
-For implementation entry points and module ownership, use the [source map](src/README.md).
+For implementation entry points and module ownership, use the [source map](apps/erl_hls/src/README.md).
 
 Contributions follow [STYLE.md](STYLE.md). Application contracts belong in `docs/`; development notes belong in `yap/`.

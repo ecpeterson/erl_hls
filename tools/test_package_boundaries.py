@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from erl_hls_tools.package_boundaries import (
     application_files,
+    policy_violations,
     undeclared_application_dependencies,
     violations,
 )
@@ -57,13 +58,36 @@ class PackageBoundariesTests(unittest.TestCase):
             {'module': 'lower', 'application': 'erl_hls', 'imports': ['lower'], 'types': []})
         self.assertEqual(violations(snapshot, {'hls_runtime'}, {'erl_hls'}), [])
 
+    def test_core_forbids_every_project_app_without_reclassifying_other_callers(self) -> None:
+        """Core cannot import another inspected app, while that app may call its own modules."""
+        snapshot = {'applications': [
+            {'name': 'hls_core', 'modules': ['core_codec'],
+             'dependencies': ['kernel', 'stdlib']},
+            {'name': 'hls_runtime', 'modules': ['runtime_codec'],
+             'dependencies': ['kernel', 'stdlib', 'hls_core']}],
+            'runtime_modules': [
+                {'module': 'core_codec', 'application': 'hls_core',
+                 'imports': ['runtime_codec'], 'types': []},
+                {'module': 'runtime_codec', 'application': 'hls_runtime',
+                 'imports': ['runtime_codec'], 'types': []}]}
+        self.assertEqual(
+            policy_violations(snapshot, {'hls_core', 'hls_runtime'}, {'erl_hls'}),
+            [{'kind': 'imports', 'module': 'core_codec', 'target': 'runtime_codec',
+              'application': 'hls_runtime'}])
+        snapshot['runtime_modules'][0]['imports'] = []
+        snapshot['applications'][0]['dependencies'].append('hls_runtime')
+        self.assertEqual(
+            policy_violations(snapshot, {'hls_core', 'hls_runtime'}, {'erl_hls'})[0],
+            {'kind': 'application_dependency', 'application': 'hls_core',
+             'target': 'hls_runtime'})
+
     def test_observer_declares_dynamic_resource_owners(self) -> None:
-        """The observer declares both owners used by its computed compiler-resource paths."""
+        """The observer declares core, runtime and compiler owners used by computed paths."""
         manifest = (Path(__file__).resolve().parents[1] /
                     'apps/hls_spacetime_observer/src/hls_spacetime_observer.app.src').read_text()
         dependency_text = manifest.split('{applications, [', 1)[1].split(']}', 1)[0]
         dependencies = {name.strip() for name in dependency_text.split(',')}
-        self.assertTrue({'erl_hls', 'hls_runtime'} <= dependencies)
+        self.assertTrue({'erl_hls', 'hls_core', 'hls_runtime'} <= dependencies)
 
     def test_release_cannot_smuggle_build_module_into_runtime_app(self) -> None:
         """Both app manifests and individual BEAM ownership are checked after packaging."""

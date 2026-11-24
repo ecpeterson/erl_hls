@@ -1,6 +1,15 @@
 {application, hls_phi, [
     {description, "Phi decoder, phenomenological source and finite example drivers"},
     {vsn, "0.1.0"}, {registered, []},
-    {applications, [kernel, stdlib, crypto, hls_runtime, erl_hls, hls_fabric, hls_lowering]},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        hls_core,
+        hls_runtime,
+        erl_hls,
+        hls_fabric,
+        hls_lowering
+    ]},
     {env, []}, {modules, []}, {licenses, ["Apache-2.0"]}, {links, []}
 ]}.

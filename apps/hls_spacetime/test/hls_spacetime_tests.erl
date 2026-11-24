@@ -32,6 +32,17 @@ saved_example_test() ->
     ?assertEqual([<<"side">>, <<"read0">>], maps:get(inputs, Join)),
     ?assertEqual(B, fixture()).
 
+%% The shared build contract preserves this artifact's map shape while spacetime keeps UTF-8 text.
+-spec observation_build_contract_test() -> ok.
+observation_build_contract_test() ->
+    Bundle = #{build := Build} = fixture(),
+    Shared = hls_observation_build:new(
+        maps:get(source, Build), maps:get(rtl, Build), maps:get(observation, Build)
+    ),
+    ?assertEqual(hls_spacetime:validate(Bundle), hls_spacetime:validate(Bundle#{build := Shared})),
+    Opaque = hls_observation_build:new(<<255>>, <<"rtl">>, <<"observation">>),
+    ?assertError({spacetime, text}, hls_spacetime:validate(Bundle#{build := Opaque})).
+
 %% Logical attribution can name multiple resources without adding dependencies or duplicating cells.
 -spec event_resource_associations_test() -> ok.
 event_resource_associations_test() ->

@@ -45,7 +45,7 @@ configuration(Width, Split, Inspection) when
         frame_payload_words => 20,
         inspection => Inspection
     }),
-    Plan = hls_protocol_topology:elaborate(
+    Plan = hls_logical_topology:materialize(
         hls_topology:normalize(topology(Width, 16#80000000)), 3 * Width
     ),
     #{actors := Actors} = Plan,

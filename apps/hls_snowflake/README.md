@@ -1,6 +1,6 @@
 # Snowflake application
 
-`hls_snowflake` owns ordinary Snowflake actors, geometry, the sequential BEAM reference and its finite independent fixtures. `hls_lowering` supplies topology planning and hardware generation; `hls_runtime` supplies actor/type support. This is a build/example library, not part of the deployed fabric runtime closure.
+`hls_snowflake` owns ordinary Snowflake actors, geometry, the sequential BEAM reference and its finite independent fixtures. `hls_lowering` supplies topology planning and hardware generation, `hls_core` supplies shared values, and `hls_runtime` supplies actor execution. This is a build/example library, not part of the deployed Fabric runtime closure.
 
 ## Source-protocol build
 

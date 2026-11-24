@@ -14,8 +14,11 @@ mailbox_padding_uses_existing_rows_test() ->
 %% Bindings expose the selected layout while retaining the minimum RAM width.
 -spec mailbox_binding_records_stride_test() -> ok.
 mailbox_binding_records_stride_test() ->
-    [Binding] = xls_scheduler_ram_v:bindings(#{groups => [#{
-        state => #{width => 32}, slot_count => 6, mailbox_capacity => 24}]}),
+    [Binding] = xls_scheduler_ram_v:bindings(
+        #{groups => [#{state => #{width => 32}, slot_count => 6, mailbox_capacity => 24}]},
+        hls_frame_layout:default(),
+        #{}
+    ),
     ?assertEqual(32, maps:get(mailbox_stride, Binding)),
     ?assertEqual(8, maps:get(mailbox_address_width, Binding)).
 

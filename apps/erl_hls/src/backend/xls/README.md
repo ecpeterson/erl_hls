@@ -38,7 +38,7 @@ These are responsibility groups within one compiler application, not separate Er
 
 `xls_parse` remains the file-level facade at this directory's root. Each module's `-moduledoc` identifies its immediate callers and collaborators; export groups distinguish entry points, retained-data queries and rendering helpers.
 
-Host provider functions and typed field offsets belong to [`hls_runtime`](../../../apps/hls_runtime/README.md). `xls_type` composes compiler conversions over those descriptors; `xls_struct_codec` renders layouts derived by `hls_field_layout`. See [provider extensions](../../../docs/type-providers.md) for callback ownership.
+Host provider functions and typed field offsets belong to [`hls_core`](../../../../hls_core/README.md). `xls_type` composes compiler conversions over those descriptors; `xls_struct_codec` renders layouts derived by `hls_field_layout`. See [provider extensions](../../../../../docs/type-providers.md) for callback ownership.
 
 Topology preparation starts from normalized [`../../topology/`](../../topology/) plans and checked actor interfaces. It chooses compact family loops or materialized instance lanes, validates startup messages against the selected frame capacity, and then renders wiring. The explicit retained-interface overloads let a fabric preparation reuse one interface catalog; calling a convenience preparation again can reacquire those interfaces.
 

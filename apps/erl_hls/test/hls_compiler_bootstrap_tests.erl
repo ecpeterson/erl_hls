@@ -6,21 +6,23 @@
 -spec isolated_interface_test() -> ok.
 isolated_interface_test() ->
     {ok, Config} = file:consult("apps/erl_hls/rebar.config"),
-    %% Runtime is a complete dependency application before any compiler bootstrap file.
+    %% Core and runtime are complete dependency applications before any compiler bootstrap file.
+    {ok, [{application, hls_core, Core}]} = file:consult(
+        filename:join([code:lib_dir(hls_core), "ebin", "hls_core.app"])),
     {ok, [{application, hls_runtime, Runtime}]} = file:consult(
         filename:join([code:lib_dir(hls_runtime), "ebin", "hls_runtime.app"])),
     Modules = [list_to_atom(filename:basename(Path, ".erl"))
         || Path <- proplists:get_value(erl_first_files, Config)] ++
+        proplists:get_value(modules, Core) ++
         proplists:get_value(modules, Runtime),
     Directory = filename:absname(filename:join("_build", "compiler-bootstrap-" ++
         integer_to_list(erlang:unique_integer([positive])))),
     ok = filelib:ensure_dir(filename:join(Directory, "placeholder")),
     try
-        %% The fixture's numeric provider is available while compiling actors.
         lists:foreach(fun(Module) ->
             {ok, _} = file:copy(code:which(Module),
                 filename:join(Directory, atom_to_list(Module) ++ ".beam"))
-        end, lists:usort(Modules ++ [hls_nums, hls_codec])),
+        end, lists:usort(Modules)),
         {ok, Peer, _Node} = peer:start_link(#{connection => standard_io,
             args => ["+S", "1:1", "+A", "1", "-pa", Directory]}),
         try

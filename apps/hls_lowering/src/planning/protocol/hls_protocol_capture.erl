@@ -7,10 +7,10 @@
 
 -doc "One declared source port/message class and its logical recipient; no physical link index is assigned yet.".
 -type binding() :: #{
-    source := hls_protocol_topology:id(),
+    source := hls_logical_topology:id(),
     port := atom(),
     tag := atom(),
-    destination := hls_protocol_topology:destination(),
+    destination := hls_logical_topology:destination(),
     atom() => term()
 }.
 
@@ -32,10 +32,10 @@
 -doc "A source-bound internal capture channel, with joined constant fields and exact ordinary/compact widths.".
 -type channel() :: #{
     frame_layout := hls_frame_layout:layout(),
-    source := hls_protocol_topology:id(),
+    source := hls_logical_topology:id(),
     port := atom(),
     tag := atom(),
-    destination := {actor, hls_protocol_topology:id()},
+    destination := {actor, hls_logical_topology:id()},
     fields := [field()],
     source_operation := 3..((1 bsl 8) - 1),
     message_bits := non_neg_integer(),
@@ -52,7 +52,7 @@
 -type plan() :: #{
     frame_layout := hls_frame_layout:layout(),
     channels := [channel()],
-    sources := #{hls_protocol_topology:id() => source_manifest()},
+    sources := #{hls_logical_topology:id() => source_manifest()},
     storage := one_reserved_snapshot_per_static_channel,
     source_ownership := declared_producer_binding,
     overwrite := requires_consumer_release,
@@ -82,7 +82,7 @@
 -doc "Joins every entry-effect layout across all phases of each internal producer's opaque compiler program. Omits only whole fields constant in every matching send; state-dependent and partially known fields stay whole. Rejects internal retained-call replies, whose destinations require dynamic caller ownership; ordinary entry sends from those actors remain capturable. Programs must come from the same preparation as the actor emitters; no source reads or compilation occur here. Channel bindings are explicit caller input, not validated topology. Supplied alternatives or source/spec maps are not accepted; this does not admit mailbox replacement or network progress.".
 -spec plan(
     #{channels := [binding()], atom() => term()},
-    #{hls_protocol_topology:id() => xls_actor_program:program()}
+    #{hls_logical_topology:id() => xls_actor_program:program()}
 ) -> plan().
 plan(#{channels := Channels}, Programs) ->
     FrameLayout = common_layout(Programs),
@@ -122,7 +122,7 @@ plan(#{channels := Channels}, Programs) ->
     }.
 
 %% Every native and host actor in one source build shares the same ordinary frame layout.
--spec common_layout(#{hls_protocol_topology:id() => xls_actor_program:program()}) ->
+-spec common_layout(#{hls_logical_topology:id() => xls_actor_program:program()}) ->
     hls_frame_layout:layout().
 common_layout(Programs) ->
     case
@@ -153,10 +153,10 @@ source(Program) ->
 %% The complete family determines constants; a convenient single phase cannot stand for all sends.
 -spec channel(binding(), [xls_actor_program:entry_effect()]) ->
     #{
-        source := hls_protocol_topology:id(),
+        source := hls_logical_topology:id(),
         port := atom(),
         tag := atom(),
-        destination := hls_protocol_topology:destination(),
+        destination := hls_logical_topology:destination(),
         fields := [field()],
         message_bits := non_neg_integer(),
         payload_bits := non_neg_integer(),

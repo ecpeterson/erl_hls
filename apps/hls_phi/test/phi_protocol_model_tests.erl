@@ -79,7 +79,7 @@ source_models() ->
     Cases = [{phi_repetition_topology:topology(N, 16#80000000), line, 3 * N, 34 * N} || N <- [2, 3, 6]] ++
         [{phi_noise_topology:topology(3, 16#80000000), halo, 54, 1188}],
     lists:foreach(fun({Topology, Kind, ActorCount, MessageCount}) ->
-        Expanded = #{actors := Actors} = hls_protocol_topology:elaborate(hls_topology:normalize(Topology), 64),
+        Expanded = #{actors := Actors} = hls_logical_topology:materialize(hls_topology:normalize(Topology), 64),
         Used = maps:with(lists:usort([M || #{module := M} <- Actors]), Artifacts),
         Inventory = hls_protocol_inventory:inspect(Expanded, Used),
         Report = #{model := Model} = hls_protocol_model:check({phi_protocol_model, contracts(Kind)}, Inventory),

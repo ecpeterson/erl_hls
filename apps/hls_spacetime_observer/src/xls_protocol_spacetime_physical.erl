@@ -6,7 +6,7 @@
 -export_type([identity/0, candidates/0, witness/0, qualified/0]).
 
 %% Build agreement covers the observation plan separately from the routed artifact.
--type build() :: #{source := binary(), rtl := binary(), observation := binary()}.
+-type build() :: hls_observation_build:build().
 -doc "Exact input closure shared by the catalogue, proposed observations and finite comparison. probe identifies the checked candidate specification, not a simulator result.".
 -type identity() :: #{
     build := build(), checkpoint := binary(), netlist := binary(), probe := binary()
@@ -96,10 +96,18 @@
 -doc "Checks unique candidate bits, exact build/checkpoint/netlist/probe agreement, every nonreset finite comparison and actual native output-pin/parent-net membership. Requires a complete validated catalogue and at least one nonempty case. Rejects disagreement with {spacetime_physical, Reason}; does not invoke vendor tools or infer missing constants, aliases or causality.".
 -spec qualify(hls_spacetime_physical:physical(), candidates(), witness()) -> qualified().
 qualify(
-    Catalogue = #{build := Build, checkpoint := Checkpoint},
-    #{identity := Identity = #{build := Build, checkpoint := Checkpoint}, probes := Probes},
+    Catalogue = #{build := CatalogueBuild, checkpoint := CatalogueCheckpoint},
+    #{
+        identity := Identity = #{build := CandidateBuild, checkpoint := CandidateCheckpoint},
+        probes := Probes
+    },
     #{identity := WitnessIdentity, cases := Cases}
 ) ->
+    require(
+        hls_observation_build:match(CatalogueBuild, CandidateBuild) =:= ok andalso
+            CatalogueCheckpoint =:= CandidateCheckpoint,
+        catalogue_identity_mismatch
+    ),
     require(Identity =:= WitnessIdentity, identity_mismatch),
     identity(Identity),
     require(Probes =/= [], no_candidates),
@@ -121,12 +129,17 @@ qualify(_, _, _) ->
 %% Opaque identity bytes must be nonempty; orchestration verifies their actual file hashes.
 -spec identity(identity()) -> ok.
 identity(#{
-    build := #{source := Source, rtl := Rtl, observation := Observation},
+    build := Build,
     checkpoint := Checkpoint,
     netlist := Netlist,
     probe := Probe
 }) ->
-    lists:foreach(fun identifier/1, [Source, Rtl, Observation, Checkpoint, Netlist, Probe]).
+    case hls_observation_build:validate(Build) of
+        ok -> ok;
+        {error, {invalid_component, _Name, Value}} -> identifier(Value);
+        {error, invalid_shape} -> error({spacetime_physical, invalid_build_identity})
+    end,
+    lists:foreach(fun identifier/1, [Checkpoint, Netlist, Probe]).
 
 %% Invalid external identities must not silently become shared empty keys.
 -spec identifier(binary()) -> ok.

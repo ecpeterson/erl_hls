@@ -60,12 +60,34 @@ retained_interface_lowering_test() ->
         ?assertEqual(Lower:lower(Plan, Profile), Graph),
         ?assertEqual(xls_actor_observation:bindings(Plan, #{}),
             xls_actor_observation:bindings(Plan, #{}, Catalog)),
+        ProcessInterfaces = hls_logical_topology:interfaces(Plan),
+        ProcessInterface = maps:get(hls_dense_statem_fixture, ProcessInterfaces),
+        Mismatch = Plan#{interfaces := ProcessInterfaces#{
+            hls_dense_statem_fixture := ProcessInterface#{mailbox_capacity := 99}
+        }},
+        ?assertException(
+            error,
+            {compiler_process_interface_mismatch, hls_dense_statem_fixture, _, _},
+            Lower:lower(Mismatch, Profile, Catalog)
+        ),
+        ?assertException(
+            error,
+            {compiler_process_interface_mismatch, hls_dense_statem_fixture, _, _},
+            xls_actor_observation:bindings(Mismatch, #{}, Catalog)
+        ),
         Wrong = hls_actor_interface:from_modules([hls_dense_statem_fixture], hls_frame_layout:new(2)),
-        ?assertException(error, {badmatch, _}, Lower:lower(Plan, Profile, Wrong)),
         case Kind of
-            rectangle -> ?assertEqual(iolist_to_binary(xls_topology_family_dslx:emit(Plan, Profile)),
-                iolist_to_binary(xls_topology_family_dslx:render(Graph)));
-            scalar -> ok
+            rectangle ->
+                ?assertException(error, {badmatch, _}, Lower:lower(Plan, Profile, Wrong)),
+                ?assertEqual(
+                    iolist_to_binary(xls_topology_family_dslx:emit(Plan, Profile)),
+                    iolist_to_binary(xls_topology_family_dslx:render(Graph))
+                );
+            scalar ->
+                ?assertError(
+                    {physical_frame_layout_mismatch, hls_dense_statem_fixture, Layout, _},
+                    Lower:lower(Plan, Profile, Wrong)
+                )
         end
     end, [scalar, rectangle]).
 

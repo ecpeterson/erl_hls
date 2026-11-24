@@ -81,11 +81,11 @@ points(#{recipients := Recipients}) -> lists:sort([{Id, At} || #{actor := Id, at
 %% Bad limits and spatial bindings must fail before any inventory or hardware can be emitted.
 -spec reject_expansion(map(), pos_integer()) -> ok.
 reject_expansion(Normal, Count) ->
-    reject(fun() -> hls_protocol_topology:elaborate(Normal, Count-1) end),
+    reject(fun() -> hls_logical_topology:materialize(Normal, Count-1) end),
     [I] = maps:get(ingresses, Normal), [T | Ts] = maps:get(targets, I), [R | Rs] = maps:get(recipients, T),
     lists:foreach(fun(Recipients) ->
         Bad = Normal#{ingresses := [I#{targets := [T#{recipients := Recipients} | Ts]}]},
-        reject(fun() -> hls_protocol_topology:elaborate(Bad, 64) end)
+        reject(fun() -> hls_logical_topology:materialize(Bad, 64) end)
     end, [[R, R | Rs], [R#{family => absent} | Rs], [R#{offset => [1000,0]} | Rs]]).
 
 %% Direct API callers receive explicit missing-source, producer, port, recipient and coverage diagnostics.

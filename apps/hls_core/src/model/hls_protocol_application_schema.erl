@@ -20,7 +20,7 @@ Concrete retained host descriptors shared by application builders and runtime co
 ]).
 
 -doc "A retained logical actor, ingress or external identity, independent of wire endpoints.".
--type id() :: atom() | non_neg_integer() | tuple().
+-type id() :: hls_logical_identity:id().
 
 -doc "An application-chosen device key, independent of host addresses and process identities.".
 -type device() :: term().
@@ -28,13 +28,13 @@ Concrete retained host descriptors shared by application builders and runtime co
 -doc "A nonzero 16-bit host or service endpoint.".
 -type endpoint() :: 1..((1 bsl 16) - 1).
 
--doc "One globally indexed actor with its checked owner, declared outputs and retained record codecs.".
+-doc "One globally indexed actor with its canonical exact-or-family instance identity, checked owner, declared outputs and retained record codecs.".
 -type actor() :: #{
     id := id(),
     module := module(),
     outputs := [atom()],
     mailbox_capacity := pos_integer(),
-    identity := {actor, id()},
+    identity := hls_actor_identity:id(),
     index := non_neg_integer(),
     device := device(),
     schemas := hls_host_codec:catalog(),
@@ -63,10 +63,10 @@ Concrete retained host descriptors shared by application builders and runtime co
     frame_layout => hls_frame_layout:layout()
 }.
 
-%% Source ports and recipients are logical identities, not Erlang distribution addresses.
+%% Source ports and recipients use canonical actor-instance identities, not Erlang addresses.
 -type route() :: #{
-    source := {{actor, id()}, atom()},
-    recipients := [{actor, id()} | {external, id()}],
+    source := {hls_actor_identity:id(), atom()},
+    recipients := [hls_actor_identity:id() | {external, id()}],
     delivery := direct | coupled | buffered | queued | best_effort
 }.
 

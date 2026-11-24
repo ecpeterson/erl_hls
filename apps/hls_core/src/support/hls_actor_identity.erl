@@ -2,6 +2,13 @@
 -moduledoc "Stable encoding of logical actor identities for emitted observation manifests and live catalog lookup. Both sides hash the same deterministic Erlang term; this identifies a logical actor, not an incarnation or source revision.".
 %% Shared observation identity.
 -export([actor_key/1]).
+%% Stable logical observation identity.
+-export_type([id/0]).
+
+-doc "An exact actor or bounded family member, independent of process and placement identity.".
+-type id() ::
+    {actor, hls_logical_identity:id()}
+    | {family, hls_logical_identity:id(), [non_neg_integer()]}.
 
 -doc "Encodes a logical actor identity deterministically for catalog lookup.".
 -spec actor_key(term()) -> binary().

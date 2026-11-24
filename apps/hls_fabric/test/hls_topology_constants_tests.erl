@@ -5,11 +5,11 @@
 -spec closed_state_projection_test() -> ok.
 closed_state_projection_test() ->
     Plan = plan(false), Groups = groups(),
-    #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Groups),
+    Scheduler = #{groups := [Group]} = hls_scheduler_plan:normalize(Plan, Groups),
     #{state_projection := P, physical_data_width := 7} = Group,
     ?assertEqual([id, bias], maps:get(constants, P)),
     ?assertEqual([0, 1], [S || #{slot := S} <- maps:get(rows, P)]),
-    [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
+    [Binding] = xls_scheduler_ram_v:bindings(Scheduler),
     ?assertEqual(40, maps:get(state_width, Binding)),
     Requirements = xls_fabric_topology_dslx:artifact_requirements(Plan,
         #{name => projection_fixture, channel_depth => 1, actor_egress_depth => burst, scheduler_groups => Groups}),

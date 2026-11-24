@@ -42,6 +42,11 @@ exact_binding_rejections_test() ->
         xls_protocol_spacetime_capture:bundle(Plan, Trace, Build#{
             observation := <<"other-observation">>
         })
+    ),
+    ?assertException(
+        error,
+        {spacetime_build_binding, build, _, {invalid, {invalid_actual, invalid_shape}}},
+        xls_protocol_spacetime_capture:bundle(Plan, Trace, Build#{extra => <<"not-on-the-wire">>})
     ).
 
 %% Register-only plans retain a generic graph and disclose the absence of stream observation.

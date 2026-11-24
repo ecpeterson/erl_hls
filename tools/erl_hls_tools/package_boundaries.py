@@ -105,6 +105,17 @@ def violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
     return errors
 
 
+def policy_violations(snapshot: dict, runtimes: set[str], forbidden: set[str],
+                      release: Path | None = None) -> list[dict[str, str]]:
+    """Apply the requested boundary and keep core independent of every other inspected app."""
+    errors = violations(snapshot, runtimes, forbidden, release)
+    found = {app['name'] for app in snapshot['applications']}
+    if 'hls_core' in runtimes & found:
+        core_forbidden = found - {'hls_core'} - forbidden
+        errors.extend(violations(snapshot, {'hls_core'}, core_forbidden, None))
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     """Inspect one already-built profile and optionally its runtime-only release; never compile."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -125,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(result.stdout + result.stderr)
         return 1
     snapshot = json.loads(result.stdout)
-    errors = violations(snapshot, set(args.runtime), set(args.forbid), args.release)
+    errors = policy_violations(snapshot, set(args.runtime), set(args.forbid), args.release)
     report = snapshot | {'violations': errors, 'release': str(args.release) if args.release else None}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')

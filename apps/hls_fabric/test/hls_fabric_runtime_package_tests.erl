@@ -26,7 +26,9 @@ isolated_runtime() ->
             [binary, exit_status, stderr_to_stdout,
              {env, [{"ERL_LIBS", false}, {"ERL_AFLAGS", false}, {"ERL_FLAGS", false}]},
              {args, ["+S", "2:2", "+A", "2", "-noshell", "-sname", "fabric_runtime_" ++ Suffix,
-                 "-pa", filename:join(code:lib_dir(hls_fabric), "ebin"), filename:join(code:lib_dir(hls_runtime), "ebin"), Dir,
+                 "-pa", filename:join(code:lib_dir(hls_core), "ebin"),
+                 filename:join(code:lib_dir(hls_fabric), "ebin"),
+                 filename:join(code:lib_dir(hls_runtime), "ebin"), Dir,
                  "-runtime_fixture", Dir,
                  "-eval", "ok = hls_fabric_runtime_package_tests:witness(), halt(0)."]}]),
         await(Port, erlang:monotonic_time(millisecond) + 30000, <<>>)

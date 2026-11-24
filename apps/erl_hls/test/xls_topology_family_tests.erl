@@ -232,22 +232,23 @@ family_backend_rejects_route_fanout_test() ->
         xls_topology_dslx:emit(Plan, hls_grid_topology_fixture:profile())
     ).
 
-%% Checks family backend rejects stale lane cache.
+%% The family backend rejects reordered, missing, or extra cached core lanes.
 -spec family_backend_rejects_stale_lane_cache_test() -> ok.
 family_backend_rejects_stale_lane_cache_test() ->
     Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(3, 4)),
     Cached = maps:get(lane_relations, Plan),
-    Reversed = lists:reverse(Cached),
-    try xls_topology_dslx:emit(
-            Plan#{lane_relations := Reversed},
-            hls_grid_topology_fixture:profile()
-        ) of
-        _ -> ?assert(false)
-    catch
-        error:{inconsistent_dslx_family_plan_lanes, Expected, Actual} ->
-            ?assertEqual(Cached, Expected),
-            ?assertEqual(Reversed, Actual)
-    end.
+    Extra = #{source => stale, destination => {external, stale}, source_ports => []},
+    lists:foreach(
+        fun(Stale) ->
+            ?assertError(
+                {inconsistent_dslx_family_plan_lanes, Cached, Stale},
+                xls_topology_family_dslx:lower(
+                    Plan#{lane_relations := Stale}, hls_grid_topology_fixture:profile()
+                )
+            )
+        end,
+        [lists:reverse(Cached), [], Cached ++ [Extra]]
+    ).
 
 %% Checks family backend rejects headless plan.
 -spec family_backend_rejects_headless_plan_test() -> ok.

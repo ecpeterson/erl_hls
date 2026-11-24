@@ -39,14 +39,7 @@ write_config(Config, Base, Output) ->
     Profile = xls_topology_profile:normalize(Profile0),
     #{name := Name, frame_payload_words := Words} = Profile,
     Stages = maps:get(pipeline_stages, Config, 2),
-    case is_integer(Stages) andalso Stages > 0 of
-        true ->
-            ok;
-        false ->
-            fail(pipeline_stages, <<"Pipeline stage count must be a positive integer">>, #{
-                value => Stages
-            })
-    end,
+    Schedule = hls_implementation_constraints:standalone_topology_schedule(Stages),
     Imports = [filename:absname(Path, Base) || Path <- maps:get(dslx_path, Config, [])],
     _ = hls_compile:support_layout(Imports),
     Loaded = lists:foldl(fun(Source, Acc) -> load(Source, Base, Acc) end, #{}, Sources),
@@ -79,16 +72,8 @@ write_config(Config, Base, Output) ->
         module => unicode:characters_to_binary(Name),
         output => Rtl,
         dslx_path => [<<"actors">>, <<".">> | Support],
-        codegen_flags => [
-            iolist_to_binary(["--pipeline_stages=", integer_to_list(Stages)]),
-            <<"--delay_model=unit">>,
-            <<"--worst_case_throughput=1">>,
-            <<"--flop_inputs=false">>,
-            <<"--flop_outputs=true">>,
-            <<"--use_system_verilog=false">>,
-            <<"--reset=reset">>,
-            <<"--fifo_module=">>
-        ],
+        codegen_flags =>
+            hls_implementation_constraints:schedule_flags(Schedule, standalone_topology),
         rtl => [Rtl]
     },
     hls_artifact_bundle:finish(Directory, [Unit], #{

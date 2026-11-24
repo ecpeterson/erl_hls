@@ -20,7 +20,7 @@
 -doc "One independently stalled recipient output, packed at offset within the publisher's combined output.".
 -type output() :: #{
     index := non_neg_integer(),
-    destination := hls_protocol_topology:destination(),
+    destination := hls_logical_topology:destination(),
     offset := non_neg_integer(),
     width := pos_integer(),
     rows := [row()]
@@ -29,7 +29,7 @@
 -doc "One actor's immutable entry snapshot, per-recipient output wiring and pending-delivery masks.".
 -type source() :: #{
     index := non_neg_integer(),
-    actor := hls_protocol_topology:id(),
+    actor := hls_logical_topology:id(),
     payload_width := pos_integer(),
     snapshot_width := pos_integer(),
     destinations := pos_integer(),
@@ -73,12 +73,12 @@
         topology := #{
             actors := [
                 #{
-                    id := hls_protocol_topology:id(),
+                    id := hls_logical_topology:id(),
                     module := module(),
                     atom() => term()
                 }
             ],
-            routes := [hls_protocol_topology:route()],
+            routes := [hls_logical_topology:route()],
             atom() => term()
         },
         modules := #{module() => hls_local_actor:source() | hls_local_actor:artifact()},
@@ -113,7 +113,7 @@ plan(
 %% Original layout payloads are retained once; their width includes shared dynamic fields.
 -spec actor(
     non_neg_integer(),
-    hls_protocol_topology:id(),
+    hls_logical_topology:id(),
     xls_actor_codegen:spec(),
     hls_protocol_transactions:actor(),
     hls_protocol_capture:plan(),
@@ -187,8 +187,8 @@ actor(I, Id, Spec, #{batches := Batches}, Capture, Pairs) ->
 
 %% One physical output covers one logical destination, including all of its source ports.
 -spec recipient_rows(
-    hls_protocol_topology:id(),
-    hls_protocol_topology:destination(),
+    hls_logical_topology:id(),
+    hls_logical_topology:destination(),
     hls_protocol_transactions:batch(),
     [effect_projection()],
     hls_protocol_capture:plan(),
@@ -218,8 +218,8 @@ recipient_rows(
 
 %% Boundary recipients retain ordinary frames; internal links omit only certified source constants.
 -spec projection(
-    hls_protocol_topology:id(),
-    hls_protocol_topology:destination(),
+    hls_logical_topology:id(),
+    hls_logical_topology:destination(),
     atom(),
     atom(),
     [hls_protocol_projection:bit()],
@@ -287,7 +287,7 @@ projection(
 %% A retained reply is a complete dynamic frame, not an entry-field projection.
 %% The reply port has one dedicated external recipient so caller identity never
 %% passes through static internal capture slots or mixes with ordinary effects.
--spec reply_output(source(), xls_actor_codegen:spec(), [hls_protocol_topology:route()]) -> source().
+-spec reply_output(source(), xls_actor_codegen:spec(), [hls_logical_topology:route()]) -> source().
 reply_output(Source, #{retained_calls := none}, _Routes) ->
     Source;
 reply_output(
