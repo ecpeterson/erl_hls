@@ -205,8 +205,12 @@ def capture(args: argparse.Namespace) -> None:
         limits["timing_objects"] = args.max_timing_objects
         inventory += ("timing.json",)
         route.extend(["--spacetime-timing", "timing.json", "--spacetime-objects", str(args.max_timing_objects)])
+    if args.sta_endpoints and (not args.sta or not 1 <= args.sta_endpoints <= 100):
+        raise ValueError("ranked endpoint count requires --sta and a limit of 1 to 100")
     if args.sta:
         route.extend(["--spacetime-sta", "sta.json"])
+        if args.sta_endpoints:
+            route.extend(["--spacetime-sta-endpoints", str(args.sta_endpoints)])
         manifest["sta"] = {"unit": "ps", "model": "nextpnr-xilinx"}
         inventory += ("sta.json",)
     if focused:
@@ -354,6 +358,7 @@ def main() -> None:
     parser.add_argument("--route-checkpoint", help="require the exact routed JSON digest for a saved demand")
     parser.add_argument("--route-sta", action="store_true", help="capture nets on the reported STA paths of this route")
     parser.add_argument("--sta", action="store_true", help="export ordered native critical paths")
+    parser.add_argument("--sta-endpoints", type=int, default=0, help="also retain up to N distinct single-clock setup endpoints, ordered by slack (1–100)")
     parser.add_argument("--allow-timing-fail", action="store_true", help="retain a routed measurement when the clock target fails")
     for key in ("xdc", "apio-home", "chipdb"):
         parser.add_argument("--" + key, type=Path, required=True)

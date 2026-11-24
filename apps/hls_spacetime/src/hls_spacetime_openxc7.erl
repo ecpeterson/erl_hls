@@ -284,18 +284,30 @@ check_timing(
     Arcs = lists:append([maps:get(<<"arcs">>, C) || C <- maps:values(Cells)]),
     Ports = lists:append([maps:values(maps:get(<<"ports">>, C)) || C <- maps:values(Cells)]),
     ClockRows = lists:sum([length(maps:get(<<"clocks">>, P)) || P <- Ports]),
+    Buffers = [B || #{<<"lut_buffer">> := B} <- maps:values(Cells)],
+    check(lists:all(fun valid_buffer/1, Buffers), lut_buffer),
     RouteRows = lists:sum([
         length(maps:get(<<"aliases">>, N)) + length(maps:get(<<"pins">>, N)) +
             map_size(maps:get(<<"wires">>, N))
      || N <- maps:values(Selected)
     ]),
     check(
-        map_size(Cells) + length(Ports) + ClockRows + length(Arcs) + length(Sinks) + RouteRows =:=
-            Count,
+        map_size(Cells) + length(Ports) + ClockRows + length(Arcs) + length(Sinks) + RouteRows +
+            length(Buffers) =:= Count,
         timing_count
     ),
     check(length([ok || #{<<"delay_ps">> := null} <- Arcs ++ Sinks]) =:= Missing, missing_delays);
 check_timing(Data, _, _) when not is_map_key(<<"timing.json">>, Data) -> ok.
+
+%% Packer observations retain the input/output nets even if the input lacks a driver.
+-spec valid_buffer(map()) -> boolean().
+valid_buffer(#{
+    <<"input_net">> := In, <<"output_net">> := Out, <<"driver">> := D, <<"driver_port">> := P
+}) ->
+    is_binary(In) andalso is_binary(Out) andalso In =/= Out andalso
+        ((D =:= null andalso P =:= null) orelse (is_binary(D) andalso is_binary(P)));
+valid_buffer(_) ->
+    false.
 
 %% Check route selection against packed net identities and retain the timed pin census.
 -spec nets(map(), map(), map()) -> [map()].

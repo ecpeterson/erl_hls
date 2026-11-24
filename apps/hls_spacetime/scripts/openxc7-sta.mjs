@@ -9,6 +9,19 @@ export function openxc7Paths(report, top) {
       Array.isArray(report.paths) &&
       report.paths.length <= 100,
   );
+  const ranked = report.ranked_endpoints;
+  if (ranked !== undefined) {
+    check(
+      Array.isArray(ranked) &&
+        Number.isSafeInteger(report.endpoint_limit) &&
+        report.endpoint_limit > 0 &&
+        report.endpoint_limit <= 100 &&
+        Number.isSafeInteger(report.eligible_endpoints) &&
+        report.eligible_endpoints >= 0 &&
+        ranked.length ===
+          Math.min(report.endpoint_limit, report.eligible_endpoints),
+    );
+  }
   const fanout = new Map();
   for (const cell of Object.values(top.cells)) {
     for (const [p, bits] of Object.entries(cell.connections)) {
@@ -18,7 +31,10 @@ export function openxc7Paths(report, top) {
   }
   const paths = [],
     unchecked = [];
-  for (const [index, path] of report.paths.entries()) {
+  const seen = new Set();
+  let priorSlack = -Infinity;
+  for (const [index, path] of report.paths.concat(ranked ?? []).entries()) {
+    const rank = index - report.paths.length;
     const points = path.points;
     check(Array.isArray(points) && points.length && points.length <= 513);
     let total = 0;
@@ -88,9 +104,17 @@ export function openxc7Paths(report, top) {
       steps.push(step);
     }
     check(steps.at(-1).pin === setup.cell + "/" + setup.port);
+    if (ranked && rank < 0) continue;
+    if (ranked) {
+      const endpoint = steps.at(-1).pin;
+      check(!seen.has(endpoint) && path.slack_ps >= priorSlack);
+      seen.add(endpoint);
+      priorSlack = path.slack_ps;
+    }
     const dataPs = total - setup.delay_ps;
     paths.push({
-      id: `setup/${index}`,
+      id: `setup/${ranked ? rank : index}`,
+      ...(ranked && { rank: rank + 1 }),
       source: steps[0].pin,
       launchPin: steps[0].pin,
       endpoint: steps.at(-1).pin,
@@ -107,5 +131,11 @@ export function openxc7Paths(report, top) {
       arcs,
     });
   }
-  return { paths, unchecked };
+  const ranking = ranked && {
+    selection: "least_slack_per_capture_pin",
+    eligible: report.eligible_endpoints,
+    limit: report.endpoint_limit,
+    retained: ranked.length,
+  };
+  return { paths, unchecked, ranking };
 }

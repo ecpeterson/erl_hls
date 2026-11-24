@@ -24,7 +24,37 @@ export function nativePaths(model) {
     "path limit exceeded",
   );
   const ids = new Set();
+  const ranking = detail.ranking;
+  if (ranking) {
+    fail(
+      ranking.selection === "least_slack_per_capture_pin" &&
+        Number.isSafeInteger(ranking.eligible) &&
+        ranking.eligible >= 0 &&
+        Number.isSafeInteger(ranking.limit) &&
+        ranking.limit > 0 &&
+        ranking.limit <= 100 &&
+        ranking.retained === Math.min(ranking.limit, ranking.eligible) &&
+        detail.paths.length <= ranking.retained,
+      "invalid endpoint population",
+    );
+  }
+  let lastRank = 0,
+    lastSlack = -Infinity;
+  const rankedPins = new Set();
   for (const path of detail.paths) {
+    if (ranking) {
+      fail(
+        Number.isSafeInteger(path.rank) &&
+          path.rank > lastRank &&
+          path.rank <= ranking.retained &&
+          path.slackNs >= lastSlack &&
+          !rankedPins.has(path.endpoint),
+        "invalid ranked endpoint",
+      );
+      lastRank = path.rank;
+      lastSlack = path.slackNs;
+      rankedPins.add(path.endpoint);
+    }
     fail(
       typeof path.id === "string" && !ids.has(path.id),
       "duplicate/invalid path ID",

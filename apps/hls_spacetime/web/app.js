@@ -335,7 +335,9 @@ async function loadDocument(
   for (const path of state.nativePaths)
     $("native-path").add(
       new Option(
-        `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
+        path.rank
+          ? `#${path.rank} · ${path.slackNs} ns slack · ${path.endpoint}`
+          : `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
         path.id,
       ),
     );
@@ -1485,6 +1487,7 @@ function storagePoints(segment) {
  * from recorded use. Per-arc rows disclose gaps instead of drawing fanout trees. */
 function renderNativePath() {
   const path = state.nativePath;
+  const ranking = state.model?.document.nativePaths?.ranking;
   const routes = path
     ? path.arcs.flatMap((arc, i) => {
         const route = state.nativeRoutes.get(`${path.id}/${i}`);
@@ -1505,6 +1508,9 @@ function renderNativePath() {
     : state.nativePaths.length
       ? "Select a saved static path to inspect its ordered combinational logic and routing, independently of this clock's execution."
       : "Native timing-path detail is unavailable for this capture.";
+  if (ranking)
+    $("native-path-summary").textContent +=
+      ` Ranked ${ranking.retained} of ${ranking.eligible.toLocaleString()} eligible capture pins by setup slack.`;
   $("native-path-steps").innerHTML = path
     ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps
         .map((step, i) => {

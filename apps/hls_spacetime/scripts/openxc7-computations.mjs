@@ -61,6 +61,36 @@ function carryDependency(input, output) {
   );
 }
 
+/** Qualify a packer-created LUT1 tied low before physical pin sharing. Check the
+ * surviving output, the original driver, and the LUT6 half selected by tied-high A6.
+ * With no input correspondence its configured upper half repeats INIT[0]. */
+function groundedBuffer(cell, raw, drivers) {
+  const buffer = raw.lut_buffer;
+  if (!buffer || cell.type !== "SLICE_LUTX") return false;
+  const attrs = cell.attributes,
+    output = raw.ports.O6,
+    source = drivers.get(buffer.input_net),
+    select = drivers.get(raw.ports.A6?.net);
+  return (
+    attrs.X_ORIG_TYPE === "LUT1" &&
+    attrs.X_ORIG_PORT_O6 === "O" &&
+    /\/[^/]*6LUT$/.test(attrs.NEXTPNR_BEL) &&
+    /^0*10$/.test(cell.parameters?.INIT) &&
+    !Object.keys(attrs).some((key) => /^X_ORIG_PORT_A[1-6]$/.test(key)) &&
+    !Object.hasOwn(attrs, "X_LUT_AS_SRL") &&
+    !Object.hasOwn(attrs, "X_LUT_AS_DRAM") &&
+    Object.values(raw.ports).filter((p) => p.direction === "OUT").length ===
+      1 &&
+    output?.bound === true &&
+    output.net === buffer.output_net &&
+    source?.type === "PSEUDO_GND" &&
+    source.cell === buffer.driver &&
+    source.port === buffer.driver_port &&
+    raw.ports.A6?.bound === true &&
+    select?.type === "PSEUDO_VCC"
+  );
+}
+
 /** Build only measured net arcs and LUT inputs, preserving missing delays and unqualified bits. */
 export function openxc7Computations(
   view,
@@ -77,6 +107,16 @@ export function openxc7Computations(
     pinIndex = new Map(),
     netIndex = new Map();
   const cellNames = Object.keys(packed).sort();
+  const constants = new Map();
+  for (const [cell, raw] of Object.entries(timing.cells)) {
+    if (!["PSEUDO_GND", "PSEUDO_VCC"].includes(raw.type)) continue;
+    for (const [port, p] of Object.entries(raw.ports)) {
+      if (p.direction !== "OUT" || !p.bound) continue;
+      if (constants.has(p.net))
+        throw Error("Conflicting native constant drivers");
+      constants.set(p.net, { cell, port, type: raw.type });
+    }
+  }
   const roots = timing.roots ?? [];
   if (
     Object.keys(timing.cells).some((id) => !Object.hasOwn(packed, id)) ||
@@ -118,7 +158,9 @@ export function openxc7Computations(
       modelInfo.bram_model_sha256 &&
       /^(RAMB18E1_RAMB18E1|RAMB36E1_RAMB36E1)$/.test(kind)
         ? "hard_block"
-        : boundary(cell);
+        : groundedBuffer(cell, raw, constants)
+          ? "constant"
+          : boundary(cell);
     const index = cells.length;
     cells.push({ id, kind, boundary: cellBoundary });
     for (const [port, p] of Object.entries(raw.ports)) {

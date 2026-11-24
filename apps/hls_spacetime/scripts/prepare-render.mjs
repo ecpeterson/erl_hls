@@ -14,6 +14,7 @@ import {
 import { resolve, dirname, join, relative, isAbsolute } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { publishOpenxc7Regions } from "./prepare-regions.mjs";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { encodePrimitive } from "../web/prepared-format.js";
@@ -455,15 +456,25 @@ export async function prepareRender({
   openxc7,
   chipdb,
   constids,
+  regionBinSize,
 }) {
   check(input && output, "input and output are required");
   check(
     (!openxc7 && !chipdb && !constids) || (openxc7 && chipdb && constids),
     "interval geometry requires --openxc7, --chipdb and --constids together",
   );
+  check(
+    regionBinSize === undefined ||
+      (openxc7 &&
+        Number.isInteger(regionBinSize) &&
+        regionBinSize > 0 &&
+        regionBinSize <= 4096),
+    "regional bin size needs an XC7 capture and 1–4096 tiles",
+  );
   const root = resolve(input),
     out = resolve(output),
-    index = JSON.parse(await bytes(join(root, "index.json"), 4 * MiB));
+    indexBytes = await bytes(join(root, "index.json"), 4 * MiB),
+    index = JSON.parse(indexBytes);
   check(
     index.format === "spacetime-view-index" &&
       index.schema === 1 &&
@@ -544,6 +555,48 @@ export async function prepareRender({
     sha256: hash(manifestBytes),
   };
   const example = { ...entry, render };
+  if (entry.latencyProfile) {
+    const ref = entry.latencyProfile;
+    await retain(pathIn(root, ref.file), pathIn(out, ref.file), ref, 4 * MiB);
+  }
+  if (regionBinSize) {
+    const { regions } = await publishOpenxc7Regions({
+      model,
+      source,
+      entry,
+      indexBytes,
+      output: join(out, "regions"),
+      capture: openxc7,
+      chipdb,
+      constids,
+      binSize: regionBinSize,
+    });
+    example.regions = { ...regions, file: "regions/" + regions.file };
+  } else if (entry.regions) {
+    const ref = entry.regions,
+      from = pathIn(root, ref.file),
+      to = pathIn(out, ref.file);
+    const regions = JSON.parse(await verified(from, ref, MiB));
+    check(
+      regions.view?.sha256 === entry.sha256 &&
+        regions.source?.sha256 === entry.computations.sha256 &&
+        Array.isArray(regions.parts) &&
+        regions.parts.length <= 256,
+      "regional source mismatch",
+    );
+    await retain(from, to, ref, MiB);
+    let total = ref.bytes;
+    for (const part of regions.parts) {
+      total += part.bytes;
+      check(total <= 64 * MiB, "regional data exceeds 64 MiB");
+      await retain(
+        pathIn(dirname(from), part.file),
+        pathIn(dirname(to), part.file),
+        part,
+        8 * MiB,
+      );
+    }
+  }
   delete example.geometry;
   if (openxc7) {
     const publisher = fileURLToPath(
@@ -586,12 +639,15 @@ export function parseArguments(args) {
         "--openxc7",
         "--chipdb",
         "--constids",
+        "--region-bin-size",
       ].includes(args[i]) &&
         args[i + 1] &&
         !args[i + 1].startsWith("--"),
       "invalid option",
     );
-    options[args[i].slice(2)] = args[i + 1];
+    if (args[i] === "--region-bin-size")
+      options.regionBinSize = Number(args[i + 1]);
+    else options[args[i].slice(2)] = args[i + 1];
   }
   return options;
 }
@@ -601,7 +657,7 @@ if (
 ) {
   if (process.argv.includes("--help"))
     console.log(
-      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE] [--openxc7 CAPTURE --chipdb CHIPDB --constids CONSTIDS]",
+      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE] [--openxc7 CAPTURE --chipdb CHIPDB --constids CONSTIDS [--region-bin-size TILES]]",
     );
   else
     prepareRender(parseArguments(process.argv.slice(2)))

@@ -1,0 +1,196 @@
+{
+  "scope": "Finite N2 replay and post-route structural timing on XC7Z030-1. Vivado reference is the archived XCZU7EV placement.",
+  "implementation": "144319d58afed647e6a5d59e6b691c000fe9d4a7323aa02e173fb31d9de815c7",
+  "routed": {
+    "bytes": 131781609,
+    "sha256": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb"
+  },
+  "chipdb": {
+    "bytes": 205235792,
+    "sha256": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba"
+  },
+  "observer": {
+    "commit": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+    "sha256": {
+      "eigen.tar.gz": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72",
+      "install_native.py": "9cbb097b76ad00db3b54830647d733ea5c9f5e0251aea8c4409cdfbf3ecb3b3c",
+      "nextpnr-coverage.patch": "6fe14d0df5a7abf9c45c53a0d74f9e410f0685370c4fb93ae5e5780e16e7bb9e",
+      "nextpnr-output-pin.patch": "af4f322db2fb581ecc695ab289e1708743f0234d54dbc546d910ade8e5cf21ad",
+      "nextpnr-pin-origins.patch": "61541440af12696957cf46aa64082f535e46d34b7727c2c140ca241a2791b865",
+      "nextpnr-spacetime": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+      "nextpnr-spacetime-carry.patch": "7085df5bc73bdf3e4428c9e775e3c27f0f00d51a52214d55733296a1447c1b80",
+      "nextpnr-spacetime-endpoints.patch": "75be24b99f7288b4d878769bc2be31c43d87c99b792e266dc5d14a16a2812247",
+      "nextpnr-spacetime-sta.patch": "23c1b398be819e4cbc70c81d48208ed768d7929097a63da5aeac6beb468a520e",
+      "nextpnr-spacetime.patch": "bf6b27bbee4f2cb2f57d0c32cbb7c50b5926c628f4456937e369f67f9b9c5439",
+      "nextpnr.tar.gz": "5652a7356b1c8ae67355c9bdcd96d88e5592d9eface9ea4b60584a9460824439",
+      "spacetime.h": "de353ddb67785021ae173eccfa052ffd9deafef6adba860ffdefd64283f196b1",
+      "xc7_bram_model.inc": "72d704b1c54de11f24083e0ceb85c57604453cba88c5fcb8c9bab23905be9c9e"
+    }
+  },
+  "replay": {
+    "cycles": 2369,
+    "taps": 592,
+    "tap_bits_per_cycle": 18335,
+    "trace_sha256": "587435348ca6201ebb1e32a1b9e772e07b7af0ee3572edf27d09e388281aa8f2",
+    "rtl_sha256": [
+      "fb342b4526c6dcb39401063d37bd10795476c3d9b39987de2293ebbe5de09599",
+      "3c8f2ec0717e8145187b9718adb2b413d63fef158a3cadd829752a6ed30d9972",
+      "087572031b9560b9a5d543e59e4fa8015a0790fa10abca28884c3baa4903d2d8",
+      "ba18afdc61281ef4c34e0b5ff69d03ca018a17c61ee0a2257f6b79b3f4460d6e",
+      "851249c2337a4393d2e87dee28a643a67bb165ce4bf09c489df72aeaae55299f",
+      "14c235ba2f4d24ccbd4ea6145eff285d239940e43b866d025eb1e64fbb002941",
+      "4ba1acced0857a5fbd46ce722b9b51d30af2b01234705a3bf13bb1a4d1041314"
+    ],
+    "verilator": "Verilator 5.047 devel rev v5.046-152-g3b328d2bb (mod)"
+  },
+  "matchedWritesSha256": "3faf231a2ef9e3dfb2c7444eb2acedcb99a2b36a60404abcef2b9cfd926b0a75",
+  "registeredData": {
+    "known": 468
+  },
+  "selectedWrite": {
+    "event": "e/25066",
+    "resource": "register/____state_154",
+    "bit": 202,
+    "registeredNs": 38.64600000000001,
+    "eligible": 528,
+    "total": 528,
+    "sink": "$auto$ff.cc:337:slice$41690/D"
+  },
+  "viewer": {
+    "checkpoint": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb",
+    "events": 61764,
+    "operations": {
+      "register_write": 7637,
+      "operand_read": 1807,
+      "operand_value": 1807,
+      "accept": 728,
+      "phase_boundary": 405,
+      "head_done": 728,
+      "take": 726,
+      "publication_accept": 357,
+      "arrival": 708,
+      "acquire": 708,
+      "postpone": 2,
+      "release": 708,
+      "public_frame": 30,
+      "boundary_transfer": 28,
+      "register_compute": 6929,
+      "selected_operand_read": 19228,
+      "selected_operand_value": 19228
+    },
+    "versions": 151134,
+    "boundaries": 10,
+    "profile": {
+      "groups": 1186,
+      "edges": 3359,
+      "choices": 5
+    },
+    "ranking": {
+      "selection": "least_slack_per_capture_pin",
+      "eligible": 11671,
+      "limit": 50,
+      "retained": 50
+    },
+    "lastSlackNs": -46.944,
+    "staGeometry": {
+      "resolved": 3522
+    },
+    "regional": {
+      "cells": 36269,
+      "pips": 542316,
+      "nets": 39811,
+      "bins": 182,
+      "unknownCellKinds": 0,
+      "unknownCellPositions": 0,
+      "unknownPipPositions": 0,
+      "unknownPipDirections": 0,
+      "wireMemberships": 1381401,
+      "locatedWireMemberships": 1381401,
+      "unknownWireMemberships": 0,
+      "netsWithUnknownPositions": 0,
+      "netsWithoutLocatedResources": 2012,
+      "netBinIncidences": 61585,
+      "pipNetIncidences": 542316
+    },
+    "selectedNetWireHistograms": 237
+  },
+  "interval": {
+    "counts": {
+      "direct": 50333,
+      "disconnected_constant": 2409,
+      "lut_permutation": 56849
+    },
+    "overlapping": 1919,
+    "localTies": 172,
+    "nodes": 497856,
+    "pips": 462229,
+    "branches": 109591,
+    "writes": 468
+  },
+  "fixtureRanking": {
+    "ranked_endpoints": 3,
+    "eligible_chains": 15,
+    "slack_ps": 7065,
+    "delay_ps": 2935
+  },
+  "publication": {
+    "file": "recording.json",
+    "title": "Repetition N2 · openXC7 · step 4",
+    "bytes": 105316059,
+    "sha256": "8d1311cdeb3d5ae1012a80272aef5fe5faef36b9f84613651ddb58eccf50eec3",
+    "computations": {
+      "file": "computations/manifest.json",
+      "bytes": 5426,
+      "sha256": "026d54b488bb251d7cdf5ee91db5557461bb93922fa9b556e3e0351924d15f9c"
+    },
+    "render": {
+      "file": "render/manifest.json",
+      "bytes": 5517,
+      "sha256": "6a76703290c7c7f79d2ce8f31423ae05eae9005dfea9df2cb22036824137d2d1"
+    },
+    "regions": {
+      "file": "regions/manifest.json",
+      "bytes": 2454,
+      "sha256": "56273e0e25ce4ae19a6e8a194506a166cd9ac7423f4898aeec9174d3bf3d2170"
+    },
+    "geometry": {
+      "file": "geometry/manifest.json",
+      "bytes": 170570,
+      "sha256": "d5276e4158a0ea4921633add56151556e24ef37c0007d58d20cfb861cc5b9bb2"
+    },
+    "latencyProfile": {
+      "file": "latency-profile.json",
+      "bytes": 1209630,
+      "sha256": "62358b8cdd29bff21c261c547123f49d3a1c461e6b6cd30a45a35b956c780367"
+    }
+  },
+  "localWitness": {
+    "seconds": 206.71754829213023,
+    "peakGroupRssBytes": 3030253568,
+    "guardSeconds": 1200,
+    "guardRssGiB": 6
+  },
+  "browser": [
+    "XC7 and Vivado selected bit 202, opened the regional resource map and evaluated a conditional latency scenario",
+    "XC7 inspected ranked endpoint 50 and the 74 resolved branches at that endpoint"
+  ],
+  "archive": "hls_artifacts/runs/spacetime-g4-parity-2026-11-24/g44-coverage",
+  "files": {
+    "evidence.tar.gz": {
+      "bytes": 74141,
+      "sha256": "8024b0e05b384ef4ece49ecf79ce5fd98cc7bf6b3e0702f2618099b688de8ae6"
+    },
+    "native.tar.gz": {
+      "bytes": 24886956,
+      "sha256": "8737e15bb06620571223b8d4b11a33a26b3fbf9098b171d6a1d8684daceb93a9"
+    },
+    "prepared.tar.gz": {
+      "bytes": 72072539,
+      "sha256": "846901d83ce19213dfc4e06e4666685a7ccc7ab6175074b9b4c65469ca416616"
+    },
+    "reproduction.tar.gz": {
+      "bytes": 7721819,
+      "sha256": "07cc1c6a29781d7adf6fa8c26ef698eb47cd28a34f29437e761e782a71af426d"
+    }
+  }
+}

@@ -209,3 +209,71 @@ test("XC7 carry and mux dependencies require the original primitive and correct 
     assert.ok(result.arcs.every((a) => a.timing.delayPs === null));
   }
 });
+
+test("only a corroborated packer buffer with a constant configured LUT half stops the data cone", async (t) => {
+  const { view } = await sourceFixture(t);
+  const packed = {
+    zero: { type: "PSEUDO_GND", attributes: {} },
+    one: { type: "PSEUDO_VCC", attributes: {} },
+    buffer: {
+      type: "SLICE_LUTX",
+      attributes: {
+        X_ORIG_TYPE: "LUT1",
+        X_ORIG_PORT_O6: "O",
+        NEXTPNR_BEL: "SLICE_X1Y0/A6LUT",
+      },
+      parameters: { INIT: "0010" },
+    },
+  };
+  const port = (net, direction, cls) => ({
+    net,
+    direction,
+    class: cls,
+    bound: true,
+  });
+  const cells = {
+    zero: {
+      type: "PSEUDO_GND",
+      ports: { Y: port("low", "OUT", "ignore") },
+      arcs: [],
+    },
+    one: {
+      type: "PSEUDO_VCC",
+      ports: { Y: port("high", "OUT", "ignore") },
+      arcs: [],
+    },
+    buffer: {
+      type: "SLICE_LUTX",
+      ports: {
+        A2: port("changing", "IN", "comb_input"),
+        A6: port("high", "IN", "comb_input"),
+        O6: port("forwarded", "OUT", "comb_output"),
+      },
+      arcs: [],
+      lut_buffer: {
+        input_net: "low",
+        output_net: "forwarded",
+        driver: "zero",
+        driver_port: "Y",
+      },
+    },
+  };
+  const boundary = (p, c) =>
+    openxc7Computations(view, p, { cells: c, sinks: [] }, [], {}).cells.find(
+      (x) => x.id === "buffer",
+    ).boundary;
+  assert.equal(boundary(packed, cells), "constant");
+  for (const change of [
+    (p, c) => delete c.buffer.lut_buffer,
+    (p, c) => (c.buffer.lut_buffer.driver = "unknown"),
+    (p, c) => (c.buffer.lut_buffer.output_net = "foreign"),
+    (p, c) => (c.buffer.ports.A6.bound = false),
+    (p) => (p.buffer.parameters.INIT = "11"),
+    (p) => (p.buffer.attributes.X_ORIG_PORT_A2 = "I0"),
+  ]) {
+    const p = structuredClone(packed),
+      c = structuredClone(cells);
+    change(p, c);
+    assert.equal(boundary(p, c), "combinational");
+  }
+});

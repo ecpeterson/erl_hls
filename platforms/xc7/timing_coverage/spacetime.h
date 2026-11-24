@@ -1,7 +1,7 @@
 // Optional observer for the pinned nextpnr-xilinx backend. All delays use its native ps unit.
 // Included by xilinx/main.cc after json11.hpp and USING_NEXTPNR_NAMESPACE.
 NEXTPNR_NAMESPACE_BEGIN
-void writeSpacetimeSta(Context *ctx, const std::string &file, int limit);
+void writeSpacetimeSta(Context *ctx, const std::string &file, int limit, int endpoints);
 NEXTPNR_NAMESPACE_END
 
 namespace {
@@ -104,7 +104,8 @@ void markSpacetimeOrigins(Context *ctx, int limit, const SpacetimeCells &roots)
 }
 
 // Query the same cell and sink delay APIs used by the timing walk, retaining unknown answers.
-void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, const std::string &route_request, const SpacetimeCells &roots, const std::string &sta_file)
+void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, const std::string &route_request,
+                          const SpacetimeCells &roots, const std::string &sta_file, const Json::object &lut_buffers)
 {
     const int maximum = limit;
     int route_work = 32 * limit;
@@ -129,10 +130,11 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
             std::string raw((std::istreambuf_iterator<char>(sta)), {});
             auto report = Json::parse(raw, error);
             if (!error.empty() || !report["paths"].is_array()) log_error("Invalid Spacetime STA report\n");
-            for (const auto &path : report["paths"].array_items())
-                for (const auto &point : path["points"].array_items())
-                    if (point["kind"].string_value() == "net")
-                        selected[point["net"].string_value()] = Json();
+            for (const char *group : {"paths", "ranked_endpoints"})
+                for (const auto &path : report[group].array_items())
+                    for (const auto &point : path["points"].array_items())
+                        if (point["kind"].string_value() == "net")
+                            selected[point["net"].string_value()] = Json();
         }
         for (const auto &root : request["data_roots"].array_items()) {
             IdString name = ctx->id(root.string_value());
@@ -211,7 +213,13 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
                     {"model", model}, {"delay_ps", valid ? Json(delay.maxDelay()) : Json()}});
             }
         }
-        cells[cell->name.str(ctx)] = Json::object{{"type", cell->type.str(ctx)}, {"ports", ports}, {"arcs", arcs}};
+        Json::object row{{"type", cell->type.str(ctx)}, {"ports", ports}, {"arcs", arcs}};
+        auto buffer = lut_buffers.find(cell->name.str(ctx));
+        if (buffer != lut_buffers.end()) {
+            chargeSpacetime(limit);
+            row.emplace("lut_buffer", buffer->second);
+        }
+        cells[cell->name.str(ctx)] = std::move(row);
     }
     for (const auto &item : ctx->nets) {
         const NetInfo *net = item.second.get();

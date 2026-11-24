@@ -4,6 +4,7 @@
 import { readFile, stat, mkdir, writeFile, realpath } from "node:fs/promises";
 import { resolve, join, relative, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { createModel } from "../web/model.js";
@@ -32,7 +33,11 @@ function coordinates(row) {
  * and cell indexes retain source order; PIP identity is global and independent of
  * net/branch/clock occurrence. Native wire membership counts are per net, not
  * physical lengths or a claimed inventory of available routing resources. */
-export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
+export function prepareRegionalData(
+  model,
+  source,
+  { binSize = 16, census } = {},
+) {
   check(
     model.catalogue?.coordinate_unit === "tile_grid",
     "explicit tile_grid catalogue required",
@@ -43,7 +48,9 @@ export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
   );
   const native = createComputations(model, source.attachment, source.routeNets);
   check(
-    native.attachment.routingComplete === true,
+    census
+      ? census.checkpoint === model.catalogue.checkpoint
+      : native.attachment.routingComplete === true,
     "complete native route population required",
   );
   const binMap = new Map(),
@@ -70,7 +77,12 @@ export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
     if (bin !== null) binMap.get(bin).cells.add(id);
     return { id: cell.id, kind: cell.kind ?? null, ...position, bin };
   });
-  const routeMap = new Map(source.routeNets.map((row) => [row.id, row]));
+  const routes = census ? censusRoutes(census, binSize) : source.routeNets;
+  const routeMap = new Map(routes.map((row) => [row.id, row]));
+  check(
+    routeMap.size === routes.length && routes.length === native.nets.length,
+    "route census differs from canonical nets",
+  );
   const nets = native.nets.map((net, id) => {
     const route = routeMap.get(net.id);
     check(route, "canonical net lacks routing record");
@@ -82,12 +94,13 @@ export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
       locatedWireCount = 0;
     for (const node of route.nodes)
       for (const wire of node.wires) {
-        wireCount++;
+        const count = wire.memberships ?? 1;
+        wireCount += count;
         const key = binFor(coordinates(wire));
         if (key === null) unknownWires.push(wire.id);
         else {
-          locatedWireCount++;
-          wireBins.set(key, (wireBins.get(key) ?? 0) + 1);
+          locatedWireCount += count;
+          wireBins.set(key, (wireBins.get(key) ?? 0) + count);
           bins.add(key);
           binMap.get(key).nets.add(id);
         }
@@ -165,15 +178,11 @@ export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
       pins: native.pins.length,
       nets: native.nets.length,
       arcs: native.arcs.length,
-      routeNets: source.routeNets.length,
-      pipMemberships: source.routeNets.reduce(
-        (n, net) => n + net.pips.length,
-        0,
-      ),
-      wireMemberships: source.routeNets.reduce(
-        (n, net) => n + net.nodes.reduce((m, node) => m + node.wires.length, 0),
-        0,
-      ),
+      routeNets: routes.length,
+      pipMemberships: routes.reduce((n, net) => n + net.pips.length, 0),
+      wireMemberships:
+        census?.wireMemberships ??
+        nets.reduce((n, net) => n + net.wireCount, 0),
     },
     cells,
     pips,
@@ -184,6 +193,72 @@ export function prepareRegionalData(model, source, { binSize = 16 } = {}) {
   createRegionalData(model, data);
   return data;
 }
+/** Convert the whole-device switch census and exact per-bin wire multiplicities to
+ * the same incidence tables used by the Vivado route-graph importer. */
+function censusRoutes(census, binSize) {
+  const tiles = new Map(census.tiles.map((name, id) => [name, id]));
+  return census.nets.map(([id, switches, bins]) => ({
+    id,
+    status: "complete",
+    route_status: bins.length ? "BOUND_WIRES" : "NO_BOUND_WIRES",
+    nodes: [
+      {
+        wires: bins.map(([x, y, memberships]) => ({
+          x: x * binSize,
+          y: y * binSize,
+          memberships,
+        })),
+      },
+    ],
+    pips: switches.map((id) => {
+      const tile = id.slice(0, id.lastIndexOf("/")),
+        index = tiles.get(tile);
+      check(index !== undefined, "unknown switch tile");
+      return {
+        id,
+        tile,
+        x: index % census.width,
+        y: Math.floor(index / census.width),
+        direction_status: "directional",
+      };
+    }),
+  }));
+}
+
+/** Derive an optional regional publication from every bound wire and fixed switch on
+ * the exact routed checkpoint; the selected branch tables keep their own scope. */
+export async function publishOpenxc7Regions({
+  model,
+  source,
+  entry,
+  indexBytes,
+  output,
+  capture,
+  chipdb,
+  constids,
+  binSize,
+}) {
+  const reader = fileURLToPath(
+    new URL("../../hls_target/priv/tools/openxc7_regions.py", import.meta.url),
+  );
+  const census = JSON.parse(
+    execFileSync(
+      "python3",
+      [
+        reader,
+        capture,
+        model.bundle.build.implementation,
+        chipdb,
+        constids,
+        String(binSize),
+      ],
+      { maxBuffer: 64 * MiB, stdio: ["ignore", "pipe", "inherit"] },
+    ),
+  );
+  const data = prepareRegionalData(model, source, { binSize, census });
+  return writeRegionalTables(output, data, entry, indexBytes, true);
+}
+
 function localPath(root, file) {
   check(
     typeof file === "string" &&
@@ -279,6 +354,18 @@ export async function prepareRegions({ input, output, capture, binSize = 16 }) {
   const data = prepareRegionalData(createModel(JSON.parse(viewBytes)), source, {
     binSize,
   });
+  return writeRegionalTables(out, data, entry, indexBytes);
+}
+
+/** Shard an integrity-checked regional data set. Compact native PIP rows preserve
+ * all identities and memberships within the common 64 MiB decoded transfer limit. */
+async function writeRegionalTables(
+  out,
+  data,
+  entry,
+  indexBytes,
+  compact = false,
+) {
   await mkdir(out);
   const parts = [],
     totals = {};
@@ -297,6 +384,7 @@ export async function prepareRegions({ input, output, capture, binSize = 16 }) {
       parts.push({
         file,
         table,
+        ...(compact && table === "pips" ? { encoding: "xc7-switch-v1" } : {}),
         rows: rows.length,
         bytes: body.length,
         sha256: hash(body),
@@ -305,7 +393,9 @@ export async function prepareRegions({ input, output, capture, binSize = 16 }) {
       bytes = 2;
     };
     for (const row of data[table]) {
-      const json = JSON.stringify(row),
+      const json = JSON.stringify(
+          compact && table === "pips" ? [row.id, row.x, row.y, row.nets] : row,
+        ),
         size = Buffer.byteLength(json);
       check(size + 2 <= 8 * MiB, "single row exceeds 8 MiB");
       if (rows.length && bytes + size + 1 > 8 * MiB) await flush();
@@ -321,7 +411,7 @@ export async function prepareRegions({ input, output, capture, binSize = 16 }) {
     format: "spacetime-regions-manifest",
     schema: 1,
     algorithm: 1,
-    view: { bytes: viewBytes.length, sha256: hash(viewBytes) },
+    view: { bytes: entry.bytes, sha256: entry.sha256 },
     source: entry.computations,
     sourceIndex: { bytes: indexBytes.length, sha256: hash(indexBytes) },
     regions: metadata,

@@ -65,9 +65,18 @@ def stage(archive: Path, directory: Path) -> dict:
 
 def publish(args: argparse.Namespace) -> None:
     """Join only the checked replay and build, then prepare the viewer's ordinary portable publication."""
-    public = json.loads((args.archive / "capture-1/live-1/public.json").read_bytes())[
-        "events"
-    ]
+    recording = args.archive / (
+        "capture-ancestry-1/live-2" if args.ancestry else "capture-1/live-1"
+    )
+    public_bytes = (recording / "public.json").read_bytes()
+    if (
+        args.ancestry
+        and hashlib.sha256(public_bytes).hexdigest()
+        != "ce90d6536517262744e0b54774c668c70fc81de1e1ec9f5229ef166cf3247d51"
+    ):
+        raise ValueError("enriched public observation mismatch")
+    observations = json.loads(public_bytes)
+    public = observations["events"]
     previous, correction, completion = [
         next(e["cycle"] for e in public if e["event"] == event)
         for event in (
@@ -108,13 +117,41 @@ def publish(args: argparse.Namespace) -> None:
             }
         ],
     }
+    if args.ancestry:
+        annotations = metadata["annotations"]
+        for row in annotations["public"]:
+            row["dependency_endpoint"] = "graph_events" in row
+        annotations["boundaries"] = [
+            dict(row, id=f"boundary/{i}", dependency_endpoint="graph_events" in row)
+            for i, row in enumerate(observations["boundaries"])
+        ]
+        for name in ("input_stalls", "output_stalls"):
+            annotations[name] = observations[name]
+        boundary = next(
+            row
+            for row in annotations["boundaries"]
+            if row["cycle"] == completion and row["step"] == 4
+        )
+        metadata["examples"].append(
+            {
+                "id": "completion-ancestry",
+                "label": "Completion C1873 and accepted transfers",
+                "event": boundary["graph_events"][-1],
+                "events": boundary["graph_events"],
+                "boundary": boundary["id"],
+                "annotation": boundary,
+                "firstCycle": previous + 1,
+                "endCycle": completion + 1,
+                "scope": "Recorded accepted-transfer contributors",
+            }
+        )
     (args.output / "metadata.json").write_text(json.dumps(metadata) + "\n")
     root = HERE.parents[5]
     subprocess.run(
         [
             "escript",
             HERE / "bind_replay.escript",
-            args.archive / "capture-1/live-1/bundle.json.gz",
+            recording / "bundle.json.gz",
             args.output,
             args.output / "joined",
         ],
@@ -151,6 +188,8 @@ def publish(args: argparse.Namespace) -> None:
             "--constids",
             args.tools / f"nextpnr-xilinx-{commit}/xilinx/constids.inc",
         ]
+    if args.all_words and args.ancestry:
+        geometry += ["--region-bin-size", "16"]
     subprocess.run(
         [
             "node",
@@ -163,6 +202,17 @@ def publish(args: argparse.Namespace) -> None:
         ],
         check=True,
     )
+    if args.profile:
+        subprocess.run(
+            [
+                "node",
+                HERE / "bind-profile.mjs",
+                args.output / "prepared",
+                args.archive,
+                args.profile,
+            ],
+            check=True,
+        )
 
 
 def capture(args: argparse.Namespace) -> None:
@@ -170,7 +220,11 @@ def capture(args: argparse.Namespace) -> None:
     args.output.mkdir()
     inputs = args.output / "inputs"
     plan = stage(args.archive / "physical-1/reproduction.tar.gz", inputs)
-    trace = args.archive / "capture-1/live-1/capture.tsv.gz"
+    trace = args.archive / (
+        "capture-ancestry-1/live/capture.tsv.gz"
+        if args.ancestry
+        else "capture-1/live-1/capture.tsv.gz"
+    )
     subprocess.run(
         [
             sys.executable,
@@ -212,6 +266,8 @@ def capture(args: argparse.Namespace) -> None:
     ]
     for name in MEMBERS + ["top.sv"]:
         cmd += ["--rtl", inputs / name]
+    if args.ancestry:
+        cmd += ["--sta-endpoints", "50"]
     if args.all_words:
         observation = json.loads(
             (args.archive / "capture-1/observation.json").read_bytes()
@@ -252,6 +308,11 @@ if __name__ == "__main__":
         "--all-words", action="store_true", help="qualify all 51 observed storage words"
     )
     parser.add_argument(
+        "--ancestry",
+        action="store_true",
+        help="replay the 592-tap selected-operand recording",
+    )
+    parser.add_argument(
         "--demand", type=Path, help="selected sink path nets from the frozen first run"
     )
     parser.add_argument(
@@ -259,7 +320,12 @@ if __name__ == "__main__":
         action="store_true",
         help="publish an existing complete, unjoined capture",
     )
+    parser.add_argument(
+        "--profile", type=Path, help="bind the reviewed N2 source scheduling profile"
+    )
     args = parser.parse_args()
+    if args.profile and not args.ancestry:
+        parser.error("--profile requires the full --ancestry replay")
     if not args.publish_only:
         capture(args)
     publish(args)

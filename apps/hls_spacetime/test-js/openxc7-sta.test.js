@@ -63,3 +63,34 @@ test("native setup evidence requires exact ordered sums, both endpoints and a ch
   assert.equal(partial.paths.length, 0);
   assert.equal(partial.unchecked[0].arrivalPs, 550);
 });
+
+test("ranked setup pins require a bounded population, unique endpoints and ascending slack", () => {
+  const { report, path, top } = fixture();
+  report.ranked_endpoints = [path];
+  report.eligible_endpoints = 7;
+  report.endpoint_limit = 1;
+  const result = openxc7Paths(report, top);
+  assert.equal(result.paths.length, 1);
+  assert.deepEqual(result.ranking, {
+    selection: "least_slack_per_capture_pin",
+    eligible: 7,
+    limit: 1,
+    retained: 1,
+  });
+  report.endpoint_limit = 2;
+  assert.throws(() => openxc7Paths(report, top));
+  report.ranked_endpoints.push(path);
+  assert.throws(() => openxc7Paths(report, top));
+  const better = structuredClone(path);
+  for (const p of better.points.slice(1)) p.cell = "other";
+  top.cells.other = top.cells.ff;
+  better.required_ps--;
+  better.slack_ps--;
+  report.ranked_endpoints[1] = better;
+  assert.throws(() => openxc7Paths(report, top));
+  report.ranked_endpoints.reverse();
+  assert.deepEqual(
+    openxc7Paths(report, top).paths.map((p) => p.endpoint),
+    ["other/D", "ff/D"],
+  );
+});

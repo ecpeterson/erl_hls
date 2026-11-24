@@ -33,6 +33,8 @@ def capture(name: str, rtl: Path, args: argparse.Namespace) -> Path:
             "--freq",
             "100",
             "--sta",
+            "--sta-endpoints",
+            "50",
             "--route-sta",
             "--allow-timing-fail",
             "--source-id",
@@ -92,7 +94,8 @@ def check_carry(out: Path, db: Path) -> dict:
 def check_sta(out: Path) -> dict:
     """Enumerate the short fixture's register-launched paths and compare the native maximizing chain."""
     t = json.loads((out / "timing.json").read_bytes())
-    report = json.loads((out / "sta.json").read_bytes())["paths"]
+    sta = json.loads((out / "sta.json").read_bytes())
+    report = sta["paths"]
     assert len(report) == 1
     path = report[0]
     incoming = defaultdict(list)
@@ -137,6 +140,16 @@ def check_sta(out: Path) -> dict:
     )
     chain = tuple((p["cell"], p["port"]) for p in points[:-1])
     assert (path["path_delay_ps"], chain) in candidates
+    maxima = {}
+    for delay, pins in candidates:
+        maxima[pins[-1]] = max(maxima.get(pins[-1], 0), delay)
+    ranked = sta["ranked_endpoints"]
+    assert len(ranked) == len(maxima) == sta["eligible_endpoints"]
+    expected = sorted(maxima, key=lambda pin: (-maxima[pin], pin))
+    for endpoint, entry in zip(expected, ranked):
+        pins = tuple((p["cell"], p["port"]) for p in entry["points"][:-1])
+        assert pins[-1] == endpoint and (maxima[endpoint], pins) in candidates
+        assert entry["slack_ps"] == 10000 - maxima[endpoint]
     printed = (
         (out / "nextpnr.log")
         .read_text()
@@ -169,6 +182,7 @@ def check_sta(out: Path) -> dict:
     )
     return {
         "eligible_chains": len(candidates),
+        "ranked_endpoints": len(ranked),
         "distinct_delays": len(set(d for d, _ in candidates)),
         "delay_ps": path["path_delay_ps"],
         "slack_ps": path["slack_ps"],

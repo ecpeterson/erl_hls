@@ -84,6 +84,11 @@ const port = (name) => {
   const i = name.lastIndexOf("/");
   return cells[name.slice(0, i)].ports[name.slice(i + 1)];
 };
+const expectedOverlap = branches.filter(
+  ([arc, , , disposition]) =>
+    disposition !== "disconnected_constant" &&
+    selected.nets.has(nets[arcs[arc].net].id),
+).length;
 let overlapping = 0;
 const counts = {},
   ties = new Set(),
@@ -157,7 +162,7 @@ assert.equal(usedPips.size, pips.length);
 assert.deepEqual(counts, m.counts);
 assert.deepEqual(
   [writes.length, branches.length, overlapping],
-  [468, 109591, 988],
+  [468, 109591, expectedOverlap],
 );
 console.log(
   JSON.stringify({

@@ -77,7 +77,8 @@ class RouteTree:
     ) -> None:
         """Reject duplicate or missing incoming fixed PIPs before tracing any branch."""
         self.parent, self.keys, self.candidates = {}, {}, defaultdict(list)
-        rows = routing.split(";") if routing else []
+        # nextpnr Property::to_string appends one space to an empty string property.
+        rows = [] if routing in ("", " ") else routing.split(";")
         if len(rows) % 3:
             raise ValueError("invalid packed ROUTING triplets")
         self.bound = dict(zip(rows[::3], rows[1::3]))

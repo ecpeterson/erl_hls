@@ -251,7 +251,7 @@ export async function writeView({
     if (meta.sta) {
       check(!document.nativePaths, "two native STA sources for one recording");
       const report = await sidecar("sta.json");
-      const { paths, unchecked } = openxc7Paths(report, top);
+      const { paths, unchecked, ranking } = openxc7Paths(report, top);
       document.nativePaths = {
         build: bundle.build,
         checkpoint: document.catalogue.checkpoint,
@@ -261,6 +261,7 @@ export async function writeView({
         report_sha256: meta.files["sta.json"].sha256,
         paths,
         unchecked,
+        ranking,
       };
       nativePaths(createModel(document));
       if (request?.sta_nets) {

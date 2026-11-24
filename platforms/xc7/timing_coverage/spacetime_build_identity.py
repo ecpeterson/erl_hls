@@ -9,7 +9,8 @@ def write_identity(stage: Path) -> None:
     """Publish a receipt alongside the built executable; capture rechecks its byte identity."""
     here = Path(__file__).resolve().parent
     inputs = [stage / "nextpnr.tar.gz", stage / "eigen.tar.gz", here / "spacetime.h",
-              here / "nextpnr-spacetime-sta.patch", here / "nextpnr-coverage.patch", here / "nextpnr-spacetime.patch",
+              here / "nextpnr-spacetime-sta.patch", here / "nextpnr-spacetime-endpoints.patch",
+              here / "nextpnr-coverage.patch", here / "nextpnr-spacetime.patch",
               here.parent / "lut_legality/nextpnr-output-pin.patch",
               here.parent / "lut_legality/nextpnr-pin-origins.patch", stage / "bin/nextpnr-spacetime"]
     bram = (stage / "nextpnr-xilinx-68aeeb39f92e39bfb239c7e4a44dd93451fc1889/xilinx/xc7_bram_model.inc")

@@ -10,15 +10,14 @@ main([SourceBundle, Run, Output]) ->
     {ok, Receipt} = file:read_file(filename:join([Run, "replay", "result.json"])),
     #{observation := Observation, source := Source} = Build,
     Observation = digest(Receipt),
-    #{<<"cycles">> := 2369, <<"taps">> := 581, <<"tap_bits_per_cycle">> := 17877,
-      <<"trace_sha256">> := <<"bbe6ea76fd2d5a788ac8605b44697da07297c359d47d6cd2507fcf4e1b878933">>,
-      <<"rtl_sha256">> := Inputs} = json:decode(Receipt),
+    #{<<"cycles">> := 2369, <<"rtl_sha256">> := Inputs} = Replay = json:decode(Receipt),
     {ok, Manifest} = file:read_file(filename:join([Run, "native", "manifest.json"])),
     #{<<"files">> := Files, <<"source_files">> := Order} = json:decode(Manifest),
     Inputs = [maps:get(<<"sha256">>, maps:get(F, Files)) || F <- Order],
     {ok, Zipped} = file:read_file(SourceBundle),
     Raw = zlib:gunzip(Zipped),
-    <<"38fdabd2e1b5a5ea53d20f8a02205d62a37ce1e95fc433f9ed75c01e8e9eb119">> = digest(Raw),
+    ExpectedBundle = bundle_digest(Replay),
+    ExpectedBundle = digest(Raw),
     [{module, M} = code:ensure_loaded(M) || M <- [hls_spacetime, hls_spacetime_storage, hls_target_physical]],
     #{<<"physical">> := null, <<"build">> := #{<<"source">> := Source, <<"rtl">> := Core}} = Wire = json:decode(Raw),
     [Core | _] = Inputs,
@@ -28,6 +27,15 @@ main([SourceBundle, Run, Output]) ->
     Joined = hls_spacetime_openxc7:join(Bundle, filename:join(Run, "native"), Checkpoint),
     _ = hls_spacetime_artifact:write_bundle(Joined, Output),
     ok.
+
+%% Each source interpretation requires a complete replay of its own exact tap population.
+-spec bundle_digest(map()) -> binary().
+bundle_digest(#{<<"taps">> := 581, <<"tap_bits_per_cycle">> := 17877,
+                <<"trace_sha256">> := <<"bbe6ea76fd2d5a788ac8605b44697da07297c359d47d6cd2507fcf4e1b878933">>}) ->
+    <<"38fdabd2e1b5a5ea53d20f8a02205d62a37ce1e95fc433f9ed75c01e8e9eb119">>;
+bundle_digest(#{<<"taps">> := 592, <<"tap_bits_per_cycle">> := 18335,
+                <<"trace_sha256">> := <<"587435348ca6201ebb1e32a1b9e772e07b7af0ee3572edf27d09e388281aa8f2">>}) ->
+    <<"1a51306fefe774218cb5574894d6bdbd69a114f6e2b95d6acc69e4d3f5596e67">>.
 
 %% Only the hash-pinned historical recording is admitted. Native IDs and dynamic port names stay binary.
 -spec typed(atom(), term()) -> term().
