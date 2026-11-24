@@ -31,10 +31,10 @@ The feedback policy may select sharing only when the stated DSP objective improv
 
 ## Work order
 
-- [ ] Repair the mixed-topology and source-map fixture failures exposed by the implementation commit's GitHub CI run, the report-only selection gap and the missing portable host-source closure exposed by its clean local replay; replace the opaque `erl_src` staging name, add regression coverage and obtain a green canonical GitHub run that actually executes the affected jobs.
+- [x] Repair the mixed-topology and source-map fixture failures exposed by the implementation commit's GitHub CI run, the report-only selection gap and the missing portable host-source closure exposed by its clean local replay; replace the opaque `erl_src` staging name, add regression coverage and obtain a green canonical GitHub run that actually executes the affected jobs.
 - [x] Complete the end-user legibility pass: move the maintained Phi and Snowflake workloads out of the architectural `apps/` directory without changing their OTP boundaries, provide goal-oriented entry points, link every maintained example family and explain Snowflake's public algorithm and package role.
 - [x] Freeze implementation commit `01b3678e7d2c023a3833d359eaaaed826b673677` and run the complete local software, release and exact-revision consumer matrix against it.
 - [x] Fast-forward that commit and the retained tag onto the canonical remote; verify `main`, tag, imported-history ancestry and strict object integrity from a fresh clone.
 - [x] Retain the former repositories as archived read-only provenance and verify their canonical-repository pointers.
 
-The master Stage 5 item is reopened in the iCloud roadmap until the canonical GitHub repair run is green. Exact evidence is retained in `yap/umbrella-otp-audit.md`.
+Stage 5 closed at exact repair revision `feacb071669d4a3951651beddcdc58f611571c93`: Source quality run `45353339224` / job `138304943438` passed, and CI run `45353339354` passed selection job `138305120782`, test job `138305204619`, closed-topology job `138305204570`, ingress-topology job `138305204523` and qualification-record job `138310994004`. Exact evidence is retained in `yap/umbrella-otp-audit.md`.
