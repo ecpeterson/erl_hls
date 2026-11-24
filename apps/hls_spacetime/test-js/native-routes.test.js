@@ -313,6 +313,20 @@ test("foreign identities, stale static arcs and corrupted graph references rejec
   }
 });
 
+test("archived Vivado build triples stay bound to the routed checkpoint and origin", () => {
+  const model = fixture();
+  delete model.bundle.build.implementation;
+  assert.equal(nativeRoutes(model)[0].disposition, "resolved");
+  model.document.nativeRoutes.build = {
+    ...model.bundle.build,
+    implementation: hash("0"),
+  };
+  assert.throws(() => nativeRoutes(model));
+  model.document.nativeRoutes.build = model.bundle.build;
+  model.document.nativeRoutes.checkpoint_sha256 = hash("9");
+  assert.throws(() => nativeRoutes(model), /checkpoint mismatch/);
+});
+
 test("original native build is accepted only through matching qualified capture origins", () => {
   const model = fixture(),
     nativeBuild = model.bundle.build;

@@ -1,3 +1,4 @@
+import { recordingBuildKeys } from "./recording-build.js";
 import { nativePaths } from "./native-paths.js";
 
 /** Validate a hash-bound native routing attachment and select only each static
@@ -30,14 +31,12 @@ function digest(value) {
 
 /** Compare all compiler/capture identities without depending on object key order. */
 function buildKey(build) {
+  const keys = recordingBuildKeys(build);
   requireValue(
-    build &&
-      ["source", "rtl", "observation", "implementation"].every((key) =>
-        digest(build[key]),
-      ),
+    build && keys.every((key) => digest(build[key])),
     "invalid build identity",
   );
-  return [build.source, build.rtl, build.observation, build.implementation].join("/");
+  return keys.map((key) => build[key]).join("/");
 }
 
 /** Collect bounded, explicitly reviewed capture-origin links while retaining the

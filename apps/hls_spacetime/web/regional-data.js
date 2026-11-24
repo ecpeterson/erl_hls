@@ -1,5 +1,7 @@
 /** Optional installed-resource bins derived from complete native routing tables.
  * Counts describe observed resource use, not capacity, utilization or congestion. */
+import { recordingBuildKeys } from "./recording-build.js";
+
 const TABLES = ["cells", "pips", "nets", "arcNets", "bins"];
 const MiB = 1024 * 1024;
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
@@ -37,7 +39,7 @@ function equalRefs(a, b, label) {
   );
 }
 function sameBuild(a, b) {
-  return ["source", "rtl", "observation", "implementation"].every(
+  return recordingBuildKeys(a, b).every(
     (key) => digest(a?.[key]) && a[key] === b?.[key],
   );
 }
