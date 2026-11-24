@@ -31,8 +31,8 @@ The feedback policy may select sharing only when the stated DSP objective improv
 
 ## Work order
 
-- [ ] Freeze the Stage 5 implementation commit and run the complete software, release and exact-revision consumer matrix against it.
-- [ ] Land that commit and the retained tag on the canonical remote; verify `main`, tag and imported-history ancestry there.
-- [ ] Retain the former repositories as read-only provenance and verify their canonical-repository pointers.
+- [x] Freeze implementation commit `01b3678e7d2c023a3833d359eaaaed826b673677` and run the complete software, release and exact-revision consumer matrix against it.
+- [x] Fast-forward that commit and the retained tag onto the canonical remote; verify `main`, tag, imported-history ancestry and strict object integrity from a fresh clone.
+- [x] Retain the former repositories as archived read-only provenance and verify their canonical-repository pointers.
 
-The master completion state remains the Stage 5 item in the iCloud roadmap. Completed tasks are removed from this working checklist as evidence moves into `yap/umbrella-otp-audit.md`.
+The master Stage 5 item is complete in the iCloud roadmap. Exact evidence is retained in `yap/umbrella-otp-audit.md`.
