@@ -1,6 +1,6 @@
-# Umbrella OTP Stages 0–3 audit
+# Umbrella OTP Stages 0–4 audit
 
-Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` completed the application-seam preflight, and `6b1246c` completed Stage 2 by extracting a process-free `hls_core` and making its semantic model authoritative across the umbrella. Commit `8bdbfb0` completes the Stage 3 ownership redraw. The final default tree has 382 production modules across nine applications; the optional profile has 400 across eleven. The [source inventory](umbrella-otp-inventory.md) remains the historical record of the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
+Stage 0 closed on 2026-11-23 with validated filters and no imported history. Stage 1 then imported those filtered histories and landed the selected 390 modules as nine OTP applications without changing their application boundaries. Commit `f92f8b0` completed the application-seam preflight, and `6b1246c` completed Stage 2 by extracting a process-free `hls_core` and making its semantic model authoritative across the umbrella. Commit `8bdbfb0` completed the Stage 3 ownership redraw. Commit `d44618a` completes Stage 4 by separating canonical deployed-execution artifacts and runtime packaging from compilation. The final default tree has 384 production modules across nine applications; the optional profile has 402 across eleven. The [source inventory](umbrella-otp-inventory.md) remains the historical record of the original 330-module, eight-application feature-branch audit and its selected-mainline reconciliation.
 
 ## Import selection
 
@@ -239,13 +239,41 @@ The final qualification used OTP 28.0.2 and Rebar3 3.24.0.
 
 These are software, packaging and synthetic native-interface witnesses. No native XLS/Yosys/Vivado, routed checkpoint, board or EC2 run was needed or performed. They establish the new authorities and the behavior of the maintained boundaries, not native synthesis, physical timing or board equivalence. The excluded history and private external-consumer material remain outside the umbrella.
 
+## Stage 4 compilation and deployed-execution separation
+
+Commit `d44618a` makes the deployment boundary explicit without changing the Stage 3 application ownership graph:
+
+- `hls_runtime` owns the versioned canonical `hls_deployment_artifact` for partition applications, protocol deployments and mixed applications. Target emitters project their build results to deterministic ETF containing only the static schemas and bindings required by execution; target-only application-build metadata remains separately in `application-build.etf` for the observer.
+- Artifact construction and decoding perform complete kind-specific static and relational validation. `decode/1` accepts at most 64 MiB of canonical ETF using existing atoms and does not intern new atoms. `load/1` applies the same bound and validation but may intern retained atoms from a trusted local build artifact. Both boundaries remain trusted because codec checks can load and invoke installed provider modules. SHA-256 identity detects byte changes; it does not authenticate a producer.
+- Partition, protocol and mixed stream entry points now require a validated artifact. Fresh brokers, actor processes, sessions, reset ownership and admission remain runtime inputs rather than serialized capabilities. Raw pre-Stage-4 ETF and stale generated deployments are rejected and must be rebuilt.
+- Source-aware debug-catalog construction moved behind the `erl_hls` façade. Compiler execution uses one exact, process-free runtime-provider call and does not start the runtime application or supervisor. The package auditor retains BEAM-level MFA evidence and permits only that call from `hls_compile` into `hls_runtime`; every other compiler-to-runtime call or remote type is rejected. Starting `hls_compile` as a standalone OTP application is not a supported launch contract because its declared provider closure still includes the runtime library.
+- A runtime-only `hls_fabric` release contains only `hls_core`, `hls_runtime` and OTP. The public runtime consumer depends only on that execution closure and a precompiled callback; the public compilation consumer uses the façade, emits a deployment, and verifies that no runtime application or supervisor was started. Both consumers are exported from the exact immutable umbrella commit before their independent builds, with path traversal and symlink rejection.
+- A clean runtime-only child loads a real target-emitted typed artifact without compiler or synthesis-tool applications. The assembled-runtime witness instead loads and validates an independently constructed canonical artifact, then separately executes a precompiled synthetic virtual-node deployment. Neither witness claims that its loaded artifact drives a stream. Installed XC7 link and repetition workflows now emit and load the versioned artifact while retaining their existing source-bound manifests.
+
+The final qualification used OTP 28.0.2 and Rebar3 3.24.0.
+
+| Check | Stage 4 result |
+| --- | --- |
+| Fresh compile and EUnit | Listener-capable projections pass: compiler 1,290/0; default Fabric 1,432/0; Fabric `spacetime` 1,510/0; standalone spacetime 136/0. |
+| Independent boundaries | Computation synthesis 2/0, communication synthesis 1/0, physical target 1/0 and standalone optimizer 136/0; 140/0 total. The local distribution suite passes 22/22 with loopback listener access. |
+| Dialyzer | Default passes over 384 project modules; `spacetime` passes over 402. |
+| Source contracts | All 33 checker tests pass. The changed-file comparison covers 1,107 files, reports 3,198 inherited gaps and zero new or changed gaps. |
+| Package and policy boundaries | All 23 package-checker tests pass. Combined default and optional snapshots inspect 786 module instances with zero violations; the source and assembled runtime closures contain 108 modules with zero violations. Root check-policy tests pass 7/7 and Fabric CI-policy tests pass 2/2. |
+| Artifact assembly | All four named releases build and expose their launchers; the spacetime escript and its command-help contract pass. The compiler installed-toolchain witness passes 5/5, the relocated Fabric toolchain passes 3/3 and the runtime-only release audit plus execution witness passes 1/1. |
+| External consumers | The two public consumers compile and run from an archive of exact commit `d44618a`. An independently maintained private consumer was also qualified at that exact revision in its own disposable environment; its detailed evidence and environment-specific limitations remain outside the umbrella. |
+| XC7 software witnesses | Partition-link simulation passes three RTL cases, repetition-link restart checks pass 2/2 and packaging mocks pass 7/7. These are finite software/simulation witnesses, not native synthesis, timing or board qualification. |
+| Formatting and hygiene | Root formatting, shell and Python syntax, confidentiality/exclusion scans, relative-link checks and committed-diff whitespace validation pass. The historical inventory is unchanged. |
+
+The artifact validator is intentionally stricter than the public low-level `hls_record_codec:check/1`; malformed fields that the latter can accept are rejected at the deployment boundary. Tightening the low-level API remains a separate follow-up. The validator also accepts two runtime-safe forms not emitted by current builders: automatic activation on a view without identity and a partition application with no events. These do not weaken the current producer contract, but producer/consumer agreement should be narrowed before treating the artifact format as a stable external protocol.
+
+No native XLS/Yosys/Vivado, routed checkpoint, physical timing, board or EC2 run was required or performed. Stage 4 changes packaging, validation and consumption boundaries; it makes no new native or physical equivalence claim. The excluded history remains external, and no private-consumer material or dependency detail enters the umbrella or its history.
+
 ## Deferred qualification
 
-Stages 0–3 establish the import contract, green mechanical umbrella, canonical shared semantic model and acyclic synthesis/optimization architecture. They do not establish the Stage 4 deployment/consumption separation or qualify native and physical behavior beyond the bounded witnesses above.
+Stages 0–4 establish the import contract, green mechanical umbrella, canonical shared semantic model, acyclic synthesis/optimization architecture and independently packaged compilation/deployed-execution boundary. They do not qualify native and physical behavior beyond the bounded witnesses above.
 
 - Native XLS/Yosys compilation, source-map integration and extended RTL simulation against the combined umbrella still need their external tool environment.
 - Vivado, physical timing and board qualification wait for a changed hardware boundary and the appropriate remote or board environment.
 - The optional spacetime RAM witness still needs its explicit testbench and primitive environment.
-- The external same-revision runtime-only consumer, separate compile-time consumer and assembled-release asset witnesses remain Stage 4 work.
 
-Stage 4 is next: define and validate the deployment artifact, reduce the façade and qualify separated compilation and execution with external consumers. Stage 5 then adds the measured `plan → implement → characterize → revise` loop so physical feedback can optimize computation and communication together.
+Stage 5 is next: add shared implementation caching, end-to-end provenance and the measured `plan → implement → characterize → revise` loop so shared characterization and physical timing feedback can optimize computation and communication together. Consumer and regression cutover follows only after those paths pass independently.
