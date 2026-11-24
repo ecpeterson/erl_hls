@@ -213,7 +213,7 @@ export function verifyTimingIdentity(
 ) {
   check(
     identity &&
-      ["source", "rtl", "observation"].every(
+      ["source", "rtl", "observation", "implementation"].every(
         (key) => identity.build?.[key] === build[key],
       ),
     "timing identity build mismatch",

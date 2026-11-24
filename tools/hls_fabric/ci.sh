@@ -44,8 +44,8 @@ if [[ "$suite" == all || "$suite" == software ]]; then
     rebar3 as spacetime compile
     python3 tools/hls_fabric/check_application_boundaries.py \
         --profile default --profile spacetime
-    rebar3 release -n hls_fabric
-    bash tools/hls_fabric/test_runtime_release.sh _build/default/rel/hls_fabric
+    rebar3 release -n hls_runtime
+    bash tools/hls_fabric/test_runtime_release.sh _build/default/rel/hls_runtime
     python3 tools/test_external_consumers.py
     record_time software
 fi

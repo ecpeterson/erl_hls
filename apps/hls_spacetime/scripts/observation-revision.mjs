@@ -3,7 +3,7 @@
  * inventories, not signatures or native equivalence proofs. */
 import { isDeepStrictEqual } from "node:util";
 
-const BUILD_KEYS = ["source", "rtl", "observation"];
+const BUILD_KEYS = ["source", "rtl", "observation", "implementation"];
 
 /** Missing identities and undeclared changes stop publication. */
 function check(condition, reason) {
@@ -188,6 +188,7 @@ export function validateObservationRevisionOrigin(
       BUILD_KEYS.every((key) => digest(origin.build?.[key])) &&
       origin.build.source === current.source &&
       origin.build.rtl === current.rtl &&
+      origin.build.implementation === current.implementation &&
       origin.build.observation !== current.observation &&
       digest(checkpoint) &&
       origin.checkpoint === checkpoint &&
@@ -326,6 +327,7 @@ export function createObservationRevisionOrigin(
   check(
     oldPlan.inputs?.source_build === review.base_build.source &&
       oldPlan.inputs.rtl === review.base_build.rtl &&
+      oldPlan.inputs.implementation === review.base_build.implementation &&
       review.comparison?.added_bindings === added.length,
     "plan input or binding-count mismatch",
   );

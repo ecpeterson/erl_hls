@@ -56,7 +56,9 @@ function fixture() {
     },
     parts,
     totals: Object.fromEntries(names.map((n) => [n, 1])),
-    render: { build: { source: "s", rtl: "r", observation: "o" } },
+    render: {
+      build: { source: "s", rtl: "r", observation: "o", implementation: "i" },
+    },
   };
   const publish = () => save("render/manifest.json", manifest);
   const fetcher = async (url) => {

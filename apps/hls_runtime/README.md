@@ -2,7 +2,7 @@
 
 `hls_runtime` owns live actor execution and transport state. It contains the actor/domain API, CPU callback execution, device brokers, virtual Erlang nodes, observation sessions, retained wire codecs and protocol queues. Shared values, logical identities and serialization contracts live in [`hls_core`](../hls_core/README.md).
 
-The application callback `hls_fabric_app` starts `hls_fabric_sup`, under which callers explicitly attach virtual device nodes. The retained module names describe the public Fabric runtime API; application ownership is `hls_runtime`. Starting the application does not compile actors, choose placement, open a physical descriptor or reset hardware. Deployment code supplies brokers and node descriptions to the explicit runtime APIs.
+The application callback `hls_runtime_app` starts `hls_runtime_sup`, under which callers explicitly attach virtual device nodes. Starting the application does not compile actors, choose placement, open a physical descriptor or reset hardware. Deployment code supplies brokers and node descriptions to the explicit runtime APIs.
 
 | Directory | Owns |
 | --- | --- |

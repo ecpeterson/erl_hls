@@ -23,7 +23,7 @@ The layers remain separate even when one pipeline produces all of them. A source
 
 `hls_host_codec` and `hls_protocol_application_schema` are retained implementation contracts in core. Fabric planning derives codec requirements from checked source and topology facts, target materialization binds them to emitted interfaces, and runtime codecs interpret them at a real wire boundary. Sessions, live routing, queues, endpoint allocation and incarnation handling remain outside core.
 
-`hls_observation_build` owns the exact `source`/`rtl`/`observation` correlation map shared by observer and spacetime code. Its components are opaque nonempty bytes. Producers remain responsible for establishing what each component identifies, while spacetime artifacts may impose stricter textual serialization rules.
+`hls_observation_build` owns the exact `source`/`rtl`/`observation`/`implementation` correlation map shared by observer and spacetime code. Its components are opaque nonempty bytes. Producers remain responsible for establishing what each component identifies, while spacetime artifacts may impose stricter textual serialization rules.
 
 `hls_implementation_plan` is the canonical proposal boundary. It binds one opaque logical-system identity to complete stable-actor placement, homogeneous scheduler requests, constraints, capabilities and planner provenance. `hls_spacetime` may construct or revise this value through pure policies. `hls_target` may interpret a checked plan, but physical layouts and tool inputs do not become fields merely because one target needs them.
 

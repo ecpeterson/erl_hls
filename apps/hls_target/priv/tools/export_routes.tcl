@@ -214,7 +214,7 @@ proc ::hls_spacetime_routes::selection {selection} {
     foreach key {checkpoint_sha256 report_sha256 selection_sha256} {
         if {![regexp {^[0-9a-f]{64}$} [dict get $selection $key]]} {error "invalid selection digest: $key"}
     }
-    foreach key {source rtl observation} {
+    foreach key {source rtl observation implementation} {
         if {![regexp {^[0-9a-f]{64}$} [dict get $selection build $key]]} {error "invalid build digest: $key"}
     }
     set paths [dict get $selection paths]

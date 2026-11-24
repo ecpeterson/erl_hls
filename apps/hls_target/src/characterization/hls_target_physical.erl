@@ -9,7 +9,7 @@ Physical companion validation for hls_spacetime recordings. Checks build identit
 
 %% Opaque nonempty identities are shared with the execution recording.
 -type id() :: binary().
-%% Exact source, generated RTL and observation identities bind both companions.
+%% Exact source, generated RTL, observation and implementation identities bind both companions.
 -type build() :: hls_observation_build:build().
 %% Primitive placement uses one common tile grid; properties retain native strings.
 -type cell() :: #{
@@ -164,8 +164,13 @@ pin_index(Nets) ->
 build(Build) ->
     case hls_observation_build:validate(Build) of
         ok ->
-            #{source := Source, rtl := Rtl, observation := Observation} = Build,
-            lists:foreach(fun identifier/1, [Source, Rtl, Observation]);
+            #{
+                source := Source,
+                rtl := Rtl,
+                observation := Observation,
+                implementation := Implementation
+            } = Build,
+            lists:foreach(fun identifier/1, [Source, Rtl, Observation, Implementation]);
         {error, {invalid_component, _Name, Value}} ->
             identifier(Value);
         {error, invalid_shape} ->

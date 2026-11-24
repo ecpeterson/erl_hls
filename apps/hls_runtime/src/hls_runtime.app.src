@@ -1,8 +1,8 @@
 {application, hls_runtime, [
     {description, "HLS actor execution, device sessions and virtual-node lifecycle"},
     {vsn, "0.1.0"},
-    {registered, [hls_fabric_sup]},
-    {mod, {hls_fabric_app, []}},
+    {registered, [hls_runtime_sup]},
+    {mod, {hls_runtime_app, []}},
     {applications, [kernel, stdlib, crypto, hls_core]},
     {env, []},
     {modules, []},

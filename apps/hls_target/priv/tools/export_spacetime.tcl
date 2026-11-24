@@ -642,7 +642,7 @@ proc ::hls_spacetime_export::run {checkpoint output build {requested_limits {}} 
     variable placement_index
     variable alias_index
     variable canonical_index
-    foreach key {source rtl observation} {
+    foreach key {source rtl observation implementation} {
         if {![dict exists $build $key] || ![regexp {^[0-9a-f]{64}$} [dict get $build $key]]} {
             error "missing/invalid registered build digest: $key"
         }
@@ -667,7 +667,7 @@ proc ::hls_spacetime_export::run {checkpoint output build {requested_limits {}} 
             if {![dict exists $location_inputs checkpoint_sha] ||
                 [dict get $location_inputs checkpoint_sha] ne [dict get $state checkpoint_sha] ||
                 ![dict exists $location_inputs build]} {error "location input checkpoint/build binding"}
-            foreach key {source rtl observation} {
+            foreach key {source rtl observation implementation} {
                 if {![dict exists $location_inputs build $key] ||
                     [dict get $location_inputs build $key] ne [dict get $build $key]} {
                     error "location input build mismatch: $key"

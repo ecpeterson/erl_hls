@@ -10,7 +10,7 @@ export function nativePaths(model) {
   fail(
     model.catalogue &&
       detail.checkpoint === model.catalogue.checkpoint &&
-      ["source", "rtl", "observation"].every(
+      ["source", "rtl", "observation", "implementation"].every(
         (key) => detail.build?.[key] === model.bundle.build[key],
       ),
     "build/checkpoint mismatch",

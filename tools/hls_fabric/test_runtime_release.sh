@@ -3,13 +3,13 @@
 set -euo pipefail
 
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-release=${1:-_build/default/rel/hls_fabric}
+release=${1:-_build/default/rel/hls_runtime}
 case "$release" in
     /*) ;;
     *) release="$project_root/$release" ;;
 esac
-if [[ ! -x "$release/bin/hls_fabric" ]]; then
-    printf 'missing runtime release launcher: %s\n' "$release/bin/hls_fabric" >&2
+if [[ ! -x "$release/bin/hls_runtime" ]]; then
+    printf 'missing runtime release launcher: %s\n' "$release/bin/hls_runtime" >&2
     exit 2
 fi
 

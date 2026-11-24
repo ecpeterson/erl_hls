@@ -17,7 +17,7 @@ function bundle() {
     schema: 1,
     unit: "cycle",
     evidence: "synthetic_fixture",
-    build: { source: "s", rtl: "r", observation: "o" },
+    build: { source: "s", rtl: "r", observation: "o", implementation: "i" },
     capture: {
       device: "synthetic",
       clock: "clk",

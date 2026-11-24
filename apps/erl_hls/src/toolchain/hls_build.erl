@@ -14,12 +14,19 @@ Public hardware-build selection used by hls_fabric_cli and Erlang clients. Dispa
 
 -doc "Two supported execution models; selecting one does not translate an incompatible placement or source protocol.".
 -type backend() :: source_protocol | channel_scheduler.
--doc "Explicit backend request. Source compositions retain their own boundary kind; scheduler configuration owns channel placement and its allowed schedule.".
+-doc "Explicit backend request. A network source request may additionally carry one implementation_plan and selected target; that form derives target placement rather than accepting raw placement fields. Other source compositions retain their own boundary kind, while scheduler configuration owns channel placement and its allowed schedule.".
 -type request() ::
     #{
         backend := source_protocol,
         kind := hls_source_build:kind(),
         configuration := hls_source_config:config() | file:filename()
+    }
+    | #{
+        backend := source_protocol,
+        kind := network,
+        configuration := hls_source_config:network() | file:filename(),
+        implementation_plan := hls_implementation_plan:plan(),
+        target := hls_implementation_plan:target()
     }
     | #{
         backend := channel_scheduler,
@@ -54,6 +61,20 @@ Public hardware-build selection used by hls_fabric_cli and Erlang clients. Dispa
 
 -doc "Plans one explicit backend request, rejecting unknown fields before compiling source. Backend configuration can be a map or trusted terms filename; a request filename contains one such request map. No XLS tool or output directory is needed.".
 -spec plan(request() | file:filename()) -> plan().
+plan(
+    Request = #{
+        backend := source_protocol,
+        kind := Kind,
+        configuration := Config,
+        implementation_plan := ImplementationPlan,
+        target := Target
+    }
+) ->
+    keys(Request, [backend, kind, configuration, implementation_plan, target]),
+    #plan{
+        backend = source_protocol,
+        value = hls_source_build:plan(Kind, Config, ImplementationPlan, Target)
+    };
 plan(Request = #{backend := source_protocol, kind := Kind, configuration := Config}) ->
     keys(Request, [backend, kind, configuration]),
     #plan{backend = source_protocol, value = hls_source_build:plan(Kind, Config)};
@@ -64,7 +85,7 @@ plan(Request) when is_map(Request) ->
     hls_diagnostic:raise(
         configuration,
         invalid_build_request,
-        <<"Select source_protocol with kind/configuration, or channel_scheduler with configuration.">>,
+        <<"Select source_protocol with kind/configuration and an optional implementation_plan/target pair, or channel_scheduler with configuration.">>,
         #{value => Request}
     );
 plan(Filename) ->

@@ -9,7 +9,7 @@ import { timingPath } from "../web/timing-paths.js";
 /** Two launches reconverge in a LUT and fan out to two selected register bits.
  * Separate enable/reset roots exercise the same API outside the data role. */
 function fixture(weights = [100, 200, 400, 500, 300, 100]) {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const cells = ["launch-a", "launch-b", "logic", "sink-a", "sink-b"].map(
     (id, i) => ({
       id,

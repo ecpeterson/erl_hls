@@ -278,7 +278,7 @@ correction_geometry_test() ->
 -spec destinations(hls_topology:plan(), atom(), non_neg_integer()) -> map().
 destinations(Plan, Family, X) ->
     maps:from_list([{Port, Id} || #{source := {_, Port}, recipients := [{actor, Id}]} <-
-        hls_topology:routes_for_instance(Plan, Family, [X, 0])]).
+        hls_logical_topology:routes_for_instance(Plan, Family, [X, 0])]).
 
 %% Configure a check with the known first-hit/second-miss PRNG stream.
 -spec syndrome(hls_nums:u32()) -> tuple().

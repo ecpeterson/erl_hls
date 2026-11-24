@@ -9,6 +9,7 @@ function fixture() {
       source: "a".repeat(64),
       rtl: "b".repeat(64),
       observation: "c".repeat(64),
+      implementation: "f".repeat(64),
     },
     checkpoint = "d".repeat(64);
   const cells = [

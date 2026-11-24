@@ -53,15 +53,23 @@ capture() ->
         state => [#{tuple_path => P, signal => N, source_width => 16, physical_width => 16}
             || {P, N} <- [{[0, 1, 0, 0], <<"____state_0">>},
                           {[0, 1, 0, 5, 0], <<"____state_1">>}]],
-        inputs => #{source_build => <<"fixture-source">>, rtl => <<"fixture-rtl">>},
+        inputs => #{
+            source_build => <<"fixture-source">>,
+            rtl => <<"fixture-rtl">>,
+            implementation => <<"fixture-implementation">>
+        },
         dependencies => xls_protocol_spacetime_dependencies:plan(Ir, Rtl, Registers)},
     Rows = [[0, 0, 1, 7, 26, 10, 7, 26, 10, 0, 0, 1] ++ C || C <-
         [[0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0, 0, 0, 1]]],
     Trace = #{signals => [#{id => <<"reset">>, width => 1, path => <<"public">>} | Signals],
         spans => [#{first => C, count => 1, values => V} || {C, V} <- lists:enumerate(0, Rows)],
         end_cycle => 2, complete => true, cause => <<"ok">>, records => 2},
-    Build = #{source => <<"fixture-source">>, rtl => <<"fixture-rtl">>,
-        observation => xls_protocol_spacetime:observation_digest(Plan)},
+    Build = #{
+        source => <<"fixture-source">>,
+        rtl => <<"fixture-rtl">>,
+        observation => xls_protocol_spacetime:observation_digest(Plan),
+        implementation => <<"fixture-implementation">>
+    },
     xls_protocol_spacetime_capture:capture(Plan, Trace, Build).
 
 %% Fixture taps supply exact declared IDs without pretending to observe native hardware.

@@ -10,7 +10,7 @@ sharing but assigns no RAM layout, slot width, generated source or target timing
 
 -doc "Balances each target/module bucket across the fewest groups with at most `MaxActors` members. Every topology instance must have one placement.".
 -spec shared_by_module(
-    hls_logical_topology:plan(), hls_implementation_plan:placement(), pos_integer()
+    hls_logical_topology:compact_plan(), hls_implementation_plan:placement(), pos_integer()
 ) -> [hls_implementation_plan:schedule()].
 shared_by_module(Topology, Placement, MaxActors) when
     is_integer(MaxActors), MaxActors > 0

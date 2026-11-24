@@ -27,6 +27,7 @@ async function fixture(t, mutate = () => {}) {
     source: "a".repeat(64),
     rtl: "b".repeat(64),
     observation: "c".repeat(64),
+    implementation: "f".repeat(64),
   };
   const checkpoint = "d".repeat(64);
   const recording = {

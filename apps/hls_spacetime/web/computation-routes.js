@@ -103,7 +103,7 @@ export function createComputations(model, attachment, routeNets = []) {
   requireValue(
     model.catalogue &&
       attachment.checkpoint === model.catalogue.checkpoint &&
-      ["source", "rtl", "observation"].every(
+      ["source", "rtl", "observation", "implementation"].every(
         (key) => attachment.build?.[key] === model.bundle.build[key],
       ),
     "build/checkpoint mismatch",

@@ -6,7 +6,7 @@ The workflow has explicit owners: the producer knows what generated signals mean
 
 Use OTP 28.0.2, rebar3 3.24.0 and Node 22 or later. From the umbrella root, build the offline command with `rebar3 as spacetime escriptize`. The XLS source-protocol adapter is the local optional `hls_spacetime_observer` application; its [capture guide](../hls_fabric/spacetime-capture.md) uses the same profile. Other backends supply the generic bundle rather than importing this adapter.
 
-Each stage takes explicit files and creates a fresh output directory. Keep source, emitted RTL, observation-plan and native-checkpoint identities with the result. A complete inventory is written last; a failed prefix is diagnostic material. Retain logs, tool versions and input/output hashes alongside a bounded capture, and apply the project’s seven-day artifact review policy. Never use a filename or equal signal values as evidence of correspondence.
+Each stage takes explicit files and creates a fresh output directory. Keep source, emitted RTL, observation-plan, realized-implementation and native-checkpoint identities with the result. A complete inventory is written last; a failed prefix is diagnostic material. Retain logs, tool versions and input/output hashes alongside a bounded capture, and apply the project’s seven-day artifact review policy. Never use a filename or equal signal values as evidence of correspondence.
 
 The Erlang interchange is trusted local, uncompressed ETF. The reader limits each file to 256 MiB, rejects trailing bytes and executable terms, and creates no atoms from data. A producer should use `hls_spacetime_artifact:write_bundle/2`, which validates before writing `bundle.etf`, `bundle.json`, `summary.json` and an exact-byte manifest. JSON uses hexadecimal masks to preserve wide integers in the browser. This is a library/tool workflow; no OTP server or deployed observer process is started.
 
@@ -25,7 +25,7 @@ Use the [target-owned native exporter](native.md) on an existing checkpoint from
 Create an identity file containing one trusted Erlang term, for example:
 
 ```erlang
-#{build => #{source => <<"SOURCE_DIGEST">>, rtl => <<"RTL_DIGEST">>, observation => <<"PLAN_DIGEST">>},
+#{build => #{source => <<"SOURCE_DIGEST">>, rtl => <<"RTL_DIGEST">>, observation => <<"PLAN_DIGEST">>, implementation => <<"IMPLEMENTATION_DIGEST">>},
   checkpoint => <<"CHECKPOINT_SHA256">>}.
 ```
 

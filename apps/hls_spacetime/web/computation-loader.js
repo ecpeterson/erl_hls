@@ -88,7 +88,7 @@ export async function loadComputations({
     !manifest.attachment ||
     manifest.attachment.schema !== 1 ||
     manifest.checkpoint !== manifest.attachment.checkpoint ||
-    ["source", "rtl", "observation"].some(
+    ["source", "rtl", "observation", "implementation"].some(
       (key) => manifest.build?.[key] !== manifest.attachment.build?.[key],
     )
   )

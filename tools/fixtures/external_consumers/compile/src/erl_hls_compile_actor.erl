@@ -1,4 +1,4 @@
--module(stage4_compile_actor).
+-module(erl_hls_compile_actor).
 -moduledoc "Minimal external actor compiled through the installed umbrella facade.".
 
 -behaviour(hls_gs).

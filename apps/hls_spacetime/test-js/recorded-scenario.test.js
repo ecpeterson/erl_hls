@@ -8,7 +8,7 @@ import {
 /** Independent tiny observation index: coupled outputs at C1, next-edge commit,
  * then immediate feedback at C3. Its old-value reader shares a replacement edge. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const events = [
     { id: "input", cycle: 0, outputs: ["input-v"] },
     {

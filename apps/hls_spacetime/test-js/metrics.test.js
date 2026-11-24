@@ -6,7 +6,12 @@ import { windowMetrics } from "../web/metrics.js";
 /** Two overlapping stored words, a masked replacement, reset and an independent
  * computation with optional observed waits. Native aliases share one FF. */
 function fixture({ stalled = false, physical = true, complete = true } = {}) {
-  const build = { source: "synthetic", rtl: "r", observation: "o" };
+  const build = {
+    source: "synthetic",
+    rtl: "r",
+    observation: "o",
+    implementation: "i",
+  };
   const events = [],
     versions = [];
   const root = (id, origin, storage = null, incarnation = "epoch0") => {

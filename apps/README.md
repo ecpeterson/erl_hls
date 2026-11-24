@@ -18,4 +18,4 @@ Additional packages have narrower roles:
 - [`hls_phi`](hls_phi/README.md) and [`hls_snowflake`](hls_snowflake/README.md) are application examples and finite witnesses; generic libraries do not depend on them.
 - [`hls_spacetime_observer`](hls_spacetime_observer/README.md) is the optional cross-layer capture adapter. Keeping it separate prevents its broad integration dependencies from entering lower applications.
 
-The default profile builds the facade, core/runtime/synthesis/target applications, router and examples. `rebar3 as spacetime` adds the local Spacetime and observer applications. The `hls` release packages build tooling, `hls_examples` adds decoder tooling, and the legacy-named `hls_fabric` release contains only the core/runtime deployment closure.
+The default profile builds the facade, core/runtime/synthesis/target applications, router and examples. `rebar3 as spacetime` adds the local Spacetime and observer applications. The `hls` release packages build tooling, `hls_examples` adds decoder tooling, and `hls_runtime` contains only the core/runtime deployment closure.

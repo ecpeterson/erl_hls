@@ -60,7 +60,7 @@ proc ::hls_spacetime_route_graph::demand {demand limits} {
     ::hls_spacetime_routes::budget
     if {[dict get $demand schema_version] != 1} {error "unsupported route-graph demand"}
     foreach key {checkpoint_sha256 catalogue_sha256 demand_sha256} {digest [dict get $demand $key]}
-    foreach key {source rtl observation} {digest [dict get $demand build $key]}
+    foreach key {source rtl observation implementation} {digest [dict get $demand build $key]}
     set nets [dict get $demand nets]
     if {![llength $nets] || [llength $nets] > [dict get $limits nets]} {error "route-graph net limit"}
     set net_count 0

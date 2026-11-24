@@ -78,7 +78,7 @@ family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
 -spec wrapped_routes_resolve_one_boundary_member_test() -> ok.
 wrapped_routes_resolve_one_boundary_member_test() ->
     Plan = hls_topology:normalize(phi_torus_topology:topology(5, 4)),
-    Routes = hls_topology:routes_for_instance(Plan, phi, [0, 0]),
+    Routes = hls_logical_topology:routes_for_instance(Plan, phi, [0, 0]),
     ?assertEqual(7, length(Routes)),
     ?assertEqual(
         [{actor, {phi, 0, 3}}],

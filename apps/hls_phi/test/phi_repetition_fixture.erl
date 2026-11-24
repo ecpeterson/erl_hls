@@ -59,7 +59,7 @@ oracle(Stage, N) ->
                     {actor, Id} -> element(2,maps:get(Id,Actors));
                     {external, _} -> Sink
                 end} || #{source := {_, Port}, recipients := [Target]} <-
-                    hls_topology:routes_for_instance(Plan,Family,[X,0])]),
+                    hls_logical_topology:routes_for_instance(Plan,Family,[X,0])]),
                 ok = Module:connect(Pid,Outputs)
             end,lists:seq(0,N-1))
         end,[data,syndrome,phi]),

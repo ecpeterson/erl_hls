@@ -4,7 +4,7 @@ import { nativePaths } from "../web/native-paths.js";
 
 /** Small native annotation fixture, independent of any observed event graph. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   return {
     bundle: { build },
     catalogue: { checkpoint: "dcp" },

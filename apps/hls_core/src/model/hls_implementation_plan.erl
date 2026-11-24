@@ -7,7 +7,18 @@ constraints, selected capabilities and provenance. It is neither generated hardw
 deployment descriptor. Targets may interpret a checked plan, but they do not own its policy.
 """.
 
--export([new/6, validate/1, identity/1, logical_system/1, placement/1, schedules/1, revise/4]).
+-export([
+    new/6,
+    validate/1,
+    identity/1,
+    logical_system/1,
+    placement/1,
+    schedules/1,
+    constraints/1,
+    capabilities/1,
+    provenance/1,
+    revise/4
+]).
 -export_type([plan/0, placement/0, provenance/0, schedule/0, target/0]).
 
 -doc "A proposed physical target name, distinct from a runtime endpoint or device session.".
@@ -24,11 +35,12 @@ deployment descriptor. Targets may interpret a checked plan, but they do not own
     members := [hls_actor_identity:id(), ...]
 }.
 
--doc "Planner identity and opaque input identities, with an optional characterization basis for a revision.".
+-doc "Planner and opaque input identities. A revision records both its direct parent and characterization basis.".
 -type provenance() :: #{
     planner := binary(),
     inputs := [binary()],
-    basis => binary()
+    basis => binary(),
+    parent => binary()
 }.
 
 -doc "A checked proposed implementation. Constraints and capabilities remain process-free owner-defined terms until lower applications interpret them.".
@@ -59,7 +71,7 @@ new(LogicalSystem, Placement, Schedules, Constraints, Capabilities, Provenance) 
         {error, Reason} -> error({implementation_plan, Reason})
     end.
 
--doc "Checks exact shape, logical identities, unique scheduler membership and provenance without interpreting owner-defined constraints or capabilities.".
+-doc "Checks exact shape, process-free owner fields, logical identities, unique scheduler membership and provenance without interpreting constraints or capabilities.".
 -spec validate(term()) -> ok | {error, term()}.
 validate(
     #{
@@ -78,7 +90,7 @@ validate(
         schedules(Schedules, Placement),
         map_field(constraints, Constraints),
         map_field(capabilities, Capabilities),
-        provenance(Provenance)
+        validate_provenance(Provenance)
     ]);
 validate(_) ->
     {error, invalid_shape}.
@@ -107,11 +119,30 @@ schedules(Plan) ->
     ok = valid(Plan),
     maps:get(schedules, Plan).
 
--doc "Creates a checked revision with replacement placement and schedules, retaining the logical system and recording one nonempty characterization identity as its basis.".
+-doc "Returns owner-defined constraints after validating the plan.".
+-spec constraints(plan()) -> map().
+constraints(Plan) ->
+    ok = valid(Plan),
+    maps:get(constraints, Plan).
+
+-doc "Returns owner-defined selected capabilities after validating the plan.".
+-spec capabilities(plan()) -> map().
+capabilities(Plan) ->
+    ok = valid(Plan),
+    maps:get(capabilities, Plan).
+
+-doc "Returns planner inputs and, for a revision, its direct parent and characterization basis.".
+-spec provenance(plan()) -> provenance().
+provenance(Plan) ->
+    ok = valid(Plan),
+    maps:get(provenance, Plan).
+
+-doc "Creates a checked revision with replacement placement and schedules, recording the direct parent plan and one nonempty characterization identity as its basis.".
 -spec revise(plan(), placement(), [schedule()], binary()) -> plan().
 revise(Plan, Placement, Schedules, Basis) ->
     ok = valid(Plan),
     ok = component(basis, Basis),
+    Parent = identity(Plan),
     Provenance0 = maps:get(provenance, Plan),
     Inputs = lists:usort([Basis | maps:get(inputs, Provenance0)]),
     new(
@@ -120,7 +151,7 @@ revise(Plan, Placement, Schedules, Basis) ->
         Schedules,
         maps:get(constraints, Plan),
         maps:get(capabilities, Plan),
-        Provenance0#{inputs := Inputs, basis => Basis}
+        Provenance0#{inputs := Inputs, basis => Basis, parent => Parent}
     ).
 
 %% Accept only nonempty opaque binary identities.
@@ -221,31 +252,36 @@ logical_identity(Id) ->
         false -> {error, {invalid_logical_identity, Id}}
     end.
 
-%% Provenance is exact except for the optional revision basis.
--spec provenance(term()) -> ok | {error, term()}.
-provenance(#{planner := Planner, inputs := Inputs} = Provenance) when
-    is_list(Inputs), map_size(Provenance) >= 2, map_size(Provenance) =< 3
-->
-    case lists:sort(maps:keys(Provenance)) -- [basis, inputs, planner] of
-        [] ->
+%% Initial provenance is exact; revision provenance adds a correlated parent and basis together.
+-spec validate_provenance(term()) -> ok | {error, term()}.
+validate_provenance(#{planner := Planner, inputs := Inputs} = Provenance) when is_list(Inputs) ->
+    Common = [component(planner, Planner)] ++ [component(input, Input) || Input <- Inputs],
+    case lists:sort(maps:keys(Provenance)) of
+        [inputs, planner] ->
+            with(Common);
+        [basis, inputs, parent, planner] ->
             with(
-                [component(planner, Planner)] ++
-                    [component(input, Input) || Input <- Inputs] ++
-                    case maps:find(basis, Provenance) of
-                        error -> [];
-                        {ok, Basis} -> [component(basis, Basis)]
-                    end
+                Common ++
+                    [
+                        component(basis, maps:get(basis, Provenance)),
+                        component(parent, maps:get(parent, Provenance))
+                    ]
             );
         _ ->
             {error, {invalid_provenance, Provenance}}
     end;
-provenance(Provenance) ->
+validate_provenance(Provenance) ->
     {error, {invalid_provenance, Provenance}}.
 
-%% Owner-defined fields must remain maps so extensions stay namespaced.
+%% Owner-defined fields remain namespaced maps and cannot capture live VM state.
 -spec map_field(atom(), term()) -> ok | {error, term()}.
-map_field(_Name, Value) when is_map(Value) -> ok;
-map_field(Name, Value) -> {error, {invalid_field, Name, Value}}.
+map_field(Name, Value) when is_map(Value) ->
+    case hls_static_term:validate(Value) of
+        ok -> ok;
+        {error, Kind} -> {error, {live_field_value, Name, Kind}}
+    end;
+map_field(Name, Value) ->
+    {error, {invalid_field, Name, Value}}.
 
 %% Return the first validation failure in deterministic field order.
 -spec with([ok | {error, term()}]) -> ok | {error, term()}.

@@ -10,7 +10,12 @@ import {
 /** Small synthetic storage history, including equal writes, read-first reuse,
  * response after replacement, a reset-retired request and an unobserved last Q. */
 function fixture() {
-  const build = { source: "source", rtl: "rtl", observation: "observer" };
+  const build = {
+    source: "source",
+    rtl: "rtl",
+    observation: "observer",
+    implementation: "implementation",
+  };
   const storage = { resource: "word", address: 0 };
   const versions = [
     {

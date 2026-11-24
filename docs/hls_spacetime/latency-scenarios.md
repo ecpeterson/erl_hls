@@ -31,7 +31,7 @@ This makes the tool useful for rejecting a narrow proposal which leaves another 
 
 ## Source profile boundary
 
-Profiles are data, never executable modules. A profile binds the exact recording byte count/SHA-256 and source/RTL/observation build identities. It contains:
+Profiles are data, never executable modules. A profile binds the exact recording byte count/SHA-256 and source/RTL/observation/implementation build identities. It contains:
 
 - `evidence`: reviewed source/observation paths, hashes and descriptions;
 - `groups`: unique simultaneous event members, a trigger and source-based classification;

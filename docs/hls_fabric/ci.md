@@ -1,6 +1,6 @@
 # CI coverage
 
-Automatic GitHub Actions runs are suspended. The workflow accepts manual dispatch only. Restoring the pull-request trigger is a separate decision after reviewing the reduced suite’s cost. Do not add a second run on merge to `main`.
+Pull requests run the software tier automatically. Manual dispatch selects `all`, `software`, `components`, `phi` or `snowflake`; there is no duplicate run on merge to `main`.
 
 The same entry point runs locally and in Actions, serially with one tool installation:
 
@@ -25,6 +25,6 @@ The previous D3 direct/shared/offloaded matrix, multiple protocol-Phi widths and
 
 Generated ordinary protocol receivers import a single source owner definition per module instead of duplicating that definition into every receiver. Each receiver still has independent state and inbox wiring; this is compilation reuse, not hardware sharing. Manifests bind the imported file and its hash. Publication rendering also groups identical selector results and emits contiguous bit slices, preserving the complete checked projection. Shared-arithmetic owners retain their distinct generated ABI.
 
-One workflow job installs tools once and runs the selected tier(s), with a 25-minute hard limit. Individual external compiler/test stages retain their shorter deadlines. Cached dependencies and Dialyzer tables save setup work; qualification-cache keys, path-selection rules and duplicate workflows have been removed. Each invocation writes `times.tsv` with setup and tier wall times. These describe host time, not simulated throughput. The full manual Linux qualification took 9m38s with warm XLS, Icarus and Dialyzer caches; see [the measured run](https://github.com/ecpeterson/hls_fabric/actions/runs/40117299694). Cold tool installation remains unmeasured. Restoring automatic runs remains a separate decision.
+One workflow job installs tools once and runs the selected tier(s), with a 25-minute hard limit. Pull-request runs omit RTL and XLS setup. Individual external compiler/test stages retain their shorter deadlines. Cached dependencies and Dialyzer tables save setup work; qualification-cache keys, path-selection rules and duplicate workflows have been removed. Each invocation writes `times.tsv` with setup and tier wall times. These describe host time, not simulated throughput. The full manual Linux qualification took 9m38s with warm XLS, Icarus and Dialyzer caches; see [the measured run](https://github.com/ecpeterson/hls_fabric/actions/runs/40117299694). Cold tool installation remains unmeasured.
 
 Successful jobs upload no artifacts by default. Failure or explicit diagnostic requests retain a bounded bundle for two days: at most 4 MiB of file data, 256 files and 256 KiB per file. Large logs retain their tails; oversized structured reports and generated netlists are omitted and listed in the index. Preserve important evidence in the external artifact archive; see [artifact storage](artifacts.md).

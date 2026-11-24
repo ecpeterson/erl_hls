@@ -12,7 +12,14 @@ import unittest
 from unittest.mock import patch
 
 from backend_commands import run, execute
-from backend_paths import ROOT, erlang_paths, erlang_environment, application_directory, erl_command
+from backend_paths import (
+    ROOT,
+    application_directory,
+    debug_rtl,
+    erl_command,
+    erlang_environment,
+    erlang_paths,
+)
 from compiler_paths import compiler_application, compiler_resource, compiler_root, compiler_tool
 
 
@@ -53,7 +60,8 @@ class BuildContextTests(unittest.TestCase):
                     source.write_text(f'-module({module}).\n-export([value/0]).\nvalue() -> {value}.\n')
                     subprocess.run(['erlc', '-o', directory, source], check=True, capture_output=True, timeout=15)
             for profile in ('default', 'test'):
-                compiler_fixture(root/'_build'/profile/'checkouts/erl_hls', profile)
+                source = compiler_fixture(root/'sources'/profile, profile)
+                compiler_projection(root, profile, 'checkouts', source)
             self.assertEqual(application_directory('erl_hls', 'default', root),
                              root/'_build/default/checkouts/erl_hls')
             self.assertEqual(application_directory('erl_hls', 'test', root),
@@ -84,10 +92,11 @@ class BuildContextTests(unittest.TestCase):
             root = Path(temporary)
             compiler = root/'_build/default/lib/erl_hls'
             (root/'_build/default/lib/hls_fabric/ebin').mkdir(parents=True)
-            override = root/'fixture'
+            (root/'_build/default/lib/hls_runtime/ebin').mkdir(parents=True)
+            override = root/'external/lib/erl_hls'
+            (override.parent/'hls_runtime/ebin').mkdir(parents=True)
             for app, value in [(compiler, 'dependency'), (override, 'fixture')]:
                 (app/'ebin').mkdir(parents=True)
-                (app/'_build/default/lib/hls_runtime/ebin').mkdir(parents=True)
                 source = app/'compiler_probe.erl'
                 source.write_text(f'-module(compiler_probe).\n-export([value/0]).\nvalue() -> {value}.\n')
                 subprocess.run(['erlc', '-o', app/'ebin', source], check=True, capture_output=True, timeout=15)
@@ -116,6 +125,17 @@ class BuildContextTests(unittest.TestCase):
             self.assertIn(base/'checkouts/hls_runtime/ebin', selected)
             self.assertNotIn(base/'lib/hls_runtime/apps/hls_runtime/ebin', selected)
             self.assertIn(base/'lib/hls_target/ebin', selected)
+
+    def test_flat_override_build_tree_is_rejected(self) -> None:
+        """A direct facade ebin cannot recover its runtime from the retired nested build shape."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'_build/test/lib/hls_fabric/ebin').mkdir(parents=True)
+            flat = root/'flat-compiler'
+            (flat/'ebin').mkdir(parents=True)
+            (flat/'_build/test/lib/hls_runtime/ebin').mkdir(parents=True)
+            with self.assertRaisesRegex(FileNotFoundError, 'runtime beams'):
+                erlang_paths('test', root, compiler=flat)
 
     def test_production_emitter_uses_native_release(self) -> None:
         """The optional driver delegates source configuration to the packaged Erlang CLI."""
@@ -202,16 +222,27 @@ class BuildContextTests(unittest.TestCase):
                         self.assertTrue(any(k.arg == 'profile' for k in node.keywords), str(path))
 
 
-def compiler_fixture(public: Path, label: str) -> Path:
-    """Create a compiler package with distinguishable direct and transitive helpers."""
-    package = public/'tools/erl_hls_tools'
+def compiler_fixture(repository: Path, label: str) -> Path:
+    """Create a canonical compiler umbrella with distinguishable transitive helpers."""
+    package = repository/'tools/erl_hls_tools'
     package.mkdir(parents=True)
-    for profile in ('default', 'test'):
-        (public/'_build'/profile/'lib/hls_runtime/ebin').mkdir(parents=True, exist_ok=True)
+    facade = repository/'apps/erl_hls'
+    (facade/'src').mkdir(parents=True)
+    for name in ('hls_compile', 'hls_fabric', 'hls_runtime', 'hls_target'):
+        (repository/'apps'/name).mkdir()
     (package/'__init__.py').write_text('"""Inert compiler fixture package."""\n')
     (package/'sibling.py').write_text(f'VALUE = {label!r}\n')
     (package/'compile_xls.py').write_text('from .sibling import VALUE\n')
-    return public.resolve()
+    return facade.resolve()
+
+
+def compiler_projection(root: Path, profile: str, kind: str, source: Path) -> Path:
+    """Project one canonical facade and its runtime sibling into a fake rebar profile."""
+    application = root/'_build'/profile/kind/'erl_hls'
+    (application/'ebin').mkdir(parents=True, exist_ok=True)
+    (application/'src').symlink_to(source/'src', target_is_directory=True)
+    (application.parent/'hls_runtime/ebin').mkdir(parents=True)
+    return application
 
 
 def production_sources() -> list[Path]:
@@ -231,21 +262,21 @@ class CompilerContextTests(unittest.TestCase):
         """Other profiles, source checkouts and inherited overrides cannot satisfy this request."""
         with tempfile.TemporaryDirectory(prefix='compiler context ') as temporary:
             root = Path(temporary)
-            test = compiler_fixture(root/'_build/test/lib/erl_hls', 'test')
+            test = compiler_fixture(root/'sources/test', 'test')
+            compiler_projection(root, 'test', 'lib', test)
             (root/'_build/test/lib/hls_fabric/ebin').mkdir(parents=True)
-            (test/'ebin').mkdir()
-            compiler_fixture(root/'_checkouts/erl_hls', 'unbuilt')
+            compiler_fixture(root/'unbuilt', 'unbuilt')
             with patch.dict(os.environ, {'ERL_HLS_ROOT': str(test)}):
                 with self.assertRaises(FileNotFoundError):
                     compiler_root('default', root=root)
                 self.assertEqual(compiler_root('test', root=root), test)
-                default = compiler_fixture(root/'_build/default/lib/erl_hls', 'default')
+                default = compiler_fixture(root/'sources/default', 'default')
+                compiler_projection(root, 'default', 'lib', default)
                 (root/'_build/default/lib/hls_fabric/ebin').mkdir(parents=True)
-                (default/'ebin').mkdir()
                 self.assertEqual(compiler_root('default', root=root), default)
                 # Both profiles remain present, but only the requested checkout wins.
-                checkout = compiler_fixture(root/'_build/default/checkouts/erl_hls', 'checkout')
-                (checkout/'ebin').mkdir()
+                checkout = compiler_fixture(root/'sources/checkout', 'checkout')
+                compiler_projection(root, 'default', 'checkouts', checkout)
                 self.assertEqual(compiler_root('default', root=root), checkout)
                 self.assertEqual(compiler_root('test', root=root), test)
                 with self.assertRaises(ValueError):
@@ -256,13 +287,9 @@ class CompilerContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = compiler_fixture(root/'source compiler', 'selected')
-            (source/'src').mkdir()
-            selected = root/'_build/test/checkouts/erl_hls'
-            (selected/'ebin').mkdir(parents=True)
-            (selected/'src').symlink_to(source/'src', target_is_directory=True)
-            (root/'_build/test/checkouts/hls_runtime/ebin').mkdir(parents=True)
+            selected = compiler_projection(root, 'test', 'checkouts', source)
             (root/'_build/test/lib/hls_fabric/ebin').mkdir(parents=True)
-            compiler_fixture(root/'_checkouts/erl_hls', 'unrelated')
+            compiler_fixture(root/'unrelated', 'unrelated')
             self.assertEqual(compiler_root('test', root=root), source)
             self.assertEqual(compiler_tool(source, 'compile_xls').VALUE, 'selected')
             paths = erlang_paths('test', root, compiler=source)
@@ -274,30 +301,33 @@ class CompilerContextTests(unittest.TestCase):
         """A selected facade maps resources to sibling applications, with checked paths."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            package = root/'tools/erl_hls_tools'
-            package.mkdir(parents=True)
-            (package/'__init__.py').write_text('"""Compiler package fixture."""\n')
-            facade = root/'apps/erl_hls'
-            (facade/'src').mkdir(parents=True)
-            for name in ('hls_compile', 'hls_fabric', 'hls_target'):
-                (root/'apps'/name).mkdir()
+            facade = compiler_fixture(root, 'resources')
+            debug = root/'apps/hls_target/priv/rtl/debug'
+            debug.mkdir(parents=True)
             self.assertEqual(compiler_application(facade, 'erl_hls'), facade.resolve())
             self.assertEqual(compiler_application(facade, 'hls_compile'),
                              (root/'apps/hls_compile').resolve())
             self.assertEqual(compiler_resource(facade, 'hls_target', 'priv/rtl/debug'),
                              (root/'apps/hls_target/priv/rtl/debug').resolve())
+            self.assertEqual(debug_rtl(facade)[0], debug.resolve()/'hls_debug_frame_rx.v')
             with self.assertRaisesRegex(ValueError, 'unsupported compiler application'):
                 compiler_application(facade, 'unknown')
             for parts in ((), ('../outside',), ('',)):
                 with self.assertRaisesRegex(ValueError, 'invalid compiler resource path'):
                     compiler_resource(facade, 'hls_compile', *parts)
 
-    def test_standalone_resource_fallback_is_deliberate(self) -> None:
-        """A legacy compiler fixture without an umbrella retains its flat resource root."""
+    def test_flat_standalone_compiler_is_rejected(self) -> None:
+        """The canonical package boundary rejects the retired flat checkout shape."""
         with tempfile.TemporaryDirectory() as temporary:
-            source = compiler_fixture(Path(temporary)/'standalone', 'legacy')
+            source = Path(temporary)/'standalone'
+            package = source/'tools/erl_hls_tools'
+            package.mkdir(parents=True)
+            (package/'__init__.py').write_text('"""Retired flat fixture."""\n')
             for name in ('erl_hls', 'hls_compile', 'hls_fabric', 'hls_target'):
-                self.assertEqual(compiler_application(source, name), source)
+                with self.assertRaises(FileNotFoundError):
+                    compiler_application(source, name)
+            with self.assertRaises(FileNotFoundError):
+                debug_rtl(source)
 
     def test_override_is_explicit_and_never_falls_back(self) -> None:
         """Explicit sources need no build tree; incomplete overrides cannot select another compiler."""
@@ -308,9 +338,9 @@ class CompilerContextTests(unittest.TestCase):
             self.assertEqual(compiler_root('default', override=selected, root=root), selected)
             self.assertEqual(dict(os.environ), before_env)
             self.assertEqual(sys.path, before_paths)
-            stale = compiler_fixture(root/'_build/default/lib/erl_hls', 'stale')
+            stale = compiler_fixture(root/'stale compiler', 'stale')
+            compiler_projection(root, 'default', 'lib', stale)
             (root/'_build/default/lib/hls_fabric/ebin').mkdir(parents=True)
-            (stale/'ebin').mkdir()
             legacy = root/'legacy'
             (legacy/'tools').mkdir(parents=True)
             (legacy/'tools/compile_xls.py').write_text('# Old flat tools are insufficient.\n')
@@ -331,8 +361,10 @@ class CompilerContextTests(unittest.TestCase):
             self.assertEqual((a.VALUE, b.VALUE, again.VALUE), ('first', 'second', 'first'))
             self.assertIs(a, again)
             self.assertIsNot(a, b)
-            self.assertEqual(Path(a.__file__).resolve(), first/'tools/erl_hls_tools/compile_xls.py')
-            self.assertEqual(Path(b.__file__).resolve(), second/'tools/erl_hls_tools/compile_xls.py')
+            self.assertEqual(Path(a.__file__).resolve(),
+                             first.parents[1]/'tools/erl_hls_tools/compile_xls.py')
+            self.assertEqual(Path(b.__file__).resolve(),
+                             second.parents[1]/'tools/erl_hls_tools/compile_xls.py')
             self.assertEqual(dict(os.environ), before_env)
             self.assertEqual(sys.path, before_paths)
 

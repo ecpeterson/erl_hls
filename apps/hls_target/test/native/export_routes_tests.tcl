@@ -67,7 +67,7 @@ proc get_site_pins {args} {
 rename ::hls_spacetime_routes::hash ::hls_spacetime_routes::native_hash
 proc ::hls_spacetime_routes::hash {path} {return $::digest}
 set opened 0
-set build [dict create source $digest rtl $digest observation $digest]
+set build [dict create source $digest rtl $digest observation $digest implementation $digest]
 set arc [dict create path_id max/0 arc_index 0 report_net net canonical_net net source_pin q target_pin d]
 set duplicate [dict replace $arc path_id max/1]
 set selection [dict create build $build checkpoint_sha256 $digest report_sha256 $digest selection_sha256 $digest paths [list $arc $duplicate]]
@@ -76,7 +76,7 @@ if {$opened != 1 || [dict get $counters net_nodes] != 1} {error "net queried mor
 set channel [open [file join $output good routes.json]]
 set result [read $channel]
 close $channel
-foreach expected {{"scope":"static_route_topology"} {"routing_node":"n0","status":"resolved"} {"direction_status":"bidirectional"} {"id":"w2","tile":"tile_b","x":4,"y":7}} {
+foreach expected {{"scope":"static_route_topology"} {"implementation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} {"routing_node":"n0","status":"resolved"} {"direction_status":"bidirectional"} {"id":"w2","tile":"tile_b","x":4,"y":7}} {
     if {[string first $expected $result] < 0} {error "missing expected output: $expected"}
 }
 set used [dict create n0 1 n1 1 n2 1]
@@ -90,4 +90,6 @@ if {![catch {::hls_spacetime_routes::run mock.dcp [file join $output wrong] $wro
 if {[file exists [file join $output wrong complete.json]]} {error "failed export has completion marker"}
 set duplicate [dict replace $selection paths [list $arc $arc]]
 if {![catch {::hls_spacetime_routes::selection $duplicate}]} {error "duplicate arc identity accepted"}
+set missing_implementation [dict replace $selection build [dict remove $build implementation]]
+if {![catch {::hls_spacetime_routes::selection $missing_implementation}]} {error "missing implementation accepted"}
 puts "route exporter synthetic fixture passed"

@@ -93,6 +93,6 @@ usage() ->
         "spacetime join BUNDLE.etf CATALOGUE.etf CLAIMS.etf FRESH_OUTPUT\n"
         "spacetime sdf-arcs INPUT.sdf SHA256 fast|slow FRESH_JSON\n"
         "SDF input/output are bounded at 256 MiB; SHA256 binds the exact raw input. The output file must not exist.\n"
-        "Bundle/catalogue/claim inputs use trusted raw ETF (256 MiB each), not compressed ETF. Import identity: #{build => #{source => <<...>>, rtl => <<...>>, observation => <<...>>}, checkpoint => <<SHA256>>}.\n"
+        "Bundle/catalogue/claim inputs use trusted raw ETF (256 MiB each), not compressed ETF. Import identity: #{build => #{source => <<...>>, rtl => <<...>>, observation => <<...>>, implementation => <<...>>}, checkpoint => <<SHA256>>}.\n"
         "Native extraction, producer claim qualification and simulation are separate commands; this command never infers physical correspondence.\n"
     >>.

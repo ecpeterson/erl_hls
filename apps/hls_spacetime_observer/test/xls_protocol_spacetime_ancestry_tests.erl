@@ -53,13 +53,15 @@ capture(Rows) ->
         {<<"____state_0">>,16},{<<"____state_1">>,16},{<<"d0">>,16},{<<"d1">>,16},
         {<<"ce0">>,1},{<<"ce1">>,1}]],
     Plan = #{schema => 1, actors => [], unsupported => [], state => [], registers => Registers,
-        signals => Signals, inputs => #{source_build => <<"fixture-source">>,rtl => <<"fixture-rtl">>},
+        signals => Signals, inputs => #{source_build => <<"fixture-source">>,rtl => <<"fixture-rtl">>,
+            implementation => <<"fixture-implementation">>},
         dependencies => xls_protocol_spacetime_dependencies:plan(Ir,Rtl,Registers)},
     Trace = #{signals => [#{id => <<"reset">>,width => 1,path => <<"public">>}|Signals],
         spans => [#{first => C,count => 1,values => V} || {C,V} <- lists:enumerate(0,Rows)],
         end_cycle => length(Rows),complete => true,cause => <<"ok">>,records => length(Rows)},
     Build = #{source => <<"fixture-source">>,rtl => <<"fixture-rtl">>,
-              observation => xls_protocol_spacetime:observation_digest(Plan)},
+              observation => xls_protocol_spacetime:observation_digest(Plan),
+              implementation => <<"fixture-implementation">>},
     xls_protocol_spacetime_capture:capture(Plan,Trace,Build).
 
 %% Fixture paths are deliberately distinct from qualified generated RTL paths.

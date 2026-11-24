@@ -265,7 +265,8 @@ class SourceToolchainTests(unittest.TestCase):
                 units.append({'directory': role, 'role': role, 'source': f'{role}/source.x',
                               'output': f'{role}/top.v', 'top': 'main', 'module': role,
                               'codegen_flags': flags, 'dslx_path': [role], 'rtl': [f'{role}/top.v']})
-            manifest = {'version': 1, 'inputs': inputs, 'units': units,
+            manifest = {'version': 2, 'provenance': {'kind': 'unplanned'},
+                        'inputs': inputs, 'units': units,
                         'rtl': {row['role']: row['rtl'] for row in units}}
             (root/'source-build.json').write_text(json.dumps(manifest))
             before = snapshot(root)
@@ -292,7 +293,8 @@ class SourceToolchainTests(unittest.TestCase):
             (root/'source.x').write_text('pub fn main() -> u1 { u1:0 }')
             unit = {'role': '.', 'directory': '.', 'source': 'source.x', 'top': 'main', 'module': 'fixture',
                     'output': 'fixture.v', 'dslx_path': ['.'], 'codegen_flags': [], 'rtl': ['fixture.v']}
-            (root/'source-build.json').write_text(json.dumps({'version': 1, 'units': [unit],
+            (root/'source-build.json').write_text(json.dumps({'version': 2,
+                'provenance': {'kind': 'unplanned'}, 'units': [unit],
                 'inputs': [{'file': 'source.x', 'sha256': hashlib.sha256((root/'source.x').read_bytes()).hexdigest()}],
                 'rtl': {'.': ['fixture.v']}}))
             xls = root/'xls'

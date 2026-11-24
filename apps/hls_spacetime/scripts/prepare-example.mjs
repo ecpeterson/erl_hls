@@ -33,7 +33,7 @@ function check(condition, message) {
 
 /** Compare content identities independently of JSON object key order. */
 function sameBuild(left, right) {
-  return ["source", "rtl", "observation"].every(
+  return ["source", "rtl", "observation", "implementation"].every(
     (key) => left?.[key] === right?.[key],
   );
 }

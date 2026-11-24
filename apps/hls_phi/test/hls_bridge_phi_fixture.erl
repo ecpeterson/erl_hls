@@ -4,6 +4,8 @@
 
 %% Shape counts phi cells in each selected plane, not physical qubits. The
 %% split changes placement only: routes and PRNG seeds retain global geometry.
+-doc "Builds the finite two-device Phi bridge topology and exact actor placement.".
+-spec fixture(map()) -> {hls_topology:plan(), map()}.
 fixture(Options) ->
     Config = #{shape := [Width, Height]} = config(Options),
     case Height rem 2 of
@@ -16,7 +18,7 @@ fixture(Options) ->
     Actors = maps:from_list([{{Family, X, Y}, Module}
         || {Family, #{module := Module}} <- lists:sort(maps:to_list(Families)),
            X <- lists:seq(0, Width-1), Y <- lists:seq(0, Height-1)]),
-    Routes = lists:append([hls_topology:routes_for_instance(FamilyPlan, Family, [X, Y])
+    Routes = lists:append([hls_logical_topology:routes_for_instance(FamilyPlan, Family, [X, Y])
         || {Family, X, Y} <- lists:sort(maps:keys(Actors))]),
     Plan = hls_topology:normalize(#{version => 1, actors => Actors, families => #{},
         ingresses => [], externals => Externals, route_relations => [],

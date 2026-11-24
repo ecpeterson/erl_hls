@@ -9,7 +9,7 @@ Cycle-native execution evidence shared by compiler/lowering observers and offlin
 
 -doc "Nonempty textual identifier scoped to one artifact, independent of payload equality.".
 -type id() :: binary().
--doc "Identities of the exact source bundle, compiled RTL and observation bindings; not application names.".
+-doc "Identities of the exact source bundle, compiled RTL, observation bindings and realized implementation; not application names.".
 -type build() :: hls_observation_build:build().
 -doc "A semantic storage word or explicit transient value. Root versions disclose initial, carry-in or unknown ancestry.".
 -type version() :: #{
@@ -191,8 +191,13 @@ validate_bundle(_) ->
 build(Build) ->
     case hls_observation_build:validate(Build) of
         ok ->
-            #{source := Source, rtl := Rtl, observation := Observation} = Build,
-            lists:foreach(fun text/1, [Source, Rtl, Observation]);
+            #{
+                source := Source,
+                rtl := Rtl,
+                observation := Observation,
+                implementation := Implementation
+            } = Build,
+            lists:foreach(fun text/1, [Source, Rtl, Observation, Implementation]);
         {error, {invalid_component, _Name, Value}} ->
             text(Value);
         {error, invalid_shape} ->

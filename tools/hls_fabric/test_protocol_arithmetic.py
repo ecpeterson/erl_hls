@@ -2,10 +2,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 import argparse
+import hashlib
 import json
 from backend_paths import ROOT, erlang_environment
 from compiler_paths import compiler_resource, compiler_root
-from protocol_test_build import compile_build, emit_command
+from protocol_test_build import compile_build
 from backend_commands import run
 from test_local_protocol import prove
 
@@ -22,16 +23,25 @@ pub fn ordinary(raw: reference::MachineBits, frame: bits[128], received: bool, s
 """
 
 
-def emit(stage: Path, members: int, shared: bool) -> Path:
-    """Invoke the public network writer with fresh source and logical actor IDs."""
+def feedback(stage: Path, name: str, *arguments: str | Path) -> dict:
+    """Run the finite Spacetime fixture through the combined test/profile projection."""
+    output = stage / (name + ".json")
+    run(["erl", "+S", "2:2", "-noshell", "-s", "hls_spacetime_feedback_fixture",
+         "main", "-extra", *arguments], stage, name, output=output,
+        env=erlang_environment("test+spacetime"))
+    return json.loads(output.read_text())
+
+
+def emit(stage: Path, case: str) -> tuple[Path, Path, dict]:
+    """Propose one correlated implementation and emit it through the public planned writer."""
     stage.mkdir()
-    config = stage / "config.erl"
-    group = ",arithmetic_groups=>[[" + ",".join(map(str, range(members))) + "]]" if shared else ""
-    config.write_text('#{sources=>[{"apps/hls_fabric/test/hls_protocol_arithmetic_fixture.erl",[]}],'
-        'topology=>{hls_protocol_arithmetic_fixture,topology,[' + str(members) + ']},actor_limit=>3' + group + '}.\n')
+    plan = stage / "implementation-plan.etf"
+    proposed = feedback(stage, "propose", "propose", case, plan)
     build = stage / "build"
-    run(emit_command("network", config, build), stage, "emit", env=erlang_environment("test"))
-    return build
+    emitted = feedback(stage, "emit", "write", plan, build)
+    if proposed["plan"] != emitted["plan"]:
+        raise ValueError("planned source writer changed the implementation plan")
+    return build, plan, emitted
 
 
 def simulate(build: Path, stage: Path, members: int) -> None:
@@ -58,13 +68,13 @@ def simulate(build: Path, stage: Path, members: int) -> None:
     assert "ARITHMETIC_PASS" in (stage / "rtl-witness.log").read_text()
 
 
-def mapped_cost(build: Path, stage: Path) -> dict:
+def mapped_cost(build: Path, stage: Path, yosys: str | Path) -> dict:
     """Count the complete connected fixture; local mapping is not routed area or timing."""
     netlist = stage / "mapped.json"
     script = stage / "map.ys"
     script.write_text(f'read_verilog "{build}/network/core.v" "{build}/network/protocol_network.sv"\n'
         f'synth_xilinx -family xc7 -top protocol_network -flatten -nowidelut\nwrite_json "{netlist}"\n')
-    run(["yosys", "-Q", "-T", "-s", script], stage, "map")
+    run([yosys, "-Q", "-T", "-s", script], stage, "map")
     types = [c["type"] for c in json.loads(netlist.read_text())["modules"]["protocol_network"]["cells"].values()]
     counts = {key: sum(t.startswith(prefix) for t in types) for key, prefix in
               [("lut", "LUT"), ("ff", "FD"), ("dsp", "DSP"), ("bram", "RAMB")]}
@@ -72,7 +82,7 @@ def mapped_cost(build: Path, stage: Path) -> dict:
     return counts
 
 
-def action_contract(xls: Path, build: Path, stage: Path) -> None:
+def action_contract(xls: Path, build: Path, stage: Path, yosys: str | Path) -> None:
     """Check source completion, ordinary public actions and busy exclusion over finite input domains."""
     source = stage / "arithmetic_contract.x"
     source.write_text("import actor_0 as reference;\nimport receiver_0 as shared;\n" +
@@ -95,7 +105,7 @@ def action_contract(xls: Path, build: Path, stage: Path) -> None:
     paths = [build / "actors", ROOT / "apps/hls_target/priv/xls/lib", ROOT / "apps/hls_fabric/priv/xls/fabric", compiler_resource(public, 'hls_compile', 'priv/xls/lib'), compiler_resource(public, 'hls_fabric', 'priv/xls/fabric')]
     run([xls / "ir_converter_main", "--warnings_as_errors=false", "--dslx_path=" + ":".join(map(str, paths)),
          "--dslx_stdlib_path=" + str(xls / "xls/dslx/stdlib"), source], stage, "contract-convert", raw)
-    args = SimpleNamespace(xls=xls, yosys="yosys")
+    args = SimpleNamespace(xls=xls, yosys=str(yosys))
     results = [prove(args, stage, raw, "arithmetic_contract", prop, positive)
                for prop, positive in [("completion", True), ("busy", True), ("ordinary", True), ("wrong", False)]]
     (stage / "contracts.json").write_text(json.dumps({"results": results,
@@ -109,17 +119,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls", type=lambda p: Path(p).resolve())
     parser.add_argument("stage", type=lambda p: Path(p).resolve())
+    parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--cases", nargs="+", choices=["local3", "shared2", "shared3"], default=["local3", "shared2", "shared3"])
     args = parser.parse_args(); args.stage.mkdir()
-    run(["rebar3", "as", "test", "compile"], args.stage, "build-backend")
+    run(["rebar3", "as", "test,spacetime", "compile"], args.stage, "build-backend")
+    cache = args.stage / "implementation-cache"
     results = {}
     for case in args.cases:
         members = int(case[-1]); part = args.stage / case
-        build = emit(part, members, case.startswith("shared"))
-        build = compile_build(args.xls, build, profile="test")
+        source, _plan, planned = emit(part, case)
+        build = compile_build(args.xls, source, profile="test+spacetime", cache=cache)
         simulate(build, part, members)
-        results[case] = mapped_cost(build, part)
-        if case == "shared3": action_contract(args.xls, build, part)
+        results[case] = mapped_cost(build, part, args.yosys)
+        compiled = json.loads((build / "compiled.json").read_text())
+        if compiled["provenance"]["implementation_plan_sha256"] != planned["plan"]:
+            raise ValueError("compiled implementation is not correlated with the proposed plan")
+        (part / "implementation.json").write_text(json.dumps({
+            "plan": planned,
+            "request": compiled["build_request"]["sha256"],
+            "product": compiled["products"]["sha256"],
+            "implementation": compiled["implementation"]["sha256"],
+            "compiled_json_sha256": hashlib.sha256((build / "compiled.json").read_bytes()).hexdigest()
+        }, indent=2) + "\n")
+        if case == "shared3": action_contract(args.xls, build, part, args.yosys)
         (args.stage / "costs.json").write_text(json.dumps(results, indent=2) + "\n")
     if "local3" in results and "shared3" in results:
         baseline, shared = results["local3"], results["shared3"]

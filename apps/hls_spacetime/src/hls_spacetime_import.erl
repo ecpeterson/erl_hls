@@ -17,7 +17,7 @@ Reads the bounded native Vivado census exported by export_spacetime.tcl and atta
 -define(MAX_BYTES, 268435456).
 -define(MAX_RECORDS, 2000000).
 
--doc "Reads a complete native export directory and requires exact source/RTL/observation and checkpoint digest agreement. Checks every table's header, row/byte counters, aggregate caps and primitive references. Unknown values remain null. Malformed or missing evidence raises an import/physical/SDF-contract or JSON decoding error. The caller owns evidence authenticity and collection hash verification.".
+-doc "Reads a complete native export directory and requires exact source/RTL/observation/implementation and checkpoint digest agreement. Checks every table's header, row/byte counters, aggregate caps and primitive references. Unknown values remain null. Malformed or missing evidence raises an import/physical/SDF-contract or JSON decoding error. The caller owns evidence authenticity and collection hash verification.".
 -spec read(file:filename_all(), hls_observation_build:build(), binary()) ->
     hls_target_physical:physical().
 read(Directory, ExpectedBuild, ExpectedCheckpoint) ->
@@ -126,8 +126,18 @@ manifest(Directory) ->
 
 %% Translate only fixed schema keys, never external names into atoms.
 -spec build(map()) -> hls_observation_build:build().
-build(#{<<"source">> := Source, <<"rtl">> := Rtl, <<"observation">> := Observation}) ->
-    Build = #{source => Source, rtl => Rtl, observation => Observation},
+build(#{
+    <<"source">> := Source,
+    <<"rtl">> := Rtl,
+    <<"observation">> := Observation,
+    <<"implementation">> := Implementation
+}) ->
+    Build = #{
+        source => Source,
+        rtl => Rtl,
+        observation => Observation,
+        implementation => Implementation
+    },
     case hls_observation_build:validate(Build) of
         ok -> Build;
         {error, _Reason} -> fail(malformed_export)

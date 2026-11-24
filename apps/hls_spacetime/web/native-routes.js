@@ -32,10 +32,12 @@ function digest(value) {
 function buildKey(build) {
   requireValue(
     build &&
-      ["source", "rtl", "observation"].every((key) => digest(build[key])),
+      ["source", "rtl", "observation", "implementation"].every((key) =>
+        digest(build[key]),
+      ),
     "invalid build identity",
   );
-  return [build.source, build.rtl, build.observation].join("/");
+  return [build.source, build.rtl, build.observation, build.implementation].join("/");
 }
 
 /** Collect bounded, explicitly reviewed capture-origin links while retaining the
@@ -54,6 +56,7 @@ function origins(detail, current, checkpoint) {
       origin.checkpoint === checkpoint &&
         origin.build?.source === current.source &&
         origin.build?.rtl === current.rtl &&
+        origin.build?.implementation === current.implementation &&
         [
           "base_projection_sha256",
           "original_trace_sha256",

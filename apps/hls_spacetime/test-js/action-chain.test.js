@@ -102,7 +102,7 @@ function fixture() {
     schema: 1,
     unit: "cycle",
     evidence: "synthetic",
-    build: { source: "s", rtl: "r", observation: "o" },
+    build: { source: "s", rtl: "r", observation: "o", implementation: "i" },
     capture: {
       first_cycle: 0,
       end_cycle: 12,

@@ -29,7 +29,7 @@
 -define(MAX_PLAN, 16777216).
 -define(MAX_FILES, 512).
 
--doc "Reads and checks one generated source-protocol build, resolves its observation plan and prepares the packaged passive harness. Source hashes and application actor count are checked by the planner; compiled RTL and support bytes are snapshotted. Rejects missing/unsafe file-list entries, duplicate paths, unsupported source bindings and more than 512 RTL files or 256 MiB total input. Executes no tools and creates no files.".
+-doc "Reads and checks one generated source-protocol build, requires its v2 compiled release identity, adds that realized implementation before deriving the observation identity, and prepares the packaged passive harness. Source hashes and application actor count are checked by the planner; compiled RTL and support bytes are snapshotted. Rejects missing/unsafe file-list entries, duplicate paths, unsupported source bindings and more than 512 RTL files or 256 MiB total input. Executes no tools and creates no files.".
 -spec prepare(config() | file:filename_all()) -> prepared().
 prepare(Config) when is_map(Config) ->
     [] = maps:keys(Config) -- [boundary_rtl, compiled, optimized_ir, raw_ir, source, scope],
@@ -40,9 +40,16 @@ prepare(Config) when is_map(Config) ->
         boundary_rtl := Rtl,
         compiled := Compiled
     } = Config,
-    FullPlan = xls_protocol_spacetime:plan(Source, Raw, Opt, Rtl),
+    SourceBuild = read(filename:join(Source, "source-build.json"), ?MAX_PLAN),
+    #{implementation := Implementation, rtl := ReceiptRtl} =
+        hls_source_build_receipt:validate(Compiled, SourceBuild),
+    BasePlan = xls_protocol_spacetime:plan(Source, Raw, Opt, Rtl),
+    FullPlan = BasePlan#{
+        inputs := (maps:get(inputs, BasePlan))#{implementation => Implementation}
+    },
     Plan = select_scope(FullPlan, maps:get(scope, Config, full)),
     Paths = file_list(Compiled),
+    ReceiptRtl = lists:sort(Paths),
     RtlFiles = rtl_files(Compiled, Paths, 0, []),
     RtlBytes = read(Rtl, ?MAX_INPUT),
     true = lists:any(fun({_, Bytes}) -> Bytes =:= RtlBytes end, RtlFiles),
@@ -61,8 +68,7 @@ prepare(Config) when is_map(Config) ->
                     read(priv(hls_spacetime, "include/spacetime_trace.h"), ?MAX_PLAN)},
                 {<<"raw.ir">>, read(Raw, ?MAX_INPUT)},
                 {<<"optimized.ir">>, read(Opt, ?MAX_INPUT)},
-                {<<"source-build.json">>,
-                    read(filename:join(Source, "source-build.json"), ?MAX_PLAN)}
+                {<<"source-build.json">>, SourceBuild}
             ]
     ),
     true = lists:sum([byte_size(B) || B <- maps:values(Files)]) =< ?MAX_INPUT,
@@ -309,8 +315,10 @@ select_scope(Plan, storage) ->
 
 %% Build identities describe the exact observation domain, not a physical checkpoint.
 -spec build(xls_protocol_spacetime:plan()) -> hls_observation_build:build().
-build(Plan = #{inputs := #{source_build := Source, rtl := Rtl}}) ->
-    hls_observation_build:new(Source, Rtl, xls_protocol_spacetime:observation_digest(Plan)).
+build(Plan = #{inputs := #{source_build := Source, rtl := Rtl, implementation := Implementation}}) ->
+    hls_observation_build:new(
+        Source, Rtl, xls_protocol_spacetime:observation_digest(Plan), Implementation
+    ).
 
 %% Source fault aggregation follows the verified public wrapper's actor population.
 -spec harness(binary(), non_neg_integer()) -> binary().

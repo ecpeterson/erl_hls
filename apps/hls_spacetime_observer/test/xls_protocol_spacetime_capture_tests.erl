@@ -45,6 +45,13 @@ exact_binding_rejections_test() ->
     ),
     ?assertException(
         error,
+        {spacetime_build_binding, implementation, _, _},
+        xls_protocol_spacetime_capture:bundle(Plan, Trace, Build#{
+            implementation := <<"other-implementation">>
+        })
+    ),
+    ?assertException(
+        error,
         {spacetime_build_binding, build, _, {invalid, {invalid_actual, invalid_shape}}},
         xls_protocol_spacetime_capture:bundle(Plan, Trace, Build#{extra => <<"not-on-the-wire">>})
     ).
@@ -231,7 +238,11 @@ fixture(Rows) ->
         state => [
             #{tuple_path => [0, 0], signal => <<"q">>, source_width => 16, physical_width => 16}
         ],
-        inputs => #{rtl => <<"rtl">>, source_build => <<"source">>}
+        inputs => #{
+            rtl => <<"rtl">>,
+            source_build => <<"source">>,
+            implementation => <<"implementation">>
+        }
     },
     Trace = #{
         signals => [#{id => <<"reset">>, width => 1, path => <<"public">>} | Signals],
@@ -245,7 +256,10 @@ fixture(Rows) ->
         records => length(Rows)
     },
     {Plan, Trace, #{
-        source => <<"source">>, rtl => <<"rtl">>, observation => observation_digest(Plan)
+        source => <<"source">>,
+        rtl => <<"rtl">>,
+        observation => observation_digest(Plan),
+        implementation => <<"implementation">>
     }}.
 
 %% Test bindings follow the production native-plan identity convention exactly.

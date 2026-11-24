@@ -3,7 +3,7 @@
  * qualifies a live clock. Evidence identities are trusted inventories, not signatures. */
 import { nativePaths } from "./native-paths.js";
 
-const BUILD_KEYS = ["source", "rtl", "observation"];
+const BUILD_KEYS = ["source", "rtl", "observation", "implementation"];
 // Native reports round displayed slack to picoseconds. Half a display unit may
 // separate a retained higher-precision value from that report's rounded summary.
 const SLACK_TOLERANCE_NS = 0.0005 + 1e-12;

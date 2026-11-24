@@ -570,7 +570,7 @@ recipients(Plan, Family, Coordinates, Port) ->
 route(Plan, Family, Coordinates, Port) ->
     [Route] = [
         Candidate
-        || Candidate <- hls_topology:routes_for_instance(
+        || Candidate <- hls_logical_topology:routes_for_instance(
             Plan,
             Family,
             Coordinates

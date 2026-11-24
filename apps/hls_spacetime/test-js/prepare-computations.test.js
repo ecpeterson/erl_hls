@@ -21,7 +21,7 @@ import {
 /** A real-shaped finite capture has publication and scalar producers, reads,
  * residence, semantic context and one unknown physical bit. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const resources = [
     {
       id: "register/state",
@@ -794,6 +794,7 @@ test("native graph preparation recognizes only a qualified same-capture observat
     source: "a".repeat(64),
     rtl: "b".repeat(64),
     observation: "c".repeat(64),
+    implementation: "f".repeat(64),
   };
   const revised = { ...build, observation: "d".repeat(64) },
     checkpoint = "e".repeat(64);

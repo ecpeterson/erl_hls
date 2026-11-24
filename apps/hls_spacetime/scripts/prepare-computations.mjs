@@ -27,7 +27,9 @@ function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 function sameBuild(a, b) {
-  return ["source", "rtl", "observation"].every((key) => a?.[key] === b?.[key]);
+  return ["source", "rtl", "observation", "implementation"].every(
+    (key) => a?.[key] === b?.[key],
+  );
 }
 
 /** TSV is the exporter's escaped cell format; decode only its documented escapes. */

@@ -64,7 +64,12 @@ rejection_test_() ->
 %% Small direct/aliased output connections include one exercised and one constant-only bit.
 -spec fixture() -> {map(), map(), map(), [map()]}.
 fixture() ->
-    Build = #{source => <<"source">>, rtl => <<"rtl">>, observation => <<"observation">>},
+    Build = #{
+        source => <<"source">>,
+        rtl => <<"rtl">>,
+        observation => <<"observation">>,
+        implementation => <<"implementation">>
+    },
     Identity = #{build => Build, checkpoint => <<"checkpoint">>, netlist => <<"netlist">>, probe => <<"probe">>},
     Cells = [#{id => Id, kind => <<"FDRE">>} || Id <- [<<"r0">>, <<"r1">>]],
     Nets = [#{id => Net, pins => [#{cell => Cell, pin => <<"Q">>, native => <<Cell/binary,"/Q">>, direction => output}]}

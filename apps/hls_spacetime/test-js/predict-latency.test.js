@@ -17,7 +17,7 @@ const options = {
   savedStep: true,
 };
 function fixture(change = () => {}) {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const events = [
     { id: "input", cycle: 0 },
     { id: "action", cycle: 1, inputs: ["root"], outputs: ["v"] },

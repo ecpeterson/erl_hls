@@ -22,6 +22,7 @@ function fixture() {
     source: identity("1"),
     rtl: identity("2"),
     observation: identity("3"),
+    implementation: identity("0"),
   };
   const extendedBuild = { ...build, observation: identity("6") };
   const event = {

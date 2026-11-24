@@ -1,7 +1,7 @@
 %% Synthetic contract fixture, not a recording of the registered N2 application.
 %% Phi/data names illustrate feedback; cycles, primitive placement and build IDs are invented.
 #{format => spacetime, schema => 1, unit => cycle, evidence => synthetic_fixture,
-  build => #{source => <<"fixture-source-1">>, rtl => <<"fixture-rtl-1">>, observation => <<"fixture-observer-1">>},
+  build => #{source => <<"fixture-source-1">>, rtl => <<"fixture-rtl-1">>, observation => <<"fixture-observer-1">>, implementation => <<"fixture-implementation-1">>},
   capture => #{device => <<"board">>, clock => <<"clk">>, first_cycle => 0, end_cycle => 14,
     complete => true, evidence => <<"Hand-authored schema example; not an application execution">>,
     incarnations => [#{id => <<"reset-0">>, first_cycle => 0, end_cycle => 10},
@@ -88,7 +88,7 @@
   activity => [#{cycle => 4, incarnation => <<"reset-0">>, resource => <<"dispatch">>,
                  evidence => <<"Illustrative switching, with no causal attribution">>}],
   physical => #{
-    build => #{source => <<"fixture-source-1">>, rtl => <<"fixture-rtl-1">>, observation => <<"fixture-observer-1">>},
+    build => #{source => <<"fixture-source-1">>, rtl => <<"fixture-rtl-1">>, observation => <<"fixture-observer-1">>, implementation => <<"fixture-implementation-1">>},
     checkpoint => <<"synthetic-no-real-dcp">>, evidence => synthetic_fixture, coordinate_unit => tile_grid,
     cells => [
       #{id => <<"ff">>, kind => <<"FDRE">>, site => <<"illustrative-site-1">>, bel => <<"AFF">>, x => 1, y => 2, properties => #{<<"INIT">> => <<"0">>}},

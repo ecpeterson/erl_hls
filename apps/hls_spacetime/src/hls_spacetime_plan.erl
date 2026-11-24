@@ -3,26 +3,24 @@
 System-level proposal and revision over shared implementation contracts.
 
 Proposal uses process-free topology values and deterministic partition/scheduler policy. Revision
-accepts characterization by value and a caller-supplied pure policy, so target tools, caches and
-parallel execution stay outside the optimizer. Shared cache ownership and iterative physical
-optimization remain later campaign work.
+accepts characterization by value and a caller-supplied pure policy. Target tools, shared caches and
+parallel execution stay outside the optimizer; callers drive the implementation and measured
+characterization steps between proposal and revision.
 """.
 
--export([propose/4, revise/3]).
+-export([propose/3, revise/4]).
 
--doc "Builds a proposed implementation from one logical topology and target set. Options are `max_group_size`, `constraints`, `capabilities`, `planner` and opaque `inputs`.".
+-doc "Builds a proposed implementation from one normalized logical topology and target set, deriving the logical-system identity from the topology. `sharing` is `none` (the default) or `{by_module, MaxActors}`; other options are `constraints`, `capabilities`, `planner` and opaque `inputs`.".
 -spec propose(
-    binary(), hls_logical_topology:plan(), [hls_implementation_plan:target(), ...], map()
+    hls_logical_topology:compact_plan(), [hls_implementation_plan:target(), ...], map()
 ) ->
     hls_implementation_plan:plan().
-propose(LogicalSystem, Topology, Targets, Options) when is_map(Options) ->
+propose(Topology, Targets, Options) when is_map(Options) ->
     keys(Options),
     Placement = hls_spacetime_partition:balanced(Topology, Targets),
-    Schedules = hls_spacetime_schedule:shared_by_module(
-        Topology, Placement, maps:get(max_group_size, Options, 1)
-    ),
+    Schedules = schedules(Topology, Placement, maps:get(sharing, Options, none)),
     hls_implementation_plan:new(
-        LogicalSystem,
+        hls_logical_topology:identity(Topology),
         Placement,
         Schedules,
         maps:get(constraints, Options, #{}),
@@ -32,20 +30,21 @@ propose(LogicalSystem, Topology, Targets, Options) when is_map(Options) ->
             inputs => maps:get(inputs, Options, [])
         }
     );
-propose(_LogicalSystem, _Topology, _Targets, Options) ->
+propose(_Topology, _Targets, Options) ->
     error({invalid_spacetime_plan_options, Options}).
 
--doc "Validates exact plan/characterization correlation, asks a pure policy for replacement placement and schedules, then records the characterization identity as revision provenance. The logical system and owner-defined constraints/capabilities cannot change.".
+-doc "Validates exact plan, realized-implementation and characterization correlation, asks a pure policy for replacement placement and schedules, then records the characterization identity as revision provenance. The logical system and owner-defined constraints/capabilities cannot change.".
 -spec revise(
     hls_implementation_plan:plan(),
+    binary(),
     hls_characterization:characterization(),
     fun(
         (hls_implementation_plan:plan(), hls_characterization:characterization()) ->
             {hls_implementation_plan:placement(), [hls_implementation_plan:schedule()]}
     )
 ) -> hls_implementation_plan:plan().
-revise(Plan, Characterization, Policy) when is_function(Policy, 2) ->
-    case hls_characterization:matches(Plan, Characterization) of
+revise(Plan, ImplementationIdentity, Characterization, Policy) when is_function(Policy, 2) ->
+    case hls_characterization:matches(Plan, ImplementationIdentity, Characterization) of
         ok ->
             {Placement, Schedules} = Policy(Plan, Characterization),
             hls_implementation_plan:revise(
@@ -58,10 +57,23 @@ revise(Plan, Characterization, Policy) when is_function(Policy, 2) ->
             error({spacetime_revision, Reason})
     end.
 
+%% Preserve independent implementations unless the caller explicitly requests grouping.
+-spec schedules(
+    hls_logical_topology:compact_plan(),
+    hls_implementation_plan:placement(),
+    none | {by_module, pos_integer()}
+) -> [hls_implementation_plan:schedule()].
+schedules(_Topology, _Placement, none) ->
+    [];
+schedules(Topology, Placement, {by_module, MaxActors}) ->
+    hls_spacetime_schedule:shared_by_module(Topology, Placement, MaxActors);
+schedules(_Topology, _Placement, Sharing) ->
+    error({invalid_spacetime_sharing, Sharing}).
+
 %% Reject ignored optimizer options before applying policy.
 -spec keys(map()) -> ok.
 keys(Options) ->
-    case maps:keys(Options) -- [max_group_size, constraints, capabilities, planner, inputs] of
+    case maps:keys(Options) -- [sharing, constraints, capabilities, planner, inputs] of
         [] -> ok;
         Unknown -> error({unknown_spacetime_plan_options, lists:sort(Unknown)})
     end.

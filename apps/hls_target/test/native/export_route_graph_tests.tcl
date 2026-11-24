@@ -87,7 +87,7 @@ proc reject {label script} {
 }
 set opened 0
 set tests 0
-set build [dict create source $digest rtl $digest observation $digest]
+set build [dict create source $digest rtl $digest observation $digest implementation $digest]
 set endpoints [list [dict create pin q kind pin direction OUT] [dict create pin d kind pin direction IN] \
     [dict create pin sibling kind pin direction IN] [dict create pin internal kind pin direction IN] \
     [dict create pin port kind port direction IN]]
@@ -148,6 +148,8 @@ if {![file exists [file join $output failed_tail nets 000001.json]] ||
 incr tests
 set wrong [dict replace $specification checkpoint_sha256 [string repeat b 64]]
 reject wrong_checkpoint {::hls_spacetime_route_graph::run mock.dcp [file join $output wrong_checkpoint] $wrong $none}
+set missing_implementation [dict replace $specification build [dict remove $build implementation]]
+reject missing_implementation {::hls_spacetime_route_graph::run mock.dcp [file join $output missing_implementation] $missing_implementation $none}
 reject tiny_budget {::hls_spacetime_route_graph::run mock.dcp [file join $output tiny_budget] $specification $none [dict create records 1]}
 reject tiny_file {::hls_spacetime_route_graph::run mock.dcp [file join $output tiny_file] $specification $none [dict create file_bytes 16]}
 set duplicate [dict replace $specification nets [list $net $net]]

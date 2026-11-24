@@ -4,7 +4,7 @@
 
 ## Supervision and ownership
 
-`hls_fabric_sup:start_node/4` creates a temporary node supervisor. Its manager, acceptor and connection supervisor are significant temporary children with `auto_shutdown => any_significant`; losing one stops that node subtree without silently restarting its identity. Individual peer connections are temporary children of their connection supervisor, so losing one leaves other peers alive. OTP owns shutdown and partial-start rollback.
+`hls_runtime_sup:start_node/4` creates a temporary node supervisor. Its manager, acceptor and connection supervisor are significant temporary children with `auto_shutdown => any_significant`; losing one stops that node subtree without silently restarting its identity. Individual peer connections are temporary children of their connection supervisor, so losing one leaves other peers alive. OTP owns shutdown and partial-start rollback.
 
 Deployment supervisors own physical brokers. Broker loss produces connection uncertainty, not proof that accepted device work failed. Managed domains additionally propagate actual endpoint death, explicitly publish fresh incarnation PIDs, and permit same-incarnation reattachment after connection loss without reviving old monitors or replaying old work. Replacing a physical broker still requires old-output exclusion and confirmed descriptor release. A new EPMD creation alone cannot fence hardware completions.
 

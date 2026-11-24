@@ -1,6 +1,6 @@
 {application, erl_hls, [
     {description, "Cross-platform environment for hardware applications."},
-    {vsn, "0.0.1"},
+    {vsn, "0.1.0"},
     {registered, []},
     {applications, [
         kernel,

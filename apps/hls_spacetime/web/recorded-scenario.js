@@ -7,7 +7,9 @@ function check(ok, reason) {
 }
 const cycle = (value) => Number.isSafeInteger(value) && value >= 0;
 const sameBuild = (a, b) =>
-  ["source", "rtl", "observation"].every((k) => a?.[k] === b?.[k]);
+  ["source", "rtl", "observation", "implementation"].every(
+    (k) => a?.[k] === b?.[k],
+  );
 
 /** Bind a small, separately reviewed obligation profile to the exact recording.
  * Names never identify owners. Every group member and extra edge must exist;

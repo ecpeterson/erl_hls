@@ -45,7 +45,7 @@ report(Distance, Rounds) when Rounds > 0 ->
     Edges = lists:append([begin
         [#{source => Id, target => {family, F, [TX, TY]}, direction => Port,
             schemas => messages(Family, Rounds)}
-            || #{source := {_, Port}, recipients := Recipients} <- hls_topology:routes_for_instance(Plan, Family, [X, Y]),
+            || #{source := {_, Port}, recipients := Recipients} <- hls_logical_topology:routes_for_instance(Plan, Family, [X, Y]),
                lists:member(Port, [north, east, west, south]), {actor, {F, TX, TY}} <- Recipients]
     end || Id = {family, Family, [X, Y]} <- identities(Distance)]),
     Cuts = lists:foldl(fun(#{source := Source, target := Target, direction := Direction, schemas := Schemas}, Acc) ->

@@ -12,8 +12,6 @@ compiler syntax, and richer lowering facts do not cross the core boundary.
 -export([from_module/1, normalize/1]).
 %% Compiler-summary projection into the shared logical contract.
 -export([project_interface/1, validate_interfaces/2]).
-%% Source-compatible compact route lookup.
--export([routes_for_instance/3]).
 %% Source-compatible compact topology contracts.
 -export_type([plan/0, spec/0]).
 
@@ -48,11 +46,6 @@ normalize(Spec) ->
         Summaries
     ),
     hls_logical_topology:normalize(Spec, Interfaces).
-
--doc "Delegates compact family-route resolution to the core topology authority.".
--spec routes_for_instance(plan(), term(), [non_neg_integer()]) -> [map()].
-routes_for_instance(Plan, FamilyId, Coordinates) ->
-    hls_logical_topology:routes_for_instance(Plan, FamilyId, Coordinates).
 
 -doc "Projects one source-bound compiler summary into the source-independent communication contract, discarding selectors, syntax, state and physical layout.".
 -spec project_interface(hls_actor_interface:summary()) -> hls_process_interface:interface().

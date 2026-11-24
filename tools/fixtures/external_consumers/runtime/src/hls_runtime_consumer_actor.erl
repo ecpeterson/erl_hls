@@ -1,5 +1,5 @@
--module(stage4_runtime_actor).
--moduledoc "Precompiled callback used by the external runtime-only package witness.".
+-module(hls_runtime_consumer_actor).
+-moduledoc "Precompiled callback used by the external runtime-only release witness.".
 
 -behaviour(hls_gs).
 

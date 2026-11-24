@@ -1,5 +1,5 @@
-{application, stage4_compile_consumer, [
-    {description, "External compile-time facade witness"},
+{application, erl_hls_compile_consumer, [
+    {description, "External installed-compiler witness"},
     {vsn, "0.1.0"},
     {registered, []},
     {applications, [

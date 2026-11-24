@@ -2,6 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+%% Exact and family routes retain their canonical logical identities across normalization.
+-spec crossing_routes_retain_logical_identities_test() -> ok.
 crossing_routes_retain_logical_identities_test() ->
     Plan = hls_topology:normalize(topology()),
     ?assertEqual([sink, source], [Id || #{id := Id} <- maps:get(actors, Plan)]),
@@ -15,7 +17,7 @@ crossing_routes_retain_logical_identities_test() ->
         Id = list_to_tuple([workers | Coordinates]),
         ?assertEqual([#{source => {Id, out}, delivery => direct,
             recipients => [{actor, sink}]}],
-            hls_topology:routes_for_instance(Plan, workers, Coordinates))
+            hls_logical_topology:routes_for_instance(Plan, workers, Coordinates))
     end, [[0, 0], [1, 2]]),
     ?assertEqual(#{source => source, destination => {actor, {workers, 1, 2}},
         source_ports => [out]}, lane(maps:get(lanes, Plan), source, {actor, {workers, 1, 2}})),
@@ -37,6 +39,8 @@ crossing_input_order_is_canonical_test() ->
         routes := lists:reverse(maps:get(routes, Spec)),
         route_relations := lists:reverse(maps:get(route_relations, Spec))})).
 
+%% A family relation may fan out to an exact actor and a translated family member together.
+-spec fixed_actor_and_translated_family_can_share_fanout_test() -> ok.
 fixed_actor_and_translated_family_can_share_fanout_test() ->
     Spec = topology(),
     Recipients = [{actor, sink}, {family, workers, {translate, [1, -1], wrap}}],
@@ -45,7 +49,7 @@ fixed_actor_and_translated_family_can_share_fanout_test() ->
     [Relation] = maps:get(route_relations, Plan),
     ?assertEqual(queued, maps:get(delivery, Relation)),
     ?assertEqual(Recipients, maps:get(recipients, Relation)),
-    [Resolved] = hls_topology:routes_for_instance(Plan, workers, [1, 0]),
+    [Resolved] = hls_logical_topology:routes_for_instance(Plan, workers, [1, 0]),
     ?assertEqual([{actor, sink}, {actor, {workers, 0, 2}}], maps:get(recipients, Resolved)).
 
 exact_source_can_fan_out_to_distinct_family_members_test() ->

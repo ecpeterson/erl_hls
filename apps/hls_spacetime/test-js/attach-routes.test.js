@@ -20,6 +20,7 @@ function fixture() {
     source: identity("1"),
     rtl: identity("2"),
     observation: identity("3"),
+    implementation: identity("0"),
   };
   const checkpoint = identity("4"),
     report = identity("5");

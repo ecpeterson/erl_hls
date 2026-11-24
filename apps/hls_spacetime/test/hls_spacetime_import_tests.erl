@@ -19,7 +19,11 @@ native_import_test() ->
 -spec identity_rejection_test() -> ok.
 identity_rejection_test() ->
     with_export(fun(D)->
+        Physical=hls_spacetime_import:read(D,build(),<<"checkpoint-digest">>),
         ?assertError({spacetime_import,build_mismatch},hls_spacetime_import:read(D,(build())#{rtl:=<<"other">>},<<"checkpoint-digest">>)),
+        ?assertError({spacetime_import,build_mismatch},hls_spacetime_import:read(D,(build())#{implementation:=<<"other-implementation">>},<<"checkpoint-digest">>)),
+        ?assertError({spacetime,physical_build_mismatch},hls_target_physical:validate(
+            build(),#{},Physical#{build:=(build())#{implementation:=<<"other-implementation">>}})),
         ?assertError({spacetime_import,checkpoint_mismatch},hls_spacetime_import:read(D,build(),<<"other">>))
     end).
 
@@ -200,7 +204,8 @@ binding()->#{resource=><<"word">>,generated=>[<<"word-rtl">>],cells=>[<<"r0">>,<
 
 %% Human-readable labels identify this parser fixture, never a native checkpoint.
 -spec build() -> hls_spacetime:build().
-build()->#{source=><<"fixture-source">>,rtl=><<"fixture-rtl">>,observation=><<"fixture-observer">>}.
+build()->#{source=><<"fixture-source">>,rtl=><<"fixture-rtl">>,observation=><<"fixture-observer">>,
+    implementation=><<"fixture-implementation">>}.
 
 %% Umbrella tests run from the repository root; keep the app-owned fixture explicit.
 -spec fixture_path() -> file:filename().
@@ -272,7 +277,9 @@ write_manifest(D)->
             <<"process_corner">>=>list_to_binary(Corner),<<"mode">>=><<"sta">>}}
     end||Corner<-["fast","slow"]]),
     Manifest=#{<<"format">>=><<"spacetime_physical_export">>,<<"schema">>=>1,<<"complete">>=>true,
-        <<"build">>=>#{<<"source">>=><<"fixture-source">>,<<"rtl">>=><<"fixture-rtl">>,<<"observation">>=><<"fixture-observer">>},
+        <<"build">>=>#{<<"source">>=><<"fixture-source">>,<<"rtl">>=><<"fixture-rtl">>,
+            <<"observation">>=><<"fixture-observer">>,
+            <<"implementation">>=><<"fixture-implementation">>},
         <<"checkpoint">>=>#{<<"sha256">>=><<"checkpoint-digest">>,<<"file">>=><<"synthetic.dcp">>},
         <<"tool">>=><<"synthetic fixture, not Vivado">>,<<"part">>=><<"synthetic part">>,
         <<"net_delay_basis">>=><<"interconnect_only">>,

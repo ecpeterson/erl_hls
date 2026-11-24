@@ -31,7 +31,7 @@ _build/default/rel/hls_examples/bin/hls-repetition \
     --width 6 --split 3 --output _build/repetition-source
 ```
 
-Use a fresh output directory. The example release includes computation, communication and target applications plus both decoders and their source inputs. It runs neither synthesis tools nor a fabric node. The generic `hls` build release excludes the decoders; the legacy-named `hls_fabric` runtime release excludes all synthesis and target applications. See [build packaging](../building.md).
+Use a fresh output directory. The example release includes computation, communication and target applications plus both decoders and their source inputs. It runs neither synthesis tools nor a fabric node. The generic `hls` build release excludes the decoders; the `hls_runtime` release excludes all synthesis and target applications. See [build packaging](../building.md).
 
 [`phi_protocol_cli`](../../../apps/hls_phi/src/phi_protocol_cli.erl) calls `phi_protocol_config:repetition(6, #{split => 3})`. That function returns `{deployment, Config}`. The frontend submits `#{backend => source_protocol, kind => deployment, configuration => Config}` to `hls_build:plan/1`, then writes the resulting plan. The backend is chosen by this build request; the logical actor definitions do not choose it.
 

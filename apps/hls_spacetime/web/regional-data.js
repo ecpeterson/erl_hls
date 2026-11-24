@@ -37,7 +37,7 @@ function equalRefs(a, b, label) {
   );
 }
 function sameBuild(a, b) {
-  return ["source", "rtl", "observation"].every(
+  return ["source", "rtl", "observation", "implementation"].every(
     (key) => digest(a?.[key]) && a[key] === b?.[key],
   );
 }

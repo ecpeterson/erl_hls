@@ -228,7 +228,8 @@ fixture(Plan, Rows, Events0) ->
     Epochs = [#{id => <<"reset/", (integer_to_binary(I))/binary>>, first_cycle => First, end_cycle => End}
         || {I, {First, End}} <- lists:enumerate(0, lists:zip(Starts, ResetStarts ++ [N]))],
     Bundle = #{format => spacetime, schema => 1, unit => cycle, evidence => synthetic_fixture,
-        build => #{source => <<"synthetic">>, rtl => <<"synthetic">>, observation => <<"synthetic">>},
+        build => #{source => <<"synthetic">>, rtl => <<"synthetic">>,
+            observation => <<"synthetic">>, implementation => <<"synthetic-implementation">>},
         capture => #{device => <<"fixture">>, clock => <<"clk">>, first_cycle => 0, end_cycle => N,
             complete => true, evidence => <<"Synthetic control histories">>, incarnations => Epochs,
             observers => [#{id => <<"fixture">>, first_sequence => 0, next_sequence => length(Events),

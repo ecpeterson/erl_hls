@@ -128,13 +128,18 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertLessEqual(report["payload_bytes"], TOTAL_BYTES)
 
     def test_workflow_upload_policy(self) -> None:
-        """Every workflow upload is bounded and gated on failure or explicit opt-in."""
+        """Every upload is bounded; pull requests use failure-only diagnostics."""
         root = Path(__file__).resolve().parents[1]
         for path in (root / ".github/workflows").glob("*.yml"):
             text = path.read_text()
             self.assertNotIn("uses: actions/upload-artifact@", text, path)
             for prefix in text.split("uses: ./.github/actions/diagnostics")[:-1]:
-                self.assertIn("if: failure() || inputs.diagnostics == true", prefix.split("- name:")[-1], path)
+                self.assertIn(
+                    "if: failure() || (github.event_name == 'workflow_dispatch' && "
+                    "inputs.diagnostics == true)",
+                    prefix.split("- name:")[-1],
+                    path,
+                )
 
 
 if __name__ == "__main__":

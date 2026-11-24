@@ -8,7 +8,7 @@ _build/default/rel/erl_hls/bin/hlsc --help
 _build/default/rel/erl_hls/bin/hlsc emit apps/erl_hls/src/examples/regsvc/regsvc.erl --output /path/to/fresh-bundle
 ```
 
-Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application, the `hls_runtime` application or a distributed Erlang node. Runtime BEAM files remain available on the code path because source types can use pure runtime-owned providers such as `hls_gs:from()`; loading those value/codec callbacks does not start `hls_fabric_sup` or another service. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
+Move the whole `_build/default/rel/erl_hls/` directory to install it elsewhere with a compatible OTP runtime. The command uses packaged BEAM files, headers and support libraries; it needs neither rebar, Python nor this checkout at runtime. It does not start the compiler application, the `hls_runtime` application or a distributed Erlang node. Runtime BEAM files remain available on the code path because source types can use pure runtime-owned providers such as `hls_gs:from()`; loading those value/codec callbacks does not start `hls_runtime_sup` or another service. Rebar's standard `compile`, `eunit`, `dialyzer` and `release` commands remain the development interface; there is no custom provider or dependency-bootstrap script.
 
 `hlsc emit SOURCE --output DIRECTORY` lowers one supported `hls_gs` or `hls_statem` actor through `hls_compile:actor/3` and the `xls_parse:to_artifact/2` path. It writes annotated `actor.x`, its `actor.x.json` runtime failure-codebook sidecar and a source bundle. Fabric placement, gateways, shared execution and application presets belong to downstream frontends.
 
@@ -54,12 +54,13 @@ The command lowers each actor with the topology's derived requirements and emits
 
 ## Bundle contract
 
-`hls_artifact_bundle` is the target-owned shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees with the default frame capacity; `support/3` accepts a checked `hls_frame_layout`. Clients that snapshot libraries directly call `configure_support/2` on the fresh copy before `finish/3`. This replaces only the copied frame configuration before hashes are frozen; never reconfigure a published bundle. `support_layout/1` describes the same sources and bundle-relative import directories without copying them. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
+`hls_artifact_bundle` is the target-owned shared packaging API. Clients emit sources into a fresh directory, call `snapshot/2` for their support trees and `finish/3` with typed compilation units. Planned builds use `finish/4` to retain their exact logical-system, implementation-plan and checked target-projection identities; `finish/3` marks an ordinary bundle `unplanned`. `hls_compile:support/2` supplies this compiler's libraries and additional DSLX import trees with the default frame capacity; `support/3` accepts a checked `hls_frame_layout`. Clients that snapshot libraries directly call `configure_support/2` on the fresh copy before publication. This replaces only the copied frame configuration before hashes are frozen; never reconfigure a published bundle. `support_layout/1` describes the same sources and bundle-relative import directories without copying them. A client chooses its own entry points, roles, schedules and RTL adapters; the compiler does not know fabric builder kinds or deployment policies.
 
-Version 1 of `source-build.json` contains:
+Version 2 of `source-build.json` contains:
 
 | Field | Meaning |
 | --- | --- |
+| `provenance` | Either exact `unplanned` status or lowercase SHA-256 identities for the logical system, proposed plan and checked target projection |
 | `metadata` | Emitter-owned descriptive data, such as `kind`; cannot override schema fields |
 | `units` | `role`, `directory`, `source`, `top`, `module`, `output`, `dslx_path`, literal `codegen_flags`, and complete `rtl` paths for each compilation unit |
 | `rtl` | Ordered RTL file list per role, derived from units |
@@ -88,6 +89,10 @@ The preview verifies frozen input hashes, resolved executable paths and their ha
 For detached use, copy both packaged `bin/compile-source-build` and `bin/compile_xls.py` into the same directory. The driver may be renamed; its companion must remain `compile_xls.py`. They require Python 3.12+ and XLS's `ir_converter_main`, `opt_main`, `codegen_main` and DSLX standard library, with no Erlang/rebar dependency. Each stage has a 300-second default deadline; `--timeout` changes it, and `--cache` selects a shared stage cache.
 
 The driver leaves `source-build.json` and every frozen source input unchanged. It snapshots their relative hierarchy, runs or reuses conversion/optimization/codegen for every unit, then publishes one complete immutable release through the default `SOURCE/compiled` symlink. `--output` selects another managed symlink; the Python `compile_build(...)` API returns the resolved release path. Resolve the symlink once, as above, before consuming several files. The release retains frozen source metadata, inputs, per-unit IR/RTL and `commands.json`, logs, `compiled.json` and a `files.f` per role. Each `files.f` entry is relative to that listing's parent directory; `compiled.json` RTL paths are relative to the release root.
+
+`compiled.json` separates three identities. The build request binds the source-recipe digest, host class, exact XLS tools and standard library, unit commands and RTL inventory without predicting tool output. The product identity binds the exact generated-product inventory. The realized-implementation identity binds that request, product set and source-recipe provenance. None is a timing, semantic-refinement, eligibility or native-measurement claim.
+
+With `--cache`, the executor retains a checked first implementation for each request. A warm hit revalidates the current recipe, tools and standard library, checks the selected implementation receipt and the complete cached release inventory, then copies it into the output-local release namespace without running XLS. Changed bytes, malformed records and links are rejected and retained under damaged names for diagnosis; a request selector cannot substitute another request's implementation. Relocation preserves a hit when every content identity and command is unchanged. This is trusted local reuse under the filesystem/tool trust boundary, not producer authentication or hardware qualification.
 
 Generated DSLX carries readable Erlang origins in a right-hand comment column, including origins in included files and imported source helpers:
 

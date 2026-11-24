@@ -1,4 +1,4 @@
-"""Keep the agreed CI budget boundary explicit while automatic Actions remain suspended."""
+"""Keep the agreed automatic software gate and manual hardware tiers explicit."""
 from pathlib import Path
 import subprocess
 import unittest
@@ -7,15 +7,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PolicyTests(unittest.TestCase):
-    """Prevent accidentally restoring the former grids or automatic duplicate runs."""
+    """Prevent accidentally restoring the former grids or duplicate merge runs."""
 
-    def test_manual_single_workflow(self) -> None:
-        """The Fabric tier stays manual while unrelated umbrella checks retain their policy."""
+    def test_pull_request_software_gate_and_manual_tiers(self) -> None:
+        """Pull requests select software while hardware tiers remain explicit manual choices."""
         workflow = (ROOT / '.github/workflows/fabric-ci.yml').read_text()
         self.assertIn('  workflow_dispatch:', workflow)
-        for trigger in ('  pull_request:', '  push:', '  schedule:'):
+        self.assertIn('  pull_request:', workflow)
+        for trigger in ('  push:', '  schedule:'):
             self.assertNotIn(trigger, workflow)
         self.assertNotIn('matrix:', workflow)
+        self.assertIn("github.event_name == 'pull_request' && 'software'", workflow)
+        self.assertEqual(workflow.count("if: env.SUITE != 'software'"), 3)
         self.assertIn('bash tools/hls_fabric/ci.sh', workflow)
 
     def test_local_entrypoint_and_unit_inventory(self) -> None:

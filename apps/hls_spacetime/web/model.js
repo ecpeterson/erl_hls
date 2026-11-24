@@ -36,9 +36,9 @@ function append(map, key, value) {
   map.get(key).push(value);
 }
 
-/** Compare the three content identities without relying on JSON key order. */
+/** Compare the four content identities without relying on JSON key order. */
 function sameBuild(left, right) {
-  return ["source", "rtl", "observation"].every(
+  return ["source", "rtl", "observation", "implementation"].every(
     (key) => left?.[key] === right?.[key],
   );
 }

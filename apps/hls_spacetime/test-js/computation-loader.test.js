@@ -24,7 +24,7 @@ function fixture() {
     };
   }
   const view = { bytes: 200, sha256: "a".repeat(64) };
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const parts = tables.map((table) => ({
     ...save(`computations/${table}.json`, [{ id: table }]),
     file: `${table}.json`,

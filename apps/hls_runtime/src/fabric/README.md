@@ -10,6 +10,6 @@ This directory is the supervised transport portion of `hls_runtime`. It consumes
 
 The [`hls_target` source tree](../../../hls_target/src/README.md) owns physical build configuration, materialization and target generators. The `hls_fabric` application owns process-free communication synthesis. Neither is loaded by this runtime. The umbrella supplies `hls_core` for shared values and contracts; deployed code supplies already-retained descriptors to the explicit runtime APIs.
 
-`rebar3 release -n hls_fabric` produces the core/runtime closure without synthesis or optimizer applications. This legacy release name identifies the virtual-node product, not application ownership.
+`rebar3 release -n hls_runtime` produces the core/runtime closure without synthesis or optimizer applications.
 
 Reusable target DSLX and RTL belong to `apps/hls_target/priv/`; runtime tests contain only the shells and fixtures needed to exercise live boundaries. The application resource is [`hls_runtime.app.src`](../hls_runtime.app.src). Production formatting and source contracts are described in [source-quality](../../../../docs/source-quality.md).

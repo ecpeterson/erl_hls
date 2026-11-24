@@ -1,5 +1,5 @@
--module(stage4_compile_consumer).
--moduledoc "Exercises the supported compiler facade without starting deployed execution.".
+-module(erl_hls_compile_consumer).
+-moduledoc "Exercises the installed compiler release without starting deployed execution.".
 
 -export([witness/0]).
 
@@ -7,17 +7,17 @@
 -spec witness() -> ok.
 witness() ->
     false = started(hls_runtime),
-    undefined = whereis(hls_fabric_sup),
-    false = code:is_loaded(hls_fabric_app),
-    Output = filename:absname("stage4-compile-output"),
+    undefined = whereis(hls_runtime_sup),
+    false = code:is_loaded(hls_runtime_app),
+    Output = filename:absname("external-compile-output"),
     ok = remove(Output),
     try
-        Manifest = hls_compile:actor("src/stage4_compile_actor.erl", #{}, Output),
+        Manifest = hls_compile:actor("src/erl_hls_compile_actor.erl", #{}, Output),
         actor = maps:get(kind, maps:get(metadata, Manifest)),
         true = filelib:is_regular(filename:join(Output, "source-build.json")),
         false = started(hls_runtime),
-        undefined = whereis(hls_fabric_sup),
-        false = code:is_loaded(hls_fabric_app),
+        undefined = whereis(hls_runtime_sup),
+        false = code:is_loaded(hls_runtime_app),
         ok
     after
         ok = remove(Output)

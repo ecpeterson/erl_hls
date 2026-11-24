@@ -9,7 +9,7 @@ rebar3 release -n hls_examples
 _build/default/rel/hls_examples/bin/hls-repetition --width 6 --split 3 --output _build/repetition-pair
 ```
 
-This emits source for two three-cell roles. External XLS compilation and actual board deployment are separate steps. The generic `hls` build release and the `hls_fabric` runtime release do not include the decoders.
+This emits source for two three-cell roles. External XLS compilation and actual board deployment are separate steps. The generic `hls` build release and the `hls_runtime` release do not include the decoders.
 
 | Directory | Responsibility |
 | --- | --- |

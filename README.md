@@ -12,7 +12,9 @@ The [umbrella package map](apps/README.md) separates seven product applications.
 
 `hls_runtime` starts the retained virtual-node supervisor; CPU actors, brokers and sessions still use explicit lifecycle APIs. The synthesis, target, optimizer and facade applications start no process. Built-in DSLX callbacks live in compiler companions, while custom providers retain the [extension contract](docs/type-providers.md).
 
-`rebar3 compile` builds the default umbrella applications locally. The `hls` release contains the facade and complete build closure. The legacy-named `hls_fabric` release contains only `hls_runtime`, `hls_core` and OTP dependencies; deployed code does not ship synthesis, target or optimizer applications.
+`rebar3 compile` builds the default umbrella applications locally. The `hls` release contains the facade and complete build closure. The `hls_runtime` release contains only `hls_runtime`, `hls_core` and OTP dependencies; deployed code does not ship synthesis, target or optimizer applications.
+
+The [repository-history map](docs/repository-history.md) records the selected source, filtered, merge, landing and retained-tag identities behind the umbrella.
 
 ## Build and check
 

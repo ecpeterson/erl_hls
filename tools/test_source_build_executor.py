@@ -1,4 +1,5 @@
 """Mock external XLS stages to check multi-unit publication and cache identity, not hardware semantics."""
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 import hashlib
@@ -94,7 +95,7 @@ class SourceBuildExecutorTests(unittest.TestCase):
         (self.bundle/'shared/libs').mkdir(parents=True)
         (self.bundle/'shared/libs/helper.x').write_text('pub const VALUE = u32:999;\n')
         (self.bundle/'shared/libs/leaf.x').write_text('pub const LEAF = u32:23;\n')
-        self.manifest: dict[str, Any] = {'version': 1,
+        self.manifest: dict[str, Any] = {'version': 2, 'provenance': {'kind': 'unplanned'},
             'metadata': {'kind': 'mock deployment', 'hardware_profile': {
                 'backend': 'fixture', 'options': {'storage': 'local', 'pipeline_stages': 99}}},
             'units': units, 'inputs': [], 'rtl': {unit['role']: unit['rtl'] for unit in units}}
@@ -145,11 +146,17 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertTrue(self.output.is_symlink())
         self.assertFalse(release.is_symlink())
         compiled = json.loads((release/'compiled.json').read_text())
+        self.assertEqual(compiled['version'], 2)
         self.assertFalse(compiled['native_measured'])
         self.assertFalse(compiled['eligible'])
         self.assertEqual(compiled['metadata'], self.manifest['metadata'])
         self.assertEqual(compiled['xls_tools'],
                          {name: tool['sha256'] for name, tool in plan['xls_tools'].items()})
+        self.assertEqual(compiled['build_request']['sha256'], plan['request_sha256'])
+        self.assertEqual(compiled['build_request']['descriptor'], plan['request'])
+        self.assertEqual(compiled['implementation']['request_sha256'], plan['request_sha256'])
+        self.assertEqual(compiled['implementation']['product_sha256'], compiled['products']['sha256'])
+        self.assertEqual(compiled['implementation']['provenance'], {'kind': 'unplanned'})
         for name, (contents, _) in before.items():
             self.assertEqual((release/name).read_bytes(), contents)
         self.assertEqual([call['command'] for call in self.invocations()],
@@ -176,6 +183,47 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertEqual(len(self.invocations()), 6)
         self.assertEqual(self.bound_snapshot(), before)
 
+    def test_compiled_release_rejects_self_consistent_inventory_edits(self) -> None:
+        """Recomputed identities cannot omit required products or add unrelated files and RTL."""
+        plan = driver.plan_build(self.xls, self.bundle)
+        release = self.compile()
+        original = json.loads((release/'compiled.json').read_text())
+
+        def reidentify(value: dict[str, Any], rows: list[dict[str, str]]) -> None:
+            """Replace product rows and recompute both dependent receipt identities."""
+            products = {'schema': 1, 'files': rows}
+            product_identity = driver.executor().identity(products)
+            value['products'] = products | {'sha256': product_identity}
+            realization = {key: value['implementation'][key]
+                           for key in ('schema', 'request_sha256', 'provenance')}
+            realization['product_sha256'] = product_identity
+            value['implementation'] = realization | {
+                'sha256': driver.executor().identity(realization),
+            }
+            (release/'compiled.json').write_text(json.dumps(value) + '\n')
+
+        omitted = json.loads(json.dumps(original))
+        reidentify(omitted, omitted['products']['files'][1:])
+        with self.assertRaisesRegex(ValueError, 'product inventory mismatch'):
+            driver.checked_compiled_release(release, plan)
+
+        added = json.loads(json.dumps(original))
+        unexpected = release/'unexpected.bin'
+        unexpected.write_bytes(b'unrelated product\n')
+        rows = added['products']['files'] + [
+            {'file': unexpected.name, 'sha256': hashlib.sha256(unexpected.read_bytes()).hexdigest()}
+        ]
+        reidentify(added, sorted(rows, key=lambda row: row['file']))
+        with self.assertRaisesRegex(ValueError, 'product inventory mismatch'):
+            driver.checked_compiled_release(release, plan)
+
+        changed_rtl = json.loads(json.dumps(original))
+        role = sorted(changed_rtl['rtl'])[0]
+        changed_rtl['rtl'][role] = changed_rtl['rtl'][role][1:]
+        (release/'compiled.json').write_text(json.dumps(changed_rtl) + '\n')
+        with self.assertRaisesRegex(ValueError, 'RTL inventory mismatch'):
+            driver.checked_compiled_release(release, plan)
+
     def test_metadata_only_change_preserves_cached_stages_and_new_provenance(self) -> None:
         """Descriptive policy cannot change schedules, but every publication retains its own metadata."""
         first_plan = driver.plan_build(self.xls, self.bundle)
@@ -198,6 +246,11 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertEqual(compiled['metadata'], self.manifest['metadata'])
         self.assertEqual(compiled['units'], first_manifest['units'])
         self.assertEqual(compiled['xls_tools'], first_manifest['xls_tools'])
+        self.assertEqual(compiled['products'], first_manifest['products'])
+        self.assertNotEqual(compiled['build_request']['sha256'],
+                            first_manifest['build_request']['sha256'])
+        self.assertNotEqual(compiled['implementation']['sha256'],
+                            first_manifest['implementation']['sha256'])
         self.assertEqual(json.loads((first/'compiled.json').read_text()), first_manifest)
         self.assertNotEqual(compiled['source_build_sha256'], first_manifest['source_build_sha256'])
 
@@ -283,24 +336,252 @@ class SourceBuildExecutorTests(unittest.TestCase):
         self.assertEqual(self.bound_snapshot(), changed)
 
     def test_relocation_reuses_cache_without_absolute_input_paths(self) -> None:
-        """Moving identical emitted bytes preserves stage identities while each publication stays self-contained."""
+        """Moving source and tools reuses the whole implementation in an output-local release."""
         first = self.compile()
         relocated = self.root/'relocated source bundle'
+        relocated_xls = self.root/'relocated tool bundle'
         shutil.copytree(self.bundle, relocated)
+        shutil.copytree(self.xls, relocated_xls)
         count = len(self.invocations())
-        second = self.compile(directory=relocated, output=self.root/'relocated output')
+        relocated_output = self.root/'relocated output'
+        with patch.object(driver.executor(), 'execute',
+                          side_effect=AssertionError('whole hit entered the stage executor')):
+            second = driver.compile_build(relocated_xls, relocated, output=relocated_output,
+                                          cache=self.cache, timeout=10)
         self.assertEqual(len(self.invocations()), count)
         self.assertNotEqual(first, second)
+        self.assertEqual(second.parent, self.root/'.relocated output-releases')
+        self.assertEqual(relocated_output.resolve(), second)
         for relative in ('role0/core/raw.ir', 'role0/core/optimized.ir', 'role0/core/design.v',
                          'role1/core/raw.ir', 'role1/core/optimized.ir', 'role1/core/design.v'):
             self.assertEqual((first/relative).read_bytes(), (second/relative).read_bytes())
         compiled = json.loads((second/'compiled.json').read_text())
+        original = json.loads((first/'compiled.json').read_text())
         report = json.loads((self.root/'relocated output.run.json').read_text())
-        self.assertTrue(all(command['reused'] for command in report['stages'].values()))
-        self.assertEqual(compiled['rtl'], json.loads((first/'compiled.json').read_text())['rtl'])
+        self.assertTrue(report['implementation_reused'])
+        self.assertEqual(report['stages'], {})
+        self.assertEqual(compiled['rtl'], original['rtl'])
+        self.assertEqual(compiled['build_request'], original['build_request'])
+        self.assertEqual(compiled['products'], original['products'])
+        self.assertEqual(compiled['implementation'], original['implementation'])
         for role in ('role0', 'role1'):
             listing = second/role/'files.f'
             self.assertTrue(all((listing.parent/line).is_file() for line in listing.read_text().splitlines()))
+
+    def test_whole_implementation_warm_hit_uses_checked_selection(self) -> None:
+        """A warm request bypasses every external stage and copies the checked release locally."""
+        plan = driver.plan_build(self.xls, self.bundle)
+        first = self.compile()
+        compiled = json.loads((first/'compiled.json').read_text())
+        implementation = compiled['implementation']['sha256']
+        selection = driver.selection_path(self.cache, plan['request_sha256'])
+        self.assertEqual(json.loads(selection.read_text())['implementation_sha256'], implementation)
+        stored = driver.implementation_path(self.cache, implementation)
+        self.assertTrue((stored/'record.json').is_file())
+        count = len(self.invocations())
+        warm_output = self.root/'warm output'
+        with patch.object(driver.executor(), 'execute',
+                          side_effect=AssertionError('warm hit entered the stage executor')):
+            warm = self.compile(output=warm_output)
+        self.assertEqual(len(self.invocations()), count)
+        self.assertEqual(warm.parent, self.root/'.warm output-releases')
+        self.assertEqual(warm_output.resolve(), warm)
+        self.assertFalse(warm.is_symlink())
+        self.assertFalse(warm.is_relative_to(stored))
+        self.assertEqual(driver.release_hashes(warm), driver.release_hashes(first))
+        report = json.loads((self.root/'warm output.run.json').read_text())
+        self.assertTrue(report['implementation_reused'])
+        self.assertEqual(report['implementation_sha256'], implementation)
+        self.assertEqual(report['stages'], {})
+
+    def test_warm_hit_rejects_linked_release_roots_and_namespaces(self) -> None:
+        """Whole-release reuse never accepts a linked store/output root as owned cache data."""
+        plan = driver.plan_build(self.xls, self.bundle)
+        first = self.compile()
+        implementation = json.loads(
+            (first/'compiled.json').read_text()
+        )['implementation']['sha256']
+        entry = driver.implementation_path(self.cache, implementation)
+        record = json.loads((entry/'record.json').read_text())
+        stored_release = entry/'release'
+
+        linked_release = self.root/'linked release'
+        linked_release.symlink_to(stored_release, target_is_directory=True)
+        self.assertFalse(driver.exact_release(linked_release, record['files']))
+
+        linked_cache_target = self.root/'linked cache target'
+        linked_cache_target.mkdir()
+        linked_cache = self.root/'linked cache'
+        linked_cache.symlink_to(linked_cache_target, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'linked owned directory'):
+            driver.compile_build(
+                self.xls,
+                self.bundle,
+                output=self.root/'linked cache output',
+                cache=linked_cache,
+                timeout=10,
+            )
+
+        output = self.root/'linked namespace output'
+        namespace = self.root/'.linked namespace output-releases'
+        outside = self.root/'outside releases'
+        outside.mkdir()
+        namespace.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'linked owned directory'):
+            self.compile(output=output)
+        self.assertFalse(output.exists())
+
+        namespace.unlink()
+        namespace.mkdir()
+        local = namespace/record['release_id']
+        local.symlink_to(stored_release, target_is_directory=True)
+        repaired = self.compile(output=output)
+        self.assertEqual(output.resolve(), repaired)
+        self.assertEqual(repaired, local)
+        self.assertTrue(local.is_dir())
+        self.assertFalse(local.is_symlink())
+        damaged = list(namespace.glob(local.name + '.damaged-*'))
+        self.assertEqual(len(damaged), 1)
+        self.assertTrue(damaged[0].is_symlink())
+        self.assertEqual(driver.release_hashes(local), record['files'])
+        self.assertEqual(
+            json.loads(driver.selection_path(self.cache, plan['request_sha256']).read_text())[
+                'implementation_sha256'
+            ],
+            implementation,
+        )
+
+    def test_cross_linked_selection_preserves_other_request_and_reselects(self) -> None:
+        """A selector cannot borrow another request's implementation or damage its valid store entry."""
+        original_metadata = json.loads(json.dumps(self.manifest['metadata']))
+        first_plan = driver.plan_build(self.xls, self.bundle)
+        first = self.compile()
+        first_implementation = json.loads(
+            (first/'compiled.json').read_text()
+        )['implementation']['sha256']
+
+        self.manifest['metadata']['hardware_profile']['options']['storage'] = 'shared'
+        self.freeze()
+        second = self.compile(output=self.root/'second request')
+        second_implementation = json.loads(
+            (second/'compiled.json').read_text()
+        )['implementation']['sha256']
+        second_entry = driver.implementation_path(self.cache, second_implementation)
+        second_hashes = driver.release_hashes(second_entry/'release')
+
+        self.manifest['metadata'] = original_metadata
+        self.freeze()
+        restored = driver.plan_build(self.xls, self.bundle)
+        self.assertEqual(restored['request_sha256'], first_plan['request_sha256'])
+        selection = driver.selection_path(self.cache, first_plan['request_sha256'])
+        value = json.loads(selection.read_text())
+        value['implementation_sha256'] = second_implementation
+        selection.write_text(json.dumps(value) + '\n')
+
+        count = len(self.invocations())
+        repaired = self.compile(output=self.root/'cross link repaired')
+        self.assertEqual(len(self.invocations()), count)
+        self.assertEqual(
+            json.loads((repaired/'compiled.json').read_text())['implementation']['sha256'],
+            first_implementation,
+        )
+        self.assertEqual(
+            json.loads(selection.read_text())['implementation_sha256'], first_implementation
+        )
+        self.assertEqual(
+            len(list(selection.parent.glob(selection.name + '.damaged-*'))), 1
+        )
+        self.assertEqual(driver.release_hashes(second_entry/'release'), second_hashes)
+        self.assertEqual(
+            list(second_entry.parent.glob(second_entry.name + '.damaged-*')), []
+        )
+
+    def test_corrupt_implementation_is_quarantined_and_rebuilt(self) -> None:
+        """A changed store file cannot be reused and remains quarantined beside a clean rebuild."""
+        first = self.compile()
+        compiled = json.loads((first/'compiled.json').read_text())
+        implementation = compiled['implementation']['sha256']
+        entry = driver.implementation_path(self.cache, implementation)
+        product = entry/'release/role0/core/design.v'
+        product.write_text('corrupt cached implementation\n')
+        for stage in ('ir', 'opt', 'codegen'):
+            shutil.rmtree(self.cache/stage)
+        count = len(self.invocations())
+        rebuilt = self.compile(output=self.root/'rebuilt output')
+        self.assertEqual(len(self.invocations()) - count, 6)
+        self.assertEqual((rebuilt/'role0/core/design.v').read_bytes(),
+                         (first/'role0/core/design.v').read_bytes())
+        damaged = list(entry.parent.glob(entry.name + '.damaged-*'))
+        self.assertEqual(len(damaged), 1)
+        self.assertEqual((damaged[0]/'release/role0/core/design.v').read_text(),
+                         'corrupt cached implementation\n')
+        self.assertNotEqual((entry/'release/role0/core/design.v').read_text(),
+                            'corrupt cached implementation\n')
+
+    def test_warm_hit_revalidates_current_tools_before_selection(self) -> None:
+        """Tool drift after lookup cannot publish an otherwise valid stored implementation."""
+        self.compile()
+        original = driver.checked_implementation
+        changed = False
+
+        def change_tool(*args: Any, **kwargs: Any) -> Any:
+            """Change one selected executable after store validation to exercise the final check."""
+            nonlocal changed
+            result = original(*args, **kwargs)
+            if not changed:
+                changed = True
+                tool = self.xls/'opt_main'
+                tool.write_text(tool.read_text() + '\n# changed after selection\n')
+                tool.chmod(0o755)
+            return result
+
+        output = self.root/'drifted warm output'
+        with patch.object(driver, 'checked_implementation', side_effect=change_tool), \
+             patch.object(driver.executor(), 'execute',
+                          side_effect=AssertionError('warm hit entered the stage executor')):
+            with self.assertRaisesRegex(ValueError, 'changed before implementation reuse'):
+                self.compile(output=output)
+        self.assertFalse(output.exists())
+        report = json.loads((self.root/'drifted warm output.run.json').read_text())
+        self.assertEqual(report['status'], 'failed')
+
+    def test_concurrent_request_has_one_external_first_writer(self) -> None:
+        """Concurrent outputs serialize request selection and only the first runs external tools."""
+        outputs = [self.root/'concurrent a', self.root/'concurrent b']
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(self.compile, output=output) for output in outputs]
+            releases = [future.result(timeout=20) for future in futures]
+        self.assertEqual(len(self.invocations()), 6)
+        for output, release in zip(outputs, releases, strict=True):
+            self.assertEqual(output.resolve(), release)
+            self.assertEqual(release.parent, self.root/f'.{output.name}-releases')
+        reports = [json.loads((output.parent/(output.name + '.run.json')).read_text())
+                   for output in outputs]
+        self.assertEqual(sum(report.get('implementation_reused', False) for report in reports), 1)
+        selections = list((self.cache/'source-build/requests').glob('*.json'))
+        implementations = [path for path in (self.cache/'source-build/implementations').iterdir()
+                           if path.is_dir() and '.damaged-' not in path.name]
+        self.assertEqual(len(selections), 1)
+        self.assertEqual(len(implementations), 1)
+
+    def test_plan_provenance_requires_exact_lowercase_sha256_identities(self) -> None:
+        """Plan correlation is closed and exact before an external tool or cache path is touched."""
+        valid = {'kind': 'implementation_plan', 'logical_system_sha256': '1' * 64,
+                 'implementation_plan_sha256': 'a' * 64, 'target_projection_sha256': 'f' * 64}
+        self.manifest['provenance'] = valid
+        self.freeze()
+        self.assertEqual(driver.plan_build(self.xls, self.bundle)['provenance'], valid)
+        invalid = [None, {}, {'kind': 'unplanned', 'extra': 'x'}, valid | {'extra': 'x'},
+                   valid | {'implementation_plan_sha256': 'A' * 64},
+                   valid | {'logical_system_sha256': '1' * 63}]
+        for value in invalid:
+            with self.subTest(provenance=value):
+                self.manifest['provenance'] = value
+                self.freeze()
+                with patch('subprocess.Popen', side_effect=AssertionError('bad provenance ran a tool')):
+                    with self.assertRaisesRegex(ValueError, 'source build provenance'):
+                        driver.plan_build(self.xls, self.bundle)
+                self.assertFalse(self.output.exists())
 
     def test_linked_standard_library_is_snapshotted(self) -> None:
         """Preserve valid imports through linked library subdirectories in the isolated source tree."""

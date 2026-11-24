@@ -123,7 +123,7 @@ launch_build_child(Dir, Suffix) ->
 %% Boot the generated release script with only its applications and the three fixture BEAMs.
 -spec launch_release_child(file:filename(), string(), file:filename()) -> port().
 launch_release_child(Dir, Suffix, Release) ->
-    Launcher = filename:join([Release, "bin", "hls_fabric"]),
+    Launcher = filename:join([Release, "bin", "hls_runtime"]),
     true = filelib:is_regular(Launcher),
     Eval = release_eval(Dir),
     VmArgs = filename:join(Dir, "vm.args"),
@@ -262,7 +262,7 @@ assembled_release() ->
         {ok, [[Release]]} ->
             Root = filename:absname(Release) ++ "/",
             ok = release_module(hls_actor_identity, Root),
-            ok = release_module(hls_fabric_app, Root),
+            ok = release_module(hls_runtime_app, Root),
             Applications = [Name || {Name, _, _} <- application:which_applications()],
             true = lists:member(hls_core, Applications),
             true = lists:member(hls_runtime, Applications),
@@ -298,7 +298,7 @@ live_node() ->
     {ok, Model} = hls_device_fixture:start(#{}),
     try
         #{brokers := Brokers} = hls_device_fixture:stats(Model),
-        {ok, Node} = hls_fabric_sup:start_node(Name, Brokers,
+        {ok, Node} = hls_runtime_sup:start_node(Name, Brokers,
             [#{name => registers, module => regsvc, endpoint => 1}], #{}),
         try
             #{registers := #{application := Actor, debug := Debug}} = hls_node:services(Node),
@@ -307,7 +307,7 @@ live_node() ->
             {ok, #{app_rx_frames := 1}} = hls_debug:get_counters(Debug),
             ok
         after
-            ok = hls_fabric_sup:stop_node(Name)
+            ok = hls_runtime_sup:stop_node(Name)
         end
     after
         ok = hls_device_fixture:stop(Model)

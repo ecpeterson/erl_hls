@@ -11,7 +11,7 @@ rectangular_profile_preserves_the_remaining_plane_test() ->
     ?assertEqual([Entry || Entry = {{Family, _, _}, _} <- maps:get(startup, Both),
         lists:member(Family, [phi_z, syndrome_z])], maps:get(startup, Single)),
     Plan = hls_topology:normalize(Single),
-    Routes = hls_topology:routes_for_instance(Plan, phi_z, [0, 0]),
+    Routes = hls_logical_topology:routes_for_instance(Plan, phi_z, [0, 0]),
     ?assertMatch([#{recipients := [{actor, {phi_z, 0, 2}}]}],
         [R || R = #{source := {_, north}} <- Routes]),
     #{groups := Groups} = phi_decoder_profile_topology_dslx:scheduler_plan(

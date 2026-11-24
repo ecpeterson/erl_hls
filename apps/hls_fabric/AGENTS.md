@@ -6,7 +6,7 @@ Run the checks in [docs/source-quality.md](../../docs/hls_fabric/source-quality.
 
 Keep long-lived worktrees and compiler caches outside system temporary directories. macOS may delete old `/tmp` files even while a worktree is in use; use it only for disposable scratch.
 
-Use `rebar3` directly for Erlang dependencies, compilation and checks; `rebar3 release` packages the `hls-fabric` source-emission command. Keep retained measurements in the external artifact archive, never in `_build/` or source directories; see [docs/artifacts.md](../../docs/hls_fabric/artifacts.md).
+Use `rebar3` directly for Erlang dependencies, compilation and checks; `rebar3 release -n hls` packages the `hls-fabric` source-emission command. Keep retained measurements in the external artifact archive, never in `_build/` or source directories; see [docs/artifacts.md](../../docs/hls_fabric/artifacts.md).
 
 Before decoder architecture experiments, read the current [campaign cost policy](../../yap/hls_fabric/physical-architecture-options.md#routing-and-area-policy). Budget LUT growth against cumulative device headroom; do not restore a universal no-growth gate or treat cycle savings as routed-clock evidence.
 

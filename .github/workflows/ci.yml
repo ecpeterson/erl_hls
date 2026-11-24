@@ -102,7 +102,7 @@ jobs:
         run: python3 tools/check.py "$RUNNER_TEMP/xls" --group test --stage _build/checks/ci --cases-json "$REGRESSION_CASES"
 
       - name: Upload decoded debug observations
-        if: failure() || inputs.diagnostics == true
+        if: failure() || (github.event_name == 'workflow_dispatch' && inputs.diagnostics == true)
         uses: ./.github/actions/diagnostics
         with:
           name: debug-observation-reports
@@ -140,7 +140,7 @@ jobs:
             _build/aggregate-debug/**/scc.log
 
       - name: Upload simulation diagnostics
-        if: failure() || inputs.diagnostics == true
+        if: failure() || (github.event_name == 'workflow_dispatch' && inputs.diagnostics == true)
         uses: ./.github/actions/diagnostics
         with:
           name: xls-simulation-diagnostics
@@ -248,7 +248,7 @@ jobs:
           python3 tools/check.py "$RUNNER_TEMP/xls" --group topology --stage _build/checks/ci --placements "$placement"
 
       - name: Upload mixed topology diagnostics
-        if: failure() || inputs.diagnostics == true
+        if: failure() || (github.event_name == 'workflow_dispatch' && inputs.diagnostics == true)
         uses: ./.github/actions/diagnostics
         with:
           name: mixed-topology-${{ matrix.workload }}-reports

@@ -1,5 +1,5 @@
-{application, stage4_runtime_consumer, [
-    {description, "External runtime-only package witness"},
+{application, hls_runtime_consumer, [
+    {description, "External installed runtime witness"},
     {vsn, "0.1.0"},
     {registered, []},
     {applications, [kernel, stdlib, hls_core, hls_runtime]},

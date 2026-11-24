@@ -20,7 +20,7 @@ oracle(Stage,N) ->
             {M,P}=maps:get({F,X,0},Actors),
             Outputs=maps:from_list([{Port,case T of
                 {actor,Id}->element(2,maps:get(Id,Actors));{external,_}->Sink
-            end}||#{source:={_,Port},recipients:=[T]}<-hls_topology:routes_for_instance(Plan,F,[X,0])]),
+            end}||#{source:={_,Port},recipients:=[T]}<-hls_logical_topology:routes_for_instance(Plan,F,[X,0])]),
             ok=M:connect(P,Outputs)
         end,lists:seq(0,N-1)) end,[data,syndrome,phi]),
         Deadline=erlang:monotonic_time(millisecond)+20000,

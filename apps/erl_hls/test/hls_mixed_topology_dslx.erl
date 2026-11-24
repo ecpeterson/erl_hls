@@ -114,13 +114,15 @@ cpu(Mode) ->
         error(cpu_fixture_timeout)
     end.
 
+%% Start, connect and drain the closed CPU fixture inside its isolated owner process.
+-spec cpu_run(term()) -> [term()].
 cpu_run(Mode) ->
     {Plan, _} = fixture(Mode),
     #{actors := Exact, families := [Family], startup := Startup, routes := Routes0} = Plan,
     #{id := FamilyId, module := Module, shape := [W, H], mailbox_capacity := FamilyCapacity} = Family,
     Actors = [{Id, M, Capacity} || #{id := Id, module := M, mailbox_capacity := Capacity} <- Exact] ++
         [{{FamilyId, X, Y}, Module, FamilyCapacity} || X <- lists:seq(0, W-1), Y <- lists:seq(0, H-1)],
-    Routes = Routes0 ++ lists:append([hls_topology:routes_for_instance(Plan, FamilyId, [X, Y])
+    Routes = Routes0 ++ lists:append([hls_logical_topology:routes_for_instance(Plan, FamilyId, [X, Y])
         || X <- lists:seq(0, W-1), Y <- lists:seq(0, H-1)]),
     Pids = maps:from_list([begin
         {ok, Pid} = hls_statem:start_link(M, [], [{mailbox_capacity, Capacity}]),

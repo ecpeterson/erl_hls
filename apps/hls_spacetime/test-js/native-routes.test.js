@@ -37,7 +37,12 @@ function pin(id, direction, nodeId) {
 
 /** One selected branch shares a prefix with a distinct unselected fanout sink. */
 function fixture() {
-  const build = { source: hash("1"), rtl: hash("2"), observation: hash("3") };
+  const build = {
+    source: hash("1"),
+    rtl: hash("2"),
+    observation: hash("3"),
+    implementation: hash("0"),
+  };
   const path = {
     id: "max/0",
     source: "ff/C",
@@ -271,6 +276,11 @@ test("foreign identities, stale static arcs and corrupted graph references rejec
       (m.document.nativeRoutes.build = {
         ...m.bundle.build,
         observation: hash("9"),
+      }),
+    (m) =>
+      (m.document.nativeRoutes.build = {
+        ...m.bundle.build,
+        implementation: hash("9"),
       }),
     (m) => (m.document.nativeRoutes.checkpoint_sha256 = hash("9")),
     (m) => (m.document.nativeRoutes.report_sha256 = hash("9")),

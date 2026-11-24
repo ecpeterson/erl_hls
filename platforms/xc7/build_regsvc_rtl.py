@@ -13,6 +13,7 @@ from prepare_te0715_boot import digest
 
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT.parent.parent
+UMBRELLA_TOOLS = BACKEND / "tools/hls_fabric"
 BUILD = ROOT / "build/routed-dma/rtl"
 GENERATED = ("regsvc", "hls_debug_observer", "hls_debug_server")
 HANDWRITTEN = (("erl_hls", "test/rtl/regsvc_fabric_fixture.sv"),
@@ -52,15 +53,15 @@ def sources(directory: Path) -> list[Path]:
 
 def compiler_context(public: Path | None, profile: str) -> Path:
     """Refresh the selected fabric profile, or require an explicit prebuilt compiler root."""
-    # Local script bootstrap is explicit; compiler modules use isolated package names.
-    sys.path.insert(0, str(BACKEND / "tools/hls_fabric"))
+    # Bootstrap helpers belong to this umbrella even when an explicit compiler root is selected.
+    sys.path.insert(0, str(UMBRELLA_TOOLS))
     from backend_paths import compiler_ebin
     from compiler_paths import compiler_root
     if public is None:
         rebar = ["rebar3", "compile"] if profile == "default" else ["rebar3", "as", profile, "compile"]
         subprocess.run(rebar, cwd=BACKEND, check=True, env={**os.environ, "ERL_AFLAGS": ""})
     selected = compiler_root(profile, public, BACKEND)
-    compiler_ebin(selected, profile)
+    compiler_ebin(selected, profile, BACKEND)
     return selected
 
 

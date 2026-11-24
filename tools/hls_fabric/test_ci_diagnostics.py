@@ -56,11 +56,16 @@ class DiagnosticsTests(unittest.TestCase):
     def test_workflow_upload_policy(self) -> None:
         """Every workflow upload is bounded and gated on failure or explicit opt-in."""
         root = Path(__file__).resolve().parents[2]
+        pull_request_guard = (
+            "if: failure() || (github.event_name == 'workflow_dispatch' && "
+            "inputs.diagnostics == true)"
+        )
         for path in (root / ".github/workflows").glob("*.yml"):
             text = path.read_text()
             self.assertNotIn("uses: actions/upload-artifact@", text, path)
             for prefix in text.split("uses: ./.github/actions/diagnostics")[:-1]:
-                self.assertIn("if: failure() || inputs.diagnostics == true", prefix.split("- name:")[-1], path)
+                step = prefix.split("- name:")[-1]
+                self.assertIn(pull_request_guard, step, path)
 
 
 if __name__ == "__main__":

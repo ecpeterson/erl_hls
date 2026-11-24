@@ -3,7 +3,7 @@
 Source-protocol build owner selected by hls_build. Retains a checked transport/network/boundary/application/bridge/deployment/mixed composition from its backend builder, exposes inspection views, and publishes DSLX plus support through hls_artifact_bundle. Source emission does not execute XLS or qualify hardware.
 """.
 %% Retained source-protocol planning and inspection.
--export([plan/2, descriptor/1, inspect/2]).
+-export([plan/2, plan/4, descriptor/1, inspect/2]).
 
 %% Source-bundle publication.
 -export([write/2, write/3]).
@@ -22,7 +22,7 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
     | hls_protocol_bridge:plan()
     | hls_protocol_deployment:plan()
     | hls_protocol_mixed:plan().
-%% Packaging retains the original config for inspection, but does not rerun it during write.
+%% Packaging retains the effective checked config for inspection, but does not rerun it during write.
 -record(plan, {
     kind :: kind(),
     config :: hls_source_config:config(),
@@ -30,7 +30,8 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
     cwd :: file:filename(),
     libraries :: [hls_artifact_bundle:library()],
     units :: [hls_artifact_bundle:unit()],
-    profile :: hls_build_profile:profile()
+    profile :: hls_build_profile:profile(),
+    projection = none :: none | hls_target_implementation_plan:plan()
 }).
 
 -doc "Read-only views of a checked build. Views inspect retained source and layout data; none resumes a build from serialized data.".
@@ -40,7 +41,7 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
 -doc "A versioned inspection report. Data is an Erlang term; hls_diagnostic:json_value/1 preserves non-JSON shapes using explicit tags for display, never as executable plan input.".
 -type inspection() :: #{version := 1, kind := kind(), stage := inspection_stage(), data := term()}.
 
--doc "One complete checked source composition selected by plan/2. Keep it unchanged in process with compatible provider type and encoding contracts. Provider/support files are read during packaging, so this is not a saved or hermetic external-tool input.".
+-doc "One complete checked source composition selected by plan/2 or plan/4. Keep it unchanged in process with compatible provider type and encoding contracts. Provider/support files are read during packaging, so this is not a saved or hermetic external-tool input.".
 -opaque plan() :: #plan{}.
 
 -doc "The selected kind, its read-only static builder descriptor and provider import paths. Generated-byte identities and support snapshots belong to the written bundle; inspect/2 exposes the retained external-tool schedules.".
@@ -71,7 +72,8 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
 
 -doc "The target-owned source bundle format with this builder's kind metadata. Unit schedules use hls_artifact_bundle's shared contract; inputs bind every packaged file and RTL lists are grouped by role.".
 -type manifest() :: #{
-    version := 1,
+    version := 2,
+    provenance := hls_artifact_bundle:provenance(),
     metadata := #{
         kind := kind(), backend := source_protocol, profile := hls_diagnostic:json_value()
     },
@@ -92,13 +94,46 @@ Source-protocol build owner selected by hls_build. Retains a checked transport/n
     (deployment, hls_source_config:deployment() | file:filename()) -> plan();
     (mixed, hls_source_config:mixed() | file:filename()) -> plan().
 plan(Kind, Config) when is_map(Config) ->
+    prepare(Kind, Config, none);
+plan(Kind, Filename) ->
+    hls_diagnostic:with_context(
+        #{kind => Kind, config_file => text(filename:absname(Filename))},
+        fun() -> plan(Kind, hls_source_config:read(Filename)) end
+    ).
+
+-doc "Checks a network source composition selected by one implementation plan and target. Caller-supplied `native_actors` or `arithmetic_groups` are rejected before source preparation. The source is prepared once, its materialized topology is correlated with the plan, and explicit schedules become target-owned arithmetic groups. Other source kinds are unsupported in this version.".
+-spec plan(
+    network,
+    hls_source_config:network() | file:filename(),
+    hls_implementation_plan:plan(),
+    hls_implementation_plan:target()
+) -> plan().
+plan(Kind, Config, ImplementationPlan, Target) when is_map(Config) ->
+    prepare(Kind, Config, {ImplementationPlan, Target});
+plan(Kind, Filename, ImplementationPlan, Target) ->
+    hls_diagnostic:with_context(
+        #{kind => Kind, config_file => text(filename:absname(Filename))},
+        fun() ->
+            plan(Kind, hls_source_config:read(Filename), ImplementationPlan, Target)
+        end
+    ).
+
+%% Share validation, support resolution and unit construction between ordinary and projected plans.
+-spec prepare(
+    kind(),
+    hls_source_config:config(),
+    none | {hls_implementation_plan:plan(), hls_implementation_plan:target()}
+) -> plan().
+prepare(Kind, Config, Selection) ->
     hls_diagnostic:with_context(#{kind => Kind}, fun() ->
         _ = builder(Kind),
+        ok = planned_kind(Kind, Selection),
+        ok = placement_authority(Config, Selection),
         Checked = hls_source_config:validate(Kind, Config),
-        Profile = hls_build_profile:protocol(Kind, Checked),
         Imports = maps:get(dslx_path, Checked, []),
         lists:foreach(fun import_directory/1, Imports),
-        Stage = stage_plan(Kind, maps:remove(dslx_path, Checked)),
+        {Effective, Stage, Projection} = selected_stage(Kind, Checked, Selection),
+        Profile = hls_build_profile:protocol(Kind, Effective),
         #{libraries := Libraries, imports := Support} = hls_build_support:layout(Imports),
         Builder = builder(Kind),
         Roles =
@@ -112,19 +147,18 @@ plan(Kind, Config) when is_map(Config) ->
         {ok, Cwd} = file:get_cwd(),
         #plan{
             kind = Kind,
-            config = Checked,
+            config = Effective,
             stage = Stage,
             cwd = Cwd,
             libraries = Libraries,
-            units = lists:append([units(K, Role, Checked, Support, Profile) || {K, Role} <- Roles]),
-            profile = Profile
+            units = lists:append([
+                units(K, Role, Effective, Support, Profile)
+             || {K, Role} <- Roles
+            ]),
+            profile = Profile,
+            projection = Projection
         }
-    end);
-plan(Kind, Filename) ->
-    hls_diagnostic:with_context(
-        #{kind => Kind, config_file => text(filename:absname(Filename))},
-        fun() -> plan(Kind, hls_source_config:read(Filename)) end
-    ).
+    end).
 
 -doc "Returns the complete static composition and provider import locations. Inspect this value without an output directory; the descriptor grants neither artifact freshness after mutation nor device admission.".
 -spec descriptor(plan()) -> descriptor().
@@ -259,7 +293,8 @@ write(
         stage = Stage,
         libraries = Libraries,
         units = Units,
-        profile = Profile
+        profile = Profile,
+        projection = Projection
     },
     Output
 ) ->
@@ -292,9 +327,90 @@ write(
         Directory,
         hls_frame_layout:new(maps:get(frame_payload_words, Config, 3))
     ),
-    hls_artifact_bundle:finish(Directory, Units, #{
-        kind => Kind, backend => source_protocol, profile => hls_diagnostic:json_value(Profile)
-    }).
+    hls_artifact_bundle:finish(
+        Directory,
+        Units,
+        #{
+            kind => Kind,
+            backend => source_protocol,
+            profile => hls_diagnostic:json_value(Profile)
+        },
+        provenance(Projection)
+    ).
+
+%% Planned source projection is deliberately limited to a complete network in version 1.
+-spec planned_kind(
+    kind(), none | {hls_implementation_plan:plan(), hls_implementation_plan:target()}
+) -> ok.
+planned_kind(_Kind, none) ->
+    ok;
+planned_kind(network, {_ImplementationPlan, _Target}) ->
+    ok;
+planned_kind(Kind, {_ImplementationPlan, _Target}) ->
+    hls_diagnostic:raise(
+        configuration,
+        unsupported_implementation_plan_kind,
+        <<"Implementation-plan source requests currently support only network builds.">>,
+        #{kind => Kind}
+    ).
+
+%% The checked target projection is the only placement authority for a planned request.
+-spec placement_authority(
+    hls_source_config:config(),
+    none | {hls_implementation_plan:plan(), hls_implementation_plan:target()}
+) -> ok.
+placement_authority(_Config, none) ->
+    ok;
+placement_authority(Config, {_ImplementationPlan, _Target}) ->
+    case lists:sort(maps:keys(maps:with([native_actors, arithmetic_groups], Config))) of
+        [] ->
+            ok;
+        Fields ->
+            hls_diagnostic:raise(
+                configuration,
+                implementation_plan_placement_override,
+                <<"Implementation-plan builds derive native placement and arithmetic groups; remove caller-supplied placement fields.">>,
+                #{fields => Fields}
+            )
+    end.
+
+%% Ordinary plans retain their existing builders; projected networks reuse one prepared source.
+-spec selected_stage(
+    kind(),
+    hls_source_config:config(),
+    none | {hls_implementation_plan:plan(), hls_implementation_plan:target()}
+) ->
+    {hls_source_config:config(), stage_plan(), none | hls_target_implementation_plan:plan()}.
+selected_stage(Kind, Checked, none) ->
+    {Checked, stage_plan(Kind, maps:remove(dslx_path, Checked)), none};
+selected_stage(network, Checked, {ImplementationPlan, Target}) ->
+    Program = hls_protocol_transport:prepare(maps:remove(dslx_path, Checked)),
+    #{topology := Topology} = hls_protocol_transport:bundle(Program),
+    Projection = hls_target_implementation_plan:source_protocol(
+        ImplementationPlan, Topology, Target
+    ),
+    #{arithmetic_groups := Groups} = hls_target_implementation_plan:descriptor(Projection),
+    Effective = Checked#{arithmetic_groups => Groups},
+    Transport = hls_protocol_transport:plan(Program, #{arithmetic_groups => Groups}),
+    Stage = hls_protocol_network:plan(
+        Transport, maps:with([activation, inspection], Effective)
+    ),
+    {Effective, Stage, Projection}.
+
+%% Bundle provenance exposes only exact correlation identities, never the in-process plan.
+-spec provenance(none | hls_target_implementation_plan:plan()) ->
+    hls_artifact_bundle:provenance().
+provenance(none) ->
+    #{kind => unplanned};
+provenance(Projection) ->
+    #{logical_system := LogicalSystem, implementation_plan := ImplementationPlan} =
+        hls_target_implementation_plan:descriptor(Projection),
+    #{
+        kind => implementation_plan,
+        logical_system_sha256 => LogicalSystem,
+        implementation_plan_sha256 => ImplementationPlan,
+        target_projection_sha256 => hls_target_implementation_plan:identity(Projection)
+    }.
 
 %% Low-level compositions share the ordinary source planner; complete application builders own theirs.
 -spec stage_plan(kind(), hls_source_config:config()) -> stage_plan().

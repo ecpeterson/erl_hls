@@ -94,7 +94,9 @@ export function selectRoutes({ viewBytes, bundleBytes }) {
     "bundle/view build or checkpoint mismatch",
   );
   for (const digest of [
-    ...["source", "rtl", "observation"].map((key) => bundle.build[key]),
+    ...["source", "rtl", "observation", "implementation"].map(
+      (key) => bundle.build[key],
+    ),
     physical.checkpoint,
   ])
     check(
@@ -195,7 +197,7 @@ export function selectRoutes({ viewBytes, bundleBytes }) {
   };
   const selectionBytes = Buffer.from(JSON.stringify(selection, null, 2) + "\n");
   check(selectionBytes.length <= 4 * 1024 * 1024, "selection exceeds 4 MiB");
-  const fields = ["source", "rtl", "observation"]
+  const fields = ["source", "rtl", "observation", "implementation"]
     .map((key) => `${tclWord(key)} ${tclWord(bundle.build[key])}`)
     .join(" ");
   const rows = arcs.map(

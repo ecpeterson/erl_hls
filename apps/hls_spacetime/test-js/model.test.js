@@ -24,7 +24,7 @@ import {
 /** Deliberately small synthetic graph: equal full writes, a read-first masked
  * overwrite, response after replacement, independent resource order and reset. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const events = [];
   const versions = [
     {
@@ -368,7 +368,12 @@ test("malformed duplicate identities, cross-reset inputs and build mismatch reje
   assert.throws(() => createModel(reset), /cross-reset input/);
   const identity = fixture();
   identity.catalogue = {
-    build: { source: "different", rtl: "r", observation: "o" },
+    build: {
+      source: "different",
+      rtl: "r",
+      observation: "o",
+      implementation: "i",
+    },
   };
   assert.throws(() => createModel(identity), /build mismatch/);
 });

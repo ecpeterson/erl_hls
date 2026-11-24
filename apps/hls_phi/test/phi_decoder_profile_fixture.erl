@@ -40,7 +40,7 @@ oracle(Stage) ->
                 {actor, Id} -> element(2, maps:get(Id, Actors));
                 {external, Stream} -> maps:get(Stream, Sinks)
             end} || #{source := {_, Port}, recipients := [Target]} <-
-                hls_topology:routes_for_instance(Plan, Family, [X, Y])]),
+                hls_logical_topology:routes_for_instance(Plan, Family, [X, Y])]),
             ok = Module:connect(Pid, Outputs)
         end, Sources ++ Phi),
         #{phi_actor_count := Count} = phi_decoder_profile:manifest(Config),

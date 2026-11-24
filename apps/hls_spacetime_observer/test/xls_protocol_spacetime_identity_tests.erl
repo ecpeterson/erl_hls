@@ -103,5 +103,10 @@ fixture(Metadata) ->
         registers => [],
         state => [],
         unsupported => [],
-        inputs => #{rtl => <<"rtl">>, source_build => <<"source">>, metadata => Metadata}
+        inputs => #{
+            rtl => <<"rtl">>,
+            source_build => <<"source">>,
+            implementation => <<"implementation">>,
+            metadata => Metadata
+        }
     }.

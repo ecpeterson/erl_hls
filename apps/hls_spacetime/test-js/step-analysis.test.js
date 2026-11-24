@@ -23,6 +23,7 @@ function fixture() {
       source: `source-${id}`,
       rtl: `rtl-${id}`,
       observation: `observer-${id}`,
+      implementation: `implementation-${id}`,
     },
     checkpoint: id.repeat(64),
     clock: "clk",

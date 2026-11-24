@@ -10,7 +10,7 @@ import {
 
 /** A global STA summary needs pin evidence, not an available routed-path drawing. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" },
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" },
     checkpoint = "c".repeat(64),
     report = { file: "global-paths.rpt", sha256: "b".repeat(64) };
   return {

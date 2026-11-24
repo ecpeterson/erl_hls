@@ -10,7 +10,12 @@ const id = (digit) => digit.repeat(64);
 /** A small producer receipt describes an unchanged capture and one new alias.
  * The fixture tests the format boundary, not the producer's recurrence proof. */
 function fixture() {
-  const build = { source: id("a"), rtl: id("b"), observation: id("c") },
+  const build = {
+      source: id("a"),
+      rtl: id("b"),
+      observation: id("c"),
+      implementation: id("f"),
+    },
     revised = { ...build, observation: id("d") };
   const capture = {
     complete: true,
@@ -35,7 +40,11 @@ function fixture() {
   const bundle = { ...structuredClone(base.bundle), build: revised };
   const oldPlan = {
     schema: 1,
-    inputs: { source_build: build.source, rtl: build.rtl },
+    inputs: {
+      source_build: build.source,
+      rtl: build.rtl,
+      implementation: build.implementation,
+    },
     registers: ["r"],
     dependencies: {
       nodes: {
@@ -155,6 +164,11 @@ test("exact trace identity and finite capture, resource and build receipts remai
     (i) => (i.review.comparison.compared_cycles = 2),
     (i) =>
       (i.review.revised_build = { ...i.review.revised_build, rtl: id("9") }),
+    (i) =>
+      (i.review.revised_build = {
+        ...i.review.revised_build,
+        implementation: id("9"),
+      }),
     (i) => (i.bundle.capture.incarnations[0].id = "other"),
     (i) => i.bundle.capture.observers.push({ id: "new", gaps: [] }),
     (i) => (i.bundle.resources[0].width = 2),
@@ -182,6 +196,16 @@ test("the serialized origin must connect to exactly its newer build", () => {
       validateObservationRevisionOrigin(
         origin,
         { ...input.bundle.build, observation: id("9") },
+        input.bundle.capture,
+        input.base.catalogue.checkpoint,
+      ),
+    /identity/,
+  );
+  assert.throws(
+    () =>
+      validateObservationRevisionOrigin(
+        origin,
+        { ...input.bundle.build, implementation: id("9") },
         input.bundle.capture,
         input.base.catalogue.checkpoint,
       ),

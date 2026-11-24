@@ -69,7 +69,7 @@ Application and debug use separate physical streams but share the peer connectio
 
 ## Configuration and inspection
 
-`hls_fabric_sup:start_node/4` attaches existing brokers. `hls_node:services/1` returns service handles; `info/1` reports incarnation, listener and connections. `hls_fabric:client_info/1` reports host queued/pending work and ignored replies. Device counters/traces use the debug PID; actor observations use a verified catalog. Native `process_info` is not a remote-device query.
+`hls_runtime_sup:start_node/4` attaches existing brokers. `hls_node:services/1` returns service handles; `info/1` reports incarnation, listener and connections. `hls_fabric:client_info/1` reports host queued/pending work and ignored replies. Device counters/traces use the debug PID; actor observations use a verified catalog. Native `process_info` is not a remote-device query.
 
 | Option | Default | Meaning |
 | --- | --- | --- |

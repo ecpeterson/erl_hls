@@ -9,7 +9,7 @@ import {
 /** Reconvergent two-input logic, three writes, one semantic producer and a read.
  * Only one of two logical bits has a qualified native destination. */
 function fixture() {
-  const build = { source: "s", rtl: "r", observation: "o" };
+  const build = { source: "s", rtl: "r", observation: "o", implementation: "i" };
   const cells = [
     { id: "source", kind: "FDRE", boundary: "sequential" },
     { id: "lut", kind: "LUT2", boundary: "combinational" },

@@ -87,7 +87,7 @@ and guards. Numeric tag compatibility remains a physical-backend concern.
 """.
 
 %% Process-free logical topology preparation and normalization.
--export([interface_modules/1, interfaces/1, normalize/2]).
+-export([interface_modules/1, interfaces/1, normalize/2, identity/1]).
 
 %% Normalized instance-route lookup.
 -export([routes_for_instance/3]).
@@ -104,7 +104,6 @@ and guards. Numeric tag compatibility remains a physical-backend concern.
     interface_catalog/0,
     instance/0,
     materialized_plan/0,
-    plan/0,
     route/0,
     spec/0
 ]).
@@ -144,9 +143,6 @@ and guards. Numeric tag compatibility remains a physical-backend concern.
 
 -doc "A normalized compact topology which retains bounded family relations.".
 -type compact_plan() :: map().
-
--doc "The historical compact-plan name retained for source type compatibility.".
--type plan() :: compact_plan().
 
 -doc "A fully expanded source topology with exact actors, routes, lanes, and ingress recipients.".
 -type materialized_plan() :: #{
@@ -194,6 +190,69 @@ normalize(Spec, Interfaces) ->
 interfaces(#{interfaces := Interfaces}) ->
     Interfaces.
 
+-doc "Returns one lowercase SHA-256 identity for a normalized compact or materialized topology. Compact input is boundedly materialized so the two representations of the same topology share an identity.".
+-spec identity(compact_plan() | materialized_plan()) -> binary().
+identity(Plan) ->
+    ok = ensure_static(Plan),
+    Canonical = identity_plan(Plan),
+    string:lowercase(
+        binary:encode_hex(crypto:hash(sha256, term_to_binary(Canonical, [deterministic])))
+    ).
+
+%% Use the expanded checked representation as the identity authority for both plan forms.
+-spec identity_plan(compact_plan() | materialized_plan()) -> materialized_plan().
+identity_plan(Plan = #{instances := _}) ->
+    ok = identity_shape(Plan, materialized),
+    Plan;
+identity_plan(Plan) ->
+    ok = identity_shape(Plan, compact),
+    materialize(Plan, 65536).
+
+%% Reject raw topology specs and extended maps rather than assigning them normalized identities.
+-spec identity_shape(term(), compact | materialized) -> ok.
+identity_shape(
+    #{
+        version := 1,
+        actors := Actors,
+        families := Families,
+        routes := Routes,
+        route_relations := RouteRelations,
+        ingresses := Ingresses,
+        externals := Externals,
+        interfaces := Interfaces,
+        startup := Startup,
+        lanes := Lanes,
+        lane_relations := LaneRelations
+    } = Plan,
+    Kind
+) when
+    is_list(Actors),
+    is_list(Families),
+    is_list(Routes),
+    is_list(RouteRelations),
+    is_list(Ingresses),
+    is_list(Externals),
+    is_map(Interfaces),
+    is_list(Startup),
+    is_list(Lanes),
+    is_list(LaneRelations)
+->
+    ExpectedSize =
+        case Kind of
+            compact -> 11;
+            materialized -> 12
+        end,
+    case {map_size(Plan), Kind, maps:find(instances, Plan)} of
+        {ExpectedSize, compact, error} ->
+            ok;
+        {ExpectedSize, materialized, {ok, Instances}} when is_list(Instances) ->
+            ok;
+        _ ->
+            error({invalid_normalized_topology, Plan})
+    end;
+identity_shape(Plan, _Kind) ->
+    error({invalid_normalized_topology, Plan}).
+
 %% Normalize a validated version-1 term without acquiring compiler state.
 -spec normalize_current(spec(), interface_catalog()) -> compact_plan().
 normalize_current(Spec, Interfaces) ->
@@ -239,7 +298,7 @@ normalize_exact_sections(Spec, FamilyIndex, Actors, Interfaces) ->
     }.
 
 -doc "Resolves one family's compact rules for one bounded member.".
--spec routes_for_instance(plan(), term(), [non_neg_integer()]) -> [map()].
+-spec routes_for_instance(compact_plan(), term(), [non_neg_integer()]) -> [map()].
 routes_for_instance(Plan = #{families := _}, FamilyId, Coordinates) ->
     hls_topology_family:routes_for_instance(Plan, FamilyId, Coordinates);
 routes_for_instance(Plan, _FamilyId, _Coordinates) ->
@@ -703,33 +762,9 @@ sort_by(Key, Values) ->
 %% Reject runtime identities anywhere in an otherwise static topology term.
 -spec ensure_static(term()) -> ok.
 ensure_static(Term) ->
-    case live_value(Term) of
-        none -> ok;
-        Kind -> error({live_topology_value, Kind})
-    end.
-
-%% Return the first kind of live runtime value nested in one term.
--spec live_value(term()) -> none | pid | port | reference | function.
-live_value(Term) when is_pid(Term) -> pid;
-live_value(Term) when is_port(Term) -> port;
-live_value(Term) when is_reference(Term) -> reference;
-live_value(Term) when is_function(Term) -> function;
-live_value([Head | Tail]) ->
-    first_live([Head, Tail]);
-live_value(Term) when is_tuple(Term) -> first_live(tuple_to_list(Term));
-live_value(Term) when is_map(Term) ->
-    first_live(lists:append([[Key, Value] || {Key, Value} <- maps:to_list(Term)]));
-live_value(_Term) ->
-    none.
-
-%% Scan terms in deterministic traversal order for a live runtime value.
--spec first_live([term()]) -> none | pid | port | reference | function.
-first_live([]) ->
-    none;
-first_live([Term | Rest]) ->
-    case live_value(Term) of
-        none -> first_live(Rest);
-        Kind -> Kind
+    case hls_static_term:validate(Term) of
+        ok -> ok;
+        {error, Kind} -> error({live_topology_value, Kind})
     end.
 
 %%%

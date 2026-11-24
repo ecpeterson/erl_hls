@@ -44,7 +44,7 @@ jobs:
           fi
           python3 tools/check.py --group quality --stage _build/checks/ci "${base[@]}"
       - name: Retain bounded source-contract diagnostics
-        if: failure() || inputs.diagnostics == true
+        if: failure() || (github.event_name == 'workflow_dispatch' && inputs.diagnostics == true)
         uses: ./.github/actions/diagnostics
         with:
           name: source-contracts

@@ -87,7 +87,7 @@ family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
 -spec wrapped_routes_resolve_one_boundary_member_test() -> ok.
 wrapped_routes_resolve_one_boundary_member_test() ->
     Plan = hls_topology:normalize(hls_grid_topology_fixture:topology(5, 4)),
-    Routes = hls_topology:routes_for_instance(Plan, grid, [0, 0]),
+    Routes = hls_logical_topology:routes_for_instance(Plan, grid, [0, 0]),
     ?assertEqual(7, length(Routes)),
     ?assertEqual(
         [{actor, {grid, 0, 3}}],
@@ -360,11 +360,11 @@ instance_route_coordinates_are_checked_test() ->
     Plan = hls_topology:from_module(hls_grid_topology_fixture),
     ?assertError(
         {invalid_family_coordinates, grid, [2, 0], [2, 3]},
-        hls_topology:routes_for_instance(Plan, grid, [2, 0])
+        hls_logical_topology:routes_for_instance(Plan, grid, [2, 0])
     ),
     ?assertError(
         {invalid_family_coordinates, grid, [0], [2, 3]},
-        hls_topology:routes_for_instance(Plan, grid, [0])
+        hls_logical_topology:routes_for_instance(Plan, grid, [0])
     ).
 
 %% Finds the one normalized route selected by source or output port.

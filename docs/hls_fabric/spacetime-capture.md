@@ -45,7 +45,7 @@ When converting a capture, add `_build/spacetime/lib/hls_spacetime_observer/ebin
 
 ## Prepare, record and interpret
 
-Compile the optional profile once, then use `bin/hls-spacetime-observer`. This command publishes or interprets files; it never runs the compiler, simulator or application host. Supply the ordinary source build, its raw/optimized boundary IR, exact boundary RTL and compiled `files.f` directory in one trusted Erlang configuration:
+Compile the optional profile once, then use `bin/hls-spacetime-observer`. This command publishes or interprets files; it never runs the compiler, simulator or application host. Supply the ordinary source build, its raw/optimized boundary IR, exact boundary RTL and compiled release root containing `compiled.json` and `files.f` in one trusted Erlang configuration:
 
 ```erlang
 #{source => "/absolute/source-build",
@@ -57,7 +57,7 @@ Compile the optional profile once, then use `bin/hls-spacetime-observer`. This c
 
 The default scope is `full`: missing semantic controls reject. Add `scope => storage` explicitly when requesting only enabled register writes and Q/D/enable checks. This scope removes actor, ownership, publication, scalar-ancestry and stream attribution; the preparation and capture manifests retain the original unsupported-control diagnostics. It is useful when XLS has erased semantic aliases in a small workload. No missing control is replaced with zero, and every D producer remains unknown.
 
-Paths resolve from the invoking directory. Source preparation and XLS compilation use the ordinary build toolchain; the observer does not choose its backend or schedule. Keep those original build artifacts and tool identities. Run from the umbrella checkout with OTP 28.0.2 and rebar3 on `PATH`:
+Paths resolve from the invoking directory. Source preparation and XLS compilation use the ordinary build toolchain; the observer does not choose its backend or schedule. Before assigning the realized-implementation identity, preparation checks the v2 source recipe, request, product inventory, provenance and retained product/RTL bytes. This is trusted local correlation, not producer authentication or semantic/physical qualification. Keep those original build artifacts and tool identities. Run from the umbrella checkout with OTP 28.0.2 and rebar3 on `PATH`:
 
 ```sh
 rebar3 as spacetime compile

@@ -1,19 +1,24 @@
 -module(hls_observation_build).
 -moduledoc """
-Canonical correlation identity for one observed implementation build. The three opaque components
-bind source input, generated RTL and observation interpretation without asserting that any component
-is a digest, path or human-readable string. This module checks shape and agreement only; callers own
-the evidence that assigns each identity.
+Canonical correlation identity for one observed implementation build. The four opaque components
+bind source input, generated RTL, observation interpretation and realized implementation without
+asserting that any component is a digest, path or human-readable string. This module checks shape and
+agreement only; callers own the evidence that assigns each identity.
 """.
 
--export([new/3, validate/1, validate_component/1, match/2]).
+-export([new/4, validate/1, validate_component/1, match/2]).
 -export_type([build/0, component/0, validation_error/0, match_error/0]).
 
 -doc "One required correlation component in the stable build map.".
--type component() :: source | rtl | observation.
+-type component() :: source | rtl | observation | implementation.
 
 -doc "Exact correlation map shared by execution, physical and observation artifacts.".
--type build() :: #{source := binary(), rtl := binary(), observation := binary()}.
+-type build() :: #{
+    source := binary(),
+    rtl := binary(),
+    observation := binary(),
+    implementation := binary()
+}.
 
 -doc "Shape or opaque-component failure. Components are valid when they are nonempty binaries.".
 -type validation_error() :: invalid_shape | {invalid_component, component(), term()}.
@@ -24,24 +29,37 @@ the evidence that assigns each identity.
     | {invalid_actual, validation_error()}
     | {component_mismatch, component(), binary(), error | {ok, term()}}.
 
--doc "Constructs the exact three-component map after validating every opaque identity. Raises {observation_build, Reason} for an empty or nonbinary component.".
--spec new(term(), term(), term()) -> build().
-new(Source, Rtl, Observation) ->
-    Build = #{source => Source, rtl => Rtl, observation => Observation},
+-doc "Constructs the exact four-component map after validating every opaque identity. Raises {observation_build, Reason} for an empty or nonbinary component.".
+-spec new(term(), term(), term(), term()) -> build().
+new(Source, Rtl, Observation, Implementation) ->
+    Build = #{
+        source => Source,
+        rtl => Rtl,
+        observation => Observation,
+        implementation => Implementation
+    },
     case validate(Build) of
         ok -> Build;
         {error, Reason} -> error({observation_build, Reason})
     end.
 
--doc "Checks that a term is exactly the three-key build map and that every component is a nonempty binary. Binary contents remain opaque and need not be UTF-8 or a digest.".
+-doc "Checks that a term is exactly the four-key build map and that every component is a nonempty binary. Binary contents remain opaque and need not be UTF-8 or a digest.".
 -spec validate(term()) -> ok | {error, validation_error()}.
-validate(#{source := Source, rtl := Rtl, observation := Observation} = Build) when
-    map_size(Build) =:= 3
+validate(
+    #{
+        source := Source,
+        rtl := Rtl,
+        observation := Observation,
+        implementation := Implementation
+    } = Build
+) when
+    map_size(Build) =:= 4
 ->
     validate_named([
         {source, Source},
         {rtl, Rtl},
-        {observation, Observation}
+        {observation, Observation},
+        {implementation, Implementation}
     ]);
 validate(_) ->
     {error, invalid_shape}.
@@ -53,7 +71,7 @@ validate_component(Value) when is_binary(Value), byte_size(Value) > 0 ->
 validate_component(_) ->
     {error, invalid_component}.
 
--doc "Checks exact agreement of two valid three-component maps. Reports the first RTL, source or observation difference, preserving the observer binding diagnostic order; rejects malformed maps even when their shared fields agree.".
+-doc "Checks exact agreement of two valid four-component maps. Reports the first RTL, source, implementation or observation difference, preserving the observer binding diagnostic order; rejects malformed maps even when their shared fields agree.".
 -spec match(term(), term()) -> ok | {error, match_error()}.
 match(Expected, Actual) ->
     case validate(Expected) of
@@ -86,7 +104,7 @@ validate_named([{Name, Value} | Rest]) ->
 first_mismatch(_Expected, Actual) when not is_map(Actual) ->
     none;
 first_mismatch(Expected, Actual) ->
-    first_mismatch([rtl, source, observation], Expected, Actual).
+    first_mismatch([rtl, source, implementation, observation], Expected, Actual).
 
 %% Component order makes mismatch diagnostics deterministic.
 -spec first_mismatch([component()], build(), map()) -> none | match_error().

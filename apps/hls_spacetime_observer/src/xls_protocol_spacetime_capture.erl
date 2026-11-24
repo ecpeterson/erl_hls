@@ -162,11 +162,16 @@ capture_scope(#{observation_scope := storage}) ->
 capture_scope(_) ->
     <<"All sampled enabled writes to retained RTL data registers >=16 bits; receiver accept/head_done/take/postpone/phase and publication controls; link ownership transitions. Encoded register operands only; unresolved computation inputs are explicit unknown roots. No sensitized gate ancestry. Adjacent Q/D/enable transfers checked; final enabled edge has no following Q sample.">>.
 
-%% Exact source, RTL and native observation-plan digests jointly identify this interpretation.
+%% Exact source, RTL, implementation and native observation-plan digests identify this interpretation.
 -spec check_build(xls_protocol_spacetime:plan(), hls_observation_build:build()) -> ok.
-check_build(Plan = #{inputs := #{rtl := Rtl, source_build := Source}}, Build) ->
+check_build(
+    Plan = #{
+        inputs := #{rtl := Rtl, source_build := Source, implementation := Implementation}
+    },
+    Build
+) ->
     Observation = xls_protocol_spacetime:observation_digest(Plan),
-    Expected = hls_observation_build:new(Source, Rtl, Observation),
+    Expected = hls_observation_build:new(Source, Rtl, Observation, Implementation),
     case hls_observation_build:match(Expected, Build) of
         ok ->
             ok;

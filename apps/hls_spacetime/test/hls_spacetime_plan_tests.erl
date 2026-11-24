@@ -6,7 +6,7 @@
 -spec deterministic_proposal_test() -> ok.
 deterministic_proposal_test() ->
     Plan = hls_spacetime_plan:propose(
-        <<"logical-system">>, topology(), [fpga_a, fpga_b], #{max_group_size => 2}
+        topology(), [fpga_a, fpga_b], #{sharing => {by_module, 2}}
     ),
     ?assertEqual(
         #{{actor, a} => fpga_a, {actor, b} => fpga_b, {actor, c} => fpga_a},
@@ -18,7 +18,7 @@ deterministic_proposal_test() ->
 -spec supplied_and_cached_characterization_match_test() -> ok.
 supplied_and_cached_characterization_match_test() ->
     Plan = hls_spacetime_plan:propose(
-        <<"logical-system">>, topology(), [fpga_a, fpga_b], #{max_group_size => 2}
+        topology(), [fpga_a, fpga_b], #{sharing => {by_module, 2}}
     ),
     Characterization = hls_characterization:new(
         hls_implementation_plan:identity(Plan),
@@ -30,8 +30,11 @@ supplied_and_cached_characterization_match_test() ->
     ),
     Cached = binary_to_term(term_to_binary(Characterization, [deterministic]), [safe]),
     Policy = fun(Current, Evidence) -> prefer_fast_target(Current, Evidence) end,
-    Revised = hls_spacetime_plan:revise(Plan, Characterization, Policy),
-    ?assertEqual(Revised, hls_spacetime_plan:revise(Plan, Cached, Policy)),
+    Revised = hls_spacetime_plan:revise(Plan, <<"realized-fixture">>, Characterization, Policy),
+    ?assertEqual(
+        Revised,
+        hls_spacetime_plan:revise(Plan, <<"realized-fixture">>, Cached, Policy)
+    ),
     ?assert(lists:all(
         fun(Target) -> Target =:= fpga_b end,
         maps:values(hls_implementation_plan:placement(Revised))
@@ -40,21 +43,55 @@ supplied_and_cached_characterization_match_test() ->
 %% A characterization for another proposal is rejected before policy execution.
 -spec mismatched_characterization_is_rejected_test() -> ok.
 mismatched_characterization_is_rejected_test() ->
-    Plan = hls_spacetime_plan:propose(
-        <<"logical-system">>, topology(), [fpga_a, fpga_b], #{}
-    ),
+    Plan = hls_spacetime_plan:propose(topology(), [fpga_a, fpga_b], #{}),
     Characterization = hls_characterization:new(
         <<"other-plan">>, <<"realized">>, <<"evidence">>, analytical_model, <<"fixture">>, #{}
     ),
     ?assertError(
         {spacetime_revision, {plan_mismatch, _, <<"other-plan">>}},
-        hls_spacetime_plan:revise(Plan, Characterization, fun(_, _) -> error(unreachable) end)
+        hls_spacetime_plan:revise(
+            Plan, <<"realized">>, Characterization, fun(_, _) -> error(unreachable) end
+        )
+    ).
+
+%% Evidence for another exact realized implementation is rejected before policy execution.
+-spec mismatched_implementation_is_rejected_test() -> ok.
+mismatched_implementation_is_rejected_test() ->
+    Plan = hls_spacetime_plan:propose(topology(), [fpga_a], #{}),
+    Characterization = hls_characterization:new(
+        hls_implementation_plan:identity(Plan),
+        <<"realized-a">>,
+        <<"evidence">>,
+        native_measurement,
+        <<"fixture">>,
+        #{}
+    ),
+    ?assertError(
+        {spacetime_revision, {implementation_mismatch, <<"realized-b">>, <<"realized-a">>}},
+        hls_spacetime_plan:revise(
+            Plan, <<"realized-b">>, Characterization, fun(_, _) -> error(unreachable) end
+        )
     ).
 
 %% The fixture is already a core materialized-instance view; no compiler module is involved.
 -spec topology() -> map().
 topology() ->
     #{
+        version => 1,
+        actors => [
+            #{id => a, module => alpha, outputs => [], mailbox_capacity => 1},
+            #{id => b, module => beta, outputs => [], mailbox_capacity => 1},
+            #{id => c, module => alpha, outputs => [], mailbox_capacity => 1}
+        ],
+        families => [],
+        routes => [],
+        route_relations => [],
+        ingresses => [],
+        externals => [],
+        interfaces => #{},
+        startup => [],
+        lanes => [],
+        lane_relations => [],
         instances => [
             #{identity => {actor, a}, actor => #{id => a, module => alpha}},
             #{identity => {actor, b}, actor => #{id => b, module => beta}},

@@ -37,10 +37,15 @@ saved_example_test() ->
 observation_build_contract_test() ->
     Bundle = #{build := Build} = fixture(),
     Shared = hls_observation_build:new(
-        maps:get(source, Build), maps:get(rtl, Build), maps:get(observation, Build)
+        maps:get(source, Build),
+        maps:get(rtl, Build),
+        maps:get(observation, Build),
+        maps:get(implementation, Build)
     ),
     ?assertEqual(hls_spacetime:validate(Bundle), hls_spacetime:validate(Bundle#{build := Shared})),
-    Opaque = hls_observation_build:new(<<255>>, <<"rtl">>, <<"observation">>),
+    Opaque = hls_observation_build:new(
+        <<255>>, <<"rtl">>, <<"observation">>, <<"implementation">>
+    ),
     ?assertError({spacetime, text}, hls_spacetime:validate(Bundle#{build := Opaque})).
 
 %% Logical attribution can name multiple resources without adding dependencies or duplicating cells.

@@ -2,7 +2,7 @@
 
 `priv/include/spacetime_trace.h` and `hls_spacetime_trace` share this bounded pre-edge recording format. Its eleven fixed public fields describe the current 32-bit source-protocol stream interface. It is a capture dialect, not the backend-neutral cycle artifact: other producers may construct that artifact without using these fields. Backend adapters give sampled taps their meaning.
 
-The protocol-specific harness, FIFO transport, fault aggregation, stimulus schedules and live/replay/drive commands belong to [hls_fabric capture](https://github.com/ecpeterson/hls_fabric/blob/main/docs/spacetime-capture.md). This library provides only recording transport and checked offline reading.
+The protocol-specific harness, FIFO transport, fault aggregation, stimulus schedules and live/replay/drive commands belong to [hls_fabric capture](../hls_fabric/spacetime-capture.md). This library provides only recording transport and checked offline reading.
 
 The trace is ASCII TSV. Every row, including the footer, ends in a newline:
 

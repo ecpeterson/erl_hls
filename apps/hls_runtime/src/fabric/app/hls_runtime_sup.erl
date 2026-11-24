@@ -1,6 +1,6 @@
--module(hls_fabric_sup).
+-module(hls_runtime_sup).
 -moduledoc """
-The application callback starts this root supervisor; clients explicitly add or remove hls_node trees over already-open brokers.
+Root runtime supervisor for explicitly attached virtual device nodes.
 """.
 -behaviour(supervisor).
 %% Application supervision.

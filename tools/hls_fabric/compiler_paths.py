@@ -16,7 +16,7 @@ def compiler_root(profile: str, override: Path | None = None, root: Path = ROOT)
     Resolution happens only when called. Environment variables do not override
     the caller. The selected compiler must provide the packaged Python tools.
     """
-    if re.fullmatch(r"[A-Za-z0-9_-]+", profile) is None:
+    if re.fullmatch(r"[A-Za-z0-9_-]+(?:\+[A-Za-z0-9_-]+)*", profile) is None:
         raise ValueError(f"invalid rebar profile: {profile!r}")
     public = (Path(override) if override is not None else
               application_directory("erl_hls", profile, root)).resolve()
@@ -24,23 +24,21 @@ def compiler_root(profile: str, override: Path | None = None, root: Path = ROOT)
 
 
 def compiler_source_root(public: Path) -> Path:
-    """Resolve sources through the selected app's own projection, never an unrelated checkout.
+    """Resolve one canonical umbrella facade through its application projection.
 
     Umbrella builds link src/priv/include into an application build directory but
     omit arbitrary tool directories. Keep that build directory for BEAM selection;
-    source/tool lookup follows its authoritative src link. BEAM selection checks
-    that same link before using the fabric profile's compiled application.
+    source/tool lookup follows its authoritative src link. Flat standalone compiler
+    checkouts are not a supported package shape after the umbrella cutover.
     """
     public = public.resolve()
     candidates = [public]
     if (public / "src").is_symlink():
         candidates.append((public / "src").resolve().parent)
     for source in candidates:
-        standalone = source / "tools/erl_hls_tools/__init__.py"
         umbrella = source.parents[1] / "tools/erl_hls_tools/__init__.py"
-        if (standalone.is_file() or
-                (source.name == "erl_hls" and source.parent.name == "apps" and
-                 (source / "src").is_dir() and umbrella.is_file())):
+        if (source.name == "erl_hls" and source.parent.name == "apps" and
+                (source / "src").is_dir() and umbrella.is_file()):
             return source
     raise FileNotFoundError(f"missing compiler application sources in {public}")
 
@@ -48,20 +46,11 @@ def compiler_source_root(public: Path) -> Path:
 def compiler_tools_root(public: Path) -> Path:
     """Return the repository that owns the selected compiler's Python package."""
     source = compiler_source_root(public)
-    candidates = [source, source.parents[1] if source.parent.name == "apps" else source]
-    for root in candidates:
-        if (root / "tools/erl_hls_tools/__init__.py").is_file():
-            return root
-    raise FileNotFoundError(f"missing compiler Python package for {source}")
+    return source.parents[1]
 
 
 def compiler_application(public: Path, name: str) -> Path:
-    """Return one source application owned by the selected compiler umbrella.
-
-    Current umbrellas keep compiler, communication and target resources in separate
-    applications. A legacy standalone compiler may still carry those resources in
-    its selected root; retain that fallback only when no umbrella application exists.
-    """
+    """Return one source application owned by the selected compiler umbrella."""
     if name not in {"erl_hls", "hls_compile", "hls_fabric", "hls_target"}:
         raise ValueError(f"unsupported compiler application: {name!r}")
     source = compiler_source_root(public)
@@ -69,10 +58,6 @@ def compiler_application(public: Path, name: str) -> Path:
     candidate = repository / "apps" / name
     if candidate.is_dir():
         return candidate.resolve()
-    if name == "erl_hls":
-        return source
-    if repository == source:
-        return source
     raise FileNotFoundError(f"missing {name} resources for compiler {source}")
 
 

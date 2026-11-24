@@ -10,7 +10,7 @@ The exported types in [`hls_spacetime`](../../apps/hls_spacetime/src/hls_spaceti
 
 | Table | Meaning |
 | --- | --- |
-| `build` | Exact source-bundle, compiled-RTL and observation-binding identities. Recordings use content identities, not application names. |
+| `build` | Exact source-bundle, compiled-RTL, observation-binding and realized-implementation identities. Recordings use content identities, not application names. |
 | `capture` | One device, one clock, half-open cycle interval, reset incarnations, observer counters, scope, completeness and evidence. |
 | `resources` | Semantic computation/storage resources. Storage declares width, depth, ports, read latency, collision behavior and reset policy. |
 | `versions` | Unique values with a producer event or an explicit initial/carry-in/unknown root. Stored versions identify resource/address; transient values use `storage: null`. |
@@ -45,7 +45,7 @@ Every observer declares `first_sequence` and exclusive `next_sequence`, includin
 
 This checks reported coverage consistency, not whether instrumentation observed every action. Omitting and renumbering records can produce a consistent artifact. The observer's declared `scope` and later observation/noninterference qualification remain part of the trust boundary. Sparse switching or inspection snapshots cannot be relabelled as complete semantic capture.
 
-The physical catalogue must match all three build identities. Each primitive appears once with kind, native properties and placement. Placed cells have site/BEL and common tile-grid coordinates. Explicitly unplaced cells, including native constants without a site, retain `null` site/BEL/coordinates; consumers must not draw them at an invented location. Canonical nets retain cell/pin/direction connections, with optional full native pin identities. Top-level ports are distinct from primitive pins. Tile coordinates are not micrometres; connectivity is not routed geometry or measured delay.
+The physical catalogue must match all four build identities. Each primitive appears once with kind, native properties and placement. Placed cells have site/BEL and common tile-grid coordinates. Explicitly unplaced cells, including native constants without a site, retain `null` site/BEL/coordinates; consumers must not draw them at an invented location. Canonical nets retain cell/pin/direction connections, with optional full native pin identities. Top-level ports are distinct from primitive pins. Tile coordinates are not micrometres; connectivity is not routed geometry or measured delay.
 
 Every semantic resource has one disposition: `direct`, `distributed`, `merged`, `replicated`, `folded`, `optimized_away`, `ambiguous` or `unmapped`. Bindings reference generated objects and physical cells. A `distributed` word spans at least two cells and must identify a supported physical output pin, with evidence, for every encoded bit. This differs from replicated copies. An optional per-bit attachment on other dispositions covers the word with supported endpoints or explicit unknowns. Resources may share a cell; ambiguous candidates do not count as established mappings. Optimized-away resources have no cell. Names and structural association establish neither value-sensitive causality nor native equivalence.
 

@@ -10,7 +10,9 @@ const digest = /^[0-9a-f]{64}$/;
 const cycle = (n) => Number.isSafeInteger(n) && n >= 0;
 const text = (s) => typeof s === "string" && s.trim().length > 0;
 const sameBuild = (a, b) =>
-  ["source", "rtl", "observation"].every((k) => a?.[k] === b?.[k]);
+  ["source", "rtl", "observation", "implementation"].every(
+    (k) => a?.[k] === b?.[k],
+  );
 function check(ok, message) {
   if (!ok) throw Error(`Step comparison: ${message}`);
 }

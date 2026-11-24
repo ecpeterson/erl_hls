@@ -13,7 +13,7 @@ def erlang_paths(profile: str, root: Path = ROOT, *, compiler: Path | None = Non
     fixture modules only for the test profile. An explicit compiler replaces that
     application with its matching built beams. Paths may contain spaces.
     """
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", profile):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\+[A-Za-z0-9_-]+)*", profile):
         raise ValueError(f"invalid rebar profile: {profile!r}")
     base = root.absolute() / "_build" / profile
     if not (base / "lib/hls_fabric/ebin").is_dir():
@@ -24,7 +24,11 @@ def erlang_paths(profile: str, root: Path = ROOT, *, compiler: Path | None = Non
         applications["erl_hls"] = compiler_ebin(compiler, profile, root)
         applications["hls_runtime"] = compiler_runtime_ebin(compiler, profile, root)
     tests = [path.parent / "test" for path in applications.values()]
-    return [*applications.values(), *([path for path in tests if path.is_dir()] if profile == "test" else [])]
+    include_tests = "test" in profile.split("+")
+    return [
+        *applications.values(),
+        *([path for path in tests if path.is_dir()] if include_tests else []),
+    ]
 
 
 def built_applications(profile: str, root: Path) -> dict[str, Path]:
@@ -49,12 +53,12 @@ def application_directory(name: str, profile: str, root: Path = ROOT) -> Path:
 
 
 def compiler_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
-    """Find matching beams in an application directory or its explicit standalone profile.
+    """Find matching beams in a canonical umbrella application projection.
 
     A source-only override is rejected rather than combined with unrelated beams
-    from the fabric dependency. Standalone checkout overrides retain precedence.
+    from another build. A projected application may supply its own ebin directly.
     """
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", profile):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\+[A-Za-z0-9_-]+)*", profile):
         raise ValueError(f"invalid rebar profile: {profile!r}")
     public = public.resolve()
     candidates = [public / "ebin"]
@@ -62,8 +66,6 @@ def compiler_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
     if selected is not None and (selected.parent / "src").is_symlink() and \
             (selected.parent / "src").resolve() == (public / "src").resolve():
         candidates.append(selected)
-    candidates += [public / "_build" / profile / "checkouts/erl_hls/ebin",
-                   public / "_build" / profile / "lib/erl_hls/ebin"]
     for path in candidates:
         if path.is_dir():
             return path
@@ -71,25 +73,16 @@ def compiler_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
 
 
 def compiler_runtime_ebin(public: Path, profile: str, root: Path = ROOT) -> Path:
-    """Select runtime beams belonging to the explicit compiler build or its installed siblings.
+    """Select runtime beams beside the explicit canonical compiler projection.
 
-    A checkout override replaces both selected umbrella applications. Never combine
-    its facade with the Fabric dependency's unrelated runtime provider code.
+    An override replaces both selected umbrella applications. Never combine its
+    facade with runtime provider code from another build.
     """
     public = public.resolve()
-    base = public / "_build" / profile
     compiler_app = compiler_ebin(public, profile, root).parent
-    candidates = [compiler_app.parent / "hls_runtime/ebin",
-        compiler_app.parent / "hls_runtime/apps/hls_runtime/ebin",
-        base / "checkouts/hls_runtime/ebin", base / "lib/hls_runtime/ebin",
-        base / "lib/hls_runtime/apps/hls_runtime/ebin",
-        public.parent / "hls_runtime/ebin",
-        public.parent / "hls_runtime/apps/hls_runtime/ebin"]
-    if public.name.startswith("erl_hls-"):
-        candidates.extend(sorted(public.parent.glob("hls_runtime-*/ebin")))
-    for path in candidates:
-        if path.is_dir():
-            return path
+    path = compiler_app.parent / "hls_runtime/ebin"
+    if path.is_dir():
+        return path
     raise FileNotFoundError(f"missing {profile} runtime beams for compiler {public}")
 
 
@@ -118,8 +111,10 @@ def debug_rtl(public: Path) -> list[Path]:
     source = public.resolve()
     if (source / "src").is_symlink():
         source = (source / "src").resolve().parent
-    target = source.parent / "hls_target" if source.parent.name == "apps" else source
+    if source.name != "erl_hls" or source.parent.name != "apps":
+        raise FileNotFoundError(f"missing canonical compiler application for {public}")
+    target = source.parent / "hls_target"
     if not (target / "priv/rtl/debug").is_dir():
-        target = source
+        raise FileNotFoundError(f"missing target debug RTL for {source}")
     return [target / "priv/rtl/debug" / name for name in
             ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]

@@ -168,7 +168,7 @@ cpu_run(Mode) ->
     #{id := FamilyId, module := Module, shape := [W, H], mailbox_capacity := FamilyCapacity} = Family,
     Actors = [{Id, M, Capacity} || #{id := Id, module := M, mailbox_capacity := Capacity} <- Exact] ++
         [{{FamilyId, X, Y}, Module, FamilyCapacity} || X <- lists:seq(0, W-1), Y <- lists:seq(0, H-1)],
-    Routes = Routes0 ++ lists:append([hls_topology:routes_for_instance(Plan, FamilyId, [X, Y])
+    Routes = Routes0 ++ lists:append([hls_logical_topology:routes_for_instance(Plan, FamilyId, [X, Y])
         || X <- lists:seq(0, W-1), Y <- lists:seq(0, H-1)]),
     Pids = maps:from_list([begin
         {ok, Pid} = hls_statem:start_link(M, [], [{mailbox_capacity, Capacity}]),

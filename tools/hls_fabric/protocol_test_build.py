@@ -14,14 +14,16 @@ def emit_command(kind: str, config: Path, output: Path) -> list[str | Path]:
             'emit', '--kind', kind, '--config', config, '--output', output]
 
 
-def compile_build(xls: Path, directory: Path, *, profile: str = 'default') -> Path:
+def compile_build(xls: Path, directory: Path, *, profile: str = 'default',
+                  cache: Path | None = None) -> Path:
     """Compile an emitted bundle and return its resolved immutable release; retain logs on failure.
 
     Schedules, imports, input verification and provenance come from the production
     source-build boundary. No fixture-specific compiler implementation is selected.
     """
     target = application_directory('hls_target', profile)
-    run([sys.executable, target/'priv/tools/compile_source_build.py', xls, directory],
+    cache_arguments = [] if cache is None else ['--cache', cache]
+    run([sys.executable, target/'priv/tools/compile_source_build.py', *cache_arguments, xls, directory],
         directory, 'compile-source-build', timeout=None)
     return (directory/'compiled').resolve()
 

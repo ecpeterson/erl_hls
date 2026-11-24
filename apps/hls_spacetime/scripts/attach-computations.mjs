@@ -91,7 +91,7 @@ async function nativeFile(descriptor, fileMap) {
 
 /** Build identities have exactly the same meaning at both independent inputs. */
 function sameBuild(a, b) {
-  return ["source", "rtl", "observation"].every(
+  return ["source", "rtl", "observation", "implementation"].every(
     (key) => typeof a?.[key] === "string" && a[key] === b?.[key],
   );
 }
@@ -110,7 +110,9 @@ function verifyBuilds(graph, native, recording) {
     checkpoint = graph.checkpoint;
   check(
     [current, nativeBuild].every((build) =>
-      ["source", "rtl", "observation"].every((key) => digest(build?.[key])),
+      ["source", "rtl", "observation", "implementation"].every((key) =>
+        digest(build?.[key]),
+      ),
     ) && digest(checkpoint),
     "invalid build/checkpoint identity",
   );
@@ -123,6 +125,7 @@ function verifyBuilds(graph, native, recording) {
       sameBuild(nativeBuild, native.build) &&
       current.source === nativeBuild.source &&
       current.rtl === nativeBuild.rtl &&
+      current.implementation === nativeBuild.implementation &&
       checkpoint === native.checkpoint_sha256 &&
       checkpoint === graph.attachment.checkpoint &&
       checkpoint === recording.catalogue.checkpoint,
@@ -156,11 +159,12 @@ function verifyBuilds(graph, native, recording) {
       const comparison = origin.comparison;
       check(
         (origin.kind == null || origin.kind === "capture-extension") &&
-          ["source", "rtl", "observation"].every((key) =>
+          ["source", "rtl", "observation", "implementation"].every((key) =>
             digest(origin.build?.[key]),
           ) &&
           origin.build.source === current.source &&
           origin.build.rtl === current.rtl &&
+          origin.build.implementation === current.implementation &&
           origin.checkpoint === checkpoint &&
           [
             "base_projection_sha256",

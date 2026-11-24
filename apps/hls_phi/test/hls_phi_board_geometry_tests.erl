@@ -35,7 +35,7 @@ adjacency_test() ->
                 {AX, AY} = A,
                 ?assertEqual({(AX+DX*Scale+2*D) rem (2*D), (AY+DY*Scale+2*D) rem (2*D)}, B)
             end || {actor, {T, TX, TY}} <- Recipients]
-        end, hls_topology:routes_for_instance(Plan, F, [X,Y]))
+        end, hls_logical_topology:routes_for_instance(Plan, F, [X,Y]))
     end, Placement).
 
 %% Two north/south boundaries share one remote peer at d=2; four peers are distinct at d=6.

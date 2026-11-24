@@ -76,7 +76,7 @@ export function createPreparedComputations(model, data) {
   check(
     model.catalogue &&
       data.checkpoint === model.catalogue.checkpoint &&
-      ["source", "rtl", "observation"].every(
+      ["source", "rtl", "observation", "implementation"].every(
         (k) => data.build?.[k] === model.bundle.build[k],
       ),
     "build/checkpoint mismatch",

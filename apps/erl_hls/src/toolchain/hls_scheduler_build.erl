@@ -57,7 +57,8 @@ Channel-scheduler build owner selected by hls_build. Loads actor/topology source
 
 -doc "The shared compiler bundle schema with scheduler backend policy serialized as tagged JSON values. Inputs bind every packaged file; units retain external schedules and RTL lists are indexed by role. Neither eligibility nor native timing is established.".
 -type manifest() :: #{
-    version := 1,
+    version := 2,
+    provenance := hls_artifact_bundle:provenance(),
     metadata := #{backend := channel_scheduler, profile := hls_diagnostic:json_value()},
     units := [hls_artifact_bundle:unit()],
     rtl := #{binary() => [binary()]},

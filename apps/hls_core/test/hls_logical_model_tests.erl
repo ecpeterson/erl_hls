@@ -85,6 +85,7 @@ compact_and_materialized_topology_share_one_authority_test() ->
     Spec = topology_spec(),
     ?assertEqual([logical_fixture], hls_logical_topology:interface_modules(Spec)),
     Compact = hls_logical_topology:normalize(Spec, #{logical_fixture => interface()}),
+    Repeat = hls_logical_topology:normalize(Spec, #{logical_fixture => interface()}),
     ?assertEqual(
         #{logical_fixture => interface()},
         hls_logical_topology:interfaces(Compact)
@@ -107,6 +108,12 @@ compact_and_materialized_topology_share_one_authority_test() ->
         hls_logical_topology:routes_for_instance(Compact, FamilyId, [0, 0])
     ),
     Materialized = hls_logical_topology:materialize(Compact, 3),
+    ?assertEqual(
+        hls_logical_topology:identity(Compact), hls_logical_topology:identity(Repeat)
+    ),
+    ?assertEqual(
+        hls_logical_topology:identity(Compact), hls_logical_topology:identity(Materialized)
+    ),
     ?assertEqual(
         hls_logical_topology:interfaces(Compact),
         hls_logical_topology:interfaces(Materialized)
@@ -140,6 +147,22 @@ compact_and_materialized_topology_share_one_authority_test() ->
         ],
         IngressRecipients
     ).
+
+%% A normalized logical change receives another identity, while raw source has none.
+-spec logical_topology_identity_tracks_normalized_changes_test() -> ok.
+logical_topology_identity_tracks_normalized_changes_test() ->
+    Spec = topology_spec(),
+    FamilyId = {tile, -3},
+    Changed = Spec#{
+        families := #{FamilyId => #{module => logical_fixture, shape => [1, 1]}}
+    },
+    InterfaceCatalog = #{logical_fixture => interface()},
+    Plan = hls_logical_topology:normalize(Spec, InterfaceCatalog),
+    ChangedPlan = hls_logical_topology:normalize(Changed, InterfaceCatalog),
+    ?assertNotEqual(
+        hls_logical_topology:identity(Plan), hls_logical_topology:identity(ChangedPlan)
+    ),
+    ?assertError({invalid_normalized_topology, Spec}, hls_logical_topology:identity(Spec)).
 
 %% One-dimensional, rectangular, and three-dimensional families retain Cartesian order and IDs.
 -spec arbitrary_rank_family_materialization_test() -> ok.
