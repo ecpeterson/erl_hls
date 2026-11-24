@@ -12,8 +12,21 @@ def qualify_words(words: list[str], synth: dict, packed: dict, timing: dict, lim
                 for bit in bits:
                     if isinstance(bit, int):
                         drivers[bit].append((name, port))
+    constants = {}
     for name, cell in packed.items():
+        if cell["type"] in ("PSEUDO_VCC", "PSEUDO_GND"):
+            for bit in cell["connections"].get("Y", []):
+                constants[bit] = "1" if cell["type"] == "PSEUDO_VCC" else "0"
         origins[cell["attributes"].get("SPACETIME_CELL")].append(name)
+    # XC7 control muxes are shared by the placed FFs in a slice.
+    driven_controls = set()
+    for cell in packed.values():
+        if cell["type"] == "SLICE_FFX":
+            site = cell["attributes"].get("NEXTPNR_BEL", "").partition("/")[0]
+            for port, inactive in (("SR", "0"), ("CE", "1")):
+                if any(constants.get(bit) != inactive for bit in cell.get("connections", {}).get(port, [])):
+                    driven_controls.add((site, port))
+    roots = set(timing.get("roots", []))
     result = []
     seen = set()
     remaining = limit
@@ -29,27 +42,33 @@ def qualify_words(words: list[str], synth: dict, packed: dict, timing: dict, lim
             if remaining < 0:
                 raise ValueError("storage bit limit")
             candidate = None
+            reason = "Constant or absent synthesis driver" if not drivers[wire] else "Multiple synthesis drivers"
             if len(drivers[wire]) == 1:
                 name, port = drivers[wire][0]
-                if port == "Q" and len(origins[name]) == 1:
+                reason = "No unique packed FDRE Q correspondence"
+                if roots and name not in roots:
+                    reason = "Outside selected timing roots" if synth["cells"][name]["type"] == "FDRE" else reason
+                elif port == "Q" and len(origins[name]) == 1:
+                    reason = "FDRE configuration, slice control or bound port identity unqualified"
                     placed = origins[name][0]
-                    candidate = fdre(synth["cells"][name], packed[placed], timing["cells"][placed])
+                    candidate = fdre(synth["cells"][name], packed[placed], timing["cells"][placed], constants, driven_controls)
                     if candidate is not None:
                         candidate.update(cell=placed, original=name, pin="Q")
             bits.append({"bit": i, **(candidate or {"status": "unknown",
-                         "evidence": "No unique FDRE with complete matching configuration and bound D/Q/CK/CE/SR"})})
+                         "evidence": reason})})
         result.append({"resource": resource, "net": net, "bits": bits})
     return result
 
 
-def fdre(source: dict, packed: dict, native: dict) -> dict | None:
+def fdre(source: dict, packed: dict, native: dict, constants: dict | None = None,
+         driven_controls: set | None = None) -> dict | None:
     """Admit positive-edge, non-inverted synchronous reset and connected active-high enable only."""
     attrs = packed["attributes"]
     if (source["type"] != "FDRE" or packed["type"] != "SLICE_FFX" or native["type"] != "SLICE_FFX" or
             attrs.get("X_ORIG_TYPE") != "FDRE" or attrs.get("X_FFSYNC", "").strip() != "1"):
         return None
     initial = source["parameters"].get("INIT", "0")
-    if initial not in ("0", "1") or packed["parameters"].get("INIT", "0") != initial:
+    if initial not in ("0", "1", "x") or packed["parameters"].get("INIT", "0") != initial:
         return None
     for params, supported in [(source["parameters"], {"IS_C_INVERTED", "IS_D_INVERTED", "IS_R_INVERTED"}),
                               (packed["parameters"], {"IS_CLK_INVERTED", "IS_D_INVERTED", "IS_SR_INVERTED"})]:
@@ -58,15 +77,28 @@ def fdre(source: dict, packed: dict, native: dict) -> dict | None:
             return None
     roles = {"D": ("D", "register_input"), "Q": ("Q", "register_output"), "CK": ("C", "clock_input"),
              "CE": ("CE", "register_input"), "SR": ("R", "register_input")}
+    local = {}
     for pin, (original, kind) in roles.items():
         row = native["ports"].get(pin, {})
         origin = attrs.get("SPACETIME_PORT_" + original)
-        if (not origin or origin != row.get("net_origin") or not row.get("wire") or not row.get("bound") or
+        source_bits = source["connections"].get(original, [])
+        packed_bits = packed.get("connections", {}).get(pin, [])
+        idle = {"CE": "1", "SR": "0"}.get(pin)
+        site = attrs.get("NEXTPNR_BEL", "").partition("/")[0]
+        if (idle and source_bits == [idle] and packed.get("connections", {}).get(pin) == []
+                and not row and origin and attrs.get("X_ORIG_PORT_" + pin) == original
+                and site and driven_controls is not None and (site, pin) not in driven_controls):
+            local[pin] = int(idle)
+            continue
+        tied = (pin in ("CE", "SR") and len(packed_bits) == 1 and len(source_bits) == 1
+                and source_bits[0] in ("0", "1") and (constants or {}).get(packed_bits[0]) == source_bits[0])
+        if (not (origin and origin == row.get("net_origin") or tied) or not row.get("wire") or not row.get("bound") or
                 attrs.get("X_ORIG_PORT_" + pin) != original or row.get("bel_pin") != pin or
                 row.get("class") != kind or len(source["connections"].get(original, [])) != 1):
             return None
         if kind != "clock_input" and [(c["port"], c["edge"]) for c in row["clocks"]] != [("CK", "rising")]:
             return None
-    return {"status": "supported", "initial": int(initial), "edge": "rising",
-            "roles": {"d": "D", "q": "Q", "clock": "CK", "ce": "CE", "reset": "SR"},
-            "evidence": "Synthesis Q bit, pre-pack port/net origins, FDRE configuration and bound packed BEL-pin wires"}
+    return {"local_controls": local, "status": "supported", "initial": None if initial == "x" else int(initial), "edge": "rising",
+            "roles": {"d": "D", "q": "Q", "clock": "CK", "ce": None if "CE" in local else "CE",
+                      "reset": None if "SR" in local else "SR"},
+            "evidence": "Synthesis Q bit, pre-pack port/net origins, FDRE configuration with routed BEL-pin wires or checked slice-local control ties"}

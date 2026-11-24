@@ -133,9 +133,14 @@ export function createComputations(model, attachment, routeNets = []) {
       "native cell identity/type mismatch",
     );
     requireValue(
-      ["sequential", "constant", "combinational", "unsupported"].includes(
-        cell.boundary,
-      ),
+      [
+        "sequential",
+        "constant",
+        "combinational",
+        "unsupported",
+        "external",
+        "hard_block",
+      ].includes(cell.boundary),
       "invalid cell boundary",
     );
   }
@@ -360,7 +365,15 @@ function frontier(index, pinIndex) {
   const pin = index.pins[pinIndex];
   if (pin.cell === null) return "external";
   const cell = index.cells[pin.cell];
-  if (["constant", "unsupported"].includes(cell.boundary)) return cell.boundary;
+  if (cell.boundary === "hard_block")
+    return pin.timingClass === "register_output" &&
+      pin.clocks?.length === 1 &&
+      pin.clocks[0].edge === "rising" &&
+      Number.isSafeInteger(pin.clocks[0].clock_to_q_ps)
+      ? "sequential"
+      : "unsupported";
+  if (["constant", "unsupported", "external"].includes(cell.boundary))
+    return cell.boundary;
   if (
     cell.boundary === "sequential" &&
     ["OUT", "output", "INOUT", "inout"].includes(pin.direction)
@@ -488,7 +501,7 @@ function pathTiming(
   cyclic,
   unsupported,
 ) {
-  if (cyclic || unsupported)
+  if (cyclic || (unsupported && !index.attachment.timingModel))
     return {
       pathDelays: {
         registered: arcIndices.map(() => null),
@@ -517,8 +530,16 @@ function pathTiming(
   const costs = (registered) => {
     const prefix = new Map(
       frontiers
-        .filter((item) => !registered || item.kind === "sequential")
-        .map((item) => [item.pin, { known: 0, unknown: false }]),
+        .filter(
+          (item) =>
+            !registered || !["constant", "external"].includes(item.kind),
+        )
+        .map((item) => {
+          const unknown = ["unsupported", "missing_connectivity"].includes(
+            item.kind,
+          );
+          return [item.pin, { known: unknown ? null : 0, unknown }];
+        }),
     );
     for (const pin of order) {
       const head = prefix.get(pin);
@@ -644,6 +665,7 @@ function cone(index, roots, role) {
     arcIndices,
     ...timing,
     frontiers,
+    ...(index.attachment.timingModel && { localFrontierUncertainty: true }),
     cellIndices: [
       ...new Set(
         [...pinSet]

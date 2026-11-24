@@ -709,16 +709,37 @@ export function nativeRoutes(model, detail = model.document.nativeRoutes) {
     "selection digest mismatch",
   );
   const current = model.bundle.build;
-  const physicalOrigins = origins(catalogue, current, catalogue.checkpoint);
-  const timingOrigins = origins(timing, current, catalogue.checkpoint);
-  requireValue(
-    JSON.stringify(physicalOrigins) === JSON.stringify(timingOrigins),
-    "physical/static timing origin disagreement",
-  );
-  requireValue(
-    physicalOrigins.some((origin) => origin.build === buildKey(detail.build)),
-    "native build absent from qualified origin chain",
-  );
+  // openXC7 source and observation IDs may be caller labels. Bind them verbatim
+  // to the current capture, whose manifest and routed checkpoint are content hashes.
+  if (model.document.openxc7Routes) {
+    const routeSource = model.document.openxc7Routes;
+    requireValue(
+      digest(current.rtl) &&
+        digest(current.implementation) &&
+        current.implementation === routeSource.implementation &&
+        routeSource.checkpoint === catalogue.checkpoint &&
+        [catalogue, timing, detail].every(
+          (record) =>
+            !record.correspondence_origin &&
+            recordingBuildKeys(current).every(
+              (key) =>
+                text(current[key]) && record.build?.[key] === current[key],
+            ),
+        ),
+      "openXC7 route build or checkpoint mismatch",
+    );
+  } else {
+    const physicalOrigins = origins(catalogue, current, catalogue.checkpoint);
+    const timingOrigins = origins(timing, current, catalogue.checkpoint);
+    requireValue(
+      JSON.stringify(physicalOrigins) === JSON.stringify(timingOrigins),
+      "physical/static timing origin disagreement",
+    );
+    requireValue(
+      physicalOrigins.some((origin) => origin.build === buildKey(detail.build)),
+      "native build absent from qualified origin chain",
+    );
+  }
   requireValue(
     Array.isArray(detail.nets) &&
       detail.nets.length <= LIMITS.nets &&

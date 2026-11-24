@@ -230,14 +230,18 @@ async function loadDocument(
     $("openxc7-routing"),
     openxc7Routing(model, model.document.openxc7Routes),
   );
-  const nativeTiming = model.document.openxc7Computations;
+  const nativeTiming =
+    model.document.openxc7Timing ??
+    model.document.openxc7Computations?.timingModel;
   const modelNote = $("openxc7-timing-model");
   modelNote.hidden = !nativeTiming;
   if (nativeTiming) {
-    const predicted = nativeTiming.arcs.filter(
-      (a) => a.timing.basis === "predicted",
-    ).length;
-    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.timingModel.unresolved_delays} unavailable delay queries. Register setup, hold and clock-to-Q use compiled constants. Per-entry database characterization is unverified.`;
+    const predicted =
+      nativeTiming.predicted ??
+      model.document.openxc7Computations.arcs.filter(
+        (a) => a.timing.basis === "predicted",
+      ).length;
+    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.unresolved_delays} unavailable delay queries. Slice flip-flops use compiled clock constants.${nativeTiming.bram_model_sha256 ? " RAM timing is qualified by primitive configuration." : ""}${nativeTiming.carry_di_model ? " Carry DI arcs use placed-site variant maxima." : ""} Per-entry database characterization is unverified.`;
   }
   const routes = nativeRoutes(model);
   const routeIndex = new Map(
@@ -1239,7 +1243,8 @@ function drawNativePath(ctx, project, flat = false, labels = null) {
       continue;
     }
     if (!route?.nodes.length) {
-      line(ctx, from, to, "#d7ab77", 1.5, true);
+      if (!state.model.document.openxc7Routes)
+        line(ctx, from, to, "#d7ab77", 1.5, true);
       continue;
     }
     // A node's wires form an unordered electrical union. Do not sort them into
@@ -1488,7 +1493,7 @@ function renderNativePath() {
     (route) => route.disposition === "partial",
   ).length;
   $("native-path-summary").textContent = path
-    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. ` +
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns.${path.requiredNs !== undefined ? ` Required ${path.requiredNs} ns, capture setup ${path.setupNs} ns.` : ""} Static STA path; activity at this clock unknown. ` +
       (routes.length
         ? `${resolved} resolved + ${partial} partial of ${path.arcs.filter((arc) => arc.kind === "net").length} net arcs have branch geometry; partial endpoints retain unknown alternatives. Violet marks native wire tiles; gold marks routing switches. Dotted spans show node connectivity or missing site geometry, not exact metal bends.`
         : "No routing geometry supplied; dotted segments join placed cells only.")
@@ -2672,7 +2677,7 @@ function inspectClockPath(row) {
   state.autoFit = true;
   render();
   notice(
-    `Showing an SDF maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
+    `Showing a ${state.model.document.openxc7Timing || state.model.document.openxc7Computations ? "nextpnr" : "SDF"} maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
   );
 }
 

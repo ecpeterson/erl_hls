@@ -1,0 +1,809 @@
+{
+  "scope": "Finite repetition N2 replay and step-4 physical coverage. Independent Vivado XCZU7EV and nextpnr XC7Z030-1 implementations.",
+  "matchedWritesSha256": "3faf231a2ef9e3dfb2c7444eb2acedcb99a2b36a60404abcef2b9cfd926b0a75",
+  "runs": {
+    "vivado": {
+      "recording": "ba6a73c7ae41d3c748d8858614e4f5696ef08547c30a048e58dd2c90a9e972fb",
+      "prepared": "4f21ce67376a3617b7a12c3fe031333ebed9aab5cfeb48fdbfc0959318d03932",
+      "build": {
+        "source": "55dd42cc79dd2515668bb1dd00985ab37fdb63857226f211cc54412e6b44d6b0",
+        "rtl": "fb342b4526c6dcb39401063d37bd10795476c3d9b39987de2293ebbe5de09599",
+        "observation": "9b742f61c85b7061b1a9c1e2b5f5c9ee539a5f152328ec6cba0ae138750c4fd6"
+      },
+      "checkpoint": "126c0c74778f76d2c6b44983227cb8c2c1c2b69ca223b894086fea37642a7874",
+      "window": "1774 < cycle <= 1873",
+      "writes": 468,
+      "resources": 51,
+      "requested": 92745,
+      "mapped": 72259,
+      "distinctRequested": 8466,
+      "distinctBound": 6108,
+      "mapping": {
+        "zero": 0,
+        "partial": 205,
+        "full": 263
+      },
+      "registeredConeOccurrences": {
+        "data": {
+          "known": 468
+        },
+        "enable": {
+          "known": 270,
+          "not_applicable": 198
+        },
+        "reset": {
+          "not_applicable": 468
+        }
+      },
+      "uniqueCones": 153,
+      "uniqueBranches": 75541,
+      "dispositions": {
+        "intrasite": 8576,
+        "partial": 15491,
+        "resolved": 44493,
+        "ambiguous": 383,
+        "unavailable": 6598
+      },
+      "uniqueArcDelays": {
+        "net_known": 68943,
+        "logic_known": 68879,
+        "net_missing": 6598
+      },
+      "sourceCounts": {
+        "events": 61764,
+        "writes": 7637,
+        "cells": 21756,
+        "pins": 115974,
+        "nets": 23292,
+        "arcs": 174960,
+        "routeNets": 23292
+      },
+      "selected": {
+        "event": "e/25066",
+        "coverage": {
+          "requestedBits": 537,
+          "mappedBits": 409,
+          "unknownBits": 128
+        },
+        "cones": [
+          {
+            "role": "data",
+            "roots": 409,
+            "registeredNs": 6.072899999999999,
+            "registeredStatus": "known",
+            "reasons": [],
+            "missing": 12,
+            "frontiers": 0
+          },
+          {
+            "role": "enable",
+            "roots": 409,
+            "registeredNs": 6.172199999999998,
+            "registeredStatus": "known",
+            "reasons": [],
+            "missing": 12,
+            "frontiers": 0
+          },
+          {
+            "role": "reset",
+            "roots": 409,
+            "registeredNs": null,
+            "registeredStatus": "not_applicable",
+            "reasons": [
+              "no_registered_launch_path"
+            ],
+            "missing": 409,
+            "frontiers": 0
+          }
+        ]
+      },
+      "sta": [
+        {
+          "source": "dut/network/core/____state_154_reg[341]/C",
+          "endpoint": "dut/network/core/____state_155_reg[130]/D",
+          "slackNs": -3.997,
+          "dataDelayNs": 8.808,
+          "logicDelayNs": 4.075,
+          "routeDelayNs": 4.733,
+          "netArcs": 41
+        }
+      ]
+    },
+    "four_bit_before": {
+      "recording": "40bc7d26d788282499104c6ebf50f7305afabd1d37a6694a703642ea91a8f44b",
+      "prepared": "8e03e454f247e9fde0fc1b881b5ec1a347816c72ebf37d6bd466973e95c8a7f2",
+      "build": {
+        "source": "55dd42cc79dd2515668bb1dd00985ab37fdb63857226f211cc54412e6b44d6b0",
+        "observation": "36c67069fd5b31021ee8aa152f95e562b36f9d18dd51cecb98645ad330613206",
+        "rtl": "79dfaf9a605da8e252d87c493d6c5e12b8e7aead01c0fd1c1d3d83fbcac540cf",
+        "implementation": "b0dcc5fc6696fda4b676f9365ce197377993f3275dec84cd6c7a17e9a35d8f61"
+      },
+      "checkpoint": "00c607a2f96a9a8b58dc78bb9255be83769f982c6242de90e752b2969a62880a",
+      "window": "1774 < cycle <= 1873",
+      "writes": 468,
+      "resources": 51,
+      "requested": 92745,
+      "mapped": 28,
+      "distinctRequested": 8466,
+      "distinctBound": 2,
+      "mapping": {
+        "zero": 454,
+        "partial": 14,
+        "full": 0
+      },
+      "registeredConeOccurrences": {
+        "data": {
+          "no_mapped_pin": 454,
+          "unknown": 14
+        },
+        "enable": {
+          "no_mapped_pin": 454,
+          "unknown": 14
+        },
+        "reset": {
+          "no_mapped_pin": 454,
+          "not_applicable": 14
+        }
+      },
+      "uniqueCones": 3,
+      "uniqueBranches": 8834,
+      "dispositions": {
+        "resolved": 2,
+        "unavailable": 8832
+      },
+      "uniqueArcDelays": {
+        "net_known": 8834,
+        "logic_known": 9230,
+        "logic_missing": 633
+      },
+      "sourceCounts": {
+        "events": 16321,
+        "writes": 7637,
+        "cells": 36269,
+        "pins": 58074,
+        "nets": 39811,
+        "arcs": 69465,
+        "routeNets": 4
+      },
+      "selected": {
+        "event": "e/25066",
+        "coverage": {
+          "requestedBits": 537,
+          "mappedBits": 0,
+          "unknownBits": 537
+        },
+        "cones": []
+      },
+      "sta": []
+    },
+    "four_bit_qualified": {
+      "recording": "7291656e85598b6631f4922fa77b64c38a8bedf57b662f6fcf3ab7b1edcbc0e2",
+      "prepared": "d28524ee3cd63cd38d777e5975449a269cbcdc7d4374e28c8d79122a16131689",
+      "build": {
+        "source": "55dd42cc79dd2515668bb1dd00985ab37fdb63857226f211cc54412e6b44d6b0",
+        "observation": "36c67069fd5b31021ee8aa152f95e562b36f9d18dd51cecb98645ad330613206",
+        "rtl": "79dfaf9a605da8e252d87c493d6c5e12b8e7aead01c0fd1c1d3d83fbcac540cf",
+        "implementation": "f5c825cc1b31b8cfa3529b16cc96c98cc2de5fe76295a287212c89e3c02fe05d"
+      },
+      "checkpoint": "f23fe0b6abd3633bcdb658df6ec225b9f329a0fefc066b41f50fea23705d0787",
+      "window": "1774 < cycle <= 1873",
+      "writes": 468,
+      "resources": 51,
+      "requested": 92745,
+      "mapped": 114,
+      "distinctRequested": 8466,
+      "distinctBound": 4,
+      "mapping": {
+        "zero": 411,
+        "partial": 57,
+        "full": 0
+      },
+      "registeredConeOccurrences": {
+        "data": {
+          "no_mapped_pin": 411,
+          "known": 57
+        },
+        "enable": {
+          "no_mapped_pin": 454,
+          "known": 14
+        },
+        "reset": {
+          "no_mapped_pin": 411,
+          "not_applicable": 57
+        }
+      },
+      "uniqueCones": 5,
+      "uniqueBranches": 11517,
+      "dispositions": {
+        "resolved": 56,
+        "unavailable": 11461
+      },
+      "uniqueArcDelays": {
+        "net_known": 11517,
+        "logic_known": 12604
+      },
+      "sourceCounts": {
+        "events": 16321,
+        "writes": 7637,
+        "cells": 36269,
+        "pins": 74875,
+        "nets": 39811,
+        "arcs": 92445,
+        "routeNets": 73
+      },
+      "selected": {
+        "event": "e/25066",
+        "coverage": {
+          "requestedBits": 537,
+          "mappedBits": 2,
+          "unknownBits": 535
+        },
+        "cones": [
+          {
+            "role": "data",
+            "roots": 2,
+            "registeredNs": 32.080000000000005,
+            "registeredStatus": "known",
+            "reasons": [],
+            "missing": 0,
+            "frontiers": 0
+          },
+          {
+            "role": "reset",
+            "roots": 2,
+            "registeredNs": null,
+            "registeredStatus": "not_applicable",
+            "reasons": [
+              "no_registered_launch_path"
+            ],
+            "missing": 0,
+            "frontiers": 0
+          }
+        ]
+      },
+      "sta": [
+        {
+          "source": "$auto$ff.cc:337:slice$40546/Q",
+          "endpoint": "$auto$ff.cc:337:slice$42155/D",
+          "slackNs": -48.723,
+          "dataDelayNs": 53.623,
+          "logicDelayNs": 12.113,
+          "routeDelayNs": 41.51,
+          "setupNs": 0.1,
+          "requiredNs": 5,
+          "netArcs": 69
+        }
+      ]
+    },
+    "all_words_before_route_demand": {
+      "recording": "cc7e4c5714e7da25806b45347a863d9f531e086b727cca5cec132a11ae98241c",
+      "prepared": "51f013cfb3923cf3ef3ebe34dd00dd9b4afa8a5f2c0387d1afc171f2e2a5ceac",
+      "build": {
+        "source": "55dd42cc79dd2515668bb1dd00985ab37fdb63857226f211cc54412e6b44d6b0",
+        "observation": "36c67069fd5b31021ee8aa152f95e562b36f9d18dd51cecb98645ad330613206",
+        "rtl": "79dfaf9a605da8e252d87c493d6c5e12b8e7aead01c0fd1c1d3d83fbcac540cf",
+        "implementation": "0d1ede5fd08e425d39a8fe809afdce264b9c972af12ed015ed762b40a8468ca7"
+      },
+      "checkpoint": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb",
+      "window": "1774 < cycle <= 1873",
+      "writes": 468,
+      "resources": 51,
+      "requested": 92745,
+      "mapped": 90797,
+      "distinctRequested": 8466,
+      "distinctBound": 8059,
+      "mapping": {
+        "zero": 0,
+        "partial": 137,
+        "full": 331
+      },
+      "registeredConeOccurrences": {
+        "data": {
+          "known": 410,
+          "unknown": 58
+        },
+        "enable": {
+          "known": 202,
+          "no_mapped_pin": 266
+        },
+        "reset": {
+          "not_applicable": 468
+        }
+      },
+      "uniqueCones": 129,
+      "uniqueBranches": 109591,
+      "dispositions": {
+        "not_requested": 108604,
+        "resolved": 375,
+        "unavailable": 612
+      },
+      "uniqueArcDelays": {
+        "net_known": 109591,
+        "logic_known": 98462
+      },
+      "sourceCounts": {
+        "events": 16321,
+        "writes": 7637,
+        "cells": 36269,
+        "pins": 176633,
+        "nets": 39811,
+        "arcs": 238180,
+        "routeNets": 73
+      },
+      "selected": {
+        "event": "e/25066",
+        "coverage": {
+          "requestedBits": 537,
+          "mappedBits": 528,
+          "unknownBits": 9
+        },
+        "cones": [
+          {
+            "role": "data",
+            "roots": 528,
+            "registeredNs": null,
+            "registeredStatus": "unknown",
+            "reasons": [
+              "unsupported_or_missing_frontier"
+            ],
+            "missing": 0,
+            "frontiers": 1
+          },
+          {
+            "role": "enable",
+            "roots": 165,
+            "registeredNs": 36.894000000000005,
+            "registeredStatus": "known",
+            "reasons": [],
+            "missing": 0,
+            "frontiers": 0
+          },
+          {
+            "role": "reset",
+            "roots": 528,
+            "registeredNs": null,
+            "registeredStatus": "not_applicable",
+            "reasons": [
+              "no_registered_launch_path"
+            ],
+            "missing": 0,
+            "frontiers": 0
+          }
+        ]
+      },
+      "sta": [
+        {
+          "source": "$auto$ff.cc:337:slice$40546/Q",
+          "endpoint": "$auto$ff.cc:337:slice$42155/D",
+          "slackNs": -48.723,
+          "dataDelayNs": 53.623,
+          "logicDelayNs": 12.113,
+          "routeDelayNs": 41.51,
+          "setupNs": 0.1,
+          "requiredNs": 5,
+          "netArcs": 69
+        }
+      ]
+    },
+    "all_words_frozen_repeat": {
+      "recording": "812e4932c020f4c1ca295fc10ca1cde6348fef31ee8e73a227ea82e576b94be1",
+      "prepared": "8c785d154326158296691a71582049cb641af6e41d4c0f29608f57549cd9dd3c",
+      "build": {
+        "source": "55dd42cc79dd2515668bb1dd00985ab37fdb63857226f211cc54412e6b44d6b0",
+        "observation": "36c67069fd5b31021ee8aa152f95e562b36f9d18dd51cecb98645ad330613206",
+        "rtl": "79dfaf9a605da8e252d87c493d6c5e12b8e7aead01c0fd1c1d3d83fbcac540cf",
+        "implementation": "6207cee189220f3b45921a15865c1f9d20bded71b0c6ac0bc685d47fb3a50e45"
+      },
+      "checkpoint": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb",
+      "window": "1774 < cycle <= 1873",
+      "writes": 468,
+      "resources": 51,
+      "requested": 92745,
+      "mapped": 90797,
+      "distinctRequested": 8466,
+      "distinctBound": 8059,
+      "mapping": {
+        "zero": 0,
+        "partial": 137,
+        "full": 331
+      },
+      "registeredConeOccurrences": {
+        "data": {
+          "known": 410,
+          "unknown": 58
+        },
+        "enable": {
+          "known": 202,
+          "no_mapped_pin": 266
+        },
+        "reset": {
+          "not_applicable": 468
+        }
+      },
+      "uniqueCones": 129,
+      "uniqueBranches": 109591,
+      "dispositions": {
+        "not_requested": 108603,
+        "resolved": 376,
+        "unavailable": 612
+      },
+      "uniqueArcDelays": {
+        "net_known": 109591,
+        "logic_known": 98462
+      },
+      "sourceCounts": {
+        "events": 16321,
+        "writes": 7637,
+        "cells": 36269,
+        "pins": 176633,
+        "nets": 39811,
+        "arcs": 238180,
+        "routeNets": 74
+      },
+      "selected": {
+        "event": "e/25066",
+        "coverage": {
+          "requestedBits": 537,
+          "mappedBits": 528,
+          "unknownBits": 9
+        },
+        "cones": [
+          {
+            "role": "data",
+            "roots": 528,
+            "registeredNs": null,
+            "registeredStatus": "unknown",
+            "reasons": [
+              "unsupported_or_missing_frontier"
+            ],
+            "missing": 0,
+            "frontiers": 1
+          },
+          {
+            "role": "enable",
+            "roots": 165,
+            "registeredNs": 36.894000000000005,
+            "registeredStatus": "known",
+            "reasons": [],
+            "missing": 0,
+            "frontiers": 0
+          },
+          {
+            "role": "reset",
+            "roots": 528,
+            "registeredNs": null,
+            "registeredStatus": "not_applicable",
+            "reasons": [
+              "no_registered_launch_path"
+            ],
+            "missing": 0,
+            "frontiers": 0
+          }
+        ]
+      },
+      "sta": [
+        {
+          "source": "$auto$ff.cc:337:slice$40546/Q",
+          "endpoint": "$auto$ff.cc:337:slice$42155/D",
+          "slackNs": -48.723,
+          "dataDelayNs": 53.623,
+          "logicDelayNs": 12.113,
+          "routeDelayNs": 41.51,
+          "setupNs": 0.1,
+          "requiredNs": 5,
+          "netArcs": 69
+        }
+      ]
+    }
+  },
+  "xc7": {
+    "replay": {
+      "cycles": 2369,
+      "taps": 581,
+      "tap_bits_per_cycle": 17877,
+      "trace_sha256": "bbe6ea76fd2d5a788ac8605b44697da07297c359d47d6cd2507fcf4e1b878933",
+      "rtl_sha256": [
+        "fb342b4526c6dcb39401063d37bd10795476c3d9b39987de2293ebbe5de09599",
+        "3c8f2ec0717e8145187b9718adb2b413d63fef158a3cadd829752a6ed30d9972",
+        "087572031b9560b9a5d543e59e4fa8015a0790fa10abca28884c3baa4903d2d8",
+        "ba18afdc61281ef4c34e0b5ff69d03ca018a17c61ee0a2257f6b79b3f4460d6e",
+        "851249c2337a4393d2e87dee28a643a67bb165ce4bf09c489df72aeaae55299f",
+        "14c235ba2f4d24ccbd4ea6145eff285d239940e43b866d025eb1e64fbb002941",
+        "4ba1acced0857a5fbd46ce722b9b51d30af2b01234705a3bf13bb1a4d1041314"
+      ],
+      "verilator": "Verilator 5.047 devel rev v5.046-152-g3b328d2bb (mod)"
+    },
+    "manifestSha256": "6207cee189220f3b45921a15865c1f9d20bded71b0c6ac0bc685d47fb3a50e45",
+    "chipdb": {
+      "bytes": 205235792,
+      "sha256": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba"
+    },
+    "nativeObserver": {
+      "commit": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+      "sha256": {
+        "eigen.tar.gz": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72",
+        "install_native.py": "9cbb097b76ad00db3b54830647d733ea5c9f5e0251aea8c4409cdfbf3ecb3b3c",
+        "nextpnr-coverage.patch": "6fe14d0df5a7abf9c45c53a0d74f9e410f0685370c4fb93ae5e5780e16e7bb9e",
+        "nextpnr-output-pin.patch": "af4f322db2fb581ecc695ab289e1708743f0234d54dbc546d910ade8e5cf21ad",
+        "nextpnr-pin-origins.patch": "61541440af12696957cf46aa64082f535e46d34b7727c2c140ca241a2791b865",
+        "nextpnr-spacetime": "a38bedf61c99a6cca2aaf587e0a4e46015e160a8cbfdfb9e2e2c2d6943e9578d",
+        "nextpnr-spacetime-carry.patch": "7085df5bc73bdf3e4428c9e775e3c27f0f00d51a52214d55733296a1447c1b80",
+        "nextpnr-spacetime-sta.patch": "23c1b398be819e4cbc70c81d48208ed768d7929097a63da5aeac6beb468a520e",
+        "nextpnr-spacetime.patch": "bf6b27bbee4f2cb2f57d0c32cbb7c50b5926c628f4456937e369f67f9b9c5439",
+        "nextpnr.tar.gz": "5652a7356b1c8ae67355c9bdcd96d88e5592d9eface9ea4b60584a9460824439",
+        "spacetime.h": "f593bb33ac26a1dd394df021e036b8240d253cedd13e2b7f9f6a7f6b631bff44",
+        "xc7_bram_model.inc": "72d704b1c54de11f24083e0ceb85c57604453cba88c5fcb8c9bab23905be9c9e"
+      }
+    },
+    "limits": {
+      "bytes": 402653184,
+      "cells": 100000,
+      "route_objects": 100000,
+      "timing_objects": 650000
+    },
+    "bytes": 312637468,
+    "roots": 8094,
+    "timedCells": 34609,
+    "timingObjects": 515774,
+    "timedPrimitivePopulation": {
+      "PSEUDO_GND": 1,
+      "SLICE_LUTX": 22790,
+      "PSEUDO_VCC": 1,
+      "SELMUX2_1": 2501,
+      "CARRY4": 585,
+      "SLICE_FFX": 8693,
+      "IOB18_INBUF_DCIEN": 38
+    },
+    "sinkDelayQueries": {
+      "routed": 53366,
+      "predicted": 71773,
+      "unavailable": 3934
+    },
+    "logicDelayQueries": {
+      "available": 109145,
+      "missing": 31697
+    },
+    "storageUnknown": {
+      "Constant or absent synthesis driver": 364,
+      "FDRE configuration, slice control or bound port identity unqualified": 43
+    },
+    "selected": {
+      "checkpoint": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb",
+      "render": "8c785d154326158296691a71582049cb641af6e41d4c0f29608f57549cd9dd3c",
+      "event": "e/25066",
+      "resource": "register/____state_154",
+      "bit": 202,
+      "registeredNs": 38.64600000000001,
+      "sink": "$auto$ff.cc:337:slice$41690/D",
+      "eligible": 527,
+      "total": 528,
+      "previousBoundaryBits": {
+        "d": {
+          "CARRY4": 3661,
+          "SELMUX2_1": 3528,
+          "external_input": 7956,
+          "unqualified_lut": 0
+        },
+        "reset": {
+          "CARRY4": 0,
+          "SELMUX2_1": 0,
+          "external_input": 8059,
+          "unqualified_lut": 0
+        },
+        "ce": {
+          "CARRY4": 1986,
+          "SELMUX2_1": 1642,
+          "external_input": 2636,
+          "unqualified_lut": 0
+        }
+      },
+      "localControls": {
+        "CE": 5423
+      },
+      "capturedNets": 74,
+      "supplied": 36,
+      "branchDispositions": {
+        "unavailable": 16,
+        "resolved": 20
+      },
+      "staDispositions": {
+        "unavailable": 22,
+        "resolved": 47
+      }
+    },
+    "routedSelectionSha256": "fcb1134d0fe5d4775667a1401f23c77dbd29df1bd990cca51a9b35063be4ab1e",
+    "geometryObjects": 19859,
+    "guards": {
+      "g44-pilot": {
+        "seconds": 118.5312648746185,
+        "peak_group_rss_bytes": 1890648064,
+        "finished_utc": "2026-11-24T17:49:19.204577+00:00"
+      },
+      "g44-final": {
+        "seconds": 147.35739191621542,
+        "peak_group_rss_bytes": 1991655424,
+        "finished_utc": "2026-11-24T18:01:20.673962+00:00"
+      },
+      "g44-application": {
+        "seconds": 167.93954699998721,
+        "peak_group_rss_bytes": 2604122112,
+        "finished_utc": "2026-11-24T18:05:58.384425+00:00"
+      },
+      "g44-repeat": {
+        "seconds": 226.60132000036538,
+        "peak_group_rss_bytes": 3326754816,
+        "finished_utc": "2026-11-24T18:13:10.296038+00:00"
+      },
+      "g44-review": {
+        "seconds": 155.26760508306324,
+        "peak_group_rss_bytes": 3256090624,
+        "finished_utc": "2026-11-24T18:23:08.558175+00:00"
+      },
+      "g44-review-probes": {
+        "seconds": 16.40320058306679,
+        "peak_group_rss_bytes": 1822326784,
+        "finished_utc": "2026-11-24T18:24:09.964641+00:00"
+      },
+      "g44-review-small": {
+        "seconds": 16.354087416548282,
+        "peak_group_rss_bytes": 914735104,
+        "finished_utc": "2026-11-24T18:24:26.419396+00:00"
+      }
+    }
+  },
+  "primitiveWitnesses": {
+    "sta": {
+      "eligible_chains": 15,
+      "distinct_delays": 15,
+      "delay_ps": 2935,
+      "slack_ps": 7065,
+      "pins": [
+        [
+          "carry_ff",
+          "Q"
+        ],
+        [
+          "chain",
+          "CYINIT"
+        ],
+        [
+          "chain",
+          "CO3"
+        ],
+        [
+          "long_lut",
+          "A2"
+        ],
+        [
+          "long_lut",
+          "O6"
+        ],
+        [
+          "join_arms",
+          "1"
+        ],
+        [
+          "join_arms",
+          "OUT"
+        ],
+        [
+          "launch",
+          "D"
+        ]
+      ],
+      "branches": [
+        {
+          "net": "ci",
+          "source": "carry_ff/Q",
+          "target": "chain/CYINIT",
+          "disposition": "resolved",
+          "pips": 10
+        },
+        {
+          "net": "carry[3]",
+          "source": "chain/CO3",
+          "target": "long_lut/A2",
+          "disposition": "resolved",
+          "pips": 7
+        },
+        {
+          "net": "long_arm",
+          "source": "long_lut/O6",
+          "target": "join_arms/1",
+          "disposition": "resolved",
+          "pips": 0
+        },
+        {
+          "net": "d",
+          "source": "join_arms/OUT",
+          "target": "launch/D",
+          "disposition": "resolved",
+          "pips": 10
+        }
+      ]
+    },
+    "carry": {
+      "checked_di_arcs": 10,
+      "site": {
+        "site": "SLICE_X0Y95",
+        "tile": "CLBLM_L_X2Y95",
+        "x": 10,
+        "y": 109
+      }
+    },
+    "bram": {
+      "bram": {
+        "ports": {
+          "register_input": 166,
+          "clock_input": 4,
+          "register_output": 32,
+          "ignore": 10
+        },
+        "launch": {
+          "arrival_ps": 2080,
+          "cell": "memory",
+          "delay_ps": 2080,
+          "kind": "clock_to_q",
+          "net": null,
+          "port": "DOADO1"
+        },
+        "setup_path_ps": 5537
+      },
+      "bramreg": {
+        "ports": {
+          "register_input": 166,
+          "clock_input": 4,
+          "register_output": 32,
+          "ignore": 10
+        },
+        "launch": {
+          "arrival_ps": 748,
+          "cell": "memory",
+          "delay_ps": 748,
+          "kind": "clock_to_q",
+          "net": null,
+          "port": "DOADO1"
+        },
+        "setup_path_ps": 4430
+      },
+      "bramneg": {
+        "ports": {
+          "ignore": 212
+        },
+        "launch": {
+          "arrival_ps": 100,
+          "cell": "$auto$ff.cc:337:slice$1612",
+          "delay_ps": 100,
+          "kind": "clock_to_q",
+          "net": null,
+          "port": "Q"
+        },
+        "setup_path_ps": 2743
+      }
+    },
+    "calibration_sha256": "6494bb967489852f77000246cb232bdb890366872688da4fdf29944ea5b48db3"
+  },
+  "captures": {
+    "archiveDirectory": "runs/spacetime-g4-parity-2026-11-24/g44-repetition/",
+    "vivadoGallery": "runs/spacetime-2026-11-08/published-gallery/viewer-data.tar.gz",
+    "vivadoSha256": "2fc61c4376d07fd119bf7cbc825870e88c53263fda63d03f27596ba42f416a87",
+    "files": {
+      "evidence.tar.gz": {
+        "sha256": "46f58dc6266e3e8aee853888b36bbbdbcec1bdced6e7e98174e91234b373c878",
+        "bytes": 819282
+      },
+      "native.tar.gz": {
+        "sha256": "40b13b172f559141a386f32479591e73a85b8a65d58df035403206550be62ad1",
+        "bytes": 22447141
+      },
+      "pilot.tar.gz": {
+        "sha256": "4f308d47e945e0e51ad1b76b3254d7e374b786609af658224e109af7797d57f1",
+        "bytes": 27578696
+      },
+      "prepared.tar.gz": {
+        "sha256": "ab388de9aeee45bf1d4d8084f28423e2de9027f327b52f58f542690107c4a495",
+        "bytes": 23462905
+      }
+    }
+  }
+}

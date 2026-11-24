@@ -1,0 +1,127 @@
+--- a/common/timing.cc
++++ b/common/timing.cc
+@@ -19,6 +19,8 @@
+  */
+ 
+ #include "timing.h"
++#include "json11.hpp"
++#include <fstream>
+ #include <algorithm>
+ #include <cstdio>
+ #include <boost/range/adaptor/reversed.hpp>
+@@ -869,7 +871,8 @@
+     return json;
+ }
+ 
+-void timing_analysis(Context *ctx, bool print_histogram, bool print_fmax, bool print_path, bool warn_on_failure)
++static void timingAnalysisReport(Context *ctx, bool print_histogram, bool print_fmax, bool print_path,
++                                 bool warn_on_failure, const std::string &filename, int limit)
+ {
+     auto format_event = [ctx](const ClockEvent &e, int field_width = 0) {
+         std::string value;
+@@ -951,7 +954,18 @@
+     }
+ 
+     if (print_path) {
+-        auto print_path_report = [ctx](ClockPair &clocks, PortRefVector &crit_path) {
++        using json11::Json;
++        Json::array reports;
++        auto print_path_report = [&](ClockPair &clocks, CriticalPath &path) {
++            auto &crit_path = path.ports;
++            Json::array points;
++            auto point = [&](const char *kind, const CellInfo *cell, IdString port, const NetInfo *net,
++                             delay_t increment, delay_t arrival) {
++                if (filename.empty()) return;
++                if (--limit < 0) log_error("Spacetime STA point limit exceeded\n");
++                points.push_back(Json::object{{"kind", kind}, {"cell", cell->name.str(ctx)}, {"port", port.str(ctx)},
++                    {"net", net ? Json(net->name.str(ctx)) : Json()}, {"delay_ps", increment}, {"arrival_ps", arrival}});
++            };
+             delay_t total = 0, logic_total = 0, route_total = 0;
+             auto &front = crit_path.front();
+             auto &front_port = front->cell->ports.at(front->port);
+@@ -982,7 +996,8 @@
+                 auto &driver = net->driver;
+                 auto driver_cell = driver.cell;
+                 DelayInfo comb_delay;
+-                if (clock_start != -1) {
++                bool launch = clock_start != -1;
++                if (launch) {
+                     auto clockInfo = ctx->getPortClockingInfo(driver_cell, driver.port, clock_start);
+                     comb_delay = clockInfo.clockToQ;
+                     clock_start = -1;
+@@ -994,11 +1009,13 @@
+                 }
+                 total += comb_delay.maxDelay();
+                 logic_total += comb_delay.maxDelay();
++                point(launch ? "clock_to_q" : "logic", driver_cell, driver.port, nullptr, comb_delay.maxDelay(), total);
+                 log_info("%4.1f %4.1f  Source %s.%s\n", ctx->getDelayNS(comb_delay.maxDelay()), ctx->getDelayNS(total),
+                          driver_cell->name.c_str(ctx), driver.port.c_str(ctx));
+                 auto net_delay = ctx->getNetinfoRouteDelay(net, *sink);
+                 total += net_delay;
+                 route_total += net_delay;
++                point("net", sink_cell, sink->port, net, net_delay, total);
+                 auto driver_loc = ctx->getBelLocation(driver_cell->bel);
+                 auto sink_loc = ctx->getBelLocation(sink_cell->bel);
+                 log_info("%4.1f %4.1f    Net %s budget %f ns (%d,%d) -> (%d,%d)\n", ctx->getDelayNS(net_delay),
+@@ -1037,8 +1054,20 @@
+                 delay_t setup = sinkClockInfo.setup.maxDelay();
+                 total += setup;
+                 logic_total += setup;
++                point("setup", crit_path.back()->cell, crit_path.back()->port, nullptr, setup, total);
+                 log_info("%4.1f %4.1f  Setup %s.%s\n", ctx->getDelayNS(setup), ctx->getDelayNS(total),
+                          crit_path.back()->cell->name.c_str(ctx), crit_path.back()->port.c_str(ctx));
++            }
++            if (!filename.empty()) {
++                bool checked = !points.empty() && points.front()["kind"].string_value() == "clock_to_q" &&
++                    points.back()["kind"].string_value() == "setup" && total == path.path_delay &&
++                    clocks.start.clock == clocks.end.clock && clocks.start.clock != ctx->id("$async$") &&
++                    clocks.start.edge == clocks.end.edge && clockCount == 1 && path.mcp == 1;
++                reports.push_back(Json::object{{"launch_clock", clocks.start.clock.str(ctx)},
++                    {"capture_clock", clocks.end.clock.str(ctx)}, {"launch_edge", clocks.start.edge == RISING_EDGE ? "rising" : "falling"},
++                    {"capture_edge", clocks.end.edge == RISING_EDGE ? "rising" : "falling"}, {"points", points},
++                    {"path_delay_ps", path.path_delay}, {"required_ps", checked ? Json(path.path_period) : Json()},
++                    {"slack_ps", checked ? Json(path.path_period - path.path_delay) : Json()}});
+             }
+             log_info("%.1f ns logic, %.1f ns routing\n", ctx->getDelayNS(logic_total), ctx->getDelayNS(route_total));
+         };
+@@ -1051,7 +1080,7 @@
+                     clock.second.first.end.edge == FALLING_EDGE ? std::string("negedge") : std::string("posedge");
+             log_info("Critical path report for clock '%s' (%s -> %s):\n", clock.first.c_str(ctx), start.c_str(),
+                      end.c_str());
+-            auto &crit_path = clock.second.second.ports;
++            auto &crit_path = clock.second.second;
+             print_path_report(clock.second.first, crit_path);
+         }
+ 
+@@ -1060,8 +1089,14 @@
+             std::string start = format_event(xclock.start);
+             std::string end = format_event(xclock.end);
+             log_info("Critical path report for cross-domain path '%s' -> '%s':\n", start.c_str(), end.c_str());
+-            auto &crit_path = crit_paths.at(xclock).ports;
++            auto &crit_path = crit_paths.at(xclock);
+             print_path_report(xclock, crit_path);
++        }
++        if (!filename.empty()) {
++            std::ofstream out(filename);
++            out << Json(Json::object{{"schema", 1}, {"unit", "ps"}, {"paths", reports}}).dump() << '\n';
++            out.close();
++            if (!out) log_error("Cannot write Spacetime STA report\n");
+         }
+     }
+     if (print_fmax) {
+@@ -1143,4 +1178,15 @@
+     timing.walk_paths();
+ }
+ 
++void timing_analysis(Context *ctx, bool print_histogram, bool print_fmax, bool print_path, bool warn_on_failure)
++{
++    timingAnalysisReport(ctx, print_histogram, print_fmax, print_path, warn_on_failure, "", 0);
++}
++
++// Capture the very same selected paths and increments printed by the backend, after routing.
++void writeSpacetimeSta(Context *ctx, const std::string &file, int limit)
++{
++    timingAnalysisReport(ctx, false, false, true, true, file, limit);
++}
++
+ NEXTPNR_NAMESPACE_END

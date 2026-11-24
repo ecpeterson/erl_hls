@@ -93,7 +93,10 @@ export function prepareRenderData(model, computationData) {
     computationData.routeNets,
   );
   check(
-    index.attachment.routingComplete === true,
+    index.attachment.routingComplete === true ||
+      (index.attachment.timingModel?.model ===
+        "nextpnr-xilinx single structural estimate" &&
+        index.attachment.routingComplete === false),
     "source routing must be complete",
   );
   const primitives = [],
@@ -180,6 +183,7 @@ export function prepareRenderData(model, computationData) {
     routes.push({
       arc: arcId,
       disposition: route.disposition,
+      requested: index.routing.nets.has(index.nets[arc.net].id),
       primitives: [...ids],
       gapCounts,
     });
@@ -330,6 +334,8 @@ export function prepareRenderData(model, computationData) {
       registered: max("registered"),
       static: max("static"),
     },
+    timingModel: index.attachment.timingModel,
+    routingComplete: index.attachment.routingComplete,
     coverage: index.attachment.coverage,
     sourceCounts: {
       events: model.events.size,
@@ -340,8 +346,9 @@ export function prepareRenderData(model, computationData) {
       arcs: index.arcs.length,
       routeNets: computationData.routeNets.length,
     },
-    scope:
-      "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF colors bound complete source-to-sink paths through each primitive; they are not incremental arc delay, switching, STA slack or an execution period.",
+    scope: index.attachment.timingModel
+      ? "nextpnr structural estimates for selected native cones and captured route branches. Missing evidence stays unknown."
+      : "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF colors bound complete source-to-sink paths through each primitive; they are not incremental arc delay, switching, STA slack or an execution period.",
     operations: [...index.operations.values()].map((op) => ({
       event: op.event,
       applicability: op.applicability,

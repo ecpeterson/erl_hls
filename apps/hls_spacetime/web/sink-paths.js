@@ -1,4 +1,4 @@
-/** Per-sink explanations of independent SDF arc envelopes. Cached pin arrivals
+/** Per-sink explanations using the supplied backend arc model. Cached pin arrivals
  * remain the authority: these paths are not sensitized execution or STA slack. */
 const caches = new WeakMap();
 const SCOPES = new Set(["registered", "static"]);
@@ -37,12 +37,12 @@ function arrival(state, cone, scope, pin) {
 }
 
 /** Qualification is local to this selected sink. Missing timing at a sibling root
- * does not invalidate a finite arrival here; cycles/unsupported frontiers retain
- * the original cone-wide conservative rejection. No new bound is invented. */
+ * does not invalidate a finite arrival here. Cycles block the cone. A source
+ * that propagates unknown frontiers per pin can retain disjoint finite arrivals. */
 function qualify(state, cone, pin, scope) {
   const reasons = [];
   if (cone.coverage.cyclic) reasons.push("cycle");
-  if (cone.coverage.unsupportedFrontiers)
+  if (cone.coverage.unsupportedFrontiers && !cone.localFrontierUncertainty)
     reasons.push("unsupported_or_missing_frontier");
   const value = arrival(state, cone, scope, pin);
   if (reasons.length) return { status: "unknown", reasons, delayNs: null };

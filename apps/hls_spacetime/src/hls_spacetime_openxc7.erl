@@ -3,7 +3,7 @@
 -include_lib("kernel/include/file.hrl").
 -export([read/3, join/3]).
 
--define(MAX_BYTES, 64 * 1024 * 1024).
+-define(MAX_BYTES, 384 * 1024 * 1024).
 -define(MAX_CELLS, 100000).
 
 -doc "Reads the complete, uncompressed placement export for an independently supplied build and routed-JSON digest. Rechecks the fixed file inventory, bounds, SHA-256 identities and packed cell census. Keeps unknown placements explicit. Raises on missing, malformed or mismatched evidence.".
@@ -80,7 +80,23 @@ load(Directory, Expected, Checkpoint) ->
             false ->
                 []
         end,
-    Names = lists:sort(PlacementFiles ++ RouteFiles ++ TimingFiles ++ StorageFiles),
+    Sources = maps:get(<<"source_files">>, Manifest, []),
+    check(
+        length(Sources) =< 64 andalso
+            Sources =:=
+                [
+                    iolist_to_binary(io_lib:format("input-~2..0B.sv", [Index]))
+                 || Index <- lists:seq(0, length(Sources) - 1)
+                ],
+        source_files
+    ),
+    Focused = maps:is_key(<<"focus_bits">>, maps:get(<<"timing">>, Manifest, #{})),
+    RootFiles = [<<"roots.json">> || Focused],
+    StaFiles = [<<"sta.json">> || maps:is_key(<<"sta">>, Manifest)],
+    Names = lists:sort(
+        PlacementFiles ++ RouteFiles ++ TimingFiles ++ StorageFiles ++ Sources ++ RootFiles ++
+            StaFiles
+    ),
     check(lists:sort(maps:keys(Files)) =:= Names, file_inventory),
     Sizes = [Size || #{<<"bytes">> := Size} <- maps:values(Files), in_range(Size, 0, Total)],
     check(length(Sizes) =:= length(Names) andalso lists:sum(Sizes) =:= Total, bytes),
@@ -90,6 +106,22 @@ load(Directory, Expected, Checkpoint) ->
     check(hls_observation_build:match(Expected, Build) =:= ok, build_mismatch),
     check(Route =:= Checkpoint, checkpoint_mismatch),
     Data = maps:map(fun(Name, Meta) -> verified(Directory, Name, Meta) end, Files),
+    case Sources of
+        [] ->
+            ok;
+        _ ->
+            IndexFile = iolist_to_binary([
+                [
+                    "// sha256 ",
+                    maps:get(<<"sha256">>, maps:get(Name, Files)),
+                    "\n`include \"",
+                    Name,
+                    "\"\n"
+                ]
+             || Name <- Sources
+            ]),
+            check(maps:get(<<"design.v">>, Data) =:= IndexFile, source_index)
+    end,
     #{<<"modules">> := #{<<"top">> := Top = #{<<"settings">> := Settings, <<"cells">> := Packed}}} =
         decode(maps:get(<<"routed.json">>, Data)),
     check(
@@ -165,30 +197,39 @@ binding(#{<<"net">> := Net, <<"resource">> := Resource, <<"bits">> := Raw}) ->
 -spec bit(map()) -> map().
 bit(#{<<"status">> := <<"unknown">>, <<"bit">> := I, <<"evidence">> := E}) ->
     #{status => unknown, bit => I, evidence => E};
-bit(#{
-    <<"status">> := <<"supported">>,
-    <<"bit">> := I,
-    <<"evidence">> := E,
-    <<"cell">> := C,
-    <<"pin">> := <<"Q">>,
-    <<"edge">> := <<"rising">>,
-    <<"initial">> := Init,
-    <<"roles">> := #{
-        <<"clock">> := <<"CK">>,
-        <<"ce">> := <<"CE">>,
-        <<"reset">> := <<"SR">>,
-        <<"d">> := <<"D">>,
-        <<"q">> := <<"Q">>
-    }
-}) when
-    Init =:= 0; Init =:= 1
+bit(
+    #{
+        <<"status">> := <<"supported">>,
+        <<"bit">> := I,
+        <<"evidence">> := E,
+        <<"cell">> := C,
+        <<"pin">> := <<"Q">>,
+        <<"edge">> := <<"rising">>,
+        <<"initial">> := Init,
+        <<"roles">> := #{
+            <<"clock">> := <<"CK">>,
+            <<"ce">> := CE,
+            <<"reset">> := SR,
+            <<"d">> := <<"D">>,
+            <<"q">> := <<"Q">>
+        }
+    } = Row
+) when
+    Init =:= 0; Init =:= 1; Init =:= null
 ->
+    Local = maps:get(<<"local_controls">>, Row, #{}),
+    Expected = maps:from_list([{<<"CE">>, 1} || CE =:= null] ++ [{<<"SR">>, 0} || SR =:= null]),
+    check(
+        (CE =:= <<"CE">> orelse CE =:= null) andalso
+            (SR =:= <<"SR">> orelse SR =:= null) andalso Local =:= Expected,
+        storage_controls
+    ),
     #{status => supported, bit => I, evidence => E, cell => C, pin => <<"Q">>}.
 
 %% A single-model estimate retains its native unit, cell population and number of absent delays.
 -spec check_timing(map(), map(), map()) -> ok.
 check_timing(
-    #{<<"timing.json">> := Raw},
+    #{<<"timing.json">> := Raw} = Data,
     #{
         <<"limits">> := #{<<"timing_objects">> := Limit},
         <<"timing">> := #{
@@ -197,7 +238,12 @@ check_timing(
     },
     Packed
 ) ->
-    check(in_range(Limit, 1, 100000) andalso in_range(Count, 1, Limit), timing_limit),
+    MaxLimit =
+        case maps:is_key(<<"roots.json">>, Data) of
+            true -> 650000;
+            false -> 100000
+        end,
+    check(in_range(Limit, 1, MaxLimit) andalso in_range(Count, 1, Limit), timing_limit),
     #{
         <<"schema">> := 1,
         <<"unit">> := <<"ps">>,
@@ -205,8 +251,36 @@ check_timing(
         <<"cells">> := Cells,
         <<"sinks">> := Sinks,
         <<"selected_routes">> := Selected
-    } = decode(Raw),
-    check(lists:sort(maps:keys(Cells)) =:= lists:sort(maps:keys(Packed)), timing_cells),
+    } = TimingData = decode(Raw),
+    Roots = maps:get(<<"roots">>, TimingData, []),
+    case Data of
+        #{<<"roots.json">> := RootBytes} ->
+            Declared = decode(RootBytes),
+            check(
+                Declared =/= [] andalso lists:sort(Roots) =:= Declared andalso
+                    lists:usort(Declared) =:= Declared andalso
+                    lists:all(
+                        fun(R) ->
+                            is_map_key(R, Cells) andalso
+                                maps:get(<<"type">>, maps:get(R, Cells)) =:= <<"SLICE_FFX">>
+                        end,
+                        Roots
+                    ) andalso
+                    lists:all(
+                        fun({C, Row}) ->
+                            maps:get(<<"type">>, Row) =:=
+                                maps:get(<<"type">>, maps:get(C, Packed))
+                        end,
+                        maps:to_list(Cells)
+                    ),
+                timing_cells
+            );
+        _ ->
+            check(
+                Roots =:= [] andalso lists:sort(maps:keys(Cells)) =:= lists:sort(maps:keys(Packed)),
+                timing_cells
+            )
+    end,
     Arcs = lists:append([maps:get(<<"arcs">>, C) || C <- maps:values(Cells)]),
     Ports = lists:append([maps:values(maps:get(<<"ports">>, C)) || C <- maps:values(Cells)]),
     ClockRows = lists:sum([length(maps:get(<<"clocks">>, P)) || P <- Ports]),

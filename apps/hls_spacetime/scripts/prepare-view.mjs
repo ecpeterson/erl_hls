@@ -4,6 +4,8 @@
 import { createHash } from "node:crypto";
 import { openxc7Routing } from "../web/openxc7-routes.js";
 import { openxc7Computations } from "./openxc7-computations.mjs";
+import { openxc7Paths } from "./openxc7-sta.mjs";
+import { publish } from "./prepare-computations.mjs";
 import { createComputations } from "../web/computation-routes.js";
 import { readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { resolve, join, basename } from "node:path";
@@ -12,6 +14,7 @@ import { gunzipSync } from "node:zlib";
 import { projectBundle, checkExamples } from "./prepare-example.mjs";
 import { parseTimingPaths } from "./timing-paths.mjs";
 import { createModel } from "../web/model.js";
+import { nativeRoutes } from "../web/native-routes.js";
 import { nativePaths } from "../web/native-paths.js";
 
 /** Reject malformed local evidence with the failed boundary in the diagnostic. */
@@ -177,6 +180,7 @@ export async function writeView({
     document.provenance.sources.push(report.identity);
     nativePaths(createModel(document));
   }
+  let graph;
   if (openxc7) {
     const manifest = await input(
       join(resolve(openxc7), "manifest.json"),
@@ -192,7 +196,10 @@ export async function writeView({
     );
     document.provenance.sources.push(manifest.identity);
     async function sidecar(name) {
-      const data = await input(join(resolve(openxc7), name), 64 * 1024 * 1024);
+      const data = await input(
+        join(resolve(openxc7), name),
+        Math.min(meta.limits.bytes, 384 * 1024 * 1024),
+      );
       check(
         data.identity.raw_sha256 === meta.files[name]?.sha256 &&
           data.bytes.length === meta.files[name]?.bytes,
@@ -205,9 +212,10 @@ export async function writeView({
       meta.routing || meta.timing
         ? (await sidecar("routed.json")).modules.top
         : null;
+    let request;
     if (meta.routing) {
       const { nets } = await sidecar("routes.json");
-      const request = await sidecar("route-request.json");
+      request = await sidecar("route-request.json");
       const packedNetCount = Object.keys(top.netnames).length;
       check(
         nets.every((net) => Object.hasOwn(top.netnames, net.id)) &&
@@ -222,6 +230,59 @@ export async function writeView({
       };
       openxc7Routing(createModel(document), document.openxc7Routes);
     }
+    if (meta.sta) {
+      check(!document.nativePaths, "two native STA sources for one recording");
+      const report = await sidecar("sta.json");
+      const { paths, unchecked } = openxc7Paths(report, top);
+      document.nativePaths = {
+        build: bundle.build,
+        checkpoint: document.catalogue.checkpoint,
+        scope: "static_timing",
+        wireGeometry: false,
+        report: "sta.json",
+        report_sha256: meta.files["sta.json"].sha256,
+        paths,
+        unchecked,
+      };
+      nativePaths(createModel(document));
+      if (request?.sta_nets) {
+        const selection = meta.files["route-request.json"].sha256;
+        const staNets = new Set(
+          paths.flatMap((path) =>
+            path.arcs.filter((a) => a.kind === "net").map((a) => a.net),
+          ),
+        );
+        document.nativePaths.route_selection_sha256 = selection;
+        document.nativeRoutes = {
+          schema_version: 1,
+          complete: true,
+          scope: "static_route_topology",
+          coordinate_unit: "tile_grid",
+          checkpoint_sha256: document.catalogue.checkpoint,
+          report_sha256: meta.files["sta.json"].sha256,
+          selection_sha256: selection,
+          build: bundle.build,
+          nets: document.openxc7Routes.nets.filter((n) => staNets.has(n.id)),
+          paths: paths.flatMap((path) =>
+            path.arcs.flatMap((arc, i) =>
+              arc.kind === "net"
+                ? [
+                    {
+                      path_id: path.id,
+                      arc_index: i,
+                      report_net: arc.net,
+                      canonical_net: arc.net,
+                      source_pin: arc.source,
+                      target_pin: arc.target,
+                    },
+                  ]
+                : [],
+            ),
+          ),
+        };
+        nativeRoutes(createModel(document));
+      }
+    }
     if (meta.timing) {
       document.openxc7Computations = openxc7Computations(
         document,
@@ -231,11 +292,23 @@ export async function writeView({
         meta.timing,
         Object.keys(top.netnames),
       );
+      document.openxc7Computations.routingComplete =
+        document.openxc7Routes?.nets.length ===
+        Object.keys(top.netnames).length;
       createComputations(
         createModel(document),
         document.openxc7Computations,
         document.openxc7Routes?.nets,
       );
+      graph = document.openxc7Computations;
+      if (meta.timing.focus_bits) {
+        document.openxc7Timing = {
+          ...meta.timing,
+          predicted: graph.arcs.filter((a) => a.timing.basis === "predicted")
+            .length,
+        };
+        delete document.openxc7Computations;
+      }
     }
   }
   const bytes = Buffer.from(JSON.stringify(document));
@@ -251,6 +324,22 @@ export async function writeView({
     bytes: bytes.length,
     sha256: sha256(bytes),
   };
+  if (graph) {
+    await publish(
+      join(output, "computations"),
+      {
+        ...graph,
+        routeNets: document.openxc7Routes?.nets ?? [],
+      },
+      entry,
+    );
+    const data = await readFile(join(output, "computations", "manifest.json"));
+    entry.computations = {
+      file: "computations/manifest.json",
+      bytes: data.length,
+      sha256: sha256(data),
+    };
+  }
   await writeFile(
     join(output, "index.json"),
     JSON.stringify(

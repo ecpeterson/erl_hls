@@ -63,7 +63,7 @@ test(
       assert.equal(document.openxc7Routes.packedNetCount, netIds.length);
       const selected = createComputations(
         model,
-        document.openxc7Computations,
+        { ...document.openxc7Computations, routingComplete: false },
         routes.filter((r) => ["d[0]", "d[1]"].includes(r.id)),
       );
       const outcomes = (index, ids) =>
@@ -144,3 +144,49 @@ test(
     assert.equal(unbound.bindings.get("q").get(1).status, "supported");
   },
 );
+
+test("XC7 carry and mux dependencies require the original primitive and correct port direction", async (t) => {
+  const { view } = await sourceFixture(t);
+  for (const [type, orig, inputs, outputs, expected] of [
+    [
+      "CARRY4",
+      "CARRY4",
+      ["DI1", "S1"],
+      ["O0", "O1", "CO1", "O2"],
+      ["DI1/CO1", "DI1/O2", "S1/CO1", "S1/O1", "S1/O2"],
+    ],
+    [
+      "SELMUX2_1",
+      "MUXF8",
+      ["0", "1", "S0", "X"],
+      ["OUT"],
+      ["0/OUT", "1/OUT", "S0/OUT"],
+    ],
+    ["SELMUX2_1", "unrecognized", ["0", "1", "S0"], ["OUT"], []],
+  ]) {
+    const ports = Object.fromEntries(
+      [...inputs, ...outputs].map((pin) => [
+        pin,
+        {
+          net: pin,
+          direction: inputs.includes(pin) ? "IN" : "OUT",
+          class: inputs.includes(pin) ? "comb_input" : "comb_output",
+        },
+      ]),
+    );
+    const result = openxc7Computations(
+      view,
+      { ff: { type, attributes: { X_ORIG_TYPE: orig } } },
+      { cells: { ff: { type, ports, arcs: [] } }, sinks: [] },
+      [],
+      {},
+    );
+    assert.deepEqual(
+      result.arcs
+        .map((a) => [a.from, a.to].map((i) => result.pins[i].pin).join("/"))
+        .sort(),
+      expected.sort(),
+    );
+    assert.ok(result.arcs.every((a) => a.timing.delayPs === null));
+  }
+});

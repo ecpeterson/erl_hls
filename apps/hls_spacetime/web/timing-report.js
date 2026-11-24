@@ -205,10 +205,17 @@ export function timingReport(
   return {
     format: "spacetime-timing-report",
     schema: 1,
-    evidence: "representative_maximum_independent_arc_sdf_envelope",
+    evidence: index.attachment.timingModel
+      ? "representative_maximum_nextpnr_arc_estimate"
+      : "representative_maximum_independent_arc_sdf_envelope",
+    ...(index.attachment.timingModel && {
+      timingModel: index.attachment.timingModel,
+    }),
     interpretation: [
       "One deterministic maximizing chain per selected shared cone; ties are not exhaustively enumerated.",
-      "Each arc uses its largest supplied fast/slow corner and conditional delay independently; a chain need not be jointly sensitizable or a single-corner STA path.",
+      index.attachment.timingModel
+        ? "Propagation uses the single supplied nextpnr estimate for each arc."
+        : "Each arc uses its largest supplied fast/slow corner and conditional delay independently; a chain need not be jointly sensitizable or a single-corner STA path.",
       "Excludes clock-to-Q, setup, clock skew, timing constraints/exceptions and dynamic activity. This is neither STA slack nor a physical clock period.",
       "Recorded write membership is structural association, not evidence that this path switched. Data, enable and reset cones remain separate.",
       "A known path delay may have partial or unavailable geometry. Unmapped target bits remain outside the analyzed native cones.",
@@ -267,7 +274,9 @@ export function timingReportMarkdown(report) {
     "",
     `Cone dispositions: ${JSON.stringify(report.summary.coneStatus)}. ${report.summary.writesWithUnknownTargetBits} writes have unmapped target bits; ${report.summary.writesWithoutNativeCones} have no native cone.`,
     "",
-    "These are independent per-arc SDF maxima, excluding clock and endpoint timing checks. They are not STA slack, a physical period or a dynamically sensitized path. Occurrences do not multiply delay.",
+    report.timingModel
+      ? "Delays use one nextpnr model and cover combinational propagation between the selected endpoints."
+      : "These are independent per-arc SDF maxima, excluding clock and endpoint timing checks. They are not STA slack, a physical period or a dynamically sensitized path. Occurrences do not multiply delay.",
     "",
     "## Longest known chains",
     "",

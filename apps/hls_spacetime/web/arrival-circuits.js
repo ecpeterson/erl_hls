@@ -497,6 +497,7 @@ export function arrivalCircuit(
         unavailable.add(arcId);
       const bridge = Boolean(
         bridgeKnownGeometry &&
+          !index.data?.timingModel &&
           type === 0 &&
           !completeGeometry &&
           known &&

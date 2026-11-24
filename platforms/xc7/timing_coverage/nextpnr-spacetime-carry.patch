@@ -1,0 +1,28 @@
+--- a/xilinx/arch.cc
++++ b/xilinx/arch.cc
+@@ -2417,7 +2417,24 @@
+         }
+     } else if (cell->type == id_CARRY4) {
+         if (xc7 && inst_id != -1) {
+-            return xc7_cell_timing_lookup(tt_id, inst_id, id("CARRY4"), fromPort, toPort, delay);
++            // On this part DI timing resides in site/load-specific CARRY4 variants.
++            // Use their measured envelope where the ordinary variant omits this pair.
++            if (xc7_cell_timing_lookup(tt_id, inst_id, id("CARRY4"), fromPort, toPort, delay))
++                return true;
++            const auto input = fromPort.str(this);
++            if (tt_id == -1 || getChipName() != "xc7z030sbg485-1" || input.size() != 3 ||
++                input.compare(0, 2, "DI") || input[2] < '0' || input[2] > '3') return false;
++            const auto &inst = chip_info->timing_data->tile_cell_timings[tt_id].instances[inst_id];
++            bool found = false;
++            for (int i = 0; i < inst.num_celltypes; ++i) {
++                IdString variant(inst.celltypes[i].variant_name);
++                if (variant.str(this).compare(0, 7, "CARRY4_") != 0) continue;
++                DelayInfo candidate;
++                if (!xc7_cell_timing_lookup(tt_id, inst_id, variant, fromPort, toPort, candidate)) continue;
++                if (!found || candidate.maxDelay() > delay.maxDelay()) delay = candidate;
++                found = true;
++            }
++            return found;
+         }
+     } else if (cell->type == id_F7MUX || cell->type == id_F8MUX || cell->type == id_F9MUX ||
+                cell->type == id("SELMUX2_1")) {

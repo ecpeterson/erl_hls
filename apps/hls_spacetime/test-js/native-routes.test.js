@@ -421,3 +421,17 @@ test("two actual driver candidates reaching the sink remain ambiguous", () => {
   assert.equal(route.disposition, "ambiguous");
   assert.deepEqual(route.nodes, []);
 });
+
+test("openXC7 static branches bind caller labels to the current manifest and checkpoint", () => {
+  const model = fixture();
+  const build = model.bundle.build;
+  build.source = "source/fixture";
+  build.observation = "two cycles";
+  model.document.openxc7Routes = {
+    implementation: build.implementation,
+    checkpoint: model.catalogue.checkpoint,
+  };
+  assert.equal(nativeRoutes(model)[0].disposition, "resolved");
+  model.document.nativeRoutes.build = { ...build, observation: "different" };
+  assert.throws(() => nativeRoutes(model), /route build/);
+});
