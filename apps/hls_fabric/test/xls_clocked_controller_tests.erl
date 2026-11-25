@@ -18,13 +18,13 @@ rejects_state_machine_test() ->
 -doc "Writes every shipped clocked controller as an isolated typed source unit; XLS checks both the actual shared transitions and the immediate adapter.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
-    Kernels = [{hls_runtime, "runtime/hls_domain_lifecycle.erl"},
-               {hls_runtime, "runtime/hls_supervisor_lifecycle.erl"},
-               {hls_fabric, "runtime/domain/hls_domain_channel.erl"},
-               {hls_fabric, "runtime/domain/hls_domain_channel_tx.erl"},
-               {hls_fabric, "runtime/domain/hls_domain_channel_rx.erl"}],
+    Kernels = ["runtime/hls_domain_lifecycle.erl",
+               "runtime/hls_supervisor_lifecycle.erl",
+               "fabric/runtime/domain/hls_domain_channel.erl",
+               "fabric/runtime/domain/hls_domain_channel_tx.erl",
+               "fabric/runtime/domain/hls_domain_channel_rx.erl"],
     [begin
-        Source = hls_source:library_file(App, Name),
+        Source = hls_source:library_file(hls_runtime, Name),
         {ok, Parsed} = hls_source:parse_file(Source),
         Forms = hls_records:resolve(Parsed),
         Names = lists:append([Tags || {attribute, _, hls_tags, Tags} <- Forms]),
@@ -36,5 +36,5 @@ write(Stage) ->
         ok = xls_emitted:write(Artifact, filename:join(Output, "controller.x")),
         ok = file:write_file(filename:join(Output, "frame_config.x"),
             xls_frame_layout:config(hls_frame_layout:new(Words)), [exclusive])
-    end || {App, Name} <- Kernels],
+    end || Name <- Kernels],
     ok.

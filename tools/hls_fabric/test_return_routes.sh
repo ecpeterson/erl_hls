@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(cd "$(dirname "$0")/../.." && pwd)
 stage="$root/_build/return-routes"
 mkdir -p "$stage"
 for config in '1 255' '3 255' '16 255' '255 255' '256 -1'; do
