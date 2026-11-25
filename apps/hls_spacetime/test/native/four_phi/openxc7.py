@@ -95,9 +95,14 @@ def memory_pin(module: dict) -> tuple[str, str]:
 
 
 def connected_path(
-    module: dict, ram: str, original: str, targets: set[str]
+    module: dict,
+    ram: str,
+    original: str,
+    targets: set[str],
+    *,
+    allow_capture: bool = False,
 ) -> list[dict]:
-    """Walk directed packed nets and combinational pin arcs to the nearest qualified DSP operand."""
+    """Walk directed pin arcs to a DSP operand. Optionally cross one D-to-Q clock boundary."""
     cells = module["cells"]
     block = cells[ram]
     outputs = [
@@ -106,7 +111,7 @@ def connected_path(
         if block["attributes"].get("X_ORIG_PORT_" + p) == original
     ]
     require(len(outputs) == 1, "packed BRAM output correspondence")
-    root = (ram, outputs[0])
+    root = (ram, outputs[0], False)
     users = defaultdict(list)
     for name, cell in cells.items():
         for port, _, bit in pins(cell, "input"):
@@ -140,8 +145,15 @@ def connected_path(
                     right["net"] = netnames[bit][0]
                 return steps
             for out, _, _ in pins(cell, "output"):
-                node = name, out
-                if node not in parents and logic_arc(cell, inp, out):
+                capture = (
+                    allow_capture
+                    and not prev[2]
+                    and cell["type"] == "SLICE_FFX"
+                    and inp == "D"
+                    and out == "Q"
+                )
+                node = name, out, prev[2] or capture
+                if node not in parents and (capture or logic_arc(cell, inp, out)):
                     parents[node] = (prev, inp)
                     queue.append(node)
     raise ValueError("no packed RAM-to-product DSP path")

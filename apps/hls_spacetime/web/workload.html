@@ -16,7 +16,9 @@
         </div>
         <nav aria-label="Replay views">
           <a id="other-view" hidden></a>
-          <a href="./?detail=transaction">C32–C37 transaction ↗</a>
+          <a id="transaction" href="./?detail=transaction"
+            >C32–C37 transaction ↗</a
+          >
         </nav>
       </header>
       <p role="alert" id="error" hidden></p>
@@ -68,6 +70,9 @@
             <label id="native-modes" hidden
               >openXC7
               <select id="native-geometry">
+                <option value="routes" hidden>
+                  Switch tiles · post-route ns
+                </option>
                 <option value="pins">Placed pins · estimated ns</option>
                 <option value="spans">Endpoint spans · estimated ns</option>
                 <option value="depth">Cell pairs · logic depth</option>
@@ -98,18 +103,15 @@
               <span>Placed · logic depth</span>
             </div>
             <p class="stat" aria-live="polite"></p>
-            <canvas
-              tabindex="0"
-              aria-label="openXC7 placed 3D signal flow"
-            ></canvas>
+            <canvas tabindex="0" aria-label="openXC7 3D signal flow"></canvas>
             <p class="flow-selection"></p>
           </article>
         </div>
         <p class="caption">
           Lines show static connections between primitives selected by the
-          clock’s activity. Drag to orbit both views. Scroll to zoom. Select a
-          pin or line to inspect a connection. With keyboard focus, use the arrow keys
-          to orbit and + or − to zoom.
+          clock’s activity. Drag to orbit. Scroll to zoom. Select a pin or line
+          to inspect a connection. With keyboard focus, use the arrow keys to
+          orbit and + or − to zoom.
         </p>
         <details>
           <summary>How to read the geometry</summary>
@@ -121,21 +123,21 @@
             establish which pin toggled first or which path carried a
             transition.
           </p>
-          <p>
+          <p id="vivado-guide">
             Vivado height accumulates maximum SDF delays from a launch clock
             pin. Solid net lines pass through the recovered switch tiles, with
             height interpolated between the two timed pins. Dashed lines join
             endpoints where the checkpoint branch could not be resolved.
             Vertical strokes show individual primitive timing arcs.
           </p>
-          <p>
+          <p id="native-flow-guide">
             openXC7 placement timing shows both ends of each modeled connection
             and the delay through each primitive. Horizontal position is the
             pin’s containing tile. Click a pin to see the other end, or choose
             Endpoint spans for all schematic connections. nextpnr estimates net
             delays from placement. Each axis fits its own implementation unless
             Shared ns scale is selected. Cell pairs retains the synthesis-level
-            logic depth view. The full four-Phi openXC7 route is outstanding.
+            logic depth view.
           </p>
         </details>
       </section>
@@ -206,8 +208,7 @@
         <p class="caption">
           <i class="swatch idle"></i> Occupied tile
           <i class="swatch active"></i> Known output change · brighter tiles
-          contain more changing primitives. Both maps use the same chip
-          coordinates, scale and clock. Select a tile to inspect it or zoom
+          contain more changing primitives. Select a tile to inspect it or zoom
           around it.
         </p>
       </section>

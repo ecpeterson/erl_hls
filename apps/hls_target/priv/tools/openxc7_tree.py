@@ -33,6 +33,7 @@ class WireNames:
         base = grid.pointer(info + 8)
         self.ids = ids + [grid.name(base + 4 * i) for i in range(grid.word(info + 4))]
         self.by_key = {}
+        self.bel_types = {}
 
     def name(self, key: tuple[int, int]) -> str:
         """Return the saved canonical tile wire or site wire for a validated wire key."""
@@ -54,6 +55,34 @@ class WireNames:
             )
             self.by_key[key] = owner + "/" + self.ids[grid.word(record)]
         return self.by_key[key]
+
+    def bel_wire(self, bel: str, pin: str) -> str | None:
+        """Resolve a packed XC7 BEL pin to its canonical chipdb wire; omit absent pins."""
+        owner, name = bel.split("/", 1)
+        g = self.grid
+        tile = g.owners[owner]
+        inst = g.tiles + tile * 24
+        typ = g.types + 32 * g.word(inst + 4)
+        if typ not in self.bel_types:
+            ports = {}
+            base = g.pointer(typ + 8)
+            for i in range(g.word(typ + 4)):
+                obj = base + 32 * i
+                site = struct.unpack_from("<h", g.db, obj + 26)[0]
+                ident = self.ids[g.word(obj)]
+                wires = g.pointer(obj + 20)
+                for j in range(g.word(obj + 16)):
+                    port, _, index = struct.unpack_from("<iii", g.db, wires + 12 * j)
+                    ports.setdefault((site, ident, self.ids[port]), index)
+            self.bel_types[typ] = ports
+        slot = -1
+        if owner != g.tile_names[tile]:
+            sites = g.pointer(inst + 20)
+            slot = next(
+                j for j in range(g.word(inst + 16)) if g.name(sites + 32 * j) == owner
+            )
+        index = self.bel_types[typ].get((slot, name, pin), -1)
+        return self.name(g.wire_key(owner, index)) if index >= 0 else None
 
     def local_key(self, wire: str) -> tuple[int, int]:
         """Resolve a zero-switch local net from its exact chipdb name when no PIP names its wire."""
@@ -103,7 +132,9 @@ class RouteTree:
         if sum(bool(pip) for pip in self.bound.values()) != len(self.parent):
             raise ValueError("checkpoint contains unaccounted PIPs")
 
-    def trace(self, start: str, end: str) -> tuple[list | None, str | None]:
+    def trace(
+        self, start: str | None, end: str | None
+    ) -> tuple[list | None, str | None]:
         """Trace to the bound driver or identify the actual disconnected root of this sink subtree."""
         if start not in self.bound or end not in self.bound:
             return None, None
@@ -117,6 +148,26 @@ class RouteTree:
             steps.append(end)
             end = self.parent[end][0]
         return steps[::-1], None
+
+    def pin_steps(
+        self,
+        top: dict,
+        net: str,
+        cell: str,
+        port: str,
+        start: str | None,
+        end: str | None,
+        bel_pin: str | None,
+    ) -> tuple:
+        """Trace the sink's bound pin or its unique net-owned LUT permutation, retaining a disconnected root."""
+        steps, root = self.trace(start, end)
+        if steps is None and end and bel_pin == port:
+            hit = lut_endpoint(top, net, cell, port, end, self.candidates)
+            if hit:
+                steps, root = self.trace(start, hit[0])
+                if steps is not None:
+                    return steps, True, None
+        return steps, False, root
 
     def branch(
         self, top: dict, timing: dict, net: str, source: str, sink: str
@@ -137,15 +188,13 @@ class RouteTree:
                 return "missing_endpoint", None, [], None, None
             endpoints.append(native["wire"])
         start, end = endpoints
-        steps, root = self.trace(start, end)
+        steps, permuted, root = self.pin_steps(
+            top, net, cell, port, start, end, native.get("bel_pin")
+        )
+        if permuted:
+            return "lut_permutation", start, steps, end, None
         if steps is not None:
             return "direct", start, steps, None, None
-        if native.get("bel_pin") == port:
-            hit = lut_endpoint(top, net, cell, port, end, self.candidates)
-            if hit:
-                steps, root = self.trace(start, hit[0])
-                if steps is not None:
-                    return "lut_permutation", start, steps, end, None
         for kind in ("GND", "VCC"):
             if (
                 source == f"$PACKER_{kind}_DRV/Y"

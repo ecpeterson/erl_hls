@@ -1,0 +1,281 @@
+{
+  "scope": "Four-worker X/Z routing attempts and a legally routed two-worker X-plane application on the same part, two-pin harness and clock constraint.",
+  "part": "xc7z030sbg485-1",
+  "targetMHz": 50,
+  "seed": 1,
+  "pins": {
+    "clock": "Y14",
+    "activity": "V13"
+  },
+  "rtl": {
+    "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+    "phi_decoder_profile.v": "2fcf50391593da789d696ad253a8b0161f7013bbc86ddb9a8ba2ea9026e2e477",
+    "phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a",
+    "phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733"
+  },
+  "tools": {
+    "nextpnr": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+    "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+    "xc7-bram-map": "a1afcda1610f3f3dcbc0b9bbe99c30ce2125788b7e69cbaa456f314fbfca6431"
+  },
+  "attempts": [
+    {
+      "mapping": "core and harness mapped separately",
+      "mappedSha256": "643cd07a4ae6e329703abfe92650cba3384248fccb7b9fbfdaee5efc849def7c",
+      "retainedCorePrimitives": 64989,
+      "assembledPrimitives": {
+        "BUFG": 1,
+        "CARRY4": 902,
+        "DSP48E1": 48,
+        "FDRE": 29947,
+        "IBUF": 1,
+        "INV": 588,
+        "LUT2": 5472,
+        "LUT3": 5416,
+        "LUT4": 7060,
+        "LUT5": 7849,
+        "LUT6": 8078,
+        "MUXF7": 1,
+        "OBUF": 1,
+        "RAMB18E1": 44,
+        "RAMB36E1": 8
+      },
+      "singleGlobalClock": true,
+      "timingDrivenRouting": true,
+      "wallLimitSeconds": 3600,
+      "durationSeconds": 3600.99,
+      "peakGroupRssBytes": 1892450304,
+      "result": "time limit",
+      "lastIteration": 124,
+      "lastOverusedWires": 80,
+      "bestOverusedWires": 73,
+      "bestIteration": 122,
+      "routedCheckpoint": null,
+      "archive": "runs/spacetime-g4-parity-2026-11-24/four-phi-route-attempts/core-harness",
+      "inventorySha256": "1e6754f9b9c70c8e9e6108450b9660bca9f05a99ece285b37319000d8e9dd75d"
+    },
+    {
+      "mapping": "original corrected placement",
+      "placedSha256": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+      "timingDrivenRouting": false,
+      "wallLimitSeconds": 1200,
+      "durationSeconds": 931.16,
+      "peakGroupRssBytes": 2225340416,
+      "result": "router2 stalled for 50 iterations",
+      "lastIteration": 133,
+      "lastOverusedWires": 2,
+      "bestOverusedWires": 1,
+      "firstBestIteration": 83,
+      "conflicts": [
+        {
+          "wire": "INT_L_X30Y27/NE6A3",
+          "nets": [
+            "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_2_2_next_inst.____state_28_0[1][1]",
+            "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.instantiation_output_159360[741]"
+          ]
+        },
+        {
+          "wire": "INT_R_X31Y31/SL1BEG3",
+          "nets": [
+            "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_2_2_next_inst.____state_28_1[3][7]",
+            "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.instantiation_output_159360[741]"
+          ]
+        }
+      ],
+      "routedCheckpoint": null,
+      "archive": "runs/spacetime-g4-parity-2026-11-24/four-phi-route-attempts/placed-congestion",
+      "inventorySha256": "07845f5133d43c81a7add6f628caa8d50d49eae18a3b8dd320277adfc0c39347"
+    }
+  ],
+  "twoWorkerWitness": {
+    "topology": "2 × 1 X plane, one shard, two Phi workers and two syndrome actors",
+    "nativeOnly": true,
+    "captureSha256": "5ed550a5bbc34a5517bcb5c8a72794f73ac9da71418506ac35bbcaad1f19e580",
+    "observationReceiptSha256": "0e2fada3936d85d35f18585f3a48443eb4cd4e052636c88efccbca26f70a983b",
+    "inputs": {
+      "native/synth.json": "a28375627e36cc8061082a7abb1a743fee40cdd54b935788418e3656162fe43f",
+      "native/routed.json": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+      "native/routing.log": "545a630b66956a2e9044703450474e742b2299b5ad94a40c10065a619ad6208e",
+      "native/fixed-routes.txt": "da81c18fcfb59a2247a4988e790ca104bfae2cfe448d4ced4bc6edd361570d38",
+      "native/routed.sdf": "074d0cbf0d26c0a88f44400e036424a8fd1c4a59deb002cb81e2443bd45b8376",
+      "native/placed.json": "496aeedec2cc7507f0a19869e5eab15fdf5fad2ee9fe07480e89f5bbc58c6454",
+      "native/report.json": "21b6eebdd8a5d8b8e091290c90a63ff999660572042000f11404be074872e964",
+      "profile.json": "d44a1f014694d1980d48f2fbbd6e3d979be536df05a129655deb34595a08b19d",
+      "input-manifest.json": "3125141200f8c8d7dd42931ad5803e022bc2a4d0efefac7feefecfca0e1d29da",
+      "mapping.json": "ab301621aadd0cc2b5dc15250bb1032a16e80310baf342d5f87b4a3bb8637ae6",
+      "phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733",
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile.v": "aef9652a4fd2a8f4d9913617098ea89d9b60d1d0e02d50aedddc026f6f59db57",
+      "phi_decoder_profile_top.v": "f70791f66ddec13be8f9635011b8223ce86a3329142a0df84389b425a8681ae1"
+    },
+    "tools": {
+      "yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "yosys-executable": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "xc7-bram-map": "a1afcda1610f3f3dcbc0b9bbe99c30ce2125788b7e69cbaa456f314fbfca6431",
+      "abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+      "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "iverilog": "5df81b269e1ff2c965dd00ad5a8071ca17717f416003b3661a18b2dde430e73c",
+      "vvp": "1a9bdf1f40102f64f015514f5069f99a5dd9f9f38de343743ef4c169fb358392"
+    },
+    "unisim": "de97e2b21318aa2dd4185a1f9d808a44c30be594efbaeabe5fbe23d1b89d1d10",
+    "mapping": {
+      "BUFG": 1,
+      "CARRY4": 305,
+      "DSP48E1": 10,
+      "FDRE": 13835,
+      "IBUF": 1,
+      "INV": 56,
+      "LUT2": 2749,
+      "LUT3": 1740,
+      "LUT4": 3157,
+      "LUT5": 2615,
+      "LUT6": 3920,
+      "MUXF7": 2,
+      "MUXF8": 1,
+      "OBUF": 1,
+      "RAMB18E1": 22,
+      "RAMB36E1": 4
+    },
+    "retainedDecoderPrimitives": 27993,
+    "placementSeconds": 118.66,
+    "routingSeconds": 64.48,
+    "timingDrivenRouting": false,
+    "router": "router2",
+    "finalOveruse": 0,
+    "finalArchFailures": 0,
+    "iteration": 4,
+    "usedWires": 521301,
+    "fixedPips": 509097,
+    "fixedNets": 31150,
+    "fmaxMHz": {
+      "achieved": 41.06,
+      "constraint": 50.0
+    },
+    "replayCycles": 4096,
+    "sourceProbes": 147,
+    "sourceUnits": {
+      "Process": 15,
+      "FIFO": 25,
+      "RAM": 4,
+      "Output": 1
+    },
+    "locatedMappedPrimitives": 28419,
+    "captureLanes": [
+      128,
+      128
+    ],
+    "controlLanes": 6,
+    "replayFrames": {
+      "Correction": 6,
+      "Status": 36
+    },
+    "step32Harness": {
+      "completeXCoordinates": 2,
+      "corrections": 11,
+      "xStalls": 32
+    },
+    "sdfConnections": {
+      "nonclockConnections": 113931,
+      "unreachedConnections": 8725,
+      "unobservedConnections": 4448,
+      "timedConnections": 100758,
+      "timedCellArcs": 87142
+    },
+    "geometry": {
+      "permuted": 47289,
+      "switchVisits": 1419650,
+      "zeroSwitch": 577,
+      "routed": 53469,
+      "unresolved": 0
+    },
+    "checkClocks": {
+      "0": {},
+      "32": {
+        "pinConnections": 61,
+        "routed": 45,
+        "switchVisits": 1001,
+        "permuted": 16,
+        "cellArcs": 101
+      },
+      "89": {
+        "pinConnections": 101,
+        "permuted": 63,
+        "switchVisits": 1454,
+        "routed": 38,
+        "cellArcs": 484
+      },
+      "90": {
+        "pinConnections": 919,
+        "routed": 446,
+        "switchVisits": 9239,
+        "permuted": 473,
+        "direct": 54,
+        "cellArcs": 7024
+      },
+      "105": {
+        "pinConnections": 1173,
+        "permuted": 584,
+        "switchVisits": 11770,
+        "routed": 589,
+        "direct": 73,
+        "cellArcs": 7936
+      },
+      "572": {
+        "pinConnections": 982,
+        "permuted": 691,
+        "switchVisits": 11152,
+        "routed": 291,
+        "direct": 25,
+        "cellArcs": 2755
+      },
+      "3640": {
+        "pinConnections": 2211,
+        "permuted": 1163,
+        "switchVisits": 23968,
+        "routed": 1048,
+        "direct": 104,
+        "cellArcs": 10340
+      }
+    },
+    "selectedLane": {
+      "memory": "decoder.scheduler_1_state",
+      "bit": 84,
+      "ramOutput": "DOADO11",
+      "dspInput": "A8",
+      "registerBoundary": "SLICE_X51Y141/A5FF",
+      "timingSegments": [
+        "RAM clock to capture D",
+        "Capture clock to DSP A8"
+      ],
+      "segments": [
+        {
+          "switches": 13,
+          "cellPs": 2232.0,
+          "netPs": 1780.0
+        },
+        {
+          "switches": 39,
+          "cellPs": 1266.0,
+          "netPs": 4042.0
+        }
+      ],
+      "branchesByDelay": {
+        "permuted": 3,
+        "routed": 4
+      },
+      "rtlRamKnownClocks": 4085,
+      "knownLaneWrites": 551,
+      "afterWriteReads": 546,
+      "settledChanges": {
+        "ram": 262,
+        "q": 410,
+        "dsp": 370
+      }
+    },
+    "activityScope": "Per-primitive known adjacent settled changes; three named pins also sampled individually. The displayed within-clock heights are modeled.",
+    "archive": "runs/spacetime-g4-parity-2026-11-24/two-phi-routed",
+    "galleryManifestSha256": "ea56edd2c024ef8534655c9433b697d2a06bc4d2833c5a6cb6850821f64f1db4",
+    "inventorySha256": "35a8b229beeb23efa9618bbc40c8c8a82d8ca58b6dc4987d37ed005f4d51327a"
+  }
+}

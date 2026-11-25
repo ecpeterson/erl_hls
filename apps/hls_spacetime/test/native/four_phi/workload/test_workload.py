@@ -9,6 +9,9 @@ import unittest
 from pathlib import Path
 from flow import ROW, arrivals, vivado
 from placed_flow import placed_rows
+from routed_flow import route_result, trace
+from openxc7_tree import RouteTree
+from unittest.mock import Mock
 from init_bits import configured
 from scopes import links
 
@@ -108,6 +111,61 @@ class WorkloadTest(unittest.TestCase):
                 sdf.write_text(bad)
                 with self.assertRaises(ValueError):
                     placed_rows(design, sdf, list(cells))
+
+    def test_partial_route(self) -> None:
+        """Reject truncated or debug-accepted routes even when a checkpoint was emitted."""
+        log = (
+            "Info:     iter=7 wires=105 overused=0 overuse=0 archfail=0\n"
+            "Info: Router2 time 0.01s\nInfo: Wrote 113 fixed-route pips across 12 nets to 'fixed.txt'\n"
+        )
+        self.assertEqual(route_result(log)["fixedPips"], 113)
+        for bad in (
+            log.replace("archfail=0", "archfail=1"),
+            log + "Warning: SKIP_FAILED_ARCS",
+            log.replace("Wrote 113", "Skipped 113"),
+        ):
+            with self.assertRaisesRegex(ValueError, "incomplete native route"):
+                route_result(bad)
+
+    def test_routed_pin_branches(self) -> None:
+        """Keep a permuted LUT's physical route independent of nextpnr's placement delay fallback."""
+        top = {
+            "cells": {
+                "src": {
+                    "connections": {"Q": [7]},
+                    "port_directions": {"Q": "output"},
+                    "attributes": {"NEXTPNR_BEL": "X/Q"},
+                },
+                "sink": {
+                    "type": "SLICE_LUTX",
+                    "connections": {"A2": [7]},
+                    "port_directions": {"A2": "input"},
+                    "attributes": {"NEXTPNR_BEL": "SLICE_X0Y0/A6LUT"},
+                },
+            },
+            "netnames": {"net": {"bits": [7]}},
+        }
+        physical = "SITEWIRE/SLICE_X0Y0/A2"
+        permuted = "SITEWIRE/SLICE_X0Y0/A1"
+        source = "driver"
+        names = Mock()
+        names.bel_wire.side_effect = (
+            lambda bel, port: source if port == "Q" else physical
+        )
+        tree = RouteTree.__new__(RouteTree)
+        tree.bound = {source: "", permuted: "pip"}
+        tree.parent = {permuted: (source, "switch", "pip", 0)}
+        tree.candidates = {("SLICE_X0Y0", "A", 2): [(permuted, "switch")]}
+        query = (top, names, tree, "net", ("src", "Q"), ("sink", "A2"))
+        self.assertEqual(trace(*query), ("permuted", [permuted]))
+        tree.candidates.clear()
+        self.assertEqual(trace(*query), ("unresolved", None))
+        tree.bound[physical] = "exact"
+        tree.parent[physical] = (source, "switch2", "exact", 1)
+        self.assertEqual(trace(*query), ("routed", [physical]))
+        top["cells"]["sink"]["connections"]["A2"] = [8]
+        with self.assertRaisesRegex(ValueError, "wrong packed pin"):
+            trace(*query)
 
     def test_effective_map(self) -> None:
         """Reject a run whose executable opened a different installation's technology map."""

@@ -35,7 +35,7 @@ def unit_label(path: str) -> str:
     return leaf
 
 
-def inventory(source: Path) -> list[dict]:
+def inventory(source: Path, schedulers: int = 4) -> list[dict]:
     """Walk generated module instances from the grid; fail on missing or unobserved process ports."""
     rtl = source.read_text()
     modules = dict(re.findall(r"^module (\w+)\((.*?)^endmodule", rtl, re.M | re.S))
@@ -71,7 +71,7 @@ def inventory(source: Path) -> list[dict]:
                 walk(child, path + "." + inst)
 
     walk(GRID.removesuffix("_inst"), BASE)
-    for i in range(4):
+    for i in range(schedulers):
         for kind in ("state", "mailbox"):
             name = f"scheduler_{i}_{kind}"
             rows.append(

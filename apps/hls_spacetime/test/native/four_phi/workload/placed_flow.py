@@ -43,7 +43,14 @@ def observe_ids(names: list[str], cells: dict, ids: dict) -> dict:
     return observed
 
 
-def placed_rows(placed: dict, sdf: Path, names: list[str]) -> tuple:
+def placed_rows(
+    placed: dict,
+    sdf: Path,
+    names: list[str],
+    *,
+    routed: bool = False,
+    selected_ps: dict | None = None,
+) -> tuple:
     """Check SDF nets against packed bits; accumulate modeled delays from real launch pins in ps."""
     cells = placed["cells"]
     ids = {n: i for i, n in enumerate(cells)}
@@ -69,10 +76,10 @@ def placed_rows(placed: dict, sdf: Path, names: list[str]) -> tuple:
         and bits[0] in drivers
     }
     require(
-        all(
-            not n["attributes"]["ROUTING"].strip() for n in placed["netnames"].values()
-        ),
-        "expected a placement-only checkpoint",
+        any(n["attributes"]["ROUTING"].strip() for n in placed["netnames"].values())
+        == routed
+        and bool(int(placed.get("settings", {}).get("route", "0"), 2)) == routed,
+        "SDF and checkpoint routing stage",
     )
     (clock,) = [ids[n] for n, c in cells.items() if c["type"] == "BUFGCTRL"]
     nets, arcs, sources, sinks, seeds = [], [], set(), set(), {}
@@ -141,6 +148,19 @@ def placed_rows(placed: dict, sdf: Path, names: list[str]) -> tuple:
         len(seen) == len(cells) and sinks == expected_sinks and seeds,
         "incomplete placed SDF",
     )
+    if selected_ps is not None:
+        queries = {}
+        for source, sink in selected_ps:
+            a, ap = source
+            b, bp = sink
+            queries[(ids[a], ap), (ids[b], bp)] = (source, sink)
+        for edges in (nets, arcs):
+            for a, b, ps in edges:
+                if (a, b) in queries:
+                    key = queries[a, b]
+                    require(selected_ps[key] is None, "duplicate selected delay")
+                    selected_ps[key] = ps
+        require(None not in selected_ps.values(), "missing pin delay on selected path")
     times = arrivals(nets + arcs, seeds)
     rows, ports, pin_ids = bytearray(), {}, bytearray()
     stats.update(

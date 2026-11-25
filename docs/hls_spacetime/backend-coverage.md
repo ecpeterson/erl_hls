@@ -157,9 +157,26 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 #### Four-Phi routed parity campaign
 
-1. **Obtain a legal native route.** Try the corrected two-stage core/harness mapping on the archived RTL at 20 ns with the recorded part, pins and seed. Retain the map actually loaded, resource counts, congestion log, checkpoint and route status. The earlier stock-map run exhausted its one-hour bound with 2,120 overused wires. Preserve the result of each bounded attempt.
+1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A congestion-only retry of the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
 2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
 3. **Qualify and expand the physical view.** Trace used switches to each sink on scheduler bit 84 first, including the inserted carry-input LUT and any packed LUT input permutation. Check the native model and timing provenance at each hop, then export the whole design. Report routed, direct, predicted and unresolved branches separately for the whole design and for C32. Registered hard-block timing and per-output-bit switching each need their own witnesses.
+
+#### Two-worker X-plane routed witness
+
+Two adjacent X workers exercise the scheduler RAM, a real capture register, the DSP operand, and public correction frames. The 2 × 1, one-shard profile uses the same two-pin harness, XC7Z030, 20 ns constraint and seed 1. Timing-driven placement took 119 seconds. Congestion-only routing of that placement took 64 seconds and finished with zero conflicts. The post-route nextpnr estimate is 41.06 MHz against 50 MHz.
+
+The 4,096-clock RTL and mapped functional replays agree on the harness output and all 42 accepted frames, including six corrections. All 28,419 observed primitives have a physical location. Of 113,931 nonclock SDF connections, 8,725 lack a modeled clock launch and 4,448 lack an observed endpoint after launch analysis. All remaining 100,758 have sink-specific switch geometry. The SDF supplies routed wire delay for 53,469 and predicted wire delay for 47,289 permuted LUT inputs. The viewer also draws 87,142 timed primitive arcs. Geometry follows switch tiles. Height interpolates modeled arrival time between pins. The activity filter uses settled primitive output changes.
+
+Open the gallery at `/workload.html?view=flow&cycle=90` for 919 connections and 7,024 primitive arcs. In **Connections**, select **State RAM → capture D** or **Capture Q → DSP input** to isolate bit 84. The first path starts at the RAM clock and ends at capture D after 13 switch visits and 4.012 ns. The next starts at the capture clock and ends at DSP A8 after 39 switch visits and 5.308 ns. At C89 the RAM output changes. At C90 capture Q and the DSP operand both change. The static path can be inspected at any clock. The pin observations below the plot refer to the selected clock.
+
+The local artifact directory `../hls_artifacts/runs/spacetime-g4-parity-2026-11-24/two-phi-routed` contains the gallery, routed capture and replay observations. Run from the repository root:
+
+```sh
+run=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24/two-phi-routed
+npm --prefix apps/hls_spacetime start -- --data "$PWD/$run/gallery" --port 49715
+```
+
+To rebuild the gallery, extract `capture.tar.gz` and `observations.tar.gz` into a fresh directory. Run `apps/hls_spacetime/test/native/four_phi/workload/two_phi.py` with Python and pass the extracted `capture` to `--run`, `obs` to `--work`, the pinned XC7Z030 database to `--chipdb`, the matching nextpnr Xilinx `constids.inc` to `--constids` and a fresh directory to `--output`. A matched two-worker Vivado capture remains open. [Witness and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
 
 ## Remaining work
 

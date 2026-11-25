@@ -7,7 +7,6 @@ import {
   zoomCamera,
 } from "./camera3d.js";
 
-const backends = ["vivado", "openxc7"];
 const format = (n) => n.toLocaleString("en-US");
 const changed = (mask, i) => (mask[i >> 3] & (1 << i % 8)) !== 0;
 
@@ -78,6 +77,7 @@ function projection(camera, viewport) {
 
 /** Load whole-implementation connectivity once; clock changes select from the verified replay masks. */
 export async function createFlow(replay, catalogs, asset) {
+  const backends = ["vivado", "openxc7"].filter((b) => replay.backends[b]);
   const panels = {};
   const w = replay.width,
     h = replay.height;
@@ -93,12 +93,30 @@ export async function createFlow(replay, catalogs, asset) {
   let camera, frame, current;
   const mode = document.getElementById("native-geometry");
   const shared = document.getElementById("flow-shared");
-  const estimate = replay.flow.openxc7.estimate;
-  if (estimate && estimate.checkpoint !== replay.checkpoints.openxc7)
-    throw Error("Placement timing belongs to a different checkpoint");
-  document.getElementById("native-modes").hidden = !estimate;
-  document.getElementById("shared-scale").hidden = !estimate;
-  if (!estimate) mode.value = "depth";
+  const routed = replay.flow.openxc7.routed;
+  const nativeTiming = routed ?? replay.flow.openxc7.estimate;
+  if (nativeTiming && nativeTiming.checkpoint !== replay.checkpoints.openxc7)
+    throw Error("Native timing belongs to a different checkpoint");
+  document.getElementById("native-modes").hidden = !nativeTiming;
+  document.getElementById("shared-scale").hidden =
+    !nativeTiming || !replay.backends.vivado;
+  for (const option of mode.options) {
+    option.hidden =
+      option.value === "routes"
+        ? !routed
+        : !!routed && option.value !== "depth";
+    option.disabled = option.hidden;
+  }
+  mode.value = routed ? "routes" : nativeTiming ? "pins" : "depth";
+  if (routed) {
+    document.getElementById("native-flow-guide").textContent =
+      "openXC7 lines follow each sink’s switch tiles on the routed checkpoint. Select a line for its pins and delay source. Height accumulates nextpnr’s post-route SDF, including placement estimates for permuted LUT inputs.";
+  }
+  if (replay.selectedPath && routed && backends.length === 1) {
+    const filter = document.getElementById("flow-filter");
+    filter.add(new Option("State RAM → capture D", "ram-stage"));
+    filter.add(new Option("Capture Q → DSP input", "dsp-stage"));
+  }
   await Promise.all(
     backends.map(async (b) => {
       const info = replay.flow[b],
@@ -118,26 +136,40 @@ export async function createFlow(replay, catalogs, asset) {
         pins,
         info.ports,
       );
-      let estimated;
-      if (b === "openxc7" && estimate) {
-        const [timed, pins] = await Promise.all([
-          asset(estimate.edges),
-          asset(estimate.pins),
+      let pinModel;
+      if (b === "openxc7" && nativeTiming) {
+        const [timed, pins, routeBytes, classes] = await Promise.all([
+          asset(nativeTiming.edges),
+          asset(nativeTiming.pins),
+          routed && asset(routed.routes),
+          routed && asset(routed.delayClass),
         ]);
-        estimated = decodeFlow(
+        pinModel = decodeFlow(
           timed,
           catalogs[b].tile.length,
-          null,
-          estimate.timedConnections,
+          routeBytes,
+          nativeTiming.timedConnections,
           w * h,
           pins,
-          estimate.ports,
+          nativeTiming.ports,
         );
         if (
-          estimated.rows !==
-          estimate.timedConnections + estimate.timedCellArcs
+          pinModel.rows !==
+          nativeTiming.timedConnections + nativeTiming.timedCellArcs
         )
-          throw Error("Incomplete placement timing inventory");
+          throw Error("Incomplete native timing inventory");
+        if (routed) {
+          if (
+            classes.length !== pinModel.nets ||
+            classes.some(
+              (v, i) =>
+                v > 2 ||
+                (v === 2) !== (pinModel.words[pinModel.offsets[i]] === 65535),
+            )
+          )
+            throw Error("Route classes disagree with native geometry");
+          pinModel.classes = classes;
+        }
       }
       const top =
         b === "vivado"
@@ -148,7 +180,7 @@ export async function createFlow(replay, catalogs, asset) {
         canvas: article.querySelector("canvas"),
         model,
         base: model,
-        estimated,
+        pinModel,
         baseTop: top,
         top,
         names: new TextDecoder().decode(names).split("\n"),
@@ -161,13 +193,118 @@ export async function createFlow(replay, catalogs, asset) {
 
   /** Fit against the shared chip box; changes of clock preserve the camera. */
   function fit() {
-    const cv = panels.vivado.canvas;
+    const cv = panels[backends[0]].canvas;
     camera = fitCamera(
       createCamera({ yaw: 0.84, pitch: 0.41 }),
       bounds,
       { width: cv.clientWidth, height: cv.clientHeight },
       { padding: 1.07 },
     );
+  }
+
+  /** Interpolate modeled pin times along the occupied tiles on one directed branch. */
+  function projectTimes(t, start, end, top) {
+    const points = t.map((v) => [v % w, Math.floor(v / w), 0]);
+    let distance = 0;
+    for (let k = 1; k < points.length; k++) {
+      distance += Math.hypot(
+        points[k][0] - points[k - 1][0],
+        points[k][1] - points[k - 1][1],
+      );
+      points[k][2] = distance;
+    }
+    for (let k = 0; k < points.length; k++) {
+      const f = distance ? points[k][2] / distance : k / (points.length - 1);
+      points[k][2] = (-(start + f * (end - start)) * height) / top;
+    }
+    return points;
+  }
+
+  /** Draw the selected state lane up to a register or from that register's clock pin to the DSP. */
+  function showStage(panel, key, cycle) {
+    const { steps } = replay.selectedPath,
+      branches = routed.selected;
+    const boundary = steps.findIndex((s) => s.kind === "SLICE_FFX");
+    const first = key === "ram-stage" ? 0 : boundary;
+    const last = key === "ram-stage" ? boundary : branches.length;
+    const durationPs = branches
+      .slice(first, last)
+      .reduce((ps, b) => ps + b.cellPs + b.netPs, 0);
+    panel.top = Math.max(1, Math.ceil(durationPs / 1000));
+    let ns = 0,
+      visits = 0;
+    for (let j = first; j < last; j++) {
+      const a = steps[j],
+        d = steps[j + 1],
+        branch = branches[j];
+      const output = ns + branch.cellPs / 1000,
+        end = output + branch.netPs / 1000;
+      const line = (tiles, start, end, local, label) => ({
+        points: projectTimes(tiles, start, end, panel.top),
+        local,
+        start,
+        end,
+        label,
+        sourceTile: a.tile,
+        dash: !local && branch.tiles === null,
+      });
+      panel.active.add(a.tile);
+      panel.active.add(d.tile);
+      panel.paths.push(
+        line(
+          [a.tile, a.tile],
+          ns,
+          output,
+          true,
+          a.cell + "/" + branch.cellInput + " → " + a.cell + "/" + a.output,
+        ),
+      );
+      const tiles = [a.tile, ...(branch.tiles ?? []), d.tile].filter(
+        (v, i, all) => !i || v !== all[i - 1],
+      );
+      if (tiles.length === 1) tiles.push(d.tile);
+      visits += branch.tiles?.length ?? 0;
+      panel.paths.push(
+        line(
+          tiles,
+          output,
+          end,
+          false,
+          a.cell +
+            "/" +
+            a.output +
+            " → " +
+            d.cell +
+            "/" +
+            d.input +
+            " · " +
+            branch.status +
+            " · " +
+            (branch.tiles?.length ?? 0) +
+            " switch visits",
+        ),
+      );
+      ns = end;
+    }
+    const name =
+      key === "ram-stage"
+        ? "RAM clock → capture D"
+        : "Capture clock → DSP operand";
+    panel.article.querySelector(".stat").textContent =
+      name + " · " + ns.toFixed(3) + " ns · " + visits + " switch visits";
+    const labels = { ram: "RAM output", q: "capture Q", dsp: "DSP operand" };
+    const changed = Object.entries(replay.selectedPath.transitions)
+      .filter(([, clocks]) => clocks.includes(cycle))
+      .map(([pin]) => labels[pin]);
+    panel.article.querySelector(".flow-selection").textContent =
+      "Static bit-" +
+      replay.selectedPath.bit +
+      " path · C" +
+      cycle +
+      (changed.length
+        ? " changed at " + changed.join(", ")
+        : " had no known change at the three probed pins") +
+      ".";
   }
 
   /** Build the visible net polyline in chip/time space. SDF supplies times only at its endpoints. */
@@ -185,19 +322,7 @@ export async function createFlow(replay, catalogs, asset) {
         if (m.words[at + 1 + j] !== t.at(-1)) t.push(m.words[at + 1 + j]);
     }
     if (t.at(-1) !== tile[d] || t.length === 1) t.push(tile[d]);
-    const points = t.map((v) => [v % w, Math.floor(v / w), 0]);
-    let distance = 0;
-    for (let k = 1; k < points.length; k++) {
-      distance += Math.hypot(
-        points[k][0] - points[k - 1][0],
-        points[k][1] - points[k - 1][1],
-      );
-      points[k][2] = distance;
-    }
-    for (let k = 0; k < points.length; k++) {
-      const f = distance ? points[k][2] / distance : k / (points.length - 1);
-      points[k][2] = (-(start + f * (end - start)) * height) / p.top;
-    }
+    const points = projectTimes(t, start, end, p.top);
     return {
       i,
       a,
@@ -215,19 +340,26 @@ export async function createFlow(replay, catalogs, asset) {
   /** Join the one-clock known-change bits to both endpoints or to the driver alone. */
   function update(cycle, masks, filter) {
     current = [cycle, masks, filter];
-    const timed = !!estimate && mode.value !== "depth";
+    const stage = filter === "ram-stage" || filter === "dsp-stage";
+    mode.disabled = stage;
+    if (stage) mode.value = "routes";
+    const timed = !!nativeTiming && mode.value !== "depth";
     shared.disabled = !timed;
     const vendor = panels.vivado,
       native = panels.openxc7;
-    native.model = timed ? native.estimated : native.base;
+    native.model = timed ? native.pinModel : native.base;
     native.top = timed
       ? 5 * Math.ceil(Math.max(native.model.top, replay.period) / 5)
       : native.baseTop;
-    vendor.top = vendor.baseTop;
-    if (timed && shared.checked)
-      native.top = vendor.top = Math.max(native.top, vendor.top);
+    if (vendor) {
+      vendor.top = vendor.baseTop;
+      if (timed && shared.checked)
+        native.top = vendor.top = Math.max(native.top, vendor.top);
+    }
     native.article.querySelector(".map-head span").textContent = timed
-      ? "Placement estimate · ns"
+      ? routed
+        ? "Routed · post-route SDF · ns"
+        : "Placement estimate · ns"
       : "Placed · logic depth";
     for (const [index, b] of backends.entries()) {
       const p = panels[b],
@@ -235,10 +367,14 @@ export async function createFlow(replay, catalogs, asset) {
         tile = catalogs[b].tile,
         mask = masks[index];
       p.active = new Set();
-      for (let i = 0; i < tile.length; i++)
-        if (tile[i] >= 0 && changed(mask, i)) p.active.add(tile[i]);
       p.paths = [];
       p.selection = null;
+      if (stage) {
+        showStage(p, filter, cycle);
+        continue;
+      }
+      for (let i = 0; i < tile.length; i++)
+        if (tile[i] >= 0 && changed(mask, i)) p.active.add(tile[i]);
       let nets = 0,
         local = 0;
       for (let i = 0; i < m.rows; i++) {
@@ -271,11 +407,15 @@ export async function createFlow(replay, catalogs, asset) {
         (b === "vivado"
           ? " net connections · " + format(local) + " cell arcs"
           : timed
-            ? " estimated pin connections · " + format(local) + " cell arcs"
+            ? (routed
+                ? " pin connections · "
+                : " estimated pin connections · ") +
+              format(local) +
+              " cell arcs"
             : " connected cell pairs");
       p.article.querySelector(".flow-selection").textContent =
         nets || local
-          ? b === "vivado"
+          ? b === "vivado" || (routed && timed)
             ? "Switch tiles and primitive arcs · height in nanoseconds"
             : timed
               ? mode.value === "pins"
@@ -338,7 +478,11 @@ export async function createFlow(replay, catalogs, asset) {
     function stroke(edge, selected) {
       if (b === "openxc7" && edge.local && !selected) {
         const key =
-          catalogs[b].tile[edge.a] + "/" + edge.start + "/" + edge.end;
+          (edge.sourceTile ?? catalogs[b].tile[edge.a]) +
+          "/" +
+          edge.start +
+          "/" +
+          edge.end;
         const existing = localGeometry.get(key);
         if (existing) {
           edge.screen = existing;
@@ -454,10 +598,20 @@ export async function createFlow(replay, catalogs, asset) {
     }
     if (!found) return;
     p.selection = found;
+    if (found.label) {
+      p.article.querySelector(".flow-selection").textContent =
+        found.start.toFixed(3) +
+        " → " +
+        found.end.toFixed(3) +
+        " ns · " +
+        found.label;
+      redraw();
+      return;
+    }
     const { a, d, i, start, end } = found;
     const pair = p.model.pairs && p.model.ports[p.model.pairs[i]];
     const timing = p.model.pairs
-      ? (b === "openxc7" ? "Estimated " : "") +
+      ? (b === "openxc7" && !routed ? "Estimated " : "") +
         start.toFixed(3) +
         " → " +
         end.toFixed(3) +
@@ -465,7 +619,7 @@ export async function createFlow(replay, catalogs, asset) {
         (found.local
           ? "primitive arc"
           : found.dash
-            ? b === "openxc7"
+            ? b === "openxc7" && !routed
               ? "unrouted endpoint span"
               : "endpoint span"
             : found.switches
@@ -474,6 +628,14 @@ export async function createFlow(replay, catalogs, asset) {
       : "Depth " + start + " → " + end;
     p.article.querySelector(".flow-selection").textContent =
       timing +
+      (p.model.classes && !found.local
+        ? " · " +
+          [
+            "routed wire delay",
+            "permuted LUT input · predicted wire delay",
+            "unresolved wire delay",
+          ][p.model.classes[i]]
+        : "") +
       " · " +
       p.names[a] +
       (pair ? "/" + pair[0] : "") +

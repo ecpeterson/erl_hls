@@ -31,7 +31,7 @@ def asset(out: Path, name: str, data: bytes) -> dict:
     return dict(file=path.name, sha256=digest(path))
 
 
-def logical(work: Path, out: Path) -> tuple[dict, list]:
+def logical(work: Path, out: Path, planes: str = "XZ") -> tuple[dict, list]:
     """Validate reset, backpressure, frames and digest. Encode four-state pre-edge probes."""
     units = json.loads((work / "rtl/units.json").read_text())
     probes = sum(len(u["signals"]) for u in units)
@@ -100,6 +100,7 @@ def logical(work: Path, out: Path) -> tuple[dict, list]:
             held[plane] = payload if v == "1" and r == "0" else None
             if v != "1":
                 continue
+            require("XZ"[plane] in planes, "inactive plane produced a frame")
             value = int(payload, 16)
             captures[plane] = value
             valid_capture |= 1 << (1 - plane)
@@ -128,7 +129,11 @@ def logical(work: Path, out: Path) -> tuple[dict, list]:
                 + [previous_valid ^ valid_capture, previous_flow ^ flow],
             )
         )
-    require(len({(f["plane"], f["x"]) for f in frames}) == 4, "planes and coordinates")
+    require(
+        {(f["plane"], f["x"]) for f in frames}
+        == {(p, x) for p in planes for x in range(2)},
+        "planes and coordinates",
+    )
     return dict(
         units=units,
         probes=probes,
@@ -178,10 +183,13 @@ def placement(run: Path, work: Path, backend: str) -> tuple[dict, dict, dict]:
     }
     for group, name, width in ((2, "valid_capture", 2), (3, "flow", 4)):
         for i, bit in enumerate(syn["netnames"][name]["bits"][:width]):
-            lanes[(group, i)] = drivers[bit]
-    packed = json.loads((run / "native/placed.json").read_bytes())["modules"]["top"][
-        "cells"
-    ]
+            if bit in drivers:
+                lanes[(group, i)] = drivers[bit]
+    mode = json.loads((run / "capture.json").read_bytes())["nativeStage"]
+    require(mode in ("placed", "routed"), "unknown native implementation stage")
+    packed = json.loads((run / "native" / f"{mode}.json").read_bytes())["modules"][
+        "top"
+    ]["cells"]
     placed = {
         n: (
             c["attributes"].get("X_ORIG_TYPE", c["type"]),
@@ -212,7 +220,13 @@ def placement(run: Path, work: Path, backend: str) -> tuple[dict, dict, dict]:
 
 
 def mapped(
-    run: Path, work: Path, out: Path, backend: str, grid: ChipGrid, expected: list
+    run: Path,
+    work: Path,
+    out: Path,
+    backend: str,
+    grid: ChipGrid,
+    expected: list,
+    planes: str = "XZ",
 ) -> dict:
     """Bind simulated outputs by exact name/type to placement and check each clock against the RTL."""
     placed, lanes, synthetic = placement(run, work, backend)
@@ -231,11 +245,13 @@ def mapped(
     indexes = {n: i for i, (n, _) in enumerate(cells)}
     checks = [(p, b, indexes[n]) for (p, b), n in lanes.items()]
     require(
-        all(any(p == side for p, b, i in checks) for side in [0, 1]),
-        "both plane registers",
+        all(any(p == "XZ".index(side) for p, b, i in checks) for side in planes),
+        "enabled plane capture registers",
     )
     require(
-        sum(p >= 2 for p, b, i in checks) == 6, "qualified valid and ready registers"
+        {(3, i) for i in range(4)} | {(2, 1 - "XZ".index(side)) for side in planes}
+        <= {(p, b) for p, b, _ in checks},
+        "qualified valid and ready registers",
     )
     occupied = Counter()
     for kind, site in placed.values():
@@ -317,7 +333,7 @@ def mapped(
         captureRegisters=[
             len({i for p, _, i in checks if p == side}) for side in [0, 1]
         ],
-        controlLanes=6,
+        controlLanes=sum(p >= 2 for p, b, _ in checks),
         kinds=kinds,
         occupancy=sorted(occupied.items()),
         catalogue=asset(out, backend + "-cells", catalogue),
@@ -348,12 +364,13 @@ def build_gallery(
         "measurements differ from their capture",
     )
     require(
-        receipt["nativeStage"] == "placed"
+        receipt["nativeStage"] in ("placed", "routed")
         and digest(database) == receipt["tools"]["chipdb"],
         "physical database",
     )
     for name, sha in receipt["files"].items():
         require(digest(run / name) == sha, "build identity " + name)
+    checkpoint = "native/" + receipt["nativeStage"] + ".json"
     rtl, expected = logical(work, out)
     with (
         database.open("rb") as f,
@@ -377,7 +394,7 @@ def build_gallery(
                 b: receipt["files"][k]
                 for b, k in (
                     ("vivado", str(VENDOR / "routed.dcp")),
-                    ("openxc7", "native/placed.json"),
+                    ("openxc7", checkpoint),
                 )
             },
             width=grid.width,
@@ -398,11 +415,7 @@ def build_gallery(
     for entry in index["examples"]:
         source = detail / entry["file"]
         require(digest(source) == entry["sha256"], "transaction recording")
-        key = (
-            str(VENDOR / "routed.dcp")
-            if source.name == "vivado.json"
-            else "native/placed.json"
-        )
+        key = str(VENDOR / "routed.dcp") if source.name == "vivado.json" else checkpoint
         require(
             json.loads(source.read_bytes())["hardwarePath"]["checkpoint"]
             == receipt["files"][key],

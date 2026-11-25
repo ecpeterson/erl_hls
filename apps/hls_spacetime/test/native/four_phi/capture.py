@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -64,6 +65,28 @@ def native_files(mode: str) -> list[Path]:
     return [Path("native") / n for n in names]
 
 
+def capture_files(mode: str, core_harness: bool, geometry: bool = False) -> list[Path]:
+    """Identify all replay, mapping and implementation files required by the selected capture."""
+    files = SHARED_FILES + native_files(mode)
+    if core_harness:
+        require(mode == "routed", "core/harness capture requires a routed checkpoint")
+        files.remove(Path("native/map.ys"))
+        files.extend(
+            Path("native") / n
+            for n in (
+                "map-core.ys",
+                "map-core.log",
+                "core-interface.ys",
+                "map-harness.ys",
+                "mapping.json",
+            )
+        )
+    if geometry:
+        require(mode == "routed", "switches and post-route SDF require a route")
+        files.extend(Path("native") / n for n in ("fixed-routes.txt", "routed.sdf"))
+    return files
+
+
 def digest(path: Path) -> str:
     """Hash exact file bytes without allocating a checkpoint-sized buffer."""
     with path.open("rb") as stream:
@@ -112,16 +135,48 @@ def simulate(run: Path) -> None:
         subprocess.run(["vvp", program], stdout=stream, check=True, timeout=600)
 
 
-def implement(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) -> None:
+def implement(
+    run: Path,
+    yosys: Path,
+    router: Path,
+    chipdb: Path,
+    mode: str,
+    core_harness: bool = False,
+) -> None:
     """Preserve origin IDs from the same frontend and implement the unchanged two-pin harness."""
     native = run / "native"
-    read = "read_verilog -sv " + " ".join(f'"{run / INPUT / n}"' for n in RTL)
+    # Match the core frontend's read order so the lowered multiply has the same Yosys origin ID.
+    order = (
+        [
+            "phi_decoder_profile.v",
+            "phi_decoder_profile_top.v",
+            "hls_1r1w_ram.v",
+            "phi_timing_harness.v",
+        ]
+        if core_harness
+        else RTL
+    )
+    read = "read_verilog -sv " + " ".join(f'"{run / INPUT / n}"' for n in order)
     common = read + "\nhierarchy -check -top phi_timing_harness\n"
     recipes = {
         "lower": "proc\nflatten\nwrite_json lowered.json",
         "map": "synth_xilinx -flatten -abc9 -family xc7 -top phi_timing_harness\n"
         "check -assert\nscc -expect 0\nwrite_json synth.json",
     }
+    if core_harness:
+        sys.path.insert(0, str(ROOT / "platforms/xc7"))
+        import phi_timing
+
+        require(
+            digest(run / INPUT / "phi_timing_harness.v")
+            == digest(phi_timing.HERE / "phi_timing_harness.v"),
+            "harness RTL identity",
+        )
+        phi_timing.map_design(
+            argparse.Namespace(stage=native, rtl=run / INPUT), {"yosys": yosys}
+        )
+        os.link(native / "mapped.json", native / "synth.json")
+        del recipes["map"]
     for name, recipe in recipes.items():
         (native / f"{name}.ys").write_text(common + recipe + "\n")
         with (native / f"{name}.log").open("x") as stream:
@@ -132,7 +187,10 @@ def implement(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) -> 
                 check=True,
                 timeout=1200,
             )
-    check_mapping_log(native / "map.log", yosys.parent.parent / BRAM_MAP)
+    check_mapping_log(
+        native / ("map-core.log" if core_harness else "map.log"),
+        yosys.parent.parent / BRAM_MAP,
+    )
     place_or_route(native, router, chipdb, mode)
 
 
@@ -155,6 +213,10 @@ def place_or_route(native: Path, router: Path, chipdb: Path, mode: str) -> None:
     """Write a placed or routed checkpoint under the same seed, placer, pin and clock constraints."""
     checkpoint, log, *reports = native_files(mode)
     stage_args = ["--report", reports[0].name] if reports else ["--no-route"]
+    if mode == "routed":
+        stage_args.extend(
+            ["--sdf", "routed.sdf", "--write-fixed-routes", "fixed-routes.txt"]
+        )
     subprocess.run(
         [
             router,
@@ -185,7 +247,14 @@ def place_or_route(native: Path, router: Path, chipdb: Path, mode: str) -> None:
     )
 
 
-def identities(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) -> dict:
+def identities(
+    run: Path,
+    yosys: Path,
+    router: Path,
+    chipdb: Path,
+    mode: str,
+    core_harness: bool = False,
+) -> dict:
     """Record exact shared RTL, simulation tools, observer, native inputs, checkpoint and vendor reports."""
     require(
         digest(router)
@@ -214,7 +283,12 @@ def identities(run: Path, yosys: Path, router: Path, chipdb: Path, mode: str) ->
         "constraints": digest(XDC),
         "testbench": digest(HERE / "transaction_tb.sv"),
         "tools": {n: digest(p) for n, p in tools.items()},
-        "files": {str(p): digest(run / p) for p in SHARED_FILES + native_files(mode)},
+        **({"coreHarness": True} if core_harness else {}),
+        **({"routedGeometry": True} if mode == "routed" else {}),
+        "files": {
+            str(p): digest(run / p)
+            for p in capture_files(mode, core_harness, mode == "routed")
+        },
     }
 
 
@@ -226,20 +300,30 @@ def main() -> None:
     parser.add_argument(
         "--native-stage", choices=["placed", "routed"], default="placed"
     )
+    parser.add_argument(
+        "--core-harness",
+        action="store_true",
+        help="map the core separately and save routed geometry and SDF",
+    )
     args = parser.parse_args()
+    if args.core_harness and args.native_stage != "routed":
+        parser.error("--core-harness requires --native-stage routed")
     run = args.output.resolve()
     tools = [args.yosys.resolve(), args.router.resolve(), args.chipdb.resolve()]
     audit_library((tools[0].parent.parent / BRAM_MAP).read_text())
     stage(args.archive, run)
     inputs = {p: digest(run / p) for p in SHARED_FILES if p.is_relative_to(PREFIX)}
     simulate(run)
-    implement(run, *tools, args.native_stage)
+    implement(run, *tools, args.native_stage, args.core_harness)
     require(
         all(digest(run / p) == sha for p, sha in inputs.items()),
         "implementation inputs changed",
     )
     (run / "capture.json").write_text(
-        json.dumps(identities(run, *tools, args.native_stage), indent=2) + "\n"
+        json.dumps(
+            identities(run, *tools, args.native_stage, args.core_harness), indent=2
+        )
+        + "\n"
     )
 
 

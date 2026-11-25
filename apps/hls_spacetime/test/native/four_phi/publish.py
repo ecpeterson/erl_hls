@@ -17,7 +17,7 @@ from capture import (
     INPUT,
     ROOT,
     RTL,
-    SHARED_FILES,
+    capture_files,
     VENDOR,
     XDC,
     digest,
@@ -269,7 +269,7 @@ def publication(
 
     if "slackNs" in physical:
         desc += f"The full setup path has {physical['fullDataDelayNs']} ns data delay and {physical['slackNs']} ns slack. "
-    else:
+    elif physical["basis"] != "routed netlist connectivity":
         desc += "Delay along this selected path is unmeasured. "
     desc += "Execution and placement are joined by RTL identity. Path sensitization is unmeasured."
     ids = [e["id"] for e in bundle["events"]]
@@ -318,7 +318,15 @@ def publish(run: Path, chipdb: Path, output: Path) -> None:
     mode = receipt["nativeStage"]
     native = native_files(mode)
     require(
-        set(files) == {str(p) for p in SHARED_FILES + native},
+        set(files)
+        == {
+            str(p)
+            for p in capture_files(
+                mode,
+                receipt.get("coreHarness", False),
+                receipt.get("routedGeometry", False),
+            )
+        },
         "capture inventory mismatch",
     )
     for name, sha in files.items():

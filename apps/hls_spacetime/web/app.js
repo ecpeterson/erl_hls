@@ -3706,6 +3706,11 @@ async function initialize() {
     if (!response.ok) return;
     const index = await response.json();
     const query = new URLSearchParams(location.search);
+    if (index.workload === "two-phi") {
+      if (!query.has("view")) query.set("view", "flow");
+      location.replace("workload.html?" + query + location.hash);
+      return;
+    }
     if (
       index.workload === "four-phi" &&
       index.flow === 1 &&

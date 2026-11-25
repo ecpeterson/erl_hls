@@ -1,8 +1,8 @@
 import { probeState, windowStart, unionMasks } from "./workload-model.js";
-/** Replay paired cycle-end primitive masks and pre-edge RTL controls from a published four-Phi witness. */
+/** Replay cycle-end primitive masks and pre-edge RTL controls from a captured decoder. */
 const byId = (id) => document.getElementById(id);
 const colors = { vivado: [255, 181, 109], openxc7: [99, 218, 203] };
-const backends = Object.keys(colors);
+let backends = Object.keys(colors);
 const fmt = (n) => n.toLocaleString("en-US");
 let flow,
   replay,
@@ -433,12 +433,22 @@ function fault(e) {
   byId("error").textContent = e.message;
 }
 
-/** Load both syntheses, verify physical catalogs, and open on the first accepted public output. */
+/** Load each captured backend, verify its catalog and select the requested clock. */
 async function init() {
   const res = await fetch("data/workload.json");
-  if (!res.ok) throw Error("This gallery has no paired four-Phi workload.");
+  if (!res.ok) throw Error("This gallery has no workload replay.");
   replay = await res.json();
-  if (replay.schema !== 1) throw Error("Unsupported four-Phi workload format.");
+  if (replay.schema !== 1) throw Error("Unsupported workload replay format.");
+  backends = Object.keys(colors).filter((b) => replay.backends[b]);
+  for (const b of Object.keys(colors)) {
+    byId(b).hidden = byId(b + "-flow").hidden = !replay.backends[b];
+  }
+  byId("vivado-guide").hidden = !replay.backends.vivado;
+  if (replay.title) {
+    document.querySelector("h1").textContent = replay.title;
+    document.title = replay.title + " · Spacetime";
+  }
+  if (replay.transaction === false) byId("transaction").hidden = true;
   logic = await asset(replay.logical.streams);
   if (logic.length !== replay.cycles * 4 * Math.ceil(replay.logical.probes / 8))
     throw Error("Incomplete source probe stream");
@@ -498,7 +508,8 @@ async function init() {
     ys = tiles.map((t) => Math.floor(t / replay.width));
   bounds = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   byId("subtitle").textContent =
-    "X and Z planes · 2 × 1 cells per plane · " +
+    (replay.topologyLabel ?? "X and Z planes · 2 × 1 cells per plane") +
+    " · " +
     replay.part +
     " · " +
     replay.period +
@@ -561,11 +572,14 @@ async function init() {
   };
   const query = new URLSearchParams(location.search);
   const inFlow = query.get("view") === "flow";
+  if (replay.flow?.openxc7.routed)
+    byId("openxc7").querySelector(".map-head span").textContent =
+      "Yosys synthesis · nextpnr routed checkpoint";
   byId("other-view").hidden = !replay.flow;
   byId("other-view").textContent = inFlow ? "2D placement" : "3D signal flow";
   if (inFlow) {
     if (replay.flow?.schema !== 1)
-      throw Error("This gallery has no four-Phi flow capture.");
+      throw Error("This gallery has no signal-flow capture.");
     byId("placement-section").hidden = true;
     byId("flow-section").hidden = false;
     for (const b of backends)
@@ -573,14 +587,21 @@ async function init() {
         "Loading connections…";
     const { createFlow } = await import("./workload-flow.js");
     flow = await createFlow(replay, catalogs, asset);
+    const filter = query.get("filter");
+    if (
+      [...byId("flow-filter").options].some((option) => option.value === filter)
+    )
+      byId("flow-filter").value = filter;
     byId("flow-filter").onchange = () => select(cycle);
   }
   const initial = query.get("cycle");
-  unit = replay.logical.units.find((u) => u.label === "X reduction");
+  unit =
+    replay.logical.units.find((u) => u.label === "X reduction") ??
+    replay.logical.units[0];
   await select(
     initial === null
       ? flow
-        ? 32
+        ? (replay.flow.defaultCycle ?? 32)
         : replay.logical.frames[0].cycle
       : Number(initial),
   );
